@@ -294,5 +294,6 @@
   "names.begin": "Begin",
   "names.save": "Save names",
   "names.reset": "Reset to defaults",
-  "names.edit": "Edit names"
+  "names.edit": "Edit names",
+  "settings.qualityMobile": "Mobile — light, for phones"
 }

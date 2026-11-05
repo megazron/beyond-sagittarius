@@ -1,4 +1,5 @@
-export type QualityName = 'web' | 'ultra';
+export type QualityName = 'mobile' | 'web' | 'ultra';
+export const QUALITY_NAMES: QualityName[] = ['mobile', 'web', 'ultra'];
 
 export interface Quality {
   name: QualityName;
@@ -21,6 +22,26 @@ export interface Quality {
 }
 
 const PRESETS: Record<QualityName, Quality> = {
+  // Phones and small tablets: chosen automatically on touch devices.
+  mobile: {
+    name: 'mobile',
+    maxPixelRatio: 1.5,
+    minPixelRatio: 0.5,
+    dynamicResolution: true,
+    shadowMapSize: 512,
+    shadowExtent: 40,
+    terrainSegments: 24,
+    treeCount: 1300,
+    plantCount: 900,
+    rockCount: 450,
+    grassCount: 9000,
+    grassRadius: 22,
+    viewDistance: 300,
+    fogDensity: 0.0042,
+    ao: false,
+    bloomStrength: 0.6,
+    heightRes: 512,
+  },
   web: {
     name: 'web',
     maxPixelRatio: 1.25,
@@ -65,13 +86,15 @@ const KEY = 'bs-quality';
 
 /**
  * Priority: ?quality= URL flag > saved user choice > environment default
- * (Ultra on `npm run dev` / localhost, Web everywhere else e.g. GitHub Pages).
+ * (Mobile on phones/tablets, Ultra on `npm run dev` / localhost, Web everywhere
+ * else e.g. GitHub Pages).
  */
 export function detectQuality(): Quality {
   const url = new URLSearchParams(location.search).get('quality');
-  if (url === 'web' || url === 'ultra') return PRESETS[url];
+  if (isQuality(url)) return PRESETS[url];
   const saved = localStorage.getItem(KEY);
-  if (saved === 'web' || saved === 'ultra') return PRESETS[saved];
+  if (isQuality(saved)) return PRESETS[saved];
+  if (isPhone()) return PRESETS.mobile;
   const local = import.meta.env.DEV || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
   return PRESETS[local ? 'ultra' : 'web'];
 }
@@ -82,4 +105,16 @@ export function saveQualityChoice(q: QualityName) {
 
 export function qualityFromUrl(): boolean {
   return new URLSearchParams(location.search).has('quality');
+}
+
+function isQuality(v: string | null): v is QualityName {
+  return v === 'mobile' || v === 'web' || v === 'ultra';
+}
+
+/** Touch-first device with a small screen (phones, small tablets). */
+export function isPhone(): boolean {
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  const small = Math.min(screen.width, screen.height) <= 900;
+  const ua = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  return (coarse && small) || (ua && small);
 }

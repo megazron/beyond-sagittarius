@@ -261,7 +261,7 @@ export class UI implements CineUI {
     const onOff = (name: string, v: boolean) => seg(name, [['1', t('settings.on')], ['0', t('settings.off')]], v ? '1' : '0');
     this.openModal(`
       <h2>${escapeHtml(t('settings.title'))}</h2>
-      <div class="row"><label>${escapeHtml(t('settings.quality'))}</label>${seg('quality', [['web', t('settings.qualityWeb')], ['ultra', t('settings.qualityUltra')]], quality)}</div>
+      <div class="row"><label>${escapeHtml(t('settings.quality'))}</label>${seg('quality', [['mobile', t('settings.qualityMobile')], ['web', t('settings.qualityWeb')], ['ultra', t('settings.qualityUltra')]], quality)}</div>
       <div class="note">${escapeHtml(t('settings.qualityNote'))}</div>
       <div class="row"><label>${escapeHtml(t('menu.language'))}</label>${seg('lang', [['en', 'English'], ['hi', 'हिन्दी'], ['ur', 'اردو']], s.lang)}</div>
       <div class="row"><label>${escapeHtml(t('settings.sensitivity'))}</label><input type="range" id="set-sens" min="0.3" max="2.5" step="0.1" value="${s.sensitivity}"></div>
