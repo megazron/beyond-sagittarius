@@ -174,7 +174,7 @@ export function createCharacter(id: CrewId, detail = 1) {
   const extras: { halo?: THREE.Group } = {};
   switch (id) {
     case 'scientist': {
-      const coat = cloth(0xe4e6e0, 0.8), under = cloth(0x1f2d3f), trou = cloth(0x2c3440), dark = leather(0x2a2522);
+      const coat = cloth(0xb9bcb6, 0.8), under = cloth(0x1f2d3f), trou = cloth(0x2c3440), dark = leather(0x2a2522);
       torso(under); pelvis(trou); pants(trou, 1.06); boot(dark, leather(0x15120f), 0.1);
       sleeves(coat, coat, 1.22); addHands(skin);
       // lab coat: open front, scorched hem, torn on one side
@@ -208,7 +208,7 @@ export function createCharacter(id: CrewId, detail = 1) {
       break;
     }
     case 'medic': {
-      const coat = cloth(0xf2f1ee, 0.72), teal = cloth(0x1aa79a), trou = cloth(0x3a4664), gl = leather(0x20806f, 0.42);
+      const coat = cloth(0xc4c6c4, 0.72), teal = cloth(0x1aa79a), trou = cloth(0x3a4664), gl = leather(0x20806f, 0.42);
       torso(coat, 1.02); pelvis(trou); pants(trou, 1.04); boot(leather(0xe8e4dc), leather(0x2a2a2e), 0.12, 0.92);
       sleeves(coat, coat, 1.12); addHands(gl);
       coatPanel(coat.clone(), 0.75, Math.PI * 2 - 0.75, 0.32, 1.14);
@@ -320,6 +320,9 @@ export function createCharacter(id: CrewId, detail = 1) {
       for (const s of [shinL, shinR]) { const g = flare(); swayByHeight(g, -0.05, -0.42, 0.6); add(g, swayMat(wide.clone()), s); }
       boot(bt, leather(0xff3f9e), 0.05, 1);
       sleeves(jk, jk, 1.45); addHands(skin);
+      // her phone is never not in her hand
+      add(new THREE.BoxGeometry(0.075, 0.15, 0.009), metal(0xe6d7f0, 0.25), handR, 0, -0.1, 0.03);
+      add(new THREE.BoxGeometry(0.066, 0.135, 0.001), glowMat(0x8fd8ff, 0.8), handR, 0, -0.1, 0.0355, false);
       // cropped bomber with loud colour blocks
       const rings = torsoRings(1.13).slice(3);
       add(arcLoft(rings, 0.42, 5.86, 16), jk, chest);

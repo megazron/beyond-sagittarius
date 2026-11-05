@@ -567,7 +567,7 @@ export class Story {
     fig.root.updateMatrixWorld();
     fig.animate(this.scenePose?.() ?? pose, c.phase, clamp(c.speed / 4, 0, 1.3), time, dt);
     fig.setName(t('crew.explorer.name'), t('crew.explorer.role'));
-    fig.setTagVisible(smoothstep(16, 6, c.pos.distanceTo(p.pos)));
+    fig.setTagVisible(this.scenePose ? 0 : smoothstep(16, 6, c.pos.distanceTo(p.pos)));
     fig.setSplint(this.flag('splint'));
   }
 
@@ -609,7 +609,7 @@ export class Story {
       { key: 'dlg.10.5', who: 'scientist', shot: () => cover.close(z, -0.3), after: 0.9 },
       { run: () => this.ui.deviceLines(null), key: 'dlg.10.6', who: 'explorer', shot: () => cover.close(y, 0.35, 1), poses: { explorer: 'point' } },
       { key: 'dlg.10.7', who: 'scientist', shot: () => cover.close(z, 0.3, 0.95), poses: { scientist: 'present' }, after: 0.5 },
-      { key: 'dlg.10.8', who: 'explorer', shot: () => cover.ots(y, z, -0.3), poses: { explorer: 'stand' }, after: 0.8 },
+      { key: 'dlg.10.8', who: 'explorer', shot: () => cover.ots(y, z, -0.6), poses: { explorer: 'stand' }, after: 0.8 },
       { key: 'dlg.10.9', who: 'scientist', shot: () => cover.close(z, -0.2, 0.85), poses: { scientist: 'stand' }, after: 1.1 },
       { key: 'dlg.10.10', who: 'explorer', shot: () => cover.close(y, -0.2, 0.9), after: 1 },
       { run: () => { this.ui.chapter(['chapter.end1', 'chapter.end2']); document.getElementById('cine-bars')!.classList.add('hidden'); }, hold: 5.5, shot: skyShot },

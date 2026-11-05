@@ -70,8 +70,10 @@ export class TouchControls {
   /** Highlight the interact button while something can be used. */
   setActionAvailable(on: boolean) { this.act.classList.toggle('ready', on); }
 
+  private sprintUsed = false;
   setSprint(on: boolean) {
     this.sprint = on;
+    this.sprintUsed = false;
     this.sprintBtn.classList.toggle('on', on);
     this.input.hold('ShiftLeft', on);
   }
@@ -85,7 +87,9 @@ export class TouchControls {
   /** Called every frame: sprint switches itself off when you stop. */
   update() {
     const m = this.input.touchMove;
-    if (this.sprint && Math.hypot(m.x, m.y) < 0.15 && this.joyId === null) this.setSprint(false);
+    const moving = Math.hypot(m.x, m.y) >= 0.15;
+    if (moving) this.sprintUsed = true;
+    if (this.sprint && this.sprintUsed && !moving && this.joyId === null) this.setSprint(false);
   }
 
   reset() {

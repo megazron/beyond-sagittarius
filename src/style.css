@@ -358,6 +358,11 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 /* Landscape phones: very little height */
 @media (max-height: 520px) and (orientation: landscape) {
   #title { padding-top: calc(env(safe-area-inset-top) + 8px); }
+  .tutorial { width: min(360px, 36vw); padding: 6px 10px; }
+  .tutorial .tut-text { font-size: 11.5px; line-height: 1.35; }
+  .tutorial .tut-title { font-size: 13px; margin: 1px 0 2px; }
+  .tutorial .tut-skip { top: 2px; }
+  .tutorial .tut-bar { margin-top: 5px; }
   .game-title { font-size: clamp(26px, 6vw, 42px); }
   .game-subtitle { font-size: 11px; margin-top: 4px; }
   .tagline { display: none; }

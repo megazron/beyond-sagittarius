@@ -45,9 +45,9 @@ export const cover = {
     return { from: h.clone().addScaledVector(f, dist).addScaledVector(r, side * dist).add(new THREE.Vector3(0, -0.2, 0)), to: h.clone().add(new THREE.Vector3(0, -0.28, 0)), push: 0.08 };
   },
   /** Over b's shoulder onto a. */
-  ots(a: Character, b: Character, side = 0.34): Shot {
+  ots(a: Character, b: Character, side = 0.6): Shot {
     const A = headOf(a), Bh = headOf(b), d = A.clone().sub(Bh).setY(0).normalize(), r = new THREE.Vector3(d.z, 0, -d.x);
-    return { from: Bh.clone().addScaledVector(d, -0.62).addScaledVector(r, side).add(new THREE.Vector3(0, 0.03, 0)), to: A.clone().add(new THREE.Vector3(0, -0.05, 0)), push: 0.05 };
+    return { from: Bh.clone().addScaledVector(d, -1.05).addScaledVector(r, side).add(new THREE.Vector3(0, 0.14, 0)), to: A.clone().add(new THREE.Vector3(0, -0.05, 0)), push: 0.05 };
   },
   two(a: Character, b: Character, dist = 2.8, side = 1): Shot {
     const A = headOf(a), Bh = headOf(b), m = A.clone().add(Bh).multiplyScalar(0.5), d = Bh.clone().sub(A).setY(0).normalize(), n = new THREE.Vector3(d.z, 0, -d.x).multiplyScalar(side);

@@ -125,10 +125,23 @@ def main():
                 # headless Chromium may not grant pointer lock: dragging must work anyway
                 failures.append("mouse look did not advance the tutorial")
                 ev("__bs.tutorialNext()")
+        def hold_until(keys, step_next):
+            """Hold keys, turning if something blocks the way, until the tutorial moves on."""
+            for k in keys:
+                page.keyboard.down(k)
+            for i in range(12):
+                ev("__bs.step(1)")
+                tu = ev("__bs.tutorial")
+                if not tu or tu["step"] == step_next:
+                    break
+                ev(f"__bs.look({i * 1.3}, -0.15)")
+            for k in keys:
+                page.keyboard.up(k)
+
         expect_step("move")
-        page.keyboard.down("KeyW"); ev("__bs.step(2.5)"); page.keyboard.up("KeyW")
+        hold_until(["KeyW"], "sprint")
         expect_step("sprint")
-        page.keyboard.down("KeyW"); page.keyboard.down("ShiftLeft"); ev("__bs.step(2)"); page.keyboard.up("ShiftLeft"); page.keyboard.up("KeyW")
+        hold_until(["KeyW", "ShiftLeft"], "jump")
         expect_step("jump")
         page.keyboard.press("Space"); ev("__bs.step(0.1)")
         expect_step("interact")

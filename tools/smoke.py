@@ -66,11 +66,11 @@ def main():
         page.wait_for_function("window.__bs && window.__bs.state === 'title'", timeout=60000)
         page.wait_for_function("window.__bs.ready", timeout=240000)
         time.sleep(2)
-        page.screenshot(path=str(SHOTS / f"{args.prefix}01-title.jpg"), type="jpeg", quality=86)
+        page.screenshot(path=str(SHOTS / f"{args.prefix}01-title.jpg"), type="jpeg", quality=86, timeout=180000)
         page.click("#btn-new")
         page.wait_for_selector("#nm-ok", timeout=10000)  # name screen: keep the default names
         page.click("#nm-ok")
-        shot = lambda name: page.screenshot(path=str(SHOTS / f"{args.prefix}{name}.jpg"), type="jpeg", quality=86)
+        shot = lambda name: page.screenshot(path=str(SHOTS / f"{args.prefix}{name}.jpg"), type="jpeg", quality=86, timeout=180000)
         page.wait_for_function("window.__bs.state === 'narrator' && window.__bs.vault.playing", timeout=20000)
         time.sleep(6)
         shot("01b-narrator-vault")
