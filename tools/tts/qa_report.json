@@ -1,0 +1,74 @@
+{
+ "en": {
+  "lines": 120,
+  "seconds": 526.2,
+  "odd_rate": [],
+  "mean_cer": 0.035,
+  "median_cer": 0.0,
+  "worst": [
+   [
+    0.175,
+    "fb.1",
+    " A memory arriving uninvited, day 39, the fight nobody posted."
+   ],
+   [
+    0.182,
+    "beacon.unknown2",
+    " Subject 6, Origin Earth."
+   ],
+   [
+    0.194,
+    "dlg.10.3",
+    " They're alive, all of them, Zenvik they're alive."
+   ]
+  ]
+ },
+ "hi": {
+  "lines": 120,
+  "seconds": 632.0,
+  "odd_rate": [],
+  "mean_cer": 0.24,
+  "median_cer": 0.156,
+  "worst": [
+   [
+    0.5,
+    "dlg.9.6",
+    " अस्ली आग जेन्वेक, तु शाछ अच्मे जीन्यस है, बालो पर मच्चरह लेना."
+   ],
+   [
+    0.536,
+    "dlg.10.3",
+    " वे जीन्दा है, सब के सब जैन्विक वे जीन्दा है."
+   ],
+   [
+    1.286,
+    "wake.line3",
+    " HELLO SCORE NOVEXA, DREXAM BHAI GROUP CHAT भी मरगाई"
+   ]
+  ]
+ },
+ "ur": {
+  "lines": 120,
+  "seconds": 655.6,
+  "odd_rate": [],
+  "mean_cer": 0.08,
+  "median_cer": 0.08,
+  "worst": [
+   [
+    0.167,
+    "memory.explorer",
+    " تمہیں آبز ویشان ڈیک پر ہنسٹی کوئی سکائیورا یاد آتی ہے  اگر ہم کبھی کہیں گرے تو گھر کا راستہ میں دھوندوں گی  تو بس اصنیکس لے آنا"
+   ],
+   [
+    0.205,
+    "dlg.9.1",
+    " کوئی ہے زینوک اگر تو ویہم ہے، تب بھی اصنیکس کا حصاب باقی ہے"
+   ],
+   [
+    0.206,
+    "cine.caption2",
+    " چھے دوست ایک سایہتی جہاز بروں کی نگرانی چفار"
+   ]
+  ]
+ }
+}
