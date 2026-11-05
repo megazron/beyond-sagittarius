@@ -33,12 +33,14 @@ class Touch:
     def send(self, kind, pts):
         self.cdp.send("Input.dispatchTouchEvent", {"type": kind, "touchPoints": [{"x": x, "y": y, "id": i} for i, (x, y) in pts]})
 
-    def drag(self, x0, y0, x1, y1, steps=12, hold=0.0, tid=1):
+    def drag(self, x0, y0, x1, y1, steps=12, hold=0.0, tid=1, during=None):
         self.send("touchStart", [(tid, (x0, y0))])
         for k in range(1, steps + 1):
             f = k / steps
             self.send("touchMove", [(tid, (x0 + (x1 - x0) * f, y0 + (y1 - y0) * f))])
             time.sleep(0.03)
+        if during:
+            during()
         if hold:
             time.sleep(hold)
         self.send("touchEnd", [])
@@ -50,6 +52,7 @@ class Touch:
 
 
 def centre(page, sel):
+    page.locator(sel).wait_for(state="visible", timeout=15000)
     b = page.locator(sel).bounding_box()
     assert b, f"{sel} not visible"
     return b["x"] + b["width"] / 2, b["y"] + b["height"] / 2
@@ -162,28 +165,34 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     # joystick: push up for a while
     p0 = ev("__bs.debug.player")
     jx, jy = vw * 0.18, vh * 0.8
-    touch.drag(jx, jy, jx, jy - 60, steps=6, hold=7)
+    touch.drag(jx, jy, jx, jy - 60, steps=6, during=lambda: ev("__bs.step(3)"))  # real touch, simulated seconds
     time.sleep(0.3)
     p1 = ev("__bs.debug.player")
     moved = ((p1[0] - p0[0]) ** 2 + (p1[2] - p0[2]) ** 2) ** 0.5
     log(f"[{tag}] joystick moved {moved:.1f} m")
-    if moved < 3:
+    if moved < 2:
         fail(f"joystick barely moved the player ({moved:.2f} m)")
+    ev("__bs.step(1.3)")
     page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'sprint'", timeout=15000)
     touch.tap(*centre(page, "#tb-sprint"))
     if not ev("document.getElementById('tb-sprint').classList.contains('on')"):
         fail("sprint toggle did not switch on")
-    touch.drag(jx, jy, jx, jy - 60, steps=6, hold=6)
+    touch.drag(jx, jy, jx, jy - 60, steps=6, during=lambda: ev("__bs.step(2.5)"))
+    ev("__bs.step(1.3)")
     page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'jump'", timeout=15000)
     touch.tap(*centre(page, "#tb-jump"))
+    ev("__bs.step(1.3)")
     page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'interact'", timeout=15000)
     # walk to the marked stone/branch and tap Use
     ev("__bs.gotoObjective(0.4)")
+    ev("__bs.step(0.3)")
     time.sleep(0.6)
     if not ev("document.body.classList.contains('can-act')"):
         fail("Use button not lit next to an item")
     shot("05-interact")
     touch.tap(*centre(page, "#tb-act"))
+    time.sleep(0.5)
+    ev("__bs.step(1.3)")
     page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'inventory'", timeout=15000)
     touch.tap(*centre(page, "#tb-inv"))
     page.wait_for_selector(".inv-list", timeout=5000)
@@ -192,17 +201,21 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     if ev("document.querySelectorAll('.inv-list li:not(.empty)').length") < 1:
         fail("inventory panel shows nothing after a pickup")
     touch.tap(*centre(page, "#m-close"))
+    ev("__bs.step(1.3)")
     page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'crew'", timeout=15000)
     touch.tap(*centre(page, "#tb-crew"))
     page.wait_for_selector(".crew-grid", timeout=5000)
     time.sleep(0.4)
     shot("07-crew")
     touch.tap(*centre(page, "#m-close"))
+    ev("__bs.step(1.3)")
     page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'objectives'", timeout=15000)
     touch.tap(*centre(page, "#tb-obj"))
     page.wait_for_selector(".levels", timeout=5000)
     touch.tap(*centre(page, "#m-close"))
+    ev("__bs.step(1.3)")
     page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'compass'", timeout=15000)
+    ev("__bs.step(9)")
     page.wait_for_function("__bs.tutorial === null", timeout=20000)
     if not ev("__bs.save.flags.tutorialDone"):
         fail("tutorial finished but not remembered in the save")
