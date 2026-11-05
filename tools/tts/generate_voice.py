@@ -259,6 +259,7 @@ class G2P:
             ps += p
         ps = re.sub(r'\s+', ' ', ps).strip()
         ps = re.sub(r'\s+([,.!?;:])', r'\1', ps)
+        ps = ps.replace('ʐ', 'z')  # espeak-ng Urdu writes ز as a retroflex symbol Kokoro lacks
         voc = self.vocab()
         bad = [c for c in ps if c not in voc]
         if bad:

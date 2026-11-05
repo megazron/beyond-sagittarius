@@ -59,7 +59,7 @@ export const LOOKS: Record<CrewId, Look> = {
       marks: (c, e) => {
         for (const g of [c, e]) { g.fillStyle = '#e9dcff'; g.beginPath(); g.moveTo(fx(0), fy(0.68)); g.lineTo(fx(0.055), fy(0.56)); g.lineTo(fx(0), fy(0.44)); g.lineTo(fx(-0.055), fy(0.56)); g.fill(); }
       } },
-    hair: { root: 0x6d6aa8, mid: 0xcfd0ee, tip: 0xf7f3ff, shine: 0xffffff },
+    hair: { root: 0x6d6aa8, mid: 0xb6b8dc, tip: 0xe9e6f8, shine: 0x6a6c8a },
     glow: 0xc8a8ff, marks: 'veins',
   },
   // Tarnkin-human, Ganymede ice caravans: coral rose skin, darker stripes, a tail.
@@ -95,7 +95,7 @@ export const LOOKS: Record<CrewId, Look> = {
       marks: (c, e) => {
         for (let i = 0; i < 60; i++) { const a = (i * 2.399) % 6.283, r = 0.25 + ((i * 37) % 70) / 100; for (const g of [c, e]) { g.fillStyle = '#d8dcff'; g.beginPath(); g.arc(fx(Math.cos(a) * r), fy(Math.sin(a) * r * 1.1), 0.9 + (i % 3) * 0.5, 0, 7); g.fill(); } }
       } },
-    hair: { root: 0x5f6bb4, mid: 0xd9dcf4, tip: 0xfff6d6, shine: 0xffffff },
+    hair: { root: 0x5f6bb4, mid: 0xc4c7e4, tip: 0xf2ecd2, shine: 0x70708a },
     glow: 0xd8dcff, marks: 'dots',
   },
   // Sirelle-human, Venus cloud cities: cobalt skin, gold stars, little antennae.

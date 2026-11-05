@@ -13,7 +13,7 @@ export interface VaultLine { key: string; pose?: CrewPose; shot?: VaultShot; aft
 export type VaultShot = 'wide' | 'push' | 'close' | 'hands' | 'orrery' | 'window' | 'profile' | 'low';
 
 const SHOTS: Record<VaultShot, { a: THREE.Vector3; b: THREE.Vector3; to: THREE.Vector3 }> = {
-  wide: { a: V(0.2, 2.1, 7.6), b: V(-0.5, 2.0, 6.3), to: V(0, 1.7, 0) },
+  wide: { a: V(0.2, 2.0, 5.4), b: V(-0.35, 1.95, 4.5), to: V(0, 1.75, 0) },
   push: { a: V(-1.1, 1.9, 4.2), b: V(-0.75, 1.92, 3.1), to: V(0, 1.85, 0) },
   close: { a: V(0.42, 2.14, 1.42), b: V(0.3, 2.14, 1.16), to: V(0, 2.18, 0) },
   profile: { a: V(1.7, 2.12, 0.5), b: V(1.45, 2.14, 0.62), to: V(0, 2.1, 0.1) },
@@ -40,7 +40,7 @@ export class Vault {
   private quill = new THREE.Group();
   private page!: THREE.MeshStandardMaterial;
   private halo = new THREE.PointLight(0xffc36a, 0, 5);
-  private key = new THREE.PointLight(0xffd9a0, 3.2, 9);
+  private key = new THREE.PointLight(0xffd9a0, 6, 9);
   private built = false;
   private lines: VaultLine[] = [];
   private i = -1;
@@ -113,7 +113,7 @@ export class Vault {
     g.fillStyle = 'rgba(40,24,14,0.85)'; for (let y = 22; y < 240; y += 13) for (const x0 of [24, 272]) { let x = x0; while (x < x0 + 214) { const w = 8 + ((x * 7 + y * 3) % 26); g.fillRect(x, y, w, 2.2); x += w + 5; } }
     g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(253, 0, 6, 256);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-    this.page = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8, emissive: 0xffc98a, emissiveMap: tex, emissiveIntensity: 0.1 });
+    this.page = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8, emissive: 0xffc98a, emissiveMap: tex, emissiveIntensity: 0.05 });
     const book = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.07, 0.56), [wood, wood, this.page, wood, wood, wood]);
     book.position.set(0, 1.15, 0); book.rotation.x = 0.24; desk.add(book);
     // quill that keeps writing without a hand
@@ -213,7 +213,7 @@ export class Vault {
     this.host.look2(this.pose === 'write' ? 0 : Math.sin(t0 * 0.4) * 0.05, 0);
     const lvl = voice.level();
     this.halo.intensity = 0.5 + lvl * 2.5;
-    this.key.intensity = 3.2 + Math.sin(t0 * 7.3) * 0.12 + Math.sin(t0 * 3.1) * 0.2;
+    this.key.intensity = 6 + Math.sin(t0 * 7.3) * 0.12 + Math.sin(t0 * 3.1) * 0.2;
     this.page.emissiveIntensity = 0.1 + lvl * 0.14;
     this.quill.position.x = 0.28 + Math.sin(t0 * 2.6) * 0.14;
     this.quill.position.z = 0.84 + (Math.sin(t0 * 0.37) * 0.5 + 0.5) * 0.14;

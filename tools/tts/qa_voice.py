@@ -12,9 +12,21 @@ import re
 import unicodedata
 from pathlib import Path
 
+import shutil
+import subprocess
+
+import numpy as np
 from faster_whisper import WhisperModel
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+FFMPEG = shutil.which('ffmpeg') or str(Path.home() / '.local' / 'bin' / 'ffmpeg')
+
+
+def pcm(path: Path) -> np.ndarray:
+    raw = subprocess.run([FFMPEG, '-v', 'error', '-i', str(path), '-f', 'f32le', '-ac', '1', '-ar', '16000', '-'], capture_output=True, check=True).stdout
+    return np.frombuffer(raw, dtype=np.float32)
 
 
 def norm(s: str) -> str:
@@ -53,7 +65,7 @@ def main():
         rnd.shuffle(keys)
         scores = []
         for k in keys[:args.sample]:
-            segs, _ = model.transcribe(str(d / f'{k}.mp3'), language=lang, beam_size=2)
+            segs, _ = model.transcribe(pcm(d / f'{k}.mp3'), language=lang, beam_size=2)
             hyp = ' '.join(s.text for s in segs)
             scores.append((round(cer(norm(texts[k]), norm(hyp)), 3), k, hyp))
         scores.sort()

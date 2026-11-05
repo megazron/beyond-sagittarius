@@ -138,7 +138,7 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
           // Kajiya-Kay strand highlight, shifted per lock and along its length
           float th = dot(Tn, Hh) + (vPh - 0.5) * 0.28 + (vT - 0.35) * 0.55;
           float s = sqrt(max(0.0, 1.0 - th * th));
-          float band = pow(s, 90.0) * 0.8 + pow(s, 16.0) * 0.1;
+          float band = pow(s, 90.0) * 0.55 + pow(s, 16.0) * 0.06;
           totalEmissiveRadiance += uShine * band * Li;
           // soft self-shadow towards the roots keeps the locks separated
           diffuseColor.rgb *= 0.72 + 0.28 * smoothstep(0.0, 0.3, vT);

@@ -3,6 +3,7 @@ import { createSpaceDome, createEarth, createOrbitalRing, createPlanet } from '.
 import { createShip, createInterior } from './ship';
 import { easeInOut, clamp, smoothstep, lerp } from '../core/noise';
 import { audio } from '../core/audio';
+import { voice } from '../core/voice';
 import { Cutscene, Beat } from './cutscene';
 import { deckScene, fightScene, stageDeck } from './scenes';
 import type { Character, CrewId } from '../characters/character';
@@ -16,7 +17,7 @@ export interface CineUI {
   fade(color: 'black' | 'white', to: number, seconds: number): void;
 }
 
-interface Cue { t: number; fn: () => void; done?: boolean }
+interface Cue { t: number; fn: () => void; done?: boolean; voiced?: boolean }
 interface Shot { start: number; end: number; enter?: () => void; update: (k: number, local: number) => void; done?: boolean }
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -193,6 +194,11 @@ export class Cinematic {
   }
 
   private cue(t: number, fn: () => void) { this.cues.push({ t, fn }); }
+  /** A spoken cue: the timeline waits for the previous line to finish before firing it. */
+  private vcue(t: number, key: string, fn: () => void) {
+    this.cues.push({ t, voiced: true, fn: () => { this.speechEnd = this.clockT + (voice.duration(key) ?? 2) + 0.15; fn(); } });
+  }
+  private speechEnd = 0;
 
   private buildTimeline() {
     const ui = this.ui;
@@ -204,11 +210,11 @@ export class Cinematic {
     // ---- Scene 1: Departure ----
     this.cue(0.3, () => ui.chapter(['cine.year', 'cine.chapter']));
     this.cue(5.0, () => ui.chapter(null));
-    this.cue(5.4, () => ui.caption('cine.caption1'));
-    this.cue(14.0, () => ui.caption(null));
-    this.cue(14.2, () => ui.subtitle('cine.line1', 'crew.explorer.name'));
-    this.cue(16.0, () => ui.subtitle('cine.line2', 'crew.strong.name'));
-    this.cue(18.0, () => ui.subtitle('cine.line3', 'crew.social.name'));
+    this.vcue(5.4, 'cine.caption1', () => ui.caption('cine.caption1'));
+    this.cues.push({ t: 14.0, voiced: true, fn: () => ui.caption(null) });
+    this.vcue(14.2, 'cine.line1', () => ui.subtitle('cine.line1', 'crew.explorer.name'));
+    this.vcue(16.0, 'cine.line2', () => ui.subtitle('cine.line2', 'crew.strong.name'));
+    this.vcue(18.0, 'cine.line3', () => ui.subtitle('cine.line3', 'crew.social.name'));
     this.cue(22.2, () => ui.subtitle(null));
     this.cue(15.4, () => { ui.mission(['cine.mission1', 'cine.mission2', 'cine.mission3', 'cine.mission4']); audio.beep(); });
     this.cue(21.6, () => ui.mission(null));
@@ -255,7 +261,7 @@ export class Cinematic {
     });
 
     // ---- Scene 2: Journey montage ----
-    this.cue(22.4, () => ui.caption('cine.caption2'));
+    this.vcue(22.4, 'cine.caption2', () => ui.caption('cine.caption2'));
     this.cue(27.5, () => ui.caption(null));
     this.cue(28.6, () => ui.caption('cine.montage'));
     this.cue(32.6, () => ui.caption(null));
@@ -290,7 +296,7 @@ export class Cinematic {
 
     // ---- Interior: the impossible reading ----
     this.cue(33.5, () => this.holdDeck());
-    this.cue(39.8, () => { ui.subtitle(null); ui.aiAlert('cine.ai1'); audio.alarm(true); });
+    this.vcue(39.8, 'cine.ai1', () => { ui.subtitle(null); ui.aiAlert('cine.ai1'); audio.alarm(true); });
     this.cue(44.2, () => { ui.aiAlert(null); audio.alarm(false); });
     const intr = this.interior;
     this.shots.push({
@@ -319,9 +325,9 @@ export class Cinematic {
 
     // ---- Approach Sagittarius A* ----
     this.cue(41.0, () => ui.caption('cine.approach'));
-    this.cue(43.0, () => ui.subtitle('op.19', 'crew.social.name'));
-    this.cue(45.4, () => { ui.caption(null); ui.subtitle('op.20', 'crew.scientist.name'); });
-    this.cue(47.6, () => ui.subtitle('cine.line6', 'crew.scientist.name'));
+    this.vcue(43.0, 'op.19', () => ui.subtitle('op.19', 'crew.social.name'));
+    this.vcue(45.4, 'op.20', () => { ui.caption(null); ui.subtitle('op.20', 'crew.scientist.name'); });
+    this.vcue(46.2, 'cine.line6', () => ui.subtitle('cine.line6', 'crew.scientist.name'));
     this.cue(49.8, () => ui.subtitle(null));
     this.shots.push({
       start: 40.6, end: 46.6,
@@ -342,8 +348,8 @@ export class Cinematic {
     });
 
     // ---- Scene 3: The Event ----
-    this.cue(46.7, () => { ui.aiAlert('cine.ai2'); audio.alarm(true); audio.thud(); });
-    this.cue(50.6, () => { ui.aiAlert(null); ui.subtitle('cine.line7', 'crew.social.name'); });
+    this.vcue(46.7, 'cine.ai2', () => { ui.aiAlert('cine.ai2'); audio.alarm(true); audio.thud(); });
+    this.vcue(50.6, 'cine.line7', () => { ui.aiAlert(null); ui.subtitle('cine.line7', 'crew.social.name'); });
     this.shots.push({
       start: 46.6, end: 52.4,
       enter: () => { this.setVisible('interior'); },
@@ -373,8 +379,8 @@ export class Cinematic {
       },
     });
 
-    this.cue(52.6, () => ui.subtitle('cine.line8', 'crew.strong.name'));
-    this.cue(54.6, () => ui.subtitle('op.21', 'crew.explorer.name'));
+    this.vcue(52.6, 'cine.line8', () => ui.subtitle('cine.line8', 'crew.strong.name'));
+    this.vcue(54.6, 'op.21', () => ui.subtitle('op.21', 'crew.explorer.name'));
     this.cue(56.6, () => ui.subtitle(null));
     this.cue(53.0, () => audio.whoosh());
     this.shots.push({
@@ -433,7 +439,10 @@ export class Cinematic {
       return;
     }
     if (!this.playing) return;
-    this.time += dt;
+    const next = this.time + dt;
+    // hold the picture rather than talk over a line (Hindi and Urdu run longer)
+    const blocked = this.clockT < this.speechEnd && this.cues.some((c) => c.voiced && !c.done && c.t <= next);
+    if (!blocked) this.time = next;
     const t = this.time;
     for (const c of this.cues) if (!c.done && t >= c.t) { c.done = true; c.fn(); if (!this.playing) return; }
     this.animateCrew(dt);
