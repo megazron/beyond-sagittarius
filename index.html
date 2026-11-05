@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="description" content="BEYOND SAGITTARIUS — A Survival Story Beyond the Known Universe. An original 3D story-survival browser game." />
+    <meta name="theme-color" content="#05070d" />
+    <title>BEYOND SAGITTARIUS — A Survival Story Beyond the Known Universe</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='12' fill='%23000'/%3E%3Cellipse cx='32' cy='32' rx='28' ry='7' fill='none' stroke='%23ffb35c' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='13' fill='none' stroke='%23ffe2b0' stroke-width='2'/%3E%3C/svg%3E" />
+    <!-- Fonts: Google Fonts (SIL Open Font License). See CREDITS.md. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Exo+2:wght@300;400;600&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Nastaliq+Urdu:wght@400;700&family=Noto+Naskh+Arabic:wght@400;600&display=swap" rel="stylesheet" />
+  </head>
+  <body class="lang-en">
+    <canvas id="c"></canvas>
+
+    <div id="fade" class="fade"></div>
+
+    <!-- Loading -->
+    <div id="loading" class="screen">
+      <div class="loader-ring"></div>
+      <div class="loader-text" data-i18n="menu.loading"></div>
+      <div class="loader-bar"><div id="loader-fill"></div></div>
+    </div>
+
+    <!-- Title -->
+    <div id="title" class="screen hidden">
+      <div class="title-block">
+        <div class="title-kicker">2189</div>
+        <h1 class="game-title" data-i18n="title.name"></h1>
+        <div class="game-subtitle" data-i18n="title.subtitle"></div>
+        <p class="tagline" data-i18n="title.tagline"></p>
+        <div class="menu">
+          <button id="btn-continue" class="btn primary hidden" data-i18n="menu.continue"></button>
+          <button id="btn-new" class="btn primary" data-i18n="menu.newGame"></button>
+          <button id="btn-settings" class="btn" data-i18n="menu.settings"></button>
+          <div class="lang-row">
+            <span class="lang-label" data-i18n="menu.language"></span>
+            <button class="btn lang" data-lang="en">English</button>
+            <button class="btn lang" data-lang="hi">हिन्दी</button>
+            <button class="btn lang" data-lang="ur">اردو</button>
+          </div>
+        </div>
+      </div>
+      <div class="title-foot">
+        <span data-i18n="title.slice"></span> · <span data-i18n="menu.quality"></span>: <b id="quality-badge"></b> · v0.1
+      </div>
+    </div>
+
+    <!-- Cinematic overlay -->
+    <div id="cine" class="hidden">
+      <div id="cine-bars"><div class="bar top"></div><div class="bar bottom"></div></div>
+      <div id="chapter" class="chapter hidden"></div>
+      <div id="caption" class="caption hidden"></div>
+      <div id="mission" class="mission hidden"></div>
+      <div id="ai-alert" class="ai-alert hidden"></div>
+      <button id="btn-skip" class="btn skip"><span data-i18n="cine.skip"></span> ▸▸</button>
+    </div>
+    <div id="subtitle" class="subtitle hidden"><span class="speaker"></span><span class="line"></span></div>
+
+    <!-- HUD -->
+    <div id="hud" class="hidden">
+      <div class="stats panel">
+        <div class="stat" data-stat="health"><span class="lbl" data-i18n="hud.health"></span><div class="bar"><i></i></div></div>
+        <div class="stat" data-stat="thirst"><span class="lbl" data-i18n="hud.thirst"></span><div class="bar"><i></i></div></div>
+        <div class="stat" data-stat="hunger"><span class="lbl" data-i18n="hud.hunger"></span><div class="bar"><i></i></div></div>
+        <div class="stat" data-stat="stamina"><span class="lbl" data-i18n="hud.stamina"></span><div class="bar"><i></i></div></div>
+        <div class="suit"><span data-i18n="hud.suit"></span> · <span data-i18n="hud.noSignal" class="blink"></span></div>
+      </div>
+      <div class="compass"><div class="compass-strip" id="compass-strip"></div><div class="compass-needle"></div><div class="compass-dist" id="compass-dist"></div></div>
+      <div class="clock panel" id="clock"></div>
+      <div class="objective panel" id="objective">
+        <div class="obj-level" id="obj-level"></div>
+        <div class="obj-title" id="obj-title"></div>
+        <div class="obj-desc" id="obj-desc"></div>
+        <div class="obj-progress" id="obj-progress"></div>
+      </div>
+      <div class="toasts" id="toasts"></div>
+      <div class="prompt hidden" id="prompt"><kbd>E</kbd><span></span></div>
+      <div class="inventory panel" id="inventory"></div>
+      <div class="help-hint" data-i18n="hud.helpHint"></div>
+      <div class="banner hidden" id="banner"><div class="b-title"></div><div class="b-sub"></div></div>
+      <div class="memory hidden" id="memory"></div>
+      <div class="device hidden" id="device"></div>
+      <div class="damage" id="damage"></div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal" class="modal hidden"><div class="modal-card" id="modal-card"></div></div>
+    <div id="fps" class="fps hidden"></div>
+    <noscript>This game needs JavaScript and WebGL2.</noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

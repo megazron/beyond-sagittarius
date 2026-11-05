@@ -1,0 +1,381 @@
+import * as THREE from 'three';
+import { t, onLangChange } from '../i18n';
+import { clamp, smoothstep, lerp, easeInOut } from '../core/noise';
+import { audio } from '../core/audio';
+import { SaveData, writeSave } from '../core/save';
+import type { World } from '../world/world';
+import { LAKE } from '../world/terrain';
+import type { Item } from '../world/props';
+import type { Player } from './player';
+import type { Input } from './input';
+import { UI, PLAYABLE_LEVELS } from '../ui/ui';
+
+type Mode = 'wake' | 'play' | 'dead';
+
+/** Survival rules, the First-24-Hours objective chain and the wake-up sequence. */
+export class Game {
+  mode: Mode = 'wake';
+  save!: SaveData;
+  private wakeT = 0;
+  private wakeCues: { t: number; fn: () => void; done?: boolean }[] = [];
+  private saveClock = 0;
+  private hudClock = 0;
+  private interactTarget: { kind: 'water' } | { kind: 'item'; item: Item } | null = null;
+  private lastThirstWarn = 0;
+  private lastHungerWarn = 0;
+  private stepWarned = false;
+  private camShake = 0;
+  private tmpV = new THREE.Vector3();
+
+  constructor(private world: World, private player: Player, private input: Input, private ui: UI) {
+    world.onCreatureStep = (p) => this.onCreatureStep(p);
+    onLangChange(() => { if (this.save) { this.refreshObjective(); this.ui.setInventory(this.save.inventory); } });
+  }
+
+  start(save: SaveData, fresh: boolean) {
+    this.save = save;
+    for (const it of this.world.items.items) {
+      it.active = !save.collected.includes(it.id);
+      it.obj.visible = it.active;
+      it.examined = !!save.flags[`ex-${it.id}`];
+    }
+    if (fresh) {
+      this.player.spawn(0, 2, 0.35);
+      this.mode = 'wake';
+      this.wakeT = 0;
+      this.buildWake();
+      this.ui.show('hud', false);
+    } else {
+      this.player.spawn(save.pos[0], save.pos[2], save.yaw);
+      this.mode = 'play';
+      this.enterPlay(false);
+    }
+    this.player.model.root.visible = true;
+    audio.startWind();
+  }
+
+  private enterPlay(announce: boolean) {
+    this.mode = 'play';
+    this.finishWakeVisuals();
+    this.input.enabled = true;
+    this.ui.show('hud', true);
+    this.ui.device(null);
+    this.ui.setInventory(this.save.inventory);
+    this.refreshObjective();
+    if (announce) {
+      this.ui.banner(t('hud.level', { n: 1 }), t('level.1.title'));
+      setTimeout(() => this.ui.toast(t('level.1.hint')), 2500);
+    }
+  }
+
+  private buildWake() {
+    const ui = this.ui;
+    this.wakeCues = [
+      { t: 0.4, fn: () => ui.fade('black', 0, 4) },
+      { t: 1.6, fn: () => ui.say('wake.line1', 'crew.scientist.name', 3.4) },
+      { t: 4.0, fn: () => { ui.device(['wake.device1', 'wake.device2', 'wake.device3']); audio.beep(); } },
+      { t: 6.2, fn: () => ui.say('wake.line2', 'crew.scientist.name', 3.6) },
+      { t: 10.0, fn: () => { ui.device(null); ui.say('wake.line3', 'crew.scientist.name', 3.4); } },
+      { t: 13.6, fn: () => { ui.say('wake.line4', 'crew.scientist.name', 3.6); audio.thud(); } },
+      { t: 18.0, fn: () => ui.say('wake.line5', 'crew.scientist.name', 3.6) },
+      { t: 18.4, fn: () => ui.chapter(['wake.chapter']) },
+      { t: 22.0, fn: () => ui.chapter(null) },
+      { t: 22.2, fn: () => this.enterPlay(true) },
+    ];
+    this.ui.show('cine', true);
+    document.getElementById('btn-skip')!.classList.add('hidden');
+    document.getElementById('cine-bars')!.classList.remove('hidden');
+  }
+
+  debugWakeSeek(t: number) {
+    if (this.mode !== 'wake') return;
+    for (const c of this.wakeCues) if (c.t < t && !c.done) { c.done = true; c.fn(); }
+    this.wakeT = t;
+  }
+
+  skipWake() {
+    if (this.mode !== 'wake') return;
+    for (const c of this.wakeCues) if (!c.done) { c.done = true; }
+    this.ui.device(null); this.ui.subtitle(null); this.ui.chapter(null); this.ui.fade('black', 0, 0.5);
+    this.finishWakeVisuals();
+    this.enterPlay(true);
+  }
+
+  private finishWakeVisuals() {
+    this.ui.show('cine', false);
+    document.getElementById('btn-skip')!.classList.remove('hidden');
+    this.player.model.root.rotation.x = 0;
+    this.player.model.root.visible = true;
+    this.player.snapCamera();
+  }
+
+  private updateWake(dt: number) {
+    this.wakeT += dt;
+    const w = this.wakeT;
+    for (const c of this.wakeCues) if (!c.done && w >= c.t) { c.done = true; c.fn(); }
+    if (this.mode !== 'wake') { this.finishWakeVisuals(); return; }
+    // let the player rig compute its normal third-person pose, then blend
+    this.player.update(dt, this.input, false, 100, 1);
+    const cam = this.player.camera;
+    const tpPos = cam.position.clone();
+    const tpQuat = cam.quaternion.clone();
+    const p = this.player.pos;
+    const head = new THREE.Vector3(p.x, p.y + 1.0, p.z);
+    const sky = this.world.sky;
+    const lookSky = head.clone().addScaledVector(sky.giantDir.clone().lerp(sky.moonDir, 0.35).normalize(), 50);
+    const lookCreature = this.world.creature.position.clone();
+    const lookA = lookSky.clone().lerp(lookCreature, smoothstep(11.5, 14.5, w));
+    const scripted = new THREE.PerspectiveCamera();
+    scripted.position.copy(head).add(new THREE.Vector3(Math.sin(w * 0.3) * 0.05, smoothstep(12, 16, w) * 1.2, 0));
+    scripted.lookAt(lookA);
+    const blend = easeInOut(smoothstep(16, 20.5, w));
+    cam.position.lerpVectors(scripted.position, tpPos, blend);
+    cam.quaternion.slerpQuaternions(scripted.quaternion, tpQuat, blend);
+    // survivor lies in the grass, then gets up
+    const up = smoothstep(14.5, 17.5, w);
+    this.player.model.root.rotation.x = lerp(-Math.PI / 2 + 0.1, 0, easeInOut(up));
+    this.player.model.root.position.y = this.player.pos.y + (1 - up) * 0.25;
+    this.player.model.root.visible = blend > 0.05 || up > 0.5;
+  }
+
+  update(dt: number, time: number) {
+    const s = this.save;
+    const st = s.stats;
+    s.timeOfDay += dt / 50; // one in-game hour = 50 s
+    if (s.timeOfDay >= 24) { s.timeOfDay -= 24; s.day++; }
+    if (Math.abs(s.timeOfDay - 19.2) < dt / 50 && !s.flags.nightMsg) { s.flags.nightMsg = true; this.ui.toast(t('msg.night')); }
+
+    if (this.mode === 'wake') { this.updateWake(dt); return; }
+    if (this.mode === 'dead') return;
+
+    const p = this.player;
+    p.update(dt, this.input, true, st.stamina, st.health < 25 ? 0.75 : 1);
+    if (this.camShake > 0) {
+      p.camera.position.x += (Math.random() - 0.5) * this.camShake;
+      p.camera.position.y += (Math.random() - 0.5) * this.camShake;
+      this.camShake = Math.max(0, this.camShake - dt * 0.5);
+    }
+
+    // stats
+    st.thirst = clamp(st.thirst - dt * 0.16, 0, 100);
+    st.hunger = clamp(st.hunger - dt * 0.07, 0, 100);
+    if (p.sprinting) st.stamina = clamp(st.stamina - dt * 16, 0, 100);
+    else st.stamina = clamp(st.stamina + dt * (p.speedNow > 0.5 ? 8 : 14), 0, 100);
+    if (st.thirst <= 0 || st.hunger <= 0) st.health -= dt * 0.6;
+    else if (st.thirst > 40 && st.hunger > 40) st.health = Math.min(100, st.health + dt * 0.12);
+    if (st.thirst < 15 && time - this.lastThirstWarn > 40) { this.lastThirstWarn = time; this.ui.toast(t('msg.thirsty')); }
+    if (st.hunger < 15 && time - this.lastHungerWarn > 50) { this.lastHungerWarn = time; this.ui.toast(t('msg.hungry')); }
+    if (p.blockedDeep && !s.flags.deepWarn) { s.flags.deepWarn = true; this.ui.toast(t('msg.deep')); setTimeout(() => (s.flags.deepWarn = false), 8000); }
+    if (st.health <= 0) { this.die(); return; }
+
+    this.findInteraction();
+    if (this.interactTarget && (this.input.hit('KeyE') || this.input.hit('KeyF'))) this.interact();
+
+    // Medic memory when first approaching fruit
+    if (!s.flags.medicHint) {
+      for (const it of this.world.items.items) {
+        if ((it.type === 'fruit' || it.type === 'redFruit') && it.active && it.pos.distanceTo(p.pos) < 9) {
+          s.flags.medicHint = true;
+          this.ui.memory('medic.hint', 11);
+          audio.chime();
+          break;
+        }
+      }
+    }
+
+    this.checkLevel();
+
+    this.hudClock -= dt;
+    if (this.hudClock <= 0) {
+      this.hudClock = 0.1;
+      this.ui.setStats(st);
+      this.ui.setClock(s.day, s.timeOfDay);
+      const m = this.marker();
+      this.ui.setCompass(p.yaw, m ? m.bearing : null, m ? m.dist : null);
+    }
+    this.saveClock += dt;
+    if (this.saveClock > 15) { this.saveClock = 0; this.persist(); }
+  }
+
+  private findInteraction() {
+    const p = this.player;
+    let best: Item | null = null, bd = 2.3;
+    for (const it of this.world.items.items) {
+      if (!it.active) continue;
+      const dx = it.pos.x - p.pos.x, dz = it.pos.z - p.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d < bd && Math.abs(it.pos.y - p.pos.y) < 2.2) { bd = d; best = it; }
+    }
+    if (best) {
+      this.interactTarget = { kind: 'item', item: best };
+      const name = t(`item.${best.type}`);
+      const fruit = best.type === 'fruit' || best.type === 'redFruit';
+      this.ui.setPrompt(fruit ? (best.examined ? t('prompt.eat', { item: name }) : t('prompt.examine', { item: name })) : t('prompt.pick', { item: name }));
+      return;
+    }
+    const f = p.forward(this.tmpV);
+    const T = this.world.terrain;
+    const ahead = T.height(p.pos.x + f.x * 1.6, p.pos.z + f.z * 1.6);
+    if (Math.min(ahead, T.height(p.pos.x, p.pos.z)) < -0.12) {
+      this.interactTarget = { kind: 'water' };
+      this.ui.setPrompt(t('prompt.drink'));
+      return;
+    }
+    this.interactTarget = null;
+    this.ui.setPrompt(null);
+  }
+
+  /** Public so the touch prompt can trigger it. */
+  interact() {
+    const target = this.interactTarget;
+    if (!target || this.mode !== 'play') return;
+    const s = this.save, st = s.stats;
+    if (target.kind === 'water') {
+      if (st.thirst > 97) { this.ui.toast(t('msg.drinkFull')); return; }
+      st.thirst = clamp(st.thirst + 35, 0, 100);
+      audio.tone(300, 0.25, 'sine', 0.15, 0, 200);
+      if (!s.flags.drank) { s.flags.drank = true; this.ui.toast(t('msg.drink')); }
+      return;
+    }
+    const it = target.item;
+    if (it.type === 'stone' || it.type === 'branch') {
+      s.inventory[it.type] = (s.inventory[it.type] ?? 0) + 1;
+      this.collect(it);
+      audio.blip();
+      this.ui.toast(t('msg.picked', { item: t(`item.${it.type}`) }));
+      this.ui.setInventory(s.inventory);
+      return;
+    }
+    if (!it.examined) {
+      it.examined = true;
+      s.flags[`ex-${it.id}`] = true;
+      this.ui.toast(t(it.type === 'fruit' ? 'fruit.examineBlue' : 'fruit.examineRed'));
+      audio.uiClick();
+      return;
+    }
+    this.collect(it);
+    if (it.type === 'fruit') {
+      st.hunger = clamp(st.hunger + 38, 0, 100);
+      st.health = clamp(st.health + 5, 0, 100);
+      s.flags.ateSafe = true;
+      this.ui.toast(t('fruit.ateBlue'));
+      audio.blip();
+    } else {
+      st.hunger = clamp(st.hunger + 6, 0, 100);
+      st.health = clamp(st.health - 28, 0, 100);
+      s.flags.ateRed = true;
+      this.ui.toast(t('fruit.ateRed'));
+      this.ui.damage();
+      audio.hurt();
+      this.camShake = 0.12;
+    }
+  }
+
+  private collect(it: Item) {
+    it.active = false;
+    it.obj.visible = false;
+    if (!this.save.collected.includes(it.id)) this.save.collected.push(it.id);
+  }
+
+  private levelDone(n: number): boolean {
+    const s = this.save;
+    if (n === 1) return !!s.flags.drank;
+    if (n === 2) return !!s.flags.ateSafe;
+    if (n === 3) return (s.inventory.stone ?? 0) >= 5 && (s.inventory.branch ?? 0) >= 5;
+    return false;
+  }
+
+  private checkLevel() {
+    const s = this.save;
+    if (s.level <= PLAYABLE_LEVELS && this.levelDone(s.level)) {
+      const n = s.level;
+      s.completed.push(n);
+      s.level++;
+      audio.chime();
+      this.ui.banner(t('level.complete', { n }), t(`level.${n}.title`));
+      if (s.level <= PLAYABLE_LEVELS) {
+        setTimeout(() => { this.ui.toast(`${t('hud.level', { n: s.level })} — ${t(`level.${s.level}.title`)}`); const h = `level.${s.level}.hint`; if (t(h) !== h) this.ui.toast(t(h)); }, 4700);
+      } else {
+        setTimeout(() => this.ui.toast(t('level.sliceEnd')), 4700);
+      }
+      this.persist();
+      this.ui.toast(t('msg.saved'));
+    }
+    this.refreshObjective();
+  }
+
+  private lastObjKey = '';
+  refreshObjective() {
+    const s = this.save;
+    const progress = s.level === 3 ? t('level.3.progress', { s: Math.min(5, s.inventory.stone ?? 0), b: Math.min(5, s.inventory.branch ?? 0) }) : null;
+    const key = `${s.level}|${progress}`;
+    if (key === this.lastObjKey && this.mode === 'play') return;
+    this.lastObjKey = key;
+    this.ui.setObjective(s.level, progress);
+  }
+
+  /** Objective marker for the compass: bearing (0 = north / -Z, clockwise) and distance. */
+  private marker(): { bearing: number; dist: number } | null {
+    const p = this.player.pos;
+    const s = this.save;
+    let tx: number | null = null, tz = 0, dist = 0;
+    if (s.level === 1) {
+      const dx = LAKE.x - p.x, dz = LAKE.z - p.z;
+      const d = Math.hypot(dx, dz);
+      tx = LAKE.x; tz = LAKE.z; dist = Math.max(0, d - LAKE.r + 4);
+    } else if (s.level === 2 || s.level === 3) {
+      let bd = Infinity;
+      for (const it of this.world.items.items) {
+        if (!it.active) continue;
+        if (s.level === 2 && it.type !== 'fruit') continue;
+        if (s.level === 3) {
+          if (it.type !== 'stone' && it.type !== 'branch') continue;
+          if ((s.inventory[it.type] ?? 0) >= 5) continue;
+        }
+        const d = it.pos.distanceTo(p);
+        if (d < bd) { bd = d; tx = it.pos.x; tz = it.pos.z; }
+      }
+      dist = bd;
+    }
+    if (tx === null || !isFinite(dist)) return null;
+    const bearing = Math.atan2(tx - p.x, -(tz - p.z));
+    return { bearing, dist };
+  }
+
+  private onCreatureStep(fp: THREE.Vector3) {
+    if (this.mode === 'dead') return;
+    const d = fp.distanceTo(this.player.pos);
+    if (d > 320) return;
+    const k = smoothstep(320, 120, d);
+    audio.tone(42, 1.6, 'sine', 0.45 * k + 0.05, 0, -14);
+    this.camShake = Math.max(this.camShake, 0.05 * k);
+    if (this.mode === 'play' && !this.stepWarned && d < 250) { this.stepWarned = true; this.ui.toast(t('msg.footsteps')); }
+  }
+
+  private die() {
+    this.mode = 'dead';
+    this.input.enabled = false;
+    this.input.releasePointer();
+    this.ui.setPrompt(null);
+    this.ui.fade('black', 0.6, 1.5);
+    audio.hurt();
+    this.ui.openDeath(() => {
+      const s = this.save;
+      s.stats = { health: 60, thirst: 50, hunger: 50, stamina: 100 };
+      this.player.spawn(0, 2, 0.35);
+      this.ui.fade('black', 0, 1.5);
+      this.mode = 'play';
+      this.input.enabled = true;
+      this.persist();
+    });
+  }
+
+  persist() {
+    const s = this.save;
+    if (this.mode === 'play') {
+      s.pos = [this.player.pos.x, this.player.pos.y, this.player.pos.z];
+      s.yaw = this.player.yaw;
+    }
+    writeSave(s);
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "beyond-sagittarius",
+  "private": true,
+  "version": "0.1.0",
+  "description": "BEYOND SAGITTARIUS - A Survival Story Beyond the Known Universe (vertical slice)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "smoke": "python3 tools/smoke.py"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
+  }
+}
