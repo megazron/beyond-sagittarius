@@ -4,15 +4,18 @@
 > *Humanity conquered the stars. Now you must learn how to survive without civilisation.*
 
 An original 3D story-survival game that runs in the browser. This repository
-holds the **first playable vertical slice**: the opening cinematic
-*"The Last Normal Day"*, the wake-up on an alien world, and the first three
-levels of *"The First 24 Hours"*.
+holds the opening cinematic *"The Last Normal Day"*, the wake-up on an alien
+world and the complete first arc, *Chapter One — "The First 24 Hours"*
+(levels 1–10), ending on the arc's cliffhanger.
 
 ![Title screen](docs/screenshots/01-title.jpg)
 ![Sagittarius A*](docs/screenshots/02c-cinematic-sgr-a.jpg)
 ![Wake-up: the giant ringed planet and the moon](docs/screenshots/03-wakeup-sky.jpg)
 ![Survival HUD (Ultra preset)](docs/screenshots/ultra-04-planet-hud.jpg)
 ![Night on the alien world](docs/screenshots/08-night.jpg)
+![Name screen](docs/screenshots/levels/web-00-names.jpg)
+![Camp at night: the rescued Explorer by the fire](docs/screenshots/levels/web-09b-crew-camp.jpg)
+![The beacon](docs/screenshots/levels/web-10-beacon.jpg)
 
 ## The story so far
 
@@ -24,7 +27,7 @@ disturbance tears the ship apart. You — the Scientist — wake up alone beneat
 two huge bodies in an unfamiliar sky, in a damaged suit, in a strange forest
 where something enormous walks between the trees.
 
-### The crew (default names, customisable in a later build)
+### The crew (default names — rename everyone on the pre-game screen)
 
 | | Role | Strength |
 | --- | --- | --- |
@@ -57,13 +60,34 @@ where something enormous walks between the trees.
 - **Survival**: health, thirst, hunger, stamina; drinking, examining and eating
   fruit (one species is safe, one is poisonous), picking up stones and
   branches; death and retry.
-- **Levels 1–3 fully playable**: Find Water → Find Food (with the Medic's
-  advice) → Collect Stones and Branches. Levels 4–10 are listed in the
-  objectives log as coming in a future build.
+- **Chapter One, levels 1–10, fully playable** (see the table below), with a
+  compass marker that always points at the nearest thing you still need.
+- **Crew in the world**: the Explorer is found injured beside her escape pod,
+  splinted, follows you (walk/idle animation, name tag) back to camp and sits
+  by the fire. The crew panel tracks who is rescued and whose signal answered.
+- **Name customisation**: *New Game* opens a "Who is on the ship?" screen for
+  you and the five friends (empty field = default, localised name). Names are
+  saved with the game, used in every subtitle, objective and name tag, and can
+  be changed later from the crew panel (C → *Edit names*).
 - **Languages**: English, हिन्दी (Hindi) and اردو (Urdu, right-to-left, Noto
   Nastaliq Urdu). Switch on the title screen or in Settings.
 - **Saves** to `localStorage` automatically (every 15 s, on level completion
   and when you quit).
+
+### Chapter One — The First 24 Hours
+
+| # | Level | What you do |
+| --- | --- | --- |
+| 1 | Find Water | Reach the lake and drink. |
+| 2 | Find Food | Examine the fruit; eat the safe Glowpod, not the Thornberry. |
+| 3 | Collect Stones and Branches | 5 of each. |
+| 4 | Make Fire | Gather dry moss, build a fire pit at camp (4 stones, 2 branches), strike stones three times for a spark. A real fire with flickering light and embers. |
+| 5 | Build a Shelter | Giant fronds + branches → a lean-to beside the fire. |
+| 6 | Craft a Spear | Branch + flint + glowvine; the spear appears in your hand. |
+| 7 | Survive the First Night | Rest until dusk; a six-eyed Duskhound circles and charges. Brace your spear (E) while it snarls and charges — three hits drive it off. Then sleep until dawn. |
+| 8 | Find the Signal | A crew signal, too weak to locate. Climb to the crystal ridge (signal meter on your wrist) and tune it. |
+| 9 | Reunite with the Explorer | Follow the signal to the second escape pod, talk to her, splint her leg (branch + glowvine) and lead her back to camp. |
+| 10 | Light the Beacon | Salvage your pod's transmitter, gather metal scrap, assemble the beacon and switch it on — four friends answer, and so does something else. |
 
 ## Controls
 
@@ -72,7 +96,7 @@ where something enormous walks between the trees.
 | W A S D / arrow keys | Move |
 | Shift | Sprint (uses stamina) |
 | Space | Jump |
-| E (or F) | Interact: drink, examine, eat, pick up |
+| E (or F) | Interact: drink, examine, eat, pick up, build, craft, talk; brace the spear |
 | Mouse | Look (click the world to lock the cursor; dragging also works) |
 | Mouse wheel | Camera distance |
 | J (or O) | Objectives log |
@@ -112,12 +136,22 @@ npm run build      # production build into dist/
 npm run preview    # serve dist/ at http://localhost:4173
 ```
 
-Smoke test (headless Chromium via Playwright, writes `docs/screenshots/`):
+Smoke tests (headless Chromium via Playwright; software GL is fine;
+`npm run smoke` / `npm run smoke:levels` are shortcuts):
 
 ```bash
 npm run build
-python3 tools/smoke.py --quality web
+python3 tools/smoke.py --quality web          # boot, cinematic, wake-up, world shots
+python3 tools/levels_smoke.py --quality web   # plays levels 1-10 end to end
 ```
+
+`levels_smoke.py` starts a new game through the name screen with custom
+names, then completes every level through the real interaction code
+(teleporting to each objective and pressing E via `window.__bs`, advancing
+game time with `__bs.step()`), fights the level-7 predator, checks the save
+survives a reload and renders the HUD in Hindi and Urdu. Both scripts take
+`--out/--shots DIR` for the screenshots and fall back to any installed
+Playwright Chromium build if the pinned one is missing.
 
 ## Deploy to GitHub Pages
 
@@ -135,19 +169,20 @@ src/
                         save/settings, synthesised audio, astronaut model
   cinematic/            space dome (stars, nebula, black hole), Earth, ship,
                         observation deck, timeline
-  world/                terrain, sky, forest, grass, water, props, the Walker
-  game/                 input, player controller, survival + objectives
+  world/                terrain, sky, forest, grass, water, props, the Walker,
+                        story.ts (camp, ridge, layout), crew.ts, predator.ts
+  game/                 input, player controller, survival + objectives,
+                        story.ts (levels 4-10, predator AI, crewmate)
   ui/                   HUD, menus, subtitles, modals
   i18n/                 en.json, hi.json, ur.json
 ```
 
 ## Roadmap (full design)
 
-1. **The First 24 Hours** — levels 4–10: primitive tools, shelter before
-   nightfall, fire, surviving the first night, the unfamiliar plant, evidence
-   that something else lives here, a perfectly undamaged ship fragment.
-2. **Finding the friends** — each rescued crew member unlocks their skill
-   tree and changes how the group survives.
+1. ~~**The First 24 Hours**~~ — done (levels 1–10).
+2. **Finding the friends** — the beacon gave bearings to the other four;
+   each rescued crew member unlocks their skill tree and changes how the group
+   survives.
 3. **Nine ages of civilisation**, drawing on human history: Stone → Fire &
    Tools → Agriculture → Bronze → Iron → Classical → Industrial → Space →
    Civilisation.
@@ -155,7 +190,7 @@ src/
 5. **Level 99** — *"SUBJECTS: SIX. ORIGIN: EARTH. … YOU WERE NOT THE FIRST TO
    ARRIVE … HUMANITY HAS BEEN HERE BEFORE … WELCOME BACK."*
 6. **Co-op multiplayer** for the six crew roles.
-7. More languages; customisable names and genders; WebGPU renderer.
+7. More languages; customisable genders (names are done); WebGPU renderer.
 
 ## Credits
 

@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "smoke": "python3 tools/smoke.py"
+    "smoke": "python3 tools/smoke.py",
+    "smoke:levels": "python3 tools/levels_smoke.py"
   },
   "dependencies": {
     "three": "^0.187.0"

@@ -19,6 +19,20 @@ DIST = ROOT / "dist"
 SHOTS = ROOT / "docs" / "screenshots"
 
 
+def launch(p):
+    """Launch Chromium; fall back to any installed Playwright Chromium build
+    if the one pinned by this Playwright version is missing."""
+    gl = ["--use-angle=vulkan", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--enable-gpu"]
+    try:
+        return p.chromium.launch(args=gl)
+    except Exception:
+        cache = pathlib.Path.home() / ".cache" / "ms-playwright"
+        for exe in sorted(cache.glob("chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell"), reverse=True) + \
+                sorted(cache.glob("chromium-*/chrome-linux64/chrome"), reverse=True):
+            return p.chromium.launch(args=gl, executable_path=str(exe))
+        raise
+
+
 def serve(port: int):
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(DIST))
     handler.log_message = lambda *a, **k: None
@@ -28,19 +42,22 @@ def serve(port: int):
 
 
 def main():
+    global SHOTS
     ap = argparse.ArgumentParser()
     ap.add_argument("--quality", default="web")
     ap.add_argument("--port", type=int, default=4173)
     ap.add_argument("--lang", default="en")
     ap.add_argument("--prefix", default="")
     ap.add_argument("--cine-at", type=float, default=0, help="also grab a frame at this cinematic time")
+    ap.add_argument("--out", default=str(ROOT / "docs" / "screenshots"), help="screenshot directory")
     args = ap.parse_args()
+    SHOTS = pathlib.Path(args.out)
     SHOTS.mkdir(parents=True, exist_ok=True)
     httpd = serve(args.port)
     errors: list[str] = []
     url = f"http://127.0.0.1:{args.port}/index.html?quality={args.quality}"
     with sync_playwright() as p:
-        browser = p.chromium.launch(args=["--use-angle=vulkan", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--enable-gpu"])
+        browser = launch(p)
         page = browser.new_page(viewport={"width": 1600, "height": 900})
         page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
         page.on("console", lambda m: errors.append(f"console.{m.type}: {m.text}") if m.type == "error" else None)
@@ -51,6 +68,8 @@ def main():
         time.sleep(2)
         page.screenshot(path=str(SHOTS / f"{args.prefix}01-title.jpg"), type="jpeg", quality=86)
         page.click("#btn-new")
+        page.wait_for_selector("#nm-ok", timeout=10000)  # name screen: keep the default names
+        page.click("#nm-ok")
         page.wait_for_function("window.__bs.state === 'cinematic'", timeout=20000)
         shot = lambda name: page.screenshot(path=str(SHOTS / f"{args.prefix}{name}.jpg"), type="jpeg", quality=86)
         # software GL is slow, so jump the timeline to key moments instead of waiting
