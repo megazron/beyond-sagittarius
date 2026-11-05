@@ -56,6 +56,7 @@ def centre(page, sel):
         page.locator(sel).wait_for(state="visible", timeout=15000)
     except Exception:
         raise AssertionError(f"{sel} hidden: " + str(page.evaluate("({s: __bs.state, m: __bs.mode, p: __bs.paused, d: __bs.device, modal: !document.getElementById('modal').classList.contains('hidden'), card: document.getElementById('modal-card').innerText.slice(0, 80), tut: __bs.tutorial})")))
+    page.locator(sel).scroll_into_view_if_needed(timeout=5000)  # a real thumb scrolls the menu
     b = page.locator(sel).bounding_box()
     assert b, f"{sel} not visible"
     return b["x"] + b["width"] / 2, b["y"] + b["height"] / 2
