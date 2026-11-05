@@ -205,11 +205,12 @@ export class Cinematic {
     this.cue(0.3, () => ui.chapter(['cine.year', 'cine.chapter']));
     this.cue(5.0, () => ui.chapter(null));
     this.cue(5.4, () => ui.caption('cine.caption1'));
-    this.cue(10.6, () => ui.caption(null));
-    this.cue(8.2, () => ui.subtitle('cine.line1', 'crew.explorer.name'));
-    this.cue(10.9, () => ui.subtitle('cine.line2', 'crew.strong.name'));
-    this.cue(13.4, () => ui.subtitle('cine.line3', 'crew.social.name'));
-    this.cue(15.4, () => { ui.subtitle(null); ui.mission(['cine.mission1', 'cine.mission2', 'cine.mission3', 'cine.mission4']); audio.beep(); });
+    this.cue(14.0, () => ui.caption(null));
+    this.cue(14.2, () => ui.subtitle('cine.line1', 'crew.explorer.name'));
+    this.cue(16.0, () => ui.subtitle('cine.line2', 'crew.strong.name'));
+    this.cue(18.0, () => ui.subtitle('cine.line3', 'crew.social.name'));
+    this.cue(22.2, () => ui.subtitle(null));
+    this.cue(15.4, () => { ui.mission(['cine.mission1', 'cine.mission2', 'cine.mission3', 'cine.mission4']); audio.beep(); });
     this.cue(21.6, () => ui.mission(null));
     this.cue(17.5, () => audio.whoosh());
 
