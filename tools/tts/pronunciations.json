@@ -1,6 +1,14 @@
 {
   "_comment": "Per-language pronunciation overrides, applied to whole words after name substitution and text cleaning. Value = plain respelling (fed to the normal G2P) or /phonemes/ in Kokoro's phoneme alphabet (inserted verbatim). Urdu name tokens ({f:id}/{n:id}) are additionally pronounced from the parallel Devanagari name in hi.json unless overridden here (see 'ur_names_from_hindi' in generate_voice.py).",
-  "en": {},
+  "en": {
+    "MegaZroN": "Mega Zron",
+    "Lyrra": "Leera",
+    "Tiktak": "Tick tack",
+    "Lamazon": "Lamma zon",
+    "Snapgram": "Snap gram",
+    "Trapadvisor": "Trap advisor",
+    "Ulari": "Oo lah ree"
+  },
   "hi": {},
   "ur": {}
 }
