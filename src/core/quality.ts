@@ -14,6 +14,10 @@ export interface Quality {
   rockCount: number;
   grassCount: number;
   grassRadius: number;
+  /** Blades per grass instance (tuft). */
+  grassBlades: number;
+  /** Canopy card density (1 = full). */
+  foliageDetail: number;
   viewDistance: number;
   fogDensity: number;
   ao: boolean;
@@ -51,9 +55,11 @@ const PRESETS: Record<QualityName, Quality> = {
     plantCount: 900,
     rockCount: 450,
     grassCount: 9000,
-    grassRadius: 22,
+    grassRadius: 18,
+    grassBlades: 4,
+    foliageDetail: 0.55,
     viewDistance: 300,
-    fogDensity: 0.0042,
+    fogDensity: 0.0026,
     ao: false,
     bloomStrength: 0.6,
     heightRes: 512,
@@ -76,10 +82,12 @@ const PRESETS: Record<QualityName, Quality> = {
     treeCount: 2600,
     plantCount: 2500,
     rockCount: 900,
-    grassCount: 36000,
-    grassRadius: 34,
+    grassCount: 30000,
+    grassRadius: 30,
+    grassBlades: 7,
+    foliageDetail: 0.8,
     viewDistance: 420,
-    fogDensity: 0.0028,
+    fogDensity: 0.0015,
     ao: true,
     bloomStrength: 0.75,
     heightRes: 768,
@@ -102,10 +110,12 @@ const PRESETS: Record<QualityName, Quality> = {
     treeCount: 7000,
     plantCount: 8000,
     rockCount: 2400,
-    grassCount: 150000,
-    grassRadius: 58,
+    grassCount: 110000,
+    grassRadius: 52,
+    grassBlades: 9,
+    foliageDetail: 1.2,
     viewDistance: 700,
-    fogDensity: 0.0021,
+    fogDensity: 0.0012,
     ao: true,
     bloomStrength: 0.85,
     heightRes: 1024,

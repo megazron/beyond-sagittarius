@@ -4,7 +4,7 @@ import { smoothstep } from '../core/noise';
 
 const C = (h: number) => new THREE.Color(h);
 const KEYS = {
-  day: { zenith: C(0x1f78a8), horizon: C(0x9fd0d0), sun: C(0xfff1d6) },
+  day: { zenith: C(0x1a5f96), horizon: C(0xa9c9d2), sun: C(0xfff0d8) },
   dusk: { zenith: C(0x30366e), horizon: C(0xf0895e), sun: C(0xffa060) },
   night: { zenith: C(0x03050d), horizon: C(0x101a30), sun: C(0x8090c0) },
 };

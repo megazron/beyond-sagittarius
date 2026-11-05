@@ -36,6 +36,12 @@ const FinalShader = {
       float v = smoothstep(0.85, 0.2, length(d * vec2(1.15, 1.0)));
       col *= mix(1.0 - uVignette, 1.0, v);
       col *= uTint;
+      // film-like grade: filmic contrast, slightly cool shadows, warm highlights
+      float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      col = mix(vec3(lum), col, 1.1);
+      col = clamp(col, 0.0, 1.0);
+      col = mix(col, col * col * (3.0 - 2.0 * col), 0.42);
+      col *= mix(vec3(0.97, 0.99, 1.04), vec3(1.03, 1.0, 0.96), smoothstep(0.1, 0.8, lum));
       col += (rnd(vUv * 731.0) - 0.5) * uGrain;
       gl_FragColor = vec4(col, 1.0);
     }

@@ -3,7 +3,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { mulberry32, smoothstep } from '../core/noise';
 import type { Quality } from '../core/quality';
 import { Terrain, HALF, LAKE } from './terrain';
-import { applyBark, applyRock } from './pbr';
+import { applyBark, applyRock, chainCompile } from './pbr';
+import { foliageAtlas, spireCanopy, crownCanopy } from './foliage';
 
 export const windUniforms = { uTime: { value: 0 }, uWind: { value: 1 } };
 
@@ -50,10 +51,10 @@ function place(g: THREE.BufferGeometry, x: number, y: number, z: number, rx = 0,
   return g;
 }
 
-interface Variant { solid: THREE.BufferGeometry; glow: THREE.BufferGeometry; radius: number }
+interface Variant { solid: THREE.BufferGeometry; glow: THREE.BufferGeometry | null; radius: number; leaf?: THREE.BufferGeometry }
 
 /** Three original alien tree species. Units: metres, base at origin. */
-function buildVariants(): Variant[] {
+function buildVariants(detail: number): Variant[] {
   const out: Variant[] = [];
   // 1. Parasol — bent trunk with a violet cap and glowing hanging tendrils
   {
@@ -127,6 +128,31 @@ function buildVariants(): Variant[] {
     const merged = mergeGeometries(solid.map((g) => g.toNonIndexed()))!;
     out.push({ solid: merged, glow: mergeGeometries(glow)!, radius: 0.9 });
   }
+  // 4-5. Duskpine: tall dark conifers, the bulk of the forest
+  for (const [h, r, bend] of [[23, 0.46, 0.015], [31, 0.6, -0.012]] as const) {
+    const trunk = colorize(bentTrunk(h, r, 0.05, bend, 9, 10), 0x4e4238, 0.15);
+    const roots: THREE.BufferGeometry[] = [trunk];
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * 6.28;
+      const root = new THREE.ConeGeometry(r * 0.5, 1.6, 6);
+      place(root, Math.cos(a) * r * 0.75, 0.32, Math.sin(a) * r * 0.75, Math.sin(a) * 1.25, 0, -Math.cos(a) * 1.25);
+      roots.push(colorize(barkify(root, 2, 1.6), 0x4e4238, 0.12));
+    }
+    out.push({ solid: mergeGeometries(roots.map((g) => g.toNonIndexed()))!, glow: null, radius: r, leaf: spireCanopy(h, h * 0.2, detail) });
+  }
+  // 6. Broadcrown: a forked hardwood with a rounded leafy crown
+  {
+    const parts: THREE.BufferGeometry[] = [colorize(bentTrunk(7, 0.62, 0.3, 0.04, 10, 8), 0x51463c, 0.15)];
+    const crown: [number, number, number, number][] = [[0, 12.5, 0, 4.4]];
+    for (let i = 0; i < 5; i++) {
+      const a = i * 1.26 + 0.4, L = 7.5 - (i % 2);
+      const b = bentTrunk(L, 0.3, 0.07, 0.26, 7, 6);
+      place(b, 0.2, 6.2, 0, 0, a, -0.25);
+      parts.push(colorize(b, 0x51463c, 0.15));
+      crown.push([Math.cos(-a) * 4.6, 10 + (i % 3) * 1.3, Math.sin(-a) * 4.6, 3.3]);
+    }
+    out.push({ solid: mergeGeometries(parts.map((g) => g.toNonIndexed()))!, glow: null, radius: 0.7, leaf: crownCanopy(crown, detail) });
+  }
   return out;
 }
 
@@ -193,12 +219,12 @@ export class Forest {
 
   build() {
     const T = this.terrain;
-    const variants = buildVariants();
+    const variants = buildVariants(this.q.foliageDetail);
     const solidMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.0, side: THREE.DoubleSide });
-    windify(solidMat, 0.35);
+    windify(solidMat, 0.12);
     applyBark(solidMat, this.q);
     const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.2, 2.2, 2.2), toneMapped: true });
-    windify(glowMat, 0.35);
+    windify(glowMat, 0.12);
     this.glowMats.push(glowMat);
 
     const rnd = mulberry32(77);
@@ -206,7 +232,7 @@ export class Forest {
     const nc = Math.ceil((HALF * 2) / this.cellSize);
     type Inst = { m: THREE.Matrix4; c: THREE.Color };
     const buckets: Inst[][][] = []; // [cell][variant]
-    for (let i = 0; i < nc * nc; i++) buckets.push([[], [], [], [], []]);
+    for (let i = 0; i < nc * nc; i++) buckets.push([[], [], [], [], [], [], [], []]);
     const cellIndex = (x: number, z: number) =>
       Math.min(nc - 1, Math.floor((x + HALF) / this.cellSize)) + Math.min(nc - 1, Math.floor((z + HALF) / this.cellSize)) * nc;
 
@@ -229,15 +255,18 @@ export class Forest {
       const near = smoothstep(260, 40, d0) * 0.25;
       if (rnd() > smoothstep(0.32, 0.62, dens) + near * 0.4) continue;
       const vSel = n.noise2(x * 0.01 - 3, z * 0.01 + 8);
-      const v = vSel < -0.2 ? 2 : vSel < 0.25 ? 0 : 1;
+      // mostly ordinary forest; the glowing species only in rare groves
+      const rare = n.noise2(x * 0.017 + 9, z * 0.017 + 4) > 0.42;
+      const v = rare ? (vSel < -0.1 ? 2 : vSel < 0.2 ? 0 : 1) : (vSel < -0.12 ? 7 : rnd() < 0.55 ? 5 : 6);
       const giant = rnd() < 0.025;
-      const sc = (0.7 + rnd() * 0.7) * (giant ? 2.4 : 1);
+      const sc = (0.7 + rnd() * 0.7) * (giant ? (v >= 5 ? 1.5 : 2.4) : 1);
       e.set((rnd() - 0.5) * 0.08, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.08);
       q.setFromEuler(e); s.set(sc, sc * (0.85 + rnd() * 0.3), sc); pos.set(x, h - 0.2, z);
       const c = new THREE.Color().setHSL(0, 0, 0.8 + rnd() * 0.35);
       if (rnd() < 0.3) c.multiply(new THREE.Color(1.0, 0.85 + rnd() * 0.2, 1.1));
+      if (v >= 5) c.multiply(new THREE.Color(0.82 + rnd() * 0.4, 0.9 + rnd() * 0.2, 0.74 + rnd() * 0.3));
       buckets[cellIndex(x, z)][v].push({ m: new THREE.Matrix4().compose(pos, q, s), c });
-      this.addObstacle(x, z, variants[v].radius * sc);
+      this.addObstacle(x, z, variants[v >= 5 ? v - 2 : v].radius * sc);
       placed++;
     }
 
@@ -284,6 +313,14 @@ export class Forest {
     addSmall(this.q.plantCount, 3, 0.3, [0.7, 1.6], 0);
     addSmall(this.q.rockCount, 4, -1.5, [0.3, 2.2], 0.8);
 
+    const atlas = foliageAtlas();
+    const leafMat = new THREE.MeshStandardMaterial({ map: atlas.map, alphaMap: atlas.alpha, vertexColors: true, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.85 });
+    windify(leafMat, 0.12);
+    // a little light through the leaves
+    chainCompile(leafMat, 'leaf', (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        totalEmissiveRadiance += diffuseColor.rgb * vec3(0.05, 0.08, 0.03);`);
+    });
     const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
     applyRock(rockMat, this.q);
     const plantMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
@@ -307,7 +344,12 @@ export class Forest {
       };
       for (let v = 0; v < 3; v++) {
         make(variants[v].solid, solidMat, buckets[ci][v], true);
-        make(variants[v].glow, glowMat, buckets[ci][v], false);
+        make(variants[v].glow!, glowMat, buckets[ci][v], false);
+      }
+      for (let v = 5; v < 8; v++) {
+        const tv = variants[v - 2];
+        make(tv.solid, solidMat, buckets[ci][v], true);
+        make(tv.leaf!, leafMat, buckets[ci][v], true);
       }
       make(plantSolid, plantMat, buckets[ci][3], false);
       make(plantGlow, plantGlowMat, buckets[ci][3], false);

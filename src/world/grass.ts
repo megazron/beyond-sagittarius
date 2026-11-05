@@ -11,15 +11,28 @@ import { windUniforms } from './forest';
  */
 export function createGrass(terrain: Terrain, q: Quality) {
   const R = q.grassRadius;
+  // one instance = a tuft of thin, curved 3-segment blades
+  const blades = q.grassBlades, pos: number[] = [], nor: number[] = [], uv: number[] = [], idx: number[] = [];
+  const rb = mulberry32(11);
+  for (let k = 0; k < blades; k++) {
+    const a = rb() * Math.PI * 2, ox = (rb() - 0.5) * 0.26, oz = (rb() - 0.5) * 0.26;
+    const h = 0.34 + rb() * 0.34, w = 0.012 + rb() * 0.012, lean = 0.12 + rb() * 0.3;
+    const ca = Math.cos(a), sa = Math.sin(a), base = pos.length / 3;
+    for (let r = 0; r <= 3; r++) {
+      const t = r / 3, ww = r === 3 ? 0 : w * (1 - t * 0.7);
+      const fw = lean * t * t * h; // curve outwards
+      const cx = ox + ca * fw, cz = oz + sa * fw, y = h * (t - lean * 0.2 * t * t);
+      pos.push(cx - sa * ww, y, cz + ca * ww, cx + sa * ww, y, cz - ca * ww);
+      nor.push(0, 1, 0, 0, 1, 0);
+      uv.push(0, t, 1, t);
+    }
+    for (let r = 0; r < 3; r++) { const i = base + r * 2; idx.push(i, i + 1, i + 2, i + 2, i + 1, i + 3); }
+  }
   const blade = new THREE.BufferGeometry();
-  // 2-segment tapered blade, 5 vertices
-  const w = 0.045, h = 0.8;
-  blade.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
-    -w, 0, 0, w, 0, 0, -w * 0.6, h * 0.5, 0, w * 0.6, h * 0.5, 0, 0, h, 0,
-  ]), 3));
-  blade.setAttribute('normal', new THREE.BufferAttribute(new Float32Array([0, 1, 0.3, 0, 1, 0.3, 0, 1, 0.3, 0, 1, 0.3, 0, 1, 0.3]), 3));
-  blade.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 0, 0.5, 1, 0.5, 0.5, 1]), 2));
-  blade.setIndex([0, 1, 2, 2, 1, 3, 2, 3, 4]);
+  blade.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  blade.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  blade.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  blade.setIndex(idx);
 
   const geo = new THREE.InstancedBufferGeometry();
   geo.index = blade.index;
@@ -47,13 +60,13 @@ export function createGrass(terrain: Terrain, q: Quality) {
     // trampled clearings (camp, crash sites): xz centre, radius
     uClear: { value: [new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1)] },
   };
-  const mat = new THREE.MeshStandardMaterial({ roughness: 0.75, side: THREE.DoubleSide, vertexColors: false });
+  const mat = new THREE.MeshStandardMaterial({ roughness: 1, side: THREE.DoubleSide, vertexColors: false });
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms, { uTime: windUniforms.uTime, uWind: windUniforms.uWind });
     sh.vertexShader = /* glsl */ `
       attribute vec4 aOffset;
       uniform vec2 uCenter; uniform sampler2D uHeight; uniform float uWorld, uRadius, uTime, uWind, uRes; uniform vec3 uClear[4];
-      varying float vTip; varying float vVar;
+      varying float vTip; varying float vVar; varying float vPatch;
       float th(vec2 p){ return texture2D(uHeight, ((p + uWorld * 0.5) / uWorld * (uRes - 1.0) + 0.5) / uRes).r; }
       float gh(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     ` + sh.vertexShader.replace(
@@ -68,36 +81,38 @@ export function createGrass(terrain: Terrain, q: Quality) {
       float slope = length(vec2(hx, hz)) / 3.0;
       float patchK = gh(floor(wp * 0.12)) * 0.4 + 0.6 * (0.5 + 0.5 * sin(wp.x * 0.07 + sin(wp.y * 0.05) * 2.0));
       float dist = length(wp - uCenter) / uRadius;
-      float s = (0.55 + aOffset.w * 0.9) * smoothstep(0.6, 1.4, hgt) * (1.0 - smoothstep(0.35, 0.6, slope)) * smoothstep(1.0, 0.75, dist) * smoothstep(0.15, 0.45, patchK);
+      float s = (0.7 + aOffset.w * 0.75) * smoothstep(0.6, 1.4, hgt) * (1.0 - smoothstep(0.35, 0.6, slope)) * smoothstep(1.0, 0.75, dist) * smoothstep(0.15, 0.45, patchK);
       for (int i = 0; i < 4; i++) { float cr = uClear[i].z; if (cr > 0.0) s *= mix(0.15, 1.0, smoothstep(cr * 0.55, cr, length(wp - uClear[i].xy))); }
       vec3 transformed = vec3(position);
       transformed.y *= s;
-      transformed.x *= 0.6 + s * 0.6;
+      transformed.xz *= 0.8 + dist * 2.2; // far tufts widen so the field stays solid
       float ca = cos(aOffset.z), sa = sin(aOffset.z);
       transformed.xz = mat2(ca, -sa, sa, ca) * transformed.xz;
-      float bendK = position.y * position.y;
+      float bendK = position.y * position.y * 2.4;
       float gust = sin(uTime * 1.7 + wp.x * 0.15 + wp.y * 0.11) * 0.5 + sin(uTime * 3.1 + wp.x * 0.4) * 0.15;
       transformed.x += (gust * 0.35 + 0.12) * bendK * uWind * s;
       transformed.z += cos(uTime * 1.3 + wp.y * 0.13) * 0.18 * bendK * uWind * s;
       transformed.xz += wp;
       transformed.y += hgt - 0.05;
-      vTip = position.y;
+      vTip = clamp(position.y / 0.6, 0.0, 1.0);
       vVar = aOffset.w;
+      vPatch = patchK;
       `,
     );
-    sh.fragmentShader = 'varying float vTip; varying float vVar;\n' + sh.fragmentShader.replace(
+    sh.fragmentShader = 'varying float vTip; varying float vVar; varying float vPatch;\n' + sh.fragmentShader.replace(
       '#include <normal_fragment_begin>',
-      '#include <normal_fragment_begin>\n      normal = normalize(vNormal);',
+      '#include <normal_fragment_begin>\n      normal = normalize(mix(vNormal, vec3(viewMatrix[1].xyz), 0.6));',
     ).replace(
       '#include <color_fragment>',
       /* glsl */ `#include <color_fragment>
-      vec3 base = mix(vec3(0.035, 0.12, 0.1), vec3(0.08, 0.06, 0.15), smoothstep(0.55, 0.9, vVar));
-      vec3 tip = mix(vec3(0.2, 0.46, 0.36), vec3(0.36, 0.28, 0.55), smoothstep(0.55, 0.9, vVar));
+      vec3 base = vec3(0.012, 0.03, 0.022);
+      vec3 tip = mix(vec3(0.07, 0.15, 0.06), vec3(0.16, 0.19, 0.075), vPatch);
+      tip = mix(tip, vec3(0.05, 0.14, 0.12), smoothstep(0.7, 0.95, vVar)); // blue-green alien strain
       diffuseColor.rgb = mix(base, tip, vTip);`,
     ).replace(
       '#include <emissivemap_fragment>',
       /* glsl */ `#include <emissivemap_fragment>
-      totalEmissiveRadiance += vec3(0.05, 0.35, 0.3) * pow(vTip, 6.0) * step(0.8, vVar) * 0.8;`,
+      totalEmissiveRadiance += vec3(0.03, 0.22, 0.2) * pow(vTip, 8.0) * step(0.93, vVar) * 0.5;`,
     );
   };
   const mesh = new THREE.Mesh(geo, mat);

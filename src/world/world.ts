@@ -139,7 +139,7 @@ export class World {
     this.sun.position.z = this.sun.target.position.z + this.lightDir.z * 220;
 
     const day = sky.day;
-    const sunI = 3.4 * smoothstep(-0.02, 0.25, e);
+    const sunI = 4.6 * smoothstep(-0.02, 0.25, e);
     const moonI = 0.55 * (1 - sunUp);
     this.sun.intensity = sunUp > 0.5 ? Math.max(sunI, 0.4) : moonI;
     this.sun.color.copy(sunUp > 0.5 ? sky.sunColor : new THREE.Color(0x9fb4ff));
@@ -150,18 +150,18 @@ export class World {
     const envTex = this.env.update(renderer, time, this.envGround);
     if (envTex) {
       this.scene.environment = envTex;
-      this.scene.environmentIntensity = 0.35 + day * 0.65;
+      this.scene.environmentIntensity = 0.3 + day * 0.42;
     }
     this.hemi.intensity = (0.35 + day * 0.65) * (envTex ? 0.4 : 1);
     this.fog.color.copy(sky.horizon);
     this.fog.density = this.q.fogDensity * (1 + (1 - day) * 0.5);
     // valley mist: thickest around dawn and at night, thin at noon
     const dawn = 1 - smoothstep(0.0, 0.35, Math.abs(e - 0.05));
-    atmosphere.uFogHeight.value = 0.6 + (1 - day) * 0.9 + dawn * 1.2;
+    atmosphere.uFogHeight.value = 0.35 + (1 - day) * 0.9 + dawn * 1.2;
     atmosphere.uFogSunDir.value.copy(sunUp > 0.5 ? sky.sunDir : sky.moonDir);
     atmosphere.uFogSun.value.copy(sky.sunColor).multiplyScalar(sunUp > 0.5 ? 0.55 * smoothstep(-0.05, 0.15, e) : 0.05);
     if (time - this.fogPatchAt > 2 || time < this.fogPatchAt) { patchSceneFog(this.scene); this.fogPatchAt = time; }
-    renderer.toneMappingExposure = 0.95 + (1 - day) * 0.55;
+    renderer.toneMappingExposure = 0.82 + (1 - day) * 0.6;
     this.forest.setGlow(1.6 + (1 - day) * 2.4);
 
     windUniforms.uTime.value = time;

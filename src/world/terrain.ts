@@ -10,14 +10,14 @@ export const LAKE = { x: -70, z: -125, r: 58 };
 export const WATER_LEVEL = 0;
 
 const PAL = {
-  mossA: new THREE.Color(0x2f6e64),
-  mossB: new THREE.Color(0x534682),
-  lilac: new THREE.Color(0x8c73b4),
-  ochre: new THREE.Color(0x8f8a5a),
-  sand: new THREE.Color(0xb3a9bb),
-  mud: new THREE.Color(0x3c3846),
-  rockA: new THREE.Color(0x6c6676),
-  rockB: new THREE.Color(0x4a4553),
+  mossA: new THREE.Color(0x2b4a33),
+  mossB: new THREE.Color(0x3a4034),
+  lilac: new THREE.Color(0x4f4a58),
+  ochre: new THREE.Color(0x5e5a3a),
+  sand: new THREE.Color(0x8d8778),
+  mud: new THREE.Color(0x2c2a28),
+  rockA: new THREE.Color(0x5f5c5e),
+  rockB: new THREE.Color(0x3d3a3e),
   crystal: new THREE.Color(0xc9c3e6),
 };
 

@@ -49,6 +49,29 @@ export function loft(rings: Ring[], seg = 14, cap = true): THREE.BufferGeometry 
   return g;
 }
 
+/** Open surface over part of the rings (coat skirts, capes, skirts). */
+export function arcLoft(rings: Ring[], a0: number, a1: number, seg = 12): THREE.BufferGeometry {
+  const pos: number[] = [], uv: number[] = [], idx: number[] = [];
+  const cols = seg + 1;
+  rings.forEach((r, i) => {
+    for (let j = 0; j <= seg; j++) {
+      const a = a0 + (j / seg) * (a1 - a0);
+      pos.push((r.x ?? 0) + Math.sin(a) * r.rx, r.y, (r.z ?? 0) + Math.cos(a) * r.rz);
+      uv.push(j / seg, i / (rings.length - 1));
+    }
+  });
+  for (let i = 0; i < rings.length - 1; i++) for (let j = 0; j < seg; j++) {
+    const a = i * cols + j, b = a + 1, c = a + cols, d = c + 1;
+    idx.push(a, c, b, b, c, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 /** A limb segment hanging down from the origin: rx0/rx1 with a muscle bulge. */
 export function limb(len: number, r0: number, r1: number, bulge = 0.12, flat = 1, seg = 12): THREE.BufferGeometry {
   const rs: Ring[] = [];
