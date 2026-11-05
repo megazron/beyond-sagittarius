@@ -11,6 +11,9 @@ import { createCreature } from './creature';
 import { computeLayout, reserveLayout, createCamp, createRidge, StoryLayout } from './story';
 import { createCrewFigure, CREW_LOOKS, CrewFigure } from './crew';
 import { createHound } from './predator';
+import { Environment } from './environment';
+import { atmosphere, patchSceneFog } from './atmosphere';
+import { applyMetal } from './pbr';
 
 /** The alien planet: terrain, sky, forest, water, props, lights and fog. */
 export class World {
@@ -36,6 +39,9 @@ export class World {
   ready = false;
   onCreatureStep: (p: THREE.Vector3) => void = () => {};
   private lightDir = new THREE.Vector3();
+  env!: Environment;
+  private envGround = new THREE.Color();
+  private fogPatchAt = 0;
 
   constructor(private q: Quality) {
     this.terrain = new Terrain(q);
@@ -85,14 +91,26 @@ export class World {
     this.creature = createCreature(this.terrain, (p) => this.onCreatureStep(p));
     s.add(this.creature.root);
 
+    const metals: THREE.MeshStandardMaterial[] = [];
+    s.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+      if (m && !Array.isArray(m) && m.userData?.pbr === 'metal' && !metals.includes(m)) metals.push(m);
+    });
+    applyMetal(metals, this.q, 3);
+    this.env = new Environment(this.q, this.sky);
+    patchSceneFog(s);
+
     this.sun.castShadow = true;
     const sh = this.sun.shadow;
     sh.mapSize.set(this.q.shadowMapSize, this.q.shadowMapSize);
     const ext = this.q.shadowExtent;
     Object.assign(sh.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: 500 });
     sh.camera.updateProjectionMatrix();
-    sh.bias = -0.0004;
-    sh.normalBias = 0.04;
+    // depth bias scales with the texel size; normal bias stops acne on the slopes
+    const texelM = (ext * 2) / this.q.shadowMapSize;
+    sh.bias = -0.00025;
+    sh.normalBias = Math.max(0.02, texelM * 0.6);
+    sh.radius = this.q.shadowSoftness;
     s.add(this.sun, this.sun.target, this.hemi);
     onProgress(1);
     this.ready = true;
@@ -127,15 +145,28 @@ export class World {
     this.sun.color.copy(sunUp > 0.5 ? sky.sunColor : new THREE.Color(0x9fb4ff));
     this.hemi.color.copy(sky.zenith).lerp(new THREE.Color(0xffffff), 0.25);
     this.hemi.groundColor.set(0x141c1a).lerp(new THREE.Color(0x2a3a33), day);
-    this.hemi.intensity = 0.35 + day * 0.65;
+    // image-based light carries most of the ambient now; the hemisphere fills in
+    this.envGround.set(0x101814).lerp(tmpG.set(0x3a4a40), day).multiply(tmpG2.copy(this.sun.color).lerp(WHITE, 0.6));
+    const envTex = this.env.update(renderer, time, this.envGround);
+    if (envTex) {
+      this.scene.environment = envTex;
+      this.scene.environmentIntensity = 0.35 + day * 0.65;
+    }
+    this.hemi.intensity = (0.35 + day * 0.65) * (envTex ? 0.4 : 1);
     this.fog.color.copy(sky.horizon);
     this.fog.density = this.q.fogDensity * (1 + (1 - day) * 0.5);
+    // valley mist: thickest around dawn and at night, thin at noon
+    const dawn = 1 - smoothstep(0.0, 0.35, Math.abs(e - 0.05));
+    atmosphere.uFogHeight.value = 0.6 + (1 - day) * 0.9 + dawn * 1.2;
+    atmosphere.uFogSunDir.value.copy(sunUp > 0.5 ? sky.sunDir : sky.moonDir);
+    atmosphere.uFogSun.value.copy(sky.sunColor).multiplyScalar(sunUp > 0.5 ? 0.55 * smoothstep(-0.05, 0.15, e) : 0.05);
+    if (time - this.fogPatchAt > 2 || time < this.fogPatchAt) { patchSceneFog(this.scene); this.fogPatchAt = time; }
     renderer.toneMappingExposure = 0.95 + (1 - day) * 0.55;
     this.forest.setGlow(1.6 + (1 - day) * 2.4);
 
     windUniforms.uTime.value = time;
     this.grass.update(focus);
-    this.water.update(time, day);
+    this.water.update(time, day, envTex);
     this.forest.update(cam.position);
     this.pod.update(time);
     this.pod2.update(time + 7.3);
@@ -144,3 +175,6 @@ export class World {
     this.creature.update(dt);
   }
 }
+const tmpG = new THREE.Color();
+const tmpG2 = new THREE.Color();
+const WHITE = new THREE.Color(1, 1, 1);

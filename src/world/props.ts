@@ -26,7 +26,8 @@ export function createPod(terrain: Terrain, forest: Forest, x = 4.5, z = -3.5, y
   const y = terrain.height(x, z);
   group.position.set(x, y - 0.6, z);
   group.rotation.set(0.35, yaw, 0.25);
-  const hull = new THREE.MeshStandardMaterial({ color: 0xa9afb8, metalness: 0.25, roughness: 0.62 });
+  const hull = new THREE.MeshStandardMaterial({ color: 0xa9afb8, metalness: 0.35, roughness: 0.7 });
+  hull.userData.pbr = 'metal'; // painted-metal panel normals/roughness arrive later (world.ts)
   const stripe = new THREE.MeshStandardMaterial({ color: 0xff7a2a, roughness: 0.55, emissive: 0x401000 });
   const burnt = new THREE.MeshStandardMaterial({ color: 0x1b1714, metalness: 0.3, roughness: 0.9 });
   const glass = new THREE.MeshStandardMaterial({ color: 0x0b1420, metalness: 0.9, roughness: 0.1, emissive: 0x0a2a44, emissiveIntensity: 0.6 });
@@ -57,7 +58,8 @@ export function createPod(terrain: Terrain, forest: Forest, x = 4.5, z = -3.5, y
 
   // Scorched debris trail
   const rnd = mulberry32(seed);
-  const debrisMat = new THREE.MeshStandardMaterial({ color: 0x8d939c, metalness: 0.7, roughness: 0.5 });
+  const debrisMat = new THREE.MeshStandardMaterial({ color: 0x8d939c, metalness: 0.7, roughness: 0.6 });
+  debrisMat.userData.pbr = 'metal';
   const debris = new THREE.Group();
   for (let i = 0; i < 18; i++) {
     const d = new THREE.Mesh(new THREE.BoxGeometry(0.2 + rnd() * 0.7, 0.04, 0.2 + rnd() * 0.5), i % 3 ? debrisMat : burnt);

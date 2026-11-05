@@ -6,6 +6,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import type { Quality } from './quality';
+import { setMaxAnisotropy } from './assets';
 
 /** Final grade: vignette, film grain, chromatic aberration and screen shake tint. */
 const FinalShader = {
@@ -77,7 +78,8 @@ export class Renderer {
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap; // soft via shadow.radius (Vogel disk)
+    setMaxAnisotropy(Math.min(quality.name === 'mobile' ? 4 : 16, this.renderer.capabilities.getMaxAnisotropy()));
 
     const dummyScene = new THREE.Scene();
     const dummyCam = new THREE.PerspectiveCamera();
@@ -89,7 +91,16 @@ export class Renderer {
       this.ao = new GTAOPass(dummyScene, dummyCam, window.innerWidth, window.innerHeight);
       this.ao.output = GTAOPass.OUTPUT.Default;
       this.ao.blendIntensity = 0.9;
-      this.ao.updateGtaoMaterial({ radius: 1.2, distanceExponent: 1.5, thickness: 1.5, scale: 1.0, samples: 12 });
+      const full = quality.aoScale >= 1;
+      this.ao.updateGtaoMaterial({ radius: 1.2, distanceExponent: 1.5, thickness: 1.5, scale: 1.0, samples: full ? 12 : 8 });
+      if (!full) {
+        // Web: AO buffers at reduced resolution, bilinearly upsampled in the blend.
+        const k = Math.max(0.25, quality.aoScale);
+        this.ao.updatePdMaterial({ samples: 8, rings: 2 });
+        const setSize = this.ao.setSize.bind(this.ao);
+        this.ao.setSize = (w: number, h: number) => setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+        this.ao.setSize(window.innerWidth, window.innerHeight);
+      }
       // The AO pass re-renders the scene with a normal override material. Objects
       // with custom vertex animation (grass, sky) are hidden from that pass.
       const orig = this.ao.render.bind(this.ao);
