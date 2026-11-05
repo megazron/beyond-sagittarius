@@ -79,6 +79,17 @@ def main():
         time.sleep(0.5)
         shot("00-names")
         page.click("#nm-ok")
+        # ---- MegaZroN opens the game: skippable ----
+        page.wait_for_function("window.__bs.state === 'narrator' && window.__bs.vault.playing", timeout=20000)
+        time.sleep(4)
+        if ev("__bs.vault.line") < 0:
+            failures.append("narrator scene did not start speaking")
+        if not ev("__bs.voiceDuration('mz.intro.1')"):
+            failures.append("no voice line for mz.intro.1")
+        if not ev("__bs.voice.played"):
+            failures.append("voice playback hook never fired")
+        shot("00b-narrator")
+        page.click("#btn-skip")
         page.wait_for_function("window.__bs.state === 'cinematic'", timeout=20000)
         page.click("#btn-skip")
         page.wait_for_function("window.__bs.state === 'game' && window.__bs.mode === 'wake'", timeout=60000)
@@ -89,6 +100,53 @@ def main():
         log("names in save:", names)
         if names.get("scientist") != PLAYER or names.get("explorer") != EXPLORER or "medic" in names:
             failures.append(f"names not saved correctly: {names}")
+
+        # ---- tutorial: every step needs the real input ----
+        def expect_step(name):
+            for _ in range(40):
+                tu = ev("__bs.tutorial")
+                if tu and tu["step"] == name:
+                    return True
+                ev("__bs.step(0.3)")
+                time.sleep(0.05)
+            failures.append(f"tutorial never reached step {name}: {ev('__bs.tutorial')}")
+            return False
+
+        if expect_step("look"):
+            shot("00c-tutorial")
+            page.mouse.move(640, 360)
+            page.mouse.down()
+            for k in range(14):
+                page.mouse.move(640 + k * 40, 360 + (k % 3) * 8)
+                time.sleep(0.03)
+            page.mouse.up()
+            ev("__bs.step(0.2)")
+            if ev("__bs.tutorial && __bs.tutorial.step") == "look":
+                # headless Chromium may not grant pointer lock: dragging must work anyway
+                failures.append("mouse look did not advance the tutorial")
+                ev("__bs.tutorialNext()")
+        expect_step("move")
+        page.keyboard.down("KeyW"); ev("__bs.step(2.5)"); page.keyboard.up("KeyW")
+        expect_step("sprint")
+        page.keyboard.down("KeyW"); page.keyboard.down("ShiftLeft"); ev("__bs.step(2)"); page.keyboard.up("ShiftLeft"); page.keyboard.up("KeyW")
+        expect_step("jump")
+        page.keyboard.press("Space"); ev("__bs.step(0.1)")
+        expect_step("interact")
+        ev("__bs.gotoObjective(0.4)"); ev("__bs.step(0.2)")
+        page.keyboard.press("KeyE"); ev("__bs.step(0.2)")
+        expect_step("inventory")
+        page.keyboard.press("KeyI"); time.sleep(0.3)
+        if not page.locator(".inv-list").count():
+            failures.append("inventory panel did not open")
+        page.keyboard.press("KeyI")
+        expect_step("crew")
+        page.keyboard.press("KeyC"); time.sleep(0.3); page.keyboard.press("KeyC")
+        expect_step("objectives")
+        page.keyboard.press("KeyJ"); time.sleep(0.3); page.keyboard.press("KeyJ")
+        expect_step("compass")
+        ev("__bs.step(9)")
+        if ev("__bs.tutorial") or not ev("__bs.save.flags.tutorialDone"):
+            failures.append("tutorial did not finish or was not remembered")
 
         # ---- play levels 1-10 ----
         # flag -> (screenshot name, hour of day for the shot)
@@ -104,14 +162,47 @@ def main():
             ev(f"__bs.teleport({x + math.sin(a + 1.4) * 2.6}, {z + math.cos(a + 1.4) * 2.6}, {a})")
             ev(f"__bs.photo([{cx}, {cy}, {cz}], [{x}, {gy + look_h}, {z}])")
 
+        n_scenes = 0
+        scene_seen = []
+
+        def skip_scene(state):
+            for _ in range(60):
+                time.sleep(0.25)
+                if ev("__bs.state") == "game":
+                    return True
+                if (state == "narrator" and ev("__bs.vault.playing")) or (state == "flashback" and ev("document.body.classList.contains('flashback')")):
+                    time.sleep(2.5)
+                    if state not in scene_seen or len(scene_seen) < 5:
+                        shot(f"scene-{len(scene_seen)}-{state}")
+                    scene_seen.append(state)
+                    ev("__bs.skip()")
+                    page.wait_for_function("window.__bs.state === 'game'", timeout=20000)
+                    return True
+            return False
+
         taken = set()
         seen_levels = []
         last_level = 0
         stuck = 0
         hound_seen = False
         for it in range(900):
-            st = ev("({level: __bs.level, mode: __bs.mode, hound: __bs.hound, crew: __bs.crew, busy: __bs.save && null})")
+            st = ev("({state: __bs.state, level: __bs.level, mode: __bs.mode, hound: __bs.hound, crew: __bs.crew, busy: __bs.save && null})")
             lvl = st["level"]
+            if st["state"] in ("narrator", "flashback"):
+                # between-level scenes: let them start, photograph, skip
+                if not skip_scene(st["state"]):
+                    failures.append(f"scene stuck on level {lvl}")
+                    break
+                continue
+            if st["mode"] == "scene":
+                n_scenes += 1
+                ev("__bs.step(1.5)")
+                time.sleep(1.5)
+                if n_scenes <= 3:
+                    shot(f"09-scene-{n_scenes}")
+                ev("__bs.skip()")
+                ev("__bs.step(0.1)")
+                continue
             if lvl != last_level:
                 log(f"-> level {lvl}  (iteration {it})")
                 seen_levels.append(lvl)
@@ -173,6 +264,20 @@ def main():
                     shot(f"{name}")
                     ev("__bs.photo(null)")
                     ev(f"__bs.setTime({saved_t})")
+        # chapter end: the final Vault scene follows the beacon
+        ev("__bs.step(6)")
+        for _ in range(60):
+            cur = ev("__bs.state")
+            if cur != "game":
+                break
+            time.sleep(0.2)
+            ev("__bs.step(0.5)")
+        if ev("__bs.state") == "narrator":
+            skip_scene("narrator")
+        flags = ev("__bs.save.flags")
+        for sc in ("l3", "fight", "l7", "ch1"):
+            if not flags.get(f"seen-{sc}"):
+                failures.append(f"scene {sc} never played")
         final = ev("({level: __bs.level, completed: __bs.save.completed, flags: __bs.save.flags, crew: __bs.crew, hits: __bs.save.houndHits})")
         log("final:", json.dumps(final)[:600])
         if final["level"] != 11:

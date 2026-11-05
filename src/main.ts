@@ -405,6 +405,7 @@ window.addEventListener('resize', () => {
   skip() { skipCurrent(); },
   get tutorial() { const tu = game?.tutorial; return tu?.active ? { step: tu.step, index: tu.index } : null; },
   get device() { return input.device; },
+  tutorialNext() { game?.tutorial.finish(true); game?.tutorial.start(); },
   get level() { return game?.save?.level; },
   setTime(h: number) { if (game?.save) game.save.timeOfDay = h; },
   cineSeek(t: number) { cine.seek(t); },

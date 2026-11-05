@@ -70,10 +70,19 @@ def main():
         page.click("#btn-new")
         page.wait_for_selector("#nm-ok", timeout=10000)  # name screen: keep the default names
         page.click("#nm-ok")
-        page.wait_for_function("window.__bs.state === 'cinematic'", timeout=20000)
         shot = lambda name: page.screenshot(path=str(SHOTS / f"{args.prefix}{name}.jpg"), type="jpeg", quality=86)
+        page.wait_for_function("window.__bs.state === 'narrator' && window.__bs.vault.playing", timeout=20000)
+        time.sleep(6)
+        shot("01b-narrator-vault")
+        page.keyboard.press("Enter")  # MegaZroN is skippable
+        page.wait_for_function("window.__bs.state === 'cinematic'", timeout=20000)
         # software GL is slow, so jump the timeline to key moments instead of waiting
-        for t, name in [(11.5, "02-cinematic-departure"), (36.5, "02b-cinematic-deck"), (44.5, "02c-cinematic-sgr-a"), (55.5, "02d-cinematic-event")]:
+        page.evaluate("window.__bs.cineSeek(33.45)")
+        time.sleep(6)
+        shot("02b-cinematic-deck")
+        page.evaluate("window.__bs.skip()")  # leave the deck scene
+        time.sleep(1)
+        for t, name in [(11.5, "02-cinematic-departure"), (44.5, "02c-cinematic-sgr-a"), (55.5, "02d-cinematic-event")]:
             page.evaluate(f"window.__bs.cineSeek({t})")
             time.sleep(3)
             shot(name)

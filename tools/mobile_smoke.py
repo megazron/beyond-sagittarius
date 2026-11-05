@@ -119,6 +119,10 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
         fail("name screen scrolls sideways")
     page.locator("#nm-ok").scroll_into_view_if_needed()
     touch.tap(*centre(page, "#nm-ok"))
+    page.wait_for_function("window.__bs.state === 'narrator' && window.__bs.vault.playing", timeout=30000)
+    time.sleep(3)
+    shot("02b-narrator")
+    touch.tap(*centre(page, "#btn-skip"))  # MegaZroN skips with a tap
     page.wait_for_function("window.__bs.state === 'cinematic'", timeout=20000)
     ev("__bs.cineSeek(11.5)")
     time.sleep(3)

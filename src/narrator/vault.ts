@@ -40,7 +40,7 @@ export class Vault {
   private quill = new THREE.Group();
   private page!: THREE.MeshStandardMaterial;
   private halo = new THREE.PointLight(0xffc36a, 0, 5);
-  private key = new THREE.PointLight(0xffd9a0, 26, 12);
+  private key = new THREE.PointLight(0xffd9a0, 3.2, 9);
   private built = false;
   private lines: VaultLine[] = [];
   private i = -1;
@@ -77,7 +77,7 @@ export class Vault {
       ring.rotation.x = -Math.PI / 2; ring.position.y = 0.004; s.add(ring);
     }
     // back wall opens onto the black hole: a horseshoe of pillars and shelves
-    const slates = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.5, 0.03), new THREE.MeshStandardMaterial({ color: 0x0c0e14, emissive: 0xffb35c, emissiveIntensity: 0.55, roughness: 0.4 }), 620);
+    const slates = new THREE.InstancedMesh(new THREE.BoxGeometry(0.26, 0.42, 0.03), new THREE.MeshStandardMaterial({ color: 0x0c0e14, emissive: 0xffb35c, emissiveIntensity: 0.16, roughness: 0.4 }), 620);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(); let n = 0;
     for (let k = 0; k < 16; k++) {
       const a = 0.72 + (k / 15) * (Math.PI * 2 - 1.44);
@@ -97,8 +97,8 @@ export class Vault {
     }
     slates.count = n; s.add(slates);
     for (let row = 0; row < 10; row++) {
-      const shelf = new THREE.Mesh(new THREE.TorusGeometry(10.2, 0.05, 6, 96, Math.PI * 2 - 1.44), brassDark);
-      shelf.rotation.x = Math.PI / 2; shelf.rotation.z = Math.PI / 2 + 0.72; shelf.position.y = 0.58 + row * 0.66; s.add(shelf);
+      const shelf = new THREE.Mesh(new THREE.TorusGeometry(10.2, 0.05, 6, 96, Math.PI * 2 - 1.44).rotateZ(-Math.PI / 2 + 0.72), brassDark);
+      shelf.rotation.x = Math.PI / 2; shelf.position.y = 0.58 + row * 0.66; s.add(shelf);
     }
     // ceiling ring around the oculus
     const roof = new THREE.Mesh(new THREE.TorusGeometry(10.6, 1.1, 10, 96), stone); roof.rotation.x = Math.PI / 2; roof.position.y = 13; s.add(roof);
@@ -113,11 +113,11 @@ export class Vault {
     g.fillStyle = 'rgba(40,24,14,0.85)'; for (let y = 22; y < 240; y += 13) for (const x0 of [24, 272]) { let x = x0; while (x < x0 + 214) { const w = 8 + ((x * 7 + y * 3) % 26); g.fillRect(x, y, w, 2.2); x += w + 5; } }
     g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(253, 0, 6, 256);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-    this.page = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8, emissive: 0xffc98a, emissiveMap: tex, emissiveIntensity: 0.28 });
+    this.page = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8, emissive: 0xffc98a, emissiveMap: tex, emissiveIntensity: 0.1 });
     const book = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.07, 0.56), [wood, wood, this.page, wood, wood, wood]);
     book.position.set(0, 1.15, 0); book.rotation.x = 0.24; desk.add(book);
     // quill that keeps writing without a hand
-    const feather = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.34, 8).rotateZ(Math.PI).scale(0.5, 1, 1.4), new THREE.MeshStandardMaterial({ color: 0xf0ece0, emissive: 0xffc36a, emissiveIntensity: 0.4, roughness: 0.6 }));
+    const feather = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.34, 8).rotateZ(Math.PI).scale(0.5, 1, 1.4), new THREE.MeshStandardMaterial({ color: 0xf0ece0, emissive: 0xffc36a, emissiveIntensity: 0.15, roughness: 0.6 }));
     feather.position.y = 0.17; this.quill.add(feather); this.quill.position.set(0.3, 1.26, 0.86); this.quill.rotation.z = -0.5; s.add(this.quill);
 
     // the six-world orrery on the host's right
@@ -143,10 +143,10 @@ export class Vault {
 
     // lighting: warm desk pool, hot rim from the disk behind him, cold fill from the shelves
     this.key.position.set(0.5, 1.75, 1.5); s.add(this.key);
-    const rim = new THREE.SpotLight(0xff9a50, 280, 30, 0.42, 0.6);
+    const rim = new THREE.SpotLight(0xff9a50, 70, 30, 0.42, 0.6);
     rim.position.set(1.8, 5.5, -7); rim.target.position.set(0, 1.9, 0); rim.castShadow = true; rim.shadow.mapSize.set(1024, 1024); rim.shadow.bias = -0.0004; s.add(rim, rim.target);
-    const rim2 = new THREE.SpotLight(0x8fb4ff, 90, 26, 0.5, 0.8); rim2.position.set(-6, 4, 1.5); rim2.target.position.set(0, 1.9, 0); s.add(rim2, rim2.target);
-    s.add(new THREE.HemisphereLight(0x3a4466, 0x120a06, 0.55));
+    const rim2 = new THREE.SpotLight(0x8fb4ff, 26, 26, 0.5, 0.8); rim2.position.set(-6, 4, 1.5); rim2.target.position.set(0, 1.9, 0); s.add(rim2, rim2.target);
+    s.add(new THREE.HemisphereLight(0x46507a, 0x1a0e08, 1.0));
     this.halo.position.set(0, 2.5, -0.2); s.add(this.halo);
 
     this.host = createCharacter('megazron', this.detail);
@@ -212,9 +212,9 @@ export class Vault {
     this.host.animate(this.pose, 0, 0, t0, dt);
     this.host.look2(this.pose === 'write' ? 0 : Math.sin(t0 * 0.4) * 0.05, 0);
     const lvl = voice.level();
-    this.halo.intensity = 1.2 + lvl * 7;
-    this.key.intensity = 26 + Math.sin(t0 * 7.3) * 0.8 + Math.sin(t0 * 3.1) * 1.2;
-    this.page.emissiveIntensity = 0.26 + lvl * 0.25;
+    this.halo.intensity = 0.5 + lvl * 2.5;
+    this.key.intensity = 3.2 + Math.sin(t0 * 7.3) * 0.12 + Math.sin(t0 * 3.1) * 0.2;
+    this.page.emissiveIntensity = 0.1 + lvl * 0.14;
     this.quill.position.x = 0.28 + Math.sin(t0 * 2.6) * 0.14;
     this.quill.position.z = 0.84 + (Math.sin(t0 * 0.37) * 0.5 + 0.5) * 0.14;
     this.quill.rotation.x = Math.sin(t0 * 7) * 0.06;

@@ -305,7 +305,7 @@ export function createCharacter(id: CrewId, detail = 1) {
       for (const f of [foreL, foreR]) rollCuff(gold, f, -0.235, 0.05);
       // a slim halo with a gap, turning behind his head
       const halo = new THREE.Group(); halo.position.set(0, 0.14, -0.1); head.add(halo);
-      add(new THREE.TorusGeometry(0.2, 0.006, 8, 64, Math.PI * 1.72), new THREE.MeshStandardMaterial({ color: 0x221708, emissive: 0xffc36a, emissiveIntensity: 3 }), halo, 0, 0, 0, false);
+      add(new THREE.TorusGeometry(0.2, 0.006, 8, 64, Math.PI * 1.72), new THREE.MeshStandardMaterial({ color: 0x221708, emissive: 0xffc36a, emissiveIntensity: 1.5 }), halo, 0, 0, 0, false);
       extras.halo = halo;
       ear('long');
       break;

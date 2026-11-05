@@ -9,7 +9,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "smoke": "python3 tools/smoke.py",
-    "smoke:levels": "python3 tools/levels_smoke.py"
+    "smoke:levels": "python3 tools/levels_smoke.py",
+    "smoke:mobile": "python3 tools/mobile_smoke.py",
+    "voice": ".venv-tts/bin/python tools/tts/generate_voice.py"
   },
   "dependencies": {
     "three": "^0.187.0"
