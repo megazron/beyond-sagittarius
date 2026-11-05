@@ -8,7 +8,7 @@ import { buildHair, HAIRSTYLES, HAIR_CAP, SKULL } from './hair';
 import { LOOKS, CrewId, Look } from './looks';
 
 export type { CrewId } from './looks';
-export type CrewPose = 'stand' | 'idle' | 'walk' | 'sit' | 'injured' | 'wave' | 'lie' | 'point' | 'cheer' | 'facepalm' | 'selfie' | 'shout' | 'argue';
+export type CrewPose = 'stand' | 'idle' | 'walk' | 'sit' | 'injured' | 'wave' | 'lie' | 'point' | 'cheer' | 'facepalm' | 'selfie' | 'shout' | 'argue' | 'present' | 'write';
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 // ---- materials ----
@@ -171,6 +171,7 @@ export function createCharacter(id: CrewId, detail = 1) {
 
   // ---- role outfits: silhouette first ----
   const tailParts: { g: THREE.Group; k: number }[] = [];
+  const extras: { halo?: THREE.Group } = {};
   switch (id) {
     case 'scientist': {
       const coat = cloth(0xe4e6e0, 0.8), under = cloth(0x1f2d3f), trou = cloth(0x2c3440), dark = leather(0x2a2522);
@@ -288,6 +289,25 @@ export function createCharacter(id: CrewId, detail = 1) {
       add(new THREE.CylinderGeometry(0.112, 0.116, 0.042, 22, 1, true), cloth(0xd8452e, 0.9), head, 0, 0.175, -0.005);
       add(new THREE.CylinderGeometry(0.005, 0.005, 0.14, 6).rotateZ(1.25), new THREE.MeshStandardMaterial({ color: 0xf4c430, roughness: 0.6 }), head, 0.09, 0.128, -0.03);
       ear('round');
+      break;
+    }
+    case 'megazron': {
+      // Star-black skin, an ink-blue greatcoat with gold piping, a quill that writes by itself.
+      const coat = cloth(0x141a3c, 0.62), gold = metal(0xd4a94e, 0.3), dark = cloth(0x0a0b16);
+      torso(dark); pelvis(dark); pants(dark, 1.04); boot(leather(0x0c0c12, 0.3), metal(0xd4a94e, 0.4), 0.26, 0.92);
+      sleeves(coat, coat, 1.3); addHands(leather(0xe9e2d0, 0.32));
+      add(arcLoft(torsoRings(1.1), 0.34, 5.94, 16), coat, chest);
+      for (const [a0, a1] of [[0.34, Math.PI], [Math.PI, 5.94]]) coatPanel(coat.clone(), a0, a1, 0.96, 1.55);
+      // tall winged collar
+      for (const s of [-1, 1]) { const g = arcLoft([{ y: 0.42, rx: 0.1, rz: 0.08 }, { y: 0.66, rx: 0.17, rz: 0.13, z: -0.02 }], s > 0 ? 0.25 : Math.PI, s > 0 ? Math.PI : 2 * Math.PI - 0.25, 10); add(g, coat, chest); }
+      // gold piping down the coat and around the cuffs
+      for (const s of [-1, 1]) { strap([V(s * 0.06, 0.45, 0.1), V(s * 0.11, 0.2, 0.125), V(s * 0.13, 0, 0.13)], gold, chest, 0.007); }
+      for (const f of [foreL, foreR]) rollCuff(gold, f, -0.235, 0.05);
+      // a slim halo with a gap, turning behind his head
+      const halo = new THREE.Group(); halo.position.set(0, 0.14, -0.1); head.add(halo);
+      add(new THREE.TorusGeometry(0.2, 0.006, 8, 64, Math.PI * 1.72), new THREE.MeshStandardMaterial({ color: 0x221708, emissive: 0xffc36a, emissiveIntensity: 3 }), halo, 0, 0, 0, false);
+      extras.halo = halo;
+      ear('long');
       break;
     }
     case 'social': {
@@ -408,6 +428,8 @@ export function createCharacter(id: CrewId, detail = 1) {
       case 'facepalm': T.aRx = -1.7; T.aRz = 0.28; T.eR = 2.3; T.hx = 0.4; T.sp += 0.08; T.hy = Math.sin(t * 1.6) * 0.09; break;
       case 'selfie': T.aRx = -2.1; T.aRz = -0.55; T.eR = 0.55; T.hz = 0.2; T.hy = -0.35; T.aLz = 0.6; T.aLy = -1.2; T.eL = 1.75; T.spZ = 0.08; break;
       case 'shout': T.aLx = -0.9; T.aRx = -0.9; T.aLz = 0.35; T.aRz = -0.35; T.eL = 1.2; T.eR = 1.2; T.sp += 0.12; T.hx = -0.14; break;
+      case 'present': T.aLx = -0.9; T.aRx = -0.9; T.aLz = 0.55; T.aRz = -0.55; T.eL = 0.5; T.eR = 0.5; T.hx = -0.05; T.sp -= 0.04; break;
+      case 'write': T.aRx = -0.85; T.aRy = 0.5; T.eR = 1.1; T.aLx = -0.45; T.eL = 0.8; T.hx = 0.34; T.sp += 0.14; break;
       case 'argue': T.aRx = -1.15 + Math.sin(t * 6) * 0.2; T.eR = 0.75 + Math.sin(t * 6) * 0.3; T.aLz = 0.6; T.aLy = -1.2; T.eL = 1.75; T.hz = Math.sin(t * 3) * 0.08; T.sp += 0.05; break;
     }
     const r = 1 - Math.exp(-dt * (amount > 0.02 ? 22 : 8));
@@ -448,6 +470,7 @@ export function createCharacter(id: CrewId, detail = 1) {
         if (i) g.rotation.x = -0.18 - amount * 0.1 + Math.sin(t * 1.3 - q * 2) * 0.05;
       });
     }
+    if (extras.halo) extras.halo.rotation.z = t * 0.4;
     // face
     if (speak > 0) { speakPhase += dt * 11; speak = Math.max(0, speak - dt); }
     blinkAt -= dt;

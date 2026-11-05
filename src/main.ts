@@ -13,9 +13,12 @@ import { Input } from './game/input';
 import { Game } from './game/game';
 import { applyCrewNames, CrewNames } from './core/crew';
 import { TouchControls, TouchAction } from './ui/touch';
+import { voice } from './core/voice';
+import { Vault, vaultScript } from './narrator/vault';
+import { onLangChange } from './i18n';
 import { fitFov, lockViewport, tryFullscreen } from './core/viewport';
 
-type State = 'loading' | 'title' | 'cinematic' | 'game';
+type State = 'loading' | 'title' | 'cinematic' | 'game' | 'narrator' | 'flashback';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 lockViewport();
@@ -24,7 +27,13 @@ setLang(settings.lang);
 const quality = detectQuality();
 const ui = new UI();
 ui.subtitlesOn = settings.subtitles;
-audio.setVolume(settings.volume);
+function applyAudio() {
+  audio.setVolume(settings.volume);
+  audio.setMix({ music: settings.musicVolume, sfx: settings.sfxVolume, voice: settings.voiceVolume, muted: settings.muted });
+}
+applyAudio();
+void voice.load();
+onLangChange(() => void voice.load());
 
 let renderer: Renderer;
 try {
@@ -44,6 +53,7 @@ const syncDevice = () => document.body.classList.toggle('touch', input.device ==
 input.onDevice(syncDevice);
 syncDevice();
 const cine = new Cinematic(ui);
+const vault = new Vault((k, sp) => ui.subtitle(k, sp), quality.name === 'mobile' ? 0.6 : 1);
 const world = new World(quality);
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2400);
 let player: Player;
@@ -52,6 +62,7 @@ let state: State = 'loading';
 let paused = false;
 let worldReady = false;
 let pendingStart: (() => void) | null = null;
+let suppressPauseOnUnlock = false;
 let pendingNames: CrewNames = {};
 /** Debug camera override used for documentation screenshots. */
 let photo: { from: THREE.Vector3; to: THREE.Vector3 } | null = null;
@@ -62,7 +73,7 @@ renderer.setScene(cine.scene, cine.camera, false);
 function persistSettings() {
   writeSettings(settings);
   ui.subtitlesOn = settings.subtitles;
-  audio.setVolume(settings.volume);
+  applyAudio();
   if (player) { player.sensitivity = settings.sensitivity; player.invertY = settings.invertY; }
   if (!settings.showFps) ui.setFps(null);
 }
@@ -92,6 +103,7 @@ function showTitle() {
   ui.show('cine', false);
   ui.subtitle(null);
   ui.closeModal();
+  cine.resetIdle();
   renderer.setScene(cine.scene, cine.camera, false);
   ui.fade('black', 0, 1.2);
   audio.stopWind();
@@ -110,6 +122,69 @@ function chooseNames() {
   ui.openNames(prev, 'new', (names) => startNewGame(names), () => {});
 }
 
+/** Fade into the Vault for a MegaZroN scene, then hand back to `after`. */
+function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1', after: () => void) {
+  const s = game?.save;
+  const names = (s?.names ?? pendingNames) as CrewNames;
+  const lines = vaultScript(id, { ateRed: !!s?.flags.ateRed, deaths: s?.deaths ?? 0, bites: s?.bites ?? 0, renamed: Object.keys(names).length > 0 });
+  state = 'narrator';
+  input.enabled = false; input.resetTouch(); touch.show(false); suppressPauseOnUnlock = true; input.releasePointer();
+  ui.fade('black', 1, 0.5);
+  ui.show('hud', false);
+  setTimeout(() => {
+    renderer.setScene(vault.scene, vault.camera, false);
+    ui.show('cine', true);
+    document.getElementById('btn-skip')!.classList.remove('hidden');
+    ui.fade('black', 0, 1.4);
+    vault.play(lines, () => {
+      ui.fade('black', 1, 0.45);
+      setTimeout(() => { ui.show('cine', false); after(); }, 480);
+    });
+  }, 520);
+}
+
+/** Return from a scene to the running game. */
+function backToWorld() {
+  state = 'game';
+  renderer.setScene(world.scene, camera, true);
+  ui.show('hud', true);
+  input.enabled = true;
+  ui.fade('black', 0, 1.0);
+}
+
+function playFlashback(after: () => void) {
+  state = 'flashback';
+  input.enabled = false; input.resetTouch(); touch.show(false); suppressPauseOnUnlock = true; input.releasePointer();
+  ui.fade('white', 1, 0.5);
+  ui.show('hud', false);
+  setTimeout(() => {
+    document.body.classList.add('flashback');
+    renderer.setScene(cine.scene, cine.camera, false);
+    ui.show('cine', true);
+    document.getElementById('btn-skip')!.classList.remove('hidden');
+    ui.fade('white', 0, 0.9);
+    cine.playFlashback(() => {
+      ui.fade('white', 1, 0.4);
+      setTimeout(() => { document.body.classList.remove('flashback'); ui.show('cine', false); ui.fade('black', 1, 0); after(); }, 430);
+    });
+  }, 520);
+}
+
+/** Level endings that cut away to the Vault or a memory (once per save). */
+function onLevelDone(n: number) {
+  const beat: Record<number, 'l3' | 'fight' | 'l7' | 'ch1'> = { 3: 'l3', 5: 'fight', 7: 'l7', 10: 'ch1' };
+  const id = beat[n];
+  if (!id || game.save.flags[`seen-${id}`]) return;
+  const go = () => {
+    if (state !== 'game' || game.mode !== 'play' || paused || ui.modalOpen()) { game.after(1, go); return; }
+    game.save.flags[`seen-${id}`] = true;
+    game.persist();
+    if (id === 'fight') playFlashback(() => { backToWorld(); game.after(1.2, () => ui.say('fb.10', 'crew.scientist.name', 4)); });
+    else playVault(id, backToWorld);
+  };
+  game.after(5.2, go);
+}
+
 function startNewGame(names: CrewNames = {}) {
   audio.start();
   if (input.device === 'touch') tryFullscreen();
@@ -117,8 +192,8 @@ function startNewGame(names: CrewNames = {}) {
   pendingNames = names;
   applyCrewNames(names);
   ui.show('title', false);
-  ui.fade('black', 1, 0.8);
-  setTimeout(() => {
+  void voice.load();
+  playVault('intro', () => {
     state = 'cinematic';
     ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden');
@@ -127,7 +202,7 @@ function startNewGame(names: CrewNames = {}) {
       ui.fade('black', 1, 0.3);
       setTimeout(() => whenWorldReady(() => enterWorld(true)), 350);
     });
-  }, 850);
+  });
 }
 
 function continueGame() {
@@ -172,14 +247,18 @@ document.querySelectorAll<HTMLButtonElement>('.btn.lang').forEach((b) => b.addEv
   refreshTitle();
 }));
 document.getElementById('btn-skip')!.addEventListener('click', () => {
-  if (state === 'cinematic') cine.skip();
-  else if (state === 'game' && game?.mode === 'wake') game.skipWake();
+  skipCurrent();
 });
+function skipCurrent() {
+  if (state === 'cinematic' || state === 'flashback') cine.skip();
+  else if (state === 'narrator') vault.skip();
+  else if (state === 'game' && game?.mode === 'wake') game.skipWake();
+  else if (state === 'game' && game?.mode === 'scene') game.skipScene();
+}
 document.getElementById('objective')!.addEventListener('click', (e) => (e.currentTarget as HTMLElement).classList.toggle('open'));
 document.getElementById('prompt')!.addEventListener('click', () => game?.interact());
 
 // ---------------- pause / menus ----------------
-let suppressPauseOnUnlock = false;
 function openPause() {
   if (state !== 'game' || game.mode !== 'play' || ui.modalOpen()) return;
   paused = true;
@@ -224,8 +303,7 @@ document.addEventListener('pointerlockchange', () => {
 
 window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement)?.tagName === 'INPUT') return; // typing a name
-  if (state === 'cinematic' && (e.code === 'Enter' || e.code === 'Escape')) { cine.skip(); return; }
-  if (state === 'game' && game.mode === 'wake' && (e.code === 'Enter' || e.code === 'Escape')) { game.skipWake(); return; }
+  if ((e.code === 'Enter' || e.code === 'Escape') && (state === 'cinematic' || state === 'narrator' || state === 'flashback' || (state === 'game' && (game.mode === 'wake' || game.mode === 'scene')))) { skipCurrent(); return; }
   if (state !== 'game') return;
   if (e.code === 'Escape') {
     if (ui.modalOpen() && paused) resume();
@@ -256,8 +334,10 @@ function frame() {
   elapsed += dt;
   if (state === 'title' || state === 'loading') {
     cine.idle(dt);
-  } else if (state === 'cinematic') {
+  } else if (state === 'cinematic' || state === 'flashback') {
     cine.update(dt);
+  } else if (state === 'narrator') {
+    vault.update(dt);
   } else if (state === 'game') {
     touch.show(input.device === 'touch' && game.mode === 'play' && !paused && !ui.modalOpen());
     touch.update();
@@ -267,7 +347,7 @@ function frame() {
     world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer);
   }
   // portrait screens: widen the vertical FOV so the horizontal view stays usable
-  const activeCam = state === 'game' ? camera : cine.camera;
+  const activeCam = state === 'game' ? camera : state === 'narrator' ? vault.camera : cine.camera;
   const designFov = activeCam.fov;
   fitFov(activeCam);
   renderer.render(dt, elapsed);
@@ -294,6 +374,7 @@ async function boot() {
   player.invertY = settings.invertY;
   world.scene.add(player.model.root);
   game = new Game(world, player, input, ui, (id) => touch.highlight(id));
+  game.onLevelComplete = onLevelDone;
   // warm up shaders so the first in-game frame doesn't hitch
   player.spawn(0, 2, 0.35);
   world.update(0.016, 0, 8.2, player.pos, camera, renderer.renderer);
@@ -308,6 +389,8 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   cine.camera.aspect = camera.aspect;
   cine.camera.updateProjectionMatrix();
+  vault.camera.aspect = camera.aspect;
+  vault.camera.updateProjectionMatrix();
 });
 
 // Small hook used by the automated smoke test and for debugging.
@@ -316,6 +399,10 @@ window.addEventListener('resize', () => {
   get mode() { return game?.mode; },
   get ready() { return worldReady; },
   get paused() { return paused; },
+  get voice() { return { last: voice.lastKey, played: voice.played }; },
+  voiceDuration(k: string) { return voice.duration(k); },
+  get vault() { return { playing: vault.playing, line: vault.lineIndex }; },
+  skip() { skipCurrent(); },
   get tutorial() { const tu = game?.tutorial; return tu?.active ? { step: tu.step, index: tu.index } : null; },
   get device() { return input.device; },
   get level() { return game?.save?.level; },

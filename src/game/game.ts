@@ -11,8 +11,10 @@ import type { Player } from './player';
 import type { Input } from './input';
 import { UI, PLAYABLE_LEVELS } from '../ui/ui';
 import { Tutorial } from './tutorial';
+import { Cutscene, Beat } from '../cinematic/cutscene';
+import { voice } from '../core/voice';
 
-type Mode = 'wake' | 'play' | 'dead';
+type Mode = 'wake' | 'play' | 'dead' | 'scene';
 
 /** Survival rules, the First-24-Hours objective chain and the wake-up sequence. */
 export class Game {
@@ -45,8 +47,38 @@ export class Game {
       if (this.pendingIntro) { this.pendingIntro = false; this.announceLevel1(); }
     };
     onLangChange(() => this.tutorial.refresh());
-    this.story = new Story(world, player, ui, () => this.save, (sec, fn) => this.after(sec, fn), (amount) => this.hurt(amount));
+    this.story = new Story(world, player, ui, () => this.save, (sec, fn) => this.after(sec, fn), (amount) => this.hurt(amount), (beats, then) => this.playScene(beats, then));
     onLangChange(() => { if (this.save) { this.lastObjKey = ''; this.refreshObjective(); this.ui.setInventory(this.save.inventory, this.story.tools()); } });
+  }
+
+  scene: Cutscene | null = null;
+  /** Run a staged conversation in the world; the camera returns afterwards. */
+  playScene(beats: Beat[], then?: () => void) {
+    if (this.mode !== 'play') { then?.(); return; }
+    this.mode = 'scene';
+    this.input.enabled = false;
+    this.input.releasePointer();
+    this.ui.setPrompt(null);
+    this.ui.show('cine', true);
+    document.getElementById('btn-skip')!.classList.remove('hidden');
+    document.getElementById('hud')!.classList.add('in-scene');
+    this.story.scenePose = () => this.scene?.poses.explorer;
+    this.scene = new Cutscene(beats, {
+      camera: this.player.camera,
+      actors: { scientist: this.player.model, explorer: this.world.explorer },
+      subtitle: (k, sp) => this.ui.subtitle(k, sp),
+      onDone: () => {
+        this.scene = null;
+        this.mode = 'play';
+        this.input.enabled = true;
+        this.ui.show('cine', false);
+        document.getElementById('hud')!.classList.remove('in-scene');
+        this.story.scenePose = null;
+        this.player.pose = 'idle';
+        this.player.snapCamera();
+        then?.();
+      },
+    });
   }
 
   /** Schedule fn after `sec` seconds of game time (pauses with the game). */
@@ -128,8 +160,12 @@ export class Game {
   /** main.ts tells us when a panel was opened (the tutorial waits for it). */
   notePanel(kind: string) { this.tutorial.notePanel(kind); }
 
+  private wakeRate = 1;
   private buildWake() {
     const ui = this.ui;
+    // stretch the sequence so no line is cut off in any language
+    const slots: [string, number][] = [['wake.line1', 4.4], ['wake.line2', 3.6], ['wake.line3', 3.4], ['wake.line4', 4.2], ['wake.line5', 3.8]];
+    this.wakeRate = 1 / Math.max(1, ...slots.map(([k, s]) => ((voice.duration(k) ?? 0) + 0.3) / s));
     this.wakeCues = [
       { t: 0.4, fn: () => ui.fade('black', 0, 4) },
       { t: 1.6, fn: () => ui.say('wake.line1', 'crew.scientist.name', 3.4) },
@@ -152,6 +188,8 @@ export class Game {
     for (const c of this.wakeCues) if (c.t < t && !c.done) { c.done = true; c.fn(); }
     this.wakeT = t;
   }
+
+  skipScene() { this.scene?.skip(); }
 
   skipWake() {
     if (this.mode !== 'wake') return;
@@ -205,9 +243,17 @@ export class Game {
     if (s.timeOfDay >= 24) { s.timeOfDay -= 24; s.day++; }
     if (Math.abs(s.timeOfDay - 19.2) < dt / 50 && !s.flags.nightMsg) { s.flags.nightMsg = true; this.ui.toast(t('msg.night')); }
 
-    if (this.mode === 'wake') { this.updateWake(dt); return; }
+    if (this.mode === 'wake') { this.updateWake(dt * this.wakeRate); return; }
     if (this.mode === 'dead') return;
     this.runCues(dt);
+    if (this.mode === 'scene') {
+      const sc = this.scene!;
+      this.player.pose = sc.poses.scientist ?? 'idle';
+      this.player.update(dt, this.input, false, 100, 1);
+      this.story.update(dt, time);
+      sc.update(dt);
+      return;
+    }
 
     const p = this.player;
     p.update(dt, this.input, true, st.stamina, st.health < 25 ? 0.75 : 1);
@@ -471,6 +517,7 @@ export class Game {
 
   private die() {
     this.mode = 'dead';
+    this.save.deaths = (this.save.deaths ?? 0) + 1;
     this.input.enabled = false;
     this.input.releasePointer();
     this.ui.setPrompt(null);

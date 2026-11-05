@@ -159,11 +159,11 @@ const D = Math.PI / 180;
 const layer = (el: number, from: number, to: number, n: number, len: number, droop: number, w: number, o: Partial<Lock> = {}): Lock[] =>
   fan(from * D, to * D, n, (az, i) => ({ az, el: el * D, len: len * (1 + ((i * 7) % 3 - 1) * 0.1), droop, w, ...o }));
 
-export type HairStyleId = 'scientist' | 'strong' | 'medic' | 'explorer' | 'builder' | 'social';
+export type HairStyleId = 'scientist' | 'strong' | 'medic' | 'explorer' | 'builder' | 'social' | 'megazron';
 
 /** Per-style shell cut: back and front hairline elevation in degrees. */
 export const HAIR_CAP: Record<HairStyleId, [number, number]> = {
-  scientist: [-18, 54], strong: [44, 62], medic: [-28, 54], explorer: [-16, 52], builder: [30, 52], social: [-14, 54],
+  scientist: [-18, 54], strong: [44, 62], medic: [-28, 54], explorer: [-16, 52], builder: [30, 52], social: [-14, 54], megazron: [-22, 58],
 };
 
 /** Six original hairstyles. Each returns its list of locks. */
@@ -206,6 +206,13 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
     ...fan(0, 310 * D, 7, (az, i) => ({ az, el: 82 * D, len: 0.13 + (i % 2) * 0.05, droop: -2, dir: [Math.sin(az) * 0.22, 1, Math.cos(az) * 0.22], w: 0.04, sway: 0.32 })),
     ...fan(-44 * D, 44 * D, 5, (az, i) => ({ az, el: 58 * D, len: 0.075 + (i % 2) * 0.02, droop: 2.4, w: 0.022, sway: 0.4, dir: [Math.sin(az) * 0.7, 0.2, 1] })),
     ...fan(115 * D, 245 * D, 8, (az) => ({ az, el: 26 * D, len: 0.07, droop: 2.4, w: 0.03, sway: 0.2 })),
+  ],
+  // Long pale hair that floats upward at the ends, as if gravity is a suggestion.
+  megazron: () => [
+    ...layer(76, 45, 315, 16, 0.5, 0.2, 0.05, { sway: 1.3 }),
+    ...layer(35, 90, 270, 13, 0.46, 0.05, 0.05, { out: 0.35, sway: 1.5, curl: 0.4 }),
+    ...fan(-46 * D, 46 * D, 8, (az, i) => ({ az, el: 78 * D, len: 0.1 + (i % 2) * 0.015, droop: 4, w: 0.024, sway: 0.4 })),
+    { az: 74 * D, el: 46 * D, len: 0.34, droop: 1, w: 0.022, sway: 1.4 }, { az: -74 * D, el: 46 * D, len: 0.34, droop: 1, w: 0.022, sway: 1.4 },
   ],
   // Two huge spiral tails with an airy fringe: the loudest silhouette in the crew.
   social: () => [

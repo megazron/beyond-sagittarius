@@ -6,6 +6,10 @@ export class Audio {
   private wind: GainNode | null = null;
   private alarmTimer = 0;
   volume = 0.7;
+  private buses: { music: GainNode; sfx: GainNode; voice: GainNode; analyser: AnalyserNode } | null = null;
+  private mix = { music: 0.6, sfx: 0.8, voice: 1, muted: false };
+  private ducked = false;
+  private meter = new Uint8Array(256);
 
   start() {
     if (this.ctx) { this.ctx.resume(); return; }
@@ -13,13 +17,45 @@ export class Audio {
       this.ctx = new AudioContext();
     } catch { return; }
     this.master = this.ctx.createGain();
-    this.master.gain.value = this.volume;
+    this.master.gain.value = this.mix.muted ? 0 : this.volume;
     this.master.connect(this.ctx.destination);
+    const music = this.ctx.createGain(), sfx = this.ctx.createGain(), voice = this.ctx.createGain();
+    const analyser = this.ctx.createAnalyser(); analyser.fftSize = 256;
+    music.connect(this.master); sfx.connect(this.master); voice.connect(analyser); analyser.connect(this.master);
+    this.buses = { music, sfx, voice, analyser };
+    this.applyMix();
   }
+
+  private applyMix() {
+    if (!this.ctx || !this.buses) return;
+    const t = this.ctx.currentTime, d = this.ducked ? 0.45 : 1, b = this.buses;
+    b.music.gain.setTargetAtTime(this.mix.music * d, t, 0.12);
+    b.sfx.gain.setTargetAtTime(this.mix.sfx * (this.ducked ? 0.7 : 1), t, 0.12);
+    b.voice.gain.setTargetAtTime(this.mix.voice, t, 0.05);
+  }
+
+  /** Bus levels 0..1 and global mute. */
+  setMix(m: { music?: number; sfx?: number; voice?: number; muted?: boolean }) {
+    Object.assign(this.mix, m);
+    this.applyMix();
+    this.setVolume(this.volume);
+  }
+
+  voiceIn(): AudioNode { return this.buses!.voice; }
+  duck(on: boolean) { this.ducked = on; this.applyMix(); }
+  voiceLevel() {
+    if (!this.buses) return 0;
+    this.buses.analyser.getByteTimeDomainData(this.meter);
+    let s = 0;
+    for (let i = 0; i < this.meter.length; i++) { const v = (this.meter[i] - 128) / 128; s += v * v; }
+    return Math.min(1, Math.sqrt(s / this.meter.length) * 4);
+  }
+  private get sfxOut(): AudioNode { return this.buses?.sfx ?? this.master; }
+  private get musicOut(): AudioNode { return this.buses?.music ?? this.master; }
 
   setVolume(v: number) {
     this.volume = v;
-    if (this.ctx) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1);
+    if (this.ctx) this.master.gain.setTargetAtTime(this.mix.muted ? 0 : v, this.ctx.currentTime, 0.1);
   }
 
   private noiseBuffer(): AudioBuffer {
@@ -43,7 +79,7 @@ export class Audio {
       const og = ctx.createGain(); og.gain.value = 0.12 / (i + 1);
       o.connect(og).connect(lp); o.start();
     });
-    lp.connect(g).connect(this.master);
+    lp.connect(g).connect(this.musicOut);
     g.gain.setTargetAtTime(0.5, ctx.currentTime, 2);
     this.drone = g;
   }
@@ -64,7 +100,7 @@ export class Audio {
     const lfo = ctx.createOscillator(); lfo.frequency.value = 0.07;
     const lfoG = ctx.createGain(); lfoG.gain.value = 220; lfo.connect(lfoG).connect(bp.frequency); lfo.start();
     const g = ctx.createGain(); g.gain.value = 0;
-    src.connect(bp).connect(g).connect(this.master); src.start();
+    src.connect(bp).connect(g).connect(this.sfxOut); src.start();
     g.gain.setTargetAtTime(0.35, ctx.currentTime, 3);
     this.wind = g;
   }
@@ -84,7 +120,7 @@ export class Audio {
     const g = ctx.createGain(); g.gain.setValueAtTime(0, t0);
     g.gain.linearRampToValueAtTime(vol, t0 + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g).connect(this.master); o.start(t0); o.stop(t0 + dur + 0.05);
+    o.connect(g).connect(this.sfxOut); o.start(t0); o.stop(t0 + dur + 0.05);
   }
 
   blip() { this.tone(880, 0.12, 'sine', 0.15); this.tone(1320, 0.15, 'sine', 0.1, 0.06); }
@@ -100,7 +136,7 @@ export class Audio {
     f.frequency.setValueAtTime(200, ctx.currentTime); f.frequency.exponentialRampToValueAtTime(3000, ctx.currentTime + 3);
     const g = ctx.createGain(); g.gain.setValueAtTime(0.0, ctx.currentTime);
     g.gain.linearRampToValueAtTime(0.6, ctx.currentTime + 2.5); g.gain.linearRampToValueAtTime(0, ctx.currentTime + 4);
-    src.connect(f).connect(g).connect(this.master); src.start(); src.stop(ctx.currentTime + 4.2);
+    src.connect(f).connect(g).connect(this.sfxOut); src.start(); src.stop(ctx.currentTime + 4.2);
   }
 
   alarm(on: boolean) {

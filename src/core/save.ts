@@ -17,6 +17,9 @@ export interface SaveData {
   names?: Partial<Record<string, string>>;
   /** Number of times the night predator was driven off (level 7). */
   houndHits?: number;
+  /** Bites taken from the predator; deaths so far (the narrator keeps score). */
+  bites?: number;
+  deaths?: number;
   savedAt: number;
 }
 
@@ -25,6 +28,10 @@ export interface Settings {
   sensitivity: number;
   invertY: boolean;
   volume: number;
+  voiceVolume: number;
+  musicVolume: number;
+  sfxVolume: number;
+  muted: boolean;
   subtitles: boolean;
   showFps: boolean;
   /** Set from the title-screen settings: run the tutorial on the next session. */
@@ -84,7 +91,7 @@ export function newSave(): SaveData {
 }
 
 export function loadSettings(): Settings {
-  const def: Settings = { lang: 'en', sensitivity: 1, invertY: false, volume: 0.7, subtitles: true, showFps: false };
+  const def: Settings = { lang: 'en', sensitivity: 1, invertY: false, volume: 0.8, voiceVolume: 1, musicVolume: 0.6, sfxVolume: 0.8, muted: false, subtitles: true, showFps: false };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) return { ...def, ...JSON.parse(raw) };

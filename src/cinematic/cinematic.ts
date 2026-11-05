@@ -3,6 +3,9 @@ import { createSpaceDome, createEarth, createOrbitalRing, createPlanet } from '.
 import { createShip, createInterior } from './ship';
 import { easeInOut, clamp, smoothstep, lerp } from '../core/noise';
 import { audio } from '../core/audio';
+import { Cutscene, Beat } from './cutscene';
+import { deckScene, fightScene, stageDeck } from './scenes';
+import type { Character, CrewId } from '../characters/character';
 
 export interface CineUI {
   subtitle(key: string | null, speakerKey?: string): void;
@@ -115,12 +118,63 @@ export class Cinematic {
   }
 
   skip() {
+    if (this.stage) { this.stage.skip(); return; } // skip the scene; a second tap skips the rest
     if (!this.playing) return;
     this.finish();
   }
 
+  private stage: Cutscene | null = null;
+  private get cast() {
+    const ids: CrewId[] = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social'];
+    return Object.fromEntries(ids.map((id, i) => [id, this.interior.crew[i]])) as Record<CrewId, Character>;
+  }
+  /** Freeze the timeline for the character scene on the observation deck. */
+  private holdDeck() {
+    this.runStage(deckScene(this.cast, this.interior.group.position), () => {
+      this.time = Math.max(this.time, 38.8);
+      this.interior.crew.forEach((c) => c.root.rotation.set(0, Math.PI, 0));
+    });
+  }
+
+  private runStage(beats: Beat[], done: () => void) {
+    stageDeck(this.cast, -2.2);
+    this.scene.updateMatrixWorld(true);
+    this.stage = new Cutscene(beats, {
+      camera: this.camera,
+      actors: this.cast,
+      subtitle: (k, sp) => this.ui.subtitle(k, sp),
+      onDone: () => { this.stage = null; done(); },
+    });
+  }
+
+  /** Back to the title backdrop. */
+  resetIdle() { this.setVisible('earth'); this.dome.uniforms.uBH.value = 0; this.camera.fov = 45; this.camera.updateProjectionMatrix(); }
+
+  /** Stand-alone flashback on the deck, used between levels. */
+  playFlashback(done: () => void) {
+    this.setVisible('interior');
+    const d = this.dome.uniforms;
+    d.uWarp.value = 0; d.uBH.value = 0; d.uNebula.value = 0.9;
+    this.camera.fov = 42; this.camera.updateProjectionMatrix();
+    this.flashback = true;
+    this.runStage(fightScene(this.cast, this.interior.group.position), () => { this.flashback = false; done(); });
+  }
+  private flashback = false;
+  get inFlashback() { return this.flashback; }
+
+  private animateCrew(dt: number) {
+    if (!this.interior.group.visible) return;
+    const poses = this.stage?.poses;
+    this.interior.crew.forEach((c) => {
+      c.root.updateMatrixWorld();
+      c.animate(poses?.[c.id as CrewId] ?? 'idle', 0, 0, this.clockT, dt);
+    });
+  }
+  private clockT = 0;
+
   private finish() {
     this.playing = false;
+    this.stage = null;
     audio.alarm(false);
     audio.stopDrone();
     this.ui.subtitle(null); this.ui.caption(null); this.ui.mission(null); this.ui.aiAlert(null); this.ui.chapter(null);
@@ -234,8 +288,7 @@ export class Cinematic {
     });
 
     // ---- Interior: the impossible reading ----
-    this.cue(34.2, () => ui.subtitle('cine.line4', 'crew.scientist.name'));
-    this.cue(37.0, () => ui.subtitle('cine.line5', 'crew.builder.name'));
+    this.cue(33.5, () => this.holdDeck());
     this.cue(39.8, () => { ui.subtitle(null); ui.aiAlert('cine.ai1'); audio.alarm(true); });
     this.cue(44.2, () => { ui.aiAlert(null); audio.alarm(false); });
     const intr = this.interior;
@@ -265,8 +318,10 @@ export class Cinematic {
 
     // ---- Approach Sagittarius A* ----
     this.cue(41.0, () => ui.caption('cine.approach'));
-    this.cue(44.6, () => { ui.caption(null); ui.subtitle('cine.line6', 'crew.scientist.name'); });
-    this.cue(46.4, () => ui.subtitle(null));
+    this.cue(43.0, () => ui.subtitle('op.19', 'crew.social.name'));
+    this.cue(45.4, () => { ui.caption(null); ui.subtitle('op.20', 'crew.scientist.name'); });
+    this.cue(47.6, () => ui.subtitle('cine.line6', 'crew.scientist.name'));
+    this.cue(49.8, () => ui.subtitle(null));
     this.shots.push({
       start: 40.6, end: 46.6,
       enter: () => { this.setVisible('deep'); d.uBH.value = 1; d.uNebula.value = 0.8; },
@@ -318,7 +373,8 @@ export class Cinematic {
     });
 
     this.cue(52.6, () => ui.subtitle('cine.line8', 'crew.strong.name'));
-    this.cue(55.0, () => ui.subtitle(null));
+    this.cue(54.6, () => ui.subtitle('op.21', 'crew.explorer.name'));
+    this.cue(56.6, () => ui.subtitle(null));
     this.cue(53.0, () => audio.whoosh());
     this.shots.push({
       start: 52.4, end: 57.6,
@@ -368,10 +424,18 @@ export class Cinematic {
   }
 
   update(dt: number) {
+    this.clockT += dt;
+    if (this.stage) {
+      this.stage.update(dt);
+      this.animateCrew(dt);
+      this.commonUpdate(dt);
+      return;
+    }
     if (!this.playing) return;
     this.time += dt;
     const t = this.time;
     for (const c of this.cues) if (!c.done && t >= c.t) { c.done = true; c.fn(); if (!this.playing) return; }
+    this.animateCrew(dt);
     for (const s of this.shots) {
       if (t >= s.start && t < s.end) {
         if (!s.done) {

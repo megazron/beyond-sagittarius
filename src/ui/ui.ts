@@ -4,6 +4,7 @@ import type { CineUI } from '../cinematic/cinematic';
 import type { Settings } from '../core/save';
 import type { QualityName } from '../core/quality';
 import { audio } from '../core/audio';
+import { voice } from '../core/voice';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -47,10 +48,11 @@ export class UI implements CineUI {
   }
 
   // ---------- cinematic ----------
-  subtitle(key: string | null, speakerKey?: string) {
+  subtitle(key: string | null, speakerKey?: string, quiet = false) {
     this.lastSub = { key, speaker: speakerKey };
     const el = $('subtitle');
     clearTimeout(this.subTimer);
+    if (key && !quiet) voice.play(key);
     if (!key || !this.subtitlesOn) { el.classList.add('hidden'); return; }
     (el.querySelector('.speaker') as HTMLElement).textContent = speakerKey ? t(speakerKey) : '';
     (el.querySelector('.line') as HTMLElement).textContent = t(key);
@@ -60,13 +62,15 @@ export class UI implements CineUI {
   /** Subtitle that clears itself. */
   say(key: string, speakerKey: string | undefined, seconds = 4) {
     this.subtitle(key, speakerKey);
-    this.subTimer = window.setTimeout(() => this.subtitle(null), seconds * 1000);
+    const spoken = voice.duration(key);
+    this.subTimer = window.setTimeout(() => this.subtitle(null), Math.max(seconds, (spoken ?? 0) + 0.4) * 1000);
   }
 
   caption(key: string | null) {
     this.lastCaption = key;
     const el = $('caption');
     if (!key) { el.classList.add('hidden'); return; }
+    voice.play(key);
     el.textContent = t(key);
     el.classList.remove('hidden');
     el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
@@ -116,6 +120,7 @@ export class UI implements CineUI {
     this.lastAlert = key;
     const el = $('ai-alert');
     if (!key) { el.classList.add('hidden'); return; }
+    voice.play(key);
     el.textContent = t(key);
     el.classList.remove('hidden');
   }
@@ -201,6 +206,8 @@ export class UI implements CineUI {
   memory(key: string | null, seconds = 9) {
     const el = $('memory');
     if (!key) { el.classList.add('hidden'); return; }
+    voice.play(key);
+    seconds = Math.max(seconds, (voice.duration(key) ?? 0) + 0.5);
     el.textContent = t(key);
     el.classList.remove('hidden');
     setTimeout(() => el.classList.add('hidden'), seconds * 1000);
@@ -267,6 +274,10 @@ export class UI implements CineUI {
       <div class="row"><label>${escapeHtml(t('menu.language'))}</label>${seg('lang', [['en', 'English'], ['hi', 'हिन्दी'], ['ur', 'اردو']], s.lang)}</div>
       <div class="row"><label>${escapeHtml(t('settings.sensitivity'))}</label><input type="range" id="set-sens" min="0.3" max="2.5" step="0.1" value="${s.sensitivity}"></div>
       <div class="row"><label>${escapeHtml(t('settings.volume'))}</label><input type="range" id="set-vol" min="0" max="1" step="0.05" value="${s.volume}"></div>
+      <div class="row"><label>${escapeHtml(t('settings.voice'))}</label><input type="range" id="set-voice" min="0" max="1" step="0.05" value="${s.voiceVolume}"></div>
+      <div class="row"><label>${escapeHtml(t('settings.music'))}</label><input type="range" id="set-music" min="0" max="1" step="0.05" value="${s.musicVolume}"></div>
+      <div class="row"><label>${escapeHtml(t('settings.sfx'))}</label><input type="range" id="set-sfx" min="0" max="1" step="0.05" value="${s.sfxVolume}"></div>
+      <div class="row"><label>${escapeHtml(t('settings.mute'))}</label>${onOff('muted', s.muted)}</div>
       <div class="row"><label>${escapeHtml(t('settings.invertY'))}</label>${onOff('invertY', s.invertY)}</div>
       <div class="row"><label>${escapeHtml(t('settings.subtitles'))}</label>${onOff('subtitles', s.subtitles)}</div>
       <div class="row"><label>${escapeHtml(t('settings.fps'))}</label>${onOff('showFps', s.showFps)}</div>
@@ -286,7 +297,11 @@ export class UI implements CineUI {
       }));
     });
     ($('set-sens') as HTMLInputElement).addEventListener('input', (e) => { s.sensitivity = +(e.target as HTMLInputElement).value; onChange(s); });
-    ($('set-vol') as HTMLInputElement).addEventListener('input', (e) => { s.volume = +(e.target as HTMLInputElement).value; onChange(s); });
+    const slider = (id: string, f: (v: number) => void) => ($(id) as HTMLInputElement).addEventListener('input', (e) => { f(+(e.target as HTMLInputElement).value); onChange(s); });
+    slider('set-vol', (v) => (s.volume = v));
+    slider('set-voice', (v) => (s.voiceVolume = v));
+    slider('set-music', (v) => (s.musicVolume = v));
+    slider('set-sfx', (v) => (s.sfxVolume = v));
     $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
   }
 

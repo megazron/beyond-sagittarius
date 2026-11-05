@@ -87,6 +87,17 @@ export const LOOKS: Record<CrewId, Look> = {
     hair: { root: 0x063a3a, mid: 0x12a48c, tip: 0xb6ff5a, shine: 0xdcffb0 },
     glow: 0xffa030, marks: 'plates',
   },
+  // MegaZroN: not on any crew list. Nobody knows what he is.
+  megazron: {
+    build: { height: 1.2, shoulder: 0.92, chest: 0.84, waist: 0.72, hip: 0.8, limb: 0.74, bust: 0, head: 0.96 },
+    persona: { stride: 0.5, armSwing: 0.15, bounce: 0.01, hipSway: 0, shoulderSway: 0.02, lean: 0, stoop: 0.05, stance: 0.05, idle: 'clasped' },
+    face: { skin: 0x23213c, shade: 0x09081a, iris: 0xffc36a, glow: true, eye: 'calm', brow: 0xe8e4f6, mouth: 'smirk',
+      marks: (c, e) => {
+        for (let i = 0; i < 60; i++) { const a = (i * 2.399) % 6.283, r = 0.25 + ((i * 37) % 70) / 100; for (const g of [c, e]) { g.fillStyle = '#d8dcff'; g.beginPath(); g.arc(fx(Math.cos(a) * r), fy(Math.sin(a) * r * 1.1), 0.9 + (i % 3) * 0.5, 0, 7); g.fill(); } }
+      } },
+    hair: { root: 0x5f6bb4, mid: 0xd9dcf4, tip: 0xfff6d6, shine: 0xffffff },
+    glow: 0xd8dcff, marks: 'dots',
+  },
   // Sirelle-human, Venus cloud cities: cobalt skin, gold stars, little antennae.
   social: {
     build: { height: 0.96, shoulder: 0.86, chest: 0.88, waist: 0.76, hip: 1.02, limb: 0.8, bust: 0.8, head: 1.02 },

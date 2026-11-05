@@ -376,3 +376,7 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 }
 /* Large screens: scale the HUD up a little */
 @media (min-width: 2200px) and (min-height: 1200px) { #hud { zoom: 1.35; } }
+
+/* Staged scenes in the world: only the wrist readout stays up */
+#hud.in-scene > *:not(#device) { display: none !important; }
+body.flashback canvas#c { filter: sepia(0.42) saturate(0.82) contrast(1.04) brightness(0.96); }

@@ -38,6 +38,9 @@ export function setOverrides(o: Record<string, string>) {
   listeners.forEach((f) => f());
 }
 
+/** Has the player given this crewmate a custom name? */
+export function isRenamed(id: string): boolean { return `crew.${id}.name` in overrides; }
+
 /** Dictionary value, ignoring overrides (used to show defaults). */
 export function tDefault(key: string): string {
   return DICTS[current][key] ?? DICTS.en[key] ?? key;

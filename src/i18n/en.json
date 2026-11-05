@@ -438,5 +438,9 @@
   "mz.ch1.2": "Subjects: six. Origin: Earth. Funny, isn't it? Not one of you has ever stood on Earth. And yet you were recognised.",
   "mz.ch1.3": "Ninety-nine steps lie between you and the truth. Every one has been walked before. Check the footprints. Check the shoe size.",
   "mz.ch1.4": "See you next chapter, little traveller. I'll keep your seat warm. I always do.",
-  "mz.name": "MegaZroN"
+  "mz.name": "MegaZroN",
+  "settings.voice": "Voices",
+  "settings.music": "Music",
+  "settings.sfx": "Sound effects",
+  "settings.mute": "Mute all"
 }

@@ -5,7 +5,10 @@ import { audio } from '../core/audio';
 import type { SaveData } from '../core/save';
 import type { World } from '../world/world';
 import type { Player } from './player';
+import type { CrewPose } from '../characters/character';
 import type { UI } from '../ui/ui';
+import { cover, Beat } from '../cinematic/cutscene';
+import { voice } from '../core/voice';
 
 /** A contextual "press E" station in the world (build, craft, talk...). */
 export interface Action {
@@ -48,6 +51,7 @@ export class Story {
     private getSave: () => SaveData,
     private after: (sec: number, fn: () => void) => void,
     private hurt: (amount: number) => void,
+    private playScene: (beats: Beat[], then?: () => void) => void,
   ) {
     this.spear = buildSpear();
     this.spear.visible = false;
@@ -187,12 +191,15 @@ export class Story {
         this.world.camp.strikeSparks();
         this.thrustT = 0.35;
         audio.tone(2400, 0.06, 'square', 0.12, 0, -1800);
+        if (this.strikes === 1) this.ui.say('dlg.4.2', 'crew.scientist.name', 2);
+        if (this.strikes === 2) this.ui.say('dlg.4.3', 'crew.scientist.name', 3);
         if (this.strikes < 3) { this.ui.toast(t(`msg.strike${this.strikes}`)); return; }
         this.consume(R.strike);
         s.flags.fire = true;
         this.world.camp.setFire(2);
         audio.tone(90, 1.4, 'sawtooth', 0.12, 0, 40);
         this.ui.toast(t('msg.fireLit'));
+        this.ui.say('dlg.4.4', 'crew.scientist.name', 4);
       } });
     }
     if (n === 5 && !this.flag('shelter')) {
@@ -278,6 +285,7 @@ export class Story {
     h.timer = 0;
     this.world.hound.root.visible = true;
     this.ui.toast(t('msg.houndNear'));
+    this.ui.say('dlg.7.2', 'crew.scientist.name', 3);
     audio.tone(70, 1.8, 'sawtooth', 0.18, 0, -20);
   }
 
@@ -360,11 +368,12 @@ export class Story {
       if (s.houndHits >= 3) {
         h.state = 'flee'; h.timer = 0;
         s.flags.houndGone = true;
-        this.after(2.2, () => this.ui.toast(t('msg.houndFled')));
+        this.after(2.2, () => { this.ui.toast(t('msg.houndFled')); this.ui.say('dlg.7.3', 'crew.scientist.name', 4); });
         return;
       }
     } else if (dist < 2.2) {
       this.hurt(14);
+      s.bites = (s.bites ?? 0) + 1;
       this.ui.toast(t('msg.houndBit'));
     }
     h.state = 'recoil'; h.timer = 0; h.braced = false;
@@ -413,7 +422,7 @@ export class Story {
     this.after(1.4, () => { this.ui.deviceLines([t('signal.tune1'), t('signal.tune2')], true); audio.beep(); });
     this.after(2.8, () => { this.ui.deviceLines([t('signal.tune1'), t('signal.tune2'), t('signal.tune3', { m: dist })], true); audio.chime(); });
     this.after(3.2, () => this.ui.say('dlg.8.found', 'crew.scientist.name', 4.5));
-    this.after(7.5, () => { this.ui.deviceLines(null); s.flags.signal = true; this.sequence = false; });
+    this.after(3.2 + Math.max(4.3, (voice.duration('dlg.8.found') ?? 0) + 0.5), () => { this.ui.deviceLines(null); s.flags.signal = true; this.sequence = false; });
   }
 
   // ---------------- level 9: the Explorer ----------------
@@ -422,16 +431,37 @@ export class Story {
     let at = 0;
     for (const [key, who] of lines) {
       this.after(at, () => this.ui.say(key, `crew.${who}.name`, gap - 0.2));
-      at += gap;
+      at += Math.max(gap, (voice.duration(key) ?? 0) + 0.4);
     }
     this.after(at, () => { this.sequence = false; then?.(); });
   }
 
+  /** Set by the game while a scene directs the Explorer. */
+  scenePose: (() => CrewPose | undefined) | null = null;
+
+  private get pair() { return { z: this.player.model, y: this.world.explorer }; }
+
   private meetCrew() {
     audio.chime();
-    this.dialogue([['dlg.9.1', 'explorer'], ['dlg.9.2', 'scientist'], ['dlg.9.3', 'explorer'], ['dlg.9.4', 'scientist']], 4.2, () => {
-      this.s.flags.metCrew = true;
-    });
+    const { z, y } = this.pair;
+    this.turnToCrew();
+    this.playScene([
+      { key: 'dlg.9.1', who: 'explorer', shot: () => cover.ots(y, z), poses: { explorer: 'injured', scientist: 'stand' }, after: 0.5 },
+      { key: 'dlg.9.2', who: 'scientist', shot: () => cover.close(z, 0.4), poses: { scientist: 'present' } },
+      { key: 'dlg.9.3', who: 'explorer', shot: () => cover.close(y, 0.45, 1.25, 0) },
+      { key: 'dlg.9.3b', who: 'scientist', shot: () => cover.close(z, -0.35), poses: { scientist: 'stand' }, after: 0.4 },
+      { key: 'dlg.9.3c', who: 'explorer', shot: () => cover.close(y, -0.4, 1.1, 0), after: 0.4 },
+      { key: 'dlg.9.4', who: 'scientist', shot: () => cover.two(z, y, 3.2), poses: { scientist: 'point' } },
+    ], () => { this.s.flags.metCrew = true; });
+  }
+
+  /** Square the player up to the Explorer before a two-hander. */
+  private turnToCrew() {
+    const p = this.player, c = this.crew.pos;
+    const yaw = Math.atan2(c.x - p.pos.x, c.z - p.pos.z);
+    p.model.root.rotation.y = yaw;
+    p.facing = yaw + Math.PI;
+    p.model.root.updateMatrixWorld(true);
   }
 
   private splint() {
@@ -440,11 +470,29 @@ export class Story {
     s.flags.splint = true;
     this.world.explorer.setSplint(true);
     audio.thud();
-    this.dialogue([['dlg.9.5', 'explorer']], 4, () => {
+    this.turnToCrew();
+    this.playScene([
+      { key: 'dlg.9.5', who: 'explorer', shot: () => cover.close(this.pair.y, 0.4, 1.1, 0), poses: { explorer: 'injured', scientist: 'facepalm' } },
+    ], () => {
       s.flags.crewFollow = true;
       this.crew.mode = 'follow';
       this.ui.toast(t('msg.crewFollow'));
     });
+  }
+
+  /** The quiet moment by the fire once she is safe. */
+  private campTalk() {
+    const { z, y } = this.pair;
+    const L = this.L;
+    this.crew.pos.copy(L.campSeat);
+    this.player.spawn(L.campSeat.x + 1.5, L.campSeat.z + 1.4, 0);
+    this.turnToCrew();
+    this.playScene([
+      { key: 'dlg.9.6', who: 'explorer', shot: () => cover.close(y, 0.5, 1.2, 0), poses: { explorer: 'sit', scientist: 'stand' }, after: 0.6 },
+      { key: 'dlg.9.7', who: 'scientist', shot: () => cover.close(z, 0.3, 0.95), poses: { scientist: 'stand' }, after: 0.8 },
+      { key: 'dlg.9.8', who: 'explorer', shot: () => cover.close(y, 0.25, 0.95, 0), after: 0.6 },
+      { key: 'dlg.9.9', who: 'scientist', shot: () => cover.two(z, y, 3.5), after: 1.2 },
+    ]);
   }
 
   private updateCrew(dt: number, time: number) {
@@ -463,7 +511,7 @@ export class Story {
     }
     fig.root.visible = mode !== 'hidden';
     if (mode === 'hidden') return;
-    let pose: 'idle' | 'walk' | 'sit' | 'injured' | 'wave' = 'idle';
+    let pose: CrewPose = 'idle';
     let target: THREE.Vector3 | null = null, maxSpeed = 0;
     if (mode === 'injured') {
       pose = 'injured';
@@ -477,10 +525,11 @@ export class Story {
       if (s.level === 9 && c.pos.distanceTo(L.camp) < 10 && p.pos.distanceTo(L.camp) < 12 && !this.sequence) {
         s.flags.crewCamp = true;
         this.ui.toast(t('msg.crewAtCamp'));
-        this.after(1.5, () => this.ui.say('dlg.9.6', 'crew.explorer.name', 5));
+        this.after(2.2, () => this.campTalk());
       }
     } else if (mode === 'camp') {
-      if (c.pos.distanceTo(L.campSeat) > 0.6) { target = L.campSeat; maxSpeed = 3.2; }
+      if (this.scenePose) pose = 'idle';
+      else if (c.pos.distanceTo(L.campSeat) > 0.6) { target = L.campSeat; maxSpeed = 3.2; }
       else pose = 'sit';
     }
     if (target) {
@@ -508,13 +557,15 @@ export class Story {
         c.yaw += Math.atan2(Math.sin(yw - c.yaw), Math.cos(yw - c.yaw)) * (1 - Math.exp(-dt * 3));
       }
     }
+    if (this.scenePose) c.yaw = Math.atan2(p.pos.x - c.pos.x, p.pos.z - c.pos.z);
     // greet the player with a wave the first time they come close after the rescue
     if (c.wave > 0) { c.wave -= dt; if (pose === 'idle') pose = 'wave'; }
     c.pos.y = this.world.terrain.height(c.pos.x, c.pos.z);
     c.phase += dt * c.speed * 2.2 * (this.flag('splint') && !this.flag('crewCamp') ? 0.9 : 1);
     fig.root.position.copy(c.pos);
     fig.root.rotation.y = c.yaw;
-    fig.animate(pose, c.phase, clamp(c.speed / 4, 0, 1.3), time, dt);
+    fig.root.updateMatrixWorld();
+    fig.animate(this.scenePose?.() ?? pose, c.phase, clamp(c.speed / 4, 0, 1.3), time, dt);
     fig.setName(t('crew.explorer.name'), t('crew.explorer.role'));
     fig.setTagVisible(smoothstep(16, 6, c.pos.distanceTo(p.pos)));
     fig.setSplint(this.flag('splint'));
@@ -533,28 +584,38 @@ export class Story {
     this.world.camp.setBeacon(true, true);
     this.sequence = true;
     audio.tone(180, 2.5, 'sine', 0.2, 0, 400);
-    const lines: string[] = [];
-    const push = (key: string, at: number, sound = true) => this.after(at, () => {
-      lines.push(t(key));
-      this.ui.deviceLines(lines.slice(-6), true);
-      if (sound) audio.beep();
-    });
-    push('beacon.1', 0.4);
-    push('beacon.2', 2.2);
-    push('beacon.strong', 4.2);
-    push('beacon.medic', 5.6);
-    push('beacon.builder', 7.0);
-    push('beacon.social', 8.4);
-    this.after(9.4, () => this.ui.say('dlg.10.3', 'crew.explorer.name', 4));
-    this.after(13.4, () => { lines.length = 0; this.ui.deviceLines([t('beacon.unknown1')], true, true); audio.tone(40, 2.5, 'sawtooth', 0.25, 0, 10); });
-    this.after(15.4, () => this.ui.deviceLines([t('beacon.unknown1'), t('beacon.unknown2')], true, true));
-    this.after(17.4, () => this.ui.deviceLines([t('beacon.unknown1'), t('beacon.unknown2'), t('beacon.unknown3')], true, true));
-    this.after(19.0, () => this.ui.say('dlg.10.4', 'crew.explorer.name', 3.8));
-    this.after(23.0, () => this.ui.say('dlg.10.5', 'crew.scientist.name', 4.5));
-    this.after(28.0, () => { this.ui.deviceLines(null); this.ui.chapter(['chapter.end1', 'chapter.end2']); this.ui.show('cine', true); document.getElementById('btn-skip')!.classList.add('hidden'); document.getElementById('cine-bars')!.classList.add('hidden'); });
-    this.after(34.0, () => {
-      this.ui.chapter(null); this.ui.show('cine', false);
-      document.getElementById('btn-skip')!.classList.remove('hidden');
+    const log: string[] = [];
+    const push = (key: string) => () => { log.push(t(key)); this.ui.deviceLines(log.slice(-6), true); audio.beep(); };
+    const alert = (n: number) => () => { this.ui.deviceLines(['beacon.unknown1', 'beacon.unknown2', 'beacon.unknown3'].slice(0, n).map((k) => t(k)), true, true); };
+    const { z, y } = this.pair;
+    const b = this.L.beacon;
+    const beaconShot = () => ({ from: b.clone().add(new THREE.Vector3(5.5, 1.5, 6)), to: b.clone().add(new THREE.Vector3(0, 2.4, 0)), push: 0.1 });
+    const skyShot = () => ({ from: z.root.position.clone().add(new THREE.Vector3(-1.5, 0.5, 2.6)), to: b.clone().add(new THREE.Vector3(0, 7, 0)), push: 0.08 });
+    this.crew.pos.set(b.x - 1.6, this.world.terrain.height(b.x - 1.6, b.z + 1.8), b.z + 1.8);
+    this.player.spawn(b.x + 1.2, b.z + 2.0, 0);
+    this.turnToCrew();
+    this.playScene([
+      { run: push('beacon.1'), hold: 1.8, shot: beaconShot, poses: { scientist: 'stand', explorer: 'stand' } },
+      { run: push('beacon.2'), hold: 1.7 },
+      { run: push('beacon.strong'), key: 'rad.strong', who: 'strong', shot: () => cover.mid(z, 0.5, 2.2), poses: { scientist: 'cheer' } },
+      { run: push('beacon.medic'), key: 'rad.medic', who: 'medic', shot: () => cover.mid(y, -0.5, 2.2), poses: { scientist: 'stand' } },
+      { run: push('beacon.builder'), key: 'rad.builder', who: 'builder', shot: () => cover.two(z, y, 3.3), poses: { scientist: 'facepalm' } },
+      { run: push('beacon.social'), key: 'rad.social', who: 'social', shot: () => cover.close(y, 0.4, 1.3), poses: { scientist: 'stand', explorer: 'cheer' } },
+      { key: 'dlg.10.3', who: 'explorer', shot: () => cover.close(y, -0.4, 1.1), poses: { explorer: 'cheer', scientist: 'cheer' }, after: 0.7 },
+      { run: () => { alert(1)(); audio.tone(40, 2.5, 'sawtooth', 0.25, 0, 10); }, hold: 2.2, shot: skyShot, poses: { explorer: 'stand', scientist: 'stand' } },
+      { run: alert(2), key: 'beacon.unknown2', hold: 2.4, shot: beaconShot },
+      { run: alert(3), key: 'beacon.unknown3', hold: 2.4, shot: () => cover.close(z, 0.2, 0.9), after: 0.8 },
+      { key: 'dlg.10.4', who: 'explorer', shot: () => cover.ots(y, z) },
+      { key: 'dlg.10.5', who: 'scientist', shot: () => cover.close(z, -0.3), after: 0.9 },
+      { run: () => this.ui.deviceLines(null), key: 'dlg.10.6', who: 'explorer', shot: () => cover.close(y, 0.35, 1), poses: { explorer: 'point' } },
+      { key: 'dlg.10.7', who: 'scientist', shot: () => cover.close(z, 0.3, 0.95), poses: { scientist: 'present' }, after: 0.5 },
+      { key: 'dlg.10.8', who: 'explorer', shot: () => cover.ots(y, z, -0.3), poses: { explorer: 'stand' }, after: 0.8 },
+      { key: 'dlg.10.9', who: 'scientist', shot: () => cover.close(z, -0.2, 0.85), poses: { scientist: 'stand' }, after: 1.1 },
+      { key: 'dlg.10.10', who: 'explorer', shot: () => cover.close(y, -0.2, 0.9), after: 1 },
+      { run: () => { this.ui.chapter(['chapter.end1', 'chapter.end2']); document.getElementById('cine-bars')!.classList.add('hidden'); }, hold: 5.5, shot: skyShot },
+    ], () => {
+      this.ui.chapter(null);
+      this.ui.deviceLines(null);
       document.getElementById('cine-bars')!.classList.remove('hidden');
       s.flags.arcEnd = true;
       this.sequence = false;
