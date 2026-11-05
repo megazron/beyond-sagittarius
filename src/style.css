@@ -380,3 +380,7 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 /* Staged scenes in the world: only the wrist readout stays up */
 #hud.in-scene > *:not(#device) { display: none !important; }
 body.flashback canvas#c { filter: sepia(0.42) saturate(0.82) contrast(1.04) brightness(0.96); }
+
+.crew-card .cp { float: inline-end; width: 84px; height: 105px; object-fit: cover; margin-inline-start: 8px; background: radial-gradient(circle at 50% 40%, rgba(111, 243, 255, 0.16), rgba(0, 0, 0, 0.1)); border: 1px solid var(--line); }
+.crew-card .cp:not([src]) { visibility: hidden; }
+.crew-card::after { content: ''; display: block; clear: both; }

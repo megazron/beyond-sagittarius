@@ -5,6 +5,7 @@ import type { Settings } from '../core/save';
 import type { QualityName } from '../core/quality';
 import { audio } from '../core/audio';
 import { voice } from '../core/voice';
+import { portraits } from './portraits';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -354,6 +355,7 @@ export class UI implements CineUI {
       const found = i > 0 && st.unlocked;
       return `
       <div class="crew-card ${i === 0 ? 'you' : ''} ${found ? 'found' : ''}" data-crew="${c}">
+        <img class="cp" alt="" data-portrait="${c}">
         <div class="cn">${escapeHtml(t(`crew.${c}.name`))}${i === 0 ? ` · ${escapeHtml(t('crew.you'))}` : ''}</div>
         <div class="cr">${escapeHtml(t(`crew.${c}.role`))}</div>
         <div class="cl">${escapeHtml(t(`crew.${c}.line`))}</div>
@@ -364,6 +366,7 @@ export class UI implements CineUI {
     this.openModal(`<h2>${escapeHtml(t('crew.title'))}</h2><div class="crew-grid">${cards}</div>
       <div class="note">${escapeHtml(t('crew.note'))}</div>
       <div class="actions">${onRename ? `<button class="btn" id="m-rename">${escapeHtml(t('names.edit'))}</button>` : ''}<button class="btn" id="m-close">${escapeHtml(t('menu.close'))}</button></div>`);
+    void portraits().then((p) => document.querySelectorAll<HTMLImageElement>('img[data-portrait]').forEach((im) => { const u = p[im.dataset.portrait!]; if (u) im.src = u; }));
     $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
     if (onRename) $('m-rename').addEventListener('click', () => { audio.uiClick(); onRename(); });
   }

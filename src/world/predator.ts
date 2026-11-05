@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { loft, limb, grainNormal } from '../characters/shapes';
 
 /**
  * The Duskhound: a lean, six-eyed night predator about the size of a wolf,
@@ -6,7 +7,7 @@ import * as THREE from 'three';
  */
 export function createHound() {
   const flat = (color: number, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
-    new THREE.MeshStandardMaterial({ color, roughness: 0.8, flatShading: true, ...extra });
+    new THREE.MeshStandardMaterial({ color, roughness: 0.55, normalMap: grainNormal(), normalScale: new THREE.Vector2(0.7, 0.7), ...extra });
   const skin = flat(0x1d1826);
   const belly = flat(0x3a2f45);
   const eyeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 0.8, 0.6) });
@@ -20,23 +21,28 @@ export function createHound() {
   const mesh = (g: THREE.BufferGeometry, m: THREE.Material, parent: THREE.Object3D, x = 0, y = 0, z = 0) => {
     const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = true; parent.add(o); return o;
   };
-  const chest = mesh(new THREE.IcosahedronGeometry(0.42, 1), skin, body, 0, 0.05, 0.35);
-  chest.scale.set(0.85, 0.95, 1.1);
-  const hips = mesh(new THREE.IcosahedronGeometry(0.34, 1), skin, body, 0, 0, -0.45);
-  hips.scale.set(0.8, 0.85, 1.15);
-  mesh(new THREE.CylinderGeometry(0.22, 0.3, 0.8, 6), belly, body, 0, -0.05, -0.05).rotation.x = Math.PI / 2;
+  // one smooth lean body: deep chest, tucked waist, muscular haunch
+  const torso = loft([
+    { y: 0.95, rx: 0.16, rz: 0.2, z: 0.02 }, { y: 0.72, rx: 0.24, rz: 0.31, z: 0.05 }, { y: 0.42, rx: 0.3, rz: 0.4, z: -0.02 }, { y: 0.1, rx: 0.25, rz: 0.33, z: 0.03 },
+    { y: -0.2, rx: 0.19, rz: 0.22, z: 0.1 }, { y: -0.5, rx: 0.25, rz: 0.29, z: 0.04 }, { y: -0.78, rx: 0.24, rz: 0.28, z: 0.04 }, { y: -0.98, rx: 0.1, rz: 0.13, z: 0.02 },
+  ], 16);
+  torso.rotateX(Math.PI / 2);
+  mesh(torso, skin, body, 0, 0.06, 0);
   // head + jaw
   const head = new THREE.Group();
   head.position.set(0, 0.18, 0.82);
   body.add(head);
-  const skull = mesh(new THREE.ConeGeometry(0.2, 0.6, 6), skin, head, 0, 0, 0.22);
-  skull.rotation.x = Math.PI / 2;
-  skull.scale.set(1, 1, 0.8);
+  const skullGeo = loft([{ y: -0.08, rx: 0.14, rz: 0.15 }, { y: 0.1, rx: 0.17, rz: 0.15 }, { y: 0.3, rx: 0.11, rz: 0.09, z: -0.03 }, { y: 0.52, rx: 0.07, rz: 0.055, z: -0.04 }, { y: 0.6, rx: 0.03, rz: 0.03, z: -0.04 }], 12);
+  skullGeo.rotateX(Math.PI / 2);
+  mesh(skullGeo, skin, head, 0, 0, 0.0);
+  const neckG = limb(0.5, 0.18, 0.13, 0.05, 1.1, 12); neckG.rotateX(-1.1);
+  mesh(neckG, skin, head, 0, -0.26, -0.48);
   const jaw = new THREE.Group();
   jaw.position.set(0, -0.08, 0.05);
   head.add(jaw);
-  const jm = mesh(new THREE.ConeGeometry(0.13, 0.48, 5), belly, jaw, 0, 0, 0.2);
-  jm.rotation.x = Math.PI / 2;
+  const jg = loft([{ y: 0, rx: 0.11, rz: 0.05 }, { y: 0.26, rx: 0.08, rz: 0.04 }, { y: 0.46, rx: 0.03, rz: 0.02 }], 10);
+  jg.rotateX(Math.PI / 2);
+  mesh(jg, belly, jaw, 0, 0, 0);
   for (let i = 0; i < 6; i++) {
     const t = mesh(new THREE.ConeGeometry(0.018, 0.07, 3), tooth, head, (i % 2 ? 1 : -1) * (0.05 + (i >> 1) * 0.025), -0.07, 0.42 - (i >> 1) * 0.08);
     t.rotation.x = Math.PI;
@@ -57,7 +63,7 @@ export function createHound() {
   for (let i = 0; i < 5; i++) {
     const seg = new THREE.Group();
     seg.position.set(0, i === 0 ? 0.08 : 0, i === 0 ? -0.8 : -0.22);
-    const m = mesh(new THREE.CylinderGeometry(0.07 - i * 0.012, 0.09 - i * 0.012, 0.24, 5), skin, seg, 0, 0, -0.11);
+    const m = mesh(new THREE.CylinderGeometry(0.07 - i * 0.012, 0.09 - i * 0.012, 0.24, 10), skin, seg, 0, 0, -0.11);
     m.rotation.x = Math.PI / 2;
     if (i === 4) mesh(new THREE.ConeGeometry(0.06, 0.2, 4), spineMat, seg, 0, 0, -0.28).rotation.x = -Math.PI / 2;
     parent.add(seg);
@@ -70,11 +76,11 @@ export function createHound() {
   for (const [x, z, ph] of [[-0.26, 0.42, 0], [0.26, 0.42, 0.5], [-0.24, -0.5, 0.5], [0.24, -0.5, 0]] as const) {
     const hip = new THREE.Group();
     hip.position.set(x, -0.05, z);
-    mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.42, 5), skin, hip, 0, -0.2, 0);
+    mesh(limb(0.42, 0.11, 0.06, 0.22, 1.2, 10), skin, hip, 0, 0, 0);
     const knee = new THREE.Group();
     knee.position.y = -0.4;
     hip.add(knee);
-    mesh(new THREE.CylinderGeometry(0.035, 0.06, 0.38, 5), skin, knee, 0, -0.18, 0);
+    mesh(limb(0.38, 0.055, 0.03, 0.1, 1, 8), skin, knee, 0, 0, 0);
     mesh(new THREE.ConeGeometry(0.06, 0.12, 4), tooth, knee, 0, -0.38, 0.05).rotation.x = Math.PI / 2;
     body.add(hip);
     legs.push({ hip, knee, phase: ph });

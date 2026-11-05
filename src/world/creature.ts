@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Terrain } from './terrain';
+import { grainNormal } from '../characters/shapes';
 
 /**
  * "The Walker" — an enormous, slow, four-legged silhouette glimpsed between
@@ -7,7 +8,7 @@ import type { Terrain } from './terrain';
  */
 export function createCreature(terrain: Terrain, onStep: (pos: THREE.Vector3) => void) {
   const root = new THREE.Group();
-  const skin = new THREE.MeshStandardMaterial({ color: 0x14121a, roughness: 0.85, metalness: 0.05 });
+  const skin = new THREE.MeshStandardMaterial({ color: 0x1b1a1f, roughness: 0.7, metalness: 0.05, normalMap: grainNormal(), normalScale: new THREE.Vector2(1.2, 1.2) });
   const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 2.6, 2.2) });
   const body = new THREE.Group();
   const torso = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), skin);
@@ -28,6 +29,13 @@ export function createCreature(terrain: Terrain, onStep: (pos: THREE.Vector3) =>
   for (const sx of [-0.6, 0.6]) {
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), glow);
     eye.position.set(sx, -5.0, 16.4); body.add(eye);
+  }
+  // a ridge of stone-like plates along the back
+  for (let i = 0; i < 16; i++) {
+    const h = 1.2 + Math.sin((i / 15) * Math.PI) * 2.4;
+    const plate = new THREE.Mesh(new THREE.ConeGeometry(0.75, h, 6), skin);
+    plate.scale.z = 0.35; plate.position.set(0, 3.05 + Math.sin((i / 15) * Math.PI) * 1.5, -8 + i * 1.05); plate.rotation.x = -0.35;
+    body.add(plate);
   }
   root.add(body);
 
