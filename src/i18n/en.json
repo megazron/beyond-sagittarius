@@ -295,5 +295,11 @@
   "names.save": "Save names",
   "names.reset": "Reset to defaults",
   "names.edit": "Edit names",
-  "settings.qualityMobile": "Mobile — light, for phones"
+  "settings.qualityMobile": "Mobile — light, for phones",
+  "vo.anon.medic.hint": "You remember the Medic: “Never eat what you can't identify. Thorns and oily skins mean poison. Test a small piece first — rub it on your skin and wait.”",
+  "vo.anon.memory.explorer": "You remember the Explorer on the observation deck, laughing: “If we ever crash somewhere, I'm the one who finds the way home. You just bring the snacks.”",
+  "vo.anon.dlg.8.found": "It's her! She's alive. Hold on — I'm coming.",
+  "vo.anon.dlg.9.1": "…Is someone there? Is that you?! Tell me you're real.",
+  "vo.anon.dlg.9.6": "A real fire. You might actually be a genius.",
+  "vo.anon.dlg.10.3": "They're alive. All of them. They're alive!"
 }
