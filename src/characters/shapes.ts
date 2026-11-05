@@ -108,7 +108,7 @@ export function sweep(path: THREE.Vector3[], o: SweepOpts): THREE.BufferGeometry
       const a = (j / S) * Math.PI * 2;
       // lens section: sharp on the edges, a soft ridge on the faces
       const ca = Math.cos(a), sa = Math.sin(a);
-      const x = Math.sign(ca) * Math.pow(Math.abs(ca), 1.5) * w, y = Math.sign(sa) * Math.pow(Math.abs(sa), 0.8) * d;
+      const x = ca * w, y = sa * d;
       pos.push(path[i].x + B.x * x + N.x * y, path[i].y + B.y * x + N.y * y, path[i].z + B.z * x + N.z * y);
       at.push(t); tan.push(T.x, T.y, T.z); uv.push(j / S, t);
     }

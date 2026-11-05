@@ -141,7 +141,7 @@ export function headGeometry(detail = 1): THREE.BufferGeometry {
     let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
     const low = Math.max(0, -y);
     // narrow jaw into a soft point
-    const jaw = 1 - 0.34 * Math.pow(low, 1.25);
+    const jaw = 1 - 0.27 * Math.pow(low, 1.5);
     x *= jaw; z *= 1 - 0.2 * Math.pow(low, 1.5);
     if (y < 0) y *= 1 + 0.12 * Math.pow(low, 2);
     if (y < -0.5) z += 0.11 * (low - 0.5);

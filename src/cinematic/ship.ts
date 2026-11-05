@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createAstronaut, Astronaut } from '../core/astronaut';
+import { createCharacter, Character, CrewId } from '../characters/character';
 import { NOISE_GLSL } from '../core/glsl';
 
 /** Panel-line hull texture generated on a canvas. */
@@ -153,7 +153,7 @@ export function createShip(): Ship {
 
 export interface Interior {
   group: THREE.Group;
-  crew: Astronaut[];
+  crew: Character[];
   floaters: THREE.Mesh[];
   alarmLight: THREE.PointLight;
   holo: THREE.ShaderMaterial;
@@ -162,7 +162,7 @@ export interface Interior {
 }
 
 /** Observation deck with a panoramic window, a holo console and the crew. */
-export function createInterior(): Interior {
+export function createInterior(detail = 1): Interior {
   const group = new THREE.Group();
   const tex = hullTexture(); tex.repeat.set(6, 2);
   const wall = new THREE.MeshStandardMaterial({ color: 0x9aa3b0, map: tex, metalness: 0.5, roughness: 0.45, side: THREE.BackSide });
@@ -222,12 +222,11 @@ export function createInterior(): Interior {
   group.add(holoMesh);
 
   // Crew of six, distinct suit accents
-  const accents = [0xff8a3d, 0x47c1ff, 0xff4f7a, 0x5cff9d, 0xffd84a, 0xb38bff];
-  const crew: Astronaut[] = [];
+  const ids: CrewId[] = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social'];
+  const crew: Character[] = [];
   const spots: [number, number, number][] = [[0.2, 0.55, 0], [-1.6, 0.3, 0.6], [1.8, -0.4, 0.4], [-3.2, 1.6, -0.2], [3.4, 1.2, -0.6], [-0.9, 1.9, 0.3]];
   for (let i = 0; i < 6; i++) {
-    const a = createAstronaut(0xb9bec6, accents[i]);
-    a.head.visible = true;
+    const a = createCharacter(ids[i], detail);
     const [x, z, ry] = spots[i];
     a.root.position.set(x, -2.2, z);
     a.root.rotation.y = Math.PI + ry;

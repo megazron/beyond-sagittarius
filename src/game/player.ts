@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createAstronaut, Astronaut } from '../core/astronaut';
+import { createCharacter, Character, CrewPose } from '../characters/character';
 import { clamp } from '../core/noise';
 import type { Terrain } from '../world/terrain';
 import type { Forest } from '../world/forest';
@@ -8,7 +8,7 @@ import { HALF } from '../world/terrain';
 
 /** Third-person survivor controller with an orbit camera that avoids terrain. */
 export class Player {
-  model: Astronaut;
+  model: Character;
   pos = new THREE.Vector3();
   vel = new THREE.Vector3();
   yaw = 0; // camera yaw
@@ -23,10 +23,12 @@ export class Player {
   inWater = false;
   sensitivity = 1;
   invertY = false;
+  /** Body pose (the wake-up lies down, cutscenes can override). */
+  pose: CrewPose = 'idle';
   private camPos = new THREE.Vector3();
 
-  constructor(private terrain: Terrain, private forest: Forest, public camera: THREE.PerspectiveCamera) {
-    this.model = createAstronaut(0xd2d5da, 0xff8a3d, true);
+  constructor(private terrain: Terrain, private forest: Forest, public camera: THREE.PerspectiveCamera, detail = 1) {
+    this.model = createCharacter('scientist', detail);
   }
 
   spawn(x: number, z: number, yaw: number) {
@@ -105,7 +107,8 @@ export class Player {
     this.model.root.position.copy(this.pos);
     if (this.inWater) this.model.root.position.y = Math.max(this.pos.y, -0.55);
     this.model.root.rotation.y = this.facing + Math.PI;
-    this.model.animate(this.walkPhase, clamp(hs / 4, 0, 1.3), performance.now() / 1000);
+    this.model.root.updateMatrixWorld();
+    this.model.animate(this.pose, this.walkPhase, clamp(hs / 4, 0, 1.3), performance.now() / 1000, dt);
 
     this.updateCamera(dt);
   }

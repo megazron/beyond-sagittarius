@@ -9,7 +9,7 @@ import { createWater } from './water';
 import { createPod, createItems } from './props';
 import { createCreature } from './creature';
 import { computeLayout, reserveLayout, createCamp, createRidge, StoryLayout } from './story';
-import { createCrewFigure, CREW_LOOKS, CrewFigure } from './crew';
+import { createCharacter, Character } from '../characters/character';
 import { createHound } from './predator';
 import { Environment } from './environment';
 import { atmosphere, patchSceneFog } from './atmosphere';
@@ -31,7 +31,7 @@ export class World {
   camp!: ReturnType<typeof createCamp>;
   ridge!: ReturnType<typeof createRidge>;
   /** The crewmate found in this arc (the Explorer). */
-  explorer!: CrewFigure;
+  explorer!: Character;
   hound!: ReturnType<typeof createHound>;
   sun = new THREE.DirectionalLight(0xffffff, 3);
   hemi = new THREE.HemisphereLight(0x8fb7c8, 0x1a2420, 0.6);
@@ -77,7 +77,7 @@ export class World {
     s.add(this.camp.root);
     this.ridge = createRidge(L);
     s.add(this.ridge.root);
-    this.explorer = createCrewFigure(CREW_LOOKS.explorer);
+    this.explorer = createCharacter('explorer', this.q.name === 'mobile' ? 0.6 : 1);
     this.explorer.root.position.copy(L.crewSpot);
     s.add(this.explorer.root);
     this.grass.setClearings([

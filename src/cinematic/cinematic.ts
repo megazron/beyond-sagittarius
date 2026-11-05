@@ -29,7 +29,7 @@ export class Cinematic {
   private earth = createEarth(100, this.sunDir);
   private ring = createOrbitalRing(128);
   private ship = createShip();
-  private interior = createInterior();
+  private interior = createInterior(matchMedia('(pointer: coarse)').matches ? 0.6 : 1);
   private mars = createPlanet(60, 'mars', this.sunDir);
   private giant = createPlanet(260, 'giant', this.sunDir);
   private giantRing: THREE.Mesh;

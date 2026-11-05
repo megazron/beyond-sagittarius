@@ -289,7 +289,7 @@ async function boot() {
   requestAnimationFrame(frame);
   const btns = ['btn-new', 'btn-continue'].map((id) => document.getElementById(id) as HTMLButtonElement);
   await world.build((p) => ui.setLoading(p));
-  player = new Player(world.terrain, world.forest, camera);
+  player = new Player(world.terrain, world.forest, camera, quality.name === 'mobile' ? 0.6 : 1);
   player.sensitivity = settings.sensitivity;
   player.invertY = settings.invertY;
   world.scene.add(player.model.root);

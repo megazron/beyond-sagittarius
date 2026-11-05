@@ -51,7 +51,7 @@ export class Story {
   ) {
     this.spear = buildSpear();
     this.spear.visible = false;
-    player.model.armR.add(this.spear);
+    player.model.handR.add(this.spear);
   }
 
   private get s() { return this.getSave(); }
@@ -663,7 +663,7 @@ function buildSpear() {
   g.add(shaft, tip, wrap);
   g.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
   // in the hand, angled forward and up
-  g.position.set(0, -0.66, 0.05);
+  g.position.set(0, -0.06, 0.01);
   g.rotation.x = 1.15;
   return g;
 }
