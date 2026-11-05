@@ -2,7 +2,11 @@
 <html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=overlays-content" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="format-detection" content="telephone=no" />
     <meta name="description" content="BEYOND SAGITTARIUS — A Survival Story Beyond the Known Universe. An original 3D story-survival browser game." />
     <meta name="theme-color" content="#05070d" />
     <title>BEYOND SAGITTARIUS — A Survival Story Beyond the Known Universe</title>
@@ -83,7 +87,29 @@
       <div class="banner hidden" id="banner"><div class="b-title"></div><div class="b-sub"></div></div>
       <div class="memory hidden" id="memory"></div>
       <div class="device hidden" id="device"></div>
-      <div class="damage" id="damage"></div>
+      <div id="damage" class="damage"></div>
+      <div id="tutorial" class="tutorial panel hidden">
+        <div class="tut-head"></div>
+        <div class="tut-title"></div>
+        <div class="tut-text"></div>
+        <div class="tut-bar"><i></i></div>
+        <button id="tut-skip" class="tut-skip"></button>
+      </div>
+      <!-- Touch controls (phones / tablets) -->
+      <div id="touch" class="touch-ui hidden">
+        <div id="joy-zone" class="joy-zone"><div id="joy" class="joy"><div id="joy-knob" class="joy-knob"></div></div><span class="joy-hint" data-i18n="touch.moveHint"></span></div>
+        <div class="touch-menu">
+          <button id="tb-pause" class="tbtn sm" aria-label="pause"><i>❚❚</i></button>
+          <button id="tb-obj" class="tbtn sm"><i>◎</i><span data-i18n="touch.obj"></span></button>
+          <button id="tb-crew" class="tbtn sm"><i>☰</i><span data-i18n="touch.crew"></span></button>
+          <button id="tb-inv" class="tbtn sm"><i>▣</i><span data-i18n="touch.inv"></span></button>
+        </div>
+        <div class="touch-actions">
+          <button id="tb-sprint" class="tbtn mid"><i>»</i><span data-i18n="touch.sprint"></span></button>
+          <button id="tb-jump" class="tbtn mid"><i>⤒</i><span data-i18n="touch.jump"></span></button>
+          <button id="tb-act" class="tbtn big"><i>✋</i><span data-i18n="touch.act"></span></button>
+        </div>
+      </div>
     </div>
 
     <!-- Modals -->

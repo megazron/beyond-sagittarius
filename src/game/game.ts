@@ -10,6 +10,7 @@ import { Story, Action, LAST_LEVEL } from './story';
 import type { Player } from './player';
 import type { Input } from './input';
 import { UI, PLAYABLE_LEVELS } from '../ui/ui';
+import { Tutorial } from './tutorial';
 
 type Mode = 'wake' | 'play' | 'dead';
 
@@ -31,8 +32,19 @@ export class Game {
   private camShake = 0;
   private tmpV = new THREE.Vector3();
 
-  constructor(private world: World, private player: Player, private input: Input, private ui: UI) {
+  tutorial: Tutorial;
+  /** Hook for between-level narrator scenes (main.ts). Return true to take over. */
+  onLevelComplete: ((n: number) => void) | null = null;
+
+  constructor(private world: World, private player: Player, private input: Input, private ui: UI, highlightTouch: (id: string | null) => void = () => {}) {
     world.onCreatureStep = (p) => this.onCreatureStep(p);
+    this.tutorial = new Tutorial(input, player, world, () => this.save, highlightTouch);
+    this.tutorial.onFinish = () => {
+      this.ui.toast(t('tut.complete'));
+      this.persist();
+      if (this.pendingIntro) { this.pendingIntro = false; this.announceLevel1(); }
+    };
+    onLangChange(() => this.tutorial.refresh());
     this.story = new Story(world, player, ui, () => this.save, (sec, fn) => this.after(sec, fn), (amount) => this.hurt(amount));
     onLangChange(() => { if (this.save) { this.lastObjKey = ''; this.refreshObjective(); this.ui.setInventory(this.save.inventory, this.story.tools()); } });
   }
@@ -93,10 +105,28 @@ export class Game {
     this.ui.setInventory(this.save.inventory, this.story.tools());
     this.refreshObjective();
     if (announce) {
-      this.ui.banner(t('hud.level', { n: 1 }), t('level.1.title'));
-      setTimeout(() => this.ui.toast(t('level.1.hint')), 2500);
+      if (!this.save.flags.tutorialDone) {
+        this.pendingIntro = true;
+        this.tutorial.start();
+      } else this.announceLevel1();
     }
   }
+
+  private pendingIntro = false;
+  private announceLevel1() {
+    this.ui.banner(t('hud.level', { n: 1 }), t('level.1.title'));
+    this.after(2.5, () => this.ui.toast(t('level.1.hint')));
+  }
+
+  /** Replay the controls tutorial (settings). */
+  startTutorial() {
+    if (this.mode !== 'play') return;
+    this.pendingIntro = false;
+    this.tutorial.start();
+  }
+
+  /** main.ts tells us when a panel was opened (the tutorial waits for it). */
+  notePanel(kind: string) { this.tutorial.notePanel(kind); }
 
   private buildWake() {
     const ui = this.ui;
@@ -113,7 +143,7 @@ export class Game {
       { t: 22.2, fn: () => this.enterPlay(true) },
     ];
     this.ui.show('cine', true);
-    document.getElementById('btn-skip')!.classList.add('hidden');
+    document.getElementById('btn-skip')!.classList.remove('hidden'); // tap to skip on phones
     document.getElementById('cine-bars')!.classList.remove('hidden');
   }
 
@@ -201,6 +231,7 @@ export class Game {
 
     this.story.update(dt, time);
     if (this.mode !== 'play') return; // the story can kill the player (predator)
+    this.tutorial.update(dt);
     this.findInteraction();
     if (this.interactTarget && (this.input.hit('KeyE') || this.input.hit('KeyF'))) this.interact();
 
@@ -358,6 +389,7 @@ export class Game {
       s.level++;
       audio.chime();
       this.ui.banner(t('level.complete', { n }), t(`level.${n}.title`));
+      this.onLevelComplete?.(n);
       if (s.level <= PLAYABLE_LEVELS) {
         const next = s.level;
         this.after(4.7, () => { this.ui.toast(`${t('hud.level', { n: next })} — ${t(`level.${next}.title`)}`); const h = `level.${next}.hint`; if (t(h) !== h) this.ui.toast(t(h)); });
@@ -386,6 +418,7 @@ export class Game {
   objectivePoint(): THREE.Vector3 | null {
     const p = this.player.pos;
     const s = this.save;
+    if (this.tutorial.target) return this.tutorial.target.clone();
     if (s.level === 1) {
       const dx = p.x - LAKE.x, dz = p.z - LAKE.z;
       const d = Math.hypot(dx, dz) || 1;
@@ -419,7 +452,7 @@ export class Game {
     const p = this.player.pos;
     const m = this.objectivePoint();
     if (!m) return null;
-    const dist = this.save.level === 1
+    const dist = this.save.level === 1 && !this.tutorial.target
       ? Math.max(0, Math.hypot(LAKE.x - p.x, LAKE.z - p.z) - LAKE.r + 4)
       : Math.hypot(m.x - p.x, m.z - p.z);
     const bearing = Math.atan2(m.x - p.x, -(m.z - p.z));

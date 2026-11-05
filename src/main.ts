@@ -12,10 +12,13 @@ import { Player } from './game/player';
 import { Input } from './game/input';
 import { Game } from './game/game';
 import { applyCrewNames, CrewNames } from './core/crew';
+import { TouchControls, TouchAction } from './ui/touch';
+import { fitFov, lockViewport, tryFullscreen } from './core/viewport';
 
 type State = 'loading' | 'title' | 'cinematic' | 'game';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
+lockViewport();
 const settings: Settings = loadSettings();
 setLang(settings.lang);
 const quality = detectQuality();
@@ -32,6 +35,14 @@ try {
 }
 
 const input = new Input(canvas);
+const touch = new TouchControls(input, (a: TouchAction) => {
+  if (a === 'pause') openPause();
+  else if (a === 'inventory') openPanel('inventory');
+  else openPanel(a);
+});
+const syncDevice = () => document.body.classList.toggle('touch', input.device === 'touch');
+input.onDevice(syncDevice);
+syncDevice();
 const cine = new Cinematic(ui);
 const world = new World(quality);
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2400);
@@ -72,6 +83,7 @@ function refreshTitle() {
 
 function showTitle() {
   state = 'title';
+  touch.show(false);
   paused = false;
   input.enabled = false;
   input.releasePointer();
@@ -100,6 +112,7 @@ function chooseNames() {
 
 function startNewGame(names: CrewNames = {}) {
   audio.start();
+  if (input.device === 'touch') tryFullscreen();
   clearSave();
   pendingNames = names;
   applyCrewNames(names);
@@ -119,6 +132,7 @@ function startNewGame(names: CrewNames = {}) {
 
 function continueGame() {
   audio.start();
+  if (input.device === 'touch') tryFullscreen();
   ui.show('title', false);
   ui.fade('black', 1, 0.6);
   setTimeout(() => whenWorldReady(() => enterWorld(false)), 650);
@@ -132,7 +146,10 @@ function enterWorld(fresh: boolean) {
   const save = fresh ? newSave() : (loadSave() ?? newSave());
   if (fresh) save.names = { ...pendingNames };
   applyCrewNames(save.names as CrewNames);
+  const replay = !!settings.replayTutorial;
+  if (replay) { save.flags.tutorialDone = false; settings.replayTutorial = false; persistSettings(); }
   game.start(save, fresh);
+  if (!fresh && replay) game.startTutorial();
   if (!fresh) ui.fade('black', 0, 1.2);
   renderer.resize();
 }
@@ -145,7 +162,7 @@ document.getElementById('btn-new')!.addEventListener('click', () => {
 document.getElementById('btn-continue')!.addEventListener('click', () => { audio.uiClick(); continueGame(); });
 document.getElementById('btn-settings')!.addEventListener('click', () => {
   audio.start(); audio.uiClick();
-  ui.openSettings(settings, quality.name, persistSettings, changeQuality, refreshTitle);
+  ui.openSettings(settings, quality.name, persistSettings, changeQuality, refreshTitle, () => { settings.replayTutorial = true; persistSettings(); });
 });
 document.querySelectorAll<HTMLButtonElement>('.btn.lang').forEach((b) => b.addEventListener('click', () => {
   audio.uiClick();
@@ -154,7 +171,11 @@ document.querySelectorAll<HTMLButtonElement>('.btn.lang').forEach((b) => b.addEv
   persistSettings();
   refreshTitle();
 }));
-document.getElementById('btn-skip')!.addEventListener('click', () => cine.skip());
+document.getElementById('btn-skip')!.addEventListener('click', () => {
+  if (state === 'cinematic') cine.skip();
+  else if (state === 'game' && game?.mode === 'wake') game.skipWake();
+});
+document.getElementById('objective')!.addEventListener('click', (e) => (e.currentTarget as HTMLElement).classList.toggle('open'));
 document.getElementById('prompt')!.addEventListener('click', () => game?.interact());
 
 // ---------------- pause / menus ----------------
@@ -163,11 +184,13 @@ function openPause() {
   if (state !== 'game' || game.mode !== 'play' || ui.modalOpen()) return;
   paused = true;
   input.enabled = false;
+  input.resetTouch();
+  touch.reset();
   suppressPauseOnUnlock = true;
   input.releasePointer();
   ui.openPause({
     resume: resume,
-    settings: () => ui.openSettings(settings, quality.name, persistSettings, changeQuality, () => openPauseAgain()),
+    settings: () => ui.openSettings(settings, quality.name, persistSettings, changeQuality, () => openPauseAgain(), () => { resume(); game.startTutorial(); }),
     objectives: () => ui.openObjectives(game.save.level, game.save.completed, () => openPauseAgain()),
     crew: () => openCrewPanel(() => openPauseAgain()),
     quit: () => { game.persist(); showTitle(); },
@@ -175,10 +198,12 @@ function openPause() {
 }
 function openPauseAgain() { paused = false; openPause(); }
 function resume() { ui.closeModal(); paused = false; input.enabled = true; }
-function openPanel(kind: 'objectives' | 'crew') {
+function openPanel(kind: 'objectives' | 'crew' | 'inventory') {
   if (state !== 'game' || game.mode !== 'play' || ui.modalOpen()) return;
-  paused = true; input.enabled = false; suppressPauseOnUnlock = true; input.releasePointer();
+  paused = true; input.enabled = false; input.resetTouch(); touch.reset(); suppressPauseOnUnlock = true; input.releasePointer();
+  game.notePanel(kind);
   if (kind === 'objectives') ui.openObjectives(game.save.level, game.save.completed, resume);
+  else if (kind === 'inventory') ui.openInventory(game.save.inventory, game.story.tools(), resume);
   else openCrewPanel(resume);
 }
 function openCrewPanel(onClose: () => void) {
@@ -209,6 +234,9 @@ window.addEventListener('keydown', (e) => {
     if (ui.modalOpen()) resume(); else openPanel('objectives');
   } else if (e.code === 'KeyC') {
     if (ui.modalOpen()) resume(); else openPanel('crew');
+  } else if (e.code === 'KeyI' || e.code === 'Tab') {
+    e.preventDefault();
+    if (ui.modalOpen()) resume(); else openPanel('inventory');
   }
 });
 
@@ -231,12 +259,19 @@ function frame() {
   } else if (state === 'cinematic') {
     cine.update(dt);
   } else if (state === 'game') {
+    touch.show(input.device === 'touch' && game.mode === 'play' && !paused && !ui.modalOpen());
+    touch.update();
     if (!paused && game.mode !== 'dead') game.update(dt, elapsed);
     const focus = player.pos;
     if (photo) { camera.position.copy(photo.from); camera.lookAt(photo.to); }
     world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer);
   }
+  // portrait screens: widen the vertical FOV so the horizontal view stays usable
+  const activeCam = state === 'game' ? camera : cine.camera;
+  const designFov = activeCam.fov;
+  fitFov(activeCam);
   renderer.render(dt, elapsed);
+  if (activeCam.fov !== designFov) { activeCam.fov = designFov; activeCam.updateProjectionMatrix(); }
   input.endFrame();
   fpsFrames++;
   const nowMs = performance.now();
@@ -258,7 +293,7 @@ async function boot() {
   player.sensitivity = settings.sensitivity;
   player.invertY = settings.invertY;
   world.scene.add(player.model.root);
-  game = new Game(world, player, input, ui);
+  game = new Game(world, player, input, ui, (id) => touch.highlight(id));
   // warm up shaders so the first in-game frame doesn't hitch
   player.spawn(0, 2, 0.35);
   world.update(0.016, 0, 8.2, player.pos, camera, renderer.renderer);
@@ -280,6 +315,9 @@ window.addEventListener('resize', () => {
   get state() { return state; },
   get mode() { return game?.mode; },
   get ready() { return worldReady; },
+  get paused() { return paused; },
+  get tutorial() { const tu = game?.tutorial; return tu?.active ? { step: tu.step, index: tu.index } : null; },
+  get device() { return input.device; },
   get level() { return game?.save?.level; },
   setTime(h: number) { if (game?.save) game.save.timeOfDay = h; },
   cineSeek(t: number) { cine.seek(t); },

@@ -173,6 +173,7 @@ export class UI implements CineUI {
 
   setPrompt(text: string | null) {
     const el = $('prompt');
+    document.body.classList.toggle('can-act', !!text);
     if (!text) { el.classList.add('hidden'); return; }
     (el.querySelector('span') as HTMLElement).textContent = text;
     el.classList.remove('hidden');
@@ -255,7 +256,7 @@ export class UI implements CineUI {
   }
   modalOpen() { return !$('modal').classList.contains('hidden'); }
 
-  openSettings(s: Settings, quality: QualityName, onChange: (s: Settings) => void, onQuality: (q: QualityName) => void, onClose: () => void) {
+  openSettings(s: Settings, quality: QualityName, onChange: (s: Settings) => void, onQuality: (q: QualityName) => void, onClose: () => void, onTutorial?: () => void) {
     const seg = (name: string, opts: [string, string][], cur: string) =>
       `<div class="seg" data-seg="${name}">${opts.map(([v, l]) => `<button data-v="${v}" class="${v === cur ? 'active' : ''}">${escapeHtml(l)}</button>`).join('')}</div>`;
     const onOff = (name: string, v: boolean) => seg(name, [['1', t('settings.on')], ['0', t('settings.off')]], v ? '1' : '0');
@@ -269,8 +270,10 @@ export class UI implements CineUI {
       <div class="row"><label>${escapeHtml(t('settings.invertY'))}</label>${onOff('invertY', s.invertY)}</div>
       <div class="row"><label>${escapeHtml(t('settings.subtitles'))}</label>${onOff('subtitles', s.subtitles)}</div>
       <div class="row"><label>${escapeHtml(t('settings.fps'))}</label>${onOff('showFps', s.showFps)}</div>
+      ${onTutorial ? `<div class="row"><label>${escapeHtml(t('settings.tutorial'))}</label><button class="btn small" id="set-tut">${escapeHtml(t('settings.tutorialReplay'))}</button></div>` : ''}
       <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.back'))}</button></div>`);
     const card = $('modal-card');
+    if (onTutorial) $('set-tut').addEventListener('click', () => { audio.uiClick(); const b = $('set-tut'); b.textContent = t('settings.tutorialQueued'); (b as HTMLButtonElement).disabled = true; onTutorial(); });
     card.querySelectorAll<HTMLElement>('.seg').forEach((g) => {
       g.querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.addEventListener('click', () => {
         audio.uiClick();
@@ -298,9 +301,22 @@ export class UI implements CineUI {
         <button class="btn" id="p-quit">${escapeHtml(t('menu.quitTitle'))}</button>
       </div>
       <h2 style="margin-top:24px">${escapeHtml(t('controls.title'))}</h2>
-      <ul class="controls-list">${['move', 'sprint', 'jump', 'interact', 'look', 'zoom', 'objectives', 'crew', 'pause', 'touch'].map((k) => `<li>${escapeHtml(t(`controls.${k}`))}</li>`).join('')}</ul>`);
+      <ul class="controls-list">${['move', 'sprint', 'jump', 'interact', 'look', 'zoom', 'objectives', 'crew', 'inventory', 'pause', 'touch'].map((k) => `<li>${escapeHtml(t(`controls.${k}`))}</li>`).join('')}</ul>`);
     const bind = (id: string, f: () => void) => $(id).addEventListener('click', () => { audio.uiClick(); f(); });
     bind('p-resume', h.resume); bind('p-obj', h.objectives); bind('p-crew', h.crew); bind('p-set', h.settings); bind('p-quit', h.quit);
+  }
+
+  /** Inventory panel: everything you carry, with a short description. */
+  openInventory(inv: Record<string, number>, tools: string[], onClose: () => void) {
+    const keys = [...BASE_SLOTS, ...EXTRA_SLOTS, 'fruit'].filter((k, i, a) => a.indexOf(k) === i && (BASE_SLOTS.includes(k) || (inv[k] ?? 0) > 0));
+    const row = (k: string, n: number | null) => `<li class="${n === 0 ? 'empty' : ''}"><span class="ico">${ITEM_ICONS[k] ?? '?'}</span>
+      <span class="iname">${escapeHtml(t(`item.${k}`))}${n !== null ? ` <b>×${n}</b>` : ` <b class="tool">${escapeHtml(t('inv.tool'))}</b>`}</span>
+      <span class="idesc">${escapeHtml(t(`itemdesc.${k}`))}</span></li>`;
+    const list = keys.map((k) => row(k, inv[k] ?? 0)).join('') + tools.map((k) => row(k, null)).join('');
+    this.openModal(`<h2>${escapeHtml(t('inv.title'))}</h2><ul class="inv-list">${list}</ul>
+      <div class="note">${escapeHtml(t('inv.note'))}</div>
+      <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.close'))}</button></div>`);
+    $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
   }
 
   openObjectives(current: number, completed: number[], onClose: () => void) {

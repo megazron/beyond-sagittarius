@@ -27,6 +27,8 @@ export interface Settings {
   volume: number;
   subtitles: boolean;
   showFps: boolean;
+  /** Set from the title-screen settings: run the tutorial on the next session. */
+  replayTutorial?: boolean;
 }
 
 const SAVE_KEY = 'bs-save-v1';
