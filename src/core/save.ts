@@ -1,4 +1,5 @@
 // localStorage persistence for game progress and player settings.
+import { migrateNames } from './crew';
 
 export interface SaveData {
   version: 1;
@@ -41,7 +42,7 @@ export function loadSave(): SaveData | null {
     d.inventory = { ...emptyInventory(), ...d.inventory };
     d.flags ??= {};
     d.collected ??= [];
-    d.names ??= {};
+    d.names = migrateNames(d.names);
     return d;
   } catch {
     return null;

@@ -27,16 +27,16 @@ disturbance tears the ship apart. You — the Scientist — wake up alone beneat
 two huge bodies in an unfamiliar sky, in a damaged suit, in a strange forest
 where something enormous walks between the trees.
 
-### The crew (default names — rename everyone on the pre-game screen)
+### The crew (default call-signs — rename everyone on the pre-game screen)
 
 | | Role | Strength |
 | --- | --- | --- |
-| **Ayaan Qureshi** (you) | The Scientist | Physics, engineering, AI, medical theory. Faster research and crafting, physically weak. |
-| Viktor Kade | The Strong One | Carrying, cutting trees, defences, fighting. |
-| Leila Haddad | The Medic | Treating injuries, identifying plants, medicines. |
-| Mira Santos | The Explorer | Tracking, navigation, finding water and food, scouting. |
-| Kenji Arai | The Builder | Tools, shelters, machines, vehicles. |
-| Priya Nair | The Social One | Leadership, negotiation, morale, organising. |
+| **Zenvik** (you) | The Scientist | Physics, engineering, AI, medical theory. Faster research and crafting, physically weak. |
+| Draxum | The Strong One | Carrying, cutting trees, defences, fighting. |
+| Lyrra | The Medic | Treating injuries, identifying plants, medicines. |
+| Skyvra | The Explorer | Tracking, navigation, finding water and food, scouting. |
+| Bolzar | The Builder | Tools, shelters, machines, vehicles. |
+| Nuvexa | The Social One | Leadership, negotiation, morale, organising. |
 
 ## What is in this slice
 

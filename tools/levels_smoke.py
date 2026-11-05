@@ -26,8 +26,8 @@ from smoke import launch, serve  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-PLAYER = "Zara Khan"
-EXPLORER = "Noor"
+PLAYER = "Quorvex"
+EXPLORER = "Jynx-7"
 
 
 def check_i18n():
