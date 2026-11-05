@@ -8,6 +8,9 @@ import { createGrass } from './grass';
 import { createWater } from './water';
 import { createPod, createItems } from './props';
 import { createCreature } from './creature';
+import { computeLayout, reserveLayout, createCamp, createRidge, StoryLayout } from './story';
+import { createCrewFigure, CREW_LOOKS, CrewFigure } from './crew';
+import { createHound } from './predator';
 
 /** The alien planet: terrain, sky, forest, water, props, lights and fog. */
 export class World {
@@ -20,6 +23,13 @@ export class World {
   pod!: ReturnType<typeof createPod>;
   items!: ReturnType<typeof createItems>;
   creature!: ReturnType<typeof createCreature>;
+  layout!: StoryLayout;
+  pod2!: ReturnType<typeof createPod>;
+  camp!: ReturnType<typeof createCamp>;
+  ridge!: ReturnType<typeof createRidge>;
+  /** The crewmate found in this arc (the Explorer). */
+  explorer!: CrewFigure;
+  hound!: ReturnType<typeof createHound>;
   sun = new THREE.DirectionalLight(0xffffff, 3);
   hemi = new THREE.HemisphereLight(0x8fb7c8, 0x1a2420, 0.6);
   fog: THREE.FogExp2;
@@ -39,7 +49,9 @@ export class World {
     const s = this.scene;
     s.add(this.sky.group);
     s.add(this.terrain.group);
+    this.layout = computeLayout(this.terrain);
     this.forest = new Forest(this.terrain, this.q);
+    reserveLayout(this.forest, this.layout);
     this.forest.build();
     onProgress(0.94);
     await new Promise((r) => setTimeout(r, 0));
@@ -50,8 +62,26 @@ export class World {
     s.add(this.water.mesh);
     this.pod = createPod(this.terrain, this.forest);
     s.add(this.pod.root);
-    this.items = createItems(this.terrain, this.forest);
+    const L = this.layout;
+    this.items = createItems(this.terrain, this.forest, { camp: L.camp, pod: L.pod, pod2: L.pod2 });
     s.add(this.items.group);
+    this.pod2 = createPod(this.terrain, this.forest, L.pod2.x, L.pod2.z, -1.9, 23);
+    s.add(this.pod2.root);
+    this.camp = createCamp(this.terrain, this.forest, L);
+    s.add(this.camp.root);
+    this.ridge = createRidge(L);
+    s.add(this.ridge.root);
+    this.explorer = createCrewFigure(CREW_LOOKS.explorer);
+    this.explorer.root.position.copy(L.crewSpot);
+    s.add(this.explorer.root);
+    this.grass.setClearings([
+      [L.camp.x - 1.2, L.camp.z + 1.2, 6.5],
+      [L.beacon.x, L.beacon.z, 2.2],
+      [L.crewSpot.x, L.crewSpot.z, 2.5],
+      [L.pod2.x, L.pod2.z, 4],
+    ]);
+    this.hound = createHound();
+    s.add(this.hound.root);
     this.creature = createCreature(this.terrain, (p) => this.onCreatureStep(p));
     s.add(this.creature.root);
 
@@ -108,6 +138,8 @@ export class World {
     this.water.update(time, day);
     this.forest.update(cam.position);
     this.pod.update(time);
+    this.pod2.update(time + 7.3);
+    this.camp.update(time, dt, focus);
     this.items.update(time, focus);
     this.creature.update(dt);
   }

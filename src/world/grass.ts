@@ -44,13 +44,15 @@ export function createGrass(terrain: Terrain, q: Quality) {
     uWorld: { value: WORLD_SIZE },
     uRadius: { value: R },
     uRes: { value: terrain.res },
+    // trampled clearings (camp, crash sites): xz centre, radius
+    uClear: { value: [new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1)] },
   };
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.75, side: THREE.DoubleSide, vertexColors: false });
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms, { uTime: windUniforms.uTime, uWind: windUniforms.uWind });
     sh.vertexShader = /* glsl */ `
       attribute vec4 aOffset;
-      uniform vec2 uCenter; uniform sampler2D uHeight; uniform float uWorld, uRadius, uTime, uWind, uRes;
+      uniform vec2 uCenter; uniform sampler2D uHeight; uniform float uWorld, uRadius, uTime, uWind, uRes; uniform vec3 uClear[4];
       varying float vTip; varying float vVar;
       float th(vec2 p){ return texture2D(uHeight, ((p + uWorld * 0.5) / uWorld * (uRes - 1.0) + 0.5) / uRes).r; }
       float gh(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -67,6 +69,7 @@ export function createGrass(terrain: Terrain, q: Quality) {
       float patchK = gh(floor(wp * 0.12)) * 0.4 + 0.6 * (0.5 + 0.5 * sin(wp.x * 0.07 + sin(wp.y * 0.05) * 2.0));
       float dist = length(wp - uCenter) / uRadius;
       float s = (0.55 + aOffset.w * 0.9) * smoothstep(0.6, 1.4, hgt) * (1.0 - smoothstep(0.35, 0.6, slope)) * smoothstep(1.0, 0.75, dist) * smoothstep(0.15, 0.45, patchK);
+      for (int i = 0; i < 4; i++) { float cr = uClear[i].z; if (cr > 0.0) s *= mix(0.15, 1.0, smoothstep(cr * 0.55, cr, length(wp - uClear[i].xy))); }
       vec3 transformed = vec3(position);
       transformed.y *= s;
       transformed.x *= 0.6 + s * 0.6;
@@ -103,5 +106,9 @@ export function createGrass(terrain: Terrain, q: Quality) {
   return {
     mesh,
     update(center: THREE.Vector3) { uniforms.uCenter.value.set(center.x, center.z); },
+    /** Up to four circles (x, z, radius) where the grass is trampled short. */
+    setClearings(list: [number, number, number][]) {
+      uniforms.uClear.value.forEach((v, i) => { const c = list[i]; if (c) v.set(c[0], c[1], c[2]); else v.set(0, 0, -1); });
+    },
   };
 }

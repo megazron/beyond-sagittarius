@@ -3,7 +3,13 @@ import { mulberry32, smoothstep } from '../core/noise';
 import { Terrain, LAKE } from './terrain';
 import type { Forest } from './forest';
 
-export type ItemType = 'stone' | 'branch' | 'fruit' | 'redFruit';
+export type ItemType = 'stone' | 'branch' | 'fruit' | 'redFruit' | 'tinder' | 'frond' | 'flint' | 'vine' | 'scrap';
+
+/** Item types that go straight into the inventory when picked up. */
+export const PICKABLE = new Set<ItemType>(['stone', 'branch', 'tinder', 'frond', 'flint', 'vine', 'scrap']);
+
+/** Story locations the items are scattered around (see world/story.ts). */
+export interface ItemSites { camp: { x: number; z: number }; pod2: { x: number; z: number }; pod: { x: number; z: number } }
 
 export interface Item {
   id: string;
@@ -15,12 +21,11 @@ export interface Item {
 }
 
 /** Crashed escape pod with smoke, sparks and debris at the spawn point. */
-export function createPod(terrain: Terrain, forest: Forest) {
+export function createPod(terrain: Terrain, forest: Forest, x = 4.5, z = -3.5, yaw = 0.8, seed = 11) {
   const group = new THREE.Group();
-  const x = 4.5, z = -3.5;
   const y = terrain.height(x, z);
   group.position.set(x, y - 0.6, z);
-  group.rotation.set(0.35, 0.8, 0.25);
+  group.rotation.set(0.35, yaw, 0.25);
   const hull = new THREE.MeshStandardMaterial({ color: 0xa9afb8, metalness: 0.25, roughness: 0.62 });
   const stripe = new THREE.MeshStandardMaterial({ color: 0xff7a2a, roughness: 0.55, emissive: 0x401000 });
   const burnt = new THREE.MeshStandardMaterial({ color: 0x1b1714, metalness: 0.3, roughness: 0.9 });
@@ -51,7 +56,7 @@ export function createPod(terrain: Terrain, forest: Forest) {
   group.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 
   // Scorched debris trail
-  const rnd = mulberry32(11);
+  const rnd = mulberry32(seed);
   const debrisMat = new THREE.MeshStandardMaterial({ color: 0x8d939c, metalness: 0.7, roughness: 0.5 });
   const debris = new THREE.Group();
   for (let i = 0; i < 18; i++) {
@@ -142,7 +147,7 @@ export function createPod(terrain: Terrain, forest: Forest) {
 }
 
 /** Collectable stones and branches + glowpod (safe) and thornberry (toxic) bushes. */
-export function createItems(terrain: Terrain, forest: Forest) {
+export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites) {
   const group = new THREE.Group();
   const items: Item[] = [];
   const rnd = mulberry32(42);
@@ -261,6 +266,8 @@ export function createItems(terrain: Terrain, forest: Forest) {
     bushIndex++;
   }
 
+  addStoryItems(terrain, forest, sites, group, items, ringGeo, ringMat, branchGeo, twig, branchMat);
+
   return {
     group,
     items,
@@ -277,4 +284,111 @@ export function createItems(terrain: Terrain, forest: Forest) {
       }
     },
   };
+}
+
+/** Materials for the First-24-Hours crafting resources (levels 4-10). */
+function addStoryItems(
+  terrain: Terrain, forest: Forest, sites: ItemSites, group: THREE.Group, items: Item[],
+  ringGeo: THREE.BufferGeometry, ringMat: THREE.MeshBasicMaterial,
+  branchGeo: THREE.BufferGeometry, twig: THREE.BufferGeometry, branchMat: THREE.Material,
+) {
+  const rnd = mulberry32(2189);
+  const flat = (color: number, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
+    new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...extra });
+  const mossMat = flat(0xb59a58);
+  const mossDark = flat(0x7d6a3c);
+  const leafMat = flat(0x2f8f86, { side: THREE.DoubleSide, roughness: 0.6, emissive: 0x05221f });
+  const leafVein = flat(0x8be3c8, { emissive: 0x2a7f6a, emissiveIntensity: 0.6 });
+  const flintMat = flat(0x1a1f2e, { roughness: 0.18, metalness: 0.35, emissive: 0x0b1030 });
+  const vineMat = flat(0x2c4a2a);
+  const nodeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.8, 2.6, 1.2) });
+  const metalMat = flat(0xa2a8b2, { metalness: 0.75, roughness: 0.38 });
+  const stripeMat = flat(0xff7a2a, { emissive: 0x401000 });
+
+  // shared geometries
+  const tuft = new THREE.IcosahedronGeometry(0.12, 0); tuft.scale(1, 0.45, 1);
+  const fibre = new THREE.ConeGeometry(0.012, 0.22, 3);
+  const leaf = new THREE.PlaneGeometry(0.42, 1.5, 1, 6);
+  {
+    const p = leaf.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const y = p.getY(i) + 0.75, x = p.getX(i);
+      const w = Math.sin((y / 1.5) * Math.PI) * 1.1;
+      p.setXYZ(i, x * w, y, -0.18 * y * y + Math.abs(x) * 0.25);
+    }
+    leaf.rotateX(-Math.PI / 2 + 0.55);
+    leaf.computeVertexNormals();
+  }
+  const vein = new THREE.CylinderGeometry(0.008, 0.012, 1.4, 3); vein.rotateX(Math.PI / 2 - 0.55); vein.translate(0, 0.4, 0.62);
+  const shard = new THREE.OctahedronGeometry(0.11, 0); shard.scale(0.7, 1.4, 0.5);
+  const coil = new THREE.TorusGeometry(0.2, 0.022, 4, 14); coil.rotateX(Math.PI / 2);
+  const node = new THREE.SphereGeometry(0.03, 5, 4);
+  const plate = new THREE.BoxGeometry(0.5, 0.03, 0.34, 3, 1, 2);
+  {
+    const p = plate.attributes.position;
+    for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) + Math.sin(p.getX(i) * 5) * 0.05);
+    plate.computeVertexNormals();
+  }
+  const stripe = new THREE.BoxGeometry(0.08, 0.035, 0.345);
+
+  const build = (type: ItemType): THREE.Group => {
+    const o = new THREE.Group();
+    const add = (g: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0, ry = 0) => {
+      const mesh = new THREE.Mesh(g, m); mesh.position.set(x, y, z); mesh.rotation.y = ry; mesh.castShadow = true; o.add(mesh); return mesh;
+    };
+    if (type === 'tinder') {
+      for (let i = 0; i < 4; i++) add(tuft, i % 2 ? mossMat : mossDark, (rnd() - 0.5) * 0.25, 0.03, (rnd() - 0.5) * 0.25, rnd() * 6);
+      for (let i = 0; i < 7; i++) { const f = add(fibre, mossMat, (rnd() - 0.5) * 0.3, 0.08, (rnd() - 0.5) * 0.3); f.rotation.set((rnd() - 0.5) * 1.6, 0, (rnd() - 0.5) * 1.6); }
+    } else if (type === 'frond') {
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2 + rnd() * 0.4;
+        const l = add(leaf, leafMat, 0, 0, 0, a); l.scale.setScalar(0.8 + rnd() * 0.4); l.receiveShadow = true;
+        add(vein, leafVein, 0, 0, 0, a).scale.setScalar(l.scale.x);
+      }
+    } else if (type === 'flint') {
+      for (let i = 0; i < 3; i++) { const m = add(shard, flintMat, (i - 1) * 0.12, 0.08, (rnd() - 0.5) * 0.1, rnd() * 6); m.rotation.z = (rnd() - 0.5) * 1.2; }
+    } else if (type === 'vine') {
+      add(coil, vineMat, 0, 0.03, 0);
+      const c2 = add(coil, vineMat, 0.05, 0.07, 0.03); c2.scale.setScalar(0.8); c2.rotation.z = 0.3;
+      for (let i = 0; i < 5; i++) { const a = i * 1.3; add(node, nodeMat, Math.cos(a) * 0.2, 0.05, Math.sin(a) * 0.2); }
+    } else if (type === 'scrap') {
+      add(plate, metalMat, 0, 0.04, 0);
+      add(stripe, stripeMat, 0.1, 0.06, 0);
+      o.rotation.set(0, rnd() * 6, (rnd() - 0.5) * 0.4);
+    } else if (type === 'branch') {
+      add(branchGeo, branchMat); add(twig, branchMat); o.rotation.y = rnd() * 6;
+    }
+    const ring = new THREE.Mesh(ringGeo, ringMat.clone());
+    ring.position.y = 0.02; ring.name = 'ring';
+    o.add(ring);
+    return o;
+  };
+
+  const probe = new THREE.Vector3();
+  const scatter = (type: ItemType, count: number, cx: number, cz: number, minR: number, maxR: number, idPrefix: string) => {
+    let k = 0, tries = 0;
+    while (k < count && tries < 3000) {
+      tries++;
+      const a = rnd() * Math.PI * 2, r = minR + rnd() * (maxR - minR);
+      const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+      const h = terrain.height(x, z);
+      if (h < 0.7 || h > 70) continue;
+      probe.set(x, 0, z);
+      forest.collide(probe, 0.6);
+      if (Math.hypot(probe.x - x, probe.z - z) > 0.01) continue; // inside a tree or rock
+      const o = build(type);
+      o.position.set(x, h + 0.04, z);
+      group.add(o);
+      items.push({ id: `${idPrefix}-${k}`, type, obj: o, pos: o.position, active: true });
+      k++;
+    }
+  };
+  const { camp, pod, pod2 } = sites;
+  scatter('tinder', 6, camp.x, camp.z, 7, 30, 'tinder');
+  scatter('frond', 8, camp.x, camp.z, 16, 46, 'frond');
+  scatter('flint', 5, camp.x, camp.z, 18, 60, 'flint');
+  scatter('vine', 5, camp.x, camp.z, 18, 55, 'vine');
+  scatter('scrap', 5, pod.x + 13, pod.z + 0.5, 1, 9, 'scrap');
+  scatter('branch', 3, pod2.x, pod2.z, 4, 16, 'branch2');
+  scatter('vine', 3, pod2.x, pod2.z, 4, 18, 'vine2');
 }

@@ -148,6 +148,14 @@ export class Forest {
 
   constructor(private terrain: Terrain, private q: Quality) {}
 
+  /** Story locations kept free of trees and rocks (camp, ridge, crash sites). */
+  private reserved: Obstacle[] = [];
+  reserve(x: number, z: number, r: number) { this.reserved.push({ x, z, r }); }
+  private isReserved(x: number, z: number, pad: number) {
+    for (const o of this.reserved) if (Math.hypot(x - o.x, z - o.z) < o.r + pad) return true;
+    return false;
+  }
+
   private key(x: number, z: number) { return `${Math.floor(x / 10)},${Math.floor(z / 10)}`; }
 
   addObstacle(x: number, z: number, r: number) {
@@ -199,6 +207,7 @@ export class Forest {
       if (d0 < 18) continue;
       const dl = Math.hypot(x - LAKE.x, z - LAKE.z);
       if (dl < LAKE.r + 6) continue;
+      if (this.isReserved(x, z, 4)) continue;
       const h = T.height(x, z);
       if (h < 1.2 || h > 90) continue;
       T.normal(x, z, nrm);
@@ -250,6 +259,7 @@ export class Forest {
         const h = T.height(x, z);
         if (h < minH || h > 95) continue;
         if (Math.hypot(x, z) < 6) continue;
+        if (slot === 4 && this.isReserved(x, z, 1.5)) continue;
         const sc = scale[0] + rnd() * (scale[1] - scale[0]);
         e.set(slot === 4 ? rnd() * 3 : 0, rnd() * 6.28, slot === 4 ? rnd() * 3 : 0); q.setFromEuler(e);
         pos.set(x, h - (slot === 4 ? sc * 0.25 : 0.02), z); s.setScalar(sc);
