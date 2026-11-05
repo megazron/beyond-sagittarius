@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { mulberry32, smoothstep } from '../core/noise';
 import type { Quality } from '../core/quality';
 import { Terrain, HALF, LAKE } from './terrain';
+import { applyBark, applyRock } from './pbr';
 
 export const windUniforms = { uTime: { value: 0 }, uWind: { value: 1 } };
 
@@ -15,6 +16,17 @@ function colorize(g: THREE.BufferGeometry, hex: number, jitter = 0): THREE.Buffe
     arr[i * 3] = c.r * j; arr[i * 3 + 1] = c.g * j; arr[i * 3 + 2] = c.b * j;
   }
   g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  if (!g.attributes.aBark) g.setAttribute('aBark', new THREE.BufferAttribute(new Float32Array(n), 1));
+  return g;
+}
+
+/** Marks a geometry as bark and scales its cylinder UVs to ~1.4 m texture tiles. */
+function barkify(g: THREE.BufferGeometry, circumference: number, height: number): THREE.BufferGeometry {
+  const n = g.attributes.position.count;
+  g.setAttribute('aBark', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
+  const uv = g.attributes.uv;
+  const ru = Math.max(1, Math.round(circumference / 1.4)), rv = height / 1.4;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * ru, uv.getY(i) * rv);
   return g;
 }
 
@@ -29,7 +41,7 @@ function bentTrunk(h: number, r0: number, r1: number, bend: number, radial = 9, 
     p.setZ(i, p.getZ(i) + Math.sin(y * 4) * 0.08 * h * 0.1);
   }
   g.computeVertexNormals();
-  return g;
+  return barkify(g, Math.PI * (r0 + r1), h);
 }
 
 function place(g: THREE.BufferGeometry, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, s: [number, number, number] = [1, 1, 1]) {
@@ -97,7 +109,7 @@ function buildVariants(): Variant[] {
   {
     const solid: THREE.BufferGeometry[] = [];
     const glow: THREE.BufferGeometry[] = [];
-    solid.push(colorize(new THREE.CylinderGeometry(0.5, 0.9, 1.2, 10).translate(0, 0.6, 0), 0x3b2c2a, 0.1));
+    solid.push(colorize(barkify(new THREE.CylinderGeometry(0.5, 0.9, 1.2, 10).translate(0, 0.6, 0), Math.PI * 1.4, 1.2), 0x3b2c2a, 0.1));
     for (let i = 0; i < 7; i++) {
       const a = (i / 7) * Math.PI * 2 + 0.3;
       const h = 4.5 + (i % 3) * 1.6;
@@ -184,6 +196,7 @@ export class Forest {
     const variants = buildVariants();
     const solidMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.0, side: THREE.DoubleSide });
     windify(solidMat, 0.35);
+    applyBark(solidMat, this.q);
     const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.2, 2.2, 2.2), toneMapped: true });
     windify(glowMat, 0.35);
     this.glowMats.push(glowMat);
@@ -271,7 +284,8 @@ export class Forest {
     addSmall(this.q.plantCount, 3, 0.3, [0.7, 1.6], 0);
     addSmall(this.q.rockCount, 4, -1.5, [0.3, 2.2], 0.8);
 
-    const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
+    const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
+    applyRock(rockMat, this.q);
     const plantMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
     windify(plantMat, 2.5);
     const plantGlowMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.4, 2.4, 2.4) });

@@ -19,7 +19,23 @@ export interface Quality {
   ao: boolean;
   bloomStrength: number;
   heightRes: number;
+  /** Ground texture size (terrain layers); props use at most 1k. */
+  texSize: TexSize;
+  /** Terrain material layers: 2 = soil + rock, 4 = soil, forest floor, mud, rock. */
+  terrainLayers: 2 | 4;
+  /** Second, rotated sample of each ground layer to break up tiling. */
+  antiTile: boolean;
+  /** Triplanar projection for the rock layer on steep slopes. */
+  triplanar: boolean;
+  /** Load the HDRI for image-based lighting (otherwise a sky-gradient environment). */
+  hdri: boolean;
+  /** Render scale of the ambient-occlusion pass (1 = full, 0.5 = half; only used when ao is on). */
+  aoScale: number;
+  /** Shadow filter radius in texels (PCF). */
+  shadowSoftness: number;
 }
+
+export type TexSize = '512' | '1k' | '2k';
 
 const PRESETS: Record<QualityName, Quality> = {
   // Phones and small tablets: chosen automatically on touch devices.
@@ -41,14 +57,21 @@ const PRESETS: Record<QualityName, Quality> = {
     ao: false,
     bloomStrength: 0.6,
     heightRes: 512,
+    texSize: '512',
+    terrainLayers: 2,
+    antiTile: false,
+    triplanar: false,
+    hdri: false,
+    aoScale: 0,
+    shadowSoftness: 1,
   },
   web: {
     name: 'web',
     maxPixelRatio: 1.25,
     minPixelRatio: 0.6,
     dynamicResolution: true,
-    shadowMapSize: 1024,
-    shadowExtent: 55,
+    shadowMapSize: 2048,
+    shadowExtent: 60,
     terrainSegments: 32,
     treeCount: 2600,
     plantCount: 2500,
@@ -57,9 +80,16 @@ const PRESETS: Record<QualityName, Quality> = {
     grassRadius: 34,
     viewDistance: 420,
     fogDensity: 0.0028,
-    ao: false,
+    ao: true,
     bloomStrength: 0.75,
     heightRes: 768,
+    texSize: '1k',
+    terrainLayers: 4,
+    antiTile: true,
+    triplanar: false,
+    hdri: true,
+    aoScale: 0.5,
+    shadowSoftness: 1.5,
   },
   ultra: {
     name: 'ultra',
@@ -79,6 +109,13 @@ const PRESETS: Record<QualityName, Quality> = {
     ao: true,
     bloomStrength: 0.85,
     heightRes: 1024,
+    texSize: '2k',
+    terrainLayers: 4,
+    antiTile: true,
+    triplanar: true,
+    hdri: true,
+    aoScale: 1,
+    shadowSoftness: 3,
   },
 };
 

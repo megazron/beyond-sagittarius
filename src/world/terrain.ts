@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { Simplex, smoothstep, lerp, clamp, tileFbm, tileNoise } from '../core/noise';
+import { NOISE_GLSL } from '../core/glsl';
+import { loadSet, meanColor } from '../core/assets';
 import type { Quality } from '../core/quality';
 
 export const WORLD_SIZE = 1400;
@@ -180,7 +182,7 @@ export class Terrain {
 
   /** Builds chunked LOD meshes. Yields between chunks. */
   async buildMeshes(onProgress: (p: number) => void) {
-    this.material = createTerrainMaterial();
+    this.material = createTerrainMaterial(this.q);
     const CH = 100;
     const n = WORLD_SIZE / CH;
     const segs = [this.q.terrainSegments, this.q.terrainSegments / 2, Math.max(8, this.q.terrainSegments / 8)];
@@ -208,8 +210,8 @@ export class Terrain {
 }
 const tmpC = new THREE.Color();
 
-/** Procedural tiling detail albedo + normal map, multiplied with vertex colours. */
-function createTerrainMaterial(): THREE.MeshStandardMaterial {
+/** Procedural tiling detail albedo + normal map: the fallback until the photo textures arrive. */
+function proceduralDetail(): { map: THREE.DataTexture; nmap: THREE.DataTexture; mean: number } {
   const S = 256;
   const hgt = new Float32Array(S * S);
   for (let y = 0; y < S; y++) {
@@ -223,11 +225,13 @@ function createTerrainMaterial(): THREE.MeshStandardMaterial {
   }
   const alb = new Uint8Array(S * S * 4);
   const nrm = new Uint8Array(S * S * 4);
+  let sum = 0;
   for (let y = 0; y < S; y++) {
     for (let x = 0; x < S; x++) {
       const i = y * S + x;
       const h = hgt[i];
       const g = Math.floor(clamp(222 + (h - 0.5) * 120, 150, 255));
+      sum += g;
       alb[i * 4] = g; alb[i * 4 + 1] = g; alb[i * 4 + 2] = g; alb[i * 4 + 3] = 255;
       const hl = hgt[y * S + ((x + S - 1) % S)], hr = hgt[y * S + ((x + 1) % S)];
       const hd = hgt[((y + S - 1) % S) * S + x], hu = hgt[((y + 1) % S) * S + x];
@@ -250,13 +254,156 @@ function createTerrainMaterial(): THREE.MeshStandardMaterial {
     t.anisotropy = 8;
     t.needsUpdate = true;
   }
+  return { map, nmap, mean: sum / (S * S) / 255 };
+}
+
+/** Ground layers: texture set, tile size in metres (from the scan's real size). */
+const LAYERS = [
+  { set: 'ground', tile: 3.2 },
+  { set: 'dirt', tile: 3.6 },
+  { set: 'mud', tile: 2.8 },
+  { set: 'rock', tile: 6.0 },
+] as const;
+
+/**
+ * Terrain material: the palette vertex colours stay (they make the planet alien);
+ * CC0 photo-scanned layers (soil, forest floor, mud, rock) add albedo detail,
+ * normals and roughness. Layers are blended by height (wet shore / mud), slope
+ * (rock, triplanar on Ultra) and noise patches, each sampled twice at rotated
+ * scales to hide tiling.
+ */
+function createTerrainMaterial(q: Quality): THREE.MeshStandardMaterial {
+  const fb = proceduralDetail();
+  const uniforms = {
+    tD: { value: LAYERS.map(() => fb.map as THREE.Texture) },
+    tN: { value: LAYERS.map(() => fb.nmap as THREE.Texture) },
+    uMean: { value: LAYERS.map(() => new THREE.Vector3().setScalar(fb.mean)) },
+    uChroma: { value: 0.0 },
+    uNormalK: { value: 0.6 },
+  };
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
-    map,
-    normalMap: nmap,
-    normalScale: new THREE.Vector2(0.45, 0.45),
     roughness: 0.92,
     metalness: 0.0,
+  });
+  mat.defines = {
+    LAYERS: q.terrainLayers,
+    ...(q.antiTile ? { ANTI_TILE: '' } : {}),
+    ...(q.triplanar ? { TRIPLANAR: '' } : {}),
+  };
+  const tile = LAYERS.map((l) => (1 / l.tile).toFixed(4));
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, uniforms);
+    sh.vertexShader = 'varying vec3 vTW; varying vec3 vTN;\n' + sh.vertexShader.replace(
+      '#include <worldpos_vertex>',
+      `#include <worldpos_vertex>
+      vTW = (modelMatrix * vec4(transformed, 1.0)).xyz;
+      vTN = normalize(mat3(modelMatrix) * objectNormal);`,
+    );
+    sh.fragmentShader = /* glsl */ `
+      varying vec3 vTW; varying vec3 vTN;
+      uniform sampler2D tD[4]; uniform sampler2D tN[4]; uniform vec3 uMean[4];
+      uniform float uChroma, uNormalK;
+      ${NOISE_GLSL}
+      struct Tap { vec3 c; vec2 n; };
+      const mat2 ROT = mat2(0.8, -0.6, 0.6, 0.8);
+      // gradients are taken once, outside any branch (derivatives in divergent flow are undefined)
+      Tap tap(sampler2D d, sampler2D n, vec2 uv, vec2 dx, vec2 dy) {
+        Tap t;
+        t.c = textureGrad(d, uv, dx, dy).rgb;
+        t.n = textureGrad(n, uv, dx, dy).xy * 2.0 - 1.0;
+        return t;
+      }
+      // two decorrelated samples blended by low-frequency noise hide the repeat
+      Tap tapAT(sampler2D d, sampler2D n, vec2 uv, vec2 dx, vec2 dy) {
+        Tap a = tap(d, n, uv, dx, dy);
+      #ifdef ANTI_TILE
+        float k = smoothstep(0.32, 0.68, vnoise2(uv * 0.21 + 3.7));
+        if (k > 0.001) {
+          Tap b = tap(d, n, ROT * uv * 0.61 + vec2(0.37, 0.71), ROT * dx * 0.61, ROT * dy * 0.61);
+          b.n = b.n * ROT; // rotate the tangent normal back
+          a.c = mix(a.c, b.c, k); a.n = mix(a.n, b.n, k);
+        }
+      #endif
+        return a;
+      }
+      vec3 detail(vec3 c, vec3 mean) {
+        float l = dot(c, vec3(0.2126, 0.7152, 0.0722)) / max(dot(mean, vec3(0.2126, 0.7152, 0.0722)), 1e-3);
+        return mix(vec3(l), c / max(mean, vec3(1e-3)), uChroma);
+      }
+    ` + sh.fragmentShader.replace(
+      '#include <map_fragment>',
+      /* glsl */ `
+      vec3 tw = vTW; vec3 tn = normalize(vTN);
+      float slope = 1.0 - tn.y;
+      vec3 gx = dFdx(tw), gy = dFdy(tw);
+      float nA = vnoise2(tw.xz * 0.045);
+      float nB = vnoise2(tw.xz * 0.23 + 7.3);
+      float wRock = smoothstep(0.17, 0.36, slope + (nB - 0.5) * 0.14);
+      float wMud = 1.0 - smoothstep(0.3, 2.2, tw.y + (nB - 0.5) * 0.9);
+      float wDirt = smoothstep(0.5, 0.78, nA + (nB - 0.5) * 0.35);
+      Tap g = tapAT(tD[0], tN[0], tw.xz * ${tile[0]}, gx.xz * ${tile[0]}, gy.xz * ${tile[0]});
+      vec3 dcol = detail(g.c, uMean[0]);
+      vec3 nW = vec3(g.n.x, 0.0, g.n.y);
+      float rough = 0.94;
+      #if LAYERS > 2
+      if (wDirt > 0.001) {
+        Tap t = tapAT(tD[1], tN[1], tw.xz * ${tile[1]}, gx.xz * ${tile[1]}, gy.xz * ${tile[1]});
+        dcol = mix(dcol, detail(t.c, uMean[1]) * 0.95, wDirt);
+        nW = mix(nW, vec3(t.n.x, 0.0, t.n.y), wDirt);
+      }
+      if (wMud > 0.001) {
+        Tap t = tap(tD[2], tN[2], tw.xz * ${tile[2]}, gx.xz * ${tile[2]}, gy.xz * ${tile[2]});
+        dcol = mix(dcol, detail(t.c, uMean[2]), wMud);
+        nW = mix(nW, vec3(t.n.x, 0.0, t.n.y), wMud);
+      }
+      #endif
+      if (wRock > 0.001) {
+        vec3 rc; vec3 rn;
+      #ifdef TRIPLANAR
+        vec3 bw = pow(abs(tn), vec3(4.0)); bw /= bw.x + bw.y + bw.z;
+        Tap tx = tap(tD[3], tN[3], tw.zy * ${tile[3]}, gx.zy * ${tile[3]}, gy.zy * ${tile[3]});
+        Tap tz = tap(tD[3], tN[3], tw.xy * ${tile[3]}, gx.xy * ${tile[3]}, gy.xy * ${tile[3]});
+        Tap ty = tap(tD[3], tN[3], tw.xz * ${tile[3]}, gx.xz * ${tile[3]}, gy.xz * ${tile[3]});
+        rc = tx.c * bw.x + ty.c * bw.y + tz.c * bw.z;
+        rn = vec3(0.0, tx.n.y, tx.n.x) * sign(tn.x) * bw.x + vec3(ty.n.x, 0.0, ty.n.y) * bw.y + vec3(tz.n.x, tz.n.y, 0.0) * sign(tn.z) * bw.z;
+      #else
+        Tap t = tap(tD[3], tN[3], tw.xz * ${tile[3]}, gx.xz * ${tile[3]}, gy.xz * ${tile[3]});
+        rc = t.c; rn = vec3(t.n.x, 0.0, t.n.y);
+      #endif
+        dcol = mix(dcol, detail(rc, uMean[3]), wRock);
+        nW = mix(nW, rn * 1.4, wRock);
+        rough = mix(rough, 0.82, wRock);
+      }
+      // wet band along the lake shore: darker, glossier
+      float wet = 1.0 - smoothstep(0.05, 0.7, tw.y + (nA - 0.5) * 0.3);
+      dcol *= mix(1.0, 0.55, wet);
+      rough = mix(rough, 0.32, wet);
+      diffuseColor.rgb *= clamp(dcol, 0.0, 2.5) * 0.92;
+      vec3 terrainN = normalize(tn + nW * uNormalK);
+      `,
+    ).replace(
+      '#include <roughnessmap_fragment>',
+      'float roughnessFactor = roughness * rough / 0.92;',
+    ).replace(
+      '#include <normal_fragment_maps>',
+      'normal = normalize((viewMatrix * vec4(terrainN, 0.0)).xyz);',
+    );
+  };
+  mat.customProgramCacheKey = () => `terrain-${q.terrainLayers}-${q.antiTile}-${q.triplanar}`;
+
+  // Swap in the CC0 photo layers once they arrive (never blocks the build).
+  LAYERS.forEach((l, i) => {
+    if (q.terrainLayers === 2 && (i === 1 || i === 2)) return;
+    loadSet(l.set, ['diff', 'nor'], q.texSize).then((set) => {
+      if (!set.diff || !set.nor) return;
+      const m = meanColor(set.diff);
+      uniforms.tD.value[i] = set.diff;
+      uniforms.tN.value[i] = set.nor;
+      uniforms.uMean.value[i].set(m.r, m.g, m.b);
+      uniforms.uChroma.value = 0.35;
+      uniforms.uNormalK.value = 1.0;
+    });
   });
   return mat;
 }
