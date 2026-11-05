@@ -19,27 +19,46 @@ world and the complete first arc, *Chapter One — "The First 24 Hours"*
 
 ## The story so far
 
-Year 2189. Humanity lives across the Solar System — the cities of Mars, the
-laboratories of Europa, the stations of Titan, the foundries of the Moon. Six
-friends book an interstellar tourist expedition to an observation corridor near
-the galactic centre. Near Sagittarius A* an impossible gravitational
-disturbance tears the ship apart. You — the Scientist — wake up alone beneath
-two huge bodies in an unfamiliar sky, in a damaged suit, in a strange forest
-where something enormous walks between the trees.
+Year 2189. Nobody is just human any more: five alien lineages married into
+ours, and six friends from six worlds book a tourist liner to the galactic
+centre on a suspiciously free route. They roast each other, argue about snacks
+and take far too many selfies. Then an impossible gravitational disturbance
+near Sagittarius A* tears the ship apart. You, the Scientist, wake up alone
+under two huge bodies in an unfamiliar sky, in a strange forest where something
+enormous walks between the trees. The tone is horror-comedy: the jokes come
+first, the fear catches up.
 
-### The crew (default call-signs — rename everyone on the pre-game screen)
+### The crew (default call-signs: rename everyone on the pre-game screen)
 
-| | Role | Strength |
-| --- | --- | --- |
-| **Zenvik** (you) | The Scientist | Physics, engineering, AI, medical theory. Faster research and crafting, physically weak. |
-| Draxum | The Strong One | Carrying, cutting trees, defences, fighting. |
-| Lyrra | The Medic | Treating injuries, identifying plants, medicines. |
-| Skyvra | The Explorer | Tracking, navigation, finding water and food, scouting. |
-| Bolzar | The Builder | Tools, shelters, machines, vehicles. |
-| Nuvexa | The Social One | Leadership, negotiation, morale, organising. |
+| | Role | Lineage and home | Look |
+| --- | --- | --- | --- |
+| **Zenvik** (you) | The Scientist | Ulari-human, under-ice labs of Europa | Teal skin, glowing freckles, fin ears, round glasses, scorched lab coat, sideswept blue fringe |
+| Draxum | The Strong One | Korrath-human, foundries of Titan | Amber hide, ember seams, horns, vest, flame crest |
+| Lyrra | The Medic | Vael-human, garden domes of Mars | Violet skin, long ears, brow sigil, field coat and satchel, silver curtain and plait |
+| Skyvra | The Explorer | Tarnkin-human, ice caravans of Ganymede | Coral striped skin, tail, goggles, scarf, worn jacket, high amber tail |
+| Bolzar | The Builder | Ortek-human, shipyards of Ceres | Jade skin, short and wide, rolled sleeves, overalls, tool belt, spiky tufts |
+| Nuvexa | The Social One | Sirelle-human, cloud cities of Venus | Cobalt skin, gold stars, antennae, loud bomber, giant twin tails |
+
+**MegaZroN** hosts the game from the Vault of the Last Ledger, an archive on
+the rim of Sagittarius A*. He keeps the book in which every story ends, he
+reads your choices back to you, and he is rude about them.
 
 ## What is in this slice
 
+- **Phones**: touch controls (floating joystick, drag to look, pinch to zoom,
+  buttons for use, jump, run, bag, crew, goals, pause), layouts for portrait
+  and landscape with safe areas, and an automatic Mobile preset.
+- **First-play tutorial** on level 1 that waits for you to actually do each
+  thing, worded for keyboard or touch, skippable, remembered in the save and
+  replayable from Settings.
+- **MegaZroN's Vault**: narrator scenes at the start, after levels 3 and 7 and
+  at the end of the chapter, which change with what you did (the thornberry,
+  your deaths, the bites, renaming the crew).
+- **Staged cutscenes** with cuts, coverage, poses and expressions: the deck
+  roast before the disaster, the day-39 fight flashback, the rescue, the talk
+  by the fire, the beacon and the accusation. All skippable.
+- **Full dubbing** in English, Hindi and Urdu with separate voice, music and
+  effects volumes and a mute (see `tools/tts/`).
 - **Opening cinematic** (≈60 s, skippable): Earth in 2189 with an atmosphere
   shader, city lights, clouds and an orbital ring with stations; the tourist
   liner's departure with the mission display; a journey montage past a red
@@ -103,9 +122,12 @@ where something enormous walks between the trees.
 | C | Crew |
 | Esc | Pause menu (settings, controls, quit) |
 | Enter / Esc | Skip cinematic or wake-up sequence |
-| Touch | Left side of the screen moves, right side looks, tap the prompt to interact |
+| I or Tab | Inventory |
+| Touch | Joystick on the left, drag anywhere else to look, pinch to zoom, buttons for the rest |
 
 ## Quality presets
+
+A third preset, **Mobile**, is picked automatically on phones: 512 textures, no HDRI download, no ambient occlusion, sparse grass and canopy, 300 m view.
 
 | | **Web** | **Ultra** |
 | --- | --- | --- |
@@ -142,7 +164,17 @@ Smoke tests (headless Chromium via Playwright; software GL is fine;
 ```bash
 npm run build
 python3 tools/smoke.py --quality web          # boot, cinematic, wake-up, world shots
-python3 tools/levels_smoke.py --quality web   # plays levels 1-10 end to end
+python3 tools/levels_smoke.py --quality web   # tutorial, scenes, levels 1-10 end to end
+python3 tools/mobile_smoke.py                 # iPhone 13 portrait, Pixel 7 landscape, real touch events
+```
+
+Regenerate the dubbing (project-local venv, Kokoro-82M on CPU, cached per line):
+
+```bash
+python3 -m venv .venv-tts && .venv-tts/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
+.venv-tts/bin/pip install kokoro soundfile faster-whisper
+npm run voice                      # every line in src/i18n/voice.json
+.venv-tts/bin/python tools/tts/qa_voice.py   # ASR spot check
 ```
 
 `levels_smoke.py` starts a new game through the name screen with custom
@@ -166,14 +198,16 @@ Actions*, then push.
 src/
   main.ts               state machine: title → cinematic → wake-up → play
   core/                 renderer + post-processing, quality presets, noise,
-                        save/settings, synthesised audio, astronaut model
+                        save/settings, audio buses, voice playback, textures
+  characters/           the crew: bodies, faces, anime hair, outfits, motion
+  narrator/             MegaZroN's Vault
   cinematic/            space dome (stars, nebula, black hole), Earth, ship,
-                        observation deck, timeline
-  world/                terrain, sky, forest, grass, water, props, the Walker,
-                        story.ts (camp, ridge, layout), crew.ts, predator.ts
-  game/                 input, player controller, survival + objectives,
+                        observation deck, timeline, cutscene engine and scenes
+  world/                terrain, sky, forest, foliage, grass, water, props, the
+                        Walker, story.ts (camp, ridge, layout), predator.ts
+  game/                 input, player controller, tutorial, survival + objectives,
                         story.ts (levels 4-10, predator AI, crewmate)
-  ui/                   HUD, menus, subtitles, modals
+  ui/                   HUD, menus, subtitles, modals, touch controls, portraits
   i18n/                 en.json, hi.json, ur.json
 ```
 
@@ -192,6 +226,8 @@ src/
 6. **Co-op multiplayer** for the six crew roles.
 7. More languages; customisable genders (names are done); WebGPU renderer.
 
+The beacon's `ORIGIN: EARTH` is the first thread of Level 99: none of the six has ever stood on Earth, and something recognised them anyway.
+
 ## Credits
 
-See [CREDITS.md](CREDITS.md). All assets are procedurally generated.
+See [CREDITS.md](CREDITS.md). Photo textures and the HDRI are CC0 from Poly Haven; voices are Kokoro-82M (Apache-2.0).
