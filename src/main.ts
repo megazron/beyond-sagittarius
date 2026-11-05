@@ -11,6 +11,7 @@ import { World } from './world/world';
 import { Player } from './game/player';
 import { Input } from './game/input';
 import { Game } from './game/game';
+import { applyCrewNames, CrewNames } from './core/crew';
 
 type State = 'loading' | 'title' | 'cinematic' | 'game';
 
@@ -40,6 +41,9 @@ let state: State = 'loading';
 let paused = false;
 let worldReady = false;
 let pendingStart: (() => void) | null = null;
+let pendingNames: CrewNames = {};
+/** Debug camera override used for documentation screenshots. */
+let photo: { from: THREE.Vector3; to: THREE.Vector3 } | null = null;
 
 document.getElementById('quality-badge')!.textContent = quality.name.toUpperCase();
 renderer.setScene(cine.scene, cine.camera, false);
@@ -79,6 +83,7 @@ function showTitle() {
   renderer.setScene(cine.scene, cine.camera, false);
   ui.fade('black', 0, 1.2);
   audio.stopWind();
+  applyCrewNames(undefined);
   refreshTitle();
 }
 
@@ -87,9 +92,17 @@ function whenWorldReady(fn: () => void) {
   else { pendingStart = fn; ui.show('loading', true); }
 }
 
-function startNewGame() {
+/** Pre-game screen: name yourself and the five friends, then the prologue. */
+function chooseNames() {
+  const prev = (loadSave()?.names ?? {}) as CrewNames;
+  ui.openNames(prev, 'new', (names) => startNewGame(names), () => {});
+}
+
+function startNewGame(names: CrewNames = {}) {
   audio.start();
   clearSave();
+  pendingNames = names;
+  applyCrewNames(names);
   ui.show('title', false);
   ui.fade('black', 1, 0.8);
   setTimeout(() => {
@@ -117,6 +130,8 @@ function enterWorld(fresh: boolean) {
   renderer.setScene(world.scene, camera, true);
   renderer.aoHidden = world.aoHidden();
   const save = fresh ? newSave() : (loadSave() ?? newSave());
+  if (fresh) save.names = { ...pendingNames };
+  applyCrewNames(save.names as CrewNames);
   game.start(save, fresh);
   if (!fresh) ui.fade('black', 0, 1.2);
   renderer.resize();
@@ -124,8 +139,8 @@ function enterWorld(fresh: boolean) {
 
 document.getElementById('btn-new')!.addEventListener('click', () => {
   audio.start(); audio.uiClick();
-  if (loadSave()) ui.openConfirm(t('menu.newGameConfirm'), startNewGame, () => {});
-  else startNewGame();
+  if (loadSave()) ui.openConfirm(t('menu.newGameConfirm'), chooseNames, () => {});
+  else chooseNames();
 });
 document.getElementById('btn-continue')!.addEventListener('click', () => { audio.uiClick(); continueGame(); });
 document.getElementById('btn-settings')!.addEventListener('click', () => {
@@ -154,7 +169,7 @@ function openPause() {
     resume: resume,
     settings: () => ui.openSettings(settings, quality.name, persistSettings, changeQuality, () => openPauseAgain()),
     objectives: () => ui.openObjectives(game.save.level, game.save.completed, () => openPauseAgain()),
-    crew: () => ui.openCrew(() => openPauseAgain()),
+    crew: () => openCrewPanel(() => openPauseAgain()),
     quit: () => { game.persist(); showTitle(); },
   });
 }
@@ -164,7 +179,17 @@ function openPanel(kind: 'objectives' | 'crew') {
   if (state !== 'game' || game.mode !== 'play' || ui.modalOpen()) return;
   paused = true; input.enabled = false; suppressPauseOnUnlock = true; input.releasePointer();
   if (kind === 'objectives') ui.openObjectives(game.save.level, game.save.completed, resume);
-  else ui.openCrew(resume);
+  else openCrewPanel(resume);
+}
+function openCrewPanel(onClose: () => void) {
+  ui.openCrew((id) => game.story.crewStatus(id), onClose, () => {
+    ui.openNames((game.save.names ?? {}) as CrewNames, 'edit', (names) => {
+      game.save.names = names;
+      applyCrewNames(names);
+      game.persist();
+      openCrewPanel(onClose);
+    }, () => openCrewPanel(onClose));
+  });
 }
 
 document.addEventListener('pointerlockchange', () => {
@@ -173,6 +198,7 @@ document.addEventListener('pointerlockchange', () => {
 });
 
 window.addEventListener('keydown', (e) => {
+  if ((e.target as HTMLElement)?.tagName === 'INPUT') return; // typing a name
   if (state === 'cinematic' && (e.code === 'Enter' || e.code === 'Escape')) { cine.skip(); return; }
   if (state === 'game' && game.mode === 'wake' && (e.code === 'Enter' || e.code === 'Escape')) { game.skipWake(); return; }
   if (state !== 'game') return;
@@ -207,6 +233,7 @@ function frame() {
   } else if (state === 'game') {
     if (!paused && game.mode !== 'dead') game.update(dt, elapsed);
     const focus = player.pos;
+    if (photo) { camera.position.copy(photo.from); camera.lookAt(photo.to); }
     world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer);
   }
   renderer.render(dt, elapsed);
@@ -259,7 +286,25 @@ window.addEventListener('resize', () => {
   wakeSeek(t: number) { game?.debugWakeSeek(t); },
   look(yaw: number, pitch: number) { if (player) { player.yaw = yaw; player.pitch = pitch; player.snapCamera(); } },
   teleport(x: number, z: number, yaw = 0) { player?.spawn(x, z, yaw); },
+  /** Teleport next to the current objective (marker target). */
+  gotoObjective(offset = 0.6) {
+    const m = game?.story.busy || (game?.save.level === 7 && game.story.houndEngaged()) ? null : game?.objectivePoint();
+    if (!m || !player) return null;
+    player.spawn(m.x + offset, m.z + offset * 0.5, player.yaw);
+    return [m.x, m.z];
+  },
+  act() { return game?.debugAct() ?? null; },
+  /** Freeze the camera at `from` looking at `to` (null releases it). */
+  photo(from: number[] | null, to?: number[]) { photo = from && to ? { from: new THREE.Vector3(...from), to: new THREE.Vector3(...to) } : null; },
+  step(sec: number) { game?.debugStep(sec, elapsed); },
+  get save() { return game?.save; },
+  get prompt() { const el = document.getElementById('prompt')!; return el.classList.contains('hidden') ? null : el.textContent; },
+  get hound() { return game?.story.debugHound(); },
+  groundAt(x: number, z: number) { return world.terrain.height(x, z); },
+  get crew() { return game?.story.debugCrew(); },
+  get layout() { const L = world.layout; return L ? Object.fromEntries(Object.entries(L).map(([k, v]) => [k, (v as THREE.Vector3).toArray()])) : null; },
   quality: quality.name,
+  get world() { return world; },
   get debug() {
     return { frames: frameCount, t: elapsed, mode: game?.mode, player: player?.pos.toArray(), cam: camera.position.toArray(), yaw: player?.yaw, creature: world.creature?.position.toArray() };
   },

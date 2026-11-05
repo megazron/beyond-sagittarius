@@ -5,7 +5,8 @@ import { audio } from '../core/audio';
 import { SaveData, writeSave } from '../core/save';
 import type { World } from '../world/world';
 import { LAKE } from '../world/terrain';
-import type { Item } from '../world/props';
+import { PICKABLE, Item } from '../world/props';
+import { Story, Action, LAST_LEVEL } from './story';
 import type { Player } from './player';
 import type { Input } from './input';
 import { UI, PLAYABLE_LEVELS } from '../ui/ui';
@@ -20,7 +21,10 @@ export class Game {
   private wakeCues: { t: number; fn: () => void; done?: boolean }[] = [];
   private saveClock = 0;
   private hudClock = 0;
-  private interactTarget: { kind: 'water' } | { kind: 'item'; item: Item } | null = null;
+  private interactTarget: { kind: 'water' } | { kind: 'item'; item: Item } | { kind: 'action'; action: Action } | { kind: 'strike' } | null = null;
+  story: Story;
+  private cues: { at: number; fn: () => void }[] = [];
+  private clock = 0;
   private lastThirstWarn = 0;
   private lastHungerWarn = 0;
   private stepWarned = false;
@@ -29,16 +33,42 @@ export class Game {
 
   constructor(private world: World, private player: Player, private input: Input, private ui: UI) {
     world.onCreatureStep = (p) => this.onCreatureStep(p);
-    onLangChange(() => { if (this.save) { this.refreshObjective(); this.ui.setInventory(this.save.inventory); } });
+    this.story = new Story(world, player, ui, () => this.save, (sec, fn) => this.after(sec, fn), (amount) => this.hurt(amount));
+    onLangChange(() => { if (this.save) { this.lastObjKey = ''; this.refreshObjective(); this.ui.setInventory(this.save.inventory, this.story.tools()); } });
+  }
+
+  /** Schedule fn after `sec` seconds of game time (pauses with the game). */
+  after(sec: number, fn: () => void) {
+    this.cues.push({ at: this.clock + sec, fn });
+  }
+
+  private runCues(dt: number) {
+    this.clock += dt;
+    if (!this.cues.length) return;
+    const due = this.cues.filter((c) => c.at <= this.clock);
+    if (!due.length) return;
+    this.cues = this.cues.filter((c) => c.at > this.clock);
+    due.sort((a, b) => a.at - b.at).forEach((c) => c.fn());
+  }
+
+  private hurt(amount: number) {
+    const st = this.save.stats;
+    st.health = clamp(st.health - amount, 0, 100);
+    this.ui.damage();
+    audio.hurt();
+    this.camShake = Math.max(this.camShake, 0.14);
   }
 
   start(save: SaveData, fresh: boolean) {
     this.save = save;
+    this.cues = [];
+    this.lastObjKey = '';
     for (const it of this.world.items.items) {
       it.active = !save.collected.includes(it.id);
       it.obj.visible = it.active;
       it.examined = !!save.flags[`ex-${it.id}`];
     }
+    this.story.sync();
     if (fresh) {
       this.player.spawn(0, 2, 0.35);
       this.mode = 'wake';
@@ -60,7 +90,7 @@ export class Game {
     this.input.enabled = true;
     this.ui.show('hud', true);
     this.ui.device(null);
-    this.ui.setInventory(this.save.inventory);
+    this.ui.setInventory(this.save.inventory, this.story.tools());
     this.refreshObjective();
     if (announce) {
       this.ui.banner(t('hud.level', { n: 1 }), t('level.1.title'));
@@ -147,6 +177,7 @@ export class Game {
 
     if (this.mode === 'wake') { this.updateWake(dt); return; }
     if (this.mode === 'dead') return;
+    this.runCues(dt);
 
     const p = this.player;
     p.update(dt, this.input, true, st.stamina, st.health < 25 ? 0.75 : 1);
@@ -168,6 +199,8 @@ export class Game {
     if (p.blockedDeep && !s.flags.deepWarn) { s.flags.deepWarn = true; this.ui.toast(t('msg.deep')); setTimeout(() => (s.flags.deepWarn = false), 8000); }
     if (st.health <= 0) { this.die(); return; }
 
+    this.story.update(dt, time);
+    if (this.mode !== 'play') return; // the story can kill the player (predator)
     this.findInteraction();
     if (this.interactTarget && (this.input.hit('KeyE') || this.input.hit('KeyF'))) this.interact();
 
@@ -197,15 +230,38 @@ export class Game {
     if (this.saveClock > 15) { this.saveClock = 0; this.persist(); }
   }
 
-  private findInteraction() {
-    const p = this.player;
+  /** Closest active item within pickup reach. */
+  private nearestItem(): Item | null {
+    const p = this.player.pos;
     let best: Item | null = null, bd = 2.3;
     for (const it of this.world.items.items) {
       if (!it.active) continue;
-      const dx = it.pos.x - p.pos.x, dz = it.pos.z - p.pos.z;
-      const d = Math.hypot(dx, dz);
-      if (d < bd && Math.abs(it.pos.y - p.pos.y) < 2.2) { bd = d; best = it; }
+      const d = Math.hypot(it.pos.x - p.x, it.pos.z - p.z);
+      if (d < bd && Math.abs(it.pos.y - p.y) < 2.2) { bd = d; best = it; }
     }
+    return best;
+  }
+
+  findInteraction() {
+    const p = this.player;
+    if (this.story.houndEngaged()) {
+      this.interactTarget = { kind: 'strike' };
+      this.ui.setPrompt(this.story.strikePrompt());
+      return;
+    }
+    let act: Action | null = null, ad = Infinity;
+    for (const a of this.story.actions()) {
+      const d = Math.hypot(a.pos.x - p.pos.x, a.pos.z - p.pos.z);
+      if (d < a.radius && d < ad && Math.abs(a.pos.y - p.pos.y) < 3) { ad = d; act = a; }
+    }
+    // a station that is still missing materials yields to a pickable item in reach
+    const nearItem = act?.missing?.length ? this.nearestItem() : null;
+    if (act && !nearItem) {
+      this.interactTarget = { kind: 'action', action: act };
+      this.ui.setPrompt(act.missing?.length ? t('prompt.need', { action: act.label, list: act.missing.join(', ') }) : act.label);
+      return;
+    }
+    const best = this.nearestItem();
     if (best) {
       this.interactTarget = { kind: 'item', item: best };
       const name = t(`item.${best.type}`);
@@ -230,6 +286,14 @@ export class Game {
     const target = this.interactTarget;
     if (!target || this.mode !== 'play') return;
     const s = this.save, st = s.stats;
+    if (target.kind === 'strike') { this.story.strike(); return; }
+    if (target.kind === 'action') {
+      const a = target.action;
+      if (a.missing?.length) { this.ui.toast(t('msg.need', { list: a.missing.join(', ') })); audio.uiClick(); return; }
+      a.run();
+      this.refreshObjective();
+      return;
+    }
     if (target.kind === 'water') {
       if (st.thirst > 97) { this.ui.toast(t('msg.drinkFull')); return; }
       st.thirst = clamp(st.thirst + 35, 0, 100);
@@ -238,12 +302,13 @@ export class Game {
       return;
     }
     const it = target.item;
-    if (it.type === 'stone' || it.type === 'branch') {
+    if (PICKABLE.has(it.type)) {
       s.inventory[it.type] = (s.inventory[it.type] ?? 0) + 1;
       this.collect(it);
       audio.blip();
       this.ui.toast(t('msg.picked', { item: t(`item.${it.type}`) }));
-      this.ui.setInventory(s.inventory);
+      this.ui.setInventory(s.inventory, this.story.tools());
+      this.refreshObjective();
       return;
     }
     if (!it.examined) {
@@ -282,7 +347,7 @@ export class Game {
     if (n === 1) return !!s.flags.drank;
     if (n === 2) return !!s.flags.ateSafe;
     if (n === 3) return (s.inventory.stone ?? 0) >= 5 && (s.inventory.branch ?? 0) >= 5;
-    return false;
+    return this.story.done(n);
   }
 
   private checkLevel() {
@@ -294,9 +359,11 @@ export class Game {
       audio.chime();
       this.ui.banner(t('level.complete', { n }), t(`level.${n}.title`));
       if (s.level <= PLAYABLE_LEVELS) {
-        setTimeout(() => { this.ui.toast(`${t('hud.level', { n: s.level })} — ${t(`level.${s.level}.title`)}`); const h = `level.${s.level}.hint`; if (t(h) !== h) this.ui.toast(t(h)); }, 4700);
-      } else {
-        setTimeout(() => this.ui.toast(t('level.sliceEnd')), 4700);
+        const next = s.level;
+        this.after(4.7, () => { this.ui.toast(`${t('hud.level', { n: next })} — ${t(`level.${next}.title`)}`); const h = `level.${next}.hint`; if (t(h) !== h) this.ui.toast(t(h)); });
+        this.story.onLevelStart(next);
+      } else if (n === LAST_LEVEL) {
+        this.after(4.7, () => this.ui.toast(t('level.arc.toast')));
       }
       this.persist();
       this.ui.toast(t('msg.saved'));
@@ -307,24 +374,27 @@ export class Game {
   private lastObjKey = '';
   refreshObjective() {
     const s = this.save;
-    const progress = s.level === 3 ? t('level.3.progress', { s: Math.min(5, s.inventory.stone ?? 0), b: Math.min(5, s.inventory.branch ?? 0) }) : null;
+    const progress = s.level === 3 ? t('level.3.progress', { s: Math.min(5, s.inventory.stone ?? 0), b: Math.min(5, s.inventory.branch ?? 0) })
+      : s.level >= 4 && s.level <= LAST_LEVEL ? this.story.progress(s.level) : null;
     const key = `${s.level}|${progress}`;
     if (key === this.lastObjKey && this.mode === 'play') return;
     this.lastObjKey = key;
     this.ui.setObjective(s.level, progress);
   }
 
-  /** Objective marker for the compass: bearing (0 = north / -Z, clockwise) and distance. */
-  private marker(): { bearing: number; dist: number } | null {
+  /** World point the current objective points at (nearest needed item, station, lake). */
+  objectivePoint(): THREE.Vector3 | null {
     const p = this.player.pos;
     const s = this.save;
-    let tx: number | null = null, tz = 0, dist = 0;
     if (s.level === 1) {
-      const dx = LAKE.x - p.x, dz = LAKE.z - p.z;
-      const d = Math.hypot(dx, dz);
-      tx = LAKE.x; tz = LAKE.z; dist = Math.max(0, d - LAKE.r + 4);
-    } else if (s.level === 2 || s.level === 3) {
-      let bd = Infinity;
+      const dx = p.x - LAKE.x, dz = p.z - LAKE.z;
+      const d = Math.hypot(dx, dz) || 1;
+      const r = LAKE.r - 8; // shallow water at the near shore
+      const x = LAKE.x + (dx / d) * r, z = LAKE.z + (dz / d) * r;
+      return new THREE.Vector3(x, this.world.terrain.height(x, z), z);
+    }
+    if (s.level === 2 || s.level === 3) {
+      let best: THREE.Vector3 | null = null, bd = Infinity;
       for (const it of this.world.items.items) {
         if (!it.active) continue;
         if (s.level === 2 && it.type !== 'fruit') continue;
@@ -333,12 +403,26 @@ export class Game {
           if ((s.inventory[it.type] ?? 0) >= 5) continue;
         }
         const d = it.pos.distanceTo(p);
-        if (d < bd) { bd = d; tx = it.pos.x; tz = it.pos.z; }
+        if (d < bd) { bd = d; best = it.pos; }
       }
-      dist = bd;
+      return best ? best.clone() : null;
     }
-    if (tx === null || !isFinite(dist)) return null;
-    const bearing = Math.atan2(tx - p.x, -(tz - p.z));
+    if (s.level >= 4 && s.level <= LAST_LEVEL) {
+      const m = this.story.markerTarget(s.level);
+      return m ? m.clone() : null;
+    }
+    return null;
+  }
+
+  /** Objective marker for the compass: bearing (0 = north / -Z, clockwise) and distance. */
+  private marker(): { bearing: number; dist: number } | null {
+    const p = this.player.pos;
+    const m = this.objectivePoint();
+    if (!m) return null;
+    const dist = this.save.level === 1
+      ? Math.max(0, Math.hypot(LAKE.x - p.x, LAKE.z - p.z) - LAKE.r + 4)
+      : Math.hypot(m.x - p.x, m.z - p.z);
+    const bearing = Math.atan2(m.x - p.x, -(m.z - p.z));
     return { bearing, dist };
   }
 
@@ -359,15 +443,39 @@ export class Game {
     this.ui.setPrompt(null);
     this.ui.fade('black', 0.6, 1.5);
     audio.hurt();
+    this.story.onDeath();
     this.ui.openDeath(() => {
       const s = this.save;
       s.stats = { health: 60, thirst: 50, hunger: 50, stamina: 100 };
-      this.player.spawn(0, 2, 0.35);
+      const camp = this.world.layout.camp;
+      // wake up at camp once there is one
+      if (s.flags.fire) this.player.spawn(camp.x + 2.5, camp.z + 1.5, 0.35); else this.player.spawn(0, 2, 0.35);
       this.ui.fade('black', 0, 1.5);
       this.mode = 'play';
       this.input.enabled = true;
       this.persist();
     });
+  }
+
+  // ---------- test / debug helpers (window.__bs) ----------
+  /** Run the interaction the player would get by pressing E right now. */
+  debugAct(): string | null {
+    if (this.mode !== 'play') return null;
+    this.findInteraction();
+    const tg = this.interactTarget;
+    if (!tg) return null;
+    const label = tg.kind === 'action' ? tg.action.id : tg.kind === 'item' ? tg.item.type : tg.kind;
+    this.interact();
+    return label;
+  }
+
+  /** Advance the simulation by `sec` seconds without rendering. */
+  debugStep(sec: number, time: number) {
+    const dt = 0.05;
+    for (let k = 0; k < Math.round(sec / dt); k++) {
+      if (this.mode === 'dead') break;
+      this.update(dt, time + k * dt);
+    }
   }
 
   persist() {

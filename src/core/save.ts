@@ -12,6 +12,10 @@ export interface SaveData {
   day: number;
   flags: Record<string, boolean>;
   collected: string[]; // ids of picked-up world items
+  /** Custom crew names chosen on the pre-game screen (missing = default). */
+  names?: Partial<Record<string, string>>;
+  /** Number of times the night predator was driven off (level 7). */
+  houndHits?: number;
   savedAt: number;
 }
 
@@ -32,7 +36,13 @@ export function loadSave(): SaveData | null {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const d = JSON.parse(raw) as SaveData;
-    return d.version === 1 ? d : null;
+    if (d.version !== 1) return null;
+    // saves from the 0.1 slice predate these fields
+    d.inventory = { ...emptyInventory(), ...d.inventory };
+    d.flags ??= {};
+    d.collected ??= [];
+    d.names ??= {};
+    return d;
   } catch {
     return null;
   }
@@ -47,19 +57,25 @@ export function clearSave() {
   localStorage.removeItem(SAVE_KEY);
 }
 
+export function emptyInventory(): Record<string, number> {
+  return { stone: 0, branch: 0, fruit: 0, tinder: 0, frond: 0, flint: 0, vine: 0, scrap: 0 };
+}
+
 export function newSave(): SaveData {
   return {
     version: 1,
     level: 1,
     completed: [],
     stats: { health: 82, thirst: 38, hunger: 55, stamina: 100 },
-    inventory: { stone: 0, branch: 0, fruit: 0 },
+    inventory: emptyInventory(),
     pos: [0, 0, 0],
     yaw: 0,
     timeOfDay: 8.2,
     day: 1,
     flags: {},
     collected: [],
+    names: {},
+    houndHits: 0,
     savedAt: 0,
   };
 }

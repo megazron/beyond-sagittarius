@@ -180,3 +180,27 @@ body.lang-ur .crew-card .cl { line-height: 2; }
 .controls-list { columns: 2; column-gap: 24px; font-size: 14px; line-height: 1.9; color: #cfe0e7; padding: 0; list-style: none; }
 @media (max-width: 700px) { .controls-list { columns: 1; } .stats { width: 180px; } .objective { width: 210px; } .slot { width: 56px; } }
 .fps { position: fixed; bottom: 4px; left: 4px; font: 11px monospace; color: #8f8; z-index: 60; background: rgba(0, 0, 0, 0.4); padding: 2px 5px; }
+
+/* Device readout variants (signal meter, beacon) */
+.device.small { top: 22%; font-size: clamp(11px, 1.05vw, 14px); line-height: 1.9; padding: 10px 16px; }
+.device.alert { color: #ff5a6a; border-color: rgba(255, 90, 110, 0.5); background: rgba(40, 0, 10, 0.55); }
+
+/* Tools in the inventory bar */
+.slot.tool { border-color: rgba(255, 179, 92, 0.55); color: var(--amber); }
+
+/* Crew panel: rescued crewmates */
+.crew-card.found { border-color: rgba(111, 243, 255, 0.55); box-shadow: 0 0 18px rgba(111, 243, 255, 0.12) inset; }
+.crew-card.found .cs { color: var(--cyan); }
+.modal-card .note.arc { color: var(--amber); font-size: 13px; }
+
+/* Pre-game name screen */
+.names { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px 18px; margin-top: 6px; }
+.name-row { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.02); }
+.name-row.you { border-color: rgba(255, 179, 92, 0.6); }
+.name-row label { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--amber); }
+body.lang-hi .name-row label, body.lang-ur .name-row label { letter-spacing: 0; text-transform: none; font-size: 13px; }
+.name-row .ny { color: var(--cyan); }
+.name-row input { font: inherit; font-size: 16px; color: #fff; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(160, 230, 255, 0.3); padding: 8px 10px; outline: none; }
+.name-row input:focus { border-color: var(--cyan); box-shadow: 0 0 12px rgba(111, 243, 255, 0.2); }
+.name-row input::placeholder { color: rgba(220, 235, 240, 0.45); }
+body.lang-ur .name-row input { font-family: 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', serif; }

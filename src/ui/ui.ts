@@ -1,4 +1,5 @@
-import { t, getLang, setLang, Lang, onLangChange } from '../i18n';
+import { t, tDefault, getLang, setLang, Lang, onLangChange } from '../i18n';
+import { CREW_IDS, CrewNames, NAME_MAX, normaliseNames } from '../core/crew';
 import type { CineUI } from '../cinematic/cinematic';
 import type { Settings } from '../core/save';
 import type { QualityName } from '../core/quality';
@@ -7,8 +8,15 @@ import { audio } from '../core/audio';
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 export const LEVEL_COUNT = 10;
-export const PLAYABLE_LEVELS = 3;
-const CREW = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social'] as const;
+export const PLAYABLE_LEVELS = 10;
+const CREW = CREW_IDS;
+
+const ITEM_ICONS: Record<string, string> = {
+  stone: '◆', branch: '⟋', fruit: '●', tinder: '❋', frond: '❦', flint: '◭', vine: '∿', scrap: '▰', spear: '↗', transmitter: '⌁',
+};
+/** Always-visible inventory slots; the rest appear once you hold some. */
+const BASE_SLOTS = ['stone', 'branch'];
+const EXTRA_SLOTS = ['tinder', 'frond', 'flint', 'vine', 'scrap'];
 
 export interface Stats { health: number; thirst: number; hunger: number; stamina: number }
 
@@ -130,19 +138,37 @@ export class UI implements CineUI {
 
   setObjective(level: number, progress: string | null) {
     this.objectiveState = { level, progress };
+    if (level > LEVEL_COUNT) {
+      $('obj-level').textContent = t('wake.chapter');
+      $('obj-title').textContent = t('level.arc.title');
+      $('obj-desc').textContent = t('level.arc.desc');
+      $('obj-progress').textContent = '';
+      return;
+    }
     $('obj-level').textContent = t('hud.level', { n: level });
     $('obj-title').textContent = t(`level.${level}.title`);
     $('obj-desc').textContent = level <= PLAYABLE_LEVELS ? t(`level.${level}.desc`) : t('level.locked');
     $('obj-progress').textContent = progress ?? '';
   }
 
-  setInventory(inv: Record<string, number>) {
-    const icons: Record<string, string> = { stone: '◆', branch: '⟋', fruit: '●' };
+  private lastInv: { inv: Record<string, number>; tools: string[] } = { inv: {}, tools: [] };
+  setInventory(inv: Record<string, number>, tools: string[] = this.lastInv.tools) {
+    this.lastInv = { inv, tools };
     const el = $('inventory');
-    el.innerHTML = ['stone', 'branch', 'fruit'].map((k) => {
-      const n = inv[k] ?? 0;
-      return `<div class="slot ${n ? '' : 'empty'}"><span class="n">${n}</span><span class="ico">${icons[k]}</span><span>${escapeHtml(t(`item.${k}`))}</span></div>`;
-    }).join('');
+    const keys = [...BASE_SLOTS, ...EXTRA_SLOTS.filter((k) => (inv[k] ?? 0) > 0)];
+    const slot = (k: string, n: number | null) =>
+      `<div class="slot ${n === 0 ? 'empty' : ''} ${n === null ? 'tool' : ''}" data-item="${k}">${n !== null ? `<span class="n">${n}</span>` : ''}<span class="ico">${ITEM_ICONS[k] ?? '?'}</span><span>${escapeHtml(t(`item.${k}`))}</span></div>`;
+    el.innerHTML = keys.map((k) => slot(k, inv[k] ?? 0)).join('') + tools.map((k) => slot(k, null)).join('');
+  }
+
+  /** Wrist-device readout with raw (already translated) lines. */
+  deviceLines(lines: string[] | null, small = false, alert = false) {
+    const el = $('device');
+    if (!lines) { el.classList.add('hidden'); return; }
+    el.classList.toggle('small', small);
+    el.classList.toggle('alert', alert);
+    el.innerHTML = lines.map((l) => `<div>${escapeHtml(l)}</div>`).join('');
+    el.classList.remove('hidden');
   }
 
   setPrompt(text: string | null) {
@@ -222,7 +248,11 @@ export class UI implements CineUI {
     $('modal-card').innerHTML = html;
     $('modal').classList.remove('hidden');
   }
-  closeModal() { $('modal').classList.add('hidden'); }
+  closeModal() {
+    $('modal').classList.add('hidden');
+    // a focused (now hidden) name field would swallow game keys
+    (document.activeElement as HTMLElement | null)?.blur?.();
+  }
   modalOpen() { return !$('modal').classList.contains('hidden'); }
 
   openSettings(s: Settings, quality: QualityName, onChange: (s: Settings) => void, onQuality: (q: QualityName) => void, onClose: () => void) {
@@ -277,28 +307,67 @@ export class UI implements CineUI {
     const items = Array.from({ length: LEVEL_COUNT }, (_, i) => {
       const n = i + 1;
       const done = completed.includes(n);
-      const cls = done ? 'done' : n === current ? 'current' : n > PLAYABLE_LEVELS ? 'locked' : '';
+      const cls = done ? 'done' : n === current ? 'current' : n > PLAYABLE_LEVELS ? 'locked' : 'upcoming';
       const st = done ? t('level.done') : n === current && n <= PLAYABLE_LEVELS ? t('level.current') : n > PLAYABLE_LEVELS ? t('level.locked') : '';
       return `<li class="${cls}"><span class="num">${String(n).padStart(2, '0')}</span><span>${escapeHtml(t(`level.${n}.title`))}</span><span class="st">${escapeHtml(st)}</span></li>`;
     }).join('');
-    this.openModal(`<h2>${escapeHtml(t('objectives.title'))}</h2><ul class="levels">${items}</ul>
+    const arc = current > LEVEL_COUNT ? `<div class="note arc">${escapeHtml(t('level.arc.title'))} — ${escapeHtml(t('level.arc.desc'))}</div>` : '';
+    this.openModal(`<h2>${escapeHtml(t('objectives.title'))}</h2><ul class="levels">${items}</ul>${arc}
       <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.close'))}</button></div>`);
     $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
   }
 
-  openCrew(onClose: () => void) {
-    const cards = CREW.map((c, i) => `
-      <div class="crew-card ${i === 0 ? 'you' : ''}">
+  openCrew(status: (id: string) => { status: string; unlocked: boolean }, onClose: () => void, onRename?: () => void) {
+    const cards = CREW.map((c, i) => {
+      const st = i === 0 ? { status: t('crew.skills'), unlocked: true } : status(c);
+      const found = i > 0 && st.unlocked;
+      return `
+      <div class="crew-card ${i === 0 ? 'you' : ''} ${found ? 'found' : ''}" data-crew="${c}">
         <div class="cn">${escapeHtml(t(`crew.${c}.name`))}${i === 0 ? ` · ${escapeHtml(t('crew.you'))}` : ''}</div>
         <div class="cr">${escapeHtml(t(`crew.${c}.role`))}</div>
         <div class="cl">${escapeHtml(t(`crew.${c}.line`))}</div>
-        <div class="cs">${escapeHtml(i === 0 ? t('crew.skills') : t('crew.status'))}</div>
-        <div class="skills">${[1, 2, 3].map((k) => `<span class="${i === 0 && k === 1 ? 'on' : ''}">${escapeHtml(t(`crew.${c}.s${k}`))}${i === 0 && k === 1 ? '' : ' · ' + escapeHtml(t('crew.locked'))}</span>`).join('')}</div>
-      </div>`).join('');
+        <div class="cs">${escapeHtml(st.status)}</div>
+        <div class="skills">${[1, 2, 3].map((k) => { const on = st.unlocked && k === 1; return `<span class="${on ? 'on' : ''}">${escapeHtml(t(`crew.${c}.s${k}`))}${on ? '' : ' · ' + escapeHtml(t('crew.locked'))}</span>`; }).join('')}</div>
+      </div>`;
+    }).join('');
     this.openModal(`<h2>${escapeHtml(t('crew.title'))}</h2><div class="crew-grid">${cards}</div>
       <div class="note">${escapeHtml(t('crew.note'))}</div>
-      <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.close'))}</button></div>`);
+      <div class="actions">${onRename ? `<button class="btn" id="m-rename">${escapeHtml(t('names.edit'))}</button>` : ''}<button class="btn" id="m-close">${escapeHtml(t('menu.close'))}</button></div>`);
     $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
+    if (onRename) $('m-rename').addEventListener('click', () => { audio.uiClick(); onRename(); });
+  }
+
+  /**
+   * Pre-game name screen (also reachable from the crew panel). Empty fields
+   * keep the localised default name.
+   */
+  openNames(current: CrewNames, mode: 'new' | 'edit', onDone: (names: CrewNames) => void, onBack: () => void) {
+    const rows = CREW.map((c, i) => `
+      <div class="name-row ${i === 0 ? 'you' : ''}">
+        <label for="nm-${c}"><span class="nr">${escapeHtml(t(`crew.${c}.role`))}</span>${i === 0 ? `<span class="ny">${escapeHtml(t('crew.you'))}</span>` : ''}</label>
+        <input id="nm-${c}" data-crew="${c}" type="text" maxlength="${NAME_MAX}" autocomplete="off" spellcheck="false" dir="auto"
+          placeholder="${escapeHtml(tDefault(`crew.${c}.name`))}" value="${escapeHtml(current[c] ?? '')}">
+      </div>`).join('');
+    this.openModal(`<h2>${escapeHtml(t('names.title'))}</h2>
+      <p class="note">${escapeHtml(t('names.subtitle'))}</p>
+      <div class="names">${rows}</div>
+      <div class="actions">
+        <button class="btn primary" id="nm-ok">${escapeHtml(t(mode === 'new' ? 'names.begin' : 'names.save'))}</button>
+        <button class="btn" id="nm-reset">${escapeHtml(t('names.reset'))}</button>
+        <button class="btn" id="nm-back">${escapeHtml(t('menu.back'))}</button>
+      </div>`);
+    const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('#modal-card .name-row input'));
+    const collect = () => normaliseNames(Object.fromEntries(inputs.map((el) => [el.dataset.crew!, el.value])));
+    const ok = () => { audio.uiClick(); const n = collect(); this.closeModal(); onDone(n); };
+    inputs.forEach((el, i) => el.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { if (i < inputs.length - 1) inputs[i + 1].focus(); else ok(); }
+      if (e.key === 'Escape') { this.closeModal(); onBack(); }
+    }));
+    $('nm-ok').addEventListener('click', ok);
+    $('nm-reset').addEventListener('click', () => { audio.uiClick(); inputs.forEach((el) => (el.value = '')); });
+    $('nm-back').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onBack(); });
+    setTimeout(() => inputs[0]?.focus(), 30);
   }
 
   openConfirm(text: string, onYes: () => void, onNo: () => void) {
@@ -328,6 +397,7 @@ export class UI implements CineUI {
     if (this.lastChapter && !$('chapter').classList.contains('hidden')) this.chapter(this.lastChapter);
     if (this.lastAlert && !$('ai-alert').classList.contains('hidden')) this.aiAlert(this.lastAlert);
     this.setObjective(this.objectiveState.level, this.objectiveState.progress);
+    this.setInventory(this.lastInv.inv, this.lastInv.tools);
   }
 }
 
