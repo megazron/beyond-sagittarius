@@ -159,6 +159,16 @@ def main():
         shot = lambda name: page.screenshot(path=str(shots / f"{args.quality}-{name}.jpg"), type="jpeg", quality=84)
         ev = page.evaluate
 
+        def close_menus():
+            """Menus fade out on a timer, and slow frames can swallow a toggle: end with none open."""
+            for _ in range(40):
+                if ev("document.getElementById('modal').classList.contains('hidden')"):
+                    return
+                if not ev("document.getElementById('modal').classList.contains('leaving')"):
+                    page.keyboard.press("Escape")
+                time.sleep(0.2)
+            failures.append("a menu would not close")
+
         # ---- first launch: safety notice and terms, one accept ----
         if not page.locator("#safety .safety-card").is_visible():
             failures.append("safety card missing on first launch")
@@ -272,6 +282,7 @@ def main():
         page.keyboard.press("KeyI"); time.sleep(0.3)
         page.keyboard.press("KeyC"); time.sleep(0.3); page.keyboard.press("KeyC"); time.sleep(0.3)
         page.keyboard.press("KeyJ"); time.sleep(0.3); page.keyboard.press("KeyJ"); time.sleep(0.3)
+        close_menus()
         ev("__bs.step(1.3)")
         if ev("__bs.tutorial") or not ev("__bs.save.flags.tutorialDone"):
             failures.append(f"hints did not finish or were not remembered: {ev('__bs.tutorial')}")
@@ -364,6 +375,16 @@ def main():
                     page.keyboard.press("Enter")
                     ev("__bs.step(0.2)")
                 continue
+            if st["mode"] == "talk":  # the loop walked into Skyvra: leave, the story goes on
+                page.keyboard.press("Escape")
+                ev("__bs.step(0.2)")
+                stuck += 1
+                continue
+            if lvl == 21 and "acids" in ev("__bs.save.discoveries"):
+                ev("__bs.step(1)")  # the finale starts on its own
+                time.sleep(0.05)
+                stuck += 1
+                continue
             stuck += 1
             if stuck > 160:
                 failures.append(f"stuck on level {lvl}: {ev('({prompt: __bs.prompt, save: __bs.save.flags, inv: __bs.save.inventory})')}")
@@ -450,6 +471,7 @@ def main():
             failures.append("custom names missing from crew panel")
         shot("12-crew-panel")
         page.keyboard.press("KeyC")
+        close_menus()
 
         # ---- discoveries: save, warnings, codex, planned entries stay locked ----
         disc = ev("__bs.save.discoveries")
@@ -481,6 +503,7 @@ def main():
         if ev("document.querySelector('.cx-node[data-id=bronze]').dataset.state") != "planned" or "Planned" not in page.inner_text(".cx-planned .cx-detail:not(.hidden)"):
             failures.append("planned entry not shown as locked in the codex")
         page.keyboard.press("KeyK")
+        close_menus()
         ev("__bs.step(0.2)")
 
         # ---- NPCs: they exist, and talking to one works ----

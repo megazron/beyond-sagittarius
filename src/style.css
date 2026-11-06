@@ -495,6 +495,8 @@ body.touch .dlg-c kbd { display: none; }
 .cx-detail p { margin: 4px 0 8px; }
 body.lang-ur .mg-text, body.lang-ur .dlg-line, body.lang-ur .disc-text, body.lang-ur .disc-joke, body.lang-ur .safety-card > p { line-height: 2.1; }
 
+body.in-panel .subtitle { bottom: auto; top: calc(var(--safe-t) + 14vh); }
+
 @media (max-height: 520px) {
   .craft { padding-top: 34px; padding-bottom: calc(var(--safe-b) + 8px); background: linear-gradient(transparent, rgba(8, 7, 5, 0.82) 30px); }
   .dialog { padding-top: 30px; padding-bottom: calc(var(--safe-b) + 6px); background: linear-gradient(transparent, rgba(8, 7, 5, 0.86) 26px); }

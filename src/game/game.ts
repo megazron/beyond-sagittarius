@@ -100,6 +100,7 @@ export class Game {
   /** Freeze the player for a panel that takes the input (minigame, conversation). */
   private enterPanel(mode: 'craft' | 'talk') {
     this.mode = mode;
+    document.body.classList.add('in-panel');
     this.input.enabled = false;
     this.input.resetTouch();
     this.input.releasePointer();
@@ -109,6 +110,7 @@ export class Game {
 
   private leavePanel() {
     this.mode = 'play';
+    document.body.classList.remove('in-panel');
     this.input.enabled = true;
     this.input.pressed.clear(); // the key that closed the panel must not press E in the world
     this.lastObjKey = '';
@@ -425,7 +427,9 @@ export class Game {
       if (d < a.radius && d < ad && Math.abs(a.pos.y - p.pos.y) < 3) { ad = d; act = a; }
     }
     // a station that is still missing materials yields to a pickable item in reach
-    const nearItem = act?.missing?.length ? this.nearestItem() : null;
+    const reach = act ? this.nearestItem() : null;
+    // ...and someone walking past doesn't stand between you and what's at your feet
+    const nearItem = reach && (act!.missing?.length || (act!.id.startsWith('npc-') && Math.hypot(reach.pos.x - p.pos.x, reach.pos.z - p.pos.z) < ad)) ? reach : null;
     if (act && !nearItem) {
       this.interactTarget = { kind: 'action', action: act };
       this.ui.setPrompt(act.missing?.length ? t('prompt.need', { action: act.label, list: act.missing.join(', ') }) : act.label, this.anchor(act.pos, 1));
