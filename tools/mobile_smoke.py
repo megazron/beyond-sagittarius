@@ -168,7 +168,7 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     # joystick: push up for a while
     p0 = ev("__bs.debug.player")
     jx, jy = vw * 0.18, vh * 0.8
-    touch.drag(jx, jy, jx, jy - 60, steps=6, during=lambda: ev("__bs.step(3)"))  # real touch, simulated seconds
+    touch.drag(jx, jy, jx, jy - 30, steps=6, during=lambda: ev("__bs.step(3)"))  # short of the rim: a walk
     time.sleep(0.3)
     p1 = ev("__bs.debug.player")
     moved = ((p1[0] - p0[0]) ** 2 + (p1[2] - p0[2]) ** 2) ** 0.5

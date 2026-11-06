@@ -177,15 +177,15 @@ src/
 
 ## Roadmap (full design)
 
-1. ~~**The First 24 Hours**~~ — done (levels 1–10).
-2. **Finding the friends** — the beacon gave bearings to the other four;
+1. ~~**The First 24 Hours**~~: done (levels 1–10).
+2. **Finding the friends**: the beacon gave bearings to the other four;
    each rescued crew member unlocks their skill tree and changes how the group
    survives.
 3. **Nine ages of civilisation**, drawing on human history: Stone → Fire &
    Tools → Agriculture → Bronze → Iron → Classical → Industrial → Space →
    Civilisation.
-4. **The mystery system** — ruins, signals and artefacts that don't add up.
-5. **Level 99** — *"SUBJECTS: SIX. ORIGIN: EARTH. … YOU WERE NOT THE FIRST TO
+4. **The mystery system**: ruins, signals and artefacts that don't add up.
+5. **Level 99**: *"SUBJECTS: SIX. ORIGIN: EARTH. … YOU WERE NOT THE FIRST TO
    ARRIVE … HUMANITY HAS BEEN HERE BEFORE … WELCOME BACK."*
 6. **Co-op multiplayer** for the six crew roles.
 7. More languages; customisable genders (names are done); WebGPU renderer.
