@@ -244,7 +244,7 @@ export class Game {
       { t: 18.0, fn: () => ui.say('wake.line5', 'crew.scientist.name', 3.6) },
       { t: 18.4, fn: () => ui.chapter(['wake.chapter']) },
       { t: 22.0, fn: () => ui.chapter(null) },
-      { t: 22.2, fn: () => this.enterPlay(true) },
+      { t: 22.2, fn: () => this.skipWake() }, // through black, like the skip: entering play is never seen
     ];
     this.ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden'); // tap to skip on phones
