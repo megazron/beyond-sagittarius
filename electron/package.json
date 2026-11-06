@@ -1,0 +1,76 @@
+{
+  "name": "beyond-sagittarius-desktop",
+  "productName": "Beyond Sagittarius",
+  "version": "0.2.0",
+  "private": true,
+  "description": "BEYOND SAGITTARIUS - desktop build",
+  "author": "megazron",
+  "type": "commonjs",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win --x64 --publish never",
+    "dist:win-dir": "electron-builder --win dir --x64 --publish never -c.win.signAndEditExecutable=false",
+    "dist:linux-dir": "electron-builder --linux dir --x64 --publish never"
+  },
+  "build": {
+    "appId": "io.github.megazron.beyondsagittarius",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist",
+        "to": "game"
+      },
+      {
+        "from": "../desktop-assets",
+        "to": "assets"
+      }
+    ],
+    "electronLanguages": [
+      "en-US",
+      "hi"
+    ],
+    "publish": null,
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "BeyondSagittarius-${version}-win-x64-setup.${ext}"
+    },
+    "zip": {
+      "artifactName": "BeyondSagittarius-${version}-win-x64.${ext}"
+    },
+    "linux": {
+      "target": "dir",
+      "category": "Game"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  }
+}
