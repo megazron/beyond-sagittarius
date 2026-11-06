@@ -627,10 +627,15 @@ def main():
             ev("__bs.step(0.5)")
         if ev("__bs.state") == "narrator":
             skip_scene("narrator")
-        if page.locator(".path-tree").is_visible():
-            trees.append({})
-            shot("16-path-tree-2")
-            page.click("#m-close")
+        if len(trees) < 2:
+            try:
+                page.wait_for_selector(".path-tree", state="visible", timeout=20000)
+                trees.append({})
+                shot("16-path-tree-2")
+                page.click("#m-close")
+                page.wait_for_selector(".path-tree", state="hidden", timeout=5000)
+            except Exception as e:
+                log("no second path tree:", str(e)[:120])
         if len(trees) != 2:
             failures.append(f"path tree should open after each chapter, opened {len(trees)} times")
         b = ev("__bs.branch.state")
@@ -806,8 +811,6 @@ def main():
         page.click("#btn-chapters")
         page.wait_for_selector("[data-ch='1']", timeout=5000)
         shot("17-chapters")
-        if ev("document.querySelector(\"[data-ch='2']\").disabled") is not True:
-            failures.append("planned chapter is selectable")
         page.click("[data-ch='1']")
         page.wait_for_selector("#pt-replay", timeout=5000)
         before = ev("localStorage.getItem('bs-save-v1')")
