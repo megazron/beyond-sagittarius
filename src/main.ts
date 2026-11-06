@@ -21,6 +21,8 @@ import { voice } from './core/voice';
 import { Vault, vaultScript } from './narrator/vault';
 import { onLangChange } from './i18n';
 import { fitFov, lockViewport, tryFullscreen } from './core/viewport';
+import { TECH, AGES } from './game/tech/data';
+import { techState } from './game/tech/tech';
 
 type State = 'loading' | 'title' | 'cinematic' | 'game' | 'narrator' | 'flashback';
 
@@ -464,6 +466,7 @@ window.addEventListener('resize', () => {
   get ready() { return worldReady; },
   get paused() { return paused; },
   get npcs() { return game?.story.npcs.debug(); },
+  get tech() { return { ages: [...AGES], nodes: TECH.map((n) => ({ id: n.id, age: n.age, status: n.status, requires: n.requires, state: game?.save ? techState(game.save, n) : null })) }; },
   get subtitleText() { return document.querySelector('#subtitle .line')?.textContent; },
   sayTest(k: string) { ui.subtitle(k, 'mz.name', true); },
   get voice() { return { last: voice.lastKey, played: voice.played }; },

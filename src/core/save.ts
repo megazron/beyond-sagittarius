@@ -25,6 +25,10 @@ export interface SaveData {
   /** Bites taken from the predator; deaths so far (the narrator keeps score). */
   bites?: number;
   deaths?: number;
+  /** Tech ids discovered so far, in order (game/tech/data.ts). */
+  discoveries?: string[];
+  /** Minigames ruined; the crew and the narrator keep score. */
+  crafts?: { failed: number };
   savedAt: number;
 }
 
@@ -69,6 +73,8 @@ export function loadSave(): SaveData | null {
     d.names = own ? { scientist: own } : {};
     d.player = { ...defaultLook(), ...(d.player ?? {}), name: d.player?.name ?? own ?? '' };
     d.skins ??= {};
+    d.discoveries ??= [];
+    d.crafts ??= { failed: 0 };
     return d;
   } catch {
     return null;
@@ -103,6 +109,8 @@ export function newSave(): SaveData {
     collected: [],
     names: {},
     houndHits: 0,
+    discoveries: [],
+    crafts: { failed: 0 },
     savedAt: 0,
   };
 }
