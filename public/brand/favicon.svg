@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Beyond Sagittarius emblem">
+  <title>Beyond Sagittarius</title>
+  <defs>
+    <linearGradient id="disc" x1="-262" y1="0" x2="262" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff1d6"/><stop offset=".45" stop-color="#ffb35c"/><stop offset="1" stop-color="#e8622a"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="-90" y1="-90" x2="90" y2="90" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#6ff3ff"/><stop offset="1" stop-color="#2f8fd8"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(256 262) rotate(-14) scale(0.92)">
+    
+    <circle r="100" fill="#05070d"/>
+    <path fill="url(#ring)" fill-rule="evenodd" d="M-110 0a110 110 0 1 0 220 0a110 110 0 1 0-220 0ZM-98 -3a99 99 0 1 0 198 0a99 99 0 1 0-198 0Z"/>
+    <path fill="url(#disc)" d="M-112.6 28A116 116 0 1 1 112.6 28A124 124 0 1 0 -112.6 28Z"/>
+    <path fill="url(#disc)" d="M-262 0C-162.621 22 -96 50 0 50C96 50 162.621 22 262 0C162.621 14 96 20 0 20C-96 20 -162.621 14 -262 0Z"/>
+  </g>
+</svg>

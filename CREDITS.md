@@ -62,6 +62,11 @@ When the game runs offline the fonts fall back to system fonts. To self-host,
 download the same families from Google Fonts into `public/fonts/` and replace
 the `<link>` in `index.html` with `@font-face` rules.
 
+## Logo
+
+The wordmark and emblem in `public/brand/` were drawn for this project by
+`tools/brand/make_logo.py`. No font is used: the letters are original outlines.
+
 ## Algorithms
 
 - 2D simplex noise after Stefan Gustavson's public-domain reference implementation.

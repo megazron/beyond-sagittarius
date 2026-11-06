@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tdisc" x1="-286" y1="0" x2="286" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff1d6"/><stop offset=".45" stop-color="#ffb35c"/><stop offset="1" stop-color="#e8622a"/>
+    </linearGradient>
+    <linearGradient id="tring" x1="-90" y1="-90" x2="90" y2="90" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#6ff3ff"/><stop offset="1" stop-color="#2f8fd8"/>
+    </linearGradient>
+    <radialGradient id="tglow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="scale(300)">
+      <stop offset=".3" stop-color="#ffb35c" stop-opacity=".3"/><stop offset=".6" stop-color="#2f8fd8" stop-opacity=".1"/><stop offset="1" stop-color="#2f8fd8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="sky" cx=".5" cy=".5" r=".75">
+      <stop offset="0" stop-color="#14233a"/><stop offset="1" stop-color="#05070d"/>
+    </radialGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="208" fill="url(#sky)"/>
+  <g transform="translate(512 524) rotate(-14) scale(1.62)">
+    <circle r="300" fill="url(#tglow)"/>
+    <circle r="100" fill="#02030a"/>
+    <path fill="url(#tring)" fill-rule="evenodd" d="M-110 0a110 110 0 1 0 220 0a110 110 0 1 0-220 0ZM-98 -3a99 99 0 1 0 198 0a99 99 0 1 0-198 0Z"/>
+    <path fill="url(#tdisc)" d="M-112.6 28A116 116 0 1 1 112.6 28A124 124 0 1 0 -112.6 28Z"/>
+    <path fill="url(#tdisc)" d="M-286 0C-177.517 22 -96 50 0 50C96 50 177.517 22 286 0C177.517 14 96 20 0 20C-96 20 -177.517 14 -286 0Z"/>
+  </g>
+</svg>

@@ -37,11 +37,14 @@ canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bloc
 [dir='rtl'] #title { background: linear-gradient(270deg, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.25) 55%, rgba(0,0,0,0) 100%); }
 .title-block { max-width: 640px; }
 .title-kicker { font-family: 'Orbitron', sans-serif; color: var(--amber); letter-spacing: 0.6em; font-size: 13px; margin-bottom: 10px; opacity: 0.9; }
-.game-title { font-family: var(--font-display); font-weight: 900; font-size: clamp(34px, 6vw, 76px); letter-spacing: 0.06em; margin: 0; line-height: 1.05;
+.game-title { margin: 0; }
+.game-logo { display: block; width: min(560px, 88vw); height: auto; filter: drop-shadow(0 0 22px rgba(120, 200, 255, 0.28)); }
+.game-name { display: block; font-family: var(--font-display); font-weight: 700; font-size: clamp(24px, 3.4vw, 42px); line-height: 1.35; margin-top: 8px;
   background: linear-gradient(180deg, #ffffff 0%, #bfe9ff 45%, #ffb35c 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 0 24px rgba(120, 200, 255, 0.35)); }
-body.lang-ur .game-title { line-height: 1.9; font-weight: 700; letter-spacing: 0; padding-inline: 0.3em; margin-inline: -0.3em; }
-body.lang-hi .game-title { line-height: 1.35; letter-spacing: 0.01em; }
+/* English reads the logo; the text stays for screen readers. Hindi and Urdu show their name under it. */
+body.lang-en .game-name { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+body.lang-ur .game-name { line-height: 1.9; padding-inline: 0.3em; margin-inline: -0.3em; }
 .game-subtitle { font-family: var(--font-display); font-size: clamp(13px, 1.5vw, 18px); letter-spacing: 0.22em; text-transform: uppercase; color: #cfe7f0; margin-top: 10px; }
 body.lang-hi .game-subtitle, body.lang-ur .game-subtitle { letter-spacing: 0.02em; text-transform: none; }
 .tagline { font-size: clamp(15px, 1.4vw, 19px); color: #d5dde2; font-weight: 300; max-width: 520px; margin: 26px 0 30px; line-height: 1.6; border-inline-start: 2px solid var(--amber); padding-inline-start: 14px; }
@@ -351,7 +354,8 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   body.touch .toasts { top: 40%; }
   .joy-zone { width: 55%; height: 45%; }
   #title { justify-content: flex-end; padding-bottom: calc(env(safe-area-inset-bottom) + 56px); }
-  .game-title { font-size: clamp(30px, 10vw, 46px); }
+  .game-logo { width: min(340px, 86vw); }
+  .game-name { font-size: clamp(22px, 7vw, 32px); }
   .menu { width: 100%; }
   .menu .btn:not(.lang) { width: 100%; }
   .crew-grid { grid-template-columns: 1fr; }
@@ -365,7 +369,8 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   .tutorial .tut-title { font-size: 13px; margin: 1px 0 2px; }
   .tutorial .tut-skip { top: 2px; }
   .tutorial .tut-bar { margin-top: 5px; }
-  .game-title { font-size: clamp(26px, 6vw, 42px); }
+  .game-logo { width: min(250px, 34vw); }
+  .game-name { font-size: clamp(18px, 3.4vw, 24px); margin-top: 2px; }
   .game-subtitle { font-size: 11px; margin-top: 4px; }
   .tagline { display: none; }
   .menu { gap: 6px; }
