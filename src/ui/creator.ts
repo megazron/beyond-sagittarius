@@ -10,68 +10,52 @@ import type { UI } from './ui';
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const css = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
-/** Live 3D preview, rebuilt when a choice changes. */
-class Preview {
-  private r: THREE.WebGLRenderer;
-  private scene = new THREE.Scene();
-  private cam = new THREE.PerspectiveCamera(26, 1, 0.05, 30);
+/**
+ * The creator's 3D stage, rendered by the main renderer: a second WebGL context
+ * would recompile every shader and re-upload every texture, which froze the
+ * game for seconds on opening.
+ */
+export class CreatorStage {
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(26, innerWidth / innerHeight, 0.05, 30);
   private fig: Character | null = null;
   private yaw = 0.35;
-  private raf = 0;
   private time = 0;
-  private last = performance.now();
+  active = false;
 
-  constructor(private canvas: HTMLCanvasElement, detail: number, private look: PlayerLook) {
-    this.r = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    this.r.toneMapping = THREE.ACESFilmicToneMapping;
-    this.r.outputColorSpace = THREE.SRGBColorSpace;
+  constructor(canvas: HTMLCanvasElement, private detail: number) {
+    this.scene.background = new THREE.Color(0x0b0f14);
     const key = new THREE.DirectionalLight(0xfff0dc, 3); key.position.set(1.6, 3, 3);
     const rim = new THREE.DirectionalLight(0x8fd8ff, 2.6); rim.position.set(-3, 2, -2);
-    this.scene.add(key, rim, new THREE.HemisphereLight(0xc4d6ea, 0x2a2622, 1.4));
-    this.detail = detail;
-    this.rebuild(look);
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(1.5, 48), new THREE.MeshStandardMaterial({ color: 0x1a2026, roughness: 0.8 }));
+    floor.rotation.x = -Math.PI / 2;
+    this.scene.add(key, rim, floor, new THREE.HemisphereLight(0xc4d6ea, 0x2a2622, 1.4));
     let drag = false, px = 0;
-    canvas.addEventListener('pointerdown', (e) => { drag = true; px = e.clientX; canvas.setPointerCapture(e.pointerId); e.stopPropagation(); });
-    canvas.addEventListener('pointermove', (e) => { if (drag) { this.yaw += (e.clientX - px) * 0.012; px = e.clientX; } });
-    canvas.addEventListener('pointerup', () => { drag = false; });
-    const tick = () => {
-      this.raf = requestAnimationFrame(tick);
-      const now = performance.now(), dt = Math.min(0.05, (now - this.last) / 1000);
-      this.last = now; this.time += dt;
-      this.fit();
-      const f = this.fig;
-      if (!f) return;
-      f.root.rotation.y = this.yaw;
-      f.root.updateMatrixWorld(true);
-      f.animate('idle', 0, 0, this.time, dt);
-      this.r.render(this.scene, this.cam);
-    };
-    tick();
-  }
-  private detail: number;
-
-  private fit() {
-    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
-    if (w && h && (this.canvas.width !== w || this.canvas.height !== h)) {
-      this.r.setSize(w, h, false);
-      this.cam.aspect = w / h; this.cam.updateProjectionMatrix();
-    }
-    const dist = this.cam.aspect < 0.8 ? 5.4 : 4.6;
-    this.cam.position.set(0, 1.25, dist);
-    this.cam.lookAt(0, 0.98, 0);
+    canvas.addEventListener('pointerdown', (e) => { if (this.active) { drag = true; px = e.clientX; } });
+    window.addEventListener('pointermove', (e) => { if (drag) { this.yaw += (e.clientX - px) * 0.012; px = e.clientX; } });
+    window.addEventListener('pointerup', () => { drag = false; });
   }
 
   rebuild(look: PlayerLook) {
-    this.look = look;
     if (this.fig) this.scene.remove(this.fig.root);
     this.fig = createCharacter('scientist', this.detail, look);
     this.scene.add(this.fig.root);
   }
 
-  dispose() {
-    cancelAnimationFrame(this.raf);
-    this.r.dispose();
-    this.r.forceContextLoss();
+  update(dt: number) {
+    this.time += dt;
+    const portrait = innerHeight > innerWidth;
+    const w = innerWidth, h = innerHeight;
+    // the figure stands in the part of the screen the options panel leaves free
+    if (portrait) this.camera.setViewOffset(w, h, 0, h * 0.22, w, h); else this.camera.setViewOffset(w, h, w * 0.2, 0, w, h);
+    this.camera.aspect = w / h;
+    this.camera.position.set(0, 1.2, portrait ? 6.6 : 4.8);
+    this.camera.lookAt(0, 0.95, 0);
+    const f = this.fig;
+    if (!f) return;
+    f.root.rotation.y = this.yaw;
+    f.root.updateMatrixWorld(true);
+    f.animate('idle', 0, 0, this.time, dt);
   }
 }
 
@@ -85,18 +69,17 @@ const row = (label: string, body: string) => `<div class="row"><label>${esc(t(la
  * Character creator: the only thing the player names is themselves. Used for a
  * new game and for changing your look later.
  */
-export function openCreator(ui: UI, start: PlayerLook, mode: 'new' | 'edit', detail: number, onDone: (look: PlayerLook) => void, onBack: () => void) {
+export function openCreator(ui: UI, start: PlayerLook, mode: 'new' | 'edit', stage: CreatorStage, show: (on: boolean) => void, onDone: (look: PlayerLook) => void, onBack: () => void) {
   const look: PlayerLook = { ...start };
-  let preview: Preview | null = null;
   const off = (v: boolean): [string, string][] => { void v; return [['1', t('settings.on')], ['0', t('settings.off')]]; };
-  const close = () => { preview?.dispose(); preview = null; ui.closeModal(); };
+  const close = () => { show(false); ui.closeModal(); };
 
   const render = () => {
     const nums = (a: unknown[]) => a.map((_, i) => [String(i), String(i + 1)]) as [string, string][];
     void nums;
     ui.openRaw(`<h2>${esc(t('cc.title'))}</h2>
       <div class="creator">
-        <div class="cc-view"><canvas id="cc-canvas"></canvas><div class="note">${esc(t('cc.rotate'))}</div></div>
+        <div class="note">${esc(t('cc.rotate'))}</div>
         <div class="cc-opts">
           <div class="name-row you"><label for="nm-scientist"><span class="nr">${esc(t('cc.name'))}</span></label>
             <input id="nm-scientist" type="text" maxlength="${NAME_MAX}" autocomplete="off" spellcheck="false" dir="auto" placeholder="${esc(t('crew.scientist.name'))}" value="${esc(look.name)}"></div>
@@ -127,14 +110,14 @@ export function openCreator(ui: UI, start: PlayerLook, mode: 'new' | 'edit', det
         <button class="btn" id="cc-reset">${esc(t('cc.reset'))}</button>
         <button class="btn" id="nm-back">${esc(t('menu.back'))}</button>
       </div>`);
-    preview?.dispose();
-    preview = new Preview(document.getElementById('cc-canvas') as HTMLCanvasElement, detail, look);
+    stage.rebuild({ ...look });
+    show(true);
     const card = document.getElementById('modal-card')!;
     const nameEl = document.getElementById('nm-scientist') as HTMLInputElement;
     nameEl.addEventListener('keydown', (e) => e.stopPropagation());
     nameEl.addEventListener('input', () => { look.name = nameEl.value; });
     let pending = 0;
-    const changed = () => { clearTimeout(pending); pending = window.setTimeout(() => preview?.rebuild({ ...look }), 90); };
+    const changed = () => { clearTimeout(pending); pending = window.setTimeout(() => stage.rebuild({ ...look }), 90); };
     card.querySelectorAll<HTMLElement>('.seg[data-k], .swatches[data-k]').forEach((g) => {
       const key = g.dataset.k as keyof PlayerLook;
       g.querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.addEventListener('click', () => {

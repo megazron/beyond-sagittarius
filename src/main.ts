@@ -14,7 +14,7 @@ import { Input } from './game/input';
 import { Game } from './game/game';
 import { applyCrewNames, CrewNames } from './core/crew';
 import { TouchControls, TouchAction } from './ui/touch';
-import { openCreator } from './ui/creator';
+import { openCreator, CreatorStage } from './ui/creator';
 import { applyIcons } from './ui/icons';
 import { initGlyphs, refreshGlyphs } from './ui/glyphs';
 import { MenuNav } from './ui/nav';
@@ -163,6 +163,15 @@ const detail = () => (quality.name === 'mobile' ? 0.6 : quality.name === 'cinema
 let pendingLook: PlayerLook = defaultLook();
 
 /** Applies the player's look and name to everything that shows them. */
+const stage = new CreatorStage(canvas, quality.name === 'mobile' ? 0.6 : 1);
+function showStage(on: boolean) {
+  stage.active = on;
+  if (state === 'title') ui.show('title', !on);
+  if (on) renderer.setScene(stage.scene, stage.camera, false);
+  else if (state === 'game') renderer.setScene(world.scene, camera, true);
+  else renderer.setScene(cine.scene, cine.camera, false);
+}
+
 let castKey = '';
 function applyPlayer(look: PlayerLook, skins: CrewSkins) {
   setPlayer(look);
@@ -178,7 +187,7 @@ function applyPlayer(look: PlayerLook, skins: CrewSkins) {
 
 /** New game: make your character, then the prologue. */
 function chooseNames() {
-  openCreator(ui, loadSave()?.player ?? defaultLook(), 'new', detail(), (look) => startNewGame(look), () => {});
+  openCreator(ui, loadSave()?.player ?? defaultLook(), 'new', stage, showStage, (look) => startNewGame(look), () => {});
 }
 
 // Locked cosmetic: only a hash of the code lives in the source.
@@ -376,7 +385,7 @@ function showTab(tab: MenuTab) {
     ui.openPause({
       resume,
       settings: () => ui.openSettings(settings, quality.name, persistSettings, changeQuality, () => showTab('pause'), () => { resume(); game.startTutorial(); }, undefined, () => ui.openLegal(() => showTab('pause'))),
-      look: () => openCreator(ui, game.save.player ?? defaultLook(), 'edit', detail(), (look) => {
+      look: () => openCreator(ui, game.save.player ?? defaultLook(), 'edit', stage, showStage, (look) => {
         game.save.player = look;
         game.save.names = look.name ? { scientist: look.name } : {};
         applyPlayer(look, game.save.skins ?? {});
@@ -492,8 +501,9 @@ function frame() {
     if (photo) { camera.position.copy(photo.from); camera.lookAt(photo.to); }
     world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer);
   }
+  if (stage.active) stage.update(dt);
   // portrait screens: widen the vertical FOV so the horizontal view stays usable
-  const activeCam = state === 'game' ? camera : state === 'narrator' ? vault.camera : cine.camera;
+  const activeCam = stage.active ? stage.camera : state === 'game' ? camera : state === 'narrator' ? vault.camera : cine.camera;
   const designFov = activeCam.fov;
   fitFov(activeCam);
   renderer.render(dt, elapsed);
@@ -529,7 +539,7 @@ async function boot() {
   const btns = ['btn-new', 'btn-continue'].map((id) => document.getElementById(id) as HTMLButtonElement);
   // the crew load alongside the world: only the people on screen first are awaited
   const crewReady = preloadCrew(['scientist', 'explorer', 'custom_m_scientist', 'custom_f_scientist'], detail());
-  void preloadCrew(['strong', 'medic', 'builder', 'social', 'megazron'], detail()).catch(() => {});
+  const crewAll = preloadCrew(['strong', 'medic', 'builder', 'social', 'megazron'], detail());
   await world.build((p) => ui.setLoading(p));
   await crewReady.catch((e) => console.warn('[crew]', e));
   player = new Player(world.terrain, world.forest, camera, quality.name === 'mobile' ? 0.6 : 1);
@@ -542,10 +552,19 @@ async function boot() {
   player.spawn(0, 2, 0.35);
   world.update(0.016, 0, 8.2, player.pos, camera, renderer.renderer);
   game.story.npcs.prepare();
+  // the default look is set up now, so an unchanged Begin rebuilds nothing
+  await crewAll.catch(() => {});
+  applyPlayer(defaultLook(), {});
+  stage.rebuild(defaultLook());
+  await player.model.whenReady;
   await renderer.renderer.compileAsync(world.scene, camera);
   warmFrame(world.scene, camera);
   await cine.warm(renderer.renderer);
   await vault.prepare(renderer.renderer);
+  warmFrame(vault.scene, vault.camera);
+  stage.update(0.016);
+  await renderer.renderer.compileAsync(stage.scene, stage.camera);
+  warmFrame(stage.scene, stage.camera);
   worldReady = true;
   btns.forEach((b) => (b.disabled = false));
   if (pendingStart) { const f = pendingStart; pendingStart = null; f(); }

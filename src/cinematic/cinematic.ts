@@ -167,7 +167,18 @@ export class Cinematic {
     const shown = [this.earth.group, this.ring, this.mars, this.giant, this.giantRing, this.interior.group, this.ship.group];
     const was = shown.map((o) => o.visible);
     shown.forEach((o) => (o.visible = true));
+    await Promise.all(this.interior.crew.map((c) => c.whenReady));
+    this.scene.updateMatrixWorld(true);
     await r.compileAsync(this.scene, this.camera);
+    // one tiny frame of the deck, so the crew's textures are on the GPU before their scene
+    stageDeck(this.cast, -2.2);
+    const cam = new THREE.PerspectiveCamera(110, 16 / 9, 0.05, 60);
+    cam.position.copy(this.interior.group.position).add(V(0, -0.6, 5));
+    cam.lookAt(this.interior.group.position.clone().add(V(0, -1.2, 0)));
+    this.scene.updateMatrixWorld(true);
+    this.interior.crew.forEach((c) => c.animate('stand', 0, 0, 0, 0.016));
+    const t = new THREE.WebGLRenderTarget(64, 36);
+    r.setRenderTarget(t); r.render(this.scene, cam); r.setRenderTarget(null); t.dispose();
     shown.forEach((o, i) => (o.visible = was[i]));
   }
 

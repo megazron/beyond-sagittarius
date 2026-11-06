@@ -345,10 +345,7 @@ body.lang-ur .cl { line-height: 2; }
 .legal p { margin: 0 0 8px; }
 .legal a { color: var(--accent); }
 body.lang-ur .legal { line-height: 2.1; }
-.creator { display: grid; grid-template-columns: minmax(220px, 38%) 1fr; gap: 28px; align-items: start; flex: 1 1 auto; }
-.cc-view { position: sticky; top: 0; }
-.cc-view canvas { width: 100%; height: min(70vh, 560px); display: block; touch-action: none; cursor: grab; }
-.cc-view .note { text-align: center; margin: 2px 0 0; }
+.creator { display: block; }
 .swatches { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
 .swatches button { width: 26px; height: 26px; border: none; padding: 0; cursor: pointer; }
 .swatches button.active, .swatches button:focus-visible, body.dev-pad .swatches button:focus { outline: 2px solid var(--paper); outline-offset: 2px; }
@@ -371,9 +368,6 @@ body.lang-ur .legal { line-height: 2.1; }
   .device { font-size: 18px; } .device.small { font-size: 16px; }
   .subtitle { font-size: 15px; max-width: 92vw; bottom: calc(var(--safe-b) + 128px); }
   .memory { font-size: 14px; }
-  .creator { grid-template-columns: 1fr; gap: 10px; }
-  .cc-view { position: sticky; top: -8px; z-index: 3; background: rgba(8, 7, 5, 0.96); }
-  .cc-view canvas { height: 30vh; }
   .swatches { justify-content: flex-start; } .swatches button { width: 34px; height: 34px; }
 }
 @media (max-width: 760px) and (orientation: portrait) {
@@ -395,9 +389,6 @@ body.lang-ur .legal { line-height: 2.1; }
   .chapter .c2 { font-size: 22px; }
   .pause { grid-template-columns: 1fr 1fr; gap: 20px; }
   .pause-side { display: block; }
-  .creator { grid-template-columns: 34% 1fr; }
-  .cc-view { position: sticky; top: 0; background: none; }
-  .cc-view canvas { height: 62vh; }
   .menu-page:has(.map) { height: calc(100% - 96px); }
   #tb-act { width: 76px; height: 76px; }
   .subtitle { bottom: calc(var(--safe-b) + 40px); max-width: 58vw; }
@@ -405,3 +396,11 @@ body.lang-ur .legal { line-height: 2.1; }
 }
 @media (min-width: 2200px) and (min-height: 1200px) { #hud { zoom: 1.35; } }
 @media (prefers-reduced-motion: reduce) { .modal, .modal.leaving, .banner, .toast, .hint { animation-duration: 0.01s; } }
+
+/* The creator's figure is on the main canvas; the options sit beside it */
+#modal:has(.creator) { background: none; pointer-events: none; display: flex; justify-content: flex-end; align-items: center; }
+#modal:has(.creator) .modal-card { pointer-events: auto; inset: 0 0 0 auto; width: min(560px, 48vw); background: rgba(8, 7, 5, 0.9); overflow: auto; }
+@media (orientation: portrait) {
+  #modal:has(.creator) { align-items: flex-end; justify-content: center; }
+  #modal:has(.creator) .modal-card { inset: auto 0 0 0; width: 100%; height: 56%; }
+}

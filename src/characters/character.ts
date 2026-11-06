@@ -313,7 +313,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   function locomotion(speed: number, dt: number) {
     // stylised walk -> brisk walk -> run -> sprint, phase locked so feet stay in step
     const m = A!.meta;
-    const walkV = m[style.walk].speed * legScale, brisk = 1.25 * legScale * m.walk.speed, runV = m.run.speed * legScale * 1.15, sprintV = m.sprint.speed * legScale;
+    const walkV = (m[style.walk] ?? m.walk).speed * legScale, brisk = 1.25 * legScale * m.walk.speed, runV = m.run.speed * legScale * 1.15, sprintV = m.sprint.speed * legScale;
     const knots: [string, number][] = [[style.walk, Math.min(walkV * 1.2, brisk * 0.8)], ['walk', brisk], ['run', runV], ['sprint', sprintV]];
     const w = [0, 0, 0, 0];
     if (speed <= knots[0][1]) w[0] = 1;
