@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { TexSize } from './quality';
+import { desktop } from './desktop';
 
 /**
  * Lazy texture loading for the CC0 PBR sets in public/textures (see
@@ -8,46 +9,57 @@ import type { TexSize } from './quality';
  * their procedural fallback until then. Failures are logged as warnings only.
  */
 const BASE = import.meta.env.BASE_URL;
+/** Where 4K textures live: the desktop download's asset folder, else this site. */
+const slash = (s: string) => (s.endsWith('/') ? s : `${s}/`);
+export const ASSET_BASE = desktop?.assetBase ? slash(desktop.assetBase) : BASE;
 const loader = new THREE.TextureLoader();
 const cache = new Map<string, Promise<THREE.Texture>>();
 let maxAniso = 4;
 
 export function setMaxAnisotropy(n: number) { maxAniso = Math.max(1, n); }
 
-export type MapKind = 'diff' | 'nor' | 'arm';
+export type MapKind = 'diff' | 'nor' | 'arm' | 'fir' | 'pine' | 'leaf';
 
 export function texUrl(set: string, map: MapKind, size: TexSize): string {
-  return `${BASE}textures/${set}/${map}_${size}.webp`;
+  return `${size === '4k' ? ASSET_BASE : BASE}textures/${set}/${map}_${size}.webp`;
 }
 
 /** Caps a requested size (e.g. props never need more than 1k). */
 export function capSize(size: TexSize, max: TexSize): TexSize {
-  const order: TexSize[] = ['512', '1k', '2k'];
+  const order: TexSize[] = ['512', '1k', '2k', '4k'];
   return order[Math.min(order.indexOf(size), order.indexOf(max))];
 }
+
+/** Sizes tried after the requested one: a missing 4K file falls back to the shipped 2K, 1K, 512. */
+const FALLBACK: Record<TexSize, TexSize | null> = { '4k': '2k', '2k': '1k', '1k': '512', '512': null };
 
 export function loadTexture(set: string, map: MapKind, size: TexSize): Promise<THREE.Texture> {
   const url = texUrl(set, map, size);
   let p = cache.get(url);
   if (!p) {
-    p = new Promise((resolve, reject) => {
+    p = new Promise<THREE.Texture>((resolve, reject) => {
       loader.load(url, (t) => {
-        t.colorSpace = map === 'diff' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+        t.colorSpace = map === 'nor' || map === 'arm' ? THREE.NoColorSpace : THREE.SRGBColorSpace;
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
         t.anisotropy = maxAniso;
         t.needsUpdate = true;
         resolve(t);
       }, undefined, reject);
+    }).catch((e) => {
+      const next = FALLBACK[size];
+      if (next) return loadTexture(set, map, next);
+      throw e;
     });
     cache.set(url, p);
   }
   return p;
 }
 
+export type PbrMap = 'diff' | 'nor' | 'arm';
 export interface PbrSet { diff?: THREE.Texture; nor?: THREE.Texture; arm?: THREE.Texture }
 
 /** Loads several maps of one set; resolves with whatever loaded (never rejects). */
-export async function loadSet(set: string, maps: MapKind[], size: TexSize): Promise<PbrSet> {
+export async function loadSet(set: string, maps: PbrMap[], size: TexSize): Promise<PbrSet> {
   const out: PbrSet = {};
   await Promise.all(maps.map((m) => loadTexture(set, m, size).then(
     (t) => { out[m] = t; },

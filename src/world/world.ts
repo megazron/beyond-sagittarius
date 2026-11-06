@@ -13,7 +13,10 @@ import { createCharacter, Character } from '../characters/character';
 import { createHound } from './predator';
 import { Environment } from './environment';
 import { atmosphere, patchSceneFog } from './atmosphere';
+import { SunLight } from 'three/examples/jsm/lights/SunLight.js';
+import type { PostSource } from '../core/renderer';
 import { applyMetal } from './pbr';
+import { loadModelPack, loadFoliageCard } from './models';
 
 /** The alien planet: terrain, sky, forest, water, props, lights and fog. */
 export class World {
@@ -33,7 +36,8 @@ export class World {
   /** The crewmate found in this arc (the Explorer). */
   explorer!: Character;
   hound!: ReturnType<typeof createHound>;
-  sun = new THREE.DirectionalLight(0xffffff, 3);
+  /** Sun or moon, with two shadow cascades fitted to the view by three's SunLight. */
+  sun = new SunLight(0xffffff, 3);
   hemi = new THREE.HemisphereLight(0x8fb7c8, 0x1a2420, 0.6);
   fog: THREE.FogExp2;
   ready = false;
@@ -42,6 +46,9 @@ export class World {
   env!: Environment;
   private envGround = new THREE.Color();
   private fogPatchAt = 0;
+  private shadowFrame = 0;
+  /** Sunlit air for the renderer's volumetric pass. */
+  post!: PostSource;
 
   constructor(private q: Quality) {
     this.terrain = new Terrain(q);
@@ -50,13 +57,16 @@ export class World {
   }
 
   async build(onProgress: (p: number) => void) {
+    // the scans download while the terrain generates
+    const assets = Promise.all([loadModelPack(this.q), loadFoliageCard('fir', this.q), loadFoliageCard('pine', this.q), loadFoliageCard('leaf', this.q)]);
     await this.terrain.generate(onProgress);
     await this.terrain.buildMeshes(onProgress);
     const s = this.scene;
     s.add(this.sky.group);
     s.add(this.terrain.group);
     this.layout = computeLayout(this.terrain);
-    this.forest = new Forest(this.terrain, this.q);
+    const [pack, fir, pine, leaf] = await assets;
+    this.forest = new Forest(this.terrain, this.q, pack, { fir, pine, leaf });
     reserveLayout(this.forest, this.layout);
     this.forest.build();
     onProgress(0.94);
@@ -103,15 +113,15 @@ export class World {
     this.sun.castShadow = true;
     const sh = this.sun.shadow;
     sh.mapSize.set(this.q.shadowMapSize, this.q.shadowMapSize);
-    const ext = this.q.shadowExtent;
-    Object.assign(sh.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: 500 });
-    sh.camera.updateProjectionMatrix();
-    // depth bias scales with the texel size; normal bias stops acne on the slopes
-    const texelM = (ext * 2) / this.q.shadowMapSize;
-    sh.bias = -0.00025;
-    sh.normalBias = Math.max(0.02, texelM * 0.6);
+    sh.camera.far = this.q.shadowRange;
+    sh.camera.near = 1;
+    sh.bias = -0.00022;
+    sh.normalBias = 0.05;
     sh.radius = this.q.shadowSoftness;
-    s.add(this.sun, this.sun.target, this.hemi);
+    sh.autoUpdate = this.q.shadowInterval <= 1;
+    s.add(this.sun, this.hemi);
+    this.post = { sun: this.sun, sunDir: this.lightDir, sunColor: this.sun.color, density: 0.002, fall: 0.03, base: 0, strength: 0 };
+    s.userData.post = this.post;
     onProgress(1);
     this.ready = true;
   }
@@ -129,14 +139,10 @@ export class World {
     const sunUp = smoothstep(-0.06, 0.08, e);
     this.lightDir.copy(sunUp > 0.5 ? sky.sunDir : sky.moonDir);
     if (this.lightDir.y < 0.12) { this.lightDir.y = 0.12; this.lightDir.normalize(); }
-    this.sun.position.copy(focus).addScaledVector(this.lightDir, 220);
-    this.sun.target.position.copy(focus);
-    // snap shadow camera to texels to avoid shimmering
-    const texel = (this.q.shadowExtent * 2) / this.q.shadowMapSize;
-    this.sun.target.position.x = Math.round(this.sun.target.position.x / texel) * texel;
-    this.sun.target.position.z = Math.round(this.sun.target.position.z / texel) * texel;
-    this.sun.position.x = this.sun.target.position.x + this.lightDir.x * 220;
-    this.sun.position.z = this.sun.target.position.z + this.lightDir.z * 220;
+    this.sun.position.copy(this.lightDir); // SunLight: direction only, cascades follow the camera
+    // the leaf cards are the most expensive thing in the frame: don't redraw them every frame
+    this.shadowFrame++;
+    this.sun.shadow.needsUpdate = this.shadowFrame % this.q.shadowInterval === 0;
 
     const day = sky.day;
     const sunI = 4.6 * smoothstep(-0.02, 0.25, e);
@@ -161,8 +167,11 @@ export class World {
     atmosphere.uFogSunDir.value.copy(sunUp > 0.5 ? sky.sunDir : sky.moonDir);
     atmosphere.uFogSun.value.copy(sky.sunColor).multiplyScalar(sunUp > 0.5 ? 0.55 * smoothstep(-0.05, 0.15, e) : 0.05);
     if (time - this.fogPatchAt > 2 || time < this.fogPatchAt) { patchSceneFog(this.scene); this.fogPatchAt = time; }
+    this.post.strength = (sunUp > 0.5 ? smoothstep(0.0, 0.2, e) * 1.0 : 0.25) * (1 + dawn * 1.5);
+    this.post.density = 0.0016 * (1 + dawn * 2.5);
     renderer.toneMappingExposure = 0.82 + (1 - day) * 0.6;
-    this.forest.setGlow(1.6 + (1 - day) * 2.4);
+    this.forest.setGlow(0.9 + (1 - day) * 2.2);
+    this.forest.setSun(this.lightDir, this.sun.color);
 
     windUniforms.uTime.value = time;
     this.grass.update(focus);

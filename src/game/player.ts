@@ -8,7 +8,13 @@ import type { Input } from './input';
 import { HALF } from '../world/terrain';
 import { audio } from '../core/audio';
 
-/** Third-person survivor controller with an orbit camera that avoids terrain. */
+const angleTo = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
+
+/**
+ * Third-person survivor controller. Weight comes from the velocity ramps; the
+ * camera follows a damped focus point, bobs with the stride, kicks its FOV when
+ * sprinting and pulls in softly when a tree comes between it and the player.
+ */
 export class Player {
   model: Character;
   pos = new THREE.Vector3();
@@ -28,9 +34,22 @@ export class Player {
   /** Body pose (the wake-up lies down, cutscenes can override). */
   pose: CrewPose = 'idle';
   private camPos = new THREE.Vector3();
+  /** Damped point the camera orbits, so it trails the body a little. */
+  private focus = new THREE.Vector3();
+  private yawS = 0;
+  private pitchS = -0.18;
+  /** Orbit distance after tree clearance. */
+  private distS = 5.2;
+  private baseFov: number;
+  private fovKick = 0;
+  private bobK = 0;
+  private lean = 0;
+  private dip = 0;
+  private dipV = 0;
 
   constructor(private terrain: Terrain, private forest: Forest, public camera: THREE.PerspectiveCamera, detail = 1) {
     this.model = createCharacter('scientist', detail);
+    this.baseFov = camera.fov;
   }
 
   /** Swap in the player's look (character creator). */
@@ -80,7 +99,10 @@ export class Player {
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
     const rx = -fz, rz = fx;
     const wx = (fx * mz + rx * mx) * speed, wz = (fz * mz + rz * mx) * speed;
-    const k = 1 - Math.exp(-dt * 10);
+    // ramp up slower than you stop, slowest of all in the air
+    const hsNow = Math.hypot(this.vel.x, this.vel.z), hsWant = Math.hypot(wx, wz);
+    const rate = !this.onGround ? 1.6 : hsWant > hsNow ? (this.sprinting ? 4.2 : 7.5) : 9.5;
+    const k = 1 - Math.exp(-dt * rate);
     this.vel.x += (wx - this.vel.x) * k;
     this.vel.z += (wz - this.vel.z) * k;
 
@@ -90,7 +112,14 @@ export class Player {
     const next = this.pos.clone();
     next.x += this.vel.x * dt;
     next.z += this.vel.z * dt;
+    const px = next.x, pz = next.z;
     this.forest.collide(next, 0.35);
+    // brushing a trunk slides along it: drop only the velocity going into the tree
+    const ox = next.x - px, oz = next.z - pz, ol = Math.hypot(ox, oz);
+    if (ol > 1e-4) {
+      const vn = (this.vel.x * ox + this.vel.z * oz) / ol;
+      if (vn < 0) { this.vel.x -= (ox / ol) * vn; this.vel.z -= (oz / ol) * vn; }
+    }
     next.x = clamp(next.x, -HALF + 80, HALF - 80);
     next.z = clamp(next.z, -HALF + 80, HALF - 80);
     // prevent wading into deep water and climbing cliffs
@@ -105,6 +134,7 @@ export class Player {
     const ground = this.terrain.height(this.pos.x, this.pos.z);
     if (this.pos.y <= ground) {
       if (!this.onGround && this.vel.y < -4) audio.human('land', 0.5);
+      if (!this.onGround && this.vel.y < -3) this.dipV -= Math.min(1.6, -this.vel.y * 0.2); // landing weight
       this.pos.y = ground; this.vel.y = 0; this.onGround = true;
     }
     else if (this.pos.y - ground > 0.15) this.onGround = false;
@@ -129,26 +159,66 @@ export class Player {
     this.updateCamera(dt);
   }
 
-  private desiredCam(out: THREE.Vector3) {
-    const cp = Math.cos(this.pitch);
-    out.set(Math.sin(this.yaw) * cp, -Math.sin(this.pitch), Math.cos(this.yaw) * cp).multiplyScalar(this.camDist);
-    out.add(this.pos).add(new THREE.Vector3(0, 1.65, 0));
+  /** Orbit position around `focus` at `dist`, kept above the ground. */
+  private orbit(out: THREE.Vector3, focus: THREE.Vector3, yaw: number, pitch: number, dist: number) {
+    const cp = Math.cos(pitch);
+    out.set(Math.sin(yaw) * cp, -Math.sin(pitch), Math.cos(yaw) * cp).multiplyScalar(dist);
+    out.add(focus);
+    out.y += 1.65;
     const g = Math.max(this.terrain.height(out.x, out.z) + 0.5, 0.45);
     if (out.y < g) out.y = g;
     return out;
   }
 
   snapCamera() {
-    this.desiredCam(this.camPos);
+    this.focus.copy(this.pos);
+    this.yawS = this.yaw; this.pitchS = this.pitch; this.distS = this.camDist;
+    this.fovKick = 0; this.bobK = 0; this.lean = 0; this.dip = 0; this.dipV = 0;
+    if (this.camera.fov !== this.baseFov) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
+    this.orbit(this.camPos, this.focus, this.yaw, this.pitch, this.camDist);
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.pos.x, this.pos.y + 1.5, this.pos.z);
   }
 
   private updateCamera(dt: number) {
-    const want = this.desiredCam(new THREE.Vector3());
-    this.camPos.lerp(want, 1 - Math.exp(-dt * 14));
-    this.camera.position.copy(this.camPos);
-    this.camera.lookAt(this.pos.x, this.pos.y + 1.45, this.pos.z);
+    const e = (r: number) => 1 - Math.exp(-dt * r);
+    // the body leads, the camera catches up: more slack vertically, so steps and jumps feel soft
+    this.focus.x += (this.pos.x - this.focus.x) * e(12);
+    this.focus.z += (this.pos.z - this.focus.z) * e(12);
+    this.focus.y += (this.pos.y - this.focus.y) * e(8);
+    // look keeps a very short filter: smooths mouse steps and touch jitter, adds no felt delay
+    const dyaw = angleTo(this.yawS, this.yaw);
+    this.yawS += dyaw * e(32);
+    this.pitchS += (this.pitch - this.pitchS) * e(32);
+
+    // soft collision: pull in fast when a trunk blocks the view, ease back out slowly
+    const want = this.orbit(tmpA, this.focus, this.yawS, this.pitchS, this.camDist);
+    const clear = this.forest.clearance(this.focus.x, this.focus.z, want.x, want.z, 0.4);
+    const target = Math.max(1.3, this.camDist * clear);
+    this.distS += (target - this.distS) * e(target < this.distS ? 16 : 2.5);
+    this.orbit(this.camPos, this.focus, this.yawS, this.pitchS, this.distS);
+
+    // stride: vertical twice per cycle, sideways once, growing with speed
+    const run = clamp(this.speedNow / 7.2, 0, 1);
+    this.bobK += ((this.onGround ? run : 0) - this.bobK) * e(8);
+    const bobY = Math.sin(this.walkPhase * 2) * (0.018 + 0.05 * this.bobK) * Math.min(1, this.bobK * 4);
+    const bobX = Math.cos(this.walkPhase) * 0.03 * this.bobK;
+    // landing spring
+    this.dipV += (-this.dip * 90 - this.dipV * 14) * dt;
+    this.dip += this.dipV * dt;
+    tmpB.set(Math.cos(this.yawS), 0, -Math.sin(this.yawS)).multiplyScalar(bobX);
+    this.camera.position.copy(this.camPos).add(tmpB);
+    this.camera.position.y += bobY + this.dip * 0.12;
+    this.camera.up.set(0, 1, 0);
+    this.camera.lookAt(this.focus.x, this.focus.y + 1.45 + bobY * 0.4 + this.dip * 0.05, this.focus.z);
+    // a touch of bank into fast turns
+    this.lean += (clamp(dyaw * 1.4, -0.03, 0.03) - this.lean) * e(6);
+    if (Math.abs(this.lean) > 1e-4) this.camera.rotateZ(this.lean);
+
+    // FOV kick while sprinting
+    this.fovKick += ((this.sprinting ? 6.5 : 0) - this.fovKick) * e(this.sprinting ? 3.5 : 6);
+    const fov = this.baseFov + this.fovKick;
+    if (Math.abs(fov - this.camera.fov) > 0.01) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
   }
 
   /** Unit vector the player is facing (horizontal). */
@@ -156,3 +226,5 @@ export class Player {
     return out.set(-Math.sin(this.facing), 0, -Math.cos(this.facing));
   }
 }
+const tmpA = new THREE.Vector3();
+const tmpB = new THREE.Vector3();

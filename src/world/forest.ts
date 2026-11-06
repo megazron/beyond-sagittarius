@@ -3,8 +3,9 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { mulberry32, smoothstep } from '../core/noise';
 import type { Quality } from '../core/quality';
 import { Terrain, HALF, LAKE } from './terrain';
-import { applyBark, applyRock, chainCompile } from './pbr';
-import { foliageAtlas, spireCanopy, crownCanopy } from './foliage';
+import { applyBark, chainCompile } from './pbr';
+import { foliageAtlas, coniferCrown, broadCrown, CROWN_LODS } from './foliage';
+import { modelMaterial, type ModelPack, type ModelInfo } from './models';
 
 export const windUniforms = { uTime: { value: 0 }, uWind: { value: 1 } };
 
@@ -51,10 +52,10 @@ function place(g: THREE.BufferGeometry, x: number, y: number, z: number, rx = 0,
   return g;
 }
 
-interface Variant { solid: THREE.BufferGeometry; glow: THREE.BufferGeometry | null; radius: number; leaf?: THREE.BufferGeometry }
+interface Variant { solid: THREE.BufferGeometry; glow: THREE.BufferGeometry | null; radius: number }
 
-/** Three original alien tree species. Units: metres, base at origin. */
-function buildVariants(detail: number): Variant[] {
+/** The planet's three alien species, only found in rare groves. Units: metres, base at origin. */
+function buildVariants(): Variant[] {
   const out: Variant[] = [];
   // 1. Parasol — bent trunk with a violet cap and glowing hanging tendrils
   {
@@ -63,10 +64,10 @@ function buildVariants(detail: number): Variant[] {
     solid.push(colorize(bentTrunk(9, 0.42, 0.18, 0.12), 0x4a3b3a, 0.15));
     const capTop = new THREE.SphereGeometry(4.2, 20, 8, 0, Math.PI * 2, 0, Math.PI * 0.42);
     place(capTop, 1.0, 8.2, 0, 0, 0, 0, [1, 0.42, 1]);
-    solid.push(colorize(capTop, 0x6b2f86, 0.25));
+    solid.push(colorize(capTop, 0x4a3a52, 0.25));
     const under = new THREE.CylinderGeometry(3.9, 0.6, 0.8, 20, 1, true);
     place(under, 1.0, 8.0, 0);
-    solid.push(colorize(under, 0x2a1838, 0.1));
+    solid.push(colorize(under, 0x241d28, 0.1));
     for (let i = 0; i < 14; i++) {
       const a = (i / 14) * Math.PI * 2;
       const r = 2.2 + (i % 3) * 0.6;
@@ -76,11 +77,11 @@ function buildVariants(detail: number): Variant[] {
       solid.push(colorize(t, 0x3a2a4c));
       const b = new THREE.SphereGeometry(0.16, 8, 6);
       place(b, 1.0 + Math.cos(a) * r, 8.0 - len, Math.sin(a) * r);
-      glow.push(colorize(b, 0x37e6ff));
+      glow.push(colorize(b, 0x4fbfd0));
     }
     const rim = new THREE.TorusGeometry(3.85, 0.06, 6, 40);
     place(rim, 1.0, 7.95, 0, Math.PI / 2);
-    glow.push(colorize(rim, 0x7b5cff));
+    glow.push(colorize(rim, 0x6a62b0));
     out.push({ solid: mergeGeometries(solid)!, glow: mergeGeometries(glow)!, radius: 0.5 });
   }
   // 2. Lantern spire — tall trunk, spiralling fronds, pink lantern pods
@@ -94,16 +95,16 @@ function buildVariants(detail: number): Variant[] {
       const len = 3.4 * (1 - i / 26);
       const f = new THREE.SphereGeometry(1, 8, 5);
       place(f, Math.cos(a) * len * 0.5, y, Math.sin(a) * len * 0.5, 0, -a, 0.5, [len * 0.55, 0.12, 0.42]);
-      solid.push(colorize(f, i % 2 ? 0x1c5b57 : 0x24706a, 0.3));
+      solid.push(colorize(f, i % 2 ? 0x24403a : 0x2c4c44, 0.3));
       if (i % 3 === 0) {
         const p = new THREE.SphereGeometry(0.28, 10, 8);
         place(p, Math.cos(a) * len * 0.95, y - 0.6, Math.sin(a) * len * 0.95, 0, 0, 0, [1, 1.35, 1]);
-        glow.push(colorize(p, 0xff5fc8));
+        glow.push(colorize(p, 0xc06a9c));
       }
     }
     const tip = new THREE.SphereGeometry(0.35, 10, 8);
     place(tip, -0.05 * 15, 15.2, 0);
-    glow.push(colorize(tip, 0xffd2f4));
+    glow.push(colorize(tip, 0xd8b4c8));
     out.push({ solid: mergeGeometries(solid)!, glow: mergeGeometries(glow)!, radius: 0.6 });
   }
   // 3. Coral fan — several bent tubes from one root, glowing tips and gill fans
@@ -116,47 +117,22 @@ function buildVariants(detail: number): Variant[] {
       const h = 4.5 + (i % 3) * 1.6;
       const tb = bentTrunk(h, 0.28, 0.09, 0.22, 7, 6);
       place(tb, 0, 0.8, 0, 0, a, 0);
-      solid.push(colorize(tb, 0x8a3b4b, 0.2));
+      solid.push(colorize(tb, 0x5e4040, 0.2));
       const tipX = Math.cos(-a) * 0.22 * h * 1.0, tipZ = Math.sin(-a) * 0.22 * h;
       const g = new THREE.SphereGeometry(0.25, 8, 6);
       place(g, tipX, 0.8 + h, tipZ);
-      glow.push(colorize(g, 0xc8ff4a));
+      glow.push(colorize(g, 0x9fc06a));
       const fan = new THREE.CircleGeometry(0.9, 10, 0, Math.PI);
       place(fan, tipX * 0.7, 0.8 + h * 0.75, tipZ * 0.7, Math.PI / 2 * 0.3, a, 0);
-      solid.push(colorize(fan, 0xd0607a, 0.2));
+      solid.push(colorize(fan, 0x8a5a5e, 0.2));
     }
     const merged = mergeGeometries(solid.map((g) => g.toNonIndexed()))!;
     out.push({ solid: merged, glow: mergeGeometries(glow)!, radius: 0.9 });
   }
-  // 4-5. Duskpine: tall dark conifers, the bulk of the forest
-  for (const [h, r, bend] of [[23, 0.46, 0.015], [31, 0.6, -0.012]] as const) {
-    const trunk = colorize(bentTrunk(h, r, 0.05, bend, 9, 10), 0x4e4238, 0.15);
-    const roots: THREE.BufferGeometry[] = [trunk];
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * 6.28;
-      const root = new THREE.ConeGeometry(r * 0.5, 1.6, 6);
-      place(root, Math.cos(a) * r * 0.75, 0.32, Math.sin(a) * r * 0.75, Math.sin(a) * 1.25, 0, -Math.cos(a) * 1.25);
-      roots.push(colorize(barkify(root, 2, 1.6), 0x4e4238, 0.12));
-    }
-    out.push({ solid: mergeGeometries(roots.map((g) => g.toNonIndexed()))!, glow: null, radius: r, leaf: spireCanopy(h, h * 0.2, detail) });
-  }
-  // 6. Broadcrown: a forked hardwood with a rounded leafy crown
-  {
-    const parts: THREE.BufferGeometry[] = [colorize(bentTrunk(7, 0.62, 0.3, 0.04, 10, 8), 0x51463c, 0.15)];
-    const crown: [number, number, number, number][] = [[0, 12.5, 0, 4.4]];
-    for (let i = 0; i < 5; i++) {
-      const a = i * 1.26 + 0.4, L = 7.5 - (i % 2);
-      const b = bentTrunk(L, 0.3, 0.07, 0.26, 7, 6);
-      place(b, 0.2, 6.2, 0, 0, a, -0.25);
-      parts.push(colorize(b, 0x51463c, 0.15));
-      crown.push([Math.cos(-a) * 4.6, 10 + (i % 3) * 1.3, Math.sin(-a) * 4.6, 3.3]);
-    }
-    out.push({ solid: mergeGeometries(parts.map((g) => g.toNonIndexed()))!, glow: null, radius: 0.7, leaf: crownCanopy(crown, detail) });
-  }
   return out;
 }
 
-function windify(mat: THREE.Material, amp: number) {
+function windify(mat: THREE.Material, amp: number, flutter = 0) {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = windUniforms.uTime;
     sh.uniforms.uWind = windUniforms.uWind;
@@ -170,21 +146,92 @@ function windify(mat: THREE.Material, amp: number) {
       #endif
       float sw = pow(max(position.y, 0.0) * 0.1, 2.0) * uWind * ${amp.toFixed(3)};
       transformed.x += sin(uTime * 1.1 + ip.x * 0.07 + ip.z * 0.05) * sw;
-      transformed.z += cos(uTime * 0.9 + ip.z * 0.07) * sw * 0.7;`,
+      transformed.z += cos(uTime * 0.9 + ip.z * 0.07) * sw * 0.7;
+      ${flutter > 0 ? `transformed.y += sin(uTime * 2.3 + position.x * 1.7 + position.z * 1.3 + ip.x) * ${flutter.toFixed(3)} * uWind;` : ''}`,
     );
   };
+}
+
+/** A geometry with up to three LODs and the material to draw it. */
+interface Part { lods: THREE.BufferGeometry[]; mat: THREE.Material; shadow: [boolean, boolean, boolean] }
+
+/**
+ * All instances of one model or tree species in the world. Instead of one draw
+ * per area, each LOD is a single instanced draw whose instance list is rebuilt
+ * as the camera moves: a tree costs a few dozen triangles until you are close.
+ */
+class Field {
+  private n = 0;
+  private x: Float32Array;
+  private z: Float32Array;
+  private m: Float32Array;
+  private c: Float32Array;
+  private meshes: THREE.InstancedMesh[][] = [];
+
+  constructor(cap: number, parts: Part[], group: THREE.Group, private near: [number, number], private far: number) {
+    this.x = new Float32Array(cap); this.z = new Float32Array(cap);
+    this.m = new Float32Array(cap * 16); this.c = new Float32Array(cap * 3);
+    for (const p of parts) {
+      const row: THREE.InstancedMesh[] = [];
+      p.lods.forEach((g, k) => {
+        const im = new THREE.InstancedMesh(g, p.mat, Math.max(1, cap));
+        im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, cap) * 3), 3);
+        im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        im.instanceColor.setUsage(THREE.DynamicDrawUsage);
+        im.frustumCulled = false; // lists are small and spread out; the LOD does the saving
+        im.castShadow = p.shadow[k];
+        im.receiveShadow = true;
+        im.count = 0;
+        row.push(im);
+        group.add(im);
+      });
+      this.meshes.push(row);
+    }
+  }
+
+  add(mat: THREE.Matrix4, col: THREE.Color) {
+    const i = this.n++;
+    this.x[i] = mat.elements[12]; this.z[i] = mat.elements[14];
+    this.m.set(mat.elements, i * 16);
+    this.c[i * 3] = col.r; this.c[i * 3 + 1] = col.g; this.c[i * 3 + 2] = col.b;
+  }
+
+  refresh(cx: number, cz: number) {
+    const d0 = this.near[0] ** 2, d1 = this.near[1] ** 2, d2 = this.far ** 2;
+    const count = [0, 0, 0];
+    for (const row of this.meshes) for (const im of row) im.count = 0;
+    for (let i = 0; i < this.n; i++) {
+      const dx = this.x[i] - cx, dz = this.z[i] - cz, d = dx * dx + dz * dz;
+      if (d > d2) continue;
+      const k = d < d0 ? 0 : d < d1 ? 1 : 2;
+      const at = count[k]++;
+      for (const row of this.meshes) {
+        const im = row[k];
+        (im.instanceMatrix.array as Float32Array).set(this.m.subarray(i * 16, i * 16 + 16), at * 16);
+        (im.instanceColor!.array as Float32Array).set(this.c.subarray(i * 3, i * 3 + 3), at * 3);
+      }
+    }
+    for (const row of this.meshes) row.forEach((im, k) => {
+      im.count = count[k];
+      im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, count[k] * 16); im.instanceMatrix.needsUpdate = true;
+      const ic = im.instanceColor!;
+      ic.clearUpdateRanges(); ic.addUpdateRange(0, count[k] * 3); ic.needsUpdate = true;
+    });
+  }
 }
 
 export interface Obstacle { x: number; z: number; r: number }
 
 export class Forest {
   group = new THREE.Group();
-  cells: THREE.Group[] = [];
+  private fields: Field[] = [];
+  private refreshAt = 0;
+  private last = new THREE.Vector2(1e9, 1e9);
+  private dirty = 0;
   obstacles = new Map<string, Obstacle[]>();
   glowMats: THREE.MeshBasicMaterial[] = [];
-  readonly cellSize = 200;
 
-  constructor(private terrain: Terrain, private q: Quality) {}
+  constructor(private terrain: Terrain, private q: Quality, private pack: ModelPack | null = null, private cards: Record<'fir' | 'pine' | 'leaf', THREE.Texture | null> = { fir: null, pine: null, leaf: null }) {}
 
   /** Story locations kept free of trees and rocks (camp, ridge, crash sites). */
   private reserved: Obstacle[] = [];
@@ -217,153 +264,281 @@ export class Forest {
     }
   }
 
+  /**
+   * How much of the segment (ax,az)-(bx,bz) is free of obstacles, 1 = all of it.
+   * Used by the camera to stay on the player's side of a trunk.
+   */
+  clearance(ax: number, az: number, bx: number, bz: number, pad: number): number {
+    const dx = bx - ax, dz = bz - az, len2 = dx * dx + dz * dz;
+    if (len2 < 1e-6) return 1;
+    let best = 1;
+    const x0 = Math.floor(Math.min(ax, bx) / 10) - 1, x1 = Math.floor(Math.max(ax, bx) / 10) + 1;
+    const z0 = Math.floor(Math.min(az, bz) / 10) - 1, z1 = Math.floor(Math.max(az, bz) / 10) + 1;
+    for (let cz = z0; cz <= z1; cz++) for (let cx = x0; cx <= x1; cx++) {
+      const list = this.obstacles.get(`${cx},${cz}`);
+      if (!list) continue;
+      for (const o of list) {
+        const t = ((o.x - ax) * dx + (o.z - az) * dz) / len2;
+        if (t <= 0.05 || t >= best) continue;
+        const r = o.r + pad, ex = ax + dx * t - o.x, ez = az + dz * t - o.z;
+        const miss = ex * ex + ez * ez;
+        if (miss < r * r) best = Math.min(best, Math.max(0, t - Math.sqrt(r * r - miss) / Math.sqrt(len2)));
+      }
+    }
+    return best;
+  }
+
+  private leafMaterial(tex: THREE.Texture | null, fallback: { map: THREE.Texture; alpha: THREE.Texture } | null) {
+    const m = new THREE.MeshStandardMaterial({
+      map: tex ?? fallback!.map, alphaMap: tex ? null : fallback!.alpha,
+      vertexColors: true, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.82,
+    });
+    windify(m, 0.12, 0.05);
+    // sunlight through the needles when you look towards it
+    chainCompile(m, 'leaf', (sh) => {
+      sh.uniforms.uLeafSun = this.leafSun;
+      sh.uniforms.uLeafCol = this.leafCol;
+      sh.fragmentShader = 'uniform vec3 uLeafSun, uLeafCol;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        vec3 lfL = normalize((viewMatrix * vec4(uLeafSun, 0.0)).xyz);
+        float lfT = pow(clamp(dot(-normalize(vViewPosition), lfL), 0.0, 1.0), 3.0);
+        totalEmissiveRadiance += diffuseColor.rgb * uLeafCol * (0.05 + 0.5 * lfT);`);
+    });
+    return m;
+  }
+
+  private leafSun = { value: new THREE.Vector3(0, 1, 0) };
+  private leafCol = { value: new THREE.Color(1, 1, 1) };
+
+  /** Sun direction and colour for the light passing through the leaves. */
+  setSun(dir: THREE.Vector3, col: THREE.Color) {
+    this.leafSun.value.copy(dir);
+    this.leafCol.value.copy(col);
+  }
+
+  /** Round trunk with a root flare; LODs drop rings. */
+  private trunk(h: number, r: number, bend: number, lod: number): THREE.BufferGeometry {
+    const [radial, rings] = ([[10, 10], [6, 5], [4, 2]] as const)[lod];
+    const g = colorize(bentTrunk(h, r, 0.03, bend, radial, rings), 0x6b5d50, 0.12);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const y = p.getY(i), f = 1 + 0.75 * Math.exp(-y * 1.4 / r * 0.45);
+      p.setX(i, p.getX(i) * f); p.setZ(i, p.getZ(i) * f);
+    }
+    g.computeVertexNormals();
+    return g;
+  }
+
   build() {
-    const T = this.terrain;
-    const variants = buildVariants(this.q.foliageDetail);
-    const solidMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.0, side: THREE.DoubleSide });
-    windify(solidMat, 0.12);
-    applyBark(solidMat, this.q);
-    const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.2, 2.2, 2.2), toneMapped: true });
+    const T = this.terrain, Q = this.q;
+    const atlas = this.cards.fir && this.cards.leaf ? null : foliageAtlas();
+    const barkMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0.0 });
+    windify(barkMat, 0.12);
+    applyBark(barkMat, Q);
+    const firLeaf = this.leafMaterial(this.cards.fir, atlas);
+    const pineLeaf = this.leafMaterial(this.cards.pine ?? this.cards.fir, atlas);
+    const broadLeaf = this.leafMaterial(this.cards.leaf, atlas);
+
+    // trunk and crown LODs of the ordinary forest
+    const treeNear: [number, number] = [Q.lodDistances[0] * 1.3, Q.lodDistances[1] * 1.3];
+    const treeFar = Q.name === 'mobile' ? Q.viewDistance : 2000;
+    const fd = Q.foliageDetail;
+    const conifer = (h: number, r: number, bend: number, crownStart: number, spread: number, leaf: THREE.Material, seed: number): Part[] => [
+      { lods: [0, 1, 2].map((l) => this.trunk(h, r, bend, l)), mat: barkMat, shadow: [true, true, false] },
+      { lods: CROWN_LODS.map((l) => coniferCrown(h, h * crownStart, l, fd, seed, spread)), mat: leaf, shadow: [true, true, true] },
+    ];
+    const lobes: [number, number, number, number][] = [[0, 12.5, 0, 4.4]];
+    for (let i = 0; i < 5; i++) { const a = i * 1.26 + 0.4; lobes.push([Math.cos(-a) * 4.6, 10 + (i % 3) * 1.3, Math.sin(-a) * 4.6, 3.3]); }
+    const broadTrunk = (lod: number) => {
+      const parts = [this.trunk(8.5, 0.55, 0.05, lod)];
+      for (let i = 0; i < (lod === 2 ? 3 : 5); i++) {
+        const a = i * 1.26 + 0.4, b = bentTrunk(7, 0.26, 0.05, 0.26, lod ? 4 : 7, lod ? 3 : 6);
+        place(b, 0.2, 5.8, 0, 0, a, -0.25);
+        parts.push(colorize(b, 0x6b5d50, 0.12));
+      }
+      return mergeGeometries(parts.map((g) => g.toNonIndexed()))!;
+    };
+    const species = [
+      conifer(23, 0.42, 0.015, 0.16, 0.24, firLeaf, 11),
+      conifer(31, 0.55, -0.012, 0.22, 0.2, firLeaf, 12),
+      conifer(21, 0.4, 0.03, 0.58, 0.3, pineLeaf, 13),
+      [
+        { lods: [0, 1, 2].map(broadTrunk), mat: barkMat, shadow: [true, true, false] as [boolean, boolean, boolean] },
+        { lods: CROWN_LODS.map((l) => broadCrown(lobes, l, fd, 14)), mat: broadLeaf, shadow: [true, true, true] as [boolean, boolean, boolean] },
+      ],
+      conifer(4.5, 0.07, 0.01, 0.1, 0.34, firLeaf, 15), // saplings in the undergrowth
+    ];
+    const capTrees = Math.ceil(Q.treeCount * 1.3);
+    const fields = species.map((p) => new Field(capTrees, p, this.group, treeNear, treeFar));
+    this.fields.push(...fields);
+
+    // the alien groves
+    const variants = buildVariants();
+    const alienSolid = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.0, side: THREE.DoubleSide });
+    windify(alienSolid, 0.12);
+    applyBark(alienSolid, Q);
+    const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.2, 1.2, 1.2), toneMapped: true });
     windify(glowMat, 0.12);
     this.glowMats.push(glowMat);
+    const alien = variants.map((v) => {
+      const parts: Part[] = [{ lods: [v.solid], mat: alienSolid, shadow: [true, true, true] }];
+      if (v.glow) parts.push({ lods: [v.glow], mat: glowMat, shadow: [false, false, false] });
+      const f = new Field(Math.ceil(Q.treeCount * 0.04) + 1, parts.map((p) => ({ ...p, lods: [p.lods[0], p.lods[0], p.lods[0]] })), this.group, [1e5, 1e6], Math.min(Q.viewDistance, 420));
+      this.fields.push(f);
+      return f;
+    });
 
     const rnd = mulberry32(77);
     const n = T.noise;
-    const nc = Math.ceil((HALF * 2) / this.cellSize);
-    type Inst = { m: THREE.Matrix4; c: THREE.Color };
-    const buckets: Inst[][][] = []; // [cell][variant]
-    for (let i = 0; i < nc * nc; i++) buckets.push([[], [], [], [], [], [], [], []]);
-    const cellIndex = (x: number, z: number) =>
-      Math.min(nc - 1, Math.floor((x + HALF) / this.cellSize)) + Math.min(nc - 1, Math.floor((z + HALF) / this.cellSize)) * nc;
-
     const nrm = new THREE.Vector3();
     const q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), pos = new THREE.Vector3();
-    let placed = 0, tries = 0;
-    while (placed < this.q.treeCount && tries < this.q.treeCount * 30) {
+    const M = new THREE.Matrix4();
+    let placed = 0, tries = 0, aliens = 0;
+    const forestAt = (x: number, z: number) => n.noise2(x * 0.006 + 40, z * 0.006 - 13) * 0.5 + 0.5;
+    while (placed < Q.treeCount && tries < Q.treeCount * 30) {
       tries++;
-      const x = (rnd() * 2 - 1) * (HALF - 60), z = (rnd() * 2 - 1) * (HALF - 60);
+      const x = (rnd() * 2 - 1) * (HALF - 40), z = (rnd() * 2 - 1) * (HALF - 40);
       const d0 = Math.hypot(x, z);
-      if (d0 < 18) continue;
+      if (d0 < 16) continue;
       const dl = Math.hypot(x - LAKE.x, z - LAKE.z);
       if (dl < LAKE.r + 6) continue;
       if (this.isReserved(x, z, 4)) continue;
       const h = T.height(x, z);
-      if (h < 1.2 || h > 90) continue;
+      if (h < 1.2 || h > 150) continue;
       T.normal(x, z, nrm);
-      if (nrm.y < 0.82) continue;
-      const dens = n.noise2(x * 0.006 + 40, z * 0.006 - 13) * 0.5 + 0.5;
+      if (nrm.y < 0.8) continue;
+      const dens = forestAt(x, z);
       const near = smoothstep(260, 40, d0) * 0.25;
       if (rnd() > smoothstep(0.32, 0.62, dens) + near * 0.4) continue;
+      // treeline: thinner, then gone
+      if (rnd() < smoothstep(95, 150, h)) continue;
       const vSel = n.noise2(x * 0.01 - 3, z * 0.01 + 8);
-      // mostly ordinary forest; the glowing species only in rare groves
-      const rare = n.noise2(x * 0.017 + 9, z * 0.017 + 4) > 0.42;
-      const v = rare ? (vSel < -0.1 ? 2 : vSel < 0.2 ? 0 : 1) : (vSel < -0.12 ? 7 : rnd() < 0.55 ? 5 : 6);
-      const giant = rnd() < 0.025;
-      const sc = (0.7 + rnd() * 0.7) * (giant ? (v >= 5 ? 1.5 : 2.4) : 1);
-      e.set((rnd() - 0.5) * 0.08, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.08);
-      q.setFromEuler(e); s.set(sc, sc * (0.85 + rnd() * 0.3), sc); pos.set(x, h - 0.2, z);
-      const c = new THREE.Color().setHSL(0, 0, 0.8 + rnd() * 0.35);
-      if (rnd() < 0.3) c.multiply(new THREE.Color(1.0, 0.85 + rnd() * 0.2, 1.1));
-      if (v >= 5) c.multiply(new THREE.Color(0.82 + rnd() * 0.4, 0.9 + rnd() * 0.2, 0.74 + rnd() * 0.3));
-      buckets[cellIndex(x, z)][v].push({ m: new THREE.Matrix4().compose(pos, q, s), c });
-      this.addObstacle(x, z, variants[v >= 5 ? v - 2 : v].radius * sc);
+      // far from the crash site, a rare stand of something that isn't quite a tree
+      const grove = d0 > 190 && n.noise2(x * 0.017 + 9, z * 0.017 + 4) > 0.68 && aliens < Q.treeCount * 0.035;
+      const sc = 0.7 + rnd() * 0.65;
+      e.set((rnd() - 0.5) * 0.06, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.06);
+      q.setFromEuler(e); pos.set(x, h - 0.15, z);
+      const c = new THREE.Color().setHSL(0, 0, 0.82 + rnd() * 0.3);
+      c.multiply(new THREE.Color(0.9 + rnd() * 0.2, 0.92 + rnd() * 0.12, 0.8 + rnd() * 0.2));
+      if (grove) {
+        const v = vSel < -0.1 ? 2 : vSel < 0.2 ? 0 : 1;
+        s.setScalar(sc * 0.9);
+        alien[v].add(M.compose(pos, q, s), c);
+        this.addObstacle(x, z, variants[v].radius * sc);
+        aliens++;
+      } else {
+        const low = h < 26 && d0 < 330;
+        const v = low && vSel < -0.25 ? 3 : vSel > 0.22 ? 2 : rnd() < 0.55 ? 0 : 1;
+        const giant = rnd() < 0.03 ? 1.35 : 1;
+        s.set(sc * giant, sc * giant * (0.88 + rnd() * 0.28), sc * giant);
+        fields[v].add(M.compose(pos, q, s), c);
+        this.addObstacle(x, z, (v === 3 ? 0.62 : v === 1 ? 0.6 : 0.46) * sc * giant);
+      }
       placed++;
     }
-
-    // Small glowing ground plants and rocks share the cell structure.
-    const plantSolid = mergeGeometries([
-      colorize(new THREE.CylinderGeometry(0.02, 0.04, 0.6, 5).translate(0, 0.3, 0), 0x2c5a50),
-      colorize(new THREE.CylinderGeometry(0.02, 0.04, 0.45, 5).translate(0, 0.22, 0).rotateZ(0.4), 0x2c5a50),
-      colorize(new THREE.CylinderGeometry(0.02, 0.04, 0.5, 5).translate(0, 0.25, 0).rotateZ(-0.35).rotateY(1.2), 0x2c5a50),
-      colorize(new THREE.SphereGeometry(0.5, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.25, 1), 0x3a6b4a, 0.3),
-    ])!;
-    const plantGlow = mergeGeometries([
-      colorize(new THREE.SphereGeometry(0.07, 6, 4).translate(0, 0.62, 0), 0x6effe0),
-      colorize(new THREE.SphereGeometry(0.06, 6, 4).translate(0.18, 0.43, 0), 0x6effe0),
-      colorize(new THREE.SphereGeometry(0.06, 6, 4).translate(-0.12, 0.47, -0.14), 0xa0ffd8),
-    ])!;
-    const rockGeo = new THREE.IcosahedronGeometry(1, 2);
-    {
-      const p = rockGeo.attributes.position;
-      for (let i = 0; i < p.count; i++) {
-        const vx = p.getX(i), vy = p.getY(i), vz = p.getZ(i);
-        const k = 1 + n.noise2(vx * 1.7 + vz, vy * 1.7) * 0.25 + n.noise2(vx * 4, vz * 4 + vy) * 0.08;
-        p.setXYZ(i, vx * k, vy * k * 0.7, vz * k);
-      }
-      rockGeo.computeVertexNormals();
-      colorize(rockGeo, 0x58525f, 0.2);
+    // saplings
+    for (let i = 0, k = 0; i < Q.treeCount * 6 && k < Q.treeCount * 0.25; i++) {
+      const x = (rnd() * 2 - 1) * (HALF - 60), z = (rnd() * 2 - 1) * (HALF - 60);
+      const h = T.height(x, z);
+      if (h < 1.5 || h > 110 || Math.hypot(x, z) < 10 || this.isReserved(x, z, 2) || rnd() > forestAt(x, z) + 0.1) continue;
+      T.normal(x, z, nrm); if (nrm.y < 0.82) continue;
+      const sc = 0.35 + rnd() * 0.9;
+      e.set(0, rnd() * 6.28, 0); q.setFromEuler(e); pos.set(x, h - 0.05, z); s.setScalar(sc);
+      fields[4].add(M.compose(pos, q, s), new THREE.Color().setHSL(0, 0, 0.8 + rnd() * 0.3));
+      k++;
     }
-    const addSmall = (count: number, slot: number, minH: number, scale: [number, number], obstacle: number) => {
+
+    if (this.pack) this.scatter(rnd, forestAt);
+    this.group.updateMatrixWorld();
+  }
+
+  /** Scanned rocks, dead wood and undergrowth. */
+  private scatter(rnd: () => number, forestAt: (x: number, z: number) => number) {
+    const T = this.terrain, Q = this.q, pack = this.pack!;
+    const mats = new Map<string, THREE.MeshStandardMaterial>();
+    const near = Q.lodDistances;
+    const byKind = new Map<ModelInfo['kind'], { name: string; info: ModelInfo; field: Field }[]>();
+    const counts: Record<ModelInfo['kind'], number> = {
+      rock: Q.rockCount, outcrop: Math.round(Q.rockCount * 0.22), stump: Q.treeCount * 0.035, log: Q.treeCount * 0.04, roots: Q.treeCount * 0.025,
+      branch: Q.plantCount * 0.12, plant: Q.plantCount, shrub: Q.plantCount * 0.22,
+    };
+    const reach: Record<ModelInfo['kind'], number> = {
+      rock: Q.viewDistance * 0.8, outcrop: 2000, stump: 130, log: 180, roots: 130, branch: 70, plant: near[1] * 0.9, shrub: near[1] * 1.3,
+    };
+    for (const name in pack.lods) {
+      const info = pack.info[name];
+      const list = byKind.get(info.kind) ?? [];
+      byKind.set(info.kind, list);
+      const mat = modelMaterial(info, Q, mats);
+      if (info.alpha) windify(mat, 22, 0);
+      const lods = pack.lods[name];
+      const cap = Math.ceil(counts[info.kind] / 1.5) + 4;
+      const big = info.kind === 'outcrop' || info.kind === 'rock';
+      const shadow: [boolean, boolean, boolean] = big ? [true, true, true] : info.kind === 'plant' ? [false, false, false] : [true, true, false];
+      const f = new Field(cap, [{ lods, mat, shadow }], this.group, big ? [near[0] * 1.2, near[1] * 1.6] : near, reach[info.kind]);
+      this.fields.push(f);
+      list.push({ name, info, field: f });
+    }
+    const nrm = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    const q = new THREE.Quaternion(), q2 = new THREE.Quaternion(), s = new THREE.Vector3(), pos = new THREE.Vector3();
+    const M = new THREE.Matrix4(), col = new THREE.Color();
+    const fill = new Map<Field, number>();
+    const put = (kind: ModelInfo['kind'], accept: (x: number, z: number, h: number, ny: number) => number) => {
+      const list = byKind.get(kind);
+      if (!list) return;
       let k = 0, tr = 0;
-      while (k < count && tr < count * 20) {
+      const want = counts[kind];
+      while (k < want && tr < want * 40) {
         tr++;
-        const x = (rnd() * 2 - 1) * (HALF - 60), z = (rnd() * 2 - 1) * (HALF - 60);
+        const x = (rnd() * 2 - 1) * (HALF - 30), z = (rnd() * 2 - 1) * (HALF - 30);
         const h = T.height(x, z);
-        if (h < minH || h > 95) continue;
-        if (Math.hypot(x, z) < 6) continue;
-        if (slot === 4 && this.isReserved(x, z, 1.5)) continue;
-        const sc = scale[0] + rnd() * (scale[1] - scale[0]);
-        e.set(slot === 4 ? rnd() * 3 : 0, rnd() * 6.28, slot === 4 ? rnd() * 3 : 0); q.setFromEuler(e);
-        pos.set(x, h - (slot === 4 ? sc * 0.25 : 0.02), z); s.setScalar(sc);
-        buckets[cellIndex(x, z)][slot].push({ m: new THREE.Matrix4().compose(pos, q, s), c: new THREE.Color().setHSL(0, 0, 0.75 + rnd() * 0.4) });
-        if (obstacle > 0 && sc > 0.8) this.addObstacle(x, z, sc * obstacle);
+        T.normal(x, z, nrm);
+        const sc = accept(x, z, h, nrm.y);
+        if (sc <= 0) continue;
+        const it = list[Math.floor(rnd() * list.length)];
+        const used = fill.get(it.field) ?? 0;
+        if (used >= Math.ceil(want / 1.5) + 3) continue;
+        fill.set(it.field, used + 1);
+        const scale = it.info.height < 0.25 ? sc * 3.2 : sc;   // the small plant scans are shot at 1:1 and sized up here
+        q.setFromAxisAngle(up, rnd() * 6.283);
+        if (kind === 'rock' || kind === 'outcrop' || kind === 'log' || kind === 'roots' || kind === 'branch') {
+          q2.setFromUnitVectors(up, nrm);
+          q.premultiply(q2);
+        }
+        const sink = kind === 'outcrop' ? it.info.height * scale * 0.28 : kind === 'rock' ? it.info.height * scale * 0.2 : kind === 'stump' ? 0.05 : 0.02;
+        pos.set(x, h - sink, z);
+        s.setScalar(scale);
+        col.setHSL(0, 0, 0.78 + rnd() * 0.3);
+        if (kind === 'plant' || kind === 'shrub') col.multiply(tmpC.setRGB(0.86 + rnd() * 0.2, 0.92 + rnd() * 0.1, 0.72 + rnd() * 0.2));
+        it.field.add(M.compose(pos, q, s), col);
+        const r = it.info.radius * scale;
+        if ((kind === 'rock' || kind === 'outcrop' || kind === 'stump') && r > 0.55) this.addObstacle(x, z, r * 0.72);
         k++;
       }
     };
-    addSmall(this.q.plantCount, 3, 0.3, [0.7, 1.6], 0);
-    addSmall(this.q.rockCount, 4, -1.5, [0.3, 2.2], 0.8);
-
-    const atlas = foliageAtlas();
-    const leafMat = new THREE.MeshStandardMaterial({ map: atlas.map, alphaMap: atlas.alpha, vertexColors: true, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.85 });
-    windify(leafMat, 0.12);
-    // a little light through the leaves
-    chainCompile(leafMat, 'leaf', (sh) => {
-      sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += diffuseColor.rgb * vec3(0.05, 0.08, 0.03);`);
-    });
-    const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
-    applyRock(rockMat, this.q);
-    const plantMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
-    windify(plantMat, 2.5);
-    const plantGlowMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.4, 2.4, 2.4) });
-    windify(plantGlowMat, 2.5);
-    this.glowMats.push(plantGlowMat);
-
-    for (let ci = 0; ci < nc * nc; ci++) {
-      const cell = new THREE.Group();
-      cell.userData.center = new THREE.Vector3(
-        -HALF + ((ci % nc) + 0.5) * this.cellSize, 0, -HALF + (Math.floor(ci / nc) + 0.5) * this.cellSize,
-      );
-      const make = (geo: THREE.BufferGeometry, mat: THREE.Material, list: Inst[], shadow: boolean) => {
-        if (!list.length) return;
-        const im = new THREE.InstancedMesh(geo, mat, list.length);
-        list.forEach((it, i) => { im.setMatrixAt(i, it.m); im.setColorAt(i, it.c); });
-        im.castShadow = shadow; im.receiveShadow = true;
-        im.computeBoundingSphere();
-        cell.add(im);
-      };
-      for (let v = 0; v < 3; v++) {
-        make(variants[v].solid, solidMat, buckets[ci][v], true);
-        make(variants[v].glow!, glowMat, buckets[ci][v], false);
-      }
-      for (let v = 5; v < 8; v++) {
-        const tv = variants[v - 2];
-        make(tv.solid, solidMat, buckets[ci][v], true);
-        make(tv.leaf!, leafMat, buckets[ci][v], true);
-      }
-      make(plantSolid, plantMat, buckets[ci][3], false);
-      make(plantGlow, plantGlowMat, buckets[ci][3], false);
-      make(rockGeo, rockMat, buckets[ci][4], true);
-      if (cell.children.length) { this.cells.push(cell); this.group.add(cell); }
-    }
+    const clear = (x: number, z: number, pad: number) => !this.isReserved(x, z, pad) && Math.hypot(x, z) > 7;
+    put('outcrop', (x, z, h, ny) => (ny < 0.9 && h > 6 && clear(x, z, 5) ? 1.1 + rnd() * rnd() * 5.5 : 0));
+    put('rock', (x, z, h, ny) => (h > -1.2 && h < 160 && clear(x, z, 2) ? 0.2 + rnd() * rnd() * 1.4 : 0));
+    put('stump', (x, z, h, ny) => (h > 1.5 && ny > 0.85 && forestAt(x, z) > 0.42 && clear(x, z, 2) ? 0.8 + rnd() * 0.7 : 0));
+    put('log', (x, z, h, ny) => (h > 1.5 && ny > 0.86 && forestAt(x, z) > 0.42 && clear(x, z, 3) ? 0.9 + rnd() * 1.1 : 0));
+    put('roots', (x, z, h, ny) => (h > 1.5 && ny > 0.85 && forestAt(x, z) > 0.4 && clear(x, z, 2) ? 0.9 + rnd() * 0.8 : 0));
+    put('branch', (x, z, h, ny) => (h > 1 && ny > 0.85 && clear(x, z, 1.5) ? 0.8 + rnd() * 0.9 : 0));
+    put('shrub', (x, z, h, ny) => (h > 1.4 && h < 110 && ny > 0.83 && clear(x, z, 2) && rnd() < forestAt(x, z) + 0.15 ? 0.45 + rnd() * 0.8 : 0));
+    put('plant', (x, z, h, ny) => (h > 0.8 && h < 110 && ny > 0.82 && clear(x, z, 1) && rnd() < forestAt(x, z) * 1.3 ? 0.8 + rnd() * 1.1 : 0));
   }
 
-  /** Distance-cull whole cells. */
+  /** Rebuilds the instance lists a few at a time; all of them after a long move. */
   update(cam: THREE.Vector3) {
-    const vd = this.q.viewDistance + this.cellSize * 0.7;
-    for (const c of this.cells) {
-      const ctr = c.userData.center as THREE.Vector3;
-      c.visible = Math.hypot(ctr.x - cam.x, ctr.z - cam.z) < vd;
+    const moved = this.last.distanceToSquared(tmpV.set(cam.x, cam.z));
+    if (moved > 16) { this.last.copy(tmpV); this.dirty = this.fields.length; }
+    if (moved > 40 * 40) {
+      for (const f of this.fields) f.refresh(cam.x, cam.z);
+      this.dirty = 0;
+      return;
+    }
+    for (let i = 0; i < 4 && this.dirty > 0; i++) {
+      this.fields[this.refreshAt % this.fields.length].refresh(cam.x, cam.z);
+      this.refreshAt++;
+      this.dirty--;
     }
   }
 
@@ -371,3 +546,5 @@ export class Forest {
     for (const m of this.glowMats) m.color.setScalar(k);
   }
 }
+const tmpC = new THREE.Color();
+const tmpV = new THREE.Vector2();

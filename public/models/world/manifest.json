@@ -1,0 +1,392 @@
+{
+"boulder_a": {
+"set": "boulder_01",
+"kind": "rock",
+"alpha": false,
+"radius": 0.982,
+"height": 1.004,
+"tris": [
+5382,
+2524,
+295
+],
+"source": "https://polyhaven.com/a/boulder_01"
+},
+"boulder_b": {
+"set": "namaqualand_boulder_03",
+"kind": "rock",
+"alpha": false,
+"radius": 1.534,
+"height": 1.473,
+"tris": [
+5000,
+1298,
+280
+],
+"source": "https://polyhaven.com/a/namaqualand_boulder_03"
+},
+"boulder_c": {
+"set": "namaqualand_boulder_04",
+"kind": "rock",
+"alpha": false,
+"radius": 1.512,
+"height": 1.9,
+"tris": [
+4998,
+1300,
+278
+],
+"source": "https://polyhaven.com/a/namaqualand_boulder_04"
+},
+"moss_a": {
+"set": "rock_moss_set_01",
+"kind": "rock",
+"alpha": false,
+"radius": 1.943,
+"height": 1.473,
+"tris": [
+5000,
+1298,
+278
+],
+"source": "https://polyhaven.com/a/rock_moss_set_01"
+},
+"moss_b": {
+"set": "rock_moss_set_01",
+"kind": "rock",
+"alpha": false,
+"radius": 1.277,
+"height": 1.768,
+"tris": [
+5000,
+1300,
+278
+],
+"source": "https://polyhaven.com/a/rock_moss_set_01"
+},
+"moss_c": {
+"set": "rock_moss_set_01",
+"kind": "rock",
+"alpha": false,
+"radius": 1.515,
+"height": 1.205,
+"tris": [
+4998,
+1300,
+278
+],
+"source": "https://polyhaven.com/a/rock_moss_set_01"
+},
+"moss_d": {
+"set": "rock_moss_set_02",
+"kind": "rock",
+"alpha": false,
+"radius": 0.927,
+"height": 0.736,
+"tris": [
+5000,
+1298,
+276
+],
+"source": "https://polyhaven.com/a/rock_moss_set_02"
+},
+"moss_e": {
+"set": "rock_moss_set_02",
+"kind": "rock",
+"alpha": false,
+"radius": 1.108,
+"height": 0.768,
+"tris": [
+5000,
+1298,
+280
+],
+"source": "https://polyhaven.com/a/rock_moss_set_02"
+},
+"outcrop_a": {
+"set": "rock_face_01",
+"kind": "outcrop",
+"alpha": false,
+"radius": 2.872,
+"height": 3.564,
+"tris": [
+9000,
+2600,
+700
+],
+"source": "https://polyhaven.com/a/rock_face_01"
+},
+"outcrop_b": {
+"set": "rock_face_02",
+"kind": "outcrop",
+"alpha": false,
+"radius": 1.719,
+"height": 2.472,
+"tris": [
+8999,
+2599,
+700
+],
+"source": "https://polyhaven.com/a/rock_face_02"
+},
+"outcrop_c": {
+"set": "mountainside",
+"kind": "outcrop",
+"alpha": false,
+"radius": 5.311,
+"height": 10.522,
+"tris": [
+8998,
+2598,
+698
+],
+"source": "https://polyhaven.com/a/mountainside"
+},
+"outcrop_d": {
+"set": "namaqualand_cliff_01",
+"kind": "outcrop",
+"alpha": false,
+"radius": 4.529,
+"height": 4.961,
+"tris": [
+8996,
+2597,
+700
+],
+"source": "https://polyhaven.com/a/namaqualand_cliff_01"
+},
+"stump_a": {
+"set": "tree_stump_01",
+"kind": "stump",
+"alpha": false,
+"radius": 0.918,
+"height": 0.573,
+"tris": [
+4499,
+1200,
+278
+],
+"source": "https://polyhaven.com/a/tree_stump_01"
+},
+"stump_b": {
+"set": "tree_stump_02",
+"kind": "stump",
+"alpha": false,
+"radius": 0.807,
+"height": 0.522,
+"tris": [
+4499,
+1200,
+279
+],
+"source": "https://polyhaven.com/a/tree_stump_02"
+},
+"log_a": {
+"set": "dead_tree_trunk",
+"kind": "log",
+"alpha": false,
+"radius": 1.526,
+"height": 0.29,
+"tris": [
+4498,
+1198,
+278
+],
+"source": "https://polyhaven.com/a/dead_tree_trunk"
+},
+"log_b": {
+"set": "dead_tree_trunk_02",
+"kind": "log",
+"alpha": false,
+"radius": 2.038,
+"height": 1.055,
+"tris": [
+4494,
+1194,
+264
+],
+"source": "https://polyhaven.com/a/dead_tree_trunk_02"
+},
+"roots_a": {
+"set": "pine_roots",
+"kind": "roots",
+"alpha": false,
+"radius": 0.911,
+"height": 0.144,
+"tris": [
+4499,
+1196,
+266
+],
+"source": "https://polyhaven.com/a/pine_roots"
+},
+"roots_b": {
+"set": "root_cluster_01",
+"kind": "roots",
+"alpha": false,
+"radius": 2.114,
+"height": 1.509,
+"tris": [
+4978,
+1869,
+270
+],
+"source": "https://polyhaven.com/a/root_cluster_01"
+},
+"branch_a": {
+"set": "dry_branches_medium_01",
+"kind": "branch",
+"alpha": false,
+"radius": 0.668,
+"height": 0.341,
+"tris": [
+1498,
+498,
+120
+],
+"source": "https://polyhaven.com/a/dry_branches_medium_01"
+},
+"branch_b": {
+"set": "dry_branches_medium_01",
+"kind": "branch",
+"alpha": false,
+"radius": 0.77,
+"height": 0.341,
+"tris": [
+1498,
+494,
+108
+],
+"source": "https://polyhaven.com/a/dry_branches_medium_01"
+},
+"fern_a": {
+"set": "fern_02",
+"kind": "plant",
+"alpha": true,
+"radius": 0.655,
+"height": 0.428,
+"tris": [
+2384,
+900,
+259
+],
+"source": "https://polyhaven.com/a/fern_02"
+},
+"fern_b": {
+"set": "fern_02",
+"kind": "plant",
+"alpha": true,
+"radius": 0.49,
+"height": 0.349,
+"tris": [
+2248,
+900,
+259
+],
+"source": "https://polyhaven.com/a/fern_02"
+},
+"fern_c": {
+"set": "fern_02",
+"kind": "plant",
+"alpha": true,
+"radius": 0.351,
+"height": 0.287,
+"tris": [
+784,
+784,
+258
+],
+"source": "https://polyhaven.com/a/fern_02"
+},
+"shrub_a": {
+"set": "shrub_02",
+"kind": "shrub",
+"alpha": true,
+"radius": 0.926,
+"height": 1.689,
+"tris": [
+3499,
+1398,
+399
+],
+"source": "https://polyhaven.com/a/shrub_02"
+},
+"shrub_b": {
+"set": "shrub_02",
+"kind": "shrub",
+"alpha": true,
+"radius": 0.829,
+"height": 1.506,
+"tris": [
+3499,
+1398,
+400
+],
+"source": "https://polyhaven.com/a/shrub_02"
+},
+"shrub_c": {
+"set": "shrub_02",
+"kind": "shrub",
+"alpha": true,
+"radius": 1.262,
+"height": 1.315,
+"tris": [
+3499,
+1398,
+400
+],
+"source": "https://polyhaven.com/a/shrub_02"
+},
+"nettle_a": {
+"set": "nettle_plant",
+"kind": "plant",
+"alpha": true,
+"radius": 0.054,
+"height": 0.217,
+"tris": [
+2398,
+899,
+259
+],
+"source": "https://polyhaven.com/a/nettle_plant"
+},
+"nettle_b": {
+"set": "nettle_plant",
+"kind": "plant",
+"alpha": true,
+"radius": 0.046,
+"height": 0.131,
+"tris": [
+2399,
+899,
+260
+],
+"source": "https://polyhaven.com/a/nettle_plant"
+},
+"weed_a": {
+"set": "weed_plant_02",
+"kind": "plant",
+"alpha": true,
+"radius": 0.169,
+"height": 0.072,
+"tris": [
+2400,
+900,
+259
+],
+"source": "https://polyhaven.com/a/weed_plant_02"
+},
+"weed_b": {
+"set": "weed_plant_02",
+"kind": "plant",
+"alpha": true,
+"radius": 0.116,
+"height": 0.068,
+"tris": [
+2273,
+898,
+260
+],
+"source": "https://polyhaven.com/a/weed_plant_02"
+}
+}

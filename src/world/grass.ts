@@ -18,15 +18,18 @@ export function createGrass(terrain: Terrain, q: Quality) {
     const a = rb() * Math.PI * 2, ox = (rb() - 0.5) * 0.26, oz = (rb() - 0.5) * 0.26;
     const h = 0.34 + rb() * 0.34, w = 0.012 + rb() * 0.012, lean = 0.12 + rb() * 0.3;
     const ca = Math.cos(a), sa = Math.sin(a), base = pos.length / 3;
+    // three segments with one shared tip vertex: 7 vertices, 5 triangles a blade
     for (let r = 0; r <= 3; r++) {
-      const t = r / 3, ww = r === 3 ? 0 : w * (1 - t * 0.7);
+      const t = r / 3, ww = w * (1 - t * 0.7);
       const fw = lean * t * t * h; // curve outwards
       const cx = ox + ca * fw, cz = oz + sa * fw, y = h * (t - lean * 0.2 * t * t);
+      if (r === 3) { pos.push(cx, y, cz); nor.push(0, 1, 0); uv.push(0.5, t); continue; }
       pos.push(cx - sa * ww, y, cz + ca * ww, cx + sa * ww, y, cz - ca * ww);
       nor.push(0, 1, 0, 0, 1, 0);
       uv.push(0, t, 1, t);
     }
-    for (let r = 0; r < 3; r++) { const i = base + r * 2; idx.push(i, i + 1, i + 2, i + 2, i + 1, i + 3); }
+    for (let r = 0; r < 2; r++) { const i = base + r * 2; idx.push(i, i + 1, i + 2, i + 2, i + 1, i + 3); }
+    idx.push(base + 4, base + 5, base + 6);
   }
   const blade = new THREE.BufferGeometry();
   blade.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -76,9 +79,9 @@ export function createGrass(terrain: Terrain, q: Quality) {
       vec2 local = aOffset.xy;
       vec2 wp = local + floor((uCenter - local) / span + 0.5) * span;
       float hgt = th(wp);
-      float hx = th(wp + vec2(1.5, 0.0)) - th(wp - vec2(1.5, 0.0));
-      float hz = th(wp + vec2(0.0, 1.5)) - th(wp - vec2(0.0, 1.5));
-      float slope = length(vec2(hx, hz)) / 3.0;
+      float hx = th(wp + vec2(2.0, 0.0)) - hgt;
+      float hz = th(wp + vec2(0.0, 2.0)) - hgt;
+      float slope = length(vec2(hx, hz)) * 0.5;
       float patchK = gh(floor(wp * 0.12)) * 0.4 + 0.6 * (0.5 + 0.5 * sin(wp.x * 0.07 + sin(wp.y * 0.05) * 2.0));
       float dist = length(wp - uCenter) / uRadius;
       float s = (0.7 + aOffset.w * 0.75) * smoothstep(0.6, 1.4, hgt) * (1.0 - smoothstep(0.35, 0.6, slope)) * smoothstep(1.0, 0.75, dist) * smoothstep(0.15, 0.45, patchK);

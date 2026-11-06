@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { t } from '../i18n';
 import { voice } from '../core/voice';
+import { Renderer } from '../core/renderer';
 import type { Character, CrewId, CrewPose } from '../characters/character';
 
 export type Who = CrewId | 'megazron';
 
 /** A camera set-up: `from` looks at `to`; `push` drifts towards the subject. */
-export interface Shot { from: THREE.Vector3; to: THREE.Vector3; push?: number; roll?: number }
+export interface Shot { from: THREE.Vector3; to: THREE.Vector3; push?: number; roll?: number; /** Lens blur override (fraction of screen height). */ aperture?: number }
 
 export interface Beat {
   /** i18n key of the line (also its voice file). */
@@ -118,6 +119,9 @@ export class Cutscene {
       cam.up.set(0, 1, 0);
       cam.lookAt(s.to);
       if (s.roll) cam.rotateZ(s.roll);
+      // focus on the subject; a close-up has a shallower field than a wide shot
+      const d = cam.position.distanceTo(s.to);
+      Renderer.current?.setDof(d, s.aperture ?? Math.min(0.016, 0.022 / Math.max(d, 1)));
     }
   }
 
@@ -125,6 +129,7 @@ export class Cutscene {
 
   private end() {
     this.done = true;
+    Renderer.current?.setDof(0, 0);
     this.ctx.subtitle(null);
     voice.stop();
     this.ctx.onDone();

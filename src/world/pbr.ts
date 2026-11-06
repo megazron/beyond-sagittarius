@@ -24,7 +24,7 @@ export function chainCompile(mat: THREE.Material, tag: string, fn: (sh: THREE.We
  * a faint version of the bark relief so they read as organic, not plastic.
  */
 export function applyBark(mat: THREE.MeshStandardMaterial, q: Quality) {
-  const u = { uMean: { value: new THREE.Vector3(0.5, 0.5, 0.5) }, uChroma: { value: 0.3 } };
+  const u = { uMean: { value: new THREE.Vector3(0.5, 0.5, 0.5) }, uChroma: { value: 0.9 } };
   chainCompile(mat, 'bark', (sh) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = 'attribute float aBark; varying float vBark;\n' + sh.vertexShader.replace(
@@ -40,13 +40,12 @@ export function applyBark(mat: THREE.MeshStandardMaterial, q: Quality) {
     ).replace('mapN.xy *= normalScale;', 'mapN.xy *= normalScale * mix(0.3, 1.0, vBark);')
       .replace('roughnessFactor *= texelRoughness.g;', 'roughnessFactor *= mix(1.0, texelRoughness.g * 1.1, vBark);');
   });
-  loadSet('bark', ['diff', 'nor', 'arm'], capSize(q.texSize, '1k')).then((s) => {
+  loadSet('bark_fir', ['diff', 'nor'], q.texSize === '4k' ? '4k' : capSize(q.texSize, '1k')).then((s) => {
     if (!s.diff) return;
     const m = meanColor(s.diff);
     u.uMean.value.set(m.r, m.g, m.b);
     mat.map = s.diff;
-    if (s.nor) { mat.normalMap = s.nor; mat.normalScale.setScalar(1.2); }
-    if (s.arm) mat.roughnessMap = s.arm;
+    if (s.nor) { mat.normalMap = s.nor; mat.normalScale.setScalar(1.4); }
     mat.needsUpdate = true;
   });
 }

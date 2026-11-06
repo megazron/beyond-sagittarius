@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mulberry32, lerp } from '../core/noise';
 
 /**
- * Leafy canopies built from alpha-tested cards. The atlas is painted at start-up
- * (no download): left half = a needle spray, right half = a broad-leaf cluster.
- * Card normals point away from the crown centre, the usual trick that makes a
- * pile of quads light like one soft volume.
+ * Tree crowns built from alpha-tested cards carrying real scans: boughs composed
+ * from Poly Haven twig and leaf sheets (tools/fetch_assets.py). Each sheet has a
+ * long bough on the left half and a spray on the right. Card normals are bent
+ * away from the crown axis, the usual trick that makes a pile of quads light
+ * like one soft volume. `foliageAtlas` paints a stand-in if the sheets can't load.
  */
 export function foliageAtlas(): { map: THREE.CanvasTexture; alpha: THREE.CanvasTexture } {
   const S = 1024, c = document.createElement('canvas');
@@ -62,77 +63,120 @@ export function foliageAtlas(): { map: THREE.CanvasTexture; alpha: THREE.CanvasT
   return { map, alpha };
 }
 
-/** One card: `half` 0 = needle, 1 = broad cluster. Bottom-centre at the origin. */
-function card(w: number, h: number, half: 0 | 1, center: boolean) {
-  const g = new THREE.PlaneGeometry(w, h);
-  g.translate(0, center ? 0 : h / 2, 0);
-  const uv = g.attributes.uv;
-  for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * 0.5 + half * 0.5);
-  return g;
-}
 
-function outward(g: THREE.BufferGeometry, c: THREE.Vector3, k = 0.75) {
-  const p = g.attributes.position, n = g.attributes.normal;
-  const v = new THREE.Vector3(), m = new THREE.Vector3();
-  for (let i = 0; i < p.count; i++) {
-    v.set(p.getX(i), p.getY(i), p.getZ(i)).sub(c).normalize();
-    m.set(n.getX(i), n.getY(i), n.getZ(i)).lerp(v, k).normalize();
-    n.setXYZ(i, m.x, m.y, m.z);
-  }
-}
+export interface CrownLod { whorls: number; per: number; segs: number; widen: number; layers: number }
 
-function tint(g: THREE.BufferGeometry, r: number, gg: number, b: number) {
-  const n = g.attributes.position.count, a = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) { a[i * 3] = r; a[i * 3 + 1] = gg; a[i * 3 + 2] = b; }
-  g.setAttribute('color', new THREE.BufferAttribute(a, 3));
-}
+/** Quality levels of a crown: LOD 0 close-up, LOD 1 mid-distance, LOD 2 a handful of big cards. */
+export const CROWN_LODS: CrownLod[] = [
+  { whorls: 22, per: 7, segs: 3, widen: 1, layers: 2 },
+  { whorls: 14, per: 5, segs: 2, widen: 1.5, layers: 1 },
+  { whorls: 7, per: 4, segs: 1, widen: 2.4, layers: 1 },
+];
 
-const place = (g: THREE.BufferGeometry, pos: THREE.Vector3, e: THREE.Euler) => {
-  g.applyMatrix4(new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromEuler(e), new THREE.Vector3(1, 1, 1)));
+interface Mesh { pos: number[]; nor: number[]; uv: number[]; col: number[]; idx: number[] }
+
+const toGeometry = (m: Mesh) => {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(m.pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(m.nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(m.uv, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(m.col, 3));
+  g.setIndex(m.idx);
   return g;
 };
 
-/** Conifer-like spire: whorls of drooping needle sprays, smaller towards the tip. */
-export function spireCanopy(height: number, base: number, detail: number): THREE.BufferGeometry {
-  const parts: THREE.BufferGeometry[] = [];
-  const whorls = Math.round(13 * detail);
-  const axis = new THREE.Vector3(0, height * 0.55, 0);
-  for (let i = 0; i < whorls; i++) {
-    const k = i / (whorls - 1);
-    const y = base + (height - base) * Math.pow(k, 0.9);
-    const len = (1 - k) * height * 0.26 + 0.7;
-    const per = Math.max(3, Math.round((7 - k * 3) * detail));
-    for (let j = 0; j < per; j++) {
-      const a = ((j + (i % 2) * 0.5) / per) * Math.PI * 2 + Math.random() * 0.4;
-      const g = card(len * 0.85, len * 1.15, 0, false);
-      // lay the spray out along the branch, tilted down at the tip
-      place(g, new THREE.Vector3(0, y, 0), new THREE.Euler(1.2 + k * 0.35 + Math.random() * 0.25, a, 0, 'YXZ'));
-      outward(g, axis, 0.55);
-      const v = 0.62 + k * 0.5 + Math.random() * 0.12;
-      tint(g, v, v, v);
-      parts.push(g);
+const v = new THREE.Vector3(), side = new THREE.Vector3(), dir = new THREE.Vector3(), nrm = new THREE.Vector3(), out = new THREE.Vector3();
+
+/**
+ * One bough: a curved strip of `segs` quads from `root`, heading along azimuth
+ * `az`, drooping as it goes. `roll` turns the card around the bough's own axis.
+ */
+function bough(m: Mesh, root: THREE.Vector3, az: number, rise: number, droop: number, len: number, width: number, roll: number, segs: number, half: 0 | 1, shade: number, axisY: number) {
+  const ca = Math.cos(az), sa = Math.sin(az);
+  side.set(-sa, 0, ca).multiplyScalar(Math.cos(roll)).add(new THREE.Vector3(0, Math.sin(roll), 0)).normalize();
+  const base = m.pos.length / 3;
+  let px = root.x, py = root.y, pz = root.z;
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs;
+    if (i > 0) {
+      const slope = rise - droop * t;
+      const step = len / segs;
+      px += ca * step; pz += sa * step; py += slope * step;
+    }
+    const w = width * (i === segs ? 0.55 : 0.5 + 0.5 * Math.sin(Math.min(1, t * 1.6 + 0.2) * Math.PI / 2));
+    for (const s of [-1, 1]) {
+      v.set(px, py, pz).addScaledVector(side, s * w * 0.5);
+      m.pos.push(v.x, v.y, v.z);
+      out.set(v.x, (v.y - axisY) * 0.6, v.z).normalize();
+      nrm.set(0, 1, 0).lerp(out, 0.65).normalize();
+      m.nor.push(nrm.x, nrm.y, nrm.z);
+      m.uv.push(half * 0.5 + (s + 1) * 0.25, t * 0.98 + 0.01);
+      // inner needles sit in the shade of the crown, tips catch the sky
+      const c = shade * (0.55 + 0.6 * t);
+      m.col.push(c, c, c);
     }
   }
-  return mergeGeometries(parts)!;
+  for (let i = 0; i < segs; i++) {
+    const a = base + i * 2;
+    m.idx.push(a, a + 1, a + 2, a + 2, a + 1, a + 3);
+  }
 }
 
-/** Rounded broad-leaf crown: overlapping cluster cards around the crown volume. */
-export function crownCanopy(centres: [number, number, number, number][], detail: number): THREE.BufferGeometry {
-  const parts: THREE.BufferGeometry[] = [];
-  for (const [cx, cy, cz, r] of centres) {
-    const c = new THREE.Vector3(cx, cy, cz);
-    const n = Math.round(11 * detail);
-    for (let i = 0; i < n; i++) {
-      const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, q = Math.sqrt(1 - u * u);
-      const d = new THREE.Vector3(q * Math.cos(a), u * 0.72, q * Math.sin(a)).multiplyScalar(r * (0.5 + Math.random() * 0.45));
-      const s = r * (0.95 + Math.random() * 0.5);
-      const g = card(s, s, 1, true);
-      place(g, c.clone().add(d), new THREE.Euler(Math.random() * 1.6 - 0.8, a + Math.PI / 2, Math.random() * 3));
-      outward(g, c, 0.85);
-      const v = 0.5 + (0.5 + u * 0.5) * 0.65;
-      tint(g, v, v, v);
-      parts.push(g);
+/**
+ * Conifer crown. `base` is where the crown starts; `shape` 1 is a narrow fir, 0.6
+ * a looser pine. Fixed seed so all LODs of a tree agree.
+ */
+export function coniferCrown(height: number, base: number, lod: CrownLod, detail: number, seed: number, spread = 0.25, rng = mulberry32(seed)): THREE.BufferGeometry {
+  const m: Mesh = { pos: [], nor: [], uv: [], col: [], idx: [] };
+  const whorls = Math.max(3, Math.round(lod.whorls * Math.min(detail, 1.2)));
+  const root = new THREE.Vector3();
+  for (let i = 0; i < whorls; i++) {
+    const k = i / (whorls - 1);
+    const y = base + (height - base) * Math.pow(k, 0.92);
+    const len = Math.pow(1 - k, 0.85) * height * spread + 0.45;
+    const per = Math.max(2, Math.round(lod.per * (1 - k * 0.45)));
+    const rise = lerp(-0.38, 0.75, k * k) + 0.06;
+    for (let j = 0; j < per; j++) {
+      const az = ((j + (i % 2) * 0.5) / per) * Math.PI * 2 + (rng() - 0.5) * 0.7;
+      const L = len * (0.82 + rng() * 0.36);
+      const shade = 0.72 + k * 0.42 + rng() * 0.12;
+      root.set(Math.cos(az) * 0.06, y + (rng() - 0.5) * (height / whorls) * 0.6, Math.sin(az) * 0.06);
+      for (let l = 0; l < lod.layers; l++) {
+        const roll = (l === 0 ? 0.16 : -0.75) + (rng() - 0.5) * 0.5;
+        bough(m, root, az + (l ? (rng() - 0.5) * 0.5 : 0), rise - l * 0.12, 0.55 + rng() * 0.3, L, L * 0.72 * lod.widen, roll, lod.segs, l === 0 ? 0 : 1, shade * (l ? 0.85 : 1), height * 0.5);
+      }
     }
   }
-  return mergeGeometries(parts)!;
+  return toGeometry(m);
+}
+
+/** Broad-leaf crown: sprays facing outwards around several lobes. */
+export function broadCrown(lobes: [number, number, number, number][], lod: CrownLod, detail: number, seed: number): THREE.BufferGeometry {
+  const rng = mulberry32(seed);
+  const m: Mesh = { pos: [], nor: [], uv: [], col: [], idx: [] };
+  const n = Math.max(3, Math.round(lod.whorls * lod.per * 0.14 * Math.min(detail, 1.2)));
+  const c = new THREE.Vector3(), d = new THREE.Vector3(), u = new THREE.Vector3(), w = new THREE.Vector3();
+  for (const [cx, cy, cz, r] of lobes) {
+    c.set(cx, cy, cz);
+    for (let i = 0; i < n; i++) {
+      const y = rng() * 2 - 1, a = rng() * Math.PI * 2, q = Math.sqrt(1 - y * y);
+      d.set(q * Math.cos(a), y * 0.8, q * Math.sin(a));
+      const p = c.clone().addScaledVector(d, r * (0.45 + rng() * 0.5));
+      const s = r * (0.95 + rng() * 0.5) * Math.sqrt(lod.widen);
+      u.set(rng() - 0.5, rng() - 0.5, rng() - 0.5).cross(d).normalize();
+      w.crossVectors(d, u).normalize();
+      const base = m.pos.length / 3;
+      const lit = 0.55 + (y * 0.5 + 0.5) * 0.6;
+      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+        v.copy(p).addScaledVector(u, sx * s * 0.5).addScaledVector(w, sy * s * 0.5);
+        m.pos.push(v.x, v.y, v.z);
+        nrm.copy(v).sub(c).normalize().lerp(d, 0.4).normalize();
+        m.nor.push(nrm.x, nrm.y, nrm.z);
+        m.uv.push(0.5 + (sx + 1) * 0.25, (sy + 1) * 0.5);
+        m.col.push(lit, lit, lit);
+      }
+      m.idx.push(base, base + 1, base + 2, base + 2, base + 1, base + 3);
+    }
+  }
+  return toGeometry(m);
 }
