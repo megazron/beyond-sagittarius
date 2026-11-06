@@ -14,12 +14,10 @@ sys.path.insert(0, str(ROOT / "tools"))
 from smoke import launch  # noqa: E402
 
 BRAND = ROOT / "public" / "brand"
-BACKDROP = ROOT / "docs" / "brand-backdrop.jpg"  # a frame of Sagittarius A* from the cinematic
 
 
 def data_uri(path: pathlib.Path) -> str:
-    kind = {".svg": "image/svg+xml", ".jpg": "image/jpeg"}[path.suffix]
-    return f"data:{kind};base64,{base64.b64encode(path.read_bytes()).decode()}"
+    return f"data:image/svg+xml;base64,{base64.b64encode(path.read_bytes()).decode()}"
 
 
 def export(page, svg: str, out: pathlib.Path, w: int, h: int):
@@ -31,11 +29,24 @@ def export(page, svg: str, out: pathlib.Path, w: int, h: int):
 
 
 def social(page, out: pathlib.Path):
+    """1280x640 card: seeded starfield, a soft nebula and the logo."""
     page.set_viewport_size({"width": 1280, "height": 640})
-    page.set_content(f"""<body style="margin:0;width:1280px;height:640px;overflow:hidden;position:relative;background:#05070d">
-      <img src="{data_uri(BACKDROP)}" style="position:absolute;inset:0;width:1280px;height:640px;object-fit:cover;object-position:50% 50%">
-      <div style="position:absolute;inset:0;background:radial-gradient(ellipse 62% 70% at 50% 50%,rgba(5,7,13,.8),rgba(5,7,13,.45) 70%,rgba(5,7,13,.2))"></div>
-      <img src="{data_uri(BRAND / 'logo.svg')}" style="position:absolute;left:50%;top:50%;width:820px;transform:translate(-50%,-50%)">
+    page.set_content(f"""<body style="margin:0;width:1280px;height:640px;overflow:hidden;position:relative;
+        background:radial-gradient(ellipse 46% 60% at 58% 44%,rgba(255,150,70,.20),transparent 70%),
+                   radial-gradient(ellipse 60% 80% at 30% 62%,rgba(96,60,190,.26),transparent 72%),
+                   radial-gradient(ellipse 50% 70% at 84% 30%,rgba(40,130,200,.18),transparent 70%),#05070d">
+      <canvas id="s" width="1280" height="640" style="position:absolute;inset:0"></canvas>
+      <img src="{data_uri(BRAND / 'logo.svg')}" style="position:absolute;left:50%;top:50%;width:860px;transform:translate(-50%,-50%);filter:drop-shadow(0 0 30px rgba(120,200,255,.3))">
+      <script>
+        let seed = 2189; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+        const c = document.getElementById('s').getContext('2d');
+        for (let i = 0; i < 700; i++) {{
+          const m = r() ** 3, tint = r();
+          c.fillStyle = tint < .15 ? '#ffd9b0' : tint < .35 ? '#bfe0ff' : '#ffffff';
+          c.globalAlpha = .18 + m * .8;
+          c.beginPath(); c.arc(r() * 1280, r() * 640, .4 + m * 1.3, 0, 7); c.fill();
+        }}
+      </script>
     </body>""")
     page.wait_for_function("[...document.images].every(i => i.complete)")
     page.screenshot(path=str(out))
@@ -54,8 +65,7 @@ def main():
             export(page, "logo-mark.svg", BRAND / f"logo-mark-{size}.png", size, size)
         export(page, "app-icon.svg", ROOT / "electron" / "build" / "icon.png", 1024, 1024)
         export(page, "app-icon.svg", BRAND / "apple-touch-icon.png", 180, 180)
-        if BACKDROP.exists():
-            social(page, ROOT / "docs" / "social-preview.png")
+        social(page, ROOT / "docs" / "social-preview.png")
         browser.close()
 
 
