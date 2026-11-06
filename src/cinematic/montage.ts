@@ -383,7 +383,9 @@ export class Montage {
     let wade = 0, shore = 0;
     for (let s = 0; s < 120; s += 0.5) { const h = T.height(c0.x + d.x * s, c0.z + d.z * s); if (!wade && h > -0.95) wade = s; if (h > 0.3) { shore = s; break; } }
     const m = c0.clone().addScaledVector(d, wade), sh = c0.clone().addScaledVector(d, shore);
-    land('medic', m, c0.clone().addScaledVector(d, Math.max(4, wade - 16)), 19.5, 1.05, -1, above(sh.clone().addScaledVector(d, 10).add(V(0, 7, 0)), 5), sh.clone().add(V(0.6, 0.85, 0)), m.clone().addScaledVector(d, 2).add(V(0, 0.75, 0)), face(c0, sh), d);
+    land('medic', m, c0.clone().addScaledVector(d, Math.max(4, wade - 16)), 19.5, 1.05, -1, above(sh.clone().addScaledVector(d, 6).add(V(0, 20, 0)), 16), sh.clone().add(V(0.6, 0.85, 0)), m.clone().addScaledVector(d, 2).add(V(0, 0.75, 0)), face(c0, sh), d);
+
+    this.lands[1].wide[1].y = 12;
 
     // Bolzar: a flat rock in the southern hills
     const b = find(10, 90, 290, 370, (x, z) => -slope(x, z) - Math.abs(T.height(x, z) - 30) * 0.002);
@@ -829,7 +831,7 @@ export class Montage {
   private wide(id: CrewId, b: number, imp: number) {
     const l = this.land(id), col = TRAIL[id];
     const k = b < imp ? clamp((b - (imp - 2)) / 2, 0, 1) : 1;
-    const head = this.tmp.copy(l.hit).addScaledVector(l.from, 105 * (1 - k));
+    const head = this.tmp.copy(l.hit).addScaledVector(l.from, 58 * (1 - k)); // on screen for the whole approach
     const sh = shakeAt(b, b >= imp ? 0.7 * after(b, imp, 1.2) : 0.03, this.tmp2);
     const cam = this.lens(this.tmp3.copy(l.wide[0]).add(sh).clone(), l.wide[1], 38, 0, 0);
     if (b < imp) {
