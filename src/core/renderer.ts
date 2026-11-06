@@ -581,14 +581,25 @@ export class Renderer {
     if (this.quality.dynamicResolution) this.adaptResolution(dt, time);
   }
 
+  private softwareCached: boolean | null = null;
+  private get softwareGL() {
+    if (this.softwareCached === null) {
+      const gl = this.renderer.getContext();
+      const info = gl.getExtension('WEBGL_debug_renderer_info');
+      this.softwareCached = /swiftshader|llvmpipe|software/i.test(String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : ''));
+    }
+    return this.softwareCached;
+  }
+
   /**
    * Holds the preset's frame rate: reacts within about a second by lowering the
    * pixel ratio; if that is near the floor it sheds the optional passes first
    * lost in a blind test (AO, then volumetrics), and restores all of it with headroom.
    */
   private adaptResolution(dt: number, time: number) {
-    // automated runs on software GL measure nothing useful; keep their frames sharp
-    if (navigator.webdriver) return;
+    // software GL measures nothing useful, so its test shots stay sharp; a real GPU
+    // always adapts, even when automated, so GPU benchmarks see what players get
+    if (this.softwareGL) return;
     const q = this.quality;
     this.frameTimes.push(dt);
     if (this.frameTimes.length > 24) this.frameTimes.shift();

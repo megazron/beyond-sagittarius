@@ -111,6 +111,7 @@ Clothing from the MakeHuman community asset packs, refit to each body, recoloure
 | toigo_ankle_boots_female | MargaretToigo | CC0 | [shoes01](https://static.makehumancommunity.org/assets/assetpacks/shoes01.html) |
 | toigo_ankle_boots_male | MargaretToigo | CC0 | [shoes01](https://static.makehumancommunity.org/assets/assetpacks/shoes01.html) |
 | toigo_basic_tucked_t-shirt | MargaretToigo | CC0 | [shirts01](https://static.makehumancommunity.org/assets/assetpacks/shirts01.html) |
+| toigo_fisherman_sweater | MargaretToigo | CC0 | [MakeHuman community assets](https://static.makehumancommunity.org/assets/assetpacks/) |
 | toigo_camisole_top | MargaretToigo | CC0 | [shirts01](https://static.makehumancommunity.org/assets/assetpacks/shirts01.html) |
 | toigo_male_suit_3 | MargaretToigo | CC0 | [suits01](https://static.makehumancommunity.org/assets/assetpacks/suits01.html) |
 | toigo_wool_pants | MargaretToigo | CC0 | [pants01](https://static.makehumancommunity.org/assets/assetpacks/pants01.html) |

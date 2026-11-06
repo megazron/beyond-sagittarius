@@ -502,7 +502,7 @@
   "legal.termsH": "Terms of use",
   "legal.terms": "BEYOND SAGITTARIUS is a free game by megazron. Play it and share links to it for personal use. Don't resell it or publish modified copies without permission. It comes with no warranty: it may have bugs, change or go offline, and saves can be lost. To the extent the law allows, megazron is not liable for loss or damage from using it.",
   "legal.privacyH": "Privacy",
-  "legal.privacy": "No accounts, adverts, analytics or tracking of our own. Your save, settings and character stay in local storage on your device. The web version is served by GitHub Pages, which sees your IP address and browser details. Fonts ship with the game, so nothing is requested from Google or any other font service.",
+  "legal.privacy": "No accounts, adverts, analytics or tracking of our own. Your save, settings and character stay in local storage on your device. The web version is served by GitHub Pages, which sees your IP address and browser details. The desktop app makes no requests of its own.",
   "legal.safetyH": "Safety and age",
   "legal.safety": "Do not try this at home. The science is simplified for a game and is not instructions. Made for a general teen audience: comic horror, peril and mild creature violence. Younger players should play with a parent or guardian.",
   "legal.parodyH": "Fiction and parody",
