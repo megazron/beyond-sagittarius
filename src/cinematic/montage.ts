@@ -334,7 +334,7 @@ export class Montage {
     const g = c.getContext('2d')!;
     g.fillStyle = '#3a2a20'; g.fillRect(0, 0, 256, 512);
     for (let i = 0; i < 520; i++) { const x = (i * 97) % 256, y = (i * 193) % 512, v = 26 + (i * 31) % 60; g.fillStyle = `rgba(${v},${v * 0.72},${v * 0.55},0.75)`; g.fillRect(x, y, 3 + (i % 9), 30 + (i * 13) % 150); }
-    const bark = new THREE.CanvasTexture(c); bark.wrapS = bark.wrapT = THREE.RepeatWrapping; bark.repeat.set(3, 6); bark.colorSpace = THREE.SRGBColorSpace;
+    const bark = new THREE.CanvasTexture(c); bark.wrapS = bark.wrapT = THREE.RepeatWrapping; bark.repeat.set(5, 9); bark.magFilter = THREE.LinearFilter; bark.colorSpace = THREE.SRGBColorSpace;
     this.trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 1.05, 30, 20, 1), new THREE.MeshStandardMaterial({ map: bark, bumpMap: bark, bumpScale: 2, roughness: 0.95 }));
     this.trunk.visible = false; this.trunk.castShadow = true;
     this.wgroup.add(this.trunk);
@@ -374,12 +374,12 @@ export class Montage {
     // Draxum: the biggest trunk in the north-east forest, shoulder to bark
     const tp = find(210, 290, -250, -170, (x, z) => -slope(x, z) - (w.forest.blocks(x, z, 4) ? 10 : 0)), td = V(-0.6, 0, 0.8).normalize();
     this.trunk.position.copy(tp).add(V(0, 14, 0)); this.trunk.visible = false;
-    const a = tp.clone().addScaledVector(td, 1.55); a.y = T.height(a.x, a.z);
+    const a = tp.clone().addScaledVector(td, 1.85); a.y = T.height(a.x, a.z);
     const aSide = V(td.z, 0, -td.x);
     land('strong', a, a.clone().addScaledVector(td, 6), 22.4, 1.15, 1, above(a.clone().addScaledVector(td, 62).add(V(20, 34, 0)), 30), a.clone().addScaledVector(aSide, 3.1).addScaledVector(td, 0.7).add(V(0, 0.9, 0)), a.clone().add(V(0, 1.25, 0)).addScaledVector(td, -0.5), face(a, tp));
 
     // Lyrra: splashes down mid-lake, wades to the shore in front of us
-    const d = V(0.75, 0, 0.66).normalize(), c0 = V(LAKE.x, 0, LAKE.z);
+    const d = V(-0.75, 0, -0.66).normalize(), c0 = V(LAKE.x, 0, LAKE.z);
     let wade = 0, shore = 0;
     for (let s = 0; s < 120; s += 0.5) { const h = T.height(c0.x + d.x * s, c0.z + d.z * s); if (!wade && h > -0.95) wade = s; if (h > 0.3) { shore = s; break; } }
     const m = c0.clone().addScaledVector(d, wade), sh = c0.clone().addScaledVector(d, shore);
@@ -400,7 +400,7 @@ export class Montage {
 
     // The player: the clearing where the wake-up starts
     const z = at(0, 2);
-    land('scientist', z, z.clone(), 5.8, 1.1, 1, z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(-3.6, 0.9, 4.4)), z.clone().add(V(0, 2.3, 0)), 0.35);
+    land('scientist', z, z.clone(), 5.8, 1.1, 1, z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(-4.2, 1.3, 5.2)), z.clone().add(V(0, 1.5, 0)), 0.35);
     this.lands[5].wide = [z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(5, 24, -14))];
     this.lands[5].from = V(0.18, 1, -0.4).normalize();
   }
@@ -829,13 +829,13 @@ export class Montage {
   private wide(id: CrewId, b: number, imp: number) {
     const l = this.land(id), col = TRAIL[id];
     const k = b < imp ? clamp((b - (imp - 2)) / 2, 0, 1) : 1;
-    const head = this.tmp.copy(l.hit).addScaledVector(l.from, 170 * (1 - k));
+    const head = this.tmp.copy(l.hit).addScaledVector(l.from, 105 * (1 - k));
     const sh = shakeAt(b, b >= imp ? 0.7 * after(b, imp, 1.2) : 0.03, this.tmp2);
     const cam = this.lens(this.tmp3.copy(l.wide[0]).add(sh).clone(), l.wide[1], 38, 0, 0);
     if (b < imp) {
       const tr = this.worldTrails[0]; tr.color = col;
       const h = head.clone();
-      tr.draw((s, o) => o.copy(h).addScaledVector(l.from, s * 170), cam, 2.6, b, 2.2);
+      tr.draw((s, o) => o.copy(h).addScaledVector(l.from, s * 150), cam, 2.6, b, 2.2);
     } else this.worldTrails[0].mesh.visible = false;
     this.impact(l, id, (b - imp) * BEAT, col);
     const f = after(b, imp, 0.45) * 0.8;
@@ -874,7 +874,7 @@ export class Montage {
       case 'strong':
         this.trunk.visible = true;
         // shoulder to the trunk, feet dug in. The tree has not noticed.
-        this.act(id, p, q(0.2, yaw), 'float', { armL: [0.28, 0.2, 1], foreL: [0.2, 0.4, 1], armR: [-0.28, 0.32, 1], foreR: [-0.2, 0.42, 1], legL: [0.12, -1, 0.3], shinL: [0.1, -1, -0.15], legR: [-0.14, -1, -0.5], shinR: [-0.1, -1, -0.75], bend: 0.25, openHands: true }, { frown: 0.95, squint: 0.5, open: 0.1 });
+        this.act(id, p, q(0.2, yaw), 'float', { armL: [0.42, -0.12, 1], foreL: [0.1, 0.1, 1], armR: [-0.42, -0.05, 1], foreR: [-0.1, 0.16, 1], legL: [0.12, -1, 0.3], shinL: [0.1, -1, -0.15], legR: [-0.14, -1, -0.5], shinR: [-0.1, -1, -0.75], bend: 0.25, openHands: true }, { frown: 0.95, squint: 0.5, open: 0.1 });
         cam.add(V(0.25, 0, 0.2).multiplyScalar(drift));
         break;
       case 'medic': {
