@@ -33,6 +33,8 @@ EXPLORER = "Skyvra"  # the crew keep their call-signs
 def check_i18n():
     dicts = {l: json.loads((ROOT / "src" / "i18n" / f"{l}.json").read_text(encoding="utf-8")) for l in ("en", "hi", "ur")}
     problems = []
+    import voice_check
+    problems += voice_check.problems()[:20]
     for l in ("hi", "ur"):
         missing = [k for k in dicts["en"] if k not in dicts[l]]
         extra = [k for k in dicts[l] if k not in dicts["en"]]

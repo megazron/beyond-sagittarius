@@ -528,7 +528,7 @@ async function boot() {
   requestAnimationFrame(frame);
   const btns = ['btn-new', 'btn-continue'].map((id) => document.getElementById(id) as HTMLButtonElement);
   // the crew load alongside the world: only the people on screen first are awaited
-  const crewReady = preloadCrew(['scientist', 'explorer'], detail());
+  const crewReady = preloadCrew(['scientist', 'explorer', 'custom_m_scientist', 'custom_f_scientist'], detail());
   void preloadCrew(['strong', 'medic', 'builder', 'social', 'megazron'], detail()).catch(() => {});
   await world.build((p) => ui.setLoading(p));
   await crewReady.catch((e) => console.warn('[crew]', e));
