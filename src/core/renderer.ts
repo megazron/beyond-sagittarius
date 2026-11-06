@@ -40,7 +40,7 @@ const FinalShader = {
       float r2 = dot(d, d);
       vec3 col;
       if (uAberration > 0.0) {
-        vec2 o = d * r2 * uAberration * 12.0;   // only towards the corners, like a real lens
+        vec2 o = d * r2 * uAberration * 3.0;   // only towards the corners, like a real lens
         col = vec3(texture2D(tDiffuse, vUv + o).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - o).b);
       } else col = texture2D(tDiffuse, vUv).rgb;
       col *= uTint;

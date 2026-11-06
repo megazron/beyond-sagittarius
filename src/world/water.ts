@@ -109,7 +109,7 @@ export function createWater(terrain: Terrain, sky: Sky, q: Quality) {
         vec3 scatter = vec3(0.018, 0.075, 0.08) * (0.15 + 0.85 * uDay);
         vec3 body = scatter * (1.0 - T);
         // bioluminescent plankton at night
-        float plank = pow(vnoise2(p * 4.0 + uTime * 0.1), 16.0) * (1.0 - uDay) * 1.1 * smoothstep(0.2, 1.5, depth);
+        float plank = pow(vnoise2(p * 11.0 + uTime * 0.1), 22.0) * (1.0 - uDay) * 0.5 * smoothstep(0.2, 1.5, depth);
         body += vec3(0.1, 0.9, 0.8) * plank;
         vec3 col = mix(body, refl, fres);
         vec3 H = normalize(uSunDir + V);

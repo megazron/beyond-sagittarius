@@ -166,10 +166,11 @@ export class World {
     const dawn = 1 - smoothstep(0.0, 0.35, Math.abs(e - 0.05));
     atmosphere.uFogHeight.value = 0.35 + (1 - day) * 0.9 + dawn * 1.2;
     atmosphere.uFogSunDir.value.copy(sunUp > 0.5 ? sky.sunDir : sky.moonDir);
-    atmosphere.uFogSun.value.copy(sky.sunColor).multiplyScalar(sunUp > 0.5 ? 0.55 * smoothstep(-0.05, 0.15, e) : 0.05);
+    atmosphere.uFogSun.value.copy(sky.sunColor).multiplyScalar(sunUp > 0.5 ? 0.32 * smoothstep(-0.05, 0.15, e) : 0.05);
     if (time - this.fogPatchAt > 2 || time < this.fogPatchAt) { patchSceneFog(this.scene); this.fogPatchAt = time; }
-    this.post.strength = (sunUp > 0.5 ? smoothstep(0.0, 0.2, e) * 1.0 : 0.25) * (1 + dawn * 1.5);
-    this.post.density = 0.0016 * (1 + dawn * 2.5);
+    // a low sun already glows through the haze: keep the shafts from washing the frame out
+    this.post.strength = sunUp > 0.5 ? 0.15 + 0.85 * smoothstep(0.05, 0.3, e) : 0.25;
+    this.post.density = 0.0016 * (1 + dawn * 0.5);
     renderer.toneMappingExposure = 0.82 + (1 - day) * 0.6;
     this.forest.setGlow(0.9 + (1 - day) * 2.2);
     this.forest.setSun(this.lightDir, this.sun.color);
