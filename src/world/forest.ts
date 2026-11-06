@@ -251,6 +251,16 @@ export class Forest {
     a.push({ x, z, r });
   }
 
+  /** Is a circle of radius r at (x,z) inside an obstacle? (camera collision) */
+  blocks(x: number, z: number, r: number): boolean {
+    const cx = Math.floor(x / 10), cz = Math.floor(z / 10);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const a = this.obstacles.get(`${cx + dx},${cz + dz}`);
+      if (a) for (const o of a) if (Math.hypot(x - o.x, z - o.z) < o.r + r) return true;
+    }
+    return false;
+  }
+
   /** Push a circle of radius pr at (x,z) out of nearby obstacles. */
   collide(p: THREE.Vector3, pr: number) {
     const cx = Math.floor(p.x / 10), cz = Math.floor(p.z / 10);

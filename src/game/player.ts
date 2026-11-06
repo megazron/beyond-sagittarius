@@ -34,6 +34,7 @@ export class Player {
   /** Body pose (the wake-up lies down, cutscenes can override). */
   pose: CrewPose = 'idle';
   private camPos = new THREE.Vector3();
+  private camClip = 1;
   /** Damped point the camera orbits, so it trails the body a little. */
   private focus = new THREE.Vector3();
   private yawS = 0;
@@ -165,7 +166,17 @@ export class Player {
     out.set(Math.sin(yaw) * cp, -Math.sin(pitch), Math.cos(yaw) * cp).multiplyScalar(dist);
     out.add(focus);
     out.y += 1.65;
-    const g = Math.max(this.terrain.height(out.x, out.z) + 0.5, 0.45);
+    // walk the line from the head to the camera: stop short of hills and trunks
+    const hx = focus.x, hy = focus.y + 1.65, hz = focus.z;
+    let free = 1;
+    for (let k = 1; k <= 10; k++) {
+      const f = k / 10, x = hx + (out.x - hx) * f, y = hy + (out.y - hy) * f, z = hz + (out.z - hz) * f;
+      if (y < this.terrain.height(x, z) + 0.3 || this.forest.blocks(x, z, 0.28)) { free = Math.max(0.16, (k - 1) / 10); break; }
+    }
+    // pull in at once, ease back out, so the view never pops
+    this.camClip = free < this.camClip ? free : this.camClip + (free - this.camClip) * 0.05;
+    out.x = hx + (out.x - hx) * this.camClip; out.y = hy + (out.y - hy) * this.camClip; out.z = hz + (out.z - hz) * this.camClip;
+    const g = Math.max(this.terrain.height(out.x, out.z) + 0.3, 0.45);
     if (out.y < g) out.y = g;
     return out;
   }
@@ -175,6 +186,7 @@ export class Player {
     this.yawS = this.yaw; this.pitchS = this.pitch; this.distS = this.camDist;
     this.fovKick = 0; this.bobK = 0; this.lean = 0; this.dip = 0; this.dipV = 0;
     if (this.camera.fov !== this.baseFov) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
+    this.camClip = 1;
     this.orbit(this.camPos, this.focus, this.yaw, this.pitch, this.camDist);
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.pos.x, this.pos.y + 1.5, this.pos.z);
