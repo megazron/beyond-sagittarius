@@ -152,6 +152,7 @@ def main():
         expect_step("interact")
         ev("__bs.gotoObjective(0.4)"); ev("__bs.step(0.2)")
         page.keyboard.press("KeyE"); ev("__bs.step(0.2)")
+        log("  after E:", ev("({prompt: __bs.prompt, player: __bs.debug.player, inv: __bs.save.inventory, tut: __bs.tutorial})"))
         expect_step("menu")
         page.keyboard.press("KeyI"); time.sleep(0.3)
         if not page.locator(".inv-list").count():

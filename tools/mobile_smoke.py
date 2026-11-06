@@ -184,9 +184,13 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
         fail("stick at the rim did not start a run")
     ev("__bs.step(1.3)")
     page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'jump'", timeout=15000)
-    ev("__bs.teleport(-28, -60, 0.73)")  # nothing in reach: the context button jumps
-    ev("__bs.step(0.2)")
-    time.sleep(0.4)
+    # stand where nothing is in reach, so the context button jumps
+    for spot in ((30, 40), (60, -30), (-40, 60), (90, 20), (20, 90)):
+        ev(f"__bs.teleport({spot[0]}, {spot[1]}, 0.73)")
+        ev("__bs.step(0.2)")
+        time.sleep(0.3)
+        if not ev("document.body.classList.contains('can-act')"):
+            break
     touch.tap(*centre(page, "#tb-act"))
     time.sleep(0.5)
     ev("__bs.step(1.3)")
