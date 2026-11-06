@@ -347,6 +347,7 @@ def main():
         ev("__bs.step(0.5)")
         page.keyboard.press("Escape")
         page.click("#p-set")
+        page.click(".sub-tabs [data-pane=system]")
         page.click("[data-seg=timers] button[data-v='0']")
         shot("15-settings-timers")
         page.click("#m-close")
@@ -366,6 +367,7 @@ def main():
         ev("__bs.step(0.5)")
         page.keyboard.press("Escape")
         page.click("#p-set")
+        page.click(".sub-tabs [data-pane=system]")
         page.click("[data-seg=timers] button[data-v='1']")
         page.click("#m-close")
         page.click("#p-resume")
@@ -422,36 +424,50 @@ def main():
 
         def small_actions():
             """The hidden actions: share food with Pello, hand Tovik's flint back."""
-            def go(who):
-                for _ in range(4):
+            def visit(who):
+                """Walk up and open the conversation."""
+                for _ in range(6):
                     n = next(x for x in ev("__bs.npcs") if x["id"] == who)
                     ev(f"__bs.teleport({n['pos'][0] + 0.8}, {n['pos'][2]}, 0)")
                     ev("__bs.step(0.2)")
-                    if ev("__bs.prompt"):
-                        break
-            go("trav")
-            first = ev("__bs.act()")
-            go("trav")
-            hunger = ev("__bs.save.stats.hunger")
-            if hunger < 30:
-                ev("__bs.save.stats.hunger = 80")
-            prompt = ev("__bs.prompt")
-            ev("__bs.act()")
-            if not entry("c1.pello.share") or "Pello" not in (prompt or ""):
-                failures.append(f"sharing food with Pello: first {first}, prompt {prompt}")
+                    if ev("__bs.act()") == f"npc-{who}":
+                        return True
+                failures.append(f"could not reach {who}")
+                return False
+
+            def say(label):
+                """Pick a line by its label, or report what was offered."""
+                talk = ev("__bs.talk")
+                if not talk or label not in talk["choices"]:
+                    failures.append(f"{label} not offered: {talk}")
+                    if talk:
+                        page.keyboard.press("Escape")
+                    return
+                page.keyboard.press(f"Digit{talk['choices'].index(label) + 1}")
+                ev("__bs.step(0.1)")
+
+            ev("__bs.save.stats.hunger = 80")
+            if visit("trav"):
+                say("ch.bye")
+            if visit("trav"):  # second visit: nobody has offered him a biscuit
+                say("ch.share")
+                say("ch.bye")
+            if not entry("c1.pello.share"):
+                failures.append("sharing food with Pello was not recorded")
             ev("__bs.save.inventory.branch += 2")
             flint = ev("__bs.save.inventory.flint")
-            go("trader")
-            ev("__bs.act()")  # hello
-            go("trader")
-            ev("__bs.act()")  # the trade, and he miscounts
+            if visit("trader"):
+                say("ch.trade")
+                say("ch.tradeflint")
+                say("ch.bye")
             if ev("__bs.save.inventory.flint") != flint + 2:
                 failures.append("Tovik did not overpay")
-            go("trader")
-            ev("__bs.act()")  # hand it back
+            if visit("trader"):
+                say("ch.returnflint")
+                say("ch.bye")
             if not entry("c1.tovik.return") or ev("__bs.save.inventory.flint") != flint + 1:
                 failures.append("could not give Tovik's flint back")
-            ev("__bs.step(6)")
+            ev("__bs.step(1)")
 
         taken = set()
         shown = {}
@@ -769,11 +785,9 @@ def main():
         # ---- chapter select: read the tree, replay without touching the main story ----
         page.keyboard.press("Escape")
         time.sleep(0.2)
-        if page.locator("#p-quit").count() == 0:
-            page.keyboard.press("Escape")
-        page.click("#p-path")
+        page.click("#tab-ledger")
         page.wait_for_selector(".path-tree", timeout=5000)
-        page.click("#m-close")
+        page.click("#tab-pause")
         page.click("#p-quit")
         page.wait_for_function("window.__bs.state === 'title'", timeout=10000)
         page.click("#btn-chapters")

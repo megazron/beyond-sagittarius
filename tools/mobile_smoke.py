@@ -312,6 +312,7 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     ev("__bs.step(0.5)")
     touch.tap(*centre(page, "#tb-pause"))
     touch.tap(*centre(page, "#p-set"))
+    touch.tap(*centre(page, ".sub-tabs [data-pane=system]"))
     touch.tap(*centre(page, "[data-seg=timers] button[data-v='0']"))
     touch.tap(*centre(page, "#m-close"))
     page.wait_for_selector("#p-resume", timeout=5000)
@@ -343,7 +344,7 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
         fail("an answered decision was offered again")
     # the path tree, by tap, on a phone
     touch.tap(*centre(page, "#tb-pause"))
-    touch.tap(*centre(page, "#p-path"))
+    touch.tap(*centre(page, "#tab-ledger"))
     page.wait_for_selector(".path-tree", timeout=5000)
     time.sleep(0.4)
     shot("13-path-tree")
@@ -352,8 +353,6 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     if ev("document.getElementById('modal-card').scrollWidth > document.getElementById('modal-card').clientWidth + 1"):
         fail("path tree scrolls sideways")
     touch.tap(*centre(page, "#m-close"))
-    page.wait_for_selector("#p-resume", timeout=5000)
-    touch.tap(*centre(page, "#p-resume"))
     time.sleep(0.4)
     # pinch-zoom must not zoom the page
     scale = ev("visualViewport ? visualViewport.scale : 1")
