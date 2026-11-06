@@ -23,7 +23,8 @@ export function t(key: string, params?: Record<string, string | number>): string
 
 /** Same as t() in a chosen language: subtitles can differ from the game language. */
 export function tIn(lang: Lang, key: string, params?: Record<string, string | number>): string {
-  let s = overrides[key] ?? DICTS[lang][key] ?? DICTS.en[key] ?? key;
+  let s = overrides[key] ?? (female ? DICTS[lang][`g.f.${key}`] : undefined) ?? DICTS[lang][key] ?? DICTS.en[key] ?? key;
+  if (s.includes('{lin}')) s = s.split('{lin}').join(tIn(lang, `lin.${lineage}`));
   if (params) for (const k in params) s = s.split(`{${k}}`).join(String(params[k]));
   if (s.includes('{n:') || s.includes('{f:')) {
     s = s.replace(/\{([nf]):([a-z]+)\}/g, (_, kind: string, id: string) => {
@@ -40,6 +41,16 @@ export function setOverrides(o: Record<string, string>) {
   applyI18n(document.body);
   listeners.forEach((f) => f());
 }
+
+let female = false;
+let lineage = 'ulari';
+/** Player's grammar and lineage: `g.f.<key>` entries win for a female player. */
+export function setPlayer(p: { gender: 'm' | 'f'; lineage: string }) {
+  female = p.gender === 'f'; lineage = p.lineage;
+  applyI18n(document.body);
+  listeners.forEach((f) => f());
+}
+export function playerFemale() { return female; }
 
 /** Has the player given this crewmate a custom name? */
 export function isRenamed(id: string): boolean { return `crew.${id}.name` in overrides; }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createCharacter, Character, CrewPose } from '../characters/character';
+import type { PlayerLook } from '../characters/custom';
 import { clamp } from '../core/noise';
 import type { Terrain } from '../world/terrain';
 import type { Forest } from '../world/forest';
@@ -30,6 +31,17 @@ export class Player {
 
   constructor(private terrain: Terrain, private forest: Forest, public camera: THREE.PerspectiveCamera, detail = 1) {
     this.model = createCharacter('scientist', detail);
+  }
+
+  /** Swap in the player's look (character creator). */
+  setLook(look: PlayerLook, detail: number, reattach: () => void) {
+    const parent = this.model.root.parent;
+    const old = this.model.root;
+    this.model = createCharacter('scientist', detail, look);
+    this.model.root.position.copy(old.position);
+    this.model.root.rotation.copy(old.rotation);
+    if (parent) { parent.remove(old); parent.add(this.model.root); }
+    reattach();
   }
 
   spawn(x: number, z: number, yaw: number) {

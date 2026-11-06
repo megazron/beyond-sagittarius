@@ -1,8 +1,14 @@
 import * as THREE from 'three';
 import { createCharacter, CrewId } from '../characters/character';
+import type { PlayerLook, CrewSkins } from '../characters/custom';
 
 const IDS: CrewId[] = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social'];
 let cache: Promise<Record<string, string>> | null = null;
+let cacheKey = '';
+let look: PlayerLook | undefined, skins: CrewSkins = {};
+
+/** New portraits next time the panel opens. */
+export function setPortraitCast(l: PlayerLook, s: CrewSkins) { look = l; skins = s; const k = JSON.stringify([l, s]); if (k !== cacheKey) { cacheKey = k; cache = null; } }
 
 /** Renders one bust per crewmate, once, for the crew panel. */
 export function portraits(): Promise<Record<string, string>> {
@@ -21,7 +27,7 @@ export function portraits(): Promise<Record<string, string>> {
         scene.add(key, rim, new THREE.HemisphereLight(0xb8cce0, 0x28242a, 1.3));
         const cam = new THREE.PerspectiveCamera(26, 224 / 280, 0.05, 20);
         for (const id of IDS) {
-          const c = createCharacter(id, 0.6);
+          const c = createCharacter(id, 0.6, id === 'scientist' ? look : undefined, id === 'strong' && skins.strong === 'suit' ? 'suit' : undefined);
           scene.add(c.root);
           scene.updateMatrixWorld(true);
           c.animate('stand', 0, 0, 1, 1);

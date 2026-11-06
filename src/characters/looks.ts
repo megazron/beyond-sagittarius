@@ -2,7 +2,7 @@ import type { FaceLook } from './face';
 import { fx, fy } from './face';
 import type { HairColors, HairStyleId } from './hair';
 
-export type CrewId = HairStyleId;
+export type CrewId = Exclude<HairStyleId, 'suit'>;
 
 /** Body build, relative to a 1.75 m figure. */
 export interface Build { height: number; shoulder: number; chest: number; waist: number; hip: number; limb: number; bust: number; head: number; }

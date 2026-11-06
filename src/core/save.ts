@@ -1,5 +1,6 @@
 // localStorage persistence for game progress and player settings.
 import { migrateNames } from './crew';
+import { defaultLook, PlayerLook, CrewSkins } from '../characters/custom';
 
 export interface SaveData {
   version: 1;
@@ -15,6 +16,10 @@ export interface SaveData {
   collected: string[]; // ids of picked-up world items
   /** Custom crew names chosen on the pre-game screen (missing = default). */
   names?: Partial<Record<string, string>>;
+  /** The player's character-creator choices. */
+  player?: PlayerLook;
+  /** Cosmetic skins for the crew. */
+  skins?: CrewSkins;
   /** Number of times the night predator was driven off (level 7). */
   houndHits?: number;
   /** Bites taken from the predator; deaths so far (the narrator keeps score). */
@@ -37,6 +42,10 @@ export interface Settings {
   subLang: 'same' | 'en' | 'hi' | 'ur' | 'off';
   /** Spoken language: 'same' follows the game language. */
   voiceLang: 'same' | 'en' | 'hi' | 'ur';
+  /** Skins opened with a code; stays open for every save on this device. */
+  unlocked?: string[];
+  /** Chosen crew skins, used for new games. */
+  skins?: CrewSkins;
   showFps: boolean;
   /** Set from the title-screen settings: run the tutorial on the next session. */
   replayTutorial?: boolean;
@@ -55,7 +64,11 @@ export function loadSave(): SaveData | null {
     d.inventory = { ...emptyInventory(), ...d.inventory };
     d.flags ??= {};
     d.collected ??= [];
-    d.names = migrateNames(d.names);
+    // only the player names themselves now; the crew keep their call-signs
+    const own = migrateNames(d.names).scientist;
+    d.names = own ? { scientist: own } : {};
+    d.player = { ...defaultLook(), ...(d.player ?? {}), name: d.player?.name ?? own ?? '' };
+    d.skins ??= {};
     return d;
   } catch {
     return null;

@@ -439,6 +439,9 @@ export class Story {
   /** Set by the game while a scene directs the Explorer. */
   scenePose: (() => CrewPose | undefined) | null = null;
 
+  /** Back into the (new) hand after the player model is rebuilt. */
+  reattachSpear() { this.player.model.handR.add(this.spear); }
+
   private get pair() { return { z: this.player.model, y: this.world.explorer }; }
 
   private meetCrew() {

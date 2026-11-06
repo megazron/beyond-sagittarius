@@ -3,9 +3,10 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { clamp, lerp } from '../core/noise';
 import { loft, arcLoft, limb, sweep, smoothPath, weaveNormal, grainNormal, Ring } from './shapes';
 import { applySway, swayByHeight, swayByStrand, swayUniforms } from './sway';
-import { paintFace, headGeometry } from './face';
+import { paintFace, headGeometry, fx, fy } from './face';
 import { buildHair, HAIRSTYLES, HAIR_CAP, SKULL } from './hair';
 import { LOOKS, CrewId, Look } from './looks';
+import type { PlayerLook } from './custom';
 
 export type { CrewId } from './looks';
 export type CrewPose = 'stand' | 'idle' | 'walk' | 'sit' | 'injured' | 'wave' | 'lie' | 'point' | 'cheer' | 'facepalm' | 'selfie' | 'shout' | 'argue' | 'present' | 'write';
@@ -37,8 +38,39 @@ function marksTexture(kind: Look['marks'], color: number) {
  * The six crew. Every character shares one skeleton but has its own body,
  * species features, outfit, anime hair, face, posture and motion.
  */
-export function createCharacter(id: CrewId, detail = 1) {
-  const L = LOOKS[id], B = L.build, P = L.persona;
+/** Turns creator choices into a look on the Scientist's skeleton. */
+function lookFrom(base: Look, c: PlayerLook): Look {
+  const k = c.build, f = c.gender === 'f';
+  const m = (a: number, b: number) => a + (b - a) * k;
+  const dark = new THREE.Color(c.skin).multiplyScalar(0.55).getHex();
+  const root = new THREE.Color(c.hairRoot).multiplyScalar(0.45).getHex();
+  const shine = new THREE.Color(c.hairTip).lerp(new THREE.Color(0xffffff), 0.5).getHex();
+  return {
+    ...base,
+    build: { height: c.height, shoulder: m(0.88, 1.28) * (f ? 0.93 : 1), chest: m(0.86, 1.26) * (f ? 0.96 : 1), waist: m(0.8, 1.2) * (f ? 0.9 : 1), hip: m(0.92, 1.12) * (f ? 1.06 : 1), limb: m(0.8, 1.32) * (f ? 0.92 : 1), bust: f ? 0.7 : 0, head: 1 },
+    face: { ...base.face, skin: c.skin, shade: dark, iris: c.iris, glow: c.eyeGlow, eye: c.eye, brow: root, marks: undefined },
+    hair: { root, mid: c.hairRoot, tip: c.hairTip, shine },
+    glow: c.glow, marks: c.marks,
+  };
+}
+
+/** Beard and moustache, painted under the 3D beard locks. */
+const beard = (c: CanvasRenderingContext2D) => {
+  c.fillStyle = 'rgba(18,12,10,0.92)';
+  c.beginPath(); c.moveTo(fx(-0.92), fy(-0.08)); c.quadraticCurveTo(fx(-0.62), fy(-0.26), fx(-0.34), fy(-0.42)); c.quadraticCurveTo(fx(0), fy(-0.36), fx(0.34), fy(-0.42)); c.quadraticCurveTo(fx(0.62), fy(-0.26), fx(0.92), fy(-0.08));
+  c.lineTo(fx(0.8), fy(-1.05)); c.lineTo(fx(-0.8), fy(-1.05)); c.fill();
+  c.fillStyle = 'rgba(120,70,60,0.85)'; c.beginPath(); c.ellipse(fx(0), fy(-0.6), 24, 6, 0, 0, 7); c.fill();
+};
+
+export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, skinId?: string) {
+  const base = LOOKS[id];
+  const human = skinId === 'suit';
+  const L: Look = custom ? lookFrom(base, custom) : human
+    ? { ...base, build: { ...base.build, shoulder: 1.2, chest: 1.18, waist: 1.08, limb: 1.1, height: 1.06, head: 1 }, glow: 0, face: { ...base.face, skin: 0x9a6a48, shade: 0x5c3420, iris: 0x2a1a10, glow: false, eye: 'calm', brow: 0x120c0a, mouth: 'flat', marks: beard }, hair: { root: 0x0c0a0a, mid: 0x1c1512, tip: 0x33261e, shine: 0x6a5a50 } }
+    : base;
+  const B = L.build, P = L.persona;
+  const outfit: string = custom ? custom.outfit : human ? 'suit' : id;
+  const hairId = custom ? custom.hair : human ? 'suit' : id;
   const sway = swayUniforms();
   const root = new THREE.Group();
   const fig = new THREE.Group();
@@ -151,9 +183,10 @@ export function createCharacter(id: CrewId, detail = 1) {
   const headMat = new THREE.MeshStandardMaterial({ map: face.open, roughness: 0.46, emissive: 0xffffff, emissiveMap: face.glowMap, emissiveIntensity: 1.1 });
   const headMesh = add(headGeometry(detail), headMat, head, SKULL.x, 0.1, SKULL.z + 0.008);
   headMesh.scale.set(0.103, 0.128, 0.11);
-  const hair = buildHair(HAIRSTYLES[id](), L.hair, sway, detail, HAIR_CAP[id][0], HAIR_CAP[id][1]);
+  const hair = buildHair(HAIRSTYLES[hairId](), L.hair, sway, detail, HAIR_CAP[hairId][0], HAIR_CAP[hairId][1]);
   head.add(hair);
-  const ear = (shape: 'fin' | 'long' | 'tuft' | 'round') => {
+  const ear = (wanted: 'fin' | 'long' | 'tuft' | 'round') => {
+    const shape = custom?.ears ?? wanted;
     for (const s of [-1, 1]) {
       const pts = shape === 'fin' ? [V(s * 0.1, 0.1, -0.005), V(s * 0.14, 0.125, -0.03), V(s * 0.175, 0.17, -0.06)]
         : shape === 'long' ? [V(s * 0.1, 0.1, -0.005), V(s * 0.155, 0.135, -0.03), V(s * 0.23, 0.2, -0.06)]
@@ -169,10 +202,23 @@ export function createCharacter(id: CrewId, detail = 1) {
     add(sweep(smoothPath(pts, 8), { width: (t) => 0.02 * (1 - t) + 0.002, thick: (t) => 0.018 * (1 - t) + 0.002, side: V(0, 0, 1), sides: 6 }), m, head);
   };
 
+  const addTail = () => {
+      let parent: THREE.Object3D = body, r = 0.042;
+      const tm = skin;
+      for (let i = 0; i < 9; i++) {
+        const g = new THREE.Group(); g.position.set(0, i === 0 ? -0.04 : -0.1, i === 0 ? -0.11 : 0);
+        if (i === 0) g.rotation.x = 1.0;
+        add(limb(0.115, r, r * 0.86, 0, 1, 8), tm, g);
+        parent.add(g); parent = g; tailParts.push({ g, k: i / 8 }); r *= 0.87;
+      }
+      add(new THREE.ConeGeometry(0.03, 0.12, 8).rotateX(Math.PI), new THREE.MeshStandardMaterial({ color: 0x8c2a0a, roughness: 0.6 }), parent, 0, -0.16, 0);
+  };
+  const hornMat = new THREE.MeshStandardMaterial({ color: 0x302420, roughness: 0.32 });
+
   // ---- role outfits: silhouette first ----
   const tailParts: { g: THREE.Group; k: number }[] = [];
   const extras: { halo?: THREE.Group } = {};
-  switch (id) {
+  switch (outfit) {
     case 'scientist': {
       const coat = cloth(0xb9bcb6, 0.8), under = cloth(0x1f2d3f), trou = cloth(0x2c3440), dark = leather(0x2a2522);
       torso(under); pelvis(trou); pants(trou, 1.06); boot(dark, leather(0x15120f), 0.1);
@@ -203,7 +249,7 @@ export function createCharacter(id: CrewId, detail = 1) {
       const links = strap([V(-0.1, 0.42, 0.06), V(0, 0.27, 0.15), V(0.1, 0.42, 0.06)], metal(0xcfc8a8), chest, 0.004);
       links.castShadow = false;
       add(new THREE.BoxGeometry(0.04, 0.06, 0.006), metal(0xddd8b8), chest, 0, 0.25, 0.158);
-      horn(1, new THREE.MeshStandardMaterial({ color: 0x302420, roughness: 0.32 })); horn(-1, new THREE.MeshStandardMaterial({ color: 0x302420, roughness: 0.32 }));
+      if (!custom && !human) { horn(1, hornMat); horn(-1, hornMat); }
       ear('round');
       break;
     }
@@ -250,16 +296,7 @@ export function createCharacter(id: CrewId, detail = 1) {
       add(new THREE.TorusGeometry(0.106, 0.009, 6, 26), gm, head, 0, 0.17, 0.003).rotation.x = Math.PI / 2 - 0.3;
       for (const s of [-1, 1]) { const o = add(new THREE.CylinderGeometry(0.034, 0.04, 0.026, 18), metal(0xb08a4a), head, s * 0.048, 0.214, 0.096); o.rotation.x = Math.PI / 2 - 0.4; add(new THREE.CircleGeometry(0.03, 16), new THREE.MeshStandardMaterial({ color: 0x143040, roughness: 0.08, metalness: 0.7 }), head, s * 0.048, 0.2195, 0.11, false).rotation.x = -0.4; }
       ear('tuft');
-      // tail: chain of segments that follows the walk
-      let parent: THREE.Object3D = body, r = 0.042;
-      const tm = skin;
-      for (let i = 0; i < 9; i++) {
-        const g = new THREE.Group(); g.position.set(0, i === 0 ? -0.04 : -0.1, i === 0 ? -0.11 : 0);
-        if (i === 0) g.rotation.x = 1.0;
-        add(limb(0.115, r, r * 0.86, 0, 1, 8), tm, g);
-        parent.add(g); parent = g; tailParts.push({ g, k: i / 8 }); r *= 0.87;
-      }
-      add(new THREE.ConeGeometry(0.03, 0.12, 8).rotateX(Math.PI), new THREE.MeshStandardMaterial({ color: 0x8c2a0a, roughness: 0.6 }), parent, 0, -0.16, 0);
+      if (!custom) addTail();
       break;
     }
     case 'builder': {
@@ -288,6 +325,24 @@ export function createCharacter(id: CrewId, detail = 1) {
       // headband, a pencil behind the ear, brow plates
       add(new THREE.CylinderGeometry(0.112, 0.116, 0.042, 22, 1, true), cloth(0xd8452e, 0.9), head, 0, 0.175, -0.005);
       add(new THREE.CylinderGeometry(0.005, 0.005, 0.14, 6).rotateZ(1.25), new THREE.MeshStandardMaterial({ color: 0xf4c430, roughness: 0.6 }), head, 0.09, 0.128, -0.03);
+      ear('round');
+      break;
+    }
+    case 'suit': {
+      // charcoal-brown three-piece: slim jacket, satin peak lapels, waistcoat, open blue shirt
+      const wool = cloth(0x2a211c, 0.72), satin = new THREE.MeshStandardMaterial({ color: 0x2c2019, roughness: 0.26, side: THREE.DoubleSide });
+      const shirt = cloth(0x7fa6cf, 0.7), shoe = leather(0x3a2318, 0.24);
+      torso(shirt); pelvis(wool); pants(wool, 1.16); boot(shoe, leather(0x1a100c, 0.4), 0.05, 1.02);
+      sleeves(wool, wool, 1.22); addHands(skin);
+      add(arcLoft(torsoRings(1.05), 0.2, 6.08, 16), wool, chest);
+      add(arcLoft(torsoRings(1.11), 0.42, 5.86, 16), wool, chest);
+      coatPanel(wool.clone(), 0.42, Math.PI, 0.2, 1.1); coatPanel(wool.clone(), Math.PI, 5.86, 0.2, 1.1);
+      for (const s of [-1, 1]) {
+        const lap = add(new THREE.BoxGeometry(0.075, 0.26, 0.01), satin, chest, s * 0.09, 0.3, 0.128 * B.chest);
+        lap.rotation.z = -s * 0.28; lap.rotation.x = -0.12;
+        const col = add(new THREE.BoxGeometry(0.06, 0.06, 0.012), shirt, chest, s * 0.05, 0.47, 0.075); col.rotation.z = s * 0.5;
+      }
+      for (const y of [0.08, 0.17]) add(new THREE.CylinderGeometry(0.009, 0.009, 0.005, 10).rotateX(Math.PI / 2), satin, chest, 0.005, y, 0.142 * B.waist);
       ear('round');
       break;
     }
@@ -342,6 +397,12 @@ export function createCharacter(id: CrewId, detail = 1) {
       ear('round');
       break;
     }
+  }
+  if (custom) {
+    if (custom.horns) { horn(1, hornMat); horn(-1, hornMat); }
+    if (custom.tail) addTail();
+    const accent = cloth(custom.accent, 0.7);
+    rollCuff(accent, armL, -0.09, 0.066 * lt); rollCuff(accent, armR, -0.09, 0.066 * lt);
   }
   // tiling for skin marks on lofts
   marksTex.repeat.set(1, 3);

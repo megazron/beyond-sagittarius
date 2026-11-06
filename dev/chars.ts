@@ -16,7 +16,8 @@ scene.add(sun, new THREE.HemisphereLight(0xbcd6e8, 0x394034, 1.3));
 const ground = new THREE.Mesh(new THREE.CircleGeometry(30, 40), new THREE.MeshStandardMaterial({ color: 0x35402f, roughness: 0.95 }));
 ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 const cam = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 100);
-const chars: Character[] = ids.map((id, i) => { const c = createCharacter(id); c.root.position.x = (i - 2.5) * 1.3; scene.add(c.root); return c; });
+const alt = new URLSearchParams(location.search).get('skin') ?? undefined;
+const chars: Character[] = ids.map((id, i) => { const c = createCharacter(id, 1, undefined, id === 'strong' ? alt : undefined); c.root.position.x = (i - 2.5) * 1.3; scene.add(c.root); return c; });
 let pose: CrewPose = 'stand', amount = 0, t = 0, phase = 0;
 const W = window as unknown as Record<string, unknown>;
 W.view = (i: number, d: number, yaw: number, h: number, dist: number) => {

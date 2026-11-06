@@ -27,7 +27,7 @@ from smoke import launch, serve  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 PLAYER = "Quorvex"
-EXPLORER = "Jynx-7"
+EXPLORER = "Skyvra"  # the crew keep their call-signs
 
 
 def check_i18n():
@@ -75,7 +75,6 @@ def main():
         page.click("#btn-new")
         page.wait_for_selector("#nm-scientist", timeout=10000)
         page.fill("#nm-scientist", PLAYER)
-        page.fill("#nm-explorer", EXPLORER)
         time.sleep(0.5)
         shot("00-names")
         page.click("#nm-ok")
@@ -98,7 +97,7 @@ def main():
         page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
         names = ev("__bs.save.names")
         log("names in save:", names)
-        if names.get("scientist") != PLAYER or names.get("explorer") != EXPLORER or "medic" in names:
+        if names.get("scientist") != PLAYER or "explorer" in names:
             failures.append(f"names not saved correctly: {names}")
 
         # ---- tutorial: every step needs the real input ----
@@ -327,7 +326,7 @@ def main():
         ev("__bs.step(2)")
         re = ev("({level: __bs.level, names: __bs.save.names, crew: __bs.crew})")
         log("after reload:", re)
-        if re["level"] != 11 or re["names"].get("explorer") != EXPLORER or re["crew"]["mode"] != "camp":
+        if re["level"] != 11 or re["names"].get("scientist") != PLAYER or re["crew"]["mode"] != "camp":
             failures.append(f"save did not persist: {re}")
 
         # ---- other languages ----

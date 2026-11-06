@@ -1,5 +1,5 @@
 import { audio } from './audio';
-import { getLang, isRenamed, tDefault, Lang } from '../i18n';
+import { getLang, isRenamed, playerFemale, tDefault, Lang } from '../i18n';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -63,7 +63,10 @@ class Voice {
   private file(key: string): string | null {
     if (!this.index[this.lang]) return null;
     const ids = Array.from(tDefault(key).matchAll(/\{[nf]:([a-z]+)\}/g)).map((m) => m[1]);
-    if (ids.some(isRenamed)) { const anon = `${key}~anon`; return this.has(anon) ? anon : null; }
+    // a female player has her own take of the line, grammar included
+    if (playerFemale() && this.has(`${key}~f`)) return `${key}~f`;
+    // only the recorded default name may ever be spoken
+    if (ids.some(isRenamed) || (playerFemale() && ids.includes('scientist'))) { const anon = `${key}~anon`; return this.has(anon) ? anon : null; }
     return this.has(key) ? key : null;
   }
 

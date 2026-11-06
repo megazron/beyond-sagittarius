@@ -1,6 +1,6 @@
 import './style.css';
 import * as THREE from 'three';
-import { setLang, t, Lang } from './i18n';
+import { setLang, setPlayer, t, Lang } from './i18n';
 import { detectQuality, isPhone, saveQualityChoice, QualityName } from './core/quality';
 import { desktop } from './core/desktop';
 import { Renderer } from './core/renderer';
@@ -14,6 +14,9 @@ import { Input } from './game/input';
 import { Game } from './game/game';
 import { applyCrewNames, CrewNames } from './core/crew';
 import { TouchControls, TouchAction } from './ui/touch';
+import { openCreator } from './ui/creator';
+import { setPortraitCast } from './ui/portraits';
+import { defaultLook, PlayerLook, CrewSkins } from './characters/custom';
 import { voice } from './core/voice';
 import { Vault, vaultScript } from './narrator/vault';
 import { onLangChange } from './i18n';
@@ -131,10 +134,44 @@ function whenWorldReady(fn: () => void) {
   else { pendingStart = fn; ui.show('loading', true); }
 }
 
-/** Pre-game screen: name yourself and the five friends, then the prologue. */
+const detail = () => (quality.name === 'mobile' ? 0.6 : 1);
+let pendingLook: PlayerLook = defaultLook();
+
+/** Applies the player's look and name to everything that shows them. */
+function applyPlayer(look: PlayerLook, skins: CrewSkins) {
+  setPlayer(look);
+  applyCrewNames(look.name ? { scientist: look.name } : {});
+  cine.setCast(look, skins);
+  setPortraitCast(look, skins);
+  if (player) player.setLook(look, detail(), () => game?.story.reattachSpear());
+}
+
+/** New game: make your character, then the prologue. */
 function chooseNames() {
-  const prev = (loadSave()?.names ?? {}) as CrewNames;
-  ui.openNames(prev, 'new', (names) => startNewGame(names), () => {});
+  openCreator(ui, loadSave()?.player ?? defaultLook(), 'new', detail(), (look) => startNewGame(look), () => {});
+}
+
+// Locked cosmetic: only a hash of the code lives in the source.
+const SKIN_HASH = '02d087933efc5d76e06f75adf1db3c14dbe271b1769d6b267eaeae29ec57330d';
+async function tryCode(code: string): Promise<boolean> {
+  if (!crypto.subtle) return false;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code.trim().toLowerCase()));
+  const hex = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  if (hex !== SKIN_HASH) return false;
+  settings.unlocked = Array.from(new Set([...(settings.unlocked ?? []), 'strong.suit']));
+  writeSettings(settings);
+  return true;
+}
+
+function openSkins(onClose: () => void) {
+  const save = state === 'game' ? game.save : null;
+  let skins: CrewSkins = save?.skins ?? settings.skins ?? {};
+  ui.openSkins(skins, settings.unlocked ?? [], (s) => {
+    skins = s;
+    settings.skins = s; writeSettings(settings);
+    if (save) { save.skins = s; game.persist(); }
+    applyPlayer(save?.player ?? pendingLook, s);
+  }, tryCode, onClose);
 }
 
 /** Fade into the Vault for a MegaZroN scene, then hand back to `after`. */
@@ -202,12 +239,13 @@ function onLevelDone(n: number) {
   game.after(5.2, go);
 }
 
-function startNewGame(names: CrewNames = {}) {
+function startNewGame(look: PlayerLook = defaultLook()) {
   audio.start();
   if (input.device === 'touch') tryFullscreen();
   clearSave();
-  pendingNames = names;
-  applyCrewNames(names);
+  pendingLook = look;
+  pendingNames = look.name ? { scientist: look.name } : {};
+  applyPlayer(look, settings.skins ?? {});
   ui.show('title', false);
   void voice.load();
   playVault('intro', () => {
@@ -236,8 +274,8 @@ function enterWorld(fresh: boolean) {
   renderer.setScene(world.scene, camera, true);
   renderer.aoHidden = world.aoHidden();
   const save = fresh ? newSave() : (loadSave() ?? newSave());
-  if (fresh) save.names = { ...pendingNames };
-  applyCrewNames(save.names as CrewNames);
+  if (fresh) { save.names = { ...pendingNames }; save.player = { ...pendingLook }; save.skins = settings.skins ?? {}; }
+  applyPlayer(save.player ?? defaultLook(), save.skins ?? {});
   const replay = !!settings.replayTutorial;
   if (replay) { save.flags.tutorialDone = false; settings.replayTutorial = false; persistSettings(); }
   game.start(save, fresh);
@@ -254,7 +292,7 @@ document.getElementById('btn-new')!.addEventListener('click', () => {
 document.getElementById('btn-continue')!.addEventListener('click', () => { audio.uiClick(); continueGame(); });
 document.getElementById('btn-settings')!.addEventListener('click', () => {
   audio.start(); audio.uiClick();
-  ui.openSettings(settings, quality.name, persistSettings, changeQuality, refreshTitle, () => { settings.replayTutorial = true; persistSettings(); });
+  ui.openSettings(settings, quality.name, persistSettings, changeQuality, refreshTitle, () => { settings.replayTutorial = true; persistSettings(); }, () => openSkins(refreshTitle));
 });
 document.querySelectorAll<HTMLButtonElement>('.btn.lang').forEach((b) => b.addEventListener('click', () => {
   audio.uiClick();
@@ -294,6 +332,14 @@ function openPause() {
     settings: () => ui.openSettings(settings, quality.name, persistSettings, changeQuality, () => openPauseAgain(), () => { resume(); game.startTutorial(); }),
     objectives: () => ui.openObjectives(game.save.level, game.save.completed, () => openPauseAgain()),
     crew: () => openCrewPanel(() => openPauseAgain()),
+    look: () => openCreator(ui, game.save.player ?? defaultLook(), 'edit', detail(), (look) => {
+      game.save.player = look;
+      game.save.names = look.name ? { scientist: look.name } : {};
+      applyPlayer(look, game.save.skins ?? {});
+      game.persist();
+      openPauseAgain();
+    }, () => openPauseAgain()),
+    skins: () => openSkins(() => openPauseAgain()),
     quit: () => { game.persist(); showTitle(); },
   });
 }
@@ -308,14 +354,7 @@ function openPanel(kind: 'objectives' | 'crew' | 'inventory') {
   else openCrewPanel(resume);
 }
 function openCrewPanel(onClose: () => void) {
-  ui.openCrew((id) => game.story.crewStatus(id), onClose, () => {
-    ui.openNames((game.save.names ?? {}) as CrewNames, 'edit', (names) => {
-      game.save.names = names;
-      applyCrewNames(names);
-      game.persist();
-      openCrewPanel(onClose);
-    }, () => openCrewPanel(onClose));
-  });
+  ui.openCrew((id) => game.story.crewStatus(id), onClose);
 }
 
 document.addEventListener('pointerlockchange', () => {

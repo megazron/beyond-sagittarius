@@ -1,5 +1,6 @@
-import { t, tIn, tDefault, getLang, setLang, Lang, onLangChange, RTL } from '../i18n';
-import { CREW_IDS, CrewNames, NAME_MAX, normaliseNames } from '../core/crew';
+import { t, tIn, getLang, setLang, Lang, onLangChange, RTL } from '../i18n';
+import { CREW_IDS } from '../core/crew';
+import type { CrewSkins } from '../characters/custom';
 import type { CineUI } from '../cinematic/cinematic';
 import type { Settings } from '../core/save';
 import type { QualityName } from '../core/quality';
@@ -276,7 +277,7 @@ export class UI implements CineUI {
   }
   modalOpen() { return !$('modal').classList.contains('hidden'); }
 
-  openSettings(s: Settings, quality: QualityName, onChange: (s: Settings) => void, onQuality: (q: QualityName) => void, onClose: () => void, onTutorial?: () => void) {
+  openSettings(s: Settings, quality: QualityName, onChange: (s: Settings) => void, onQuality: (q: QualityName) => void, onClose: () => void, onTutorial?: () => void, onSkins?: () => void) {
     const seg = (name: string, opts: [string, string][], cur: string) =>
       `<div class="seg" data-seg="${name}">${opts.map(([v, l]) => `<button data-v="${v}" class="${v === cur ? 'active' : ''}">${escapeHtml(l)}</button>`).join('')}</div>`;
     const onOff = (name: string, v: boolean) => seg(name, [['1', t('settings.on')], ['0', t('settings.off')]], v ? '1' : '0');
@@ -296,8 +297,10 @@ export class UI implements CineUI {
       <div class="row"><label>${escapeHtml(t('settings.voiceLang'))}</label>${seg('voiceLang', [['same', t('settings.same')], ['en', 'English'], ['hi', 'हिन्दी'], ['ur', 'اردو']], s.voiceLang)}</div>
       <div class="row"><label>${escapeHtml(t('settings.fps'))}</label>${onOff('showFps', s.showFps)}</div>
       ${onTutorial ? `<div class="row"><label>${escapeHtml(t('settings.tutorial'))}</label><button class="btn small" id="set-tut">${escapeHtml(t('settings.tutorialReplay'))}</button></div>` : ''}
+      ${onSkins ? `<div class="row"><label>${escapeHtml(t('menu.skins'))}</label><button class="btn small" id="set-skins">${escapeHtml(t('menu.skins'))}</button></div>` : ''}
       <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.back'))}</button></div>`);
     const card = $('modal-card');
+    if (onSkins) $('set-skins').addEventListener('click', () => { audio.uiClick(); onSkins(); });
     if (onTutorial) $('set-tut').addEventListener('click', () => { audio.uiClick(); const b = $('set-tut'); b.textContent = t('settings.tutorialQueued'); (b as HTMLButtonElement).disabled = true; onTutorial(); });
     card.querySelectorAll<HTMLElement>('.seg').forEach((g) => {
       g.querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.addEventListener('click', () => {
@@ -325,20 +328,22 @@ export class UI implements CineUI {
     $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
   }
 
-  openPause(h: { resume: () => void; settings: () => void; objectives: () => void; crew: () => void; quit: () => void }) {
+  openPause(h: { resume: () => void; settings: () => void; objectives: () => void; crew: () => void; look: () => void; skins: () => void; quit: () => void }) {
     this.openModal(`
       <h2>${escapeHtml(t('menu.paused'))}</h2>
       <div class="menu">
         <button class="btn primary" id="p-resume">${escapeHtml(t('menu.resume'))}</button>
         <button class="btn" id="p-obj">${escapeHtml(t('menu.objectives'))}</button>
         <button class="btn" id="p-crew">${escapeHtml(t('menu.crew'))}</button>
+        <button class="btn" id="p-look">${escapeHtml(t('menu.changeLook'))}</button>
+        <button class="btn" id="p-skins">${escapeHtml(t('menu.skins'))}</button>
         <button class="btn" id="p-set">${escapeHtml(t('menu.settings'))}</button>
         <button class="btn" id="p-quit">${escapeHtml(t('menu.quitTitle'))}</button>
       </div>
       <h2 style="margin-top:24px">${escapeHtml(t('controls.title'))}</h2>
       <ul class="controls-list">${['move', 'sprint', 'jump', 'interact', 'look', 'zoom', 'objectives', 'crew', 'inventory', 'pause', 'touch'].map((k) => `<li>${escapeHtml(t(`controls.${k}`))}</li>`).join('')}</ul>`);
     const bind = (id: string, f: () => void) => $(id).addEventListener('click', () => { audio.uiClick(); f(); });
-    bind('p-resume', h.resume); bind('p-obj', h.objectives); bind('p-crew', h.crew); bind('p-set', h.settings); bind('p-quit', h.quit);
+    bind('p-look', h.look); bind('p-skins', h.skins); bind('p-resume', h.resume); bind('p-obj', h.objectives); bind('p-crew', h.crew); bind('p-set', h.settings); bind('p-quit', h.quit);
   }
 
   /** Inventory panel: everything you carry, with a short description. */
@@ -390,37 +395,35 @@ export class UI implements CineUI {
     if (onRename) $('m-rename').addEventListener('click', () => { audio.uiClick(); onRename(); });
   }
 
-  /**
-   * Pre-game name screen (also reachable from the crew panel). Empty fields
-   * keep the localised default name.
-   */
-  openNames(current: CrewNames, mode: 'new' | 'edit', onDone: (names: CrewNames) => void, onBack: () => void) {
-    const rows = CREW.map((c, i) => `
-      <div class="name-row ${i === 0 ? 'you' : ''}">
-        <label for="nm-${c}"><span class="nr">${escapeHtml(t(`crew.${c}.role`))}</span>${i === 0 ? `<span class="ny">${escapeHtml(t('crew.you'))}</span>` : ''}</label>
-        <input id="nm-${c}" data-crew="${c}" type="text" maxlength="${NAME_MAX}" autocomplete="off" spellcheck="false" dir="auto"
-          placeholder="${escapeHtml(tDefault(`crew.${c}.name`))}" value="${escapeHtml(current[c] ?? '')}">
-      </div>`).join('');
-    this.openModal(`<h2>${escapeHtml(t('names.title'))}</h2>
-      <p class="note">${escapeHtml(t('names.subtitle'))}</p>
-      <div class="names">${rows}</div>
-      <div class="actions">
-        <button class="btn primary" id="nm-ok">${escapeHtml(t(mode === 'new' ? 'names.begin' : 'names.save'))}</button>
-        <button class="btn" id="nm-reset">${escapeHtml(t('names.reset'))}</button>
-        <button class="btn" id="nm-back">${escapeHtml(t('menu.back'))}</button>
-      </div>`);
-    const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('#modal-card .name-row input'));
-    const collect = () => normaliseNames(Object.fromEntries(inputs.map((el) => [el.dataset.crew!, el.value])));
-    const ok = () => { audio.uiClick(); const n = collect(); this.closeModal(); onDone(n); };
-    inputs.forEach((el, i) => el.addEventListener('keydown', (e) => {
-      e.stopPropagation();
-      if (e.key === 'Enter') { if (i < inputs.length - 1) inputs[i + 1].focus(); else ok(); }
-      if (e.key === 'Escape') { this.closeModal(); onBack(); }
+  /** Plain modal shell for other UI modules. */
+  openRaw(html: string) { this.openModal(html); }
+
+  /** Skins menu with the code field. Locked skins are not listed at all. */
+  openSkins(current: CrewSkins, unlocked: string[], onPick: (s: CrewSkins) => void, onCode: (code: string) => Promise<boolean>, onClose: () => void) {
+    const opts: [string, string][] = [['default', t('skins.strong.default')]];
+    if (unlocked.includes('strong.suit')) opts.push(['suit', t('skins.strong.suit')]);
+    const cur = current.strong ?? 'default';
+    this.openModal(`<h2>${escapeHtml(t('skins.title'))}</h2>
+      <div class="row"><label>${escapeHtml(t('crew.strong.name'))}</label>
+        <div class="seg" id="skin-strong">${opts.map(([v, l]) => `<button data-v="${v}" class="${v === cur ? 'active' : ''}">${escapeHtml(l)}</button>`).join('')}</div></div>
+      <div class="note">${escapeHtml(t('skins.note'))}</div>
+      <div class="row"><label for="skin-code">${escapeHtml(t('skins.code'))}</label>
+        <div class="code-row"><input id="skin-code" type="text" maxlength="24" autocomplete="off" spellcheck="false"><button class="btn small" id="skin-try">${escapeHtml(t('skins.try'))}</button></div></div>
+      <div class="note" id="skin-msg"></div>
+      <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.back'))}</button></div>`);
+    document.querySelectorAll<HTMLButtonElement>('#skin-strong button').forEach((b) => b.addEventListener('click', () => {
+      audio.uiClick();
+      onPick({ ...current, strong: b.dataset.v as 'default' | 'suit' });
+      document.querySelectorAll('#skin-strong button').forEach((x) => x.classList.toggle('active', x === b));
     }));
-    $('nm-ok').addEventListener('click', ok);
-    $('nm-reset').addEventListener('click', () => { audio.uiClick(); inputs.forEach((el) => (el.value = '')); });
-    $('nm-back').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onBack(); });
-    setTimeout(() => inputs[0]?.focus(), 30);
+    const input = $('skin-code') as HTMLInputElement;
+    const go = async () => {
+      if (await onCode(input.value)) { audio.chime(); this.openSkins(current, [...unlocked, 'strong.suit'], onPick, onCode, onClose); $('skin-msg').textContent = t('skins.ok'); }
+      else { audio.uiClick(); $('skin-msg').textContent = t('skins.wrong'); input.value = ''; }
+    };
+    input.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') void go(); });
+    $('skin-try').addEventListener('click', () => void go());
+    $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
   }
 
   openConfirm(text: string, onYes: () => void, onNo: () => void) {

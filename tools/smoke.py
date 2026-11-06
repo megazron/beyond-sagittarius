@@ -68,7 +68,12 @@ def main():
         time.sleep(2)
         page.screenshot(path=str(SHOTS / f"{args.prefix}01-title.jpg"), type="jpeg", quality=86, timeout=180000)
         page.click("#btn-new")
-        page.wait_for_selector("#nm-ok", timeout=10000)  # name screen: keep the default names
+        page.wait_for_selector("#nm-ok", timeout=10000)  # character creator
+        page.click("#cc-random")
+        page.click("#cc-reset")
+        page.click('.seg[data-k="gender"] button[data-v="f"]')
+        page.click('.seg[data-k="gender"] button[data-v="m"]')
+        page.screenshot(path=str(SHOTS / f"{args.prefix}01a-creator.jpg"), type="jpeg", quality=86, timeout=180000)
         page.click("#nm-ok")
         shot = lambda name: page.screenshot(path=str(SHOTS / f"{args.prefix}{name}.jpg"), type="jpeg", quality=86, timeout=180000)
         page.wait_for_function("window.__bs.state === 'narrator' && window.__bs.vault.playing", timeout=20000)
@@ -126,6 +131,19 @@ def main():
             errors.append(f"console.error: subtitle language setting ignored: {sub!r}")
         if page.evaluate("document.querySelector('.obj-title').textContent") != page.evaluate("document.querySelector('.obj-title').textContent.normalize()") or any("\u0900" <= c <= "\u097f" for c in page.evaluate("document.querySelector('.obj-title').textContent")):
             errors.append("console.error: UI changed language with the subtitles")
+        # skins menu: nothing locked is listed, and a wrong code is refused
+        page.keyboard.press("Escape")
+        page.wait_for_selector("#p-skins", timeout=10000)
+        page.click("#p-skins")
+        page.wait_for_selector("#skin-code", timeout=10000)
+        if page.locator('#skin-strong button').count() != 1:
+            errors.append("console.error: a locked skin is visible")
+        page.fill("#skin-code", "wrong-code")
+        page.click("#skin-try")
+        page.wait_for_function("document.getElementById('skin-msg').textContent.length > 0", timeout=5000)
+        page.click("#m-close")
+        page.wait_for_selector("#p-resume", timeout=10000)
+        page.click("#p-resume")
         state = page.evaluate("({state: __bs.state, mode: __bs.mode, level: __bs.level})")
         print("final state:", state)
         browser.close()

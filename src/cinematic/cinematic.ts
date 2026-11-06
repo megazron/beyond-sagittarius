@@ -6,7 +6,8 @@ import { audio } from '../core/audio';
 import { voice } from '../core/voice';
 import { Cutscene, Beat } from './cutscene';
 import { deckScene, fightScene, stageDeck } from './scenes';
-import type { Character, CrewId } from '../characters/character';
+import { createCharacter, Character, CrewId } from '../characters/character';
+import type { PlayerLook, CrewSkins } from '../characters/custom';
 
 export interface CineUI {
   subtitle(key: string | null, speakerKey?: string): void;
@@ -146,6 +147,14 @@ export class Cinematic {
       subtitle: (k, sp) => this.ui.subtitle(k, sp),
       onDone: () => { this.stage = null; done(); },
     });
+  }
+
+  /** The player's figure and any crew skins on the deck. */
+  setCast(look: PlayerLook, skins: CrewSkins) {
+    const g = this.interior.group, crew = this.interior.crew, d = matchMedia('(pointer: coarse)').matches ? 0.6 : 1;
+    const swap = (i: number, c: Character) => { const o = crew[i]; c.root.position.copy(o.root.position); c.root.rotation.copy(o.root.rotation); g.remove(o.root); g.add(c.root); crew[i] = c; };
+    swap(0, createCharacter('scientist', d, look));
+    swap(1, createCharacter('strong', d, undefined, skins.strong === 'suit' ? 'suit' : undefined));
   }
 
   /** Back to the title backdrop. */

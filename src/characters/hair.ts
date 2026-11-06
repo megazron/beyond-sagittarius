@@ -159,11 +159,11 @@ const D = Math.PI / 180;
 const layer = (el: number, from: number, to: number, n: number, len: number, droop: number, w: number, o: Partial<Lock> = {}): Lock[] =>
   fan(from * D, to * D, n, (az, i) => ({ az, el: el * D, len: len * (1 + ((i * 7) % 3 - 1) * 0.1), droop, w, ...o }));
 
-export type HairStyleId = 'scientist' | 'strong' | 'medic' | 'explorer' | 'builder' | 'social' | 'megazron';
+export type HairStyleId = 'scientist' | 'strong' | 'medic' | 'explorer' | 'builder' | 'social' | 'megazron' | 'suit';
 
 /** Per-style shell cut: back and front hairline elevation in degrees. */
 export const HAIR_CAP: Record<HairStyleId, [number, number]> = {
-  scientist: [-18, 54], strong: [44, 62], medic: [-28, 54], explorer: [-16, 52], builder: [30, 52], social: [-14, 54], megazron: [-22, 58],
+  scientist: [-18, 54], strong: [44, 62], medic: [-28, 54], explorer: [-16, 52], builder: [30, 52], social: [-14, 54], megazron: [-22, 58], suit: [-10, 52],
 };
 
 /** Six original hairstyles. Each returns its list of locks. */
@@ -206,6 +206,14 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
     ...fan(0, 310 * D, 7, (az, i) => ({ az, el: 82 * D, len: 0.13 + (i % 2) * 0.05, droop: -2, dir: [Math.sin(az) * 0.22, 1, Math.cos(az) * 0.22], w: 0.04, sway: 0.32 })),
     ...fan(-44 * D, 44 * D, 5, (az, i) => ({ az, el: 58 * D, len: 0.075 + (i % 2) * 0.02, droop: 2.4, w: 0.022, sway: 0.4, dir: [Math.sin(az) * 0.7, 0.2, 1] })),
     ...fan(115 * D, 245 * D, 8, (az) => ({ az, el: 26 * D, len: 0.07, droop: 2.4, w: 0.03, sway: 0.2 })),
+  ],
+  // Thick wavy hair swept up and back, with a full groomed beard.
+  suit: () => [
+    ...fan(-58 * D, 58 * D, 11, (az, i) => ({ az, el: 58 * D, len: 0.11 + (i % 3) * 0.015, droop: 1.2, dir: [Math.sin(az) * 0.4, 1, 0.3 - (i % 2) * 0.25], w: 0.04, curl: 0.5, sway: 0.25 })),
+    ...layer(74, 60, 300, 13, 0.14, 1.2, 0.044, { curl: 0.5, sway: 0.3 }),
+    ...layer(20, 80, 280, 12, 0.08, 2.2, 0.04, { sway: 0.15 }),
+    ...fan(-105 * D, 105 * D, 15, (az, i) => ({ az, el: -30 * D, len: 0.05 + (i % 2) * 0.012, droop: 3, dir: [Math.sin(az) * 0.5, -1, Math.cos(az) * 0.4], w: 0.024, thick: 0.012, sway: 0.1 })),
+    ...fan(-60 * D, 60 * D, 9, (az, i) => ({ az, el: -55 * D, len: 0.05 + (i % 2) * 0.012, droop: 3, dir: [Math.sin(az) * 0.3, -1, 0.3], w: 0.022, thick: 0.012, sway: 0.1 })),
   ],
   // Long pale hair that floats upward at the ends, as if gravity is a suggestion.
   megazron: () => [
