@@ -16,6 +16,7 @@ import { applyCrewNames, CrewNames } from './core/crew';
 import { TouchControls, TouchAction } from './ui/touch';
 import { openCreator } from './ui/creator';
 import { setPortraitCast } from './ui/portraits';
+import { preloadCrew } from './characters/character';
 import { defaultLook, PlayerLook, CrewSkins } from './characters/custom';
 import { voice } from './core/voice';
 import { Vault, vaultScript } from './narrator/vault';
@@ -144,7 +145,7 @@ function applyPlayer(look: PlayerLook, skins: CrewSkins) {
   setPlayer(look);
   applyCrewNames(look.name ? { scientist: look.name } : {});
   cine.setCast(look, skins);
-  setPortraitCast(look, skins);
+  setPortraitCast(look, skins, detail());
   if (player) player.setLook(look, detail(), () => game?.story.reattachSpear());
 }
 
@@ -432,7 +433,11 @@ async function boot() {
   showTitle();
   requestAnimationFrame(frame);
   const btns = ['btn-new', 'btn-continue'].map((id) => document.getElementById(id) as HTMLButtonElement);
+  // the crew load alongside the world: only the people on screen first are awaited
+  const crewReady = preloadCrew(['scientist', 'explorer'], detail());
+  void preloadCrew(['strong', 'medic', 'builder', 'social', 'megazron'], detail()).catch(() => {});
   await world.build((p) => ui.setLoading(p));
+  await crewReady.catch((e) => console.warn('[crew]', e));
   player = new Player(world.terrain, world.forest, camera, quality.name === 'mobile' ? 0.6 : 1);
   player.sensitivity = settings.sensitivity;
   player.invertY = settings.invertY;

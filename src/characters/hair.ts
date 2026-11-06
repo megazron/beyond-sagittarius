@@ -8,6 +8,23 @@ import { mulberry32 } from '../core/noise';
 export const SKULL = new THREE.Vector3(0, 0.122, -0.004);
 export const SKULL_R = 0.112;
 
+/** The real head: centre and measured radius by direction (head-bone space), from the character build. */
+export interface Skull { c: THREE.Vector3; radius: (d: THREE.Vector3) => number; }
+export const roundSkull: Skull = { c: SKULL, radius: () => SKULL_R };
+export function skullFrom(c: number[], grid: number[][]): Skull {
+  const NE = grid.length, NA = grid[0].length;
+  return {
+    c: new THREE.Vector3(c[0], c[1], c[2]),
+    radius(d) {
+      const az = Math.atan2(d.x, d.z), el = Math.asin(Math.max(-1, Math.min(1, d.y / (d.length() || 1))));
+      const fa = ((az + Math.PI) / (Math.PI * 2)) * NA - 0.5, fe = Math.max(0, Math.min(NE - 1.001, ((el + Math.PI / 2) / Math.PI) * NE - 0.5));
+      const a0 = Math.floor(fa), e0 = Math.floor(fe), ta = fa - a0, te = fe - e0;
+      const g = (e: number, a: number) => grid[e][((a % NA) + NA) % NA];
+      return (g(e0, a0) * (1 - ta) + g(e0, a0 + 1) * ta) * (1 - te) + (g(e0 + 1, a0) * (1 - ta) + g(e0 + 1, a0 + 1) * ta) * te;
+    },
+  };
+}
+
 export interface Lock {
   /** Root on the skull: azimuth (0 = front, + = character's left) and elevation, radians. */
   az: number; el: number;
@@ -33,9 +50,9 @@ function dirOf(az: number, el: number, o = new THREE.Vector3()) {
 }
 
 /** Grow one lock from the skull, keeping it outside the head. */
-function grow(l: Lock, steps: number): { path: THREE.Vector3[]; side: THREE.Vector3 } {
+function grow(l: Lock, steps: number, S: Skull): { path: THREE.Vector3[]; side: THREE.Vector3 } {
   const d = dirOf(l.az, l.el);
-  const p = SKULL.clone().addScaledVector(d, SKULL_R * 0.94);
+  const p = S.c.clone().addScaledVector(d, S.radius(d) * 0.97);
   const east = new THREE.Vector3(Math.cos(l.az), 0, -Math.sin(l.az));
   const south = new THREE.Vector3().crossVectors(d, east).normalize(); // points down the skull
   if (south.y > 0) south.negate();
@@ -51,24 +68,24 @@ function grow(l: Lock, steps: number): { path: THREE.Vector3[]; side: THREE.Vect
     const t = i / steps;
     dir.y -= droop * ds;
     dir.addScaledVector(east, sw * ds * 2);
-    if (curl) dir.addScaledVector(v.copy(p).sub(SKULL).setY(0).normalize(), curl * t * t * ds * 12);
-    n.copy(p).sub(SKULL);
+    if (curl) dir.addScaledVector(v.copy(p).sub(S.c).setY(0).normalize(), curl * t * t * ds * 12);
+    n.copy(p).sub(S.c);
     const rr = n.length(); n.normalize();
     // wrap the skull first: only fall free below the widest part of the head
-    if (hug && p.y > SKULL.y - 0.06 && rr < SKULL_R * 1.3) { const o = dir.dot(n); if (o > 0) dir.addScaledVector(n, -o * 0.9); }
+    if (hug && p.y > S.c.y - 0.06 && rr < S.radius(n) * 1.3) { const o = dir.dot(n); if (o > 0) dir.addScaledVector(n, -o * 0.9); }
     dir.normalize();
     p.addScaledVector(dir, ds);
-    v.copy(p).sub(SKULL);
-    const r = v.length(), min = SKULL_R * 1.075;
-    if (r < min) p.copy(SKULL).addScaledVector(v.normalize(), min);
+    v.copy(p).sub(S.c);
+    const r = v.length(), min = S.radius(v) * 1.035;
+    if (r < min) p.copy(S.c).addScaledVector(v.normalize(), min);
     pts.push(p.clone());
   }
   return { path: pts, side: east };
 }
 
 /** Smooth under-shell: the mass the locks lie on, cut along the hairline. */
-function capShell(lowDeg: number, frontDeg: number) {
-  const sp = new THREE.SphereGeometry(SKULL_R * 1.045, 30, 22);
+function capShell(lowDeg: number, frontDeg: number, S: Skull) {
+  const sp = new THREE.SphereGeometry(1, 30, 22);
   const p = sp.attributes.position, idx = sp.index!;
   const keep = (i: number) => {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i), r = Math.hypot(x, y, z);
@@ -78,11 +95,14 @@ function capShell(lowDeg: number, frontDeg: number) {
   const out: number[] = [];
   for (let i = 0; i < idx.count; i += 3) { const a = idx.getX(i), b = idx.getX(i + 1), c = idx.getX(i + 2); if (keep(a) && keep(b) && keep(c)) out.push(a, b, c); }
   sp.setIndex(out);
-  sp.translate(SKULL.x, SKULL.y, SKULL.z);
+  { const q = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) { q.fromBufferAttribute(p, i); q.multiplyScalar(S.radius(q) * 1.012); p.setXYZ(i, q.x, q.y, q.z); } }
+  sp.computeVertexNormals();
+  sp.translate(S.c.x, S.c.y, S.c.z);
   const n = p.count, at = new Float32Array(n).fill(0.16), z = new Float32Array(n), ph = new Float32Array(n).fill(0.5), tan = new Float32Array(n * 3);
   const v = new THREE.Vector3(), down = new THREE.Vector3(0, -1, 0);
   for (let i = 0; i < n; i++) {
-    v.set(p.getX(i), p.getY(i) - SKULL.y, p.getZ(i)).normalize();
+    v.set(p.getX(i) - S.c.x, p.getY(i) - S.c.y, p.getZ(i) - S.c.z).normalize();
     const tn = down.clone().addScaledVector(v, -down.dot(v)).normalize();
     tan[i * 3] = tn.x; tan[i * 3 + 1] = tn.y; tan[i * 3 + 2] = tn.z;
   }
@@ -96,11 +116,19 @@ function capShell(lowDeg: number, frontDeg: number) {
 export interface HairColors { root: number; mid: number; tip: number; shine: number }
 
 /** Sculpted anime hair: every lock is a tapered ribbon with its own phase. */
-export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms, detail = 1, capLow = -20, capFront = 50): THREE.Mesh {
+export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms, detail = 1, capLow = -20, capFront = 50, skull: Skull = roundSkull): THREE.Mesh {
   const rnd = mulberry32(locks.length * 37 + 5);
   const steps = detail < 0.8 ? 5 : 7;
-  const parts = locks.map((l) => {
-    const { path, side } = grow(l, steps);
+  // on a real head one anime lock is a bundle of finer strands around the same path
+  const fine: Lock[] = locks.flatMap((l) => {
+    const n = detail < 0.8 ? 2 : 3;
+    return Array.from({ length: n }, (_, i) => {
+      const k = i - (n - 1) / 2;
+      return { ...l, az: l.az + k * 0.085 + (rnd() - 0.5) * 0.04, el: l.el + (rnd() - 0.5) * 0.06, len: l.len * (0.86 + rnd() * 0.22), w: (l.w ?? 0.03) * 0.46, thick: (l.thick ?? (l.w ?? 0.03) * 0.42) * 0.7 };
+    });
+  });
+  const parts = fine.map((l) => {
+    const { path, side } = grow(l, steps, skull);
     const w = l.w ?? 0.03, th = l.thick ?? w * 0.42;
     const g = sweep(smoothPath(path, steps + (detail < 0.8 ? 0 : 3)), {
       side,
@@ -110,7 +138,7 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
     });
     return swayByStrand(g, 0.12, l.sway ?? 1, rnd());
   });
-  parts.push(capShell(capLow, capFront));
+  parts.push(capShell(capLow, capFront, skull));
   const geo = mergeGeometries(parts)!;
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.46, metalness: 0.0, side: THREE.DoubleSide });
   const u = {
@@ -215,8 +243,8 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
   ],
   // Long pale hair that floats upward at the ends, as if gravity is a suggestion.
   megazron: () => [
-    ...layer(76, 45, 315, 16, 0.5, 0.2, 0.05, { sway: 1.3 }),
-    ...layer(35, 90, 270, 13, 0.46, 0.05, 0.05, { out: 0.35, sway: 1.5, curl: 0.4 }),
+    ...layer(76, 45, 315, 16, 0.5, 1.5, 0.05, { sway: 1.3 }),
+    ...layer(35, 90, 270, 13, 0.46, 1.1, 0.05, { out: 0.2, sway: 1.5, curl: 0.4 }),
     ...fan(-46 * D, 46 * D, 8, (az, i) => ({ az, el: 78 * D, len: 0.1 + (i % 2) * 0.015, droop: 4, w: 0.024, sway: 0.4 })),
     { az: 74 * D, el: 46 * D, len: 0.34, droop: 1, w: 0.022, sway: 1.4 }, { az: -74 * D, el: 46 * D, len: 0.34, droop: 1, w: 0.022, sway: 1.4 },
   ],

@@ -51,6 +51,7 @@ export class Player {
   constructor(private terrain: Terrain, private forest: Forest, public camera: THREE.PerspectiveCamera, detail = 1) {
     this.model = createCharacter('scientist', detail);
     this.baseFov = camera.fov;
+    this.model.setGround((x, z) => this.terrain.height(x, z));
   }
 
   /** Swap in the player's look (character creator). */
@@ -58,6 +59,7 @@ export class Player {
     const parent = this.model.root.parent;
     const old = this.model.root;
     this.model = createCharacter('scientist', detail, look);
+    this.model.setGround((x, z) => this.terrain.height(x, z));
     this.model.root.position.copy(old.position);
     this.model.root.rotation.copy(old.rotation);
     if (parent) { parent.remove(old); parent.add(this.model.root); }
@@ -155,7 +157,7 @@ export class Player {
     if (this.inWater) this.model.root.position.y = Math.max(this.pos.y, -0.55);
     this.model.root.rotation.y = this.facing + Math.PI;
     this.model.root.updateMatrixWorld();
-    this.model.animate(this.pose, this.walkPhase, clamp(hs / 4, 0, 1.3), performance.now() / 1000, dt);
+    this.model.animate(this.onGround || this.pose !== 'idle' ? this.pose : 'jump', this.walkPhase, clamp(hs / 4, 0, 1.3), performance.now() / 1000, dt);
 
     this.updateCamera(dt);
   }

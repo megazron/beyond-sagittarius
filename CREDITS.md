@@ -4,6 +4,10 @@ BEYOND SAGITTARIUS is an original game design by its owner. Crew, creatures,
 hair, clothes, the Vault, shaders and synthesised sound effects are generated
 in code at runtime. The photo textures, scanned models, the HDRI and the voice
 model below are third-party and credited here. Every in-game company or
+BEYOND SAGITTARIUS is an original game design by its owner. Creatures,
+anime hair, the Vault, shaders, synthesised sound effects and the foliage
+atlas are generated in code at runtime. The photo textures, the HDRI and the
+voice model below are third-party and credited here. Every in-game company or
 product name is a made-up parody.
 
 ## Libraries
@@ -74,6 +78,52 @@ The water normal map (FFT wave spectrum) and the hydraulic erosion of the mounta
 (`public/models/world/erosion_*.bin`, from `tools/bake_erosion.ts`) are generated, not sourced.
 Clouds, the sky, the giant planet and the moon are shaders. The Windows build can add 4K versions of the same
 assets (`tools/fetch_assets.py --desktop`, not in this repository).
+
+## Characters
+
+The crew are skinned MakeHuman bodies built offline by `tools/build_characters.py`; only MakeHuman's
+CC0 data files are read (base mesh hm08, macro and expression targets, default rig and weights, eyes,
+teeth, tongue, eyelashes, eyebrows, photographic skin source), never its AGPL program code. Body shapes,
+species ears, skin colouring, glowing marks, props and hair are this project's own work.
+
+| Asset | Source | Author | Licence |
+| --- | --- | --- | --- |
+| Base mesh, targets, rig, weights | https://github.com/makehumancommunity/makehuman | MakeHuman Team, Data Collection AB, Joel Palmius, Jonas Hauquier | CC0 1.0 |
+| Eyes, teeth, tongue, eyelashes, eyebrows, young male and female skin | [MakeHuman system assets](https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html) | MakeHuman Team | CC0 1.0 |
+
+Clothing from the MakeHuman community asset packs, refit to each body, recoloured and reduced:
+
+| Asset | Author | Licence | Source |
+| --- | --- | --- | --- |
+| cortu_cargo_pants | Cortu | CC0 | [pants01](https://static.makehumancommunity.org/assets/assetpacks/pants01.html) |
+| cortu_jeans_shorts | Cortu | CC0 | [pants01](https://static.makehumancommunity.org/assets/assetpacks/pants01.html) |
+| elvs_emt_uniform_jacket_female | Elvaerwyn | CC-BY | [suits03](https://static.makehumancommunity.org/assets/assetpacks/suits03.html) |
+| elvs_emt_uniform_pants_female | Elvaerwyn | CC-BY | [suits03](https://static.makehumancommunity.org/assets/assetpacks/suits03.html) |
+| elvs_gored_elephant_pants | Elvaerwyn | CC-BY | [pants02](https://static.makehumancommunity.org/assets/assetpacks/pants02.html) |
+| elvs_hooded_sweat_jacket1 | Elvaerwyn | CC-BY | [shirts02](https://static.makehumancommunity.org/assets/assetpacks/shirts02.html) |
+| joepal_crude_t-shirt_female | Joel Palmius | CC0 | [shirts01](https://static.makehumancommunity.org/assets/assetpacks/shirts01.html) |
+| male_worksuit01 | MakeHuman team | CC0 | [makehuman_system_assets](https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html) |
+| mindfront_cardigan_long_open_front | Mindfront | CC-BY | [shirts02](https://static.makehumancommunity.org/assets/assetpacks/shirts02.html) |
+| mindfront_shoes_biker_boots_male | Mindfront | CC-BY | [shoes03](https://static.makehumancommunity.org/assets/assetpacks/shoes03.html) |
+| mindfront_tactical_vest_male | Mindfront | CC-BY | [equipment03](https://static.makehumancommunity.org/assets/assetpacks/equipment03.html) |
+| punkduck_winter_boots | punkduck | CC-BY | [shoes03](https://static.makehumancommunity.org/assets/assetpacks/shoes03.html) |
+| punkduck_winter_coat | punkduck | CC-BY | [dress03](https://static.makehumancommunity.org/assets/assetpacks/dress03.html) |
+| toigo_ankle_boots_female | MargaretToigo | CC0 | [shoes01](https://static.makehumancommunity.org/assets/assetpacks/shoes01.html) |
+| toigo_ankle_boots_male | MargaretToigo | CC0 | [shoes01](https://static.makehumancommunity.org/assets/assetpacks/shoes01.html) |
+| toigo_basic_tucked_t-shirt | MargaretToigo | CC0 | [shirts01](https://static.makehumancommunity.org/assets/assetpacks/shirts01.html) |
+| toigo_camisole_top | MargaretToigo | CC0 | [shirts01](https://static.makehumancommunity.org/assets/assetpacks/shirts01.html) |
+| toigo_male_suit_3 | MargaretToigo | CC0 | [suits01](https://static.makehumancommunity.org/assets/assetpacks/suits01.html) |
+| toigo_wool_pants | MargaretToigo | CC0 | [pants01](https://static.makehumancommunity.org/assets/assetpacks/pants01.html) |
+
+CC-BY assets are used under Creative Commons Attribution; changes made: fitted to new bodies, geometry
+reduced, recoloured, emblems removed, texture-atlased.
+
+## Motion capture
+
+Animation is retargeted offline by `tools/build_animations.py` from the CMU Graphics Lab Motion Capture
+Database, free for any use: "The data used in this project was obtained from mocap.cs.cmu.edu. The
+database was created with funding from NSF EIA-0196217." Source: http://mocap.cs.cmu.edu (AMC/ASF originals;
+trial numbers are listed in `CLIPS` in that tool and in `public/models/crew/anim.json`).
 
 ## Voices
 

@@ -1,8 +1,9 @@
 // Dev-only turntable for the crew (not part of the build): vite, then /dev/chars.html
 import * as THREE from 'three';
+import { randomLook } from '../src/characters/custom';
 import { createCharacter, CrewId, Character, CrewPose } from '../src/characters/character';
 
-const ids: CrewId[] = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social'];
+const ids: CrewId[] = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social', 'megazron'];
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const r = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
 r.setSize(innerWidth, innerHeight);
@@ -17,7 +18,8 @@ const ground = new THREE.Mesh(new THREE.CircleGeometry(30, 40), new THREE.MeshSt
 ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 const cam = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 100);
 const alt = new URLSearchParams(location.search).get('skin') ?? undefined;
-const chars: Character[] = ids.map((id, i) => { const c = createCharacter(id, 1, undefined, id === 'strong' ? alt : undefined); c.root.position.x = (i - 2.5) * 1.3; scene.add(c.root); return c; });
+const customs = new URLSearchParams(location.search).get('custom');
+const chars: Character[] = ids.map((id, i) => { const c = customs ? createCharacter('scientist', 1, randomLook({ name: 'x', gender: i % 2 ? 'f' : 'm' })) : createCharacter(id, 1, undefined, id === 'strong' ? alt : undefined); c.root.position.x = (i - 2.5) * 1.3; scene.add(c.root); return c; });
 let pose: CrewPose = 'stand', amount = 0, t = 0, phase = 0;
 const W = window as unknown as Record<string, unknown>;
 W.view = (i: number, d: number, yaw: number, h: number, dist: number) => {
@@ -28,5 +30,4 @@ W.view = (i: number, d: number, yaw: number, h: number, dist: number) => {
 W.pose = (p: CrewPose, a = 0) => { pose = p; amount = a; };
 W.step = (n: number, dt = 1 / 30) => { for (let k = 0; k < n; k++) { t += dt; phase += dt * 7 * amount; chars.forEach((c) => { c.root.updateMatrixWorld(); c.animate(pose, phase, amount, t, dt); }); } r.render(scene, cam); };
 (W.view as Function)(-1, 1, 0, 1.3, 11);
-(W.step as Function)(60);
-W.ready = true;
+Promise.all(chars.map((c) => c.whenReady)).then(() => { (W.step as Function)(4); setTimeout(() => { (W.step as Function)(2); W.ready = true; }, 3000); });

@@ -1,0 +1,185 @@
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { swayUniforms } from './sway';
+export { swayUniforms };
+
+const BASE = `${import.meta.env.BASE_URL}models/crew/`;
+
+export interface ClipMeta { loop: boolean; speed: number; kind: string; dur: number; hand: string; take: string; }
+export interface AnimSet { refLeg: number; refHip: number; meta: Record<string, ClipMeta>; clips: Map<string, THREE.AnimationClip>; }
+export interface CrewMeta {
+  height: number; skin: 'm' | 'f'; atlas: string;
+  pivots: Record<string, [number, number, number]>;
+  skull: { c: number[]; r: number[][] };
+  fit: Record<'waist' | 'neck' | 'chest', [number, number, number, number]>;
+  build_slim_pivots?: number[][]; build_heavy_pivots?: number[][];
+}
+export interface CrewAsset { scene: THREE.Group; meta: CrewMeta; }
+
+const gltf = new GLTFLoader();
+const assets = new Map<string, Promise<CrewAsset>>();
+const loaded = new Map<string, CrewAsset>();
+let animP: Promise<AnimSet> | null = null;
+let anim: AnimSet | null = null;
+const texCache = new Map<string, THREE.Texture>();
+const pending = new Set<Promise<void>>();
+const loadTex = (url: string) => {
+  let done: () => void = () => {};
+  const p = new Promise<void>((r) => { done = r; });
+  pending.add(p);
+  const fin = () => { pending.delete(p); done(); };
+  return new THREE.TextureLoader().load(url, fin, undefined, () => { console.warn('[crew] texture', url); fin(); });
+};
+/** Resolves when every texture requested so far has arrived. */
+export const texturesReady = async () => { await Promise.all([...pending]); };
+
+/** Web or phone: decides mesh LOD and texture size for everything loaded afterwards. */
+export const lodOf = (detail: number) => (detail < 0.8 ? 1 : 0);
+
+export function loadAnim() {
+  animP ??= (async () => {
+    const [g, j] = await Promise.all([gltf.loadAsync(`${BASE}anim.glb`), fetch(`${BASE}anim.json`).then((r) => r.json())]);
+    anim = { refLeg: j.refLeg, refHip: j.refHip, meta: j.clips, clips: new Map(g.animations.map((c) => [c.name, c])) };
+    return anim;
+  })();
+  return animP;
+}
+export const animNow = () => anim;
+
+export function loadAsset(key: string, lod: number) {
+  const custom = key.startsWith('custom_');
+  const file = lod && !custom ? `${key}.lod1` : key;
+  const id = `${file}`;
+  let p = assets.get(id);
+  if (!p) {
+    p = (async () => {
+      const [g, meta] = await Promise.all([gltf.loadAsync(`${BASE}${file}.glb`), fetch(`${BASE}${key}.json`).then((r) => r.json())]);
+      const a: CrewAsset = { scene: g.scene, meta };
+      loaded.set(id, a);
+      return a;
+    })();
+    assets.set(id, p);
+  }
+  return p;
+}
+export function assetNow(key: string, lod: number) {
+  return loaded.get(lod && !key.startsWith('custom_') ? `${key}.lod1` : key);
+}
+
+/** Load everything the first frames need, so characters appear without a pop. */
+export async function preloadCrew(keys: string[], detail = 1) {
+  await Promise.all([loadAnim(), ...keys.map((k) => loadAsset(k, lodOf(detail)))]);
+}
+
+export function tex(name: string, lod: number, srgb = false) {
+  const url = `${BASE}tex/${name}${lod ? '.m' : ''}.webp`;
+  let t = texCache.get(url);
+  if (!t) {
+    t = loadTex(url);
+    t.flipY = false;
+    t.anisotropy = 4;
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    texCache.set(url, t);
+  }
+  return t;
+}
+export function texPlain(name: string, srgb = false) {
+  const url = `${BASE}tex/${name}.webp`;
+  let t = texCache.get(url);
+  if (!t) {
+    t = loadTex(url);
+    t.flipY = false;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    texCache.set(url, t);
+  }
+  return t;
+}
+
+/** Hips translations in the clips are authored for the reference legs; each body gets its own. */
+const scaled = new Map<string, Map<string, THREE.AnimationClip>>();
+export function clipsFor(key: string, legRatio: number, a: AnimSet) {
+  const k = `${key}:${legRatio.toFixed(3)}`;
+  let m = scaled.get(k);
+  if (!m) {
+    m = new Map();
+    for (const [n, c] of a.clips) {
+      const d = c.clone();
+      d.tracks = d.tracks.map((t) => {
+        if (!t.name.endsWith('.position')) return t;
+        const u = t.clone();
+        for (let i = 0; i < u.values.length; i++) u.values[i] *= legRatio;
+        return u;
+      });
+      m.set(n, d);
+    }
+    scaled.set(k, m);
+  }
+  return m;
+}
+
+const col = (c: number) => new THREE.Color(c);
+
+export interface SkinLook { skin: number; shade: number; lip: number; glow: number; over: number; glowK: number; }
+
+/** Photo detail, species colour: the neutral map is recoloured here, so every skin keeps its pores. */
+export function skinMaterial(sex: 'm' | 'f', marks: string, l: SkinLook, lod: number) {
+  const m = new THREE.MeshStandardMaterial({ map: tex(`skin_${sex}`, lod), normalMap: tex(`skin_${sex}_n`, lod), normalScale: new THREE.Vector2(0.55, 0.55), roughness: 0.52 });
+  const u = {
+    uSkin: { value: col(l.skin) }, uShade: { value: col(l.shade) }, uLip: { value: col(l.lip) }, uGlow: { value: col(l.glow) }, uOver: { value: col(l.over) },
+    uGlowK: { value: l.glowK }, uMarks: { value: texPlain(`${marks}_marks`) },
+  };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.fragmentShader = `uniform vec3 uSkin, uShade, uLip, uGlow, uOver; uniform float uGlowK; uniform sampler2D uMarks;\n` + sh.fragmentShader
+      .replace('#include <map_fragment>', /* glsl */ `
+        vec4 sk = texture2D(map, vMapUv);
+        float sr = sk.r * 2.0;
+        vec3 mk = texture2D(uMarks, vMapUv).rgb;
+        vec3 sc = mix(uShade, uSkin, clamp((sr - 0.45) / 0.55, 0.0, 1.0)) * pow(clamp(sr, 0.3, 1.45), 0.85);
+        sc = mix(sc, uLip * 1.1, sk.g * 0.6);
+        sc = mix(sc, uShade * 0.35, mk.g);
+        sc = mix(sc, uOver * clamp(sr, 0.6, 1.2), mk.b);
+        sc = mix(sc, uGlow, mk.r * 0.5);
+        diffuseColor.rgb = sc;`)
+      .replace('#include <emissivemap_fragment>', /* glsl */ `#include <emissivemap_fragment>
+        totalEmissiveRadiance += uGlow * mk.r * uGlowK;
+        // light bleeding through thin skin at grazing angles
+        float rimS = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0);
+        totalEmissiveRadiance += mix(sc, uSkin, 0.5) * rimS * 0.1;`);
+  };
+  m.customProgramCacheKey = () => 'crew-skin';
+  return m;
+}
+
+export function eyeMaterial(iris: number, glow: number) {
+  const m = new THREE.MeshStandardMaterial({ map: texPlain('eye'), roughness: 0.18 });
+  const u = { uIris: { value: col(iris) }, uEyeGlow: { value: glow } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.fragmentShader = `uniform vec3 uIris; uniform float uEyeGlow;\n` + sh.fragmentShader
+      .replace('#include <map_fragment>', /* glsl */ `
+        vec3 ey = texture2D(map, vMapUv).rgb;
+        vec3 sclera = vec3(0.78, 0.8, 0.84) * pow(ey.r, 1.6) * 1.2;
+        vec3 irisC = uIris * (0.35 + ey.r * 1.3);
+        diffuseColor.rgb = mix(sclera, irisC, ey.g) * (1.0 - ey.b * 0.97);`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        totalEmissiveRadiance += uIris * ey.g * (1.0 - ey.b) * uEyeGlow * (0.3 + ey.r);`);
+  };
+  m.customProgramCacheKey = () => 'crew-eye';
+  return m;
+}
+
+export function lashMaterial(brow: number) {
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7, alphaMap: texPlain('lash'), transparent: true, depthWrite: false, side: THREE.DoubleSide, alphaTest: 0.02 });
+  const u = { uBrow: { value: col(brow) } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.fragmentShader = `uniform vec3 uBrow;\n` + sh.fragmentShader.replace('#include <map_fragment>', 'diffuseColor.rgb = vAlphaMapUv.x < 0.5 ? vec3(0.012) : uBrow;');
+  };
+  m.customProgramCacheKey = () => 'crew-lash';
+  return m;
+}
+
+export const mouthMaterial = () => new THREE.MeshStandardMaterial({ map: texPlain('teeth', true), roughness: 0.34 });
+export const corneaMaterial = () => new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.1, roughness: 0.04, metalness: 0.0, depthWrite: false });
