@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { t } from '../i18n';
-import { audio } from '../core/audio';
 import { createCharacter, Character } from '../characters/character';
 import { cleanName, NAME_MAX } from '../core/crew';
 import {
@@ -139,7 +138,6 @@ export function openCreator(ui: UI, start: PlayerLook, mode: 'new' | 'edit', det
     card.querySelectorAll<HTMLElement>('.seg[data-k], .swatches[data-k]').forEach((g) => {
       const key = g.dataset.k as keyof PlayerLook;
       g.querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.addEventListener('click', () => {
-        audio.uiClick();
         const v = b.dataset.v!;
         const rec = look as unknown as Record<string, unknown>;
         if (g.classList.contains('swatches')) rec[key] = +v;
@@ -155,14 +153,13 @@ export function openCreator(ui: UI, start: PlayerLook, mode: 'new' | 'edit', det
       changed();
     }));
     document.getElementById('nm-ok')!.addEventListener('click', () => {
-      audio.uiClick();
       look.name = cleanName(look.name);
       close();
       onDone(look);
     });
-    document.getElementById('cc-random')!.addEventListener('click', () => { audio.uiClick(); Object.assign(look, randomLook(look)); render(); });
-    document.getElementById('cc-reset')!.addEventListener('click', () => { audio.uiClick(); Object.assign(look, defaultLook(), { name: look.name, gender: look.gender }); render(); });
-    document.getElementById('nm-back')!.addEventListener('click', () => { audio.uiClick(); close(); onBack(); });
+    document.getElementById('cc-random')!.addEventListener('click', () => { Object.assign(look, randomLook(look)); render(); });
+    document.getElementById('cc-reset')!.addEventListener('click', () => { Object.assign(look, defaultLook(), { name: look.name, gender: look.gender }); render(); });
+    document.getElementById('nm-back')!.addEventListener('click', () => { close(); onBack(); });
   };
   render();
 }

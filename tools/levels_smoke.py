@@ -152,19 +152,16 @@ def main():
         expect_step("interact")
         ev("__bs.gotoObjective(0.4)"); ev("__bs.step(0.2)")
         page.keyboard.press("KeyE"); ev("__bs.step(0.2)")
-        expect_step("inventory")
+        expect_step("menu")
         page.keyboard.press("KeyI"); time.sleep(0.3)
         if not page.locator(".inv-list").count():
-            failures.append("inventory panel did not open")
-        page.keyboard.press("KeyI")
-        expect_step("crew")
-        page.keyboard.press("KeyC"); time.sleep(0.3); page.keyboard.press("KeyC")
-        expect_step("objectives")
-        page.keyboard.press("KeyJ"); time.sleep(0.3); page.keyboard.press("KeyJ")
-        expect_step("compass")
-        ev("__bs.step(9)")
+            failures.append("inventory did not open")
+        page.keyboard.press("KeyI"); time.sleep(0.3)
+        page.keyboard.press("KeyC"); time.sleep(0.3); page.keyboard.press("KeyC"); time.sleep(0.3)
+        page.keyboard.press("KeyJ"); time.sleep(0.3); page.keyboard.press("KeyJ"); time.sleep(0.3)
+        ev("__bs.step(1.3)")
         if ev("__bs.tutorial") or not ev("__bs.save.flags.tutorialDone"):
-            failures.append("tutorial did not finish or was not remembered")
+            failures.append(f"hints did not finish or were not remembered: {ev('__bs.tutorial')}")
 
         # ---- play levels 1-10 ----
         # flag -> (screenshot name, hour of day for the shot)

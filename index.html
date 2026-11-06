@@ -8,14 +8,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="format-detection" content="telephone=no" />
     <meta name="description" content="BEYOND SAGITTARIUS: A Survival Story Beyond the Known Universe. An original 3D story-survival browser game." />
-    <meta name="theme-color" content="#05070d" />
+    <meta name="theme-color" content="#0a0907" />
     <title>BEYOND SAGITTARIUS: A Survival Story Beyond the Known Universe</title>
     <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg" />
     <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
-    <!-- Fonts: Google Fonts (SIL Open Font License). See CREDITS.md. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Exo+2:wght@300;400;600&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Nastaliq+Urdu:wght@400;700&family=Noto+Naskh+Arabic:wght@400;600&display=swap" rel="stylesheet" />
   </head>
   <body class="lang-en">
     <canvas id="c"></canvas>
@@ -24,7 +20,6 @@
 
     <!-- Loading -->
     <div id="loading" class="screen">
-      <div class="loader-ring"></div>
       <div class="loader-text" data-i18n="menu.loading"></div>
       <div class="loader-bar"><div id="loader-fill"></div></div>
     </div>
@@ -32,9 +27,7 @@
     <!-- Title -->
     <div id="title" class="screen hidden">
       <div class="title-block">
-        <div class="title-kicker">2189</div>
         <h1 class="game-title"><img class="game-logo" src="/brand/logo.svg" alt="" width="737" height="230" /><span class="game-name" data-i18n="title.name"></span></h1>
-        <div class="game-subtitle" data-i18n="title.subtitle"></div>
         <p class="tagline" data-i18n="title.tagline"></p>
         <div class="menu">
           <button id="btn-continue" class="btn primary hidden" data-i18n="menu.continue"></button>
@@ -42,24 +35,15 @@
           <button id="btn-settings" class="btn" data-i18n="menu.settings"></button>
           <a id="btn-download" class="btn hidden" href="https://github.com/megazron/beyond-sagittarius/releases/latest" target="_blank" rel="noopener" data-i18n="menu.download"></a>
           <button id="btn-quit-desktop" class="btn hidden" data-i18n="menu.quitDesktop"></button>
-          <div class="lang-row">
-            <span class="lang-label" data-i18n="menu.language"></span>
-            <button class="btn lang" data-lang="en">English</button>
-            <button class="btn lang" data-lang="hi">हिन्दी</button>
-            <button class="btn lang" data-lang="ur">اردو</button>
-          </div>
-          <div class="lang-row">
-            <span class="lang-label" data-i18n="settings.subLang"></span>
-            <button class="btn sublang" data-sub="same" data-i18n="settings.same"></button>
-            <button class="btn sublang" data-sub="en">English</button>
-            <button class="btn sublang" data-sub="hi">हिन्दी</button>
-            <button class="btn sublang" data-sub="ur">اردو</button>
-            <button class="btn sublang" data-sub="off" data-i18n="settings.off"></button>
-          </div>
+        </div>
+        <div class="lang-row">
+          <button class="btn lang" data-lang="en">English</button>
+          <button class="btn lang" data-lang="hi">हिन्दी</button>
+          <button class="btn lang" data-lang="ur">اردو</button>
         </div>
       </div>
       <div class="title-foot">
-        <span data-i18n="title.slice"></span> · <span data-i18n="menu.quality"></span>: <b id="quality-badge"></b> · <span id="version-badge">v0.1</span> · <button id="btn-legal" class="link-btn" data-i18n="legal.title"></button>
+        <span data-i18n="title.slice"></span> · <span id="version-badge">v0.1</span> · <span data-i18n="menu.quality"></span> <b id="quality-badge"></b> · <button id="btn-legal" class="link-btn" data-i18n="legal.title"></button>
       </div>
     </div>
 
@@ -70,56 +54,37 @@
       <div id="caption" class="caption hidden"></div>
       <div id="mission" class="mission hidden"></div>
       <div id="ai-alert" class="ai-alert hidden"></div>
-      <button id="btn-skip" class="btn skip"><span data-i18n="cine.skip"></span> ▸▸</button>
+      <button id="btn-skip" class="btn skip"><span class="gl" data-glyph="skip"></span><span data-i18n="cine.skip"></span></button>
     </div>
     <div id="subtitle" class="subtitle hidden"><span class="speaker"></span><span class="line"></span></div>
 
-    <!-- HUD -->
+    <!-- HUD: nothing here is a panel. Things appear when they matter and leave again. -->
     <div id="hud" class="hidden">
-      <div class="stats panel">
-        <div class="stat" data-stat="health"><span class="lbl" data-i18n="hud.health"></span><div class="bar"><i></i></div></div>
-        <div class="stat" data-stat="thirst"><span class="lbl" data-i18n="hud.thirst"></span><div class="bar"><i></i></div></div>
-        <div class="stat" data-stat="hunger"><span class="lbl" data-i18n="hud.hunger"></span><div class="bar"><i></i></div></div>
-        <div class="stat" data-stat="stamina"><span class="lbl" data-i18n="hud.stamina"></span><div class="bar"><i></i></div></div>
-        <div class="suit"><span data-i18n="hud.suit"></span> · <span data-i18n="hud.noSignal" class="blink"></span></div>
-      </div>
-      <div class="compass"><div class="compass-strip" id="compass-strip"></div><div class="compass-needle"></div><div class="compass-dist" id="compass-dist"></div></div>
-      <div class="clock panel" id="clock"></div>
-      <div class="objective panel" id="objective">
-        <div class="obj-level" id="obj-level"></div>
+      <div class="quest" id="objective">
         <div class="obj-title" id="obj-title"></div>
-        <div class="obj-desc" id="obj-desc"></div>
         <div class="obj-progress" id="obj-progress"></div>
+        <div class="obj-desc" id="obj-desc"></div>
       </div>
+      <div class="vitals" id="vitals">
+        <div class="needs"><span class="need" data-stat="thirst"><i data-icon="thirst"></i></span><span class="need" data-stat="hunger"><i data-icon="hunger"></i></span></div>
+        <div class="vbar" data-stat="health"><i></i></div>
+      </div>
+      <svg class="stamina" id="stamina" viewBox="0 0 40 40" aria-hidden="true"><circle class="s-bg" cx="20" cy="20" r="16"/><circle class="s-fg" cx="20" cy="20" r="16" pathLength="100"/></svg>
+      <div class="wmark hidden" id="wmark"><i data-icon="marker"></i><span id="wmark-dist"></span></div>
+      <div class="prompt hidden" id="prompt"><span class="gl" data-glyph="interact"></span><span class="ptext"></span></div>
       <div class="toasts" id="toasts"></div>
-      <div class="prompt hidden" id="prompt"><kbd>E</kbd><span></span></div>
-      <div class="inventory panel" id="inventory"></div>
-      <div class="help-hint" data-i18n="hud.helpHint"></div>
       <div class="banner hidden" id="banner"><div class="b-title"></div><div class="b-sub"></div></div>
       <div class="memory hidden" id="memory"></div>
       <div class="device hidden" id="device"></div>
       <div id="damage" class="damage"></div>
-      <div id="tutorial" class="tutorial panel hidden">
-        <div class="tut-head"></div>
-        <div class="tut-title"></div>
-        <div class="tut-text"></div>
-        <div class="tut-bar"><i></i></div>
-        <button id="tut-skip" class="tut-skip"></button>
-      </div>
-      <!-- Touch controls (phones / tablets) -->
+      <div id="tutorial" class="hint hidden"><span class="tut-text"></span></div>
+      <div id="wheel" class="wheel hidden"><div class="wring"></div><div class="wmid"><div class="wname"></div><div class="wdesc"></div></div></div>
+      <!-- Touch: floating stick, one context button, the bag, the menu -->
       <div id="touch" class="touch-ui hidden">
-        <div id="joy-zone" class="joy-zone"><div id="joy" class="joy"><div id="joy-knob" class="joy-knob"></div></div><span class="joy-hint" data-i18n="touch.moveHint"></span></div>
-        <div class="touch-menu">
-          <button id="tb-pause" class="tbtn sm" aria-label="pause"><i>❚❚</i></button>
-          <button id="tb-obj" class="tbtn sm"><i>◎</i><span data-i18n="touch.obj"></span></button>
-          <button id="tb-crew" class="tbtn sm"><i>☰</i><span data-i18n="touch.crew"></span></button>
-          <button id="tb-inv" class="tbtn sm"><i>▣</i><span data-i18n="touch.inv"></span></button>
-        </div>
-        <div class="touch-actions">
-          <button id="tb-sprint" class="tbtn mid"><i>»</i><span data-i18n="touch.sprint"></span></button>
-          <button id="tb-jump" class="tbtn mid"><i>⤒</i><span data-i18n="touch.jump"></span></button>
-          <button id="tb-act" class="tbtn big"><i>✋</i><span data-i18n="touch.act"></span></button>
-        </div>
+        <div id="joy-zone" class="joy-zone"><div id="joy" class="joy"><div id="joy-knob" class="joy-knob"></div></div></div>
+        <button id="tb-pause" class="tbtn sm" aria-label="menu"><i data-icon="pause"></i></button>
+        <button id="tb-inv" class="tbtn sm" aria-label="items"><i data-icon="inventory"></i></button>
+        <button id="tb-act" class="tbtn big" aria-label="action"><i id="tb-act-ico" data-icon="jump"></i></button>
       </div>
     </div>
 

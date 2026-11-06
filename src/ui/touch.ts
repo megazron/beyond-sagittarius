@@ -1,13 +1,15 @@
 import type { Input } from '../game/input';
 import { audio } from '../core/audio';
+import { icon } from './icons';
 
-export type TouchAction = 'inventory' | 'crew' | 'objectives' | 'pause';
+export type TouchAction = 'wheel' | 'pause';
+
 
 /**
- * On-screen controls for phones and tablets: a floating virtual joystick on
- * the left (touch anywhere in the zone to place it), and buttons for
- * interact, jump, sprint (toggle) and the inventory / crew / objectives /
- * pause panels. Looking around is a drag on the world itself (game/input.ts).
+ * On-screen controls for phones and tablets, laid out like a mobile action game:
+ * a stick that appears under your left thumb (push it to the rim to run), one
+ * context button that uses what is in reach and otherwise jumps, a bag for the
+ * item wheel and a menu button. Looking is a drag on the world (game/input.ts).
  */
 export class TouchControls {
   private root = document.getElementById('touch')!;
@@ -15,7 +17,6 @@ export class TouchControls {
   private base = document.getElementById('joy')!;
   private knob = document.getElementById('joy-knob')!;
   private act = document.getElementById('tb-act')!;
-  private sprintBtn = document.getElementById('tb-sprint')!;
   private joyId: number | null = null;
   private origin = { x: 0, y: 0 };
   private radius = 56;
@@ -51,12 +52,8 @@ export class TouchControls {
       tapBtn(id, () => {});
       document.getElementById(id)!.addEventListener('click', () => { audio.uiClick(); onAction(a); });
     };
-    tapBtn('tb-act', () => input.tapAction('interact'));
-    tapBtn('tb-jump', () => input.tapAction('jump'));
-    tapBtn('tb-sprint', () => this.setSprint(!this.sprint));
-    menuBtn('tb-inv', 'inventory');
-    menuBtn('tb-crew', 'crew');
-    menuBtn('tb-obj', 'objectives');
+    tapBtn('tb-act', () => input.tapAction(document.body.classList.contains('can-act') ? 'interact' : 'jump'));
+    menuBtn('tb-inv', 'wheel');
     menuBtn('tb-pause', 'pause');
     window.addEventListener('resize', () => this.layout());
     this.layout();
@@ -73,14 +70,17 @@ export class TouchControls {
     if (!on) this.reset();
   }
 
-  /** Highlight the interact button while something can be used. */
-  setActionAvailable(on: boolean) { this.act.classList.toggle('ready', on); }
+  /** The context button shows what it will do. */
+  private shown = '';
+  syncAct() {
+    const want = document.body.classList.contains('can-act') ? 'use' : 'jump';
+    if (want !== this.shown) { this.shown = want; document.getElementById('tb-act-ico')!.innerHTML = icon(want); }
+  }
 
-  private sprintUsed = false;
   setSprint(on: boolean) {
+    if (on === this.sprint) return;
     this.sprint = on;
-    this.sprintUsed = false;
-    this.sprintBtn.classList.toggle('on', on);
+    this.base.classList.toggle('run', on);
     this.input.holdAction('sprint', on);
   }
 
@@ -90,13 +90,8 @@ export class TouchControls {
     if (id) document.getElementById(id)?.classList.add('pulse');
   }
 
-  /** Called every frame: sprint switches itself off when you stop. */
-  update() {
-    const m = this.input.touchMove;
-    const moving = Math.hypot(m.x, m.y) >= 0.15;
-    if (moving) this.sprintUsed = true;
-    if (this.sprint && this.sprintUsed && !moving && this.joyId === null) this.setSprint(false);
-  }
+  /** Called every frame. */
+  update() { this.syncAct(); }
 
   reset() {
     this.joyUp();
@@ -129,10 +124,14 @@ export class TouchControls {
     this.moveTotal += Math.abs(nx - this.input.touchMove.x) + Math.abs(ny - this.input.touchMove.y);
     this.input.touchMove.x = nx;
     this.input.touchMove.y = ny;
+    // pushed to the rim, forwards: run. Easing off walks again.
+    if (d >= r * 0.92 && ny < -0.6) this.setSprint(true);
+    else if (d < r * 0.7) this.setSprint(false);
   }
 
   private joyUp() {
     this.joyId = null;
+    this.setSprint(false);
     this.input.touchMove.x = this.input.touchMove.y = 0;
     this.base.classList.remove('active');
     this.base.style.left = '';

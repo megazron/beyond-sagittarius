@@ -7,6 +7,13 @@ import type { QualityName } from '../core/quality';
 import { audio } from '../core/audio';
 import { voice } from '../core/voice';
 import { portraits } from './portraits';
+import { icon } from './icons';
+import { glyph, glyphText } from './glyphs';
+import { ITEM_ICON } from './wheel';
+import { mapHtml } from './map';
+import { remapHtml, bindRemap } from './remap';
+import type { Input } from '../game/input';
+import * as THREE from 'three';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -14,12 +21,9 @@ export const LEVEL_COUNT = 10;
 export const PLAYABLE_LEVELS = 10;
 const CREW = CREW_IDS;
 
-const ITEM_ICONS: Record<string, string> = {
-  stone: '◆', branch: '⟋', fruit: '●', tinder: '❋', frond: '❦', flint: '◭', vine: '∿', scrap: '▰', spear: '↗', transmitter: '⌁',
-};
-/** Always-visible inventory slots; the rest appear once you hold some. */
-const BASE_SLOTS = ['stone', 'branch'];
-const EXTRA_SLOTS = ['tinder', 'frond', 'flint', 'vine', 'scrap'];
+export type MenuTab = 'pause' | 'map' | 'inventory' | 'objectives' | 'crew';
+const TABS: [MenuTab, string, string][] = [['pause', 'pause', 'tab.game'], ['map', 'planet', 'tab.map'], ['inventory', 'inventory', 'tab.inventory'], ['objectives', 'objectives', 'tab.goals'], ['crew', 'crew', 'tab.crew']];
+const ALL_ITEMS = ['stone', 'branch', 'tinder', 'frond', 'flint', 'vine', 'scrap', 'fruit'];
 
 export interface Stats { health: number; thirst: number; hunger: number; stamina: number }
 
@@ -41,6 +45,21 @@ export class UI implements CineUI {
     el.classList.remove('sub-en', 'sub-hi', 'sub-ur');
     el.classList.add(`sub-${l}`);
   }
+
+  /** Set by main: switches the full-screen menu to a tab. */
+  onMenuTab: ((tab: MenuTab) => void) | null = null;
+  onDamage: (() => void) | null = null;
+  input: Input | null = null;
+  private clockText = '';
+  private seen: Record<string, number> = {};
+  private flareTimer = 0;
+  private needTimers: Record<string, number> = {};
+  private staminaTimer = 0;
+  private healthTimer = 0;
+  private promptAnchor: THREE.Vector3 | null = null;
+  private markPoint: THREE.Vector3 | null = null;
+  private markDist: number | null = null;
+  private v = new THREE.Vector3();
 
   constructor() {
     onLangChange(() => this.refreshLang());
@@ -147,38 +166,59 @@ export class UI implements CineUI {
   }
 
   // ---------- HUD ----------
+  /** Vitals stay out of sight until they change or run low. */
   setStats(s: Stats) {
-    for (const k of ['health', 'thirst', 'hunger', 'stamina'] as const) {
-      const row = document.querySelector(`.stat[data-stat="${k}"]`) as HTMLElement;
-      (row.querySelector('i') as HTMLElement).style.width = `${Math.max(0, Math.min(100, s[k]))}%`;
-      row.classList.toggle('low', s[k] < 20);
+    const health = document.querySelector('.vbar') as HTMLElement;
+    (health.querySelector('i') as HTMLElement).style.width = `${Math.max(0, Math.min(100, s.health))}%`;
+    const was = this.seen.health ?? s.health;
+    if (Math.abs(was - s.health) > 0.4) {
+      this.seen.health = s.health;
+      health.classList.add('show');
+      clearTimeout(this.healthTimer);
+      this.healthTimer = window.setTimeout(() => { if ((this.seen.health ?? 100) >= 35) health.classList.remove('show'); }, 3500);
     }
+    this.seen.health ??= s.health;
+    if (s.health < 35) health.classList.add('show');
+    health.classList.toggle('low', s.health < 20);
+    for (const k of ['thirst', 'hunger'] as const) {
+      const el = document.querySelector(`.need[data-stat="${k}"]`) as HTMLElement;
+      const rose = s[k] > (this.seen[k] ?? s[k]) + 1;
+      this.seen[k] = s[k];
+      if (rose) { el.classList.add('show'); clearTimeout(this.needTimers[k]); this.needTimers[k] = window.setTimeout(() => el.classList.remove('show'), 2500); }
+      el.classList.toggle('warn', s[k] < 30);
+      el.classList.toggle('low', s[k] < 15);
+    }
+    const st = $('stamina');
+    (st.querySelector('.s-fg') as SVGElement).style.strokeDashoffset = String(100 - Math.max(0, Math.min(100, s.stamina)));
+    st.classList.toggle('low', s.stamina < 22);
+    if (s.stamina < 99) { st.classList.add('show'); clearTimeout(this.staminaTimer); this.staminaTimer = window.setTimeout(() => st.classList.remove('show'), 900); }
+  }
+
+  /** One quiet line; the description shows for a few seconds when the goal changes. */
+  private flare() {
+    const q = $('objective');
+    q.classList.add('flare');
+    clearTimeout(this.flareTimer);
+    this.flareTimer = window.setTimeout(() => q.classList.remove('flare'), 8000);
   }
 
   setObjective(level: number, progress: string | null) {
+    const prev = this.objectiveState;
     this.objectiveState = { level, progress };
+    if (prev.level !== level || prev.progress !== progress) this.flare();
     if (level > LEVEL_COUNT) {
-      $('obj-level').textContent = t('wake.chapter');
       $('obj-title').textContent = t('level.arc.title');
       $('obj-desc').textContent = t('level.arc.desc');
       $('obj-progress').textContent = '';
       return;
     }
-    $('obj-level').textContent = t('hud.level', { n: level });
     $('obj-title').textContent = t(`level.${level}.title`);
     $('obj-desc').textContent = level <= PLAYABLE_LEVELS ? t(`level.${level}.desc`) : t('level.locked');
     $('obj-progress').textContent = progress ?? '';
   }
 
   private lastInv: { inv: Record<string, number>; tools: string[] } = { inv: {}, tools: [] };
-  setInventory(inv: Record<string, number>, tools: string[] = this.lastInv.tools) {
-    this.lastInv = { inv, tools };
-    const el = $('inventory');
-    const keys = [...BASE_SLOTS, ...EXTRA_SLOTS.filter((k) => (inv[k] ?? 0) > 0)];
-    const slot = (k: string, n: number | null) =>
-      `<div class="slot ${n === 0 ? 'empty' : ''} ${n === null ? 'tool' : ''}" data-item="${k}">${n !== null ? `<span class="n">${n}</span>` : ''}<span class="ico">${ITEM_ICONS[k] ?? '?'}</span><span>${escapeHtml(t(`item.${k}`))}</span></div>`;
-    el.innerHTML = keys.map((k) => slot(k, inv[k] ?? 0)).join('') + tools.map((k) => slot(k, null)).join('');
-  }
+  setInventory(inv: Record<string, number>, tools: string[] = this.lastInv.tools) { this.lastInv = { inv, tools }; }
 
   /** Wrist-device readout with raw (already translated) lines. */
   deviceLines(lines: string[] | null, small = false, alert = false) {
@@ -190,22 +230,63 @@ export class UI implements CineUI {
     el.classList.remove('hidden');
   }
 
-  setPrompt(text: string | null) {
+  /** Prompt that sits on the thing it is about. No anchor: low in the centre. */
+  setPrompt(text: string | null, anchor: THREE.Vector3 | null = null) {
     const el = $('prompt');
     document.body.classList.toggle('can-act', !!text);
+    this.promptAnchor = anchor;
     if (!text) { el.classList.add('hidden'); return; }
-    (el.querySelector('span') as HTMLElement).textContent = text;
+    (el.querySelector('.ptext') as HTMLElement).textContent = text;
+    el.classList.remove('hidden');
+  }
+
+  /** The goal's point in the world, drawn by track(). */
+  setMarker(point: THREE.Vector3 | null, dist: number | null) { this.markPoint = point; this.markDist = dist; }
+
+  /** Every frame: pin the prompt and the goal marker to the world. */
+  track(cam: THREE.Camera) {
+    const w = window.innerWidth, h = window.innerHeight;
+    const pr = $('prompt');
+    if (!pr.classList.contains('hidden')) {
+      let x = w / 2, y = h * 0.66;
+      if (this.promptAnchor) {
+        const v = this.v.copy(this.promptAnchor).project(cam);
+        if (v.z < 1 && Math.abs(v.x) < 1.2) { x = (v.x + 1) / 2 * w; y = (1 - v.y) / 2 * h; }
+      }
+      const half = pr.offsetWidth / 2;
+      pr.style.transform = `translate(${Math.round(Math.max(half + 10, Math.min(w - half - 10, x)) - half)}px, ${Math.round(Math.max(70, Math.min(h - 130, y - pr.offsetHeight - 12)))}px)`;
+    }
+    const m = $('wmark');
+    if (!this.markPoint) { m.classList.add('hidden'); return; }
+    m.classList.remove('hidden');
+    const v = this.v.copy(this.markPoint); v.y += 1.4; v.project(cam);
+    const behind = v.z > 1;
+    let nx = behind ? -v.x * 4 : v.x, ny = behind ? 0.8 : v.y;
+    const edge = Math.max(Math.abs(nx) / 0.9, Math.abs(ny) / 0.8, 1);
+    nx /= edge; ny /= edge;
+    m.style.transform = `translate(${Math.round((nx + 1) / 2 * w)}px, ${Math.round((1 - ny) / 2 * h)}px)`;
+    const near = !behind && edge === 1 && Math.abs(nx) < 0.22;
+    m.classList.toggle('edge', edge > 1);
+    m.classList.toggle('read', near || $('objective').classList.contains('flare'));
+    $('wmark-dist').textContent = this.markDist !== null ? t('hud.distance', { m: Math.round(this.markDist) }) : '';
+  }
+
+  /** Light contextual hint, low on the screen. */
+  hint(text: string | null) {
+    const el = $('tutorial');
+    if (!text) { el.classList.add('hidden'); return; }
+    (el.querySelector('.tut-text') as HTMLElement).innerHTML = glyphText(text);
     el.classList.remove('hidden');
   }
 
   toast(text: string) {
     const d = document.createElement('div');
     d.className = 'toast';
-    d.textContent = text;
+    d.innerHTML = glyphText(text);
     $('toasts').appendChild(d);
     setTimeout(() => d.remove(), 5000);
     const all = $('toasts').children;
-    if (all.length > 4) all[0].remove();
+    if (all.length > 3) all[0].remove();
   }
 
   banner(title: string, sub: string) {
@@ -231,49 +312,57 @@ export class UI implements CineUI {
     const el = $('damage');
     el.classList.add('on');
     setTimeout(() => el.classList.remove('on'), 120);
+    this.onDamage?.();
   }
 
   setClock(day: number, hours: number) {
     const h = Math.floor(hours) % 24, m = Math.floor((hours % 1) * 60);
-    $('clock').textContent = `${t('hud.day', { d: day })} · ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  }
-
-  /** yaw: camera heading in radians (0 = north/-Z). bearing: world bearing of objective. */
-  setCompass(yaw: number, bearing: number | null, dist: number | null) {
-    const strip = $('compass-strip');
-    const width = strip.clientWidth || 400;
-    const pxPerRad = width / (Math.PI * 0.9);
-    const heading = -yaw;
-    const parts: string[] = [];
-    const labels: [number, string][] = [[0, t('compass.n')], [Math.PI / 2, t('compass.e')], [Math.PI, t('compass.s')], [-Math.PI / 2, t('compass.w')]];
-    const rel = (a: number) => Math.atan2(Math.sin(a - heading), Math.cos(a - heading));
-    for (let i = 0; i < 24; i++) {
-      const a = (i / 24) * Math.PI * 2;
-      const r = rel(a);
-      if (Math.abs(r) < Math.PI * 0.5) parts.push(`<span class="tick" style="left:${width / 2 + r * pxPerRad}px"></span>`);
-    }
-    for (const [a, l] of labels) {
-      const r = rel(a);
-      if (Math.abs(r) < Math.PI * 0.5) parts.push(`<span style="left:${width / 2 + r * pxPerRad}px">${escapeHtml(l)}</span>`);
-    }
-    if (bearing !== null) {
-      const r = rel(bearing);
-      const clamped = Math.max(-Math.PI * 0.44, Math.min(Math.PI * 0.44, r));
-      parts.push(`<span class="marker" style="left:${width / 2 + clamped * pxPerRad}px">◆</span>`);
-    }
-    strip.innerHTML = parts.join('');
-    $('compass-dist').textContent = dist !== null ? t('hud.distance', { m: Math.round(dist) }) : '';
+    this.clockText = `${t('hud.day', { d: day })} · ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 
   // ---------- modals ----------
+  private leaveTimer = 0;
   private openModal(html: string) {
+    const m = $('modal');
+    clearTimeout(this.leaveTimer);
+    if (m.classList.contains('hidden') || m.classList.contains('leaving')) audio.uiOpen();
+    m.classList.remove('leaving');
     $('modal-card').innerHTML = html;
-    $('modal').classList.remove('hidden');
+    $('modal-card').scrollTop = 0;
+    m.classList.remove('hidden');
+    document.body.classList.add('in-menu');
+    document.querySelectorAll<HTMLElement>('#modal-card [data-icon]').forEach((el) => { el.innerHTML = icon(el.dataset.icon!); });
   }
   closeModal() {
-    $('modal').classList.add('hidden');
+    const m = $('modal');
+    document.body.classList.remove('in-menu');
+    if (!m.classList.contains('hidden') && !m.classList.contains('leaving')) {
+      audio.uiClose();
+      m.classList.add('leaving');
+      clearTimeout(this.leaveTimer);
+      this.leaveTimer = window.setTimeout(() => { m.classList.add('hidden'); m.classList.remove('leaving'); }, 130);
+    }
     // a focused (now hidden) name field would swallow game keys
     (document.activeElement as HTMLElement | null)?.blur?.();
+  }
+  /** Full-screen menu shell: tab strip, page, button hints. */
+  private menuPage(tab: MenuTab, body: string, back = 'menu.close') {
+    this.openModal(`<header class="menu-top"><span class="tabhint">${glyph('tabs')}</span>
+      <nav class="tabs main-tabs">${TABS.map(([id, ic, label]) => `<button id="tab-${id}" class="tab ${id === tab ? 'active' : ''}" data-tab="${id}">${icon(ic)}<span>${escapeHtml(t(label))}</span></button>`).join('')}</nav>
+      <span class="menu-clock">${escapeHtml(this.clockText)}</span></header>
+      <div class="menu-page">${body}</div>${this.foot(back)}`);
+    document.querySelectorAll<HTMLElement>('.main-tabs .tab').forEach((b) => b.addEventListener('click', () => { if (b.dataset.tab !== tab) { audio.uiTab(); this.onMenuTab?.(b.dataset.tab as MenuTab); } }));
+  }
+  private foot(back: string) {
+    return `<footer class="menu-foot"><span class="hintline">${glyph('confirm')}<span>${escapeHtml(t('menu.select'))}</span></span><button class="foot-btn" id="m-close">${glyph('cancel')}<span>${escapeHtml(t(back))}</span></button></footer>`;
+  }
+  /** LB/RB, Q/E style: the next tab in whichever strip is showing. */
+  cycleTab(dir: number) {
+    const strip = document.querySelector('#modal-card .sub-tabs') ?? document.querySelector('#modal-card .main-tabs');
+    if (!strip) return;
+    const tabs = Array.from(strip.querySelectorAll<HTMLElement>('.tab'));
+    const i = tabs.findIndex((x) => x.classList.contains('active'));
+    tabs[(i + dir + tabs.length) % tabs.length]?.click();
   }
   modalOpen() { return !$('modal').classList.contains('hidden'); }
 
@@ -281,30 +370,46 @@ export class UI implements CineUI {
     const seg = (name: string, opts: [string, string][], cur: string) =>
       `<div class="seg" data-seg="${name}">${opts.map(([v, l]) => `<button data-v="${v}" class="${v === cur ? 'active' : ''}">${escapeHtml(l)}</button>`).join('')}</div>`;
     const onOff = (name: string, v: boolean) => seg(name, [['1', t('settings.on')], ['0', t('settings.off')]], v ? '1' : '0');
-    this.openModal(`
-      <h2>${escapeHtml(t('settings.title'))}</h2>
-      <div class="row"><label>${escapeHtml(t('settings.quality'))}</label>${seg('quality', [['mobile', t('settings.qualityMobile')], ['web', t('settings.qualityWeb')], ['ultra', t('settings.qualityUltra')]], quality)}</div>
-      <div class="note">${escapeHtml(t('settings.qualityNote'))}</div>
-      <div class="row"><label>${escapeHtml(t('menu.language'))}</label>${seg('lang', [['en', 'English'], ['hi', 'हिन्दी'], ['ur', 'اردو']], s.lang)}</div>
-      <div class="row"><label>${escapeHtml(t('settings.sensitivity'))}</label><input type="range" id="set-sens" min="0.3" max="2.5" step="0.1" value="${s.sensitivity}"></div>
-      <div class="row"><label>${escapeHtml(t('settings.volume'))}</label><input type="range" id="set-vol" min="0" max="1" step="0.05" value="${s.volume}"></div>
-      <div class="row"><label>${escapeHtml(t('settings.voice'))}</label><input type="range" id="set-voice" min="0" max="1" step="0.05" value="${s.voiceVolume}"></div>
-      <div class="row"><label>${escapeHtml(t('settings.music'))}</label><input type="range" id="set-music" min="0" max="1" step="0.05" value="${s.musicVolume}"></div>
-      <div class="row"><label>${escapeHtml(t('settings.sfx'))}</label><input type="range" id="set-sfx" min="0" max="1" step="0.05" value="${s.sfxVolume}"></div>
-      <div class="row"><label>${escapeHtml(t('settings.mute'))}</label>${onOff('muted', s.muted)}</div>
-      <div class="row"><label>${escapeHtml(t('settings.invertY'))}</label>${onOff('invertY', s.invertY)}</div>
-      <div class="row"><label>${escapeHtml(t('settings.subLang'))}</label>${seg('subLang', [['same', t('settings.same')], ['en', 'English'], ['hi', 'हिन्दी'], ['ur', 'اردو'], ['off', t('settings.off')]], s.subLang)}</div>
-      <div class="row"><label>${escapeHtml(t('settings.voiceLang'))}</label>${seg('voiceLang', [['same', t('settings.same')], ['en', 'English'], ['hi', 'हिन्दी'], ['ur', 'اردو']], s.voiceLang)}</div>
-      <div class="row"><label>${escapeHtml(t('settings.fps'))}</label>${onOff('showFps', s.showFps)}</div>
-      ${onTutorial ? `<div class="row"><label>${escapeHtml(t('settings.tutorial'))}</label><button class="btn small" id="set-tut">${escapeHtml(t('settings.tutorialReplay'))}</button></div>` : ''}
-      ${onSkins ? `<div class="row"><label>${escapeHtml(t('menu.skins'))}</label><button class="btn small" id="set-skins">${escapeHtml(t('menu.skins'))}</button></div>` : ''}
-      ${onLegal ? `<div class="row"><label>${escapeHtml(t('legal.title'))}</label><button class="btn small" id="set-legal">${escapeHtml(t('legal.title'))}</button></div>` : ''}
-      <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.back'))}</button></div>`);
-    const card = $('modal-card');
-    if (onLegal) $('set-legal').addEventListener('click', () => { audio.uiClick(); onLegal(); });
-    if (onSkins) $('set-skins').addEventListener('click', () => { audio.uiClick(); onSkins(); });
+    const row = (label: string, body: string) => `<div class="row"><label>${escapeHtml(t(label))}</label>${body}</div>`;
+    const range = (id: string, label: string, min: number, max: number, step: number, v: number) => row(label, `<input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${v}">`);
+    const LANGS: [string, string][] = [['en', 'English'], ['hi', 'हिन्दी'], ['ur', 'اردو']];
+    const panes: [string, string, string][] = [
+      ['sound', 'settings.tabSound', `
+        ${row('menu.language', seg('lang', LANGS, s.lang))}
+        ${row('settings.subLang', seg('subLang', [['same', t('settings.same')], ...LANGS, ['off', t('settings.off')]], s.subLang))}
+        ${row('settings.voiceLang', seg('voiceLang', [['same', t('settings.same')], ...LANGS], s.voiceLang))}
+        ${range('set-vol', 'settings.volume', 0, 1, 0.05, s.volume)}${range('set-voice', 'settings.voice', 0, 1, 0.05, s.voiceVolume)}
+        ${range('set-music', 'settings.music', 0, 1, 0.05, s.musicVolume)}${range('set-sfx', 'settings.sfx', 0, 1, 0.05, s.sfxVolume)}
+        ${row('settings.mute', onOff('muted', s.muted))}`],
+      ['display', 'settings.tabDisplay', `
+        ${row('settings.quality', seg('quality', [['mobile', t('settings.qualityMobile')], ['web', t('settings.qualityWeb')], ['ultra', t('settings.qualityUltra')]], quality))}
+        <div class="note">${escapeHtml(t('settings.qualityNote'))}</div>
+        ${row('settings.fps', onOff('showFps', s.showFps))}`],
+      ['controls', 'settings.tabControls', `
+        ${range('set-sens', 'settings.sensitivity', 0.3, 2.5, 0.1, s.sensitivity)}
+        ${row('settings.invertY', onOff('invertY', s.invertY))}
+        ${row('settings.vibration', onOff('vibration', s.vibration !== false))}
+        ${this.input ? remapHtml(this.input) : ''}`],
+      ['system', 'settings.tabSystem', `
+        ${onTutorial ? row('settings.tutorial', `<button class="btn small" id="set-tut">${escapeHtml(t('settings.tutorialReplay'))}</button>`) : ''}
+        ${onSkins ? row('menu.skins', `<button class="btn small" id="set-skins">${escapeHtml(t('menu.skins'))}</button>`) : ''}
+        ${onLegal ? row('legal.title', `<button class="btn small" id="set-legal">${escapeHtml(t('legal.title'))}</button>`) : ''}`],
+    ];
+    this.openModal(`<header class="menu-top"><span class="tabhint">${glyph('tabs')}</span><h2>${escapeHtml(t('settings.title'))}</h2>
+        <nav class="tabs sub-tabs">${panes.map(([id, label], i) => `<button class="tab ${i === 0 ? 'active' : ''}" data-pane="${id}"><span>${escapeHtml(t(label))}</span></button>`).join('')}</nav></header>
+      <div class="menu-page">${panes.map(([id, , body], i) => `<section class="pane ${i === 0 ? '' : 'hidden'}" data-pane="${id}">${body}</section>`).join('')}</div>${this.foot('menu.back')}`);
+    document.querySelectorAll<HTMLElement>('.sub-tabs .tab').forEach((b) => b.addEventListener('click', () => {
+      audio.uiTab();
+      document.querySelectorAll('.sub-tabs .tab').forEach((x) => x.classList.toggle('active', x === b));
+      document.querySelectorAll<HTMLElement>('.pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== b.dataset.pane));
+      $('modal-card').scrollTop = 0;
+    }));
+    if (this.input) bindRemap(this.input, s, onChange);
+    if (onLegal) $('set-legal').addEventListener('click', () => onLegal());
+    if (onSkins) $('set-skins').addEventListener('click', () => onSkins());
     if (onTutorial) $('set-tut').addEventListener('click', () => { audio.uiClick(); const b = $('set-tut'); b.textContent = t('settings.tutorialQueued'); (b as HTMLButtonElement).disabled = true; onTutorial(); });
-    card.querySelectorAll<HTMLElement>('.seg').forEach((g) => {
+    const card = $('modal-card');
+    card.querySelectorAll<HTMLElement>('.seg[data-seg]').forEach((g) => {
       g.querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.addEventListener('click', () => {
         audio.uiClick();
         const name = g.dataset.seg!, v = b.dataset.v!;
@@ -315,7 +420,7 @@ export class UI implements CineUI {
           onChange(s);
           return;
         }
-        if (name === 'lang') { s.lang = v as Lang; setLang(s.lang); onChange(s); this.openSettings(s, quality, onChange, onQuality, onClose); return; }
+        if (name === 'lang') { s.lang = v as Lang; setLang(s.lang); onChange(s); this.openSettings(s, quality, onChange, onQuality, onClose, onTutorial, onSkins, onLegal); return; }
         (s as unknown as Record<string, boolean>)[name] = v === '1';
         g.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
         onChange(s);
@@ -327,38 +432,38 @@ export class UI implements CineUI {
     slider('set-voice', (v) => (s.voiceVolume = v));
     slider('set-music', (v) => (s.musicVolume = v));
     slider('set-sfx', (v) => (s.sfxVolume = v));
-    $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
+    $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
   }
 
-  openPause(h: { resume: () => void; settings: () => void; objectives: () => void; crew: () => void; look: () => void; skins: () => void; quit: () => void }) {
-    this.openModal(`
-      <h2>${escapeHtml(t('menu.paused'))}</h2>
-      <div class="menu">
-        <button class="btn primary" id="p-resume">${escapeHtml(t('menu.resume'))}</button>
-        <button class="btn" id="p-obj">${escapeHtml(t('menu.objectives'))}</button>
-        <button class="btn" id="p-crew">${escapeHtml(t('menu.crew'))}</button>
-        <button class="btn" id="p-look">${escapeHtml(t('menu.changeLook'))}</button>
-        <button class="btn" id="p-skins">${escapeHtml(t('menu.skins'))}</button>
-        <button class="btn" id="p-set">${escapeHtml(t('menu.settings'))}</button>
-        <button class="btn" id="p-quit">${escapeHtml(t('menu.quitTitle'))}</button>
-      </div>
-      <h2 style="margin-top:24px">${escapeHtml(t('controls.title'))}</h2>
-      <ul class="controls-list">${['move', 'sprint', 'jump', 'interact', 'look', 'zoom', 'objectives', 'crew', 'inventory', 'pause', 'touch'].map((k) => `<li>${escapeHtml(t(`controls.${k}`))}</li>`).join('')}</ul>`);
-    const bind = (id: string, f: () => void) => $(id).addEventListener('click', () => { audio.uiClick(); f(); });
-    bind('p-look', h.look); bind('p-skins', h.skins); bind('p-resume', h.resume); bind('p-obj', h.objectives); bind('p-crew', h.crew); bind('p-set', h.settings); bind('p-quit', h.quit);
+  openPause(h: { resume: () => void; settings: () => void; look: () => void; skins: () => void; quit: () => void }) {
+    const row = (id: string, ic: string, label: string, cls = '') => `<button class="btn ${cls}" id="${id}">${icon(ic)}<span>${escapeHtml(t(label))}</span></button>`;
+    const { level, progress } = this.objectiveState;
+    this.menuPage('pause', `<div class="pause">
+      <div class="menu">${row('p-resume', 'play', 'menu.resume', 'primary')}${row('p-set', 'settings', 'menu.settings')}${row('p-look', 'look', 'menu.changeLook')}${row('p-skins', 'skins', 'menu.skins')}${row('p-quit', 'quit', 'menu.quitTitle')}</div>
+      <aside class="pause-side"><div class="eyebrow">${escapeHtml(t('hud.objective'))}</div>
+        <div class="side-title">${escapeHtml($('obj-title').textContent ?? '')}</div>
+        <p>${escapeHtml($('obj-desc').textContent ?? '')}</p>${progress ? `<p class="accent">${escapeHtml(progress)}</p>` : ''}${level > LEVEL_COUNT ? '' : `<div class="eyebrow dim">${escapeHtml(t('hud.level', { n: level }))}</div>`}</aside></div>`, 'menu.resume');
+    const bind = (id: string, f: () => void) => $(id).addEventListener('click', f);
+    bind('p-look', h.look); bind('p-skins', h.skins); bind('p-resume', h.resume); bind('p-set', h.settings); bind('p-quit', h.quit);
+    bind('m-close', h.resume);
   }
 
-  /** Inventory panel: everything you carry, with a short description. */
+  /** The Map tab; main draws into it once the layout exists. */
+  openMap(onClose: () => void) {
+    this.menuPage('map', mapHtml());
+    $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
+  }
+
+  /** Inventory tab: everything you carry, with a short description. */
   openInventory(inv: Record<string, number>, tools: string[], onClose: () => void) {
-    const keys = [...BASE_SLOTS, ...EXTRA_SLOTS, 'fruit'].filter((k, i, a) => a.indexOf(k) === i && (BASE_SLOTS.includes(k) || (inv[k] ?? 0) > 0));
-    const row = (k: string, n: number | null) => `<li class="${n === 0 ? 'empty' : ''}"><span class="ico">${ITEM_ICONS[k] ?? '?'}</span>
-      <span class="iname">${escapeHtml(t(`item.${k}`))}${n !== null ? ` <b>×${n}</b>` : ` <b class="tool">${escapeHtml(t('inv.tool'))}</b>`}</span>
+    const keys = ALL_ITEMS.filter((k) => (inv[k] ?? 0) > 0);
+    const row = (k: string, n: number | null) => `<li>${icon(ITEM_ICON[k] ?? 'marker')}
+      <span class="iname">${escapeHtml(t(`item.${k}`))}${n !== null ? ` <b>${n}</b>` : ` <b class="tool">${escapeHtml(t('inv.tool'))}</b>`}</span>
       <span class="idesc">${escapeHtml(t(`itemdesc.${k}`))}</span></li>`;
     const list = keys.map((k) => row(k, inv[k] ?? 0)).join('') + tools.map((k) => row(k, null)).join('');
-    this.openModal(`<h2>${escapeHtml(t('inv.title'))}</h2><ul class="inv-list">${list}</ul>
-      <div class="note">${escapeHtml(t('inv.note'))}</div>
-      <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.close'))}</button></div>`);
-    $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
+    this.menuPage('inventory', `<ul class="inv-list">${list || `<li class="empty"><span class="iname">${escapeHtml(t('wheel.empty'))}</span></li>`}</ul>
+      <div class="note">${escapeHtml(t('inv.note'))}</div>`);
+    $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
   }
 
   openObjectives(current: number, completed: number[], onClose: () => void) {
@@ -367,12 +472,11 @@ export class UI implements CineUI {
       const done = completed.includes(n);
       const cls = done ? 'done' : n === current ? 'current' : n > PLAYABLE_LEVELS ? 'locked' : 'upcoming';
       const st = done ? t('level.done') : n === current && n <= PLAYABLE_LEVELS ? t('level.current') : n > PLAYABLE_LEVELS ? t('level.locked') : '';
-      return `<li class="${cls}"><span class="num">${String(n).padStart(2, '0')}</span><span>${escapeHtml(t(`level.${n}.title`))}</span><span class="st">${escapeHtml(st)}</span></li>`;
+      return `<li class="${cls}"><span class="num">${done ? icon('check') : String(n).padStart(2, '0')}</span><span>${escapeHtml(t(`level.${n}.title`))}</span><span class="st">${escapeHtml(st)}</span></li>`;
     }).join('');
     const arc = current > LEVEL_COUNT ? `<div class="note arc">${escapeHtml(t('level.arc.title'))}: ${escapeHtml(t('level.arc.desc'))}</div>` : '';
-    this.openModal(`<h2>${escapeHtml(t('objectives.title'))}</h2><ul class="levels">${items}</ul>${arc}
-      <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.close'))}</button></div>`);
-    $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
+    this.menuPage('objectives', `<h3 class="page-h">${escapeHtml(t('objectives.title'))}</h3><ul class="levels">${items}</ul>${arc}`);
+    $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
   }
 
   openCrew(status: (id: string) => { status: string; unlocked: boolean }, onClose: () => void, onRename?: () => void) {
@@ -382,19 +486,17 @@ export class UI implements CineUI {
       return `
       <div class="crew-card ${i === 0 ? 'you' : ''} ${found ? 'found' : ''}" data-crew="${c}">
         <img class="cp" alt="" data-portrait="${c}">
-        <div class="cn">${escapeHtml(t(`crew.${c}.name`))}${i === 0 ? ` · ${escapeHtml(t('crew.you'))}` : ''}</div>
+        <div class="cbody"><div class="cn">${icon(c)}${escapeHtml(t(`crew.${c}.name`))}${i === 0 ? ` · ${escapeHtml(t('crew.you'))}` : ''}</div>
         <div class="cr">${escapeHtml(t(`crew.${c}.role`))}</div>
         <div class="cl">${escapeHtml(t(`crew.${c}.line`))}</div>
         <div class="cs">${escapeHtml(st.status)}</div>
-        <div class="skills">${[1, 2, 3].map((k) => { const on = st.unlocked && k === 1; return `<span class="${on ? 'on' : ''}">${escapeHtml(t(`crew.${c}.s${k}`))}${on ? '' : ' · ' + escapeHtml(t('crew.locked'))}</span>`; }).join('')}</div>
+        <div class="skills">${[1, 2, 3].map((k) => { const on = st.unlocked && k === 1; return `<span class="${on ? 'on' : ''}">${on ? '' : icon('lock')}${escapeHtml(t(`crew.${c}.s${k}`))}</span>`; }).join('')}</div></div>
       </div>`;
     }).join('');
-    this.openModal(`<h2>${escapeHtml(t('crew.title'))}</h2><div class="crew-grid">${cards}</div>
-      <div class="note">${escapeHtml(t('crew.note'))}</div>
-      <div class="actions">${onRename ? `<button class="btn" id="m-rename">${escapeHtml(t('names.edit'))}</button>` : ''}<button class="btn" id="m-close">${escapeHtml(t('menu.close'))}</button></div>`);
+    this.menuPage('crew', `<div class="crew-grid">${cards}</div><div class="note">${escapeHtml(t('crew.note'))}</div>`);
     void portraits().then((p) => document.querySelectorAll<HTMLImageElement>('img[data-portrait]').forEach((im) => { const u = p[im.dataset.portrait!]; if (u) im.src = u; }));
-    $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
-    if (onRename) $('m-rename').addEventListener('click', () => { audio.uiClick(); onRename(); });
+    $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
+    void onRename;
   }
 
   /** Terms, privacy, safety, parody note and licences. */
@@ -404,8 +506,8 @@ export class UI implements CineUI {
       <p class="note">${escapeHtml(t('legal.template'))}</p>
       ${['terms', 'privacy', 'safety', 'parody', 'licences'].map(sec).join('')}
       <p><a href="https://github.com/megazron/beyond-sagittarius#readme" target="_blank" rel="noopener">${escapeHtml(t('legal.readFull'))}</a></p></div>
-      <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.back'))}</button></div>`);
-    $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
+      ${this.foot('menu.back')}`);
+    $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
   }
 
   /** Plain modal shell for other UI modules. */
@@ -423,32 +525,31 @@ export class UI implements CineUI {
       <div class="row"><label for="skin-code">${escapeHtml(t('skins.code'))}</label>
         <div class="code-row"><input id="skin-code" type="text" maxlength="24" autocomplete="off" spellcheck="false"><button class="btn small" id="skin-try">${escapeHtml(t('skins.try'))}</button></div></div>
       <div class="note" id="skin-msg"></div>
-      <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.back'))}</button></div>`);
+      ${this.foot('menu.back')}`);
     document.querySelectorAll<HTMLButtonElement>('#skin-strong button').forEach((b) => b.addEventListener('click', () => {
-      audio.uiClick();
       onPick({ ...current, strong: b.dataset.v as 'default' | 'suit' });
       document.querySelectorAll('#skin-strong button').forEach((x) => x.classList.toggle('active', x === b));
     }));
     const input = $('skin-code') as HTMLInputElement;
     const go = async () => {
       if (await onCode(input.value)) { audio.chime(); this.openSkins(current, [...unlocked, 'strong.suit'], onPick, onCode, onClose); $('skin-msg').textContent = t('skins.ok'); }
-      else { audio.uiClick(); $('skin-msg').textContent = t('skins.wrong'); input.value = ''; }
+      else { audio.uiDenied(); $('skin-msg').textContent = t('skins.wrong'); input.value = ''; }
     };
     input.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') void go(); });
     $('skin-try').addEventListener('click', () => void go());
-    $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
+    $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
   }
 
   openConfirm(text: string, onYes: () => void, onNo: () => void) {
-    this.openModal(`<p style="font-size:16px;line-height:1.6">${escapeHtml(text)}</p>
-      <div class="actions"><button class="btn primary" id="c-yes">${escapeHtml(t('menu.newGame'))}</button><button class="btn" id="c-no">${escapeHtml(t('menu.back'))}</button></div>`);
+    this.openModal(`<div class="center-msg"><p>${escapeHtml(text)}</p>
+      <div class="actions"><button class="btn primary" id="c-yes">${escapeHtml(t('menu.newGame'))}</button><button class="btn" id="c-no">${escapeHtml(t('menu.back'))}</button></div></div>`);
     $('c-yes').addEventListener('click', () => { this.closeModal(); onYes(); });
     $('c-no').addEventListener('click', () => { this.closeModal(); onNo(); });
   }
 
   openDeath(onRetry: () => void) {
-    this.openModal(`<h2 style="color:#ff6a5a">${escapeHtml(t('death.title'))}</h2><p style="line-height:1.6">${escapeHtml(t('death.text'))}</p>
-      <div class="actions"><button class="btn primary" id="d-retry">${escapeHtml(t('death.retry'))}</button></div>`);
+    this.openModal(`<div class="center-msg death"><h2>${escapeHtml(t('death.title'))}</h2><p>${escapeHtml(t('death.text'))}</p>
+      <div class="actions"><button class="btn primary" id="d-retry">${escapeHtml(t('death.retry'))}</button></div></div>`);
     $('d-retry').addEventListener('click', () => { this.closeModal(); onRetry(); });
   }
 
@@ -460,6 +561,7 @@ export class UI implements CineUI {
   }
 
   private refreshLang() {
+    if (!$('hud')) return;
     document.querySelectorAll<HTMLButtonElement>('.btn.lang').forEach((b) => b.classList.toggle('active', b.dataset.lang === getLang()));
     if (this.lastSub.key && !$('subtitle').classList.contains('hidden')) this.subtitle(this.lastSub.key, this.lastSub.speaker);
     if (this.lastCaption && !$('caption').classList.contains('hidden')) this.caption(this.lastCaption);

@@ -30,12 +30,9 @@ FONTS = [
     ("barlow-condensed-500", "barlowcondensed", "BarlowCondensed-Medium.ttf", LATIN, None),
     ("barlow-condensed-600", "barlowcondensed", "BarlowCondensed-SemiBold.ttf", LATIN, None),
     ("barlow-500", "barlow", "Barlow-Medium.ttf", LATIN, None),
-    ("courier-prime-400", "courierprime", "CourierPrime-Regular.ttf", LATIN, None),
-    ("courier-prime-700", "courierprime", "CourierPrime-Bold.ttf", LATIN, None),
     ("rajdhani-500", "rajdhani", "Rajdhani-Medium.ttf", DEVA, None),
     ("rajdhani-700", "rajdhani", "Rajdhani-Bold.ttf", DEVA, None),
     ("noto-sans-devanagari", "notosansdevanagari", "NotoSansDevanagari[wdth,wght].ttf", DEVA, {"wdth": 100, "wght": (400, 700)}),
-    ("tiro-devanagari-hindi", "tirodevanagarihindi", "TiroDevanagariHindi-Regular.ttf", DEVA, None),
     ("noto-naskh-arabic", "notonaskharabic", "NotoNaskhArabic[wght].ttf", ARAB, {"wght": (400, 700)}),
     ("noto-nastaliq-urdu", "notonastaliqurdu", "NotoNastaliqUrdu[wght].ttf", ARAB, {"wght": (400, 700)}),
 ]

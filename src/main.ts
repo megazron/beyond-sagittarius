@@ -15,6 +15,12 @@ import { Game } from './game/game';
 import { applyCrewNames, CrewNames } from './core/crew';
 import { TouchControls, TouchAction } from './ui/touch';
 import { openCreator } from './ui/creator';
+import { applyIcons } from './ui/icons';
+import { initGlyphs, refreshGlyphs } from './ui/glyphs';
+import { MenuNav } from './ui/nav';
+import { Wheel } from './ui/wheel';
+import { drawMap, MapPin } from './ui/map';
+import type { MenuTab } from './ui/ui';
 import { setPortraitCast } from './ui/portraits';
 import { preloadCrew } from './characters/character';
 import { defaultLook, PlayerLook, CrewSkins } from './characters/custom';
@@ -58,12 +64,24 @@ try {
 }
 
 const input = new Input(canvas);
+input.setBinds(settings.binds);
+input.vibration = settings.vibration !== false;
+ui.input = input;
+ui.onDamage = () => input.rumble(180, 0.7);
+initGlyphs(input);
+applyIcons(document);
+refreshGlyphs();
+const nav = new MenuNav(input, (dir) => ui.cycleTab(dir));
+const wheel = new Wheel(input, (k) => game?.useItem(k));
 const touch = new TouchControls(input, (a: TouchAction) => {
   if (a === 'pause') openPause();
-  else if (a === 'inventory') openPanel('inventory');
-  else openPanel(a);
+  else if (wheel.open) wheel.close(false);
+  else if (canPlay()) wheel.show(game.save.inventory, game.story.tools());
 });
-const syncDevice = () => document.body.classList.toggle('touch', input.device === 'touch');
+const syncDevice = () => {
+  document.body.classList.toggle('touch', input.device === 'touch');
+  document.body.classList.toggle('dev-pad', input.device === 'pad');
+};
 input.onDevice(syncDevice);
 syncDevice();
 const cine = new Cinematic(ui);
@@ -96,6 +114,8 @@ function persistSettings() {
   applyLanguages();
   applyAudio();
   if (player) { player.sensitivity = settings.sensitivity; player.invertY = settings.invertY; }
+  input.vibration = settings.vibration !== false;
+  refreshGlyphs();
   if (!settings.showFps) ui.setFps(null);
 }
 
@@ -319,69 +339,114 @@ function skipCurrent() {
   else if (state === 'game' && game?.mode === 'wake') game.skipWake();
   else if (state === 'game' && game?.mode === 'scene') game.skipScene();
 }
-document.getElementById('objective')!.addEventListener('click', (e) => (e.currentTarget as HTMLElement).classList.toggle('open'));
-document.getElementById('prompt')!.addEventListener('click', () => game?.interact());
 
 // ---------------- pause / menus ----------------
-function openPause() {
-  if (state !== 'game' || game.mode !== 'play' || ui.modalOpen()) return;
+const canPlay = () => state === 'game' && game.mode === 'play' && !paused && !ui.modalOpen();
+
+function freeze() {
   paused = true;
   input.enabled = false;
   input.resetTouch();
   touch.reset();
+  wheel.close(false);
+  invT0 = 0;
   suppressPauseOnUnlock = true;
   input.releasePointer();
-  ui.openPause({
-    resume: resume,
-    settings: () => ui.openSettings(settings, quality.name, persistSettings, changeQuality, () => openPauseAgain(), () => { resume(); game.startTutorial(); }, undefined, () => ui.openLegal(() => openPauseAgain())),
-    objectives: () => ui.openObjectives(game.save.level, game.save.completed, () => openPauseAgain()),
-    crew: () => openCrewPanel(() => openPauseAgain()),
-    look: () => openCreator(ui, game.save.player ?? defaultLook(), 'edit', detail(), (look) => {
-      game.save.player = look;
-      game.save.names = look.name ? { scientist: look.name } : {};
-      applyPlayer(look, game.save.skins ?? {});
-      game.persist();
-      openPauseAgain();
-    }, () => openPauseAgain()),
-    skins: () => openSkins(() => openPauseAgain()),
-    quit: () => { game.persist(); showTitle(); },
-  });
+  audio.duck(true);
 }
-function openPauseAgain() { paused = false; openPause(); }
-function resume() { ui.closeModal(); paused = false; input.enabled = true; }
-function openPanel(kind: 'objectives' | 'crew' | 'inventory') {
-  if (state !== 'game' || game.mode !== 'play' || ui.modalOpen()) return;
-  paused = true; input.enabled = false; input.resetTouch(); touch.reset(); suppressPauseOnUnlock = true; input.releasePointer();
-  game.notePanel(kind);
-  if (kind === 'objectives') ui.openObjectives(game.save.level, game.save.completed, resume);
-  else if (kind === 'inventory') ui.openInventory(game.save.inventory, game.story.tools(), resume);
-  else openCrewPanel(resume);
+function resume() { ui.closeModal(); paused = false; input.enabled = true; audio.duck(false); }
+
+function openMapTab() {
+  ui.openMap(resume);
+  const L = world.layout, m = game.objectivePoint();
+  const pins: MapPin[] = [{ x: L.camp.x, z: L.camp.z, icon: 'camp', label: t('map.camp') }];
+  if (m) pins.push({ x: m.x, z: m.z, icon: 'marker', cls: 'goal', label: document.getElementById('obj-title')!.textContent ?? '' });
+  drawMap((x, z) => world.terrain.height(x, z), { x: player.pos.x, z: player.pos.z, yaw: player.yaw }, pins, quality.name === 'mobile' ? 360 : 720);
 }
-function openCrewPanel(onClose: () => void) {
-  ui.openCrew((id) => game.story.crewStatus(id), onClose);
+
+function showTab(tab: MenuTab) {
+  if (tab !== 'pause') game.notePanel(tab);
+  if (tab === 'pause') {
+    ui.openPause({
+      resume,
+      settings: () => ui.openSettings(settings, quality.name, persistSettings, changeQuality, () => showTab('pause'), () => { resume(); game.startTutorial(); }, undefined, () => ui.openLegal(() => showTab('pause'))),
+      look: () => openCreator(ui, game.save.player ?? defaultLook(), 'edit', detail(), (look) => {
+        game.save.player = look;
+        game.save.names = look.name ? { scientist: look.name } : {};
+        applyPlayer(look, game.save.skins ?? {});
+        game.persist();
+        showTab('pause');
+      }, () => showTab('pause')),
+      skins: () => openSkins(() => showTab('pause')),
+      quit: () => { game.persist(); audio.duck(false); showTitle(); },
+    });
+  } else if (tab === 'map') openMapTab();
+  else if (tab === 'objectives') ui.openObjectives(game.save.level, game.save.completed, resume);
+  else if (tab === 'inventory') ui.openInventory(game.save.inventory, game.story.tools(), resume);
+  else ui.openCrew((id) => game.story.crewStatus(id), resume);
+}
+ui.onMenuTab = showTab;
+
+function openPause() { if (canPlay()) { freeze(); showTab('pause'); } }
+function openPanel(kind: MenuTab) { if (canPlay()) { freeze(); showTab(kind); } }
+
+/** Tap the inventory input for the full list, hold it for the wheel. */
+let invT0 = 0;
+function invStart() { if (canPlay() && !wheel.open) invT0 = performance.now(); }
+function invEnd() {
+  if (!invT0) return;
+  invT0 = 0;
+  if (wheel.open) wheel.close(true); else openPanel('inventory');
+}
+
+/** Menu shortcuts: the same input closes what it opened. */
+function menuKey(tab: MenuTab) {
+  if (ui.modalOpen()) { if (paused) resume(); } else openPanel(tab);
 }
 
 document.addEventListener('pointerlockchange', () => {
   if (!document.pointerLockElement && state === 'game' && !paused && !suppressPauseOnUnlock) openPause();
   suppressPauseOnUnlock = false;
 });
+input.onPadLost(() => { if (input.device === 'pad') openPause(); });
+
+const inScene = () => state === 'cinematic' || state === 'narrator' || state === 'flashback' || (state === 'game' && (game.mode === 'wake' || game.mode === 'scene'));
 
 window.addEventListener('keydown', (e) => {
-  if ((e.target as HTMLElement)?.tagName === 'INPUT') return; // typing a name
-  if ((e.code === 'Enter' || e.code === 'Escape') && (state === 'cinematic' || state === 'narrator' || state === 'flashback' || (state === 'game' && (game.mode === 'wake' || game.mode === 'scene')))) { skipCurrent(); return; }
-  if (state !== 'game') return;
+  if ((e.target as HTMLElement)?.tagName === 'INPUT' && (e.target as HTMLInputElement).type !== 'range') return; // typing a name
+  if ((e.code === 'Enter' || e.code === 'Escape') && inScene()) { skipCurrent(); return; }
   if (e.code === 'Escape') {
-    if (ui.modalOpen() && paused) resume();
-    else openPause();
-  } else if (e.code === 'KeyJ' || e.code === 'KeyO') {
-    if (ui.modalOpen()) resume(); else openPanel('objectives');
-  } else if (e.code === 'KeyC') {
-    if (ui.modalOpen()) resume(); else openPanel('crew');
-  } else if (e.code === 'KeyI' || e.code === 'Tab') {
+    if (ui.modalOpen()) { if (!nav.back() && paused) resume(); } else if (state === 'game') openPause();
+    return;
+  }
+  if (state !== 'game') return;
+  const a = input.actionFor(e.code);
+  if (a === 'objectives') menuKey('objectives');
+  else if (a === 'crew') menuKey('crew');
+  else if (a === 'map') menuKey('map');
+  else if (a === 'inventory') {
     e.preventDefault();
-    if (ui.modalOpen()) resume(); else openPanel('inventory');
+    if (ui.modalOpen()) menuKey('inventory'); else if (!e.repeat) invStart();
   }
 });
+window.addEventListener('keyup', (e) => { if (input.actionFor(e.code) === 'inventory') invEnd(); });
+
+/** Pad buttons that do what the keys above do. */
+let padInv = false;
+function padFrame() {
+  if (inScene()) { if (input.padSkip()) skipCurrent(); return; }
+  if (state !== 'game') return;
+  if (input.padAct('pause')) { if (ui.modalOpen()) { if (paused) resume(); } else openPause(); }
+  if (!ui.modalOpen()) { // in menus the bumpers switch tabs and B goes back
+    if (input.padAct('objectives')) openPanel('objectives');
+    if (input.padAct('crew')) openPanel('crew');
+    if (input.padAct('map')) openPanel('map');
+  }
+  const inv = input.padConnected && input.padHeld('inventory');
+  if (inv && !padInv && !ui.modalOpen()) invStart();
+  if (!inv && padInv) invEnd();
+  padInv = inv;
+}
 
 window.addEventListener('beforeunload', () => { if (state === 'game' && game?.mode === 'play') game.persist(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'game' && game?.mode === 'play') game.persist(); });
@@ -395,8 +460,17 @@ let frameCount = 0;
 function frame() {
   requestAnimationFrame(frame);
   frameCount++;
-  const dt = Math.min(clock.getDelta(), 0.05);
+  let dt = Math.min(clock.getDelta(), 0.05);
   elapsed += dt;
+  input.poll(dt);
+  nav.update();
+  padFrame();
+  if (invT0 && !wheel.open && performance.now() - invT0 > 220 && canPlay()) wheel.show(game.save.inventory, game.story.tools());
+  if (wheel.open) {
+    wheel.update(input.lookDX, input.lookDY, input.padAim.x, input.padAim.y);
+    input.lookDX = input.lookDY = 0;
+    dt *= 0.3; // the world slows while you choose
+  }
   if (state === 'title' || state === 'loading') {
     cine.idle(dt);
   } else if (state === 'cinematic' || state === 'flashback') {
@@ -406,6 +480,7 @@ function frame() {
   } else if (state === 'game') {
     touch.show(input.device === 'touch' && game.mode === 'play' && !paused && !ui.modalOpen());
     touch.update();
+    if (state === 'game') ui.track(camera);
     if (!paused && game.mode !== 'dead') game.update(dt, elapsed);
     const focus = player.pos;
     if (photo) { camera.position.copy(photo.from); camera.lookAt(photo.to); }
@@ -442,7 +517,7 @@ async function boot() {
   player.sensitivity = settings.sensitivity;
   player.invertY = settings.invertY;
   world.scene.add(player.model.root);
-  game = new Game(world, player, input, ui, (id) => touch.highlight(id));
+  game = new Game(world, player, input, ui, (id) => touch.highlight(id), (text) => ui.hint(text));
   game.onLevelComplete = onLevelDone;
   // warm up shaders so the first in-game frame doesn't hitch
   player.spawn(0, 2, 0.35);
@@ -499,6 +574,8 @@ window.addEventListener('resize', () => {
   photo(from: number[] | null, to?: number[]) { photo = from && to ? { from: new THREE.Vector3(...from), to: new THREE.Vector3(...to) } : null; },
   step(sec: number) { game?.debugStep(sec, elapsed); },
   get save() { return game?.save; },
+  get wheelOpen() { return wheel.open; },
+  get binds() { return input.binds; },
   get prompt() { const el = document.getElementById('prompt')!; return el.classList.contains('hidden') ? null : el.textContent; },
   get hound() { return game?.story.debugHound(); },
   groundAt(x: number, z: number) { return world.terrain.height(x, z); },

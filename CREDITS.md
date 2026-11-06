@@ -140,18 +140,15 @@ All dubbing in `public/audio/vo/` is synthetic speech rendered locally by `tools
 
 ## Fonts
 
-Loaded at runtime from **Google Fonts** (`fonts.googleapis.com`), all under the
-[SIL Open Font License 1.1](https://openfontlicense.org):
+Self-hosted in `public/fonts/`, subset by `tools/ui/make_fonts.py`, all under the
+SIL Open Font License 1.1 (full texts in `public/fonts/OFL.txt`):
 
-- **Orbitron** (Matt McInerney): display/HUD Latin text
-- **Exo 2** (Natanael Gama): body Latin text
-- **Noto Sans Devanagari** (Google): Hindi
-- **Noto Nastaliq Urdu** (Google): Urdu (titles, subtitles, story text)
-- **Noto Naskh Arabic** (Google): Urdu fallback and small HUD labels
-
-When the game runs offline the fonts fall back to system fonts. To self-host,
-download the same families from Google Fonts into `public/fonts/` and replace
-the `<link>` in `index.html` with `@font-face` rules.
+- **Barlow** and **Barlow Condensed** (Jeremy Tribby): English text and UI
+- **VT323** (Peter Hull): wrist device readouts
+- **Rajdhani** (Indian Type Foundry): Hindi UI
+- **Noto Sans Devanagari** (Google): Hindi reading text and subtitles
+- **Noto Naskh Arabic** (Google): Urdu UI
+- **Noto Nastaliq Urdu** (Google): Urdu subtitles and story text
 
 ## Logo
 

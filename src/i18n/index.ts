@@ -21,6 +21,9 @@ let overrides: Record<string, string> = {};
  */
 export function t(key: string, params?: Record<string, string | number>): string { return tIn(current, key, params); }
 
+/** Is there a string for this key? */
+export function has(key: string) { return key in DICTS[current] || key in DICTS.en; }
+
 /** Same as t() in a chosen language: subtitles can differ from the game language. */
 export function tIn(lang: Lang, key: string, params?: Record<string, string | number>): string {
   let s = overrides[key] ?? (female ? DICTS[lang][`g.f.${key}`] : undefined) ?? DICTS[lang][key] ?? DICTS.en[key] ?? key;

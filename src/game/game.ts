@@ -38,9 +38,9 @@ export class Game {
   /** Hook for between-level narrator scenes (main.ts). Return true to take over. */
   onLevelComplete: ((n: number) => void) | null = null;
 
-  constructor(private world: World, private player: Player, private input: Input, private ui: UI, highlightTouch: (id: string | null) => void = () => {}) {
+  constructor(private world: World, private player: Player, private input: Input, private ui: UI, highlightTouch: (id: string | null) => void = () => {}, hint: (text: string | null) => void = () => {}) {
     world.onCreatureStep = (p) => this.onCreatureStep(p);
-    this.tutorial = new Tutorial(input, player, world, () => this.save, highlightTouch);
+    this.tutorial = new Tutorial(input, player, world, () => this.save, highlightTouch, hint);
     this.tutorial.onFinish = () => {
       this.ui.toast(t('tut.complete'));
       this.persist();
@@ -302,7 +302,7 @@ export class Game {
       this.ui.setStats(st);
       this.ui.setClock(s.day, s.timeOfDay);
       const m = this.marker();
-      this.ui.setCompass(p.yaw, m ? m.bearing : null, m ? m.dist : null);
+      this.ui.setMarker(m ? this.objectivePoint() : null, m ? m.dist : null);
     }
     this.saveClock += dt;
     if (this.saveClock > 15) { this.saveClock = 0; this.persist(); }
@@ -318,6 +318,19 @@ export class Game {
       if (d < bd && Math.abs(it.pos.y - p.y) < 2.2) { bd = d; best = it; }
     }
     return best;
+  }
+
+  private anchorV = new THREE.Vector3();
+  private anchor(pos: THREE.Vector3, up: number) { return this.anchorV.copy(pos).setY(pos.y + up); }
+
+  /** Eat from the wheel. Other items just show their description there. */
+  useItem(key: string) {
+    const s = this.save;
+    if (key !== 'fruit' || (s.inventory.fruit ?? 0) <= 0) return;
+    s.inventory.fruit--;
+    s.stats.hunger = Math.min(100, s.stats.hunger + 30);
+    this.ui.setInventory(s.inventory, this.story.tools());
+    this.ui.toast(t('fruit.ateBlue'));
   }
 
   findInteraction() {
@@ -336,7 +349,7 @@ export class Game {
     const nearItem = act?.missing?.length ? this.nearestItem() : null;
     if (act && !nearItem) {
       this.interactTarget = { kind: 'action', action: act };
-      this.ui.setPrompt(act.missing?.length ? t('prompt.need', { action: act.label, list: act.missing.join(', ') }) : act.label);
+      this.ui.setPrompt(act.missing?.length ? t('prompt.need', { action: act.label, list: act.missing.join(', ') }) : act.label, this.anchor(act.pos, 1));
       return;
     }
     const best = this.nearestItem();
@@ -344,7 +357,7 @@ export class Game {
       this.interactTarget = { kind: 'item', item: best };
       const name = t(`item.${best.type}`);
       const fruit = best.type === 'fruit' || best.type === 'redFruit';
-      this.ui.setPrompt(fruit ? (best.examined ? t('prompt.eat', { item: name }) : t('prompt.examine', { item: name })) : t('prompt.pick', { item: name }));
+      this.ui.setPrompt(fruit ? (best.examined ? t('prompt.eat', { item: name }) : t('prompt.examine', { item: name })) : t('prompt.pick', { item: name }), this.anchor(best.pos, 0.35));
       return;
     }
     const f = p.forward(this.tmpV);
@@ -352,7 +365,7 @@ export class Game {
     const ahead = T.height(p.pos.x + f.x * 1.6, p.pos.z + f.z * 1.6);
     if (Math.min(ahead, T.height(p.pos.x, p.pos.z)) < -0.12) {
       this.interactTarget = { kind: 'water' };
-      this.ui.setPrompt(t('prompt.drink'));
+      this.ui.setPrompt(t('prompt.drink'), this.anchor(this.tmpV.set(p.pos.x + f.x * 2, 0, p.pos.z + f.z * 2), 0.2));
       return;
     }
     this.interactTarget = null;

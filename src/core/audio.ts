@@ -17,6 +17,8 @@ export class Audio {
   private meter = new Uint8Array(256);
   private humans: Promise<Map<string, AudioBuffer[]>> | null = null;
   private lastHuman = new Map<string, AudioBuffer>();
+  private clickBuf: AudioBuffer | null = null;
+  private lastUi = 0;
 
   start() {
     if (this.ctx) { this.ctx.resume(); return; }
@@ -170,7 +172,31 @@ export class Audio {
 
   blip() { this.tone(880, 0.12, 'sine', 0.15); this.tone(1320, 0.15, 'sine', 0.1, 0.06); }
   chime() { [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 1.2, 'sine', 0.12, i * 0.11)); }
-  uiClick() { this.tone(1200, 0.05, 'square', 0.04); }
+  /** Short filtered noise: the body of every UI sound. */
+  private tick(freq: number, q: number, dur: number, vol: number, when = 0) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t0 = ctx.currentTime + when;
+    this.clickBuf ??= (() => { const b = ctx.createBuffer(1, ctx.sampleRate * 0.4, ctx.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; })();
+    const src = ctx.createBufferSource(); src.buffer = this.clickBuf;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+    const g = ctx.createGain(); g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(f).connect(g).connect(this.sfxOut); src.start(t0, Math.random() * 0.3); src.stop(t0 + dur + 0.02);
+  }
+  /** One UI sound per moment: code that still calls uiClick next to the global handler stays single. */
+  private once(ms = 45) { const n = performance.now(); if (n - this.lastUi < ms) return false; this.lastUi = n; return true; }
+  uiClick() { if (this.once()) { this.tick(2300, 1.4, 0.05, 0.28); this.tone(170, 0.07, 'sine', 0.13, 0, -70); } }
+  uiMove() { if (this.once(30)) this.tick(3400, 3, 0.025, 0.12); }
+  uiBack() { if (this.once()) { this.tick(1500, 1.4, 0.05, 0.2); this.tone(240, 0.09, 'sine', 0.1, 0, -120); } }
+  uiToggle() { if (this.once()) { this.tick(2800, 2, 0.03, 0.2); this.tick(1900, 2, 0.03, 0.14, 0.035); } }
+  uiSlider(v: number) { if (this.once(55)) this.tick(900 + v * 1800, 6, 0.03, 0.14); }
+  uiOpen() { this.tick(700, 0.8, 0.16, 0.16); this.tone(210, 0.14, 'sine', 0.07, 0, 170); }
+  uiClose() { this.tick(520, 0.8, 0.13, 0.13); this.tone(320, 0.12, 'sine', 0.06, 0, -170); }
+  uiTab() { if (this.once()) { this.tick(1200, 1, 0.08, 0.15); this.tick(2600, 2, 0.03, 0.1, 0.03); } }
+  uiWheel() { this.tick(1600, 1, 0.1, 0.12); this.tone(300, 0.1, 'sine', 0.06, 0, 200); }
+  uiDenied() { this.tone(130, 0.08, 'square', 0.05); this.tone(110, 0.1, 'square', 0.05, 0.09); }
+  uiListen() { this.tone(980, 0.09, 'sine', 0.07); }
+  uiBound() { this.tone(980, 0.06, 'sine', 0.07); this.tone(1470, 0.1, 'sine', 0.07, 0.06); }
+  pickup() { this.tick(1100, 1.2, 0.06, 0.16); this.tone(620, 0.09, 'sine', 0.06, 0.02, 180); }
   hurt() { this.tone(160, 0.5, 'sawtooth', 0.15, 0, -90); }
   beep() { this.tone(1046, 0.08, 'square', 0.05); }
   thud() { this.tone(48, 1.4, 'sine', 0.5, 0, -18); this.tone(70, 0.6, 'triangle', 0.2); }

@@ -7,10 +7,10 @@
 export type InputDevice = 'kbm' | 'touch' | 'pad';
 export type PadStyle = 'xbox' | 'ps' | 'nintendo';
 
-export type Action = 'forward' | 'back' | 'left' | 'right' | 'sprint' | 'jump' | 'interact' | 'inventory' | 'crew' | 'objectives' | 'codex' | 'pause';
+export type Action = 'forward' | 'back' | 'left' | 'right' | 'sprint' | 'jump' | 'interact' | 'inventory' | 'crew' | 'objectives' | 'map' | 'codex' | 'pause';
 /** Actions listed in the remap screen, in order. */
-export const KB_ACTIONS: Action[] = ['forward', 'back', 'left', 'right', 'sprint', 'jump', 'interact', 'inventory', 'crew', 'objectives', 'codex'];
-export const PAD_ACTIONS: Action[] = ['sprint', 'jump', 'interact', 'inventory', 'crew', 'objectives', 'codex', 'pause'];
+export const KB_ACTIONS: Action[] = ['forward', 'back', 'left', 'right', 'sprint', 'jump', 'interact', 'inventory', 'crew', 'objectives', 'map', 'codex'];
+export const PAD_ACTIONS: Action[] = ['sprint', 'jump', 'interact', 'inventory', 'crew', 'objectives', 'map', 'codex', 'pause'];
 
 export interface Binds { kb: Record<Action, string[]>; pad: Partial<Record<Action, number>> }
 
@@ -20,9 +20,9 @@ export function defaultBinds(): Binds {
     kb: {
       forward: ['KeyW', 'ArrowUp'], back: ['KeyS', 'ArrowDown'], left: ['KeyA'], right: ['KeyD'],
       sprint: ['ShiftLeft', 'ShiftRight'], jump: ['Space'], interact: ['KeyE', 'KeyF'],
-      inventory: ['KeyI', 'Tab'], crew: ['KeyC'], objectives: ['KeyJ', 'KeyO'], codex: ['KeyK'], pause: ['Escape'],
+      inventory: ['KeyI', 'Tab'], crew: ['KeyC'], objectives: ['KeyJ', 'KeyO'], map: ['KeyM'], codex: ['KeyK'], pause: ['Escape'],
     },
-    pad: { sprint: 6, jump: 0, interact: 2, inventory: 3, crew: 5, objectives: 8, codex: 4, pause: 9 },
+    pad: { sprint: 6, jump: 0, interact: 2, inventory: 3, crew: 5, objectives: 11, map: 8, codex: 4, pause: 9 },
   };
 }
 
@@ -44,6 +44,8 @@ export class Input {
   wheel = 0;
   touchMove = { x: 0, y: 0 };
   padMove = { x: 0, y: 0 };
+  /** Right stick, for the item wheel. */
+  padAim = { x: 0, y: 0 };
   enabled = false;
   /** Total look movement so far (tutorial uses it to see the player looked around). */
   lookTotal = 0;
@@ -196,6 +198,7 @@ export class Input {
       return;
     }
 
+    this.padAim.x = rx; this.padAim.y = ry;
     if (this.enabled) {
       this.padMove.x = lx; this.padMove.y = ly;
       // look: squared response, so small tilts aim and full tilt turns
@@ -243,6 +246,7 @@ export class Input {
   }
   /** Was the action pressed on the pad this frame? Key presses go through keydown in main.ts. */
   padAct(a: Action) { const p = this.binds.pad[a]; return p !== undefined && this.padHit.has(p); }
+  padHeld(a: Action) { const p = this.binds.pad[a]; return p !== undefined && this.padDown.has(p); }
   /** Which action, if any, a keyboard code triggers. */
   actionFor(code: string): Action | null {
     for (const a of Object.keys(this.binds.kb) as Action[]) if (this.binds.kb[a].includes(code)) return a;

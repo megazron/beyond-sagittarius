@@ -9,7 +9,7 @@ The game has no accounts, no adverts, no analytics and no tracking of its own. m
 **Network requests.**
 
 - The web version is served by GitHub Pages, and the game's files and audio load from there. GitHub's own [privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement) covers those requests, including server logs of your IP address.
-- Fonts load from Google Fonts (`fonts.googleapis.com` and `fonts.gstatic.com`), in the browser and in the desktop app, so Google receives your IP address and browser details. See [Google's privacy policy](https://policies.google.com/privacy). If those requests fail, the game uses system fonts.
+- Fonts ship with the game and load from the same place as everything else. Nothing is requested from Google or any other font service.
 - Links to the GitHub releases page open only when you click them.
 
 **Device information.** The game reads your browser language, screen size and input type on your device to choose defaults. These never leave your device.

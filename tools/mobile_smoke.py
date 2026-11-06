@@ -66,12 +66,11 @@ LAYOUT_JS = """() => {
   const vw = innerWidth, vh = innerHeight, out = [];
   const box = (s) => { const e = document.querySelector(s); if (!e || e.offsetParent === null && getComputedStyle(e).position !== 'fixed') return null;
     const r = e.getBoundingClientRect(); return r.width && r.height ? r : null; };
-  const sels = ['.stats', '.objective', '.compass', '#tb-act', '#tb-jump', '#tb-sprint', '#tb-inv', '#tb-crew', '#tb-obj', '#tb-pause', '#tutorial'];
+  const sels = ['.quest', '#tb-act', '#tb-inv', '#tb-pause', '#tutorial'];
   const rects = {};
   for (const s of sels) { const r = box(s); if (!r) continue; rects[s] = r;
     if (r.left < -1 || r.top < -1 || r.right > vw + 1 || r.bottom > vh + 1) out.push(`${s} off-screen ${JSON.stringify([r.left, r.top, r.right, r.bottom].map(Math.round))}`); }
-  const pairs = [['.stats', '.objective'], ['.stats', '.compass'], ['.objective', '.compass'], ['#tutorial', '.stats'], ['#tutorial', '.objective'],
-    ['#tb-act', '#tb-jump'], ['#tb-act', '#tb-sprint'], ['#tb-inv', '#tb-act'], ['#tb-pause', '.stats'], ['#tb-obj', '.objective']];
+  const pairs = [['.quest', '#tb-pause'], ['#tutorial', '#tb-act'], ['#tutorial', '#tb-inv'], ['#tb-inv', '#tb-act'], ['#tutorial', '.quest']];
   for (const [a, b] of pairs) { const A = rects[a], B = rects[b]; if (!A || !B) continue;
     if (A.left < B.right - 2 && B.left < A.right - 2 && A.top < B.bottom - 2 && B.top < A.bottom - 2) out.push(`${a} overlaps ${b}`); }
   const se = document.scrollingElement;
@@ -150,7 +149,7 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
         fail(f"tutorial did not start on 'look': {tut}")
     txt = ev("document.querySelector('#tutorial .tut-text').textContent")
     if "Drag" not in txt:
-        fail(f"tutorial text is not the touch variant: {txt!r}")
+        fail(f"hint is not the touch variant: {txt!r}")
     shot("04-hud-tutorial")
     for m in ev(LAYOUT_JS):
         fail(f"hud: {m}")
@@ -178,48 +177,61 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
         fail(f"joystick barely moved the player ({moved:.2f} m)")
     ev("__bs.step(1.3)")
     page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'sprint'", timeout=15000)
-    touch.tap(*centre(page, "#tb-sprint"))
-    if not ev("document.getElementById('tb-sprint').classList.contains('on')"):
-        fail("sprint toggle did not switch on")
-    touch.drag(jx, jy, jx, jy - 60, steps=6, during=lambda: ev("__bs.step(2.5)"))
+    # pushing the stick to the rim runs: no sprint button
+    ran = []
+    touch.drag(jx, jy, jx, jy - 90, steps=6, during=lambda: (ev("__bs.step(2.5)"), ran.append(ev("document.getElementById('joy').classList.contains('run')"))))
+    if not any(ran):
+        fail("stick at the rim did not start a run")
     ev("__bs.step(1.3)")
     page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'jump'", timeout=15000)
-    touch.tap(*centre(page, "#tb-jump"))
+    ev("__bs.teleport(-28, -60, 0.73)")  # nothing in reach: the context button jumps
+    ev("__bs.step(0.2)")
+    time.sleep(0.4)
+    touch.tap(*centre(page, "#tb-act"))
+    time.sleep(0.5)
     ev("__bs.step(1.3)")
     page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'interact'", timeout=15000)
-    # walk to the marked stone/branch and tap Use
+    # walk to the marked stone/branch: the same button now uses it
     ev("__bs.gotoObjective(0.4)")
     ev("__bs.step(0.3)")
     time.sleep(0.6)
     if not ev("document.body.classList.contains('can-act')"):
-        fail("Use button not lit next to an item")
+        fail("context button not lit next to an item")
     shot("05-interact")
     touch.tap(*centre(page, "#tb-act"))
     time.sleep(0.5)
     ev("__bs.step(1.3)")
-    page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'inventory'", timeout=15000)
+    page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'menu'", timeout=15000)
     touch.tap(*centre(page, "#tb-inv"))
+    page.wait_for_selector("#wheel .wseg", timeout=5000)
+    time.sleep(0.3)
+    shot("06-wheel")
+    wb = page.locator("#wheel").bounding_box()
+    touch.tap(wb["x"] + wb["width"] / 2, wb["y"] + wb["height"] / 2)
+    time.sleep(0.3)
+    if ev("__bs.wheelOpen"):
+        fail("wheel did not close")
+    touch.tap(*centre(page, "#tb-pause"))
+    page.wait_for_selector("#tab-map", timeout=5000)
+    touch.tap(*centre(page, "#tab-inventory"))
     page.wait_for_selector(".inv-list", timeout=5000)
     time.sleep(0.4)
-    shot("06-inventory")
+    shot("07-inventory")
     if ev("document.querySelectorAll('.inv-list li:not(.empty)').length") < 1:
-        fail("inventory panel shows nothing after a pickup")
-    touch.tap(*centre(page, "#m-close"))
-    ev("__bs.step(1.3)")
-    page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'crew'", timeout=15000)
-    touch.tap(*centre(page, "#tb-crew"))
+        fail("inventory shows nothing after a pickup")
+    touch.tap(*centre(page, "#tab-crew"))
     page.wait_for_selector(".crew-grid", timeout=5000)
     time.sleep(0.4)
-    shot("07-crew")
-    touch.tap(*centre(page, "#m-close"))
-    ev("__bs.step(1.3)")
-    page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'objectives'", timeout=15000)
-    touch.tap(*centre(page, "#tb-obj"))
+    shot("07b-crew")
+    touch.tap(*centre(page, "#tab-map"))
+    page.wait_for_selector("#map-chart", timeout=5000)
+    time.sleep(0.6)
+    shot("07c-map")
+    touch.tap(*centre(page, "#tab-objectives"))
     page.wait_for_selector(".levels", timeout=5000)
     touch.tap(*centre(page, "#m-close"))
+    time.sleep(0.3)
     ev("__bs.step(1.3)")
-    page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'compass'", timeout=15000)
-    ev("__bs.step(9)")
     page.wait_for_function("__bs.tutorial === null", timeout=20000)
     if not ev("__bs.save.flags.tutorialDone"):
         fail("tutorial finished but not remembered in the save")
@@ -238,6 +250,7 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
             fail(f"settings: {m}")
     touch.tap(*centre(page, "#m-close"))
     page.wait_for_selector("#p-resume", timeout=5000)
+    time.sleep(0.2)
     touch.tap(*centre(page, "#p-resume"))
     time.sleep(0.5)
     if ev("__bs.paused"):

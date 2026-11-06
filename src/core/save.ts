@@ -1,5 +1,6 @@
 // localStorage persistence for game progress and player settings.
 import { migrateNames } from './crew';
+import type { Binds } from '../game/input';
 import { defaultLook, PlayerLook, CrewSkins } from '../characters/custom';
 
 export interface SaveData {
@@ -51,6 +52,10 @@ export interface Settings {
   /** Chosen crew skins, used for new games. */
   skins?: CrewSkins;
   showFps: boolean;
+  /** Remapped keys and pad buttons (missing = defaults). */
+  binds?: Binds;
+  /** Controller rumble. */
+  vibration?: boolean;
   /** Set from the title-screen settings: run the tutorial on the next session. */
   replayTutorial?: boolean;
 }

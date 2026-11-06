@@ -106,10 +106,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     tagText = key;
     const g = tagCanvas.getContext('2d')!;
     g.clearRect(0, 0, 512, 96);
-    g.fillStyle = 'rgba(8,16,24,0.62)'; g.beginPath(); g.roundRect(56, 6, 400, 84, 10); g.fill();
-    g.fillStyle = '#ffd7a0'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.font = "600 34px 'Exo 2', 'Noto Sans Devanagari', 'Noto Naskh Arabic', sans-serif"; g.fillText(name, 256, 36, 380);
-    g.fillStyle = '#8fd8e6'; g.font = "22px 'Exo 2', 'Noto Sans Devanagari', 'Noto Naskh Arabic', sans-serif"; g.fillText(role, 256, 70, 380);
+    g.shadowColor = 'rgba(0,0,0,0.9)'; g.shadowBlur = 8;
+    g.fillStyle = '#f2ebdd'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = "600 34px 'Barlow', 'Rajdhani', 'Noto Sans Devanagari', 'Noto Naskh Arabic', sans-serif"; g.fillText(name, 256, 36, 380);
+    g.fillStyle = '#e8a33d'; g.font = "22px 'Barlow', 'Rajdhani', 'Noto Sans Devanagari', 'Noto Naskh Arabic', sans-serif"; g.fillText(role, 256, 70, 380);
     tagTex.needsUpdate = true;
   };
 
