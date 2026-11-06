@@ -458,7 +458,7 @@ export class Forest {
     const near = Q.lodDistances;
     const byKind = new Map<ModelInfo['kind'], { name: string; info: ModelInfo; field: Field }[]>();
     const counts: Record<ModelInfo['kind'], number> = {
-      rock: Q.rockCount, outcrop: Math.round(Q.rockCount * 0.22), stump: Q.treeCount * 0.035, log: Q.treeCount * 0.04, roots: Q.treeCount * 0.025,
+      rock: Q.rockCount * 1.2, outcrop: Math.round(Q.rockCount * 0.22), stump: Q.treeCount * 0.035, log: Q.treeCount * 0.04, roots: Q.treeCount * 0.025,
       branch: Q.plantCount * 0.12, plant: Q.plantCount, shrub: Q.plantCount * 0.22,
     };
     const reach: Record<ModelInfo['kind'], number> = {
@@ -483,21 +483,22 @@ export class Forest {
     const q = new THREE.Quaternion(), q2 = new THREE.Quaternion(), s = new THREE.Vector3(), pos = new THREE.Vector3();
     const M = new THREE.Matrix4(), col = new THREE.Color();
     const fill = new Map<Field, number>();
-    const put = (kind: ModelInfo['kind'], accept: (x: number, z: number, h: number, ny: number) => number) => {
+    const put = (kind: ModelInfo['kind'], accept: (x: number, z: number, h: number, ny: number) => number, count = counts[kind], around?: [number, number, number]) => {
       const list = byKind.get(kind);
       if (!list) return;
       let k = 0, tr = 0;
-      const want = counts[kind];
+      const want = count;
       while (k < want && tr < want * 40) {
         tr++;
-        const x = (rnd() * 2 - 1) * (HALF - 30), z = (rnd() * 2 - 1) * (HALF - 30);
+        let x = (rnd() * 2 - 1) * (HALF - 30), z = (rnd() * 2 - 1) * (HALF - 30);
+        if (around) { const a = rnd() * 6.283, r = Math.sqrt(rnd()) * around[2]; x = around[0] + Math.cos(a) * r; z = around[1] + Math.sin(a) * r; }
         const h = T.height(x, z);
         T.normal(x, z, nrm);
         const sc = accept(x, z, h, nrm.y);
         if (sc <= 0) continue;
         const it = list[Math.floor(rnd() * list.length)];
         const used = fill.get(it.field) ?? 0;
-        if (used >= Math.ceil(want / 1.5) + 3) continue;
+        if (used >= Math.ceil(counts[kind] / 1.5) + 3) continue;
         fill.set(it.field, used + 1);
         const scale = it.info.height < 0.25 ? sc * 3.2 : sc;   // the small plant scans are shot at 1:1 and sized up here
         q.setFromAxisAngle(up, rnd() * 6.283);
@@ -519,6 +520,10 @@ export class Forest {
     const clear = (x: number, z: number, pad: number) => !this.isReserved(x, z, pad) && Math.hypot(x, z) > 7;
     put('outcrop', (x, z, h, ny) => (ny < 0.9 && h > 6 && clear(x, z, 5) ? 1.1 + rnd() * rnd() * 5.5 : 0));
     put('rock', (x, z, h, ny) => (h > -1.2 && h < 160 && clear(x, z, 2) ? 0.2 + rnd() * rnd() * 1.4 : 0));
+    // the lake's edge: stones in the shallows and wood washed ashore
+    const shore: [number, number, number] = [LAKE.x, LAKE.z, LAKE.r + 40];
+    put('rock', (x, z, h) => (h > -0.7 && h < 1.1 && clear(x, z, 1.5) ? 0.12 + rnd() * rnd() * 0.75 : 0), Math.round(Q.rockCount * 0.16), shore);
+    put('log', (x, z, h) => (h > -0.2 && h < 1.4 && clear(x, z, 3) ? 0.8 + rnd() * 0.8 : 0), 10, shore);
     put('stump', (x, z, h, ny) => (h > 1.5 && ny > 0.85 && forestAt(x, z) > 0.42 && clear(x, z, 2) ? 0.8 + rnd() * 0.7 : 0));
     put('log', (x, z, h, ny) => (h > 1.5 && ny > 0.86 && forestAt(x, z) > 0.42 && clear(x, z, 3) ? 0.9 + rnd() * 1.1 : 0));
     put('roots', (x, z, h, ny) => (h > 1.5 && ny > 0.85 && forestAt(x, z) > 0.4 && clear(x, z, 2) ? 0.9 + rnd() * 0.8 : 0));

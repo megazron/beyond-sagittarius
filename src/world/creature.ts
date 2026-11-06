@@ -9,7 +9,7 @@ import { grainNormal } from '../characters/shapes';
 export function createCreature(terrain: Terrain, onStep: (pos: THREE.Vector3) => void) {
   const root = new THREE.Group();
   const skin = new THREE.MeshStandardMaterial({ color: 0x1b1a1f, roughness: 0.7, metalness: 0.05, normalMap: grainNormal(), normalScale: new THREE.Vector2(1.2, 1.2) });
-  const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 2.6, 2.2) });
+  const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.14, 0.8, 0.7) });
   const body = new THREE.Group();
   const torso = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), skin);
   torso.scale.set(4.5, 3.2, 9);
