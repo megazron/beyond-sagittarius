@@ -100,6 +100,7 @@ export class Game {
     st.health = clamp(st.health - amount, 0, 100);
     this.ui.damage();
     audio.hurt();
+    audio.human(amount >= 10 ? 'yelp' : 'grunt');
     this.camShake = Math.max(this.camShake, 0.14);
   }
 
@@ -524,6 +525,7 @@ export class Game {
     this.ui.setPrompt(null);
     this.ui.fade('black', 0.6, 1.5);
     audio.hurt();
+    audio.human('scream');
     this.story.onDeath();
     this.ui.openDeath(() => {
       const s = this.save;

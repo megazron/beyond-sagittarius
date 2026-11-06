@@ -12,7 +12,9 @@
     "smoke:levels": "python3 tools/levels_smoke.py",
     "smoke:mobile": "python3 tools/mobile_smoke.py",
     "smoke:desktop": "xvfb-run -a python3 tools/desktop_smoke.py",
-    "voice": ".venv-tts/bin/python tools/tts/generate_voice.py"
+    "voice": ".venv-tts/bin/python tools/tts/generate_voice.py",
+    "prebuild": "python3 tools/tts/voice_overrides.py",
+    "voice:overrides": "python3 tools/tts/voice_overrides.py"
   },
   "dependencies": {
     "three": "^0.187.0"

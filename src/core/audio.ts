@@ -1,4 +1,9 @@
-// Fully synthesised WebAudio soundscape (no audio files).
+const BASE = import.meta.env.BASE_URL;
+
+/** Recorded human sounds in public/audio/sfx/human/ (index.json: name -> files). */
+export type HumanSound = 'gasp' | 'grunt' | 'yelp' | 'scream' | 'land' | 'breath' | 'laugh' | 'crowd';
+
+// WebAudio soundscape synthesised at runtime, plus a few recorded human sounds.
 export class Audio {
   ctx: AudioContext | null = null;
   master!: GainNode;
@@ -10,6 +15,8 @@ export class Audio {
   private mix = { music: 0.6, sfx: 0.8, voice: 1, muted: false };
   private ducked = false;
   private meter = new Uint8Array(256);
+  private humans: Promise<Map<string, AudioBuffer[]>> | null = null;
+  private lastHuman = new Map<string, AudioBuffer>();
 
   start() {
     if (this.ctx) { this.ctx.resume(); return; }
@@ -24,6 +31,44 @@ export class Audio {
     music.connect(this.master); sfx.connect(this.master); voice.connect(analyser); analyser.connect(this.master);
     this.buses = { music, sfx, voice, analyser };
     this.applyMix();
+    void this.loadHumans();
+  }
+
+  private loadHumans() {
+    this.humans ??= (async () => {
+      const out = new Map<string, AudioBuffer[]>();
+      try {
+        const r = await fetch(`${BASE}audio/sfx/human/index.json`);
+        if (!r.ok) return out;
+        const index = await r.json() as Record<string, string[]>;
+        await Promise.all(Object.entries(index).map(async ([name, files]) => {
+          const got = await Promise.all(files.map(async (f) => {
+            try {
+              const a = await fetch(`${BASE}audio/sfx/human/${f}`);
+              return a.ok ? await this.ctx!.decodeAudioData(await a.arrayBuffer()) : null;
+            } catch { return null; }
+          }));
+          out.set(name, got.filter((b): b is AudioBuffer => !!b));
+        }));
+      } catch { /* the game just stays quieter */ }
+      return out;
+    })();
+    return this.humans;
+  }
+
+  /** Play a recorded human sound (random take, never the same one twice running). */
+  human(name: HumanSound, vol = 0.8) {
+    if (!this.ctx) return;
+    void this.loadHumans().then((all) => {
+      const takes = all.get(name), ctx = this.ctx;
+      if (!takes?.length || !ctx) return;
+      const fresh = takes.length > 1 ? takes.filter((b) => b !== this.lastHuman.get(name)) : takes;
+      const buf = fresh[Math.floor(Math.random() * fresh.length)];
+      this.lastHuman.set(name, buf);
+      const src = ctx.createBufferSource(), g = ctx.createGain();
+      src.buffer = buf; src.playbackRate.value = 0.96 + Math.random() * 0.08; g.gain.value = vol;
+      src.connect(g).connect(this.sfxOut); src.start();
+    });
   }
 
   private applyMix() {

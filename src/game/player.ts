@@ -5,6 +5,7 @@ import type { Terrain } from '../world/terrain';
 import type { Forest } from '../world/forest';
 import type { Input } from './input';
 import { HALF } from '../world/terrain';
+import { audio } from '../core/audio';
 
 /** Third-person survivor controller with an orbit camera that avoids terrain. */
 export class Player {
@@ -90,7 +91,10 @@ export class Player {
     this.pos.x = next.x; this.pos.z = next.z;
     this.pos.y += this.vel.y * dt;
     const ground = this.terrain.height(this.pos.x, this.pos.z);
-    if (this.pos.y <= ground) { this.pos.y = ground; this.vel.y = 0; this.onGround = true; }
+    if (this.pos.y <= ground) {
+      if (!this.onGround && this.vel.y < -4) audio.human('land', 0.5);
+      this.pos.y = ground; this.vel.y = 0; this.onGround = true;
+    }
     else if (this.pos.y - ground > 0.15) this.onGround = false;
     this.inWater = ground < -0.25;
 

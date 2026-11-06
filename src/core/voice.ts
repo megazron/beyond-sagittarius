@@ -3,13 +3,22 @@ import { getLang, isRenamed, tDefault, Lang } from '../i18n';
 
 const BASE = import.meta.env.BASE_URL;
 
+/** A recorded take: seconds, and the formats on disk (see tools/tts/voice_overrides.py). */
+type Take = { d: number; f: string[] };
+
 /**
  * Pre-rendered dubbing. public/audio/vo/<lang>/index.json lists every line with
  * its duration; each line is a small MP3 fetched on first use (and preloaded
  * for scenes), decoded and played through the voice bus.
+ *
+ * Recorded takes: public/audio/voice/override/<lang>/<key>.ogg (or .mp3/.m4a)
+ * replaces the generated line. override/index.json is written at build time, so
+ * the game knows what exists without probing for 404s.
  */
 class Voice {
   private index: Partial<Record<Lang, Record<string, number>>> = {};
+  private takes: Partial<Record<Lang, Record<string, Take>>> = {};
+  private takesLoaded: Promise<void> | null = null;
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
   private src: AudioBufferSourceNode | null = null;
   private token = 0;
@@ -18,6 +27,10 @@ class Voice {
   played = 0;
 
   async load(lang: Lang = this.lang) {
+    this.takesLoaded ??= fetch(`${BASE}audio/voice/override/index.json`)
+      .then(async (r) => { if (r.ok) this.takes = await r.json(); })
+      .catch(() => { /* no recorded takes */ });
+    await this.takesLoaded;
     if (this.index[lang]) return;
     try {
       const r = await fetch(`${BASE}audio/vo/${lang}/index.json`);
@@ -29,33 +42,51 @@ class Voice {
   override: Lang | null = null;
   private get lang(): Lang { return this.override ?? getLang(); }
 
+  private has(file: string): boolean {
+    return this.takes[this.lang]?.[file] !== undefined || this.index[this.lang]?.[file] !== undefined;
+  }
+
+  private seconds(file: string): number {
+    return this.takes[this.lang]?.[file]?.d ?? this.index[this.lang]![file];
+  }
+
+  /** URLs to try for a line, best first. Safari may refuse .ogg, so mp3/m4a win when both exist. */
+  private urls(file: string): string[] {
+    const lang = this.lang, name = encodeURIComponent(file);
+    const formats = this.takes[lang]?.[file]?.f ?? [];
+    const recorded = ['mp3', 'm4a', 'ogg'].filter((e) => formats.includes(e))
+      .map((e) => `${BASE}audio/voice/override/${lang}/${name}.${e}`);
+    return this.index[lang]?.[file] !== undefined ? [...recorded, `${BASE}audio/vo/${lang}/${name}.mp3`] : recorded;
+  }
+
   /** File key for a line: name-free take if a crewmate named in it was renamed. */
   private file(key: string): string | null {
-    const idx = this.index[this.lang];
-    if (!idx) return null;
+    if (!this.index[this.lang]) return null;
     const ids = Array.from(tDefault(key).matchAll(/\{[nf]:([a-z]+)\}/g)).map((m) => m[1]);
-    if (ids.some(isRenamed)) { const anon = `${key}~anon`; return idx[anon] !== undefined ? anon : null; }
-    return idx[key] !== undefined ? key : null;
+    if (ids.some(isRenamed)) { const anon = `${key}~anon`; return this.has(anon) ? anon : null; }
+    return this.has(key) ? key : null;
   }
 
   /** Spoken length in seconds, or null if the line has no audio. */
   duration(key: string): number | null {
     const f = this.file(key);
-    return f ? this.index[this.lang]![f] : null;
+    return f ? this.seconds(f) : null;
   }
 
   private fetchBuffer(file: string): Promise<AudioBuffer | null> {
-    const url = `${BASE}audio/vo/${this.lang}/${encodeURIComponent(file)}.mp3`;
-    let p = this.buffers.get(url);
+    const urls = this.urls(file), id = urls[0];
+    let p = this.buffers.get(id);
     if (!p) {
       p = (async () => {
-        try {
-          const r = await fetch(url);
-          if (!r.ok || !audio.ctx) return null;
-          return await audio.ctx.decodeAudioData(await r.arrayBuffer());
-        } catch { return null; }
+        for (const url of urls) {
+          try {
+            const r = await fetch(url);
+            if (r.ok && audio.ctx) return await audio.ctx.decodeAudioData(await r.arrayBuffer());
+          } catch { /* undecodable here: try the next format */ }
+        }
+        return null;
       })();
-      this.buffers.set(url, p);
+      this.buffers.set(id, p);
       if (this.buffers.size > 80) this.buffers.delete(this.buffers.keys().next().value!);
     }
     return p;
@@ -67,7 +98,7 @@ class Voice {
   play(key: string): number | null {
     const f = this.file(key);
     if (!f) return null;
-    const dur = this.index[this.lang]![f];
+    const dur = this.seconds(f);
     this.lastKey = key; this.played++;
     this.stop();
     const tk = ++this.token;

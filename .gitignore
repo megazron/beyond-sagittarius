@@ -7,3 +7,4 @@ __pycache__/
 tools/tts/.cache/
 electron/release/
 desktop-assets/
+.venv-tts2/

@@ -1,0 +1,28 @@
+{
+  "_comment": "Reference clips for Chatterbox. Each one is synthesised by a Kokoro-82M voicepack: a synthetic voice, never a recording of a real person. Change a voice here and run tools/tts/make_refs.py --force.",
+  "text": {
+    "a": "Okay, so here is the thing. I checked it twice, and honestly? I have no idea how it got this far. We should probably stop, take a breath, and work out what to do next. Right now I would really like some good news!",
+    "b": "Okay, so here is the thing. I checked it twice, and honestly? I have no idea how it got this far. We should probably stop, take a breath, and work out what to do next. Right now I would really like some good news!",
+    "h": "देखो, बात यह है। मैंने दो बार जाँच की, और सच कहूँ तो मुझे नहीं पता यह यहाँ तक कैसे पहुँचा। हमें रुककर एक गहरी साँस लेनी चाहिए और सोचना चाहिए कि आगे क्या करें। अभी मुझे कोई अच्छी ख़बर चाहिए!"
+  },
+  "refs": {
+    "scientist_en": {"voice": "am_michael", "g2p": "a", "speed": 1.08},
+    "strong_en":    {"voice": "am_fenrir", "g2p": "a", "speed": 0.92},
+    "medic_en":     {"voice": "bf_emma", "g2p": "b", "speed": 0.95},
+    "explorer_en":  {"voice": "af_bella", "g2p": "a", "speed": 1.08},
+    "builder_en":   {"voice": "am_puck", "g2p": "a", "speed": 1.0},
+    "social_en":    {"voice": "af_heart", "g2p": "a", "speed": 1.08},
+    "megazron_en":  {"voice": {"bm_george": 0.6, "am_onyx": 0.4}, "g2p": "b", "speed": 0.88},
+    "ship_en":      {"voice": "bf_isabella", "g2p": "b", "speed": 1.0},
+    "unknown_en":   {"voice": "am_onyx", "g2p": "a", "speed": 0.85},
+    "scientist_hi": {"voice": "hm_omega", "g2p": "h", "speed": 1.08},
+    "strong_hi":    {"voice": "hm_psi", "g2p": "h", "speed": 0.92},
+    "medic_hi":     {"voice": "hf_alpha", "g2p": "h", "speed": 0.95},
+    "explorer_hi":  {"voice": "hf_beta", "g2p": "h", "speed": 1.08},
+    "builder_hi":   {"voice": {"hm_psi": 0.55, "hm_omega": 0.45}, "g2p": "h", "speed": 1.02},
+    "social_hi":    {"voice": {"hf_alpha": 0.5, "hf_beta": 0.5}, "g2p": "h", "speed": 1.05},
+    "megazron_hi":  {"voice": {"hm_omega": 0.8, "hm_psi": 0.2}, "g2p": "h", "speed": 0.88},
+    "ship_hi":      {"voice": "hf_beta", "g2p": "h", "speed": 1.0},
+    "unknown_hi":   {"voice": "hm_psi", "g2p": "h", "speed": 0.85}
+  }
+}
