@@ -130,6 +130,7 @@ def main():
         time.sleep(3)
         shot("08-night")
         # subtitles are independent of the game language: English game, Hindi subtitles
+        print("step: settings", flush=True)
         page.keyboard.press("Escape")
         page.wait_for_selector("#p-set", timeout=10000)
         page.click("#p-set")
@@ -142,10 +143,11 @@ def main():
             errors.append(f"console.error: subtitle language setting ignored: {sub!r}")
         if page.evaluate("document.querySelector('.obj-title').textContent") != page.evaluate("document.querySelector('.obj-title').textContent.normalize()") or any("\u0900" <= c <= "\u097f" for c in page.evaluate("document.querySelector('.obj-title').textContent")):
             errors.append("console.error: UI changed language with the subtitles")
+        print("step: skins", flush=True)
         # skins menu: nothing locked is listed, and a wrong code is refused
         page.keyboard.press("Escape")
         page.wait_for_selector("#p-skins", timeout=10000)
-        page.click("#p-skins")
+        page.evaluate("document.getElementById('p-skins').click()")  # at 1 fps software GL the menu never reads as stable to Playwright
         page.wait_for_selector("#skin-code", timeout=10000)
         if page.locator('#skin-strong button').count() != 1:
             errors.append("console.error: a locked skin is visible")
