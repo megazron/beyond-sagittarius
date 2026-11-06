@@ -697,7 +697,7 @@ window.addEventListener('resize', () => {
   get frameReport() { return frameReport; },
   /** The branch system, for the smoke tests. */
   branch: {
-    get open() { return ui.choice.open || !!game?.dialogue.open; },
+    get open() { return ui.choice.open || !!game?.dialogue.deciding; },
     get remaining() { return ui.choice.remaining ?? game?.dialogue.remaining ?? null; },
     get state() { return game?.save.branch; },
     comments(scene: string) { return game ? pickComments(game.save, COMMENTS, scene) : []; },

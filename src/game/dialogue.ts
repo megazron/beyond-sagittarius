@@ -78,6 +78,8 @@ export class Dialogue {
   }
 
   get open() { return !!this.tree; }
+  /** A decision is on screen, not just a conversation. */
+  get deciding() { return !!this.tree && !!this.forced; }
 
   /** Seconds left on a forced panel, or null with no clock. */
   get remaining() { return this.tree && this.forced?.seconds ? this.left : null; }
