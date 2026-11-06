@@ -44,7 +44,7 @@ beat. Impact frames on the snare hits.
 | 10 | 38-40 | Lyrra, violet trail, eyes shut, arms folded in free fall | Tracking from below | Violet rim | Whoosh right to left |
 | 11 | 40-42 | Skyvra, coral trail, reaching back the way she came | Rear chase | Coral rim | Whoosh |
 | 12 | 42-44 | Bolzar, green trail, clutching a torn hull plate | Front, he comes at the lens | Green rim | Whoosh |
-| 13 | 44-46 | Nuvexa, blue trail, phone still in hand | Side, roll the other way | Blue rim | Whoosh |
+| 13 | 44-46 | Nuvexa, gold trail, phone still in hand | Side, roll the other way | Gold rim | Whoosh |
 | 14 | 46-48 | The player, their own glow as a trail, last one out | Head-on close, pulling away | Own colour | Whoosh and a rising tone |
 | 15 | 48-52 | All six trails braiding through bent space | Inside the braid, wide lens, speed lines | Palette goes to the other universe | Snare fill |
 | 16 | 52-56 | Four one-beat faces then two half-beats, each in a flat two-tone impact frame | Locked close-ups | Two-tone grade | Hit per face |
@@ -53,29 +53,31 @@ beat. Impact frames on the snare hits.
 ## Act III: The Landing (bars 17 to 28, 24 to 42 s)
 
 Each friend gets two bars: the comet comes in, it hits on the downbeat, the dust clears, a name
-card slams in on beat 3, then one beat of character. Night to dawn across the six, because they
-fall through the whole night. Locations match what the beacon reports in Level 10.
+card slams in, then one beat of character. Dusk to dawn across the six, because they fall
+through the whole night. Locations match what the beacon reports in Level 10.
 
 | # | Beats | Who | Where | Shot | Card joke (also spoken) |
 | --- | --- | --- | --- | --- | --- |
-| 18 | 64-72 | Draxum | North-east forest, 1.9 km | Night forest, comet through the canopy, then him upside down against a huge tree that didn't move | "The tree started it." |
+| 18 | 64-72 | Draxum | North-east forest, 1.9 km | Dusk forest, comet over the canopy, then him shoulder to a huge tree that doesn't move | "The tree started it." |
 | 19 | 72-80 | Lyrra | Western lake, 3.4 km | Comet hits the lake, spray falls back, she wades out with perfect posture | "Vitals stable. Mood: no." |
-| 20 | 80-88 | Bolzar | Southern hills, 5.2 km | Skids in on a hull plate, stops on a rock edge, gives the thumbs-up of a man who has lost | "Landing: crooked. It'll hold." |
+| 20 | 80-88 | Bolzar | Southern hills, 5.2 km | Sits on the hull plate he rode in on, one hand up, the thumbs-up of a man who has lost | "Landing: crooked. It'll hold." |
 | 21 | 88-96 | Skyvra | Fallen pod, the eastern hills | Pod in a scorched furrow, she sits against it holding her leg. Something huge passes behind the ridge | "Worst part? Nobody paid me back." |
 | 22 | 96-104 | Nuvexa | Beyond the mountains, 7.8 km | Comet over bare peaks at first light, she gets up and takes a selfie | "One percent. Posting anyway." |
-| 23 | 104-112 | The player | The clearing, 0 km | Seen from above, the last comet coming straight for the camera | "Hypothesis: ow." comes after the hit |
+| 23 | 104-112 | The player | The clearing, 0 km | From the clearing: one light in the sky, getting bigger | "Hypothesis: ow." comes after the hit |
 
 ## Act IV: The Title (bars 29 to 33, 42 to 49.5 s)
 
 | # | Beats | Shot | Camera and lens | Light | Sound |
 | --- | --- | --- | --- | --- | --- |
-| 24 | 112-120 | The player falling, wind and fire, ground rushing up in the reflection, every beat a tighter cut | Close, shaking harder each beat | Own colour, then dawn | Snare roll rising, everything climbing |
+| 24 | 112-120 | The player falling, wind and fire, every cut shorter and closer, ending in white | Close, shaking harder each beat | Own colour, then dawn | Snare roll rising, everything climbing |
 | 25 | 120 | THE HIT. White, then the title | | Flash | Full chord, cymbal |
 | 26 | 120-132 | The clearing at dawn: a smoking furrow, the ringed world in the sky, BEYOND SAGITTARIUS held over it, the player's legs sticking out of the dirt | Very slow push from low | Dawn, smoke | Chord rings out. "Hypothesis: ow." on the last beat, muffled |
 
 Black. The wake-up starts.
 
 ## What this replaces
+
+Sound for each row is in `make_sfx()` in `tools/make_theme.py`, placed from the beat map.
 
 The old pods-ejecting shot and the white-out go. The alarm, the approach and the "Pods!" line stay
 before the sequence and hand over to shot 1.
