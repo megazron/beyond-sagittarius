@@ -7,7 +7,7 @@ Done means objectives, world content, NPCs, cutscene, dubbing, codex and smoke t
 
 | # | Level | Status |
 | --- | --- | --- |
-| P | Opening: Vault, deck scene, the event | done |
+| P | Opening: Vault, deck scene, the event, title sequence | done |
 | 1 | Find Water | done, plus tutorial |
 | 2 | Find Food | done |
 | 3 | Collect Stones and Branches | done |
