@@ -16,6 +16,19 @@ const loader = new THREE.TextureLoader();
 const cache = new Map<string, Promise<THREE.Texture>>();
 let maxAniso = 4;
 
+// Uploading a big texture on first use stalls that frame, so upload as they arrive, one at a time.
+const warmQueue: THREE.Texture[] = [];
+let warmer: ((t: THREE.Texture) => void) | null = null, pumping = false;
+function pumpWarm() {
+  if (pumping || !warmer) return;
+  const t = warmQueue.shift();
+  if (!t) return;
+  pumping = true;
+  warmer(t);
+  setTimeout(() => { pumping = false; pumpWarm(); }, 60);
+}
+export function setTextureWarmer(f: (t: THREE.Texture) => void) { warmer = f; pumpWarm(); }
+
 export function setMaxAnisotropy(n: number) { maxAniso = Math.max(1, n); }
 
 export type MapKind = 'diff' | 'nor' | 'arm' | 'fir' | 'pine' | 'leaf';
@@ -43,6 +56,7 @@ export function loadTexture(set: string, map: MapKind, size: TexSize): Promise<T
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
         t.anisotropy = maxAniso;
         t.needsUpdate = true;
+        warmQueue.push(t); pumpWarm();
         resolve(t);
       }, undefined, reject);
     }).catch((e) => {

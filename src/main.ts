@@ -23,6 +23,7 @@ import { drawMap, MapPin } from './ui/map';
 import type { MenuTab } from './ui/ui';
 import { setPortraitCast } from './ui/portraits';
 import { preloadCrew } from './characters/character';
+import { setTextureWarmer } from './core/assets';
 import { defaultLook, PlayerLook, CrewSkins } from './characters/custom';
 import { voice } from './core/voice';
 import { frameReport } from './cinematic/cutscene';
@@ -162,11 +163,16 @@ const detail = () => (quality.name === 'mobile' ? 0.6 : quality.name === 'cinema
 let pendingLook: PlayerLook = defaultLook();
 
 /** Applies the player's look and name to everything that shows them. */
+let castKey = '';
 function applyPlayer(look: PlayerLook, skins: CrewSkins) {
   setPlayer(look);
   applyCrewNames(look.name ? { scientist: look.name } : {});
-  cine.setCast(look, skins);
   setPortraitCast(look, skins, detail());
+  // rebuilding figures is expensive: only when the look really changed
+  const key = JSON.stringify([{ ...look, name: '' }, skins]);
+  if (key === castKey) return;
+  castKey = key;
+  cine.setCast(look, skins);
   if (player) player.setLook(look, detail(), () => game?.story.reattachSpear());
 }
 
@@ -208,7 +214,6 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1', after: () => void) {
   ui.fade('black', 1, 0.5);
   ui.show('hud', false);
   setTimeout(() => {
-    vault.prepare(renderer.renderer);
     renderer.setScene(vault.scene, vault.camera, false);
     ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden');
@@ -504,7 +509,20 @@ function frame() {
   }
 }
 
+/** One tiny off-screen frame: first-use uploads and shadow setup happen here, not mid-game. */
+function warmFrame(scene: THREE.Scene, cam: THREE.Camera) {
+  const r = renderer.renderer, t = new THREE.WebGLRenderTarget(64, 36);
+  r.setRenderTarget(t); r.render(scene, cam); r.setRenderTarget(null); t.dispose();
+}
+
+// Stalls over 50 ms, with what was on screen (tools/transition_test.py reads this).
+const longTasks: { t: number; ms: number; state: string; mode?: string }[] = [];
+try {
+  new PerformanceObserver((l) => { for (const e of l.getEntries()) longTasks.push({ t: Math.round(e.startTime), ms: Math.round(e.duration), state, mode: game?.mode }); }).observe({ type: 'longtask', buffered: true });
+} catch { /* not supported */ }
+
 async function boot() {
+  setTextureWarmer((t) => renderer.renderer.initTexture(t));
   ui.show('loading', false);
   showTitle();
   requestAnimationFrame(frame);
@@ -524,11 +542,12 @@ async function boot() {
   player.spawn(0, 2, 0.35);
   world.update(0.016, 0, 8.2, player.pos, camera, renderer.renderer);
   game.story.npcs.prepare();
-  renderer.renderer.compile(world.scene, camera);
+  await renderer.renderer.compileAsync(world.scene, camera);
+  warmFrame(world.scene, camera);
+  await cine.warm(renderer.renderer);
+  await vault.prepare(renderer.renderer);
   worldReady = true;
   btns.forEach((b) => (b.disabled = false));
-  // warm the Vault while the player is still on the title screen
-  setTimeout(() => { if (state === 'title') vault.prepare(renderer.renderer); }, 400);
   if (pendingStart) { const f = pendingStart; pendingStart = null; f(); }
 }
 
@@ -547,6 +566,8 @@ window.addEventListener('resize', () => {
   get mode() { return game?.mode; },
   get ready() { return worldReady; },
   get paused() { return paused; },
+  get longTasks() { return longTasks; },
+  sceneTest(id: 'l3' | 'fight') { if (id === 'fight') playFlashback(() => backToWorld()); else playVault(id, backToWorld); },
   nextBeat() { cine.debugNext(); game?.scene?.debugNext(); },
   get frameReport() { return frameReport; },
   get npcs() { return game?.story.npcs.debug(); },

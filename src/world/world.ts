@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addCutsceneRig } from '../cinematic/cutscene';
 import type { Quality } from '../core/quality';
 import { smoothstep } from '../core/noise';
 import { Terrain } from './terrain';
@@ -125,6 +126,7 @@ export class World {
     this.post = { sun: this.sun, sunDir: this.lightDir, sunColor: this.sun.color, density: 0.002, fall: 0.03, base: 0, strength: 0 };
     s.userData.post = this.post;
     onProgress(1);
+    addCutsceneRig(this.scene);
     this.ready = true;
   }
 

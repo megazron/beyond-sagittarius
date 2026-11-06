@@ -170,10 +170,10 @@ export class Vault {
    * real-GPU test run, this stall held the fade-in back for seconds, so the
    * scene sat nearly black long after it had started.
    */
-  prepare(r: THREE.WebGLRenderer) {
+  async prepare(r: THREE.WebGLRenderer) {
     if (!this.built) this.build();
     this.update(0.016);
-    r.compile(this.scene, this.camera);
+    await r.compileAsync(this.scene, this.camera);
   }
 
   /** Runs a scene; `done` fires when it ends or is skipped. */

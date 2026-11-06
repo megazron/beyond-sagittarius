@@ -4,7 +4,7 @@ import { createShip, createInterior } from './ship';
 import { easeInOut, clamp, smoothstep, lerp } from '../core/noise';
 import { audio } from '../core/audio';
 import { voice } from '../core/voice';
-import { Cutscene, Beat } from './cutscene';
+import { Cutscene, Beat, addCutsceneRig } from './cutscene';
 import { deckScene, fightScene, stageDeck } from './scenes';
 import { createCharacter, Character, CrewId } from '../characters/character';
 import type { PlayerLook, CrewSkins } from '../characters/custom';
@@ -84,6 +84,7 @@ export class Cinematic {
 
     this.bhRot.setFromMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(0.22, 0, 0.32))).transpose();
     this.dome.uniforms.uBHRot.value = this.bhRot;
+    addCutsceneRig(this.scene);
     this.buildTimeline();
     this.idle(0);
   }
@@ -160,6 +161,15 @@ export class Cinematic {
 
   /** Test hook: next beat of the running scene. */
   debugNext() { this.stage?.debugNext(); }
+
+  /** Compile everything, including what is hidden at the title, so no shot stalls later. */
+  async warm(r: THREE.WebGLRenderer) {
+    const shown = [this.earth.group, this.ring, this.mars, this.giant, this.giantRing, this.interior.group, this.ship.group];
+    const was = shown.map((o) => o.visible);
+    shown.forEach((o) => (o.visible = true));
+    await r.compileAsync(this.scene, this.camera);
+    shown.forEach((o, i) => (o.visible = was[i]));
+  }
 
   /** Back to the title backdrop. */
   resetIdle() { this.setVisible('earth'); this.dome.uniforms.uBH.value = 0; this.camera.fov = 45; this.camera.updateProjectionMatrix(); }

@@ -57,17 +57,18 @@ export const cover = {
   },
 };
 
-/** Three-point light for whoever is talking, one rig per scene, so faces always read. */
-function rigFor(scene: THREE.Scene) {
-  let rig = scene.getObjectByName('cutscene-rig') as THREE.Group | undefined;
-  if (!rig) {
-    rig = new THREE.Group(); rig.name = 'cutscene-rig';
-    rig.add(new THREE.PointLight(0xfff0e0, 6, 7, 1.6), new THREE.PointLight(0xc4d6ff, 2.2, 7, 1.6), new THREE.PointLight(0xffd8b0, 5, 6, 1.6));
-    scene.add(rig);
-  }
-  rig.visible = true;
-  return rig;
+/**
+ * Key, fill and rim for whoever is talking. The lights live in the scene from
+ * the start, off: adding a light later would recompile every material in the
+ * scene mid-game, which is a multi-second freeze.
+ */
+export function addCutsceneRig(scene: THREE.Scene) {
+  const rig = new THREE.Group(); rig.name = 'cutscene-rig';
+  rig.add(new THREE.PointLight(0xfff0e0, 0, 7, 1.6), new THREE.PointLight(0xc4d6ff, 0, 7, 1.6), new THREE.PointLight(0xffd8b0, 0, 6, 1.6));
+  scene.add(rig);
 }
+const RIG = [6, 2.2, 5];
+const rigFor = (scene: THREE.Scene) => scene.getObjectByName('cutscene-rig') as THREE.Group;
 
 /** How each spoken shot framed its speaker (tests read this). */
 export const frameReport: { key: string; x: number; y: number; fixed: boolean }[] = [];
@@ -103,6 +104,7 @@ export class Cutscene {
     if (key) frameReport.push({ key, x: q.x, y: q.y, fixed });
     const d = s.from.clone().sub(h).setY(0).normalize(), r = new THREE.Vector3(d.z, 0, -d.x), up = new THREE.Vector3(0, 1, 0);
     const [k, f, b] = this.rig.children;
+    this.rig.children.forEach((l, i) => ((l as THREE.PointLight).intensity = RIG[i]));
     k.position.copy(h).addScaledVector(d, 1.2).addScaledVector(r, 0.8).addScaledVector(up, 0.5);
     f.position.copy(h).addScaledVector(d, 1.3).addScaledVector(r, -1.1).addScaledVector(up, -0.1);
     b.position.copy(h).addScaledVector(d, -1.1).addScaledVector(r, -0.5).addScaledVector(up, 0.7);
@@ -169,7 +171,7 @@ export class Cutscene {
 
   private end() {
     this.done = true;
-    this.rig.visible = false;
+    this.rig.children.forEach((l) => ((l as THREE.PointLight).intensity = 0));
     Renderer.current?.setDof(0, 0);
     this.ctx.subtitle(null);
     voice.stop();
