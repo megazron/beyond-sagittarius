@@ -6,113 +6,65 @@
 "loop": true,
 "speed": 0.0,
 "kind": "loop",
-"take": "139_02",
-"hand": "relaxed",
-"dur": 7.8
+"take": "ual:Idle_Loop",
+"hand": null,
+"dur": 2.5
 },
-"idle_wait": {
+"idle_talk": {
 "loop": true,
 "speed": 0.0,
 "kind": "loop",
-"take": "141_20",
-"hand": "relaxed",
-"dur": 5.0
-},
-"idle_gangly": {
-"loop": true,
-"speed": 0.0,
-"kind": "loop",
-"take": "137_19",
-"hand": "relaxed",
-"dur": 12.0
-},
-"idle_lady": {
-"loop": true,
-"speed": 0.0,
-"kind": "loop",
-"take": "137_23",
-"hand": "relaxed",
-"dur": 12.0
-},
-"idle_sexy": {
-"loop": true,
-"speed": 0.0,
-"kind": "loop",
-"take": "137_37",
-"hand": "relaxed",
-"dur": 12.0
-},
-"idle_strong": {
-"loop": true,
-"speed": 0.0,
-"kind": "loop",
-"take": "137_41",
-"hand": "fist",
-"dur": 12.0
+"take": "ual:Idle_Talking_Loop",
+"hand": null,
+"dur": 2.9
 },
 "walk": {
 "loop": true,
-"speed": 0.9952431301611815,
+"speed": 1.063019804066107,
 "kind": "cycle",
-"take": "16_15",
-"hand": "relaxed",
-"dur": 1.1666666666666667
+"take": "ual:Walk_Loop",
+"hand": null,
+"dur": 1.3333333333333333
 },
-"walk_slow": {
+"walk_formal": {
 "loop": true,
-"speed": 0.4540785537720057,
+"speed": 1.030275001165998,
 "kind": "cycle",
-"take": "137_29",
-"hand": "relaxed",
-"dur": 1.1666666666666667
+"take": "ual:Walk_Formal_Loop",
+"hand": null,
+"dur": 1.3333333333333333
 },
-"walk_gangly": {
+"run": {
 "loop": true,
-"speed": 0.7903235358339401,
+"speed": 4.8987384573372905,
 "kind": "cycle",
-"take": "137_20",
-"hand": "relaxed",
-"dur": 1.1333333333333333
+"take": "ual:Jog_Fwd_Loop",
+"hand": null,
+"dur": 0.9
 },
-"walk_lady": {
+"sprint": {
 "loop": true,
-"speed": 0.6825667194671061,
+"speed": 5.4329322017786215,
 "kind": "cycle",
-"take": "137_24",
-"hand": "relaxed",
-"dur": 1.0
+"take": "ual:Sprint_Loop",
+"hand": null,
+"dur": 0.6666666666666666
 },
-"walk_old": {
+"jump": {
 "loop": true,
-"speed": 0.3851992268761814,
-"kind": "cycle",
-"take": "137_33",
-"hand": "relaxed",
-"dur": 0.8
+"speed": 0.0,
+"kind": "loop",
+"take": "ual:Jump_Loop",
+"hand": null,
+"dur": 2.5
 },
-"walk_sexy": {
+"crouch": {
 "loop": true,
-"speed": 0.6563476440297361,
-"kind": "cycle",
-"take": "137_38",
-"hand": "relaxed",
-"dur": 1.7
-},
-"walk_strong": {
-"loop": true,
-"speed": 0.5543686986022653,
-"kind": "cycle",
-"take": "137_42",
-"hand": "fist",
-"dur": 1.8333333333333333
-},
-"walk_cool": {
-"loop": true,
-"speed": 1.2090364490971752,
-"kind": "cycle",
-"take": "142_04",
-"hand": "relaxed",
-"dur": 1.1
+"speed": 0.0,
+"kind": "loop",
+"take": "ual:Crouch_Idle_Loop",
+"hand": null,
+"dur": 2.9
 },
 "limp": {
 "loop": true,
@@ -121,30 +73,6 @@
 "take": "139_19",
 "hand": "relaxed",
 "dur": 0.5666666666666667
-},
-"run": {
-"loop": true,
-"speed": 2.3790785806911368,
-"kind": "cycle",
-"take": "16_35",
-"hand": "fist",
-"dur": 0.8
-},
-"sprint": {
-"loop": true,
-"speed": 5.082523466106662,
-"kind": "cycle",
-"take": "141_01",
-"hand": "fist",
-"dur": 0.5666666666666667
-},
-"jump": {
-"loop": true,
-"speed": 0.0,
-"kind": "air",
-"take": "16_01",
-"hand": "relaxed",
-"dur": 0.9333333333333333
 },
 "sit": {
 "loop": true,
@@ -190,17 +118,17 @@
 "loop": true,
 "speed": 0.0,
 "kind": "loop",
-"take": "80_48",
-"hand": "open",
-"dur": 6.3
+"take": "ual:Idle_Talking_Loop",
+"hand": null,
+"dur": 2.9
 },
 "present": {
 "loop": true,
 "speed": 0.0,
 "kind": "loop",
-"take": "80_14",
-"hand": "open",
-"dur": 9.4
+"take": "ual:Idle_Talking_Loop",
+"hand": null,
+"dur": 2.9
 },
 "write": {
 "loop": true,
@@ -214,25 +142,25 @@
 "loop": true,
 "speed": 0.0,
 "kind": "gesture",
-"take": "139_02",
+"take": "ual:Idle_Loop",
 "hand": "open",
-"dur": 7.8
+"dur": 2.5
 },
 "selfie": {
 "loop": true,
 "speed": 0.0,
 "kind": "gesture",
-"take": "139_02",
+"take": "ual:Idle_Loop",
 "hand": "fist",
-"dur": 7.8
+"dur": 2.5
 },
 "lie": {
 "loop": true,
 "speed": 0.0,
 "kind": "gesture",
-"take": "139_02",
+"take": "ual:Idle_Loop",
 "hand": "relaxed",
-"dur": 7.8
+"dur": 2.5
 },
 "injured": {
 "loop": true,

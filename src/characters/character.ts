@@ -15,13 +15,13 @@ export type CrewPose = 'stand' | 'idle' | 'walk' | 'sit' | 'injured' | 'wave' | 
 
 /** Mocap style per character: how they stand and how they walk. */
 const STYLE: Record<string, { walk: string; idle: string; rate: number }> = {
-  scientist: { walk: 'walk_gangly', idle: 'idle_gangly', rate: 1 },
-  strong: { walk: 'walk_strong', idle: 'idle_strong', rate: 0.92 },
-  medic: { walk: 'walk_lady', idle: 'idle_lady', rate: 1 },
-  explorer: { walk: 'walk_cool', idle: 'idle_wait', rate: 1.05 },
+  scientist: { walk: 'walk', idle: 'stand', rate: 1 },
+  strong: { walk: 'walk', idle: 'stand', rate: 0.92 },
+  medic: { walk: 'walk_formal', idle: 'stand', rate: 1 },
+  explorer: { walk: 'walk', idle: 'stand', rate: 1.05 },
   builder: { walk: 'walk', idle: 'stand', rate: 1 },
-  social: { walk: 'walk_sexy', idle: 'idle_sexy', rate: 1 },
-  megazron: { walk: 'walk_slow', idle: 'stand', rate: 0.8 },
+  social: { walk: 'walk_formal', idle: 'stand', rate: 1 },
+  megazron: { walk: 'walk_formal', idle: 'stand', rate: 0.8 },
 };
 
 /** Standing face of each kind of eye: morph weights on top of the real lids. */
@@ -259,11 +259,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const hair = buildHair(HAIRSTYLES[hairId](), hc, sway, detail, HAIR_CAP[hairId][0], HAIR_CAP[hairId][1], skullFrom(M.skull.c, M.skull.r));
     bs.get('head')!.add(hair);
     // The decimated scan teeth break up in close-ups: use a clean mouth instead.
-    const headLocal = (v: THREE.Vector3) => bs.get('head')!.worldToLocal(v);
     const mouthBox = new THREE.Box3();
-    scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.material as THREE.Material) === mouth) { mouthBox.expandByObject(m); m.visible = false; } });
+    scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.material as THREE.Material) === mouth) { m.geometry.computeBoundingBox(); mouthBox.union(m.geometry.boundingBox!); m.visible = false; } });
     if (!mouthBox.isEmpty()) {
-      const c = headLocal(mouthBox.getCenter(new THREE.Vector3()));
+      // bind-pose position, so it holds wherever the character happens to stand when the model arrives
+      const c = mouthBox.getCenter(new THREE.Vector3()).sub(piv('head'));
       const inside = new THREE.Mesh(new THREE.SphereGeometry(0.026, 14, 10), new THREE.MeshStandardMaterial({ color: 0x170708, roughness: 0.9 }));
       inside.scale.set(1.15, 0.6, 0.9); inside.position.copy(c); bs.get('head')!.add(inside);
       const teeth = new THREE.Mesh(new THREE.TorusGeometry(0.021, 0.0042, 6, 18, Math.PI), new THREE.MeshStandardMaterial({ color: 0xe6e0d4, roughness: 0.38 }));
@@ -376,13 +376,14 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const hipsB = bs.get('hips')!, spine1 = bs.get('spine1')!, chestB = bs.get('chest')!, neckB = bs.get('neck')!, headB = bs.get('head')!;
     const standing = !FULL_BODY.has(kind);
     if (standing) {
-      spine1.quaternion.multiply(Q.setFromEuler(E.set(P.stoop * 0.5 + Math.min(speed / 4, 1.3) * P.lean * 0.4, 0, 0)));
-      chestB.quaternion.multiply(Q.setFromEuler(E.set(P.stoop * 0.4 + breathe, 0, 0)));
+      spine1.quaternion.multiply(Q.setFromEuler(E.set(P.stoop * 0.12 + Math.min(speed / 4, 1.3) * P.lean * 0.15, 0, 0)));
+      chestB.quaternion.multiply(Q.setFromEuler(E.set(P.stoop * 0.1 + breathe, 0, 0)));
       // lean into turns, shoulders lead the hips
       const lean = clamp(yawRate * Math.min(speed, 5) * 0.012, -0.09, 0.09);
       hipsB.quaternion.premultiply(Q.setFromAxisAngle(V1.set(0, 0, 1), -lean));
       spine1.quaternion.multiply(Q.setFromEuler(E.set(0, clamp(yawRate * 0.025, -0.07, 0.07), lean * 0.4)));
-      neckB.quaternion.multiply(Q.setFromEuler(E.set(-P.stoop * 0.5, 0, 0)));
+      // running bodies pitch forward, eyes stay on the road
+      neckB.quaternion.multiply(Q.setFromEuler(E.set(-P.stoop * 0.15 - clamp((speed - 2.2) / 3.5, 0, 1) * 0.38, 0, 0)));
       // wide bodies carry their arms away from the torso
       const sp = (P.stance - 0.05) * 0.8;
       if (sp > 0) {

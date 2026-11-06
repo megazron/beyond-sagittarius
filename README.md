@@ -142,7 +142,7 @@ Bodies are real rigged meshes, built offline and shipped in `public/models/crew/
 
 ```
 ~/.venvs/ehd/bin/python tools/fetch_character_assets.py   # MakeHuman CC0 data and packs, CMU takes (resumable)
-~/.venvs/ehd/bin/python tools/build_animations.py         # AMC -> retarget -> anim.glb, anim.json
+~/.venvs/ehd/bin/python tools/build_animations.py         # Quaternius loops + CMU takes -> retarget -> anim.glb, anim.json
 ~/.venvs/ehd/bin/python tools/build_characters.py         # bodies, clothes, morphs, LODs, textures
 ~/.venvs/ehd/bin/python tools/chars/credits.py            # asset table, fails on a disallowed licence
 ```

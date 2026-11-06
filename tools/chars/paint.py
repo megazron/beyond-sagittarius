@@ -2,7 +2,7 @@
 cloth atlases, irises. Everything is resumable: outputs are simply overwritten."""
 import os
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 from scipy.ndimage import gaussian_filter, binary_dilation, distance_transform_edt
 from scipy.spatial import cKDTree
 import mh
@@ -54,6 +54,15 @@ def cloth_atlas(cid, garments, out, size=2048):
         tex = mat.get('diffuseTexture')
         im = Image.open(tex).convert('RGB').resize((w, h), Image.LANCZOS) if tex and os.path.exists(tex) else Image.new('RGB', (w, h), (200, 200, 200))
         a = np.asarray(im, np.float32) / 255
+        # grow the painted islands over the empty background: mips must never pull black into a seam
+        mk = Image.new('L', (w, h), 0)
+        dr = ImageDraw.Draw(mk)
+        uvp = np.mod(p.UV, 1.0) * [w, h]
+        for t in p.TU:
+            dr.polygon([tuple(uvp[t[0]]), tuple(uvp[t[1]]), tuple(uvp[t[2]])], fill=255)
+        M = binary_dilation(np.asarray(mk) > 0, iterations=1)
+        idx = distance_transform_edt(~M, return_distances=False, return_indices=True)
+        a = a[idx[0], idx[1]]
         L = a @ np.array([0.3, 0.59, 0.11], np.float32)
         if p.tint is not None:
             if p.opt.get('flat'):
@@ -70,7 +79,8 @@ def cloth_atlas(cid, garments, out, size=2048):
         A.paste(Image.fromarray((a * 255).astype(np.uint8)), (int(r[0] * size), int(r[1] * size)))
         nt = mat.get('normalmapTexture')
         if nt and os.path.exists(nt) and not p.opt.get('flat'):
-            Nn.paste(Image.open(nt).convert('RGB').resize((w, h), Image.LANCZOS), (int(r[0] * size), int(r[1] * size)))
+            na = np.asarray(Image.open(nt).convert('RGB').resize((w, h), Image.LANCZOS))[idx[0], idx[1]]
+            Nn.paste(Image.fromarray(na), (int(r[0] * size), int(r[1] * size)))
         else:
             Lh = L - gaussian_filter(L, 3)
             Nn.paste(Image.fromarray(detail_normal(Lh * 6, 1.5)), (int(r[0] * size), int(r[1] * size)))

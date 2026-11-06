@@ -119,9 +119,16 @@ Clothing from the MakeHuman community asset packs, refit to each body, recoloure
 CC-BY assets are used under Creative Commons Attribution; changes made: fitted to new bodies, geometry
 reduced, recoloured, emblems removed, texture-atlased.
 
+## Animation
+
+Standing, walking, jogging, sprinting, jumping and talking are from the Universal Animation Library by
+[Quaternius](https://quaternius.com/packs/universalanimationlibrary.html) (animation help by Gonzalo Furnier),
+CC0 1.0, free version as mirrored at https://github.com/J-Ponzo/gltf-universal-animation-library, retargeted
+to the crew rig by `tools/build_animations.py`.
+
 ## Motion capture
 
-Animation is retargeted offline by `tools/build_animations.py` from the CMU Graphics Lab Motion Capture
+Gestures the pack lacks (sitting on the ground, waving, pointing, cheering, shouting, writing, limping) are retargeted offline by `tools/build_animations.py` from the CMU Graphics Lab Motion Capture
 Database, free for any use: "The data used in this project was obtained from mocap.cs.cmu.edu. The
 database was created with funding from NSF EIA-0196217." Source: http://mocap.cs.cmu.edu (AMC/ASF originals;
 trial numbers are listed in `CLIPS` in that tool and in `public/models/crew/anim.json`).

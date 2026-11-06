@@ -8,7 +8,7 @@ injured sit, lie) are made here by layering offline IK on a mocap idle.
 import json, os, sys
 import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'chars'))
-import mh, amc
+import mh, amc, ual
 from glb import Glb, F32, I16
 
 M = os.path.expanduser(f'{mh.ROOT}/mocap')
@@ -20,39 +20,32 @@ for s, a in (('L', 'l'), ('R', 'r')):
     SRC.update({f'clavicle{s}': f'{a}clavicle', f'upperarm{s}': f'{a}humerus', f'lowerarm{s}': f'{a}radius', f'hand{s}': f'{a}hand',
                 f'upperleg{s}': f'{a}femur', f'lowerleg{s}': f'{a}tibia', f'foot{s}': f'{a}foot', f'toe{s}': f'{a}toes'})
 
-# name: take, start, end (s; None = auto), mode, hand shape
+# name: take, start, end (s; None = auto), mode, hand shape.
+# 'ual:' takes are Quaternius' hand-keyed game loops (CC0): clean foot contacts, seamless, with fingers.
+# Plain numbers are CMU captures, used where the free pack has no such action.
 CLIPS = {
-    'stand':      ('139_02', None, None, 'loop', 'relaxed'),
-    'idle_wait':  ('141_20', 1.0, 6.0, 'loop', 'relaxed'),
-    'idle_gangly': ('137_19', 2.0, 14.0, 'loop', 'relaxed'),
-    'idle_lady':  ('137_23', 4.0, 16.0, 'loop', 'relaxed'),
-    'idle_sexy':  ('137_37', 4.0, 16.0, 'loop', 'relaxed'),
-    'idle_strong': ('137_41', 2.0, 14.0, 'loop', 'fist'),
-    'walk':       ('16_15', None, None, 'cycle', 'relaxed'),
-    'walk_slow':  ('137_29', None, None, 'cycle', 'relaxed'),
-    'walk_gangly': ('137_20', None, None, 'cycle', 'relaxed'),
-    'walk_lady':  ('137_24', None, None, 'cycle', 'relaxed'),
-    'walk_old':   ('137_33', None, None, 'cycle', 'relaxed'),
-    'walk_sexy':  ('137_38', None, None, 'cycle', 'relaxed'),
-    'walk_strong': ('137_42', None, None, 'cycle', 'fist'),
-    'walk_cool':  ('142_04', None, None, 'cycle', 'relaxed'),
+    'stand':      ('ual:Idle_Loop', None, None, 'uloop', None),
+    'idle_talk':  ('ual:Idle_Talking_Loop', None, None, 'uloop', None),
+    'walk':       ('ual:Walk_Loop', None, None, 'ucycle', None),
+    'walk_formal': ('ual:Walk_Formal_Loop', None, None, 'ucycle', None),
+    'run':        ('ual:Jog_Fwd_Loop', None, None, 'ucycle', None),
+    'sprint':     ('ual:Sprint_Loop', None, None, 'ucycle', None),
+    'jump':       ('ual:Jump_Loop', None, None, 'uair', None),
+    'crouch':     ('ual:Crouch_Idle_Loop', None, None, 'uloop', None),
     'limp':       ('139_19', None, None, 'cycle', 'relaxed'),
-    'run':        ('16_35', None, None, 'cycle', 'fist'),
-    'sprint':     ('141_01', None, None, 'cycle', 'fist'),
-    'jump':       ('16_01', None, None, 'air', 'relaxed'),
     'sit':        ('82_05', 1.5, 15.0, 'loop', 'relaxed'),
     'wave':       ('141_16', 0.3, 1.7, 'pingpong', 'open'),
     'point':      ('139_25', 2.3, 3.2, 'pingpong', 'point'),
     'cheer':      ('79_69', 1.0, 4.0, 'loop', 'open'),
     'shout':      ('18_10', 1.0, 5.6, 'loop', 'fist'),
-    'argue':      ('80_48', 1.7, 8.0, 'loop', 'open'),
-    'present':    ('80_14', 2.6, 12.0, 'loop', 'open'),
+    'argue':      ('ual:Idle_Talking_Loop', None, None, 'uloop', None),
+    'present':    ('ual:Idle_Talking_Loop', None, None, 'uloop', None),
     'write':      ('79_31', 1.3, 3.9, 'loop', 'relaxed'),
 }
 
 
 # How much of the performance survives: standing people should barely move.
-CALM = {'stand': 0.3, 'wave': 0.9, 'argue': 0.6, 'shout': 0.6, 'present': 0.7, 'cheer': 0.75, 'write': 0.8, 'sit': 0.5}
+CALM = {'wave': 0.9, 'argue': 0.6, 'shout': 0.6, 'present': 0.7, 'cheer': 0.75, 'write': 0.8, 'sit': 0.5}
 
 
 def norm(v):
@@ -143,6 +136,121 @@ def corrections(ref, asf, takes_sign):
         C[f'foot{s}'] = align(ft, B[f'{a}foot']['dir'], X, X)
         C[f'toe{s}'] = C[f'foot{s}']
     return C
+
+
+UMAP = {'hips': 'DEF-hips', 'spine': 'DEF-spine.001', 'spine1': 'DEF-spine.002', 'chest': 'DEF-spine.003', 'neck': 'DEF-neck', 'head': 'DEF-head'}
+for _s in 'LR':
+    UMAP.update({f'clavicle{_s}': f'DEF-shoulder.{_s}', f'upperarm{_s}': f'DEF-upper_arm.{_s}', f'lowerarm{_s}': f'DEF-forearm.{_s}', f'hand{_s}': f'DEF-hand.{_s}',
+                 f'upperleg{_s}': f'DEF-thigh.{_s}', f'lowerleg{_s}': f'DEF-shin.{_s}', f'foot{_s}': f'DEF-foot.{_s}', f'toe{_s}': f'DEF-toe.{_s}'})
+    for _n, _f in ((1, 'thumb'), (2, 'f_index'), (3, 'f_middle'), (4, 'f_ring'), (5, 'f_pinky')):
+        for _j in (1, 2, 3):
+            UMAP[f'finger{_n}_{_j}{_s}'] = f'DEF-{_f}.0{_j}.{_s}'
+
+
+class UalSource:
+    """Rest frames of the Quaternius rig against ours: each bone is matched by direction plus a real
+    second axis (elbow and knee hinge read from how the joint actually bends, palm plane from the knuckles),
+    so no limb twists and no wrist breaks."""
+    def __init__(self, ref):
+        self.u = ual.Ual()
+        R, P, _ = self.u.sample('A_TPose')
+        self.R0 = {b: R[b][0] for b in R}
+        self.P0 = {b: P[b][0] for b in P}
+        P0 = self.P0
+        self.leg = np.linalg.norm(P0['DEF-thigh.L'] - P0['DEF-shin.L']) + np.linalg.norm(P0['DEF-shin.L'] - P0['DEF-foot.L'])
+        self.k = ref.leg / self.leg
+        p = ref.p
+        C = {}
+        d = lambda a, b: P0[b] - P0[a]
+        C['spine'] = align(p('spine1') - p('spine'), d('DEF-spine.001', 'DEF-spine.002'))
+        C['spine1'] = align(p('chest') - p('spine1'), d('DEF-spine.002', 'DEF-spine.003'))
+        C['chest'] = align(p('neck') - p('chest'), d('DEF-spine.003', 'DEF-neck'))
+        C['neck'] = align(p('head') - p('neck'), d('DEF-neck', 'DEF-head'))
+        C['head'] = np.eye(3)
+        for s, sg in (('L', 1), ('R', -1)):
+            ua, fa, ha = f'DEF-upper_arm.{s}', f'DEF-forearm.{s}', f'DEF-hand.{s}'
+            hs = self.hinge(ua, fa, ha, ('Sitting_Talking_Loop', 'Idle_Talking_Loop', 'Jog_Fwd_Loop'))
+            u_t = p(f'lowerarm{s}') - p(f'upperarm{s}'); f_t = p(f'hand{s}') - p(f'lowerarm{s}')
+            ht = np.cross(u_t, f_t)
+            C[f'upperarm{s}'] = align(u_t, d(ua, fa), ht, hs)
+            C[f'lowerarm{s}'] = align(f_t, d(fa, ha), ht, hs)
+            C[f'clavicle{s}'] = align(p(f'upperarm{s}') - p(f'clavicle{s}'), d(f'DEF-shoulder.{s}', ua))
+            dt_ = p(f'finger3_1{s}') - p(f'hand{s}'); at = p(f'finger2_1{s}') - p(f'finger5_1{s}')
+            ds = d(ha, f'DEF-f_middle.01.{s}'); as_ = P0[f'DEF-f_index.01.{s}'] - P0[f'DEF-f_pinky.01.{s}']
+            C[f'hand{s}'] = align(dt_, ds, at, as_)
+            nt, ns = sg * np.cross(dt_, at), sg * np.cross(ds, as_)
+            for n, f in ((2, 'f_index'), (3, 'f_middle'), (4, 'f_ring'), (5, 'f_pinky'), (1, 'thumb')):
+                for j in (1, 2, 3):
+                    a_, b_ = f'DEF-{f}.0{j}.{s}', f'DEF-{f}.0{min(j + 1, 3)}.{s}'
+                    fs = d(a_, b_) if j < 3 else d(f'DEF-{f}.02.{s}', a_)
+                    ft = (p(f'finger{n}_{j + 1}{s}') - p(f'finger{n}_{j}{s}')) if j < 3 else (p(f'finger{n}_3{s}') - p(f'finger{n}_2{s}'))
+                    C[f'finger{n}_{j}{s}'] = align(ft, fs, nt, ns)
+            th, sh, ft_ = f'DEF-thigh.{s}', f'DEF-shin.{s}', f'DEF-foot.{s}'
+            hk = self.hinge(th, sh, ft_, ('Walk_Loop', 'Jog_Fwd_Loop'))
+            X = np.array([1.0, 0, 0])
+            C[f'upperleg{s}'] = align(p(f'lowerleg{s}') - p(f'upperleg{s}'), d(th, sh), X, hk)
+            C[f'lowerleg{s}'] = align(p(f'foot{s}') - p(f'lowerleg{s}'), d(sh, ft_), X, hk)
+            C[f'foot{s}'] = align(p(f'toe{s}') - p(f'foot{s}'), d(ft_, f'DEF-toe.{s}'), X, X)
+            C[f'toe{s}'] = C[f'foot{s}']
+        self.C = C
+
+    def hinge(self, a, b, c, clips):
+        """Hinge axis in the rest pose, measured from the bending itself."""
+        P0 = self.P0
+        u0, f0 = norm(P0[b] - P0[a]), norm(P0[c] - P0[b])
+        acc = np.zeros(3)
+        for n in clips:
+            R, _, _ = self.u.sample(n)
+            Da = np.einsum('fij,jk->fik', R[a], self.R0[a].T)
+            Db = np.einsum('fij,jk->fik', R[b], self.R0[b].T)
+            rel = np.einsum('fji,fjk->fik', Da, Db)
+            acc += np.cross(u0, np.einsum('fij,j->fi', rel, f0)).sum(0)
+        return norm(acc)
+
+    def retarget(self, ref, clip):
+        R, P, _ = self.u.sample(clip)
+        W = {}
+        for n, b in UMAP.items():
+            W[n] = np.einsum('fij,jk,kl->fil', R[b], self.R0[b].T, self.C.get(n, np.eye(3)))
+        return W, P['DEF-hips'] * self.k
+
+
+_US = None
+def make_ual(ref, take, mode):
+    global _US
+    _US = _US or UalSource(ref)
+    clip = take[4:]
+    W, pos = _US.retarget(ref, clip)
+    W = level_gaze(W, 0.6)
+    pos = pos.copy()
+    pos[:, 0] -= pos[:, 0].mean(); pos[:, 2] -= pos[:, 2].mean()
+    Q = world_to_local(ref, W)
+    T = {k: v[:-1].copy() for k, v in Q.items()}
+    p = pos[:-1].copy()
+    F = len(p)
+    speed = 0.0
+    if mode == 'ucycle':
+        # foot paths on our skeleton: the left foot furthest forward is frame 0, so gaits share a phase
+        zl = np.zeros(F); fz = {b: np.zeros(F) for b in ('footL', 'footR')}; fy = {b: np.zeros(F) for b in fz}
+        for i in range(F):
+            _, Pw = fk(ref, T, p, i)
+            for b in fz:
+                fz[b][i] = Pw[b][2] - Pw['hips'][2]; fy[b][i] = Pw[b][1]
+        sh = int(np.argmax(fz['footL']))
+        sp = []
+        for b in fz:
+            low = fy[b] < np.percentile(fy[b], 35)
+            v = -(np.roll(fz[b], -1) - np.roll(fz[b], 1)) / 2 * FPS
+            sp.append(np.percentile(v[low], 70))
+        speed = {'Jog_Fwd_Loop': 2.8, 'Sprint_Loop': 5.0}.get(clip, float(np.mean(sp)))  # flight phases fool the foot measure
+        T = {k: np.roll(v, -sh, 0) for k, v in T.items()}
+        p = np.roll(p, -sh, 0)
+    if mode == 'uair':
+        p[:, 1] = ref.p('hips')[1]
+    # closed loop: last key equals the first
+    T = {k: np.concatenate([v, v[:1] * np.sign(np.sum(v[:1] * v[-1:]) or 1)]) for k, v in T.items()}
+    p = np.concatenate([p, p[:1]])
+    return T, p, dict(loop=True, speed=speed, kind='cycle' if mode == 'ucycle' else 'loop', take=take)
 
 
 def retarget(ref, take):
@@ -555,15 +663,18 @@ def main():
     ref = Ref()
     made = {}
     for name, (take, t0, t1, mode, hand) in CLIPS.items():
-        if mode == 'cycle':
+        if take.startswith('ual:'):
+            T, p, meta = make_ual(ref, take, mode)
+        elif mode == 'cycle':
             T, p, meta = make_cycle(ref, take)
         else:
             T, p, meta = make_window(ref, take, t0, t1, mode)
         meta['hand'] = hand
-        idle = name == 'stand' or name.startswith('idle')
-        sig = 7.0 if idle else 1.2 if mode == 'cycle' else 3.0
-        T, p = smooth_clip(T, p, sig, CALM.get(name, 0.2 if idle else 1.0), mode != 'once')
-        if mode != 'air':
+        if not take.startswith('ual:'):
+            idle = name.startswith('idle')
+            sig = 7.0 if idle else 1.2 if mode == 'cycle' else 3.0
+            T, p = smooth_clip(T, p, sig, CALM.get(name, 0.2 if idle else 1.0), mode != 'once')
+        if mode not in ('air', 'uair'):
             # the source hips sit higher over the femurs than ours: settle on the target's own feet
             low = 9.0
             for i in range(0, len(p), 3):
@@ -573,10 +684,13 @@ def main():
             p = p.copy()
             p[:, 1] -= low
         made[name] = (T, p, meta)
-        print(f"{name:12s} {take:7s} {len(p) / FPS:5.2f}s speed {meta['speed']:.2f}", flush=True)
-    made['facepalm'] = gesture(ref, made['stand'], 'facepalm'); made['facepalm'][2]['hand'] = 'open'
-    made['selfie'] = gesture(ref, made['stand'], 'selfie'); made['selfie'][2]['hand'] = 'fist'
-    made['lie'] = gesture(ref, made['stand'], 'lie'); made['lie'][2]['hand'] = 'relaxed'
+        print(f"{name:12s} {take:24s} {len(p) / FPS:5.2f}s speed {meta['speed']:.2f}", flush=True)
+    # gestures keep the idle's fingers unless they set their own
+    base = dict(made['stand']) if False else made['stand']
+    base = ({k: v for k, v in base[0].items() if not k.startswith('finger')}, base[1], base[2])
+    made['facepalm'] = gesture(ref, base, 'facepalm'); made['facepalm'][2]['hand'] = 'open'
+    made['selfie'] = gesture(ref, base, 'selfie'); made['selfie'][2]['hand'] = 'fist'
+    made['lie'] = gesture(ref, base, 'lie'); made['lie'][2]['hand'] = 'relaxed'
     made['injured'] = injured(ref, made['sit']); made['injured'][2]['hand'] = 'relaxed'
     g = Glb()
     nodes = {}
@@ -597,7 +711,7 @@ def main():
             q = q / np.linalg.norm(q, axis=1, keepdims=True)
             ch.append((nodes[b], 'rotation', times, q))
         t2 = np.array([0.0, times[-1]])
-        for b, q in shapes[m['hand']].items():
+        for b, q in (shapes[m['hand']] if m['hand'] else {}).items():
             ch.append((nodes[b], 'rotation', t2, np.stack([q, q])))
         add_anim(g, name, ch)
         meta[name] = {k: m[k] for k in ('loop', 'speed', 'kind', 'take', 'hand')}

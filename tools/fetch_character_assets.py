@@ -33,10 +33,16 @@ def main():
     if not os.path.isdir(repo):
         subprocess.check_call(['git', 'clone', '--depth', '1', '--filter=blob:none', '--sparse', 'https://github.com/makehumancommunity/makehuman', repo])
         subprocess.check_call(['git', '-C', repo, 'sparse-checkout', 'set', 'makehuman/data/3dobjs', 'makehuman/data/rigs', 'makehuman/data/targets'])
+    ual = f'{ROOT}/ual/gltf-universal-animation-library'
+    if not os.path.isdir(ual):
+        os.makedirs(f'{ROOT}/ual', exist_ok=True)
+        subprocess.check_call(['git', 'clone', '--depth', '1', 'https://github.com/J-Ponzo/gltf-universal-animation-library', ual])
     # CMU takes named in the clip table
     sys.path.insert(0, os.path.dirname(__file__))
     from build_animations import CLIPS
     for take, *_ in CLIPS.values():
+        if take.startswith('ual:'):
+            continue
         s = take.split('_')[0]
         get(f'http://mocap.cs.cmu.edu/subjects/{s}/{s}.asf', f'{ROOT}/mocap/{s}.asf')
         get(f'http://mocap.cs.cmu.edu/subjects/{s}/{take}.amc', f'{ROOT}/mocap/{take}.amc')

@@ -146,7 +146,7 @@ def skirt_weights(c, p, pivots):
     p.W = p.W * (1 - k[:, None]) + Wn * k[:, None]
     # a skirt stands clear of the legs it hides: striding thighs must not come through
     r = np.stack([x, np.zeros_like(x), p.P[:, 2] - pivots[ix['hips']][2]], 1)
-    p.P = p.P + r / np.maximum(np.linalg.norm(r, axis=1, keepdims=True), 1e-6) * (k * 0.045)[:, None]
+    p.P = p.P + r / np.maximum(np.linalg.norm(r, axis=1, keepdims=True), 1e-6) * (k * 0.075)[:, None]
     sway = np.clip((crotch + 0.12 - y) / max(crotch + 0.12, 1e-3), 0, 1).astype(np.float32)
     p.extra['_SWAY'] = sway
     return p

@@ -52,6 +52,35 @@ W.slide = (i: number, v: number, n = 240, dt = 1 / 60) => {
   c.root.position.z = 0;
   return { medianStanceSlide: res[res.length >> 1], p90: res[Math.floor(res.length * 0.9)], minFootY: Math.min(...lows) };
 };
+/** Deterministic driven take for video: speed and turn profile over time, camera following. */
+const grid = new THREE.GridHelper(200, 200, 0xc8d0c0, 0x7f8a7a); grid.position.y = 0.004; (grid.material as THREE.Material).transparent = true; (grid.material as THREE.Material).opacity = 0.5; scene.add(grid);
+let driveT = 0, yawNow = 0;
+const profile = (s: number): [number, number] => {
+  // seconds -> [m/s, rad/s]
+  const seg = (a: number, b: number, x: number) => Math.min(1, Math.max(0, (x - a) / (b - a)));
+  const v = 1.4 * seg(1, 1.6, s) + 1.6 * seg(4, 4.6, s) + 3.2 * seg(7, 7.6, s) - 6.2 * seg(9.5, 10.3, s);
+  const w = (s > 5 && s < 6 ? 0.9 : 0) + (s > 11 && s < 12.4 ? 1.8 : 0) + (s > 13.2 && s < 14.2 ? -2.4 : 0);
+  return [Math.max(0, v), w];
+};
+W.drive = (i: number, dt = 1 / 30, sideView = false) => {
+  const c = chars[i];
+  chars.forEach((o, j) => { o.root.visible = j === i; });
+  c.setGround(() => 0);
+  for (let k = 0; k < 2; k++) {
+    const h = dt / 2; driveT += h; t += h;
+    const [v, w] = profile(driveT);
+    yawNow += w * h;
+    c.root.rotation.y = yawNow;
+    c.root.position.x += Math.sin(yawNow) * v * h; c.root.position.z += Math.cos(yawNow) * v * h;
+    c.root.updateMatrixWorld(true);
+    c.animate('idle', 0, v / 4, t, h);
+  }
+  const p = c.root.position;
+  if (sideView) { cam.position.set(p.x + 3.8, 1.0, p.z); cam.lookAt(p.x, 0.92, p.z); }
+  else { cam.position.set(p.x - Math.sin(yawNow - 0.5) * 3.6, 1.55, p.z - Math.cos(yawNow - 0.5) * 3.6); cam.lookAt(p.x, 0.95, p.z); }
+  r.render(scene, cam);
+  return driveT;
+};
 /** Shake probe: head travel per frame while standing, and worst frame-to-frame jerk (mm). */
 W.calm = (i: number, kind: CrewPose = 'stand', n = 240, dt = 1 / 60) => {
   const c = chars[i]; const h = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3();

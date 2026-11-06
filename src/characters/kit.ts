@@ -149,7 +149,7 @@ export function addKit(k: KitInput): Kit {
       for (const [s, l] of [[1, 0.5], [-1, 0.4]] as [number, number][]) {
         const front = fit.chest[3] - n.z + fit.chest[1] + 0.045;
         const g = sweep(smoothPath([V(s * nx * 0.7, wrapY, nc - n.z + nz * 1.2), V(s * nx * 1.05, wrapY - 0.11, front - 0.02), V(s * nx * 1.2, wrapY - l * 0.6, front + 0.02), V(s * nx * 1.05, wrapY - l, front + 0.015)], 14), { width: () => 0.03, thick: () => 0.0035, side: V(1, 0, 0.2), sides: 4 });
-        swayByStrand(g, 0, 1.0);
+        swayByStrand(g, 0, 0.45);
         scarfEnds.push(add(g, scarfM, chest));
       }
       // backpack and bedroll
@@ -159,7 +159,7 @@ export function addKit(k: KitInput): Kit {
       add(rbox(0.2, 0.13, 0.05, 0.02), cloth(0x4e3c28), chest, 0, cy - n.y - 0.08, zb - 0.075);
       const roll = add(new THREE.CylinderGeometry(0.062, 0.062, 0.34, 16), cloth(0x8a3a30), chest, 0, cy - n.y + 0.19, zb);
       roll.rotation.z = Math.PI / 2;
-      for (const s of [-1, 1]) add(sweep(smoothPath([V(s * cx * 0.62, cy - n.y + 0.13, zb + 0.06), V(s * cx * 0.66, cy - n.y + 0.2, cc - n.z), V(s * cx * 0.68, cy - n.y + 0.14, cc - n.z + cz * 1.02), V(s * cx * 0.8, cy - n.y - 0.12, cc - n.z + cz * 0.95)], 14), { width: () => 0.0155, thick: () => 0.0028, side: V(1, 0.1, 0), sides: 4 }), leather(0x3a2a1a), chest);
+      for (const s of [-1, 1]) add(sweep(smoothPath([V(s * cx * 0.62, cy - n.y + 0.13, zb + 0.06), V(s * cx * 0.66, cy - n.y + 0.2, cc - n.z), V(s * cx * 0.68, cy - n.y + 0.14, cc - n.z + cz * 0.86), V(s * cx * 0.86, cy - n.y - 0.12, cc - n.z + cz * 0.62)], 14), { width: () => 0.0155, thick: () => 0.0028, side: V(1, 0.1, 0), sides: 4 }), leather(0x3a2a1a), chest);
       break;
     }
     case 'builder': {
