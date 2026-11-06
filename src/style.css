@@ -53,6 +53,7 @@ body.lang-hi .btn, body.lang-ur .btn { letter-spacing: 0.02em; text-transform: n
 .btn:hover, .btn:focus-visible { border-color: var(--cyan); background: rgba(40, 110, 140, 0.35); color: #fff; outline: none; box-shadow: 0 0 18px rgba(111, 243, 255, 0.25) inset; }
 .btn.primary { border-color: rgba(255, 179, 92, 0.6); }
 .btn.primary:hover { background: rgba(255, 150, 60, 0.25); border-color: var(--amber); }
+a.btn { box-sizing: border-box; text-decoration: none; }
 .lang-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .lang-label { font-size: 12px; letter-spacing: 0.2em; color: #9fb7c2; text-transform: uppercase; margin-inline-end: 6px; }
 .btn.lang { min-width: 0; padding: 8px 14px; text-transform: none; letter-spacing: 0; font-family: 'Exo 2', 'Noto Sans Devanagari', 'Noto Naskh Arabic', sans-serif; }

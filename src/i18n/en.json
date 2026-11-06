@@ -7,6 +7,8 @@
   "menu.newGame": "New Game",
   "menu.continue": "Continue",
   "menu.settings": "Settings",
+  "menu.download": "Download for Windows",
+  "menu.quitDesktop": "Quit to Desktop",
   "menu.language": "Language",
   "menu.resume": "Resume",
   "menu.objectives": "Objectives",

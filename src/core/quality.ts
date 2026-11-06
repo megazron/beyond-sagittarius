@@ -1,3 +1,5 @@
+import { desktop } from './desktop';
+
 export type QualityName = 'mobile' | 'web' | 'ultra';
 export const QUALITY_NAMES: QualityName[] = ['mobile', 'web', 'ultra'];
 
@@ -133,14 +135,15 @@ const KEY = 'bs-quality';
 
 /**
  * Priority: ?quality= URL flag > saved user choice > environment default
- * (Mobile on phones/tablets, Ultra on `npm run dev` / localhost, Web everywhere
- * else e.g. GitHub Pages).
+ * (the desktop build's own preset, Mobile on phones/tablets, Ultra on
+ * `npm run dev` / localhost, Web everywhere else e.g. GitHub Pages).
  */
 export function detectQuality(): Quality {
   const url = new URLSearchParams(location.search).get('quality');
   if (isQuality(url)) return PRESETS[url];
   const saved = localStorage.getItem(KEY);
   if (isQuality(saved)) return PRESETS[saved];
+  if (desktop) return PRESETS[isQuality(desktop.quality) ? desktop.quality : 'ultra'];
   if (isPhone()) return PRESETS.mobile;
   const local = import.meta.env.DEV || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
   return PRESETS[local ? 'ultra' : 'web'];

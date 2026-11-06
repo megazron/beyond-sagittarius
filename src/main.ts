@@ -1,7 +1,8 @@
 import './style.css';
 import * as THREE from 'three';
 import { setLang, t, Lang } from './i18n';
-import { detectQuality, saveQualityChoice, QualityName } from './core/quality';
+import { detectQuality, isPhone, saveQualityChoice, QualityName } from './core/quality';
+import { desktop } from './core/desktop';
 import { Renderer } from './core/renderer';
 import { audio } from './core/audio';
 import { loadSave, newSave, clearSave, loadSettings, writeSettings, Settings } from './core/save';
@@ -68,6 +69,13 @@ let pendingNames: CrewNames = {};
 let photo: { from: THREE.Vector3; to: THREE.Vector3 } | null = null;
 
 document.getElementById('quality-badge')!.textContent = quality.name.toUpperCase();
+document.getElementById('btn-download')!.classList.toggle('hidden', !!desktop || isPhone());
+if (desktop) {
+  document.getElementById('version-badge')!.textContent = `v${desktop.version}`;
+  const quit = document.getElementById('btn-quit-desktop')!;
+  quit.classList.remove('hidden'); // fullscreen has no window close button
+  quit.addEventListener('click', () => desktop?.quit());
+}
 renderer.setScene(cine.scene, cine.camera, false);
 
 function persistSettings() {
