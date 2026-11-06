@@ -130,7 +130,7 @@ with a mouse and keyboard and real audio have not been tested by a person.
 
 ## Roadmap
 
-- Chapter Two, in progress: crafting your way out of the Stone Age
+- Beyond Chapter Two: the Bronze Age and the rest of the tech tree
 - Finding the rest of the crew, each with their own skills
 - Nine ages of civilisation, from stone to the ship home
 - Ruins and signals that do not add up
