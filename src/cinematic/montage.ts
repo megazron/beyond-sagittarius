@@ -383,12 +383,10 @@ export class Montage {
     let wade = 0, shore = 0;
     for (let s = 0; s < 120; s += 0.5) { const h = T.height(c0.x + d.x * s, c0.z + d.z * s); if (!wade && h > -0.95) wade = s; if (h > 0.3) { shore = s; break; } }
     const m = c0.clone().addScaledVector(d, wade), sh = c0.clone().addScaledVector(d, shore);
-    land('medic', m, c0.clone().addScaledVector(d, Math.max(4, wade - 16)), 19.5, 1.05, -1, above(sh.clone().addScaledVector(d, 6).add(V(0, 20, 0)), 16), sh.clone().add(V(0.6, 0.85, 0)), m.clone().addScaledVector(d, 2).add(V(0, 0.75, 0)), face(c0, sh), d);
+    // the wide sits out over the water: nothing can stand in front of the lens there
+    land('medic', m, c0.clone().addScaledVector(d, Math.max(4, wade - 26)), 19.5, 1.05, -1, sh.clone().addScaledVector(d, -7).add(V(0, 5, 0)), sh.clone().add(V(0.6, 0.85, 0)), m.clone().addScaledVector(d, 2).add(V(0, 0.75, 0)), face(c0, sh), d);
 
     this.lands[1].wide[1].y = 12;
-    // sidestep along the shore until no trunk stands in front of the lens
-    { const c = this.lands[1].wide[0], f = this.lands[1].wide[1].clone().sub(c).setY(0).normalize(), side = V(f.z, 0, -f.x), clear = (p: THREE.Vector3) => { for (let k = 1; k <= 12; k++) if (w.forest.blocks(p.x + f.x * k * 2, p.z + f.z * k * 2, 1.2)) return false; return true; };
-      for (const o of [0, 5, -5, 10, -10, 16, -16, 24, -24]) { const p = c.clone().addScaledVector(side, o); if (clear(p)) { c.copy(p); break; } } }
 
     // Bolzar: a flat rock in the southern hills
     const b = find(10, 90, 290, 370, (x, z) => -slope(x, z) - Math.abs(T.height(x, z) - 30) * 0.002);
