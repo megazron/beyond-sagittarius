@@ -559,7 +559,7 @@ export class UI implements CineUI {
   }
 
   /** The path tree: what was chosen, what stayed locked, and where that left people. */
-  openPath(title: string, v: PathView, onClose: () => void, opts: { replay?: () => void; note?: string; back?: string; standalone?: boolean } = {}) {
+  openPath(title: string, v: PathView, onClose: () => void, opts: { replay?: () => void; note?: string; back?: string; standalone?: boolean; leaning?: string[] } = {}) {
     const mark = { taken: '◆', locked: '◇', secret: '◇' };
     const nodes = v.nodes.map((n) => {
       const open = n.branches.some((b) => b.state === 'taken');
@@ -581,7 +581,7 @@ export class UI implements CineUI {
       <div class="pt-cols">
         <section><div class="eyebrow">${escapeHtml(t('br.path.trust'))}</div><ul class="pt-stats">${trust}</ul></section>
         <section><div class="eyebrow">${escapeHtml(t('br.path.record'))}</div><ul class="pt-stats">${rec}</ul></section>
-        <section><div class="eyebrow">${escapeHtml(t('br.path.endings'))}</div><ul class="pt-ends">${ENDINGS.map((e) => `<li data-ending="${escapeHtml(e.id)}"><span>${escapeHtml(t(e.title))}</span><small>${escapeHtml(t(e.desc))}</small></li>`).join('')}</ul></section>
+        <section><div class="eyebrow">${escapeHtml(t('br.path.endings'))}</div><ul class="pt-ends">${ENDINGS.map((e) => `<li data-ending="${escapeHtml(e.id)}" class="${opts.leaning?.includes(e.id) ? 'now' : ''}" title="${opts.leaning?.includes(e.id) ? escapeHtml(t('br.end.now')) : ''}"><span>${escapeHtml(t(e.title))}</span><small>${escapeHtml(t(e.desc))}</small></li>`).join('')}</ul></section>
       </div>
       ${opts.replay ? `<div class="menu"><button class="btn primary" id="pt-replay">${escapeHtml(t('br.replay'))}</button></div>` : ''}`;
     if (opts.standalone) this.openModal(`<h2>${escapeHtml(t('br.path.title'))}</h2><div class="menu-page">${body}</div>${this.foot(opts.back ?? 'menu.back')}`);

@@ -13,7 +13,7 @@ import { Player } from './game/player';
 import { Input } from './game/input';
 import { Game } from './game/game';
 import { applyCrewNames, CREW_IDS, CrewNames } from './core/crew';
-import { CHAPTERS, COMMENTS, emptyBranch, pathView, pickComments, resolveLine, takenBranches } from './game/branch';
+import { CHAPTERS, COMMENTS, emptyBranch, pathView, pickComments, resolveLine, takenBranches, endingFor, ENDINGS } from './game/branch';
 import type { Chapter } from './game/branch';
 import { TouchControls, TouchAction } from './ui/touch';
 import { openCreator, CreatorStage } from './ui/creator';
@@ -280,7 +280,7 @@ function playFlashback(after: () => void) {
 function openPathTree(s: SaveData, ch: Chapter, onClose: () => void, opts: { replay?: () => void; back?: string; standalone?: boolean } = {}) {
   settings.paths = Array.from(new Set([...(settings.paths ?? []), ...takenBranches(s, ch)]));
   writeSettings(settings);
-  ui.openPath(t(ch.title), pathView(s, ch, settings.paths, CREW_IDS), onClose, { ...opts, note: s.replay ? t('br.replay.note') : undefined });
+  ui.openPath(t(ch.title), pathView(s, ch, settings.paths, CREW_IDS), onClose, { ...opts, note: s.replay ? t('br.replay.note') : undefined, leaning: [endingFor(s, 'stay', ENDINGS).id, endingFor(s, 'home', ENDINGS).id] });
 }
 
 /** Chapter select: each chapter you have played shows its tree; ones with branches can be replayed. */
@@ -690,6 +690,7 @@ window.addEventListener('resize', () => {
   get mode() { return game?.mode; },
   get ready() { return worldReady; },
   get paused() { return paused; },
+  get endings() { return game?.save ? { stay: endingFor(game.save, 'stay', ENDINGS).id, home: endingFor(game.save, 'home', ENDINGS).id } : null; },
   get inputState() { return { keys: Array.from(input.keys), enabled: input.enabled, active: document.activeElement?.tagName, activeId: document.activeElement?.id, mode: game?.mode, pose: player?.pose, vel: player?.vel.toArray(), onGround: player?.onGround, water: player?.inWater, blocked: player?.blockedDeep }; },
   get longTasks() { return longTasks; },
   sceneTest(id: 'l3' | 'l7' | 'ch1' | 'intro' | 'fight') { if (id === 'fight') playFlashback(() => backToWorld()); else playVault(id, backToWorld); },

@@ -1010,5 +1010,10 @@
   "ch.returnflint": "Hand back the extra flint",
   "ch.tradeflint3": "3 branches for 1 flint",
   "br.path.none": "No branches here yet.",
-  "vo.anon.mz.br.late": "She waited a long time for you. She won't say so twice. She doesn't have to."
+  "vo.anon.mz.br.late": "She waited a long time for you. She won't say so twice. She doesn't have to.",
+  "br.end.d.stay.together": "They stay because they believe you.",
+  "br.end.d.stay.alone": "You stay. Nobody asked you to.",
+  "br.end.d.home.everyone": "Everyone gets on the ship.",
+  "br.end.d.home.without": "The ship leaves with empty seats.",
+  "br.end.now": "Where you stand today"
 }

@@ -722,6 +722,12 @@ def main():
         close_menus()
         ev("__bs.step(0.2)")
 
+        # ---- endings read the record: one stay and one home ending, whatever was chosen ----
+        ends = ev("__bs.endings")
+        log("endings on this record:", ends)
+        if not ends or ends["stay"] not in ("stay.together", "stay.alone") or ends["home"] not in ("home.everyone", "home.without"):
+            failures.append(f"endings not evaluated: {ends}")
+
         # ---- NPCs: they exist, and talking to one works ----
         npcs = ev("__bs.npcs")
         log("npcs:", [n["id"] for n in npcs])

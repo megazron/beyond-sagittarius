@@ -551,5 +551,6 @@ body.lang-ur .pt-b, body.lang-ur .pt-ends li { line-height: 2; }
 .pt-stats .warm b, .pt-stats .firm b { color: var(--teal); }
 .pt-stats .shaken b, .pt-stats .broken b { color: var(--accent); }
 .pt-ends li { padding: 2px 0; font-size: 15px; color: var(--dim); }
+.pt-ends li.now { color: var(--ink); }
 .menu.chapters small { display: block; font: 500 14px var(--font-ui); color: var(--dim); text-transform: none; letter-spacing: 0; }
 .menu.chapters .btn:disabled { opacity: 0.6; }

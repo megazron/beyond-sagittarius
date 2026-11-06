@@ -1,4 +1,4 @@
-import { AXES, Axis, BranchState, Chapter, Comment, Cond, Effect, Hidden, LineChoice, Payoff, Person } from './types';
+import { AXES, Axis, BranchState, Chapter, Comment, Cond, Effect, Ending, Hidden, LineChoice, Payoff, Person } from './types';
 import { HIDDEN } from './registry';
 
 /** The part of the save the system reads and writes. */
@@ -110,6 +110,12 @@ export function resolveLine(s: StoryState, l: LineChoice): { key?: string; who?:
 }
 
 /** The Vault lines this save has earned, first match per group. */
+/** The ending this record reaches if the last choice were made now. */
+export function endingFor(s: StoryState, choice: 'stay' | 'home', list: Ending[]): Ending {
+  const t: StoryState = { ...s, flags: { ...s.flags, [`end.${choice}`]: true } };
+  return list.find((e) => test(t, e.if))!;
+}
+
 export function pickComments(s: StoryState, list: Comment[], scene: string): string[] {
   const seen = new Set<string>(), out: string[] = [];
   for (const c of list) {
