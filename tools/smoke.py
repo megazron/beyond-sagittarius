@@ -85,6 +85,17 @@ def main():
         page.evaluate("window.__bs.cineSeek(33.45)")
         time.sleep(6)
         shot("02b-cinematic-deck")
+        # every spoken shot must keep its speaker in frame
+        for _ in range(40):
+            page.evaluate("__bs.nextBeat()")
+            time.sleep(0.35)
+            if page.evaluate("__bs.frameReport.length") >= 20:
+                break
+        report = page.evaluate("__bs.frameReport")
+        bad = [r for r in report if abs(r["x"]) > 0.9 or abs(r["y"]) > 0.9]
+        print("framed shots:", len(report), "re-aimed:", sum(1 for r in report if r["fixed"]))
+        if len(report) < 10 or bad:
+            errors.append(f"console.error: speaker out of frame: {bad[:3]} ({len(report)} shots)")
         page.evaluate("window.__bs.skip()")  # leave the deck scene
         time.sleep(1)
         for t, name in [(11.5, "02-cinematic-departure"), (44.5, "02c-cinematic-sgr-a"), (55.5, "02d-cinematic-event")]:

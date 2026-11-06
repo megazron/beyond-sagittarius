@@ -27,6 +27,7 @@ export interface Beat {
 
 export interface CutsceneCtx {
   camera: THREE.PerspectiveCamera;
+  scene: THREE.Scene;
   actors: Partial<Record<CrewId, Character>>;
   subtitle: (key: string | null, speaker?: string) => void;
   onDone: () => void;
@@ -56,6 +57,22 @@ export const cover = {
   },
 };
 
+/** Three-point light for whoever is talking, one rig per scene, so faces always read. */
+function rigFor(scene: THREE.Scene) {
+  let rig = scene.getObjectByName('cutscene-rig') as THREE.Group | undefined;
+  if (!rig) {
+    rig = new THREE.Group(); rig.name = 'cutscene-rig';
+    rig.add(new THREE.PointLight(0xfff0e0, 6, 7, 1.6), new THREE.PointLight(0xc4d6ff, 2.2, 7, 1.6), new THREE.PointLight(0xffd8b0, 5, 6, 1.6));
+    scene.add(rig);
+  }
+  rig.visible = true;
+  return rig;
+}
+
+/** How each spoken shot framed its speaker (tests read this). */
+export const frameReport: { key: string; x: number; y: number; fixed: boolean }[] = [];
+const P = new THREE.Vector3();
+
 /**
  * Plays a list of beats: cuts between shots, stages poses and looks, and holds
  * each beat for as long as its voice line lasts. Works on any scene.
@@ -70,7 +87,29 @@ export class Cutscene {
 
   constructor(private beats: Beat[], private ctx: CutsceneCtx) {
     voice.preload(beats.flatMap((b) => (b.key ? [b.key] : [])));
+    this.rig = rigFor(ctx.scene);
   }
+  private rig: THREE.Group;
+
+  /** Keep the speaker's head inside the safe area, and light them from the camera side. */
+  private frame(who: Who | undefined, key: string | undefined) {
+    const a = who && who !== 'megazron' ? this.ctx.actors[who] : undefined;
+    const cam = this.ctx.camera, s = this.shot;
+    if (!a || !s) return;
+    const h = headOf(a);
+    const look = () => { cam.position.copy(s.from); cam.up.set(0, 1, 0); cam.lookAt(s.to); cam.updateMatrixWorld(); return P.copy(h).project(cam); };
+    let q = look(), fixed = false;
+    if (Math.abs(q.x) > 0.8 || Math.abs(q.y) > 0.8 || q.z > 1) { s.to.copy(h); s.to.y -= 0.05; q = look(); fixed = true; }
+    if (key) frameReport.push({ key, x: q.x, y: q.y, fixed });
+    const d = s.from.clone().sub(h).setY(0).normalize(), r = new THREE.Vector3(d.z, 0, -d.x), up = new THREE.Vector3(0, 1, 0);
+    const [k, f, b] = this.rig.children;
+    k.position.copy(h).addScaledVector(d, 1.2).addScaledVector(r, 0.8).addScaledVector(up, 0.5);
+    f.position.copy(h).addScaledVector(d, 1.3).addScaledVector(r, -1.1).addScaledVector(up, -0.1);
+    b.position.copy(h).addScaledVector(d, -1.1).addScaledVector(r, -0.5).addScaledVector(up, 0.7);
+  }
+
+  /** Test hook: go straight to the next beat. */
+  debugNext() { this.left = 0; }
 
   private next() {
     this.i++;
@@ -91,6 +130,7 @@ export class Cutscene {
     } else subtitle(null);
     this.left = dur + (b.after ?? 0.28);
     if (b.shot) { this.shot = b.shot(); this.shotT = 0; this.shotLen = this.left; }
+    this.frame(b.who, b.key);
   }
 
   poses: Partial<Record<CrewId, CrewPose>> = {};
@@ -108,7 +148,7 @@ export class Cutscene {
       if (!a || !b) continue;
       const want = Math.atan2(b.root.position.x - a.root.position.x, b.root.position.z - a.root.position.z);
       const d = Math.atan2(Math.sin(want - a.root.rotation.y), Math.cos(want - a.root.rotation.y));
-      a.root.rotation.y += d * (1 - Math.exp(-dt * 5));
+      a.root.rotation.y += d * (1 - Math.exp(-dt * 3));
     }
     const s = this.shot;
     if (s) {
@@ -129,6 +169,7 @@ export class Cutscene {
 
   private end() {
     this.done = true;
+    this.rig.visible = false;
     Renderer.current?.setDof(0, 0);
     this.ctx.subtitle(null);
     voice.stop();

@@ -5,6 +5,7 @@ import { applySway, swayUniforms } from './sway';
 import { buildHair, HAIRSTYLES, HAIR_CAP, skullFrom } from './hair';
 import { LOOKS, CrewId, Look } from './looks';
 import type { PlayerLook } from './custom';
+import { voice } from '../core/voice';
 import { AnimSet, CrewAsset, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, lashMaterial, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
 import { addKit, Kit } from './kit';
 
@@ -37,6 +38,7 @@ const FULL_BODY = new Set<CrewPose>(['sit', 'injured', 'lie', 'jump']);
 const MARK_OF: Record<string, string> = { dots: 'scientist', cracks: 'strong', veins: 'medic', stripes: 'explorer', plates: 'builder', stars: 'social' };
 
 const bones = (root: THREE.Object3D) => { const m = new Map<string, THREE.Bone>(); root.traverse((o) => { if ((o as THREE.Bone).isBone) m.set(o.name, o as THREE.Bone); }); return m; };
+const lip = { open: 0, round: 0, wide: 0 };
 const Q = new THREE.Quaternion(), Q2 = new THREE.Quaternion(), E = new THREE.Euler();
 const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3(), V4 = new THREE.Vector3(), V5 = new THREE.Vector3();
 
@@ -130,7 +132,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let ground: ((x: number, z: number) => number) | null = null;
   const lookAt = { y: 0, x: 0 };
   const morph: Record<string, number> = {};
-  let blinkAt = 2 + Math.random() * 3, blinkT = 0, speak = 0, speakPhase = 0, vis = 0, visAt = 0;
+  let blinkAt = 2 + Math.random() * 3, blinkT = 0, speak = 0;
   let gaitPhase = 0, inited = false, hipDrop = 0, sacAt = 1, sacX = 0, sacY = 0, firstFrame = true;
   const footOff = [0, 0];
   const pin = [new THREE.Vector3(), new THREE.Vector3()], pinOff = [new THREE.Vector3(), new THREE.Vector3()], pinned = [false, false];
@@ -394,7 +396,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       headB.quaternion.multiply(Q.setFromEuler(E.set(lx * 0.6, ly * 0.6, 0)));
     }
     sacAt -= dt;
-    if (sacAt <= 0) { sacAt = 0.5 + Math.random() * 2.4; sacX = (Math.random() - 0.5) * 0.14; sacY = (Math.random() - 0.5) * 0.26; }
+    if (sacAt <= 0) { sacAt = 1.2 + Math.random() * 3; sacX = (Math.random() - 0.5) * 0.05; sacY = (Math.random() - 0.5) * 0.09; }
     for (const n of ['eyeL', 'eyeR']) bs.get(n)!.quaternion.setFromEuler(E.set(sacX, sacY + clamp(yawRate * 0.12, -0.35, 0.35), 0));
     chestB.scale.setScalar(1 + bp * 0.005 * (standing ? 1 : 0.6));
 
@@ -402,22 +404,19 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const r = 1 - Math.exp(-dt * 10);
     const ex = EXPR[kind] ?? {};
     const hurt = (kind === 'injured' ? 1 : 0);
-    if (speak > 0) {
-      speakPhase += dt * 12; speak = Math.max(0, speak - dt); visAt -= dt;
-      if (visAt <= 0) { visAt = 0.09 + Math.random() * 0.13; vis = Math.floor(Math.random() * 3); }
-    }
-    const talking = speak > 0.04;
-    const open = talking ? 0.22 + 0.42 * Math.abs(Math.sin(speakPhase * 0.5)) : ex.open ?? 0;
-    easeMorph('open', open, 1 - Math.exp(-dt * 26));
-    easeMorph('round', talking && vis === 1 ? 0.5 : 0, 1 - Math.exp(-dt * 20));
-    easeMorph('wide', talking && vis === 2 ? 0.5 : 0, 1 - Math.exp(-dt * 20));
+    // the mouth follows the voice clip itself; no clip, no movement
+    if (speak > 0) { speak = Math.max(0, speak - dt); voice.mouth(lip); } else lip.open = lip.round = lip.wide = 0;
+    const open = speak > 0 ? lip.open * 0.62 : ex.open ?? 0;
+    easeMorph('open', open, 1 - Math.exp(-dt * 30));
+    easeMorph('round', lip.round * 0.55, 1 - Math.exp(-dt * 22));
+    easeMorph('wide', lip.wide * 0.5, 1 - Math.exp(-dt * 22));
     bs.get('jaw')!.rotation.x = (morph.open ?? 0) * 0.2;
     easeMorph('smile', ex.smile ?? smileBase, r);
     easeMorph('frown', ex.frown ?? 0, r);
     easeMorph('fear', (ex.fear ?? 0) + eyeShape.fear + hurt * 0.1, r);
     easeMorph('squint', (ex.squint ?? 0) + eyeShape.squint, r);
     blinkAt -= dt;
-    if (blinkAt <= 0) { blinkT = 0.15; blinkAt = 1.6 + Math.random() * 4.5; }
+    if (blinkAt <= 0) { blinkT = 0.15; blinkAt = 2.4 + Math.random() * 3.6; }
     if (blinkT > 0) blinkT -= dt;
     const bl = blinkT > 0 ? Math.sin((blinkT / 0.15) * Math.PI) : 0;
     setMorph('blink', Math.max(bl, ex.blink ?? eyeShape.blink));

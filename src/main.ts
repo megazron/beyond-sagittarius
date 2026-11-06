@@ -25,6 +25,7 @@ import { setPortraitCast } from './ui/portraits';
 import { preloadCrew } from './characters/character';
 import { defaultLook, PlayerLook, CrewSkins } from './characters/custom';
 import { voice } from './core/voice';
+import { frameReport } from './cinematic/cutscene';
 import { Vault, vaultScript } from './narrator/vault';
 import { onLangChange } from './i18n';
 import { fitFov, lockViewport, tryFullscreen } from './core/viewport';
@@ -545,6 +546,8 @@ window.addEventListener('resize', () => {
   get mode() { return game?.mode; },
   get ready() { return worldReady; },
   get paused() { return paused; },
+  nextBeat() { cine.debugNext(); game?.scene?.debugNext(); },
+  get frameReport() { return frameReport; },
   get npcs() { return game?.story.npcs.debug(); },
   get tech() { return { ages: [...AGES], nodes: TECH.map((n) => ({ id: n.id, age: n.age, status: n.status, requires: n.requires, state: game?.save ? techState(game.save, n) : null })) }; },
   get subtitleText() { return document.querySelector('#subtitle .line')?.textContent; },

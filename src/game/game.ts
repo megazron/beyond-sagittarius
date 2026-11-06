@@ -62,9 +62,10 @@ export class Game {
     this.ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden');
     document.getElementById('hud')!.classList.add('in-scene');
-    this.story.scenePose = () => this.scene?.poses.explorer;
+    this.story.scenePose = () => this.scene?.poses.explorer ?? 'stand';
     this.scene = new Cutscene(beats, {
       camera: this.player.camera,
+      scene: this.world.scene,
       actors: { scientist: this.player.model, explorer: this.world.explorer },
       subtitle: (k, sp) => this.ui.subtitle(k, sp),
       onDone: () => {
@@ -249,7 +250,7 @@ export class Game {
     this.runCues(dt);
     if (this.mode === 'scene') {
       const sc = this.scene!;
-      this.player.pose = sc.poses.scientist ?? 'idle';
+      this.player.pose = sc.poses.scientist ?? 'stand';
       this.player.update(dt, this.input, false, 100, 1);
       this.story.update(dt, time);
       sc.update(dt);

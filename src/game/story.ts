@@ -454,11 +454,11 @@ export class Story {
     this.turnToCrew();
     this.playScene([
       { key: 'dlg.9.1', who: 'explorer', shot: () => cover.ots(y, z), poses: { explorer: 'injured', scientist: 'stand' }, after: 0.5 },
-      { key: 'dlg.9.2', who: 'scientist', shot: () => cover.close(z, 0.4), poses: { scientist: 'present' } },
+      { key: 'dlg.9.2', who: 'scientist', shot: () => cover.close(z, 0.4) },
       { key: 'dlg.9.3', who: 'explorer', shot: () => cover.close(y, 0.45, 1.25, 0) },
       { key: 'dlg.9.3b', who: 'scientist', shot: () => cover.close(z, -0.35), poses: { scientist: 'stand' }, after: 0.4 },
       { key: 'dlg.9.3c', who: 'explorer', shot: () => cover.close(y, -0.4, 1.1, 0), after: 0.4 },
-      { key: 'dlg.9.4', who: 'scientist', shot: () => cover.two(z, y, 3.2), poses: { scientist: 'point' } },
+      { key: 'dlg.9.4', who: 'scientist', shot: () => cover.two(z, y, 3.2), poses: { scientist: 'stand' } },
     ], () => { this.s.flags.metCrew = true; });
   }
 
@@ -479,7 +479,7 @@ export class Story {
     audio.thud();
     this.turnToCrew();
     this.playScene([
-      { key: 'dlg.9.5', who: 'explorer', shot: () => cover.close(this.pair.y, 0.4, 1.1, 0), poses: { explorer: 'injured', scientist: 'facepalm' } },
+      { key: 'dlg.9.5', who: 'explorer', shot: () => cover.close(this.pair.y, 0.4, 1.1, 0), poses: { explorer: 'injured', scientist: 'stand' } },
     ], () => {
       s.flags.crewFollow = true;
       this.crew.mode = 'follow';
@@ -605,18 +605,18 @@ export class Story {
     this.playScene([
       { run: push('beacon.1'), hold: 1.8, shot: beaconShot, poses: { scientist: 'stand', explorer: 'stand' } },
       { run: push('beacon.2'), hold: 1.7 },
-      { run: push('beacon.strong'), key: 'rad.strong', who: 'strong', shot: () => cover.mid(z, 0.5, 2.2), poses: { scientist: 'cheer' } },
+      { run: push('beacon.strong'), key: 'rad.strong', who: 'strong', shot: () => cover.mid(z, 0.5, 2.2), poses: { scientist: 'stand' } },
       { run: push('beacon.medic'), key: 'rad.medic', who: 'medic', shot: () => cover.mid(y, -0.5, 2.2), poses: { scientist: 'stand' } },
-      { run: push('beacon.builder'), key: 'rad.builder', who: 'builder', shot: () => cover.two(z, y, 3.3), poses: { scientist: 'facepalm' } },
-      { run: push('beacon.social'), key: 'rad.social', who: 'social', shot: () => cover.close(y, 0.4, 1.3), poses: { scientist: 'stand', explorer: 'cheer' } },
-      { key: 'dlg.10.3', who: 'explorer', shot: () => cover.close(y, -0.4, 1.1), poses: { explorer: 'cheer', scientist: 'cheer' }, after: 0.7 },
+      { run: push('beacon.builder'), key: 'rad.builder', who: 'builder', shot: () => cover.two(z, y, 3.3), poses: { scientist: 'stand' } },
+      { run: push('beacon.social'), key: 'rad.social', who: 'social', shot: () => cover.close(y, 0.4, 1.3), poses: { scientist: 'stand', explorer: 'stand' } },
+      { key: 'dlg.10.3', who: 'explorer', shot: () => cover.close(y, -0.4, 1.1), poses: { explorer: 'stand', scientist: 'stand' }, after: 0.7 },
       { run: () => { alert(1)(); audio.tone(40, 2.5, 'sawtooth', 0.25, 0, 10); }, hold: 2.2, shot: skyShot, poses: { explorer: 'stand', scientist: 'stand' } },
       { run: alert(2), key: 'beacon.unknown2', hold: 2.4, shot: beaconShot },
       { run: alert(3), key: 'beacon.unknown3', hold: 2.4, shot: () => cover.close(z, 0.2, 0.9), after: 0.8 },
       { key: 'dlg.10.4', who: 'explorer', shot: () => cover.ots(y, z) },
       { key: 'dlg.10.5', who: 'scientist', shot: () => cover.close(z, -0.3), after: 0.9 },
       { run: () => this.ui.deviceLines(null), key: 'dlg.10.6', who: 'explorer', shot: () => cover.close(y, 0.35, 1), poses: { explorer: 'point' } },
-      { key: 'dlg.10.7', who: 'scientist', shot: () => cover.close(z, 0.3, 0.95), poses: { scientist: 'present' }, after: 0.5 },
+      { key: 'dlg.10.7', who: 'scientist', shot: () => cover.close(z, 0.3, 0.95), after: 0.5 },
       { key: 'dlg.10.8', who: 'explorer', shot: () => cover.ots(y, z, -0.6), poses: { explorer: 'stand' }, after: 0.8 },
       { key: 'dlg.10.9', who: 'scientist', shot: () => cover.close(z, -0.2, 0.85), poses: { scientist: 'stand' }, after: 1.1 },
       { key: 'dlg.10.10', who: 'explorer', shot: () => cover.close(y, -0.2, 0.9), after: 1 },

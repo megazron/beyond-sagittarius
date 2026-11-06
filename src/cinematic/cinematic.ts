@@ -143,6 +143,7 @@ export class Cinematic {
     this.scene.updateMatrixWorld(true);
     this.stage = new Cutscene(beats, {
       camera: this.camera,
+      scene: this.scene,
       actors: this.cast,
       subtitle: (k, sp) => this.ui.subtitle(k, sp),
       onDone: () => { this.stage = null; done(); },
@@ -156,6 +157,9 @@ export class Cinematic {
     swap(0, createCharacter('scientist', d, look));
     swap(1, createCharacter('strong', d, undefined, skins.strong === 'suit' ? 'suit' : undefined));
   }
+
+  /** Test hook: next beat of the running scene. */
+  debugNext() { this.stage?.debugNext(); }
 
   /** Back to the title backdrop. */
   resetIdle() { this.setVisible('earth'); this.dome.uniforms.uBH.value = 0; this.camera.fov = 45; this.camera.updateProjectionMatrix(); }
@@ -177,7 +181,7 @@ export class Cinematic {
     const poses = this.stage?.poses;
     this.interior.crew.forEach((c) => {
       c.root.updateMatrixWorld();
-      c.animate(poses?.[c.id as CrewId] ?? 'idle', 0, 0, this.clockT, dt);
+      c.animate(poses?.[c.id as CrewId] ?? 'stand', 0, 0, this.clockT, dt);
     });
   }
   private clockT = 0;

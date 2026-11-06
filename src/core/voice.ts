@@ -27,6 +27,7 @@ class Voice {
   played = 0;
 
   async load(lang: Lang = this.lang) {
+    void this.loadLips(lang);
     this.takesLoaded ??= fetch(`${BASE}audio/voice/override/index.json`)
       .then(async (r) => { if (r.ok) this.takes = await r.json(); })
       .catch(() => { /* no recorded takes */ });
@@ -113,6 +114,7 @@ class Voice {
       s.connect(audio.voiceIn());
       s.onended = () => { if (this.src === s) { this.src = null; audio.duck(false); } };
       s.start();
+      this.startedAt = audio.ctx.currentTime; this.lipFile = f;
       this.src = s;
       audio.duck(true);
     });
@@ -122,6 +124,31 @@ class Voice {
   stop() {
     this.token++;
     if (this.src) { try { this.src.stop(); } catch { /* already over */ } this.src = null; audio.duck(false); }
+  }
+
+  private lips: Partial<Record<Lang, Record<string, string>>> = {};
+  private lipFile: string | null = null;
+  private startedAt = 0;
+  private async loadLips(lang: Lang) {
+    if (this.lips[lang]) return;
+    this.lips[lang] = {};
+    try { const r = await fetch(`${BASE}audio/vo/${lang}/lipsync.json`); if (r.ok) this.lips[lang] = await r.json(); } catch { /* mouths stay shut */ }
+  }
+
+  /**
+   * Mouth shape right now, read from the clip's own track (open, round, wide,
+   * 0..1). All zero when nothing is playing, so silence is a closed mouth.
+   */
+  mouth(out: { open: number; round: number; wide: number }) {
+    out.open = out.round = out.wide = 0;
+    if (!this.src || !this.lipFile || !audio.ctx) return out;
+    const tr = this.lips[this.lang]?.[this.lipFile];
+    if (!tr) return out;
+    const [a, b, c] = tr.split('|');
+    const f = (audio.ctx.currentTime - this.startedAt) * 25, i = Math.floor(f), k = f - i;
+    const at = (s: string) => { if (i < 0 || i + 1 >= s.length) return 0; return ((s.charCodeAt(i) - 48) * (1 - k) + (s.charCodeAt(i + 1) - 48) * k) / 9; };
+    out.open = at(a); out.round = at(b); out.wide = at(c);
+    return out;
   }
 
   /** Current speech loudness 0..1 (drives mouths and the narrator's halo). */
