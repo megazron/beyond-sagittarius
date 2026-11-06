@@ -567,6 +567,27 @@ export class Renderer {
     if (cam.isPerspectiveCamera) { cam.aspect = w / h; cam.updateProjectionMatrix(); }
   }
 
+  /**
+   * Warm-up runs the real post chain, off screen at a tiny size. Only that compiles
+   * the exact shader variants (render-target output, depth and normal overrides)
+   * and uploads the buffers and textures a scene needs; compile() alone does not.
+   */
+  warmBegin() {
+    this.composer.renderToScreen = false;
+    this.composer.setPixelRatio(1);
+    this.composer.setSize(96, 54);
+  }
+  warm(scene: THREE.Scene, cam: THREE.PerspectiveCamera, ao: boolean) {
+    this.setScene(scene, cam, ao);
+    if (this.volumetric) this.volumetric.source = (scene.userData.post as PostSource | undefined) ?? null;
+    this.composer.render(0.016);
+  }
+  warmEnd() {
+    this.composer.renderToScreen = true;
+    this.composer.setPixelRatio(this.pixelRatio);
+    this.resize();
+  }
+
   render(dt: number, time: number) {
     this.final.uniforms.uTime.value = time;
     if (this.volumetric) this.volumetric.source = (this.renderPass.scene.userData.post as PostSource | undefined) ?? null;

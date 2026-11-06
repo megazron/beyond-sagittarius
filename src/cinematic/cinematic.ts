@@ -163,23 +163,23 @@ export class Cinematic {
   debugNext() { this.stage?.debugNext(); }
 
   /** Compile everything, including what is hidden at the title, so no shot stalls later. */
-  async warm(r: THREE.WebGLRenderer) {
+  async warm(draw: (scene: THREE.Scene, cam: THREE.PerspectiveCamera) => void) {
     const shown = [this.earth.group, this.ring, this.mars, this.giant, this.giantRing, this.interior.group, this.ship.group];
     const was = shown.map((o) => o.visible);
     shown.forEach((o) => (o.visible = true));
     await Promise.all(this.interior.crew.map((c) => c.whenReady));
-    this.scene.updateMatrixWorld(true);
-    await r.compileAsync(this.scene, this.camera);
-    // one tiny frame of the deck, so the crew's textures are on the GPU before their scene
+    // the deck with the whole crew in view: their shaders, buffers and textures
     stageDeck(this.cast, -2.2);
-    const cam = new THREE.PerspectiveCamera(110, 16 / 9, 0.05, 60);
+    this.interior.crew.forEach((c) => { c.root.updateMatrixWorld(); c.animate('stand', 0, 0, 0, 0.016); });
+    const cam = new THREE.PerspectiveCamera(110, 16 / 9, 0.05, 40000);
     cam.position.copy(this.interior.group.position).add(V(0, -0.6, 5));
     cam.lookAt(this.interior.group.position.clone().add(V(0, -1.2, 0)));
-    this.scene.updateMatrixWorld(true);
-    this.interior.crew.forEach((c) => c.animate('stand', 0, 0, 0, 0.016));
-    const t = new THREE.WebGLRenderTarget(64, 36);
-    r.setRenderTarget(t); r.render(this.scene, cam); r.setRenderTarget(null); t.dispose();
+    cam.updateMatrixWorld();
+    draw(this.scene, cam);
     shown.forEach((o, i) => (o.visible = was[i]));
+    // and the exterior shots
+    this.setVisible('earth');
+    draw(this.scene, this.camera);
   }
 
   /** Back to the title backdrop. */

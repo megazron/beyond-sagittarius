@@ -519,10 +519,28 @@ function frame() {
   }
 }
 
-/** One tiny off-screen frame: first-use uploads and shadow setup happen here, not mid-game. */
-function warmFrame(scene: THREE.Scene, cam: THREE.Camera) {
-  const r = renderer.renderer, t = new THREE.WebGLRenderTarget(64, 36);
-  r.setRenderTarget(t); r.render(scene, cam); r.setRenderTarget(null); t.dispose();
+/** Every scene once through the real pipeline during loading, yielding between them. */
+async function warmAll() {
+  const breathe = () => new Promise((r) => requestAnimationFrame(r));
+  renderer.warmBegin();
+  // the world from the spawn point, in every direction: the wake-up turns the camera around
+  const wide = new THREE.PerspectiveCamera(100, 16 / 9, 0.1, 2400);
+  wide.position.copy(player.pos).add(new THREE.Vector3(0, 1.7, 0));
+  for (let i = 0; i < 4; i++) {
+    wide.rotation.set(0, (i / 4) * Math.PI * 2, 0);
+    wide.updateMatrixWorld();
+    renderer.warm(world.scene, wide, true);
+    await breathe();
+  }
+  await cine.warm((sc, cam) => renderer.warm(sc, cam, false));
+  await breathe();
+  vault.prepare();
+  renderer.warm(vault.scene, vault.camera, false);
+  await breathe();
+  stage.update(0.016);
+  renderer.warm(stage.scene, stage.camera, false);
+  renderer.warmEnd();
+  renderer.setScene(cine.scene, cine.camera, false);
 }
 
 // Stalls over 50 ms, with what was on screen (tools/transition_test.py reads this).
@@ -558,14 +576,7 @@ async function boot() {
   applyPlayer(defaultLook(), {});
   stage.rebuild(defaultLook());
   await player.model.whenReady;
-  await renderer.renderer.compileAsync(world.scene, camera);
-  warmFrame(world.scene, camera);
-  await cine.warm(renderer.renderer);
-  await vault.prepare(renderer.renderer);
-  warmFrame(vault.scene, vault.camera);
-  stage.update(0.016);
-  await renderer.renderer.compileAsync(stage.scene, stage.camera);
-  warmFrame(stage.scene, stage.camera);
+  await warmAll();
   worldReady = true;
   btns.forEach((b) => (b.disabled = false));
   if (pendingStart) { const f = pendingStart; pendingStart = null; f(); }
