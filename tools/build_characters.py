@@ -195,7 +195,7 @@ def covered(P, N, garments, reach=0.035):
     return hid
 
 
-def ray_covered(P, N, garment, sel, reach=0.16):
+def ray_covered(P, N, garment, sel, reach=0.16, both=False):
     """Vertices whose outward normal runs into the garment: true for loose sleeves and skirts too."""
     g = garment.decimated(2600, None, None, 1e-3)
     A, B, C = g.P[g.T[:, 0]], g.P[g.T[:, 1]], g.P[g.T[:, 2]]
@@ -214,7 +214,10 @@ def ray_covered(P, N, garment, sel, reach=0.16):
         qv = np.cross(tv, e1[None])
         v = np.einsum('rc,rtc->rt', d, qv) * inv
         t = np.einsum('rtc,tc->rt', qv, e2) * inv
-        hit[ii] = ((u >= -0.02) & (v >= -0.02) & (u + v <= 1.04) & (t > 0) & (t < reach)).any(1)
+        inside = (u >= -0.02) & (v >= -0.02) & (u + v <= 1.04)
+        hit[ii] = (inside & (t > 0) & (t < reach)).any(1)
+        if both:  # an inner layer poking out through the outer one is also cut
+            hit[ii] |= (inside & (t < 0) & (t > -0.05)).any(1)
     return hit
 
 
@@ -289,8 +292,8 @@ def build(c, cid, force=False):
         Ng = g.N
         used = np.zeros(len(g.P), bool); used[np.unique(g.T)] = True
         for o in outer:
-            hid |= ray_covered(g.P, Ng, o, used & ~hid, 0.1)
-        hid = erode(hid, g.T, 1)
+            hid |= ray_covered(g.P, Ng, o, used & ~hid, 0.1, True)
+        hid = erode(hid, g.T, 3)
         vis = ~hid[g.T].all(1)
         if vis.sum() > 60:
             g.T, g.TU = g.T[vis], g.TU[vis]
@@ -299,6 +302,15 @@ def build(c, cid, force=False):
             for o in garments:
                 if o is not g:
                     g.P = resolve_layers(g.P, o, 0.008)
+            hid = np.zeros(len(g.P), bool)
+            used = np.zeros(len(g.P), bool); used[np.unique(g.T)] = True
+            for o in garments:
+                if o is not g:
+                    hid |= ray_covered(g.P, g.N, o, used & ~hid, 0.08, True)
+            hid = erode(hid, g.T, 2)
+            vis = ~hid[g.T].all(1)
+            if vis.sum() > 60:
+                g.T, g.TU = g.T[vis], g.TU[vis]
     # --- body ---
     keep = []
     dl = np.zeros(len(V), bool)
@@ -474,5 +486,5 @@ if __name__ == '__main__':
     paint.shared_maps(ctx0.base, ctx0.rig, OUT)
     ids = a.only.split(',') if a.only else list(CHARS)
     ids = [i for i in ids if a.force or a.only or not os.path.exists(f'{OUT}/{i}.json')]
-    with Pool(min(2, len(ids) or 1)) as pool:
+    with Pool(min(3, len(ids) or 1)) as pool:
         pool.map(job, ids, 1)

@@ -147,7 +147,8 @@ export function addKit(k: KitInput): Kit {
       add(loft([{ y: wrapY + 0.045, rx: nx * 1.02, rz: nz * 1.02 }, { y: wrapY + 0.015, rx: nx * 1.2, rz: nz * 1.2, z: 0.004 }, { y: wrapY - 0.015, rx: nx * 1.3, rz: nz * 1.32, z: 0.01 }, { y: wrapY - 0.04, rx: nx * 1.18, rz: nz * 1.22, z: 0.01 }], 22), sc, chest, 0, 0, nc - n.z);
       const scarfM = applySway(cloth(col, 0.92), sway);
       for (const [s, l] of [[1, 0.5], [-1, 0.4]] as [number, number][]) {
-        const g = sweep(smoothPath([V(s * nx * 0.7, wrapY, nc - n.z + nz * 1.2), V(s * nx * 1.05, wrapY - 0.11, nc - n.z + nz * 1.8), V(s * nx * 1.2, wrapY - l * 0.6, nc - n.z + nz * 2.3), V(s * nx * 1.05, wrapY - l, nc - n.z + nz * 2.5)], 14), { width: () => 0.03, thick: () => 0.0035, side: V(1, 0, 0.2), sides: 4 });
+        const front = fit.chest[3] - n.z + fit.chest[1] + 0.045;
+        const g = sweep(smoothPath([V(s * nx * 0.7, wrapY, nc - n.z + nz * 1.2), V(s * nx * 1.05, wrapY - 0.11, front - 0.02), V(s * nx * 1.2, wrapY - l * 0.6, front + 0.02), V(s * nx * 1.05, wrapY - l, front + 0.015)], 14), { width: () => 0.03, thick: () => 0.0035, side: V(1, 0, 0.2), sides: 4 });
         swayByStrand(g, 0, 1.0);
         scarfEnds.push(add(g, scarfM, chest));
       }
