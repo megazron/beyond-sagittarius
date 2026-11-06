@@ -5,7 +5,7 @@ import { applySway, swayUniforms } from './sway';
 import { buildHair, HAIRSTYLES, HAIR_CAP, skullFrom } from './hair';
 import { LOOKS, CrewId, Look } from './looks';
 import type { PlayerLook } from './custom';
-import { AnimSet, CrewAsset, animNow, assetNow, clipsFor, corneaMaterial, eyeMaterial, lashMaterial, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
+import { AnimSet, CrewAsset, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, lashMaterial, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
 import { addKit, Kit } from './kit';
 
 export type { CrewId } from './looks';
@@ -181,12 +181,22 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const browC = custom ? new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex() : human ? 0x1a100c : L.face.brow;
     const atlas = M.atlas;
     const cloth = new THREE.MeshStandardMaterial({ map: tex(`${atlas}_cloth`, lod, true), normalMap: tex(`${atlas}_cloth_n`, lod), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, side: THREE.DoubleSide });
-    const accent = { uAccent: { value: new THREE.Color(custom?.accent ?? 0xffffff) }, uAccentK: { value: custom ? 1 : 0 } };
+    const accent = { uAccent: { value: new THREE.Color(custom?.accent ?? 0xffffff) }, uAccentK: { value: custom ? 1 : 0 }, uDetail: { value: clothDetail() }, uHeightM: { value: heightM } };
     applySway(cloth, sway, (sh) => {
       Object.assign(sh.uniforms, accent);
-      sh.vertexShader = `attribute float aAccent; varying float vAccent;\n` + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n  vAccent = aAccent;`);
-      sh.fragmentShader = `uniform vec3 uAccent; uniform float uAccentK; varying float vAccent;\n` + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
-        diffuseColor.rgb = mix(diffuseColor.rgb, uAccent * (0.35 + dot(diffuseColor.rgb, vec3(1.1))), vAccent * uAccentK);`);
+      sh.vertexShader = `attribute float aAccent; varying float vAccent; varying float vBindY;\n` + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n  vAccent = aAccent; vBindY = position.y;`);
+      sh.fragmentShader = `uniform vec3 uAccent; uniform float uAccentK, uHeightM; uniform sampler2D uDetail; varying float vAccent; varying float vBindY;\n` + sh.fragmentShader
+        .replace('#include <map_fragment>', `#include <map_fragment>
+        diffuseColor.rgb = mix(diffuseColor.rgb, uAccent * (0.35 + dot(diffuseColor.rgb, vec3(1.1))), vAccent * uAccentK);
+        // survivors of a crash: dust climbs from the ground, worn patches come and go
+        float wearN = texture2D(uDetail, vMapUv * 5.0).b;
+        float dust = (1.0 - smoothstep(0.0, 0.62, vBindY / uHeightM)) * 0.75 + smoothstep(0.55, 0.8, wearN) * 0.5;
+        dust = clamp(dust * (0.45 + wearN), 0.0, 1.0);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.66, 0.6, 0.52) + vec3(0.035, 0.028, 0.02), dust);`)
+        .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        roughnessFactor = min(1.0, roughnessFactor + dust * 0.14);`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        { vec2 dn = texture2D(uDetail, vMapUv * 26.0).xy * 2.0 - 1.0; normal = normalize(normal + tbn * vec3(dn * 0.5, 0.0)); }`);
     });
     cloth.customProgramCacheKey = () => 'crew-cloth';
     const mouth = mouthMaterial(), cornea = corneaMaterial(), lash = lashMaterial(browC);

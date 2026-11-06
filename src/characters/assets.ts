@@ -119,6 +119,10 @@ export function clipsFor(key: string, legRatio: number, a: AnimSet) {
 }
 
 const col = (c: number) => new THREE.Color(c);
+const detailTile = (n: string) => { const t = texPlain(n); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t; };
+/** How far each channel wraps: skin passes its own hue deepest, as flesh passes red. */
+const scatterOf = (skin: number) => { const c = col(skin), m = Math.max(c.r, c.g, c.b, 0.01); return new THREE.Vector3(0.12 + 0.3 * c.r / m, 0.12 + 0.3 * c.g / m, 0.12 + 0.3 * c.b / m); };
+export const clothDetail = () => detailTile('detail_cloth');
 
 export interface SkinLook { skin: number; shade: number; lip: number; glow: number; over: number; glowK: number; }
 
@@ -128,10 +132,22 @@ export function skinMaterial(sex: 'm' | 'f', marks: string, l: SkinLook, lod: nu
   const u = {
     uSkin: { value: col(l.skin) }, uShade: { value: col(l.shade) }, uLip: { value: col(l.lip) }, uGlow: { value: col(l.glow) }, uOver: { value: col(l.over) },
     uGlowK: { value: l.glowK }, uMarks: { value: texPlain(`${marks}_marks`) },
+    uDetail: { value: detailTile('detail_skin') }, uScatter: { value: scatterOf(l.skin) },
   };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.fragmentShader = `uniform vec3 uSkin, uShade, uLip, uGlow, uOver; uniform float uGlowK; uniform sampler2D uMarks;\n` + sh.fragmentShader
+    sh.fragmentShader = `uniform vec3 uSkin, uShade, uLip, uGlow, uOver, uScatter; uniform float uGlowK; uniform sampler2D uMarks, uDetail;\n` + sh.fragmentShader
+      // subsurface look: light wraps past the terminator, further in the skin's own colour
+      .replace('#include <lights_physical_pars_fragment>', THREE.ShaderChunk.lights_physical_pars_fragment.replace(
+        'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );',
+        `{ float nlw = dot( geometryNormal, directLight.direction );
+           vec3 sss = saturate( ( nlw + uScatter ) / ( 1.0 + uScatter ) );
+           sss *= mix( vec3( 1.0 ), sss, 0.5 );
+           reflectedLight.directDiffuse += sss * directLight.color * BRDF_Lambert( material.diffuseColor ); }`))
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        roughnessFactor = mix(0.56, 0.33, sk.g) - 0.05 * (texture2D(uDetail, vMapUv * 3.0).b - 0.5);`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        { vec2 dn = texture2D(uDetail, vMapUv * 16.0).xy * 2.0 - 1.0; normal = normalize(normal + tbn * vec3(dn * 0.32, 0.0)); }`)
       .replace('#include <map_fragment>', /* glsl */ `
         vec4 sk = texture2D(map, vMapUv);
         float sr = sk.r * 2.0;

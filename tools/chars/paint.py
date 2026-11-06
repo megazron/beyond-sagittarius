@@ -262,10 +262,40 @@ def mark_map(cid, cfg, base, rig, out):
     save_webp(Image.fromarray(rgb), f'{out}/tex/{cid}_marks.webp', 85)
 
 
+def detail_tiles(out):
+    """Tiling micro detail: skin pores and cloth weave (RG normal), B broad noise for wear."""
+    N = 512
+    rs = np.random.default_rng(11)
+
+    def tile(h):
+        gx = (np.roll(h, -1, 1) - np.roll(h, 1, 1)); gy = (np.roll(h, -1, 0) - np.roll(h, 1, 0))
+        return gx, gy
+
+    def wrapnoise(sig):
+        return gaussian_filter(rs.normal(0, 1, (N, N)), sig, mode='wrap')
+    # pores: pits at random spots over fine wrinkling
+    pts = np.zeros((N, N)); pts[rs.integers(0, N, 5200), rs.integers(0, N, 5200)] = 1
+    pores = gaussian_filter(pts, 1.1, mode='wrap'); pores /= pores.max()
+    wr = wrapnoise(1.6); wr /= np.abs(wr).max()
+    h = -pores * 1.0 + wr * 0.5
+    gx, gy = tile(h)
+    wear = wrapnoise(28); wear = (wear - wear.min()) / np.ptp(wear)
+    k = 1.6
+    Image.fromarray((np.clip(np.stack([gx * k * .5 + .5, gy * k * .5 + .5, wear], -1), 0, 1) * 255).astype(np.uint8)).save(f'{out}/tex/detail_skin.webp', 'WEBP', quality=88, method=6)
+    # plain weave: warp and weft ribs alternating
+    y, x = np.mgrid[0:N, 0:N] / N * 2 * np.pi * 64
+    h = np.sin(x) * (np.sin(y / 2) > 0) + np.sin(y) * (np.sin(y / 2) <= 0)
+    h = h + wrapnoise(1.2) / np.abs(wrapnoise(1.2)).max() * .8
+    gx, gy = tile(gaussian_filter(h, .6, mode='wrap'))
+    fibre = wrapnoise(14); fibre = (fibre - fibre.min()) / np.ptp(fibre)
+    Image.fromarray((np.clip(np.stack([gx * .22 + .5, gy * .22 + .5, fibre], -1), 0, 1) * 255).astype(np.uint8)).save(f'{out}/tex/detail_cloth.webp', 'WEBP', quality=86, method=6)
+
+
 def shared_maps(base, rig, out):
     """Species-neutral skin (R brightness ratio, G flush) and shared eye and lash maps.
     Colours are applied in the shader, so any skin the player picks keeps the photo detail."""
     maps = position_maps(base, rig)
+    detail_tiles(out)
     for g, src in SKIN_SRC.items():
         if os.path.exists(f'{out}/tex/skin_{g}.webp'):
             continue

@@ -88,7 +88,7 @@ export class World {
     s.add(this.camp.root);
     this.ridge = createRidge(L);
     s.add(this.ridge.root);
-    this.explorer = createCharacter('explorer', this.q.name === 'mobile' ? 0.6 : 1);
+    this.explorer = createCharacter('explorer', this.q.name === 'mobile' ? 0.6 : this.q.name === 'cinematic' ? 1.4 : 1);
     this.explorer.setGround((x, z) => this.terrain.height(x, z));
     this.explorer.root.position.copy(L.crewSpot);
     s.add(this.explorer.root);

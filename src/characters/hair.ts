@@ -121,10 +121,10 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
   const steps = detail < 0.8 ? 5 : 7;
   // on a real head one anime lock is a bundle of finer strands around the same path
   const fine: Lock[] = locks.flatMap((l) => {
-    const n = detail < 0.8 ? 2 : 3;
+    const n = detail < 0.8 ? 2 : detail > 1.2 ? 5 : 3;
     return Array.from({ length: n }, (_, i) => {
       const k = i - (n - 1) / 2;
-      return { ...l, az: l.az + k * 0.085 + (rnd() - 0.5) * 0.04, el: l.el + (rnd() - 0.5) * 0.06, len: l.len * (0.86 + rnd() * 0.22), w: (l.w ?? 0.03) * 0.46, thick: (l.thick ?? (l.w ?? 0.03) * 0.42) * 0.7 };
+      return { ...l, az: l.az + k * (n > 3 ? 0.055 : 0.085) + (rnd() - 0.5) * 0.04, el: l.el + (rnd() - 0.5) * 0.06, len: l.len * (0.86 + rnd() * 0.22), w: (l.w ?? 0.03) * (n > 3 ? 0.32 : 0.46), thick: (l.thick ?? (l.w ?? 0.03) * 0.42) * 0.7 };
     });
   });
   const parts = fine.map((l) => {

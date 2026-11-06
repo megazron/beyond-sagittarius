@@ -137,7 +137,7 @@ function whenWorldReady(fn: () => void) {
   else { pendingStart = fn; ui.show('loading', true); }
 }
 
-const detail = () => (quality.name === 'mobile' ? 0.6 : 1);
+const detail = () => (quality.name === 'mobile' ? 0.6 : quality.name === 'cinematic' ? 1.4 : 1);
 let pendingLook: PlayerLook = defaultLook();
 
 /** Applies the player's look and name to everything that shows them. */

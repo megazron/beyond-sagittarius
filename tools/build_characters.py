@@ -248,21 +248,22 @@ def build(c, cid, force=False):
         garments.append(p)
     # layers: inner garments never show through outer ones, and hidden cloth is not shipped
     for i in range(len(garments)):
-        outer = garments[i + 1:]
-        if not outer:
-            continue
+        # footwear goes on under the trouser hem: a boot never pushes cloth aside or eats it
+        outer = [o for o in garments[i + 1:] if 'boot' not in o.asset and 'shoe' not in o.asset]
         g = garments[i]
         for o in outer:
             g.P = resolve_layers(g.P, o, 0.012)
-        hid = erode(covered(g.P, g.N, outer, 0.025), g.T, 6)
-        vis = ~hid[g.T].all(1)
-        g.T, g.TU = g.T[vis], g.TU[vis]
+    for g in garments:
+        if 'boot' in g.asset or 'shoe' in g.asset:
+            for o in garments:
+                if o is not g:
+                    g.P = resolve_layers(g.P, o, 0.008)
     # --- body ---
     keep = []
     dl = np.zeros(len(V), bool)
     dl[list(deleted)] = True
     Tall = tri_fan(base.faces, base.fuv, bodyf)[0]
-    dl |= erode(covered(V, vnormals(V, Tall), garments, 0.04), Tall, 3)
+    dl |= erode(covered(V, vnormals(V, Tall), garments, 0.055), Tall, 2)
     hw0 = rig.W[:, [rig.index[n] for n in ('head', 'jaw', 'eyeL', 'eyeR')]].sum(1)
     dl[hw0 > 0.3] = False
     for i in bodyf:
@@ -275,7 +276,7 @@ def build(c, cid, force=False):
     hm = hw[T].mean(1) > 0.5
     Vb = V
     for o in garments:
-        Vb = resolve_layers(Vb, o, 0.011)
+        Vb = resolve_layers(Vb, o, 0.016)
     bm = {k: vb[k] for k in vb if not k.endswith('_dm')}
     head = Part(V, T[hm], TU[hm], UV, rig.W, 'skin_head', {**morphs, **bm})
     body = Part(Vb, T[~hm], TU[~hm], UV, rig.W, 'skin_body', bm)
