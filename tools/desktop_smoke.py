@@ -105,8 +105,9 @@ def main():
             page.wait_for_selector("#title", state="hidden", timeout=60_000)
             time.sleep(8)
             page.screenshot(path=str(out / "desktop-opening.png"))
-            state = page.evaluate("window.__bs && window.__bs.state ? String(window.__bs.state()) : 'n/a'")
-            print("state after Begin:", state)
+            state = page.evaluate("({ state: __bs.state, voice: __bs.voice })")
+            print("after Begin:", state)
+            assert state["state"] in ("narrator", "cinematic"), state
 
             # Quit through the title's own path, then check saves outlive the process.
             page.evaluate("window.location.reload()")

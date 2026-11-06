@@ -141,7 +141,7 @@ graphics preset and the extra assets the browser version does not load:
 
 The build is **unsigned**, so Windows SmartScreen shows "Windows protected your
 PC". Choose **More info**, then **Run anyway**. F11 toggles fullscreen; quit from
-the title screen or with Alt+F4. Saves stay in `%APPDATA%\\Beyond Sagittarius`
+the title screen or with Alt+F4. Saves stay in `%APPDATA%\Beyond Sagittarius`
 and survive updates. Windows 10 or 11, x64.
 
 To build it yourself, see `electron/` and `.github/workflows/desktop.yml`:
