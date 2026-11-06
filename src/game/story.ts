@@ -679,7 +679,7 @@ export class Story {
       { run: alert(3), key: 'beacon.unknown3', hold: 2.4, shot: () => cover.close(z, 0.2, 0.9), after: 0.8 },
       { key: 'dlg.10.4', who: 'explorer', shot: () => cover.ots(y, z) },
       { key: 'dlg.10.5', who: 'scientist', shot: () => cover.close(z, -0.3), after: 0.9 },
-      { run: () => this.ui.deviceLines(null), key: 'dlg.10.6', who: 'explorer', shot: () => cover.close(y, 0.35, 1), poses: { explorer: 'point' } },
+      { run: () => this.ui.deviceLines(null), key: 'dlg.10.6', who: 'explorer', shot: () => cover.close(y, 0.35, 1), poses: { explorer: 'stand' } },
       { key: 'dlg.10.7', who: 'scientist', shot: () => cover.close(z, 0.3, 0.95), after: 0.5 },
       { key: 'dlg.10.8', who: 'explorer', shot: () => cover.ots(y, z, -0.6), poses: { explorer: 'stand' }, after: 0.8 },
       { choice: 'c1.accuse', shot: () => cover.close(y, -0.2, 1), poses: { explorer: 'stand', scientist: 'stand' } },

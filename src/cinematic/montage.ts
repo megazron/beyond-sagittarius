@@ -955,7 +955,7 @@ export class Montage {
     this.lens(l.close[0].clone().lerp(this.tmp.copy(l.close[0]).add(V(0.9, 0.05, -1.1)), e), l.close[1], 40, 0, 0);
     this.impact(l, 'scientist', tt + 0.3, col);
     // face down at the end of his own furrow. Two doctorates.
-    this.act('scientist', l.at.clone(), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.7, 0)), 'lie', null, { blink: 0.92 });
+    this.act('scientist', l.at.clone().add(V(0, 0.2, 0)), new THREE.Quaternion().setFromEuler(new THREE.Euler(1.5, 2.2, 0, 'YXZ')), 'float', { armL: [1, 0.3, 0.05], foreL: [0.9, 0.5, 0.05], armR: [-1, 0.25, 0.05], foreR: [-0.9, 0.5, 0.05], legL: [0.2, -1, 0], shinL: [0.18, -1, 0.1], legR: [-0.16, -1, 0], shinR: [-0.2, -1, -0.05] }, { blink: 0.92 });
     this.boost = 1.5;
     this.setRig([{ p: l.at.clone().add(V(-2.4, 3, 3)), color: 0xffd8b0, i: 30, d: 14 }, { p: l.at.clone().add(V(2.5, 2, -2)), color: 0xff9a70, i: 14, d: 10 }]);
     const f = after(b, S.hit, 1.6);

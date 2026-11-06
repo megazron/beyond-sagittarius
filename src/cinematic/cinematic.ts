@@ -40,6 +40,7 @@ export class Cinematic {
   private home = createPlanet(400, 'home', V(0.86, 0.22, -0.46).normalize());
   private giantRing: THREE.Mesh;
   private sunLight = new THREE.DirectionalLight(0xfff2e0, 3.2);
+  private sunDisc!: THREE.Mesh;
   private cues: Cue[] = [];
   private shots: Shot[] = [];
   private shake = 0;
@@ -79,7 +80,7 @@ export class Cinematic {
     s.add(this.giantRing);
 
     // The sun
-    const sun = new THREE.Mesh(new THREE.SphereGeometry(80, 24, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(30, 26, 20) }));
+    const sun = this.sunDisc = new THREE.Mesh(new THREE.SphereGeometry(80, 24, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(30, 26, 20) }));
     sun.position.copy(this.sunDir).multiplyScalar(7000);
     s.add(sun);
     this.sunLight.position.copy(this.sunDir).multiplyScalar(100);
@@ -243,6 +244,8 @@ export class Cinematic {
     this.interior.group.visible = group === 'interior';
     this.ship.group.visible = group !== 'interior' && group !== 'home';
     this.home.visible = group === 'home';
+    this.sunDisc.visible = group === 'earth' || group === 'mars' || group === 'giant';
+    this.sunLight.intensity = group === 'interior' ? 1.2 : 3.2; // no sun reaches the deck like open space
   }
 
   private cue(t: number, fn: () => void) { this.cues.push({ t, fn }); }
@@ -408,7 +411,7 @@ export class Cinematic {
       update: (k, local) => {
         const b = intr.group.position;
         this.camera.position.copy(b).add(V(-4.2 + k * 0.5, -0.8, -0.4));
-        this.lookTarget.copy(b).add(V(0.4, -1.0, 1.0));
+        this.lookTarget.copy(b).add(V(0.4, -0.6, 1.0));
         d.uBHPos.value.set(-6, 10, -lerp(60, 40, k));
         intr.alarmLight.intensity = (Math.sin(local * 9) * 0.5 + 0.5) * 20;
         intr.consoleLight.intensity = 0.6;
