@@ -38,7 +38,7 @@ CHARS = {  # noqa
         clothes=[('toigo_wool_pants', (0x2c, 0x34, 0x40), {}),
                  ('toigo_basic_tucked_t-shirt', (0x1f, 0x2d, 0x3f), {'accent': True}),
                  ('mindfront_cardigan_long_open_front', (0xd2, 0xd4, 0xce), {'skirt': True, 'inflate': 0.004}),
-                 ('toigo_ankle_boots_male', (0x2a, 0x25, 0x22), {})],
+                 ('mindfront_shoes_biker_boots_male', (0x2a, 0x25, 0x22), {})],
     ),
     'strong': dict(
         look=dict(skin=0xc77d33, shade=0x7c3016, iris=0xffc23a, brow=0x3b0f08, glow=0xff7a1e, marks='cracks', ear='round'),

@@ -572,6 +572,7 @@ export class Story {
     fig.root.position.copy(c.pos);
     fig.root.rotation.y = c.yaw;
     fig.root.updateMatrixWorld();
+    fig.setLookTarget(c.pos.distanceTo(p.pos) < 9 ? V_LOOK.copy(p.pos).setY(p.pos.y + 1.55) : null);
     fig.animate(this.scenePose?.() ?? pose, c.phase, clamp(c.speed / 4, 0, 1.3), time, dt);
     fig.setName(t('crew.explorer.name'), t('crew.explorer.role'));
     fig.setTagVisible(this.scenePose ? 0 : smoothstep(16, 6, c.pos.distanceTo(p.pos)));
@@ -719,6 +720,8 @@ export class Story {
 }
 
 /** Flint-tipped spear held in the right hand. */
+const V_LOOK = new THREE.Vector3();
+
 function buildSpear() {
   const g = new THREE.Group();
   const wood = new THREE.MeshStandardMaterial({ color: 0x6a4e3a, roughness: 0.85, flatShading: true });

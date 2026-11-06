@@ -114,7 +114,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   };
 
   // ---- runtime state ----
-  let pendingSplint = false;
+  let pendingSplint = false, soleLift = 0;
+  const gazeAt = new THREE.Vector3();
+  let gaze: THREE.Vector3 | null = null, gazeY = 0, gazeX = 0;
   let B: Map<string, THREE.Bone> | null = null;
   let mixer: THREE.AnimationMixer | null = null;
   let clips: Map<string, THREE.AnimationClip> | null = null;
@@ -218,6 +220,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         if (ears && ears !== 'round') put(`ear_${ears}`, 1);
       }
     });
+    // shoes reach below the bare sole: stand on them, not through them
+    scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh && (m.material as THREE.Material) === cloth) { m.geometry.computeBoundingBox(); soleLift = Math.max(soleLift, -m.geometry.boundingBox!.min.y); }
+    });
+    scene.position.y = soleLift;
     fig.add(scene);
     scene.updateMatrixWorld(true);
     // handles onto the skeleton
@@ -358,7 +366,19 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       }
     }
     // head look-at, clamped and shared with the neck; the eyes lead
-    const ly = clamp(lookAt.y + clamp(yawRate * 0.1, -0.3, 0.3), -1.1, 1.1), lx = clamp(lookAt.x, -0.6, 0.6);
+    // someone to look at: only within what a neck can do, otherwise ease back to the front
+    let wantY = 0, wantX = 0;
+    if (gaze) {
+      headB.getWorldPosition(V2);
+      V3.copy(gaze).sub(V2);
+      root.getWorldQuaternion(Q).invert();
+      V3.applyQuaternion(Q);
+      const yawTo = Math.atan2(V3.x, V3.z);
+      if (Math.abs(yawTo) < 1.7) { wantY = yawTo; wantX = -Math.atan2(V3.y, Math.hypot(V3.x, V3.z)); }
+    }
+    const gr = 1 - Math.exp(-dt * 5);
+    gazeY += (wantY - gazeY) * gr; gazeX += (wantX - gazeX) * gr;
+    const ly = clamp(lookAt.y + gazeY + clamp(yawRate * 0.1, -0.3, 0.3), -1.1, 1.1), lx = clamp(lookAt.x + gazeX, -0.5, 0.5);
     if (ly || lx) {
       neckB.quaternion.multiply(Q.setFromEuler(E.set(lx * 0.4, ly * 0.4, 0)));
       headB.quaternion.multiply(Q.setFromEuler(E.set(lx * 0.6, ly * 0.6, 0)));
@@ -396,7 +416,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (ground && standing && root.visible) {
       root.updateWorldMatrix(true, true);
       const baseY = root.getWorldPosition(tmp).y;
-      const rest = kit?.footH ?? 0.09;
+      const rest = (kit?.footH ?? 0.09) + soleLift;
       let drop = 0, busy = false;
       const legs: { h: THREE.Bone; k: THREE.Bone; f: THREE.Bone; p: THREE.Vector3; q: THREE.Quaternion; n: THREE.Vector3; w: number }[] = [];
       (['L', 'R'] as const).forEach((s, i) => {
@@ -404,17 +424,19 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         const p = f.getWorldPosition(new THREE.Vector3());
         const stance = clamp((rest + 0.075 - (p.y - baseY)) / 0.05, 0, 1);
         // pin: from touchdown the foot stays put in the world, whatever the blend does
-        if (moving && stance > 0.6 && speed < 6) {
+        if (moving && stance > 0.6 && speed < 8) {
           if (!pinned[i]) { pinned[i] = true; pin[i].set(p.x + pinOff[i].x, 0, p.z + pinOff[i].z); }
           pinOff[i].set(pin[i].x - p.x, 0, pin[i].z - p.z);
-          if (pinOff[i].length() > 0.13) { pinned[i] = false; }
+          if (pinOff[i].length() > 0.2) { pinned[i] = false; }
         } else {
           pinned[i] = false;
           pinOff[i].multiplyScalar(Math.exp(-dt * 14));
         }
         p.x += pinOff[i].x; p.z += pinOff[i].z;
         const g = ground!(p.x, p.z);
-        footOff[i] += ((g - baseY) * stance - footOff[i]) * (1 - Math.exp(-dt * 18));
+        // soles rest on the ground, heels still lift: mocap floors differ by a centimetre or two
+        const sole = clamp((rest + 0.03 - (p.y - baseY)) / 0.03, 0, 1);
+        footOff[i] += ((g - baseY) * stance + (rest - (p.y - baseY)) * sole - footOff[i]) * (1 - Math.exp(-dt * 18));
         drop = Math.min(drop, footOff[i]);
         const e = 0.14, n = new THREE.Vector3(ground!(p.x - e, p.z) - ground!(p.x + e, p.z), 2 * e, ground!(p.x, p.z - e) - ground!(p.x, p.z + e)).normalize();
         p.y += footOff[i];
@@ -444,11 +466,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (vel.length() > 30) vel.set(0, 0, 0);
     const yaw = root.rotation.y, cs = Math.cos(-yaw), sn = Math.sin(-yaw);
     const lx2 = vel.x * cs + vel.z * sn, lz = -vel.x * sn + vel.z * cs;
-    const target = tmp.set(-lx2 * 0.045, -Math.abs(Math.cos(gaitPhase * 12.566)) * 0.012 * amount + vel.y * -0.02, -lz * 0.045);
+    const target = tmp.set(-lx2 * 0.02, -Math.abs(Math.cos(gaitPhase * 12.566)) * 0.012 * amount + vel.y * -0.02, -lz * 0.02);
     target.x += Math.sin(t * 0.8) * 0.016; target.z += Math.cos(t * 0.63) * 0.012; // breeze
     swingV.addScaledVector(tmp.sub(swing), 90 * dt); swingV.multiplyScalar(Math.exp(-dt * 9));
     swing.addScaledVector(swingV, dt);
-    swing.clampLength(0, 0.34);
+    swing.clampLength(0, 0.2);
     sway.uSwing.value.copy(swing);
     sway.uTime.value = t;
     sway.uFlutter.value = 0.008 + amount * 0.016;
@@ -466,6 +488,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     say(seconds: number) { speak = Math.max(speak, seconds); },
     /** Head offset for looking at something (radians). */
     look2(y: number, x: number) { lookAt.y = y; lookAt.x = x; },
+    /** World point to keep an eye on, or null. The neck clamps it. */
+    setLookTarget(v: THREE.Vector3 | null) { if (v) { gaze = gazeAt.copy(v); } else gaze = null; },
     /** Height of the ground under a point: enables foot planting on slopes. */
     setGround(fn: ((x: number, z: number) => number) | null) { ground = fn; },
     /** Resolves when the skinned body is in place. */

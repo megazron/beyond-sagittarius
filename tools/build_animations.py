@@ -534,6 +534,15 @@ def main():
         else:
             T, p, meta = make_window(ref, take, t0, t1, mode)
         meta['hand'] = hand
+        if mode != 'air':
+            # the source hips sit higher over the femurs than ours: settle on the target's own feet
+            low = 9.0
+            for i in range(0, len(p), 3):
+                _, Pw = fk(ref, T, p, i)
+                for b in ('footL', 'footR', 'toeL', 'toeR'):
+                    low = min(low, Pw[b][1] - ref.p(b)[1])
+            p = p.copy()
+            p[:, 1] -= low
         made[name] = (T, p, meta)
         print(f"{name:12s} {take:7s} {len(p) / FPS:5.2f}s speed {meta['speed']:.2f}", flush=True)
     made['facepalm'] = gesture(ref, made['stand'], 'facepalm'); made['facepalm'][2]['hand'] = 'open'

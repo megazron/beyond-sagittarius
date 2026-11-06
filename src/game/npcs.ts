@@ -28,6 +28,7 @@ interface Npc {
   greeted: boolean;
 }
 
+const LOOK = new THREE.Vector3();
 const look = (lineage: PlayerLook['lineage'], o: Partial<PlayerLook>): PlayerLook => ({ ...defaultLook(), lineage, ...LINEAGES[lineage], ...o });
 
 /**
@@ -154,6 +155,7 @@ export class Npcs {
       n.fig.root.position.copy(n.pos);
       n.fig.root.rotation.y = n.yaw;
       n.fig.root.updateMatrixWorld();
+      n.fig.setLookTarget(n.pos.distanceTo(this.player.pos) < 7 ? LOOK.copy(this.player.pos).setY(this.player.pos.y + 1.55) : null);
       n.fig.animate(n.speed > 0.3 ? 'walk' : n.pose, n.phase, Math.min(1.1, n.speed / 3), time, dt);
       n.fig.setName(t(`npc.${n.id}.name`), t(`npc.${n.id}.role`));
       n.fig.setTagVisible(smoothstep(14, 5, dist));

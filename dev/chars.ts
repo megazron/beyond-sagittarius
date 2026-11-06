@@ -29,5 +29,38 @@ W.view = (i: number, d: number, yaw: number, h: number, dist: number) => {
 };
 W.pose = (p: CrewPose, a = 0) => { pose = p; amount = a; };
 W.step = (n: number, dt = 1 / 30) => { for (let k = 0; k < n; k++) { t += dt; phase += dt * 7 * amount; chars.forEach((c) => { c.root.updateMatrixWorld(); c.animate(pose, phase, amount, t, dt); }); } r.render(scene, cam); };
+/** Foot slide probe: walk a character at v m/s over flat ground, report world drift of planted feet. */
+W.slide = (i: number, v: number, n = 240, dt = 1 / 60) => {
+  const c = chars[i]; const res: number[] = [];
+  c.setGround(() => 0);
+  const b = (name: string) => c.fig.getObjectByName(name)!;
+  const last: Record<string, THREE.Vector3> = {};
+  const p = new THREE.Vector3(), lows: number[] = [];
+  for (let k = 0; k < n; k++) {
+    c.root.position.z += v * dt; t += dt;
+    c.root.updateMatrixWorld(true);
+    c.animate('walk', 0, v / 4, t, dt);
+    c.root.updateMatrixWorld(true);
+    for (const s of ['footL', 'footR']) {
+      b(s).getWorldPosition(p);
+      if (last[s] && k > 60 && p.y < 0.13) res.push(Math.hypot(p.x - last[s].x, p.z - last[s].z) / dt);
+      if (k > 60) lows.push(p.y);
+      (last[s] ??= new THREE.Vector3()).copy(p);
+    }
+  }
+  res.sort((a, b2) => a - b2);
+  c.root.position.z = 0;
+  return { medianStanceSlide: res[res.length >> 1], p90: res[Math.floor(res.length * 0.9)], minFootY: Math.min(...lows) };
+};
+/** Walk one character past the camera, a frame every few steps. */
+W.film = (i: number, v: number, k: number) => {
+  const c = chars[i];
+  chars.forEach((o, j) => { o.root.visible = j === i; });
+  c.setGround(() => 0);
+  for (let n = 0; n < k; n++) { c.root.position.z += v / 60; t += 1 / 60; c.root.updateMatrixWorld(true); c.animate('walk', 0, v / 4, t, 1 / 60); }
+  const p = c.root.position;
+  cam.position.set(p.x + 3.6, 1.1, p.z + 0.2); cam.lookAt(p.x, 0.95, p.z);
+  r.render(scene, cam);
+};
 (W.view as Function)(-1, 1, 0, 1.3, 11);
 Promise.all(chars.map((c) => c.whenReady)).then(() => { (W.step as Function)(4); setTimeout(() => { (W.step as Function)(2); W.ready = true; }, 3000); });
