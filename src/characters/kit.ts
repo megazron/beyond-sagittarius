@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { skullFrom } from './hair';
 import { loft, sweep, smoothPath, weaveNormal, grainNormal } from './shapes';
 import { applySway, swayByStrand, SwayUniforms } from './sway';
 import type { Look, CrewId } from './looks';
@@ -32,6 +33,27 @@ export function addKit(k: KitInput): Kit {
   const eye = local('head', piv('eyeL')); // x>0, forward of the head pivot
   const top = M.skull.c[1] + M.skull.r[M.skull.r.length - 1][0];
 
+  // a strip that really lies on the skull, for straps and headbands
+  const skull = skullFrom(M.skull.c, M.skull.r);
+  const band = (el: number, h: number, tilt: number, m: THREE.Material, gap = 1.035) => {
+    const n = 48, pos: number[] = [], idx: number[] = [], uv: number[] = [];
+    const d = new THREE.Vector3();
+    for (let i = 0; i <= n; i++) {
+      const az = (i / n) * Math.PI * 2 - Math.PI;
+      const e = el + Math.cos(az) * tilt;
+      d.set(Math.sin(az) * Math.cos(e), Math.sin(e), Math.cos(az) * Math.cos(e));
+      const r = skull.radius(d) * gap;
+      pos.push(skull.c.x + d.x * r, skull.c.y + d.y * r + h / 2, skull.c.z + d.z * r, skull.c.x + d.x * r, skull.c.y + d.y * r - h / 2, skull.c.z + d.z * r);
+      uv.push(i / 8, 0, i / 8, 1);
+      if (i < n) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    return add(g, m, head);
+  };
+
   // ---- head ----
   const horn = (s: number) => {
     const m = new THREE.MeshStandardMaterial({ color: 0x2a201c, roughness: 0.36 });
@@ -61,13 +83,13 @@ export function addKit(k: KitInput): Kit {
     add(sweep(smoothPath([V(-eye.x + 0.02, eye.y + 0.002, z), V(0, eye.y + 0.009, z + 0.003), V(eye.x - 0.02, eye.y + 0.002, z)], 6), { width: () => 0.002, thick: () => 0.0016, side: V(0, 1, 0), sides: 4 }), fr, head, 0, 0, 0, false);
   };
   const goggles = () => {
-    const strap = leather(0x2c2118);
-    const r = M.skull.r[9][12] * 1.02;
-    const c = M.skull.c;
-    const band = add(new THREE.TorusGeometry(r, 0.006, 6, 40), strap, head, c[0], c[1] + 0.045, c[2]);
-    band.rotation.x = Math.PI / 2 - 0.25; band.scale.set(0.86, 1.03, 1.6);
+        const c = M.skull.c, el = 0.62;
+    const sm = leather(0x2c2118); sm.side = THREE.DoubleSide;
+    band(el, 0.016, 0.1, sm);
+    const d = new THREE.Vector3(0, Math.sin(el + 0.1), Math.cos(el + 0.1));
+    const r = skull.radius(d);
     for (const s of [-1, 1]) {
-      const o = add(new THREE.CylinderGeometry(0.024, 0.029, 0.018, 24), metal(0xb08a4a, 0.4), head, s * 0.034, c[1] + 0.085, c[2] + r * 0.92);
+      const o = add(new THREE.CylinderGeometry(0.024, 0.029, 0.018, 24), metal(0xb08a4a, 0.4), head, s * 0.034, c[1] + d.y * r + 0.006, c[2] + d.z * r + 0.012);
       o.rotation.x = Math.PI / 2 - 0.5;
       const l = add(new THREE.CircleGeometry(0.021, 20), new THREE.MeshStandardMaterial({ color: 0x20303a, roughness: 0.08, metalness: 0.4 }), o, 0, 0.0095, 0, false);
       l.rotation.x = -Math.PI / 2;
@@ -151,8 +173,7 @@ export function addKit(k: KitInput): Kit {
       add(new THREE.CylinderGeometry(0.011, 0.012, 0.24, 10), leather(0x6a4524), hm, 0, -0.1, 0);
       add(rbox(0.1, 0.034, 0.034, 0.006), metal(0x6a6e74, 0.5), hm, 0, 0.02, 0);
       if (!custom) {
-        const c = M.skull.c, r = M.skull.r[8][12];
-        const hb = add(new THREE.CylinderGeometry(r * 1.0, r * 1.03, 0.04, 36, 1, true), cloth(0xd8452e, 0.9), head, c[0], c[1] + 0.05, c[2]); hb.scale.z = 1.22;
+        band(0.5, 0.036, 0.14, cloth(0xd8452e, 0.9), 1.03);
       }
       break;
     }

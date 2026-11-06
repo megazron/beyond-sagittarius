@@ -174,7 +174,7 @@ def retarget(ref, take):
     return W, pos, joints
 
 
-def level_gaze(W, keep=0.3):
+def level_gaze(W, keep=0.1):
     """Actors often look at their feet on the mocap stage: bring the mean gaze back to level."""
     f = W['head'][:, :, 2].mean(0)
     pitch = np.arctan2(-f[1], np.hypot(f[0], f[2]))

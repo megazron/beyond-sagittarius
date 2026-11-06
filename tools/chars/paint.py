@@ -57,8 +57,9 @@ def cloth_atlas(cid, garments, out, size=2048):
         L = a @ np.array([0.3, 0.59, 0.11], np.float32)
         if p.tint is not None:
             if p.opt.get('flat'):
-                # logos and emblems out: keep only fine weave and folds
-                L = L - gaussian_filter(L, 12) + 0.6
+                # third-party logos and emblems must not survive: plain woven cloth instead
+                rs = np.random.default_rng(5)
+                L = 0.6 + gaussian_filter(rs.normal(0, 0.05, L.shape), 1.0).astype(np.float32)
             # reference brightness from texels the garment really uses, not the empty background
             uvs = np.clip(np.mod(p.UV[np.unique(p.TU)], 1.0), 0, 0.999)
             ref = float(L[(uvs[:, 1] * h).astype(int), (uvs[:, 0] * w).astype(int)].mean())
@@ -68,7 +69,7 @@ def cloth_atlas(cid, garments, out, size=2048):
             a = np.clip(Ln[..., None] * c, 0, 1)
         A.paste(Image.fromarray((a * 255).astype(np.uint8)), (int(r[0] * size), int(r[1] * size)))
         nt = mat.get('normalmapTexture')
-        if nt and os.path.exists(nt):
+        if nt and os.path.exists(nt) and not p.opt.get('flat'):
             Nn.paste(Image.open(nt).convert('RGB').resize((w, h), Image.LANCZOS), (int(r[0] * size), int(r[1] * size)))
         else:
             Lh = L - gaussian_filter(L, 3)

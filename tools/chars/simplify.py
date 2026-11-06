@@ -4,7 +4,7 @@ import heapq
 import numpy as np
 
 
-def simplify(P, F, FU, target, locked=None, importance=None, boundary_w=1e3, seam_w=30.0, maxcost=1e-4):
+def simplify(P, F, FU, target, locked=None, importance=None, boundary_w=1e5, seam_w=30.0, maxcost=1e-4):
     """P (n,3) positions, F (m,3) triangles, FU (m,3) per-corner uv ids.
     Returns (kept triangles, their uv ids). A collapse is only legal if every uv island around
     the removed vertex maps onto a uv of the survivor through a shared triangle, so seams

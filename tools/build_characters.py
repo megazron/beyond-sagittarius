@@ -254,7 +254,7 @@ def build(c, cid, force=False):
         g = garments[i]
         for o in outer:
             g.P = resolve_layers(g.P, o, 0.012)
-        hid = erode(covered(g.P, g.N, outer, 0.03), g.T, 3)
+        hid = erode(covered(g.P, g.N, outer, 0.025), g.T, 6)
         vis = ~hid[g.T].all(1)
         g.T, g.TU = g.T[vis], g.TU[vis]
     # --- body ---

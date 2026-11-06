@@ -72,7 +72,7 @@ function grow(l: Lock, steps: number, S: Skull): { path: THREE.Vector3[]; side: 
     n.copy(p).sub(S.c);
     const rr = n.length(); n.normalize();
     // wrap the skull first: only fall free below the widest part of the head
-    if (hug && p.y > S.c.y - 0.06 && rr < S.radius(n) * 1.3) { const o = dir.dot(n); if (o > 0) dir.addScaledVector(n, -o * 0.9); }
+    if (hug && p.y > S.c.y - 0.11 && rr < S.radius(n) * 1.6) { const o = dir.dot(n); if (o > 0) dir.addScaledVector(n, -o * 0.9); }
     dir.normalize();
     p.addScaledVector(dir, ds);
     v.copy(p).sub(S.c);
