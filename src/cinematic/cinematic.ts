@@ -153,7 +153,7 @@ export class Cinematic {
       actors: this.cast,
       subtitle: (k, sp) => this.ui.subtitle(k, sp),
       // inside the hull, off the floor, clear of the console
-      cameraOk: (p) => Math.hypot(p.y, p.z) < 3.75 && p.y > -2.05 && Math.abs(p.x) < 5.6 && !(Math.abs(p.x) < 1.3 && p.z < -0.85 && p.z > -1.95),
+      cameraOk: (p) => Math.hypot(p.y, p.z) < 3.75 && p.y > -2.05 && Math.abs(p.x) < 5.6 && !(Math.abs(p.x) < 1.7 && p.z < -0.7),
       onDone: () => { this.stage = null; done(); },
     });
   }
@@ -199,7 +199,7 @@ export class Cinematic {
     d.uWarp.value = 0; d.uBH.value = 0; d.uNebula.value = 0.9;
     // a memory of the day before: nothing of the disaster may leak into it
     const i = this.interior;
-    i.holo.uniforms.uAlarm.value = 0; i.holo.uniforms.uSpike.value = 0; i.alarmLight.intensity = 0; i.mainLight.intensity = 9; i.consoleLight.intensity = 6;
+    i.holo.uniforms.uAlarm.value = 0; i.holo.uniforms.uSpike.value = 0; i.alarmLight.intensity = 0; i.mainLight.intensity = 9; i.consoleLight.intensity = 2.2;
     for (const f of i.floaters) { f.position.copy(f.userData.base as THREE.Vector3); f.rotation.set(0, 0, 0); }
     this.interior.crew.forEach((c) => { c.armL.rotation.set(0, 0, 0); c.armR.rotation.set(0, 0, 0); });
     this.camera.fov = 42; this.camera.updateProjectionMatrix();
@@ -407,11 +407,12 @@ export class Cinematic {
       enter: () => { this.setVisible('interior'); },
       update: (k, local) => {
         const b = intr.group.position;
-        this.camera.position.copy(b).add(V(-2.9 + k * 0.5, -0.75, -2.3));
-        this.lookTarget.copy(b).add(V(0.6, -1.05, 1.2));
+        this.camera.position.copy(b).add(V(-4.2 + k * 0.5, -0.8, -0.4));
+        this.lookTarget.copy(b).add(V(0.4, -1.0, 1.0));
         d.uBHPos.value.set(-6, 10, -lerp(60, 40, k));
-        intr.alarmLight.intensity = (Math.sin(local * 9) * 0.5 + 0.5) * 70;
-        intr.mainLight.intensity = 9 * (0.35 + 0.65 * (Math.sin(local * 37) > -0.6 ? 1 : 0.1)) * (1 - k * 0.5);
+        intr.alarmLight.intensity = (Math.sin(local * 9) * 0.5 + 0.5) * 20;
+        intr.consoleLight.intensity = 0.6;
+        intr.mainLight.intensity = 4 * (0.35 + 0.65 * (Math.sin(local * 37) > -0.6 ? 1 : 0.1)) * (1 - k * 0.5);
         intr.holo.uniforms.uAlarm.value = 1;
         intr.holo.uniforms.uSpike.value = 2;
         const g = smoothstep(0.3, 2.2, local);

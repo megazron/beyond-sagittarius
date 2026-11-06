@@ -366,7 +366,7 @@ export class Montage {
       return r.multiplyScalar(side * 0.85).add(V(0, 0.62, 0)).addScaledVector(f, -0.12).normalize();
     };
     const land = (id: CrewId, p: THREE.Vector3, hit: THREE.Vector3, hours: number, boost: number, side: number, wideCam: THREE.Vector3, closeCam: THREE.Vector3, closeTo: THREE.Vector3, yaw: number, dir = V(0, 0, 1)) => {
-      const to = hit.clone().add(V(0, 15, 0));
+      const to = hit.clone().add(V(0, 30, 0)); // the sky is where the comet is
       this.lands.push({ id, at: p, hit, hours, boost, from: across(wideCam, to, side), wide: [wideCam, to], close: [above(closeCam, 0.45), closeTo], yaw, dir });
     };
     const face = (from: THREE.Vector3, to: THREE.Vector3) => Math.atan2(to.x - from.x, to.z - from.z);
@@ -376,7 +376,7 @@ export class Montage {
     this.trunk.position.copy(tp).add(V(0, 14, 0)); this.trunk.visible = false;
     const a = tp.clone().addScaledVector(td, 1.85); a.y = T.height(a.x, a.z);
     const aSide = V(td.z, 0, -td.x);
-    land('strong', a, a.clone().addScaledVector(td, 6), 18.9, 1, 1, above(a.clone().addScaledVector(td, 62).add(V(20, 34, 0)), 30), a.clone().addScaledVector(aSide, 3.1).addScaledVector(td, 0.7).add(V(0, 0.9, 0)), a.clone().add(V(0, 1.25, 0)).addScaledVector(td, -0.5), face(a, tp));
+    land('strong', a, a.clone().addScaledVector(td, 6), 18.9, 1.5, 1, above(a.clone().addScaledVector(td, 62).add(V(20, 34, 0)), 30), a.clone().addScaledVector(aSide, 3.1).addScaledVector(td, 0.7).add(V(0, 0.9, 0)), a.clone().add(V(0, 1.45, 0)).addScaledVector(td, -0.5), face(a, tp));
 
     // Lyrra: splashes down mid-lake, wades to the shore in front of us
     const d = V(-0.75, 0, -0.66).normalize(), c0 = V(LAKE.x, 0, LAKE.z);
@@ -387,7 +387,7 @@ export class Montage {
 
     // Bolzar: a flat rock in the southern hills
     const b = find(10, 90, 290, 370, (x, z) => -slope(x, z) - Math.abs(T.height(x, z) - 30) * 0.002);
-    land('builder', b, b.clone(), 20.3, 1.2, 1, above(b.clone().add(V(-50, 30, -44)), 28), b.clone().add(V(-2.2, 1.05, -2.3)), b.clone().add(V(0, 0.75, 0)), face(b, V(b.x - 2.2, 0, b.z - 2.3)));
+    land('builder', b, b.clone(), 20.3, 1.5, 1, above(b.clone().add(V(-50, 30, -44)), 28), b.clone().add(V(-2.2, 1.05, -2.3)), b.clone().add(V(0, 0.75, 0)), face(b, V(b.x - 2.2, 0, b.z - 2.3)));
 
     // Skyvra: against her pod, which is where the rescue finds her
     const e = L.crewSpot.clone(), away = e.clone().sub(L.pod2).setY(0).normalize(), es = V(away.z, 0, -away.x);
@@ -400,7 +400,7 @@ export class Montage {
 
     // The player: the clearing where the wake-up starts
     const z = at(0, 2);
-    land('scientist', z, z.clone(), 5.8, 1.1, 1, z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(-3.2, 0.7, 4.3)), z.clone().add(V(0, 1.7, 0)), 0.35);
+    land('scientist', z, z.clone(), 5.8, 1.1, 1, z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(-2.6, 0.55, 3.6)), z.clone().add(V(0, 1.1, 0)), 0.35);
     this.lands[5].wide = [z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(5, 24, -14))];
     this.lands[5].from = V(0.18, 1, -0.4).normalize();
   }
@@ -954,9 +954,8 @@ export class Montage {
     const e = easeInOut(clamp((b - S.hit) / 12, 0, 1));
     this.lens(l.close[0].clone().lerp(this.tmp.copy(l.close[0]).add(V(0.9, 0.05, -1.1)), e), l.close[1], 40, 0, 0);
     this.impact(l, 'scientist', tt + 0.3, col);
-    // head first, up to the waist, legs in the morning air
-    const yaw = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI - 0.3, 0.75, 0.16));
-    this.act('scientist', l.at.clone().add(V(0, 1.55, 0)), yaw, 'float', { armL: [1, -0.1, 0], armR: [-1, -0.1, 0], legL: [0.5, -1, 0.1], shinL: [0.6, -1, -0.25], legR: [-0.45, -1, 0.06], shinR: [-0.7, -1, 0.2] }, { blink: 0.9 });
+    // face down at the end of his own furrow. Two doctorates.
+    this.act('scientist', l.at.clone(), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.7, 0)), 'lie', null, { blink: 0.92 });
     this.boost = 1.5;
     this.setRig([{ p: l.at.clone().add(V(-2.4, 3, 3)), color: 0xffd8b0, i: 30, d: 14 }, { p: l.at.clone().add(V(2.5, 2, -2)), color: 0xff9a70, i: 14, d: 10 }]);
     const f = after(b, S.hit, 1.6);

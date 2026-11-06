@@ -272,7 +272,7 @@ export function createInterior(detail = 1): Interior {
 
   const mainLight = new THREE.PointLight(0xcfe6ff, 9, 18, 1.6);
   mainLight.position.set(0, 2.5, 0.5); group.add(mainLight);
-  const consoleLight = new THREE.PointLight(0x55ccff, 6, 6, 2);
+  const consoleLight = new THREE.PointLight(0x55ccff, 2.2, 6, 2);
   consoleLight.position.set(0, -0.6, -0.8); group.add(consoleLight);
   const alarmLight = new THREE.PointLight(0xff2a1a, 0, 20, 1.5);
   alarmLight.position.set(0, 2.0, 1.0); group.add(alarmLight);

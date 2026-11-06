@@ -71,7 +71,7 @@ through the whole night. Locations match what the beacon reports in Level 10.
 | --- | --- | --- | --- | --- | --- |
 | 24 | 112-120 | The player falling, wind and fire, every cut shorter and closer, ending in white | Close, shaking harder each beat | Own colour, then dawn | Snare roll rising, everything climbing |
 | 25 | 120 | THE HIT. White, then the title | | Flash | Full chord, cymbal |
-| 26 | 120-132 | The clearing at dawn: a smoking furrow, the ringed world in the sky, BEYOND SAGITTARIUS held over it, the player's legs sticking out of the dirt | Very slow push from low | Dawn, smoke | Chord rings out. "Hypothesis: ow." on the last beat, muffled |
+| 26 | 120-132 | The clearing at dawn: a smoking furrow, the ringed world in the sky, BEYOND SAGITTARIUS held over it, the player face down at the end of it | Very slow push from low | Dawn, smoke | Chord rings out. "Hypothesis: ow." on the last beat, muffled |
 
 Black. The wake-up starts.
 

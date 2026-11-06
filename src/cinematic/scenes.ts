@@ -22,7 +22,8 @@ const DECK = { social: [-1.5, 1.4], strong: [-0.25, 2.0], medic: [1.15, 1.75], e
 export function deckScene(a: Cast, origin: THREE.Vector3): Beat[] {
   const o = (x: number, y: number, z: number) => origin.clone().add(V(x, y, z));
   const master = (): Shot => ({ from: o(4.2, -0.75, 3.05), to: o(-0.2, -1.05, 0.5), push: 0.07 });
-  const selfie = (): Shot => ({ from: o(-1.05, -0.62, -0.25), to: o(-0.95, -0.82, 1.8), push: 0.04 });
+  // from the phone's side: faces and the group behind, close enough to be about the joke
+  const selfie = (): Shot => ({ from: o(-1.0, -0.42, 0.42), to: o(-1.3, -0.5, 1.55), push: 0.04 });
   return [
     { key: 'op.1', who: 'social', shot: selfie, poses: { social: 'selfie', strong: 'stand', explorer: 'stand', builder: 'stand', medic: 'stand', scientist: 'stand' }, faces: {} },
     { key: 'op.2', who: 'strong', shot: () => cover.close(a.strong, 0.55, 1.15) },

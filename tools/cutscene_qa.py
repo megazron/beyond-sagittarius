@@ -49,7 +49,9 @@ class Run:
         t, last = 0.0, time.time()
         while self.page.evaluate(running) and t < limit:
             if self.page.evaluate('__bs.branch.open'):
-                self.page.evaluate('__bs.skip()')  # a choice or quick-time beat waits for a player: take the default
+                # a choice or quick-time beat waits for a player: take the first option
+                self.page.keyboard.press('Digit1')
+                self.page.evaluate('__bs.skip()')
             self.advance(step)
             t += step
             self.shot(folder, f'{t:06.1f}')
