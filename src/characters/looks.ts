@@ -91,7 +91,7 @@ export const LOOKS: Record<CrewId, Look> = {
   megazron: {
     build: { height: 1.2, shoulder: 0.92, chest: 0.84, waist: 0.72, hip: 0.8, limb: 0.74, bust: 0, head: 0.96 },
     persona: { stride: 0.5, armSwing: 0.15, bounce: 0.01, hipSway: 0, shoulderSway: 0.02, lean: 0, stoop: 0.05, stance: 0.05, idle: 'clasped' },
-    face: { skin: 0x23213c, shade: 0x09081a, iris: 0xffc36a, glow: true, eye: 'calm', brow: 0xe8e4f6, mouth: 'smirk',
+    face: { skin: 0x4a4670, shade: 0x1c1a38, iris: 0xffc36a, glow: true, eye: 'calm', brow: 0xe8e4f6, mouth: 'smirk',
       marks: (c, e) => {
         for (let i = 0; i < 60; i++) { const a = (i * 2.399) % 6.283, r = 0.25 + ((i * 37) % 70) / 100; for (const g of [c, e]) { g.fillStyle = '#d8dcff'; g.beginPath(); g.arc(fx(Math.cos(a) * r), fy(Math.sin(a) * r * 1.1), 0.9 + (i % 3) * 0.5, 0, 7); g.fill(); } }
       } },

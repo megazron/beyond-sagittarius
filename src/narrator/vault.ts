@@ -22,7 +22,7 @@ export interface VaultLine { key: string; pose?: CrewPose; shot?: VaultShot; aft
 export type VaultShot = 'wide' | 'push' | 'close' | 'hands' | 'orrery' | 'window' | 'profile' | 'low';
 
 const SHOTS: Record<VaultShot, { a: THREE.Vector3; b: THREE.Vector3; to: THREE.Vector3 }> = {
-  wide: { a: V(0.2, 2.0, 5.4), b: V(-0.35, 1.95, 4.5), to: V(0, 1.75, 0) },
+  wide: { a: V(0.15, 2.2, 3.7), b: V(-0.2, 2.2, 3.1), to: V(0, 2.05, 0) },
   push: { a: V(-1.1, 1.9, 4.2), b: V(-0.75, 1.92, 3.1), to: V(0, 1.85, 0) },
   close: { a: V(0.42, 2.14, 1.42), b: V(0.3, 2.14, 1.16), to: V(0, 2.18, 0) },
   profile: { a: V(1.7, 2.12, 0.5), b: V(1.45, 2.14, 0.62), to: V(0, 2.1, 0.1) },
@@ -154,10 +154,10 @@ export class Vault {
     this.key.position.set(0.5, 1.75, 1.5); s.add(this.key);
     const rim = new THREE.SpotLight(0xff9a50, 70, 30, 0.42, 0.6);
     rim.position.set(1.8, 5.5, -7); rim.target.position.set(0, 1.9, 0); rim.castShadow = true; rim.shadow.mapSize.set(1024, 1024); rim.shadow.bias = -0.0004; s.add(rim, rim.target);
-    const rim2 = new THREE.SpotLight(0x8fb4ff, 26, 26, 0.5, 0.8); rim2.position.set(-6, 4, 1.5); rim2.target.position.set(0, 1.9, 0); s.add(rim2, rim2.target);
+    const rim2 = new THREE.SpotLight(0x8fb4ff, 60, 26, 0.5, 0.8); rim2.position.set(-6, 4, 1.5); rim2.target.position.set(0, 1.9, 0); s.add(rim2, rim2.target);
     s.add(new THREE.HemisphereLight(0x5a668f, 0x241410, 1.9));
     // soft front fill so his face and coat read even in the wide shots
-    const fill = new THREE.SpotLight(0xd8dcff, 40, 14, 0.5, 0.9); fill.position.set(0.8, 3.2, 5.2); fill.target.position.set(0, 1.9, 0); s.add(fill, fill.target);
+    const fill = new THREE.SpotLight(0xffe9d2, 120, 14, 0.34, 0.9); fill.position.set(0.9, 3.0, 4.6); fill.target.position.set(0, 2.1, 0); s.add(fill, fill.target);
     this.halo.position.set(0, 2.5, -0.2); s.add(this.halo);
 
     this.host = createCharacter('megazron', this.detail);
@@ -232,7 +232,8 @@ export class Vault {
     this.dome.uniforms.uTime.value = t0;
     this.host.root.updateMatrixWorld();
     this.host.animate(this.pose, 0, 0, t0, dt);
-    this.host.look2(this.pose === 'write' ? 0 : Math.sin(t0 * 0.4) * 0.05, 0);
+    this.host.look2(0, 0);
+    this.host.setLookTarget(this.pose === 'write' ? null : this.camera.position);
     const lvl = voice.level();
     this.halo.intensity = 0.5 + lvl * 2.5;
     this.key.intensity = 7 + Math.sin(t0 * 7.3) * 0.12 + Math.sin(t0 * 3.1) * 0.2;
@@ -251,14 +252,14 @@ export class Vault {
 export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1', s: { ateRed: boolean; deaths: number; bites: number; renamed: boolean }): VaultLine[] {
   switch (id) {
     case 'intro': return [
-      { key: 'mz.intro.1', shot: 'wide', pose: 'write' },
+      { key: 'mz.intro.1', shot: 'wide', pose: 'stand' },
       { key: 'mz.intro.2', shot: 'push', pose: 'present' },
       { key: 'mz.intro.3', shot: 'orrery', pose: 'point' },
       { key: 'mz.intro.4', shot: 'hands', pose: 'write' },
       { key: 'mz.intro.5', shot: 'close', pose: 'idle' },
     ];
     case 'l3': return [
-      { key: 'mz.l3.1', shot: 'wide', pose: 'write' },
+      { key: 'mz.l3.1', shot: 'wide', pose: 'stand' },
       { key: s.ateRed ? 'mz.l3.red' : 'mz.l3.safe', shot: 'hands', pose: 'write' },
       ...(s.deaths > 0 ? [{ key: 'mz.l3.died', shot: 'profile' as VaultShot, pose: 'present' as CrewPose }] : []),
       { key: 'j.8', shot: 'profile', pose: 'present' },
@@ -272,7 +273,7 @@ export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1', s: { ateRed: bool
       { key: 'mz.l7.hint', shot: 'close', pose: 'idle' },
     ];
     case 'ch1': return [
-      { key: 'mz.ch1.1', shot: 'wide', pose: 'write' },
+      { key: 'mz.ch1.1', shot: 'wide', pose: 'stand' },
       { key: s.renamed ? 'mz.ch1.names' : 'mz.ch1.nonames', shot: 'hands', pose: 'write' },
       { key: 'mz.ch1.2', shot: 'low', pose: 'present' },
       { key: 'mz.ch1.3', shot: 'window', pose: 'idle' },

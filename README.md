@@ -85,14 +85,15 @@ on the planet would also like to sell you a rock.
 The Windows build is unsigned, so SmartScreen will warn you. Choose **More info**,
 then **Run anyway**.
 
-Measured on the live site at commit 6366f85 with `tools/gpu_test.py`, Chrome
-headless at 1600x900 on an Intel Core Ultra 7 155H laptop. Frames per second:
+Measured on the live site with `tools/gpu_test.py`, Chrome headless at 1600x900
+on an Intel Core Ultra 7 155H laptop. The NVIDIA rows are from commit fccfeb0,
+the Intel row from the older 6366f85. Frames per second:
 
 | GPU | Preset | Title | Narrator | Cinematic | Play |
 | --- | --- | --- | --- | --- | --- |
 | Intel integrated | Web | 52 | 48 | 56 | 34 |
-| NVIDIA RTX A500 Laptop | Web | 60 | 60 | 60 | 47 |
-| NVIDIA RTX A500 Laptop | Ultra | 60 | 60 | 59 | 23 |
+| NVIDIA RTX A500 Laptop | Web | 60 | 60 | 60 | 58 |
+| NVIDIA RTX A500 Laptop | Ultra | 60 | 60 | 60 | 40 |
 
 This was a short standing scene, and the graphics have changed since. Real play
 with a mouse and keyboard and real audio have not been tested by a person.

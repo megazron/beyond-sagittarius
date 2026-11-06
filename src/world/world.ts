@@ -158,9 +158,9 @@ export class World {
     const envTex = this.env.update(renderer, time, this.envGround);
     if (envTex) {
       this.scene.environment = envTex;
-      this.scene.environmentIntensity = 0.3 + day * 0.42;
+      this.scene.environmentIntensity = 0.42 + day * 0.68;
     }
-    this.hemi.intensity = (0.35 + day * 0.65) * (envTex ? 0.4 : 1);
+    this.hemi.intensity = (0.4 + day * 0.7) * (envTex ? 0.72 : 1);
     this.fog.color.copy(sky.horizon);
     this.fog.density = this.q.fogDensity * (1 + (1 - day) * 0.5);
     // valley mist: thickest around dawn and at night, thin at noon
