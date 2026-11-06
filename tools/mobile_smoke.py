@@ -350,8 +350,9 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     shot("13-path-tree")
     if ev("document.querySelectorAll('.pt-b.taken').length") != 1:
         fail("path tree does not show the decision")
-    if ev("document.getElementById('modal-card').scrollWidth > document.getElementById('modal-card').clientWidth + 1"):
-        fail("path tree scrolls sideways")
+    over = ev("[...document.querySelectorAll('.path-tree, .pt-cols, .pt-t')].filter((e) => e.getBoundingClientRect().right > innerWidth + 1).length")
+    if over:
+        fail(f"path tree runs off the side: {over} blocks")
     touch.tap(*centre(page, "#m-close"))
     time.sleep(0.4)
     # pinch-zoom must not zoom the page

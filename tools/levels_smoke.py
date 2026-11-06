@@ -479,7 +479,7 @@ def main():
         for it in range(900):
             st = ev("({state: __bs.state, level: __bs.level, mode: __bs.mode, hound: __bs.hound, crew: __bs.crew, busy: __bs.save && null})")
             lvl = st["level"]
-            if page.locator(".path-tree").is_visible():
+            if page.locator(".pt-cols").is_visible():
                 # the path tree opens by itself after each chapter
                 time.sleep(0.5)
                 shot(f"16-path-tree-{len(trees) + 1}")
@@ -489,7 +489,7 @@ def main():
                 if tree["ends"] != 4 or (len(trees) == 1 and (tree["taken"] != 6 or tree["closed"] < 3)):
                     failures.append(f"path tree content: {tree}")
                 page.click("#m-close")
-                page.wait_for_selector(".path-tree", state="hidden", timeout=5000)
+                page.wait_for_selector(".pt-cols", state="hidden", timeout=5000)
                 continue
             if ev("__bs.branch.open"):
                 time.sleep(0.4)
@@ -629,11 +629,11 @@ def main():
             skip_scene("narrator")
         if len(trees) < 2:
             try:
-                page.wait_for_selector(".path-tree", state="visible", timeout=20000)
+                page.wait_for_selector(".pt-cols", state="visible", timeout=20000)
                 trees.append({})
                 shot("16-path-tree-2")
                 page.click("#m-close")
-                page.wait_for_selector(".path-tree", state="hidden", timeout=5000)
+                page.wait_for_selector(".pt-cols", state="hidden", timeout=5000)
             except Exception as e:
                 log("no second path tree:", str(e)[:120])
         if len(trees) != 2:
