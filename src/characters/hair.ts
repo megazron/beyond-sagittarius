@@ -243,10 +243,10 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
   ],
   // Long pale hair that floats upward at the ends, as if gravity is a suggestion.
   megazron: () => [
-    ...layer(76, 72, 288, 15, 0.5, 1.5, 0.05, { sway: 1.3 }),
-    ...layer(35, 100, 260, 12, 0.46, 1.1, 0.05, { out: 0.2, sway: 1.5, curl: 0.4 }),
-    // centre parting: the fringe opens on the face
-    ...[-1, 1].flatMap((s) => fan(28 * D, 66 * D, 4, (az, i) => ({ az: az * s, el: 76 * D, len: 0.15 + i * 0.012, droop: 3.6, sweep: s * 0.9, w: 0.024, sway: 0.4 }))),
+    ...layer(78, 70, 290, 18, 0.46, 5, 0.05, { out: 0, sway: 1 }),
+    ...layer(40, 96, 264, 14, 0.42, 5, 0.05, { out: 0, sway: 1.1 }),
+    // centre parting: the fringe opens on the face and falls behind the ears
+    ...[-1, 1].flatMap((s) => fan(26 * D, 64 * D, 4, (az, i) => ({ az: az * s, el: 74 * D, len: 0.2 + i * 0.02, droop: 5, sweep: s * 0.8, w: 0.024, out: 0, sway: 0.5 }))),
   ],
   // Two huge spiral tails with an airy fringe: the loudest silhouette in the crew.
   social: () => [

@@ -258,6 +258,24 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const hc = custom ? { root: new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex(), mid: custom.hairRoot, tip: custom.hairTip, shine: new THREE.Color(custom.hairTip).lerp(new THREE.Color(0xffffff), 0.5).getHex() } : human ? { root: 0x120c0a, mid: 0x1c120e, tip: 0x2a1a14, shine: 0x5a4a40 } : L.hair;
     const hair = buildHair(HAIRSTYLES[hairId](), hc, sway, detail, HAIR_CAP[hairId][0], HAIR_CAP[hairId][1], skullFrom(M.skull.c, M.skull.r));
     bs.get('head')!.add(hair);
+    // The decimated scan teeth break up in close-ups: use a clean mouth instead.
+    const headLocal = (v: THREE.Vector3) => bs.get('head')!.worldToLocal(v);
+    const mouthBox = new THREE.Box3();
+    scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.material as THREE.Material) === mouth) { mouthBox.expandByObject(m); m.visible = false; } });
+    if (!mouthBox.isEmpty()) {
+      const c = headLocal(mouthBox.getCenter(new THREE.Vector3()));
+      const inside = new THREE.Mesh(new THREE.SphereGeometry(0.026, 14, 10), new THREE.MeshStandardMaterial({ color: 0x170708, roughness: 0.9 }));
+      inside.scale.set(1.15, 0.6, 0.9); inside.position.copy(c); bs.get('head')!.add(inside);
+      const teeth = new THREE.Mesh(new THREE.TorusGeometry(0.021, 0.0042, 6, 18, Math.PI), new THREE.MeshStandardMaterial({ color: 0xe6e0d4, roughness: 0.38 }));
+      teeth.rotation.x = Math.PI / 2; teeth.rotation.z = Math.PI; teeth.position.set(c.x, c.y + 0.0045, c.z + 0.002); bs.get('head')!.add(teeth);
+    }
+    // MegaZroN's coat is open at the neck: a dark stock under it, so no bare chest shows
+    if (id === 'megazron' && !custom) {
+      const chestBone = bs.get('chest')!;
+      const n = chestBone.worldToLocal(bs.get('neck')!.getWorldPosition(new THREE.Vector3()));
+      const stock = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), new THREE.MeshStandardMaterial({ color: 0x0c0d1c, roughness: 0.8 }));
+      stock.scale.set(0.95, 1.7, 0.78); stock.position.set(n.x, n.y - 0.17, n.z + 0.02); chestBone.add(stock);
+    }
     kit = addKit({ id, custom, human, bones: bs, meta: M, look: L, sway, skinC, glowC, shadeC, detail, heightM });
     kit.splint.visible = pendingSplint;
     // clips
@@ -409,7 +427,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const hurt = (kind === 'injured' ? 1 : 0);
     // the mouth follows the voice clip itself; no clip, no movement
     if (speak > 0) { speak = Math.max(0, speak - dt); voice.mouth(lip); } else lip.open = lip.round = lip.wide = 0;
-    const open = speak > 0 ? lip.open * 0.62 : ex.open ?? 0;
+    const open = speak > 0 ? lip.open * 0.45 : ex.open ?? 0;
     easeMorph('open', open, 1 - Math.exp(-dt * 30));
     easeMorph('round', lip.round * 0.55, 1 - Math.exp(-dt * 22));
     easeMorph('wide', lip.wide * 0.5, 1 - Math.exp(-dt * 22));

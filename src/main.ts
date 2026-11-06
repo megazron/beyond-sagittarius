@@ -523,6 +523,7 @@ async function boot() {
   // warm up shaders so the first in-game frame doesn't hitch
   player.spawn(0, 2, 0.35);
   world.update(0.016, 0, 8.2, player.pos, camera, renderer.renderer);
+  game.story.npcs.prepare();
   renderer.renderer.compile(world.scene, camera);
   worldReady = true;
   btns.forEach((b) => (b.disabled = false));

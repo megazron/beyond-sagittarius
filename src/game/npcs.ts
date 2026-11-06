@@ -62,8 +62,8 @@ export class Npcs {
     add('trav', createCharacter('scientist', d, look('sirelle', { skin: 0xe6c3a0, marks: 'dots', glow: 0xffa030, outfit: 'social', hair: 'scientist', hairRoot: 0x2a1a14, hairTip: 0x6a4a34, gender: 'm', build: 0.55, eye: 'tired', iris: 0x8a5a34, eyeGlow: false })), at(L.pod2.x + 18, L.pod2.z - 12), 7);
     // somewhere unexpected: a different spot each playthrough, picked from the save
     const spots = [[L.ridge.x - 40, L.ridge.z + 26], [L.pod2.x - 52, L.pod2.z + 30], [L.camp.x - 70, L.camp.z - 60]];
-    const [cx, cz] = spots[(this.s.day + (this.s.savedAt % 3)) % spots.length];
-    add('cameo', createCharacter('strong', d, undefined, 'suit'), at(cx, cz), 0);
+    this.cameoSpots = spots.map(([x, z]) => at(x, z));
+    add('cameo', createCharacter('strong', d, undefined, 'suit'), this.cameoSpots[0].clone(), 0);
   }
 
   private talk(lines: string[], who: NpcId) {
@@ -116,8 +116,20 @@ export class Npcs {
     return out;
   }
 
+  private cameoSpots: THREE.Vector3[] = [];
+  private cameoPlaced = false;
+
+  /** Build everyone during loading, so nobody pops in with a frame hitch on first play. */
+  prepare() { if (!this.built) this.build(); }
+
   update(dt: number, time: number) {
     if (!this.built) this.build();
+    if (!this.cameoPlaced) {
+      this.cameoPlaced = true;
+      const n = this.list.find((x) => x.id === 'cameo')!;
+      const at = this.cameoSpots[(this.s.day + (this.s.savedAt % 3)) % this.cameoSpots.length];
+      n.home.copy(at); n.pos.copy(at); n.target.copy(at);
+    }
     const p = this.player.pos;
     for (const n of this.list) {
       const dist = n.pos.distanceTo(p);
