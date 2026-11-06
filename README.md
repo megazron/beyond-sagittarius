@@ -8,6 +8,10 @@ holds the opening cinematic *"The Last Normal Day"*, the wake-up on an alien
 world and the complete first arc, *Chapter One — "The First 24 Hours"*
 (levels 1–10), ending on the arc's cliffhanger.
 
+![MegaZroN in the Vault of the Last Ledger](docs/screenshots/01b-narrator-vault.jpg)
+![The deck scene before the disaster](docs/screenshots/02b-cinematic-deck.jpg)
+![Crew panel](docs/screenshots/levels/web-12-crew-panel.jpg)
+![Phone, portrait](docs/screenshots/mobile/iphone13-portrait-04-hud-tutorial.jpg)
 ![Title screen](docs/screenshots/01-title.jpg)
 ![Sagittarius A*](docs/screenshots/02c-cinematic-sgr-a.jpg)
 ![Wake-up: the giant ringed planet and the moon](docs/screenshots/03-wakeup-sky.jpg)

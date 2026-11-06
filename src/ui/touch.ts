@@ -45,13 +45,19 @@ export class TouchControls {
       el.addEventListener('pointercancel', release);
       el.addEventListener('contextmenu', (e) => e.preventDefault());
     };
+    // panels open on release: opening on press would let the same touch's click
+    // land on whatever menu button appears under the finger
+    const menuBtn = (id: string, a: TouchAction) => {
+      tapBtn(id, () => {});
+      document.getElementById(id)!.addEventListener('click', () => { audio.uiClick(); onAction(a); });
+    };
     tapBtn('tb-act', () => input.tap('KeyE'));
     tapBtn('tb-jump', () => input.tap('Space'));
     tapBtn('tb-sprint', () => this.setSprint(!this.sprint));
-    tapBtn('tb-inv', () => { audio.uiClick(); onAction('inventory'); });
-    tapBtn('tb-crew', () => { audio.uiClick(); onAction('crew'); });
-    tapBtn('tb-obj', () => { audio.uiClick(); onAction('objectives'); });
-    tapBtn('tb-pause', () => { audio.uiClick(); onAction('pause'); });
+    menuBtn('tb-inv', 'inventory');
+    menuBtn('tb-crew', 'crew');
+    menuBtn('tb-obj', 'objectives');
+    menuBtn('tb-pause', 'pause');
     window.addEventListener('resize', () => this.layout());
     this.layout();
   }

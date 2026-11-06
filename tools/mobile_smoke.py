@@ -274,7 +274,8 @@ def main():
             try:
                 run_device(p, tag, name, landscape, shots, args.port, failures, log)
             except Exception as e:  # keep testing the other device
-                failures.append(f"[{tag}] exception: {e}")
+                line = e.__traceback__.tb_next.tb_lineno if e.__traceback__.tb_next else 0
+                failures.append(f"[{tag}] exception at line {line}: {e}")
     httpd.shutdown()
     for f in failures:
         print("FAIL:", f)

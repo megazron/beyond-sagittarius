@@ -134,6 +134,7 @@ def main():
                 tu = ev("__bs.tutorial")
                 if not tu or tu["step"] == step_next:
                     break
+                log("  still on", tu["step"], "at", [round(v, 1) for v in ev("__bs.debug.player")], "keys", keys)
                 ev(f"__bs.look({i * 1.3}, -0.15)")
             for k in keys:
                 page.keyboard.up(k)
