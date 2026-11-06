@@ -92,7 +92,7 @@ const syncDevice = () => {
 input.onDevice(syncDevice);
 syncDevice();
 const cine = new Cinematic(ui);
-const film = new Montage(cine, () => (worldReady ? world : null), (sc, cam, ao) => renderer.setScene(sc, cam, ao), () => pendingLook.glow, ui);
+const film = new Montage(cine, () => (worldReady ? world : null), (sc, cam, ao) => renderer.setScene(sc, cam, ao), () => pendingLook.glow, () => (player ? [player.model.root] : []), ui);
 const vault = new Vault((k, sp) => ui.subtitle(k, sp), quality.name === 'mobile' ? 0.6 : 1);
 const world = new World(quality);
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2400);
@@ -574,7 +574,7 @@ function tick(step: number) {
     cine.update(dt);
   } else if (state === 'film') {
     film.update(dt);
-    if (film.inWorld) world.update(dt, elapsed, film.hours, film.focus, film.wcam, renderer.renderer);
+    if (film.inWorld) { world.update(dt, elapsed, film.hours, film.focus, film.wcam, renderer.renderer); renderer.renderer.toneMappingExposure *= film.boost; world.fog.density *= film.fog; }
   } else if (state === 'narrator') {
     vault.update(dt);
   } else if (state === 'game') {
@@ -729,7 +729,7 @@ window.addEventListener('resize', () => {
   hold(on: boolean) { hold.on = on; film.manual = on; },
   advance(sec: number) { hold.pending = sec; },
   get frames() { return hold.done; },
-  film: { seek(b: number) { film.seek(b); }, get playing() { return film.playing; }, get beat() { return film.beat; }, get seconds() { return film.lengthSeconds; }, start() { state = 'film'; renderer.setScene(cine.scene, cine.camera, false); ui.show('cine', true); ui.fade('black', 0, 0); void film.play(() => {}); } },
+  film: { seek(b: number) { film.seek(b); }, get playing() { return film.playing; }, get beat() { return film.beat; }, get seconds() { return film.lengthSeconds; }, start() { state = 'film'; renderer.setScene(cine.scene, cine.camera, false); ui.show('title', false); ui.show('cine', true); ui.fade('black', 0, 0); void film.play(() => {}); } },
   cineTime() { return cine.time; },
   get stagePlaying() { return cine.staged; },
   gameScene(id: 'rescue' | 'camp' | 'beacon') { game?.debugScene(id); },

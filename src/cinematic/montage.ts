@@ -8,6 +8,7 @@ import { Renderer } from '../core/renderer';
 import type { Character, CrewId, CrewPose, Dir, Face, Limbs } from '../characters/character';
 import type { Cinematic } from './cinematic';
 import type { World } from '../world/world';
+import { LAKE } from '../world/heightfield';
 
 const BEAT = 60 / beat.bpm;
 const S = beat.sections;
@@ -64,7 +65,7 @@ class Trail {
           float core = exp(-y * y * 16.0), halo = exp(-y * y * 3.0);
           float flow = 0.62 + 0.38 * sin(x * 34.0 - uTime * 24.0 + sin(x * 9.0 + uTime * 3.0) * 2.0);
           float fade = pow(1.0 - x, 1.3) * smoothstep(0.0, 0.015, x);
-          vec3 c = (uColor * 1.9 * halo * flow + vec3(1.0) * core * 1.5 * (1.0 - x)) * fade * uGain;
+          vec3 c = (uColor * 0.8 * halo * flow + mix(uColor, vec3(1.0), 0.6) * core * 0.9 * (1.0 - x)) * fade * uGain;
           gl_FragColor = vec4(c, 1.0);
         }`,
     });
@@ -199,7 +200,7 @@ class Debris {
 interface FilmShot { from: number; to: number; where: 'deep' | 'interior' | 'home' | 'world'; enter?: () => void; at: (k: number, b: number) => void; }
 
 /** Where each one comes down: the world's own places, the distances the beacon reports in Level 10. */
-interface Landing { id: CrewId; at: THREE.Vector3; hours: number; impact: number; from: THREE.Vector3; wide: [THREE.Vector3, THREE.Vector3]; close: [THREE.Vector3, THREE.Vector3] }
+interface Landing { id: CrewId; at: THREE.Vector3; hit: THREE.Vector3; hours: number; boost: number; from: THREE.Vector3; wide: [THREE.Vector3, THREE.Vector3]; close: [THREE.Vector3, THREE.Vector3]; yaw: number; dir: THREE.Vector3 }
 
 /**
  * "The Scatter": the title sequence between the deck and the wake-up. Every frame is a
@@ -215,12 +216,13 @@ export class Montage {
   private crack: THREE.Mesh;
   private shards: Debris;
   private wgroup = new THREE.Group();
-  private dust!: Burst; private fire!: Burst; private spray!: Burst; private smoke!: Burst; private scorch!: THREE.Mesh; private ringFx!: THREE.Mesh; private plate!: THREE.Mesh; private heat!: THREE.Mesh;
+  private dust!: Burst; private fire!: Burst; private spray!: Burst; private smoke!: Burst; private scorch!: THREE.Mesh; private ringFx!: THREE.Mesh; private plate!: THREE.Mesh; private heat!: THREE.Mesh; private trunk!: THREE.Mesh;
   private shots: FilmShot[] = [];
   private cur: FilmShot | null = null;
   private cast!: Record<CrewId, Character>;
   private poses: Partial<Record<CrewId, CrewPose>> = {};
   private seen = new Set<CrewId>();
+  private posed: Partial<Record<CrewId, CrewPose>> = {};
   private fx: Parameters<Renderer['setFilm']>[0] = {};
   private time = 0;
   private lastCue = -1;
@@ -228,9 +230,14 @@ export class Montage {
   private cues: { b: number; fn: () => void; done?: boolean }[] = [];
   private lands: Landing[] = [];
   private el: { root: HTMLElement; card: HTMLElement; name: HTMLElement; role: HTMLElement; loc: HTMLElement; bar: HTMLElement; title: HTMLElement; main: HTMLElement; sub: HTMLElement };
+  private markL = V(-0.9, -1.45, 0); private markR = V(0.9, -1.45, 0);
   private tmp = new THREE.Vector3(); private tmp2 = new THREE.Vector3(); private tmp3 = new THREE.Vector3();
   playing = false;
   hours = 22;
+  /** Night shots are printed brighter than the game's night. */
+  boost = 1;
+  /** And some of the valley haze is taken out, so distance keeps its detail. */
+  fog = 1;
   /** The world camera; its far plane suits the terrain, not the cosmos. */
   wcam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 2600);
   focus = new THREE.Vector3();
@@ -240,7 +247,7 @@ export class Montage {
   /** Tests step the picture by hand: the audio clock doesn't drive it then. */
   manual = false;
 
-  constructor(private cine: Cinematic, private getWorld: () => World | null, private view: (scene: THREE.Scene, cam: THREE.PerspectiveCamera, ao: boolean) => void, private playerGlow: () => number, private ui: { subtitle: (k: string | null, sp?: string) => void; fade: (c: 'black' | 'white', to: number, s: number) => void }) {
+  constructor(private cine: Cinematic, private getWorld: () => World | null, private view: (scene: THREE.Scene, cam: THREE.PerspectiveCamera, ao: boolean) => void, private playerGlow: () => number, private extras: () => THREE.Object3D[], private ui: { subtitle: (k: string | null, sp?: string) => void; fade: (c: 'black' | 'white', to: number, s: number) => void }) {
     this.set = cine.set;
     const s = this.set.scene;
     s.add(this.group);
@@ -301,13 +308,12 @@ export class Montage {
       vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
         uniform vec3 uColor; uniform float uHeat; varying vec2 vUv;
-        float h(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
         void main(){
           vec2 q = vUv - 0.5; float r = length(q) * 2.0, a = atan(q.y, q.x);
           float ragged = r + 0.08 * sin(a * 7.0) + 0.05 * sin(a * 17.0 + 1.0);
           float burn = smoothstep(1.0, 0.45, ragged);
-          float ember = smoothstep(0.82, 0.62, ragged) * smoothstep(0.35, 0.6, ragged) * step(0.72, h(floor(vUv * 80.0)));
-          gl_FragColor = vec4(mix(vec3(0.006, 0.005, 0.004), uColor * 3.0, ember * uHeat), burn * 0.94);
+          float ember = smoothstep(0.86, 0.7, ragged) * smoothstep(0.5, 0.72, ragged) * (0.5 + 0.5 * sin(a * 11.0 + r * 30.0));
+          gl_FragColor = vec4(mix(vec3(0.006, 0.005, 0.004), uColor * 0.1, ember * uHeat), burn * 0.92);
         }`,
     }));
     this.scorch.frustumCulled = false; this.scorch.visible = false; this.scorch.renderOrder = 2;
@@ -319,10 +325,19 @@ export class Montage {
     }));
     this.ringFx.visible = false;
     this.wgroup.add(this.ringFx);
-    const hull = new THREE.MeshStandardMaterial({ color: 0x8a9098, metalness: 0.6, roughness: 0.5 });
+    const hull = new THREE.MeshStandardMaterial({ color: 0x3c4148, metalness: 0.7, roughness: 0.62 });
     this.plate = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.12, 1.5), hull);
     this.plate.visible = false; this.plate.castShadow = true;
     this.wgroup.add(this.plate);
+    // the tree that started it. Bigger than anything the forest grows, because it won.
+    const c = document.createElement('canvas'); c.width = 256; c.height = 512;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#3a2a20'; g.fillRect(0, 0, 256, 512);
+    for (let i = 0; i < 520; i++) { const x = (i * 97) % 256, y = (i * 193) % 512, v = 26 + (i * 31) % 60; g.fillStyle = `rgba(${v},${v * 0.72},${v * 0.55},0.75)`; g.fillRect(x, y, 3 + (i % 9), 30 + (i * 13) % 150); }
+    const bark = new THREE.CanvasTexture(c); bark.wrapS = bark.wrapT = THREE.RepeatWrapping; bark.repeat.set(3, 6); bark.colorSpace = THREE.SRGBColorSpace;
+    this.trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 1.05, 30, 20, 1), new THREE.MeshStandardMaterial({ map: bark, bumpMap: bark, bumpScale: 2, roughness: 0.95 }));
+    this.trunk.visible = false; this.trunk.castShadow = true;
+    this.wgroup.add(this.trunk);
     this.heat = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { uColor: { value: new THREE.Color(1, 0.5, 0.2) }, uA: { value: 1 } },
       vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vN = normalize(normalMatrix * normal); vec4 p = modelViewMatrix * vec4(position, 1.0); vV = normalize(-p.xyz); gl_Position = projectionMatrix * p; }`,
@@ -336,21 +351,64 @@ export class Montage {
   /** Everyone's landing spot, from the world as it was generated. */
   private layout(w: World) {
     const T = w.terrain, L = w.layout;
-    const at = (x: number, z: number, up = 0) => V(x, T.height(x, z) + up, z);
-    const land = (id: CrewId, p: THREE.Vector3, hours: number, impact: number, from: THREE.Vector3, wide: [THREE.Vector3, THREE.Vector3], close: [THREE.Vector3, THREE.Vector3]) => this.lands.push({ id, at: p, hours, impact, from: from.normalize(), wide, close });
-    const a = at(248, -214), m = at(-70, -125), b = at(46, 330), e = L.crewSpot.clone(), s = at(-120, -628), z = L.camp.clone();
-    land('strong', a, 21.8, 64, V(0.5, 1, 0.3), [a.clone().add(V(-46, 12, 34)), a.clone().add(V(0, 8, 0))], [a.clone().add(V(-3.2, 1.3, 2.4)), a.clone().add(V(0.4, 1.1, 0))]);
-    land('medic', m, 23.6, 72, V(-0.6, 1, -0.2), [m.clone().add(V(34, 7, 62)), m.clone().add(V(0, 7, 0))], [m.clone().add(V(4, 1.1, 8)), m.clone().add(V(0, 0.9, 1))]);
-    land('builder', b, 2.4, 80, V(0.7, 0.9, 0.4), [b.clone().add(V(-40, 9, -30)), b.clone().add(V(4, 3, 2))], [b.clone().add(V(-3.4, 1.0, -3.6)), b.clone().add(V(0, 1, 0))]);
-    land('explorer', e, 4.5, 88, V(-0.4, 1, 0.5), [e.clone().add(V(30, 10, -30)), e.clone().add(V(0, 3, 0))], [e.clone().add(V(2.1, 0.9, 2.3)), e.clone().add(V(0, 0.8, 0))]);
-    land('social', s, 5.6, 96, V(0.5, 0.9, -0.5), [s.clone().add(V(70, 18, 90)), s.clone().add(V(0, 6, 0))], [s.clone().add(V(1.1, 1.65, 2.7)), s.clone().add(V(0, 1.6, 0))]);
-    land('scientist', z, 6.9, 120, V(0.25, 1, -0.3), [z.clone().add(V(-5, 1.0, 12)), z.clone().add(V(4, 22, -12))], [z.clone().add(V(-9, 2.2, 10)), z.clone().add(V(0, 2, 0))]);
+    const at = (x: number, z: number) => V(x, T.height(x, z), z);
+    const above = (v: THREE.Vector3, m: number) => { v.y = Math.max(v.y, T.height(v.x, v.z) + m); return v; };
+    const slope = (x: number, z: number) => { const e = 2; return Math.hypot(T.height(x + e, z) - T.height(x - e, z), T.height(x, z + e) - T.height(x, z - e)) / (2 * e); };
+    /** Flattest, or highest, spot in a box. */
+    const find = (x0: number, x1: number, z0: number, z1: number, score: (x: number, z: number) => number) => {
+      let best = at((x0 + x1) / 2, (z0 + z1) / 2), top = -Infinity;
+      for (let x = x0; x <= x1; x += 6) for (let z = z0; z <= z1; z += 6) { const s = score(x, z); if (s > top) { top = s; best = at(x, z); } }
+      return best;
+    };
+    /** Comets cross the frame on a diagonal: straight down the lens they'd read as nothing. */
+    const across = (cam: THREE.Vector3, to: THREE.Vector3, side: number) => {
+      const f = to.clone().sub(cam).normalize(), r = f.clone().cross(V(0, 1, 0)).normalize();
+      return r.multiplyScalar(side * 0.85).add(V(0, 0.62, 0)).addScaledVector(f, -0.12).normalize();
+    };
+    const land = (id: CrewId, p: THREE.Vector3, hit: THREE.Vector3, hours: number, boost: number, side: number, wideCam: THREE.Vector3, closeCam: THREE.Vector3, closeTo: THREE.Vector3, yaw: number, dir = V(0, 0, 1)) => {
+      const to = hit.clone().add(V(0, 15, 0));
+      this.lands.push({ id, at: p, hit, hours, boost, from: across(wideCam, to, side), wide: [wideCam, to], close: [above(closeCam, 0.45), closeTo], yaw, dir });
+    };
+    const face = (from: THREE.Vector3, to: THREE.Vector3) => Math.atan2(to.x - from.x, to.z - from.z);
+
+    // Draxum: the biggest trunk in the north-east forest, shoulder to bark
+    const tp = find(210, 290, -250, -170, (x, z) => -slope(x, z) - (w.forest.blocks(x, z, 4) ? 10 : 0)), td = V(-0.6, 0, 0.8).normalize();
+    this.trunk.position.copy(tp).add(V(0, 14, 0)); this.trunk.visible = false;
+    const a = tp.clone().addScaledVector(td, 1.55); a.y = T.height(a.x, a.z);
+    const aSide = V(td.z, 0, -td.x);
+    land('strong', a, a.clone().addScaledVector(td, 6), 22.4, 1.15, 1, above(a.clone().addScaledVector(td, 62).add(V(20, 34, 0)), 30), a.clone().addScaledVector(aSide, 3.1).addScaledVector(td, 0.7).add(V(0, 0.9, 0)), a.clone().add(V(0, 1.25, 0)).addScaledVector(td, -0.5), face(a, tp));
+
+    // Lyrra: splashes down mid-lake, wades to the shore in front of us
+    const d = V(0.75, 0, 0.66).normalize(), c0 = V(LAKE.x, 0, LAKE.z);
+    let wade = 0, shore = 0;
+    for (let s = 0; s < 120; s += 0.5) { const h = T.height(c0.x + d.x * s, c0.z + d.z * s); if (!wade && h > -0.95) wade = s; if (h > 0.3) { shore = s; break; } }
+    const m = c0.clone().addScaledVector(d, wade), sh = c0.clone().addScaledVector(d, shore);
+    land('medic', m, c0.clone().addScaledVector(d, Math.max(4, wade - 16)), 0.9, 1.15, -1, above(sh.clone().addScaledVector(d, 10).add(V(0, 7, 0)), 5), sh.clone().add(V(0.6, 0.85, 0)), m.clone().addScaledVector(d, 2).add(V(0, 0.75, 0)), face(c0, sh), d);
+
+    // Bolzar: a flat rock in the southern hills
+    const b = find(10, 90, 290, 370, (x, z) => -slope(x, z) - Math.abs(T.height(x, z) - 30) * 0.002);
+    land('builder', b, b.clone(), 3.2, 1.2, 1, above(b.clone().add(V(-50, 30, -44)), 28), b.clone().add(V(-2.2, 1.05, -2.3)), b.clone().add(V(0, 0.75, 0)), face(b, V(b.x - 2.2, 0, b.z - 2.3)));
+
+    // Skyvra: against her pod, which is where the rescue finds her
+    const e = L.crewSpot.clone(), away = e.clone().sub(L.pod2).setY(0).normalize(), es = V(away.z, 0, -away.x);
+    land('explorer', e, L.pod2.clone(), 4.6, 1.2, -1, above(e.clone().addScaledVector(away, 60).add(V(0, 34, 0)), 30), e.clone().addScaledVector(away, 2.5).addScaledVector(es, 0.9).add(V(0, 0.75, 0)), e.clone().add(V(0, 0.6, 0)).addScaledVector(away, -0.3), face(e, e.clone().addScaledVector(away, 3)));
+
+    // Nuvexa: the highest ledge you could stand on, past the valley
+    const s = find(-240, -30, -670, -550, (x, z) => T.height(x, z) - (slope(x, z) > 0.75 ? 1000 : 0));
+    const out = V(-s.x, 0, -s.z).normalize();
+    land('social', s, s.clone(), 5.25, 1.25, 1, above(s.clone().addScaledVector(out, 120).add(V(30, 30, 0)), 20), s.clone().addScaledVector(out, 2.4).add(V(0.5, 1.5, 0)), s.clone().add(V(0, 1.45, 0)), face(s, s.clone().addScaledVector(out, 3)), out);
+
+    // The player: the clearing where the wake-up starts
+    const z = at(0, 2);
+    land('scientist', z, z.clone(), 5.8, 1.1, 1, z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(-3.6, 0.9, 4.4)), z.clone().add(V(0, 2.3, 0)), 0.35);
+    this.lands[5].wide = [z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(5, 24, -14))];
+    this.lands[5].from = V(0.18, 1, -0.4).normalize();
   }
 
   /** Compile the sequence's world materials while the game loads. */
   warm(w: World, draw: (scene: THREE.Scene, cam: THREE.PerspectiveCamera) => void) {
     this.buildWorldFx(w);
-    const shown = [this.scorch, this.ringFx, this.plate, this.heat];
+    const shown = [this.scorch, this.ringFx, this.plate, this.heat, this.trunk];
     shown.forEach((o) => (o.visible = true));
     [this.dust, this.smoke, this.fire, this.spray].forEach((b) => b.play(0.1));
     this.worldTrails[0].draw((s, o) => o.set(0, 40 + s * 30, 0), this.wcam, 1, 0);
@@ -412,7 +470,9 @@ export class Montage {
     this.setRig(null);
     const { dome } = this.set;
     dome.uniforms.uWarp.value = 0; dome.uniforms.uOther.value = 0; dome.uniforms.uBH.value = 0;
-    this.world()?.explorer && (this.world()!.explorer.root.visible = true);
+    const w = this.world();
+    if (w) { w.explorer.root.visible = true; w.grass.setClearings(w.clearings); }
+    this.extras().forEach((o) => (o.visible = true));
     const f = this.onDone; this.onDone = null;
     this.inWorld = false;
     f?.();
@@ -431,7 +491,7 @@ export class Montage {
   private clear() {
     for (const tr of [...this.trails, ...this.worldTrails]) tr.mesh.visible = false;
     this.embers.points.visible = false; this.debris.mesh.visible = false; this.shards.mesh.visible = false; this.crack.visible = false;
-    if (this.dust) { [this.dust, this.smoke, this.fire, this.spray].forEach((b) => (b.points.visible = false)); [this.scorch, this.ringFx, this.plate, this.heat].forEach((o) => (o.visible = false)); }
+    if (this.dust) { [this.dust, this.smoke, this.fire, this.spray].forEach((b) => (b.points.visible = false)); [this.scorch, this.ringFx, this.plate, this.heat, this.trunk].forEach((o) => (o.visible = false)); }
     for (const id of ORDER) if (this.cast[id]) { this.cast[id].root.visible = false; this.cast[id].setLimbs(null); this.cast[id].setFace(null); }
     this.seen.clear();
   }
@@ -505,7 +565,7 @@ export class Montage {
       { b: 20.4, fn: () => { this.ui.subtitle('cine.line8', 'crew.strong.name'); this.cast.strong.say(voice.duration('cine.line8') ?? 2); } },
       { b: 27.4, fn: () => this.ui.subtitle('op.21', 'crew.explorer.name') },
       { b: 31, fn: () => this.ui.subtitle(null) },
-      ...ORDER.slice(0, 5).map((id, i) => ({ b: beat.cards[i] + 1.5, fn: () => { this.ui.subtitle(`film.${id}`, `crew.${id}.name`); this.cast[id].say(voice.duration(`film.${id}`) ?? 1.4); } })),
+      ...ORDER.slice(0, 5).map((id, i) => ({ b: beat.cards[i] + 0.25, fn: () => { this.ui.subtitle(`film.${id}`, `crew.${id}.name`); this.cast[id].say(voice.duration(`film.${id}`) ?? 1.4); } })),
       ...ORDER.slice(0, 5).map((_, i) => ({ b: beat.impacts[i] + 7, fn: () => this.ui.subtitle(null) })),
       { b: 129.2, fn: () => this.ui.subtitle('film.scientist', 'crew.scientist.name') },
     );
@@ -525,6 +585,7 @@ export class Montage {
       this.hole(4, -3.5, -44);
       this.sun(V(0.4, -0.3, -1), 0xff9a50, 1.2);
       this.lens(V(0, 1.4, 120 - e * 8), V(0, 0.4, 0), 13, 110, 0);
+      this.fx = { exposure: 0.42 };
     }, () => { this.mend(); });
 
     P(8, 16, 'deep', (k, b) => {
@@ -548,6 +609,7 @@ export class Montage {
       this.hole(-3, -2, -30, 0.1);
       this.sun(V(0.1, 0.2, -1), 0xffa060, 4.5);
       this.lens(cam.add(shakeAt(b, 0.03 + k * 0.05, tmp)), V(0, 0, 1.5), 30, 15, 0.002, Math.sin(b * 0.5) * 0.02);
+      this.fx = { exposure: 0.8 };
     }, breakShip);
 
     const lift = (id: CrewId, i: number, k: number, b: number) => {
@@ -565,19 +627,20 @@ export class Montage {
       if (k > 0.45) this.shards.update((k - 0.45) * 4, tmp.set(0, 0.05, -1), 5, 4);
       else this.shards.mesh.visible = false;
       ORDER.forEach((id, n) => lift(id, n, smoothstep(0.25, 1, k), b));
-      i.alarmLight.intensity = 25 + 45 * after(b % 1, 0, 0.6);
-      i.mainLight.intensity = 2.5;
-      i.consoleLight.intensity = 3;
+      i.alarmLight.intensity = 6 + 14 * after(b % 1, 0, 0.6);
+      i.mainLight.intensity = 1.2;
+      i.consoleLight.intensity = 1.5;
       this.hole(-2, 6, -20, 0.1);
-      this.lens(V(-0.3 + k * 0.5, -1.7 + k * 0.5, 3.3).add(shakeAt(b, 0.012 + k * 0.03, tmp)), V(0, -0.7, -3), 58, 4.5, 0.004, -0.05 + k * 0.09);
-      this.fx = { flash: [after(k, 0.45, 0.1) * 0.5, after(k, 0.45, 0.1) * 0.5, after(k, 0.45, 0.1) * 0.6] };
+      this.lens(V(-0.3 + k * 0.5, -0.45, 3.7).add(shakeAt(b, 0.012 + k * 0.03, tmp)), V(0, -0.85, -3), 64, 4.5, 0.003, -0.05 + k * 0.09);
+      const fl = after(k, 0.45, 0.1) * 0.3;
+      this.fx = { flash: [fl, fl, fl * 1.2], exposure: 0.8 };
       void tt;
     }, () => set.show('interior'));
 
     P(20, 24, 'interior', (k, b) => {
       const i = set.interior;
-      i.alarmLight.intensity = 30 + 40 * after(b % 1, 0, 0.6);
-      i.mainLight.intensity = 2.5;
+      i.alarmLight.intensity = 8 + 14 * after(b % 1, 0, 0.6);
+      i.mainLight.intensity = 1.2;
       const p = V(-1.5, -1.0, -0.2);
       this.act('strong', p, new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.5, Math.PI * 0.86, 0.12)), 'float', {
         ...FALL.strong, armL: [0.55, 0.85, -0.2], foreL: [0.45, 0.9, -0.1], armR: wob([-0.3, 0.1, 1], b, 1, 0.05), foreR: [-0.2, 0.1, 1], openHands: true, hair: [0, 0.4, 1],
@@ -604,29 +667,32 @@ export class Montage {
           armL: wob([1, 0.32, 0.02], b, i, 0.03), armR: wob([-1, 0.32, 0.02], b, i + 1, 0.03), legL: [0.22, -1, 0.05], shinL: [0.15, -1, 0.3], legR: [-0.2, -1, 0], shinR: [-0.15, -1, 0.25], openHands: true, hair: [0, 0.2, 1],
         }, { fear: 0.5, frown: 0.5 });
       });
-      this.hole(1.5, -60, -1.5);
+      this.hole(1.2, -26, -1.2);
+      this.fx = { exposure: 0.7 };
       this.sun(V(0.2, -1, 0.1), 0xffb070, 3.5);
-      this.setRig([{ p: V(0, 5, 0), color: 0x9fc0ff, i: 40, d: 16 }]);
-      this.lens(V(0.3, 11 + e * 6, 0.4), V(0, 0, 0), 42, 12, 0, 0.3 + b * 0.008, down);
+      this.setRig([{ p: V(0, 4, 0), color: 0xc8d8ff, i: 70, d: 16 }]);
+      this.lens(V(0.3, 8.5 + e * 3.5, 0.4), V(0, 0, 0), 44, 10, 0, 0.3 + b * 0.008, down);
     }, () => set.show('deep'));
 
     // Two hands, a few centimetres short.
     P(28, 31, 'deep', (k, b) => {
       ship.group.visible = false;
-      const gap = 0.012 + k * k * 0.11;
-      const left = this.cast.explorer, right = this.cast.scientist;
-      const hl = this.handOf(left, 'L'), hr = this.handOf(right, 'R');
-      const bl = this.tmp.copy(left.root.position), br = this.tmp2.copy(right.root.position);
-      void hl; void hr;
-      this.act('explorer', V(-0.92 - gap, -1.45 - k * 0.02, 0), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -0.03)), 'float', { ...FALL.spread, armL: [1, 0.06, 0.02], foreL: [1, 0.02, 0.03], openHands: true }, FACE.explorer);
-      this.act('scientist', V(0.92 + gap, -1.42 + k * 0.02, 0), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, 0.03)), 'float', { ...FALL.spread, armR: [-1, 0.06, 0.02], foreR: [-1, 0.02, 0.03], openHands: true }, FACE.scientist);
-      void bl; void br;
-      const mid = V(0, 0, 0);
-      this.hole(0.3, 0.1, -18);
-      this.sun(V(0, 0.2, -1), 0xffa060, 5);
-      this.setRig([{ p: V(0.1, 0.5, 0.9), color: 0xbfd6ff, i: 3.5, d: 4 }, { p: V(-0.6, -0.3, -0.6), color: 0xff9a50, i: 3, d: 4 }]);
-      const focus = lerp(0.62, 0.5, k);
-      this.lens(V(lerp(-0.12, 0.1, k), 0.04, focus), mid, 26, focus, 0.02, -0.08);
+      const gap = 0.1 + k * k * 0.16;
+      const fit = (c: Character, side: 'L' | 'R', want: number, id: CrewId, o: THREE.Vector3, tilt: number) => {
+        // the arm's length differs per body: steer the body so the wrist lands on its mark
+        const w = this.handOf(c, side);
+        if (c.root.visible && this.seen.has(id)) o.set(o.x + want - w.x, o.y - w.y, o.z - w.z);
+        return this.act(id, o, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, tilt)), 'float', side === 'L'
+          ? { ...FALL.spread, armL: [1, 0.05, 0], foreL: [1, 0.02, 0], openHands: true } : { ...FALL.spread, armR: [-1, 0.05, 0], foreR: [-1, 0.02, 0], openHands: true }, FACE[id]);
+      };
+      fit(this.cast.explorer, 'L', -gap, 'explorer', this.markL, -0.03);
+      fit(this.cast.scientist, 'R', gap, 'scientist', this.markR, 0.03);
+      this.hole(0.5, 0.3, -30);
+      this.sun(V(0, 0.2, -1), 0xffa060, 3);
+      this.setRig([{ p: V(0.1, 0.5, 0.9), color: 0xbfd6ff, i: 3, d: 4 }, { p: V(-0.6, -0.3, -0.6), color: 0xff9a50, i: 2.5, d: 4 }]);
+      const dist = lerp(0.95, 0.82, k);
+      this.lens(V(lerp(-0.08, 0.08, k), 0.05, dist), V(0, 0, 0), 26, dist, 0.012, -0.06);
+      this.fx = { exposure: 0.5 };
     }, () => set.show('deep'));
 
     P(31, 32, 'deep', () => { ship.group.visible = false; this.hole(0, 0, -6000); this.lens(V(0, 0, 0), V(0, 0, -1), 40, 0, 0); this.fx = { flash: [-1, -1, -1] }; }, () => set.show('deep'));
@@ -645,7 +711,7 @@ export class Montage {
       });
       this.embers.set({ at: V(0, 0, 0), c0: 0xfff2d0, c1: 0xff8040, life: 2, speed: 40, drag: 1.2, grav: 0, size: 0.2, grow: 0.2, stagger: 0, squash: [1, 1, 0.3] }).play(tt);
       const f = after(b, 32, 1.1);
-      this.fx = { flash: [f * 1.2, f * 1.15, f * 1.1], zoom: 0.14 * (1 - k), lines: 0.8 * (1 - k) };
+      this.fx = { flash: [f * 1.2, f * 1.15, f * 1.1], zoom: 0.12 * (1 - k), lines: 0.8 * (1 - k), exposure: 0.7 };
     }, () => set.show('deep'));
 
     const fly = (from: number, to: number, id: CrewId, n: number, o: { cam: (k: number) => THREE.Vector3; aim?: THREE.Vector3; roll?: (k: number) => number; spin?: (b: number) => THREE.Euler; dir: THREE.Vector3; fov?: number }) => {
@@ -658,14 +724,14 @@ export class Montage {
         const cam = this.lens(o.cam(k).add(shakeAt(b, 0.012, this.tmp2)), o.aim ?? h, o.fov ?? 32, 3.2, 0.006, o.roll ? o.roll(k) : 0);
         const dir = o.dir, tr = this.trails[n];
         tr.color = col;
-        tr.draw((s, out) => { out.copy(h).addScaledVector(dir, -s * 34); out.x += Math.sin(s * 6 + b * 2) * s * 0.9; out.y += Math.cos(s * 5 + b * 2) * s * 0.9; }, cam, 0.55, b, 1.2);
+        tr.draw((s, out) => { out.copy(h).addScaledVector(dir, -s * 34); out.x += Math.sin(s * 6 + b * 2) * s * 0.9; out.y += Math.cos(s * 5 + b * 2) * s * 0.9; }, cam, 0.34, b, 0.7);
         this.embers.set({ at: h, c0: col, c1: col, life: 0.8, speed: 3, drag: 0.5, grav: 0, size: 0.03, grow: 0.5, stagger: 0.4, lift: [-dir.x * 18, -dir.y * 18, -dir.z * 18] }).play(0.4 + (b % 2) * BEAT);
         this.setRig([{ p: h.clone().addScaledVector(dir, -1.2).add(V(0.3, 0.6, 0)), color: col, i: 26, d: 7 }, { p: cam.position.clone().add(V(0.6, 1, 0)), color: 0xe8efff, i: 7, d: 8 }]);
         const u = set.dome.uniforms;
         u.uWarpDir.value.copy(dir).negate();
-        this.hole(30 * dir.x, 30 * dir.y, -60, 0.9);
+        this.hole(30 * dir.x, 30 * dir.y, -70, 0.5);
         const hit = after(b, from, 0.5);
-        this.fx = { zoom: 0.05 + hit * 0.06, flash: [hit * 0.4, hit * 0.4, hit * 0.4], lines: 0.5 };
+        this.fx = { zoom: 0.02 + hit * 0.05, flash: [hit * 0.25, hit * 0.25, hit * 0.25], lines: 0.15, exposure: 0.75 };
       }, () => set.show('deep'));
     };
     fly(36, 38, 'strong', 0, { dir: V(0.8, 0.1, -0.6).normalize(), cam: (k) => V(lerp(3.2, 2.2, k), 0.4, 3.4), roll: (k) => 0.3 - k * 0.5, spin: (b) => new THREE.Euler(-1.0, b * 0.55, 0.4) });
@@ -673,7 +739,7 @@ export class Montage {
     fly(40, 42, 'explorer', 2, { dir: V(0.2, -0.3, 0.92).normalize(), cam: (k) => V(0.8, 0.6, -3.1 - k * 0.8), spin: () => new THREE.Euler(0.8, Math.PI, 0.15) });
     fly(42, 44, 'builder', 3, { dir: V(-0.3, 0.2, 0.9).normalize(), cam: (k) => V(0.5, -0.5, lerp(5, 2.1, k)), spin: (b) => new THREE.Euler(-0.5, 0.2, 0.2 + b * 0.04) });
     fly(44, 46, 'social', 4, { dir: V(-0.95, -0.1, 0.25).normalize(), cam: (k) => V(0.3, 0.7, 3.2 - k * 0.7), roll: (k) => 0.35 - k * 0.3, spin: () => new THREE.Euler(-0.4, -0.5, 0.5) });
-    fly(46, 48, 'scientist', 5, { dir: V(0, 0.1, -1).normalize(), cam: (k) => V(0.15, 0.3, lerp(1.9, 3.8, k)), spin: () => new THREE.Euler(-0.15, 0, 0.08) });
+    fly(46, 48, 'scientist', 5, { dir: V(0, -0.1, 1).normalize(), cam: (k) => V(0.15, 0.3, lerp(1.9, 3.8, k)), spin: () => new THREE.Euler(-0.15, 0, 0.08) });
 
     P(48, 52, 'deep', (k, b) => {
       ship.group.visible = false;
@@ -682,13 +748,13 @@ export class Montage {
       this.trails.forEach((tr, i) => {
         tr.color = i === 5 ? this.playerGlow() : TRAIL[ORDER[i]];
         const ph = (i / 6) * 6.283;
-        tr.draw((s, o) => { const zz = z - 34 + s * 70, a = ph + zz * 0.09, r = 3.2 + Math.sin(zz * 0.05 + i) * 1.4; o.set(Math.cos(a) * r, Math.sin(a) * r, zz); }, cam, 0.5, b, 1.3);
+        tr.draw((s, o) => { const zz = z - 34 + s * 70, a = ph + zz * 0.09, r = 3.2 + Math.sin(zz * 0.05 + i) * 1.4; o.set(Math.cos(a) * r, Math.sin(a) * r, zz); }, cam, 0.3, b, 0.9);
       });
       const u = set.dome.uniforms;
       u.uWarpDir.value.set(0, 0, -1);
       this.hole(0, 0, -2600, 1.3, smoothstep(0, 1, k));
       set.dome.uniforms.uBH.value = 0;
-      this.fx = { zoom: 0.06 + k * 0.1, lines: 0.5 + k * 0.5 };
+      this.fx = { zoom: 0.04 + k * 0.08, lines: 0.3 + k * 0.5, exposure: 0.8 };
     }, () => set.show('deep'));
 
     const face = (from: number, to: number, id: CrewId) => P(from, to, 'deep', (k, b) => {
@@ -698,10 +764,10 @@ export class Montage {
       const push = 1 - k * 0.1;
       this.lens(h.clone().add(V(0.1, 0.07, 0.95 * push)), h.clone().add(V(0, 0.06, 0)), 30, 0.95, 0);
       const col = id === 'scientist' ? this.playerGlow() : TRAIL[id];
-      const u = set.dome.uniforms; u.uBH.value = 0; u.uOther.value = 1; u.uWarp.value = 1.4;
-      this.setRig([{ p: h.clone().add(V(0.7, 0.5, 0.9)), color: 0xffffff, i: 10, d: 5 }, { p: h.clone().add(V(-0.7, 0.2, -0.6)), color: col, i: 20, d: 5 }]);
-      const ink = 1 - smoothstep(0.55, 0.8, k);
-      this.fx = { ink, dark: new THREE.Color(col).multiplyScalar(0.12), light: new THREE.Color(col).lerp(new THREE.Color(1, 1, 1), 0.8), zoom: 0.02, lines: 0.6 * ink };
+      const u = set.dome.uniforms; u.uBH.value = 0; u.uOther.value = 1; u.uWarp.value = 0.4;
+      this.setRig([{ p: h.clone().add(V(0.7, 0.5, 0.9)), color: 0xffffff, i: 3, d: 5 }, { p: h.clone().add(V(-0.7, 0.2, -0.6)), color: col, i: 9, d: 5 }]);
+      const ink = 1 - smoothstep(0.3, 0.5, k);
+      this.fx = { ink, dark: new THREE.Color(col).multiplyScalar(0.12), light: new THREE.Color(col).lerp(new THREE.Color(1, 1, 1), 0.8), lines: 0.4 * ink, exposure: 0.8 };
     }, () => set.show('deep'));
     const fh = beat.faceHits;
     ORDER.forEach((id, i) => face(fh[i], fh[i + 1] ?? S.planet, id));
@@ -714,18 +780,19 @@ export class Montage {
         tr.color = i === 5 ? this.playerGlow() : TRAIL[ORDER[i]];
         const start = V(-420 + i * 90, 520 - i * 24, 380 - i * 40), end = V(-210 + i * 42 + Math.sin(i * 3) * 30, 90 + Math.cos(i * 2) * 40, 330 - i * 12);
         const head = smoothstep(0.1 + i * 0.05, 0.85 + i * 0.02, k);
-        tr.draw((s, o) => o.lerpVectors(start, end, Math.max(0, head - s * 0.32)), cam, 2 + head * 2, b, head > 0 ? 1.2 : 0);
+        tr.draw((s, o) => o.lerpVectors(start, end, Math.max(0, head - s * 0.32)), cam, 1.6 + head * 1.6, b, head > 0 ? 1.6 : 0);
       });
       const u = set.dome.uniforms;
       u.uBH.value = 0; u.uWarp.value = 0; u.uOther.value = 0; u.uNebula.value = 0.6;
-      this.fx = { flash: [after(b, 56, 0.6) * 0.5, after(b, 56, 0.6) * 0.5, after(b, 56, 0.6) * 0.55] };
+      const pf = after(b, 56, 0.6) * 0.4;
+      this.fx = { flash: [pf, pf, pf], exposure: 1 };
     }, () => set.show('home'));
 
     // ---- Act III: The Landing ----
     ORDER.slice(0, 5).forEach((id, i) => {
       const imp = beat.impacts[i], nextTo = imp + 6;
-      P(imp - 2, imp + 1, 'world', (k, b) => this.wide(id, b, imp), () => this.setLand(id));
-      P(imp + 1, nextTo, 'world', (k, b) => this.closeShot(id, k, b, imp));
+      P(imp - 2, imp + 1.5, 'world', (k, b) => this.wide(id, b, imp), () => this.setLand(id));
+      P(imp + 1.5, nextTo, 'world', (k, b) => this.closeShot(id, k, b, imp));
     });
 
     // ---- Act IV: The player comes down ----
@@ -745,38 +812,41 @@ export class Montage {
     const w = this.world();
     if (!w) return;
     const l = this.land(id), T = w.terrain;
-    this.hours = l.hours;
-    const size = id === 'medic' ? 0 : 15;
+    this.hours = l.hours; this.boost = l.boost; this.fog = id === 'social' || id === 'scientist' ? 0.3 : 0.75;
+    w.grass.setClearings([[l.at.x, l.at.z, 11], [l.hit.x, l.hit.z, 9]]);
+    const size = id === 'medic' ? 1 : 15;
     const pos = this.scorch.geometry.getAttribute('position') as THREE.BufferAttribute;
-    this.scorch.position.set(l.at.x, 0, l.at.z);
-    this.scorch.scale.set(size || 1, 1, size || 1);
-    for (let i = 0; i < pos.count; i++) pos.setY(i, T.height(l.at.x + pos.getX(i) * size, l.at.z + pos.getZ(i) * size) + 0.12);
+    const base = this.scorchXZ ??= Float32Array.from({ length: pos.count * 2 }, (_, i) => (i % 2 ? pos.getZ(i >> 1) : pos.getX(i >> 1)));
+    this.scorch.position.set(l.hit.x, 0, l.hit.z);
+    this.scorch.scale.set(size, 1, size);
+    for (let i = 0; i < pos.count; i++) pos.setY(i, T.height(l.hit.x + base[i * 2] * size, l.hit.z + base[i * 2 + 1] * size) + 0.12);
     pos.needsUpdate = true;
     (this.scorch.material as THREE.ShaderMaterial).uniforms.uColor.value.set(id === 'scientist' ? this.playerGlow() : TRAIL[id]);
   }
+  private scorchXZ: Float32Array | null = null;
 
   /** The comet comes in on a long lens; the hit lands exactly on the downbeat. */
   private wide(id: CrewId, b: number, imp: number) {
     const l = this.land(id), col = TRAIL[id];
     const k = b < imp ? clamp((b - (imp - 2)) / 2, 0, 1) : 1;
-    const head = this.tmp.copy(l.at).addScaledVector(l.from, 420 * (1 - k) * (1 - k * 0.25));
-    const sh = shakeAt(b, b >= imp ? 0.9 * after(b, imp, 1.2) : 0.05, this.tmp2);
-    const cam = this.lens(this.tmp3.copy(l.wide[0]).add(sh).clone(), l.wide[1], 34, 0, 0);
+    const head = this.tmp.copy(l.hit).addScaledVector(l.from, 170 * (1 - k));
+    const sh = shakeAt(b, b >= imp ? 0.7 * after(b, imp, 1.2) : 0.03, this.tmp2);
+    const cam = this.lens(this.tmp3.copy(l.wide[0]).add(sh).clone(), l.wide[1], 38, 0, 0);
     if (b < imp) {
       const tr = this.worldTrails[0]; tr.color = col;
       const h = head.clone();
-      tr.draw((s, o) => o.copy(h).addScaledVector(l.from, s * 240), cam, 5.5, b, 2);
+      tr.draw((s, o) => o.copy(h).addScaledVector(l.from, s * 170), cam, 2.6, b, 2.2);
     } else this.worldTrails[0].mesh.visible = false;
     this.impact(l, id, (b - imp) * BEAT, col);
-    const f = after(b, imp, 0.45);
+    const f = after(b, imp, 0.45) * 0.8;
     const c = new THREE.Color(col).lerp(new THREE.Color(1, 1, 1), 0.7);
-    this.fx = { flash: [c.r * f, c.g * f, c.b * f], zoom: 0.1 * after(b, imp, 0.6), ink: b >= imp && b < imp + 0.2 ? 1 : 0, dark: new THREE.Color(0x05060a), light: c };
+    this.fx = { flash: [c.r * f, c.g * f, c.b * f], zoom: 0.06 * after(b, imp, 0.6) };
   }
 
   /** Everything that happens at the point of impact, from `tt` seconds after it. */
   private impact(l: Landing, id: CrewId, tt: number, col: number) {
     const on = tt >= 0;
-    const at = l.at;
+    const at = l.hit;
     this.scorch.visible = on && id !== 'medic';
     if (id === 'medic') {
       this.spray.set({ at, c0: 0xe0f4ff, c1: 0x8fb0c8, life: 1.8, speed: 26, drag: 0.9, grav: 7, size: 0.5, grow: 2, stagger: 0.1, squash: [0.4, 1.6, 0.4], alpha: 0.85 }).play(on ? tt : -1);
@@ -786,16 +856,8 @@ export class Montage {
       this.smoke.set({ at, c0: 0x2e2a28, c1: 0x121214, life: 6, speed: 3, drag: 1, grav: 0, size: 1.6, grow: 3.2, stagger: 2.4, squash: [1, 0.5, 1], lift: [0.6, 3.4, 0.2], alpha: 0.55 }).play(on ? tt : -1);
     }
     this.fire.set({ at, c0: new THREE.Color(col).lerp(new THREE.Color(1, 1, 1), 0.4), c1: col, life: 1.2, speed: 30, drag: 1.4, grav: 5, size: 0.22, grow: 0.5, stagger: 0.1, squash: [1, 1.3, 1] }).play(on ? tt : -1);
-    this.ringFx.visible = on && tt < 0.8;
-    if (this.ringFx.visible) {
-      const k = tt / 0.8, r = 4 + (1 - Math.pow(1 - k, 3)) * 60;
-      this.ringFx.position.copy(at).add(this.tmp3.set(0, 1.2, 0));
-      this.ringFx.scale.set(r, 1, r);
-      const m = this.ringFx.material as THREE.ShaderMaterial;
-      m.uniforms.uColor.value.set(col); m.uniforms.uA.value = (1 - k) * (1 - k);
-    }
     const glow = on ? Math.exp(-tt * 1.1) : 0;
-    this.setRig([{ p: at.clone().add(this.tmp3.set(0, 4, 0)), color: col, i: 900 * glow + 60, d: 90 }]);
+    this.setRig([{ p: at.clone().add(this.tmp3.set(0, 4, 0)), color: col, i: 260 * glow + 14, d: 70 }]);
     this.focus.copy(at);
   }
 
@@ -803,44 +865,45 @@ export class Montage {
   private closeShot(id: CrewId, k: number, b: number, imp: number) {
     const l = this.land(id), col = TRAIL[id], tt = (b - imp) * BEAT;
     this.impact(l, id, tt, col);
-    const q = new THREE.Quaternion();
-    const yaw = (a: number) => q.setFromEuler(new THREE.Euler(0, a, 0)).clone();
-    const p = l.at.clone();
-    let cam = l.close[0].clone(), to = l.close[1].clone();
+    const q = (x: number, y: number) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, 0, 'YXZ'));
+    const p = l.at.clone(), yaw = l.yaw;
+    const cam = l.close[0].clone(), to = l.close[1].clone();
     const drift = easeInOut(k);
+    let fov = 34;
     switch (id) {
-      case 'strong': {
-        // arm-wrestling a tree, and losing
-        const c = this.act(id, p.clone().add(V(0, 0, 0)), yaw(0.95), 'float', { armL: [0.25, 0.28, 1], foreL: [0.2, 0.3, 1], armR: [-0.25, 0.42, 1], foreR: [-0.2, 0.32, 1], legL: [0.1, -1, 0.42], shinL: [0.1, -1, -0.1], legR: [-0.15, -1, -0.5], shinR: [-0.1, -1, -0.65], bend: 0.3, openHands: true }, { frown: 0.95, squint: 0.5, open: 0.1 });
-        void c;
-        this.plate.visible = false;
-        cam.lerp(this.tmp.copy(cam).add(V(0.5, 0, 0.3)), drift);
+      case 'strong':
+        this.trunk.visible = true;
+        // shoulder to the trunk, feet dug in. The tree has not noticed.
+        this.act(id, p, q(0.2, yaw), 'float', { armL: [0.28, 0.2, 1], foreL: [0.2, 0.4, 1], armR: [-0.28, 0.32, 1], foreR: [-0.2, 0.42, 1], legL: [0.12, -1, 0.3], shinL: [0.1, -1, -0.15], legR: [-0.14, -1, -0.5], shinR: [-0.1, -1, -0.75], bend: 0.25, openHands: true }, { frown: 0.95, squint: 0.5, open: 0.1 });
+        cam.add(V(0.25, 0, 0.2).multiplyScalar(drift));
         break;
-      }
       case 'medic': {
-        const z = 1.0 + (1 - drift) * -2.2;
-        const c = this.act(id, V(p.x, -0.98 + drift * 0.18, p.z + z + 3), yaw(0.15), 'walk', null, { smile: 0.05, squint: 0.15 });
-        void c;
-        to = V(p.x, 0.9, p.z + z + 3);
+        const w = this.world()!, s = lerp(-1.8, 1.0, drift), wx = p.x + l.dir.x * s, wz = p.z + l.dir.z * s;
+        this.act(id, V(wx, w.terrain.height(wx, wz), wz), q(0, yaw), 'walk', { armL: [0.55, -0.7, 0.1], armR: [-0.55, -0.7, 0.1] }, { smile: 0.05, squint: 0.15 });
+        to.set(wx, 1.0, wz); fov = 20;
         break;
       }
-      case 'builder': {
-        this.plate.visible = true; this.plate.position.copy(p).add(V(0, 0.3, 0)); this.plate.rotation.set(-0.1, 0.5, 0.14);
-        this.act(id, p.clone().add(V(0, 0.42, 0)), yaw(-2.3), 'sit', { armR: [-0.65, 0.45, 0.6], foreR: [-0.1, 1, 0.3] }, { smile: 0.55, frown: 0.3, squint: 0.2 });
+      case 'builder':
+        this.plate.visible = true; this.plate.position.copy(p).add(V(0, 0.16, 0)); this.plate.rotation.set(-0.06, yaw, 0.1);
+        this.act(id, p.clone().add(V(0, 0.2, 0)), q(0, yaw), 'sit', { armR: [-0.65, 0.4, 0.65], foreR: [-0.1, 1, 0.3] }, { smile: 0.55, frown: 0.3, squint: 0.2 });
         break;
-      }
-      case 'explorer': {
-        this.act(id, p, yaw(0.7), 'injured', null, { frown: 0.5, squint: 0.25 });
+      case 'explorer':
+        this.act(id, p, q(0, yaw), 'injured', null, { frown: 0.5, squint: 0.25 });
         break;
-      }
-      case 'social': {
-        this.act(id, p, yaw(0.3), 'selfie', null, { smile: 0.85 });
+      case 'social':
+        this.act(id, p, q(0, yaw), 'selfie', null, { smile: 0.85 });
+        fov = 30;
         break;
-      }
     }
-    this.lens(cam.add(shakeAt(b, 0.02 * after(b, imp + 1, 1.5), this.tmp2)), to, id === 'social' ? 32 : 36, cam.distanceTo(to), 0.012);
-    this.setRig([{ p: to.clone().add(V(1.6, 1.6, 2)), color: 0xffe8d0, i: 34, d: 12 }, { p: to.clone().add(V(-1.8, 0.8, -1.4)), color: col, i: 60, d: 12 }]);
-    this.card(id, (b - (imp + 2)) / 0.5);
+    const pos = cam.add(shakeAt(b, 0.012 * after(b, imp + 1, 1.5), this.tmp2)).clone();
+    this.lens(pos, to, fov, pos.distanceTo(to), 0.01);
+    const side = this.tmp3.copy(to).sub(pos).cross(V(0, 1, 0)).normalize().clone();
+    const back = to.clone().sub(pos).setY(0).normalize();
+    this.setRig([
+      { p: pos.clone().lerp(to, 0.45).addScaledVector(side, 1.2).add(V(0, 1.1, 0)), color: 0xffe8d0, i: 9, d: 10 },
+      { p: to.clone().addScaledVector(back, 1.3).addScaledVector(side, -1).add(V(0, 0.7, 0)), color: col, i: 7, d: 8 },
+    ]);
+    this.card(id, (b - (imp + 1.75)) / 0.5);
     if (b >= imp + 5.6) this.el.card.style.opacity = '0';
   }
 
@@ -852,7 +915,6 @@ export class Montage {
     const head = l.at.clone().addScaledVector(l.from, lerp(1500, 520, k * k));
     const tr = this.worldTrails[0]; tr.color = c;
     tr.draw((s, o) => o.copy(head).addScaledVector(l.from, s * 500), cam, 4 + k * 8, b, 2);
-    this.setRig(null);
     this.focus.copy(l.at);
   }
 
@@ -862,27 +924,25 @@ export class Montage {
     const u = (b - 108) / 12; // 0 at the first cut, 1 at the ground
     const alt = 480 * Math.pow(1 - u, 1.6) + 8;
     const p = l.at.clone().addScaledVector(l.from, alt);
-    const c = this.act('scientist', p, new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.45, 0.6, Math.sin(b * 0.4) * 0.25)), 'float', { ...FALL.scientist, armL: wob(FALL.scientist.armL!, b, 1, 0.08), armR: wob(FALL.scientist.armR!, b, 3, 0.08), hair: [0, 0, -1] }, { fear: 0.95, open: 0.65 });
+    const c = this.act('scientist', p, new THREE.Quaternion().setFromEuler(new THREE.Euler(1.3, 0.25, Math.sin(b * 0.4) * 0.2)), 'float', { ...FALL.scientist, armL: wob(FALL.scientist.armL!, b, 1, 0.08), armR: wob(FALL.scientist.armR!, b, 3, 0.08), hair: [0, 0, -1] }, { fear: 0.95, open: 0.65 });
     c.root.updateWorldMatrix(true, true);
     const chest = c.chest.getWorldPosition(this.tmp).clone(), hd = c.head.getWorldPosition(this.tmp2).clone();
     const sh = shakeAt(b, 0.03 + u * 0.12, this.tmp3).clone();
     let cam: THREE.PerspectiveCamera;
     if (n === 0) cam = this.lens(chest.clone().add(V(-2.2, 0.8, 3.1)).add(sh), chest, 30, 3.5, 0.004, 0.35);
     else if (n === 1) cam = this.lens(chest.clone().add(V(0.3, 2.8, -0.9)).add(sh), l.at, 54, 3, 0.002, b * 0.03);
-    else if (n === 2) cam = this.lens(hd.clone().add(V(0.5, -0.3, 1.1)).add(sh), hd, 32, 1.1, 0.008, -0.2);
-    else if (n === 3) cam = this.lens(hd.clone().add(V(0.2, 0.1, 0.55)).add(sh), hd, 26, 0.55, 0.008, 0.25);
+    else if (n === 2) cam = this.lens(hd.clone().add(V(0.35, -1.0, 0.5)).add(sh), hd, 32, 1.1, 0.008, -0.2);
+    else if (n === 3) cam = this.lens(hd.clone().add(V(0.12, -0.52, 0.28)).add(sh), hd, 26, 0.6, 0.008, 0.25);
     else cam = this.lens(chest.clone().add(V(0, -1.1, 0.2)).add(sh), l.at, 76, 0, 0, 0);
     const tr = this.worldTrails[0]; tr.color = col;
     const dir = l.from;
-    tr.draw((s, o) => o.copy(chest).addScaledVector(dir, s * 60), cam, 1.3, b, 1.5);
-    this.heat.visible = true; this.heat.position.copy(chest).addScaledVector(dir, -0.5); this.heat.scale.set(1.2, 1.2, 1.2);
-    (this.heat.material as THREE.ShaderMaterial).uniforms.uColor.value.set(col);
+    tr.draw((s, o) => o.copy(chest).addScaledVector(dir, 0.6 + s * 60), cam, 0.42, b, 0.7);
     this.fire.set({ at: chest, c0: 0xffffff, c1: col, life: 0.7, speed: 3, drag: 0.5, grav: -40, size: 0.05, grow: 0.5, stagger: 0.6 }).play(0.6 + (b % 1) * 0.3);
-    this.setRig([{ p: chest.clone().add(V(0, -2, 0.5)), color: col, i: 50, d: 8 }, { p: chest.clone().add(V(1.5, 1.5, 2)), color: 0xfff0e0, i: 16, d: 7 }]);
+    this.setRig([{ p: chest.clone().add(V(0, -2, 0.5)), color: col, i: 5, d: 8 }, { p: chest.clone().add(V(1.5, 1.5, 2)), color: 0xfff0e0, i: 4, d: 7 }]);
     this.card('scientist', n === 0 ? (b - 109) / 0.5 : 0);
     if (n > 0) this.el.card.style.opacity = '0';
-    const hit = after(b % 1, 0, 0.5) * (0.1 + u * 0.3);
-    this.fx = { zoom: 0.03 + u * 0.13, lines: u * 0.8, flash: [hit, hit, hit] };
+    const hit = after(b % 1, 0, 0.5) * (0.05 + u * 0.15) + (n === 4 ? k * k * 1.4 : 0);
+    this.fx = { zoom: 0.015 + u * 0.07, lines: u * 0.5, flash: [hit, hit, hit] };
     this.focus.copy(p);
   }
 
@@ -892,12 +952,12 @@ export class Montage {
     const tt = (b - S.hit) * BEAT;
     this.hours = l.hours;
     const e = easeInOut(clamp((b - S.hit) / 12, 0, 1));
-    this.lens(l.close[0].clone().lerp(this.tmp.copy(l.close[0]).add(V(2.2, 0.1, -2.6)), e), l.close[1], 44, 0, 0);
+    this.lens(l.close[0].clone().lerp(this.tmp.copy(l.close[0]).add(V(0.9, 0.05, -1.1)), e), l.close[1], 40, 0, 0);
     this.impact(l, 'scientist', tt + 0.3, col);
-    this.ringFx.visible = false;
     // head first, up to the waist, legs in the morning air
     const yaw = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI - 0.22, 0.5, 0.12));
     this.act('scientist', l.at.clone().add(V(0, 1.02, 0)), yaw, 'float', { armL: [1, -0.1, 0], armR: [-1, -0.1, 0], legL: [0.32, -1, 0.1], shinL: [0.42, -1, -0.25], legR: [-0.22, -1, 0.1], shinR: [-0.5, -1, 0.15] }, { blink: 0.9 });
+    this.setRig([{ p: l.at.clone().add(V(-2.4, 3, 3)), color: 0xffd8b0, i: 16, d: 12 }]);
     const f = after(b, S.hit, 1.6);
     const out = smoothstep(S.end - 1.5, S.end, b);
     this.fx = { flash: [f * 1.4 - out, f * 1.4 - out, f * 1.4 - out] };
@@ -924,12 +984,14 @@ export class Montage {
     if (shot && shot !== this.cur) {
       const wasWorld = this.inWorld;
       this.clear();
+      this.card(null, 0);
       this.cur = shot;
       this.inWorld = shot.where === 'world';
       if (this.inWorld && !wasWorld) {
         const w = this.world()!;
         for (const id of ORDER) w.scene.add(this.cast[id].root);
         w.explorer.root.visible = false;
+        this.extras().forEach((o) => (o.visible = false));
         this.view(w.scene, this.wcam, true);
       } else if (!this.inWorld && wasWorld) {
         for (const id of ORDER) this.group.add(this.cast[id].root);
@@ -944,7 +1006,10 @@ export class Montage {
     for (const id of this.seen) {
       const c = this.cast[id];
       c.root.updateMatrixWorld();
-      c.animate(this.poses[id] ?? 'float', 0, 0, this.time, dt);
+      const pose = this.poses[id] ?? 'float';
+      // a cut is a cut: the body is already in its pose, it doesn't blend there on camera
+      if (this.posed[id] !== pose) { this.posed[id] = pose; c.animate(pose, 0, 0, this.time, 1.2); }
+      c.animate(pose, 0, 0, this.time, dt);
     }
     this.set.tick(dt);
     if (shot && this.inWorld) this.set.camera.updateMatrixWorld();

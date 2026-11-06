@@ -37,7 +37,7 @@ export class Cinematic {
   private interior = createInterior(matchMedia('(pointer: coarse)').matches ? 0.6 : 1);
   private mars = createPlanet(60, 'mars', this.sunDir);
   private giant = createPlanet(260, 'giant', this.sunDir);
-  private home = createPlanet(400, 'home', V(0.72, 0.3, 0.62).normalize());
+  private home = createPlanet(400, 'home', V(0.86, 0.22, -0.46).normalize());
   private giantRing: THREE.Mesh;
   private sunLight = new THREE.DirectionalLight(0xfff2e0, 3.2);
   private cues: Cue[] = [];

@@ -76,9 +76,9 @@ const FinalShader = {
       if (uLines > 0.0) {
         // speed lines: thin rays that come and go, heavier towards the edges
         float ang = atan(d.y, d.x * 1.78);
-        float ray = fract(sin(floor(ang * 70.0) * 12.9898 + floor(uTime * 24.0) * 4.1) * 43758.5453);
-        float ln = step(1.0 - 0.28 * uLines, ray) * smoothstep(0.12, 0.42, sqrt(r2) * (0.8 + ray * 0.5));
-        col = mix(col, vec3(1.0), ln * 0.55);
+        float ray = fract(sin(floor(ang * 240.0) * 12.9898 + floor(uTime * 24.0) * 4.1) * 43758.5453);
+        float ln = step(1.0 - 0.1 * uLines, ray) * smoothstep(0.3, 0.62, sqrt(r2) * (0.75 + ray * 0.45));
+        col = mix(col, vec3(1.0), ln * 0.3);
       }
       if (uInk > 0.0) {
         // impact frame: two flat tones for a few frames on the big hits
@@ -589,7 +589,7 @@ export class Renderer {
   }
 
   /** Title-sequence lens: zoom blur (with its centre), additive flash, two-tone ink, speed lines. */
-  setFilm(f: { zoom?: number; at?: [number, number]; flash?: [number, number, number]; ink?: number; dark?: THREE.Color; light?: THREE.Color; lines?: number } = {}) {
+  setFilm(f: { zoom?: number; at?: [number, number]; flash?: [number, number, number]; ink?: number; dark?: THREE.Color; light?: THREE.Color; lines?: number; exposure?: number } = {}) {
     const u = this.final.uniforms;
     u.uZoom.value = f.zoom ?? 0;
     u.uZoomAt.value.set(...(f.at ?? [0.5, 0.5]));
@@ -598,6 +598,7 @@ export class Renderer {
     if (f.dark) u.uInkDark.value.set(f.dark.r, f.dark.g, f.dark.b);
     if (f.light) u.uInkLight.value.set(f.light.r, f.light.g, f.light.b);
     u.uLines.value = f.lines ?? 0;
+    if (f.exposure !== undefined) this.renderer.toneMappingExposure = f.exposure;
   }
 
   resize() {

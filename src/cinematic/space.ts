@@ -334,15 +334,15 @@ export function createPlanet(radius: number, kind: 'mars' | 'giant' | 'home', su
           float hill = fbm3(n * 11.0);
           albedo = mix(vec3(0.01, 0.06, 0.1), mix(vec3(0.06, 0.16, 0.09), vec3(0.3, 0.26, 0.2), smoothstep(0.5, 0.72, hill)), land);
           float cloud = smoothstep(0.5, 0.74, fbm3(n * 3.6 + vec3(uTime * 0.01, 0.0, 0.0)) + 0.25 * fbm3(n * 13.0));
-          albedo = mix(albedo, vec3(0.88, 0.9, 0.95), cloud * 0.9);
+          albedo = mix(albedo, vec3(0.62, 0.65, 0.7), cloud * 0.85);
           vec3 Nn = normalize(vWN);
           float dd = dot(Nn, uSun);
           // night side: the forests glow faintly, as they do from the ground
-          vec3 glow = vec3(0.1, 0.55, 0.5) * land * (1.0 - cloud) * smoothstep(0.5, 0.75, fbm3(n * 24.0)) * smoothstep(0.1, -0.2, dd);
+          vec3 glow = vec3(0.02, 0.1, 0.095) * land * (1.0 - cloud) * smoothstep(0.45, 0.8, fbm3(n * 34.0)) * smoothstep(0.1, -0.2, dd);
           vec3 Vv = normalize(cameraPosition - vWP);
           float rim = pow(1.0 - max(dot(Nn, Vv), 0.0), 3.5);
           float lit = smoothstep(-0.12, 0.5, dd);
-          vec3 c = albedo * lit * 1.5 + glow * 1.6 + vec3(0.25, 0.55, 1.2) * rim * smoothstep(-0.25, 0.3, dd) * 1.4 + vec3(1.1, 0.45, 0.2) * rim * smoothstep(0.25, 0.0, abs(dd)) * 0.9;
+          vec3 c = albedo * lit * 1.1 + glow * 0.8 + vec3(0.25, 0.55, 1.2) * rim * smoothstep(-0.25, 0.3, dd) * 1.4 + vec3(1.1, 0.45, 0.2) * rim * smoothstep(0.25, 0.0, abs(dd)) * 0.9;
           gl_FragColor = vec4(c, 1.0);
           return;
         } else {

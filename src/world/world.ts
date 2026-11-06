@@ -32,6 +32,7 @@ export class World {
   items!: ReturnType<typeof createItems>;
   creature!: ReturnType<typeof createCreature>;
   layout!: StoryLayout;
+  clearings: [number, number, number][] = [];
   /** Show finished Chapter Two work around the fire. */
   setCampWork: (done: string[]) => void = () => {};
   pod2!: ReturnType<typeof createPod>;
@@ -97,12 +98,13 @@ export class World {
     this.explorer.setGround((x, z) => this.terrain.height(x, z));
     this.explorer.root.position.copy(L.crewSpot);
     s.add(this.explorer.root);
-    this.grass.setClearings([
+    this.clearings = [
       [L.camp.x - 1.2, L.camp.z + 1.2, 6.5],
       [L.beacon.x, L.beacon.z, 2.2],
       [L.crewSpot.x, L.crewSpot.z, 2.5],
       [L.pod2.x, L.pod2.z, 4],
-    ]);
+    ];
+    this.grass.setClearings(this.clearings);
     this.hound = createHound();
     s.add(this.hound.root);
     this.creature = createCreature(this.terrain, (p) => this.onCreatureStep(p));
