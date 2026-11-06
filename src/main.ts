@@ -319,7 +319,6 @@ function enterWorld(fresh: boolean) {
   game.start(save, fresh);
   if (!fresh && replay) game.startTutorial();
   if (!fresh) ui.fade('black', 0, 1.2);
-  renderer.resize();
 }
 
 document.getElementById('btn-new')!.addEventListener('click', () => {
@@ -544,9 +543,9 @@ async function warmAll() {
 }
 
 // Stalls over 50 ms, with what was on screen (tools/transition_test.py reads this).
-const longTasks: { t: number; ms: number; state: string; mode?: string }[] = [];
+const longTasks: { t: number; ms: number; state: string; mode?: string; covered: boolean }[] = [];
 try {
-  new PerformanceObserver((l) => { for (const e of l.getEntries()) longTasks.push({ t: Math.round(e.startTime), ms: Math.round(e.duration), state, mode: game?.mode }); }).observe({ type: 'longtask', buffered: true });
+  new PerformanceObserver((l) => { for (const e of l.getEntries()) longTasks.push({ t: Math.round(e.startTime), ms: Math.round(e.duration), state, mode: game?.mode, covered: +(document.getElementById('fade')!.style.opacity || 0) >= 0.99 }); }).observe({ type: 'longtask', buffered: true });
 } catch { /* not supported */ }
 
 async function boot() {

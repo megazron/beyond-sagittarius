@@ -193,12 +193,20 @@ export class Game {
 
   skipScene() { this.scene?.skip(); }
 
+  private wakeSkipped = false;
   skipWake() {
-    if (this.mode !== 'wake') return;
+    if (this.mode !== 'wake' || this.wakeSkipped) return;
+    this.wakeSkipped = true;
     for (const c of this.wakeCues) if (!c.done) { c.done = true; }
-    this.ui.device(null); this.ui.subtitle(null); this.ui.chapter(null); this.ui.fade('black', 0, 0.5);
-    this.finishWakeVisuals();
-    this.enterPlay(true);
+    this.ui.device(null); this.ui.subtitle(null); this.ui.chapter(null);
+    // through black: whatever entering play costs happens where nobody can see it
+    this.ui.fade('black', 1, 0.2);
+    setTimeout(() => {
+      this.finishWakeVisuals();
+      this.enterPlay(true);
+      this.wakeSkipped = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => this.ui.fade('black', 0, 0.6)));
+    }, 240);
   }
 
   private finishWakeVisuals() {

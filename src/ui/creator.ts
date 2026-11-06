@@ -36,7 +36,11 @@ export class CreatorStage {
     window.addEventListener('pointerup', () => { drag = false; });
   }
 
+  private key = '';
   rebuild(look: PlayerLook) {
+    const k = JSON.stringify({ ...look, name: '' });
+    if (k === this.key) return; // opening the screen with the same look costs nothing
+    this.key = k;
     if (this.fig) this.scene.remove(this.fig.root);
     this.fig = createCharacter('scientist', this.detail, look);
     this.scene.add(this.fig.root);

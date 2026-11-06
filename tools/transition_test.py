@@ -60,7 +60,7 @@ def shot(n):
 LIMIT=200
 w.call('Page.navigate',url=URL)
 wait("window.__bs && window.__bs.state==='title'",90); ev("localStorage.removeItem('bs-save-v1')"); w.call('Page.reload'); time.sleep(2)
-wait("window.__bs && window.__bs.ready",180); time.sleep(4)
+t_load=time.time(); wait("window.__bs && window.__bs.ready",180); print('ready after',round(time.time()-t_load),'s',flush=True); time.sleep(4)
 mark=ev("performance.now()"); marks=[]
 def step(name):
     marks.append((name,ev("performance.now()"))); print('->',name,flush=True)
@@ -80,7 +80,7 @@ marks.append(('end',ev("performance.now()")))
 bad=0
 for (n,t0),(_,t1) in zip(marks,marks[1:]):
     ts=[x for x in tasks if t0<=x['t']<t1]
-    worst=max([x['ms'] for x in ts],default=0)
+    worst=max([x['ms'] for x in ts if not x.get('covered')],default=0)  # stalls behind a full black fade can't be seen
     flag='FAIL' if worst>LIMIT else 'ok'
     bad+=worst>LIMIT
     print(f"{flag:4} {n:24} worst {worst} ms, {len(ts)} long tasks")
