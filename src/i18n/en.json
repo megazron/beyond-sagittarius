@@ -536,5 +536,18 @@
   "npc.cameo.name": "Drexon",
   "npc.cameo.role": "Business casual",
   "action.trade": "Trade with {name}",
-  "action.give": "Give {name} a stone"
+  "action.give": "Give {name} a stone",
+  "legal.title": "Legal",
+  "legal.template": "These pages are templates and have not been reviewed by a lawyer.",
+  "legal.termsH": "Terms of use",
+  "legal.terms": "BEYOND SAGITTARIUS is a free game by megazron. Play it and share links to it for personal use. Don't resell it or publish modified copies without permission. It comes with no warranty: it may have bugs, change or go offline, and saves can be lost. To the extent the law allows, megazron is not liable for loss or damage from using it.",
+  "legal.privacyH": "Privacy",
+  "legal.privacy": "No accounts, adverts, analytics or tracking of our own. Your save, settings and character stay in local storage on your device. The web version is served by GitHub Pages, and fonts load from Google Fonts in the browser and the desktop app, so those services see your IP address and browser details.",
+  "legal.safetyH": "Safety and age",
+  "legal.safety": "Do not try this at home. The science is simplified for a game and is not instructions. Made for a general teen audience: comic horror, peril and mild creature violence. Younger players should play with a parent or guardian.",
+  "legal.parodyH": "Fiction and parody",
+  "legal.parody": "Characters and events are made up. Names such as Lamazon are invented parodies used for humour. No real company is involved or endorses this game.",
+  "legal.licencesH": "Licences and credits",
+  "legal.licences": "Game code, art and story: all rights reserved, megazron. Built with three.js (MIT). Textures, models and the HDRI are CC0 from Poly Haven. Voices are synthetic. The full list with every licence is in CREDITS.md on GitHub.",
+  "legal.readFull": "Full texts on GitHub"
 }

@@ -289,10 +289,11 @@ document.getElementById('btn-new')!.addEventListener('click', () => {
   if (loadSave()) ui.openConfirm(t('menu.newGameConfirm'), chooseNames, () => {});
   else chooseNames();
 });
+document.getElementById('btn-legal')!.addEventListener('click', () => { audio.uiClick(); ui.openLegal(() => {}); });
 document.getElementById('btn-continue')!.addEventListener('click', () => { audio.uiClick(); continueGame(); });
 document.getElementById('btn-settings')!.addEventListener('click', () => {
   audio.start(); audio.uiClick();
-  ui.openSettings(settings, quality.name, persistSettings, changeQuality, refreshTitle, () => { settings.replayTutorial = true; persistSettings(); }, () => openSkins(refreshTitle));
+  ui.openSettings(settings, quality.name, persistSettings, changeQuality, refreshTitle, () => { settings.replayTutorial = true; persistSettings(); }, () => openSkins(refreshTitle), () => ui.openLegal(refreshTitle));
 });
 document.querySelectorAll<HTMLButtonElement>('.btn.lang').forEach((b) => b.addEventListener('click', () => {
   audio.uiClick();
@@ -329,7 +330,7 @@ function openPause() {
   input.releasePointer();
   ui.openPause({
     resume: resume,
-    settings: () => ui.openSettings(settings, quality.name, persistSettings, changeQuality, () => openPauseAgain(), () => { resume(); game.startTutorial(); }),
+    settings: () => ui.openSettings(settings, quality.name, persistSettings, changeQuality, () => openPauseAgain(), () => { resume(); game.startTutorial(); }, undefined, () => ui.openLegal(() => openPauseAgain())),
     objectives: () => ui.openObjectives(game.save.level, game.save.completed, () => openPauseAgain()),
     crew: () => openCrewPanel(() => openPauseAgain()),
     look: () => openCreator(ui, game.save.player ?? defaultLook(), 'edit', detail(), (look) => {

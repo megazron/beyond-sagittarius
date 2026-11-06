@@ -277,7 +277,7 @@ export class UI implements CineUI {
   }
   modalOpen() { return !$('modal').classList.contains('hidden'); }
 
-  openSettings(s: Settings, quality: QualityName, onChange: (s: Settings) => void, onQuality: (q: QualityName) => void, onClose: () => void, onTutorial?: () => void, onSkins?: () => void) {
+  openSettings(s: Settings, quality: QualityName, onChange: (s: Settings) => void, onQuality: (q: QualityName) => void, onClose: () => void, onTutorial?: () => void, onSkins?: () => void, onLegal?: () => void) {
     const seg = (name: string, opts: [string, string][], cur: string) =>
       `<div class="seg" data-seg="${name}">${opts.map(([v, l]) => `<button data-v="${v}" class="${v === cur ? 'active' : ''}">${escapeHtml(l)}</button>`).join('')}</div>`;
     const onOff = (name: string, v: boolean) => seg(name, [['1', t('settings.on')], ['0', t('settings.off')]], v ? '1' : '0');
@@ -298,8 +298,10 @@ export class UI implements CineUI {
       <div class="row"><label>${escapeHtml(t('settings.fps'))}</label>${onOff('showFps', s.showFps)}</div>
       ${onTutorial ? `<div class="row"><label>${escapeHtml(t('settings.tutorial'))}</label><button class="btn small" id="set-tut">${escapeHtml(t('settings.tutorialReplay'))}</button></div>` : ''}
       ${onSkins ? `<div class="row"><label>${escapeHtml(t('menu.skins'))}</label><button class="btn small" id="set-skins">${escapeHtml(t('menu.skins'))}</button></div>` : ''}
+      ${onLegal ? `<div class="row"><label>${escapeHtml(t('legal.title'))}</label><button class="btn small" id="set-legal">${escapeHtml(t('legal.title'))}</button></div>` : ''}
       <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.back'))}</button></div>`);
     const card = $('modal-card');
+    if (onLegal) $('set-legal').addEventListener('click', () => { audio.uiClick(); onLegal(); });
     if (onSkins) $('set-skins').addEventListener('click', () => { audio.uiClick(); onSkins(); });
     if (onTutorial) $('set-tut').addEventListener('click', () => { audio.uiClick(); const b = $('set-tut'); b.textContent = t('settings.tutorialQueued'); (b as HTMLButtonElement).disabled = true; onTutorial(); });
     card.querySelectorAll<HTMLElement>('.seg').forEach((g) => {
@@ -393,6 +395,17 @@ export class UI implements CineUI {
     void portraits().then((p) => document.querySelectorAll<HTMLImageElement>('img[data-portrait]').forEach((im) => { const u = p[im.dataset.portrait!]; if (u) im.src = u; }));
     $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
     if (onRename) $('m-rename').addEventListener('click', () => { audio.uiClick(); onRename(); });
+  }
+
+  /** Terms, privacy, safety, parody note and licences. */
+  openLegal(onClose: () => void) {
+    const sec = (k: string) => `<h3>${escapeHtml(t(`legal.${k}H`))}</h3><p>${escapeHtml(t(`legal.${k}`))}</p>`;
+    this.openModal(`<h2>${escapeHtml(t('legal.title'))}</h2><div class="legal">
+      <p class="note">${escapeHtml(t('legal.template'))}</p>
+      ${['terms', 'privacy', 'safety', 'parody', 'licences'].map(sec).join('')}
+      <p><a href="https://github.com/megazron/beyond-sagittarius#readme" target="_blank" rel="noopener">${escapeHtml(t('legal.readFull'))}</a></p></div>
+      <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.back'))}</button></div>`);
+    $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });
   }
 
   /** Plain modal shell for other UI modules. */
