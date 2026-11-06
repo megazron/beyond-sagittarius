@@ -78,6 +78,44 @@
     "ref": "scientist_f",
     "pace": 1.03
    }
+  },
+  "trader": {
+   "role": "fast-talking shopkeeper, male",
+   "all": {
+    "ref": "trader",
+    "pace": 1.08
+   }
+  },
+  "local": {
+   "role": "slow, odd, alien-sounding female",
+   "all": {
+    "ref": "local",
+    "pace": 0.92,
+    "pitch": 1.5,
+    "fx": "aphaser=in_gain=0.9:out_gain=0.9:delay=2:decay=0.3:speed=0.4"
+   }
+  },
+  "hermit": {
+   "role": "old, dry, knowing",
+   "all": {
+    "ref": "hermit",
+    "pace": 0.92,
+    "pitch": -1
+   }
+  },
+  "traveller": {
+   "role": "weary complaining tourist",
+   "all": {
+    "ref": "traveller",
+    "pace": 0.97
+   }
+  },
+  "cameo": {
+   "role": "deadpan, flat, calm male in a suit. Fully synthetic: no reference from any real person",
+   "all": {
+    "ref": "cameo",
+    "pace": 0.97
+   }
   }
  }
 }

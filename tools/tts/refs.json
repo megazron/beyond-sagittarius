@@ -123,6 +123,68 @@
       },
       "g2p": "h",
       "speed": 1.12
+    },
+    "trader_en": {
+      "voice": "am_eric",
+      "g2p": "a",
+      "speed": 1.18
+    },
+    "local_en": {
+      "voice": "af_kore",
+      "g2p": "a",
+      "speed": 0.82
+    },
+    "hermit_en": {
+      "voice": "bm_lewis",
+      "g2p": "b",
+      "speed": 0.85
+    },
+    "traveller_en": {
+      "voice": "bm_daniel",
+      "g2p": "b",
+      "speed": 0.95
+    },
+    "cameo_en": {
+      "voice": "am_echo",
+      "g2p": "a",
+      "speed": 0.95
+    },
+    "trader_hi": {
+      "voice": {
+        "hm_psi": 0.3,
+        "hm_omega": 0.7
+      },
+      "g2p": "h",
+      "speed": 1.18
+    },
+    "local_hi": {
+      "voice": {
+        "hf_beta": 0.7,
+        "hf_alpha": 0.3
+      },
+      "g2p": "h",
+      "speed": 0.82
+    },
+    "hermit_hi": {
+      "voice": {
+        "hm_psi": 0.7,
+        "hm_omega": 0.3
+      },
+      "g2p": "h",
+      "speed": 0.82
+    },
+    "traveller_hi": {
+      "voice": {
+        "hm_omega": 0.5,
+        "hm_psi": 0.5
+      },
+      "g2p": "h",
+      "speed": 0.95
+    },
+    "cameo_hi": {
+      "voice": "hm_omega",
+      "g2p": "h",
+      "speed": 0.92
     }
   }
 }
