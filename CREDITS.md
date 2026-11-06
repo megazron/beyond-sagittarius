@@ -11,6 +11,8 @@ product name is a made-up parody.
 | Library | Use | Licence |
 | --- | --- | --- |
 | [three.js](https://threejs.org) (r187) incl. `examples/jsm` post-processing (EffectComposer, UnrealBloomPass, GTAOPass, OutputPass, ShaderPass, HDRLoader) and `BufferGeometryUtils` | Rendering | MIT |
+| [Electron](https://www.electronjs.org) (includes Chromium; its notices ship as `LICENSES.chromium.html` in the download) | Desktop build runtime | MIT |
+| [electron-builder](https://www.electron.build) | Desktop packaging (dev only) | MIT |
 | [Vite](https://vitejs.dev) | Build tool (dev only) | MIT |
 | [TypeScript](https://www.typescriptlang.org) | Language (dev only) | Apache-2.0 |
 

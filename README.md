@@ -129,6 +129,33 @@ reads your choices back to you, and he is rude about them.
 | I or Tab | Inventory |
 | Touch | Joystick on the left, drag anywhere else to look, pinch to zoom, buttons for the rest |
 
+## Download for Windows
+
+The downloadable build is the same game in its own window with the highest
+graphics preset and the extra assets the browser version does not load:
+
+**[Download the latest Windows build](https://github.com/megazron/beyond-sagittarius/releases/latest)**
+
+- `BeyondSagittarius-<version>-win-x64-setup.exe`: installer, per-user, no admin rights needed.
+- `BeyondSagittarius-<version>-win-x64.zip`: no install; unzip and run `Beyond Sagittarius.exe`.
+
+The build is **unsigned**, so Windows SmartScreen shows "Windows protected your
+PC". Choose **More info**, then **Run anyway**. F11 toggles fullscreen; quit from
+the title screen or with Alt+F4. Saves stay in `%APPDATA%\\Beyond Sagittarius`
+and survive updates. Windows 10 or 11, x64.
+
+To build it yourself, see `electron/` and `.github/workflows/desktop.yml`:
+
+```bash
+npm ci && npm run build
+cd electron && npm ci
+npm start                 # run against dist/
+npm run dist:win          # installer + zip in electron/release/ (works from Linux too)
+```
+
+`npm run smoke:desktop` boots the app under Xvfb and drives it over CDP. Pushing
+a `desktop-v*` tag builds on `windows-latest` and attaches the files to a Release.
+
 ## Quality presets
 
 A third preset, **Mobile**, is picked automatically on phones: 512 textures, no HDRI download, no ambient occlusion, sparse grass and canopy, 300 m view.

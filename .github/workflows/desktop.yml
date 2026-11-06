@@ -1,0 +1,99 @@
+name: Desktop build
+
+on:
+  push:
+    tags: ['desktop-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create or update, e.g. desktop-v0.2.1 (empty = workflow artifact only)
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            electron/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build the game
+        run: |
+          npm ci
+          npm run build
+
+      # Large files live only in Releases, never in git. Writes into desktop-assets/.
+      - name: Fetch desktop assets
+        run: |
+          mkdir -p desktop-assets
+          if grep -q -- '--desktop' tools/fetch_assets.py; then
+            pip install pillow numpy
+            python tools/fetch_assets.py --desktop
+          else
+            echo "::notice::tools/fetch_assets.py has no --desktop yet, building without HD assets"
+          fi
+          du -sh desktop-assets
+
+      # NSIS cannot hold more than 2 GB and a Release asset is capped at 2 GiB,
+      # so oversized assets ship as a separate split zip unpacked next to the .exe.
+      - name: Split oversized assets
+        run: |
+          size=$(du -sm desktop-assets | cut -f1)
+          if [ "$size" -gt 1500 ]; then
+            mkdir -p extra-assets
+            mv desktop-assets extra-assets/assets
+            mkdir desktop-assets
+            (cd extra-assets && 7z a -tzip -v1900m ../electron/release-assets.zip assets)
+          fi
+
+      - name: Package
+        working-directory: electron
+        run: |
+          npm ci
+          if [ -n "$TAG" ]; then npm version --no-git-tag-version --allow-same-version "${TAG#desktop-v}"; fi
+          npm run dist:win
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: beyond-sagittarius-windows
+          retention-days: 7
+          compression-level: 0
+          path: |
+            electron/release/*.exe
+            electron/release/*.zip
+
+      - name: Publish release
+        if: env.TAG != ''
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
+            --title "Beyond Sagittarius Desktop ${TAG#desktop-v}" \
+            --target "$GITHUB_SHA" \
+            --notes "Windows x64 build. Unsigned: SmartScreen will warn, choose More info, then Run anyway. See the README section Download for Windows."
+          gh release upload "$TAG" --clobber electron/release/*.exe electron/release/*.zip
+          for part in electron/release-assets.zip*; do
+            [ -e "$part" ] && gh release upload "$TAG" --clobber "$part"
+          done
+          gh release view "$TAG"

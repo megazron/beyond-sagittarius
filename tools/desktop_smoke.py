@@ -98,11 +98,15 @@ def main():
             assert r["missing"][0] == 404 and r["traversal"][0] in (403, 404), r
             assert r["assetsOrigin"][0] == 404, r
 
-            # Reaches the game proper: cinematic start with audio and textures loading.
+            # Name screen, then the opening: voices and textures load over app:// here.
             page.evaluate("localStorage.setItem('bs-desktop-smoke', '1')")
             page.click("#btn-new")
-            time.sleep(3)
-            page.screenshot(path=str(out / "desktop-after-new-game.png"))
+            page.get_by_role("button", name="Begin").click()
+            page.wait_for_selector("#title", state="hidden", timeout=60_000)
+            time.sleep(8)
+            page.screenshot(path=str(out / "desktop-opening.png"))
+            state = page.evaluate("window.__bs && window.__bs.state ? String(window.__bs.state()) : 'n/a'")
+            print("state after Begin:", state)
 
             # Quit through the title's own path, then check saves outlive the process.
             page.evaluate("window.location.reload()")

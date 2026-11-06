@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "dist:win": "electron-builder --win --x64 --publish never",
-    "dist:win-dir": "electron-builder --win dir --x64 --publish never -c.win.signAndEditExecutable=false",
+    "dist:win-dir": "electron-builder --win dir --x64 --publish never",
     "dist:linux-dir": "electron-builder --linux dir --x64 --publish never"
   },
   "build": {
@@ -53,16 +53,15 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "artifactName": "BeyondSagittarius-${version}-win-x64.${ext}",
+      "signExecutable": false
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "artifactName": "BeyondSagittarius-${version}-win-x64-setup.${ext}"
-    },
-    "zip": {
-      "artifactName": "BeyondSagittarius-${version}-win-x64.${ext}"
     },
     "linux": {
       "target": "dir",
