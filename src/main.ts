@@ -21,7 +21,7 @@ import { MenuNav } from './ui/nav';
 import { Wheel } from './ui/wheel';
 import { drawMap, MapPin } from './ui/map';
 import type { MenuTab } from './ui/ui';
-import { setPortraitCast } from './ui/portraits';
+import { setPortraitCast, setPortraitRenderer } from './ui/portraits';
 import { preloadCrew } from './characters/character';
 import { setTextureWarmer } from './core/assets';
 import { defaultLook, PlayerLook, CrewSkins } from './characters/custom';
@@ -533,6 +533,7 @@ try {
 
 async function boot() {
   setTextureWarmer((t) => renderer.renderer.initTexture(t));
+  setPortraitRenderer(renderer.renderer);
   ui.show('loading', false);
   showTitle();
   requestAnimationFrame(frame);

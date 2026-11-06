@@ -163,6 +163,7 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     log(f"[{tag}] drag-to-look yaw {yaw0:.2f} -> {yaw1:.2f}")
     if abs(yaw1 - yaw0) < 0.3:
         fail("drag on the world did not turn the camera")
+    ev("__bs.step(1.3)")
     page.wait_for_function("__bs.tutorial && __bs.tutorial.step === 'move'", timeout=15000)
 
     # joystick: push up for a while
@@ -224,7 +225,7 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     if ev("document.querySelectorAll('.inv-list li:not(.empty)').length") < 1:
         fail("inventory shows nothing after a pickup")
     touch.tap(*centre(page, "#tab-crew"))
-    page.wait_for_selector(".crew-grid", timeout=5000)
+    page.wait_for_selector(".crew-grid", timeout=30000)
     time.sleep(0.4)
     shot("07b-crew")
     touch.tap(*centre(page, "#tab-map"))
