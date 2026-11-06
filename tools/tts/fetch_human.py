@@ -11,38 +11,39 @@ import json
 import shutil
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 OUT = ROOT / 'public' / 'audio' / 'sfx' / 'human'
 FFMPEG = shutil.which('ffmpeg') or str(Path.home() / '.local' / 'bin' / 'ffmpeg')
-# Freesound id, author, {sound: [(start, end), ...]}
+# Freesound id, author, preview URL, {sound: [(start, end), ...]}
 SOURCES = [
-    (434550, 'TheCurlyOne', {'gasp': [(0, 0.47)]}),
-    (489917, 'falcospizaetus', {'gasp': [(0.6, 0.98), (3.06, 3.5)]}),
-    (803168, 'salemaudio', {'grunt': [(0, 0.5), (1.6, 1.95)], 'land': [(4.2, 4.58), (7.3, 7.7), (8.6, 9.05)]}),
-    (667697, 'EvilOldScratch', {'grunt': [(0, 0.75)]}),
-    (327838, 'milnersouza', {'yelp': [(1.35, 1.92), (3.72, 4.3), (5.7, 6.46)]}),
-    (745726, 'JD_Brick_Productions', {'scream': [(1.5, 2.38), (2.88, 3.7), (4.32, 5.95)]}),
-    (698876, 'filippys', {'scream': [(0.38, 2.9)]}),
-    (547906, 'abrmy', {'breath': [(0, 3.4)]}),
-    (808406, 'crackedlilith', {'breath': [(1.42, 3.04)]}),
-    (683654, 'B.Harkins', {'laugh': [(0, 1.98), (3.05, 3.85)]}),
-    (678668, 'mglennsound', {'laugh': [(0, 1.05)]}),
-    (867051, 'IENBA', {'crowd': [(0.5, 6.5)]}),
-    (763993, 'ShangusBurger', {'crowd': [(0.95, 2.7)]}),
+    (434550, 'TheCurlyOne', 'https://cdn.freesound.org/previews/434/434550_8482864-hq.mp3', {'gasp': [(0, 0.47)]}),
+    (489917, 'falcospizaetus', 'https://cdn.freesound.org/previews/489/489917_10570192-hq.mp3', {'gasp': [(0.6, 0.98), (3.06, 3.5)]}),
+    (803168, 'salemaudio', 'https://cdn.freesound.org/previews/803/803168_17274093-hq.mp3', {'grunt': [(0, 0.5), (1.6, 1.95)], 'land': [(4.2, 4.58), (7.3, 7.7), (8.6, 9.05)]}),
+    (667697, 'EvilOldScratch', 'https://cdn.freesound.org/previews/667/667697_14597423-hq.mp3', {'grunt': [(0, 0.75)]}),
+    (327838, 'milnersouza', 'https://cdn.freesound.org/previews/327/327838_2314212-hq.mp3', {'yelp': [(1.35, 1.92), (3.72, 4.3), (5.7, 6.46)]}),
+    (745726, 'JD_Brick_Productions', 'https://cdn.freesound.org/previews/745/745726_6832358-hq.mp3', {'scream': [(1.5, 2.38), (2.88, 3.7), (4.32, 5.95)]}),
+    (698876, 'filippys', 'https://cdn.freesound.org/previews/698/698876_14267594-hq.mp3', {'scream': [(0.38, 2.9)]}),
+    (547906, 'abrmy', 'https://cdn.freesound.org/previews/547/547906_4920550-hq.mp3', {'breath': [(0, 3.4)]}),
+    (808406, 'crackedlilith', 'https://cdn.freesound.org/previews/808/808406_17284634-hq.mp3', {'breath': [(1.42, 3.04)]}),
+    (683654, 'B.Harkins', 'https://cdn.freesound.org/previews/683/683654_14665352-hq.mp3', {'laugh': [(0, 1.98), (3.05, 3.85)]}),
+    (678668, 'mglennsound', 'https://cdn.freesound.org/previews/678/678668_14787385-hq.mp3', {'laugh': [(0, 1.05)]}),
+    (867051, 'IENBA', 'https://cdn.freesound.org/previews/867/867051_9616576-hq.mp3', {'crowd': [(0.5, 6.5)]}),
+    (763993, 'ShangusBurger', 'https://cdn.freesound.org/previews/763/763993_11744683-hq.mp3', {'crowd': [(0.95, 2.7)]}),
 ]
 
 
 def main():
     raw = Path(sys.argv[1])
-    cand = {int(c['id']): c for c in json.loads((raw / 'candidates.json').read_text())}
+    raw.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
     index = {}
-    for sid, author, cuts in SOURCES:
-        c = cand[sid]
-        assert c['author'] == author and c['licence'] == ['creativecommons.org/publicdomain/zero/1.0'], c
-        src = raw / f"{c['cat']}_{sid}.mp3"
+    for sid, author, url, cuts in SOURCES:
+        src = raw / f'{sid}.mp3'
+        if not src.exists():
+            urllib.request.urlretrieve(url, src)
         for name, spans in cuts.items():
             for a, b in spans:
                 n = len(index.setdefault(name, [])) + 1
