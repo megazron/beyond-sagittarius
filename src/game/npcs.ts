@@ -51,6 +51,7 @@ export class Npcs {
     const at = (x: number, z: number) => new THREE.Vector3(x, T.height(x, z), z);
     const add = (id: NpcId, fig: Character, home: THREE.Vector3, roam: number) => {
       fig.root.position.copy(home);
+      fig.setGround((x, z) => T.height(x, z));
       this.world.scene.add(fig.root);
       this.list.push({ id, fig, home, pos: home.clone(), target: home.clone(), yaw: 0, phase: 0, speed: 0, wait: 1 + Math.random() * 3, roam, pose: 'idle', greeted: false });
     };
