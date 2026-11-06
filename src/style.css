@@ -423,3 +423,10 @@ body.flashback canvas#c { filter: sepia(0.42) saturate(0.82) contrast(1.04) brig
   .swatches button { width: 34px; height: 34px; }
 }
 @media (max-height: 520px) and (orientation: landscape) { .cc-view canvas { height: 62vh; } .creator { grid-template-columns: 34% 1fr; } }
+
+.link-btn { background: none; border: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; padding: 4px; }
+.legal { font-size: 14px; line-height: 1.55; color: #cfe0e7; }
+.legal h3 { font-family: var(--font-display); font-size: 15px; margin: 14px 0 4px; color: #fff; }
+.legal p { margin: 0 0 8px; }
+.legal a { color: var(--cyan); }
+body.lang-ur .legal { line-height: 2.1; }
