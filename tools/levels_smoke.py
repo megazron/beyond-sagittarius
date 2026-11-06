@@ -156,7 +156,7 @@ def main():
         page.evaluate("localStorage.removeItem('bs-save-v1')")
         page.wait_for_function("window.__bs && window.__bs.state === 'title'", timeout=60000)
         page.wait_for_function("window.__bs.ready", timeout=240000)
-        shot = lambda name: page.screenshot(path=str(shots / f"{args.quality}-{name}.jpg"), type="jpeg", quality=84)
+        shot = lambda name: page.screenshot(path=str(shots / f"{args.quality}-{name}.jpg"), type="jpeg", quality=84, timeout=120000)
         ev = page.evaluate
 
         def close_menus():
@@ -593,7 +593,8 @@ def main():
             page.keyboard.press("KeyK")
             page.wait_for_selector(".cx-ages", timeout=5000)
             ev("document.querySelector('.cx-node[data-id=glass]').scrollIntoView({block: 'center'})")
-            page.click(".cx-node[data-id=glass]")
+            ev("document.querySelector('.cx-node[data-id=glass]').scrollIntoView({block: 'center'})")
+            ev("document.querySelector('.cx-node[data-id=glass]').click()")
             time.sleep(1)
             shot(f"24-codex-{lang}")
             ctext = page.inner_text("#modal-card")
