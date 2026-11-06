@@ -157,7 +157,7 @@ export class Vault {
     const rim2 = new THREE.SpotLight(0x8fb4ff, 60, 26, 0.5, 0.8); rim2.position.set(-6, 4, 1.5); rim2.target.position.set(0, 1.9, 0); s.add(rim2, rim2.target);
     s.add(new THREE.HemisphereLight(0x5a668f, 0x241410, 1.9));
     // soft front fill so his face and coat read even in the wide shots
-    const fill = new THREE.SpotLight(0xffe9d2, 190, 14, 0.34, 0.9); fill.position.set(0.9, 3.0, 4.6); fill.target.position.set(0, 2.1, 0); s.add(fill, fill.target);
+    const fill = new THREE.SpotLight(0xffe9d2, 135, 14, 0.34, 0.9); fill.position.set(0.9, 3.0, 4.6); fill.target.position.set(0, 2.1, 0); s.add(fill, fill.target);
     this.halo.position.set(0, 2.5, -0.2); s.add(this.halo);
 
     this.host = createCharacter('megazron', this.detail);

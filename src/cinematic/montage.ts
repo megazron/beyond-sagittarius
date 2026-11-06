@@ -955,8 +955,8 @@ export class Montage {
     this.lens(l.close[0].clone().lerp(this.tmp.copy(l.close[0]).add(V(0.9, 0.05, -1.1)), e), l.close[1], 40, 0, 0);
     this.impact(l, 'scientist', tt + 0.3, col);
     // head first, up to the waist, legs in the morning air
-    const yaw = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI - 0.22, 0.5, 0.12));
-    this.act('scientist', l.at.clone().add(V(0, 1.55, 0)), yaw, 'float', { armL: [1, -0.1, 0], armR: [-1, -0.1, 0], legL: [0.2, -1, 0.05], shinL: [0.3, -1, -0.2], legR: [-0.16, -1, 0.06], shinR: [-0.4, -1, 0.1] }, { blink: 0.9 });
+    const yaw = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI - 0.3, 0.75, 0.16));
+    this.act('scientist', l.at.clone().add(V(0, 1.55, 0)), yaw, 'float', { armL: [1, -0.1, 0], armR: [-1, -0.1, 0], legL: [0.5, -1, 0.1], shinL: [0.6, -1, -0.25], legR: [-0.45, -1, 0.06], shinR: [-0.7, -1, 0.2] }, { blink: 0.9 });
     this.boost = 1.5;
     this.setRig([{ p: l.at.clone().add(V(-2.4, 3, 3)), color: 0xffd8b0, i: 30, d: 14 }, { p: l.at.clone().add(V(2.5, 2, -2)), color: 0xff9a70, i: 14, d: 10 }]);
     const f = after(b, S.hit, 1.6);

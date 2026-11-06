@@ -35,7 +35,7 @@ export function deckScene(a: Cast, origin: THREE.Vector3): Beat[] {
     { key: 'j.3', who: 'builder', shot: () => cover.close(a.builder, -0.4) },
     { key: 'op.9', who: 'social', shot: () => cover.close(a.social, -0.4) },
     { key: 'j.1', who: 'social', shot: () => cover.mid(a.social, 0.4, 1.7) },
-    { key: 'op.10', who: 'strong', shot: master, faces: { strong: 'social', social: 'strong' } },
+    { key: 'op.10', who: 'strong', shot: () => cover.mid(a.strong, 0.45, 2.4), faces: { strong: 'social', social: 'strong' } },
     { key: 'j.9', who: 'strong', shot: () => cover.mid(a.strong, -0.4, 2.1) },
     { key: 'j.2', who: 'medic', shot: () => cover.close(a.medic, 0.35, 1.05), after: 0.5 },
     { key: 'op.11', who: 'scientist', shot: () => cover.close(a.scientist, -0.45), faces: { scientist: 'strong' } },
@@ -46,7 +46,7 @@ export function deckScene(a: Cast, origin: THREE.Vector3): Beat[] {
     { key: 'op.16', who: 'medic', shot: () => cover.close(a.medic, 0.45, 1), poses: { scientist: 'stand' }, after: 0.8 },
     // the turn: hold on the window with nobody talking
     { hold: 1.6, shot: () => ({ from: o(0.3, -0.9, 3.4), to: o(0, -0.7, -3), push: 0.14 }) },
-    { key: 'op.17', who: 'explorer', shot: () => cover.close(a.explorer, 0.3, 1.2), poses: { explorer: 'point' }, faces: {}, after: 0.5 },
+    { key: 'op.17', who: 'explorer', shot: () => cover.close(a.explorer, 0.3, 1.2), faces: {}, after: 0.5 },
     { key: 'op.18', who: 'builder', shot: () => cover.mid(a.builder, -0.4, 1.8), poses: { explorer: 'stand' } },
   ];
 }
@@ -63,7 +63,7 @@ export function fightScene(a: Cast, origin: THREE.Vector3): Beat[] {
     { key: 'fb.6', who: 'strong', shot: () => cover.close(a.strong, 0.5, 1.1), after: 0.5 },
     { hold: 1.2, shot: () => cover.close(a.scientist, -0.2, 0.9) },
     { key: 'fb.7', who: 'scientist', shot: () => cover.close(a.scientist, -0.2, 0.85), after: 0.5 },
-    { key: 'fb.8', who: 'explorer', shot: () => cover.two(a.explorer, a.scientist, 3), poses: { explorer: 'point' }, faces: { explorer: 'strong' } },
+    { key: 'fb.8', who: 'explorer', shot: () => cover.mid(a.explorer, 0.4, 2.1), faces: { explorer: 'strong' } },
     { key: 'fb.9', who: 'builder', shot: () => cover.mid(a.builder, 0.3, 1.8), poses: { explorer: 'stand' }, after: 0.6 },
   ];
 }

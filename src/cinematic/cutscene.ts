@@ -98,7 +98,7 @@ export function addCutsceneRig(scene: THREE.Scene) {
   rig.add(new THREE.PointLight(0xfff0e0, 0, 7, 1.6), new THREE.PointLight(0xc4d6ff, 0, 7, 1.6), new THREE.PointLight(0xffd8b0, 0, 6, 1.6));
   scene.add(rig);
 }
-const RIG = [3.4, 1.4, 3.2];
+const RIG = [2.6, 1.3, 3];
 const rigFor = (scene: THREE.Scene) => scene.getObjectByName('cutscene-rig') as THREE.Group;
 
 /** How each spoken shot framed its speaker (tests read this). */
@@ -143,16 +143,17 @@ export class Cutscene {
     for (const id in this.ctx.actors) {
       const o = this.ctx.actors[id as CrewId];
       if (!o || o === a || !o.root.visible) continue;
-      for (const part of [o.head, o.chest]) {
+      for (const [part, r] of [[o.head, 0.55], [o.chest, 0.36]] as [THREE.Object3D, number][]) {
         const p = part.getWorldPosition(new THREE.Vector3());
         seg.closestPointToPoint(p, true, near);
-        // a shoulder at the edge of frame is coverage; a body across the lens is a mistake
-        if (near.distanceTo(p) < 0.34) cost += 10;
+        // a shoulder at the edge of frame is coverage; a body across the lens is a mistake. Heads count hair.
+        if (near.distanceTo(p) < r) cost += 10;
       }
     }
     const to = cam.clone().sub(h).setY(0).normalize();
     const facing = to.dot(yawDir(a));
     if (facing < 0.2) cost += (0.2 - facing) * 6;
+    if (facing < -0.1) cost += 40; // the back of a speaker's head is the worst shot there is
     if (this.ctx.cameraOk && !this.ctx.cameraOk(cam)) cost += 20;
     return cost;
   }
@@ -175,7 +176,8 @@ export class Cutscene {
     const cam = this.ctx.camera, s = this.shot;
     if (!a || !s) return;
     const h = headOf(a);
-    if (this.fresh) this.clearShot(a, h, s);
+    // only coverage built on the speaker can swing: a set-up aimed at something else stays put
+    if (this.fresh && s.track) this.clearShot(a, h, s);
     this.fresh = false;
     const look = () => { cam.position.copy(s.from); cam.up.set(0, 1, 0); cam.lookAt(s.to); cam.updateMatrixWorld(); return P.copy(h).project(cam); };
     let q = look(), fixed = false;
@@ -184,9 +186,18 @@ export class Cutscene {
     const d = s.from.clone().sub(h).setY(0).normalize(), r = new THREE.Vector3(d.z, 0, -d.x), up = new THREE.Vector3(0, 1, 0);
     const [k, f, b] = this.rig.children;
     this.rig.children.forEach((l, i) => ((l as THREE.PointLight).intensity = RIG[i]));
-    k.position.copy(h).addScaledVector(d, 1.2).addScaledVector(r, 0.8).addScaledVector(up, 0.5);
+    k.position.copy(h).addScaledVector(d, 1.2).addScaledVector(r, 0.8).addScaledVector(up, 0.9);
     f.position.copy(h).addScaledVector(d, 1.3).addScaledVector(r, -1.1).addScaledVector(up, -0.1);
     b.position.copy(h).addScaledVector(d, -1.1).addScaledVector(r, -0.5).addScaledVector(up, 0.7);
+    // a lamp beside a listener would burn them out: ease it off as they get close
+    for (const l of this.rig.children as THREE.PointLight[]) {
+      for (const id in this.ctx.actors) {
+        const o = this.ctx.actors[id as CrewId];
+        if (!o || o === a || !o.root.visible) continue;
+        const dist = l.position.distanceTo(o.chest.getWorldPosition(P));
+        if (dist < 1.5) l.intensity *= Math.max(0.15, (dist / 1.5) ** 2);
+      }
+    }
   }
 
   /** Test hook: go straight to the next beat. */
@@ -223,8 +234,19 @@ export class Cutscene {
       if (who && who !== 'megazron') actors[who]?.say(dur);
     } else subtitle(null);
     this.left = dur + (b.after ?? 0.28);
-    if (b.shot) { this.shot = b.shot(); this.shotT = 0; this.shotLen = Math.max(this.left, 6); }
+    if (b.shot) {
+      // a cut hides the turn: whoever was going to face someone already has
+      for (const id in this.faces) {
+        const x = actors[id as CrewId], y = actors[this.faces[id as CrewId]!];
+        if (!x || !y) continue;
+        x.root.rotation.y = Math.atan2(y.root.position.x - x.root.position.x, y.root.position.z - x.root.position.z);
+        x.root.updateMatrixWorld(true);
+      }
+      this.shot = b.shot(); this.shotT = 0; this.shotLen = Math.max(this.left, 6); this.fresh = true;
+    }
     this.frame(who, key);
+    const sh = this.shot;
+    if (b.shot && sh) { this.aim.copy(sh.to); if (sh.track) this.trackOff.copy(sh.to).sub(headOf(sh.track)); }
     if (br && (b.choice || b.qte)) {
       this.waiting = true;
       const done = () => { this.waiting = false; this.left = 0; };
