@@ -134,6 +134,8 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     time.sleep(3)
     shot("03-cinematic")
     touch.tap(*centre(page, "#btn-skip"))
+    page.wait_for_function("window.__bs.state === 'film'", timeout=20000)
+    touch.tap(*centre(page, "#btn-skip"))  # the title sequence skips on its own tap
     page.wait_for_function("window.__bs.state === 'game' && window.__bs.mode === 'wake'", timeout=60000)
     time.sleep(1.5)
     touch.tap(*centre(page, "#btn-skip"))  # skip the wake-up by tapping

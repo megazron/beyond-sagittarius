@@ -28,12 +28,13 @@ import { defaultLook, PlayerLook, CrewSkins } from './characters/custom';
 import { voice } from './core/voice';
 import { frameReport } from './cinematic/cutscene';
 import { Vault, vaultScript } from './narrator/vault';
+import { Montage } from './cinematic/montage';
 import { onLangChange } from './i18n';
 import { fitFov, lockViewport, tryFullscreen } from './core/viewport';
 import { TECH, AGES } from './game/tech/data';
 import { techState } from './game/tech/tech';
 
-type State = 'loading' | 'title' | 'cinematic' | 'game' | 'narrator' | 'flashback';
+type State = 'loading' | 'title' | 'cinematic' | 'game' | 'narrator' | 'film' | 'flashback';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 lockViewport();
@@ -87,6 +88,7 @@ const syncDevice = () => {
 input.onDevice(syncDevice);
 syncDevice();
 const cine = new Cinematic(ui);
+const film = new Montage(cine, () => (worldReady ? world : null), (sc, cam, ao) => renderer.setScene(sc, cam, ao), () => pendingLook.glow, ui);
 const vault = new Vault((k, sp) => ui.subtitle(k, sp), quality.name === 'mobile' ? 0.6 : 1);
 const world = new World(quality);
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2400);
@@ -291,10 +293,18 @@ function startNewGame(look: PlayerLook = defaultLook()) {
     ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden');
     renderer.setScene(cine.scene, cine.camera, false);
-    cine.start(() => {
-      ui.fade('black', 1, 0.3);
-      setTimeout(() => whenWorldReady(() => enterWorld(true)), 350);
-    });
+    cine.start(() => playFilm());
+  });
+}
+
+/** The title sequence, then the wake-up. */
+function playFilm() {
+  state = 'film';
+  ui.fade('black', 0, 0);
+  ui.subtitle(null);
+  void film.play(() => {
+    ui.fade('black', 1, 0.2);
+    setTimeout(() => whenWorldReady(() => enterWorld(true)), 240);
   });
 }
 
@@ -349,6 +359,7 @@ document.getElementById('btn-skip')!.addEventListener('click', () => {
 });
 function skipCurrent() {
   if (state === 'cinematic' || state === 'flashback') cine.skip();
+  else if (state === 'film') film.skip();
   else if (state === 'narrator') vault.skip();
   else if (state === 'game' && game?.mode === 'wake') game.skipWake();
   else if (state === 'game' && game?.mode === 'scene') game.skipScene();
@@ -424,7 +435,7 @@ document.addEventListener('pointerlockchange', () => {
 });
 input.onPadLost(() => { if (input.device === 'pad') openPause(); });
 
-const inScene = () => state === 'cinematic' || state === 'narrator' || state === 'flashback' || (state === 'game' && (game.mode === 'wake' || game.mode === 'scene'));
+const inScene = () => state === 'cinematic' || state === 'film' || state === 'narrator' || state === 'flashback' || (state === 'game' && (game.mode === 'wake' || game.mode === 'scene'));
 
 window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement)?.tagName === 'INPUT' && (e.target as HTMLInputElement).type !== 'range') return; // typing a name
@@ -471,10 +482,22 @@ let elapsed = 0;
 let fpsAcc = 0, fpsFrames = 0, fpsLast = performance.now();
 
 let frameCount = 0;
+/** Test hook: frames only move when asked, by a fixed step, so a slow GPU sees the same film. */
+const hold = { on: false, pending: 0, done: 0 };
 function frame() {
   requestAnimationFrame(frame);
   frameCount++;
-  let dt = Math.min(clock.getDelta(), 0.05);
+  const real = Math.min(clock.getDelta(), 0.05);
+  if (!hold.on) { tick(real); draw(real); return; }
+  if (hold.pending <= 0) return;
+  for (let left = hold.pending; left > 1e-6; left -= 1 / 30) tick(Math.min(left, 1 / 30));
+  hold.pending = 0;
+  draw(1 / 30);
+  hold.done++;
+}
+
+function tick(step: number) {
+  let dt = step;
   elapsed += dt;
   input.poll(dt);
   nav.update();
@@ -489,6 +512,9 @@ function frame() {
     cine.idle(dt);
   } else if (state === 'cinematic' || state === 'flashback') {
     cine.update(dt);
+  } else if (state === 'film') {
+    film.update(dt);
+    if (film.inWorld) world.update(dt, elapsed, film.hours, film.focus, film.wcam, renderer.renderer);
   } else if (state === 'narrator') {
     vault.update(dt);
   } else if (state === 'game') {
@@ -501,8 +527,11 @@ function frame() {
     world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer);
   }
   if (stage.active) stage.update(dt);
+}
+
+function draw(dt: number) {
   // portrait screens: widen the vertical FOV so the horizontal view stays usable
-  const activeCam = stage.active ? stage.camera : state === 'game' ? camera : state === 'narrator' ? vault.camera : cine.camera;
+  const activeCam = stage.active ? stage.camera : state === 'game' ? camera : state === 'narrator' ? vault.camera : state === 'film' && film.inWorld ? film.wcam : cine.camera;
   const designFov = activeCam.fov;
   fitFov(activeCam);
   renderer.render(dt, elapsed);
@@ -597,7 +626,7 @@ window.addEventListener('resize', () => {
   get ready() { return worldReady; },
   get paused() { return paused; },
   get longTasks() { return longTasks; },
-  sceneTest(id: 'l3' | 'fight') { if (id === 'fight') playFlashback(() => backToWorld()); else playVault(id, backToWorld); },
+  sceneTest(id: 'l3' | 'l7' | 'ch1' | 'intro' | 'fight') { if (id === 'fight') playFlashback(() => backToWorld()); else playVault(id, backToWorld); },
   nextBeat() { cine.debugNext(); game?.scene?.debugNext(); },
   get frameReport() { return frameReport; },
   get npcs() { return game?.story.npcs.debug(); },
@@ -614,6 +643,14 @@ window.addEventListener('resize', () => {
   get level() { return game?.save?.level; },
   setTime(h: number) { if (game?.save) game.save.timeOfDay = h; },
   cineSeek(t: number) { cine.seek(t); },
+  /** Freeze the clock (true) and step it by hand; `frames` counts finished steps. */
+  hold(on: boolean) { hold.on = on; film.manual = on; },
+  advance(sec: number) { hold.pending = sec; },
+  get frames() { return hold.done; },
+  film: { seek(b: number) { film.seek(b); }, get playing() { return film.playing; }, get beat() { return film.beat; }, get seconds() { return film.lengthSeconds; }, start() { state = 'film'; renderer.setScene(cine.scene, cine.camera, false); ui.show('cine', true); ui.fade('black', 0, 0); void film.play(() => {}); } },
+  cineTime() { return cine.time; },
+  get stagePlaying() { return cine.staged; },
+  gameScene(id: 'rescue' | 'camp' | 'beacon') { game?.debugScene(id); },
   wakeSeek(t: number) { game?.debugWakeSeek(t); },
   look(yaw: number, pitch: number) { if (player) { player.yaw = yaw; player.pitch = pitch; player.snapCamera(); } },
   teleport(x: number, z: number, yaw = 0) { player?.spawn(x, z, yaw); },

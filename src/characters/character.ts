@@ -11,7 +11,16 @@ import { addKit, Kit } from './kit';
 
 export type { CrewId } from './looks';
 export { preloadCrew } from './assets';
-export type CrewPose = 'stand' | 'idle' | 'walk' | 'sit' | 'injured' | 'wave' | 'lie' | 'point' | 'cheer' | 'facepalm' | 'selfie' | 'shout' | 'argue' | 'present' | 'write' | 'jump';
+/** A direction in the body's own space: +x left, +y up, +z forward. */
+export type Dir = [number, number, number];
+/**
+ * A hand-set body pose laid over the clip, for bodies no mocap covers (free fall,
+ * crash landings). Directions are where each bone points, so the same pose fits
+ * every build and no rig axes leak out of here.
+ */
+export interface Limbs { armL?: Dir; armR?: Dir; foreL?: Dir; foreR?: Dir; legL?: Dir; legR?: Dir; shinL?: Dir; shinR?: Dir; bend?: number; twist?: number; openHands?: boolean; hair?: Dir }
+export type Face = Partial<Record<'smile' | 'frown' | 'fear' | 'squint' | 'open' | 'blink', number>>;
+export type CrewPose = 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'injured' | 'wave' | 'lie' | 'point' | 'cheer' | 'facepalm' | 'selfie' | 'shout' | 'argue' | 'present' | 'write' | 'jump';
 
 /** Mocap style per character: how they stand and how they walk. */
 const STYLE: Record<string, { walk: string; idle: string; rate: number }> = {
@@ -34,7 +43,7 @@ const EXPR: Partial<Record<CrewPose, Record<string, number>>> = {
   cheer: { smile: 0.95, open: 0.25 }, wave: { smile: 0.6 }, selfie: { smile: 0.85 }, present: { smile: 0.3 }, shout: { frown: 0.75, open: 0.65 },
   argue: { frown: 0.6 }, facepalm: { frown: 0.55, squint: 0.5 }, injured: { fear: 0.45, frown: 0.2 }, sit: { smile: 0.1 }, lie: { blink: 0.92 },
 };
-const FULL_BODY = new Set<CrewPose>(['sit', 'injured', 'lie', 'jump']);
+const FULL_BODY = new Set<CrewPose>(['sit', 'injured', 'lie', 'jump', 'float']);
 const MARK_OF: Record<string, string> = { dots: 'scientist', cracks: 'strong', veins: 'medic', stripes: 'explorer', plates: 'builder', stars: 'social' };
 
 const bones = (root: THREE.Object3D) => { const m = new Map<string, THREE.Bone>(); root.traverse((o) => { if ((o as THREE.Bone).isBone) m.set(o.name, o as THREE.Bone); }); return m; };
@@ -133,6 +142,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const lookAt = { y: 0, x: 0 };
   const morph: Record<string, number> = {};
   let blinkAt = 2 + Math.random() * 3, blinkT = 0, speak = 0;
+  let limbs: Limbs | null = null, faceSet: Face | null = null;
+  const fingerRest = new Map<THREE.Bone, THREE.Quaternion>();
   let gaitPhase = 0, inited = false, hipDrop = 0, sacAt = 1, sacX = 0, sacY = 0, firstFrame = true;
   const footOff = [0, 0];
   const pin = [new THREE.Vector3(), new THREE.Vector3()], pinOff = [new THREE.Vector3(), new THREE.Vector3()], pinned = [false, false];
@@ -240,6 +251,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     scene.position.y = soleLift;
     fig.add(scene);
     scene.updateMatrixWorld(true);
+    bs.forEach((b, n) => { if (n.startsWith('finger')) fingerRest.set(b, b.quaternion.clone()); });
     // handles onto the skeleton
     const on = (g: THREE.Object3D, n: string) => { g.position.set(0, 0, 0); bs.get(n)!.add(g); };
     on(body, 'hips'); on(chest, 'chest'); on(head, 'head'); on(legL, 'upperlegL'); on(legR, 'upperlegR');
@@ -325,6 +337,27 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     return knots.map(([n], i) => ({ n, w: w[i] }));
   }
 
+  /** Lays the set pose over the clip: each bone turns to point the requested way. */
+  function applyLimbs(l: Limbs, bs: Map<string, THREE.Bone>) {
+    if (l.bend) { bs.get('spine1')!.quaternion.multiply(Q.setFromEuler(E.set(l.bend * 0.5, 0, 0))); bs.get('chest')!.quaternion.multiply(Q.setFromEuler(E.set(l.bend * 0.5, 0, 0))); }
+    if (l.twist) bs.get('chest')!.quaternion.multiply(Q.setFromEuler(E.set(0, l.twist, 0)));
+    root.updateWorldMatrix(true, true);
+    const rq = root.getWorldQuaternion(new THREE.Quaternion());
+    const aim = (a: string, b: string, d?: Dir) => {
+      if (!d) return;
+      const p = bs.get(a)!, c = bs.get(b)!;
+      p.updateWorldMatrix(true, true);
+      const from = c.getWorldPosition(V3).sub(p.getWorldPosition(V4)).normalize();
+      const to = V5.set(d[0], d[1], d[2]).normalize().applyQuaternion(rq);
+      worldRotate(p, new THREE.Quaternion().setFromUnitVectors(from, to));
+    };
+    aim('upperarmL', 'lowerarmL', l.armL); aim('lowerarmL', 'handL', l.foreL ?? l.armL);
+    aim('upperarmR', 'lowerarmR', l.armR); aim('lowerarmR', 'handR', l.foreR ?? l.armR);
+    aim('upperlegL', 'lowerlegL', l.legL); aim('lowerlegL', 'footL', l.shinL ?? l.legL);
+    aim('upperlegR', 'lowerlegR', l.legR); aim('lowerlegR', 'footR', l.shinR ?? l.legR);
+    if (l.openHands) fingerRest.forEach((q, b) => b.quaternion.copy(q));
+  }
+
   function animate(kind: CrewPose, phase: number, amount: number, t: number, dt: number) {
     if (!mixer || !B) return;
     const bs = B;
@@ -398,6 +431,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         g.rotation.set(0, 0, 0);
       }
     }
+    if (limbs) applyLimbs(limbs, bs);
     // head look-at, clamped and shared with the neck; the eyes lead
     // someone to look at: only within what a neck can do, otherwise ease back to the front
     let wantY = 0, wantX = 0;
@@ -424,7 +458,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
 
     // ---- face ----
     const r = 1 - Math.exp(-dt * 10);
-    const ex = EXPR[kind] ?? {};
+    const ex: Face = faceSet ?? EXPR[kind] ?? {};
     const hurt = (kind === 'injured' ? 1 : 0);
     // the mouth follows the voice clip itself; no clip, no movement
     if (speak > 0) { speak = Math.max(0, speak - dt); voice.mouth(lip); } else lip.open = lip.round = lip.wide = 0;
@@ -495,6 +529,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const vel = tmp.clone().sub(lastPos).divideScalar(Math.max(dt, 1 / 120));
     lastPos.copy(tmp);
     if (vel.length() > 30) vel.set(0, 0, 0);
+    if (limbs?.hair) vel.set(limbs.hair[0], limbs.hair[1], limbs.hair[2]).multiplyScalar(-8);
     const yaw = root.rotation.y, cs = Math.cos(-yaw), sn = Math.sin(-yaw);
     const lx2 = vel.x * cs + vel.z * sn, lz = -vel.x * sn + vel.z * cs;
     const target = tmp.set(-lx2 * 0.02, -Math.abs(Math.cos(gaitPhase * 12.566)) * 0.012 * amount + vel.y * -0.02, -lz * 0.02);
@@ -518,6 +553,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     setSplint(on: boolean) { pendingSplint = on; if (kit) kit.splint.visible = on; },
     setTagVisible(v: number) { (tag.material as THREE.SpriteMaterial).opacity = v; tag.visible = v > 0.02; },
     /** Mouth moves while > 0 (seconds of speech left). */
+    /** Hand-set pose over the clip (null gives the body back to the clip). */
+    setLimbs(l: Limbs | null) { limbs = l; },
+    /** Held expression (null goes back to what the pose asks for). */
+    setFace(f: Face | null) { faceSet = f; },
     say(seconds: number) { speak = Math.max(speak, seconds); },
     /** Head offset for looking at something (radians). */
     look2(y: number, x: number) { lookAt.y = y; lookAt.x = x; },

@@ -96,6 +96,8 @@ def main():
         page.click("#btn-skip")
         page.wait_for_function("window.__bs.state === 'cinematic'", timeout=20000)
         page.click("#btn-skip")
+        page.wait_for_function("window.__bs.state === 'film'", timeout=20000)
+        page.click("#btn-skip")  # the title sequence skips on its own tap
         page.wait_for_function("window.__bs.state === 'game' && window.__bs.mode === 'wake'", timeout=60000)
         time.sleep(1)
         page.keyboard.press("Enter")

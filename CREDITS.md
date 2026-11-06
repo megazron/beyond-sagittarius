@@ -133,6 +133,10 @@ Database, free for any use: "The data used in this project was obtained from moc
 database was created with funding from NSF EIA-0196217." Source: http://mocap.cs.cmu.edu (AMC/ASF originals;
 trial numbers are listed in `CLIPS` in that tool and in `public/models/crew/anim.json`).
 
+## Music
+
+The title theme "The Scatter" (`public/audio/music/`) is an original composition, synthesised from scratch by `tools/make_theme.py`. No samples, no borrowed melody. It is part of this project's own work.
+
 ## Voices
 
 All dubbing in `public/audio/vo/` is synthetic speech rendered locally by `tools/tts/generate_voice.py`.

@@ -448,6 +448,15 @@ export class Story {
 
   private get pair() { return { z: this.player.model, y: this.world.explorer }; }
 
+  /** Test hook: stage one of the world scenes straight away. */
+  debugScene(id: 'rescue' | 'camp' | 'beacon') {
+    this.crew.mode = 'idle';
+    const L = this.L;
+    if (id === 'rescue') { this.player.spawn(L.crewSpot.x + 2.2, L.crewSpot.z + 1.6, 0); this.crew.pos.copy(L.crewSpot); this.meetCrew(); }
+    else if (id === 'camp') this.campTalk();
+    else this.lightBeacon();
+  }
+
   private meetCrew() {
     audio.chime();
     const { z, y } = this.pair;

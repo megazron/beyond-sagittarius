@@ -28,7 +28,7 @@ export class Cinematic {
   camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.05, 40000);
   time = 0;
   playing = false;
-  readonly duration = 62;
+  readonly duration = 52.4;
   private dome = createSpaceDome();
   private sunDir = V(1, 0.22, 0.55).normalize();
   private earth = createEarth(100, this.sunDir);
@@ -37,6 +37,7 @@ export class Cinematic {
   private interior = createInterior(matchMedia('(pointer: coarse)').matches ? 0.6 : 1);
   private mars = createPlanet(60, 'mars', this.sunDir);
   private giant = createPlanet(260, 'giant', this.sunDir);
+  private home = createPlanet(400, 'home', V(0.72, 0.3, 0.62).normalize());
   private giantRing: THREE.Mesh;
   private sunLight = new THREE.DirectionalLight(0xfff2e0, 3.2);
   private cues: Cue[] = [];
@@ -53,12 +54,15 @@ export class Cinematic {
     this.ring.rotation.set(0.18, 0, 0.05);
     s.add(this.ring);
     s.add(this.ship.group);
-    this.interior.group.position.set(60000, 0, 0);
+    // at the origin, not parked far away: skinned faces lose centimetres of float precision out there.
+    // Earth shares the spot, but the two are never on screen together.
     s.add(this.interior.group);
     this.mars.position.set(20000, 0, 0);
     s.add(this.mars);
     this.giant.position.set(40000, 0, 0);
     s.add(this.giant);
+    this.home.visible = false;
+    s.add(this.home);
     this.giantRing = new THREE.Mesh(
       new THREE.RingGeometry(330, 560, 128, 1),
       new THREE.ShaderMaterial({
@@ -127,6 +131,7 @@ export class Cinematic {
   }
 
   private stage: Cutscene | null = null;
+  get staged() { return !!this.stage; }
   private get cast() {
     const ids: CrewId[] = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social'];
     return Object.fromEntries(ids.map((id, i) => [id, this.interior.crew[i]])) as Record<CrewId, Character>;
@@ -164,7 +169,7 @@ export class Cinematic {
 
   /** Compile everything, including what is hidden at the title, so no shot stalls later. */
   async warm(draw: (scene: THREE.Scene, cam: THREE.PerspectiveCamera) => void) {
-    const shown = [this.earth.group, this.ring, this.mars, this.giant, this.giantRing, this.interior.group, this.ship.group];
+    const shown = [this.earth.group, this.ring, this.mars, this.giant, this.giantRing, this.home, this.interior.group, this.ship.group];
     const was = shown.map((o) => o.visible);
     shown.forEach((o) => (o.visible = true));
     await Promise.all(this.interior.crew.map((c) => c.whenReady));
@@ -217,14 +222,20 @@ export class Cinematic {
     cb?.();
   }
 
-  private setVisible(group: 'earth' | 'mars' | 'giant' | 'interior' | 'deep') {
+  /** What the title sequence shoots with. */
+  get set() {
+    return { scene: this.scene, camera: this.camera, dome: this.dome, ship: this.ship, interior: this.interior, home: this.home, sun: this.sunLight, show: (g: 'interior' | 'deep' | 'home') => this.setVisible(g), tick: (dt: number) => { this.clockT += dt; this.time += dt; this.commonUpdate(dt); } };
+  }
+
+  private setVisible(group: 'earth' | 'mars' | 'giant' | 'interior' | 'deep' | 'home') {
     this.earth.group.visible = group === 'earth';
     this.ring.visible = group === 'earth';
     this.mars.visible = group === 'mars';
     this.giant.visible = group === 'giant';
     this.giantRing.visible = group === 'giant';
     this.interior.group.visible = group === 'interior';
-    this.ship.group.visible = group !== 'interior';
+    this.ship.group.visible = group !== 'interior' && group !== 'home';
+    this.home.visible = group === 'home';
   }
 
   private cue(t: number, fn: () => void) { this.cues.push({ t, fn }); }
@@ -413,55 +424,8 @@ export class Cinematic {
       },
     });
 
-    this.vcue(52.6, 'cine.line8', () => ui.subtitle('cine.line8', 'crew.strong.name'));
-    this.vcue(54.6, 'op.21', () => ui.subtitle('op.21', 'crew.explorer.name'));
-    this.cue(56.6, () => ui.subtitle(null));
-    this.cue(53.0, () => audio.whoosh());
-    this.shots.push({
-      start: 52.4, end: 57.6,
-      enter: () => {
-        this.setVisible('deep');
-        ship.pods.forEach((p) => { p.visible = true; p.position.set(p.userData.dir.x * 0.95, p.userData.dir.y * 0.95, -0.5); });
-      },
-      update: (k, local) => {
-        const p = V(80000, 0, 0);
-        ship.group.position.copy(p);
-        ship.group.rotation.z += 0.004;
-        ship.ring.rotation.z += 0.03;
-        for (const pod of ship.pods) {
-          const dir = pod.userData.dir as THREE.Vector3;
-          pod.position.set(dir.x * (0.95 + local * 2.2), dir.y * (0.95 + local * 2.2), -0.5 + dir.z * local * 2.2);
-        }
-        this.camera.position.copy(p).add(V(lerp(-7, -9, k), lerp(3, 4, k), lerp(11, 14, k)));
-        this.lookTarget.copy(p).add(V(0, 1, -12));
-        const dist = lerp(38, 16, easeInOut(k));
-        d.uBHPos.value.set(-3, 2.5, -dist);
-        d.uWarp.value = lerp(0.2, 1.0, k);
-        d.uWarpDir.value.set(0, 0, -1);
-        this.shake = 0.05 + k * 0.08;
-      },
-    });
-
-    // ---- Glimpse of another universe → white out ----
-    this.cue(59.2, () => ui.fade('white', 1, 1.2));
-    this.cue(60.6, () => ui.fade('black', 1, 0.05));
-    this.shots.push({
-      start: 57.6, end: 60.6,
-      update: (k) => {
-        const p = V(80000, 0, 0);
-        ship.group.visible = false;
-        this.camera.position.copy(p);
-        this.lookTarget.copy(p).add(V(0, 0, -10));
-        d.uBHPos.value.set(0, 1.5, -lerp(14, 6, k));
-        d.uBH.value = lerp(1, 0.2, k);
-        d.uOther.value = smoothstep(0.1, 0.7, k);
-        d.uWarp.value = 1.4;
-        this.camera.fov = lerp(45, 95, easeInOut(k));
-        this.camera.updateProjectionMatrix();
-        this.shake = 0.06;
-      },
-    });
-    this.cue(61.8, () => this.finish());
+    // the rest happens in the title sequence: montage.ts
+    this.cue(52.4, () => this.finish());
   }
 
   update(dt: number) {

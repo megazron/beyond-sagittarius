@@ -138,6 +138,44 @@ export class Audio {
     setTimeout(() => g.disconnect(), 3000);
   }
 
+  private scores = new Map<string, Promise<AudioBuffer | null>>();
+  private scoreBuffer(name: string) {
+    let p = this.scores.get(name);
+    if (!p) {
+      p = (async () => {
+        try {
+          const r = await fetch(`${BASE}audio/music/${name}.mp3`);
+          return r.ok && this.ctx ? await this.ctx.decodeAudioData(await r.arrayBuffer()) : null;
+        } catch { return null; }
+      })();
+      this.scores.set(name, p);
+    }
+    return p;
+  }
+  /** Fetch and decode ahead of time, so the first note lands on time. */
+  preloadScore(...names: string[]) { if (this.ctx) names.forEach((n) => void this.scoreBuffer(n)); }
+
+  /**
+   * Music and its sound-design stem, started on the same sample, each on its own bus.
+   * `now` is seconds into the score on the audio clock: picture follows it.
+   */
+  async playScore(music: string, sfx: string) {
+    const ctx = this.ctx;
+    if (!ctx) return null;
+    const [m, s] = await Promise.all([this.scoreBuffer(music), this.scoreBuffer(sfx)]);
+    if (!m) return null;
+    const t0 = ctx.currentTime + 0.08;
+    const nodes = ([[m, this.musicOut], [s, this.sfxOut]] as [AudioBuffer | null, AudioNode][]).filter((n): n is [AudioBuffer, AudioNode] => !!n[0]).map(([buf, out]) => {
+      const src = ctx.createBufferSource(), g = ctx.createGain();
+      src.buffer = buf; src.connect(g).connect(out); src.start(t0);
+      return { src, g };
+    });
+    return {
+      now: () => (ctx.state === 'running' ? ctx.currentTime - t0 : undefined),
+      stop: () => nodes.forEach(({ src, g }) => { g.gain.setTargetAtTime(0, ctx.currentTime, 0.12); try { src.stop(ctx.currentTime + 0.7); } catch { /* over already */ } }),
+    };
+  }
+
   /** Forest wind bed for the planet. */
   startWind() {
     if (!this.ctx || this.wind) return;

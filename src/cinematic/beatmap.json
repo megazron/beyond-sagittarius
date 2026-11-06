@@ -1,0 +1,14 @@
+{
+  "_comment": "One clock for the title sequence. tools/make_theme.py composes to this and src/cinematic/montage.ts cuts to it. Times are beats from the start of the music.",
+  "bpm": 160,
+  "beatsPerBar": 4,
+  "length": 132,
+  "sections": { "horizon": 0, "build": 16, "silence": 31, "drop": 32, "planet": 56, "landing": 64, "rise": 112, "hit": 120, "end": 132 },
+  "impacts": [64, 72, 80, 88, 96],
+  "cards": [66, 74, 82, 90, 98],
+  "whooshes": [36, 38, 40, 42, 44, 46],
+  "faceHits": [52, 53, 54, 54.5, 55, 55.5],
+  "plates": [9, 10.5, 12, 13, 14, 15],
+  "glass": 16,
+  "falling": 104
+}

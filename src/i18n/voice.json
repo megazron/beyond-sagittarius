@@ -247,6 +247,12 @@
     "rad.ch2.strong": "strong",
     "rad.ch2.medic": "medic",
     "rad.ch2.builder": "builder",
-    "rad.ch2.social": "social"
+    "rad.ch2.social": "social",
+    "film.strong": "strong",
+    "film.medic": "medic",
+    "film.builder": "builder",
+    "film.explorer": "explorer",
+    "film.social": "social",
+    "film.scientist": "scientist"
   }
 }

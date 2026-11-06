@@ -103,6 +103,13 @@ def main():
             time.sleep(3)
             shot(name)
         page.click("#btn-skip")
+        page.wait_for_function("window.__bs.state === 'film' && window.__bs.film.playing", timeout=30000)
+        # the title sequence: a frame from each act, then the skip must land on the wake-up
+        for b, name in [(26, "02e-film-ring"), (40, "02f-film-scatter"), (66.5, "02g-film-landing")]:
+            page.evaluate(f"window.__bs.film.seek({b})")
+            time.sleep(3)
+            shot(name)
+        page.click("#btn-skip")
         page.wait_for_function("window.__bs.state === 'game'", timeout=30000)
         page.wait_for_function("window.__bs.mode === 'wake'", timeout=30000)
         page.evaluate("window.__bs.wakeSeek(13.9)")

@@ -73,6 +73,8 @@ def main():
         press(0)  # skip the Vault
         page.wait_for_function("__bs.state === 'cinematic'", timeout=30000)
         press(1)  # B skips too
+        page.wait_for_function("__bs.state === 'film'", timeout=30000)
+        press(1)  # and the title sequence has its own skip
         page.wait_for_function("__bs.state === 'game' && __bs.mode === 'wake'", timeout=60000)
         time.sleep(1)
         press(9)

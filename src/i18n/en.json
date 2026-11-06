@@ -886,5 +886,18 @@
   "act.pause": "Menu",
   "tut.look.pad": "[[look]] Look around",
   "tut.menu.kbm": "Tap [[inventory]] for your items, hold it for the wheel. [[map]] opens the map.",
-  "tut.menu.touch": "[[pause]] has the map, your items and the crew"
+  "tut.menu.touch": "[[pause]] has the map, your items and the crew",
+  "film.sub": "The Scatter",
+  "film.loc.strong": "North-east forest · 1.9 km",
+  "film.loc.medic": "The western lake · 3.4 km",
+  "film.loc.builder": "Southern hills · 5.2 km",
+  "film.loc.explorer": "Eastern hills · pod down",
+  "film.loc.social": "Beyond the mountains · 7.8 km",
+  "film.loc.scientist": "The clearing · You are here",
+  "film.strong": "The tree started it.",
+  "film.medic": "Vitals stable. Mood: no.",
+  "film.builder": "Landing: crooked. It'll hold.",
+  "film.explorer": "Worst part? Nobody paid me back.",
+  "film.social": "One percent. Posting anyway.",
+  "film.scientist": "Hypothesis: ow."
 }

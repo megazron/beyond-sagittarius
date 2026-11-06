@@ -23,10 +23,18 @@ const FinalShader = {
     uGrain: { value: 0.02 },
     uAberration: { value: 0.0 },
     uTint: { value: new THREE.Vector3(1, 1, 1) },
+    // title-sequence lens: all zero outside it, and each costs nothing while zero
+    uZoom: { value: 0 },
+    uZoomAt: { value: new THREE.Vector2(0.5, 0.5) },
+    uFlash: { value: new THREE.Vector3(0, 0, 0) },
+    uInk: { value: 0 },
+    uInkDark: { value: new THREE.Vector3(0.02, 0.02, 0.05) },
+    uInkLight: { value: new THREE.Vector3(1, 1, 1) },
+    uLines: { value: 0 },
   },
   vertexShader: QUAD_VS,
   fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; uniform float uTime, uVignette, uGrain, uAberration; uniform vec3 uTint;
+    uniform sampler2D tDiffuse; uniform float uTime, uVignette, uGrain, uAberration, uZoom, uInk, uLines; uniform vec3 uTint, uFlash, uInkDark, uInkLight; uniform vec2 uZoomAt;
     varying vec2 vUv;
     float ign(vec2 p){ return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
     // Print-film response, per channel: lifted toe, soft shoulder (what a 3D LUT would bake in).
@@ -43,6 +51,14 @@ const FinalShader = {
         vec2 o = d * r2 * uAberration * 3.0;   // only towards the corners, like a real lens
         col = vec3(texture2D(tDiffuse, vUv + o).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - o).b);
       } else col = texture2D(tDiffuse, vUv).rgb;
+      if (uZoom > 0.0) {
+        // cheap motion blur for fast moves: everything smears away from one point
+        vec2 dz = (vUv - uZoomAt) * uZoom;
+        float j = ign(gl_FragCoord.xy);
+        vec3 acc = col;
+        for (int i = 1; i <= 9; i++) acc += texture2D(tDiffuse, vUv - dz * ((float(i) - j) / 9.0)).rgb;
+        col = acc / 10.0;
+      }
       col *= uTint;
       col = clamp(col, 0.0, 1.0);
       float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
@@ -57,6 +73,19 @@ const FinalShader = {
       // luminance grain, strongest in the midtones
       float g = ign(gl_FragCoord.xy + fract(uTime * 7.31) * 97.0) - 0.5;
       col += g * uGrain * (1.0 - 0.75 * abs(lum * 2.0 - 1.0));
+      if (uLines > 0.0) {
+        // speed lines: thin rays that come and go, heavier towards the edges
+        float ang = atan(d.y, d.x * 1.78);
+        float ray = fract(sin(floor(ang * 70.0) * 12.9898 + floor(uTime * 24.0) * 4.1) * 43758.5453);
+        float ln = step(1.0 - 0.28 * uLines, ray) * smoothstep(0.12, 0.42, sqrt(r2) * (0.8 + ray * 0.5));
+        col = mix(col, vec3(1.0), ln * 0.55);
+      }
+      if (uInk > 0.0) {
+        // impact frame: two flat tones for a few frames on the big hits
+        float ink = smoothstep(0.26, 0.34, dot(col, vec3(0.2126, 0.7152, 0.0722)));
+        col = mix(col, mix(uInkDark, uInkLight, ink), uInk);
+      }
+      col += uFlash;
       gl_FragColor = vec4(col, 1.0);
     }
   `,
@@ -557,6 +586,18 @@ export class Renderer {
     this.dof.focus = focusDistance;
     this.dof.aperture = aperture;
     this.dof.enabled = aperture > 0;
+  }
+
+  /** Title-sequence lens: zoom blur (with its centre), additive flash, two-tone ink, speed lines. */
+  setFilm(f: { zoom?: number; at?: [number, number]; flash?: [number, number, number]; ink?: number; dark?: THREE.Color; light?: THREE.Color; lines?: number } = {}) {
+    const u = this.final.uniforms;
+    u.uZoom.value = f.zoom ?? 0;
+    u.uZoomAt.value.set(...(f.at ?? [0.5, 0.5]));
+    u.uFlash.value.set(...(f.flash ?? [0, 0, 0]));
+    u.uInk.value = f.ink ?? 0;
+    if (f.dark) u.uInkDark.value.set(f.dark.r, f.dark.g, f.dark.b);
+    if (f.light) u.uInkLight.value.set(f.light.r, f.light.g, f.light.b);
+    u.uLines.value = f.lines ?? 0;
   }
 
   resize() {

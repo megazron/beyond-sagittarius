@@ -65,7 +65,7 @@ shot('1-title'); res['title']=ev(FPS.replace('SEC','4000'),True)
 ev("document.querySelector('#btn-new').click()"); wait("!!document.querySelector('#nm-ok')",15); time.sleep(.5); shot('2-names'); ev("document.querySelector('#nm-ok').click()")
 wait("window.__bs.state==='narrator'",30); time.sleep(6); shot('3-narrator'); res['narrator']=ev(FPS.replace('SEC','5000'),True)
 ev("document.querySelector('#btn-skip').click()"); wait("window.__bs.state==='cinematic'",30); time.sleep(8); shot('4-cinematic'); res['cinematic']=ev(FPS.replace('SEC','5000'),True)
-ev("document.querySelector('#btn-skip').click()"); wait("window.__bs.state==='game'",90); time.sleep(3); shot('5-wake')
+ev("document.querySelector('#btn-skip').click()"); wait("window.__bs.state==='film'",30); ev("document.querySelector('#btn-skip').click()"); wait("window.__bs.state==='game'",90); time.sleep(3); shot('5-wake')
 ev("document.dispatchEvent(new KeyboardEvent('keydown',{code:'Enter',key:'Enter',bubbles:true}));window.dispatchEvent(new KeyboardEvent('keydown',{code:'Enter',key:'Enter',bubbles:true}))")
 wait("window.__bs.mode==='play'",20); time.sleep(4); shot('6-play'); res['play']=ev(FPS.replace('SEC','8000'),True)
 res['mode']=ev("window.__bs.mode"); res['errors']=errs[:8]

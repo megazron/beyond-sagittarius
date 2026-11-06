@@ -309,9 +309,9 @@ export function createOrbitalRing(radius: number) {
 }
 
 /** Generic planet (Mars-like or banded gas giant) for the journey montage. */
-export function createPlanet(radius: number, kind: 'mars' | 'giant', sunDir: THREE.Vector3) {
+export function createPlanet(radius: number, kind: 'mars' | 'giant' | 'home', sunDir: THREE.Vector3) {
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uSun: { value: sunDir }, uKind: { value: kind === 'mars' ? 0 : 1 }, uTime: { value: 0 } },
+    uniforms: { uSun: { value: sunDir }, uKind: { value: kind === 'mars' ? 0 : kind === 'giant' ? 1 : 2 }, uTime: { value: 0 } },
     vertexShader: /* glsl */ `
       varying vec3 vN; varying vec3 vWN; varying vec3 vWP;
       void main(){ vN = normalize(position); vWN = normalize(mat3(modelMatrix)*normal); vWP = (modelMatrix*vec4(position,1.0)).xyz;
@@ -328,6 +328,23 @@ export function createPlanet(radius: number, kind: 'mars' | 'giant', sunDir: THR
           albedo = mix(vec3(0.35, 0.12, 0.05), vec3(0.75, 0.38, 0.18), f);
           albedo *= 0.75 + 0.5 * g;
           albedo = mix(albedo, vec3(0.9), smoothstep(0.9, 0.95, abs(n.y)));
+        } else if (uKind > 1.5) {
+          // the world they fall on: dark seas, forest continents, weather
+          float land = smoothstep(0.47, 0.53, fbm3(n * 2.3 + 4.0) + 0.14 * fbm3(n * 9.0));
+          float hill = fbm3(n * 11.0);
+          albedo = mix(vec3(0.01, 0.06, 0.1), mix(vec3(0.06, 0.16, 0.09), vec3(0.3, 0.26, 0.2), smoothstep(0.5, 0.72, hill)), land);
+          float cloud = smoothstep(0.5, 0.74, fbm3(n * 3.6 + vec3(uTime * 0.01, 0.0, 0.0)) + 0.25 * fbm3(n * 13.0));
+          albedo = mix(albedo, vec3(0.88, 0.9, 0.95), cloud * 0.9);
+          vec3 Nn = normalize(vWN);
+          float dd = dot(Nn, uSun);
+          // night side: the forests glow faintly, as they do from the ground
+          vec3 glow = vec3(0.1, 0.55, 0.5) * land * (1.0 - cloud) * smoothstep(0.5, 0.75, fbm3(n * 24.0)) * smoothstep(0.1, -0.2, dd);
+          vec3 Vv = normalize(cameraPosition - vWP);
+          float rim = pow(1.0 - max(dot(Nn, Vv), 0.0), 3.5);
+          float lit = smoothstep(-0.12, 0.5, dd);
+          vec3 c = albedo * lit * 1.5 + glow * 1.6 + vec3(0.25, 0.55, 1.2) * rim * smoothstep(-0.25, 0.3, dd) * 1.4 + vec3(1.1, 0.45, 0.2) * rim * smoothstep(0.25, 0.0, abs(dd)) * 0.9;
+          gl_FragColor = vec4(c, 1.0);
+          return;
         } else {
           float w = fbm3(n * vec3(2.0, 0.5, 2.0) + uTime * 0.01) * 2.0;
           float bands = sin(n.y * 22.0 + w * 2.5) * 0.5 + 0.5;

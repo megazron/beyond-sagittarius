@@ -34,6 +34,8 @@ export interface Ship {
   ring: THREE.Group;
   lights: THREE.MeshBasicMaterial;
   pods: THREE.Group[];
+  /** The hull in two torn halves, shown instead of `spine` when the ship breaks. */
+  broken: { spine: THREE.Mesh; front: THREE.Mesh; rear: THREE.Mesh; hull: THREE.Material };
 }
 
 /** Interstellar tourist liner: spine, habitat ring, observation dome, drive. */
@@ -56,6 +58,24 @@ export function createShip(): Ship {
   spineGeo.translate(0, 0, 6);
   const spine = new THREE.Mesh(spineGeo, hull);
   group.add(spine);
+
+  // the same hull torn across the middle: the free ends of the lathe get a ragged edge
+  const half = (from: number, to: number, tornEnd: 'start' | 'end') => {
+    const pr = prof.slice(from, to).map(([r, y]) => new THREE.Vector2(r, y));
+    const g = new THREE.LatheGeometry(pr, 48);
+    const n = pr.length, pos = g.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i <= 48; i++) {
+      const j = i % 48, v = i * n + (tornEnd === 'end' ? n - 1 : 0);
+      const tear = (Math.sin(j * 1.7) * 0.5 + Math.sin(j * 4.1 + 1) * 0.32 + Math.sin(j * 9.3) * 0.18) * 0.55;
+      pos.setY(v, pos.getY(v) + tear);
+    }
+    g.computeVertexNormals(); g.rotateX(-Math.PI / 2); g.translate(0, 0, 6);
+    const m = new THREE.Mesh(g, brokenHull);
+    m.visible = false; group.add(m);
+    return m;
+  };
+  const brokenHull = hull.clone(); brokenHull.side = THREE.DoubleSide;
+  const broken = { spine, front: half(0, 6, 'end'), rear: half(5, prof.length, 'start'), hull: brokenHull };
 
   // Bridge observation dome near the nose
   const dome = new THREE.Mesh(new THREE.SphereGeometry(0.7, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), glass);
@@ -148,7 +168,7 @@ export function createShip(): Ship {
   group.add(band);
 
   group.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  return { group, engineGlow, plume, ring, lights, pods };
+  return { group, engineGlow, plume, ring, lights, pods, broken };
 }
 
 export interface Interior {

@@ -575,6 +575,8 @@ export class Game {
     return label;
   }
 
+  debugScene(id: 'rescue' | 'camp' | 'beacon') { this.story.debugScene(id); }
+
   /** Advance the simulation by `sec` seconds without rendering. */
   debugStep(sec: number, time: number) {
     const dt = 0.05;

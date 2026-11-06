@@ -106,6 +106,20 @@ body.lang-ur .tagline { font-family: var(--font-story); line-height: 2.3; }
 .btn.skip { position: absolute; bottom: calc(var(--safe-b) + 2.4vh); inset-inline-end: calc(var(--safe-r) + 3vw); width: auto; gap: 8px; padding: 6px 10px; font-size: 17px; pointer-events: auto; }
 .btn.skip::before { display: none; }
 .btn.skip:hover, .btn.skip:focus-visible, body.dev-pad .btn.skip:focus { padding-inline-start: 10px; }
+#film { position: absolute; inset: 0; }
+#film-card { position: absolute; left: 7vw; bottom: 17vh; display: flex; gap: 16px; align-items: stretch; opacity: 0; will-change: transform, opacity; text-shadow: 0 2px 14px rgba(0,0,0,0.85); }
+#fc-bar { width: 7px; background: #fff; }
+#fc-name { font: 600 clamp(38px, 6vw, 84px)/1 var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; }
+#fc-role { font: 600 clamp(14px, 1.5vw, 20px)/1.5 var(--font-ui); letter-spacing: 0.26em; color: var(--paper); text-transform: uppercase; }
+#fc-loc { font: 500 clamp(13px, 1.25vw, 17px)/1.5 var(--font-ui); letter-spacing: 0.2em; color: var(--accent); text-transform: uppercase; }
+body.lang-ur #film-card { left: auto; right: 7vw; flex-direction: row-reverse; }
+body.lang-ur #fc-name, body.lang-ur #fc-role, body.lang-ur #fc-loc { letter-spacing: 0; line-height: 1.9; text-align: right; }
+body.lang-hi #fc-role, body.lang-hi #fc-loc { letter-spacing: 0.04em; }
+#film-title { position: absolute; left: 0; right: 0; top: 26vh; text-align: center; opacity: 0; text-shadow: 0 0 40px rgba(0,0,0,0.75), 0 3px 12px rgba(0,0,0,0.8); }
+#ft-main { font: 600 clamp(36px, 7vw, 104px)/1.15 var(--font-ui); letter-spacing: 0.22em; color: #fff7e8; white-space: nowrap; }
+#ft-sub { margin-top: 10px; font: 500 clamp(12px, 1.3vw, 18px)/1.5 var(--font-ui); letter-spacing: 0.34em; color: var(--accent); text-transform: uppercase; }
+body.lang-ur #ft-main, body.lang-ur #ft-sub { letter-spacing: 0 !important; line-height: 2; }
+body.lang-hi #ft-main, body.lang-hi #ft-sub { letter-spacing: 0.02em !important; }
 .chapter { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; animation: fadein 1.5s ease; }
 .chapter .c1 { font: 500 16px var(--font-ui); letter-spacing: 0.3em; color: var(--accent); }
 .chapter .c2 { font: 600 clamp(26px, 3.6vw, 46px)/1.3 var(--font-ui); letter-spacing: var(--track); text-align: center; }
