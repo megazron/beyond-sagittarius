@@ -5,14 +5,16 @@ import { detectQuality, isPhone, saveQualityChoice, QualityName } from './core/q
 import { desktop } from './core/desktop';
 import { Renderer } from './core/renderer';
 import { audio } from './core/audio';
-import { loadSave, newSave, clearSave, loadSettings, writeSettings, Settings } from './core/save';
+import { loadSave, newSave, clearSave, loadSettings, writeSettings, useSlot, SaveData, Settings } from './core/save';
 import { UI } from './ui/ui';
 import { Cinematic } from './cinematic/cinematic';
 import { World } from './world/world';
 import { Player } from './game/player';
 import { Input } from './game/input';
 import { Game } from './game/game';
-import { applyCrewNames, CrewNames } from './core/crew';
+import { applyCrewNames, CREW_IDS, CrewNames } from './core/crew';
+import { CHAPTERS, COMMENTS, emptyBranch, pathView, pickComments, resolveLine, takenBranches } from './game/branch';
+import type { Chapter } from './game/branch';
 import { TouchControls, TouchAction } from './ui/touch';
 import { openCreator, CreatorStage } from './ui/creator';
 import { applyIcons } from './ui/icons';
@@ -102,6 +104,8 @@ let worldReady = false;
 let pendingStart: (() => void) | null = null;
 let suppressPauseOnUnlock = false;
 let pendingNames: CrewNames = {};
+/** Chapter being replayed by the next world start. */
+let replaying: number | null = null;
 /** Debug camera override used for documentation screenshots. */
 let photo: { from: THREE.Vector3; to: THREE.Vector3 } | null = null;
 
@@ -123,6 +127,7 @@ function persistSettings() {
   input.vibration = settings.vibration !== false;
   refreshGlyphs();
   if (!settings.showFps) ui.setFps(null);
+  if (game) game.timersOff = !!settings.noTimers;
 }
 
 function changeQuality(q: QualityName) {
@@ -135,7 +140,9 @@ function changeQuality(q: QualityName) {
 
 // ---------------- title ----------------
 function refreshTitle() {
-  document.getElementById('btn-continue')!.classList.toggle('hidden', !loadSave());
+  const main = loadSave();
+  document.getElementById('btn-continue')!.classList.toggle('hidden', !main);
+  document.getElementById('btn-chapters')!.classList.toggle('hidden', !main);
   document.querySelectorAll<HTMLButtonElement>('.btn.lang').forEach((b) => b.classList.toggle('active', b.dataset.lang === settings.lang));
 }
 
@@ -155,6 +162,7 @@ function showTitle() {
   ui.fade('black', 0, 1.2);
   audio.stopWind();
   applyCrewNames(undefined);
+  useSlot('main');
   refreshTitle();
 }
 
@@ -221,7 +229,7 @@ function openSkins(onClose: () => void) {
 function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', after: () => void) {
   const s = game?.save;
   const names = (s?.names ?? pendingNames) as CrewNames;
-  const lines = vaultScript(id, { ateRed: !!s?.flags.ateRed, deaths: s?.deaths ?? 0, bites: s?.bites ?? 0, renamed: Object.keys(names).length > 0, failed: s?.crafts?.failed ?? 0 });
+  const lines = vaultScript(id, { ateRed: !!s?.flags.ateRed, deaths: s?.deaths ?? 0, bites: s?.bites ?? 0, renamed: Object.keys(names).length > 0, failed: s?.crafts?.failed ?? 0, comments: s ? pickComments(s, COMMENTS, id) : [] });
   state = 'narrator';
   input.enabled = false; input.resetTouch(); touch.show(false); suppressPauseOnUnlock = true; input.releasePointer();
   ui.fade('black', 1, 0.5);
@@ -266,6 +274,39 @@ function playFlashback(after: () => void) {
   }, 520);
 }
 
+/** Opens the path tree for a save, and remembers on this device what it has seen. */
+function openPathTree(s: SaveData, ch: Chapter, onClose: () => void, opts: { replay?: () => void; back?: string; standalone?: boolean } = {}) {
+  settings.paths = Array.from(new Set([...(settings.paths ?? []), ...takenBranches(s, ch)]));
+  writeSettings(settings);
+  ui.openPath(t(ch.title), pathView(s, ch, settings.paths, CREW_IDS), onClose, { ...opts, note: s.replay ? t('br.replay.note') : undefined });
+}
+
+/** Chapter select: each chapter you have played shows its tree; ones with branches can be replayed. */
+function openChapters() {
+  const main = loadSave();
+  if (!main) return;
+  const list = CHAPTERS.map((c) => ({ id: c.id, title: c.title, played: main.level >= c.levels[0], note: c.status === 'ready' ? 'br.ch.unplayed' : 'br.ch.planned' }));
+  ui.openChapters(list, (id) => {
+    const ch = CHAPTERS.find((c) => c.id === id)!;
+    openPathTree(main, ch, openChapters, { standalone: true, replay: ch.replayable ? () => startReplay(ch) : undefined });
+  }, refreshTitle);
+}
+
+/** Plays a chapter again in the replay slot; the main story stays as it was. */
+function startReplay(ch: Chapter) {
+  const base = loadSave();
+  audio.start();
+  if (input.device === 'touch') tryFullscreen();
+  useSlot('replay');
+  clearSave();
+  pendingLook = base?.player ?? defaultLook();
+  pendingNames = { ...(base?.names ?? {}) } as CrewNames;
+  replaying = ch.id;
+  ui.show('title', false);
+  ui.fade('black', 1, 0.6);
+  setTimeout(() => whenWorldReady(() => enterWorld(true)), 650);
+}
+
 /** Level endings that cut away to the Vault or a memory (once per save). */
 function onLevelDone(n: number) {
   const beat: Record<number, 'l3' | 'fight' | 'l7' | 'ch1' | 'ch2'> = { 3: 'l3', 5: 'fight', 7: 'l7', 10: 'ch1', 21: 'ch2' };
@@ -276,9 +317,17 @@ function onLevelDone(n: number) {
     game.save.flags[`seen-${id}`] = true;
     game.persist();
     if (id === 'fight') playFlashback(() => { backToWorld(); game.after(1.2, () => ui.say('fb.10', 'crew.scientist.name', 4)); });
-    else playVault(id, backToWorld);
+    else playVault(id, () => { backToWorld(); if (id === 'ch1') chapterClosed(1); else if (id === 'ch2') chapterClosed(2); });
   };
   game.after(5.2, go);
+}
+
+/** After each chapter: the player reads what they did. A replay ends here. */
+function chapterClosed(id: number) {
+  const ch = CHAPTERS.find((c) => c.id === id)!;
+  freeze();
+  const replay = game.save.replay;
+  openPathTree(game.save, ch, () => { if (replay) { game.persist(); showTitle(); } else resume(); }, { back: replay ? 'menu.quitTitle' : 'menu.resume' });
 }
 
 function startNewGame(look: PlayerLook = defaultLook()) {
@@ -311,6 +360,7 @@ function playFilm() {
 }
 
 function continueGame() {
+  useSlot('main');
   audio.start();
   if (input.device === 'touch') tryFullscreen();
   ui.show('title', false);
@@ -325,6 +375,7 @@ function enterWorld(fresh: boolean) {
   renderer.aoHidden = world.aoHidden();
   const save = fresh ? newSave() : (loadSave() ?? newSave());
   if (fresh) { save.names = { ...pendingNames }; save.player = { ...pendingLook }; save.skins = settings.skins ?? {}; }
+  if (fresh && replaying) { save.replay = replaying; save.flags.tutorialDone = true; replaying = null; }
   applyPlayer(save.player ?? defaultLook(), save.skins ?? {});
   const replay = !!settings.replayTutorial;
   if (replay) { save.flags.tutorialDone = false; settings.replayTutorial = false; persistSettings(); }
@@ -338,6 +389,7 @@ document.getElementById('btn-new')!.addEventListener('click', () => {
   if (loadSave()) ui.openConfirm(t('menu.newGameConfirm'), chooseNames, () => {});
   else chooseNames();
 });
+document.getElementById('btn-chapters')!.addEventListener('click', () => { audio.start(); audio.uiClick(); openChapters(); });
 document.getElementById('btn-legal')!.addEventListener('click', () => { audio.uiClick(); ui.openLegal(() => {}); });
 document.getElementById('btn-continue')!.addEventListener('click', () => { audio.uiClick(); continueGame(); });
 document.getElementById('btn-settings')!.addEventListener('click', () => {
@@ -411,6 +463,7 @@ function showTab(tab: MenuTab) {
   } else if (tab === 'map') openMapTab();
   else if (tab === 'objectives') ui.openObjectives(game.save.level, game.save.completed, resume);
   else if (tab === 'codex') openCodex(ui, game.save, resume);
+  else if (tab === 'ledger') openPathTree(game.save, CHAPTERS.find((c) => game.save.level <= c.levels[1]) ?? CHAPTERS[0], resume);
   else if (tab === 'inventory') ui.openInventory(game.save.inventory, game.story.tools(), resume);
   else ui.openCrew((id) => game.story.crewStatus(id), resume);
 }
@@ -604,6 +657,7 @@ async function boot() {
   world.scene.add(player.model.root);
   game = new Game(world, player, input, ui, (id) => touch.highlight(id), (text) => ui.hint(text));
   game.onLevelComplete = onLevelDone;
+  game.timersOff = !!settings.noTimers;
   // warm up shaders so the first in-game frame doesn't hitch
   player.spawn(0, 2, 0.35);
   world.update(0.016, 0, 8.2, player.pos, camera, renderer.renderer);
@@ -639,6 +693,21 @@ window.addEventListener('resize', () => {
   sceneTest(id: 'l3' | 'l7' | 'ch1' | 'intro' | 'fight') { if (id === 'fight') playFlashback(() => backToWorld()); else playVault(id, backToWorld); },
   nextBeat() { cine.debugNext(); game?.scene?.debugNext(); },
   get frameReport() { return frameReport; },
+  /** The branch system, for the smoke tests. */
+  branch: {
+    get open() { return ui.choice.open || !!game?.dialogue.open; },
+    get remaining() { return ui.choice.remaining ?? game?.dialogue.remaining ?? null; },
+    get state() { return game?.save.branch; },
+    comments(scene: string) { return game ? pickComments(game.save, COMMENTS, scene) : []; },
+    demo(id: string) { game?.debugBranch({ choice: id }); },
+    demoQte(id: string) { game?.debugBranch({ qte: id }); },
+    /** How a beat plays for a crewmate who is dead, in a throwaway story. */
+    lineIfDead(id: string, l: { key: string; who: string; fallback?: string }) {
+      const s = { ...newSave(), branch: { ...emptyBranch(), dead: { [id]: { cause: 'test', level: 1 } } } };
+      return resolveLine(s, l);
+    },
+    get savedLog() { const raw = localStorage.getItem('bs-save-v1'); return raw ? (JSON.parse(raw) as SaveData).branch?.log ?? [] : []; },
+  },
   get npcs() { return game?.story.npcs.debug(); },
   get craft() { return game?.craft.debug() ?? null; },
   get talk() { return game?.dialogue.debug() ?? null; },

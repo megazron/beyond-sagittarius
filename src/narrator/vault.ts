@@ -248,7 +248,9 @@ export class Vault {
 }
 
 /** Scene scripts. `s` says what the player actually did. */
-export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', s: { ateRed: boolean; deaths: number; bites: number; renamed: boolean; failed?: number }): VaultLine[] {
+export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', s: { ateRed: boolean; deaths: number; bites: number; renamed: boolean; failed?: number; comments?: string[] }): VaultLine[] {
+  // what the record earned: the Ledger, read back
+  const said = (s.comments ?? []).map((key, i): VaultLine => ({ key, shot: i % 2 ? 'profile' : 'hands', pose: i % 2 ? 'present' : 'write' }));
   switch (id) {
     case 'intro': return [
       { key: 'mz.intro.1', shot: 'wide', pose: 'stand' },
@@ -269,6 +271,7 @@ export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', s: { ateR
       { key: 'mz.l7.1', shot: 'push', pose: 'present' },
       { key: s.bites === 0 ? 'mz.l7.clean' : 'mz.l7.bitten', shot: 'profile', pose: 'idle' },
       { key: 'mz.l7.2', shot: 'orrery', pose: 'point' },
+      ...said,
       { key: 'mz.l7.hint', shot: 'close', pose: 'idle' },
     ];
     case 'ch2': return [
@@ -280,6 +283,7 @@ export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', s: { ateR
     case 'ch1': return [
       { key: 'mz.ch1.1', shot: 'wide', pose: 'stand' },
       { key: s.renamed ? 'mz.ch1.names' : 'mz.ch1.nonames', shot: 'hands', pose: 'write' },
+      ...said,
       { key: 'mz.ch1.2', shot: 'low', pose: 'present' },
       { key: 'mz.ch1.3', shot: 'window', pose: 'idle' },
       { key: 'mz.ch1.4', shot: 'close', pose: 'idle', after: 1.2 },

@@ -3,16 +3,33 @@ import { t } from '../i18n';
 import { voice } from '../core/voice';
 import { Renderer } from '../core/renderer';
 import type { Character, CrewId, CrewPose } from '../characters/character';
+import type { Cond, Effect, LineChoice } from '../game/branch/types';
 
 export type Who = CrewId | 'megazron';
 
 /** A camera set-up: `from` looks at `to`; `push` drifts towards the subject. */
 export interface Shot { from: THREE.Vector3; to: THREE.Vector3; push?: number; roll?: number; /** Lens blur override (fraction of screen height). */ aperture?: number }
 
-export interface Beat {
+/**
+ * A step of a scene. Beyond the line itself it can branch: `if` plays it only
+ * when the condition holds, `swap` and `fallback` change the line (see
+ * LineChoice; a dead speaker's line is skipped unless it has a fallback), and
+ * `choice` or `qte` stops the scene for the player. Put the consequences in
+ * the beats that follow, behind `if`.
+ */
+export interface Beat extends Omit<LineChoice, 'who' | 'fallbackWho'> {
   /** i18n key of the line (also its voice file). */
   key?: string;
   who?: Who;
+  fallbackWho?: Who;
+  /** Plays only if this holds. */
+  if?: Cond;
+  /** Id of a Decision. The scene waits; an answered decision is passed over. */
+  choice?: string;
+  /** Id of a Qte. The scene waits; an answered one is passed over. */
+  qte?: string;
+  /** Applied when the beat plays, even if the rest of the scene is skipped. */
+  effects?: Effect[];
   /** Builds the shot when the beat starts, so it can read actor positions. */
   shot?: () => Shot;
   poses?: Partial<Record<CrewId, CrewPose>>;
@@ -25,7 +42,19 @@ export interface Beat {
   run?: () => void;
 }
 
+/** What a scene needs from the story system. Without it no beat is conditional. */
+export interface SceneBranch {
+  test(c?: Cond): boolean;
+  line(b: Beat): { key?: string; who?: string } | null;
+  apply(e: Effect[]): void;
+  /** Has this decision or quick-time moment been answered? */
+  answered(id: string): boolean;
+  ask(decision: string, done: () => void): void;
+  quick(qte: string, done: () => void): void;
+}
+
 export interface CutsceneCtx {
+  branch?: SceneBranch;
   camera: THREE.PerspectiveCamera;
   scene: THREE.Scene;
   actors: Partial<Record<CrewId, Character>>;
@@ -86,9 +115,18 @@ export class Cutscene {
   private shot: Shot | null = null;
   done = false;
 
+  /** A panel is up: the scene holds until it answers. */
+  private waiting = false;
+
   constructor(private beats: Beat[], private ctx: CutsceneCtx) {
-    voice.preload(beats.flatMap((b) => (b.key ? [b.key] : [])));
+    voice.preload(beats.flatMap((b) => [b.key, b.fallback, ...(b.swap ?? []).map((x) => x.key)].filter((k): k is string => !!k)));
     this.rig = rigFor(ctx.scene);
+  }
+
+  private plays(b: Beat) { return this.ctx.branch?.test(b.if) ?? true; }
+  private pending(b: Beat) {
+    const id = b.choice ?? b.qte;
+    return !!id && !!this.ctx.branch && !this.ctx.branch.answered(id);
   }
   private rig: THREE.Group;
 
@@ -114,25 +152,44 @@ export class Cutscene {
   debugNext() { this.left = 0; }
 
   private next() {
-    this.i++;
-    if (this.i >= this.beats.length) { this.end(); return; }
-    const b = this.beats[this.i];
+    for (;;) {
+      this.i++;
+      if (this.i >= this.beats.length) { this.end(); return; }
+      if (this.start(this.beats[this.i])) return;
+    }
+  }
+
+  /** Starts a beat; false if it has nothing to do in this story. */
+  private start(b: Beat): boolean {
+    const br = this.ctx.branch;
+    if (!this.plays(b)) return false;
+    if ((b.choice || b.qte) && !this.pending(b)) return false;
+    const line = br ? br.line(b) : { key: b.key, who: b.who };
+    if (!line) return false;
+    const key = line.key, who = line.who as Who | undefined;
     const { actors, subtitle } = this.ctx;
     b.run?.();
+    if (b.effects) br?.apply(b.effects);
     if (b.poses) for (const id in b.poses) this.poses[id as CrewId] = b.poses[id as CrewId]!;
     if (b.faces) Object.assign(this.faces, b.faces);
     let dur = b.hold ?? 0;
-    if (b.key) {
-      const speaker = b.who ? (b.who === 'megazron' ? 'mz.name' : `crew.${b.who}.name`) : undefined;
-      subtitle(b.key, speaker);
-      const spoken = voice.duration(b.key);
-      const est = Math.max(1.4, t(b.key).length * 0.062);
+    if (key) {
+      const speaker = who ? (who === 'megazron' ? 'mz.name' : `crew.${who}.name`) : undefined;
+      subtitle(key, speaker);
+      const spoken = voice.duration(key);
+      const est = Math.max(1.4, t(key).length * 0.062);
       dur = Math.max(dur, spoken ?? est);
-      if (b.who && b.who !== 'megazron') actors[b.who]?.say(dur);
+      if (who && who !== 'megazron') actors[who]?.say(dur);
     } else subtitle(null);
     this.left = dur + (b.after ?? 0.28);
-    if (b.shot) { this.shot = b.shot(); this.shotT = 0; this.shotLen = this.left; }
-    this.frame(b.who, b.key);
+    if (b.shot) { this.shot = b.shot(); this.shotT = 0; this.shotLen = Math.max(this.left, 6); }
+    this.frame(who, key);
+    if (br && (b.choice || b.qte)) {
+      this.waiting = true;
+      const done = () => { this.waiting = false; this.left = 0; };
+      if (b.choice) br.ask(b.choice, done); else br.quick(b.qte!, done);
+    }
+    return true;
   }
 
   poses: Partial<Record<CrewId, CrewPose>> = {};
@@ -141,9 +198,11 @@ export class Cutscene {
   /** Advance; call once per frame before the actors are animated. */
   update(dt: number) {
     if (this.done) return;
-    if (this.i < 0) this.next();
-    this.left -= dt;
-    if (this.left <= 0) { this.next(); if (this.done) return; }
+    if (this.i < 0) { this.next(); if (this.done) return; }
+    if (!this.waiting) {
+      this.left -= dt;
+      if (this.left <= 0) { this.next(); if (this.done) return; }
+    }
     // turn actors towards whoever they're addressing
     for (const id in this.faces) {
       const a = this.ctx.actors[id as CrewId], b = this.ctx.actors[this.faces[id as CrewId]!];
@@ -167,7 +226,23 @@ export class Cutscene {
     }
   }
 
-  skip() { if (!this.done) this.end(); }
+  /**
+   * Jumps to the next open choice, or ends the scene if none is left: skipping
+   * can pass the talking, never the deciding. Skipped beats still take effect.
+   */
+  skip() {
+    if (this.done || this.waiting) return;
+    voice.stop();
+    while (++this.i < this.beats.length) {
+      const b = this.beats[this.i];
+      if (!this.plays(b)) continue;
+      if (this.pending(b)) { this.i--; this.left = 0; this.next(); return; }
+      if (b.effects) this.ctx.branch?.apply(b.effects);
+      b.run?.();
+      if (b.poses) for (const id in b.poses) this.poses[id as CrewId] = b.poses[id as CrewId]!;
+    }
+    this.end();
+  }
 
   private end() {
     this.done = true;

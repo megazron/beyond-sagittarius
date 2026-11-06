@@ -4,7 +4,9 @@ import { audio } from '../core/audio';
 import { smoothstep } from '../core/noise';
 import { createCharacter, Character, CrewPose } from '../characters/character';
 import { defaultLook, LINEAGES, PlayerLook } from '../characters/custom';
+import { writeSave } from '../core/save';
 import type { SaveData } from '../core/save';
+import { doHidden, test } from './branch';
 import type { World } from '../world/world';
 import type { Player } from './player';
 import type { UI } from '../ui/ui';
@@ -98,6 +100,11 @@ export class Npcs {
     return { label, blocked: () => this.lacking(cost), run: () => { this.take(cost); this.give(get); }, go };
   }
 
+  /** Tovik's miscount, still in your pocket, while handing it back can matter. */
+  private owesFlint() {
+    return this.s.level < 9 && (this.inv.flint ?? 0) > 0 && test(this.s, { all: [{ did: 'c1.tovik.over' }, { not: { did: 'c1.tovik.return' } }] });
+  }
+
   private bye: DlgChoice = { label: 'ch.bye' };
   private back: DlgChoice = { label: 'ch.back', go: 'top' };
 
@@ -107,6 +114,7 @@ export class Npcs {
     const line = (say: string) => ({ who, say, choices: end });
     const died = (this.s.deaths ?? 0);
     const ch2 = this.s.level >= 11;
+    const short = !!this.s.flags['c1.tovikShort'], price = short ? 3 : 2;
     switch (id) {
       case 'trader': return {
         start: 'top',
@@ -121,21 +129,33 @@ export class Npcs {
             },
             choices: () => [
               { label: 'ch.trade', go: 'shop' },
+              // no reminder anywhere: he doesn't know, so only the player can raise it
+              { label: 'ch.returnflint', show: () => this.owesFlint(), run: () => { doHidden(this.s, 'c1.tovik.return'); this.ui.setInventory(this.inv); writeSave(this.s); }, go: 'honest' },
               { label: 'ch.work', go: 'quest', show: () => ch2 && !this.flag(id, 'q') },
               { label: 'ch.tovtip', show: () => ch2 && !this.s.flags['tip-charcoal'], blocked: () => this.lacking({ stone: 2 }), run: () => { this.take({ stone: 2 }); this.teach('charcoal'); }, go: 'tip' },
               this.bye,
             ],
           },
           shop: {
-            who, say: () => ((this.inv.branch ?? 0) < 2 && !ch2 ? 'npc.trader.no' : 'npc.trader.menu'),
+            who, say: () => (short ? 'npc.trader.short' : (this.inv.branch ?? 0) < 2 && !ch2 ? 'npc.trader.no' : 'npc.trader.menu'),
             choices: () => [
-              { ...this.deal('ch.tradeflint', { branch: 2 }, { flint: 1 }, 'sold') },
+              {
+                label: short ? 'ch.tradeflint3' : 'ch.tradeflint', blocked: () => this.lacking({ branch: price }), go: 'sold',
+                run: () => {
+                  this.take({ branch: price });
+                  // the first time he loses count, and doesn't notice
+                  const over = this.s.level < 9 && doHidden(this.s, 'c1.tovik.over');
+                  this.give({ flint: over ? 2 : 1 });
+                  if (over) writeSave(this.s);
+                },
+              },
               { ...this.deal('ch.tradeclay', { charcoal: 1 }, { clay: 2 }, 'sold'), show: () => this.knows('charcoal') },
               { ...this.deal('ch.tradenut', { salt: 1 }, { oilnut: 2 }, 'sold'), show: () => this.knows('salt') },
               this.back,
             ],
           },
           sold: line('npc.trader.done'),
+          honest: line('npc.trader.honest'),
           tip: line('npc.trader.tip'),
           quest: {
             who, say: 'npc.trader.q',
@@ -210,10 +230,12 @@ export class Npcs {
               if (this.once(id, 'met')) return 'npc.trav.1';
               if (died >= 1 && this.once(id, 'dead')) return 'npc.trav.dead';
               if ((this.inv.soap ?? 0) > 0 && this.once(id, 'soap')) return 'npc.trav.soap';
-              return 'npc.trav.2';
+              return this.once(id, 'hungry') ? 'npc.trav.hungry' : 'npc.trav.2';
             },
             choices: () => [
               { label: 'ch.refund', go: 'refund' },
+              // costs real hunger, and nothing says it matters
+              { label: 'ch.share', show: () => this.flag(id, 'hungry') && !test(this.s, { did: 'c1.pello.share' }) && this.s.stats.hunger >= 30, run: () => { doHidden(this.s, 'c1.pello.share'); audio.blip(); writeSave(this.s); }, go: 'fed' },
               { label: 'ch.work', go: 'quest', show: () => this.knows('pottery') && !this.flag(id, 'q') },
               this.bye,
             ],
@@ -226,6 +248,7 @@ export class Npcs {
               this.back,
             ],
           },
+          fed: line('npc.trav.fed'),
           qdone: line('npc.trav.qdone'),
         },
       };

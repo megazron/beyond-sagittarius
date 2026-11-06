@@ -51,8 +51,9 @@ export class MenuNav {
   }
 
   /** Focus the first sensible control when a layer appears (not on touch: it would raise keyboards). */
-  private settle(root: HTMLElement) {
+  private settle(root: HTMLElement, asked = false) {
     if (this.input.device === 'touch') return;
+    if (!asked && root.hasAttribute('data-wait-focus')) return; // focus only once the player moves
     if (root.contains(document.activeElement) && document.activeElement !== root) return;
     const list = this.items(root).filter((el) => !(el instanceof HTMLInputElement && el.type === 'text'));
     (list.find((el) => el.matches('.primary, .active')) ?? list.find((el) => !el.closest('.tabs') && !el.matches(BACK)) ?? list[0])?.focus({ preventScroll: true });
@@ -63,7 +64,7 @@ export class MenuNav {
     if (!root) return;
     const list = this.items(root);
     const cur = document.activeElement as HTMLElement;
-    if (!root.contains(cur) || cur === root) { this.settle(root); return; }
+    if (!root.contains(cur) || cur === root) { this.settle(root, true); return; }
     const a = cur.getBoundingClientRect();
     const ax = a.left + a.width / 2, ay = a.top + a.height / 2;
     let best: HTMLElement | null = null, bs = Infinity;
@@ -120,7 +121,7 @@ export class MenuNav {
     if (m.left) { if (range) this.nudge(range, -1); else this.move('left'); }
     if (m.right) { if (range) this.nudge(range, 1); else this.move('right'); }
     if (m.a && root.contains(cur) && cur !== root) cur.click();
-    else if (m.a) this.settle(root);
+    else if (m.a) this.settle(root, true);
     if (m.b) this.back();
     if (m.lb) this.onTab(-1);
     if (m.rb) this.onTab(1);

@@ -14,6 +14,8 @@ import { mapHtml } from './map';
 import { remapHtml, bindRemap } from './remap';
 import type { Input } from '../game/input';
 import * as THREE from 'three';
+import { QuickPrompt } from './choice';
+import { ENDINGS, PathView, trustBand } from '../game/branch';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -21,8 +23,8 @@ export const LEVEL_COUNT = 21;
 export const PLAYABLE_LEVELS = 21;
 const CREW = CREW_IDS;
 
-export type MenuTab = 'pause' | 'map' | 'inventory' | 'objectives' | 'codex' | 'crew';
-const TABS: [MenuTab, string, string][] = [['pause', 'pause', 'tab.game'], ['map', 'planet', 'tab.map'], ['inventory', 'inventory', 'tab.inventory'], ['objectives', 'objectives', 'tab.goals'], ['codex', 'codex', 'menu.codex'], ['crew', 'crew', 'tab.crew']];
+export type MenuTab = 'pause' | 'map' | 'inventory' | 'objectives' | 'codex' | 'crew' | 'ledger';
+const TABS: [MenuTab, string, string][] = [['pause', 'pause', 'tab.game'], ['map', 'planet', 'tab.map'], ['inventory', 'inventory', 'tab.inventory'], ['objectives', 'objectives', 'tab.goals'], ['codex', 'codex', 'menu.codex'], ['crew', 'crew', 'tab.crew'], ['ledger', 'objectives', 'br.path.title']];
 const ALL_ITEMS = ['stone', 'branch', 'tinder', 'frond', 'flint', 'vine', 'scrap', 'fruit', 'nodule', 'fibre', 'clay', 'sand', 'limestone', 'brine', 'ash', 'oilnut', 'sugarpod', 'lichen', 'blade', 'cord', 'pot', 'charcoal', 'lime', 'salt', 'glass', 'soap', 'brew', 'vinegar'];
 
 export interface Stats { health: number; thirst: number; hunger: number; stamina: number }
@@ -36,6 +38,10 @@ export class UI implements CineUI {
   private lastAlert: string | null = null;
   private objectiveState: { level: number; progress: string | null } = { level: 1, progress: null };
   subtitlesOn = true;
+  /** Quick-time prompt (see choice.ts). */
+  choice = new QuickPrompt();
+  /** May change or drop a line spoken in the world, as the story requires. */
+  sayFilter: ((key: string, speakerKey?: string) => { key: string; who?: string } | null) | null = null;
   /** Subtitle language; null follows the game language. */
   subLang: Lang | null = null;
   private subT(key: string) { return tIn(this.subLang ?? getLang(), key); }
@@ -92,6 +98,9 @@ export class UI implements CineUI {
 
   /** Subtitle that clears itself. */
   say(key: string, speakerKey: string | undefined, seconds = 4) {
+    const line = this.sayFilter ? this.sayFilter(key, speakerKey) : { key, who: speakerKey };
+    if (!line) return;
+    key = line.key; speakerKey = line.who;
     this.subtitle(key, speakerKey);
     const spoken = voice.duration(key);
     this.subTimer = window.setTimeout(() => this.subtitle(null), Math.max(seconds, (spoken ?? 0) + 0.4) * 1000);
@@ -391,6 +400,8 @@ export class UI implements CineUI {
         ${row('settings.vibration', onOff('vibration', s.vibration !== false))}
         ${this.input ? remapHtml(this.input) : ''}`],
       ['system', 'settings.tabSystem', `
+        ${row('settings.timers', seg('timers', [['1', t('settings.on')], ['0', t('settings.off')]], s.noTimers ? '0' : '1'))}
+        <div class="note">${escapeHtml(t('settings.timersNote'))}</div>
         ${onTutorial ? row('settings.tutorial', `<button class="btn small" id="set-tut">${escapeHtml(t('settings.tutorialReplay'))}</button>`) : ''}
         ${onSkins ? row('menu.skins', `<button class="btn small" id="set-skins">${escapeHtml(t('menu.skins'))}</button>`) : ''}
         ${onLegal ? row('legal.title', `<button class="btn small" id="set-legal">${escapeHtml(t('legal.title'))}</button>`) : ''}`],
@@ -416,6 +427,12 @@ export class UI implements CineUI {
         if (name === 'quality') { if (v !== quality) onQuality(v as QualityName); return; }
         if (name === 'subLang' || name === 'voiceLang') {
           (s as unknown as Record<string, string>)[name] = v;
+          g.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+          onChange(s);
+          return;
+        }
+        if (name === 'timers') {
+          s.noTimers = v === '0';
           g.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
           onChange(s);
           return;
@@ -538,6 +555,48 @@ export class UI implements CineUI {
     };
     input.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') void go(); });
     $('skin-try').addEventListener('click', () => void go());
+    $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
+  }
+
+  /** The path tree: what was chosen, what stayed locked, and where that left people. */
+  openPath(title: string, v: PathView, onClose: () => void, opts: { replay?: () => void; note?: string; back?: string; standalone?: boolean } = {}) {
+    const mark = { taken: '◆', locked: '◇', secret: '◇' };
+    const nodes = v.nodes.map((n) => {
+      const open = n.branches.some((b) => b.state === 'taken');
+      const rows = n.branches.map((b) => {
+        const label = b.state === 'secret' ? t('br.path.secret') : t(b.label);
+        const why = b.state === 'locked' ? (b.hint ? t(b.hint) : t('br.path.locked')) : '';
+        return `<li class="pt-b ${b.state}" data-branch="${escapeHtml(b.id)}"><i>${mark[b.state]}</i><span>${escapeHtml(label)}${why ? `<small>${escapeHtml(why)}</small>` : ''}</span></li>`;
+      }).join('');
+      return `<li class="pt-node ${open ? 'open' : ''}" data-node="${escapeHtml(n.id)}"><div class="eyebrow dim">${escapeHtml(t('br.path.level', { n: n.level }))}</div><div class="pt-t">${escapeHtml(t(n.title))}</div><ul>${rows}</ul></li>`;
+    }).join('');
+    const trust = v.trust.map((r) => {
+      const state = v.dead.includes(r.id) ? t('crew.st.dead') : t(`br.trust.${trustBand(r.value)}`);
+      return `<li class="${trustBand(r.value)}"><span>${escapeHtml(t(`crew.${r.id}.name`))}</span><b>${escapeHtml(state)}</b></li>`;
+    }).join('');
+    const rec = v.record.map((r) => `<li><span>${escapeHtml(t(`br.axis.${r.axis}`))}</span><b>${r.value > 0 ? '+' : ''}${r.value}</b></li>`).join('');
+    const body = `<h3 class="page-h">${escapeHtml(title)}</h3>
+      ${opts.note ? `<div class="note">${escapeHtml(opts.note)}</div>` : ''}
+      ${nodes ? `<ol class="path-tree">${nodes}</ol>` : `<div class="note">${escapeHtml(t('br.path.none'))}</div>`}
+      <div class="pt-cols">
+        <section><div class="eyebrow">${escapeHtml(t('br.path.trust'))}</div><ul class="pt-stats">${trust}</ul></section>
+        <section><div class="eyebrow">${escapeHtml(t('br.path.record'))}</div><ul class="pt-stats">${rec}</ul></section>
+        <section><div class="eyebrow">${escapeHtml(t('br.path.endings'))}</div><ul class="pt-ends">${ENDINGS.map((e) => `<li data-ending="${escapeHtml(e.id)}"><span>${escapeHtml(t(e.title))}</span><small>${escapeHtml(t(e.desc))}</small></li>`).join('')}</ul></section>
+      </div>
+      ${opts.replay ? `<div class="menu"><button class="btn primary" id="pt-replay">${escapeHtml(t('br.replay'))}</button></div>` : ''}`;
+    if (opts.standalone) this.openModal(`<h2>${escapeHtml(t('br.path.title'))}</h2><div class="menu-page">${body}</div>${this.foot(opts.back ?? 'menu.back')}`);
+    else this.menuPage('ledger', body, opts.back ?? 'menu.close');
+    if (opts.replay) $('pt-replay').addEventListener('click', () => { this.closeModal(); opts.replay!(); });
+    $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
+  }
+
+  /** Chapter select on the title. */
+  openChapters(list: { id: number; title: string; played: boolean; note: string }[], onOpen: (id: number) => void, onClose: () => void) {
+    this.openModal(`<h2>${escapeHtml(t('br.chapters'))}</h2><div class="menu-page">
+      <div class="note">${escapeHtml(t('br.chapters.note'))}</div>
+      <div class="menu chapters">${list.map((c) => `<button class="btn ${c.played ? 'primary' : ''}" data-ch="${c.id}" ${c.played ? '' : 'disabled'}><span>${escapeHtml(t(c.title))}${c.played ? '' : `<small>${escapeHtml(t(c.note))}</small>`}</span></button>`).join('')}</div></div>
+      ${this.foot('menu.back')}`);
+    $('modal-card').querySelectorAll<HTMLButtonElement>('[data-ch]').forEach((b) => b.addEventListener('click', () => onOpen(+b.dataset.ch!)));
     $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
   }
 

@@ -510,3 +510,46 @@ body.in-panel .subtitle { bottom: auto; top: calc(var(--safe-t) + 14vh); }
   .disc h2, .safety-card h2 { font-size: 26px; }
   .disc-text, .safety-card > p, .warn, .disc-joke { font-size: 14px; margin: 4px 0; }
 }
+
+/* Choices: the countdown ring sits on the conversation panel; quick-time prompt; the Ledger note */
+body.choosing .btn.skip, body.choosing .subtitle { display: none; }
+.ring-timer { position: relative; display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; }
+.ring-timer svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring-timer circle { fill: none; stroke-width: 3; }
+.ring-timer .bg { stroke: var(--faint); }
+.ring-timer .fg { stroke: var(--accent); stroke-linecap: round; }
+.urgent .fg, .ring-timer.urgent .fg { stroke: var(--red); }
+.ring-timer b { font: 600 19px var(--font-ui); }
+.dialog .ring-timer { margin-bottom: 6px; }
+.dialog:not(:has(.dlg-who:empty)) .ring-timer { float: inline-end; margin-bottom: 0; }
+.qte { position: fixed; left: 50%; top: 56%; transform: translate(-50%, -50%); z-index: 31; display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(420px, 92vw); text-align: center; text-shadow: var(--shadow); }
+#qte-btn { width: 96px; height: 96px; padding: 0; background: none; border: 0; border-radius: 50%; color: var(--paper); cursor: pointer; touch-action: manipulation; }
+#qte-btn kbd { font: 600 26px var(--font-ui); color: var(--accent); }
+body.touch #qte-btn kbd { display: none; }
+body.touch #qte-btn::after { content: ''; width: 40px; height: 40px; border-radius: 50%; background: var(--accent); }
+.qte-label { font: 600 24px var(--font-ui); letter-spacing: var(--track); }
+.ledger-note { position: fixed; top: calc(var(--safe-t) + 18px); inset-inline-end: calc(var(--safe-r) + 22px); z-index: 31; font: 500 16px var(--font-ui); letter-spacing: var(--track); color: var(--accent); text-shadow: var(--shadow); pointer-events: none; }
+
+/* The path tree */
+.path-tree, .path-tree ul, .pt-stats, .pt-ends { list-style: none; margin: 0; padding: 0; }
+.path-tree { padding-inline-start: 18px; border-inline-start: 1px solid var(--faint); margin: 12px 0 18px 6px; max-width: 680px; }
+.pt-node { position: relative; padding-bottom: 14px; }
+.pt-node::before { content: ''; position: absolute; inset-inline-start: -23px; top: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--night); box-shadow: inset 0 0 0 1px var(--dim); }
+.pt-node.open::before { background: var(--accent); box-shadow: none; }
+.pt-node .eyebrow.dim { margin-top: 0; font-size: 13px; }
+.pt-t { font: 600 20px var(--font-ui); letter-spacing: var(--track); margin-bottom: 2px; }
+.pt-b { display: flex; gap: 8px; padding: 2px 0; font-size: 15px; line-height: 1.4; color: var(--dim); }
+.pt-b i { flex: none; font-style: normal; }
+.pt-b.taken { color: var(--paper); }
+.pt-b.taken i { color: var(--accent); }
+.pt-b.secret span { font-style: italic; }
+.pt-b small, .pt-ends small { display: block; font-size: 13px; color: var(--dim); }
+body.lang-ur .pt-b, body.lang-ur .pt-ends li { line-height: 2; }
+.pt-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px 32px; margin-bottom: 14px; }
+.pt-stats li { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; font-size: 15px; color: var(--dim); }
+.pt-stats b { font-weight: 500; color: var(--paper); }
+.pt-stats .warm b, .pt-stats .firm b { color: var(--teal); }
+.pt-stats .shaken b, .pt-stats .broken b { color: var(--accent); }
+.pt-ends li { padding: 2px 0; font-size: 15px; color: var(--dim); }
+.menu.chapters small { display: block; font: 500 14px var(--font-ui); color: var(--dim); text-transform: none; letter-spacing: 0; }
+.menu.chapters .btn:disabled { opacity: 0.6; }

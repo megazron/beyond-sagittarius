@@ -17,8 +17,9 @@ import type { Player } from './player';
 import type { Input } from './input';
 import { UI, PLAYABLE_LEVELS } from '../ui/ui';
 import { Tutorial } from './tutorial';
-import { Cutscene, Beat } from '../cinematic/cutscene';
+import { Cutscene, Beat, SceneBranch } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
+import { apply, collectPayoffs, DECISIONS, LINE_RULES, QTES, record, resolveLine, test } from './branch';
 
 type Mode = 'wake' | 'play' | 'dead' | 'scene' | 'craft' | 'talk';
 
@@ -29,6 +30,7 @@ export class Game {
   private wakeT = 0;
   private wakeCues: { t: number; fn: () => void; done?: boolean }[] = [];
   private saveClock = 0;
+  private payoffClock = 0;
   private hudClock = 0;
   private interactTarget: { kind: 'water' } | { kind: 'item'; item: Item } | { kind: 'action'; action: Action } | { kind: 'strike' } | null = null;
   story: Story;
@@ -63,6 +65,13 @@ export class Game {
       c.failed++;
       this.ui.say(`fail.${(this.fails++ % 4) + 1}`, 'mz.name', 3.5);
     };
+    // the dead stop talking, wherever the line comes from
+    ui.sayFilter = (key, who) => {
+      const id = /^crew\.(\w+)\.name$/.exec(who ?? '')?.[1];
+      if (!id || !this.save) return { key, who };
+      const line = resolveLine(this.save, { ...LINE_RULES[key], key, who: id });
+      return line?.key ? { key: line.key, who: line.who ? `crew.${line.who}.name` : undefined } : null;
+    };
     onLangChange(() => { if (this.save) { this.lastObjKey = ''; this.refreshObjective(); this.ui.setInventory(this.save.inventory, this.story.tools()); } });
   }
 
@@ -79,6 +88,7 @@ export class Game {
     document.getElementById('hud')!.classList.add('in-scene');
     this.story.scenePose = () => this.scene?.poses.explorer ?? 'stand';
     this.scene = new Cutscene(beats, {
+      branch: this.sceneBranch,
       camera: this.player.camera,
       scene: this.world.scene,
       actors: { scientist: this.player.model, explorer: this.world.explorer },
@@ -142,6 +152,89 @@ export class Game {
     showDiscovery(n, () => { this.leavePanel(); this.story.ch2.afterDiscovery(n); });
   }
 
+  /** Accessibility setting: choices wait for the player. */
+  timersOff = false;
+
+  private sceneBranch: SceneBranch = {
+    test: (c) => test(this.save, c),
+    line: (b) => resolveLine(this.save, b),
+    apply: (e) => apply(this.save, e),
+    answered: (id) => this.save.branch.log.some((e) => e.id === id),
+    ask: (id, done) => this.ask(id, done),
+    quick: (id, done) => this.quick(id, done),
+  };
+
+  /**
+   * Opens a decision. The panel is saved as open and the answer is saved the
+   * moment it lands, so neither a reload nor a crash takes a choice back.
+   */
+  private ask(id: string, done: () => void) {
+    const s = this.save, d = DECISIONS[id];
+    if (!d) { s.branch.open = null; done(); return; }
+    const options = d.options.filter((o) => test(s, o.requires));
+    s.branch.open = { kind: 'decision', id };
+    this.persist();
+    this.ui.subtitle(null);
+    let expired = false;
+    const tree: DlgTree = {
+      start: 'q',
+      nodes: {
+        q: {
+          who: d.who ? `crew.${d.who}.name` : '', say: d.prompt ?? '', quiet: true,
+          choices: options.map((o) => ({
+            label: o.label,
+            run: () => { record(s, id, 'decision', o.id, expired); apply(s, o.effects); this.settle(); },
+          })),
+        },
+      },
+    };
+    this.dialogue.start(tree, done, {
+      seconds: d.seconds && !this.timersOff ? d.seconds : null,
+      fallback: Math.max(0, options.findIndex((o) => o.id === d.fallback)),
+      expired: () => { expired = true; },
+    });
+  }
+
+  private quick(id: string, done: () => void) {
+    const s = this.save, q = QTES[id];
+    if (!q) { s.branch.open = null; done(); return; }
+    s.branch.open = { kind: 'qte', id };
+    this.persist();
+    this.ui.subtitle(null);
+    this.ui.choice.quick({
+      label: t(q.label),
+      seconds: this.timersOff ? null : q.seconds,
+      onDone: (passed) => {
+        record(s, id, 'qte', passed ? 'pass' : 'fail');
+        apply(s, passed ? q.pass : q.fail);
+        this.settle();
+        done();
+      },
+    });
+  }
+
+  /** The answer is in: close the record and write it to disk now. */
+  private settle() {
+    this.save.branch.open = null;
+    this.ui.choice.note();
+    this.persist();
+    this.ui.setInventory(this.save.inventory, this.story.tools());
+  }
+
+  /** Delivers consequences whose level has arrived. */
+  private deliverPayoffs() {
+    const due = collectPayoffs(this.save);
+    if (!due.length) return;
+    this.persist();
+    this.ui.setInventory(this.save.inventory, this.story.tools());
+    for (const p of due) {
+      this.after(p.delay ?? 0, () => {
+        if (p.say) this.ui.say(p.say.key, p.say.who, 5);
+        if (p.toast) this.ui.toast(t(p.toast));
+      });
+    }
+  }
+
   /** Schedule fn after `sec` seconds of game time (pauses with the game). */
   after(sec: number, fn: () => void) {
     this.cues.push({ at: this.clock + sec, fn });
@@ -181,6 +274,9 @@ export class Game {
       this.player.spawn(save.pos[0], save.pos[2], save.yaw);
       this.mode = 'play';
       this.enterPlay(false);
+      // the panel that was open when the game closed is still waiting
+      const open = save.branch.open;
+      if (open) this.after(0.6, () => this.playScene([open.kind === 'decision' ? { choice: open.id } : { qte: open.id }]));
     }
     this.player.model.root.visible = true;
     audio.startWind();
@@ -257,7 +353,7 @@ export class Game {
     this.wakeT = t;
   }
 
-  skipScene() { this.scene?.skip(); }
+  skipScene() { if (this.ui.choice.open) this.ui.choice.press(); else this.scene?.skip(); }
 
   private wakeSkipped = false;
   skipWake() {
@@ -322,6 +418,8 @@ export class Game {
     if (this.mode === 'wake') { this.updateWake(dt * this.wakeRate); return; }
     if (this.mode === 'dead') return;
     this.runCues(dt);
+    this.ui.choice.update(dt);
+    if (this.mode === 'scene') this.dialogue.update(dt);
     if (this.mode === 'craft' || this.mode === 'talk') {
       this.player.update(dt, this.input, false, 100, 1);
       this.story.update(dt, time);
@@ -385,6 +483,8 @@ export class Game {
       const m = this.marker();
       this.ui.setMarker(m ? this.objectivePoint() : null, m ? m.dist : null);
     }
+    this.payoffClock -= dt;
+    if (this.payoffClock <= 0) { this.payoffClock = 1; this.deliverPayoffs(); }
     this.saveClock += dt;
     if (this.saveClock > 15) { this.saveClock = 0; this.persist(); }
   }
@@ -639,6 +739,13 @@ export class Game {
   }
 
   // ---------- test / debug helpers (window.__bs) ----------
+  /** Plays a decision or quick-time beat on its own, forgetting test answers first. */
+  debugBranch(beat: Beat) {
+    const b = this.save.branch;
+    b.log = b.log.filter((e) => !e.id.startsWith('debug.'));
+    this.playScene([beat]);
+  }
+
   /** Run the interaction the player would get by pressing E right now. */
   debugAct(): string | null {
     if (this.mode !== 'play') return null;

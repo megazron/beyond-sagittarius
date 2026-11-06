@@ -279,6 +279,82 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     time.sleep(0.5)
     if ev("__bs.paused"):
         fail("still paused after Resume")
+    # ---- choices by touch ----
+    def open_panel(call, want):
+        ev(f"__bs.branch.{call}")
+        ev("__bs.step(0.2)")
+        page.wait_for_selector(want, timeout=5000)
+        time.sleep(0.5)
+
+    def log_pick(i):
+        return next((e["pick"] for e in ev("__bs.branch.state.log") if e["id"] == i), None)
+
+    open_panel("demo('debug.timed')", "#dlg-choices .dlg-c")
+    shot("11-choice")
+    fit = ev("""() => [...document.querySelectorAll('#dlg-choices .dlg-c, #dlg-timer')].map((e) => {
+      const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom, r.height]; })""")
+    if len(fit) != 4:
+        fail(f"timed choice: expected ring and three options, got {len(fit)} boxes")
+    for l, tp, r, bt, h in fit:
+        if l < -1 or tp < -1 or r > ev("innerWidth") + 1 or bt > ev("innerHeight") + 1 or h < 40:
+            fail(f"choice box off-screen or too small: {[l, tp, r, bt, h]}")
+    touch.tap(*centre(page, "#dlg-choices .dlg-c[data-i='1']"))
+    ev("__bs.step(0.2)")
+    if log_pick("debug.timed") != "joke":
+        fail(f"tap did not pick option 2: {log_pick('debug.timed')}")
+    open_panel("demoQte('debug.qte')", "#qte-btn")
+    shot("12-qte")
+    touch.tap(*centre(page, "#qte-btn"))
+    ev("__bs.step(0.2)")
+    if log_pick("debug.qte") != "pass":
+        fail("tap did not pass the quick-time moment")
+    # timers off by tap
+    ev("__bs.step(0.5)")
+    touch.tap(*centre(page, "#tb-pause"))
+    touch.tap(*centre(page, "#p-set"))
+    touch.tap(*centre(page, "[data-seg=timers] button[data-v='0']"))
+    touch.tap(*centre(page, "#m-close"))
+    page.wait_for_selector("#p-resume", timeout=5000)
+    touch.tap(*centre(page, "#p-resume"))
+    time.sleep(0.3)
+    open_panel("demo('debug.timed')", "#dlg-choices .dlg-c")
+    ev("__bs.step(20)")
+    if not ev("__bs.branch.open") or page.locator("#dlg-timer").is_visible():
+        fail("timers off: panel still counts down")
+    touch.tap(*centre(page, "#dlg-choices .dlg-c[data-i='0']"))
+    ev("__bs.step(0.2)")
+    # a real decision survives a reload and isn't offered again
+    open_panel("demo('c1.accuse')", "#dlg-choices .dlg-c")
+    touch.tap(*centre(page, "#dlg-choices .dlg-c[data-i='0']"))
+    ev("__bs.step(0.6)")
+    if not any(e["id"] == "c1.accuse" and e["pick"] == "truth" for e in ev("__bs.branch.savedLog")):
+        fail("decision not autosaved")
+    page.reload(wait_until="domcontentloaded")
+    page.wait_for_function("window.__bs && window.__bs.ready", timeout=300000)
+    touch.tap(*centre(page, "#btn-continue"))
+    page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
+    time.sleep(1)
+    ev("__bs.step(1)")
+    if log_pick("c1.accuse") != "truth":
+        fail("decision lost on reload")
+    ev("__bs.branch.demo('c1.accuse')")
+    ev("__bs.step(1)")
+    if ev("__bs.branch.open"):
+        fail("an answered decision was offered again")
+    # the path tree, by tap, on a phone
+    touch.tap(*centre(page, "#tb-pause"))
+    touch.tap(*centre(page, "#p-path"))
+    page.wait_for_selector(".path-tree", timeout=5000)
+    time.sleep(0.4)
+    shot("13-path-tree")
+    if ev("document.querySelectorAll('.pt-b.taken').length") != 1:
+        fail("path tree does not show the decision")
+    if ev("document.getElementById('modal-card').scrollWidth > document.getElementById('modal-card').clientWidth + 1"):
+        fail("path tree scrolls sideways")
+    touch.tap(*centre(page, "#m-close"))
+    page.wait_for_selector("#p-resume", timeout=5000)
+    touch.tap(*centre(page, "#p-resume"))
+    time.sleep(0.4)
     # pinch-zoom must not zoom the page
     scale = ev("visualViewport ? visualViewport.scale : 1")
     if abs(scale - 1) > 0.01:

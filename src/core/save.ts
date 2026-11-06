@@ -2,6 +2,8 @@
 import { migrateNames } from './crew';
 import type { Binds } from '../game/input';
 import { defaultLook, PlayerLook, CrewSkins } from '../characters/custom';
+import { emptyBranch, normaliseBranch } from '../game/branch/engine';
+import type { BranchState } from '../game/branch/types';
 
 export interface SaveData {
   version: 1;
@@ -30,6 +32,10 @@ export interface SaveData {
   discoveries?: string[];
   /** Minigames ruined; the crew and the narrator keep score. */
   crafts?: { failed: number };
+  /** Trust, the personality record, the decisions log and who is still alive. */
+  branch: BranchState;
+  /** Set on a chapter replay, which lives in its own slot. */
+  replay?: number;
   savedAt: number;
 }
 
@@ -56,16 +62,28 @@ export interface Settings {
   binds?: Binds;
   /** Controller rumble. */
   vibration?: boolean;
+  /** Accessibility: choices and quick-time moments wait for the player. */
+  noTimers?: boolean;
+  /** Path branches taken in any run on this device (the path tree unmasks them). */
+  paths?: string[];
   /** Set from the title-screen settings: run the tutorial on the next session. */
   replayTutorial?: boolean;
 }
 
 const SAVE_KEY = 'bs-save-v1';
+const REPLAY_KEY = 'bs-save-replay-v1';
 const SETTINGS_KEY = 'bs-settings-v1';
+
+/**
+ * A chapter replay writes to its own slot, so a second run through a chapter
+ * can never rewrite the choices of the main story.
+ */
+let slotKey = SAVE_KEY;
+export function useSlot(slot: 'main' | 'replay') { slotKey = slot === 'main' ? SAVE_KEY : REPLAY_KEY; }
 
 export function loadSave(): SaveData | null {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = localStorage.getItem(slotKey);
     if (!raw) return null;
     const d = JSON.parse(raw) as SaveData;
     if (d.version !== 1) return null;
@@ -80,6 +98,7 @@ export function loadSave(): SaveData | null {
     d.skins ??= {};
     d.discoveries ??= [];
     d.crafts ??= { failed: 0 };
+    d.branch = normaliseBranch(d.branch);
     return d;
   } catch {
     return null;
@@ -88,11 +107,11 @@ export function loadSave(): SaveData | null {
 
 export function writeSave(d: SaveData) {
   d.savedAt = Date.now();
-  localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+  localStorage.setItem(slotKey, JSON.stringify(d));
 }
 
 export function clearSave() {
-  localStorage.removeItem(SAVE_KEY);
+  localStorage.removeItem(slotKey);
 }
 
 export function emptyInventory(): Record<string, number> {
@@ -116,6 +135,7 @@ export function newSave(): SaveData {
     houndHits: 0,
     discoveries: [],
     crafts: { failed: 0 },
+    branch: emptyBranch(),
     savedAt: 0,
   };
 }

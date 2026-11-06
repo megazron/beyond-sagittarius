@@ -14,6 +14,8 @@ import { Chapter2 } from './chapter2';
 import { CH2_FIRST } from './tech/data';
 import type { TechNode } from './tech/data';
 import type { DlgTree } from './dialogue';
+import { doHidden, HARD_TO_BELIEVE, isAlive, JOKED, RESCUE_EARLY_HOURS, SAID_NOTHING, SPOKE_PLAINLY, storyHours, trustBand, trustOf } from './branch';
+import type { Cond } from './branch';
 
 /** A contextual "press E" station in the world (build, craft, talk...). */
 export interface Action {
@@ -33,6 +35,12 @@ export const LAST_LEVEL = 10;
 const DAWN = 6.0;
 const DUSK = 19.4;
 const isNight = (h: number) => h >= DUSK || h < 5.5;
+
+const FIRE_BIG: Cond = { chose: ['c1.fire', 'big'] };
+const FIRE_SMALL: Cond = { chose: ['c1.fire', 'small'] };
+const PROOF: Cond = { chose: ['c1.accuse', 'proof'] };
+const TRUTH: Cond = { chose: ['c1.accuse', 'truth'] };
+const SPLINT_SLIPPED: Cond = { all: [{ decided: 'c1.splint' }, { not: { passed: 'c1.splint' } }] };
 
 /**
  * Levels 4-10 of "The First 24 Hours": fire, shelter, spear, the first night,
@@ -442,7 +450,7 @@ export class Story {
     this.after(1.4, () => { this.ui.deviceLines([t('signal.tune1'), t('signal.tune2')], true); audio.beep(); });
     this.after(2.8, () => { this.ui.deviceLines([t('signal.tune1'), t('signal.tune2'), t('signal.tune3', { m: dist })], true); audio.chime(); });
     this.after(3.2, () => this.ui.say('dlg.8.found', 'crew.scientist.name', 4.5));
-    this.after(3.2 + Math.max(4.3, (voice.duration('dlg.8.found') ?? 0) + 0.5), () => { this.ui.deviceLines(null); s.flags.signal = true; this.sequence = false; });
+    this.after(3.2 + Math.max(4.3, (voice.duration('dlg.8.found') ?? 0) + 0.5), () => { this.ui.deviceLines(null); s.flags.signal = true; s.branch.marks.signal = storyHours(s); this.sequence = false; });
   }
 
   // ---------------- level 9: the Explorer ----------------
@@ -477,12 +485,17 @@ export class Story {
     audio.chime();
     const { z, y } = this.pair;
     this.turnToCrew();
+    // how long she was left waiting: nothing on screen ever counted it
+    const since = this.s.branch.marks.signal;
+    if (since !== undefined) doHidden(this.s, storyHours(this.s) - since <= RESCUE_EARLY_HOURS ? 'c1.rescue.early' : 'c1.rescue.late');
     this.playScene([
       { key: 'dlg.9.1', who: 'explorer', shot: () => cover.ots(y, z), poses: { explorer: 'injured', scientist: 'stand' }, after: 0.5 },
       { key: 'dlg.9.2', who: 'scientist', shot: () => cover.close(z, 0.4) },
       { key: 'dlg.9.3', who: 'explorer', shot: () => cover.close(y, 0.45, 1.25, 0) },
       { key: 'dlg.9.3b', who: 'scientist', shot: () => cover.close(z, -0.35), poses: { scientist: 'stand' }, after: 0.4 },
       { key: 'dlg.9.3c', who: 'explorer', shot: () => cover.close(y, -0.4, 1.1, 0), after: 0.4 },
+      { key: 'br.res.early', who: 'explorer', if: { did: 'c1.rescue.early' }, shot: () => cover.ots(y, z), after: 0.4 },
+      { key: 'br.res.late', who: 'explorer', if: { did: 'c1.rescue.late' }, shot: () => cover.ots(y, z), after: 0.4 },
       { key: 'dlg.9.4', who: 'scientist', shot: () => cover.two(z, y, 3.2), poses: { scientist: 'stand' } },
     ], () => { this.s.flags.metCrew = true; });
   }
@@ -503,8 +516,12 @@ export class Story {
     this.world.explorer.setSplint(true);
     audio.thud();
     this.turnToCrew();
+    const { y } = this.pair;
     this.playScene([
-      { key: 'dlg.9.5', who: 'explorer', shot: () => cover.close(this.pair.y, 0.4, 1.1, 0), poses: { explorer: 'injured', scientist: 'stand' } },
+      // the knot is half tied when the ground jumps: Greg, walking
+      { run: () => audio.tone(42, 1.6, 'sine', 0.5, 0, -14), qte: 'c1.splint', shot: () => cover.close(y, 0.4, 1.1, 0), poses: { explorer: 'injured', scientist: 'stand' } },
+      { key: 'br.splint.fail', who: 'explorer', if: SPLINT_SLIPPED, shot: () => cover.close(y, -0.3, 1, 0), poses: { scientist: 'facepalm' }, after: 0.4 },
+      { key: 'dlg.9.5', who: 'explorer', shot: () => cover.close(y, 0.4, 1.1, 0), poses: { explorer: 'injured', scientist: 'stand' } },
     ], () => {
       s.flags.crewFollow = true;
       this.crew.mode = 'follow';
@@ -524,7 +541,24 @@ export class Story {
       { key: 'dlg.9.7', who: 'scientist', shot: () => cover.close(z, 0.3, 0.95), poses: { scientist: 'stand' }, after: 0.8 },
       { key: 'dlg.9.8', who: 'explorer', shot: () => cover.close(y, 0.25, 0.95, 0), after: 0.6 },
       { key: 'dlg.9.9', who: 'scientist', shot: () => cover.two(z, y, 3.5), after: 1.2 },
-    ]);
+      { key: 'br.fire.ask', who: 'explorer', shot: () => cover.close(y, -0.35, 1.1, 0), after: 0.4 },
+      { choice: 'c1.fire', shot: () => cover.two(z, y, 3.5) },
+      { key: 'br.fire.big', who: 'scientist', if: FIRE_BIG, shot: () => cover.close(z, 0.3, 0.95) },
+      { key: 'br.fire.big.r', who: 'explorer', if: FIRE_BIG, shot: () => cover.close(y, 0.3, 1, 0), after: 0.6 },
+      { key: 'br.fire.small', who: 'scientist', if: FIRE_SMALL, shot: () => cover.close(z, 0.3, 0.95) },
+      { key: 'br.fire.small.r', who: 'explorer', if: FIRE_SMALL, shot: () => cover.close(y, 0.3, 1, 0), after: 0.6 },
+    ], () => {
+      this.campPending = false;
+      if (this.nextTalk) { this.nextTalk = false; this.beaconPlan(); }
+    });
+  }
+
+  /** The fire talk is coming or running: the next level's opening waits for it. */
+  private campPending = false;
+  private nextTalk = false;
+  private beaconPlan() {
+    this.dialogue([['dlg.10.1', 'explorer'], ['dlg.10.2', 'scientist'], ['j.7', 'explorer']], 5);
+    this.crew.wave = 2.5;
   }
 
   private updateCrew(dt: number, time: number) {
@@ -556,6 +590,7 @@ export class Story {
       // arrived at camp with her?
       if (s.level === 9 && c.pos.distanceTo(L.camp) < 10 && p.pos.distanceTo(L.camp) < 12 && !this.sequence) {
         s.flags.crewCamp = true;
+        this.campPending = true;
         this.ui.toast(t('msg.crewAtCamp'));
         this.after(2.2, () => this.campTalk());
       }
@@ -630,10 +665,10 @@ export class Story {
     this.playScene([
       { run: push('beacon.1'), hold: 1.8, shot: beaconShot, poses: { scientist: 'stand', explorer: 'stand' } },
       { run: push('beacon.2'), hold: 1.7 },
-      { run: push('beacon.strong'), key: 'rad.strong', who: 'strong', shot: () => cover.mid(z, 0.5, 2.2), poses: { scientist: 'stand' } },
-      { run: push('beacon.medic'), key: 'rad.medic', who: 'medic', shot: () => cover.mid(y, -0.5, 2.2), poses: { scientist: 'stand' } },
-      { run: push('beacon.builder'), key: 'rad.builder', who: 'builder', shot: () => cover.two(z, y, 3.3), poses: { scientist: 'stand' } },
-      { run: push('beacon.social'), key: 'rad.social', who: 'social', shot: () => cover.close(y, 0.4, 1.3), poses: { scientist: 'stand', explorer: 'stand' } },
+      { run: push('beacon.strong'), key: 'rad.strong', who: 'strong', fallback: 'br.rad.static', shot: () => cover.mid(z, 0.5, 2.2), poses: { scientist: 'stand' } },
+      { run: push('beacon.medic'), key: 'rad.medic', who: 'medic', fallback: 'br.rad.static', shot: () => cover.mid(y, -0.5, 2.2), poses: { scientist: 'stand' } },
+      { run: push('beacon.builder'), key: 'rad.builder', who: 'builder', swap: [{ if: { flag: 'c1.bigFire' }, key: 'br.rad.builder.smoke' }], fallback: 'br.rad.static', shot: () => cover.two(z, y, 3.3), poses: { scientist: 'stand' } },
+      { run: push('beacon.social'), key: 'rad.social', who: 'social', fallback: 'br.rad.static', shot: () => cover.close(y, 0.4, 1.3), poses: { scientist: 'stand', explorer: 'stand' } },
       { key: 'dlg.10.3', who: 'explorer', shot: () => cover.close(y, -0.4, 1.1), poses: { explorer: 'stand', scientist: 'stand' }, after: 0.7 },
       { run: () => { alert(1)(); audio.tone(40, 2.5, 'sawtooth', 0.25, 0, 10); }, hold: 2.2, shot: skyShot, poses: { explorer: 'stand', scientist: 'stand' } },
       { run: alert(2), key: 'beacon.unknown2', hold: 2.4, shot: beaconShot },
@@ -643,8 +678,22 @@ export class Story {
       { run: () => this.ui.deviceLines(null), key: 'dlg.10.6', who: 'explorer', shot: () => cover.close(y, 0.35, 1), poses: { explorer: 'point' } },
       { key: 'dlg.10.7', who: 'scientist', shot: () => cover.close(z, 0.3, 0.95), after: 0.5 },
       { key: 'dlg.10.8', who: 'explorer', shot: () => cover.ots(y, z, -0.6), poses: { explorer: 'stand' }, after: 0.8 },
-      { key: 'dlg.10.9', who: 'scientist', shot: () => cover.close(z, -0.2, 0.85), poses: { scientist: 'stand' }, after: 1.1 },
-      { key: 'dlg.10.10', who: 'explorer', shot: () => cover.close(y, -0.2, 0.9), after: 1 },
+      { choice: 'c1.accuse', shot: () => cover.close(y, -0.2, 1), poses: { explorer: 'stand', scientist: 'stand' } },
+      { key: 'dlg.10.9', who: 'scientist', if: TRUTH, shot: () => cover.close(z, -0.2, 0.85), after: 1.1 },
+      { key: 'dlg.10.10', who: 'explorer', if: TRUTH, swap: [{ if: HARD_TO_BELIEVE, key: 'br.acc.doubt' }], shot: () => cover.close(y, -0.2, 0.9), after: 1 },
+      { key: 'br.acc.proof', who: 'scientist', if: PROOF, shot: () => cover.close(z, -0.2, 0.85), poses: { scientist: 'present' }, after: 0.9 },
+      { key: 'br.acc.proof.r', who: 'explorer', if: PROOF, shot: () => cover.close(y, -0.2, 0.9), after: 1 },
+      { key: 'br.acc.joke', who: 'scientist', if: JOKED, shot: () => cover.close(z, 0.3, 0.95), poses: { scientist: 'present' }, after: 1.3 },
+      { key: 'br.acc.joke.r', who: 'explorer', if: JOKED, shot: () => cover.close(y, 0.2, 0.9), poses: { scientist: 'stand' }, after: 1 },
+      { hold: 2.8, if: SAID_NOTHING, shot: () => cover.close(z, -0.2, 0.85) },
+      { key: 'br.acc.silent.r', who: 'explorer', if: SAID_NOTHING, shot: () => cover.close(y, -0.2, 0.9), after: 1 },
+      // nobody closed the channel: the others heard all of it
+      { key: 'br.rad.medic.truth', who: 'medic', if: SPOKE_PLAINLY, shot: skyShot },
+      { key: 'br.rad.strong.truth', who: 'strong', if: SPOKE_PLAINLY, shot: () => cover.two(z, y, 3.3), after: 0.8 },
+      { key: 'br.rad.medic.joke', who: 'medic', if: JOKED, shot: skyShot },
+      { key: 'br.rad.strong.joke', who: 'strong', if: JOKED, shot: () => cover.two(z, y, 3.3), after: 0.8 },
+      { key: 'br.rad.medic.silent', who: 'medic', if: SAID_NOTHING, shot: skyShot },
+      { key: 'br.rad.strong.silent', who: 'strong', if: SAID_NOTHING, shot: () => cover.two(z, y, 3.3), after: 0.8 },
       { run: () => { this.ui.chapter(['chapter.end1', 'chapter.end2']); document.getElementById('cine-bars')!.classList.add('hidden'); }, hold: 5.5, shot: skyShot },
     ], () => {
       this.ui.chapter(null);
@@ -714,8 +763,8 @@ export class Story {
     }
     if (n === 9) this.after(5.0, () => this.ui.memory('memory.explorer', 10));
     if (n === 10) {
-      this.dialogue([['dlg.10.1', 'explorer'], ['dlg.10.2', 'scientist'], ['j.7', 'explorer']], 5);
-      this.crew.wave = 2.5;
+      if (this.campPending) this.nextTalk = true;
+      else this.beaconPlan();
     }
   }
 
@@ -759,9 +808,12 @@ export class Story {
 
   /** Crew panel status for each crewmate. */
   crewStatus(id: string): { status: string; unlocked: boolean } {
+    if (!isAlive(this.s.branch, id)) return { status: t('crew.st.dead'), unlocked: false };
+    if (id === 'explorer' && this.flag('crewFollow')) {
+      const band = trustBand(trustOf(this.s.branch, id));
+      return { status: `${t(this.flag('crewCamp') ? 'crew.st.camp' : 'crew.st.withYou')} · ${t(`br.trust.${band}`)}`, unlocked: true };
+    }
     if (id === 'explorer') {
-      if (this.flag('crewCamp')) return { status: t('crew.st.camp'), unlocked: true };
-      if (this.flag('crewFollow')) return { status: t('crew.st.withYou'), unlocked: true };
       if (this.flag('signal')) return { status: t('crew.st.injured'), unlocked: false };
     }
     if (this.flag('beacon') && id !== 'scientist') return { status: t(`crew.st.signal.${id}`), unlocked: false };

@@ -292,6 +292,100 @@ def main():
         if ev("__bs.tutorial") or not ev("__bs.save.flags.tutorialDone"):
             failures.append(f"hints did not finish or were not remembered: {ev('__bs.tutorial')}")
 
+        # ---- choices: keys, countdown, timers off, surviving a reload ----
+        def entry(i):
+            return next((e for e in ev("__bs.branch.state.log") if e["id"] == i), None)
+
+        def demo(call="demo('debug.timed')", want="#dlg-choices .dlg-c"):
+            ev(f"__bs.branch.{call}")
+            ev("__bs.step(0.2)")
+            page.wait_for_selector(want, timeout=5000)
+            time.sleep(0.4)  # the guard against a stray skip tap
+
+        demo()
+        if ev("document.querySelectorAll('#dlg-choices .dlg-c').length") != 3 or not page.locator("#dlg-timer").is_visible():
+            failures.append("timed choice: no three options and a ring")
+        if page.locator("#btn-skip").is_visible():
+            failures.append("skip button shows over a choice")
+        page.keyboard.press("Enter")  # nothing highlighted: must neither pick nor skip
+        ev("__bs.step(0.1)")
+        if not ev("__bs.branch.open"):
+            failures.append("Enter with nothing highlighted closed the panel")
+        shot("14-choice")
+        page.keyboard.press("Digit2")
+        ev("__bs.step(0.2)")
+        e = entry("debug.timed")
+        if not e or e["pick"] != "joke":
+            failures.append(f"digit key did not pick option 2: {e}")
+        if not any(x["id"] == "debug.timed" for x in ev("__bs.branch.savedLog")):
+            failures.append("decision was not autosaved")
+        demo()
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("ArrowUp")
+        page.keyboard.press("Enter")
+        ev("__bs.step(0.2)")
+        e = entry("debug.timed")
+        if not e or e["pick"] != "joke":
+            failures.append(f"arrows and Enter did not pick option 2: {e}")
+        demo()
+        ev("__bs.step(7)")
+        e = entry("debug.timed")
+        if ev("__bs.branch.open") or not e or e["pick"] != "silent" or not e.get("timedOut"):
+            failures.append(f"timer did not fall back to silence: {e}")
+        demo("demoQte('debug.qte')", "#qte-btn")
+        page.keyboard.press("KeyE")
+        ev("__bs.step(0.2)")
+        if (entry("debug.qte") or {}).get("pick") != "pass":
+            failures.append("quick-time key press did not pass")
+        demo("demoQte('debug.qte')", "#qte-btn")
+        ev("__bs.step(3)")
+        if (entry("debug.qte") or {}).get("pick") != "fail":
+            failures.append("quick-time window did not fail on its own")
+        # timers off, through the real Settings
+        ev("__bs.step(0.5)")
+        page.keyboard.press("Escape")
+        page.click("#p-set")
+        page.click("[data-seg=timers] button[data-v='0']")
+        shot("15-settings-timers")
+        page.click("#m-close")
+        page.click("#p-resume")
+        demo()
+        ev("__bs.step(30)")
+        if not ev("__bs.branch.open") or page.locator("#dlg-timer").is_visible():
+            failures.append("timers off: the panel still counts down")
+        page.keyboard.press("Digit1")
+        ev("__bs.step(0.2)")
+        demo("demoQte('debug.qte')", "#qte-btn")
+        ev("__bs.step(30)")
+        if not ev("__bs.branch.open"):
+            failures.append("timers off: quick-time prompt did not wait")
+        page.keyboard.press("Space")
+        ev("__bs.step(0.2)")
+        ev("__bs.step(0.5)")
+        page.keyboard.press("Escape")
+        page.click("#p-set")
+        page.click("[data-seg=timers] button[data-v='1']")
+        page.click("#m-close")
+        page.click("#p-resume")
+        # a reload with the panel open brings the panel back
+        demo()
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_function("window.__bs && window.__bs.ready", timeout=240000)
+        page.click("#btn-continue")
+        page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
+        ev("__bs.step(1)")
+        if not ev("__bs.branch.open"):
+            failures.append("reload with a choice open dropped the choice")
+        else:
+            time.sleep(0.4)
+            page.keyboard.press("Digit1")
+            ev("__bs.step(0.2)")
+        if ev("__bs.branch.state.open"):
+            failures.append("answered choice is still marked open")
+        ev("__bs.step(0.5)")
+
         # ---- play levels 1-10 ----
         # flag -> (screenshot name, hour of day for the shot)
         shots_at = {"fire": ("04-fire", 21.0), "shelter": ("05-shelter", 17.4), "splint": ("09-crew", 9.5), "crewCamp": ("09b-crew-camp", 20.5), "beacon": ("10-beacon", 21.5)}
@@ -324,6 +418,41 @@ def main():
                     return True
             return False
 
+        answered = []
+
+        def small_actions():
+            """The hidden actions: share food with Pello, hand Tovik's flint back."""
+            def go(who):
+                for _ in range(4):
+                    n = next(x for x in ev("__bs.npcs") if x["id"] == who)
+                    ev(f"__bs.teleport({n['pos'][0] + 0.8}, {n['pos'][2]}, 0)")
+                    ev("__bs.step(0.2)")
+                    if ev("__bs.prompt"):
+                        break
+            go("trav")
+            first = ev("__bs.act()")
+            go("trav")
+            hunger = ev("__bs.save.stats.hunger")
+            if hunger < 30:
+                ev("__bs.save.stats.hunger = 80")
+            prompt = ev("__bs.prompt")
+            ev("__bs.act()")
+            if not entry("c1.pello.share") or "Pello" not in (prompt or ""):
+                failures.append(f"sharing food with Pello: first {first}, prompt {prompt}")
+            ev("__bs.save.inventory.branch += 2")
+            flint = ev("__bs.save.inventory.flint")
+            go("trader")
+            ev("__bs.act()")  # hello
+            go("trader")
+            ev("__bs.act()")  # the trade, and he miscounts
+            if ev("__bs.save.inventory.flint") != flint + 2:
+                failures.append("Tovik did not overpay")
+            go("trader")
+            ev("__bs.act()")  # hand it back
+            if not entry("c1.tovik.return") or ev("__bs.save.inventory.flint") != flint + 1:
+                failures.append("could not give Tovik's flint back")
+            ev("__bs.step(6)")
+
         taken = set()
         shown = {}
         seen_levels = []
@@ -333,6 +462,21 @@ def main():
         for it in range(900):
             st = ev("({state: __bs.state, level: __bs.level, mode: __bs.mode, hound: __bs.hound, crew: __bs.crew, busy: __bs.save && null})")
             lvl = st["level"]
+            if ev("__bs.branch.open"):
+                time.sleep(0.4)
+                if page.locator("#qte-btn").is_visible():
+                    shot("14b-qte")
+                    page.keyboard.press("KeyE")
+                else:
+                    opts = ev("document.querySelectorAll('#dlg-choices .dlg-c').length")
+                    answered.append(opts)
+                    shot(f"14c-choice-{len(answered)}")
+                    page.keyboard.press("Digit1")  # big fire, then the truth
+                ev("__bs.step(0.2)")
+                continue
+            if st["mode"] == "play" and lvl == 6 and "small" not in taken:
+                taken.add("small")
+                small_actions()
             if st["state"] in ("narrator", "flashback"):
                 # between-level scenes: let them start, photograph, skip
                 if not skip_scene(st["state"]):
@@ -449,6 +593,38 @@ def main():
             ev("__bs.step(0.5)")
         if ev("__bs.state") == "narrator":
             skip_scene("narrator")
+        # the path tree opens by itself after the chapter
+        if not page.locator(".path-tree").count():
+            failures.append("path tree did not open after the chapter")
+        else:
+            time.sleep(0.5)
+            shot("16-path-tree")
+            tree = ev("({taken: document.querySelectorAll('.pt-b.taken').length, closed: document.querySelectorAll('.pt-b.locked, .pt-b.secret').length, ends: document.querySelectorAll('[data-ending]').length})")
+            log("path tree:", tree)
+            if tree["taken"] != 6 or tree["closed"] < 3 or tree["ends"] != 4:
+                failures.append(f"path tree content: {tree}")
+            page.click("#m-close")
+        b = ev("__bs.branch.state")
+        log("branch state:", json.dumps({k: b[k] for k in ("trust", "record", "pending", "open", "dead")}))
+        picks = {e["id"]: e["pick"] for e in b["log"]}
+        for k, v in {"c1.splint": "pass", "c1.fire": "big", "c1.accuse": "truth", "c1.rescue.early": "done", "c1.pello.share": "done", "c1.tovik.return": "done"}.items():
+            if picks.get(k) != v:
+                failures.append(f"branch log: {k} = {picks.get(k)}")
+        if answered != [2, 4]:
+            failures.append(f"expected a two-way then a four-way choice (trust unlocks the fourth): {answered}")
+        if b["pending"] or b["open"] or b["dead"]:
+            failures.append(f"branch state not settled: {b['pending']} {b['open']} {b['dead']}")
+        if b["trust"].get("explorer>scientist") != 5:
+            failures.append(f"Skyvra's trust: {b['trust']}")
+        said = ev("__bs.branch.comments('ch1')")
+        log("MegaZroN says:", said)
+        if "mz.br.truth" not in said or "mz.br.kind" not in said or len(said) != 3:
+            failures.append(f"MegaZroN comments: {said}")
+        # the dead don't speak: a line is skipped, or swapped for its fallback
+        if ev("__bs.branch.lineIfDead('medic', {key: 'rad.medic', who: 'medic'})") is not None:
+            failures.append("a dead crewmate's line was not skipped")
+        if ev("__bs.branch.lineIfDead('medic', {key: 'rad.medic', who: 'medic', fallback: 'br.rad.static'})")["key"] != "br.rad.static":
+            failures.append("a dead crewmate's line did not use its fallback")
         flags = ev("__bs.save.flags")
         for sc in ("l3", "fight", "l7", "ch1", "ch2"):
             if not flags.get(f"seen-{sc}"):
@@ -579,6 +755,47 @@ def main():
             failures.append("discoveries lost on reload")
         if re["level"] != 22 or re["names"].get("scientist") != PLAYER or re["crew"]["mode"] != "camp":
             failures.append(f"save did not persist: {re}")
+
+        # ---- a decision can't be taken back ----
+        if re.get("level") == 11:
+            ev("__bs.branch.demo('c1.accuse')")
+            ev("__bs.step(1)")
+            if ev("__bs.branch.open"):
+                failures.append("an answered decision was offered again after reload")
+            n = len([e for e in ev("__bs.branch.state.log") if e["id"] == "c1.accuse"])
+            if n != 1 or next(e for e in ev("__bs.branch.savedLog") if e["id"] == "c1.accuse")["pick"] != "truth":
+                failures.append("decision changed after reload")
+
+        # ---- chapter select: read the tree, replay without touching the main story ----
+        page.keyboard.press("Escape")
+        time.sleep(0.2)
+        if page.locator("#p-quit").count() == 0:
+            page.keyboard.press("Escape")
+        page.click("#p-path")
+        page.wait_for_selector(".path-tree", timeout=5000)
+        page.click("#m-close")
+        page.click("#p-quit")
+        page.wait_for_function("window.__bs.state === 'title'", timeout=10000)
+        page.click("#btn-chapters")
+        page.wait_for_selector("[data-ch='1']", timeout=5000)
+        shot("17-chapters")
+        if ev("document.querySelector(\"[data-ch='2']\").disabled") is not True:
+            failures.append("planned chapter is selectable")
+        page.click("[data-ch='1']")
+        page.wait_for_selector("#pt-replay", timeout=5000)
+        before = ev("localStorage.getItem('bs-save-v1')")
+        page.click("#pt-replay")
+        page.wait_for_function("window.__bs.state === 'game' && window.__bs.mode === 'wake'", timeout=60000)
+        page.keyboard.press("Enter")
+        page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
+        ev("__bs.step(1)")
+        ev("window.dispatchEvent(new Event('beforeunload'))")
+        rp = ev("({replay: __bs.save.replay, level: __bs.level, log: __bs.branch.state.log.length, tut: __bs.tutorial})")
+        log("replay:", rp)
+        if rp["replay"] != 1 or rp["level"] != 1 or rp["log"] or rp["tut"]:
+            failures.append(f"replay did not start clean: {rp}")
+        if ev("localStorage.getItem('bs-save-v1')") != before or not ev("localStorage.getItem('bs-save-replay-v1')"):
+            failures.append("replay touched the main save")
 
         # ---- other languages ----
         for lang in ("hi", "ur"):
