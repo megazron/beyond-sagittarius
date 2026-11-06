@@ -421,6 +421,7 @@ def main():
             return False
 
         answered = []
+        trees = []
 
         def small_actions():
             """The hidden actions: share food with Pello, hand Tovik's flint back."""
@@ -478,6 +479,17 @@ def main():
         for it in range(900):
             st = ev("({state: __bs.state, level: __bs.level, mode: __bs.mode, hound: __bs.hound, crew: __bs.crew, busy: __bs.save && null})")
             lvl = st["level"]
+            if page.locator(".path-tree").is_visible():
+                # the path tree opens by itself after each chapter
+                time.sleep(0.5)
+                shot(f"16-path-tree-{len(trees) + 1}")
+                tree = ev("({taken: document.querySelectorAll('.pt-b.taken').length, closed: document.querySelectorAll('.pt-b.locked, .pt-b.secret').length, ends: document.querySelectorAll('[data-ending]').length})")
+                log("path tree:", tree)
+                trees.append(tree)
+                if tree["ends"] != 4 or (len(trees) == 1 and (tree["taken"] != 6 or tree["closed"] < 3)):
+                    failures.append(f"path tree content: {tree}")
+                page.click("#m-close")
+                continue
             if ev("__bs.branch.open"):
                 time.sleep(0.4)
                 if page.locator("#qte-btn").is_visible():
@@ -609,17 +621,12 @@ def main():
             ev("__bs.step(0.5)")
         if ev("__bs.state") == "narrator":
             skip_scene("narrator")
-        # the path tree opens by itself after the chapter
-        if not page.locator(".path-tree").count():
-            failures.append("path tree did not open after the chapter")
-        else:
-            time.sleep(0.5)
-            shot("16-path-tree")
-            tree = ev("({taken: document.querySelectorAll('.pt-b.taken').length, closed: document.querySelectorAll('.pt-b.locked, .pt-b.secret').length, ends: document.querySelectorAll('[data-ending]').length})")
-            log("path tree:", tree)
-            if tree["taken"] != 6 or tree["closed"] < 3 or tree["ends"] != 4:
-                failures.append(f"path tree content: {tree}")
+        if page.locator(".path-tree").is_visible():
+            trees.append({})
+            shot("16-path-tree-2")
             page.click("#m-close")
+        if len(trees) != 2:
+            failures.append(f"path tree should open after each chapter, opened {len(trees)} times")
         b = ev("__bs.branch.state")
         log("branch state:", json.dumps({k: b[k] for k in ("trust", "record", "pending", "open", "dead")}))
         picks = {e["id"]: e["pick"] for e in b["log"]}
