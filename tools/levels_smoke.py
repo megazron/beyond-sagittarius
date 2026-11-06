@@ -127,9 +127,11 @@ def main():
                 ev("__bs.tutorialNext()")
         def hold_until(keys, step_next):
             """Hold keys, turning if something blocks the way, until the tutorial moves on."""
-            for k in keys:
-                page.keyboard.down(k)
             for i in range(12):
+                # re-press each round: a late pointer-lock grant blurs the window and drops held keys
+                for k in keys:
+                    page.keyboard.up(k)
+                    page.keyboard.down(k)
                 ev("__bs.step(1)")
                 tu = ev("__bs.tutorial")
                 if not tu or tu["step"] == step_next:
