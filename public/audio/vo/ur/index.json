@@ -243,5 +243,11 @@
 "warn.fire": 6.42,
 "warn.heat": 8.86,
 "warn.pressure": 6.43,
-"warn.sharp": 8.25
+"warn.sharp": 8.25,
+"film.builder": 2.04,
+"film.explorer": 2.48,
+"film.medic": 2.81,
+"film.scientist": 1.67,
+"film.social": 2.4,
+"film.strong": 2.02
 }
