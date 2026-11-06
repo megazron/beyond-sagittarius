@@ -93,6 +93,20 @@ W.calm = (i: number, kind: CrewPose = 'stand', n = 240, dt = 1 / 60) => {
   }
   return { meanMmPerFrame: v / (n - 91) * 1000, peakMm: peak * 1000, jerkMm: jerk * 1000 };
 };
+W.trace = (i: number, n = 200, dt = 1 / 60) => {
+  const c = chars[i]; const a = new THREE.Vector3(), h = new THREE.Vector3(), out: unknown[] = [];
+  const hips = c.fig.getObjectByName('hips')!, hp = new THREE.Vector3(), lp = new THREE.Vector3();
+  const last = new Map<string, THREE.Quaternion>();
+  for (let k = 0; k < n; k++) {
+    t += dt; c.root.updateMatrixWorld(true); c.animate('stand', 0, 0, t, dt); c.root.updateMatrixWorld(true);
+    c.head.getWorldPosition(h); hips.getWorldPosition(hp);
+    const d = h.distanceTo(a) * 1000, e = hp.distanceTo(lp) * 1000;
+    if (k > 0 && d > 3) { const bad: string[] = []; c.fig.traverse((o) => { if (!(o as THREE.Bone).isBone) return; const l = last.get(o.name); if (l) { const a2 = l.angleTo(o.quaternion) * 57.3; if (a2 > 0.5) bad.push(o.name + ':' + a2.toFixed(1)); } }); out.push([k, +d.toFixed(1), +e.toFixed(1), bad.join(' ')]); }
+    c.fig.traverse((o) => { if ((o as THREE.Bone).isBone) last.set(o.name, o.quaternion.clone()); });
+    a.copy(h); lp.copy(hp);
+  }
+  return out;
+};
 /** Walk one character past the camera, a frame every few steps. */
 W.film = (i: number, v: number, k: number) => {
   const c = chars[i];

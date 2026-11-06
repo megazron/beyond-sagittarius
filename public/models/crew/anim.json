@@ -36,7 +36,7 @@
 },
 "run": {
 "loop": true,
-"speed": 4.8987384573372905,
+"speed": 2.8,
 "kind": "cycle",
 "take": "ual:Jog_Fwd_Loop",
 "hand": null,
@@ -44,7 +44,7 @@
 },
 "sprint": {
 "loop": true,
-"speed": 5.4329322017786215,
+"speed": 5.0,
 "kind": "cycle",
 "take": "ual:Sprint_Loop",
 "hand": null,

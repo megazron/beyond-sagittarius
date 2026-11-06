@@ -247,6 +247,10 @@ def make_ual(ref, take, mode):
         p = np.roll(p, -sh, 0)
     if mode == 'uair':
         p[:, 1] = ref.p('hips')[1]
+    if clip == 'Jog_Fwd_Loop':
+        p[:, 1] = p[:, 1].mean() + (p[:, 1] - p[:, 1].mean()) * 0.5  # the pack's jog bounces like a cartoon
+    if mode == 'uloop':
+        T, p = smooth_clip(T, p, 2.5, 1.0, True)  # circular, so the seam itself is smoothed away
     # closed loop: last key equals the first
     T = {k: np.concatenate([v, v[:1] * np.sign(np.sum(v[:1] * v[-1:]) or 1)]) for k, v in T.items()}
     p = np.concatenate([p, p[:1]])
