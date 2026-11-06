@@ -45,7 +45,7 @@ CHARS = {  # noqa
         height=1.97, macro=dict(gender=1.0, muscle=1.0, weight=0.78, proportions=0.8),
         skin_src='m',
         clothes=[('cortu_cargo_pants', (0x3b, 0x3a, 0x30), {}),
-                 ('mindfront_tactical_vest_male', (0x4a, 0x5a, 0x58), {'accent': True}),
+                 ('mindfront_tactical_vest_male', (0x4a, 0x5a, 0x58), {'accent': True, 'budget': 2.4}),
                  ('mindfront_shoes_biker_boots_male', (0x1f, 0x1d, 0x1c), {})],
     ),
     'medic': dict(
@@ -74,11 +74,10 @@ CHARS = {  # noqa
     ),
     'social': dict(
         look=dict(skin=0x4d70e0, shade=0x2a2f9e, iris=0xffd84a, brow=0xc32e8f, lip=0xff4fa8, glow=0xffe07a, marks='stars', ear='round'),
-        height=1.67, macro=dict(gender=0.0, muscle=0.42, weight=0.62, proportions=0.85, cup=0.8),
+        height=1.67, macro=dict(gender=0.0, muscle=0.42, weight=0.5, proportions=0.85, cup=0.68),
         skin_src='f',
-        clothes=[('elvs_gored_elephant_pants', (0x6b, 0x2b, 0xd0), {}),
-                 ('toigo_camisole_top', (0x20, 0x10, 0x38), {'accent': True}),
-                 ('elvs_hooded_sweat_jacket1', (0xff, 0xc8, 0x1e), {}),
+        clothes=[('toigo_fisherman_sweater', (0xff, 0xc8, 0x1e), {'accent': True}),
+                 ('elvs_gored_elephant_pants', (0x6b, 0x2b, 0xd0), {}),
                  ('toigo_ankle_boots_female', (0xf5, 0xf0, 0xea), {})],
     ),
     'megazron': dict(

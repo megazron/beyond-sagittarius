@@ -51,6 +51,10 @@ CLIPS = {
 }
 
 
+# How much of the performance survives: standing people should barely move.
+CALM = {'stand': 0.3, 'wave': 0.9, 'argue': 0.6, 'shout': 0.6, 'present': 0.7, 'cheer': 0.75, 'write': 0.8, 'sit': 0.5}
+
+
 def norm(v):
     return v / np.maximum(np.linalg.norm(v, axis=-1, keepdims=True), 1e-9)
 
@@ -231,6 +235,28 @@ def slerp(a, b, t):
 
 def heading_rot(angle):
     return amc.ry(angle)
+
+
+def smooth_clip(T, p, sigma, calm=1.0, loop=True):
+    """Low-pass the capture (marker noise reads as shake) and pull idles towards their mean pose."""
+    from scipy.ndimage import gaussian_filter1d
+    mode = 'wrap' if loop else 'nearest'
+    out = {}
+    for b, q in T.items():
+        q = q.copy()
+        for i in range(1, len(q)):
+            if q[i] @ q[i - 1] < 0:
+                q[i] = -q[i]
+        f = gaussian_filter1d(q, sigma, axis=0, mode=mode)
+        if calm < 1:
+            m = f.mean(0, keepdims=True)
+            f = m + (f - m) * calm
+        out[b] = f / np.linalg.norm(f, axis=1, keepdims=True)
+    p2 = gaussian_filter1d(p, sigma, axis=0, mode=mode)
+    if calm < 1:
+        m = p2.mean(0, keepdims=True)
+        p2 = m + (p2 - m) * calm
+    return out, p2
 
 
 def apply_heading(W, pos, ang):
@@ -534,6 +560,9 @@ def main():
         else:
             T, p, meta = make_window(ref, take, t0, t1, mode)
         meta['hand'] = hand
+        idle = name == 'stand' or name.startswith('idle')
+        sig = 7.0 if idle else 1.2 if mode == 'cycle' else 3.0
+        T, p = smooth_clip(T, p, sig, CALM.get(name, 0.2 if idle else 1.0), mode != 'once')
         if mode != 'air':
             # the source hips sit higher over the femurs than ours: settle on the target's own feet
             low = 9.0

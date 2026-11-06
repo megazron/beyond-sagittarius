@@ -52,6 +52,18 @@ W.slide = (i: number, v: number, n = 240, dt = 1 / 60) => {
   c.root.position.z = 0;
   return { medianStanceSlide: res[res.length >> 1], p90: res[Math.floor(res.length * 0.9)], minFootY: Math.min(...lows) };
 };
+/** Shake probe: head travel per frame while standing, and worst frame-to-frame jerk (mm). */
+W.calm = (i: number, kind: CrewPose = 'stand', n = 240, dt = 1 / 60) => {
+  const c = chars[i]; const h = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3();
+  let v = 0, jerk = 0, peak = 0;
+  for (let k = 0; k < n; k++) {
+    t += dt; c.root.updateMatrixWorld(true); c.animate(kind, 0, 0, t, dt); c.root.updateMatrixWorld(true);
+    c.head.getWorldPosition(h);
+    if (k > 90) { const d = h.distanceTo(a); v += d; peak = Math.max(peak, d); jerk = Math.max(jerk, h.clone().sub(a).sub(a.clone().sub(b)).length()); }
+    b.copy(a); a.copy(h);
+  }
+  return { meanMmPerFrame: v / (n - 91) * 1000, peakMm: peak * 1000, jerkMm: jerk * 1000 };
+};
 /** Walk one character past the camera, a frame every few steps. */
 W.film = (i: number, v: number, k: number) => {
   const c = chars[i];

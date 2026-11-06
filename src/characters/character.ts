@@ -137,7 +137,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const footOff = [0, 0];
   const pin = [new THREE.Vector3(), new THREE.Vector3()], pinOff = [new THREE.Vector3(), new THREE.Vector3()], pinned = [false, false];
   const trackPos = new THREE.Vector3();
-  let tracked = false, trackYaw = 0, groundSpeed = 0, yawRate = 0;
+  let tracked = false, trackYaw = 0, groundSpeed = 0, yawRate = 0, gaitOn = false, eyeY = 0;
   const lastPos = new THREE.Vector3(), swing = new THREE.Vector3(), swingV = new THREE.Vector3(), tmp = new THREE.Vector3();
   const eyeShape = EYE_SHAPE[custom ? custom.eye : human ? 'calm' : L.face.eye] ?? EYE_SHAPE.calm;
   const smileBase = MOUTH[L.face.mouth] ?? 0.1;
@@ -321,12 +321,14 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     let dy = yawNow - trackYaw;
     dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     trackPos.copy(tmp); trackYaw = yawNow;
-    const sr = 1 - Math.exp(-dt * 12);
+    const sr = 1 - Math.exp(-dt * 6);
     groundSpeed += (inst - groundSpeed) * sr;
     yawRate += (clamp(dy / sdt, -6, 6) - yawRate) * sr;
-    const pivot = Math.abs(yawRate) > 0.5 ? Math.abs(yawRate) * 0.26 : 0; // turning on the spot still takes steps
+    const pivot = Math.abs(yawRate) > 1.1 ? Math.abs(yawRate) * 0.22 : 0; // turning on the spot still takes steps
     const speed = Math.max(groundSpeed > 0.08 ? groundSpeed : amount * 4, pivot);
-    const moving = (amount > 0.02 || groundSpeed > 0.25 || pivot > 0) && !FULL_BODY.has(kind) && (kind === 'idle' || kind === 'walk' || kind === 'stand');
+    // a moving body stays moving until it has clearly stopped: no flicker between idle and gait
+    gaitOn = gaitOn ? amount > 0.012 || groundSpeed > 0.14 || pivot > 0 : amount > 0.03 || groundSpeed > 0.32 || pivot > 0;
+    const moving = gaitOn && !FULL_BODY.has(kind) && (kind === 'idle' || kind === 'walk' || kind === 'stand');
     const limp = !!kit?.splint.visible;
     for (const s of acts.values()) s.target = 0;
     if (moving) {
@@ -339,7 +341,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       s.target = 1;
       s.a.timeScale = style.rate;
     }
-    const rate = firstFrame ? 1 : 1 - Math.exp(-dt * 7);
+    const rate = firstFrame ? 1 : 1 - Math.exp(-dt * 4.5);
     let sum = 0;
     for (const s of acts.values()) { s.w += (s.target - s.w) * rate; if (s.w < 0.004 && s.target === 0) s.w = 0; sum += s.w; }
     for (const s of acts.values()) {
@@ -351,17 +353,17 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     firstFrame = false;
 
     // ---- style on top of the clip ----
-    const bp = Math.sin(t * (1.35 + amount * 1.2));
-    const breathe = bp * 0.012;
+    const bp = Math.sin(t * 1.25);
+    const breathe = bp * 0.005;
     const hipsB = bs.get('hips')!, spine1 = bs.get('spine1')!, chestB = bs.get('chest')!, neckB = bs.get('neck')!, headB = bs.get('head')!;
     const standing = !FULL_BODY.has(kind);
     if (standing) {
       spine1.quaternion.multiply(Q.setFromEuler(E.set(P.stoop * 0.5 + Math.min(speed / 4, 1.3) * P.lean * 0.4, 0, 0)));
       chestB.quaternion.multiply(Q.setFromEuler(E.set(P.stoop * 0.4 + breathe, 0, 0)));
       // lean into turns, shoulders lead the hips
-      const lean = clamp(yawRate * Math.min(speed, 5) * 0.022, -0.2, 0.2);
+      const lean = clamp(yawRate * Math.min(speed, 5) * 0.012, -0.09, 0.09);
       hipsB.quaternion.premultiply(Q.setFromAxisAngle(V1.set(0, 0, 1), -lean));
-      spine1.quaternion.multiply(Q.setFromEuler(E.set(0, clamp(yawRate * 0.05, -0.16, 0.16), lean * 0.5)));
+      spine1.quaternion.multiply(Q.setFromEuler(E.set(0, clamp(yawRate * 0.025, -0.07, 0.07), lean * 0.4)));
       neckB.quaternion.multiply(Q.setFromEuler(E.set(-P.stoop * 0.5, 0, 0)));
       // wide bodies carry their arms away from the torso
       const sp = (P.stance - 0.05) * 0.8;
@@ -388,17 +390,18 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const yawTo = Math.atan2(V3.x, V3.z);
       if (Math.abs(yawTo) < 1.7) { wantY = yawTo; wantX = -Math.atan2(V3.y, Math.hypot(V3.x, V3.z)); }
     }
-    const gr = 1 - Math.exp(-dt * 5);
+    const gr = 1 - Math.exp(-dt * 2.2);
     gazeY += (wantY - gazeY) * gr; gazeX += (wantX - gazeX) * gr;
-    const ly = clamp(lookAt.y + gazeY + clamp(yawRate * 0.1, -0.3, 0.3), -1.1, 1.1), lx = clamp(lookAt.x + gazeX, -0.5, 0.5);
+    const ly = clamp(lookAt.y + gazeY + clamp(yawRate * 0.05, -0.15, 0.15), -1.1, 1.1), lx = clamp(lookAt.x + gazeX, -0.5, 0.5);
     if (ly || lx) {
       neckB.quaternion.multiply(Q.setFromEuler(E.set(lx * 0.4, ly * 0.4, 0)));
       headB.quaternion.multiply(Q.setFromEuler(E.set(lx * 0.6, ly * 0.6, 0)));
     }
     sacAt -= dt;
     if (sacAt <= 0) { sacAt = 1.2 + Math.random() * 3; sacX = (Math.random() - 0.5) * 0.05; sacY = (Math.random() - 0.5) * 0.09; }
-    for (const n of ['eyeL', 'eyeR']) bs.get(n)!.quaternion.setFromEuler(E.set(sacX, sacY + clamp(yawRate * 0.12, -0.35, 0.35), 0));
-    chestB.scale.setScalar(1 + bp * 0.005 * (standing ? 1 : 0.6));
+    eyeY += (sacY + clamp(yawRate * 0.08, -0.25, 0.25) - eyeY) * (1 - Math.exp(-dt * 20));
+    for (const n of ['eyeL', 'eyeR']) bs.get(n)!.quaternion.setFromEuler(E.set(sacX, eyeY, 0));
+    chestB.scale.setScalar(1 + bp * 0.0025);
 
     // ---- face ----
     const r = 1 - Math.exp(-dt * 10);
@@ -444,15 +447,15 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         p.x += pinOff[i].x; p.z += pinOff[i].z;
         const g = ground!(p.x, p.z);
         // soles rest on the ground, heels still lift: mocap floors differ by a centimetre or two
-        const sole = clamp((rest + 0.03 - (p.y - baseY)) / 0.03, 0, 1);
-        footOff[i] += ((g - baseY) * stance + (rest - (p.y - baseY)) * sole - footOff[i]) * (1 - Math.exp(-dt * 18));
+        const sole = moving ? clamp((rest + 0.03 - (p.y - baseY)) / 0.03, 0, 1) : 0;
+        footOff[i] += ((g - baseY) * stance + (rest - (p.y - baseY)) * sole - footOff[i]) * (1 - Math.exp(-dt * 9));
         drop = Math.min(drop, footOff[i]);
         const e = 0.14, n = new THREE.Vector3(ground!(p.x - e, p.z) - ground!(p.x + e, p.z), 2 * e, ground!(p.x, p.z - e) - ground!(p.x, p.z + e)).normalize();
         p.y += footOff[i];
-        if (Math.abs(footOff[i]) > 0.004 || pinOff[i].lengthSq() > 1e-5 || n.y < 0.995) busy = true;
+        if (Math.abs(footOff[i]) > 0.006 || pinOff[i].lengthSq() > 4e-5 || n.y < 0.99) busy = true;
         legs.push({ h: bs.get(`upperleg${s}`)!, k: bs.get(`lowerleg${s}`)!, f, p, q: f.getWorldQuaternion(new THREE.Quaternion()), n, w: stance });
       });
-      hipDrop += (drop - hipDrop) * (1 - Math.exp(-dt * 12));
+      hipDrop += (drop - hipDrop) * (1 - Math.exp(-dt * 6));
       if (busy || Math.abs(hipDrop) > 0.002) {
         hipsB.position.y += hipDrop / fig.scale.y;
         fig.updateWorldMatrix(true, true);
@@ -476,13 +479,15 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const yaw = root.rotation.y, cs = Math.cos(-yaw), sn = Math.sin(-yaw);
     const lx2 = vel.x * cs + vel.z * sn, lz = -vel.x * sn + vel.z * cs;
     const target = tmp.set(-lx2 * 0.02, -Math.abs(Math.cos(gaitPhase * 12.566)) * 0.012 * amount + vel.y * -0.02, -lz * 0.02);
-    target.x += Math.sin(t * 0.8) * 0.016; target.z += Math.cos(t * 0.63) * 0.012; // breeze
-    swingV.addScaledVector(tmp.sub(swing), 90 * dt); swingV.multiplyScalar(Math.exp(-dt * 9));
-    swing.addScaledVector(swingV, dt);
+    target.x += Math.sin(t * 0.8) * 0.008; target.z += Math.cos(t * 0.63) * 0.006; // breeze
+    // critically damped: hair and hems settle, they never ring
+    const sdt2 = Math.min(dt, 1 / 30);
+    swingV.addScaledVector(tmp.sub(swing), 49 * sdt2); swingV.multiplyScalar(Math.exp(-sdt2 * 14));
+    swing.addScaledVector(swingV, sdt2);
     swing.clampLength(0, 0.2);
     sway.uSwing.value.copy(swing);
     sway.uTime.value = t;
-    sway.uFlutter.value = 0.008 + amount * 0.016;
+    sway.uFlutter.value = 0.003 + Math.min(amount, 1) * 0.007;
     kit?.update(t, amount);
     void phase;
   }

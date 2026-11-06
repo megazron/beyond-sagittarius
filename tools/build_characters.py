@@ -195,6 +195,29 @@ def covered(P, N, garments, reach=0.035):
     return hid
 
 
+def ray_covered(P, N, garment, sel, reach=0.16):
+    """Vertices whose outward normal runs into the garment: true for loose sleeves and skirts too."""
+    g = garment.decimated(2600, None, None, 1e-3)
+    A, B, C = g.P[g.T[:, 0]], g.P[g.T[:, 1]], g.P[g.T[:, 2]]
+    e1, e2 = B - A, C - A
+    hit = np.zeros(len(P), bool)
+    idx = np.nonzero(sel)[0]
+    for s0 in range(0, len(idx), 512):
+        ii = idx[s0:s0 + 512]
+        o = P[ii] + N[ii] * 0.002
+        d = N[ii]
+        pv = np.cross(d[:, None, :], e2[None])
+        det = np.einsum('rtc,tc->rt', pv, e1)
+        inv = 1 / np.where(np.abs(det) < 1e-12, 1e-12, det)
+        tv = o[:, None, :] - A[None]
+        u = np.einsum('rtc,rtc->rt', tv, pv) * inv
+        qv = np.cross(tv, e1[None])
+        v = np.einsum('rc,rtc->rt', d, qv) * inv
+        t = np.einsum('rtc,tc->rt', qv, e2) * inv
+        hit[ii] = ((u >= -0.02) & (v >= -0.02) & (u + v <= 1.04) & (t > 0) & (t < reach)).any(1)
+    return hit
+
+
 def erode(hid, T, rings=2):
     """Keep a margin of real surface inside every hidden region, so openings show no hole."""
     h = hid.copy()
@@ -246,6 +269,14 @@ def build(c, cid, force=False):
             skirt_weights(c, p, piv)
         p.tint, p.opt, p.asset = tint, opt, nm
         garments.append(p)
+    # some source meshes have patches wound inside out: their normals must still face away from the body
+    Nb0 = vnormals(V, tri_fan(base.faces, base.fuv, bodyf)[0])
+    bodyidx = np.unique(tri_fan(base.faces, base.fuv, bodyf)[0])
+    tree = cKDTree(V[bodyidx])
+    for g in garments:
+        _, j = tree.query(g.P, workers=1)
+        flip = np.einsum('ij,ij->i', g.N, Nb0[bodyidx[j]]) < -0.15
+        g.N[flip] *= -1
     # layers: inner garments never show through outer ones, and hidden cloth is not shipped
     for i in range(len(garments)):
         # footwear goes on under the trouser hem: a boot never pushes cloth aside or eats it
@@ -253,6 +284,16 @@ def build(c, cid, force=False):
         g = garments[i]
         for o in outer:
             g.P = resolve_layers(g.P, o, 0.012)
+        # whatever an outer layer really covers is cut, along exact sight lines
+        hid = np.zeros(len(g.P), bool)
+        Ng = g.N
+        used = np.zeros(len(g.P), bool); used[np.unique(g.T)] = True
+        for o in outer:
+            hid |= ray_covered(g.P, Ng, o, used & ~hid, 0.1)
+        hid = erode(hid, g.T, 1)
+        vis = ~hid[g.T].all(1)
+        if vis.sum() > 60:
+            g.T, g.TU = g.T[vis], g.TU[vis]
     for g in garments:
         if 'boot' in g.asset or 'shoe' in g.asset:
             for o in garments:
@@ -263,7 +304,12 @@ def build(c, cid, force=False):
     dl = np.zeros(len(V), bool)
     dl[list(deleted)] = True
     Tall = tri_fan(base.faces, base.fuv, bodyf)[0]
-    dl |= erode(covered(V, vnormals(V, Tall), garments, 0.055), Tall, 2)
+    Nb = vnormals(V, Tall)
+    bodyv = np.zeros(len(V), bool); bodyv[np.unique(Tall)] = True
+    hid = covered(V, Nb, garments, 0.055)
+    for g in garments:
+        hid |= ray_covered(V, Nb, g, bodyv & ~hid)
+    dl |= erode(hid, Tall, 1)
     hw0 = rig.W[:, [rig.index[n] for n in ('head', 'jaw', 'eyeL', 'eyeR')]].sum(1)
     dl[hw0 > 0.3] = False
     for i in bodyf:
@@ -348,10 +394,10 @@ def build(c, cid, force=False):
         lb = merge([lash, brow], 'lash', uvmap=[(0, 0, 0.5, 1), (0.5, 0, 0.5, 1)], morphs=list(morphs))
         emit(lb, 'lash')
         budget = L['cloth']
-        tot = sum(len(p.T) for p in garments)
+        tot = sum(len(p.T) * p.opt.get('budget', 1) for p in garments)
         cl = []
         for p, rect in zip(garments, atlas):
-            cl.append(p.decimated(max(300, int(budget * len(p.T) / tot)), None, None, L['cost']))
+            cl.append(p.decimated(max(300, int(budget * len(p.T) * p.opt.get('budget', 1) / tot)), None, None, L['cost'] * (0.25 if p.opt.get('budget') else 1)))
         emit(merge(cl, 'cloth', uvmap=atlas, morphs=[k for k in ('build_slim', 'build_heavy') if k in vb]), 'cloth')
         root = g.node(name='crew', children=rootc)
         g.j['scenes'][0]['nodes'] = [root]
