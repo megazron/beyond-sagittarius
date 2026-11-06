@@ -217,8 +217,8 @@ def build_jobs(lang, voice_map, voices, direction, strings, hi_strings, lexicon,
         if speaker == 'scientist' or fem:
             variants.append((f'{key}~f', fem or strings[key]))
         d = direction['lines'].get(key)
-        if d is None:
-            raise SystemExit(f'direction.json has no line {key!r}')
+        if d is None:  # new line nobody has directed yet: a plain read beats stopping the render
+            d = {'emotion': 'dry', 'intensity': 0.5, 'pace': 1.0, 'pre': 0, 'post': 0.2, 'tags': [], 'fx': ''}
         for vkey, raw in variants:
             if only and not any(fnmatch.fnmatchcase(vkey, o) or fnmatch.fnmatchcase(vkey.split('~')[0], o) for o in only):
                 continue
