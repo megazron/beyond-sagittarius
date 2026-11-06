@@ -51,8 +51,8 @@ export class TouchControls {
       tapBtn(id, () => {});
       document.getElementById(id)!.addEventListener('click', () => { audio.uiClick(); onAction(a); });
     };
-    tapBtn('tb-act', () => input.tap('KeyE'));
-    tapBtn('tb-jump', () => input.tap('Space'));
+    tapBtn('tb-act', () => input.tapAction('interact'));
+    tapBtn('tb-jump', () => input.tapAction('jump'));
     tapBtn('tb-sprint', () => this.setSprint(!this.sprint));
     menuBtn('tb-inv', 'inventory');
     menuBtn('tb-crew', 'crew');
@@ -81,7 +81,7 @@ export class TouchControls {
     this.sprint = on;
     this.sprintUsed = false;
     this.sprintBtn.classList.toggle('on', on);
-    this.input.hold('ShiftLeft', on);
+    this.input.holdAction('sprint', on);
   }
 
   /** Pulse a control (tutorial). Pass null to clear. */

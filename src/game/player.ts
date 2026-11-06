@@ -87,16 +87,16 @@ export class Player {
     // move
     let mx = 0, mz = 0;
     if (canMove) {
-      if (input.down('KeyW') || input.down('ArrowUp')) mz += 1;
-      if (input.down('KeyS') || input.down('ArrowDown')) mz -= 1;
-      if (input.down('KeyA')) mx -= 1;
-      if (input.down('KeyD')) mx += 1;
-      mx += input.touchMove.x; mz -= input.touchMove.y;
+      if (input.held('forward')) mz += 1;
+      if (input.held('back')) mz -= 1;
+      if (input.held('left')) mx -= 1;
+      if (input.held('right')) mx += 1;
+      mx += input.touchMove.x + input.padMove.x; mz -= input.touchMove.y + input.padMove.y;
     }
     const len = Math.hypot(mx, mz);
     if (len > 1) { mx /= len; mz /= len; }
     const moving = len > 0.05;
-    this.sprinting = moving && canMove && (input.down('ShiftLeft') || input.down('ShiftRight')) && stamina > 2 && mz > 0;
+    this.sprinting = moving && canMove && input.held('sprint') && stamina > 2 && mz > 0;
     let speed = (this.sprinting ? 7.2 : 4.0) * slow;
     if (this.inWater) speed *= 0.55;
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
@@ -109,7 +109,7 @@ export class Player {
     this.vel.x += (wx - this.vel.x) * k;
     this.vel.z += (wz - this.vel.z) * k;
 
-    if (canMove && this.onGround && input.hit('Space')) { this.vel.y = 5.2; this.onGround = false; }
+    if (canMove && this.onGround && input.act('jump')) { this.vel.y = 5.2; this.onGround = false; }
     this.vel.y -= 14 * dt;
 
     const next = this.pos.clone();

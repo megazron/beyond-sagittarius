@@ -280,7 +280,7 @@ export class Game {
     if (this.mode !== 'play') return; // the story can kill the player (predator)
     this.tutorial.update(dt);
     this.findInteraction();
-    if (this.interactTarget && (this.input.hit('KeyE') || this.input.hit('KeyF'))) this.interact();
+    if (this.interactTarget && this.input.act('interact')) this.interact();
 
     // Medic memory when first approaching fruit
     if (!s.flags.medicHint) {
