@@ -17,7 +17,7 @@ class Voice {
   lastKey: string | null = null;
   played = 0;
 
-  async load(lang: Lang = getLang()) {
+  async load(lang: Lang = this.lang) {
     if (this.index[lang]) return;
     try {
       const r = await fetch(`${BASE}audio/vo/${lang}/index.json`);
@@ -25,9 +25,13 @@ class Voice {
     } catch { this.index[lang] = {}; }
   }
 
+  /** Spoken language; null follows the game language. */
+  override: Lang | null = null;
+  private get lang(): Lang { return this.override ?? getLang(); }
+
   /** File key for a line: name-free take if a crewmate named in it was renamed. */
   private file(key: string): string | null {
-    const idx = this.index[getLang()];
+    const idx = this.index[this.lang];
     if (!idx) return null;
     const ids = Array.from(tDefault(key).matchAll(/\{[nf]:([a-z]+)\}/g)).map((m) => m[1]);
     if (ids.some(isRenamed)) { const anon = `${key}~anon`; return idx[anon] !== undefined ? anon : null; }
@@ -37,11 +41,11 @@ class Voice {
   /** Spoken length in seconds, or null if the line has no audio. */
   duration(key: string): number | null {
     const f = this.file(key);
-    return f ? this.index[getLang()]![f] : null;
+    return f ? this.index[this.lang]![f] : null;
   }
 
   private fetchBuffer(file: string): Promise<AudioBuffer | null> {
-    const url = `${BASE}audio/vo/${getLang()}/${encodeURIComponent(file)}.mp3`;
+    const url = `${BASE}audio/vo/${this.lang}/${encodeURIComponent(file)}.mp3`;
     let p = this.buffers.get(url);
     if (!p) {
       p = (async () => {
@@ -63,7 +67,7 @@ class Voice {
   play(key: string): number | null {
     const f = this.file(key);
     if (!f) return null;
-    const dur = this.index[getLang()]![f];
+    const dur = this.index[this.lang]![f];
     this.lastKey = key; this.played++;
     this.stop();
     const tk = ++this.token;

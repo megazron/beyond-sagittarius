@@ -113,6 +113,19 @@ def main():
         page.evaluate("window.__bs.look(0.73, -0.12)")
         time.sleep(3)
         shot("08-night")
+        # subtitles are independent of the game language: English game, Hindi subtitles
+        page.keyboard.press("Escape")
+        page.wait_for_selector("#p-set", timeout=10000)
+        page.click("#p-set")
+        page.click('.seg[data-seg="subLang"] button[data-v="hi"]')
+        page.click("#m-close")
+        page.click("#p-resume")
+        page.evaluate("__bs.sayTest('dlg.8.1')")
+        sub = page.evaluate("__bs.subtitleText") or ""
+        if not any("\u0900" <= c <= "\u097f" for c in sub):
+            errors.append(f"console.error: subtitle language setting ignored: {sub!r}")
+        if page.evaluate("document.querySelector('.obj-title').textContent") != page.evaluate("document.querySelector('.obj-title').textContent.normalize()") or any("\u0900" <= c <= "\u097f" for c in page.evaluate("document.querySelector('.obj-title').textContent")):
+            errors.append("console.error: UI changed language with the subtitles")
         state = page.evaluate("({state: __bs.state, mode: __bs.mode, level: __bs.level})")
         print("final state:", state)
         browser.close()

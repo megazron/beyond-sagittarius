@@ -19,12 +19,15 @@ let overrides: Record<string, string> = {};
  * names: `{n:medic}` is the full name and `{f:medic}` the first name, so
  * player-customised names flow into every line of dialogue.
  */
-export function t(key: string, params?: Record<string, string | number>): string {
-  let s = overrides[key] ?? DICTS[current][key] ?? DICTS.en[key] ?? key;
+export function t(key: string, params?: Record<string, string | number>): string { return tIn(current, key, params); }
+
+/** Same as t() in a chosen language: subtitles can differ from the game language. */
+export function tIn(lang: Lang, key: string, params?: Record<string, string | number>): string {
+  let s = overrides[key] ?? DICTS[lang][key] ?? DICTS.en[key] ?? key;
   if (params) for (const k in params) s = s.split(`{${k}}`).join(String(params[k]));
   if (s.includes('{n:') || s.includes('{f:')) {
     s = s.replace(/\{([nf]):([a-z]+)\}/g, (_, kind: string, id: string) => {
-      const full = t(`crew.${id}.name`);
+      const full = tIn(lang, `crew.${id}.name`);
       return kind === 'n' ? full : full.trim().split(/\s+/)[0];
     });
   }

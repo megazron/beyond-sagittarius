@@ -27,13 +27,20 @@ const settings: Settings = loadSettings();
 setLang(settings.lang);
 const quality = detectQuality();
 const ui = new UI();
-ui.subtitlesOn = settings.subtitles;
+function applyLanguages() {
+  ui.subtitlesOn = settings.subLang !== 'off';
+  ui.subLang = settings.subLang === 'same' || settings.subLang === 'off' ? null : settings.subLang;
+  voice.override = settings.voiceLang === 'same' ? null : settings.voiceLang;
+  void voice.load();
+  document.querySelectorAll<HTMLButtonElement>('.btn.sublang').forEach((b) => b.classList.toggle('active', b.dataset.sub === settings.subLang));
+}
+
 function applyAudio() {
   audio.setVolume(settings.volume);
   audio.setMix({ music: settings.musicVolume, sfx: settings.sfxVolume, voice: settings.voiceVolume, muted: settings.muted });
 }
 applyAudio();
-void voice.load();
+applyLanguages();
 onLangChange(() => void voice.load());
 
 let renderer: Renderer;
@@ -80,7 +87,7 @@ renderer.setScene(cine.scene, cine.camera, false);
 
 function persistSettings() {
   writeSettings(settings);
-  ui.subtitlesOn = settings.subtitles;
+  applyLanguages();
   applyAudio();
   if (player) { player.sensitivity = settings.sensitivity; player.invertY = settings.invertY; }
   if (!settings.showFps) ui.setFps(null);
@@ -140,14 +147,16 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1', after: () => void) {
   ui.fade('black', 1, 0.5);
   ui.show('hud', false);
   setTimeout(() => {
+    vault.prepare(renderer.renderer);
     renderer.setScene(vault.scene, vault.camera, false);
     ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden');
-    ui.fade('black', 0, 1.4);
     vault.play(lines, () => {
       ui.fade('black', 1, 0.45);
       setTimeout(() => { ui.show('cine', false); after(); }, 480);
     });
+    // lift the black only once the Vault is really on screen
+    requestAnimationFrame(() => requestAnimationFrame(() => ui.fade('black', 0, 1.0)));
   }, 520);
 }
 
@@ -253,6 +262,11 @@ document.querySelectorAll<HTMLButtonElement>('.btn.lang').forEach((b) => b.addEv
   setLang(settings.lang);
   persistSettings();
   refreshTitle();
+}));
+document.querySelectorAll<HTMLButtonElement>('.btn.sublang').forEach((b) => b.addEventListener('click', () => {
+  audio.uiClick();
+  settings.subLang = b.dataset.sub as Settings['subLang'];
+  persistSettings();
 }));
 document.getElementById('btn-skip')!.addEventListener('click', () => {
   skipCurrent();
@@ -389,6 +403,8 @@ async function boot() {
   renderer.renderer.compile(world.scene, camera);
   worldReady = true;
   btns.forEach((b) => (b.disabled = false));
+  // warm the Vault while the player is still on the title screen
+  setTimeout(() => { if (state === 'title') vault.prepare(renderer.renderer); }, 400);
   if (pendingStart) { const f = pendingStart; pendingStart = null; f(); }
 }
 
@@ -407,6 +423,8 @@ window.addEventListener('resize', () => {
   get mode() { return game?.mode; },
   get ready() { return worldReady; },
   get paused() { return paused; },
+  get subtitleText() { return document.querySelector('#subtitle .line')?.textContent; },
+  sayTest(k: string) { ui.subtitle(k, 'mz.name', true); },
   get voice() { return { last: voice.lastKey, played: voice.played }; },
   voiceDuration(k: string) { return voice.duration(k); },
   get vault() { return { playing: vault.playing, line: vault.lineIndex }; },

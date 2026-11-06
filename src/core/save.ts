@@ -33,6 +33,10 @@ export interface Settings {
   sfxVolume: number;
   muted: boolean;
   subtitles: boolean;
+  /** Subtitle language, independent of the game: 'same', en, hi, ur or off. */
+  subLang: 'same' | 'en' | 'hi' | 'ur' | 'off';
+  /** Spoken language: 'same' follows the game language. */
+  voiceLang: 'same' | 'en' | 'hi' | 'ur';
   showFps: boolean;
   /** Set from the title-screen settings: run the tutorial on the next session. */
   replayTutorial?: boolean;
@@ -91,10 +95,14 @@ export function newSave(): SaveData {
 }
 
 export function loadSettings(): Settings {
-  const def: Settings = { lang: 'en', sensitivity: 1, invertY: false, volume: 0.8, voiceVolume: 1, musicVolume: 0.6, sfxVolume: 0.8, muted: false, subtitles: true, showFps: false };
+  const def: Settings = { lang: 'en', sensitivity: 1, invertY: false, volume: 0.8, voiceVolume: 1, musicVolume: 0.6, sfxVolume: 0.8, muted: false, subtitles: true, subLang: 'same', voiceLang: 'same', showFps: false };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) return { ...def, ...JSON.parse(raw) };
+    if (raw) {
+      const s = { ...def, ...JSON.parse(raw) } as Settings;
+      if (s.subtitles === false && !JSON.parse(raw).subLang) s.subLang = 'off'; // older settings
+      return s;
+    }
   } catch { /* ignore */ }
   const nav = navigator.language || '';
   if (nav.startsWith('hi')) def.lang = 'hi';

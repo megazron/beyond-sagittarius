@@ -1,4 +1,4 @@
-import { t, tDefault, getLang, setLang, Lang, onLangChange } from '../i18n';
+import { t, tIn, tDefault, getLang, setLang, Lang, onLangChange, RTL } from '../i18n';
 import { CREW_IDS, CrewNames, NAME_MAX, normaliseNames } from '../core/crew';
 import type { CineUI } from '../cinematic/cinematic';
 import type { Settings } from '../core/save';
@@ -31,6 +31,15 @@ export class UI implements CineUI {
   private lastAlert: string | null = null;
   private objectiveState: { level: number; progress: string | null } = { level: 1, progress: null };
   subtitlesOn = true;
+  /** Subtitle language; null follows the game language. */
+  subLang: Lang | null = null;
+  private subT(key: string) { return tIn(this.subLang ?? getLang(), key); }
+  private subStyle(el: HTMLElement) {
+    const l = this.subLang ?? getLang();
+    el.dir = RTL[l] ? 'rtl' : 'ltr';
+    el.classList.remove('sub-en', 'sub-hi', 'sub-ur');
+    el.classList.add(`sub-${l}`);
+  }
 
   constructor() {
     onLangChange(() => this.refreshLang());
@@ -55,8 +64,9 @@ export class UI implements CineUI {
     clearTimeout(this.subTimer);
     if (key && !quiet) voice.play(key);
     if (!key || !this.subtitlesOn) { el.classList.add('hidden'); return; }
-    (el.querySelector('.speaker') as HTMLElement).textContent = speakerKey ? t(speakerKey) : '';
-    (el.querySelector('.line') as HTMLElement).textContent = t(key);
+    (el.querySelector('.speaker') as HTMLElement).textContent = speakerKey ? this.subT(speakerKey) : '';
+    (el.querySelector('.line') as HTMLElement).textContent = this.subT(key);
+    this.subStyle(el);
     el.classList.remove('hidden');
   }
 
@@ -72,7 +82,9 @@ export class UI implements CineUI {
     const el = $('caption');
     if (!key) { el.classList.add('hidden'); return; }
     voice.play(key);
-    el.textContent = t(key);
+    if (!this.subtitlesOn) { el.classList.add('hidden'); return; }
+    el.textContent = this.subT(key);
+    this.subStyle(el);
     el.classList.remove('hidden');
     el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
   }
@@ -280,7 +292,8 @@ export class UI implements CineUI {
       <div class="row"><label>${escapeHtml(t('settings.sfx'))}</label><input type="range" id="set-sfx" min="0" max="1" step="0.05" value="${s.sfxVolume}"></div>
       <div class="row"><label>${escapeHtml(t('settings.mute'))}</label>${onOff('muted', s.muted)}</div>
       <div class="row"><label>${escapeHtml(t('settings.invertY'))}</label>${onOff('invertY', s.invertY)}</div>
-      <div class="row"><label>${escapeHtml(t('settings.subtitles'))}</label>${onOff('subtitles', s.subtitles)}</div>
+      <div class="row"><label>${escapeHtml(t('settings.subLang'))}</label>${seg('subLang', [['same', t('settings.same')], ['en', 'English'], ['hi', 'हिन्दी'], ['ur', 'اردو'], ['off', t('settings.off')]], s.subLang)}</div>
+      <div class="row"><label>${escapeHtml(t('settings.voiceLang'))}</label>${seg('voiceLang', [['same', t('settings.same')], ['en', 'English'], ['hi', 'हिन्दी'], ['ur', 'اردو']], s.voiceLang)}</div>
       <div class="row"><label>${escapeHtml(t('settings.fps'))}</label>${onOff('showFps', s.showFps)}</div>
       ${onTutorial ? `<div class="row"><label>${escapeHtml(t('settings.tutorial'))}</label><button class="btn small" id="set-tut">${escapeHtml(t('settings.tutorialReplay'))}</button></div>` : ''}
       <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.back'))}</button></div>`);
@@ -291,6 +304,12 @@ export class UI implements CineUI {
         audio.uiClick();
         const name = g.dataset.seg!, v = b.dataset.v!;
         if (name === 'quality') { if (v !== quality) onQuality(v as QualityName); return; }
+        if (name === 'subLang' || name === 'voiceLang') {
+          (s as unknown as Record<string, string>)[name] = v;
+          g.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+          onChange(s);
+          return;
+        }
         if (name === 'lang') { s.lang = v as Lang; setLang(s.lang); onChange(s); this.openSettings(s, quality, onChange, onQuality, onClose); return; }
         (s as unknown as Record<string, boolean>)[name] = v === '1';
         g.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));

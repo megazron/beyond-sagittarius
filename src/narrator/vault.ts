@@ -40,7 +40,7 @@ export class Vault {
   private quill = new THREE.Group();
   private page!: THREE.MeshStandardMaterial;
   private halo = new THREE.PointLight(0xffc36a, 0, 5);
-  private key = new THREE.PointLight(0xffd9a0, 6, 9);
+  private key = new THREE.PointLight(0xffd9a0, 10, 11);
   private built = false;
   private lines: VaultLine[] = [];
   private i = -1;
@@ -146,12 +146,25 @@ export class Vault {
     const rim = new THREE.SpotLight(0xff9a50, 70, 30, 0.42, 0.6);
     rim.position.set(1.8, 5.5, -7); rim.target.position.set(0, 1.9, 0); rim.castShadow = true; rim.shadow.mapSize.set(1024, 1024); rim.shadow.bias = -0.0004; s.add(rim, rim.target);
     const rim2 = new THREE.SpotLight(0x8fb4ff, 26, 26, 0.5, 0.8); rim2.position.set(-6, 4, 1.5); rim2.target.position.set(0, 1.9, 0); s.add(rim2, rim2.target);
-    s.add(new THREE.HemisphereLight(0x46507a, 0x1a0e08, 1.0));
+    s.add(new THREE.HemisphereLight(0x5a668f, 0x241410, 1.9));
+    // soft front fill so his face and coat read even in the wide shots
+    const fill = new THREE.SpotLight(0xd8dcff, 40, 14, 0.5, 0.9); fill.position.set(0.8, 3.2, 5.2); fill.target.position.set(0, 1.9, 0); s.add(fill, fill.target);
     this.halo.position.set(0, 2.5, -0.2); s.add(this.halo);
 
     this.host = createCharacter('megazron', this.detail);
     s.add(this.host.root);
     this.dome.mesh.position.set(0, 0, 0);
+  }
+
+  /**
+   * Builds the room and compiles its shaders ahead of time. Done on the first
+   * real-GPU test run, this stall held the fade-in back for seconds, so the
+   * scene sat nearly black long after it had started.
+   */
+  prepare(r: THREE.WebGLRenderer) {
+    if (!this.built) this.build();
+    this.update(0.016);
+    r.compile(this.scene, this.camera);
   }
 
   /** Runs a scene; `done` fires when it ends or is skipped. */
@@ -213,7 +226,7 @@ export class Vault {
     this.host.look2(this.pose === 'write' ? 0 : Math.sin(t0 * 0.4) * 0.05, 0);
     const lvl = voice.level();
     this.halo.intensity = 0.5 + lvl * 2.5;
-    this.key.intensity = 6 + Math.sin(t0 * 7.3) * 0.12 + Math.sin(t0 * 3.1) * 0.2;
+    this.key.intensity = 10 + Math.sin(t0 * 7.3) * 0.12 + Math.sin(t0 * 3.1) * 0.2;
     this.page.emissiveIntensity = 0.1 + lvl * 0.14;
     this.quill.position.x = 0.28 + Math.sin(t0 * 2.6) * 0.14;
     this.quill.position.z = 0.84 + (Math.sin(t0 * 0.37) * 0.5 + 0.5) * 0.14;
@@ -239,6 +252,7 @@ export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1', s: { ateRed: bool
       { key: 'mz.l3.1', shot: 'wide', pose: 'write' },
       { key: s.ateRed ? 'mz.l3.red' : 'mz.l3.safe', shot: 'hands', pose: 'write' },
       ...(s.deaths > 0 ? [{ key: 'mz.l3.died', shot: 'profile' as VaultShot, pose: 'present' as CrewPose }] : []),
+      { key: 'j.8', shot: 'profile', pose: 'present' },
       { key: 'mz.l3.hint', shot: 'close', pose: 'idle' },
       { key: 'mz.l3.2', shot: 'window', pose: 'idle' },
     ];

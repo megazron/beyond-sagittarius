@@ -654,7 +654,7 @@ export class Story {
     }
     if (n === 9) this.after(5.0, () => this.ui.memory('memory.explorer', 10));
     if (n === 10) {
-      this.dialogue([['dlg.10.1', 'explorer'], ['dlg.10.2', 'scientist']], 5);
+      this.dialogue([['dlg.10.1', 'explorer'], ['dlg.10.2', 'scientist'], ['j.7', 'explorer']], 5);
       this.crew.wave = 2.5;
     }
   }

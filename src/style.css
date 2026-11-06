@@ -56,8 +56,8 @@ body.lang-hi .btn, body.lang-ur .btn { letter-spacing: 0.02em; text-transform: n
 a.btn { box-sizing: border-box; text-decoration: none; }
 .lang-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .lang-label { font-size: 12px; letter-spacing: 0.2em; color: #9fb7c2; text-transform: uppercase; margin-inline-end: 6px; }
-.btn.lang { min-width: 0; padding: 8px 14px; text-transform: none; letter-spacing: 0; font-family: 'Exo 2', 'Noto Sans Devanagari', 'Noto Naskh Arabic', sans-serif; }
-.btn.lang.active { border-color: var(--cyan); color: var(--cyan); }
+.btn.lang, .btn.sublang { min-width: 0; padding: 8px 14px; text-transform: none; letter-spacing: 0; font-family: 'Exo 2', 'Noto Sans Devanagari', 'Noto Naskh Arabic', sans-serif; }
+.btn.lang.active, .btn.sublang.active { border-color: var(--cyan); color: var(--cyan); }
 .title-foot { position: absolute; bottom: 18px; inset-inline-start: 7vw; font-size: 12px; color: #8aa3ad; letter-spacing: 0.05em; }
 
 /* Cinematic */
@@ -391,3 +391,10 @@ body.flashback canvas#c { filter: sepia(0.42) saturate(0.82) contrast(1.04) brig
 .crew-card .cp { float: inline-end; width: 84px; height: 105px; object-fit: cover; margin-inline-start: 8px; background: radial-gradient(circle at 50% 40%, rgba(111, 243, 255, 0.16), rgba(0, 0, 0, 0.1)); border: 1px solid var(--line); }
 .crew-card .cp:not([src]) { visibility: hidden; }
 .crew-card::after { content: ''; display: block; clear: both; }
+
+/* Subtitles keep their own script, whatever the game language */
+.sub-hi { font-family: 'Noto Sans Devanagari', 'Exo 2', sans-serif; line-height: 1.6; }
+.sub-ur { font-family: 'Noto Nastaliq Urdu', 'Noto Naskh Arabic', serif; line-height: 2.2; }
+.sub-en { font-family: 'Exo 2', system-ui, sans-serif; line-height: 1.4; }
+
+@media (max-height: 520px) and (orientation: landscape) { .btn.lang, .btn.sublang { min-height: 30px; padding: 4px 10px; font-size: 12px; } .lang-row { margin-top: 2px; } }

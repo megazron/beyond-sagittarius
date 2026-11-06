@@ -180,6 +180,24 @@ Renderer: WebGL2. A WebGPU path is not included yet — three.js' WebGPU
 renderer needs the node-material system, and every custom shader here would
 have to be ported to TSL; that is planned rather than half-done.
 
+## Tested on real hardware
+
+Measured on the live site (commit 6366f85) with `tools/gpu_test.py`: Chrome
+headless over DevTools at 1600×900 on an Intel Core Ultra 7 155H laptop with
+32 GB of RAM. Title, narrator, cinematic and play ran with zero page errors in
+every run. Frames per second:
+
+| GPU | Preset | Title | Narrator | Cinematic | Play |
+| --- | --- | --- | --- | --- | --- |
+| Intel integrated | Web | 52 | 48 | 56 | 34 |
+| NVIDIA RTX A500 Laptop | Web | 60 | 60 | 60 | 47 |
+| NVIDIA RTX A500 Laptop | Ultra | 60 | 60 | 59 | 23 |
+
+This measures a short standing scene, not a full playthrough. The narrator
+figures were taken on a scene that was rendering nearly black (since fixed), so
+they will change. Real mouse and keyboard play and real audio have not been
+tested by a person. Phones have only been tested in emulation.
+
 ## Run locally
 
 ```bash

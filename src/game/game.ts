@@ -375,7 +375,7 @@ export class Game {
       if (st.thirst > 97) { this.ui.toast(t('msg.drinkFull')); return; }
       st.thirst = clamp(st.thirst + 35, 0, 100);
       audio.tone(300, 0.25, 'sine', 0.15, 0, 200);
-      if (!s.flags.drank) { s.flags.drank = true; this.ui.toast(t('msg.drink')); }
+      if (!s.flags.drank) { s.flags.drank = true; this.ui.toast(t('msg.drink')); this.ui.say('j.4', 'crew.scientist.name', 4); }
       return;
     }
     const it = target.item;
@@ -407,6 +407,7 @@ export class Game {
       st.health = clamp(st.health - 28, 0, 100);
       s.flags.ateRed = true;
       this.ui.toast(t('fruit.ateRed'));
+      this.ui.say('j.5', 'crew.scientist.name', 3);
       this.ui.damage();
       audio.hurt();
       this.camShake = 0.12;
@@ -534,6 +535,7 @@ export class Game {
       this.mode = 'play';
       this.input.enabled = true;
       this.persist();
+      this.after(1.6, () => this.ui.say('j.6', 'mz.name', 4));
     });
   }
 
