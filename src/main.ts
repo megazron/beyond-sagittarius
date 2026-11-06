@@ -634,6 +634,7 @@ window.addEventListener('resize', () => {
   get mode() { return game?.mode; },
   get ready() { return worldReady; },
   get paused() { return paused; },
+  get inputState() { return { keys: Array.from(input.keys), enabled: input.enabled, active: document.activeElement?.tagName, activeId: document.activeElement?.id, mode: game?.mode, pose: player?.pose, vel: player?.vel.toArray(), onGround: player?.onGround, water: player?.inWater, blocked: player?.blockedDeep }; },
   get longTasks() { return longTasks; },
   sceneTest(id: 'l3' | 'l7' | 'ch1' | 'intro' | 'fight') { if (id === 'fight') playFlashback(() => backToWorld()); else playVault(id, backToWorld); },
   nextBeat() { cine.debugNext(); game?.scene?.debugNext(); },

@@ -15,6 +15,7 @@ Requires: pip install playwright && playwright install chromium
 """
 import argparse
 import json
+import os
 import pathlib
 import re
 import sys
@@ -261,6 +262,8 @@ def main():
                 if not tu or tu["step"] == step_next:
                     break
                 log("  still on", tu["step"], "at", [round(v, 1) for v in ev("__bs.debug.player")], "keys", keys)
+                if i == 1:
+                    log("  input:", ev("__bs.inputState"))
                 ev(f"__bs.look({i * 1.3}, -0.15)")
             for k in keys:
                 page.keyboard.up(k)
@@ -268,6 +271,8 @@ def main():
         expect_step("move")
         hold_until(["KeyW"], "sprint")
         expect_step("sprint")
+        if os.environ.get("BS_STOP_AFTER_MOVE"):
+            sys.exit(0)
         hold_until(["KeyW", "ShiftLeft"], "jump")
         expect_step("jump")
         page.keyboard.press("Space"); ev("__bs.step(0.1)")
