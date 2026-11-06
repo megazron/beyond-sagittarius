@@ -317,6 +317,17 @@ def main():
         shot("12-crew-panel")
         page.keyboard.press("KeyC")
 
+        # ---- NPCs: they exist, and talking to one works ----
+        npcs = ev("__bs.npcs")
+        log("npcs:", [n["id"] for n in npcs])
+        if len(npcs) < 5:
+            failures.append(f"expected five NPCs: {npcs}")
+        t = next(n for n in npcs if n["id"] == "trader")
+        ev(f"__bs.teleport({t['pos'][0] + 1}, {t['pos'][2]}, 0)")
+        ev("__bs.step(0.3)")
+        if ev("__bs.act()") != "npc-trader":
+            failures.append("could not talk to the trader")
+
         # ---- persistence: reload and continue ----
         ev("__bs.save && window.dispatchEvent(new Event('beforeunload'))")
         page.reload(wait_until="domcontentloaded")

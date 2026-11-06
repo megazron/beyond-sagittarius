@@ -9,7 +9,12 @@
     "builder",
     "social",
     "ship",
-    "unknown"
+    "unknown",
+    "trader",
+    "local",
+    "hermit",
+    "traveller",
+    "cameo"
   ],
   "lines": {
     "cine.caption1": "megazron",
@@ -126,6 +131,18 @@
     "j.6": "megazron",
     "j.7": "explorer",
     "j.8": "megazron",
-    "j.9": "strong"
+    "j.9": "strong",
+    "npc.trader.hi": "trader",
+    "npc.trader.done": "trader",
+    "npc.trader.no": "trader",
+    "npc.local.hi": "local",
+    "npc.local.ask": "local",
+    "npc.local.done": "local",
+    "npc.hermit.1": "hermit",
+    "npc.hermit.2": "hermit",
+    "npc.trav.1": "traveller",
+    "npc.trav.2": "traveller",
+    "npc.cameo.1": "cameo",
+    "npc.cameo.2": "cameo"
   }
 }

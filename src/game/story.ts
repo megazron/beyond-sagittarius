@@ -9,6 +9,7 @@ import type { CrewPose } from '../characters/character';
 import type { UI } from '../ui/ui';
 import { cover, Beat } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
+import { Npcs } from './npcs';
 
 /** A contextual "press E" station in the world (build, craft, talk...). */
 export interface Action {
@@ -35,6 +36,7 @@ const isNight = (h: number) => h >= DUSK || h < 5.5;
  * lives in SaveData (flags + inventory) so it survives reloads.
  */
 export class Story {
+  npcs: Npcs;
   private strikes = 0;
   private thrustT = 0;
   private spear: THREE.Group;
@@ -53,6 +55,7 @@ export class Story {
     private hurt: (amount: number) => void,
     private playScene: (beats: Beat[], then?: () => void) => void,
   ) {
+    this.npcs = new Npcs(world, player, ui, getSave, after);
     this.spear = buildSpear();
     this.spear.visible = false;
     player.model.handR.add(this.spear);
@@ -177,6 +180,7 @@ export class Story {
     const n = s.level;
     const out: Action[] = [];
     if (this.sequence) return out;
+    out.push(...this.npcs.actions());
     if (n === 4 && !this.flag('pitBuilt')) {
       out.push({ id: 'pit', pos: L.camp, radius: 2.6, label: t('action.buildPit'), missing: this.missing(R.pit), run: () => {
         this.consume(R.pit);
@@ -673,6 +677,7 @@ export class Story {
 
   update(dt: number, time: number) {
     const s = this.s;
+    this.npcs.update(dt, time);
     this.updateHound(dt, time);
     this.updateCrew(dt, time);
     // spear thrust animation overrides the walk cycle's right arm

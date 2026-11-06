@@ -50,7 +50,7 @@ export class World {
   /** Sunlit air for the renderer's volumetric pass. */
   post!: PostSource;
 
-  constructor(private q: Quality) {
+  constructor(public q: Quality) {
     this.terrain = new Terrain(q);
     this.fog = new THREE.FogExp2(0xbcd6cf, q.fogDensity);
     this.scene.fog = this.fog;

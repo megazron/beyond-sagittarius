@@ -462,6 +462,7 @@ window.addEventListener('resize', () => {
   get mode() { return game?.mode; },
   get ready() { return worldReady; },
   get paused() { return paused; },
+  get npcs() { return game?.story.npcs.debug(); },
   get subtitleText() { return document.querySelector('#subtitle .line')?.textContent; },
   sayTest(k: string) { ui.subtitle(k, 'mz.name', true); },
   get voice() { return { last: voice.lastKey, played: voice.played }; },
