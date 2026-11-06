@@ -474,8 +474,12 @@ export class Story {
 
   /** Test hook: stage one of the world scenes straight away. */
   debugScene(id: 'rescue' | 'camp' | 'beacon') {
-    this.crew.mode = 'idle';
-    const L = this.L;
+    const s = this.s, L = this.L;
+    // the save decides who is on stage: put it where this scene happens
+    s.level = id === 'beacon' ? 10 : 9;
+    s.flags.crewFollow = id !== 'rescue';
+    s.flags.crewCamp = id !== 'rescue';
+    this.updateCrew(0.016, 0);
     if (id === 'rescue') { this.player.spawn(L.crewSpot.x + 2.2, L.crewSpot.z + 1.6, 0); this.crew.pos.copy(L.crewSpot); this.meetCrew(); }
     else if (id === 'camp') this.campTalk();
     else this.lightBeacon();

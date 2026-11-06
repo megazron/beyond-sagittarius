@@ -8,7 +8,7 @@ import type { Cond, Effect, LineChoice } from '../game/branch/types';
 export type Who = CrewId | 'megazron';
 
 /** A camera set-up: `from` looks at `to`; `push` drifts towards the subject. */
-export interface Shot { from: THREE.Vector3; to: THREE.Vector3; push?: number; roll?: number; /** Lens blur override (fraction of screen height). */ aperture?: number }
+export interface Shot { from: THREE.Vector3; to: THREE.Vector3; push?: number; roll?: number; /** Lens blur override (fraction of screen height). */ aperture?: number; /** Keep this actor's head where it is in frame, whatever the body does. */ track?: Character }
 
 /**
  * A step of a scene. Beyond the line itself it can branch: `if` plays it only
@@ -60,6 +60,8 @@ export interface CutsceneCtx {
   actors: Partial<Record<CrewId, Character>>;
   subtitle: (key: string | null, speaker?: string) => void;
   onDone: () => void;
+  /** Can a camera stand here? Walls, trees, the ground. */
+  cameraOk?: (p: THREE.Vector3) => boolean;
 }
 
 const headOf = (c: Character) => new THREE.Vector3().setFromMatrixPosition(c.head.matrixWorld).add(new THREE.Vector3(0, 0.12, 0));
@@ -69,16 +71,16 @@ const yawDir = (c: Character) => new THREE.Vector3(Math.sin(c.root.rotation.y), 
 export const cover = {
   close(c: Character, side = 0.5, dist = 1.05, drop = 0.03): Shot {
     const h = headOf(c), f = yawDir(c), r = new THREE.Vector3(f.z, 0, -f.x);
-    return { from: h.clone().addScaledVector(f, dist).addScaledVector(r, side * dist).add(new THREE.Vector3(0, -drop, 0)), to: h.clone().add(new THREE.Vector3(0, -0.04, 0)), push: 0.1 };
+    return { from: h.clone().addScaledVector(f, dist).addScaledVector(r, side * dist).add(new THREE.Vector3(0, -drop, 0)), to: h.clone().add(new THREE.Vector3(0, -0.12, 0)), push: 0.1, track: c };
   },
   mid(c: Character, side = 0.45, dist = 2): Shot {
     const h = headOf(c), f = yawDir(c), r = new THREE.Vector3(f.z, 0, -f.x);
-    return { from: h.clone().addScaledVector(f, dist).addScaledVector(r, side * dist).add(new THREE.Vector3(0, -0.2, 0)), to: h.clone().add(new THREE.Vector3(0, -0.28, 0)), push: 0.08 };
+    return { from: h.clone().addScaledVector(f, dist).addScaledVector(r, side * dist).add(new THREE.Vector3(0, -0.2, 0)), to: h.clone().add(new THREE.Vector3(0, -0.28, 0)), push: 0.08, track: c };
   },
   /** Over b's shoulder onto a. */
   ots(a: Character, b: Character, side = 0.6): Shot {
     const A = headOf(a), Bh = headOf(b), d = A.clone().sub(Bh).setY(0).normalize(), r = new THREE.Vector3(d.z, 0, -d.x);
-    return { from: Bh.clone().addScaledVector(d, -1.05).addScaledVector(r, side).add(new THREE.Vector3(0, 0.14, 0)), to: A.clone().add(new THREE.Vector3(0, -0.05, 0)), push: 0.05 };
+    return { from: Bh.clone().addScaledVector(d, -1.05).addScaledVector(r, side).add(new THREE.Vector3(0, 0.14, 0)), to: A.clone().add(new THREE.Vector3(0, -0.1, 0)), push: 0.05, track: a };
   },
   two(a: Character, b: Character, dist = 2.8, side = 1): Shot {
     const A = headOf(a), Bh = headOf(b), m = A.clone().add(Bh).multiplyScalar(0.5), d = Bh.clone().sub(A).setY(0).normalize(), n = new THREE.Vector3(d.z, 0, -d.x).multiplyScalar(side);
@@ -96,12 +98,13 @@ export function addCutsceneRig(scene: THREE.Scene) {
   rig.add(new THREE.PointLight(0xfff0e0, 0, 7, 1.6), new THREE.PointLight(0xc4d6ff, 0, 7, 1.6), new THREE.PointLight(0xffd8b0, 0, 6, 1.6));
   scene.add(rig);
 }
-const RIG = [6, 2.2, 5];
+const RIG = [3.4, 1.4, 3.2];
 const rigFor = (scene: THREE.Scene) => scene.getObjectByName('cutscene-rig') as THREE.Group;
 
 /** How each spoken shot framed its speaker (tests read this). */
 export const frameReport: { key: string; x: number; y: number; fixed: boolean }[] = [];
 const P = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
 
 /**
  * Plays a list of beats: cuts between shots, stages poses and looks, and holds
@@ -113,6 +116,9 @@ export class Cutscene {
   private shotT = 0;
   private shotLen = 1;
   private shot: Shot | null = null;
+  private fresh = false;
+  private aim = new THREE.Vector3();
+  private trackOff = new THREE.Vector3();
   done = false;
 
   /** A panel is up: the scene holds until it answers. */
@@ -130,12 +136,47 @@ export class Cutscene {
   }
   private rig: THREE.Group;
 
+  /** Is anyone standing in this shot's way, or is the speaker facing away from it? */
+  private shotCost(a: Character, h: THREE.Vector3, cam: THREE.Vector3) {
+    const seg = new THREE.Line3(cam, h), near = new THREE.Vector3();
+    let cost = 0;
+    for (const id in this.ctx.actors) {
+      const o = this.ctx.actors[id as CrewId];
+      if (!o || o === a || !o.root.visible) continue;
+      for (const part of [o.head, o.chest]) {
+        const p = part.getWorldPosition(new THREE.Vector3());
+        seg.closestPointToPoint(p, true, near);
+        // a shoulder at the edge of frame is coverage; a body across the lens is a mistake
+        if (near.distanceTo(p) < 0.34) cost += 10;
+      }
+    }
+    const to = cam.clone().sub(h).setY(0).normalize();
+    const facing = to.dot(yawDir(a));
+    if (facing < 0.2) cost += (0.2 - facing) * 6;
+    if (this.ctx.cameraOk && !this.ctx.cameraOk(cam)) cost += 20;
+    return cost;
+  }
+
+  /** Swing the camera around the speaker to the nearest angle that sees them clearly. */
+  private clearShot(a: Character, h: THREE.Vector3, s: Shot) {
+    const base = s.from.clone().sub(h);
+    let best = 0, top = Infinity;
+    for (const turn of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.25, -1.25, 1.6, -1.6, 2, -2, 2.5, -2.5, Math.PI]) {
+      const cam = base.clone().applyAxisAngle(UP, turn).add(h);
+      const c = this.shotCost(a, h, cam) + Math.abs(turn) * 0.05;
+      if (c < top - 1e-6) { top = c; best = turn; }
+    }
+    if (best) { s.from.copy(base.applyAxisAngle(UP, best).add(h)); }
+  }
+
   /** Keep the speaker's head inside the safe area, and light them from the camera side. */
   private frame(who: Who | undefined, key: string | undefined) {
     const a = who && who !== 'megazron' ? this.ctx.actors[who] : undefined;
     const cam = this.ctx.camera, s = this.shot;
     if (!a || !s) return;
     const h = headOf(a);
+    if (this.fresh) this.clearShot(a, h, s);
+    this.fresh = false;
     const look = () => { cam.position.copy(s.from); cam.up.set(0, 1, 0); cam.lookAt(s.to); cam.updateMatrixWorld(); return P.copy(h).project(cam); };
     let q = look(), fixed = false;
     if (Math.abs(q.x) > 0.8 || Math.abs(q.y) > 0.8 || q.z > 1) { s.to.copy(h); s.to.y -= 0.05; q = look(); fixed = true; }
@@ -216,12 +257,14 @@ export class Cutscene {
       this.shotT += dt;
       const k = Math.min(1, this.shotT / this.shotLen);
       const cam = this.ctx.camera;
-      cam.position.copy(s.from).lerp(s.to, (s.push ?? 0) * k);
+      // the frame follows the head through a gesture, gently, as an operator would
+      if (s.track) this.aim.lerp(P.copy(headOf(s.track)).add(this.trackOff), 1 - Math.exp(-dt * 5));
+      cam.position.copy(s.from).lerp(this.aim, (s.push ?? 0) * k);
       cam.up.set(0, 1, 0);
-      cam.lookAt(s.to);
+      cam.lookAt(this.aim);
       if (s.roll) cam.rotateZ(s.roll);
       // focus on the subject; a close-up has a shallower field than a wide shot
-      const d = cam.position.distanceTo(s.to);
+      const d = cam.position.distanceTo(this.aim);
       Renderer.current?.setDof(d, s.aperture ?? Math.min(0.016, 0.022 / Math.max(d, 1)));
     }
   }

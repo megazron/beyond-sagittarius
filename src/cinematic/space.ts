@@ -200,7 +200,7 @@ export function createEarth(radius: number, sunDir: THREE.Vector3) {
         float diff = smoothstep(-0.05, 0.4, ndl);
         vec3 col = albedo * diff * 1.6;
         vec3 H = normalize(uSun + V);
-        col += vec3(1.0, 0.9, 0.75) * pow(max(dot(N, H), 0.0), 260.0) * (1.0 - lm) * (1.0 - ice) * 1.2 * step(0.0, ndl);
+        col += vec3(1.0, 0.9, 0.75) * pow(max(dot(N, H), 0.0), 260.0) * (1.0 - lm) * (1.0 - ice) * 0.3 * step(0.0, ndl);
         // city lights on the night side: 2189: dense
         float night = smoothstep(0.1, -0.15, ndl);
         float city = pow(vnoise(n * 160.0), 6.0) * 2.4 + pow(vnoise(n * 45.0), 4.0) * 0.5;

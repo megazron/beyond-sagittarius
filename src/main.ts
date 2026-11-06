@@ -92,7 +92,7 @@ const syncDevice = () => {
 input.onDevice(syncDevice);
 syncDevice();
 const cine = new Cinematic(ui);
-const film = new Montage(cine, () => (worldReady ? world : null), (sc, cam, ao) => renderer.setScene(sc, cam, ao), () => pendingLook.glow, () => (player ? [player.model.root] : []), ui);
+const film = new Montage(cine, () => (worldReady ? world : null), (sc, cam, ao) => renderer.setScene(sc, cam, ao), () => pendingLook.glow, () => (player ? [player.model.root, ...(game?.story.npcs.roots() ?? [])] : []), ui);
 const vault = new Vault((k, sp) => ui.subtitle(k, sp), quality.name === 'mobile' ? 0.6 : 1);
 const world = new World(quality);
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2400);
@@ -236,6 +236,7 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', after: () => void)
   ui.show('hud', false);
   setTimeout(() => {
     renderer.setScene(vault.scene, vault.camera, false);
+    renderer.renderer.toneMappingExposure = 1;
     ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden');
     vault.play(lines, () => {
@@ -258,6 +259,7 @@ function backToWorld() {
 
 function playFlashback(after: () => void) {
   state = 'flashback';
+  renderer.renderer.toneMappingExposure = 1; // the world leaves its own exposure behind
   input.enabled = false; input.resetTouch(); touch.show(false); suppressPauseOnUnlock = true; input.releasePointer();
   ui.fade('white', 1, 0.5);
   ui.show('hud', false);

@@ -146,10 +146,12 @@ export function createShip(): Ship {
     new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
       uniforms: { uTime: { value: 0 }, uPower: { value: 0 } },
-      vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-      fragmentShader: `uniform float uTime, uPower; varying vec2 vUv;
+      vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ vUv = uv; vN = normalize(normalMatrix*normal); vec4 p = modelViewMatrix*vec4(position,1.0); vV = normalize(-p.xyz); gl_Position = projectionMatrix*p; }`,
+      fragmentShader: `uniform float uTime, uPower; varying vec2 vUv; varying vec3 vN; varying vec3 vV;
         void main(){ float a = pow(vUv.y, 2.5) * uPower; float f = 0.8 + 0.2*sin(vUv.y*40.0 - uTime*30.0);
-          gl_FragColor = vec4(vec3(0.35, 0.65, 1.6) * a * f, 1.0); }`,
+          // gas has no edge: thin to nothing at the silhouette of the cone
+          float soft = pow(abs(dot(normalize(vN), normalize(vV))), 2.2);
+          gl_FragColor = vec4(vec3(0.35, 0.65, 1.6) * a * f * soft, 1.0); }`,
     }),
   );
   plume.rotation.x = Math.PI / 2;
@@ -257,7 +259,7 @@ export function createInterior(detail = 1): Interior {
   // Loose objects that float when gravity fails
   const floaters: THREE.Mesh[] = [];
   const fMats = [new THREE.MeshStandardMaterial({ color: 0xe0e0e0, roughness: 0.4 }), new THREE.MeshStandardMaterial({ color: 0xff7a3d, roughness: 0.5 }), frameMat];
-  const fGeos = [new THREE.BoxGeometry(0.25, 0.04, 0.18), new THREE.CylinderGeometry(0.05, 0.05, 0.12, 10), new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.SphereGeometry(0.06, 8, 6)];
+  const fGeos = [new THREE.BoxGeometry(0.16, 0.02, 0.11), new THREE.CylinderGeometry(0.03, 0.03, 0.09, 10), new THREE.BoxGeometry(0.07, 0.03, 0.05), new THREE.SphereGeometry(0.035, 8, 6)];
   for (let i = 0; i < 26; i++) {
     const f = new THREE.Mesh(fGeos[i % 4], fMats[i % 3]);
     f.position.set((Math.random() - 0.5) * 8, -2.15 + Math.random() * 0.3, (Math.random() - 0.5) * 3.5);

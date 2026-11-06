@@ -50,6 +50,9 @@ export class Npcs {
 
   private get s() { return this.getSave(); }
 
+  /** Everyone standing about: scenes that aren't theirs clear them off the set. */
+  roots() { return this.list.map((n) => n.fig.root); }
+
   private build() {
     this.built = true;
     const L = this.world.layout, d = this.world.q.name === 'mobile' ? 0.6 : 1;

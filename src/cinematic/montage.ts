@@ -178,16 +178,16 @@ class Debris {
     parent.add(this.mesh);
   }
   /** Plates leave along `pull` with some scatter, released one by one from `from` to `to` in the hull's length. */
-  update(time: number, pull: THREE.Vector3, along: number, spread: number) {
+  update(time: number, pull: THREE.Vector3, along: number, spread: number, base = 0, scale = 1) {
     const n = this.mesh.count, sd = this.seeds;
     for (let i = 0; i < n; i++) {
       const k = i * 8, rel = Math.abs(sd[k]) * 0.8, tt = Math.max(0, time - rel * 2.4);
-      const z = along * sd[k + 1], a = sd[k + 2] * 6.283;
+      const z = base + along * sd[k + 1], a = sd[k + 2] * 6.283;
       this.p.set(Math.cos(a) * 1.05, Math.sin(a) * 1.05, z);
       this.p.addScaledVector(pull, tt * tt * (0.8 + Math.abs(sd[k + 3]) * 2.2));
       this.p.x += sd[k + 4] * spread * tt; this.p.y += sd[k + 5] * spread * tt;
       this.e.set(sd[k + 6] * 3 + tt * sd[k + 3] * 3, sd[k + 7] * 3 + tt * sd[k + 4] * 2, tt * sd[k + 5] * 2);
-      const sc = tt > 0 ? 0.25 + Math.abs(sd[k + 2]) * 0.8 : 0.0001;
+      const sc = tt > 0 ? (0.25 + Math.abs(sd[k + 2]) * 0.8) * scale : 0.0001;
       this.s.set(sc, sc * 1.2, sc);
       this.m.compose(this.p, this.q.setFromEuler(this.e), this.s);
       this.mesh.setMatrixAt(i, this.m);
@@ -376,22 +376,22 @@ export class Montage {
     this.trunk.position.copy(tp).add(V(0, 14, 0)); this.trunk.visible = false;
     const a = tp.clone().addScaledVector(td, 1.85); a.y = T.height(a.x, a.z);
     const aSide = V(td.z, 0, -td.x);
-    land('strong', a, a.clone().addScaledVector(td, 6), 22.4, 1.15, 1, above(a.clone().addScaledVector(td, 62).add(V(20, 34, 0)), 30), a.clone().addScaledVector(aSide, 3.1).addScaledVector(td, 0.7).add(V(0, 0.9, 0)), a.clone().add(V(0, 1.25, 0)).addScaledVector(td, -0.5), face(a, tp));
+    land('strong', a, a.clone().addScaledVector(td, 6), 18.9, 1, 1, above(a.clone().addScaledVector(td, 62).add(V(20, 34, 0)), 30), a.clone().addScaledVector(aSide, 3.1).addScaledVector(td, 0.7).add(V(0, 0.9, 0)), a.clone().add(V(0, 1.25, 0)).addScaledVector(td, -0.5), face(a, tp));
 
     // Lyrra: splashes down mid-lake, wades to the shore in front of us
     const d = V(-0.75, 0, -0.66).normalize(), c0 = V(LAKE.x, 0, LAKE.z);
     let wade = 0, shore = 0;
     for (let s = 0; s < 120; s += 0.5) { const h = T.height(c0.x + d.x * s, c0.z + d.z * s); if (!wade && h > -0.95) wade = s; if (h > 0.3) { shore = s; break; } }
     const m = c0.clone().addScaledVector(d, wade), sh = c0.clone().addScaledVector(d, shore);
-    land('medic', m, c0.clone().addScaledVector(d, Math.max(4, wade - 16)), 0.9, 1.15, -1, above(sh.clone().addScaledVector(d, 10).add(V(0, 7, 0)), 5), sh.clone().add(V(0.6, 0.85, 0)), m.clone().addScaledVector(d, 2).add(V(0, 0.75, 0)), face(c0, sh), d);
+    land('medic', m, c0.clone().addScaledVector(d, Math.max(4, wade - 16)), 19.5, 1.05, -1, above(sh.clone().addScaledVector(d, 10).add(V(0, 7, 0)), 5), sh.clone().add(V(0.6, 0.85, 0)), m.clone().addScaledVector(d, 2).add(V(0, 0.75, 0)), face(c0, sh), d);
 
     // Bolzar: a flat rock in the southern hills
     const b = find(10, 90, 290, 370, (x, z) => -slope(x, z) - Math.abs(T.height(x, z) - 30) * 0.002);
-    land('builder', b, b.clone(), 3.2, 1.2, 1, above(b.clone().add(V(-50, 30, -44)), 28), b.clone().add(V(-2.2, 1.05, -2.3)), b.clone().add(V(0, 0.75, 0)), face(b, V(b.x - 2.2, 0, b.z - 2.3)));
+    land('builder', b, b.clone(), 20.3, 1.2, 1, above(b.clone().add(V(-50, 30, -44)), 28), b.clone().add(V(-2.2, 1.05, -2.3)), b.clone().add(V(0, 0.75, 0)), face(b, V(b.x - 2.2, 0, b.z - 2.3)));
 
     // Skyvra: against her pod, which is where the rescue finds her
     const e = L.crewSpot.clone(), away = e.clone().sub(L.pod2).setY(0).normalize(), es = V(away.z, 0, -away.x);
-    land('explorer', e, L.pod2.clone(), 4.6, 1.2, -1, above(e.clone().addScaledVector(away, 60).add(V(0, 34, 0)), 30), e.clone().addScaledVector(away, 2.5).addScaledVector(es, 0.9).add(V(0, 0.75, 0)), e.clone().add(V(0, 0.6, 0)).addScaledVector(away, -0.3), face(e, e.clone().addScaledVector(away, 3)));
+    land('explorer', e, L.pod2.clone(), 4.9, 1.2, -1, above(e.clone().addScaledVector(away, 60).add(V(0, 34, 0)), 30), e.clone().addScaledVector(away, 2.5).addScaledVector(es, 0.9).add(V(0, 0.75, 0)), e.clone().add(V(0, 0.6, 0)).addScaledVector(away, -0.3), face(e, e.clone().addScaledVector(away, 3)));
 
     // Nuvexa: the highest ledge you could stand on, past the valley
     const s = find(-240, -30, -670, -550, (x, z) => T.height(x, z) - (slope(x, z) > 0.75 ? 1000 : 0));
@@ -400,7 +400,7 @@ export class Montage {
 
     // The player: the clearing where the wake-up starts
     const z = at(0, 2);
-    land('scientist', z, z.clone(), 5.8, 1.1, 1, z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(-4.2, 1.3, 5.2)), z.clone().add(V(0, 1.5, 0)), 0.35);
+    land('scientist', z, z.clone(), 5.8, 1.1, 1, z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(-3.2, 0.7, 4.3)), z.clone().add(V(0, 1.7, 0)), 0.35);
     this.lands[5].wide = [z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(5, 24, -14))];
     this.lands[5].from = V(0.18, 1, -0.4).normalize();
   }
@@ -624,7 +624,7 @@ export class Montage {
       const crack = smoothstep(0, 0.3, k);
       this.crack.visible = k < 0.55;
       (this.crack.material as THREE.ShaderMaterial).uniforms.uK.value = crack * 1.5;
-      if (k > 0.45) this.shards.update((k - 0.45) * 4, tmp.set(0, 0.05, -1), 5, 4);
+      if (k > 0.45) this.shards.update((k - 0.45) * 4, tmp.set(0, 0.05, -1), 1.2, 4, -3.2, 0.3);
       else this.shards.mesh.visible = false;
       ORDER.forEach((id, n) => lift(id, n, smoothstep(0.25, 1, k), b));
       i.alarmLight.intensity = 6 + 14 * after(b % 1, 0, 0.6);
@@ -731,7 +731,7 @@ export class Montage {
         u.uWarpDir.value.copy(dir).negate();
         this.hole(30 * dir.x, 30 * dir.y, -70, 0.5);
         const hit = after(b, from, 0.5);
-        this.fx = { zoom: 0.02 + hit * 0.05, flash: [hit * 0.25, hit * 0.25, hit * 0.25], lines: 0.15, exposure: 0.75 };
+        this.fx = { zoom: 0.02 + hit * 0.05, flash: [hit * 0.1, hit * 0.1, hit * 0.1], lines: 0.15, exposure: 0.75 };
       }, () => set.show('deep'));
     };
     fly(36, 38, 'strong', 0, { dir: V(0.8, 0.1, -0.6).normalize(), cam: (k) => V(lerp(3.2, 2.2, k), 0.4, 3.4), roll: (k) => 0.3 - k * 0.5, spin: (b) => new THREE.Euler(-1.0, b * 0.55, 0.4) });
@@ -784,7 +784,7 @@ export class Montage {
       });
       const u = set.dome.uniforms;
       u.uBH.value = 0; u.uWarp.value = 0; u.uOther.value = 0; u.uNebula.value = 0.6;
-      const pf = after(b, 56, 0.6) * 0.4;
+      const pf = after(b, 56, 0.6) * 0.15;
       this.fx = { flash: [pf, pf, pf], exposure: 1 };
     }, () => set.show('home'));
 
@@ -850,7 +850,7 @@ export class Montage {
     this.scorch.visible = on && id !== 'medic';
     if (id === 'medic') {
       this.spray.set({ at, c0: 0xe0f4ff, c1: 0x8fb0c8, life: 1.8, speed: 26, drag: 0.9, grav: 7, size: 0.5, grow: 2, stagger: 0.1, squash: [0.4, 1.6, 0.4], alpha: 0.85 }).play(on ? tt : -1);
-      this.smoke.set({ at, c0: 0xd0e4f0, c1: 0x708090, life: 3, speed: 12, drag: 1.1, grav: 0, size: 2, grow: 3, stagger: 0.1, squash: [1.2, 0.3, 1.2], lift: [0, 1, 0], alpha: 0.4 }).play(on ? tt : -1);
+      this.smoke.set({ at, c0: 0xd0e4f0, c1: 0x708090, life: 1.6, speed: 12, drag: 1.1, grav: 0, size: 2, grow: 3, stagger: 0.1, squash: [1.2, 0.3, 1.2], lift: [0, 1, 0], alpha: 0.28 }).play(on ? tt : -1);
     } else {
       this.dust.set({ at, c0: 0x4b3a2c, c1: 0x2a2520, life: 2.6, speed: 24, drag: 1.3, grav: 1.6, size: 1.1, grow: 2.6, stagger: 0.05, squash: [1, 1.2, 1], alpha: 0.9 }).play(on ? tt : -1);
       this.smoke.set({ at, c0: 0x2e2a28, c1: 0x121214, life: 6, speed: 3, drag: 1, grav: 0, size: 1.6, grow: 3.2, stagger: 2.4, squash: [1, 0.5, 1], lift: [0.6, 3.4, 0.2], alpha: 0.55 }).play(on ? tt : -1);
@@ -880,7 +880,7 @@ export class Montage {
       case 'medic': {
         const w = this.world()!, s = lerp(-1.8, 1.0, drift), wx = p.x + l.dir.x * s, wz = p.z + l.dir.z * s;
         this.act(id, V(wx, w.terrain.height(wx, wz), wz), q(0, yaw), 'walk', { armL: [0.55, -0.7, 0.1], armR: [-0.55, -0.7, 0.1] }, { smile: 0.05, squint: 0.15 });
-        to.set(wx, 1.0, wz); fov = 20;
+        to.set(wx, w.terrain.height(wx, wz) + 1.4, wz); fov = 20;
         break;
       }
       case 'builder':
@@ -901,7 +901,7 @@ export class Montage {
     const back = to.clone().sub(pos).setY(0).normalize();
     this.setRig([
       { p: pos.clone().lerp(to, 0.45).addScaledVector(side, 1.2).add(V(0, 1.1, 0)), color: 0xffe8d0, i: 9, d: 10 },
-      { p: to.clone().addScaledVector(back, 1.3).addScaledVector(side, -1).add(V(0, 0.7, 0)), color: col, i: 7, d: 8 },
+      { p: to.clone().addScaledVector(back, 1.3).addScaledVector(side, -1).add(V(0, 0.7, 0)), color: col, i: 3.5, d: 7 },
     ]);
     this.card(id, (b - (imp + 1.75)) / 0.5);
     if (b >= imp + 5.6) this.el.card.style.opacity = '0';
@@ -956,8 +956,9 @@ export class Montage {
     this.impact(l, 'scientist', tt + 0.3, col);
     // head first, up to the waist, legs in the morning air
     const yaw = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI - 0.22, 0.5, 0.12));
-    this.act('scientist', l.at.clone().add(V(0, 1.02, 0)), yaw, 'float', { armL: [1, -0.1, 0], armR: [-1, -0.1, 0], legL: [0.32, -1, 0.1], shinL: [0.42, -1, -0.25], legR: [-0.22, -1, 0.1], shinR: [-0.5, -1, 0.15] }, { blink: 0.9 });
-    this.setRig([{ p: l.at.clone().add(V(-2.4, 3, 3)), color: 0xffd8b0, i: 16, d: 12 }]);
+    this.act('scientist', l.at.clone().add(V(0, 1.55, 0)), yaw, 'float', { armL: [1, -0.1, 0], armR: [-1, -0.1, 0], legL: [0.2, -1, 0.05], shinL: [0.3, -1, -0.2], legR: [-0.16, -1, 0.06], shinR: [-0.4, -1, 0.1] }, { blink: 0.9 });
+    this.boost = 1.5;
+    this.setRig([{ p: l.at.clone().add(V(-2.4, 3, 3)), color: 0xffd8b0, i: 30, d: 14 }, { p: l.at.clone().add(V(2.5, 2, -2)), color: 0xff9a70, i: 14, d: 10 }]);
     const f = after(b, S.hit, 1.6);
     const out = smoothstep(S.end - 1.5, S.end, b);
     this.fx = { flash: [f * 1.4 - out, f * 1.4 - out, f * 1.4 - out] };

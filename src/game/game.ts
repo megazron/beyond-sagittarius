@@ -93,6 +93,7 @@ export class Game {
       scene: this.world.scene,
       actors: { scientist: this.player.model, explorer: this.world.explorer },
       subtitle: (k, sp) => this.ui.subtitle(k, sp),
+      cameraOk: (p) => !this.world.forest.blocks(p.x, p.z, 0.5) && p.y > this.world.terrain.height(p.x, p.z) + 0.35,
       onDone: () => {
         this.scene = null;
         this.mode = 'play';

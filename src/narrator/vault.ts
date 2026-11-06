@@ -22,10 +22,10 @@ export interface VaultLine { key: string; pose?: CrewPose; shot?: VaultShot; aft
 export type VaultShot = 'wide' | 'push' | 'close' | 'hands' | 'orrery' | 'window' | 'profile' | 'low';
 
 const SHOTS: Record<VaultShot, { a: THREE.Vector3; b: THREE.Vector3; to: THREE.Vector3 }> = {
-  wide: { a: V(0.15, 2.2, 3.7), b: V(-0.2, 2.2, 3.1), to: V(0, 2.05, 0) },
+  wide: { a: V(0.15, 2.05, 3.2), b: V(-0.2, 2.05, 2.7), to: V(0, 1.75, 0) },
   push: { a: V(-1.1, 1.9, 4.2), b: V(-0.75, 1.92, 3.1), to: V(0, 1.85, 0) },
-  close: { a: V(0.42, 2.14, 1.42), b: V(0.3, 2.14, 1.16), to: V(0, 2.18, 0) },
-  profile: { a: V(1.7, 2.12, 0.5), b: V(1.45, 2.14, 0.62), to: V(0, 2.1, 0.1) },
+  close: { a: V(0.42, 2.0, 1.42), b: V(0.3, 2.0, 1.16), to: V(0, 1.9, 0) },
+  profile: { a: V(1.7, 1.98, 0.5), b: V(1.45, 1.98, 0.62), to: V(0, 1.82, 0.1) },
   low: { a: V(-1.2, 0.5, 2.4), b: V(-0.95, 0.56, 2.1), to: V(0, 2.2, 0) },
   hands: { a: V(0.9, 1.75, 1.75), b: V(0.75, 1.65, 1.5), to: V(0, 1.22, 0.75) },
   orrery: { a: V(-2.6, 1.35, 1.8), b: V(-2.45, 1.6, 1.3), to: V(-3.2, 2.9, -1.6) },
@@ -122,7 +122,7 @@ export class Vault {
     g.fillStyle = 'rgba(40,24,14,0.85)'; for (let y = 22; y < 240; y += 13) for (const x0 of [24, 272]) { let x = x0; while (x < x0 + 214) { const w = 8 + ((x * 7 + y * 3) % 26); g.fillRect(x, y, w, 2.2); x += w + 5; } }
     g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(253, 0, 6, 256);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-    this.page = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8, emissive: 0xffc98a, emissiveMap: tex, emissiveIntensity: 0.05 });
+    this.page = new THREE.MeshStandardMaterial({ map: tex, color: 0x6e6658, roughness: 0.8, emissive: 0xffc98a, emissiveMap: tex, emissiveIntensity: 0.02 });
     const book = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.07, 0.56), [wood, wood, this.page, wood, wood, wood]);
     book.position.set(0, 1.15, 0); book.rotation.x = 0.24; desk.add(book);
     // quill that keeps writing without a hand
@@ -157,7 +157,7 @@ export class Vault {
     const rim2 = new THREE.SpotLight(0x8fb4ff, 60, 26, 0.5, 0.8); rim2.position.set(-6, 4, 1.5); rim2.target.position.set(0, 1.9, 0); s.add(rim2, rim2.target);
     s.add(new THREE.HemisphereLight(0x5a668f, 0x241410, 1.9));
     // soft front fill so his face and coat read even in the wide shots
-    const fill = new THREE.SpotLight(0xffe9d2, 120, 14, 0.34, 0.9); fill.position.set(0.9, 3.0, 4.6); fill.target.position.set(0, 2.1, 0); s.add(fill, fill.target);
+    const fill = new THREE.SpotLight(0xffe9d2, 190, 14, 0.34, 0.9); fill.position.set(0.9, 3.0, 4.6); fill.target.position.set(0, 2.1, 0); s.add(fill, fill.target);
     this.halo.position.set(0, 2.5, -0.2); s.add(this.halo);
 
     this.host = createCharacter('megazron', this.detail);
@@ -236,7 +236,7 @@ export class Vault {
     const lvl = voice.level();
     this.halo.intensity = 0.5 + lvl * 2.5;
     this.key.intensity = 7 + Math.sin(t0 * 7.3) * 0.12 + Math.sin(t0 * 3.1) * 0.2;
-    this.page.emissiveIntensity = 0.1 + lvl * 0.14;
+    this.page.emissiveIntensity = 0.03 + lvl * 0.05;
     this.quill.position.x = 0.28 + Math.sin(t0 * 2.6) * 0.14;
     this.quill.position.z = 0.84 + (Math.sin(t0 * 0.37) * 0.5 + 0.5) * 0.14;
     this.quill.rotation.x = Math.sin(t0 * 7) * 0.06;
