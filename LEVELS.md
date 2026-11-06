@@ -54,6 +54,9 @@ Original story only. Teen-safe, handled with care. Self-harm and suicide are nev
 
 ## Handover notes
 
+- Branches not yet on main: `wip-science` (Chapter Two crafting, codex, NPC dialogue, safety card; 22 commits behind main) and `wip-branch` (choices system; 23 behind). Both need a rebase onto the new HUD and skinned characters, then their tests.
+- Chatterbox dubbing is rendering into `public/audio/vo/en` from the main tree, resumable through `tools/tts/.cache`. Never commit `public/audio/vo` until a language finishes, or the index is partial. Then run `tools/tts/lipsync.py`.
+
 - `tools/levels_smoke.py` plays Chapter One end to end through `window.__bs`. Add each new level to it.
 - Spoken lines go in `src/i18n/voice.json`; `npm run voice` renders them, cached per line.
 - Rescuing the other four crew is not built yet: they only exist on the deck, in the flashback, in the crew panel and on the radio.
