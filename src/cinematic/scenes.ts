@@ -28,7 +28,7 @@ export function deckScene(a: Cast, origin: THREE.Vector3): Beat[] {
     { key: 'op.3', who: 'medic', shot: () => cover.close(a.medic, -0.5), faces: { medic: 'strong', strong: 'medic' }, after: 0.5 },
     { key: 'op.4', who: 'explorer', shot: () => cover.ots(a.explorer, a.scientist), poses: { social: 'stand' }, faces: { explorer: 'scientist', scientist: 'explorer' } },
     { key: 'op.5', who: 'scientist', shot: () => cover.close(a.scientist, 0.4), poses: { explorer: 'stand' } },
-    { key: 'op.6', who: 'explorer', shot: () => cover.two(a.explorer, a.medic, 3), faces: { medic: 'explorer' }, after: 0.5 },
+    { key: 'op.6', who: 'explorer', shot: () => cover.mid(a.explorer, 0.35, 2.1), faces: { medic: 'explorer' }, after: 0.5 },
     { key: 'op.7', who: 'builder', shot: () => cover.mid(a.builder, 0.3, 1.7), faces: { builder: 'medic' } },
     { key: 'op.8', who: 'medic', shot: () => cover.ots(a.medic, a.builder), faces: { medic: 'builder' } },
     { key: 'j.3', who: 'builder', shot: () => cover.close(a.builder, -0.4) },
