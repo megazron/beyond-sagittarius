@@ -493,13 +493,14 @@ def main():
             failures.append("codex lacks the safety notice")
         if ev("document.querySelectorAll('.cx-node').length") != len(tech["nodes"]):
             failures.append("codex does not list every entry")
-        page.click(".cx-node[data-id=soap]")
+        cx = lambda i: (ev(f"document.querySelector('.cx-node[data-id={i}]').scrollIntoView({{block: 'center'}})"), page.click(f".cx-node[data-id={i}]"))  # the menu footer sits over the last rows
+        cx("soap")
         body = page.inner_text(".cx-done .cx-detail:not(.hidden)")
         if "alkali" not in body or page.locator(".cx-detail:not(.hidden) .warn").count() < 1:
             failures.append(f"codex entry incomplete: {body[:120]}")
         time.sleep(0.3)
         shot("22-codex")
-        page.click(".cx-node[data-id=bronze]")
+        cx("bronze")
         if ev("document.querySelector('.cx-node[data-id=bronze]').dataset.state") != "planned" or "Planned" not in page.inner_text(".cx-planned .cx-detail:not(.hidden)"):
             failures.append("planned entry not shown as locked in the codex")
         page.keyboard.press("KeyK")
@@ -591,6 +592,7 @@ def main():
             shot(f"13-hud-{lang}")
             page.keyboard.press("KeyK")
             page.wait_for_selector(".cx-ages", timeout=5000)
+            ev("document.querySelector('.cx-node[data-id=glass]').scrollIntoView({block: 'center'})")
             page.click(".cx-node[data-id=glass]")
             time.sleep(1)
             shot(f"24-codex-{lang}")
