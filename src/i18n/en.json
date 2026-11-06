@@ -970,7 +970,6 @@
   "settings.timersNote": "Off: choices and quick-time moments wait for you, with no countdown.",
   "br.chapters": "Chapters",
   "br.chapters.note": "Open a chapter you have played to read its path or replay it.",
-  "br.ch.2": "Chapter Two: Finding the Friends",
   "br.ch.planned": "Coming later",
   "br.ch.unplayed": "Not played yet",
   "br.replay": "Replay this chapter",
@@ -1010,5 +1009,6 @@
   "ch.share": "Share your food with him",
   "ch.returnflint": "Hand back the extra flint",
   "ch.tradeflint3": "3 branches for 1 flint",
-  "br.path.none": "No branches here yet."
+  "br.path.none": "No branches here yet.",
+  "vo.anon.mz.br.late": "She waited a long time for you. She won't say so twice. She doesn't have to."
 }

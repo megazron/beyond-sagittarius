@@ -104,7 +104,7 @@ export const CHAPTER_ONE: Chapter = {
 };
 
 /** Playable, with no branches of its own yet. */
-export const CHAPTER_TWO: Chapter = { id: 2, title: 'br.ch.2', levels: [CH2_FIRST, CH2_LAST], status: 'ready', path: [] };
+export const CHAPTER_TWO: Chapter = { id: 2, title: 'objectives.ch2', levels: [CH2_FIRST, CH2_LAST], status: 'ready', path: [] };
 
 /** MegaZroN reads the record back: `ch1` closes the chapter, `l7` is the half-way hint. */
 export const COMMENTS: Comment[] = [
