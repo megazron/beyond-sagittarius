@@ -27,6 +27,22 @@ Done means objectives, world content, NPCs, cutscene, dubbing, codex and smoke t
 | | Fire and Tools, Agriculture, Bronze, Iron, Classical, Industrial, Space, Civilisation | planned, data entries only |
 | 99 | The reveal, and the ending choice: stay or go home | planned |
 
+## Combat and boss direction (planned, not built)
+
+Original designs only: no characters, techniques, names or lines from any series. Violence stays teen-safe, no gore.
+
+- Combat: dodge, parry, combos, and abilities that come from the tech tree, so science can turn a fight (chemistry, physics, terrain).
+- Boss fights in phases, with reversals, mid-fight dialogue, a rival with a real ideology, betrayals, sacrifices and real "they might die" tension.
+- Presentation: cinematic cameras, slow motion, impact frames, shake, and music that rises with each phase.
+- Pacing: a quiet friend moment before each disaster, a cliffhanger at the end of each chapter, mysteries that pay off at Level 99.
+- A rival and a major boss for each age:
+
+| Age | Rival | Boss | Status |
+| --- | --- | --- | --- |
+| Stone Age | to design | to design | planned |
+| Fire and Tools to Civilisation | to design | to design | planned |
+| Level 99 | the thing that said "welcome back" | to design | planned |
+
 ## Handover notes
 
 - `tools/levels_smoke.py` plays Chapter One end to end through `window.__bs`. Add each new level to it.
