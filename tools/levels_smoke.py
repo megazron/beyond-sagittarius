@@ -569,6 +569,7 @@ def main():
                 continue
             stuck += 1
             if stuck > 160:
+                log(f"stuck on level {lvl}", ev("({prompt: __bs.prompt, talk: __bs.talk, inv: __bs.save.inventory, mode: __bs.mode, paused: __bs.paused, modal: !document.getElementById('modal').classList.contains('hidden')})"))
                 failures.append(f"stuck on level {lvl}: {ev('({prompt: __bs.prompt, save: __bs.save.flags, inv: __bs.save.inventory})')}")
                 break
             h = st["hound"]
@@ -596,7 +597,7 @@ def main():
             # screenshots once a level's key prop exists
             done_flags = ev("__bs.save.flags")
             for key, (name, hour) in shots_at.items():
-                if done_flags.get(key) and name not in taken:
+                if done_flags.get(key) and name not in taken and ev("__bs.mode") == "play":
                     taken.add(name)
                     L = ev("__bs.layout")
                     if key == "splint":
