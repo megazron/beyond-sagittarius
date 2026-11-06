@@ -386,7 +386,7 @@ export class Montage {
     // the wide sits out over the water: nothing can stand in front of the lens there
     land('medic', m, c0.clone().addScaledVector(d, Math.max(4, wade - 26)), 19.5, 1.05, -1, sh.clone().addScaledVector(d, -7).add(V(0, 5, 0)), sh.clone().add(V(0.6, 0.85, 0)), m.clone().addScaledVector(d, 2).add(V(0, 0.75, 0)), face(c0, sh), d);
 
-    this.lands[1].wide[1].y = 12;
+    this.lands[1].wide[1].y = 3; // horizon mid-frame, so the splash is in shot
 
     // Bolzar: a flat rock in the southern hills
     const b = find(10, 90, 290, 370, (x, z) => -slope(x, z) - Math.abs(T.height(x, z) - 30) * 0.002);
