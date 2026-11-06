@@ -489,11 +489,11 @@ def main():
                 if tree["ends"] != 4 or (len(trees) == 1 and (tree["taken"] != 6 or tree["closed"] < 3)):
                     failures.append(f"path tree content: {tree}")
                 page.click("#m-close")
+                page.wait_for_selector(".path-tree", state="hidden", timeout=5000)
                 continue
             if ev("__bs.branch.open"):
                 time.sleep(0.4)
                 if page.locator("#qte-btn").is_visible():
-                    shot("14b-qte")
                     page.keyboard.press("KeyE")
                 else:
                     opts = ev("document.querySelectorAll('#dlg-choices .dlg-c').length")
@@ -513,7 +513,12 @@ def main():
                 continue
             if st["mode"] == "scene":
                 n_scenes += 1
-                ev("__bs.step(1.5)")
+                for _ in range(8):  # small steps: a quick-time window must not pass unseen
+                    ev("__bs.step(0.2)")
+                    if ev("__bs.branch.open"):
+                        break
+                if ev("__bs.branch.open"):
+                    continue
                 time.sleep(1.5)
                 if n_scenes <= 3:
                     shot(f"09-scene-{n_scenes}")
