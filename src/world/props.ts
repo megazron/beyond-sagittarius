@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { modelMaterial, modelMats, type ModelPack } from './models';
+import type { Quality } from '../core/quality';
 import { mulberry32, smoothstep } from '../core/noise';
 import { Terrain, LAKE } from './terrain';
 import type { Forest } from './forest';
@@ -149,19 +151,21 @@ export function createPod(terrain: Terrain, forest: Forest, x = 4.5, z = -3.5, y
 }
 
 /** Collectable stones and branches + glowpod (safe) and thornberry (toxic) bushes. */
-export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites) {
+export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, pack: ModelPack | null = null, q: Quality | null = null) {
   const group = new THREE.Group();
   const items: Item[] = [];
   const rnd = mulberry32(42);
-  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x8a8494, roughness: 0.85 });
-  const branchMat = new THREE.MeshStandardMaterial({ color: 0x5a4334, roughness: 0.9 });
-  const stoneGeo = new THREE.DodecahedronGeometry(0.16, 1);
+  const scan = (name: string) => (pack && q && pack.lods[name] ? { geo: pack.lods[name][1], mat: modelMaterial(pack.info[name], q, modelMats) } : null);
+  const stoneScan = scan('moss_d'), branchScan = scan('branch_a'), shrubScan = scan('shrub_b');
+  const stoneMat = stoneScan?.mat ?? new THREE.MeshStandardMaterial({ color: 0x8a8494, roughness: 0.85 });
+  const branchMat = branchScan?.mat ?? new THREE.MeshStandardMaterial({ color: 0x5a4334, roughness: 0.9 });
+  let stoneGeo: THREE.BufferGeometry = new THREE.DodecahedronGeometry(0.16, 1);
   {
     const p = stoneGeo.attributes.position;
     for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) * 0.6);
     stoneGeo.computeVertexNormals();
   }
-  const branchGeo = new THREE.CylinderGeometry(0.025, 0.04, 1.1, 6, 3);
+  let branchGeo: THREE.BufferGeometry = new THREE.CylinderGeometry(0.025, 0.04, 1.1, 6, 3);
   branchGeo.rotateZ(Math.PI / 2);
   {
     const p = branchGeo.attributes.position;
@@ -170,6 +174,8 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites) 
   }
   const twig = new THREE.CylinderGeometry(0.012, 0.02, 0.35, 4);
   twig.rotateZ(0.9); twig.translate(0.2, 0.08, 0);
+  if (stoneScan) stoneGeo = stoneScan.geo.clone().scale(0.2, 0.2, 0.2).translate(0, -0.05, 0);
+  if (branchScan) { branchGeo = branchScan.geo; twig.scale(0, 0, 0); }
 
   const ringGeo = new THREE.RingGeometry(0.35, 0.42, 32);
   ringGeo.rotateX(-Math.PI / 2);
@@ -212,7 +218,7 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites) 
   // Fruit bushes along the lake shore, between spawn and water
   const leafMat = new THREE.MeshStandardMaterial({ color: 0x1d4c49, roughness: 0.7, side: THREE.DoubleSide });
   const stemMat = new THREE.MeshStandardMaterial({ color: 0x2b2f28, roughness: 0.9 });
-  const blueMat = new THREE.MeshStandardMaterial({ color: 0x3aa9ff, roughness: 0.25, emissive: new THREE.Color(0.2, 0.9, 1.6), emissiveIntensity: 1.4 });
+  const blueMat = new THREE.MeshStandardMaterial({ color: 0x3aa9ff, roughness: 0.25, emissive: new THREE.Color(0.2, 0.9, 1.6), emissiveIntensity: 0.45 });
   const redMat = new THREE.MeshStandardMaterial({ color: 0xa3132a, roughness: 0.35, metalness: 0.1, emissive: 0x3a0008, emissiveIntensity: 0.6 });
   const thornGeo = new THREE.ConeGeometry(0.02, 0.09, 4);
   const toLake = new THREE.Vector2(LAKE.x, LAKE.z).normalize();
@@ -233,7 +239,11 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites) 
     if (!ok) continue;
     const bush = new THREE.Group();
     bush.position.set(bx, h, bz);
-    for (let s = 0; s < 6; s++) {
+    if (shrubScan) {
+      const m = new THREE.Mesh(shrubScan.geo, shrubScan.mat);
+      m.scale.setScalar(0.62 + rnd() * 0.2); m.rotation.y = rnd() * 6;
+      bush.add(m);
+    } else for (let s = 0; s < 6; s++) {
       const st = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.04, 1.1, 5), stemMat);
       st.position.y = 0.5; st.rotation.set((rnd() - 0.5) * 0.9, 0, (rnd() - 0.5) * 0.9);
       bush.add(st);

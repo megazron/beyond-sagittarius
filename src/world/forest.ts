@@ -5,7 +5,7 @@ import type { Quality } from '../core/quality';
 import { Terrain, HALF, LAKE } from './terrain';
 import { applyBark, chainCompile } from './pbr';
 import { foliageAtlas, coniferCrown, broadCrown, CROWN_LODS } from './foliage';
-import { modelMaterial, type ModelPack, type ModelInfo } from './models';
+import { modelMaterial, modelMats, type ModelPack, type ModelInfo } from './models';
 
 export const windUniforms = { uTime: { value: 0 }, uWind: { value: 1 } };
 
@@ -213,6 +213,7 @@ class Field {
     }
     for (const row of this.meshes) row.forEach((im, k) => {
       im.count = count[k];
+      im.visible = count[k] > 0;
       im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, count[k] * 16); im.instanceMatrix.needsUpdate = true;
       const ic = im.instanceColor!;
       ic.clearUpdateRanges(); ic.addUpdateRange(0, count[k] * 3); ic.needsUpdate = true;
@@ -408,7 +409,7 @@ export class Forest {
       if (nrm.y < 0.8) continue;
       const dens = forestAt(x, z);
       const near = smoothstep(260, 40, d0) * 0.25;
-      if (rnd() > smoothstep(0.32, 0.62, dens) + near * 0.4) continue;
+      if (rnd() > smoothstep(0.36, 0.54, dens) + near * 0.4) continue;
       // treeline: thinner, then gone
       if (rnd() < smoothstep(95, 150, h)) continue;
       const vSel = n.noise2(x * 0.01 - 3, z * 0.01 + 8);
@@ -454,7 +455,6 @@ export class Forest {
   /** Scanned rocks, dead wood and undergrowth. */
   private scatter(rnd: () => number, forestAt: (x: number, z: number) => number) {
     const T = this.terrain, Q = this.q, pack = this.pack!;
-    const mats = new Map<string, THREE.MeshStandardMaterial>();
     const near = Q.lodDistances;
     const byKind = new Map<ModelInfo['kind'], { name: string; info: ModelInfo; field: Field }[]>();
     const counts: Record<ModelInfo['kind'], number> = {
@@ -468,8 +468,9 @@ export class Forest {
       const info = pack.info[name];
       const list = byKind.get(info.kind) ?? [];
       byKind.set(info.kind, list);
-      const mat = modelMaterial(info, Q, mats);
-      if (info.alpha) windify(mat, 22, 0);
+      const fresh = !modelMats.has(info.set);
+      const mat = modelMaterial(info, Q, modelMats);
+      if (info.alpha && fresh) windify(mat, 22, 0);
       const lods = pack.lods[name];
       const cap = Math.ceil(counts[info.kind] / 1.5) + 4;
       const big = info.kind === 'outcrop' || info.kind === 'rock';

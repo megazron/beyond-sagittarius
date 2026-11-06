@@ -17,7 +17,7 @@ branch cards (public/textures/foliage/).
 --desktop instead writes the 4K maps of every texture set to desktop-assets/
 (gitignored, shipped only with the Windows build).
 
-Usage:  python tools/fetch_assets.py [--cache DIR] [--only textures,models,foliage,hdri,water] [--desktop]
+Usage:  python tools/fetch_assets.py [--cache DIR] [--only textures,models,foliage,hdri,water,erosion] [--desktop]
 Needs:  pip install pillow numpy scipy; node (runs gltfpack through npx)
 """
 import argparse
@@ -516,7 +516,7 @@ def fetch_desktop(cache: pathlib.Path, report: dict):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache", default=str(ROOT / ".asset-cache"), help="where downloaded originals are kept")
-    ap.add_argument("--only", default="textures,hdri,water,models,foliage", help="comma list of steps")
+    ap.add_argument("--only", default="textures,hdri,water,models,foliage,erosion", help="comma list of steps")
     ap.add_argument("--desktop", action="store_true", help="only write the 4K maps to desktop-assets/")
     args = ap.parse_args()
     cache = pathlib.Path(args.cache)
@@ -538,6 +538,8 @@ def main():
         fetch_model_textures(cache, report)
     if "foliage" in steps:
         fetch_foliage(cache, report)
+    if "erosion" in steps:
+        subprocess.run(["node", "--experimental-strip-types", "--no-warnings", "tools/bake_erosion.ts"], check=True, cwd=ROOT)
     total = 0
     for k, v in sorted(report.items()):
         print(f"{v / 1024:9.1f} KiB  {k}")

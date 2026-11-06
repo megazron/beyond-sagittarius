@@ -74,6 +74,9 @@ export async function loadModelPack(q: Quality): Promise<ModelPack | null> {
 const ROUGH: Record<ModelInfo['kind'], number> = { rock: 0.88, outcrop: 0.9, stump: 0.85, log: 0.85, roots: 0.85, branch: 0.85, plant: 0.7, shrub: 0.72 };
 const FALLBACK: Record<ModelInfo['kind'], number> = { rock: 0x5b5a58, outcrop: 0x5b5a58, stump: 0x4a4034, log: 0x4a4034, roots: 0x4a4034, branch: 0x4a4034, plant: 0x2f4426, shrub: 0x2f4426 };
 
+/** Materials of the scans, shared by the scatter and the story props. */
+export const modelMats = new Map<string, THREE.MeshStandardMaterial>();
+
 /** One material per texture set; the maps stream in after the world is up. */
 export function modelMaterial(info: ModelInfo, q: Quality, cache: Map<string, THREE.MeshStandardMaterial>): THREE.MeshStandardMaterial {
   let m = cache.get(info.set);

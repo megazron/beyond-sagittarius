@@ -43,17 +43,18 @@ const FRAG = /* glsl */ `
     #else
       float dens = 2.0 / max(fogFar, 1.0);
     #endif
-    float haze = 1.0 - exp(-dens * dens * dist * dist);
+    // aerial perspective: air scatters blue first, so far ridges go blue before they go pale
+    vec3 air = exp(-dens * dist * vec3(0.62, 0.7, 0.82));
     // analytic integral of density exp(-(y - base) * fall) along the view ray
     float b = uFogFall;
     float h0 = cameraPosition.y - uFogBase;
     float dy = rd.y;
     float integ = abs(dy) > 0.01 ? (exp(-h0 * b) - exp(-(h0 + dy) * b)) / (b * dy) : exp(-h0 * b);
     float mist = 1.0 - exp(-dens * uFogHeight * dist * clamp(integ, 0.0, 8.0));
-    float f = 1.0 - (1.0 - haze) * (1.0 - mist);
+    vec3 f = 1.0 - air * (1.0 - mist);
     float sd = max(dot(rd / max(dist, 1e-3), uFogSunDir), 0.0);
     vec3 fc = fogColor + uFogSun * (pow(sd, 6.0) * 0.6 + pow(sd, 32.0) * 0.8);
-    gl_FragColor.rgb = mix(gl_FragColor.rgb, fc, clamp(f, 0.0, 1.0));
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, fc, clamp(f, vec3(0.0), vec3(1.0)));
   }
 #endif`;
 

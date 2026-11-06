@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { NOISE_GLSL } from '../core/glsl';
 import { Terrain, WORLD_SIZE, LAKE } from './terrain';
 import type { Sky } from './sky';
+import type { Quality } from '../core/quality';
 
 /**
  * Animated water: procedural ripple normals, Fresnel sky reflection, sun glint,
  * depth-based absorption from the terrain heightmap and shoreline foam.
  */
-export function createWater(terrain: Terrain, sky: Sky) {
+export function createWater(terrain: Terrain, sky: Sky, q: Quality) {
   const uniforms = THREE.UniformsUtils.merge([
     THREE.UniformsLib.fog,
     {
@@ -24,6 +25,9 @@ export function createWater(terrain: Terrain, sky: Sky) {
       uHasN: { value: 0 },
       uEnv: { value: null as THREE.Texture | null },
       uHasEnv: { value: 0 },
+      tRefl: { value: null as THREE.Texture | null },
+      uHasRefl: { value: 0 },
+      uReflM: { value: new THREE.Matrix4() },
     },
   ]);
   uniforms.uHeight.value = terrain.heightTex;
@@ -36,13 +40,14 @@ export function createWater(terrain: Terrain, sky: Sky) {
     uniforms,
     transparent: true,
     fog: true,
-    depthWrite: false,
     vertexShader: /* glsl */ `
       #include <fog_pars_vertex>
-      varying vec3 vWP;
+      uniform mat4 uReflM;
+      varying vec3 vWP; varying vec4 vRefl;
       void main(){
         vec4 wp = modelMatrix * vec4(position, 1.0);
         vWP = wp.xyz;
+        vRefl = uReflM * wp;
         vec4 mvPosition = viewMatrix * wp;
         gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
@@ -50,7 +55,9 @@ export function createWater(terrain: Terrain, sky: Sky) {
     fragmentShader: /* glsl */ `
       #include <fog_pars_fragment>
       uniform float uTime, uWorld, uRes, uDay, uHasN, uHasEnv;
-      uniform sampler2D uHeight, tWaterN;
+      uniform sampler2D uHeight, tWaterN, tRefl;
+      uniform float uHasRefl;
+      varying vec4 vRefl;
       uniform samplerCube uEnv;
       uniform vec3 uSunDir, uSunColor, uZenith, uHorizon;
       varying vec3 vWP;
@@ -78,7 +85,7 @@ export function createWater(terrain: Terrain, sky: Sky) {
           // two scrolling layers of the baked ripple map + the slow procedural swell
           vec2 n1 = texture2D(tWaterN, p * 0.16 + vec2(uTime * 0.021, uTime * 0.013)).xy * 2.0 - 1.0;
           vec2 n2 = texture2D(tWaterN, p * 0.43 * mat2(0.8, -0.6, 0.6, 0.8) - vec2(uTime * 0.034, -uTime * 0.027)).xy * 2.0 - 1.0;
-          gN = gN * 0.5 + (n1 * 0.55 + n2 * 0.35);
+          gN = gN * 0.28 + (n1 * 0.2 + n2 * 0.13);
         }
         vec3 V = normalize(cameraPosition - vWP);
         float camD = length(cameraPosition - vWP);
@@ -90,11 +97,16 @@ export function createWater(terrain: Terrain, sky: Sky) {
         vec3 refl = uHasEnv > 0.5 ? textureLod(uEnv, R, 1.0).rgb : skyCol(R);
         // the far shore and forest occlude the low sky in the reflection
         refl *= mix(0.55, 1.0, smoothstep(0.0, 0.22, R.y));
+        if (uHasRefl > 0.5) {
+          // the real shore, mirrored and broken up by the ripples
+          vec2 ruv = vRefl.xy / vRefl.w + gN * vec2(0.05, 0.09);
+          refl = mix(refl, texture2D(tRefl, clamp(ruv, 0.002, 0.998)).rgb, 0.92);
+        }
         float depth = max(-th(p), 0.0);
         // Beer-Lambert along the refracted view path: red goes first, then green
         float path = depth / max(V.y, 0.2);
         vec3 T = exp(-path * vec3(0.55, 0.16, 0.11));
-        vec3 scatter = vec3(0.04, 0.2, 0.22) * (0.15 + 0.85 * uDay);
+        vec3 scatter = vec3(0.018, 0.075, 0.08) * (0.15 + 0.85 * uDay);
         vec3 body = scatter * (1.0 - T);
         // bioluminescent plankton at night
         float plank = pow(vnoise2(p * 4.0 + uTime * 0.1), 16.0) * (1.0 - uDay) * 1.1 * smoothstep(0.2, 1.5, depth);
@@ -106,7 +118,7 @@ export function createWater(terrain: Terrain, sky: Sky) {
         col += uSunColor * spec;
         float fn = vnoise2(p * 3.0 + uTime * 0.4) * 0.6 + vnoise2(p * 9.0 - uTime * 0.7) * 0.4;
         float foam = smoothstep(0.3, 0.0, depth) * smoothstep(0.4, 0.62, fn + (1.0 - smoothstep(0.0, 0.12, depth)) * 0.3);
-        col = mix(col, vec3(0.8, 0.86, 0.9) * (0.25 + 0.75 * uDay), foam * 0.55);
+        col = mix(col, vec3(0.8, 0.86, 0.9) * (0.25 + 0.75 * uDay), foam * 0.3);
         float tr = dot(T, vec3(0.333));
         float alpha = clamp(1.0 - tr * 0.85 + fres * 0.6 + foam * 0.4, 0.0, 0.98);
         alpha *= smoothstep(0.0, 0.06, depth);
@@ -128,8 +140,69 @@ export function createWater(terrain: Terrain, sky: Sky) {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(LAKE.x * 0.5, 0, LAKE.z * 0.5);
   mesh.renderOrder = 1;
+
+  // Planar reflection: the lake is flat, so one mirrored render beats screen-space
+  // tracing (it also shows what is off screen). Only runs when the lake is in view.
+  const rt = q.reflectionScale > 0
+    ? new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 0 })
+    : null;
+  const mirror = new THREE.PerspectiveCamera();
+  const plane = new THREE.Plane(), clip = new THREE.Vector4(), qv = new THREE.Vector4();
+  const fwd = new THREE.Vector3(), look = new THREE.Vector3(), lake = new THREE.Vector3(LAKE.x, 0, LAKE.z);
+  const size = new THREE.Vector2();
+  let frame = 0;
+  const every = q.name === 'web' ? 3 : q.name === 'ultra' ? 2 : 1;
+
+  /** Mirrors `cam` in the plane y = 0 and renders the scene, minus `hidden`, into the reflection. */
+  function reflect(r: THREE.WebGLRenderer, scene: THREE.Scene, cam: THREE.PerspectiveCamera, hidden: THREE.Object3D[]) {
+    if (!rt) return;
+    const toLake = cam.position.distanceTo(lake);
+    cam.getWorldDirection(fwd);
+    look.copy(lake).sub(cam.position).normalize();
+    const visible = cam.position.y > 0.05 && toLake < 340 && (toLake < LAKE.r * 1.8 || fwd.dot(look) > 0.25);
+    uniforms.uHasRefl.value = visible ? 1 : 0;
+    if (!visible || frame++ % every) return;
+    r.getDrawingBufferSize(size);
+    const w = Math.max(16, Math.round(size.x * q.reflectionScale)), h = Math.max(16, Math.round(size.y * q.reflectionScale));
+    if (rt.width !== w || rt.height !== h) rt.setSize(w, h);
+    mirror.position.set(cam.position.x, -cam.position.y, cam.position.z);
+    look.copy(fwd).setY(-fwd.y).add(mirror.position);
+    mirror.up.set(0, 1, 0);
+    mirror.lookAt(look);
+    mirror.near = cam.near; mirror.far = cam.far;
+    mirror.updateMatrixWorld();
+    mirror.projectionMatrix.copy(cam.projectionMatrix);
+    mirror.projectionMatrixInverse.copy(cam.projectionMatrixInverse);
+    const m = uniforms.uReflM.value as THREE.Matrix4;
+    m.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
+    m.multiply(mirror.projectionMatrix).multiply(mirror.matrixWorldInverse);
+    // oblique near plane: nothing below the water leaks into the reflection
+    plane.set(new THREE.Vector3(0, 1, 0), 0).applyMatrix4(mirror.matrixWorldInverse);
+    clip.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
+    const pm = mirror.projectionMatrix, e = pm.elements;
+    qv.x = (Math.sign(clip.x) + e[8]) / e[0];
+    qv.y = (Math.sign(clip.y) + e[9]) / e[5];
+    qv.z = -1;
+    qv.w = (1 + e[10]) / e[14];
+    clip.multiplyScalar(2 / clip.dot(qv));
+    e[2] = clip.x; e[6] = clip.y; e[10] = clip.z + 1 - 0.003; e[14] = clip.w;
+    const was = hidden.map((o) => o.visible);
+    hidden.forEach((o) => (o.visible = false));
+    const shadows = r.shadowMap.autoUpdate;
+    r.shadowMap.autoUpdate = false;
+    const prev = r.getRenderTarget();
+    r.setRenderTarget(rt);
+    r.clear();
+    r.render(scene, mirror);
+    r.setRenderTarget(prev);
+    r.shadowMap.autoUpdate = shadows;
+    hidden.forEach((o, i) => (o.visible = was[i]));
+    uniforms.tRefl.value = rt.texture;
+  }
+
   return {
     mesh,
+    reflect,
     update(time: number, day: number, env?: THREE.Texture | null) {
       uniforms.uTime.value = time;
       uniforms.uDay.value = day;

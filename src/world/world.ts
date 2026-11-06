@@ -22,7 +22,7 @@ import { loadModelPack, loadFoliageCard } from './models';
 export class World {
   scene = new THREE.Scene();
   terrain: Terrain;
-  sky = new Sky();
+  sky: Sky;
   forest!: Forest;
   grass!: ReturnType<typeof createGrass>;
   water!: ReturnType<typeof createWater>;
@@ -52,6 +52,7 @@ export class World {
 
   constructor(public q: Quality) {
     this.terrain = new Terrain(q);
+    this.sky = new Sky(q.cloudSteps);
     this.fog = new THREE.FogExp2(0xbcd6cf, q.fogDensity);
     this.scene.fog = this.fog;
   }
@@ -74,12 +75,12 @@ export class World {
     s.add(this.forest.group);
     this.grass = createGrass(this.terrain, this.q);
     s.add(this.grass.mesh);
-    this.water = createWater(this.terrain, this.sky);
+    this.water = createWater(this.terrain, this.sky, this.q);
     s.add(this.water.mesh);
     this.pod = createPod(this.terrain, this.forest);
     s.add(this.pod.root);
     const L = this.layout;
-    this.items = createItems(this.terrain, this.forest, { camp: L.camp, pod: L.pod, pod2: L.pod2 });
+    this.items = createItems(this.terrain, this.forest, { camp: L.camp, pod: L.pod, pod2: L.pod2 }, pack, this.q);
     s.add(this.items.group);
     this.pod2 = createPod(this.terrain, this.forest, L.pod2.x, L.pod2.z, -1.9, 23);
     s.add(this.pod2.root);
@@ -177,6 +178,7 @@ export class World {
     this.grass.update(focus);
     this.water.update(time, day, envTex);
     this.forest.update(cam.position);
+    this.water.reflect(renderer, this.scene, cam as THREE.PerspectiveCamera, [this.water.mesh, this.grass.mesh]);
     this.pod.update(time);
     this.pod2.update(time + 7.3);
     this.camp.update(time, dt, focus);

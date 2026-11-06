@@ -108,14 +108,15 @@ export function createGrass(terrain: Terrain, q: Quality) {
     ).replace(
       '#include <color_fragment>',
       /* glsl */ `#include <color_fragment>
-      vec3 base = vec3(0.012, 0.03, 0.022);
-      vec3 tip = mix(vec3(0.07, 0.15, 0.06), vec3(0.16, 0.19, 0.075), vPatch);
-      tip = mix(tip, vec3(0.05, 0.14, 0.12), smoothstep(0.7, 0.95, vVar)); // blue-green alien strain
+      vec3 base = vec3(0.016, 0.028, 0.012);
+      vec3 tip = mix(vec3(0.085, 0.13, 0.042), vec3(0.19, 0.185, 0.07), vPatch);
+      tip = mix(tip, vec3(0.2, 0.16, 0.08), smoothstep(0.6, 0.9, fract(vVar * 7.3)) * 0.6); // sun-dried blades
+      tip = mix(tip, vec3(0.06, 0.13, 0.1), smoothstep(0.9, 0.98, vVar)); // the odd blue-green alien strain
       diffuseColor.rgb = mix(base, tip, vTip);`,
     ).replace(
       '#include <emissivemap_fragment>',
       /* glsl */ `#include <emissivemap_fragment>
-      totalEmissiveRadiance += vec3(0.03, 0.22, 0.2) * pow(vTip, 8.0) * step(0.93, vVar) * 0.5;`,
+      totalEmissiveRadiance += vec3(0.03, 0.22, 0.2) * pow(vTip, 8.0) * step(0.985, vVar) * 0.4;`,
     );
   };
   const mesh = new THREE.Mesh(geo, mat);
