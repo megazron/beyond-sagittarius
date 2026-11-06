@@ -101,7 +101,7 @@ export function addKit(k: KitInput): Kit {
       if (!custom) { glasses(); earGlow(); }
       const hand = piv('handL'), dir = piv('forearmtwL').sub(hand).normalize();
       const dev = add(rbox(0.05, 0.016, 0.042, 0.006), metal(0x2a3038, 0.45), wrist('L'), 0, 0, 0);
-      dev.position.copy(local('forearmtwL', hand.clone().addScaledVector(dir, 0.05)).add(V(0, 0.022, 0)));
+      dev.position.copy(local('forearmtwL', hand.clone().addScaledVector(dir, 0.07)).add(V(0, 0.05, 0.012)));
       add(new THREE.BoxGeometry(0.04, 0.0015, 0.032), glowMat(0xffa040, 1.4), dev, 0, 0.0085, 0, false);
       break;
     }

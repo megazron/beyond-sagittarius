@@ -67,6 +67,13 @@ class Part:
 def write_prim(g, part, skin, mat):
     pv, uv, idx = part.corners()
     P = part.P[pv]
+    # decimation can leave a sliver wound against its smooth normals, which shades black on two-sided cloth
+    tri = idx.reshape(-1, 3).astype(np.int64)
+    fn = np.cross(P[tri[:, 1]] - P[tri[:, 0]], P[tri[:, 2]] - P[tri[:, 0]])
+    vn = part.N[pv][tri].sum(1)
+    bad = np.einsum('ij,ij->i', fn, vn) < 0
+    tri[bad] = tri[bad][:, [0, 2, 1]]
+    idx = tri.ravel().astype(np.uint32)
     attrs = {'POSITION': g.accessor(P, F32, target=34962, minmax=True)}
     N = part.N[pv]
     attrs['NORMAL'] = g.accessor(np.clip(np.round(N * 127), -127, 127).astype(np.int8), I8, 3, normalized=True, target=34962)
