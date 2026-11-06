@@ -1,1 +1,41 @@
-{}
+{
+"gasp": [
+"gasp_1.mp3",
+"gasp_2.mp3",
+"gasp_3.mp3"
+],
+"grunt": [
+"grunt_1.mp3",
+"grunt_2.mp3",
+"grunt_3.mp3"
+],
+"land": [
+"land_1.mp3",
+"land_2.mp3",
+"land_3.mp3"
+],
+"yelp": [
+"yelp_1.mp3",
+"yelp_2.mp3",
+"yelp_3.mp3"
+],
+"scream": [
+"scream_1.mp3",
+"scream_2.mp3",
+"scream_3.mp3",
+"scream_4.mp3"
+],
+"breath": [
+"breath_1.mp3",
+"breath_2.mp3"
+],
+"laugh": [
+"laugh_1.mp3",
+"laugh_2.mp3",
+"laugh_3.mp3"
+],
+"crowd": [
+"crowd_1.mp3",
+"crowd_2.mp3"
+]
+}

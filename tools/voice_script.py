@@ -39,6 +39,9 @@ def main():
             w.writerow([key, speaker, emotion, lang, fill(strings[key])])
             if f'vo.anon.{key}' in strings and re.search(r'\{[fn]:', strings[key]):
                 w.writerow([f'{key}~anon', speaker, emotion, lang, strings[f'vo.anon.{key}']])
+            fem = strings.get(f'vo.f.{key}') or strings.get(f'g.f.{key}')
+            if speaker == 'scientist' or fem:
+                w.writerow([f'{key}~f', 'scientist_f' if speaker == 'scientist' else speaker, emotion, lang, fill(fem or strings[key])])
 
 
 if __name__ == '__main__':

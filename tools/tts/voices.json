@@ -1,69 +1,83 @@
 {
-  "_comment": "Voice casting for tools/tts/generate_voice.py. Per speaker, per language: 'voice' is a Kokoro-82M voicepack id or a weighted blend {id: weight} (weights are normalised; voicepack tensors are averaged), 'g2p' is the Kokoro pipeline/lang used for phonemes (a = US English, b = UK English, h = Hindi via espeak-ng), 'speed' is Kokoro's speaking rate, 'pitch' is a semitone shift applied afterwards with ffmpeg rubberband (formants preserved), 'fx' is an optional ffmpeg filtergraph appended after the pitch shift (may use asplit/amix labels; input is the mono 24 kHz voice). Change anything here and only the affected lines re-render.",
-  "defaults": {
-    "speed": 1.0,
-    "pitch": 0,
-    "fx": ""
+ "_comment": "Casting for tools/tts/generate_voice.py. 'ref' names a synthetic clip in tools/tts/refs/ (<ref>_en.wav, or <ref>_hi.wav for Hindi and Urdu), made by make_refs.py from Kokoro voicepacks: never a recording of a real person. 'pace' multiplies the per-line pace in direction.json, 'pitch' is a semitone shift with formants preserved, 'fx' is an ffmpeg filtergraph applied to every line of that speaker.",
+ "defaults": {
+  "pace": 1.0,
+  "pitch": 0,
+  "fx": ""
+ },
+ "fx_presets": {},
+ "speakers": {
+  "megazron": {
+   "role": "narrator: deep, theatrical, dry, rude",
+   "all": {
+    "ref": "megazron",
+    "pitch": -2.5,
+    "fx": "equalizer=f=140:t=q:w=1.0:g=2.0,highpass=f=55"
+   }
   },
-  "fx_presets": {
-    "narrator_room": "aecho=0.85:0.55:38|61|97:0.10|0.07|0.045,equalizer=f=140:t=q:w=1.0:g=2.0,highpass=f=55",
-    "ship_ai": "highpass=f=260,lowpass=f=6800,aecho=0.9:0.7:6|11:0.32|0.18,equalizer=f=2600:t=q:w=1.2:g=3,acompressor=threshold=0.12:ratio=3:attack=4:release=60",
-    "alien_signal": "asplit=3[s0][s1][s2];[s1]rubberband=pitch=0.749:formant=preserved,volume=0.75[s1o];[s2]rubberband=pitch=1.059:formant=preserved,adelay=23,volume=0.35[s2o];[s0][s1o][s2o]amix=inputs=3:normalize=0,aphaser=in_gain=0.8:out_gain=0.9:delay=3:decay=0.45:speed=0.25,aecho=0.8:0.6:90|170|260:0.22|0.14|0.08,highpass=f=90,lowpass=f=7000"
+  "scientist": {
+   "role": "Zenvik: male, nervous, overthinks",
+   "all": {
+    "ref": "scientist",
+    "pace": 1.03
+   }
   },
-  "speakers": {
-    "megazron": {
-      "role": "narrator / host: deep, calm, mysterious, male",
-      "en": {"voice": {"bm_george": 0.6, "am_onyx": 0.4}, "g2p": "b", "speed": 0.9, "pitch": -2.5, "fx": "@narrator_room"},
-      "hi": {"voice": {"hm_omega": 0.8, "hm_psi": 0.2}, "g2p": "h", "speed": 0.9, "pitch": -2.5, "fx": "@narrator_room"},
-      "ur": {"voice": {"hm_omega": 0.8, "hm_psi": 0.2}, "g2p": "h", "speed": 0.9, "pitch": -2.5, "fx": "@narrator_room"}
-    },
-    "scientist": {
-      "role": "player character, male, thoughtful",
-      "en": {"voice": "am_michael", "g2p": "a", "speed": 1.0},
-      "hi": {"voice": "hm_omega", "g2p": "h", "speed": 1.0, "pitch": 0.5},
-      "ur": {"voice": "hm_omega", "g2p": "h", "speed": 1.0, "pitch": 0.5}
-    },
-    "strong": {
-      "role": "big, gruff male",
-      "en": {"voice": "am_fenrir", "g2p": "a", "speed": 0.95, "pitch": -1.5},
-      "hi": {"voice": "hm_psi", "g2p": "h", "speed": 0.95, "pitch": -1.5},
-      "ur": {"voice": "hm_psi", "g2p": "h", "speed": 0.95, "pitch": -1.5}
-    },
-    "medic": {
-      "role": "calm female",
-      "en": {"voice": "bf_emma", "g2p": "b", "speed": 0.95},
-      "hi": {"voice": "hf_alpha", "g2p": "h", "speed": 0.95},
-      "ur": {"voice": "hf_alpha", "g2p": "h", "speed": 0.95}
-    },
-    "explorer": {
-      "role": "energetic female",
-      "en": {"voice": "af_bella", "g2p": "a", "speed": 1.08, "pitch": 0.5},
-      "hi": {"voice": "hf_beta", "g2p": "h", "speed": 1.08, "pitch": 1.0},
-      "ur": {"voice": "hf_beta", "g2p": "h", "speed": 1.08, "pitch": 1.0}
-    },
-    "builder": {
-      "role": "practical male",
-      "en": {"voice": "am_puck", "g2p": "a", "speed": 1.03},
-      "hi": {"voice": {"hm_psi": 0.55, "hm_omega": 0.45}, "g2p": "h", "speed": 1.04, "pitch": 1.5},
-      "ur": {"voice": {"hm_psi": 0.55, "hm_omega": 0.45}, "g2p": "h", "speed": 1.04, "pitch": 1.5}
-    },
-    "social": {
-      "role": "warm female",
-      "en": {"voice": "af_heart", "g2p": "a", "speed": 1.0},
-      "hi": {"voice": {"hf_alpha": 0.5, "hf_beta": 0.5}, "g2p": "h", "speed": 1.0, "pitch": -1.0},
-      "ur": {"voice": {"hf_alpha": 0.5, "hf_beta": 0.5}, "g2p": "h", "speed": 1.0, "pitch": -1.0}
-    },
-    "ship": {
-      "role": "ship AI: synthetic, filtered",
-      "en": {"voice": "bf_isabella", "g2p": "b", "speed": 1.0, "fx": "@ship_ai"},
-      "hi": {"voice": "hf_beta", "g2p": "h", "speed": 1.0, "pitch": -0.5, "fx": "@ship_ai"},
-      "ur": {"voice": "hf_beta", "g2p": "h", "speed": 1.0, "pitch": -0.5, "fx": "@ship_ai"}
-    },
-    "unknown": {
-      "role": "ancient alien signal speaking human words: eerie, layered",
-      "en": {"voice": "am_onyx", "g2p": "a", "speed": 0.85, "fx": "@alien_signal"},
-      "hi": {"voice": "hm_psi", "g2p": "h", "speed": 0.85, "fx": "@alien_signal"},
-      "ur": {"voice": "hm_psi", "g2p": "h", "speed": 0.85, "fx": "@alien_signal"}
-    }
+  "strong": {
+   "role": "Draxum: male, deadpan gym bro, big",
+   "all": {
+    "ref": "strong",
+    "pitch": -1.5,
+    "pace": 0.97
+   }
+  },
+  "medic": {
+   "role": "Lyrra: female, calm, dry sarcasm",
+   "all": {
+    "ref": "medic"
+   }
+  },
+  "explorer": {
+   "role": "Skyvra: female, hype, playful",
+   "all": {
+    "ref": "explorer",
+    "pitch": 0.5,
+    "pace": 1.04
+   }
+  },
+  "builder": {
+   "role": "Bolzar: male, easygoing, it will hold",
+   "all": {
+    "ref": "builder",
+    "pace": 0.98
+   }
+  },
+  "social": {
+   "role": "Nuvexa: female, loud influencer",
+   "all": {
+    "ref": "social",
+    "pace": 1.03
+   }
+  },
+  "ship": {
+   "role": "ship AI: synthetic, filtered",
+   "all": {
+    "ref": "ship",
+    "fx": "highpass=f=260,lowpass=f=6800,aecho=0.9:0.7:6|11:0.32|0.18,equalizer=f=2600:t=q:w=1.2:g=3,acompressor=threshold=0.12:ratio=3:attack=4:release=60"
+   }
+  },
+  "unknown": {
+   "role": "ancient signal: eerie, layered",
+   "all": {
+    "ref": "unknown",
+    "fx": "asplit=3[s0][s1][s2];[s1]rubberband=pitch=0.749:formant=preserved,volume=0.75[s1o];[s2]rubberband=pitch=1.059:formant=preserved,adelay=23,volume=0.35[s2o];[s0][s1o][s2o]amix=inputs=3:normalize=0,aphaser=in_gain=0.8:out_gain=0.9:delay=3:decay=0.45:speed=0.25,aecho=0.8:0.6:90|170|260:0.22|0.14|0.08,highpass=f=90,lowpass=f=7000"
+   }
+  },
+  "scientist_f": {
+   "role": "Zenvik as a woman: the same nervous over-thinker, used for ~f takes",
+   "all": {
+    "ref": "scientist_f",
+    "pace": 1.03
+   }
   }
+ }
 }

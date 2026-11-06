@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """Render every voiced line of BEYOND SAGITTARIUS to small MP3s (en / hi / ur).
 
-Inputs : src/i18n/voice.json (key -> speaker), src/i18n/{en,hi,ur}.json
-Config : tools/tts/voices.json (casting), tools/tts/pronunciations.json
+Inputs : src/i18n/voice.json (key -> speaker), src/i18n/{en,hi,ur}.json, read at run time
+Config : tools/tts/voices.json (casting), direction.json (delivery per line),
+         pronunciations.json, refs/ (synthetic reference clips, see make_refs.py)
 Output : public/audio/vo/<lang>/<key>.mp3 (+ <key>~anon.mp3) and index.json
          {key: duration_seconds}. Mono 24 kHz MP3, loudness-normalised.
 
-TTS model: Kokoro-82M (Apache-2.0), CPU only. Lines are cached in
-tools/tts/.cache keyed by (script version, phonemes, voice config), so re-runs
-only render what changed.
+Chatterbox on CPU is slow, so this is built to be interrupted: every take is cached
+in tools/tts/.cache by a hash of its inputs, and each finished line is published
+straight away. Re-running skips what exists. Every take is transcribed with
+Whisper and retaken with a new seed if it drifts from the script.
 
-Run:  npm run voice -- [--lang en,hi,ur] [--only 'dlg.9.*'] [--force]
+Run:  npm run voice -- [--lang en,hi,ur] [--only 'dlg.9.*'] [--force] [--limit 20]
 """
 from __future__ import annotations
 
 import argparse
-import concurrent.futures as cf
 import fnmatch
 import hashlib
 import json
@@ -29,33 +30,24 @@ import time
 import warnings
 from pathlib import Path
 
-SCRIPT_VERSION = 3
+SCRIPT_VERSION = 4
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 I18N = ROOT / 'src' / 'i18n'
 OUT_ROOT = ROOT / 'public' / 'audio' / 'vo'
-CACHE = HERE / '.cache'
+CACHE = HERE / '.cache' / 'v4'
 SR = 24000
-REPO_ID = 'hexgrad/Kokoro-82M'
 FFMPEG = shutil.which('ffmpeg') or str(Path.home() / '.local' / 'bin' / 'ffmpeg')
 
 TARGET_LUFS = -18.0
 PEAK_LIMIT = 0.89          # ~ -1 dBFS
 MP3_BITRATE = '48k'
 LANGS = ('en', 'hi', 'ur')
-
-# Urdu front-end:
-#   espeak-ur : espeak-ng Urdu G2P on the Urdu script text  (default)
-#   deva      : Urdu words transliterated to Devanagari (spelling resolved via
-#               the parallel Hindi line), then Hindi G2P. See ur2deva.py.
-UR_METHODS = ('espeak-ur', 'deva')
-DEFAULT_UR_METHOD = 'espeak-ur'
-# Pronounce Urdu name tokens from the parallel Devanagari name in hi.json.
-UR_NAMES_FROM_HINDI = True
+MAX_TAKES = 3
 
 NAME_RE = re.compile(r'\{([fn]):([a-z0-9_]+)\}')
 PARAM_RE = re.compile(r'\{[^}]*\}')
-NAME_OPEN, NAME_CLOSE = '', ''
+NAME_OPEN, NAME_CLOSE = '\ue000', '\ue001'
 
 
 def log(*a):
@@ -149,208 +141,7 @@ def display_text(t: str) -> str:
     return re.sub(f'{NAME_OPEN}[^{NAME_CLOSE}]*{NAME_CLOSE}', '', t).replace(NAME_OPEN, '').replace(NAME_CLOSE, '')
 
 
-# --------------------------------------------------------------------------- G2P
-class G2P:
-    def __init__(self, lexicon: dict, hi_names: dict, ur_method: str):
-        self._pipes = {}
-        self._esp = {}
-        self.lex = lexicon
-        self.hi_names = hi_names
-        self.ur_method = ur_method
-        self.dropped = {}
-
-    def pipe(self, code):
-        if code not in self._pipes:
-            from kokoro import KPipeline
-            self._pipes[code] = KPipeline(lang_code=code, repo_id=REPO_ID, model=False)
-        return self._pipes[code]
-
-    def esp(self, lang):
-        if lang not in self._esp:
-            from misaki.espeak import EspeakG2P
-            self._esp[lang] = EspeakG2P(language=lang)
-        return self._esp[lang]
-
-    def vocab(self):
-        if not hasattr(self, '_vocab'):
-            from huggingface_hub import hf_hub_download
-            cfg = load_json(Path(hf_hub_download(REPO_ID, 'config.json')))
-            self._vocab = set(cfg['vocab'].keys())
-        return self._vocab
-
-    def _plain(self, text: str, lang: str, code: str, phon_lang: str) -> str:
-        if not text.strip():
-            return ''
-        if lang == 'en':
-            ps, _ = self.pipe(code).g2p(text)
-        else:
-            ps, _ = self.esp(phon_lang)(text)
-        return ps.strip()
-
-    def phonemize(self, text: str, lang: str, code: str, key: str, hi_parallel: str = '') -> str:
-        """text = cleaned text with name markers. Returns Kokoro phoneme string."""
-        lex = self.lex.get(lang, {})
-        phon_lang = 'hi'
-        if lang == 'ur':
-            if self.ur_method == 'deva':
-                from ur2deva import urdu_line_to_devanagari
-                # names: use the Hindi spelling of the same crew member
-                def nm(m):
-                    cid = m.group(1).split(':')[0]
-                    return f'{NAME_OPEN}{m.group(1)}{NAME_CLOSE}{self.hi_names.get(cid, m.group(2))}{NAME_OPEN}{NAME_CLOSE}'
-                text = re.sub(f'{NAME_OPEN}([^{NAME_CLOSE}]+){NAME_CLOSE}(.*?){NAME_OPEN}{NAME_CLOSE}', nm, text)
-                parts = re.split(f'({NAME_OPEN}[^{NAME_CLOSE}]*{NAME_CLOSE})', text)
-                text = ''.join(p if p.startswith(NAME_OPEN) else urdu_line_to_devanagari(p, hi_parallel)[0] for p in parts)
-            else:
-                phon_lang = 'ur'
-        # split into segments: ('t', text) | ('p', phonemes)
-        segs = []
-        pos = 0
-        name_re = re.compile(f'{NAME_OPEN}([^{NAME_CLOSE}]+){NAME_CLOSE}(.*?){NAME_OPEN}{NAME_CLOSE}')
-        for m in name_re.finditer(text):
-            segs.append(('t', text[pos:m.start()]))
-            cid = m.group(1).split(':')[0]
-            name = m.group(2)
-            if name in lex:
-                segs.append(('t', name))           # override handled below
-            elif lang == 'ur' and phon_lang == 'ur' and UR_NAMES_FROM_HINDI and cid in self.hi_names:
-                hn = self.hi_names[cid].split()
-                hn = ' '.join(hn[:len(name.split())])
-                segs.append(('p', self._plain(hn, 'hi', 'h', 'hi')))
-            else:
-                segs.append(('t', name))
-            pos = m.end()
-        segs.append(('t', text[pos:]))
-        # pronunciation overrides on whole words
-        if lex:
-            pat = re.compile(r'(?<!\w)(' + '|'.join(re.escape(w) for w in sorted(lex, key=len, reverse=True)) + r')(?!\w)')
-            new = []
-            for kind, s in segs:
-                if kind != 't':
-                    new.append((kind, s)); continue
-                pos = 0
-                for m in pat.finditer(s):
-                    new.append(('t', s[pos:m.start()]))
-                    v = lex[m.group(1)]
-                    new.append(('p', v[1:-1]) if v.startswith('/') and v.endswith('/') else ('t', v))
-                    pos = m.end()
-                new.append(('t', s[pos:]))
-            segs = new
-        # merge adjacent text segments, phonemize
-        merged = []
-        for kind, s in segs:
-            if merged and kind == 't' and merged[-1][0] == 't':
-                merged[-1] = ('t', merged[-1][1] + s)
-            else:
-                merged.append((kind, s))
-        ps = ''
-        for kind, s in merged:
-            if kind == 't':
-                lead = s[:1] if s[:1] in ',.!?;:' else ''
-                p = self._plain(s, lang, code, phon_lang)
-                if lead and not p.startswith(lead):
-                    p = lead + ' ' + p
-            else:
-                p = s
-            if not p:
-                continue
-            if ps and not p[0] in ',.!?;:…' and not ps.endswith(' '):
-                ps += ' '
-            ps += p
-        ps = re.sub(r'\s+', ' ', ps).strip()
-        ps = re.sub(r'\s+([,.!?;:])', r'\1', ps)
-        ps = ps.replace('ʐ', 'z')  # espeak-ng Urdu writes ز as a retroflex symbol Kokoro lacks
-        voc = self.vocab()
-        bad = [c for c in ps if c not in voc]
-        if bad:
-            self.dropped[f'{lang}:{key}'] = ''.join(sorted(set(bad)))
-            log(f'  WARN [{lang}] {key}: {len(bad)} phoneme symbols not in Kokoro vocab dropped: {sorted(set(bad))}')
-            ps = ''.join(c for c in ps if c in voc)
-        return ps
-
-
-def split_phonemes(ps: str, limit: int = 480):
-    if len(ps) <= limit:
-        return [ps]
-    parts = re.split(r'(?<=[.!?…])\s+', ps)
-    chunks, cur = [], ''
-    for p in parts:
-        while len(p) > limit:                    # very long sentence: split at commas
-            cut = p.rfind(', ', 0, limit)
-            cut = cut + 1 if cut > 0 else limit
-            if cur:
-                chunks.append(cur); cur = ''
-            chunks.append(p[:cut].strip()); p = p[cut:].strip()
-        if cur and len(cur) + 1 + len(p) > limit:
-            chunks.append(cur); cur = p
-        else:
-            cur = f'{cur} {p}'.strip()
-    if cur:
-        chunks.append(cur)
-    return chunks
-
-
-# --------------------------------------------------------------------------- casting
-def resolve_cfg(voices: dict, speaker: str, lang: str) -> dict:
-    sp = voices['speakers'].get(speaker)
-    if sp is None:
-        raise SystemExit(f'voices.json has no speaker {speaker!r}')
-    c = dict(voices.get('defaults', {}))
-    c.update(sp.get(lang) or sp.get('en'))
-    fx = c.get('fx') or ''
-    if fx.startswith('@'):
-        fx = voices['fx_presets'][fx[1:]]
-    c['fx'] = fx
-    if isinstance(c['voice'], str):
-        c['voice'] = {c['voice']: 1.0}
-    tot = sum(c['voice'].values())
-    c['voice'] = {k: round(v / tot, 4) for k, v in sorted(c['voice'].items())}
-    return c
-
-
-def filter_chain(cfg: dict) -> str:
-    parts = []
-    if cfg.get('pitch'):
-        parts.append(f"rubberband=pitch={2 ** (cfg['pitch'] / 12):.5f}:formant=preserved")
-    if cfg.get('fx'):
-        parts.append(cfg['fx'])
-    return ','.join(parts) if parts else 'anull'
-
-
-# --------------------------------------------------------------------------- worker
-_W = {}
-
-
-def _winit(threads: int):
-    warnings.filterwarnings('ignore')
-    import torch
-    torch.set_num_threads(threads)
-    from kokoro import KModel
-    _W['model'] = KModel(repo_id=REPO_ID).eval()
-    _W['packs'] = {}
-
-
-def _pack(blend: dict):
-    import torch
-    from huggingface_hub import hf_hub_download
-    key = json.dumps(blend, sort_keys=True)
-    if key not in _W['packs']:
-        acc = None
-        for vid, w in blend.items():
-            t = torch.load(hf_hub_download(REPO_ID, f'voices/{vid}.pt'), weights_only=True)
-            acc = t * w if acc is None else acc + t * w
-        _W['packs'][key] = acc
-    return _W['packs'][key]
-
-
-def _ff(args, **kw):
-    r = subprocess.run([FFMPEG, '-hide_banner', '-nostdin', '-loglevel', 'error', '-y', *args],
-                       capture_output=True, text=True, **kw)
-    if r.returncode:
-        raise RuntimeError(r.stderr[-2000:])
-    return r
-
-
+# --------------------------------------------------------------------------- audio
 def _trim(x, sr, head_db=-42.0, pad_head=0.04, pad_tail=0.08):
     import numpy as np
     if len(x) == 0:
@@ -380,99 +171,194 @@ def _fade(x, sr, fin=0.008, fout=0.06):
     return x
 
 
-def render_job(job: dict) -> dict:
+def _ff(args):
+    r = subprocess.run([FFMPEG, '-hide_banner', '-nostdin', '-loglevel', 'error', '-y', *args],
+                       capture_output=True, text=True)
+    if r.returncode:
+        raise RuntimeError(r.stderr[-2000:])
+
+
+# --------------------------------------------------------------------------- jobs
+def respell(text: str, lex: dict) -> str:
+    if not lex:
+        return text
+    pat = re.compile(r'(?<!\w)(' + '|'.join(re.escape(w) for w in sorted(lex, key=len, reverse=True)) + r')(?!\w)')
+    return pat.sub(lambda m: lex[m.group(1)], text)
+
+
+def spoken_text(raw, key, lang, strings, hi_strings, lexicon):
+    """The text the model reads. Urdu goes through Devanagari (Chatterbox has no Urdu)."""
+    names = crew_names(strings)
+    text = display_text(clean_text(substitute_names(raw, names, key, lang), lang, key))
+    if lang == 'ur':
+        from ur2deva import urdu_line_to_devanagari
+        hi_names = crew_names(hi_strings)
+        for cid, n in names.items():          # names keep their Hindi spelling
+            text = text.replace(n, hi_names.get(cid, n))
+        base = key.split('~')[0]
+        tries = [f'vo.anon.{base}'] if key.endswith('~anon') else [f'vo.f.{base}', f'g.f.{base}'] if key.endswith('~f') else []
+        hi_line = next((hi_strings[k] for k in [*tries, base] if k in hi_strings), '')
+        hi_raw = NAME_RE.sub(lambda m: hi_names.get(m.group(2), ''), hi_line)
+        text = urdu_line_to_devanagari(text, hi_raw)[0]
+    return respell(text, lexicon.get(lang, {}))
+
+
+def build_jobs(lang, voice_map, voices, direction, strings, hi_strings, lexicon, only):
+    jobs = []
+    for key, speaker in voice_map['lines'].items():
+        if key not in strings:
+            log(f'  WARN [{lang}] missing key {key}')
+            continue
+        variants = [(key, strings[key])]
+        if NAME_RE.search(strings[key]) and f'vo.anon.{key}' in strings:
+            variants.append((f'{key}~anon', strings[f'vo.anon.{key}']))
+        # Female-player takes: every scientist line, plus any line with its own feminine text.
+        fem = strings.get(f'vo.f.{key}') or strings.get(f'g.f.{key}')
+        if speaker == 'scientist' or fem:
+            variants.append((f'{key}~f', fem or strings[key]))
+        d = direction['lines'].get(key)
+        if d is None:
+            raise SystemExit(f'direction.json has no line {key!r}')
+        for vkey, raw in variants:
+            if only and not any(fnmatch.fnmatchcase(vkey, o) or fnmatch.fnmatchcase(vkey.split('~')[0], o) for o in only):
+                continue
+            who = 'scientist_f' if vkey.endswith('~f') and speaker == 'scientist' else speaker
+            cast = voices['speakers'][who]
+            c = {**voices['defaults'], **cast.get('all', {}), **cast.get(lang, {})}
+            text = spoken_text(raw, vkey, lang, strings, hi_strings, lexicon)
+            ex, cfg, temp = direction['emotions'][d['emotion']]
+            job = {'lang': lang, 'key': vkey, 'speaker': who, 'text': text, 'dir': d, 'cast': c,
+                   'exaggeration': round(min(1.2, ex * (0.6 + 0.8 * d['intensity'])), 3), 'cfg': cfg, 'temperature': temp,
+                   'ref': f"{c['ref']}_{'en' if lang == 'en' else 'hi'}"}
+            job['fx'] = [x for x in (direction['fx'].get(d['fx']), c.get('fx')) if x]
+            h = hashlib.sha1(json.dumps({'v': SCRIPT_VERSION, **{k: v for k, v in job.items() if k != 'key'}},
+                                        sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:20]
+            job.update(hash=h, mp3=str(CACHE / lang / f'{h}.mp3'), meta=str(CACHE / lang / f'{h}.json'))
+            jobs.append(job)
+    return jobs
+
+
+# --------------------------------------------------------------------------- render
+class Engine:
+    def __init__(self, threads):
+        import torch
+        torch.set_num_threads(threads)
+        self.torch, self._m, self._asr = torch, {}, None
+
+    def model(self, name):
+        if name not in self._m:
+            self._m.clear()                  # one model in RAM at a time
+            if name == 'en':
+                from chatterbox.tts import ChatterboxTTS
+                self._m[name] = ChatterboxTTS.from_pretrained('cpu')
+            else:
+                from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+                self._m[name] = ChatterboxMultilingualTTS.from_pretrained(self.torch.device('cpu'))
+        return self._m[name]
+
+    def synth(self, job, seed):
+        self.torch.manual_seed(seed)
+        ref = str(HERE / 'refs' / f"{job['ref']}.wav")
+        kw = dict(audio_prompt_path=ref, exaggeration=job['exaggeration'], cfg_weight=job['cfg'], temperature=job['temperature'])
+        if job['lang'] == 'en':
+            m = self.model('en')
+            w = m.generate(job['text'], **kw)
+        else:
+            m = self.model('hi')
+            w = m.generate(job['text'], language_id='hi', **kw)
+        return w.squeeze().cpu().numpy(), m.sr
+
+    def cer(self, y, sr, job):
+        import librosa
+        from faster_whisper import WhisperModel
+        from qa_voice import cer, norm
+        if self._asr is None:
+            self._asr = WhisperModel('small', device='cpu', compute_type='int8', cpu_threads=4)
+        lang = 'hi' if job['lang'] != 'en' else 'en'
+        segs, _ = self._asr.transcribe(librosa.resample(y, orig_sr=sr, target_sr=16000), language=lang, beam_size=2)
+        return cer(norm(job['text']), norm(' '.join(s.text for s in segs)))
+
+
+def finish(y, sr, job):
+    """Trim, stretch to the directed pace, add fx and pauses, normalise, encode."""
+    import librosa
     import numpy as np
-    import soundfile as sf
-    import torch
     import pyloudnorm as pyln
-    from kokoro import KPipeline
-    t0 = time.time()
-    cfg = job['cfg']
-    pack = _pack(cfg['voice'])
-    audio = []
-    gap = np.zeros(int(0.18 * SR), dtype=np.float32)
-    with torch.no_grad():
-        for i, chunk in enumerate(split_phonemes(job['ps'])):
-            out = KPipeline.infer(_W['model'], chunk, pack, cfg.get('speed', 1.0))
-            a = out.audio.cpu().numpy().astype(np.float32)
-            if i:
-                audio.append(gap)
-            audio.append(_trim(a, SR))
-    raw = np.concatenate(audio) if audio else np.zeros(1, np.float32)
-    synth_s = time.time() - t0
-    raw = _trim(raw, SR)
-    tail = np.zeros(int(0.9 * SR), dtype=np.float32)
+    import soundfile as sf
+    y = librosa.resample(np.asarray(y, dtype=np.float32), orig_sr=sr, target_sr=SR) if sr != SR else y
+    y = _trim(y, SR)
+    d, c = job['dir'], job['cast']
+    chain = []
+    pace = d['pace'] * c.get('pace', 1.0)
+    if abs(pace - 1) > 0.01:
+        chain.append(f'rubberband=tempo={pace:.3f}')
+    if c.get('pitch'):
+        chain.append(f"rubberband=pitch={2 ** (c['pitch'] / 12):.5f}:formant=preserved")
+    chain += job['fx']
     with tempfile.TemporaryDirectory() as td:
-        a, b, c = Path(td, 'a.wav'), Path(td, 'b.wav'), Path(td, 'c.wav')
-        sf.write(a, np.concatenate([np.zeros(int(0.05 * SR), np.float32), raw, tail]), SR, subtype='FLOAT')
-        _ff(['-i', str(a), '-filter_complex', f'[0:a]{filter_chain(cfg)},aresample={SR}[o]', '-map', '[o]',
+        a, b, o = Path(td, 'a.wav'), Path(td, 'b.wav'), Path(td, 'c.wav')
+        sf.write(a, np.concatenate([y, np.zeros(int(0.6 * SR), np.float32)]), SR, subtype='FLOAT')
+        _ff(['-i', str(a), '-filter_complex', f"[0:a]{','.join(chain) or 'anull'},aresample={SR}[o]", '-map', '[o]',
              '-ac', '1', '-c:a', 'pcm_f32le', str(b)])
         y, _ = sf.read(b, dtype='float32')
-        if y.ndim > 1:
-            y = y.mean(axis=1)
-        y = _fade(_trim(y, SR, head_db=-48.0, pad_head=0.03, pad_tail=0.12), SR)
-        # loudness normalisation (BS.1770 integrated; short clips measured whole)
+        y = _fade(_trim(y, SR, head_db=-48.0, pad_head=0.02, pad_tail=0.06), SR)
         meter = pyln.Meter(SR, block_size=min(0.4, max(0.1, len(y) / SR - 0.01)))
         try:
             lufs = meter.integrated_loudness(y.astype(np.float64))
         except Exception:
             lufs = float('-inf')
         if not np.isfinite(lufs):
-            rms = float(np.sqrt(np.mean(y ** 2) + 1e-12))
-            lufs = 20 * np.log10(rms) - 0.7
-        gain = 10 ** ((TARGET_LUFS - lufs) / 20)
-        y = y * gain
-        sf.write(c, y, SR, subtype='FLOAT')
-        dur = len(y) / SR
-        Path(job['cache_mp3']).parent.mkdir(parents=True, exist_ok=True)
-        tmp_mp3 = str(job['cache_mp3']) + '.tmp.mp3'
-        _ff(['-i', str(c), '-af', f'alimiter=limit={PEAK_LIMIT}:attack=2:release=40:level=false',
-             '-ac', '1', '-ar', str(SR), '-c:a', 'libmp3lame', '-b:a', MP3_BITRATE, '-write_xing', '1',
-             '-map_metadata', '-1', tmp_mp3])
-        os.replace(tmp_mp3, job['cache_mp3'])
-    meta = {'duration': round(dur, 2), 'lufs_in': round(lufs, 1), 'synth_s': round(synth_s, 2),
-            'total_s': round(time.time() - t0, 2), 'audio_s_raw': round(len(raw) / SR, 2)}
-    with open(job['cache_meta'], 'w') as f:
-        json.dump(meta, f)
-    return {**job, **meta}
+            lufs = 20 * np.log10(float(np.sqrt(np.mean(y ** 2) + 1e-12))) - 0.7
+        y = y * 10 ** ((TARGET_LUFS - lufs) / 20)
+        y = np.concatenate([np.zeros(int(d['pre'] * SR), np.float32), y, np.zeros(int(d['post'] * SR), np.float32)])
+        sf.write(o, y, SR, subtype='FLOAT')
+        Path(job['mp3']).parent.mkdir(parents=True, exist_ok=True)
+        tmp = job['mp3'] + '.tmp.mp3'
+        _ff(['-i', str(o), '-af', f'alimiter=limit={PEAK_LIMIT}:attack=2:release=40:level=false', '-ac', '1', '-ar', str(SR),
+             '-c:a', 'libmp3lame', '-b:a', MP3_BITRATE, '-write_xing', '1', '-map_metadata', '-1', tmp])
+        os.replace(tmp, job['mp3'])
+    return round(len(y) / SR, 2)
 
 
-# --------------------------------------------------------------------------- main
-def build_jobs(lang, voice_map, voices, strings, hi_strings, g2p, ur_method, only):
-    names = crew_names(strings)
-    jobs = []
-    code_default = 'a'
-    for key, speaker in voice_map['lines'].items():
-        variants = []
-        if key not in strings:
-            log(f'  WARN [{lang}] missing key {key}')
-            continue
-        variants.append((key, strings[key]))
-        if NAME_RE.search(strings[key]) and f'vo.anon.{key}' in strings:
-            variants.append((f'{key}~anon', strings[f'vo.anon.{key}']))
-        for vkey, raw in variants:
-            if only and not any(fnmatch.fnmatchcase(vkey, o) or fnmatchcase_base(vkey, o) for o in only):
-                continue
-            cfg = resolve_cfg(voices, speaker, lang)
-            text = clean_text(substitute_names(raw, names, vkey, lang), lang, vkey)
-            hi_par = ''
-            if lang == 'ur' and hi_strings:
-                hk = f'vo.anon.{key}' if vkey.endswith('~anon') else key
-                hi_par = hi_strings.get(hk, '')
-            ps = g2p.phonemize(text, lang, cfg.get('g2p', code_default), vkey, hi_par)
-            h = hashlib.sha1(json.dumps({'v': SCRIPT_VERSION, 'lang': lang, 'ps': ps, 'cfg': cfg,
-                                         'ur': ur_method if lang == 'ur' else None,
-                                         'lufs': TARGET_LUFS, 'br': MP3_BITRATE},
-                                        sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:20]
-            jobs.append({'lang': lang, 'key': vkey, 'speaker': speaker, 'text': display_text(text),
-                         'raw': raw, 'ps': ps, 'cfg': cfg, 'hash': h,
-                         'cache_mp3': str(CACHE / lang / f'{h}.mp3'),
-                         'cache_meta': str(CACHE / lang / f'{h}.json')})
-    return jobs
+def render(engine, job, max_cer):
+    """Best of up to MAX_TAKES seeds: stop at the first take close enough to the script."""
+    t0, best = time.time(), None
+    seed0 = int(job['hash'][:6], 16)
+    for n in range(MAX_TAKES):
+        y, sr = engine.synth(job, seed0 + n)
+        c = engine.cer(y, sr, job)
+        if best is None or c < best[0]:
+            best = (c, y, sr, n + 1)
+        if c <= max_cer:
+            break
+    c, y, sr, take = best
+    dur = finish(y, sr, job)
+    meta = {'duration': dur, 'cer': round(c, 3), 'take': take, 'secs': round(time.time() - t0, 1)}
+    Path(job['meta']).write_text(json.dumps(meta))
+    return meta
 
 
-def fnmatchcase_base(vkey, pat):
-    return vkey.endswith('~anon') and fnmatch.fnmatchcase(vkey[:-5], pat)
+def publish(lang, jobs, out_root, prune):
+    d = out_root / lang
+    d.mkdir(parents=True, exist_ok=True)
+    idx_p = d / 'index.json'
+    index = load_json(idx_p) if idx_p.exists() else {}
+    for j in jobs:
+        if Path(j['meta']).exists():
+            shutil.copyfile(j['mp3'], d / f"{j['key']}.mp3")
+            index[j['key']] = load_json(Path(j['meta']))['duration']
+    if prune:
+        keep = {j['key'] for j in jobs}
+        index = {k: v for k, v in index.items() if k in keep}
+        for f in d.glob('*.mp3'):
+            if f.stem not in keep:
+                f.unlink()
+                log(f'  removed stale {f}')
+    tmp = idx_p.with_suffix('.tmp')
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(dict(sorted(index.items())), f, ensure_ascii=False, indent=0, separators=(',', ':'))
+        f.write('\n')
+    os.replace(tmp, idx_p)
 
 
 def main():
@@ -480,91 +366,46 @@ def main():
     ap.add_argument('--lang', default=','.join(LANGS))
     ap.add_argument('--only', action='append', default=[], help='key glob (repeatable, comma-separated ok)')
     ap.add_argument('--force', action='store_true', help='ignore cache')
-    ap.add_argument('--ur-method', choices=UR_METHODS, default=DEFAULT_UR_METHOD)
-    ap.add_argument('--out', default=str(OUT_ROOT), help='output root (default public/audio/vo)')
-    ap.add_argument('--workers', type=int, default=0)
-    ap.add_argument('--dry-run', action='store_true', help='print cleaned text + phonemes only')
+    ap.add_argument('--out', default=str(OUT_ROOT))
+    ap.add_argument('--threads', type=int, default=16)
+    ap.add_argument('--max-cer', type=float, default=0.15, help='retake above this (Hindi and Urdu get +0.15: Whisper is weaker there)')
+    ap.add_argument('--limit', type=int, default=0, help='stop after N new lines')
+    ap.add_argument('--dry-run', action='store_true', help='print the text each line will read')
     args = ap.parse_args()
     warnings.filterwarnings('ignore')
     sys.path.insert(0, str(HERE))
-
     langs = [l.strip() for l in args.lang.split(',') if l.strip()]
     only = [o.strip() for s in args.only for o in s.split(',') if o.strip()]
     voice_map = load_json(I18N / 'voice.json')
     voices = load_json(HERE / 'voices.json')
+    direction = load_json(HERE / 'direction.json')
     lexicon = {k: v for k, v in load_json(HERE / 'pronunciations.json').items() if not k.startswith('_')}
     hi_strings = load_json(I18N / 'hi.json')
-    g2p = G2P(lexicon, crew_names(hi_strings), args.ur_method)
     out_root = Path(args.out)
 
-    all_jobs = []
-    for lang in langs:
-        strings = load_json(I18N / f'{lang}.json')
-        jobs = build_jobs(lang, voice_map, voices, strings, hi_strings, g2p, args.ur_method, only)
-        all_jobs.extend(jobs)
-        log(f'[{lang}] {len(jobs)} lines')
+    per_lang = {l: build_jobs(l, voice_map, voices, direction, load_json(I18N / f'{l}.json'), hi_strings, lexicon, only) for l in langs}
     if args.dry_run:
-        for j in all_jobs:
-            print(f"{j['lang']}\t{j['key']}\t{j['speaker']}\t{j['text']}\t{j['ps']}")
+        for l in langs:
+            for j in per_lang[l]:
+                print(f"{l}\t{j['key']}\t{j['speaker']}\t{j['exaggeration']}\t{j['text']}")
         return
-
-    todo = [j for j in all_jobs if args.force or not (Path(j['cache_mp3']).exists() and Path(j['cache_meta']).exists())]
-    log(f'{len(all_jobs)} lines total, {len(todo)} to render, {len(all_jobs) - len(todo)} cached')
-    t0 = time.time()
-    if todo:
-        cores = os.cpu_count() or 4
-        workers = args.workers or max(1, min(len(todo), cores // 4, 6))
-        threads = max(1, cores // workers)
-        with cf.ProcessPoolExecutor(workers, initializer=_winit, initargs=(threads,)) as ex:
-            futs = {ex.submit(render_job, j): j for j in todo}
-            for n, f in enumerate(cf.as_completed(futs), 1):
-                j = futs[f]
-                try:
-                    r = f.result()
-                    log(f"  [{n}/{len(todo)}] {j['lang']} {j['key']:<24} {r['duration']:5.2f}s audio, {r['total_s']:5.2f}s cpu")
-                except Exception as e:
-                    log(f"  FAIL {j['lang']} {j['key']}: {e}")
-                    raise
-    log(f'render wall time {time.time() - t0:.1f}s')
-
-    # publish
-    for lang in langs:
-        d = out_root / lang
-        d.mkdir(parents=True, exist_ok=True)
-        idx_p = d / 'index.json'
-        index = load_json(idx_p) if (only and idx_p.exists()) else {}
-        lines_meta = {}
-        for j in (x for x in all_jobs if x['lang'] == lang):
-            meta = load_json(Path(j['cache_meta']))
-            dst = d / f"{j['key']}.mp3"
-            src = Path(j['cache_mp3'])
-            if not dst.exists() or dst.read_bytes() != src.read_bytes():
-                shutil.copyfile(src, dst)
-            index[j['key']] = meta['duration']
-            lines_meta[j['key']] = {'speaker': j['speaker'], 'text': j['text'], 'ps': j['ps'],
-                                    'voice': j['cfg']['voice'], 'hash': j['hash'], **meta}
-        if not only:   # prune files of keys that are no longer voiced
-            for f in d.glob('*.mp3'):
-                if f.stem not in index:
-                    f.unlink()
-                    log(f'  removed stale {f}')
-        index = dict(sorted(index.items()))
-        with open(idx_p, 'w', encoding='utf-8') as f:
-            json.dump(index, f, ensure_ascii=False, indent=0, separators=(',', ':'))
-            f.write('\n')
-        # build manifest for QA (not shipped)
-        tag = '' if out_root.resolve() == OUT_ROOT.resolve() else f'_{out_root.name}'
-        man_p = CACHE / f'manifest_{lang}{tag}.json'
-        man = load_json(man_p) if (only and man_p.exists()) else {}
-        man.update(lines_meta)
-        man['_ur_method'] = args.ur_method if lang == 'ur' else None
-        CACHE.mkdir(exist_ok=True)
-        with open(man_p, 'w', encoding='utf-8') as f:
-            json.dump(man, f, ensure_ascii=False, indent=1)
-        size = sum(f.stat().st_size for f in d.glob('*.mp3'))
-        log(f'[{lang}] {len(index)} files, {size / 1024:.0f} KiB -> {d}')
-    if g2p.dropped:
-        log(f'dropped phoneme symbols: {g2p.dropped}')
+    engine, done = None, 0
+    for l in langs:
+        jobs = per_lang[l]
+        todo = [j for j in jobs if args.force or not Path(j['meta']).exists()]
+        log(f'[{l}] {len(jobs)} lines, {len(todo)} to render')
+        for n, j in enumerate(todo, 1):
+            engine = engine or Engine(args.threads)
+            m = render(engine, j, args.max_cer + (0 if l == 'en' else 0.15))
+            log(f"  [{n}/{len(todo)}] {l} {j['key']:<20} {m['duration']:5.2f}s cer {m['cer']:.2f} take {m['take']} in {m['secs']:.0f}s")
+            publish(l, [j], out_root, False)
+            done += 1
+            if args.limit and done >= args.limit:
+                return
+        publish(l, jobs, out_root, not only)
+    from voice_overrides import main as overrides
+    sys.argv = sys.argv[:1]
+    overrides()
 
 
 if __name__ == '__main__':
