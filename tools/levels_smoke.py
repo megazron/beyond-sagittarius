@@ -39,6 +39,9 @@ def check_i18n():
         if missing or extra:
             problems.append(f"{l}: missing {missing} extra {extra}")
     for l, d in dicts.items():
+        dashes = [k for k, v in d.items() if "\u2014" in v]
+        if dashes:
+            problems.append(f"{l}: em dash in {dashes[:5]}")
         for k in [f"level.{n}.{f}" for n in range(1, 11) for f in ("title", "desc")]:
             if k not in d:
                 problems.append(f"{l}: no {k}")
