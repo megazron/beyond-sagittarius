@@ -57,7 +57,7 @@ interface Variant { solid: THREE.BufferGeometry; glow: THREE.BufferGeometry | nu
 /** The planet's three alien species, only found in rare groves. Units: metres, base at origin. */
 function buildVariants(): Variant[] {
   const out: Variant[] = [];
-  // 1. Parasol — bent trunk with a violet cap and glowing hanging tendrils
+  // 1. Parasol: bent trunk with a violet cap and glowing hanging tendrils
   {
     const solid: THREE.BufferGeometry[] = [];
     const glow: THREE.BufferGeometry[] = [];
@@ -84,7 +84,7 @@ function buildVariants(): Variant[] {
     glow.push(colorize(rim, 0x6a62b0));
     out.push({ solid: mergeGeometries(solid)!, glow: mergeGeometries(glow)!, radius: 0.5 });
   }
-  // 2. Lantern spire — tall trunk, spiralling fronds, pink lantern pods
+  // 2. Lantern spire: tall trunk, spiralling fronds, pink lantern pods
   {
     const solid: THREE.BufferGeometry[] = [];
     const glow: THREE.BufferGeometry[] = [];
@@ -107,7 +107,7 @@ function buildVariants(): Variant[] {
     glow.push(colorize(tip, 0xd8b4c8));
     out.push({ solid: mergeGeometries(solid)!, glow: mergeGeometries(glow)!, radius: 0.6 });
   }
-  // 3. Coral fan — several bent tubes from one root, glowing tips and gill fans
+  // 3. Coral fan: several bent tubes from one root, glowing tips and gill fans
   {
     const solid: THREE.BufferGeometry[] = [];
     const glow: THREE.BufferGeometry[] = [];

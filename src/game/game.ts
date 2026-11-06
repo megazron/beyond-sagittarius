@@ -440,7 +440,7 @@ export class Game {
       this.onLevelComplete?.(n);
       if (s.level <= PLAYABLE_LEVELS) {
         const next = s.level;
-        this.after(4.7, () => { this.ui.toast(`${t('hud.level', { n: next })} — ${t(`level.${next}.title`)}`); const h = `level.${next}.hint`; if (t(h) !== h) this.ui.toast(t(h)); });
+        this.after(4.7, () => { this.ui.toast(`${t('hud.level', { n: next })}: ${t(`level.${next}.title`)}`); const h = `level.${next}.hint`; if (t(h) !== h) this.ui.toast(t(h)); });
         this.story.onLevelStart(next);
       } else if (n === LAST_LEVEL) {
         this.after(4.7, () => this.ui.toast(t('level.arc.toast')));

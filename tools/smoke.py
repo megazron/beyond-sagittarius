@@ -154,7 +154,7 @@ def main():
     if real:
         print(f"FAILED with {len(real)} error(s)")
         sys.exit(1)
-    print("OK — no page errors")
+    print("OK: no page errors")
 
 
 if __name__ == "__main__":

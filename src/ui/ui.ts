@@ -369,7 +369,7 @@ export class UI implements CineUI {
       const st = done ? t('level.done') : n === current && n <= PLAYABLE_LEVELS ? t('level.current') : n > PLAYABLE_LEVELS ? t('level.locked') : '';
       return `<li class="${cls}"><span class="num">${String(n).padStart(2, '0')}</span><span>${escapeHtml(t(`level.${n}.title`))}</span><span class="st">${escapeHtml(st)}</span></li>`;
     }).join('');
-    const arc = current > LEVEL_COUNT ? `<div class="note arc">${escapeHtml(t('level.arc.title'))} — ${escapeHtml(t('level.arc.desc'))}</div>` : '';
+    const arc = current > LEVEL_COUNT ? `<div class="note arc">${escapeHtml(t('level.arc.title'))}: ${escapeHtml(t('level.arc.desc'))}</div>` : '';
     this.openModal(`<h2>${escapeHtml(t('objectives.title'))}</h2><ul class="levels">${items}</ul>${arc}
       <div class="actions"><button class="btn" id="m-close">${escapeHtml(t('menu.close'))}</button></div>`);
     $('m-close').addEventListener('click', () => { audio.uiClick(); this.closeModal(); onClose(); });

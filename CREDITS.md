@@ -52,11 +52,11 @@ All dubbing in `public/audio/vo/` is synthetic speech rendered locally by `tools
 Loaded at runtime from **Google Fonts** (`fonts.googleapis.com`), all under the
 [SIL Open Font License 1.1](https://openfontlicense.org):
 
-- **Orbitron** (Matt McInerney) — display/HUD Latin text
-- **Exo 2** (Natanael Gama) — body Latin text
-- **Noto Sans Devanagari** (Google) — Hindi
-- **Noto Nastaliq Urdu** (Google) — Urdu (titles, subtitles, story text)
-- **Noto Naskh Arabic** (Google) — Urdu fallback and small HUD labels
+- **Orbitron** (Matt McInerney): display/HUD Latin text
+- **Exo 2** (Natanael Gama): body Latin text
+- **Noto Sans Devanagari** (Google): Hindi
+- **Noto Nastaliq Urdu** (Google): Urdu (titles, subtitles, story text)
+- **Noto Naskh Arabic** (Google): Urdu fallback and small HUD labels
 
 When the game runs offline the fonts fall back to system fonts. To self-host,
 download the same families from Google Fonts into `public/fonts/` and replace

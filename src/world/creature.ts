@@ -3,7 +3,7 @@ import type { Terrain } from './terrain';
 import { grainNormal } from '../characters/shapes';
 
 /**
- * "The Walker" — an enormous, slow, four-legged silhouette glimpsed between
+ * "The Walker": an enormous, slow, four-legged silhouette glimpsed between
  * the trees. Feet are planted in world space and step procedurally.
  */
 export function createCreature(terrain: Terrain, onStep: (pos: THREE.Vector3) => void) {

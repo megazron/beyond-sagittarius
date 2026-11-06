@@ -282,7 +282,7 @@ def main():
     if failures:
         print(f"FAILED ({len(failures)})")
         sys.exit(1)
-    print("OK — mobile layouts, touch controls and tutorial work")
+    print("OK: mobile layouts, touch controls and tutorial work")
 
 
 if __name__ == "__main__":
