@@ -131,6 +131,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let blinkAt = 2 + Math.random() * 3, blinkT = 0, speak = 0, speakPhase = 0, vis = 0, visAt = 0;
   let gaitPhase = 0, inited = false, hipDrop = 0, sacAt = 1, sacX = 0, sacY = 0, firstFrame = true;
   const footOff = [0, 0];
+  const pin = [new THREE.Vector3(), new THREE.Vector3()], pinOff = [new THREE.Vector3(), new THREE.Vector3()], pinned = [false, false];
+  const trackPos = new THREE.Vector3();
+  let tracked = false, trackYaw = 0, groundSpeed = 0, yawRate = 0;
   const lastPos = new THREE.Vector3(), swing = new THREE.Vector3(), swingV = new THREE.Vector3(), tmp = new THREE.Vector3();
   const eyeShape = EYE_SHAPE[custom ? custom.eye : human ? 'calm' : L.face.eye] ?? EYE_SHAPE.calm;
   const smileBase = MOUTH[L.face.mouth] ?? 0.1;
@@ -287,8 +290,23 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   function animate(kind: CrewPose, phase: number, amount: number, t: number, dt: number) {
     if (!mixer || !B) return;
     const bs = B;
-    const speed = amount * 4;
-    const moving = amount > 0.02 && !FULL_BODY.has(kind);
+    // real ground speed and turn rate: gait follows the body, whatever the caller says about it
+    root.getWorldPosition(tmp);
+    root.getWorldQuaternion(Q);
+    const yawNow = Math.atan2(2 * (Q.w * Q.y + Q.x * Q.z), 1 - 2 * (Q.y * Q.y + Q.x * Q.x));
+    if (!tracked) { trackPos.copy(tmp); trackYaw = yawNow; tracked = true; }
+    const sdt = Math.max(dt, 1 / 240);
+    let inst = Math.hypot(tmp.x - trackPos.x, tmp.z - trackPos.z) / sdt;
+    if (inst > 14) inst = 0; // teleport
+    let dy = yawNow - trackYaw;
+    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    trackPos.copy(tmp); trackYaw = yawNow;
+    const sr = 1 - Math.exp(-dt * 12);
+    groundSpeed += (inst - groundSpeed) * sr;
+    yawRate += (clamp(dy / sdt, -6, 6) - yawRate) * sr;
+    const pivot = Math.abs(yawRate) > 0.5 ? Math.abs(yawRate) * 0.26 : 0; // turning on the spot still takes steps
+    const speed = Math.max(groundSpeed > 0.08 ? groundSpeed : amount * 4, pivot);
+    const moving = (amount > 0.02 || groundSpeed > 0.25 || pivot > 0) && !FULL_BODY.has(kind) && (kind === 'idle' || kind === 'walk' || kind === 'stand');
     const limp = !!kit?.splint.visible;
     for (const s of acts.values()) s.target = 0;
     if (moving) {
@@ -313,12 +331,17 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     firstFrame = false;
 
     // ---- style on top of the clip ----
-    const breathe = Math.sin(t * 1.5) * 0.012;
+    const bp = Math.sin(t * (1.35 + amount * 1.2));
+    const breathe = bp * 0.012;
     const hipsB = bs.get('hips')!, spine1 = bs.get('spine1')!, chestB = bs.get('chest')!, neckB = bs.get('neck')!, headB = bs.get('head')!;
     const standing = !FULL_BODY.has(kind);
     if (standing) {
-      spine1.quaternion.multiply(Q.setFromEuler(E.set(P.stoop * 0.5 + amount * P.lean * 0.4, 0, 0)));
+      spine1.quaternion.multiply(Q.setFromEuler(E.set(P.stoop * 0.5 + Math.min(speed / 4, 1.3) * P.lean * 0.4, 0, 0)));
       chestB.quaternion.multiply(Q.setFromEuler(E.set(P.stoop * 0.4 + breathe, 0, 0)));
+      // lean into turns, shoulders lead the hips
+      const lean = clamp(yawRate * Math.min(speed, 5) * 0.022, -0.2, 0.2);
+      hipsB.quaternion.premultiply(Q.setFromAxisAngle(V1.set(0, 0, 1), -lean));
+      spine1.quaternion.multiply(Q.setFromEuler(E.set(0, clamp(yawRate * 0.05, -0.16, 0.16), lean * 0.5)));
       neckB.quaternion.multiply(Q.setFromEuler(E.set(-P.stoop * 0.5, 0, 0)));
       // wide bodies carry their arms away from the torso
       const sp = (P.stance - 0.05) * 0.8;
@@ -335,14 +358,15 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       }
     }
     // head look-at, clamped and shared with the neck; the eyes lead
-    const ly = clamp(lookAt.y, -1.1, 1.1), lx = clamp(lookAt.x, -0.6, 0.6);
+    const ly = clamp(lookAt.y + clamp(yawRate * 0.1, -0.3, 0.3), -1.1, 1.1), lx = clamp(lookAt.x, -0.6, 0.6);
     if (ly || lx) {
       neckB.quaternion.multiply(Q.setFromEuler(E.set(lx * 0.4, ly * 0.4, 0)));
       headB.quaternion.multiply(Q.setFromEuler(E.set(lx * 0.6, ly * 0.6, 0)));
     }
     sacAt -= dt;
     if (sacAt <= 0) { sacAt = 0.5 + Math.random() * 2.4; sacX = (Math.random() - 0.5) * 0.14; sacY = (Math.random() - 0.5) * 0.26; }
-    for (const n of ['eyeL', 'eyeR']) bs.get(n)!.quaternion.setFromEuler(E.set(sacX, sacY, 0));
+    for (const n of ['eyeL', 'eyeR']) bs.get(n)!.quaternion.setFromEuler(E.set(sacX, sacY + clamp(yawRate * 0.12, -0.35, 0.35), 0));
+    chestB.scale.setScalar(1 + bp * 0.005 * (standing ? 1 : 0.6));
 
     // ---- face ----
     const r = 1 - Math.exp(-dt * 10);
@@ -368,29 +392,47 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const bl = blinkT > 0 ? Math.sin((blinkT / 0.15) * Math.PI) : 0;
     setMorph('blink', Math.max(bl, ex.blink ?? eyeShape.blink));
 
-    // ---- feet on the terrain ----
+    // ---- feet: planted where they land, on the real ground ----
     if (ground && standing && root.visible) {
       root.updateWorldMatrix(true, true);
       const baseY = root.getWorldPosition(tmp).y;
-      const up = kit?.footH ?? 0.09;
-      let drop = 0;
-      const want: [THREE.Bone, THREE.Bone, THREE.Bone, THREE.Vector3, number][] = [];
+      const rest = kit?.footH ?? 0.09;
+      let drop = 0, busy = false;
+      const legs: { h: THREE.Bone; k: THREE.Bone; f: THREE.Bone; p: THREE.Vector3; q: THREE.Quaternion; n: THREE.Vector3; w: number }[] = [];
       (['L', 'R'] as const).forEach((s, i) => {
         const f = bs.get(`foot${s}`)!;
         const p = f.getWorldPosition(new THREE.Vector3());
-        const animY = p.y - baseY;
-        const stance = clamp((0.22 - animY) / 0.1, 0, 1);
-        const g = ground!(p.x, p.z) - baseY;
-        footOff[i] += (g * stance - footOff[i]) * (1 - Math.exp(-dt * 18));
+        const stance = clamp((rest + 0.075 - (p.y - baseY)) / 0.05, 0, 1);
+        // pin: from touchdown the foot stays put in the world, whatever the blend does
+        if (moving && stance > 0.6 && speed < 6) {
+          if (!pinned[i]) { pinned[i] = true; pin[i].set(p.x + pinOff[i].x, 0, p.z + pinOff[i].z); }
+          pinOff[i].set(pin[i].x - p.x, 0, pin[i].z - p.z);
+          if (pinOff[i].length() > 0.13) { pinned[i] = false; }
+        } else {
+          pinned[i] = false;
+          pinOff[i].multiplyScalar(Math.exp(-dt * 14));
+        }
+        p.x += pinOff[i].x; p.z += pinOff[i].z;
+        const g = ground!(p.x, p.z);
+        footOff[i] += ((g - baseY) * stance - footOff[i]) * (1 - Math.exp(-dt * 18));
         drop = Math.min(drop, footOff[i]);
-        want.push([bs.get(`upperleg${s}`)!, bs.get(`lowerleg${s}`)!, f, p, footOff[i]]);
+        const e = 0.14, n = new THREE.Vector3(ground!(p.x - e, p.z) - ground!(p.x + e, p.z), 2 * e, ground!(p.x, p.z - e) - ground!(p.x, p.z + e)).normalize();
+        p.y += footOff[i];
+        if (Math.abs(footOff[i]) > 0.004 || pinOff[i].lengthSq() > 1e-5 || n.y < 0.995) busy = true;
+        legs.push({ h: bs.get(`upperleg${s}`)!, k: bs.get(`lowerleg${s}`)!, f, p, q: f.getWorldQuaternion(new THREE.Quaternion()), n, w: stance });
       });
       hipDrop += (drop - hipDrop) * (1 - Math.exp(-dt * 12));
-      if (Math.abs(hipDrop) > 0.002 || Math.abs(footOff[0]) > 0.004 || Math.abs(footOff[1]) > 0.004) {
-        hipsB.position.y += hipDrop / (custom ? custom.height : 1);
+      if (busy || Math.abs(hipDrop) > 0.002) {
+        hipsB.position.y += hipDrop / fig.scale.y;
         fig.updateWorldMatrix(true, true);
-        for (const [a, b, c, p, off] of want) { p.y += off; solveLeg(a, b, c, p); b.updateWorldMatrix(true, true); }
-        void up;
+        for (const l of legs) {
+          solveLeg(l.h, l.k, l.f, l.p);
+          l.h.updateWorldMatrix(true, true);
+          // the sole keeps its animated attitude, tipped to the slope while it bears weight
+          l.q.premultiply(Q2.setFromUnitVectors(V1.set(0, 1, 0), l.n).slerp(Q.identity(), 1 - l.w * 0.8));
+          l.f.parent!.getWorldQuaternion(Q).invert();
+          l.f.quaternion.copy(Q.multiply(l.q));
+        }
       }
     }
 

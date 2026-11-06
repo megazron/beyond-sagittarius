@@ -417,5 +417,5 @@ if __name__ == '__main__':
     paint.shared_maps(ctx0.base, ctx0.rig, OUT)
     ids = a.only.split(',') if a.only else list(CHARS)
     ids = [i for i in ids if a.force or a.only or not os.path.exists(f'{OUT}/{i}.json')]
-    with Pool(min(10, len(ids) or 1)) as pool:
+    with Pool(min(2, len(ids) or 1)) as pool:
         pool.map(job, ids, 1)
