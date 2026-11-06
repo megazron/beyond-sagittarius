@@ -209,11 +209,9 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
   ],
   // Thick wavy hair swept up and back, with a full groomed beard.
   suit: () => [
-    ...fan(-58 * D, 58 * D, 11, (az, i) => ({ az, el: 58 * D, len: 0.11 + (i % 3) * 0.015, droop: 1.2, dir: [Math.sin(az) * 0.4, 1, 0.3 - (i % 2) * 0.25], w: 0.04, curl: 0.5, sway: 0.25 })),
-    ...layer(74, 60, 300, 13, 0.14, 1.2, 0.044, { curl: 0.5, sway: 0.3 }),
-    ...layer(20, 80, 280, 12, 0.08, 2.2, 0.04, { sway: 0.15 }),
-    ...fan(-105 * D, 105 * D, 15, (az, i) => ({ az, el: -30 * D, len: 0.05 + (i % 2) * 0.012, droop: 3, dir: [Math.sin(az) * 0.5, -1, Math.cos(az) * 0.4], w: 0.024, thick: 0.012, sway: 0.1 })),
-    ...fan(-60 * D, 60 * D, 9, (az, i) => ({ az, el: -55 * D, len: 0.05 + (i % 2) * 0.012, droop: 3, dir: [Math.sin(az) * 0.3, -1, 0.3], w: 0.022, thick: 0.012, sway: 0.1 })),
+    ...fan(-62 * D, 62 * D, 12, (az, i) => ({ az, el: 60 * D, len: 0.17 + (i % 3) * 0.02, droop: 2.6, dir: [Math.sin(az) * 0.5, 0.4, -0.9], w: 0.04, thick: 0.02, curl: 0.15, sway: 0.25 })),
+    ...layer(78, 50, 310, 13, 0.16, 2.2, 0.046, { curl: 0.4, sway: 0.3 }),
+    ...layer(24, 80, 280, 12, 0.09, 2.2, 0.04, { sway: 0.15 }),
   ],
   // Long pale hair that floats upward at the ends, as if gravity is a suggestion.
   megazron: () => [

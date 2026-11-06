@@ -343,6 +343,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         const col = add(new THREE.BoxGeometry(0.06, 0.06, 0.012), shirt, chest, s * 0.05, 0.47, 0.075); col.rotation.z = s * 0.5;
       }
       for (const y of [0.08, 0.17]) add(new THREE.CylinderGeometry(0.009, 0.009, 0.005, 10).rotateX(Math.PI / 2), satin, chest, 0.005, y, 0.142 * B.waist);
+      // full groomed beard: a soft shell along the jaw, with a moustache
+      const hairy = new THREE.MeshStandardMaterial({ color: 0x120d0b, roughness: 0.82, normalMap: grainNormal(), normalScale: new THREE.Vector2(1, 1) });
+      add(loft([{ y: 0.092, rx: 0.1, rz: 0.1, z: 0.002 }, { y: 0.04, rx: 0.099, rz: 0.104, z: 0.012 }, { y: 0.0, rx: 0.082, rz: 0.098, z: 0.022 }, { y: -0.035, rx: 0.05, rz: 0.07, z: 0.04 }, { y: -0.058, rx: 0.018, rz: 0.03, z: 0.05 }], 18), hairy, head);
+      const stache = add(new THREE.SphereGeometry(0.03, 10, 6), hairy, head, 0, 0.052, 0.112); stache.scale.set(1.35, 0.32, 0.45);
       ear('round');
       break;
     }
