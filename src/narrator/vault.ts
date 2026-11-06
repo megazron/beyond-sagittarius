@@ -8,6 +8,15 @@ import { audio } from '../core/audio';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
+/** Soft round sprite so dust near the lens isn't a square. */
+function dot() {
+  const c = document.createElement('canvas'); c.width = c.height = 32;
+  const g = c.getContext('2d')!, r = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  r.addColorStop(0, '#fff'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 32, 32);
+  return new THREE.CanvasTexture(c);
+}
+
 /** One spoken line with a gesture and a camera set-up. */
 export interface VaultLine { key: string; pose?: CrewPose; shot?: VaultShot; after?: number }
 export type VaultShot = 'wide' | 'push' | 'close' | 'hands' | 'orrery' | 'window' | 'profile' | 'low';
@@ -40,7 +49,7 @@ export class Vault {
   private quill = new THREE.Group();
   private page!: THREE.MeshStandardMaterial;
   private halo = new THREE.PointLight(0xffc36a, 0, 5);
-  private key = new THREE.PointLight(0xffd9a0, 10, 11);
+  private key = new THREE.PointLight(0xffd9a0, 7, 11);
   private built = false;
   private lines: VaultLine[] = [];
   private i = -1;
@@ -138,7 +147,7 @@ export class Vault {
     const N = 500, p = new Float32Array(N * 3);
     for (let i = 0; i < N; i++) { p[i * 3] = (Math.random() - 0.5) * 14; p[i * 3 + 1] = Math.random() * 6; p[i * 3 + 2] = (Math.random() - 0.5) * 12; }
     const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(p, 3));
-    this.motes = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0xffd9a8, size: 0.018, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.motes = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0xffd9a8, size: 0.018, map: dot(), transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
     s.add(this.motes);
 
     // lighting: warm desk pool, hot rim from the disk behind him, cold fill from the shelves
@@ -226,7 +235,7 @@ export class Vault {
     this.host.look2(this.pose === 'write' ? 0 : Math.sin(t0 * 0.4) * 0.05, 0);
     const lvl = voice.level();
     this.halo.intensity = 0.5 + lvl * 2.5;
-    this.key.intensity = 10 + Math.sin(t0 * 7.3) * 0.12 + Math.sin(t0 * 3.1) * 0.2;
+    this.key.intensity = 7 + Math.sin(t0 * 7.3) * 0.12 + Math.sin(t0 * 3.1) * 0.2;
     this.page.emissiveIntensity = 0.1 + lvl * 0.14;
     this.quill.position.x = 0.28 + Math.sin(t0 * 2.6) * 0.14;
     this.quill.position.z = 0.84 + (Math.sin(t0 * 0.37) * 0.5 + 0.5) * 0.14;
