@@ -50,7 +50,7 @@ jobs:
         run: |
           mkdir -p desktop-assets
           if grep -q -- '--desktop' tools/fetch_assets.py; then
-            pip install pillow numpy
+            pip install pillow numpy scipy
             python tools/fetch_assets.py --desktop
           else
             echo "::notice::tools/fetch_assets.py has no --desktop yet, building without HD assets"

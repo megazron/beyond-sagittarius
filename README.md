@@ -131,8 +131,11 @@ reads your choices back to you, and he is rude about them.
 
 ## Download for Windows
 
-The downloadable build is the same game in its own window with the highest
-graphics preset and the extra assets the browser version does not load:
+The downloadable build is the same game in its own fullscreen window, on the
+highest graphics preset the build includes. Version 0.2.0 runs Ultra with the
+same textures as the browser; the Cinematic preset and 4K textures come in a
+later desktop release. Rendering is WebGL2 through Direct3D 11. WebGPU is
+switched on in the shell, but the game does not use it yet.
 
 **[Download the latest Windows build](https://github.com/megazron/beyond-sagittarius/releases/latest)**
 
@@ -141,8 +144,12 @@ graphics preset and the extra assets the browser version does not load:
 
 The build is **unsigned**, so Windows SmartScreen shows "Windows protected your
 PC". Choose **More info**, then **Run anyway**. F11 toggles fullscreen; quit from
-the title screen or with Alt+F4. Saves stay in `%APPDATA%\Beyond Sagittarius`
-and survive updates. Windows 10 or 11, x64.
+the title screen or with Alt+F4. Saves stay in `%APPDATA%\Beyond Sagittarius`.
+Windows 10 or 11, x64.
+
+Tested on one machine so far: Windows 11 with an NVIDIA RTX A500 Laptop GPU ran
+Ultra at about 20 fps in play at 1900x1025 (60 fps on the title and in the
+cinematic). On a laptop GPU, pick a lower preset in Settings.
 
 To build it yourself, see `electron/` and `.github/workflows/desktop.yml`:
 
