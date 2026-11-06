@@ -8,6 +8,7 @@ import { Forest, windUniforms } from './forest';
 import { createGrass } from './grass';
 import { createWater } from './water';
 import { createPod, createItems } from './props';
+import { addResources } from './resources';
 import { createCreature } from './creature';
 import { computeLayout, reserveLayout, createCamp, createRidge, StoryLayout } from './story';
 import { createCharacter, Character } from '../characters/character';
@@ -31,6 +32,8 @@ export class World {
   items!: ReturnType<typeof createItems>;
   creature!: ReturnType<typeof createCreature>;
   layout!: StoryLayout;
+  /** Show finished Chapter Two work around the fire. */
+  setCampWork: (done: string[]) => void = () => {};
   pod2!: ReturnType<typeof createPod>;
   camp!: ReturnType<typeof createCamp>;
   ridge!: ReturnType<typeof createRidge>;
@@ -83,6 +86,7 @@ export class World {
     const L = this.layout;
     this.items = createItems(this.terrain, this.forest, { camp: L.camp, pod: L.pod, pod2: L.pod2 }, pack, this.q);
     s.add(this.items.group);
+    this.setCampWork = addResources(this.items.items, this.items.group, this.terrain, this.forest, L);
     this.pod2 = createPod(this.terrain, this.forest, L.pod2.x, L.pod2.z, -1.9, 23);
     s.add(this.pod2.root);
     this.camp = createCamp(this.terrain, this.forest, L);

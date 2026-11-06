@@ -10,6 +10,10 @@ import type { UI } from '../ui/ui';
 import { cover, Beat } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
 import { Npcs } from './npcs';
+import { Chapter2 } from './chapter2';
+import { CH2_FIRST } from './tech/data';
+import type { TechNode } from './tech/data';
+import type { DlgTree } from './dialogue';
 
 /** A contextual "press E" station in the world (build, craft, talk...). */
 export interface Action {
@@ -37,6 +41,9 @@ const isNight = (h: number) => h >= DUSK || h < 5.5;
  */
 export class Story {
   npcs: Npcs;
+  ch2: Chapter2;
+  /** Set by the game: open the crafting and dialogue panels. */
+  hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean } = { craft: () => {}, talk: () => {}, free: () => true };
   private strikes = 0;
   private thrustT = 0;
   private spear: THREE.Group;
@@ -55,7 +62,8 @@ export class Story {
     private hurt: (amount: number) => void,
     private playScene: (beats: Beat[], then?: () => void) => void,
   ) {
-    this.npcs = new Npcs(world, player, ui, getSave, after);
+    this.npcs = new Npcs(world, player, ui, getSave, after, (tree) => this.hooks.talk(tree));
+    this.ch2 = new Chapter2(this, world, player, ui, getSave, after);
     this.spear = buildSpear();
     this.spear.visible = false;
     player.model.handR.add(this.spear);
@@ -66,7 +74,7 @@ export class Story {
   private inv(k: string) { return this.s.inventory[k] ?? 0; }
   private flag(k: string) { return !!this.s.flags[k]; }
 
-  private missing(req: Req): string[] {
+  missing(req: Req): string[] {
     const out: string[] = [];
     for (const k in req) {
       const have = this.inv(k);
@@ -75,7 +83,7 @@ export class Story {
     return out;
   }
   private consume(req: Req) { for (const k in req) this.s.inventory[k] = Math.max(0, this.inv(k) - req[k]); this.ui.setInventory(this.s.inventory, this.tools()); }
-  private progressOf(req: Req) { return Object.keys(req).map((k) => t('req.item', { item: t(`item.${k}`), n: Math.min(req[k], this.inv(k)), need: req[k] })).join(' · '); }
+  progressOf(req: Req) { return Object.keys(req).map((k) => t('req.item', { item: t(`item.${k}`), n: Math.min(req[k], this.inv(k)), need: req[k] })).join(' · '); }
 
   /** Tools shown in the inventory bar. */
   tools(): string[] {
@@ -96,6 +104,7 @@ export class Story {
   };
 
   done(n: number): boolean {
+    if (n >= CH2_FIRST) return this.ch2.done(n);
     const f = (k: string) => this.flag(k);
     switch (n) {
       case 4: return f('fire');
@@ -110,6 +119,7 @@ export class Story {
   }
 
   progress(n: number): string | null {
+    if (n >= CH2_FIRST) return this.ch2.progress(n);
     const R = Story.REQ;
     switch (n) {
       case 4:
@@ -134,18 +144,24 @@ export class Story {
     return null;
   }
 
+  /** Closest active pickup of these types. */
+  nearest(types: string[]): THREE.Vector3 | null {
+    let best: THREE.Vector3 | null = null, bd = Infinity;
+    for (const it of this.world.items.items) {
+      if (!it.active || !types.includes(it.type)) continue;
+      const d = it.pos.distanceTo(this.player.pos);
+      if (d < bd) { bd = d; best = it.pos; }
+    }
+    return best;
+  }
+
+  get crewPos() { return this.crew.pos; }
+
   /** Where the compass marker points (nearest missing resource or the station). */
   markerTarget(n: number): THREE.Vector3 | null {
+    if (n >= CH2_FIRST) return this.ch2.marker(n);
     const L = this.L;
-    const nearest = (types: string[]) => {
-      let best: THREE.Vector3 | null = null, bd = Infinity;
-      for (const it of this.world.items.items) {
-        if (!it.active || !types.includes(it.type)) continue;
-        const d = it.pos.distanceTo(this.player.pos);
-        if (d < bd) { bd = d; best = it.pos; }
-      }
-      return best;
-    };
+    const nearest = (types: string[]) => this.nearest(types);
     const needFor = (req: Req) => Object.keys(req).filter((k) => this.inv(k) < req[k]);
     const R = Story.REQ;
     switch (n) {
@@ -180,7 +196,7 @@ export class Story {
     const n = s.level;
     const out: Action[] = [];
     if (this.sequence) return out;
-    out.push(...this.npcs.actions());
+    out.push(...this.npcs.actions(), ...this.ch2.actions());
     if (n === 4 && !this.flag('pitBuilt')) {
       out.push({ id: 'pit', pos: L.camp, radius: 2.6, label: t('action.buildPit'), missing: this.missing(R.pit), run: () => {
         this.consume(R.pit);
@@ -430,7 +446,7 @@ export class Story {
   }
 
   // ---------------- level 9: the Explorer ----------------
-  private dialogue(lines: [string, string][], gap: number, then?: () => void) {
+  dialogue(lines: [string, string][], gap: number, then?: () => void) {
     this.sequence = true;
     let at = 0;
     for (const [key, who] of lines) {
@@ -639,6 +655,32 @@ export class Story {
     });
   }
 
+  // ---------------- end of Chapter Two ----------------
+  /** The beacon lists what you made, in order, and knows what comes next. */
+  ch2Finale() {
+    if (!this.hooks.free() || this.sequence) { this.after(1, () => this.ch2Finale()); return; }
+    const s = this.s, L = this.L;
+    const { z, y } = this.pair;
+    this.crew.pos.copy(L.campSeat);
+    this.player.spawn(L.campSeat.x + 1.5, L.campSeat.z + 1.4, 0);
+    this.turnToCrew();
+    const b = L.beacon;
+    const beaconShot = () => ({ from: b.clone().add(new THREE.Vector3(5.5, 1.5, 6)), to: b.clone().add(new THREE.Vector3(0, 2.4, 0)), push: 0.1 });
+    const alert = (k: string) => () => { this.ui.deviceLines([t('beacon.voice'), t(k)], true, true); audio.tone(40, 2, 'sawtooth', 0.25, 0, 10); };
+    this.playScene([
+      { run: alert('ch2.end.1'), key: 'ch2.end.1', hold: 3, shot: beaconShot, poses: { explorer: 'sit', scientist: 'stand' }, after: 0.6 },
+      { key: 'ch2.end.2', who: 'explorer', shot: () => cover.close(y, 0.4, 1.1, 0), after: 0.5 },
+      { run: alert('ch2.end.3'), key: 'ch2.end.3', hold: 2.6, shot: beaconShot, after: 0.6 },
+      { run: () => this.ui.deviceLines(null), key: 'ch2.end.4', who: 'explorer', shot: () => cover.close(y, -0.3, 1, 0), after: 0.6 },
+      { run: () => { this.ui.chapter(['chapter2.end1', 'chapter2.end2']); document.getElementById('cine-bars')!.classList.add('hidden'); }, hold: 5, shot: () => cover.close(z, 0.2, 0.9) },
+    ], () => {
+      this.ui.chapter(null);
+      this.ui.deviceLines(null);
+      document.getElementById('cine-bars')!.classList.remove('hidden');
+      s.flags.ch2End = true;
+    });
+  }
+
   // ---------------- lifecycle ----------------
   /** Rebuild world state (camp stages, spear, crewmate) from the save. */
   sync() {
@@ -646,6 +688,7 @@ export class Story {
     camp.setFire(this.flag('fire') ? 2 : this.flag('pitBuilt') ? 1 : 0);
     camp.setShelter(this.flag('shelter'));
     camp.setBeacon(this.flag('beaconBuilt'), this.flag('beacon'));
+    this.world.setCampWork(s.discoveries ?? []);
     if (this.flag('beacon') && !this.flag('arcEnd')) s.flags.arcEnd = true; // quit mid-sequence
     this.syncSpear();
     this.strikes = 0;
@@ -690,6 +733,7 @@ export class Story {
     this.npcs.update(dt, time);
     this.updateHound(dt, time);
     this.updateCrew(dt, time);
+    this.ch2.update(dt);
     // spear thrust animation overrides the walk cycle's right arm
     if (this.thrustT > 0) {
       this.thrustT = Math.max(0, this.thrustT - dt);
@@ -707,7 +751,7 @@ export class Story {
       }
     }
     this.world.camp.setSites({
-      fire: s.level === 4 || (s.level === 6 && !this.flag('spear')),
+      fire: s.level === 4 || (s.level === 6 && !this.flag('spear')) || (s.level >= CH2_FIRST && !!this.ch2.node(s.level) && this.ch2.progress(s.level) === t('progress.ch2Ready')),
       shelter: s.level === 5 && !this.flag('shelter'),
       beacon: s.level === 10 && !this.flag('beaconBuilt'),
     });

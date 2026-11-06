@@ -2,8 +2,7 @@ import type { Input } from '../game/input';
 import { audio } from '../core/audio';
 import { icon } from './icons';
 
-export type TouchAction = 'wheel' | 'pause';
-
+export type TouchAction = 'wheel' | 'pause' | 'codex';
 
 /**
  * On-screen controls for phones and tablets, laid out like a mobile action game:
@@ -55,6 +54,7 @@ export class TouchControls {
     tapBtn('tb-act', () => input.tapAction(document.body.classList.contains('can-act') ? 'interact' : 'jump'));
     menuBtn('tb-inv', 'wheel');
     menuBtn('tb-pause', 'pause');
+    menuBtn('tb-codex', 'codex');
     window.addEventListener('resize', () => this.layout());
     this.layout();
   }

@@ -17,13 +17,13 @@ import * as THREE from 'three';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
-export const LEVEL_COUNT = 10;
-export const PLAYABLE_LEVELS = 10;
+export const LEVEL_COUNT = 21;
+export const PLAYABLE_LEVELS = 21;
 const CREW = CREW_IDS;
 
-export type MenuTab = 'pause' | 'map' | 'inventory' | 'objectives' | 'crew';
-const TABS: [MenuTab, string, string][] = [['pause', 'pause', 'tab.game'], ['map', 'planet', 'tab.map'], ['inventory', 'inventory', 'tab.inventory'], ['objectives', 'objectives', 'tab.goals'], ['crew', 'crew', 'tab.crew']];
-const ALL_ITEMS = ['stone', 'branch', 'tinder', 'frond', 'flint', 'vine', 'scrap', 'fruit'];
+export type MenuTab = 'pause' | 'map' | 'inventory' | 'objectives' | 'codex' | 'crew';
+const TABS: [MenuTab, string, string][] = [['pause', 'pause', 'tab.game'], ['map', 'planet', 'tab.map'], ['inventory', 'inventory', 'tab.inventory'], ['objectives', 'objectives', 'tab.goals'], ['codex', 'codex', 'menu.codex'], ['crew', 'crew', 'tab.crew']];
+const ALL_ITEMS = ['stone', 'branch', 'tinder', 'frond', 'flint', 'vine', 'scrap', 'fruit', 'nodule', 'fibre', 'clay', 'sand', 'limestone', 'brine', 'ash', 'oilnut', 'sugarpod', 'lichen', 'blade', 'cord', 'pot', 'charcoal', 'lime', 'salt', 'glass', 'soap', 'brew', 'vinegar'];
 
 export interface Stats { health: number; thirst: number; hunger: number; stamina: number }
 
@@ -346,7 +346,7 @@ export class UI implements CineUI {
     (document.activeElement as HTMLElement | null)?.blur?.();
   }
   /** Full-screen menu shell: tab strip, page, button hints. */
-  private menuPage(tab: MenuTab, body: string, back = 'menu.close') {
+  menuPage(tab: MenuTab, body: string, back = 'menu.close') {
     this.openModal(`<header class="menu-top"><span class="tabhint">${glyph('tabs')}</span>
       <nav class="tabs main-tabs">${TABS.map(([id, ic, label]) => `<button id="tab-${id}" class="tab ${id === tab ? 'active' : ''}" data-tab="${id}">${icon(ic)}<span>${escapeHtml(t(label))}</span></button>`).join('')}</nav>
       <span class="menu-clock">${escapeHtml(this.clockText)}</span></header>
@@ -472,7 +472,8 @@ export class UI implements CineUI {
       const done = completed.includes(n);
       const cls = done ? 'done' : n === current ? 'current' : n > PLAYABLE_LEVELS ? 'locked' : 'upcoming';
       const st = done ? t('level.done') : n === current && n <= PLAYABLE_LEVELS ? t('level.current') : n > PLAYABLE_LEVELS ? t('level.locked') : '';
-      return `<li class="${cls}"><span class="num">${done ? icon('check') : String(n).padStart(2, '0')}</span><span>${escapeHtml(t(`level.${n}.title`))}</span><span class="st">${escapeHtml(st)}</span></li>`;
+      const head = n === 1 ? `<li class="chap">${escapeHtml(t('objectives.ch1'))}</li>` : n === 11 ? `<li class="chap">${escapeHtml(t('objectives.ch2'))}</li>` : '';
+      return `${head}<li class="${cls}"><span class="num">${done ? icon('check') : String(n).padStart(2, '0')}</span><span>${escapeHtml(t(`level.${n}.title`))}</span><span class="st">${escapeHtml(st)}</span></li>`;
     }).join('');
     const arc = current > LEVEL_COUNT ? `<div class="note arc">${escapeHtml(t('level.arc.title'))}: ${escapeHtml(t('level.arc.desc'))}</div>` : '';
     this.menuPage('objectives', `<h3 class="page-h">${escapeHtml(t('objectives.title'))}</h3><ul class="levels">${items}</ul>${arc}`);
@@ -572,6 +573,6 @@ export class UI implements CineUI {
   }
 }
 
-function escapeHtml(s: string) {
+export function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }

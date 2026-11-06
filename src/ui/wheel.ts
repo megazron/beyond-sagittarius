@@ -4,6 +4,8 @@ import { icon } from './icons';
 import type { Input } from '../game/input';
 
 export const ITEM_ICON: Record<string, string> = {
+  nodule: 'flint', blade: 'flint', fibre: 'vine', cord: 'vine', clay: 'stone', sand: 'scrap', limestone: 'stone', charcoal: 'stone', ash: 'tinder', lichen: 'tinder',
+  brine: 'water', brew: 'water', vinegar: 'water', oilnut: 'fruit', sugarpod: 'fruit', pot: 'pot', lime: 'crystal', salt: 'crystal', glass: 'crystal', soap: 'scrap',
   stone: 'stone', branch: 'branch', fruit: 'fruit', redFruit: 'redFruit', tinder: 'tinder', frond: 'frond', flint: 'flint', vine: 'vine', scrap: 'scrap', spear: 'spear', transmitter: 'transmitter',
 };
 
@@ -32,7 +34,7 @@ export class Wheel {
   }
 
   show(inv: Record<string, number>, tools: string[]) {
-    this.items = [...Object.keys(inv).filter((k) => (inv[k] ?? 0) > 0).map((k) => ({ key: k, n: inv[k] })), ...tools.map((k) => ({ key: k, n: null }))];
+    this.items = [...Object.keys(inv).filter((k) => (inv[k] ?? 0) > 0).map((k) => ({ key: k, n: inv[k] })), ...tools.map((k) => ({ key: k, n: null }))].slice(0, 12); // the ring stays readable; the rest is in the Inventory tab
     this.sel = -1; this.aim = { x: 0, y: 0 };
     const N = Math.max(this.items.length, 1), R = 38;
     this.el.querySelector('.wring')!.innerHTML = this.items.map((it, i) => {

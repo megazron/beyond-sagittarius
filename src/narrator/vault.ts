@@ -248,7 +248,7 @@ export class Vault {
 }
 
 /** Scene scripts. `s` says what the player actually did. */
-export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1', s: { ateRed: boolean; deaths: number; bites: number; renamed: boolean }): VaultLine[] {
+export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', s: { ateRed: boolean; deaths: number; bites: number; renamed: boolean; failed?: number }): VaultLine[] {
   switch (id) {
     case 'intro': return [
       { key: 'mz.intro.1', shot: 'wide', pose: 'stand' },
@@ -270,6 +270,12 @@ export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1', s: { ateRed: bool
       { key: s.bites === 0 ? 'mz.l7.clean' : 'mz.l7.bitten', shot: 'profile', pose: 'idle' },
       { key: 'mz.l7.2', shot: 'orrery', pose: 'point' },
       { key: 'mz.l7.hint', shot: 'close', pose: 'idle' },
+    ];
+    case 'ch2': return [
+      { key: 'mz.ch2.1', shot: 'wide', pose: 'write' },
+      { key: (s.failed ?? 0) >= 4 ? 'mz.ch2.messy' : 'mz.ch2.clean', shot: 'hands', pose: 'write' },
+      { key: 'mz.ch2.2', shot: 'profile', pose: 'present' },
+      { key: 'mz.ch2.3', shot: 'close', pose: 'idle', after: 1.2 },
     ];
     case 'ch1': return [
       { key: 'mz.ch1.1', shot: 'wide', pose: 'stand' },

@@ -23,8 +23,10 @@ Done means objectives, world content, NPCs, cutscene, dubbing, codex and smoke t
 
 | Levels | Age | Status |
 | --- | --- | --- |
-| 11+ | Stone Age and first chemistry (knapping, cordage, pottery, charcoal, lime, glass, salt, soap) | in progress |
-| | Fire and Tools, Agriculture, Bronze, Iron, Classical, Industrial, Space, Civilisation | planned, data entries only |
+| 11 to 14 | Stone Age: knapping, cordage, fire, pottery | playable, dubbing to render |
+| 15 to 19 | Fire and Tools: charcoal, lime, salt, glass, soap | playable, dubbing to render |
+| 20 to 21 | Agriculture, first part: fermentation, acids and bases | playable, dubbing to render |
+| | Farming, irrigation, Bronze, Iron, Classical, Industrial, Space, Civilisation | planned, data entries only (`src/game/tech/data.ts`) |
 | 99 | The reveal, and the ending choice: stay or go home | planned |
 
 ## Combat and boss direction (planned, not built)
@@ -54,10 +56,10 @@ Original story only. Teen-safe, handled with care. Self-harm and suicide are nev
 
 ## Handover notes
 
-- Branches not yet on main: `wip-science` (Chapter Two crafting, codex, NPC dialogue, safety card; 22 commits behind main) and `wip-branch` (choices system; 23 behind). Both need a rebase onto the new HUD and skinned characters, then their tests.
+- Branch not yet on main: `wip-branch` (choices system). It needs a rebase onto the new HUD and skinned characters, then its tests.
 - Chatterbox dubbing is rendering into `public/audio/vo/en` from the main tree, resumable through `tools/tts/.cache`. Never commit `public/audio/vo` until a language finishes, or the index is partial. Then run `tools/tts/lipsync.py`.
-
-- `tools/levels_smoke.py` plays Chapter One end to end through `window.__bs`. Add each new level to it.
+- `tools/levels_smoke.py` plays Chapters One and Two end to end through `window.__bs`. Add each new level to it.
+- A new discovery is one entry in `src/game/tech/data.ts` plus text keys (`tech.`, `codex.`, `mg.`, `teach.`, `after.`). Keep it qualitative: no quantities, no recipes.
 - Spoken lines go in `src/i18n/voice.json`; `npm run voice` renders them, cached per line.
 - Rescuing the other four crew is not built yet: they only exist on the deck, in the flashback, in the crew panel and on the radio.
 - `src/characters/` is being moved from primitives to skinned meshes; keep the `createCharacter` API.

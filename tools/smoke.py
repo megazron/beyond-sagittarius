@@ -61,6 +61,7 @@ def main():
         page = browser.new_page(viewport={"width": 1600, "height": 900})
         page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
         page.on("console", lambda m: errors.append(f"console.{m.type}: {m.text}") if m.type == "error" else None)
+        page.add_init_script("localStorage.setItem('bs-consent-v1', '1')")
         page.add_init_script(f"localStorage.setItem('bs-settings-v1', JSON.stringify({{lang: '{args.lang}', sensitivity: 1, invertY: false, volume: 0, subtitles: true, showFps: true}}))")
         page.goto(url, wait_until="domcontentloaded", timeout=120000)
         page.wait_for_function("window.__bs && window.__bs.state === 'title'", timeout=60000)

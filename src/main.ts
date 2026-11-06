@@ -33,6 +33,7 @@ import { onLangChange } from './i18n';
 import { fitFov, lockViewport, tryFullscreen } from './core/viewport';
 import { TECH, AGES } from './game/tech/data';
 import { techState } from './game/tech/tech';
+import { openCodex, showSafetyCard, consentGiven, stopSpeech } from './ui/science';
 
 type State = 'loading' | 'title' | 'cinematic' | 'game' | 'narrator' | 'film' | 'flashback';
 
@@ -78,6 +79,7 @@ const nav = new MenuNav(input, (dir) => ui.cycleTab(dir));
 const wheel = new Wheel(input, (k) => game?.useItem(k));
 const touch = new TouchControls(input, (a: TouchAction) => {
   if (a === 'pause') openPause();
+  else if (a === 'codex') openPanel('codex');
   else if (wheel.open) wheel.close(false);
   else if (canPlay()) wheel.show(game.save.inventory, game.story.tools());
 });
@@ -216,10 +218,10 @@ function openSkins(onClose: () => void) {
 }
 
 /** Fade into the Vault for a MegaZroN scene, then hand back to `after`. */
-function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1', after: () => void) {
+function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', after: () => void) {
   const s = game?.save;
   const names = (s?.names ?? pendingNames) as CrewNames;
-  const lines = vaultScript(id, { ateRed: !!s?.flags.ateRed, deaths: s?.deaths ?? 0, bites: s?.bites ?? 0, renamed: Object.keys(names).length > 0 });
+  const lines = vaultScript(id, { ateRed: !!s?.flags.ateRed, deaths: s?.deaths ?? 0, bites: s?.bites ?? 0, renamed: Object.keys(names).length > 0, failed: s?.crafts?.failed ?? 0 });
   state = 'narrator';
   input.enabled = false; input.resetTouch(); touch.show(false); suppressPauseOnUnlock = true; input.releasePointer();
   ui.fade('black', 1, 0.5);
@@ -266,7 +268,7 @@ function playFlashback(after: () => void) {
 
 /** Level endings that cut away to the Vault or a memory (once per save). */
 function onLevelDone(n: number) {
-  const beat: Record<number, 'l3' | 'fight' | 'l7' | 'ch1'> = { 3: 'l3', 5: 'fight', 7: 'l7', 10: 'ch1' };
+  const beat: Record<number, 'l3' | 'fight' | 'l7' | 'ch1' | 'ch2'> = { 3: 'l3', 5: 'fight', 7: 'l7', 10: 'ch1', 21: 'ch2' };
   const id = beat[n];
   if (!id || game.save.flags[`seen-${id}`]) return;
   const go = () => {
@@ -390,6 +392,7 @@ function openMapTab() {
 }
 
 function showTab(tab: MenuTab) {
+  stopSpeech();
   if (tab !== 'pause') game.notePanel(tab);
   if (tab === 'pause') {
     ui.openPause({
@@ -407,6 +410,7 @@ function showTab(tab: MenuTab) {
     });
   } else if (tab === 'map') openMapTab();
   else if (tab === 'objectives') ui.openObjectives(game.save.level, game.save.completed, resume);
+  else if (tab === 'codex') openCodex(ui, game.save, resume);
   else if (tab === 'inventory') ui.openInventory(game.save.inventory, game.story.tools(), resume);
   else ui.openCrew((id) => game.story.crewStatus(id), resume);
 }
@@ -449,6 +453,7 @@ window.addEventListener('keydown', (e) => {
   if (a === 'objectives') menuKey('objectives');
   else if (a === 'crew') menuKey('crew');
   else if (a === 'map') menuKey('map');
+  else if (a === 'codex') menuKey('codex');
   else if (a === 'inventory') {
     e.preventDefault();
     if (ui.modalOpen()) menuKey('inventory'); else if (!e.repeat) invStart();
@@ -466,7 +471,9 @@ function padFrame() {
     if (input.padAct('objectives')) openPanel('objectives');
     if (input.padAct('crew')) openPanel('crew');
     if (input.padAct('map')) openPanel('map');
+    if (input.padAct('codex')) openPanel('codex');
   }
+  if (game.mode === 'craft') game.craft.pad(input);
   const inv = input.padConnected && input.padHeld('inventory');
   if (inv && !padInv && !ui.modalOpen()) invStart();
   if (!inv && padInv) invEnd();
@@ -582,6 +589,8 @@ async function boot() {
   setPortraitRenderer(renderer.renderer);
   ui.show('loading', false);
   showTitle();
+  const redrawSafety = showSafetyCard(ui);
+  if (redrawSafety) onLangChange(() => { if (!consentGiven()) redrawSafety(); });
   requestAnimationFrame(frame);
   const btns = ['btn-new', 'btn-continue'].map((id) => document.getElementById(id) as HTMLButtonElement);
   // the crew load alongside the world: only the people on screen first are awaited
@@ -630,6 +639,9 @@ window.addEventListener('resize', () => {
   nextBeat() { cine.debugNext(); game?.scene?.debugNext(); },
   get frameReport() { return frameReport; },
   get npcs() { return game?.story.npcs.debug(); },
+  get craft() { return game?.craft.debug() ?? null; },
+  get talk() { return game?.dialogue.debug() ?? null; },
+  get consent() { return consentGiven(); },
   get tech() { return { ages: [...AGES], nodes: TECH.map((n) => ({ id: n.id, age: n.age, status: n.status, requires: n.requires, state: game?.save ? techState(game.save, n) : null })) }; },
   get subtitleText() { return document.querySelector('#subtitle .line')?.textContent; },
   sayTest(k: string) { ui.subtitle(k, 'mz.name', true); },

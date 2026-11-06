@@ -10,6 +10,11 @@ atlas are generated in code at runtime. The photo textures, the HDRI and the
 voice model below are third-party and credited here. Every in-game company or
 product name is a made-up parody.
 
+## Science
+
+The science is simplified for a game and is not instructions. Do not try this
+at home. Dangerous procedures stay high-level or are left out.
+
 ## Libraries
 
 | Library | Use | Licence |

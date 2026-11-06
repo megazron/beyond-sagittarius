@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { t } from '../i18n';
 import { audio } from '../core/audio';
-import { voice } from '../core/voice';
 import { smoothstep } from '../core/noise';
 import { createCharacter, Character, CrewPose } from '../characters/character';
 import { defaultLook, LINEAGES, PlayerLook } from '../characters/custom';
@@ -10,6 +9,8 @@ import type { World } from '../world/world';
 import type { Player } from './player';
 import type { UI } from '../ui/ui';
 import type { Action } from './story';
+import type { DlgChoice, DlgTree } from './dialogue';
+import { isDiscovered } from './tech/tech';
 
 type NpcId = 'trader' | 'local' | 'hermit' | 'trav' | 'cameo';
 
@@ -34,14 +35,16 @@ const look = (lineage: PlayerLook['lineage'], o: Partial<PlayerLook>): PlayerLoo
 /**
  * People you can bump into: a trader on his rounds, a local who finds you
  * noisy, a hermit who knows too much, a tourist who has been queuing for nine
- * years, and a man in a suit who shouldn't be here at all.
+ * years, and a man in a suit who shouldn't be here at all. Everyone talks
+ * through the dialogue panel: choices, trades, small quests, taught tricks
+ * (`tip-<tech>` flags make a minigame easier) and reactions to the save.
  */
 export class Npcs {
   private list: Npc[] = [];
   private built = false;
   private tmp = new THREE.Vector3();
 
-  constructor(private world: World, private player: Player, private ui: UI, private getSave: () => SaveData, private after: (s: number, fn: () => void) => void) {}
+  constructor(private world: World, private player: Player, private ui: UI, private getSave: () => SaveData, private after: (s: number, fn: () => void) => void, private open: (tree: DlgTree) => void) {}
 
   private get s() { return this.getSave(); }
 
@@ -66,52 +69,185 @@ export class Npcs {
     add('cameo', createCharacter('strong', d, undefined, 'suit'), this.cameoSpots[0].clone(), 0);
   }
 
-  private talk(lines: string[], who: NpcId) {
-    let at = 0;
-    for (const k of lines) {
-      this.after(at, () => this.ui.say(k, `npc.${who}.name`, 3));
-      at += Math.max(3, (voice.duration(k) ?? 0) + 0.4);
+  private get inv() { return this.s.inventory; }
+  private flag(n: NpcId, k: string) { return !!this.s.flags[`npc-${n}-${k}`]; }
+  private set(n: NpcId, k: string) { this.s.flags[`npc-${n}-${k}`] = true; }
+  private once(n: NpcId, k: string) { if (this.flag(n, k)) return false; this.set(n, k); return true; }
+  private knows(id: string) { return isDiscovered(this.s, id); }
+  private give(items: Record<string, number>) {
+    for (const k in items) { this.inv[k] = (this.inv[k] ?? 0) + items[k]; this.ui.toast(t('msg.got', { n: items[k], item: t(`item.${k}`) })); }
+    audio.chime();
+    this.ui.setInventory(this.inv);
+  }
+  private take(items: Record<string, number>) {
+    for (const k in items) this.inv[k] = Math.max(0, (this.inv[k] ?? 0) - items[k]);
+    this.ui.setInventory(this.inv);
+  }
+  /** Why a deal can't happen yet, or null. */
+  private lacking(items: Record<string, number>): string | null {
+    const out = Object.keys(items).filter((k) => (this.inv[k] ?? 0) < items[k]).map((k) => t('req.item', { item: t(`item.${k}`), n: this.inv[k] ?? 0, need: items[k] }));
+    return out.length ? t('dlg.need', { list: out.join(', ') }) : null;
+  }
+  private teach(techId: string) {
+    this.s.flags[`tip-${techId}`] = true;
+    audio.chime();
+    this.ui.toast(t('msg.taught', { name: t(`tech.${techId}`) }));
+  }
+  /** Spend `cost`, receive `get`. */
+  private deal(label: string, cost: Record<string, number>, get: Record<string, number>, go?: string): DlgChoice {
+    return { label, blocked: () => this.lacking(cost), run: () => { this.take(cost); this.give(get); }, go };
+  }
+
+  private bye: DlgChoice = { label: 'ch.bye' };
+  private back: DlgChoice = { label: 'ch.back', go: 'top' };
+
+  /** Who you get depends on what you did: flags, deaths and discoveries. */
+  private tree(id: NpcId): DlgTree {
+    const who = `npc.${id}.name`, end = [this.back, this.bye];
+    const line = (say: string) => ({ who, say, choices: end });
+    const died = (this.s.deaths ?? 0);
+    const ch2 = this.s.level >= 11;
+    switch (id) {
+      case 'trader': return {
+        start: 'top',
+        nodes: {
+          top: {
+            who,
+            say: () => {
+              if (this.once(id, 'met')) return 'npc.trader.hi';
+              if (died >= 2 && this.once(id, 'dead')) return 'npc.trader.dead';
+              if (this.knows('salt') && this.once(id, 'salt')) return 'npc.trader.salt';
+              return 'npc.trader.back';
+            },
+            choices: () => [
+              { label: 'ch.trade', go: 'shop' },
+              { label: 'ch.work', go: 'quest', show: () => ch2 && !this.flag(id, 'q') },
+              { label: 'ch.tovtip', show: () => ch2 && !this.s.flags['tip-charcoal'], blocked: () => this.lacking({ stone: 2 }), run: () => { this.take({ stone: 2 }); this.teach('charcoal'); }, go: 'tip' },
+              this.bye,
+            ],
+          },
+          shop: {
+            who, say: () => ((this.inv.branch ?? 0) < 2 && !ch2 ? 'npc.trader.no' : 'npc.trader.menu'),
+            choices: () => [
+              { ...this.deal('ch.tradeflint', { branch: 2 }, { flint: 1 }, 'sold') },
+              { ...this.deal('ch.tradeclay', { charcoal: 1 }, { clay: 2 }, 'sold'), show: () => this.knows('charcoal') },
+              { ...this.deal('ch.tradenut', { salt: 1 }, { oilnut: 2 }, 'sold'), show: () => this.knows('salt') },
+              this.back,
+            ],
+          },
+          sold: line('npc.trader.done'),
+          tip: line('npc.trader.tip'),
+          quest: {
+            who, say: 'npc.trader.q',
+            choices: () => [
+              { label: 'ch.givesoap', blocked: () => this.lacking({ soap: 1 }), run: () => { this.take({ soap: 1 }); this.give({ sand: 3 }); this.set(id, 'q'); }, go: 'qdone' },
+              this.back,
+            ],
+          },
+          qdone: line('npc.trader.qdone'),
+        },
+      };
+      case 'local': return {
+        start: 'top',
+        nodes: {
+          top: {
+            who,
+            say: () => {
+              if (this.once(id, 'met')) return 'npc.local.hi';
+              if (died >= 1 && this.once(id, 'dead')) return 'npc.local.dead';
+              if (this.knows('soap') && this.once(id, 'soap')) return 'npc.local.soap';
+              return this.flag(id, 'done') ? 'npc.local.hi' : 'npc.local.ask';
+            },
+            choices: () => [
+              { label: 'ch.stone', show: () => !this.flag(id, 'done'), blocked: () => this.lacking({ stone: 1 }), run: () => { this.take({ stone: 1 }); this.give({ vine: 1 }); this.set(id, 'done'); }, go: 'gave' },
+              { label: 'ch.cord', show: () => ch2 && !this.s.flags['tip-cordage'], run: () => this.teach('cordage'), go: 'cord' },
+              { label: 'ch.clay', show: () => ch2 && !this.s.flags['tip-pottery'], run: () => this.teach('pottery'), go: 'clay' },
+              { label: 'ch.work', go: 'quest', show: () => this.knows('pottery') && !this.flag(id, 'q') },
+              this.bye,
+            ],
+          },
+          gave: line('npc.local.done'),
+          cord: line('npc.local.cord'),
+          clay: line('npc.local.clay'),
+          quest: {
+            who, say: 'npc.local.q',
+            choices: () => [
+              { label: 'ch.givepot', blocked: () => this.lacking({ pot: 1 }), run: () => { this.take({ pot: 1 }); this.give({ lichen: 2 }); this.set(id, 'q'); }, go: 'qdone' },
+              this.back,
+            ],
+          },
+          qdone: line('npc.local.qdone'),
+        },
+      };
+      case 'hermit': return {
+        start: 'top',
+        nodes: {
+          top: {
+            who,
+            say: () => {
+              if (this.once(id, 'met')) return 'npc.hermit.1';
+              if (died >= 1 && this.once(id, `dead${died}`)) return 'npc.hermit.dead';
+              return 'npc.hermit.2';
+            },
+            choices: () => [
+              { label: 'ch.voice', go: 'voice', show: () => !!this.s.flags.beacon },
+              { label: 'ch.lime', show: () => ch2 && !this.s.flags['tip-lime'], run: () => { if (this.knows('charcoal')) this.teach('lime'); }, go: 'lime' },
+              { label: 'ch.glasstip', show: () => this.knows('salt') && !this.s.flags['tip-glass'], blocked: () => this.lacking({ salt: 1 }), run: () => { this.take({ salt: 1 }); this.teach('glass'); }, go: 'glass' },
+              this.bye,
+            ],
+          },
+          voice: line('npc.hermit.voice'),
+          lime: { who, say: () => (this.knows('charcoal') ? 'npc.hermit.lime' : 'npc.hermit.soon'), choices: end },
+          glass: line('npc.hermit.glass'),
+        },
+      };
+      case 'trav': return {
+        start: 'top',
+        nodes: {
+          top: {
+            who,
+            say: () => {
+              if (this.once(id, 'met')) return 'npc.trav.1';
+              if (died >= 1 && this.once(id, 'dead')) return 'npc.trav.dead';
+              if ((this.inv.soap ?? 0) > 0 && this.once(id, 'soap')) return 'npc.trav.soap';
+              return 'npc.trav.2';
+            },
+            choices: () => [
+              { label: 'ch.refund', go: 'refund' },
+              { label: 'ch.work', go: 'quest', show: () => this.knows('pottery') && !this.flag(id, 'q') },
+              this.bye,
+            ],
+          },
+          refund: line('npc.trav.refund'),
+          quest: {
+            who, say: 'npc.trav.q',
+            choices: () => [
+              { label: 'ch.givepot', blocked: () => this.lacking({ pot: 1 }), run: () => { this.take({ pot: 1 }); this.give({ sugarpod: 3 }); this.teach('fermentation'); this.set(id, 'q'); }, go: 'qdone' },
+              this.back,
+            ],
+          },
+          qdone: line('npc.trav.qdone'),
+        },
+      };
+      case 'cameo': return {
+        // no quest, no trade, no reaction: he is just here
+        start: 'top',
+        nodes: { top: { who, say: () => (this.once(id, 'met') ? 'npc.cameo.1' : 'npc.cameo.2'), choices: [{ label: 'ch.silent' }] } },
+      };
     }
   }
 
   actions(): Action[] {
-    const s = this.s, out: Action[] = [];
+    const out: Action[] = [];
     for (const n of this.list) {
       if (!n.fig.root.visible) continue;
       const name = t(`npc.${n.id}.name`);
-      const base = { id: `npc-${n.id}`, pos: n.pos, radius: 2.8 };
-      const flag = (k: string) => !!s.flags[`npc-${n.id}-${k}`];
-      const set = (k: string) => { s.flags[`npc-${n.id}-${k}`] = true; };
       const face = () => { n.wait = Math.max(n.wait, 6); n.speed = 0; n.target.copy(n.pos); n.pose = 'wave'; this.after(2, () => (n.pose = 'idle')); };
-      if (n.id === 'trader') {
-        out.push({ ...base, label: t('action.trade', { name }), run: () => {
-          face();
-          if (!flag('met')) { set('met'); this.talk(['npc.trader.hi'], 'trader'); return; }
-          if ((s.inventory.branch ?? 0) < 2) { this.talk(['npc.trader.no'], 'trader'); return; }
-          s.inventory.branch -= 2;
-          s.inventory.flint = (s.inventory.flint ?? 0) + 1;
-          audio.blip();
-          this.ui.setInventory(s.inventory);
-          this.talk(['npc.trader.done'], 'trader');
-        } });
-      } else if (n.id === 'local') {
-        const done = flag('done');
-        out.push({ ...base, label: flag('met') && !done ? t('action.give', { name }) : t('action.talk', { name }), run: () => {
-          face();
-          if (!flag('met')) { set('met'); this.talk(['npc.local.hi', 'npc.local.ask'], 'local'); return; }
-          if (done) { this.talk(['npc.local.hi'], 'local'); return; }
-          if ((s.inventory.stone ?? 0) < 1) { this.talk(['npc.local.ask'], 'local'); return; }
-          s.inventory.stone -= 1;
-          s.inventory.vine = (s.inventory.vine ?? 0) + 1;
-          set('done');
-          audio.chime();
-          this.ui.setInventory(s.inventory);
-          this.talk(['npc.local.done'], 'local');
-        } });
-      } else {
-        const lines = n.id === 'hermit' ? ['npc.hermit.1', 'npc.hermit.2'] : n.id === 'trav' ? ['npc.trav.1', 'npc.trav.2'] : ['npc.cameo.1', 'npc.cameo.2'];
-        out.push({ ...base, label: t('action.talk', { name }), run: () => { face(); this.talk(lines, n.id); } });
-      }
+      out.push({
+        id: `npc-${n.id}`, pos: n.pos, radius: 2.8,
+        label: t(n.id === 'trader' ? 'action.trade' : 'action.talk', { name }),
+        run: () => { face(); this.open(this.tree(n.id)); },
+      });
     }
     return out;
   }

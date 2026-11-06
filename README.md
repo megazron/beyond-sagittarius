@@ -57,6 +57,36 @@ on the planet would also like to sell you a rock.
 | ![The forest by day](docs/screenshots/readme/forest.jpg) | ![The lake at dusk](docs/screenshots/readme/lake-dusk.jpg) |
 | ![The liner approaching Sagittarius A*](docs/screenshots/readme/sagittarius-a.jpg) | ![The crew on the observation deck](docs/screenshots/readme/deck.jpg) |
 
+### Chapter Two: Rocks to Reason
+
+The way home is a ship, the ship needs chips, the chips need glass and metal,
+and the metal needs fire, so you start with rocks. One discovery per level:
+gather the real ingredients near camp, the lake and the ridge, work the process
+as a small minigame at camp, and get a true short explanation in the codex.
+
+| # | Level | Discovery |
+| --- | --- | --- |
+| 11 | Make an Edge | Flint knapping |
+| 12 | Twist a Cord | Cordage |
+| 13 | Fire on Demand | Bow-drill fire |
+| 14 | Fire Some Clay | Pottery |
+| 15 | Make Charcoal | Charcoal |
+| 16 | Burn a Rock | Lime |
+| 17 | Boil Out Salt | Salt |
+| 18 | Melt Sand | Glass |
+| 19 | Make Soap | Soap |
+| 20 | Let It Ferment | Fermentation |
+| 21 | Sour and Bitter | Acids and bases |
+
+The codex (K, the pause menu or the touch button) shows all nine ages, from
+Stone to Civilisation. Everything past Chapter Two is listed honestly as
+planned and locked. People at camp and around the map talk through a dialogue
+panel with choices, trades, small quests and taught tricks that make a process
+easier, and they react to your deaths and discoveries.
+
+**Do not try this at home.** The science is simplified for a game and is not
+instructions.
+
 ## Controls
 
 | Input | Action |

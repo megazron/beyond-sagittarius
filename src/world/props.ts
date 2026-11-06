@@ -5,10 +5,11 @@ import { mulberry32, smoothstep } from '../core/noise';
 import { Terrain, LAKE } from './terrain';
 import type { Forest } from './forest';
 
-export type ItemType = 'stone' | 'branch' | 'fruit' | 'redFruit' | 'tinder' | 'frond' | 'flint' | 'vine' | 'scrap';
+export type ItemType = 'stone' | 'branch' | 'fruit' | 'redFruit' | 'tinder' | 'frond' | 'flint' | 'vine' | 'scrap'
+  | 'nodule' | 'fibre' | 'clay' | 'sand' | 'limestone' | 'brine' | 'ash' | 'oilnut' | 'sugarpod' | 'lichen';
 
 /** Item types that go straight into the inventory when picked up. */
-export const PICKABLE = new Set<ItemType>(['stone', 'branch', 'tinder', 'frond', 'flint', 'vine', 'scrap']);
+export const PICKABLE = new Set<ItemType>(['stone', 'branch', 'tinder', 'frond', 'flint', 'vine', 'scrap', 'nodule', 'fibre', 'clay', 'sand', 'limestone', 'brine', 'ash', 'oilnut', 'sugarpod', 'lichen']);
 
 /** Story locations the items are scattered around (see world/story.ts). */
 export interface ItemSites { camp: { x: number; z: number }; pod2: { x: number; z: number }; pod: { x: number; z: number } }
@@ -20,6 +21,8 @@ export interface Item {
   pos: THREE.Vector3;
   active: boolean;
   examined?: boolean;
+  /** Level from which this item exists at all. */
+  gate?: number;
 }
 
 /** Crashed escape pod with smoke, sparks and debris at the spawn point. */

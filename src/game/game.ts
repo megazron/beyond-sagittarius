@@ -7,6 +7,12 @@ import type { World } from '../world/world';
 import { LAKE } from '../world/terrain';
 import { PICKABLE, Item } from '../world/props';
 import { Story, Action, LAST_LEVEL } from './story';
+import { Craft } from './tech/craft';
+import { Dialogue, DlgTree } from './dialogue';
+import type { TechNode } from './tech/data';
+import { CH2_LAST } from './tech/data';
+import { recordDiscovery } from './tech/tech';
+import { showDiscovery } from '../ui/science';
 import type { Player } from './player';
 import type { Input } from './input';
 import { UI, PLAYABLE_LEVELS } from '../ui/ui';
@@ -14,7 +20,7 @@ import { Tutorial } from './tutorial';
 import { Cutscene, Beat } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
 
-type Mode = 'wake' | 'play' | 'dead' | 'scene';
+type Mode = 'wake' | 'play' | 'dead' | 'scene' | 'craft' | 'talk';
 
 /** Survival rules, the First-24-Hours objective chain and the wake-up sequence. */
 export class Game {
@@ -35,6 +41,9 @@ export class Game {
   private tmpV = new THREE.Vector3();
 
   tutorial: Tutorial;
+  craft = new Craft();
+  dialogue = new Dialogue();
+  private fails = 0;
   /** Hook for between-level narrator scenes (main.ts). Return true to take over. */
   onLevelComplete: ((n: number) => void) | null = null;
 
@@ -48,6 +57,12 @@ export class Game {
     };
     onLangChange(() => this.tutorial.refresh());
     this.story = new Story(world, player, ui, () => this.save, (sec, fn) => this.after(sec, fn), (amount) => this.hurt(amount), (beats, then) => this.playScene(beats, then));
+    this.story.hooks = { craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
+    this.craft.onFail = () => {
+      const c = (this.save.crafts ??= { failed: 0 });
+      c.failed++;
+      this.ui.say(`fail.${(this.fails++ % 4) + 1}`, 'mz.name', 3.5);
+    };
     onLangChange(() => { if (this.save) { this.lastObjKey = ''; this.refreshObjective(); this.ui.setInventory(this.save.inventory, this.story.tools()); } });
   }
 
@@ -82,6 +97,49 @@ export class Game {
     });
   }
 
+  /** Freeze the player for a panel that takes the input (minigame, conversation). */
+  private enterPanel(mode: 'craft' | 'talk') {
+    this.mode = mode;
+    this.input.enabled = false;
+    this.input.resetTouch();
+    this.input.releasePointer();
+    this.ui.setPrompt(null);
+    this.player.pose = 'idle';
+  }
+
+  private leavePanel() {
+    this.mode = 'play';
+    this.input.enabled = true;
+    this.input.pressed.clear(); // the key that closed the panel must not press E in the world
+    this.lastObjKey = '';
+    this.refreshObjective();
+  }
+
+  startTalk(tree: DlgTree) {
+    if (this.mode !== 'play') return;
+    this.enterPanel('talk');
+    this.dialogue.start(tree, () => this.leavePanel());
+  }
+
+  startCraft(n: TechNode) {
+    if (this.mode !== 'play') return;
+    this.enterPanel('craft');
+    this.craft.start(n, !!this.save.flags[`tip-${n.id}`], (ok) => this.endCraft(n, ok));
+  }
+
+  /** Materials are only spent on success: a ruined run costs dignity, not progress. */
+  private endCraft(n: TechNode, ok: boolean) {
+    if (!ok) { this.leavePanel(); return; }
+    const s = this.save;
+    for (const k in n.ingredients) s.inventory[k] = Math.max(0, (s.inventory[k] ?? 0) - n.ingredients[k]);
+    for (const k in n.yields) s.inventory[k] = (s.inventory[k] ?? 0) + n.yields[k];
+    this.ui.setInventory(s.inventory, this.story.tools());
+    const first = recordDiscovery(s, n.id);
+    this.persist();
+    if (!first) { this.ui.toast(t('msg.madeMore', { name: t(`tech.${n.id}`) })); this.leavePanel(); return; }
+    showDiscovery(n, () => { this.leavePanel(); this.story.ch2.afterDiscovery(n); });
+  }
+
   /** Schedule fn after `sec` seconds of game time (pauses with the game). */
   after(sec: number, fn: () => void) {
     this.cues.push({ at: this.clock + sec, fn });
@@ -109,11 +167,7 @@ export class Game {
     this.save = save;
     this.cues = [];
     this.lastObjKey = '';
-    for (const it of this.world.items.items) {
-      it.active = !save.collected.includes(it.id);
-      it.obj.visible = it.active;
-      it.examined = !!save.flags[`ex-${it.id}`];
-    }
+    this.syncItems();
     this.story.sync();
     if (fresh) {
       this.player.spawn(0, 2, 0.35);
@@ -128,6 +182,16 @@ export class Game {
     }
     this.player.model.root.visible = true;
     audio.startWind();
+  }
+
+  /** Show what exists at this point of the story and hasn't been picked up. */
+  private syncItems() {
+    const save = this.save;
+    for (const it of this.world.items.items) {
+      it.active = !save.collected.includes(it.id) && (it.gate ?? 0) <= save.level;
+      it.obj.visible = it.active;
+      it.examined = !!save.flags[`ex-${it.id}`];
+    }
   }
 
   private enterPlay(announce: boolean) {
@@ -256,6 +320,12 @@ export class Game {
     if (this.mode === 'wake') { this.updateWake(dt * this.wakeRate); return; }
     if (this.mode === 'dead') return;
     this.runCues(dt);
+    if (this.mode === 'craft' || this.mode === 'talk') {
+      this.player.update(dt, this.input, false, 100, 1);
+      this.story.update(dt, time);
+      if (this.mode === 'craft') this.craft.update(dt);
+      return;
+    }
     if (this.mode === 'scene') {
       const sc = this.scene!;
       this.player.pose = sc.poses.scientist ?? 'stand';
@@ -460,12 +530,13 @@ export class Game {
       audio.chime();
       this.ui.banner(t('level.complete', { n }), t(`level.${n}.title`));
       this.onLevelComplete?.(n);
+      if (n === LAST_LEVEL) { this.syncItems(); this.after(4.7, () => this.ui.toast(t('level.arc.toast'))); }
       if (s.level <= PLAYABLE_LEVELS) {
         const next = s.level;
         this.after(4.7, () => { this.ui.toast(`${t('hud.level', { n: next })}: ${t(`level.${next}.title`)}`); const h = `level.${next}.hint`; if (t(h) !== h) this.ui.toast(t(h)); });
         this.story.onLevelStart(next);
-      } else if (n === LAST_LEVEL) {
-        this.after(4.7, () => this.ui.toast(t('level.arc.toast')));
+      } else if (n === CH2_LAST) {
+        this.after(4.7, () => this.ui.toast(t('level.arc2.toast')));
       }
       this.persist();
       this.ui.toast(t('msg.saved'));
@@ -477,7 +548,7 @@ export class Game {
   refreshObjective() {
     const s = this.save;
     const progress = s.level === 3 ? t('level.3.progress', { s: Math.min(5, s.inventory.stone ?? 0), b: Math.min(5, s.inventory.branch ?? 0) })
-      : s.level >= 4 && s.level <= LAST_LEVEL ? this.story.progress(s.level) : null;
+      : s.level >= 4 && s.level <= PLAYABLE_LEVELS ? this.story.progress(s.level) : null;
     const key = `${s.level}|${progress}`;
     if (key === this.lastObjKey && this.mode === 'play') return;
     this.lastObjKey = key;
@@ -510,7 +581,7 @@ export class Game {
       }
       return best ? best.clone() : null;
     }
-    if (s.level >= 4 && s.level <= LAST_LEVEL) {
+    if (s.level >= 4 && s.level <= PLAYABLE_LEVELS) {
       const m = this.story.markerTarget(s.level);
       return m ? m.clone() : null;
     }

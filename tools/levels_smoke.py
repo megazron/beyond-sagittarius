@@ -16,6 +16,7 @@ Requires: pip install playwright && playwright install chromium
 import argparse
 import json
 import pathlib
+import re
 import sys
 import time
 
@@ -44,10 +45,92 @@ def check_i18n():
         dashes = [k for k, v in d.items() if "\u2014" in v]
         if dashes:
             problems.append(f"{l}: em dash in {dashes[:5]}")
-        for k in [f"level.{n}.{f}" for n in range(1, 11) for f in ("title", "desc")]:
+        for k in [f"level.{n}.{f}" for n in range(1, 22) for f in ("title", "desc")]:
             if k not in d:
                 problems.append(f"{l}: no {k}")
     return problems
+
+
+def check_voice():
+    """Every voiced line exists in every language; science text stays free of quantities."""
+    voice = json.loads((ROOT / "src" / "i18n" / "voice.json").read_text(encoding="utf-8"))
+    problems = []
+    for l in ("en", "hi", "ur"):
+        d = json.loads((ROOT / "src" / "i18n" / f"{l}.json").read_text(encoding="utf-8"))
+        problems += [f"{l}: voiced key {k} has no text" for k in voice["lines"] if k not in d]
+    en = json.loads((ROOT / "src" / "i18n" / "en.json").read_text(encoding="utf-8"))
+    for k, v in en.items():
+        if k.startswith(("codex.", "teach.", "mg.")) and re.search(r"\d\s*(%|g\b|kg|ml|l\b|litre|gram|degree|°|parts?\b)", v):
+            problems.append(f"science text reads like a recipe: {k}")
+    return problems
+
+
+def play_craft(page, ev, seen, failures, log, ruin_once=None):
+    """Finish the running minigame through real key events; simulated time."""
+    held = False
+    side = "KeyA"
+    ruined = False
+    for _ in range(6000):
+        c = ev("__bs.craft")
+        if not c:
+            break
+        if held and c["kind"] != "heat":
+            page.keyboard.up("Space")
+            held = False
+        if c["failed"]:
+            if held:
+                page.keyboard.up("Space")
+                held = False
+            page.keyboard.press("Space")
+            continue
+        lo, hi = c["band"]
+        v, kind = c["v"], c["kind"]
+        mid = (lo + hi) / 2
+        if ruin_once == c["id"] and kind == "heat" and not ruined:
+            # hold far too long: the run is ruined and costs no materials
+            before = ev("__bs.save.inventory")
+            page.keyboard.down("Space")
+            for _ in range(200):
+                ev("__bs.step(0.1)")
+                if ev("__bs.craft.failed"):
+                    break
+            page.keyboard.up("Space")
+            ruined = True
+            if not ev("__bs.craft.failed"):
+                failures.append("overheating did not ruin the run")
+            if ev("__bs.save.inventory") != before:
+                failures.append("a ruined run spent materials")
+            if ev("__bs.save.crafts.failed") < 1:
+                failures.append("failure not counted in the save")
+            continue
+        if kind == "tap":
+            if lo + 0.012 < v < hi - 0.012:
+                page.keyboard.press("Space")
+        elif kind == "heat":
+            want = v < mid
+            if want and not held:
+                page.keyboard.down("Space")
+                held = True
+            elif not want and held:
+                page.keyboard.up("Space")
+                held = False
+        elif kind == "rhythm":
+            if v < mid:
+                page.keyboard.press(side)
+                side = "KeyD" if side == "KeyA" else "KeyA"
+        elif kind == "mix":
+            if v < lo + 0.005:
+                page.keyboard.press("KeyD")
+            elif v > hi - 0.005:
+                page.keyboard.press("KeyA")
+            else:
+                page.keyboard.press("Space")
+            continue
+        ev("__bs.step(0.05)")
+    if held:
+        page.keyboard.up("Space")
+    if ev("__bs.craft"):
+        failures.append(f"minigame never finished: {ev('__bs.craft')}")
 
 
 def main():
@@ -58,7 +141,7 @@ def main():
     args = ap.parse_args()
     shots = pathlib.Path(args.shots)
     shots.mkdir(parents=True, exist_ok=True)
-    failures = check_i18n()
+    failures = check_i18n() + check_voice()
     httpd = serve(args.port)
     errors: list[str] = []
     url = f"http://127.0.0.1:{args.port}/index.html?quality={args.quality}"
@@ -75,6 +158,31 @@ def main():
         page.wait_for_function("window.__bs.ready", timeout=240000)
         shot = lambda name: page.screenshot(path=str(shots / f"{args.quality}-{name}.jpg"), type="jpeg", quality=84)
         ev = page.evaluate
+
+        # ---- first launch: safety notice and terms, one accept ----
+        if not page.locator("#safety .safety-card").is_visible():
+            failures.append("safety card missing on first launch")
+        shot("00-safety")
+        card = page.inner_text("#safety")
+        if "Do not try this at home" not in card or "Terms" not in card:
+            failures.append(f"safety card text wrong: {card[:120]}")
+        page.click("#sf-legal")
+        page.wait_for_selector(".legal", timeout=5000)
+        page.click("#m-close")
+        page.wait_for_selector("#sf-ok", timeout=5000)
+        if ev("__bs.consent"):
+            failures.append("consent recorded before accepting")
+        page.click("#sf-ok")
+        if not ev("__bs.consent") or page.locator("#safety .safety-card").is_visible():
+            failures.append("accepting did not dismiss and remember the card")
+        tech = ev("__bs.tech")
+        if len(tech["ages"]) != 9 or {n["age"] for n in tech["nodes"]} != set(tech["ages"]):
+            failures.append(f"tech tree does not cover nine ages: {tech['ages']}")
+        ids = {n["id"] for n in tech["nodes"]}
+        for n in tech["nodes"]:
+            if not set(n["requires"]) <= ids:
+                failures.append(f"tech {n['id']} needs unknown {n['requires']}")
+        log("tech:", len(tech["nodes"]), "nodes,", sum(n["status"] == "playable" for n in tech["nodes"]), "playable")
 
         # ---- name screen ----
         page.click("#btn-new")
@@ -201,6 +309,7 @@ def main():
             return False
 
         taken = set()
+        shown = {}
         seen_levels = []
         last_level = 0
         stuck = 0
@@ -228,12 +337,32 @@ def main():
                 seen_levels.append(lvl)
                 last_level = lvl
                 stuck = 0
-            if lvl > 10:
+            if lvl > 21:
                 break
             if st["mode"] == "dead":
                 failures.append(f"died on level {lvl}")
                 page.click("#d-retry")
                 ev("__bs.step(1)")
+                continue
+            if st["mode"] == "craft":
+                cr = ev("__bs.craft")
+                if cr:
+                    if cr["id"] not in taken:
+                        taken.add(cr["id"])
+                        if cr["id"] in ("knapping", "pottery", "acids"):
+                            ev("__bs.step(0.4)")
+                            time.sleep(0.4)
+                            shot(f"20-craft-{cr['id']}")
+                    play_craft(page, ev, taken, failures, log, ruin_once="pottery")
+                if page.locator("#disc h2").is_visible():
+                    title = page.inner_text("#disc h2")
+                    warns = ev("[...document.querySelectorAll('#disc .warn')].map(e => e.dataset.warn)")
+                    shown[title] = warns
+                    if title == "Pottery":
+                        time.sleep(0.4)
+                        shot("21-discovery")
+                    page.keyboard.press("Enter")
+                    ev("__bs.step(0.2)")
                 continue
             stuck += 1
             if stuck > 160:
@@ -295,14 +424,14 @@ def main():
         if ev("__bs.state") == "narrator":
             skip_scene("narrator")
         flags = ev("__bs.save.flags")
-        for sc in ("l3", "fight", "l7", "ch1"):
+        for sc in ("l3", "fight", "l7", "ch1", "ch2"):
             if not flags.get(f"seen-{sc}"):
                 failures.append(f"scene {sc} never played")
         final = ev("({level: __bs.level, completed: __bs.save.completed, flags: __bs.save.flags, crew: __bs.crew, hits: __bs.save.houndHits})")
         log("final:", json.dumps(final)[:600])
-        if final["level"] != 11:
+        if final["level"] != 22:
             failures.append(f"did not finish the arc: level {final['level']}")
-        if sorted(final["completed"]) != list(range(1, 11)):
+        if sorted(final["completed"]) != list(range(1, 22)):
             failures.append(f"completed list wrong: {final['completed']}")
         if not hound_seen or (final["hits"] or 0) < 3:
             failures.append("predator fight did not happen")
@@ -322,6 +451,38 @@ def main():
         shot("12-crew-panel")
         page.keyboard.press("KeyC")
 
+        # ---- discoveries: save, warnings, codex, planned entries stay locked ----
+        disc = ev("__bs.save.discoveries")
+        log("discoveries:", disc)
+        tech = ev("__bs.tech")
+        playable = [n["id"] for n in tech["nodes"] if n["status"] == "playable"]
+        if sorted(disc) != sorted(playable):
+            failures.append(f"discoveries {disc} != playable {playable}")
+        if any(n["state"] != "planned" for n in tech["nodes"] if n["status"] == "planned"):
+            failures.append("a planned entry is not locked")
+        need_warn = {"Flint knapping": "sharp", "Fire on demand": "fire", "Pottery": "heat", "Charcoal": "fire", "Lime": "chemical", "Salt": "heat", "Glass": "heat", "Soap": "chemical", "Fermentation": "pressure", "Acids and bases": "chemical"}
+        for title, cat in need_warn.items():
+            if cat not in shown.get(title, []):
+                failures.append(f"no {cat} warning on the {title} discovery: {shown.get(title)}")
+        ev("__bs.step(0.5)")
+        page.keyboard.press("KeyK")
+        page.wait_for_selector(".cx-ages", timeout=5000)
+        if "Do not try this at home" not in page.inner_text("#modal-card"):
+            failures.append("codex lacks the safety notice")
+        if ev("document.querySelectorAll('.cx-node').length") != len(tech["nodes"]):
+            failures.append("codex does not list every entry")
+        page.click(".cx-node[data-id=soap]")
+        body = page.inner_text(".cx-done .cx-detail:not(.hidden)")
+        if "alkali" not in body or page.locator(".cx-detail:not(.hidden) .warn").count() < 1:
+            failures.append(f"codex entry incomplete: {body[:120]}")
+        time.sleep(0.3)
+        shot("22-codex")
+        page.click(".cx-node[data-id=bronze]")
+        if ev("document.querySelector('.cx-node[data-id=bronze]').dataset.state") != "planned" or "Planned" not in page.inner_text(".cx-planned .cx-detail:not(.hidden)"):
+            failures.append("planned entry not shown as locked in the codex")
+        page.keyboard.press("KeyK")
+        ev("__bs.step(0.2)")
+
         # ---- NPCs: they exist, and talking to one works ----
         npcs = ev("__bs.npcs")
         log("npcs:", [n["id"] for n in npcs])
@@ -332,6 +493,47 @@ def main():
         ev("__bs.step(0.3)")
         if ev("__bs.act()") != "npc-trader":
             failures.append("could not talk to the trader")
+        if not ev("__bs.talk") or ev("__bs.mode") != "talk":
+            failures.append("trader did not open the dialogue panel")
+        ev("__bs.save.inventory.branch = 2; __bs.save.inventory.flint = 0")
+        time.sleep(0.3)
+        shot("23-dialogue")
+        page.click('#dlg-choices button[data-c="ch.trade"]')
+        page.click('#dlg-choices button[data-c="ch.tradeflint"]')
+        if ev("__bs.save.inventory.flint") != 1 or ev("__bs.save.inventory.branch") != 0:
+            failures.append("trade choice did not swap the items")
+        if ev("__bs.talk.node") != "sold":
+            failures.append(f"trade did not reach the deal line: {ev('__bs.talk')}")
+        page.keyboard.press("Escape")
+        ev("__bs.step(0.2)")
+        if ev("__bs.mode") != "play" or ev("__bs.paused"):
+            failures.append("leaving a conversation did not return to play")
+        loc = next(n for n in npcs if n["id"] == "local")
+        ev(f"__bs.teleport({loc['pos'][0] + 1}, {loc['pos'][2]}, 0)")
+        ev("__bs.step(0.3)")
+        for _ in range(3):
+            n = next(x for x in ev("__bs.npcs") if x["id"] == "local")
+            ev(f"__bs.teleport({n['pos'][0] + 1}, {n['pos'][2]}, 0)")
+            ev("__bs.step(0.1)")
+            if ev("__bs.act()") == "npc-local":
+                break
+        page.keyboard.press("Digit1") if ev("__bs.talk.choices[0]") == "ch.cord" else page.click('#dlg-choices button[data-c="ch.cord"]')
+        if not ev("__bs.save.flags['tip-cordage']"):
+            failures.append("Oom-Sa did not teach cordage")
+        page.keyboard.press("Escape")
+        ev("__bs.step(0.2)")
+        # Skyvra re-makes what ran out, at camp
+        Lc = ev("__bs.layout")["campSeat"]
+        ev(f"__bs.teleport({Lc[0] + 1.2}, {Lc[2] + 0.4}, 0)")
+        ev("__bs.step(0.3)")
+        if ev("__bs.act()") != "skyvra":
+            failures.append("could not talk to Skyvra at camp")
+        else:
+            page.click('#dlg-choices button[data-c="ch.next"]')
+            if ev("__bs.talk.node") != "next":
+                failures.append("Skyvra's choice did not advance")
+            page.keyboard.press("Escape")
+            ev("__bs.step(0.2)")
 
         # ---- persistence: reload and continue ----
         ev("__bs.save && window.dispatchEvent(new Event('beforeunload'))")
@@ -342,7 +544,11 @@ def main():
         ev("__bs.step(2)")
         re = ev("({level: __bs.level, names: __bs.save.names, crew: __bs.crew})")
         log("after reload:", re)
-        if re["level"] != 11 or re["names"].get("scientist") != PLAYER or re["crew"]["mode"] != "camp":
+        if not page.locator("#safety .safety-card").count() == 0 and page.locator("#safety .safety-card").is_visible():
+            failures.append("safety card came back after being accepted")
+        if len(ev("__bs.save.discoveries")) != 11:
+            failures.append("discoveries lost on reload")
+        if re["level"] != 22 or re["names"].get("scientist") != PLAYER or re["crew"]["mode"] != "camp":
             failures.append(f"save did not persist: {re}")
 
         # ---- other languages ----
@@ -360,6 +566,15 @@ def main():
             if "level." in txt or "item." in txt or "{" in txt:
                 failures.append(f"{lang}: untranslated key in HUD: {txt[:200]}")
             shot(f"13-hud-{lang}")
+            page.keyboard.press("KeyK")
+            page.wait_for_selector(".cx-ages", timeout=5000)
+            page.click(".cx-node[data-id=glass]")
+            time.sleep(1)
+            shot(f"24-codex-{lang}")
+            ctext = page.inner_text("#modal-card")
+            if "codex." in ctext or "tech." in ctext or "warn." in ctext:
+                failures.append(f"{lang}: untranslated key in the codex")
+            page.keyboard.press("KeyK")
         browser.close()
     httpd.shutdown()
     real = [e for e in errors if "fonts.g" not in e and "net::ERR" not in e]

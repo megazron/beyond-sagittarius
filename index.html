@@ -88,12 +88,34 @@
         <div id="joy-zone" class="joy-zone"><div id="joy" class="joy"><div id="joy-knob" class="joy-knob"></div></div></div>
         <button id="tb-pause" class="tbtn sm" aria-label="menu"><i data-icon="pause"></i></button>
         <button id="tb-inv" class="tbtn sm" aria-label="items"><i data-icon="inventory"></i></button>
+        <button id="tb-codex" class="tbtn sm" aria-label="codex"><i data-icon="codex"></i></button>
         <button id="tb-act" class="tbtn big" aria-label="action"><i id="tb-act-ico" data-icon="jump"></i></button>
       </div>
     </div>
 
+    <!-- Crafting minigame -->
+    <div id="craft" class="craft hidden">
+      <div class="mg-head"><b id="mg-name"></b><span id="mg-step"></span></div>
+      <div class="mg-text" id="mg-text"></div>
+      <div class="mg-tip hidden" id="mg-tip" data-i18n="mg.tip"></div>
+      <div class="mg-gauge" id="mg-gauge" dir="ltr"><i class="band" id="mg-band"></i><i class="needle" id="mg-needle"></i></div>
+      <div class="mg-state" id="mg-state"></div>
+      <div class="mg-prog"><i id="mg-prog"></i></div>
+      <div class="mg-keys" id="mg-keys"></div>
+      <div class="mg-btns" dir="ltr"><button id="mg-left" class="mgb"></button><button id="mg-main" class="mgb main"></button><button id="mg-right" class="mgb"></button></div>
+      <button id="mg-stop" class="mg-stop"></button>
+    </div>
+    <div id="disc" class="disc nav-layer hidden"></div>
+    <!-- Conversations -->
+    <div id="dialog" class="dialog nav-layer hidden">
+      <div class="dlg-who" id="dlg-who"></div>
+      <div class="dlg-line" id="dlg-line"></div>
+      <div class="dlg-choices" id="dlg-choices"></div>
+    </div>
+
     <!-- Modals -->
     <div id="modal" class="modal hidden"><div class="modal-card" id="modal-card"></div></div>
+    <div id="safety" class="safety nav-layer hidden"></div>
     <div id="fps" class="fps hidden"></div>
     <noscript>This game needs JavaScript and WebGL2.</noscript>
     <script type="module" src="/src/main.ts"></script>

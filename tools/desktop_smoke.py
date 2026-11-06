@@ -100,6 +100,8 @@ def main():
 
             # Name screen, then the opening: voices and textures load over app:// here.
             page.evaluate("localStorage.setItem('bs-desktop-smoke', '1')")
+            if page.locator("#sf-ok").is_visible():
+                page.click("#sf-ok")
             page.click("#btn-new")
             page.get_by_role("button", name="Begin").click()
             page.wait_for_selector("#title", state="hidden", timeout=60_000)

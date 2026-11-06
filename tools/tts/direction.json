@@ -1,2290 +1,2290 @@
 {
- "_comment": "Per-line delivery for tools/tts/generate_voice.py, shared by all languages. emotion selects a row of 'emotions' (Chatterbox exaggeration, cfg_weight, temperature); intensity 0..1 scales exaggeration; pace is a time stretch after synthesis; pre/post are seconds of silence kept around the take (the game's timing uses the resulting duration); tags are non-verbal sounds, used only where the model supports them; fx is a key of 'fx'.",
- "emotions": {
-  "calm": [
-   0.35,
-   0.5,
-   0.7
-  ],
-  "warm": [
-   0.5,
-   0.5,
-   0.8
-  ],
-  "dry": [
-   0.4,
-   0.5,
-   0.7
-  ],
-  "deadpan": [
-   0.28,
-   0.55,
-   0.65
-  ],
-  "sarcasm": [
-   0.42,
-   0.5,
-   0.8
-  ],
-  "smug": [
-   0.5,
-   0.45,
-   0.8
-  ],
-  "easy": [
-   0.4,
-   0.45,
-   0.75
-  ],
-  "flat": [
-   0.25,
-   0.6,
-   0.6
-  ],
-  "tired": [
-   0.35,
-   0.45,
-   0.75
-  ],
-  "sad": [
-   0.45,
-   0.4,
-   0.75
-  ],
-  "cold": [
-   0.4,
-   0.55,
-   0.7
-  ],
-  "suspicious": [
-   0.5,
-   0.45,
-   0.8
-  ],
-  "accuse": [
-   0.6,
-   0.4,
-   0.8
-  ],
-  "wonder": [
-   0.55,
-   0.45,
-   0.8
-  ],
-  "awe": [
-   0.55,
-   0.4,
-   0.8
-  ],
-  "anxious": [
-   0.65,
-   0.35,
-   0.85
-  ],
-  "fear": [
-   0.8,
-   0.3,
-   0.85
-  ],
-  "panic": [
-   0.95,
-   0.25,
-   0.9
-  ],
-  "pain": [
-   0.75,
-   0.3,
-   0.85
-  ],
-  "relief": [
-   0.8,
-   0.35,
-   0.85
-  ],
-  "hype": [
-   0.8,
-   0.35,
-   0.9
-  ],
-  "angry": [
-   0.85,
-   0.3,
-   0.85
-  ],
-  "theatrical": [
-   0.65,
-   0.4,
-   0.8
-  ],
-  "ominous": [
-   0.5,
-   0.45,
-   0.7
-  ],
-  "eerie": [
-   0.3,
-   0.5,
-   0.6
-  ]
- },
- "fx": {
-  "room": "aecho=0.9:0.5:23|41:0.09|0.05",
-  "suit-radio": "highpass=f=320,lowpass=f=3400,acompressor=threshold=0.1:ratio=6:attack=3:release=50,acrusher=bits=11:mix=0.25",
-  "breathless": "tremolo=f=5.5:d=0.12"
- },
- "lines": {
-  "cine.caption1": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 0.95,
-   "pre": 0.0,
-   "post": 0.25,
-   "tags": [],
-   "fx": "room"
-  },
-  "cine.caption2": {
-   "emotion": "dry",
-   "intensity": 0.55,
-   "pace": 0.92,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "cine.line1": {
-   "emotion": "wonder",
-   "intensity": 0.55,
-   "pace": 1.0,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [],
-   "fx": ""
-  },
-  "cine.line2": {
-   "emotion": "deadpan",
-   "intensity": 0.35,
-   "pace": 0.95,
-   "pre": 0.05,
-   "post": 0.05,
-   "tags": [],
-   "fx": ""
-  },
-  "cine.line3": {
-   "emotion": "hype",
-   "intensity": 0.8,
-   "pace": 1.05,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [
-    "laugh"
-   ],
-   "fx": ""
-  },
-  "cine.ai1": {
-   "emotion": "flat",
-   "intensity": 0.3,
-   "pace": 1.0,
-   "pre": 0.0,
-   "post": 0.1,
-   "tags": [],
-   "fx": ""
-  },
-  "cine.line6": {
-   "emotion": "fear",
-   "intensity": 0.65,
-   "pace": 0.85,
-   "pre": 0.15,
-   "post": 0.1,
-   "tags": [
-    "breath"
-   ],
-   "fx": "breathless"
-  },
-  "cine.ai2": {
-   "emotion": "flat",
-   "intensity": 0.35,
-   "pace": 1.0,
-   "pre": 0.0,
-   "post": 0.1,
-   "tags": [],
-   "fx": ""
-  },
-  "cine.line7": {
-   "emotion": "panic",
-   "intensity": 0.95,
-   "pace": 1.15,
-   "pre": 0.0,
-   "post": 0.0,
-   "tags": [],
-   "fx": "breathless"
-  },
-  "cine.line8": {
-   "emotion": "panic",
-   "intensity": 0.9,
-   "pace": 1.1,
-   "pre": 0.0,
-   "post": 0.0,
-   "tags": [],
-   "fx": "breathless"
-  },
-  "wake.line1": {
-   "emotion": "pain",
-   "intensity": 0.6,
-   "pace": 0.95,
-   "pre": 0.25,
-   "post": 0.1,
-   "tags": [
-    "groan"
-   ],
-   "fx": ""
-  },
-  "wake.line2": {
-   "emotion": "awe",
-   "intensity": 0.6,
-   "pace": 0.9,
-   "pre": 0.15,
-   "post": 0.1,
-   "tags": [
-    "breath"
-   ],
-   "fx": ""
-  },
-  "wake.line3": {
-   "emotion": "anxious",
-   "intensity": 0.65,
-   "pace": 1.0,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [],
-   "fx": ""
-  },
-  "wake.line4": {
-   "emotion": "fear",
-   "intensity": 0.9,
-   "pace": 1.1,
-   "pre": 0.1,
-   "post": 0.0,
-   "tags": [
-    "gasp"
-   ],
-   "fx": "breathless"
-  },
-  "wake.line5": {
-   "emotion": "anxious",
-   "intensity": 0.6,
-   "pace": 1.05,
-   "pre": 0.1,
-   "post": 0.1,
-   "tags": [
-    "breath"
-   ],
-   "fx": ""
-  },
-  "medic.hint": {
-   "emotion": "calm",
-   "intensity": 0.4,
-   "pace": 0.97,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "memory.explorer": {
-   "emotion": "warm",
-   "intensity": 0.45,
-   "pace": 0.97,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "dlg.7.1": {
-   "emotion": "tired",
-   "intensity": 0.45,
-   "pace": 0.95,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [
-    "sigh"
-   ],
-   "fx": ""
-  },
-  "dlg.8.1": {
-   "emotion": "sarcasm",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0.0,
-   "post": 0.1,
-   "tags": [
-    "sigh"
-   ],
-   "fx": ""
-  },
-  "dlg.8.found": {
-   "emotion": "relief",
-   "intensity": 0.8,
-   "pace": 1.08,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [
-    "gasp"
-   ],
-   "fx": ""
-  },
-  "dlg.9.1": {
-   "emotion": "anxious",
-   "intensity": 0.7,
-   "pace": 1.0,
-   "pre": 0.05,
-   "post": 0.05,
-   "tags": [],
-   "fx": "breathless"
-  },
-  "dlg.9.2": {
-   "emotion": "warm",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0.0,
-   "post": 0.1,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.9.3": {
-   "emotion": "tired",
-   "intensity": 0.5,
-   "pace": 0.97,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [
-    "chuckle"
-   ],
-   "fx": ""
-  },
-  "dlg.9.3b": {
-   "emotion": "deadpan",
-   "intensity": 0.35,
-   "pace": 0.95,
-   "pre": 0.1,
-   "post": 0.05,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.9.3c": {
-   "emotion": "tired",
-   "intensity": 0.35,
-   "pace": 0.95,
-   "pre": 0.05,
-   "post": 0.05,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.9.4": {
-   "emotion": "anxious",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.9.5": {
-   "emotion": "pain",
-   "intensity": 0.85,
-   "pace": 1.05,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [
-    "groan"
-   ],
-   "fx": ""
-  },
-  "dlg.9.6": {
-   "emotion": "warm",
-   "intensity": 0.6,
-   "pace": 1.0,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [
-    "chuckle"
-   ],
-   "fx": ""
-  },
-  "dlg.9.7": {
-   "emotion": "sad",
-   "intensity": 0.5,
-   "pace": 0.88,
-   "pre": 0.2,
-   "post": 0.15,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.9.8": {
-   "emotion": "warm",
-   "intensity": 0.55,
-   "pace": 0.95,
-   "pre": 0.1,
-   "post": 0.1,
-   "tags": [
-    "chuckle"
-   ],
-   "fx": ""
-  },
-  "dlg.9.9": {
-   "emotion": "sad",
-   "intensity": 0.4,
-   "pace": 0.88,
-   "pre": 0.1,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.10.1": {
-   "emotion": "hype",
-   "intensity": 0.65,
-   "pace": 1.05,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.10.2": {
-   "emotion": "tired",
-   "intensity": 0.45,
-   "pace": 0.95,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.10.3": {
-   "emotion": "relief",
-   "intensity": 0.95,
-   "pace": 1.1,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [
-    "gasp"
-   ],
-   "fx": "breathless"
-  },
-  "dlg.10.4": {
-   "emotion": "fear",
-   "intensity": 0.6,
-   "pace": 0.95,
-   "pre": 0.1,
-   "post": 0.1,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.10.5": {
-   "emotion": "fear",
-   "intensity": 0.6,
-   "pace": 0.9,
-   "pre": 0.15,
-   "post": 0.1,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.10.6": {
-   "emotion": "fear",
-   "intensity": 0.7,
-   "pace": 1.0,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.10.7": {
-   "emotion": "panic",
-   "intensity": 0.75,
-   "pace": 1.08,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.10.8": {
-   "emotion": "cold",
-   "intensity": 0.6,
-   "pace": 0.9,
-   "pre": 0.2,
-   "post": 0.15,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.10.9": {
-   "emotion": "anxious",
-   "intensity": 0.75,
-   "pace": 1.0,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.10.10": {
-   "emotion": "tired",
-   "intensity": 0.6,
-   "pace": 0.95,
-   "pre": 0.15,
-   "post": 0.1,
-   "tags": [
-    "sigh"
-   ],
-   "fx": ""
-  },
-  "beacon.unknown2": {
-   "emotion": "eerie",
-   "intensity": 0.4,
-   "pace": 0.8,
-   "pre": 0.2,
-   "post": 0.3,
-   "tags": [],
-   "fx": ""
-  },
-  "beacon.unknown3": {
-   "emotion": "eerie",
-   "intensity": 0.45,
-   "pace": 0.75,
-   "pre": 0.3,
-   "post": 0.4,
-   "tags": [],
-   "fx": ""
-  },
-  "op.1": {
-   "emotion": "hype",
-   "intensity": 0.85,
-   "pace": 1.08,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.2": {
-   "emotion": "deadpan",
-   "intensity": 0.3,
-   "pace": 0.92,
-   "pre": 0.05,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.3": {
-   "emotion": "sarcasm",
-   "intensity": 0.4,
-   "pace": 0.97,
-   "pre": 0.1,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.4": {
-   "emotion": "accuse",
-   "intensity": 0.65,
-   "pace": 1.0,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.5": {
-   "emotion": "anxious",
-   "intensity": 0.5,
-   "pace": 1.08,
-   "pre": 0.05,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.6": {
-   "emotion": "sarcasm",
-   "intensity": 0.6,
-   "pace": 1.02,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [
-    "laugh"
-   ],
-   "fx": "room"
-  },
-  "op.7": {
-   "emotion": "easy",
-   "intensity": 0.4,
-   "pace": 0.92,
-   "pre": 0.05,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.8": {
-   "emotion": "sarcasm",
-   "intensity": 0.45,
-   "pace": 0.97,
-   "pre": 0.1,
-   "post": 0.05,
-   "tags": [
-    "sigh"
-   ],
-   "fx": "room"
-  },
-  "op.9": {
-   "emotion": "hype",
-   "intensity": 0.75,
-   "pace": 1.05,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [
-    "laugh"
-   ],
-   "fx": "room"
-  },
-  "op.10": {
-   "emotion": "deadpan",
-   "intensity": 0.3,
-   "pace": 0.92,
-   "pre": 0.05,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.11": {
-   "emotion": "smug",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0.05,
-   "post": 0.05,
-   "tags": [
-    "sigh"
-   ],
-   "fx": "room"
-  },
-  "op.12": {
-   "emotion": "suspicious",
-   "intensity": 0.6,
-   "pace": 0.95,
-   "pre": 0.1,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.13": {
-   "emotion": "anxious",
-   "intensity": 0.55,
-   "pace": 0.95,
-   "pre": 0.1,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.14": {
-   "emotion": "deadpan",
-   "intensity": 0.45,
-   "pace": 0.92,
-   "pre": 0.1,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.15": {
-   "emotion": "anxious",
-   "intensity": 0.6,
-   "pace": 1.08,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [
-    "chuckle"
-   ],
-   "fx": "room"
-  },
-  "op.16": {
-   "emotion": "sarcasm",
-   "intensity": 0.45,
-   "pace": 0.95,
-   "pre": 0.15,
-   "post": 0.1,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.17": {
-   "emotion": "anxious",
-   "intensity": 0.65,
-   "pace": 0.92,
-   "pre": 0.15,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.18": {
-   "emotion": "fear",
-   "intensity": 0.6,
-   "pace": 0.97,
-   "pre": 0.05,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.19": {
-   "emotion": "fear",
-   "intensity": 0.7,
-   "pace": 1.0,
-   "pre": 0.05,
-   "post": 0.05,
-   "tags": [
-    "chuckle"
-   ],
-   "fx": "room"
-  },
-  "op.20": {
-   "emotion": "panic",
-   "intensity": 0.8,
-   "pace": 1.05,
-   "pre": 0.0,
-   "post": 0.0,
-   "tags": [],
-   "fx": "room"
-  },
-  "op.21": {
-   "emotion": "panic",
-   "intensity": 0.95,
-   "pace": 1.1,
-   "pre": 0.0,
-   "post": 0.0,
-   "tags": [],
-   "fx": "breathless"
-  },
-  "dlg.4.1": {
-   "emotion": "smug",
-   "intensity": 0.45,
-   "pace": 1.0,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [],
-   "fx": ""
-  },
-  "dlg.4.2": {
-   "emotion": "deadpan",
-   "intensity": 0.4,
-   "pace": 0.92,
-   "pre": 0.2,
-   "post": 0.1,
-   "tags": [
-    "sigh"
-   ],
-   "fx": ""
-  },
-  "dlg.4.3": {
-   "emotion": "sarcasm",
-   "intensity": 0.55,
-   "pace": 0.97,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [
-    "groan"
-   ],
-   "fx": ""
-  },
-  "dlg.4.4": {
-   "emotion": "hype",
-   "intensity": 0.9,
-   "pace": 1.1,
-   "pre": 0.0,
-   "post": 0.1,
-   "tags": [
-    "laugh"
-   ],
-   "fx": ""
-  },
-  "fb.1": {
-   "emotion": "dry",
-   "intensity": 0.45,
-   "pace": 0.92,
-   "pre": 0.0,
-   "post": 0.25,
-   "tags": [],
-   "fx": "room"
-  },
-  "fb.2": {
-   "emotion": "angry",
-   "intensity": 0.6,
-   "pace": 1.0,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "fb.3": {
-   "emotion": "angry",
-   "intensity": 0.9,
-   "pace": 1.1,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "fb.4": {
-   "emotion": "cold",
-   "intensity": 0.7,
-   "pace": 0.95,
-   "pre": 0.1,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "fb.5": {
-   "emotion": "calm",
-   "intensity": 0.5,
-   "pace": 0.95,
-   "pre": 0.1,
-   "post": 0.1,
-   "tags": [
-    "sigh"
-   ],
-   "fx": "room"
-  },
-  "fb.6": {
-   "emotion": "cold",
-   "intensity": 0.6,
-   "pace": 0.95,
-   "pre": 0.1,
-   "post": 0.15,
-   "tags": [],
-   "fx": "room"
-  },
-  "fb.7": {
-   "emotion": "sad",
-   "intensity": 0.5,
-   "pace": 0.88,
-   "pre": 0.3,
-   "post": 0.15,
-   "tags": [],
-   "fx": "room"
-  },
-  "fb.8": {
-   "emotion": "hype",
-   "intensity": 0.8,
-   "pace": 1.08,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [],
-   "fx": "room"
-  },
-  "fb.9": {
-   "emotion": "easy",
-   "intensity": 0.4,
-   "pace": 0.92,
-   "pre": 0.1,
-   "post": 0.1,
-   "tags": [],
-   "fx": "room"
-  },
-  "fb.10": {
-   "emotion": "sad",
-   "intensity": 0.6,
-   "pace": 0.85,
-   "pre": 0.2,
-   "post": 0.25,
-   "tags": [
-    "breath"
-   ],
-   "fx": ""
-  },
-  "dlg.7.2": {
-   "emotion": "fear",
-   "intensity": 0.8,
-   "pace": 1.02,
-   "pre": 0.05,
-   "post": 0.05,
-   "tags": [
-    "gasp"
-   ],
-   "fx": "breathless"
-  },
-  "dlg.7.3": {
-   "emotion": "relief",
-   "intensity": 0.75,
-   "pace": 1.05,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [
-    "laugh"
-   ],
-   "fx": "breathless"
-  },
-  "rad.strong": {
-   "emotion": "hype",
-   "intensity": 0.75,
-   "pace": 1.05,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [],
-   "fx": "suit-radio"
-  },
-  "rad.medic": {
-   "emotion": "dry",
-   "intensity": 0.4,
-   "pace": 0.97,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [
-    "sigh"
-   ],
-   "fx": "suit-radio"
-  },
-  "rad.builder": {
-   "emotion": "easy",
-   "intensity": 0.4,
-   "pace": 0.95,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [
-    "chuckle"
-   ],
-   "fx": "suit-radio"
-  },
-  "rad.social": {
-   "emotion": "hype",
-   "intensity": 0.85,
-   "pace": 1.08,
-   "pre": 0.0,
-   "post": 0.05,
-   "tags": [
-    "laugh"
-   ],
-   "fx": "suit-radio"
-  },
-  "j.1": {
-   "emotion": "sarcasm",
-   "intensity": 0.55,
-   "pace": 1.0,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [
-    "sigh"
-   ],
-   "fx": ""
-  },
-  "j.2": {
-   "emotion": "sarcasm",
-   "intensity": 0.5,
-   "pace": 0.97,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [
-    "sigh"
-   ],
-   "fx": ""
-  },
-  "j.3": {
-   "emotion": "easy",
-   "intensity": 0.5,
-   "pace": 0.97,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [
-    "chuckle"
-   ],
-   "fx": ""
-  },
-  "j.4": {
-   "emotion": "sarcasm",
-   "intensity": 0.5,
-   "pace": 0.97,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [
-    "sigh"
-   ],
-   "fx": ""
-  },
-  "j.5": {
-   "emotion": "tired",
-   "intensity": 0.5,
-   "pace": 0.92,
-   "pre": 0.1,
-   "post": 0.1,
-   "tags": [
-    "groan"
-   ],
-   "fx": ""
-  },
-  "j.6": {
-   "emotion": "dry",
-   "intensity": 0.6,
-   "pace": 0.92,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "j.7": {
-   "emotion": "sarcasm",
-   "intensity": 0.55,
-   "pace": 1.0,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [
-    "chuckle"
-   ],
-   "fx": ""
-  },
-  "j.8": {
-   "emotion": "dry",
-   "intensity": 0.55,
-   "pace": 0.92,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "j.9": {
-   "emotion": "deadpan",
-   "intensity": 0.4,
-   "pace": 0.92,
-   "pre": 0.05,
-   "post": 0.1,
-   "tags": [],
-   "fx": ""
-  },
-  "mz.intro.1": {
-   "emotion": "dry",
-   "intensity": 0.6,
-   "pace": 0.93,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.intro.2": {
-   "emotion": "theatrical",
-   "intensity": 0.7,
-   "pace": 0.9,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.intro.3": {
-   "emotion": "dry",
-   "intensity": 0.6,
-   "pace": 0.95,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.intro.4": {
-   "emotion": "ominous",
-   "intensity": 0.55,
-   "pace": 0.9,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.intro.5": {
-   "emotion": "theatrical",
-   "intensity": 0.65,
-   "pace": 0.92,
-   "pre": 0.0,
-   "post": 0.25,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.l3.1": {
-   "emotion": "dry",
-   "intensity": 0.55,
-   "pace": 0.93,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.l3.red": {
-   "emotion": "dry",
-   "intensity": 0.6,
-   "pace": 0.9,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.l3.safe": {
-   "emotion": "dry",
-   "intensity": 0.55,
-   "pace": 0.93,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.l3.died": {
-   "emotion": "theatrical",
-   "intensity": 0.65,
-   "pace": 0.93,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.l3.hint": {
-   "emotion": "dry",
-   "intensity": 0.45,
-   "pace": 0.95,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.l3.2": {
-   "emotion": "ominous",
-   "intensity": 0.6,
-   "pace": 0.88,
-   "pre": 0.0,
-   "post": 0.25,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.l7.1": {
-   "emotion": "dry",
-   "intensity": 0.55,
-   "pace": 0.93,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.l7.clean": {
-   "emotion": "theatrical",
-   "intensity": 0.75,
-   "pace": 0.97,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.l7.bitten": {
-   "emotion": "dry",
-   "intensity": 0.65,
-   "pace": 0.93,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.l7.2": {
-   "emotion": "ominous",
-   "intensity": 0.55,
-   "pace": 0.9,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.l7.hint": {
-   "emotion": "ominous",
-   "intensity": 0.5,
-   "pace": 0.92,
-   "pre": 0.0,
-   "post": 0.2,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.ch1.1": {
-   "emotion": "ominous",
-   "intensity": 0.6,
-   "pace": 0.9,
-   "pre": 0.0,
-   "post": 0.25,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.ch1.names": {
-   "emotion": "ominous",
-   "intensity": 0.65,
-   "pace": 0.88,
-   "pre": 0.0,
-   "post": 0.25,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.ch1.nonames": {
-   "emotion": "ominous",
-   "intensity": 0.6,
-   "pace": 0.9,
-   "pre": 0.0,
-   "post": 0.25,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.ch1.2": {
-   "emotion": "ominous",
-   "intensity": 0.65,
-   "pace": 0.88,
-   "pre": 0.0,
-   "post": 0.25,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.ch1.3": {
-   "emotion": "theatrical",
-   "intensity": 0.65,
-   "pace": 0.9,
-   "pre": 0.0,
-   "post": 0.25,
-   "tags": [],
-   "fx": "room"
-  },
-  "mz.ch1.4": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 0.92,
-   "pre": 0.0,
-   "post": 0.35,
-   "tags": [],
-   "fx": "room"
-  },
-  "npc.trader.hi": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trader.done": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trader.no": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.local.hi": {
-   "emotion": "calm",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.local.ask": {
-   "emotion": "calm",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.local.done": {
-   "emotion": "calm",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.hermit.1": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.hermit.2": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trav.1": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trav.2": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.cameo.1": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.cameo.2": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.knapping.text": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.knapping.joke": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.cordage.text": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.cordage.joke": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.fire.text": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.fire.joke": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.pottery.text": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.pottery.joke": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.charcoal.text": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.charcoal.joke": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.lime.text": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.lime.joke": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.salt.text": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.salt.joke": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.glass.text": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.glass.joke": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.soap.text": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.soap.joke": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.fermentation.text": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.fermentation.joke": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.acids.text": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "codex.acids.joke": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "warn.fire": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "warn.heat": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "warn.chemical": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "warn.electric": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "warn.sharp": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "warn.pressure": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "safety.text": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "safety.joke": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "fail.1": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "fail.2": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "fail.3": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "fail.4": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "teach.knapping": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "after.knapping": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "teach.cordage": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "after.cordage": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "teach.fire": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "after.fire": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "teach.pottery": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "after.pottery": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "teach.charcoal": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "after.charcoal": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "teach.lime": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "after.lime": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "teach.salt": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "after.salt": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "teach.glass": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "after.glass": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "teach.soap": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "after.soap": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "teach.fermentation": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "after.fermentation": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "teach.acids": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "after.acids": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "ch2.intro.1": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "ch2.intro.2": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "ch2.intro.3": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "ch2.beacon.fire": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "ch2.beacon.pottery": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "ch2.beacon.glass": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "ch2.beacon.react": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "ch2.end.1": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "ch2.end.2": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "ch2.end.3": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "ch2.end.4": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "mz.ch2.1": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "mz.ch2.clean": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "mz.ch2.messy": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "mz.ch2.2": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "mz.ch2.3": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trader.back": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trader.dead": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trader.salt": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trader.menu": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trader.q": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trader.qdone": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trader.tip": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.local.dead": {
-   "emotion": "calm",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.local.soap": {
-   "emotion": "calm",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.local.cord": {
-   "emotion": "calm",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.local.clay": {
-   "emotion": "calm",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.local.q": {
-   "emotion": "calm",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.local.qdone": {
-   "emotion": "calm",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.hermit.dead": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.hermit.voice": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.hermit.lime": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.hermit.glass": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.hermit.soon": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trav.refund": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trav.dead": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trav.soap": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trav.q": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "npc.trav.qdone": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "sk.hi": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "sk.dead": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "sk.fails": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "sk.leg": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "sk.done": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "rad.ch2.strong": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "rad.ch2.medic": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "rad.ch2.builder": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  },
-  "rad.ch2.social": {
-   "emotion": "dry",
-   "intensity": 0.5,
-   "pace": 1.0,
-   "pre": 0,
-   "post": 0.2,
-   "tags": [],
-   "fx": ""
-  }
- }
+"_comment": "Per-line delivery for tools/tts/generate_voice.py, shared by all languages. emotion selects a row of 'emotions' (Chatterbox exaggeration, cfg_weight, temperature); intensity 0..1 scales exaggeration; pace is a time stretch after synthesis; pre/post are seconds of silence kept around the take (the game's timing uses the resulting duration); tags are non-verbal sounds, used only where the model supports them; fx is a key of 'fx'.",
+"emotions": {
+"calm": [
+0.35,
+0.5,
+0.7
+],
+"warm": [
+0.5,
+0.5,
+0.8
+],
+"dry": [
+0.4,
+0.5,
+0.7
+],
+"deadpan": [
+0.28,
+0.55,
+0.65
+],
+"sarcasm": [
+0.42,
+0.5,
+0.8
+],
+"smug": [
+0.5,
+0.45,
+0.8
+],
+"easy": [
+0.4,
+0.45,
+0.75
+],
+"flat": [
+0.25,
+0.6,
+0.6
+],
+"tired": [
+0.35,
+0.45,
+0.75
+],
+"sad": [
+0.45,
+0.4,
+0.75
+],
+"cold": [
+0.4,
+0.55,
+0.7
+],
+"suspicious": [
+0.5,
+0.45,
+0.8
+],
+"accuse": [
+0.6,
+0.4,
+0.8
+],
+"wonder": [
+0.55,
+0.45,
+0.8
+],
+"awe": [
+0.55,
+0.4,
+0.8
+],
+"anxious": [
+0.65,
+0.35,
+0.85
+],
+"fear": [
+0.8,
+0.3,
+0.85
+],
+"panic": [
+0.95,
+0.25,
+0.9
+],
+"pain": [
+0.75,
+0.3,
+0.85
+],
+"relief": [
+0.8,
+0.35,
+0.85
+],
+"hype": [
+0.8,
+0.35,
+0.9
+],
+"angry": [
+0.85,
+0.3,
+0.85
+],
+"theatrical": [
+0.65,
+0.4,
+0.8
+],
+"ominous": [
+0.5,
+0.45,
+0.7
+],
+"eerie": [
+0.3,
+0.5,
+0.6
+]
+},
+"fx": {
+"room": "aecho=0.9:0.5:23|41:0.09|0.05",
+"suit-radio": "highpass=f=320,lowpass=f=3400,acompressor=threshold=0.1:ratio=6:attack=3:release=50,acrusher=bits=11:mix=0.25",
+"breathless": "tremolo=f=5.5:d=0.12"
+},
+"lines": {
+"cine.caption1": {
+"emotion": "dry",
+"intensity": 0.5,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.25,
+"tags": [],
+"fx": "room"
+},
+"cine.caption2": {
+"emotion": "dry",
+"intensity": 0.55,
+"pace": 0.92,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"cine.line1": {
+"emotion": "wonder",
+"intensity": 0.55,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.05,
+"tags": [],
+"fx": ""
+},
+"cine.line2": {
+"emotion": "deadpan",
+"intensity": 0.35,
+"pace": 0.95,
+"pre": 0.05,
+"post": 0.05,
+"tags": [],
+"fx": ""
+},
+"cine.line3": {
+"emotion": "hype",
+"intensity": 0.8,
+"pace": 1.05,
+"pre": 0.0,
+"post": 0.05,
+"tags": [
+"laugh"
+],
+"fx": ""
+},
+"cine.ai1": {
+"emotion": "flat",
+"intensity": 0.3,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"cine.line6": {
+"emotion": "fear",
+"intensity": 0.65,
+"pace": 0.85,
+"pre": 0.15,
+"post": 0.1,
+"tags": [
+"breath"
+],
+"fx": "breathless"
+},
+"cine.ai2": {
+"emotion": "flat",
+"intensity": 0.35,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"cine.line7": {
+"emotion": "panic",
+"intensity": 0.95,
+"pace": 1.15,
+"pre": 0.0,
+"post": 0.0,
+"tags": [],
+"fx": "breathless"
+},
+"cine.line8": {
+"emotion": "panic",
+"intensity": 0.9,
+"pace": 1.1,
+"pre": 0.0,
+"post": 0.0,
+"tags": [],
+"fx": "breathless"
+},
+"wake.line1": {
+"emotion": "pain",
+"intensity": 0.6,
+"pace": 0.95,
+"pre": 0.25,
+"post": 0.1,
+"tags": [
+"groan"
+],
+"fx": ""
+},
+"wake.line2": {
+"emotion": "awe",
+"intensity": 0.6,
+"pace": 0.9,
+"pre": 0.15,
+"post": 0.1,
+"tags": [
+"breath"
+],
+"fx": ""
+},
+"wake.line3": {
+"emotion": "anxious",
+"intensity": 0.65,
+"pace": 1.0,
+"pre": 0.05,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"wake.line4": {
+"emotion": "fear",
+"intensity": 0.9,
+"pace": 1.1,
+"pre": 0.1,
+"post": 0.0,
+"tags": [
+"gasp"
+],
+"fx": "breathless"
+},
+"wake.line5": {
+"emotion": "anxious",
+"intensity": 0.6,
+"pace": 1.05,
+"pre": 0.1,
+"post": 0.1,
+"tags": [
+"breath"
+],
+"fx": ""
+},
+"medic.hint": {
+"emotion": "calm",
+"intensity": 0.4,
+"pace": 0.97,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"memory.explorer": {
+"emotion": "warm",
+"intensity": 0.45,
+"pace": 0.97,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"dlg.7.1": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 0.95,
+"pre": 0.05,
+"post": 0.1,
+"tags": [
+"sigh"
+],
+"fx": ""
+},
+"dlg.8.1": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [
+"sigh"
+],
+"fx": ""
+},
+"dlg.8.found": {
+"emotion": "relief",
+"intensity": 0.8,
+"pace": 1.08,
+"pre": 0.0,
+"post": 0.05,
+"tags": [
+"gasp"
+],
+"fx": ""
+},
+"dlg.9.1": {
+"emotion": "anxious",
+"intensity": 0.7,
+"pace": 1.0,
+"pre": 0.05,
+"post": 0.05,
+"tags": [],
+"fx": "breathless"
+},
+"dlg.9.2": {
+"emotion": "warm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"dlg.9.3": {
+"emotion": "tired",
+"intensity": 0.5,
+"pace": 0.97,
+"pre": 0.05,
+"post": 0.1,
+"tags": [
+"chuckle"
+],
+"fx": ""
+},
+"dlg.9.3b": {
+"emotion": "deadpan",
+"intensity": 0.35,
+"pace": 0.95,
+"pre": 0.1,
+"post": 0.05,
+"tags": [],
+"fx": ""
+},
+"dlg.9.3c": {
+"emotion": "tired",
+"intensity": 0.35,
+"pace": 0.95,
+"pre": 0.05,
+"post": 0.05,
+"tags": [],
+"fx": ""
+},
+"dlg.9.4": {
+"emotion": "anxious",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.05,
+"tags": [],
+"fx": ""
+},
+"dlg.9.5": {
+"emotion": "pain",
+"intensity": 0.85,
+"pace": 1.05,
+"pre": 0.0,
+"post": 0.05,
+"tags": [
+"groan"
+],
+"fx": ""
+},
+"dlg.9.6": {
+"emotion": "warm",
+"intensity": 0.6,
+"pace": 1.0,
+"pre": 0.05,
+"post": 0.1,
+"tags": [
+"chuckle"
+],
+"fx": ""
+},
+"dlg.9.7": {
+"emotion": "sad",
+"intensity": 0.5,
+"pace": 0.88,
+"pre": 0.2,
+"post": 0.15,
+"tags": [],
+"fx": ""
+},
+"dlg.9.8": {
+"emotion": "warm",
+"intensity": 0.55,
+"pace": 0.95,
+"pre": 0.1,
+"post": 0.1,
+"tags": [
+"chuckle"
+],
+"fx": ""
+},
+"dlg.9.9": {
+"emotion": "sad",
+"intensity": 0.4,
+"pace": 0.88,
+"pre": 0.1,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"dlg.10.1": {
+"emotion": "hype",
+"intensity": 0.65,
+"pace": 1.05,
+"pre": 0.0,
+"post": 0.05,
+"tags": [],
+"fx": ""
+},
+"dlg.10.2": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 0.95,
+"pre": 0.05,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"dlg.10.3": {
+"emotion": "relief",
+"intensity": 0.95,
+"pace": 1.1,
+"pre": 0.0,
+"post": 0.05,
+"tags": [
+"gasp"
+],
+"fx": "breathless"
+},
+"dlg.10.4": {
+"emotion": "fear",
+"intensity": 0.6,
+"pace": 0.95,
+"pre": 0.1,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"dlg.10.5": {
+"emotion": "fear",
+"intensity": 0.6,
+"pace": 0.9,
+"pre": 0.15,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"dlg.10.6": {
+"emotion": "fear",
+"intensity": 0.7,
+"pace": 1.0,
+"pre": 0.05,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"dlg.10.7": {
+"emotion": "panic",
+"intensity": 0.75,
+"pace": 1.08,
+"pre": 0.0,
+"post": 0.05,
+"tags": [],
+"fx": ""
+},
+"dlg.10.8": {
+"emotion": "cold",
+"intensity": 0.6,
+"pace": 0.9,
+"pre": 0.2,
+"post": 0.15,
+"tags": [],
+"fx": ""
+},
+"dlg.10.9": {
+"emotion": "anxious",
+"intensity": 0.75,
+"pace": 1.0,
+"pre": 0.05,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"dlg.10.10": {
+"emotion": "tired",
+"intensity": 0.6,
+"pace": 0.95,
+"pre": 0.15,
+"post": 0.1,
+"tags": [
+"sigh"
+],
+"fx": ""
+},
+"beacon.unknown2": {
+"emotion": "eerie",
+"intensity": 0.4,
+"pace": 0.8,
+"pre": 0.2,
+"post": 0.3,
+"tags": [],
+"fx": ""
+},
+"beacon.unknown3": {
+"emotion": "eerie",
+"intensity": 0.45,
+"pace": 0.75,
+"pre": 0.3,
+"post": 0.4,
+"tags": [],
+"fx": ""
+},
+"op.1": {
+"emotion": "hype",
+"intensity": 0.85,
+"pace": 1.08,
+"pre": 0.0,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"op.2": {
+"emotion": "deadpan",
+"intensity": 0.3,
+"pace": 0.92,
+"pre": 0.05,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"op.3": {
+"emotion": "sarcasm",
+"intensity": 0.4,
+"pace": 0.97,
+"pre": 0.1,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"op.4": {
+"emotion": "accuse",
+"intensity": 0.65,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"op.5": {
+"emotion": "anxious",
+"intensity": 0.5,
+"pace": 1.08,
+"pre": 0.05,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"op.6": {
+"emotion": "sarcasm",
+"intensity": 0.6,
+"pace": 1.02,
+"pre": 0.0,
+"post": 0.05,
+"tags": [
+"laugh"
+],
+"fx": "room"
+},
+"op.7": {
+"emotion": "easy",
+"intensity": 0.4,
+"pace": 0.92,
+"pre": 0.05,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"op.8": {
+"emotion": "sarcasm",
+"intensity": 0.45,
+"pace": 0.97,
+"pre": 0.1,
+"post": 0.05,
+"tags": [
+"sigh"
+],
+"fx": "room"
+},
+"op.9": {
+"emotion": "hype",
+"intensity": 0.75,
+"pace": 1.05,
+"pre": 0.0,
+"post": 0.05,
+"tags": [
+"laugh"
+],
+"fx": "room"
+},
+"op.10": {
+"emotion": "deadpan",
+"intensity": 0.3,
+"pace": 0.92,
+"pre": 0.05,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"op.11": {
+"emotion": "smug",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.05,
+"post": 0.05,
+"tags": [
+"sigh"
+],
+"fx": "room"
+},
+"op.12": {
+"emotion": "suspicious",
+"intensity": 0.6,
+"pace": 0.95,
+"pre": 0.1,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"op.13": {
+"emotion": "anxious",
+"intensity": 0.55,
+"pace": 0.95,
+"pre": 0.1,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"op.14": {
+"emotion": "deadpan",
+"intensity": 0.45,
+"pace": 0.92,
+"pre": 0.1,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"op.15": {
+"emotion": "anxious",
+"intensity": 0.6,
+"pace": 1.08,
+"pre": 0.0,
+"post": 0.05,
+"tags": [
+"chuckle"
+],
+"fx": "room"
+},
+"op.16": {
+"emotion": "sarcasm",
+"intensity": 0.45,
+"pace": 0.95,
+"pre": 0.15,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"op.17": {
+"emotion": "anxious",
+"intensity": 0.65,
+"pace": 0.92,
+"pre": 0.15,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"op.18": {
+"emotion": "fear",
+"intensity": 0.6,
+"pace": 0.97,
+"pre": 0.05,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"op.19": {
+"emotion": "fear",
+"intensity": 0.7,
+"pace": 1.0,
+"pre": 0.05,
+"post": 0.05,
+"tags": [
+"chuckle"
+],
+"fx": "room"
+},
+"op.20": {
+"emotion": "panic",
+"intensity": 0.8,
+"pace": 1.05,
+"pre": 0.0,
+"post": 0.0,
+"tags": [],
+"fx": "room"
+},
+"op.21": {
+"emotion": "panic",
+"intensity": 0.95,
+"pace": 1.1,
+"pre": 0.0,
+"post": 0.0,
+"tags": [],
+"fx": "breathless"
+},
+"dlg.4.1": {
+"emotion": "smug",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.05,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"dlg.4.2": {
+"emotion": "deadpan",
+"intensity": 0.4,
+"pace": 0.92,
+"pre": 0.2,
+"post": 0.1,
+"tags": [
+"sigh"
+],
+"fx": ""
+},
+"dlg.4.3": {
+"emotion": "sarcasm",
+"intensity": 0.55,
+"pace": 0.97,
+"pre": 0.05,
+"post": 0.1,
+"tags": [
+"groan"
+],
+"fx": ""
+},
+"dlg.4.4": {
+"emotion": "hype",
+"intensity": 0.9,
+"pace": 1.1,
+"pre": 0.0,
+"post": 0.1,
+"tags": [
+"laugh"
+],
+"fx": ""
+},
+"fb.1": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 0.92,
+"pre": 0.0,
+"post": 0.25,
+"tags": [],
+"fx": "room"
+},
+"fb.2": {
+"emotion": "angry",
+"intensity": 0.6,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"fb.3": {
+"emotion": "angry",
+"intensity": 0.9,
+"pace": 1.1,
+"pre": 0.0,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"fb.4": {
+"emotion": "cold",
+"intensity": 0.7,
+"pace": 0.95,
+"pre": 0.1,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"fb.5": {
+"emotion": "calm",
+"intensity": 0.5,
+"pace": 0.95,
+"pre": 0.1,
+"post": 0.1,
+"tags": [
+"sigh"
+],
+"fx": "room"
+},
+"fb.6": {
+"emotion": "cold",
+"intensity": 0.6,
+"pace": 0.95,
+"pre": 0.1,
+"post": 0.15,
+"tags": [],
+"fx": "room"
+},
+"fb.7": {
+"emotion": "sad",
+"intensity": 0.5,
+"pace": 0.88,
+"pre": 0.3,
+"post": 0.15,
+"tags": [],
+"fx": "room"
+},
+"fb.8": {
+"emotion": "hype",
+"intensity": 0.8,
+"pace": 1.08,
+"pre": 0.0,
+"post": 0.05,
+"tags": [],
+"fx": "room"
+},
+"fb.9": {
+"emotion": "easy",
+"intensity": 0.4,
+"pace": 0.92,
+"pre": 0.1,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"fb.10": {
+"emotion": "sad",
+"intensity": 0.6,
+"pace": 0.85,
+"pre": 0.2,
+"post": 0.25,
+"tags": [
+"breath"
+],
+"fx": ""
+},
+"dlg.7.2": {
+"emotion": "fear",
+"intensity": 0.8,
+"pace": 1.02,
+"pre": 0.05,
+"post": 0.05,
+"tags": [
+"gasp"
+],
+"fx": "breathless"
+},
+"dlg.7.3": {
+"emotion": "relief",
+"intensity": 0.75,
+"pace": 1.05,
+"pre": 0.05,
+"post": 0.1,
+"tags": [
+"laugh"
+],
+"fx": "breathless"
+},
+"rad.strong": {
+"emotion": "hype",
+"intensity": 0.75,
+"pace": 1.05,
+"pre": 0.0,
+"post": 0.05,
+"tags": [],
+"fx": "suit-radio"
+},
+"rad.medic": {
+"emotion": "dry",
+"intensity": 0.4,
+"pace": 0.97,
+"pre": 0.0,
+"post": 0.05,
+"tags": [
+"sigh"
+],
+"fx": "suit-radio"
+},
+"rad.builder": {
+"emotion": "easy",
+"intensity": 0.4,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.05,
+"tags": [
+"chuckle"
+],
+"fx": "suit-radio"
+},
+"rad.social": {
+"emotion": "hype",
+"intensity": 0.85,
+"pace": 1.08,
+"pre": 0.0,
+"post": 0.05,
+"tags": [
+"laugh"
+],
+"fx": "suit-radio"
+},
+"j.1": {
+"emotion": "sarcasm",
+"intensity": 0.55,
+"pace": 1.0,
+"pre": 0.05,
+"post": 0.1,
+"tags": [
+"sigh"
+],
+"fx": ""
+},
+"j.2": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 0.97,
+"pre": 0.05,
+"post": 0.1,
+"tags": [
+"sigh"
+],
+"fx": ""
+},
+"j.3": {
+"emotion": "easy",
+"intensity": 0.5,
+"pace": 0.97,
+"pre": 0.05,
+"post": 0.1,
+"tags": [
+"chuckle"
+],
+"fx": ""
+},
+"j.4": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 0.97,
+"pre": 0.05,
+"post": 0.1,
+"tags": [
+"sigh"
+],
+"fx": ""
+},
+"j.5": {
+"emotion": "tired",
+"intensity": 0.5,
+"pace": 0.92,
+"pre": 0.1,
+"post": 0.1,
+"tags": [
+"groan"
+],
+"fx": ""
+},
+"j.6": {
+"emotion": "dry",
+"intensity": 0.6,
+"pace": 0.92,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"j.7": {
+"emotion": "sarcasm",
+"intensity": 0.55,
+"pace": 1.0,
+"pre": 0.05,
+"post": 0.1,
+"tags": [
+"chuckle"
+],
+"fx": ""
+},
+"j.8": {
+"emotion": "dry",
+"intensity": 0.55,
+"pace": 0.92,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"j.9": {
+"emotion": "deadpan",
+"intensity": 0.4,
+"pace": 0.92,
+"pre": 0.05,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"mz.intro.1": {
+"emotion": "dry",
+"intensity": 0.6,
+"pace": 0.93,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.intro.2": {
+"emotion": "theatrical",
+"intensity": 0.7,
+"pace": 0.9,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.intro.3": {
+"emotion": "dry",
+"intensity": 0.6,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.intro.4": {
+"emotion": "ominous",
+"intensity": 0.55,
+"pace": 0.9,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.intro.5": {
+"emotion": "theatrical",
+"intensity": 0.65,
+"pace": 0.92,
+"pre": 0.0,
+"post": 0.25,
+"tags": [],
+"fx": "room"
+},
+"mz.l3.1": {
+"emotion": "dry",
+"intensity": 0.55,
+"pace": 0.93,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.l3.red": {
+"emotion": "dry",
+"intensity": 0.6,
+"pace": 0.9,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.l3.safe": {
+"emotion": "dry",
+"intensity": 0.55,
+"pace": 0.93,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.l3.died": {
+"emotion": "theatrical",
+"intensity": 0.65,
+"pace": 0.93,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.l3.hint": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.l3.2": {
+"emotion": "ominous",
+"intensity": 0.6,
+"pace": 0.88,
+"pre": 0.0,
+"post": 0.25,
+"tags": [],
+"fx": "room"
+},
+"mz.l7.1": {
+"emotion": "dry",
+"intensity": 0.55,
+"pace": 0.93,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.l7.clean": {
+"emotion": "theatrical",
+"intensity": 0.75,
+"pace": 0.97,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.l7.bitten": {
+"emotion": "dry",
+"intensity": 0.65,
+"pace": 0.93,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.l7.2": {
+"emotion": "ominous",
+"intensity": 0.55,
+"pace": 0.9,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.l7.hint": {
+"emotion": "ominous",
+"intensity": 0.5,
+"pace": 0.92,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"mz.ch1.1": {
+"emotion": "ominous",
+"intensity": 0.6,
+"pace": 0.9,
+"pre": 0.0,
+"post": 0.25,
+"tags": [],
+"fx": "room"
+},
+"mz.ch1.names": {
+"emotion": "ominous",
+"intensity": 0.65,
+"pace": 0.88,
+"pre": 0.0,
+"post": 0.25,
+"tags": [],
+"fx": "room"
+},
+"mz.ch1.nonames": {
+"emotion": "ominous",
+"intensity": 0.6,
+"pace": 0.9,
+"pre": 0.0,
+"post": 0.25,
+"tags": [],
+"fx": "room"
+},
+"mz.ch1.2": {
+"emotion": "ominous",
+"intensity": 0.65,
+"pace": 0.88,
+"pre": 0.0,
+"post": 0.25,
+"tags": [],
+"fx": "room"
+},
+"mz.ch1.3": {
+"emotion": "theatrical",
+"intensity": 0.65,
+"pace": 0.9,
+"pre": 0.0,
+"post": 0.25,
+"tags": [],
+"fx": "room"
+},
+"mz.ch1.4": {
+"emotion": "dry",
+"intensity": 0.5,
+"pace": 0.92,
+"pre": 0.0,
+"post": 0.35,
+"tags": [],
+"fx": "room"
+},
+"npc.trader.hi": {
+"emotion": "smug",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trader.done": {
+"emotion": "smug",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trader.no": {
+"emotion": "smug",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.local.hi": {
+"emotion": "calm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"npc.local.ask": {
+"emotion": "calm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"npc.local.done": {
+"emotion": "calm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"npc.hermit.1": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.hermit.2": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trav.1": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trav.2": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.cameo.1": {
+"emotion": "deadpan",
+"intensity": 0.3,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.cameo.2": {
+"emotion": "deadpan",
+"intensity": 0.3,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"codex.knapping.text": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"codex.knapping.joke": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+},
+"codex.cordage.text": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"codex.cordage.joke": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+},
+"codex.fire.text": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"codex.fire.joke": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+},
+"codex.pottery.text": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"codex.pottery.joke": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+},
+"codex.charcoal.text": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"codex.charcoal.joke": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"codex.lime.text": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"codex.lime.joke": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+},
+"codex.salt.text": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"codex.salt.joke": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+},
+"codex.glass.text": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"codex.glass.joke": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+},
+"codex.soap.text": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"codex.soap.joke": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+},
+"codex.fermentation.text": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"codex.fermentation.joke": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+},
+"codex.acids.text": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"codex.acids.joke": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"warn.fire": {
+"emotion": "calm",
+"intensity": 0.3,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"warn.heat": {
+"emotion": "calm",
+"intensity": 0.3,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"warn.chemical": {
+"emotion": "calm",
+"intensity": 0.3,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"warn.electric": {
+"emotion": "calm",
+"intensity": 0.3,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"warn.sharp": {
+"emotion": "calm",
+"intensity": 0.3,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"warn.pressure": {
+"emotion": "calm",
+"intensity": 0.3,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"safety.text": {
+"emotion": "calm",
+"intensity": 0.3,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"safety.joke": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"fail.1": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"fail.2": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"fail.3": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"fail.4": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"teach.knapping": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"after.knapping": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"teach.cordage": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"after.cordage": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"teach.fire": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"after.fire": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"teach.pottery": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"after.pottery": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"teach.charcoal": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"after.charcoal": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"teach.lime": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"after.lime": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"teach.salt": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"after.salt": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"teach.glass": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"after.glass": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"teach.soap": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"after.soap": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"teach.fermentation": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"after.fermentation": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"teach.acids": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"after.acids": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"ch2.intro.1": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"ch2.intro.2": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"ch2.intro.3": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+},
+"ch2.beacon.fire": {
+"emotion": "eerie",
+"intensity": 0.4,
+"pace": 0.8,
+"pre": 0.2,
+"post": 0.3,
+"tags": [],
+"fx": ""
+},
+"ch2.beacon.pottery": {
+"emotion": "eerie",
+"intensity": 0.4,
+"pace": 0.8,
+"pre": 0.2,
+"post": 0.3,
+"tags": [],
+"fx": ""
+},
+"ch2.beacon.glass": {
+"emotion": "eerie",
+"intensity": 0.4,
+"pace": 0.8,
+"pre": 0.2,
+"post": 0.3,
+"tags": [],
+"fx": ""
+},
+"ch2.beacon.react": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"ch2.end.1": {
+"emotion": "eerie",
+"intensity": 0.4,
+"pace": 0.8,
+"pre": 0.2,
+"post": 0.3,
+"tags": [],
+"fx": ""
+},
+"ch2.end.2": {
+"emotion": "fear",
+"intensity": 0.4,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"ch2.end.3": {
+"emotion": "eerie",
+"intensity": 0.4,
+"pace": 0.8,
+"pre": 0.2,
+"post": 0.3,
+"tags": [],
+"fx": ""
+},
+"ch2.end.4": {
+"emotion": "fear",
+"intensity": 0.4,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"mz.ch2.1": {
+"emotion": "dry",
+"intensity": 0.5,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"mz.ch2.clean": {
+"emotion": "dry",
+"intensity": 0.5,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"mz.ch2.messy": {
+"emotion": "dry",
+"intensity": 0.5,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"mz.ch2.2": {
+"emotion": "ominous",
+"intensity": 0.5,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"mz.ch2.3": {
+"emotion": "ominous",
+"intensity": 0.5,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"npc.trader.back": {
+"emotion": "smug",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trader.dead": {
+"emotion": "smug",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trader.salt": {
+"emotion": "smug",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trader.menu": {
+"emotion": "smug",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trader.q": {
+"emotion": "smug",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trader.qdone": {
+"emotion": "smug",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trader.tip": {
+"emotion": "smug",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.local.dead": {
+"emotion": "calm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"npc.local.soap": {
+"emotion": "calm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"npc.local.cord": {
+"emotion": "calm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"npc.local.clay": {
+"emotion": "calm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"npc.local.q": {
+"emotion": "calm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"npc.local.qdone": {
+"emotion": "calm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"npc.hermit.dead": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.hermit.voice": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.hermit.lime": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.hermit.glass": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.hermit.soon": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trav.refund": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trav.dead": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trav.soap": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trav.q": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"npc.trav.qdone": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"sk.hi": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"sk.dead": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"sk.fails": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"sk.leg": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"sk.done": {
+"emotion": "easy",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"rad.ch2.strong": {
+"emotion": "easy",
+"intensity": 0.4,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+},
+"rad.ch2.medic": {
+"emotion": "easy",
+"intensity": 0.4,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+},
+"rad.ch2.builder": {
+"emotion": "easy",
+"intensity": 0.4,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+},
+"rad.ch2.social": {
+"emotion": "easy",
+"intensity": 0.4,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "suit-radio"
+}
+}
 }

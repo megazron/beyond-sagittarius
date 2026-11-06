@@ -26,6 +26,9 @@ const ICONS: Record<string, string> = {
   spear: s('M3 21L16 8M16 8l1-5 4 4-5 1zM6 13l5 5'),
   transmitter: s('M4 11h16v10H4zM7 11L18 3M8 16h3M15 15v2M18 15v2'),
   water: s('M2 8l5-3 5 3 5-3 5 3M2 14l5-3 5 3 5-3 5 3M2 20l5-3 5 3 5-3 5 3'),
+  pot: s('M8 3h8l-1 4 4 5v5l-3 4H8l-3-4v-5l4-5zM5 13h14'),
+  crystal: s('M12 2l7 7-7 13L5 9zM5 9h14M9 9l3 13 3-13'),
+  codex: s('M4 4h7l1 2 1-2h7v16h-7l-1 2-1-2H4zM12 6v14M7 9h2M7 13h2M15 9h2M15 13h2'),
   // buttons and menus
   pause: f('M6 4h4v16H6zM14 4h4v16h-4z'),
   play: f('M6 3l14 9-14 9z'),

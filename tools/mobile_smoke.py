@@ -66,11 +66,11 @@ LAYOUT_JS = """() => {
   const vw = innerWidth, vh = innerHeight, out = [];
   const box = (s) => { const e = document.querySelector(s); if (!e || e.offsetParent === null && getComputedStyle(e).position !== 'fixed') return null;
     const r = e.getBoundingClientRect(); return r.width && r.height ? r : null; };
-  const sels = ['.quest', '#tb-act', '#tb-inv', '#tb-pause', '#tutorial'];
+  const sels = ['.quest', '#tb-act', '#tb-inv', '#tb-pause', '#tb-codex', '#tutorial'];
   const rects = {};
   for (const s of sels) { const r = box(s); if (!r) continue; rects[s] = r;
     if (r.left < -1 || r.top < -1 || r.right > vw + 1 || r.bottom > vh + 1) out.push(`${s} off-screen ${JSON.stringify([r.left, r.top, r.right, r.bottom].map(Math.round))}`); }
-  const pairs = [['.quest', '#tb-pause'], ['#tutorial', '#tb-act'], ['#tutorial', '#tb-inv'], ['#tb-inv', '#tb-act'], ['#tutorial', '.quest']];
+  const pairs = [['.quest', '#tb-pause'], ['#tutorial', '#tb-act'], ['#tutorial', '#tb-inv'], ['#tb-inv', '#tb-act'], ['#tutorial', '.quest'], ['.quest', '#tb-codex'], ['#tb-codex', '#tb-pause'], ['#tutorial', '#tb-codex']];
   for (const [a, b] of pairs) { const A = rects[a], B = rects[b]; if (!A || !B) continue;
     if (A.left < B.right - 2 && B.left < A.right - 2 && A.top < B.bottom - 2 && B.top < A.bottom - 2) out.push(`${a} overlaps ${b}`); }
   const se = document.scrollingElement;
@@ -93,7 +93,7 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     errors = []
     page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
     page.on("console", lambda m: errors.append(f"console.{m.type}: {m.text}") if m.type == "error" else None)
-    page.add_init_script("localStorage.setItem('bs-settings-v1', JSON.stringify({lang: 'en', sensitivity: 1, invertY: false, volume: 0, subtitles: true, showFps: false}))")
+    page.add_init_script("if (!localStorage.getItem('bs-settings-v1')) localStorage.setItem('bs-settings-v1', JSON.stringify({lang: 'en', sensitivity: 1, invertY: false, volume: 0, subtitles: true, showFps: false}))")
     touch = Touch(ctx.new_cdp_session(page))
     shot = lambda name: page.screenshot(path=str(shots / f"{tag}-{name}.jpg"), type="jpeg", quality=82)
     ev = page.evaluate
@@ -107,6 +107,23 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     if q != "mobile":
         fail(f"expected the Mobile preset, got {q}")
     time.sleep(1.5)
+    # first launch: the safety notice and the accept, with a thumb
+    page.wait_for_selector("#sf-ok", timeout=5000)
+    shot("00-safety")
+    box = page.locator("#safety .safety-card").bounding_box()
+    if box["x"] < 0 or box["x"] + box["width"] > dev["viewport"]["width"] + 1 or box["y"] < 0 or box["y"] + box["height"] > dev["viewport"]["height"] + 1:
+        fail(f"safety card off-screen: {box}")
+    if page.locator("#sf-ok").bounding_box()["height"] < 40:
+        fail("accept button too small to tap")
+    touch.tap(*centre(page, "#sf-ok"))
+    time.sleep(0.4)
+    if not ev("__bs.consent") or page.locator("#sf-ok").is_visible():
+        fail("safety card did not accept by touch")
+    page.reload(wait_until="domcontentloaded")
+    page.wait_for_function("window.__bs && window.__bs.ready", timeout=300000)
+    time.sleep(1)
+    if page.locator("#sf-ok").is_visible():
+        fail("safety card came back after accepting")
     shot("01-title")
     for m in ev(LAYOUT_JS):
         fail(f"title: {m}")
@@ -269,6 +286,91 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     ev("__bs.teleport(-28, -78, 0.73)")
     time.sleep(2.5)
     shot("10-lake")
+
+    # ---- Chapter Two on a phone: codex, minigame, discovery, dialogue ----
+    ev("""(() => { const s = __bs.save; s.level = 11; s.completed = [1,2,3,4,5,6,7,8,9,10]; s.flags.crewCamp = true; s.flags.ch2Intro = true;
+        Object.assign(s.inventory, { nodule: 2, stone: 1, branch: 2 }); })()""")
+    ev("__bs.gotoObjective(0.4)")
+    ev("__bs.step(0.4)")
+    time.sleep(0.5)
+    if not ev("document.body.classList.contains('can-act')"):
+        fail(f"no craft prompt at camp: {ev('__bs.prompt')}")
+    touch.tap(*centre(page, "#tb-act"))
+    time.sleep(0.3)
+    ev("__bs.step(0.1)")
+    page.wait_for_selector("#craft:not(.hidden)", timeout=10000)
+    shot("11-craft")
+    b = page.locator("#mg-main").bounding_box()
+    if b["height"] < 44 or b["y"] + b["height"] > vh + 1:
+        fail(f"craft button unusable: {b}")
+    for _ in range(4000):
+        c = ev("__bs.craft")
+        if not c:
+            break
+        if c["failed"]:
+            touch.tap(*centre(page, "#mg-main"))
+            continue
+        lo, hi = c["band"]
+        if lo + 0.03 < c["v"] < hi - 0.03:
+            bx = page.locator("#mg-main").bounding_box()
+            touch.tap(bx["x"] + bx["width"] / 2, bx["y"] + bx["height"] / 2)
+        ev("__bs.step(0.05)")
+    page.wait_for_selector("#disc:not(.hidden)", timeout=5000)
+    time.sleep(0.3)
+    shot("12-discovery")
+    if "Sharp stone" not in page.inner_text("#disc"):
+        fail("no sharp-tool warning on the knapping discovery")
+    touch.tap(*centre(page, "#disc-ok"))
+    ev("__bs.step(0.3)")
+    if "knapping" not in ev("__bs.save.discoveries"):
+        fail("discovery not saved")
+    ev("__bs.step(0.5)")
+    touch.tap(*centre(page, "#tb-codex"))
+    page.wait_for_selector(".cx-ages", timeout=5000)
+    time.sleep(0.3)
+    shot("13-codex")
+    if ev("document.scrollingElement.scrollWidth") > ev("innerWidth") + 1:
+        fail("codex scrolls sideways")
+    touch.tap(*centre(page, ".cx-node[data-id=knapping]"))
+    time.sleep(0.3)
+    if "conchoidal" in page.inner_text(".cx-detail:not(.hidden)") or "Flint breaks" not in page.inner_text(".cx-detail:not(.hidden)"):
+        fail("codex entry did not open by touch")
+    touch.tap(*centre(page, ".cx-node[data-id=shiphome]"))
+    time.sleep(0.3)
+    if "Planned" not in page.inner_text(".cx-detail:not(.hidden)"):
+        fail("planned entry not locked in the codex")
+    shot("14-codex-entry")
+    touch.tap(*centre(page, "#m-close"))
+    ev("__bs.step(0.3)")
+    n = next(x for x in ev("__bs.npcs") if x["id"] == "trader")
+    ev(f"__bs.teleport({n['pos'][0] + 1}, {n['pos'][2]}, 0)")
+    ev("__bs.step(0.2)")
+    n = next(x for x in ev("__bs.npcs") if x["id"] == "trader")
+    ev(f"__bs.teleport({n['pos'][0] + 1}, {n['pos'][2]}, 0)")
+    ev("__bs.step(0.1)")
+    time.sleep(0.3)
+    touch.tap(*centre(page, "#tb-act"))
+    time.sleep(0.3)
+    ev("__bs.step(0.1)")
+    page.wait_for_selector("#dialog:not(.hidden)", timeout=10000)
+    time.sleep(0.3)
+    shot("15-dialogue")
+    b = page.locator("#dialog").bounding_box()
+    if b["x"] < -1 or b["x"] + b["width"] > vw + 1 or b["y"] < -1 or b["y"] + b["height"] > vh + 1:
+        fail(f"dialogue panel off-screen: {b}")
+    touch.tap(*centre(page, '#dlg-choices button[data-c="ch.trade"]'))
+    time.sleep(0.2)
+    if ev("__bs.talk.node") != "shop":
+        fail("dialogue choice did not work by touch")
+    touch.tap(*centre(page, '#dlg-choices button[data-c="ch.tradeflint"]'))
+    time.sleep(0.2)
+    if ev("__bs.save.inventory.flint") < 1:
+        fail("touch trade did not deliver")
+    touch.tap(*centre(page, '#dlg-choices button[data-c="ch.bye"]'))
+    time.sleep(0.2)
+    ev("__bs.step(0.2)")
+    if ev("__bs.mode") != "play":
+        fail("did not return to play after the dialogue")
     ctx.close()
     browser.close()
     real = [e for e in errors if "fonts.g" not in e and "net::ERR" not in e]
