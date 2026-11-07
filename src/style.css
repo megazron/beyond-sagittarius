@@ -107,6 +107,7 @@ body.lang-ur .tagline { font-family: var(--font-story); line-height: 2.3; }
 .btn.skip::before { display: none; }
 .btn.skip:hover, .btn.skip:focus-visible, body.dev-pad .btn.skip:focus { padding-inline-start: 10px; }
 #film { position: absolute; inset: 0; }
+.film-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
 #film-card { position: absolute; left: 7vw; bottom: 17vh; display: flex; gap: 16px; align-items: stretch; opacity: 0; will-change: transform, opacity; text-shadow: 0 2px 14px rgba(0,0,0,0.85); }
 #fc-bar { width: 7px; background: #fff; }
 #fc-name { font: 600 clamp(38px, 6vw, 84px)/1 var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; }

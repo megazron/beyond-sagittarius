@@ -7,6 +7,7 @@ import { t } from '../i18n';
 import { Renderer } from '../core/renderer';
 import type { Character, CrewId, CrewPose, Dir, Face, Limbs } from '../characters/character';
 import type { Cinematic } from './cinematic';
+import { FilmVideo } from './filmvideo';
 import type { World } from '../world/world';
 import { LAKE } from '../world/heightfield';
 
@@ -256,6 +257,13 @@ export class Montage {
   private seen = new Set<CrewId>();
   private posed: Partial<Record<CrewId, CrewPose>> = {};
   private fx: Parameters<Renderer['setFilm']>[0] = {};
+  private video: FilmVideo | null = null;
+  /** Phones take the small encode. */
+  small = false;
+  /** The picture is a video: the 3D view need not be drawn. */
+  get videoOn() { return !!this.video; }
+  /** The lens effects of the current frame, for the offline grade. */
+  get lensFx() { return this.fx; }
   private time = 0;
   private lastCue = -1;
   private onDone: (() => void) | null = null;
@@ -468,6 +476,8 @@ export class Montage {
     this.time = 0; this.cur = null; this.inWorld = false; this.lastCue = -1;
     this.el.root.classList.remove('hidden');
     this.el.card.style.opacity = '0'; this.el.title.style.opacity = '0';
+    // the rendered film if there is one; test runs on a held clock always use the real-time scene
+    this.video = this.manual ? null : await FilmVideo.open('scatter', this.el.root, this.small);
     this.playing = true;
     this.score = await audio.playScore('theme', 'theme_sfx');
   }
@@ -486,6 +496,7 @@ export class Montage {
 
   private finish() {
     this.playing = false;
+    this.video?.close(); this.video = null;
     this.score?.stop(); this.score = null;
     this.ui.subtitle(null);
     voice.stop();
@@ -691,7 +702,7 @@ export class Montage {
       (['explorer', 'builder'] as CrewId[]).forEach((id, n) => {
         const u = clamp((k - 0.12 - n * 0.36) / 0.5, 0, 1);
         if (u <= 0 || u >= 1) { this.cast[id].root.visible = false; return; }
-        this.act(id, V(lerp(-2.6, -0.4, u) + n * 0.5, -1.2 + u * 1.1, lerp(1.6, -4.4, u)), new THREE.Quaternion().setFromEuler(new THREE.Euler(u * 5 + n, u * 3.4, u * 2.6)), 'float', flail({ ...FALL.spread, openHands: true }, t, n * 7, 0.9), { fear: 0.9, open: 0.6 });
+        this.act(id, V(lerp(-4.2, 2.8, u), -1.6 + u * 1.2 + n * 0.3, 1.5 + n * 0.8 - u * 0.6), new THREE.Quaternion().setFromEuler(new THREE.Euler(u * 5 + n, u * 3.4, u * 2.6)), 'float', flail({ ...FALL.spread, openHands: true }, t, n * 7, 0.9), { fear: 0.9, open: 0.6 });
       });
       const h = c.head.getWorldPosition(tmp);
       this.lens(V(h.x + 1.3 - k * 0.3, h.y - 0.1, h.z - 2.3 + k * 0.5).add(shakeAt(b, 0.012, this.tmp2)), V(h.x, h.y - 0.15, h.z), 34, 2.4, 0.012, 0.06);
@@ -1066,7 +1077,7 @@ export class Montage {
     }
     this.set.tick(dt);
     if (shot && this.inWorld) this.set.camera.updateMatrixWorld();
-    Renderer.current?.setFilm(this.fx);
+    if (this.video) this.video.sync(this.time); else Renderer.current?.setFilm(this.fx);
   }
 }
 

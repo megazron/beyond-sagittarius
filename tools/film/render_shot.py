@@ -167,19 +167,19 @@ for f, d in data.items():
 
 # light: the game's own rig, in real watts, plus the black hole itself as the world
 for i in range(8):
-    ld = bpy.data.lights.new(f'l{i}', 'POINT'); ld.shadow_soft_size = .35; lo = bpy.data.objects.new(f'l{i}', ld); sc.collection.objects.link(lo)
+    ld = bpy.data.lights.new(f'l{i}', 'POINT'); ld.shadow_soft_size = .6; lo = bpy.data.objects.new(f'l{i}', ld); sc.collection.objects.link(lo)
     for f, d in data.items():
         L = [x for x in d['lights'] if x['type'] == 'PointLight' and x['i'] > 0]
         L.sort(key=lambda x: -x['i'])
         if i < len(L):
-            x = L[i]; lo.location = C @ Vector(x['p']); ld.color = hexc(x['color'])[:3]; ld.energy = x['i'] * 14
+            x = L[i]; lo.location = C @ Vector(x['p']); ld.color = hexc(x['color'])[:3]; ld.energy = x['i'] * 34
         else:
             ld.energy = 0
         lo.keyframe_insert('location', frame=f); ld.keyframe_insert('energy', frame=f); ld.keyframe_insert('color', frame=f)
 w = bpy.data.worlds.new('w'); sc.world = w; w.use_nodes = True; nt = w.node_tree
 bg = nt.nodes['Background']; bg.inputs[1].default_value = 1
 if a.plate:
-    e = nt.nodes.new('ShaderNodeTexEnvironment'); e.image = image(os.path.expanduser(a.plate)); mp = nt.nodes.new('ShaderNodeMapping'); tc = nt.nodes.new('ShaderNodeTexCoord')
+    e = nt.nodes.new('ShaderNodeTexEnvironment'); e.interpolation = 'Cubic'; e.image = image(os.path.expanduser(a.plate)); mp = nt.nodes.new('ShaderNodeMapping'); tc = nt.nodes.new('ShaderNodeTexCoord')
     nt.links.new(tc.outputs['Generated'], mp.inputs['Vector']); nt.links.new(mp.outputs[0], e.inputs['Vector']); nt.links.new(e.outputs[0], bg.inputs[0])
     for f, d in data.items():
         h = d.get('hole')

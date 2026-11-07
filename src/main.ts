@@ -94,6 +94,7 @@ syncDevice();
 const cine = new Cinematic(ui);
 const film = new Montage(cine, () => (worldReady ? world : null), (sc, cam, ao) => renderer.setScene(sc, cam, ao), () => pendingLook.glow, () => (player ? [player.model.root, ...(game?.story.npcs.roots() ?? [])] : []), ui);
 const vault = new Vault((k, sp) => ui.subtitle(k, sp), quality.name === 'mobile' ? 0.6 : 1);
+film.small = quality.name === 'mobile';
 const world = new World(quality);
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2400);
 let player: Player;
@@ -596,7 +597,7 @@ function draw(dt: number) {
   const activeCam = stage.active ? stage.camera : state === 'game' ? camera : state === 'narrator' ? vault.camera : state === 'film' && film.inWorld ? film.wcam : cine.camera;
   const designFov = activeCam.fov;
   fitFov(activeCam);
-  renderer.render(dt, elapsed);
+  if (!(state === 'film' && film.videoOn)) renderer.render(dt, elapsed);
   if (activeCam.fov !== designFov) { activeCam.fov = designFov; activeCam.updateProjectionMatrix(); }
   input.endFrame();
   fpsFrames++;
@@ -732,7 +733,7 @@ window.addEventListener('resize', () => {
   hold(on: boolean) { hold.on = on; film.manual = on; },
   advance(sec: number) { hold.pending = sec; },
   get frames() { return hold.done; },
-  film: { seek(b: number) { film.seek(b); }, get playing() { return film.playing; }, get beat() { return film.beat; }, get seconds() { return film.lengthSeconds; }, start() { state = 'film'; renderer.setScene(cine.scene, cine.camera, false); ui.show('title', false); ui.show('cine', true); ui.fade('black', 0, 0); void film.play(() => {}); } },
+  film: { get fx() { return film.lensFx; }, get video() { return film.videoOn; }, seek(b: number) { film.seek(b); }, get playing() { return film.playing; }, get beat() { return film.beat; }, get seconds() { return film.lengthSeconds; }, start() { state = 'film'; renderer.setScene(cine.scene, cine.camera, false); ui.show('title', false); ui.show('cine', true); ui.fade('black', 0, 0); void film.play(() => {}); } },
   stageInfo() { return renderer.stageInfo(); },
   cineTime() { return cine.time; },
   get stagePlaying() { return cine.staged; },
