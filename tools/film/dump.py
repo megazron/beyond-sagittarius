@@ -14,9 +14,29 @@ from smoke import launch, serve  # noqa: E402
 ap = argparse.ArgumentParser()
 ap.add_argument('--out', required=True); ap.add_argument('--from', dest='b0', type=float, default=0); ap.add_argument('--to', dest='b1', type=float, default=132)
 ap.add_argument('--fps', type=float, default=24); ap.add_argument('--port', type=int, default=4187); ap.add_argument('--quality', default='ultra')
+ap.add_argument('--stage', default=''); ap.add_argument('--timing', default='')
 a = ap.parse_args()
 out = pathlib.Path(a.out).expanduser(); (out / 'frames').mkdir(parents=True, exist_ok=True); (out / 'fresh').mkdir(exist_ok=True)
 BEAT = 0.375
+if a.stage:
+    # a dev stage: frames are a function of seconds, timing comes from the EDL
+    T = json.load(open(a.timing)); last = T['length']
+    with sync_playwright() as pw:
+        b = launch(pw); page = b.new_page(viewport={'width': 320, 'height': 180})
+        page.on('pageerror', lambda e: print('pageerror', str(e)[:300], flush=True))
+        page.goto(a.stage, wait_until='domcontentloaded', timeout=120000)
+        page.wait_for_function('window.ready === true', timeout=300000)
+        page.evaluate((HERE / 'dump.js').read_text()); page.evaluate('(t) => __entry.load(t)', T)
+        known = set(); t0 = time.time(); total = int(last * a.fps)
+        for f in range(total):
+            d = page.evaluate(f'(() => {{ __entry.frame({f / a.fps}); return __filmDump(); }})()')
+            for k, v in d.pop('fresh').items():
+                if k not in known:
+                    (out / 'fresh' / f'{k}.json').write_text(json.dumps(v)); known.add(k)
+            (out / 'frames' / f'{f:05d}.json').write_text(json.dumps(d))
+            if f % 48 == 0: print(f'{f}/{total} meshes {len(d["meshes"])} {time.time() - t0:.0f}s', flush=True)
+        b.close()
+    print('done', flush=True); sys.exit(0)
 httpd = serve(a.port)
 with sync_playwright() as pw:
     b = launch(pw)

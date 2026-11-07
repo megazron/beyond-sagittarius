@@ -1,0 +1,87 @@
+// Dev-only stage for the rendered black hole entry. Never shipped: tools/film/dump.py --stage films it for Blender.
+import * as THREE from 'three';
+import { createShip, createInterior } from '../src/cinematic/ship';
+import { flail, mixLimbs, FALL, STANDING, nz } from '../src/cinematic/montage';
+import type { Character, CrewPose, Limbs, Face } from '../src/characters/character';
+
+const canvas = document.getElementById('c') as HTMLCanvasElement;
+const r = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true }); r.setSize(320, 180);
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(30, 16 / 9, 0.05, 4000);
+const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+const ship = createShip(); scene.add(ship.group);
+const deck = createInterior(1); scene.add(deck.group);
+const ids = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social'] as const;
+const C = Object.fromEntries(ids.map((id, i) => [id, deck.crew[i]])) as Record<(typeof ids)[number], Character>;
+const MARK: Record<string, [number, number]> = { social: [-1.5, 1.4], strong: [-0.25, 2.0], medic: [1.15, 1.75], explorer: [1.95, 0.75], builder: [-2.5, 0.5], scientist: [0.3, -0.45] };
+const seen = new Map<Character, CrewPose>();
+const headOf = (c: Character) => c.head.getWorldPosition(new THREE.Vector3());
+
+// window cracks: branches that grow from one point
+const crack = new THREE.Group(); crack.position.set(0, 0, -3.72); deck.group.add(crack); const cracks: THREE.Mesh[] = [];
+{ const m = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xdfeaff, emissiveIntensity: 2 }); let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const grow = (x: number, y: number, a: number, n: number, gen: number) => { for (let i = 0; i < n; i++) { const l = 0.08 + rnd() * 0.22, nx = x + Math.cos(a) * l, ny = y + Math.sin(a) * l;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(l, 0.008 + 0.012 / (gen + 1), 0.01), m); b.position.set((x + nx) / 2, (y + ny) / 2, 0); b.rotation.z = a; b.userData.at = Math.hypot(nx - 0.3, ny + 0.2); crack.add(b); cracks.push(b);
+      x = nx; y = ny; a += (rnd() - 0.5) * 0.9; if (gen < 2 && rnd() < 0.32) grow(x, y, a + (rnd() < .5 ? 1 : -1) * (0.5 + rnd() * .7), Math.floor(n * .6), gen + 1); } };
+  for (let i = 0; i < 9; i++) grow(0.3, -0.2, i / 9 * 6.283 + rnd() * .4, 11, 0); }
+// glass and hull that go with it
+const shards: { m: THREE.Mesh; v: THREE.Vector3; w: THREE.Vector3; p: THREE.Vector3 }[] = [];
+{ const m = new THREE.MeshStandardMaterial({ color: 0xbcd4e8, metalness: .1, roughness: .08, transparent: true, opacity: .55 }); let s = 11; const q = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 150; i++) { const g = new THREE.TetrahedronGeometry(0.03 + q() * 0.13); const o = new THREE.Mesh(g, m); o.visible = false; deck.group.add(o);
+    shards.push({ m: o, p: V((q() - .5) * 9, -2 + q() * 4, -3.6), v: V((q() - .5) * 3, (q() - .4) * 2.5, -3 - q() * 5), w: V(q() * 6, q() * 6, q() * 6) }); } }
+
+function act(c: Character, p: THREE.Vector3, q: THREE.Quaternion | null, pose: CrewPose, limbs: Limbs | null, face: Face | null = null) {
+  c.root.visible = true; c.root.position.copy(p); if (q) c.root.quaternion.copy(q); c.setLimbs(limbs); c.setFace(face); seen.set(c, pose);
+}
+const faceTo = (c: Character, t: THREE.Vector3) => Math.atan2(t.x - c.root.position.x, t.z - c.root.position.z);
+const yawQ = (y: number, x = 0, z = 0) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, 'YXZ'));
+function lens(from: THREE.Vector3, to: THREE.Vector3, fov: number, focus: number, ap: number, roll = 0) {
+  cam.position.copy(from); cam.up.set(0, 1, 0); cam.lookAt(to); if (roll) cam.rotateZ(roll); cam.fov = fov; cam.updateProjectionMatrix(); cam.updateMatrixWorld(); dof = { focus, ap };
+}
+let dof = { focus: 0, ap: 0 };
+const standAll = (t: number, tense = 0) => ids.forEach((id, i) => { const m = MARK[id]; const c = C[id]; act(c, V(m[0], -2.2, m[1]), yawQ(Math.PI + (i - 2.5) * .08), 'stand', null, { fear: tense * .5 }); c.look2(nz(t * .4, i) * .2, 0); });
+const hole = V(-2, 6, -20);
+
+type Shot = (k: number, t: number, len: number) => void;
+const SHOTS: Record<string, Shot> = {
+  a1(k, t) { deck.group.visible = false; ship.group.visible = true; ship.group.position.set(0, 0, 0); ship.group.rotation.set(0, Math.PI * .9 + k * .05, 0); lens(V(-34 + k * 6, 7, 60 - k * 8), V(0, 0, 0), 13, 62, 0); void t; },
+  a2(k, t) { standAll(t); const f = deck.floaters[0]; f.position.set(.42, -1.2 + k * .55, -1.2); f.rotation.set(k * 1.3, k * .8, k * .5); const c = C.scientist; act(c, V(.3, -2.2, -.45), yawQ(Math.PI), 'stand', null, { fear: k * .3 }); c.look2(.25, .28 - k * .3);
+    lens(V(1.5 - k * .2, -.9, -2.3 + k * .1), V(.42, -1 + k * .3, -1.1), 34, 1.6, .02); },
+  b1(k, t) { standAll(t, .3); const c = C.strong, s = C.scientist; const y = THREE.MathUtils.lerp(Math.PI, faceTo(c, s.root.position), THREE.MathUtils.smoothstep(k, 0, .35)); act(c, V(-.25, -2.2, 2), yawQ(y), 'stand', null, { frown: .55 }); c.setLookTarget(headOf(s));
+    const h = headOf(c); lens(h.clone().add(V(.9 - k * .1, -.08, -1.25 + k * .15)), h.clone().add(V(0, -.1, 0)), 38, 1.5, .022); },
+  b2(k, t) { standAll(t, .4); const c = C.scientist; act(c, V(.3, -2.2, -.45), yawQ(.15), 'stand', null, { fear: .6 }); c.look2(k < .45 ? -.45 : .35 * Math.sin(k * 9), .2); const h = headOf(c); lens(h.clone().add(V(.22, -.04, .85 - k * .12)), h.clone().add(V(0, -.04, 0)), 42, .85, .03, .015); },
+  b3(k, t) { const a = THREE.MathUtils.smoothstep(k, .1, .5); deck.group.rotation.z = a * .05; ids.forEach((id, i) => { const c = C[id], m = MARK[id]; act(c, V(m[0] + a * .38 * (1 + (i % 2)) + nz(t * 3, i) * .05 * a, -2.2, m[1]), yawQ(Math.PI + (i - 2.5) * .08, 0, -a * .14), 'stand', mixLimbs(STANDING, flail({ ...FALL.spread, openHands: true }, t, i * 3, .18), a * .7), { fear: .3 + .5 * a, open: .3 * a }); });
+    deck.floaters.forEach((f, i) => { const b = f.userData.b0 ?? (f.userData.b0 = f.position.clone()); f.position.x = b.x + a * a * (.9 + (i % 5) * .3); }); lens(V(-.6, -.2, 5.2 - k * .4), V(.1, -1, -1), 34, 5, .006, a * .05); },
+  c1(k, t) { deck.group.visible = false; ship.group.visible = true; ship.group.scale.set(1 - k * .12, 1 - k * .12, 1 + k * k * .55); ship.group.rotation.set(.12, Math.PI * .9 + k * .18, k * .1); ship.ring.rotation.z = t * .4 * k; const a = 2.2 + k * .7; lens(V(Math.sin(a) * 22, 6 - k * 3, Math.cos(a) * 22), V(0, 0, 1 + k * 2), 30, 22, .002, nz(t * 3, 1) * .012 * (1 + k * 3)); },
+  c2(k, t) { deck.group.visible = true; deck.group.rotation.z = .05; standAll(t, .5); const c = C.builder; act(c, V(-3.05, -2.2, .1), yawQ(-Math.PI / 2 + .1), 'stand', { ...STANDING, armL: [.25, .4, 1], foreL: [.2, .5, 1], armR: [-.25, .35, 1], foreR: [-.2, .45, 1], openHands: true, bend: .12 + nz(t, 2) * .03 }, null); c.look2(.1, .05 + nz(t * 1.3, 3) * .06); const h = headOf(c); lens(h.clone().add(V(.25, -.02, .85)), h.clone().add(V(-.15, -.06, 0)), 40, .9, .028); },
+  c3(k, t) { const c = C.builder; act(c, V(-3.05, -2.2, .1), yawQ(-Math.PI / 2 + .1), 'stand', { ...STANDING, armL: [.25, .4, 1], foreL: [.2, .5, 1], armR: [-.4, -.3, .8], foreR: [-.3, -.6, .6], openHands: true, bend: .1 }, { fear: .5 * k }); c.look2(0, .3 * k); const h = headOf(c); lens(h.clone().add(V(.8, -.1, .9)), h.clone().add(V(-.3, -.2, 0)), 34, 1.2, .02, nz(t * 4, 1) * .01); void t; },
+  c4(k, t) { const c = C.social, m = MARK.social; const low = THREE.MathUtils.smoothstep(k, .45, .9); act(c, V(m[0], -2.2, m[1]), yawQ(Math.PI * .92), 'stand', { ...STANDING, armR: [-.3, .25 - low * 1.1, .95 - low * .5], foreR: [-.05, .75 - low * 1.5, .7], openHands: false }, { fear: .35 + .5 * low, smile: .3 * (1 - low) }); c.look2(0, -.05 + low * .3); const h = headOf(c); lens(h.clone().add(V(-.5, -.06, -.95 + k * .1)), h.clone().add(V(0, -.08, 0)), 40, 1.05, .028); void t; },
+  d1(k, t) { standAll(t, .85); cracks.forEach((b) => { b.visible = b.userData.at < k * 3.4; }); lens(V(-.3 + k * .3, -.5, 3.7), V(.3, -.3, -3.6), 44, 7, .002); },
+  d2(k, t) { cracks.forEach((b) => (b.visible = false)); ids.forEach((id, i) => { const go = THREE.MathUtils.smoothstep(k, i * .03, .4 + i * .04), g2 = go * go, side = i % 2 ? 1 : -1, m = MARK[id]; const p = V(m[0] + side * g2 * 1 + nz(t * 2, i) * .25 * go, -2.2 + go * (1.2 + (i % 3) * .5), THREE.MathUtils.lerp(m[1], m[1] - 7, g2));
+      act(C[id], p, new THREE.Quaternion().setFromEuler(new THREE.Euler(-g2 * (2 + (i % 3)) + nz(t * 2, i) * .3 * go, Math.PI + side * g2 * 2.2, side * g2 * 2)), 'float', mixLimbs(STANDING, flail({ ...FALL.spread, openHands: true }, t, i * 3.1, .85), THREE.MathUtils.smoothstep(go, 0, .3)), { fear: .9, open: .6 }); C[id].look2(nz(t * 2.4, i + 2) * .9, nz(t * 1.8, i + 4) * .35); });
+    shards.forEach((s, i) => { s.m.visible = true; const u = k * 4; s.m.position.copy(s.p).addScaledVector(s.v, u * (1 + (i % 3) * .3)); s.m.rotation.set(s.w.x * u, s.w.y * u, s.w.z * u); }); lens(V(-.3, -.45, 4 - k), V(0, -.8, -3), 58, 4, .003, nz(t * 5, 2) * .03); },
+  d3(k, t) { deck.group.visible = true; shards.forEach((s) => (s.m.visible = false)); for (const o of deck.group.children) if (!o.userData.crewKeep) o.visible = false; ids.forEach((id, i) => { const a = i / 6 * 6.283 + t * .08, R = 1 + k * k * 1.2 + 1.75; const rad = V(Math.cos(a), 0, Math.sin(a)); const up = rad.clone().negate(), fw = V(0, -1, 0), lf = up.clone().cross(fw); const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(lf, up, fw)).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(nz(t * 1.5, i) * .4, nz(t * 1.2, i + 2) * .35, nz(t * 1.7, i + 4) * .45)));
+      act(C[id], rad.multiplyScalar(R + nz(t * 1.4, i + 6) * .14), q, 'float', flail({ armL: [1, .32, .02], armR: [-1, .32, .02], legL: [.22, -1, .05], shinL: [.15, -1, .3], legR: [-.2, -1, 0], shinR: [-.15, -1, .25], openHands: true }, t, i * 2.7, .22 + k * .35), { fear: .6, frown: .5 }); C[id].look2(nz(t * 1.6, i + 8) * .7, 0); }); lens(V(.3, 8.5 + k * 3.5, .4), V(0, 0, 0), 44, 10, 0, .3 + t * .02); },
+  d4(k, t) { ids.forEach((id) => (C[id].root.visible = false)); const gap = .03 + k * k * .3; const put = (c: Character, side: 'L' | 'R', x: number, tilt: number) => { const L = side === 'L'; const base = flail({ ...FALL.spread, openHands: true }, t, L ? 3 : 9, .3); act(c, V(x, -1.5, 0), yawQ(0, 0, tilt + nz(t, L ? 6 : 8) * .06), 'float', L ? { ...base, armL: [1, .05 + nz(t * 2, 1) * .05, 0], foreL: [1, .02 + nz(t * 2.4, 2) * .07, 0] } : { ...base, armR: [-1, .05 + nz(t * 2, 7) * .05, 0], foreR: [-1, .02 + nz(t * 2.4, 8) * .07, 0] }, { fear: .9, open: .4 }); };
+    put(C.explorer, 'L', -1.12 - gap, -.03); put(C.scientist, 'R', 1.1 + gap, .03); lens(V(k * .1 - .05, .02, .95 - k * .1), V(0, -.02, 0), 26, .9, .012, -.05); },
+  d5() { ids.forEach((id) => (C[id].root.visible = false)); ship.group.visible = false; deck.group.visible = false; lens(V(0, 0, 0), V(0, 0, -1), 40, 0, 0); },
+};
+
+let TIMING: { shots: { id: string; t0: number; t1: number }[] };
+let cur = '', tPrev = 0;
+const W = window as unknown as Record<string, unknown>;
+W.__entry = {
+  load(t: typeof TIMING) { TIMING = t; },
+  frame(time: number) {
+    const s = TIMING.shots.find((x) => time >= x.t0 && time < x.t1) ?? TIMING.shots[TIMING.shots.length - 1];
+    if (s.id !== cur) { cur = s.id; deck.group.visible = true; ship.group.visible = false; for (const o of deck.group.children) o.visible = true; deck.group.rotation.z = 0; ship.group.scale.set(1, 1, 1); crack.visible = true; cracks.forEach((b) => (b.visible = false)); shards.forEach((x) => (x.m.visible = false)); ids.forEach((id) => { C[id].root.visible = true; C[id].setLookTarget(null); C[id].look2(0, 0); }); }
+    const k = (time - s.t0) / (s.t1 - s.t0);
+    for (let pass = 0; pass < 2; pass++) {
+      seen.clear(); SHOTS[s.id](k, time, s.t1 - s.t0);
+      for (const [c, p] of seen) { c.root.updateMatrixWorld(); c.animate(p, 0, 0, time, pass ? Math.max(.001, time - tPrev) : 1.2); }
+    }
+    tPrev = time; scene.updateMatrixWorld(true); r.render(scene, cam);
+  },
+};
+W.__bs = { stageInfo: () => ({ scene, camera: cam, focus: dof.focus, aperture: dof.ap }), film: { get beat() { return tPrev; } } };
+Promise.all(deck.crew.map((c) => c.whenReady)).then(() => { W.ready = true; });

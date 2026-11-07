@@ -1,27 +1,236 @@
 {
-  "scene": "entry",
-  "note": "The black hole entry. Picture is cut to this timing: each phrase carries the action it belongs to, and a shot ends only after its last phrase. Times are filled by tools/film/edl.py from the final voice takes.",
-  "shots": [
-    {"id": "a1", "act": "Approach", "min": 9.0, "action": "The liner, tiny, against the disk. No voices. Only the ship's own hum dropping away.", "lines": []},
-    {"id": "a2", "act": "Approach", "min": 7.0, "action": "Deck, silent. A stylus drifts up off the console. Zenvik watches it. Nobody else has noticed.", "lines": []},
-    {"id": "b1", "act": "Gravity takes hold", "min": 5.0, "action": "Draxum turns from the window. He has seen the course screen.", "lines": [
-      {"who": "strong", "react": 0.8, "direction": "low, not joking for once", "phrases": [["Zenvik.", 0.7], ["Why is your login on the course change?", 0.0]]}]},
-    {"id": "b2", "act": "Gravity takes hold", "min": 4.0, "action": "Close on Zenvik. The eyes go to the screen, then to everyone looking at him.", "lines": [
-      {"who": "scientist", "react": 1.0, "direction": "caught, thin voice", "phrases": [["I didn't...", 0.5], ["That isn't...", 0.0]]}]},
-    {"id": "b3", "act": "Gravity takes hold", "min": 3.5, "action": "The deck tilts a degree. Every loose object slides at once. The argument stops mid breath.", "lines": []},
-    {"id": "c1", "act": "Straining", "min": 6.0, "action": "Outside: the hull flexes, plates lifting along the spine. The ship is longer than it was.", "lines": []},
-    {"id": "c2", "act": "Straining", "min": 4.0, "action": "Bolzar, both hands on a bulkhead, listening to it with his whole body.", "lines": [
-      {"who": "builder", "react": 0.6, "direction": "gentle, to the wall, as if to an animal", "phrases": [["Easy.", 0.5], ["Easy now.", 0.6], ["It'll hold.", 0.0]]}]},
-    {"id": "c3", "act": "Straining", "min": 2.5, "action": "The rib beside his hand buckles. He looks at it. Then at nobody.", "lines": []},
-    {"id": "c4", "act": "Straining", "min": 3.5, "action": "Nuvexa, phone up out of pure habit, realises what she is filming and lowers it.", "lines": [
-      {"who": "social", "react": 0.4, "direction": "tiny joke, dies in the air", "phrases": [["Okay, this is...", 0.5], ["this is not for the story.", 0.0]]}]},
-    {"id": "d1", "act": "The fall", "min": 3.0, "action": "The window cracks across. Silence for a beat. Everyone sees it.", "lines": []},
-    {"id": "d2", "act": "The fall", "min": 4.0, "action": "It goes. The six are thrown, tumbling, reaching for anything.", "lines": [
-      {"who": "strong", "react": 0.3, "direction": "full shout over the gale", "phrases": [["Hold on to me!", 0.0]]}]},
-    {"id": "d3", "act": "The fall", "min": 6.0, "action": "Outside. The ring of six, hand to hand, turning above the hole. The grip is going.", "lines": []},
-    {"id": "d4", "act": "The fall", "min": 7.0, "action": "Two hands, centimetres apart, sliding.", "lines": [
-      {"who": "scientist", "react": 0.5, "direction": "straining, lying to her", "phrases": [["I've got you.", 0.25], ["I've got you, I won't...", 0.6]]},
-      {"who": "explorer", "react": 0.3, "direction": "terror turning into a joke she can't finish", "phrases": [["You still owe me...", 0.5], ["You still owe me snacks!", 0.0]]}]},
-    {"id": "d5", "act": "The fall", "min": 1.5, "action": "Black. Nothing.", "lines": []}
-  ]
+ "scene": "entry",
+ "note": "The black hole entry. Picture is cut to this timing: each phrase carries the action it belongs to, and a shot ends only after its last phrase. Times are filled by tools/film/edl.py from the final voice takes.",
+ "shots": [
+  {
+   "id": "a1",
+   "act": "Approach",
+   "min": 9.0,
+   "action": "The liner, tiny, against the disk. No voices. Only the ship's own hum dropping away.",
+   "lines": []
+  },
+  {
+   "id": "a2",
+   "act": "Approach",
+   "min": 7.0,
+   "action": "Deck, silent. A stylus drifts up off the console. Zenvik watches it. Nobody else has noticed.",
+   "lines": []
+  },
+  {
+   "id": "b1",
+   "act": "Gravity takes hold",
+   "min": 5.0,
+   "action": "Draxum turns from the window. He has seen the course screen.",
+   "lines": [
+    {
+     "who": "strong",
+     "react": 0.8,
+     "direction": "low, not joking for once",
+     "phrases": [
+      [
+       "Zenvik.",
+       0.7
+      ],
+      [
+       "Why is your login on the course change?",
+       0.0
+      ]
+     ],
+     "emotion": "suspicion",
+     "ex": 1.0,
+     "k": 0.85
+    }
+   ]
+  },
+  {
+   "id": "b2",
+   "act": "Gravity takes hold",
+   "min": 4.0,
+   "action": "Close on Zenvik. The eyes go to the screen, then to everyone looking at him.",
+   "lines": [
+    {
+     "who": "scientist",
+     "react": 1.0,
+     "direction": "caught, thin voice",
+     "phrases": [
+      [
+       "I didn't...",
+       0.5
+      ],
+      [
+       "That isn't...",
+       0.0
+      ]
+     ],
+     "emotion": "shock",
+     "ex": 0.95,
+     "k": 0.8
+    }
+   ]
+  },
+  {
+   "id": "b3",
+   "act": "Gravity takes hold",
+   "min": 3.5,
+   "action": "The deck tilts a degree. Every loose object slides at once. The argument stops mid breath.",
+   "lines": []
+  },
+  {
+   "id": "c1",
+   "act": "Straining",
+   "min": 6.0,
+   "action": "Outside: the hull flexes, plates lifting along the spine. The ship is longer than it was.",
+   "lines": []
+  },
+  {
+   "id": "c2",
+   "act": "Straining",
+   "min": 4.0,
+   "action": "Bolzar, both hands on a bulkhead, listening to it with his whole body.",
+   "lines": [
+    {
+     "who": "builder",
+     "react": 0.6,
+     "direction": "gentle, to the wall, as if to an animal",
+     "phrases": [
+      [
+       "Easy.",
+       0.5
+      ],
+      [
+       "Easy now.",
+       0.6
+      ],
+      [
+       "It'll hold.",
+       0.0
+      ]
+     ],
+     "emotion": "tender",
+     "ex": 0.75,
+     "k": 0.7
+    }
+   ]
+  },
+  {
+   "id": "c3",
+   "act": "Straining",
+   "min": 2.5,
+   "action": "The rib beside his hand buckles. He looks at it. Then at nobody.",
+   "lines": []
+  },
+  {
+   "id": "c4",
+   "act": "Straining",
+   "min": 3.5,
+   "action": "Nuvexa, phone up out of pure habit, realises what she is filming and lowers it.",
+   "lines": [
+    {
+     "who": "social",
+     "react": 0.4,
+     "direction": "tiny joke, dies in the air",
+     "phrases": [
+      [
+       "Okay, this is...",
+       0.5
+      ],
+      [
+       "this is not for the story.",
+       0.0
+      ]
+     ],
+     "emotion": "fear",
+     "ex": 0.9,
+     "k": 0.75
+    }
+   ]
+  },
+  {
+   "id": "d1",
+   "act": "The fall",
+   "min": 3.0,
+   "action": "The window cracks across. Silence for a beat. Everyone sees it.",
+   "lines": []
+  },
+  {
+   "id": "d2",
+   "act": "The fall",
+   "min": 4.0,
+   "action": "It goes. The six are thrown, tumbling, reaching for anything.",
+   "lines": [
+    {
+     "who": "strong",
+     "react": 0.3,
+     "direction": "full shout over the gale",
+     "phrases": [
+      [
+       "Hold on to me!",
+       0.0
+      ]
+     ],
+     "emotion": "fear",
+     "ex": 1.2,
+     "k": 1
+    }
+   ]
+  },
+  {
+   "id": "d3",
+   "act": "The fall",
+   "min": 6.0,
+   "action": "Outside. The ring of six, hand to hand, turning above the hole. The grip is going.",
+   "lines": []
+  },
+  {
+   "id": "d4",
+   "act": "The fall",
+   "min": 7.0,
+   "action": "Two hands, centimetres apart, sliding.",
+   "lines": [
+    {
+     "who": "scientist",
+     "react": 0.5,
+     "direction": "straining, lying to her",
+     "phrases": [
+      [
+       "I've got you.",
+       0.25
+      ],
+      [
+       "I've got you, I won't...",
+       0.6
+      ]
+     ],
+     "emotion": "strain",
+     "ex": 1.0,
+     "k": 1
+    },
+    {
+     "who": "explorer",
+     "react": 0.3,
+     "direction": "terror turning into a joke she can't finish",
+     "phrases": [
+      [
+       "You still owe me...",
+       0.5
+      ],
+      [
+       "You still owe me snacks!",
+       0.0
+      ]
+     ],
+     "emotion": "fear",
+     "ex": 1.15,
+     "k": 1
+    }
+   ]
+  },
+  {
+   "id": "d5",
+   "act": "The fall",
+   "min": 1.5,
+   "action": "Black. Nothing.",
+   "lines": []
+  }
+ ]
 }

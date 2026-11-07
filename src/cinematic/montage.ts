@@ -21,7 +21,7 @@ const shakeAt = (time: number, amp: number, out: THREE.Vector3) => out.set(Math.
 const wob = (d: Dir, time: number, seed: number, amt = 0.12): Dir => [d[0] + Math.sin(time * 1.1 + seed) * amt, d[1] + Math.sin(time * 0.9 + seed * 2) * amt, d[2] + Math.sin(time * 1.3 + seed * 3) * amt];
 
 /** Smooth noise, -1..1: three sines that never line up, so no joint ever repeats or rests. */
-const nz = (t: number, s: number) => (Math.sin(t + s) + Math.sin(t * 1.73 + s * 2.3) * 0.6 + Math.sin(t * 2.91 + s * 3.7) * 0.3) / 1.9;
+export const nz = (t: number, s: number) => (Math.sin(t + s) + Math.sin(t * 1.73 + s * 2.3) * 0.6 + Math.sin(t * 2.91 + s * 3.7) * 0.3) / 1.9;
 const nzDir = (d: Dir, t: number, s: number, a: number): Dir => [d[0] + nz(t, s) * a, d[1] + nz(t * 1.1, s + 5) * a, d[2] + nz(t * 0.9, s + 11) * a];
 /**
  * A thrown body never holds a shape. Every joint chases its own path around the base pose, and
