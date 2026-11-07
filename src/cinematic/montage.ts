@@ -315,10 +315,10 @@ export class Montage {
     for (let i = 0; i < 16; i++) bolt(512, 470, (i / 16) * Math.PI * 2 + r() * 0.3, 22, 3.4);
     const tex = new THREE.CanvasTexture(c);
     this.crack = new THREE.Mesh(new THREE.PlaneGeometry(13, 7), new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { tMap: { value: tex }, uK: { value: 0 } },
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { tMap: { value: tex }, uK: { value: 0 }, uFade: { value: 1 } },
       vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `uniform sampler2D tMap; uniform float uK; varying vec2 vUv;
-        void main(){ float d = length((vUv - vec2(0.5, 0.54)) * vec2(1.8, 1.0)); vec3 c = texture2D(tMap, vUv).rgb * smoothstep(uK, uK - 0.12, d) * 1.6; gl_FragColor = vec4(c, 1.0); }`,
+      fragmentShader: `uniform sampler2D tMap; uniform float uK, uFade; varying vec2 vUv;
+        void main(){ float d = length((vUv - vec2(0.5, 0.54)) * vec2(1.8, 1.0)); vec3 c = texture2D(tMap, vUv).rgb * smoothstep(uK, uK - 0.12, d) * 1.6 * uFade; gl_FragColor = vec4(c, 1.0); }`,
     }));
     this.crack.position.set(0, 0.2, -3.6);
     this.crack.visible = false;
@@ -672,8 +672,10 @@ export class Montage {
       const tt = (b - 16) * BEAT;
       const i = set.interior;
       const crack = smoothstep(0, 0.3, k);
-      this.crack.visible = k < 0.55;
-      (this.crack.material as THREE.ShaderMaterial).uniforms.uK.value = crack * 1.5;
+      this.crack.visible = k < 0.72;
+      const cu = (this.crack.material as THREE.ShaderMaterial).uniforms;
+      cu.uK.value = crack * 1.5;
+      cu.uFade.value = 1 - smoothstep(0.42, 0.7, k); // the glass goes with the first shards, it doesn't switch off
       if (k > 0.45) this.shards.update((k - 0.45) * 4, tmp.set(0, 0.05, -1), 1.2, 4, -3.2, 0.3);
       else this.shards.mesh.visible = false;
       ORDER.forEach((id, n) => lift(id, n, k, b));
@@ -702,7 +704,7 @@ export class Montage {
       (['explorer', 'builder'] as CrewId[]).forEach((id, n) => {
         const u = clamp((k - 0.12 - n * 0.36) / 0.5, 0, 1);
         if (u <= 0 || u >= 1) { this.cast[id].root.visible = false; return; }
-        this.act(id, V(lerp(-4.2, 2.8, u), -1.6 + u * 1.2 + n * 0.3, 1.5 + n * 0.8 - u * 0.6), new THREE.Quaternion().setFromEuler(new THREE.Euler(u * 5 + n, u * 3.4, u * 2.6)), 'float', flail({ ...FALL.spread, openHands: true }, t, n * 7, 0.9), { fear: 0.9, open: 0.6 });
+        this.act(id, V(lerp(-9, 7.5, u), -1.6 + u * 1.2 + n * 0.3, 1.5 + n * 0.8 - u * 0.6), new THREE.Quaternion().setFromEuler(new THREE.Euler(u * 5 + n, u * 3.4, u * 2.6)), 'float', flail({ ...FALL.spread, openHands: true }, t, n * 7, 0.9), { fear: 0.9, open: 0.6 });
       });
       const h = c.head.getWorldPosition(tmp);
       this.lens(V(h.x + 1.3 - k * 0.3, h.y - 0.1, h.z - 2.3 + k * 0.5).add(shakeAt(b, 0.012, this.tmp2)), V(h.x, h.y - 0.15, h.z), 34, 2.4, 0.012, 0.06);
@@ -1045,6 +1047,7 @@ export class Montage {
     if (bb !== b) { this.finish(); return; }
     const shot = this.shots.find((s) => b >= s.from && b < s.to) ?? null;
     this.fx = {};
+    const entered = !!shot && shot !== this.cur;
     if (shot && shot !== this.cur) {
       const wasWorld = this.inWorld;
       this.clear();
@@ -1067,6 +1070,11 @@ export class Montage {
     }
     for (const c of this.cues) if (!c.done && b >= c.b) { c.done = true; c.fn(); }
     if (shot) shot.at(clamp((b - shot.from) / (shot.to - shot.from), 0, 1), b);
+    // shots that place a body by where its hand ended up need one solved pose first, or their first frame snaps
+    if (shot && entered) {
+      for (const id of this.seen) { const c = this.cast[id]; c.root.updateMatrixWorld(); const pose = this.poses[id] ?? 'float'; this.posed[id] = pose; c.animate(pose, 0, 0, this.time, 1.2); }
+      shot.at(clamp((b - shot.from) / (shot.to - shot.from), 0, 1), b);
+    }
     for (const id of this.seen) {
       const c = this.cast[id];
       c.root.updateMatrixWorld();
