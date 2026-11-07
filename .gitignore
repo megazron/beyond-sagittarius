@@ -10,3 +10,4 @@ desktop-assets/
 .venv-tts2/
 .asset-cache/
 tools/tts/kokoro/.cache/
+tools/.line_pauses.json
