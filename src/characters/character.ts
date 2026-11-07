@@ -326,6 +326,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   function setMorph(k: string, v: number) { morph[k] = v; for (const f of faces) { const i = f.dict[k]; if (i !== undefined) f.infl[i] = v; } }
   const easeMorph = (k: string, v: number, r: number) => setMorph(k, (morph[k] ?? 0) + (v - (morph[k] ?? 0)) * r);
 
+  let limpOn = false;
+
   function locomotion(speed: number, dt: number) {
     // stylised walk -> brisk walk -> run -> sprint, phase locked so feet stay in step
     const m = A!.meta;
@@ -384,7 +386,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     // a moving body stays moving until it has clearly stopped: no flicker between idle and gait
     gaitOn = gaitOn ? amount > 0.012 || groundSpeed > 0.14 || pivot > 0 : amount > 0.03 || groundSpeed > 0.32 || pivot > 0;
     const moving = gaitOn && !FULL_BODY.has(kind) && (kind === 'idle' || kind === 'walk' || kind === 'stand');
-    const limp = !!kit?.splint.visible;
+    const limp = limpOn || !!kit?.splint.visible;
     for (const s of acts.values()) s.target = 0;
     if (moving) {
       const parts = limp && speed < 2 ? [{ n: 'limp', w: 1 }] : locomotion(speed, dt);
@@ -554,6 +556,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     id, root, body, chest, head, armL, armR, legL, legR, handL, handR, fig, look: L,
     animate,
     setName,
+    /** Hurt and moving like it. */
+    setLimp(on: boolean) { limpOn = on; },
     setSplint(on: boolean) { pendingSplint = on; if (kit) kit.splint.visible = on; },
     setTagVisible(v: number) { (tag.material as THREE.SpriteMaterial).opacity = v; tag.visible = v > 0.02; },
     /** Mouth moves while > 0 (seconds of speech left). */

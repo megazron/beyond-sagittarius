@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import face as FACE
 
 ap = argparse.ArgumentParser()
-for n, d in (('--dump', None), ('--out', None), ('--plate', ''), ('--tex', '~/bs-film/tex'), ('--perf', ''), ('--facedir', '~/bs-film/face')):
+for n, d in (('--dump', None), ('--out', None), ('--plate', ''), ('--tex', '~/bs-film/tex'), ('--perf', ''), ('--facedir', '~/bs-film/face'), ('--hole', '')):
     ap.add_argument(n, default=d)
 for n, d in (('--first', 0), ('--last', 0), ('--samples', 48), ('--w', 1280), ('--step', 1), ('--exposure', 0)):
     ap.add_argument(n, type=float if n == '--exposure' else int, default=d)
@@ -30,7 +30,7 @@ if not a.cpu:
     for d in pr.devices: d.use = d.type != 'CPU'
     cy.device = 'GPU'
 cy.samples = a.samples; cy.use_denoising = True; cy.use_adaptive_sampling = True; cy.adaptive_threshold = 0.03
-cy.max_bounces = 5; cy.transparent_max_bounces = 12; cy.caustics_reflective = False; cy.caustics_refractive = False
+cy.use_camera_cull = True; cy.camera_cull_margin = .25; cy.max_bounces = 4; cy.use_auto_tile = False; cy.debug_use_spatial_splits = False; cy.transparent_max_bounces = 12; cy.caustics_reflective = False; cy.caustics_refractive = False
 sc.render.resolution_x, sc.render.resolution_y = a.w, a.w * 9 // 16
 sc.render.fps = 24; sc.render.use_motion_blur = True; sc.render.motion_blur_shutter = 0.5
 sc.view_settings.view_transform = 'AgX'; sc.view_settings.look = 'AgX - Medium High Contrast'; sc.view_settings.exposure = a.exposure
@@ -123,7 +123,7 @@ def face_of(key):
         z = np.load(p) if os.path.exists(p) else None
         FD[key] = (list(z['names']), z['delta'].astype(np.float32), z['bind']) if z is not None else None
     return FD[key]
-ID_OF = {'scientist': 'custom_m_scientist'}
+ID_OF = {}
 def who_of(info):
     f = info['material'].get('film') or {}
     if f.get('kind') != 'skin' or info.get('name') != 'skin_head': return None
@@ -147,6 +147,7 @@ for k, fs in ids.items():
     if info['instanced']: pass
     me = mesh_of(info); me.materials.append(material(mat))
     o = bpy.data.objects.new(info.get('name') or k[:8], me); sc.collection.objects.link(o); objs[k] = o
+    o.cycles.use_camera_cull = True
     recs = {f: next(r for r in data[f]['meshes'] if r['id'] == k) for f in fs}
     baked = any('baked' in r for r in recs.values())
     if baked:
@@ -161,7 +162,8 @@ for k, fs in ids.items():
                     wid = who_of(info)
                     fd = face_of(ID_OF.get(wid, wid)) if wid and PERF.get(wid) else None
                     if fd and len(fd[2]) == len(q):
-                        q = FACE.apply(q.copy(), fd[2], fd[1], fd[0], FACE.track(fd[0], PERF[wid], f / 24, seed=len(wid)))
+                        pf = PERF[wid]; g = min(f + 1, len(pf['open']) - 1); lip = (pf['open'][g], pf['round'][g], pf['wide'][g])
+                        q = FACE.apply(q.copy(), fd[2], fd[1], fd[0], FACE.track(fd[0], pf['cues'], f / 24, seed=len(wid), env=lambda _t: pf['open'][g], lip=lip))
                     last = np.stack([q[:, 0], -q[:, 2], q[:, 1]], 1).astype('<f4')
                 if last is None:
                     q = b64f(next(iter(x for x in recs.values() if 'baked' in x))['baked']).reshape(-1, 3); last = np.stack([q[:, 0], -q[:, 2], q[:, 1]], 1).astype('<f4')
@@ -170,7 +172,7 @@ for k, fs in ids.items():
             pass
         mc = o.modifiers.new('film', 'MESH_CACHE'); mc.cache_format = 'PC2'; mc.filepath = path; mc.frame_start = frames[0]; mc.deform_mode = 'OVERWRITE'
         o.cycles.use_deform_motion = True
-        if info.get('name') in ('skin_head', 'skin_body', 'cloth'):
+        if info.get('name') == 'skin_head':
             sb = o.modifiers.new('sub', 'SUBSURF'); sb.levels = 0; sb.render_levels = 1  # the game head is thin for a close-up
     else:
         for f, r in recs.items():
@@ -202,15 +204,20 @@ for i in range(8):
             ld.energy = 0
         lo.keyframe_insert('location', frame=f); ld.keyframe_insert('energy', frame=f); ld.keyframe_insert('color', frame=f)
 w = bpy.data.worlds.new('w'); sc.world = w; w.use_nodes = True; nt = w.node_tree
+# the rotation is keyed, so Cycles rebuilds this map every frame: at 8K that was most of a frame's time
+w.cycles.sampling_method = 'MANUAL'; w.cycles.sample_map_resolution = 512
 bg = nt.nodes['Background']; bg.inputs[1].default_value = 1
 if a.plate:
     e = nt.nodes.new('ShaderNodeTexEnvironment'); e.interpolation = 'Cubic'; e.image = image(os.path.expanduser(a.plate)); mp = nt.nodes.new('ShaderNodeMapping'); tc = nt.nodes.new('ShaderNodeTexCoord')
     nt.links.new(tc.outputs['Generated'], mp.inputs['Vector']); nt.links.new(mp.outputs[0], e.inputs['Vector']); nt.links.new(e.outputs[0], bg.inputs[0])
+    # the plate's centre is the hole, and Blender's equirect centre is +X: rotate the hole's direction onto it
+    mp.vector_type = 'TEXTURE'
+    fixed = [float(x) for x in a.hole.split(',')] if a.hole else None
     for f, d in data.items():
-        h = d.get('hole')
-        if h:
-            # the plate centres the hole on +y in Blender's world after this rotation
-            v = C @ Vector(h['p']); mp.inputs['Rotation'].default_value = (0, -math.asin(max(-1, min(1, v.z / (v.length or 1)))) * -1, math.atan2(v.x, v.y) * -1 + math.pi / 2 * 0)
+        hp = fixed or (d.get('hole') or {}).get('p')
+        if hp:
+            v = (C @ Vector(hp)).normalized()
+            mp.inputs['Rotation'].default_value = (0, -math.asin(v.z), math.atan2(v.y, v.x))
             mp.inputs['Rotation'].keyframe_insert('default_value', frame=f)
 else:
     bg.inputs[0].default_value = (.002, .002, .003, 1)

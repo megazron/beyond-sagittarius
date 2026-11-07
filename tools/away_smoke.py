@@ -20,23 +20,27 @@ with sync_playwright() as pw:
         if page.evaluate("__bs.state === 'game' && __bs.mode === 'play'"): break
         page.evaluate('__bs.skip()'); time.sleep(3)
     page.wait_for_function("__bs.state === 'game' && __bs.mode === 'play'", timeout=120000)
-    page.evaluate("__bs.goAway('explorer', 'ring')"); time.sleep(3)
-    print('mode', page.evaluate('__bs.mode'), page.evaluate('__bs.away'), flush=True)
-    if page.evaluate('__bs.mode') != 'away': fails.append('did not enter the stage')
-    if a.shot: page.screenshot(path=a.shot, type='jpeg', quality=85, timeout=120000)
-    for _ in range(12):
-        s = page.evaluate('__bs.away')
-        if not s: break
-        n = s
-        for _try in range(4):  # a frame can take seconds under load: a press may land between two of them
-            page.evaluate('__bs.awayGoNext()'); time.sleep(1.5); page.keyboard.press('KeyE'); time.sleep(1.5)
-            n = page.evaluate('__bs.away')
-            if not n or n['next'] != s['next']: break
-        print('after', s['next'], '->', n and n['next'], flush=True)
-        if n and n['next'] == s['next']: fails.append(f"task {s['next']} did not complete")
-    time.sleep(1)
-    if page.evaluate('__bs.mode') != 'play': fails.append(f"did not come back: {page.evaluate('__bs.mode')}")
+    for who, loc in (('explorer', 'ring'), ('builder', 'scree'), ('medic', 'wreck'), ('strong', 'moon'), ('social', 'clouds')):
+        page.evaluate(f"__bs.goAway('{who}', '{loc}')"); time.sleep(3)
+        if page.evaluate('__bs.mode') != 'away': fails.append(f'{loc}: did not enter'); continue
+        if a.shot: page.screenshot(path=f'{a.shot}_{loc}.jpg', type='jpeg', quality=85, timeout=180000)
+        for _ in range(14):
+            s = page.evaluate('__bs.away')
+            if not s: break
+            n = s
+            for _try in range(5):  # a frame can take seconds under load: a press may land between two of them
+                page.evaluate('__bs.awayGoNext()'); time.sleep(1.5); page.keyboard.press('KeyE'); time.sleep(1.5)
+                n = page.evaluate('__bs.away')
+                if not n or n['next'] != s['next']: break
+            if n and n['next'] == s['next']: fails.append(f"{loc}: task {s['next']} did not complete"); break
+        time.sleep(1)
+        print(loc, 'mode after:', page.evaluate('__bs.mode'), flush=True)
+        if page.evaluate('__bs.mode') != 'play': fails.append(f"{loc}: did not come back")
+    # the Crew tab offers whoever has had their story told
+    page.keyboard.press('KeyC'); time.sleep(4)
+    print('play buttons:', page.evaluate("[...document.querySelectorAll('.crew-play')].map((b) => b.dataset.play)"), flush=True)
+    if page.evaluate("document.querySelectorAll('.crew-play').length") < 5: fails.append('crew tab does not offer all five')
     b.close()
 httpd.shutdown()
-print(('FAILED ' + '; '.join(fails)) if fails else 'OK: stage entered, every task done, back on the green world', flush=True)
+print(('FAILED ' + '; '.join(fails)) if fails else 'OK: five stages entered, every task done, back on the green world, Play as offered', flush=True)
 sys.exit(1 if fails else 0)

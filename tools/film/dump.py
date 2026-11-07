@@ -26,7 +26,7 @@ if a.stage:
         page.on('pageerror', lambda e: print('pageerror', str(e)[:300], flush=True))
         page.goto(a.stage, wait_until='domcontentloaded', timeout=120000)
         page.wait_for_function('window.ready === true', timeout=300000)
-        page.evaluate((HERE / 'dump.js').read_text()); page.evaluate('(t) => __entry.load(t)', T)
+        page.evaluate((HERE / 'dump.js').read_text() + '\n;0'); page.evaluate('(t) => __entry.load(t)', T)
         known = set(); t0 = time.time(); total = int(last * a.fps)
         for f in range(total):
             d = page.evaluate(f'(() => {{ __entry.frame({f / a.fps}); return __filmDump(); }})()')
@@ -46,7 +46,7 @@ with sync_playwright() as pw:
     page.add_init_script("localStorage.setItem('bs-consent-v1', '1')")
     page.goto(f'http://127.0.0.1:{a.port}/index.html?quality={a.quality}', wait_until='domcontentloaded', timeout=120000)
     page.wait_for_function("window.__bs && window.__bs.ready", timeout=300000)
-    page.evaluate((HERE / 'dump.js').read_text())
+    page.evaluate((HERE / 'dump.js').read_text() + '\n;0')
     page.evaluate('__bs.hold(true)'); page.evaluate('__bs.film.start()'); time.sleep(1)
 
     def step(b_):

@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { Character, CrewId } from '../characters/character';
+import { ROSTER } from './away/roster';
 import { t } from '../i18n';
 import { clamp, smoothstep } from '../core/noise';
 import { audio } from '../core/audio';
@@ -14,7 +16,7 @@ import { Chapter2 } from './chapter2';
 import { CH2_FIRST } from './tech/data';
 import type { TechNode } from './tech/data';
 import type { DlgTree } from './dialogue';
-import { doHidden, HARD_TO_BELIEVE, isAlive, JOKED, RESCUE_EARLY_HOURS, SAID_NOTHING, SPOKE_PLAINLY, storyHours, trustBand, trustOf } from './branch';
+import { doHidden, test, HARD_TO_BELIEVE, isAlive, JOKED, RESCUE_EARLY_HOURS, SAID_NOTHING, SPOKE_PLAINLY, storyHours, trustBand, trustOf } from './branch';
 import type { Cond } from './branch';
 
 /** A contextual "press E" station in the world (build, craft, talk...). */
@@ -47,11 +49,21 @@ const SPLINT_SLIPPED: Cond = { all: [{ decided: 'c1.splint' }, { not: { passed: 
  * the crew signal, the rescue of the Explorer and the beacon. All progress
  * lives in SaveData (flags + inventory) so it survives reloads.
  */
+/** A person who isn't there: light from the beacon, standing in for someone a long way up. */
+function projection(c: Character) {
+  c.root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    m.material = new THREE.MeshStandardMaterial({ color: 0x9fe8ff, emissive: 0x4fc8ff, emissiveIntensity: 0.7, transparent: true, opacity: 0.5, depthWrite: false, roughness: 0.6 });
+    m.castShadow = false;
+  });
+}
+
 export class Story {
   npcs: Npcs;
   ch2: Chapter2;
   /** Set by the game: open the crafting and dialogue panels. */
-  hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean } = { craft: () => {}, talk: () => {}, free: () => true };
+  hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean; away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void; quick: (id: string, done: () => void) => void } = { away: () => {}, quick: () => {}, craft: () => {}, talk: () => {}, free: () => true };
   private strikes = 0;
   private thrustT = 0;
   private spear: THREE.Group;
@@ -141,9 +153,7 @@ export class Story {
         return isNight(this.s.timeOfDay) ? t('progress.waitNight') : t('progress.restDusk');
       case 8: return this.flag('signal') ? null : t('progress.highGround');
       case 9:
-        if (!this.flag('metCrew')) return t('progress.findCrew');
-        if (!this.flag('splint')) return this.progressOf(R.splint);
-        return t('progress.leadCrew');
+        return t(this.flag('metCrew') ? 'progress.leadCrew' : 'progress.findCrew');
       case 10:
         if (!this.flag('transmitter')) return t('progress.salvage');
         if (!this.flag('beaconBuilt')) return this.progressOf(R.beacon);
@@ -182,13 +192,7 @@ export class Story {
       case 6: { const m = needFor(R.spear); return m.length ? nearest(m) : L.camp; }
       case 7: return this.hound.state !== 'hidden' && this.hound.state !== 'flee' ? null : L.shelter;
       case 8: return L.ridge;
-      case 9: {
-        if (!this.flag('splint')) {
-          if (this.flag('metCrew')) { const m = needFor(R.splint); if (m.length) return nearest(m); }
-          return L.crewSpot;
-        }
-        return L.camp;
-      }
+      case 9: return this.flag('metCrew') ? L.camp : L.ridge;
       case 10: {
         if (!this.flag('transmitter')) return L.pod;
         if (!this.flag('beaconBuilt')) { const m = needFor(R.beacon); if (m.length) return nearest(m); }
@@ -257,10 +261,8 @@ export class Story {
     if (n === 8 && !this.flag('signal')) {
       out.push({ id: 'tune', pos: L.ridge, radius: 5, label: t('action.tune'), run: () => this.tune() });
     }
-    if (n === 9 && this.crew.mode === 'injured') {
-      if (!this.flag('metCrew')) out.push({ id: 'talk', pos: this.crew.pos, radius: 2.8, label: t('action.talk', { name: t('{f:explorer}') }), run: () => this.meetCrew() });
-      else out.push({ id: 'splint', pos: this.crew.pos, radius: 2.8, label: t('action.splint', { name: t('{f:explorer}') }), missing: this.missing(R.splint), run: () => this.splint() });
-    }
+    if (n === 9 && !this.flag('metCrew')) out.push({ id: 'answer', pos: L.ridge, radius: 6, label: t('action.answer'), run: () => this.answerSignal() });
+    if (n === 9 && this.flag('metCrew') && !this.flag('crewCamp')) out.push({ id: 'radio', pos: L.camp, radius: 5, label: t('action.radio'), run: () => { this.s.flags.crewCamp = true; this.campPending = true; this.campTalk(); } });
     if (n === 10 && !this.flag('transmitter')) {
       out.push({ id: 'salvage', pos: L.pod, radius: 3.4, label: t('action.salvage'), run: () => {
         s.flags.transmitter = true;
@@ -480,77 +482,51 @@ export class Story {
     s.flags.crewFollow = id !== 'rescue';
     s.flags.crewCamp = id !== 'rescue';
     this.updateCrew(0.016, 0);
-    if (id === 'rescue') { this.player.spawn(L.crewSpot.x + 2.2, L.crewSpot.z + 1.6, 0); this.crew.pos.copy(L.crewSpot); this.meetCrew(); }
+    if (id === 'rescue') this.answerSignal();
     else if (id === 'camp') this.campTalk();
     else this.lightBeacon();
   }
 
-  private meetCrew() {
+  /** Level 9: the first time the player is someone else. She is on the ring, and she answers. */
+  private answerSignal() {
     audio.chime();
-    const { z, y } = this.pair;
-    this.turnToCrew();
     // how long she was left waiting: nothing on screen ever counted it
     const since = this.s.branch.marks.signal;
     if (since !== undefined) doHidden(this.s, storyHours(this.s) - since <= RESCUE_EARLY_HOURS ? 'c1.rescue.early' : 'c1.rescue.late');
-    this.playScene([
-      { key: 'dlg.9.1', who: 'explorer', shot: () => cover.ots(y, z), poses: { explorer: 'injured', scientist: 'stand' }, after: 0.5 },
-      { key: 'dlg.9.2', who: 'scientist', shot: () => cover.close(z, 0.4) },
-      { key: 'dlg.9.3', who: 'explorer', shot: () => cover.close(y, 0.45, 1.25, 0) },
-      { key: 'dlg.9.3b', who: 'scientist', shot: () => cover.close(z, -0.35), poses: { scientist: 'stand' }, after: 0.4 },
-      { key: 'dlg.9.3c', who: 'explorer', shot: () => cover.close(y, -0.4, 1.1, 0), after: 0.4 },
-      { key: 'br.res.early', who: 'explorer', if: { did: 'c1.rescue.early' }, shot: () => cover.ots(y, z), after: 0.4 },
-      { key: 'br.res.late', who: 'explorer', if: { did: 'c1.rescue.late' }, shot: () => cover.ots(y, z), after: 0.4 },
-      { key: 'dlg.9.4', who: 'scientist', shot: () => cover.two(z, y, 3.2), poses: { scientist: 'stand' } },
-    ], () => { this.s.flags.metCrew = true; });
+    this.hooks.away('explorer', 'ring', (id, go) => this.ringTask(id, go), () => { this.s.flags.metCrew = true; this.s.flags.splint = true; this.ui.toast(t('progress.leadCrew')); });
+    const lines: [string, string][] = [['dlg.9.1', 'explorer'], ['dlg.9.2', 'scientist'], ['dlg.9.3', 'explorer'], ['dlg.9.3b', 'scientist'], ['dlg.9.3c', 'explorer']];
+    lines.push([this.s.flags['c1.rescueLate'] ? 'br.res.late' : 'br.res.early', 'explorer'], ['dlg.9.4', 'scientist']);
+    this.dialogue(lines, 2.2);
   }
 
-  /** Square the player up to the Explorer before a two-hander. */
-  private turnToCrew() {
-    const p = this.player, c = this.crew.pos;
-    const yaw = Math.atan2(c.x - p.pos.x, c.z - p.pos.z);
-    p.model.root.rotation.y = yaw;
-    p.facing = yaw + Math.PI;
-    p.model.root.updateMatrixWorld(true);
-  }
-
-  private splint() {
-    const s = this.s;
-    this.consume(Story.REQ.splint);
-    s.flags.splint = true;
-    this.world.explorer.setSplint(true);
+  private ringTask(id: string, go: () => void) {
+    if (id !== 'splint') { audio.blip(); go(); return; }
+    // the knot is half tied when the whole boulder jumps
     audio.thud();
-    this.turnToCrew();
-    const { y } = this.pair;
-    this.playScene([
-      // the knot is half tied when the ground jumps: Greg, walking
-      { run: () => audio.tone(42, 1.6, 'sine', 0.5, 0, -14), qte: 'c1.splint', shot: () => cover.close(y, 0.4, 1.1, 0), poses: { explorer: 'injured', scientist: 'stand' } },
-      { key: 'br.splint.fail', who: 'explorer', if: SPLINT_SLIPPED, shot: () => cover.close(y, -0.3, 1, 0), poses: { scientist: 'facepalm' }, after: 0.4 },
-      { key: 'dlg.9.5', who: 'explorer', shot: () => cover.close(y, 0.4, 1.1, 0), poses: { explorer: 'injured', scientist: 'stand' } },
-    ], () => {
-      s.flags.crewFollow = true;
-      this.crew.mode = 'follow';
-      this.ui.toast(t('msg.crewFollow'));
+    this.hooks.quick('c1.splint', () => {
+      const slipped = test(this.s, SPLINT_SLIPPED);
+      this.ui.say(slipped ? 'br.splint.fail' : 'dlg.9.5', 'crew.explorer.name', 3.4);
+      go();
     });
   }
 
   /** The quiet moment by the fire once she is safe. */
   private campTalk() {
-    const { z, y } = this.pair;
+    const { z } = this.pair;
     const L = this.L;
     this.crew.pos.copy(L.campSeat);
     this.player.spawn(L.campSeat.x + 1.5, L.campSeat.z + 1.4, 0);
-    this.turnToCrew();
     this.playScene([
-      { key: 'dlg.9.6', who: 'explorer', shot: () => cover.close(y, 0.5, 1.2, 0), poses: { explorer: 'sit', scientist: 'stand' }, after: 0.6 },
+      { key: 'dlg.9.6', who: 'explorer', shot: () => cover.close(z, 0.5, 1.2, 0), poses: { explorer: 'sit', scientist: 'stand' }, after: 0.6 },
       { key: 'dlg.9.7', who: 'scientist', shot: () => cover.close(z, 0.3, 0.95), poses: { scientist: 'stand' }, after: 0.8 },
-      { key: 'dlg.9.8', who: 'explorer', shot: () => cover.close(y, 0.25, 0.95, 0), after: 0.6 },
-      { key: 'dlg.9.9', who: 'scientist', shot: () => cover.two(z, y, 3.5), after: 1.2 },
-      { key: 'br.fire.ask', who: 'explorer', shot: () => cover.close(y, -0.35, 1.1, 0), after: 0.4 },
-      { choice: 'c1.fire', shot: () => cover.two(z, y, 3.5) },
+      { key: 'dlg.9.8', who: 'explorer', shot: () => cover.close(z, 0.25, 0.95, 0), after: 0.6 },
+      { key: 'dlg.9.9', who: 'scientist', shot: () => cover.mid(z, 0.45, 2.4), after: 1.2 },
+      { key: 'br.fire.ask', who: 'explorer', shot: () => cover.close(z, -0.35, 1.1, 0), after: 0.4 },
+      { choice: 'c1.fire', shot: () => cover.mid(z, 0.45, 2.4) },
       { key: 'br.fire.big', who: 'scientist', if: FIRE_BIG, shot: () => cover.close(z, 0.3, 0.95) },
-      { key: 'br.fire.big.r', who: 'explorer', if: FIRE_BIG, shot: () => cover.close(y, 0.3, 1, 0), after: 0.6 },
+      { key: 'br.fire.big.r', who: 'explorer', if: FIRE_BIG, shot: () => cover.close(z, 0.3, 1, 0), after: 0.6 },
       { key: 'br.fire.small', who: 'scientist', if: FIRE_SMALL, shot: () => cover.close(z, 0.3, 0.95) },
-      { key: 'br.fire.small.r', who: 'explorer', if: FIRE_SMALL, shot: () => cover.close(y, 0.3, 1, 0), after: 0.6 },
+      { key: 'br.fire.small.r', who: 'explorer', if: FIRE_SMALL, shot: () => cover.close(z, 0.3, 1, 0), after: 0.6 },
     ], () => {
       this.campPending = false;
       if (this.nextTalk) { this.nextTalk = false; this.beaconPlan(); }
@@ -568,15 +544,11 @@ export class Story {
   private updateCrew(dt: number, time: number) {
     const s = this.s, L = this.L, c = this.crew, fig = this.world.explorer, p = this.player;
     // which mode does the save imply?
-    let mode = c.mode;
-    if (s.level < 9 && !this.flag('crewFollow')) mode = 'hidden';
-    else if (this.flag('crewCamp')) mode = 'camp';
-    else if (this.flag('crewFollow')) mode = 'follow';
-    else mode = 'injured';
+    const mode = (this.flag('arcEnd') ? 'camp' : 'hidden') as typeof c.mode;
     if (mode !== c.mode) {
       if (mode === 'injured') { c.pos.copy(L.crewSpot); c.yaw = Math.atan2(L.pod2.x - L.crewSpot.x, L.pod2.z - L.crewSpot.z) + Math.PI; }
       if (mode === 'follow' && c.mode !== 'injured') this.placeBehindPlayer();
-      if (mode === 'camp' && c.mode === 'hidden') c.pos.copy(L.campSeat);
+      if (mode === 'camp' && c.mode === 'hidden') { c.pos.copy(L.campSeat); projection(fig); }
       c.mode = mode;
     }
     fig.root.visible = mode !== 'hidden';
@@ -659,45 +631,44 @@ export class Story {
     const log: string[] = [];
     const push = (key: string) => () => { log.push(t(key)); this.ui.deviceLines(log.slice(-6), true); audio.beep(); };
     const alert = (n: number) => () => { this.ui.deviceLines(['beacon.unknown1', 'beacon.unknown2', 'beacon.unknown3'].slice(0, n).map((k) => t(k)), true, true); };
-    const { z, y } = this.pair;
+    const { z } = this.pair;
     const b = this.L.beacon;
     const beaconShot = () => ({ from: b.clone().add(new THREE.Vector3(5.5, 1.5, 6)), to: b.clone().add(new THREE.Vector3(0, 2.4, 0)), push: 0.1 });
     const skyShot = () => ({ from: z.root.position.clone().add(new THREE.Vector3(-1.5, 0.5, 2.6)), to: b.clone().add(new THREE.Vector3(0, 7, 0)), push: 0.08 });
     this.crew.pos.set(b.x - 1.6, this.world.terrain.height(b.x - 1.6, b.z + 1.8), b.z + 1.8);
     this.player.spawn(b.x + 1.2, b.z + 2.0, 0);
-    this.turnToCrew();
     this.playScene([
       { run: push('beacon.1'), hold: 1.8, shot: beaconShot, poses: { scientist: 'stand', explorer: 'stand' } },
       { run: push('beacon.2'), hold: 1.7 },
       { run: push('beacon.strong'), key: 'rad.strong', who: 'strong', fallback: 'br.rad.static', shot: () => cover.mid(z, 0.5, 2.2), poses: { scientist: 'stand' } },
-      { run: push('beacon.medic'), key: 'rad.medic', who: 'medic', fallback: 'br.rad.static', shot: () => cover.mid(y, -0.5, 2.2), poses: { scientist: 'stand' } },
-      { run: push('beacon.builder'), key: 'rad.builder', who: 'builder', swap: [{ if: { flag: 'c1.bigFire' }, key: 'br.rad.builder.smoke' }], fallback: 'br.rad.static', shot: () => cover.two(z, y, 3.3), poses: { scientist: 'stand' } },
-      { run: push('beacon.social'), key: 'rad.social', who: 'social', fallback: 'br.rad.static', shot: () => cover.close(y, 0.4, 1.3), poses: { scientist: 'stand', explorer: 'stand' } },
-      { key: 'dlg.10.3', who: 'explorer', shot: () => cover.close(y, -0.4, 1.1), poses: { explorer: 'stand', scientist: 'stand' }, after: 0.7 },
+      { run: push('beacon.medic'), key: 'rad.medic', who: 'medic', fallback: 'br.rad.static', shot: () => cover.mid(z, -0.5, 2.2), poses: { scientist: 'stand' } },
+      { run: push('beacon.builder'), key: 'rad.builder', who: 'builder', swap: [{ if: { flag: 'c1.bigFire' }, key: 'br.rad.builder.smoke' }], fallback: 'br.rad.static', shot: () => cover.mid(z, 0.45, 2.4), poses: { scientist: 'stand' } },
+      { run: push('beacon.social'), key: 'rad.social', who: 'social', fallback: 'br.rad.static', shot: () => cover.close(z, 0.4, 1.3), poses: { scientist: 'stand', explorer: 'stand' } },
+      { key: 'dlg.10.3', who: 'explorer', shot: () => cover.close(z, -0.4, 1.1), poses: { explorer: 'stand', scientist: 'stand' }, after: 0.7 },
       { run: () => { alert(1)(); audio.tone(40, 2.5, 'sawtooth', 0.25, 0, 10); }, hold: 2.2, shot: skyShot, poses: { explorer: 'stand', scientist: 'stand' } },
       { run: alert(2), key: 'beacon.unknown2', hold: 2.4, shot: beaconShot },
       { run: alert(3), key: 'beacon.unknown3', hold: 2.4, shot: () => cover.close(z, 0.2, 0.9), after: 0.8 },
-      { key: 'dlg.10.4', who: 'explorer', shot: () => cover.ots(y, z) },
+      { key: 'dlg.10.4', who: 'explorer', shot: () => cover.close(z, 0.35, 1.0) },
       { key: 'dlg.10.5', who: 'scientist', shot: () => cover.close(z, -0.3), after: 0.9 },
-      { run: () => this.ui.deviceLines(null), key: 'dlg.10.6', who: 'explorer', shot: () => cover.close(y, 0.35, 1), poses: { explorer: 'stand' } },
+      { run: () => this.ui.deviceLines(null), key: 'dlg.10.6', who: 'explorer', shot: () => cover.close(z, 0.35, 1), poses: { explorer: 'stand' } },
       { key: 'dlg.10.7', who: 'scientist', shot: () => cover.close(z, 0.3, 0.95), after: 0.5 },
-      { key: 'dlg.10.8', who: 'explorer', shot: () => cover.ots(y, z, -0.6), poses: { explorer: 'stand' }, after: 0.8 },
-      { choice: 'c1.accuse', shot: () => cover.close(y, -0.2, 1), poses: { explorer: 'stand', scientist: 'stand' } },
+      { key: 'dlg.10.8', who: 'explorer', shot: () => cover.close(z, 0.35, 1.0), poses: { explorer: 'stand' }, after: 0.8 },
+      { choice: 'c1.accuse', shot: () => cover.close(z, -0.2, 1), poses: { explorer: 'stand', scientist: 'stand' } },
       { key: 'dlg.10.9', who: 'scientist', if: TRUTH, shot: () => cover.close(z, -0.2, 0.85), after: 1.1 },
-      { key: 'dlg.10.10', who: 'explorer', if: TRUTH, swap: [{ if: HARD_TO_BELIEVE, key: 'br.acc.doubt' }], shot: () => cover.close(y, -0.2, 0.9), after: 1 },
+      { key: 'dlg.10.10', who: 'explorer', if: TRUTH, swap: [{ if: HARD_TO_BELIEVE, key: 'br.acc.doubt' }], shot: () => cover.close(z, -0.2, 0.9), after: 1 },
       { key: 'br.acc.proof', who: 'scientist', if: PROOF, shot: () => cover.close(z, -0.2, 0.85), poses: { scientist: 'present' }, after: 0.9 },
-      { key: 'br.acc.proof.r', who: 'explorer', if: PROOF, shot: () => cover.close(y, -0.2, 0.9), after: 1 },
+      { key: 'br.acc.proof.r', who: 'explorer', if: PROOF, shot: () => cover.close(z, -0.2, 0.9), after: 1 },
       { key: 'br.acc.joke', who: 'scientist', if: JOKED, shot: () => cover.close(z, 0.3, 0.95), poses: { scientist: 'present' }, after: 1.3 },
-      { key: 'br.acc.joke.r', who: 'explorer', if: JOKED, shot: () => cover.close(y, 0.2, 0.9), poses: { scientist: 'stand' }, after: 1 },
+      { key: 'br.acc.joke.r', who: 'explorer', if: JOKED, shot: () => cover.close(z, 0.2, 0.9), poses: { scientist: 'stand' }, after: 1 },
       { hold: 2.8, if: SAID_NOTHING, shot: () => cover.close(z, -0.2, 0.85) },
-      { key: 'br.acc.silent.r', who: 'explorer', if: SAID_NOTHING, shot: () => cover.close(y, -0.2, 0.9), after: 1 },
+      { key: 'br.acc.silent.r', who: 'explorer', if: SAID_NOTHING, shot: () => cover.close(z, -0.2, 0.9), after: 1 },
       // nobody closed the channel: the others heard all of it
       { key: 'br.rad.medic.truth', who: 'medic', if: SPOKE_PLAINLY, shot: skyShot },
-      { key: 'br.rad.strong.truth', who: 'strong', if: SPOKE_PLAINLY, shot: () => cover.two(z, y, 3.3), after: 0.8 },
+      { key: 'br.rad.strong.truth', who: 'strong', if: SPOKE_PLAINLY, shot: () => cover.mid(z, 0.45, 2.4), after: 0.8 },
       { key: 'br.rad.medic.joke', who: 'medic', if: JOKED, shot: skyShot },
-      { key: 'br.rad.strong.joke', who: 'strong', if: JOKED, shot: () => cover.two(z, y, 3.3), after: 0.8 },
+      { key: 'br.rad.strong.joke', who: 'strong', if: JOKED, shot: () => cover.mid(z, 0.45, 2.4), after: 0.8 },
       { key: 'br.rad.medic.silent', who: 'medic', if: SAID_NOTHING, shot: skyShot },
-      { key: 'br.rad.strong.silent', who: 'strong', if: SAID_NOTHING, shot: () => cover.two(z, y, 3.3), after: 0.8 },
+      { key: 'br.rad.strong.silent', who: 'strong', if: SAID_NOTHING, shot: () => cover.mid(z, 0.45, 2.4), after: 0.8 },
       { run: () => { this.ui.chapter(['chapter.end1', 'chapter.end2']); document.getElementById('cine-bars')!.classList.add('hidden'); }, hold: 5.5, shot: skyShot },
     ], () => {
       this.ui.chapter(null);
@@ -716,7 +687,6 @@ export class Story {
     const { z, y } = this.pair;
     this.crew.pos.copy(L.campSeat);
     this.player.spawn(L.campSeat.x + 1.5, L.campSeat.z + 1.4, 0);
-    this.turnToCrew();
     const b = L.beacon;
     const beaconShot = () => ({ from: b.clone().add(new THREE.Vector3(5.5, 1.5, 6)), to: b.clone().add(new THREE.Vector3(0, 2.4, 0)), push: 0.1 });
     const alert = (k: string) => () => { this.ui.deviceLines([t('beacon.voice'), t(k)], true, true); audio.tone(40, 2, 'sawtooth', 0.25, 0, 10); };
@@ -811,15 +781,15 @@ export class Story {
   }
 
   /** Crew panel status for each crewmate. */
-  crewStatus(id: string): { status: string; unlocked: boolean } {
+  crewStatus(id: string): { status: string; unlocked: boolean; play?: string } {
     if (!isAlive(this.s.branch, id)) return { status: t('crew.st.dead'), unlocked: false };
-    if (id === 'explorer' && this.flag('crewFollow')) {
+    const r = ROSTER.find((x) => x.id === id);
+    // playable once their own story has been told; where they are is only named then
+    if (r?.location && this.flag(`played.${id}`)) {
       const band = trustBand(trustOf(this.s.branch, id));
-      return { status: `${t(this.flag('crewCamp') ? 'crew.st.camp' : 'crew.st.withYou')} · ${t(`br.trust.${band}`)}`, unlocked: true };
+      return { status: `${t(`away.${r.location}.place`)} · ${t(`br.trust.${band}`)}`, unlocked: true, play: r.location };
     }
-    if (id === 'explorer') {
-      if (this.flag('signal')) return { status: t('crew.st.injured'), unlocked: false };
-    }
+    if (id === 'explorer' && this.flag('signal')) return { status: t('crew.st.injured'), unlocked: false };
     if (this.flag('beacon') && id !== 'scientist') return { status: t(`crew.st.signal.${id}`), unlocked: false };
     return { status: t('crew.status'), unlocked: false };
   }

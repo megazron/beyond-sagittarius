@@ -172,7 +172,8 @@ export class Cutscene {
 
   /** Keep the speaker's head inside the safe area, and light them from the camera side. */
   private frame(who: Who | undefined, key: string | undefined) {
-    const a = who && who !== 'megazron' ? this.ctx.actors[who] : undefined;
+    const on = who && who !== 'megazron' ? this.ctx.actors[who] : undefined;
+    const a = on?.root.visible ? on : undefined; // a voice on the radio is nobody to frame
     const cam = this.ctx.camera, s = this.shot;
     if (!a || !s) return;
     const h = headOf(a);

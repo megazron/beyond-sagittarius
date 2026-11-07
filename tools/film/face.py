@@ -30,7 +30,7 @@ def noise(t, s):
     return (math.sin(t + s) + .6 * math.sin(t * 1.73 + s * 2.3) + .3 * math.sin(t * 2.91 + s * 3.7)) / 1.9
 
 
-def track(names, cues, t, seed=0.0, env=None):
+def track(names, cues, t, seed=0.0, env=None, lip=None):
     """Weights for one character at time t. cues: [{t0, t1, emotion, k, react}], env(t) -> 0..1 voice level."""
     w = dict.fromkeys(names, 0.0); tr = 0.0
     for c in cues:
@@ -44,6 +44,10 @@ def track(names, cues, t, seed=0.0, env=None):
         q = tr * (.6 + .4 * noise(t * 2.1, seed + 3))
         w['mouth-compression'] += q * (.5 + .5 * math.sin(t * 47 + seed)); w['mouth-depression'] += q * (.5 + .5 * math.sin(t * 39 + seed + 1))
         for s in ('eyebrows-left-inner-up', 'eyebrows-right-inner-up'): w[s] += q * .35 * math.sin(t * 31 + seed)
+    if lip:
+        # the mouth follows this take's own sound, a frame ahead of it, as a mouth does
+        o, r, wd = lip
+        w['mouth-open'] += .62 * o; w['mouth-pursing'] += .55 * r; w['mouth-part-later'] += .5 * wd; w['mouth-retraction'] += .2 * wd
     if env:
         v = env(t)
         for s in ('eyebrows-left-up', 'eyebrows-right-up'): w[s] += .3 * v * v

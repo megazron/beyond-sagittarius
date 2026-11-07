@@ -19,9 +19,9 @@ Done means objectives, world content, NPCs, cutscene, dubbing, codex and smoke t
 | 9 | Reunite with the Explorer | done |
 | 10 | Light the Beacon | done, final Vault scene follows |
 
-## The Scatter: where the six landed (PROPOSED, awaiting owner review)
+## The Scatter: where the six landed
 
-Nothing below is built yet. The opening shows the six separate and only the player's landing. Everyone else's fate is
+The table is in `src/game/away/roster.ts` and `kit.ts`, so it is easy to change. The owner is still reviewing it. The opening shows the six separate and only the player's landing. Everyone else's fate is
 revealed in their own film at the moment they unlock, then the player controls them on their own ground.
 
 The system: one green world (the player's), a ringed giant in its sky (the second "world" of `wake.line2`), the giant's
@@ -36,9 +36,22 @@ methane moon, a loose band of rubble, and a hot cloud-wrapped planet closer to t
 | Agriculture (21 or next) | Draxum, Korrath | Hadrik: the giant's methane moon, nitrogen air, lakes of liquid methane | Titan foundry lineage: burns hydrogen and acetylene instead of oxygen, ember seams hold body heat | Proposed Titan biochemistry (McKay 2005) | Heavy carry, breaking ice bedrock, defences |
 | Bronze Age | Nuvexa, Sirelle | Sulva: the cloud deck of the hot planet, drifting at the one height with sane pressure | Venus cloud lineage: acid-proof skin, and breathable air is a lifting gas in thick carbon dioxide, so her pod simply floats | Air is buoyant in a CO2 atmosphere (Venus aerostat studies) | Morale, negotiation with whatever lives in the clouds, signal relays |
 
-**One decision for the owner: Skyvra.** She is physically present in Levels 9 and 10 and at the camp through Chapter Two.
+**Who can be played, as built:**
 
-- Option B, recommended and used in the table: she is on the ring. Level 8 finds her signal, Level 9 is her survival film and the first character switch: the splint quick-time becomes something the player does as her. The fire and accusation choices stay, over radio. After the beacon she appears at camp as a flickering projection, so Chapter Two conversations keep working. Meets "everyone somewhere different" literally.
+| Who | Stage | Tasks | State |
+| --- | --- | --- | --- |
+| Zenvik | The green world | Everything in levels 1 to 22 | Done |
+| Skyvra | The Long Ice | Splint (the quick-time), three ice, the pod, the dish | Playable at Level 9, part of the story. No reveal film yet |
+| Bolzar | The Scree | Salvage hull plate, weld the seal | Stage and tasks work from Level 14. No reveal film, no voiced lines |
+| Lyrra | The wreck | Tend lichen, close the wound, send in the sun window | Stage and tasks work from Level 19. No reveal film, no voiced lines |
+| Draxum | Hadrik | Haul ice, break bedrock, feed the ember | Stage and tasks work from Level 22. No reveal film, no voiced lines |
+| Nuvexa | Sulva | Patch the float, raise the relay | Stage and tasks work when forced by test only. Her unlock is in the Bronze Age, which does not exist yet |
+
+Levels with per-character tasks: 9, 14, 19, 22. All other levels are Zenvik only. Switching is the Crew tab's Play as, on keyboard, touch and gamepad through the same menu, and only after that person's story has been told. Stages are blocky first passes.
+
+**Skyvra.** She is physically present in Levels 9 and 10 and at the camp through Chapter Two.
+
+- Option B, chosen and built: she is on the ring. Level 8 finds her signal, Level 9 is her survival film and the first character switch: the splint quick-time becomes something the player does as her. The fire and accusation choices stay, over radio. After the beacon she appears at camp as a flickering projection, so Chapter Two conversations keep working. Meets "everyone somewhere different" literally.
 - Option A: she stays on the green world, in a far region. Cheapest, least re-recording, but two of the six share a world.
 
 **What has to change** (either option unless noted):

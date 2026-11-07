@@ -94,3 +94,24 @@ Total: 61 found, 49 fixed, 6 improved but open, 6 left. Three of the fixed items
 - Sound and picture sync was never heard. Only the beat map and a spectrogram were checked.
 - Everything was judged on software GL at 960x540, Web preset. Nothing here has been seen on a real GPU.
 - Frames every 0.75 to 1 s can miss a glitch that lasts a few frames.
+
+
+## Rendered or real-time
+
+Honest list. Rendered means a Cycles film from `tools/film/`, played by `src/cinematic/filmvideo.ts`. Everything else plays in WebGL.
+
+| Scene | State |
+| --- | --- |
+| Black hole entry (`tools/film/entry.json`) | In production, first scene for the owner to judge. Not in the game yet |
+| Title sequence, the fall and the lights going out | Real-time |
+| Deck scene | Real-time |
+| Player's landing and wake-up | Real-time, landing rework still to do |
+| Vault scenes (l3, l7, ch1, ch2) | Real-time |
+| Fight flashback | Real-time |
+| Skyvra on the ring (Level 9) | Real-time stage, reveal film not made |
+| Camp and beacon radio scenes | Real-time |
+| The four other reveals | Not made. Waiting on the owner's review of the story |
+
+## Line timing
+
+`python tools/line_timing.py` reports lines over 4.5 s, lines of 3 s or more with no pause in the audio, and for the timed opening how long the picture would freeze or a line would run past its shot. The real-time opening stretches its shots to the takes of the current language (`fitToVoice`), so the freeze figure is what the written timeline asks for, not what plays. Rendered scenes are cut to the takes by `tools/film/edl.py`, which fails if a line outlasts its shot.

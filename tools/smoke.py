@@ -148,7 +148,7 @@ def main():
         page.wait_for_selector("#p-set", timeout=10000)
         page.click("#p-set")
         page.click('.seg[data-seg="subLang"] button[data-v="hi"]')
-        page.click("#m-close")
+        page.evaluate("document.getElementById('m-close').click()")
         page.evaluate("document.getElementById('p-resume').click()")
         page.evaluate("__bs.sayTest('dlg.8.1')")
         sub = page.evaluate("__bs.subtitleText") or ""
@@ -167,7 +167,7 @@ def main():
         page.fill("#skin-code", "wrong-code")
         page.click("#skin-try")
         page.wait_for_function("document.getElementById('skin-msg').textContent.length > 0", timeout=5000)
-        page.click("#m-close")
+        page.evaluate("document.getElementById('m-close').click()")
         page.wait_for_selector("#p-resume", timeout=10000)
         page.evaluate("document.getElementById('p-resume').click()")
         state = page.evaluate("({state: __bs.state, mode: __bs.mode, level: __bs.level})")

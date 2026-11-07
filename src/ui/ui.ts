@@ -497,7 +497,7 @@ export class UI implements CineUI {
     $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
   }
 
-  openCrew(status: (id: string) => { status: string; unlocked: boolean }, onClose: () => void, onRename?: () => void) {
+  openCrew(status: (id: string) => { status: string; unlocked: boolean; play?: string }, onClose: () => void, onRename?: () => void, onPlay?: (id: string, loc: string) => void) {
     const cards = CREW.map((c, i) => {
       const st = i === 0 ? { status: t('crew.skills'), unlocked: true } : status(c);
       const found = i > 0 && st.unlocked;
@@ -508,12 +508,14 @@ export class UI implements CineUI {
         <div class="cr">${escapeHtml(t(`crew.${c}.role`))}</div>
         <div class="cl">${escapeHtml(t(`crew.${c}.line`))}</div>
         <div class="cs">${escapeHtml(st.status)}</div>
+        ${'play' in st && st.play ? `<button class="btn small crew-play" data-play="${c}" data-loc="${st.play}">${escapeHtml(t('away.playAs'))}</button>` : ''}
         <div class="skills">${[1, 2, 3].map((k) => { const on = st.unlocked && k === 1; return `<span class="${on ? 'on' : ''}">${on ? '' : icon('lock')}${escapeHtml(t(`crew.${c}.s${k}`))}</span>`; }).join('')}</div></div>
       </div>`;
     }).join('');
     this.menuPage('crew', `<div class="crew-grid">${cards}</div><div class="note">${escapeHtml(t('crew.note'))}</div>`);
     void portraits().then((p) => document.querySelectorAll<HTMLImageElement>('img[data-portrait]').forEach((im) => { const u = p[im.dataset.portrait!]; if (u) im.src = u; }));
     $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
+    document.querySelectorAll<HTMLButtonElement>('.crew-play').forEach((b) => b.addEventListener('click', () => { this.closeModal(); onClose(); onPlay?.(b.dataset.play!, b.dataset.loc!); }));
     void onRename;
   }
 

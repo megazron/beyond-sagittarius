@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Away } from './away/away';
+import { ROSTER } from './away/roster';
 import type { CrewId } from '../characters/character';
 import { t, onLangChange } from '../i18n';
 import { clamp, smoothstep, lerp, easeInOut } from '../core/noise';
@@ -27,11 +28,22 @@ type Mode = 'wake' | 'play' | 'dead' | 'scene' | 'craft' | 'talk' | 'away';
 
 /** Survival rules, the First-24-Hours objective chain and the wake-up sequence. */
 export class Game {
+  private sinceLevel = 0;
+  /** Someone whose moment has come and whose story hasn't been told. Skyvra's is in Level 9 itself. */
+  get revealDue() { const s = this.save; return s.replay ? undefined : ROSTER.find((r) => r.location && r.id !== 'explorer' && s.level >= r.unlock && !s.flags[`played.${r.id}`]); }
+
   /** Hand control to a crew member on their own stage; the green world waits. */
   goAway(id: CrewId, location: string, done?: () => void) {
     if (!this.away) return;
     this.mode = 'away';
-    this.away.enter(id, location, () => { this.mode = 'play'; done?.(); });
+    this.away.level = this.save.level;
+    this.away.enter(id, location, () => {
+      this.mode = 'play';
+      const first = !this.save.flags[`played.${id}`];
+      this.save.flags[`played.${id}`] = true;
+      if (first) { this.ui.toast(t('away.switchHint')); this.persist(); }
+      done?.();
+    });
   }
 
   mode: Mode = 'wake';
@@ -70,7 +82,7 @@ export class Game {
     };
     onLangChange(() => this.tutorial.refresh());
     this.story = new Story(world, player, ui, () => this.save, (sec, fn) => this.after(sec, fn), (amount) => this.hurt(amount), (beats, then) => this.playScene(beats, then));
-    this.story.hooks = { craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
+    this.story.hooks = { away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
     this.craft.onFail = () => {
       const c = (this.save.crafts ??= { failed: 0 });
       c.failed++;
@@ -413,9 +425,12 @@ export class Game {
     const blend = easeInOut(smoothstep(16, 20.5, w));
     cam.position.lerpVectors(scripted.position, tpPos, blend);
     cam.quaternion.slerpQuaternions(scripted.quaternion, tpQuat, blend);
-    // survivor lies in the grass, then gets up
-    const up = smoothstep(14.5, 17.5, w);
-    this.player.model.root.rotation.x = lerp(-Math.PI / 2 + 0.1, 0, easeInOut(up));
+    // the survivor lies still, comes round, pushes up, doesn't make it, and only then gets up
+    const lift = smoothstep(13.5, 15.2, w) * .42 - smoothstep(15.2, 15.7, w) * .24 + smoothstep(16.1, 18.6, w) * .82;
+    const up = clamp(lift, 0, 1);
+    const shake = up > .05 && up < .97 ? Math.sin(w * 31) * .012 : 0;
+    this.player.model.root.rotation.x = lerp(-Math.PI / 2 + 0.1, 0, easeInOut(up)) + shake;
+    this.player.model.root.rotation.z = (1 - up) * .16 * Math.sin(w * 1.3);
     this.player.model.root.position.y = this.player.pos.y + (1 - up) * 0.25;
     this.player.model.root.visible = blend > 0.05 || up > 0.5;
   }
@@ -449,7 +464,16 @@ export class Game {
     }
 
     const p = this.player;
-    p.update(dt, this.input, true, st.stamina, st.health < 25 ? 0.75 : 1);
+    if (this.away && this.away.quiet > 0) { this.away.quiet -= dt; this.input.endFrame(); }
+    // whoever this level reveals: their own story, on their own ground, as soon as the moment is free
+    // a level's own ending lands first: the Vault, the Ledger, then the next person's story
+    this.sinceLevel += dt;
+    const who = this.revealDue;
+    if (who && this.sinceLevel > 15 && !this.story.busy && !this.ui.modalOpen()) { this.goAway(who.id, who.location!); return; }
+    // the crash isn't forgotten by the next cutscene: hurt on day one, better by the time there's food
+    const hurt = s.level <= 1 ? 0.45 : s.level === 2 ? 0.72 : 1;
+    p.model.setLimp(s.level <= 1);
+    p.update(dt, this.input, true, st.stamina, (st.health < 25 ? 0.75 : 1) * hurt);
     if (this.camShake > 0) {
       p.camera.position.x += (Math.random() - 0.5) * this.camShake;
       p.camera.position.y += (Math.random() - 0.5) * this.camShake;
@@ -644,6 +668,7 @@ export class Game {
       const n = s.level;
       s.completed.push(n);
       s.level++;
+      this.sinceLevel = 0;
       audio.chime();
       this.ui.banner(t('level.complete', { n }), t(`level.${n}.title`));
       this.onLevelComplete?.(n);

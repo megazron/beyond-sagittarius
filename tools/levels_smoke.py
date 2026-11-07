@@ -594,6 +594,13 @@ def main():
             ev("__bs.step(0.3)")
             if label is None and target is None:
                 ev("__bs.step(1.0)")  # a dialogue or fade is running
+            # someone else's stage: do their tasks through the real interact input
+            for _ in range(24):
+                if ev("__bs.mode") != "away":
+                    break
+                if ev("__bs.branch.open"):
+                    page.keyboard.press("Space"); ev("__bs.step(0.4)"); continue
+                ev("__bs.awayGoNext()"); ev("__bs.step(0.3)"); page.keyboard.press("KeyE"); time.sleep(.5); ev("__bs.step(0.5)")
             # screenshots once a level's key prop exists
             done_flags = ev("__bs.save.flags")
             for key, (name, hour) in shots_at.items():
@@ -601,9 +608,7 @@ def main():
                     taken.add(name)
                     L = ev("__bs.layout")
                     if key == "splint":
-                        ev("__bs.step(4.5)")  # let the dialogue finish, she stands up
-                        c = ev("__bs.crew")["pos"]
-                        frame(c[0], c[2], 3.2, 0.55, -0.1)
+                        frame(L["camp"][0], L["camp"][2], 6.5, 0.35, -0.12)
                     elif key == "crewCamp":
                         ev("__bs.step(6)")
                         frame(L["campSeat"][0], L["campSeat"][2], 3.4, 0.5, -0.12)
@@ -728,6 +733,15 @@ def main():
         if not ends or ends["stay"] not in ("stay.together", "stay.alone") or ends["home"] not in ("home.everyone", "home.without"):
             failures.append(f"endings not evaluated: {ends}")
 
+        # a level can end in someone's reveal: play it out first
+        for _ in range(60):
+            ev("__bs.step(1)")
+            if ev("__bs.mode") == "away":
+                ev("__bs.awayGoNext()"); ev("__bs.step(0.3)"); page.keyboard.press("KeyE"); time.sleep(.5); ev("__bs.step(0.5)")
+            elif ev("__bs.mode") == "play" and not ev("__bs.revealDue"):
+                break
+        if ev("__bs.revealDue"):
+            failures.append("a reveal never played")
         # ---- NPCs: they exist, and talking to one works ----
         npcs = ev("__bs.npcs")
         log("npcs:", [n["id"] for n in npcs])
@@ -743,6 +757,7 @@ def main():
         ev("__bs.save.inventory.branch = 2; __bs.save.inventory.flint = 0")
         time.sleep(0.3)
         shot("23-dialogue")
+        log("before trade:", ev("({mode: __bs.mode, state: __bs.state, talk: __bs.talk && __bs.talk.choices, due: __bs.revealDue, modal: !!document.querySelector('#modal:not(.hidden), .modal.open'), buttons: [...document.querySelectorAll('#dlg-choices button')].map(b => b.dataset.c)})"))
         page.click('#dlg-choices button[data-c="ch.trade"]')
         page.click('#dlg-choices button[data-c="ch.tradeflint"]')
         if ev("__bs.save.inventory.flint") != 1 or ev("__bs.save.inventory.branch") != 0:

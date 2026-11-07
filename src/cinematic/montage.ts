@@ -611,8 +611,6 @@ export class Montage {
       { b: 20.4, fn: () => { this.ui.subtitle('cine.line8', 'crew.strong.name'); this.cast.strong.say(voice.duration('cine.line8') ?? 2); } },
       { b: 27.4, fn: () => this.ui.subtitle('op.21', 'crew.explorer.name') },
       { b: 31, fn: () => this.ui.subtitle(null) },
-      ...ORDER.slice(0, 5).map((id, i) => ({ b: beat.cards[i] + 0.25, fn: () => { this.ui.subtitle(`film.${id}`, `crew.${id}.name`); this.cast[id].say(voice.duration(`film.${id}`) ?? 1.4); } })),
-      ...ORDER.slice(0, 5).map((_, i) => ({ b: beat.impacts[i] + 7, fn: () => this.ui.subtitle(null) })),
       { b: 129.2, fn: () => this.ui.subtitle('film.scientist', 'crew.scientist.name') },
     );
 
@@ -855,11 +853,20 @@ export class Montage {
     }, () => set.show('home'));
 
     // ---- Act III: The Landing ----
-    ORDER.slice(0, 5).forEach((id, i) => {
-      const imp = beat.impacts[i], nextTo = imp + 6;
-      P(imp - 2, imp + 1.5, 'world', (k, b) => this.wide(id, b, imp), () => this.setLand(id));
-      P(imp + 1.5, nextTo, 'world', (k, b) => this.closeShot(id, k, b, imp));
-    });
+    // Where the others went is not shown. Six lights drift apart, and on each hit one flares and is gone.
+    P(62, 102, 'deep', (k, b) => {
+      ship.group.visible = false;
+      const cam = this.lens(V(Math.sin(b * .02) * 1.2, Math.cos(b * .017) * .8, 46 + k * 10), V(0, 0, 0), 42, 0, 0, b * .004);
+      this.hole(0, 0, -6000);
+      this.trails.forEach((tr, i) => {
+        const id = ORDER[i], hit = i < 5 ? beat.impacts[i] : 1e9, after_ = b - hit;
+        if (after_ > 1.6) { tr.mesh.visible = false; return; }
+        tr.color = i === 5 ? this.playerGlow() : TRAIL[id];
+        const d = dirs[i], reach = 8 + (b - 62) * .62, flare = after_ > 0 ? (1 - after_ / 1.6) * 3.4 : 1;
+        tr.draw((u, o) => { o.copy(d).multiplyScalar(reach * (1 - u * .34)); o.x += Math.sin(u * 3 + i) * u * 1.4; o.y += Math.cos(u * 3 + i) * u * 1.4; }, cam, .12 * flare, b, .8);
+      });
+      this.fx = { exposure: .55, flash: beat.impacts.some((h: number) => b >= h && b < h + .3) ? [.05, .05, .06] : undefined };
+    }, () => set.show('deep'));
 
     // ---- Act IV: The player comes down ----
     P(102, 108, 'world', (k, b) => this.lookUp(k, b), () => this.setLand('scientist'));

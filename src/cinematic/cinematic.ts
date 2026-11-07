@@ -19,7 +19,7 @@ export interface CineUI {
   fade(color: 'black' | 'white', to: number, seconds: number): void;
 }
 
-interface Cue { t: number; fn: () => void; done?: boolean; voiced?: boolean }
+interface Cue { t: number; fn: () => void; done?: boolean; voiced?: boolean; key?: string; t0?: number }
 interface Shot { start: number; end: number; enter?: () => void; update: (k: number, local: number) => void; done?: boolean }
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -112,6 +112,7 @@ export class Cinematic {
     this.onDone = onDone;
     this.time = 0;
     this.playing = true;
+    this.fitToVoice();
     this.cues.forEach((c) => (c.done = false));
     this.shots.forEach((s) => (s.done = false));
     audio.startDrone();
@@ -120,6 +121,7 @@ export class Cinematic {
   /** Jump to a time (debug / screenshots). Earlier cues are marked done without firing. */
   seek(t: number) {
     if (!this.playing) return;
+    t = this.warp(t);
     this.time = t;
     this.cues.forEach((c) => { if (c.t < t) c.done = true; });
     this.shots.forEach((s) => { if (s.end <= t) { s.enter?.(); s.done = true; } });
@@ -141,7 +143,7 @@ export class Cinematic {
   /** Freeze the timeline for the character scene on the observation deck. */
   private holdDeck() {
     this.runStage(deckScene(this.cast, this.interior.group.position), () => {
-      this.time = Math.max(this.time, 38.8);
+      this.time = Math.max(this.time, this.warp(38.8));
       this.interior.crew.forEach((c) => c.root.rotation.set(0, Math.PI, 0));
     });
   }
@@ -252,9 +254,35 @@ export class Cinematic {
   private cue(t: number, fn: () => void) { this.cues.push({ t, fn }); }
   /** A spoken cue: the timeline waits for the previous line to finish before firing it. */
   private vcue(t: number, key: string, fn: () => void) {
-    this.cues.push({ t, voiced: true, fn: () => { this.speechEnd = this.clockT + (voice.duration(key) ?? 2) + 0.15; fn(); } });
+    this.cues.push({ t, voiced: true, key, fn: () => { this.speechEnd = this.clockT + (voice.duration(key) ?? 2) + 0.15; fn(); } });
   }
   private speechEnd = 0;
+  private inserts: { at: number; by: number }[] = [];
+
+  /**
+   * Picture follows speech: where a line is longer than the time it was given, the shots around it stretch,
+   * so nothing freezes and no line runs on after its action. Per language, since the takes differ in length.
+   */
+  private fitToVoice() {
+    for (const c of this.cues) { c.t = c.t0 ??= c.t; }
+    for (const s of this.shots as (Shot & { s0?: number; e0?: number })[]) { s.start = s.s0 ??= s.start; s.end = s.e0 ??= s.end; }
+    this.inserts = [];
+    const voiced = this.cues.filter((c) => c.key).sort((a, b) => a.t - b.t);
+    voiced.forEach((c, i) => {
+      const d = voice.duration(c.key!) ?? 2;
+      const shot = this.shots.find((s) => s.start <= c.t && c.t < s.end);
+      const next = voiced[i + 1]?.t ?? Infinity;
+      const edge = Math.min(next, shot?.end ?? Infinity);
+      const need = c.t + d + 0.2 - edge;
+      if (need <= 0 || edge === Infinity) return;
+      this.inserts.push({ at: edge - 0.001, by: need });
+      for (const x of this.cues) if (x.t >= edge - 0.001) x.t += need;
+      for (const s of this.shots) { if (s.start >= edge - 0.001) s.start += need; if (s.end >= edge - 0.001) s.end += need; }
+    });
+  }
+
+  /** A time on the written timeline, on the stretched one. */
+  private warp(t: number) { let o = t; for (const k of this.inserts) if (o >= k.at) o += k.by; return o; }
 
   private buildTimeline() {
     const ui = this.ui;

@@ -6,8 +6,9 @@ import type { UI } from '../../ui/ui';
 import { t } from '../../i18n';
 import type { AwayStage, AwayTask } from './stage';
 import { createRing } from './ring';
+import { buildStage, STAGES } from './kit';
 
-const STAGES: Record<string, (label: (k: string) => string) => AwayStage> = { ring: createRing };
+const make = (loc: string, label: (k: string) => string): AwayStage => (loc === 'ring' ? createRing(label) : buildStage(loc, STAGES[loc], label));
 
 /** Playing someone else, somewhere else: their stage, their tasks, the same controls on every device. */
 export class Away {
@@ -20,11 +21,13 @@ export class Away {
   /** Runs a task's story beat (a quick-time, a line). Call `go` when it is over. */
   onTask: ((id: string, go: () => void) => void) | null = null;
   private busy = false;
+  /** Seconds after coming back during which interact is ignored. */
+  quiet = 0;
 
   constructor(private camera: THREE.PerspectiveCamera, private input: Input, private ui: UI, private detail: number, private show: (s: THREE.Scene | null) => void) {}
 
   enter(id: CrewId, location: string, done: () => void) {
-    const stage = STAGES[location](t);
+    const stage = make(location, t);
     this.stage = stage; this.who = id; this.onDone = done; this.done.clear(); this.busy = false;
     const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: () => 1 }, this.camera, this.detail, id);
     p.physics = { gravity: stage.gravity, jump: stage.jump, gaps: true };
@@ -44,9 +47,13 @@ export class Away {
   /** Test hook: stand beside a task. */
   teleport(x: number, z: number) { this.player?.spawn(x, z, 0); }
 
+  /** The level the HUD is showing, so the quest line can name the job in hand. */
+  level = 1;
+
   update(dt: number, time: number, canMove: boolean) {
     const s = this.stage, p = this.player;
     if (!s || !p) return;
+    this.ui.setObjective(this.level, this.next?.label ?? null);
     p.update(dt, this.input, canMove && !this.busy, 100, 1);
     s.update(dt, time);
     // falling off the ice costs nothing but the walk back
@@ -73,6 +80,10 @@ export class Away {
     this.stage = null; this.player = null; this.active = false; this.who = null;
     this.ui.setPrompt(null);
     this.show(null);
+    // the press that finished the last task belongs to this stage, not to whoever stands near Zenvik
+    this.input.endFrame();
+    this.input.capture = null;
+    this.quiet = 0.6;
     const d = this.onDone; this.onDone = null; d?.();
   }
 }

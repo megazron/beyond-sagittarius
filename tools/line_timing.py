@@ -40,18 +40,20 @@ def scenes():
 
 
 def cine():
-    """Timed cues: the clock runs on, so a line can run past its shot."""
+    """Timed cues. The clock holds at a voiced cue until the last line ends, so a long line doesn't overrun
+    the next cue: the picture freezes instead. Both are reported: seconds frozen, and seconds past the shot."""
     src = (ROOT / 'src/cinematic/cinematic.ts').read_text()
-    cues = [(float(t), k) for t, k in re.findall(r"vcue\(([\d.]+), '([\w.]+)'", src)]
+    cues = sorted((float(t), k) for t, k in re.findall(r"vcue\(([\d.]+), '([\w.]+)'", src))
     shots = [(float(s), float(e)) for s, e in re.findall(r'start: ([\d.]+), end: ([\d.]+)', src)]
-    out, free = [], 0
-    for i, (t, k) in enumerate(sorted(cues)):
-        d = idx.get(k); st = max(t, free)
-        if d is None: out.append(('cine', k, None, 'no audio')); continue
-        end = st + d + .15; free = end
+    out = []
+    for i, (t, k) in enumerate(cues):
+        d = idx.get(k)
+        if d is None: out.append(('cine', k, None, 0, 0)); continue
+        nxt = cues[i + 1][0] if i + 1 < len(cues) else 1e9
+        frozen = max(0, t + d + .15 - nxt)
         sh = next(((s, e) for s, e in shots if s <= t < e), None)
-        over = end - sh[1] if sh else 0
-        out.append(('cine', k, d, f'starts {st - t:.2f} s late' if st > t + .05 else '', round(over, 2)))
+        past = max(0, min(t + d, nxt) - sh[1]) if sh else 0
+        out.append(('cine', k, d, round(frozen, 2), round(past, 2)))
     return out
 
 
@@ -72,8 +74,8 @@ for sc, s in sorted(byscene.items(), key=lambda x: -x[1]['seconds']):
 T = {k: sum(s[k] for s in byscene.values()) for k in ('lines', 'long', 'nopause', 'noaudio')}
 print('total', T)
 print('\ntimed opening (cine):')
-over = 0
-for r in cine():
-    if len(r) == 5 and (r[4] > 0 or r[3]): print(' ', r[1], f'{r[2]:.1f} s', r[3], f'past shot by {r[4]} s' if r[4] > 0 else ''); over += r[4] > 0
-print('lines past their shot:', over)
+R = cine()
+for r in R:
+    if r[3] or r[4]: print(f'  {r[1]:14} {r[2]:.1f} s  picture frozen {r[3]} s  past its shot {r[4]} s')
+print('lines that freeze the picture:', sum(1 for r in R if r[3]), 'for', round(sum(r[3] for r in R), 1), 's; lines past their shot:', sum(1 for r in R if r[4]))
 print('\nworst paragraph reads:'); [print(f'  {d:.1f} s {k} ({w})') for d, k, w in sorted(longs, reverse=True)[:10]]

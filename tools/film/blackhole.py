@@ -29,14 +29,18 @@ def write_hdr(path, img):
         f.write(np.concatenate([rgb, ee[..., None]], 2).tobytes())
 
 
+OCT = [(fa, fr, amp, *rng.uniform(0, 6.28, 2)) for fa, fr, amp in ((2, 2.3, .42), (5, 5.1, .34), (11, 9.7, .26), (23, 19., .19), (47, 37., .14), (97, 71., .1), (199, 139., .07), (401, 271., .05))]
+
+
 def noise_disk(r, ph):
     """Hot filaments that wind tighter inwards. Pure function of disk coordinates."""
     out = np.zeros_like(r)
-    wind = ph + 2.6 * np.log(np.maximum(r, 1e-3)) + a.phase * 3.0 / np.maximum(r, 1) ** 1.5
-    for k, (fa, fr, amp) in enumerate(((3, 3.1, .5), (7, 6.3, .3), (13, 11., .2), (29, 23., .12), (61, 47., .07))):
-        s = rng.uniform(0, 6.28, 2)
-        out += amp * np.sin(wind * fa + s[0] + 1.7 * np.sin(np.log(np.maximum(r, 1e-3)) * fr + s[1]))
-    return 0.5 + 0.5 * np.tanh(out * 1.7)
+    lr = np.log(np.maximum(r, 1e-3))
+    wind = ph + 3.4 * lr + a.phase * 3.0 / np.maximum(r, 1) ** 1.5
+    # fixed phases: the same disk for every ray, or chunks of the sky disagree and it bands
+    for fa, fr, amp, s0, s1 in OCT:
+        out += amp * np.sin(wind * fa + s0 + 1.9 * np.sin(lr * fr + s1 + wind * .5))
+    return 0.5 + 0.5 * np.tanh(out * 1.5)
 
 
 def blackbody(t):

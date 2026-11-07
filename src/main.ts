@@ -470,7 +470,7 @@ function showTab(tab: MenuTab) {
   else if (tab === 'codex') openCodex(ui, game.save, resume);
   else if (tab === 'ledger') openPathTree(game.save, CHAPTERS.find((c) => game.save.level <= c.levels[1]) ?? CHAPTERS[0], resume);
   else if (tab === 'inventory') ui.openInventory(game.save.inventory, game.story.tools(), resume);
-  else ui.openCrew((id) => game.story.crewStatus(id), resume);
+  else ui.openCrew((id) => game.story.crewStatus(id), resume, undefined, (id, loc) => game.goAway(id as CrewId, loc));
 }
 ui.onMenuTab = showTab;
 
@@ -740,6 +740,7 @@ window.addEventListener('resize', () => {
   stageInfo() { return renderer.stageInfo(); },
   goAway(id: CrewId, loc: string) { game?.goAway(id, loc); },
   get away() { const a = game?.away; return a?.active ? { who: a.who, next: a.next?.id ?? null, done: [...a.done], pos: a.position?.toArray() } : null; },
+  get revealDue() { return !!game?.revealDue; },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   cineTime() { return cine.time; },
   get stagePlaying() { return cine.staged; },

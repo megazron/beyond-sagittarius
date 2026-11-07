@@ -28,6 +28,7 @@ window.__filmDump = (() => {
     const st = __bs.stageInfo(), scene = st.scene, cam = st.camera;
     scene.updateMatrixWorld(true); cam.updateMatrixWorld(true);
     const out = { beat: __bs.film.beat, camera: { m: Array.from(cam.matrixWorld.elements), fov: cam.fov, focus: st.focus, aperture: st.aperture }, lights: [], meshes: [], fresh: {} };
+    if (window.__hole) out.hole = { on: 1, p: window.__hole, warp: 0 };
     const v = cam.position.clone();
     scene.traverse((o) => {
       const un = o.material?.uniforms;

@@ -83,7 +83,7 @@ export class Tutorial {
     const p = this.player;
     switch (this.step) {
       case 'look': return this.input.lookTotal - this.startLook > 500;
-      case 'move': return Math.hypot(p.pos.x - this.startPos.x, p.pos.z - this.startPos.z) > 5;
+      case 'move': return Math.hypot(p.pos.x - this.startPos.x, p.pos.z - this.startPos.z) > 2.5; // you're hurt: a few steps is the lesson
       case 'sprint': return this.sprintT > 1.2;
       case 'jump': return !p.onGround && p.vel.y > 0.5;
       case 'interact': return this.carried() > this.startCarried;
