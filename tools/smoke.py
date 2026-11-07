@@ -87,9 +87,14 @@ def main():
         time.sleep(6)
         shot("02b-cinematic-deck")
         # every spoken shot must keep its speaker in frame
+        # wait for each shot to register: under load a frame takes seconds, and a fixed sleep skips shots unseen
         for _ in range(40):
+            seen = page.evaluate("__bs.frameReport.length")
             page.evaluate("__bs.nextBeat()")
-            time.sleep(0.35)
+            try:
+                page.wait_for_function(f"__bs.frameReport.length > {seen}", timeout=4000)
+            except Exception:
+                pass
             if page.evaluate("__bs.frameReport.length") >= 20:
                 break
         report = page.evaluate("__bs.frameReport")
@@ -144,7 +149,7 @@ def main():
         page.click("#p-set")
         page.click('.seg[data-seg="subLang"] button[data-v="hi"]')
         page.click("#m-close")
-        page.click("#p-resume")
+        page.evaluate("document.getElementById('p-resume').click()")
         page.evaluate("__bs.sayTest('dlg.8.1')")
         sub = page.evaluate("__bs.subtitleText") or ""
         if not any("\u0900" <= c <= "\u097f" for c in sub):
@@ -164,7 +169,7 @@ def main():
         page.wait_for_function("document.getElementById('skin-msg').textContent.length > 0", timeout=5000)
         page.click("#m-close")
         page.wait_for_selector("#p-resume", timeout=10000)
-        page.click("#p-resume")
+        page.evaluate("document.getElementById('p-resume').click()")
         state = page.evaluate("({state: __bs.state, mode: __bs.mode, level: __bs.level})")
         print("final state:", state)
         browser.close()
