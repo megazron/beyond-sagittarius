@@ -411,7 +411,10 @@ def build(c, cid, force=False):
             total += tris
 
         locked = seam.copy()
-        emit(head.decimated(L['head'], locked, imp, L['cost']), 'skin')
+        hd = head.decimated(L['head'], locked, imp, L['cost'])
+        emit(hd, 'skin')
+        if FILM_FACE and suffix == '':
+            film_face(cid, hd, Vdm, scale, lb_parts=(lash, brow))
         bb = body.decimated(L['body'], locked, imp, L['cost'])
         emit(bb, 'skin')
         emit(eyes.decimated(500 if suffix == '' else 200), 'eyes')
@@ -440,6 +443,25 @@ def build(c, cid, force=False):
     meta.update(paint.head_profile(V, T[hm], piv[rig.index['head']]))
     json.dump(meta, open(f'{OUT}/{cid}.json', 'w'), separators=(',', ':'))
     print(cid, info, f'{time.time() - t0:.1f}s', flush=True)
+
+
+FILM_FACE = os.environ.get('FILM_FACE')
+
+
+def film_face(cid, hd, Vdm, scale, lb_parts):
+    """All 34 CC0 expression units per render vertex of the head, for the offline film only: the game keeps
+    its eight morphs. Order follows the glTF primitive, so Blender can add them to baked frames."""
+    U_DIR = f'{mh.DATA}/targets/expression/units/caucasian'
+    names = sorted(f[:-7] for f in os.listdir(U_DIR) if f.endswith('.target'))
+    pv = hd.corners()[0]
+    D = np.zeros((len(names), len(pv), 3), np.float16)
+    for k, n in enumerate(names):
+        i, d = mh.load_target(f'{U_DIR}/{n}.target')
+        full = np.zeros_like(Vdm); full[i] = d * scale
+        D[k] = full[pv]
+    os.makedirs(FILM_FACE, exist_ok=True)
+    np.savez_compressed(f'{FILM_FACE}/{cid}.npz', names=np.array(names), delta=D, bind=hd.P[pv].astype(np.float32))
+    print('film face', cid, D.shape, flush=True)
 
 
 def fur_shells(V, N, T, TU, UV, W, morphs, neutral, layers):
