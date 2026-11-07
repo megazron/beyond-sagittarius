@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { Away } from './away/away';
+import type { CrewId } from '../characters/character';
 import { t, onLangChange } from '../i18n';
 import { clamp, smoothstep, lerp, easeInOut } from '../core/noise';
 import { audio } from '../core/audio';
@@ -21,10 +23,17 @@ import { Cutscene, Beat, SceneBranch } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
 import { apply, collectPayoffs, DECISIONS, LINE_RULES, QTES, record, resolveLine, test } from './branch';
 
-type Mode = 'wake' | 'play' | 'dead' | 'scene' | 'craft' | 'talk';
+type Mode = 'wake' | 'play' | 'dead' | 'scene' | 'craft' | 'talk' | 'away';
 
 /** Survival rules, the First-24-Hours objective chain and the wake-up sequence. */
 export class Game {
+  /** Hand control to a crew member on their own stage; the green world waits. */
+  goAway(id: CrewId, location: string, done?: () => void) {
+    if (!this.away) return;
+    this.mode = 'away';
+    this.away.enter(id, location, () => { this.mode = 'play'; done?.(); });
+  }
+
   mode: Mode = 'wake';
   save!: SaveData;
   private wakeT = 0;
@@ -43,6 +52,8 @@ export class Game {
   private tmpV = new THREE.Vector3();
 
   tutorial: Tutorial;
+  /** Playing another crew member on their own stage (main.ts makes it). */
+  away: Away | null = null;
   craft = new Craft();
   dialogue = new Dialogue();
   private fails = 0;
@@ -419,6 +430,7 @@ export class Game {
     if (this.mode === 'wake') { this.updateWake(dt * this.wakeRate); return; }
     if (this.mode === 'dead') return;
     this.runCues(dt);
+    if (this.mode === 'away') { this.away?.update(dt, time, !this.ui.modalOpen()); return; }
     this.ui.choice.update(dt);
     if (this.mode === 'scene') this.dialogue.update(dt);
     if (this.mode === 'craft' || this.mode === 'talk') {

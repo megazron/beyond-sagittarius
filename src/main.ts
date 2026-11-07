@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { setLang, setPlayer, t, Lang } from './i18n';
 import { detectQuality, isPhone, saveQualityChoice, QualityName } from './core/quality';
 import { desktop } from './core/desktop';
+import { Away } from './game/away/away';
+import type { CrewId } from './characters/character';
 import { Renderer } from './core/renderer';
 import { audio } from './core/audio';
 import { loadSave, newSave, clearSave, loadSettings, writeSettings, useSlot, SaveData, Settings } from './core/save';
@@ -423,7 +425,7 @@ function skipCurrent() {
 }
 
 // ---------------- pause / menus ----------------
-const canPlay = () => state === 'game' && game.mode === 'play' && !paused && !ui.modalOpen();
+const canPlay = () => state === 'game' && (game.mode === 'play' || game.mode === 'away') && !paused && !ui.modalOpen();
 
 function freeze() {
   paused = true;
@@ -659,6 +661,7 @@ async function boot() {
   player.invertY = settings.invertY;
   world.scene.add(player.model.root);
   game = new Game(world, player, input, ui, (id) => touch.highlight(id), (text) => ui.hint(text));
+  game.away = new Away(camera, input, ui, detail(), (sc) => (sc ? renderer.setScene(sc, camera, false) : renderer.setScene(world.scene, camera, true)));
   game.onLevelComplete = onLevelDone;
   game.timersOff = !!settings.noTimers;
   // warm up shaders so the first in-game frame doesn't hitch
@@ -735,6 +738,9 @@ window.addEventListener('resize', () => {
   get frames() { return hold.done; },
   film: { get fx() { return film.lensFx; }, get video() { return film.videoOn; }, seek(b: number) { film.seek(b); }, get playing() { return film.playing; }, get beat() { return film.beat; }, get seconds() { return film.lengthSeconds; }, start() { state = 'film'; renderer.setScene(cine.scene, cine.camera, false); ui.show('title', false); ui.show('cine', true); ui.fade('black', 0, 0); void film.play(() => {}); } },
   stageInfo() { return renderer.stageInfo(); },
+  goAway(id: CrewId, loc: string) { game?.goAway(id, loc); },
+  get away() { const a = game?.away; return a?.active ? { who: a.who, next: a.next?.id ?? null, done: [...a.done], pos: a.position?.toArray() } : null; },
+  awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   cineTime() { return cine.time; },
   get stagePlaying() { return cine.staged; },
   gameScene(id: 'rescue' | 'camp' | 'beacon') { game?.debugScene(id); },

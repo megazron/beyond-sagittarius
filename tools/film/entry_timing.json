@@ -1,0 +1,231 @@
+{
+"length": 69.65,
+"shots": [
+{
+"id": "a1",
+"act": "Approach",
+"t0": 0.0,
+"t1": 9.0,
+"action": "The liner, tiny, against the disk. No voices. Only the ship's own hum dropping away."
+},
+{
+"id": "a2",
+"act": "Approach",
+"t0": 9.0,
+"t1": 16.0,
+"action": "Deck, silent. A stylus drifts up off the console. Zenvik watches it. Nobody else has noticed."
+},
+{
+"id": "b1",
+"act": "Gravity takes hold",
+"t0": 16.0,
+"t1": 21.436,
+"action": "Draxum turns from the window. He has seen the course screen."
+},
+{
+"id": "b2",
+"act": "Gravity takes hold",
+"t0": 21.436,
+"t1": 25.436,
+"action": "Close on Zenvik. The eyes go to the screen, then to everyone looking at him."
+},
+{
+"id": "b3",
+"act": "Gravity takes hold",
+"t0": 25.436,
+"t1": 28.936,
+"action": "The deck tilts a degree. Every loose object slides at once. The argument stops mid breath."
+},
+{
+"id": "c1",
+"act": "Straining",
+"t0": 28.936,
+"t1": 34.936,
+"action": "Outside: the hull flexes, plates lifting along the spine. The ship is longer than it was."
+},
+{
+"id": "c2",
+"act": "Straining",
+"t0": 34.936,
+"t1": 39.514,
+"action": "Bolzar, both hands on a bulkhead, listening to it with his whole body."
+},
+{
+"id": "c3",
+"act": "Straining",
+"t0": 39.514,
+"t1": 42.014,
+"action": "The rib beside his hand buckles. He looks at it. Then at nobody."
+},
+{
+"id": "c4",
+"act": "Straining",
+"t0": 42.014,
+"t1": 46.839,
+"action": "Nuvexa, phone up out of pure habit, realises what she is filming and lowers it."
+},
+{
+"id": "d1",
+"act": "The fall",
+"t0": 46.839,
+"t1": 49.839,
+"action": "The window cracks across. Silence for a beat. Everyone sees it."
+},
+{
+"id": "d2",
+"act": "The fall",
+"t0": 49.839,
+"t1": 53.839,
+"action": "It goes. The six are thrown, tumbling, reaching for anything."
+},
+{
+"id": "d3",
+"act": "The fall",
+"t0": 53.839,
+"t1": 59.839,
+"action": "Outside. The ring of six, hand to hand, turning above the hole. The grip is going."
+},
+{
+"id": "d4",
+"act": "The fall",
+"t0": 59.839,
+"t1": 68.149,
+"action": "Two hands, centimetres apart, sliding."
+},
+{
+"id": "d5",
+"act": "The fall",
+"t0": 68.149,
+"t1": 69.649,
+"action": "Black. Nothing."
+}
+],
+"lines": [
+{
+"key": "b1.0.0",
+"who": "strong",
+"t0": 16.8,
+"t1": 17.442,
+"text": "Zenvik.",
+"emotion": "suspicion",
+"k": 0.85
+},
+{
+"key": "b1.0.1",
+"who": "strong",
+"t0": 18.142,
+"t1": 20.886,
+"text": "Why is your login on the course change?",
+"emotion": "suspicion",
+"k": 0.85
+},
+{
+"key": "b2.0.0",
+"who": "scientist",
+"t0": 22.436,
+"t1": 23.012,
+"text": "I didn't...",
+"emotion": "shock",
+"k": 0.8
+},
+{
+"key": "b2.0.1",
+"who": "scientist",
+"t0": 23.512,
+"t1": 24.136,
+"text": "That isn't...",
+"emotion": "shock",
+"k": 0.8
+},
+{
+"key": "c2.0.0",
+"who": "builder",
+"t0": 35.536,
+"t1": 36.286,
+"text": "Easy.",
+"emotion": "tender",
+"k": 0.7
+},
+{
+"key": "c2.0.1",
+"who": "builder",
+"t0": 36.786,
+"t1": 37.537,
+"text": "Easy now.",
+"emotion": "tender",
+"k": 0.7
+},
+{
+"key": "c2.0.2",
+"who": "builder",
+"t0": 38.137,
+"t1": 38.964,
+"text": "It'll hold.",
+"emotion": "tender",
+"k": 0.7
+},
+{
+"key": "c4.0.0",
+"who": "social",
+"t0": 42.414,
+"t1": 43.843,
+"text": "Okay, this is...",
+"emotion": "fear",
+"k": 0.75
+},
+{
+"key": "c4.0.1",
+"who": "social",
+"t0": 44.343,
+"t1": 46.289,
+"text": "this is not for the story.",
+"emotion": "fear",
+"k": 0.75
+},
+{
+"key": "d2.0.0",
+"who": "strong",
+"t0": 50.139,
+"t1": 51.18,
+"text": "Hold on to me!",
+"emotion": "fear",
+"k": 1
+},
+{
+"key": "d4.0.0",
+"who": "scientist",
+"t0": 60.339,
+"t1": 61.001,
+"text": "I've got you.",
+"emotion": "strain",
+"k": 1
+},
+{
+"key": "d4.0.1",
+"who": "scientist",
+"t0": 61.251,
+"t1": 62.948,
+"text": "I've got you, I won't...",
+"emotion": "strain",
+"k": 1
+},
+{
+"key": "d4.1.0",
+"who": "explorer",
+"t0": 63.848,
+"t1": 65.062,
+"text": "You still owe me...",
+"emotion": "fear",
+"k": 1
+},
+{
+"key": "d4.1.1",
+"who": "explorer",
+"t0": 65.562,
+"t1": 67.599,
+"text": "You still owe me snacks!",
+"emotion": "fear",
+"k": 1
+}
+]
+}

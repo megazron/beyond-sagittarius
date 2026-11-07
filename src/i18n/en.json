@@ -1015,5 +1015,10 @@
   "br.end.d.stay.alone": "You stay. Nobody asked you to.",
   "br.end.d.home.everyone": "Everyone gets on the ship.",
   "br.end.d.home.without": "The ship leaves with empty seats.",
-  "br.end.now": "Where you stand today"
+  "br.end.now": "Where you stand today",
+  "away.fell": "Back on the ice. It didn't notice.",
+  "away.ring.splint": "Splint your leg",
+  "away.ring.ice": "Break off clean ice",
+  "away.ring.cracker": "Feed the ice to the pod",
+  "away.ring.dish": "Aim the dish at the green world"
 }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createCharacter, Character, CrewPose } from '../characters/character';
+import { createCharacter, Character, CrewId, CrewPose } from '../characters/character';
 import type { PlayerLook } from '../characters/custom';
 import { clamp } from '../core/noise';
 import type { Terrain } from '../world/terrain';
@@ -48,8 +48,11 @@ export class Player {
   private dip = 0;
   private dipV = 0;
 
-  constructor(private terrain: Terrain, private forest: Forest, public camera: THREE.PerspectiveCamera, detail = 1) {
-    this.model = createCharacter('scientist', detail);
+  /** Stages other than the green world set their own gravity, and let you jump across open gaps. */
+  physics = { gravity: 14, jump: 5.2, gaps: false };
+
+  constructor(private terrain: Pick<Terrain, 'height'>, private forest: Pick<Forest, 'collide' | 'blocks' | 'clearance'>, public camera: THREE.PerspectiveCamera, detail = 1, id: CrewId = 'scientist') {
+    this.model = createCharacter(id, detail);
     this.baseFov = camera.fov;
     this.model.setGround((x, z) => this.terrain.height(x, z));
   }
@@ -109,8 +112,8 @@ export class Player {
     this.vel.x += (wx - this.vel.x) * k;
     this.vel.z += (wz - this.vel.z) * k;
 
-    if (canMove && this.onGround && input.act('jump')) { this.vel.y = 5.2; this.onGround = false; }
-    this.vel.y -= 14 * dt;
+    if (canMove && this.onGround && input.act('jump')) { this.vel.y = this.physics.jump; this.onGround = false; }
+    this.vel.y -= this.physics.gravity * dt;
 
     const next = this.pos.clone();
     next.x += this.vel.x * dt;
@@ -129,9 +132,11 @@ export class Player {
     const gNext = this.terrain.height(next.x, next.z);
     const gNow = this.terrain.height(this.pos.x, this.pos.z);
     this.blockedDeep = false;
-    if (gNext < -1.1 && gNext < gNow) { this.blockedDeep = true; next.x = this.pos.x; next.z = this.pos.z; }
-    const climb = (gNext - gNow) / Math.max(1e-3, Math.hypot(next.x - this.pos.x, next.z - this.pos.z));
-    if (climb > 1.6 && gNext > gNow) { next.x = this.pos.x; next.z = this.pos.z; }
+    if (!this.physics.gaps) {
+      if (gNext < -1.1 && gNext < gNow) { this.blockedDeep = true; next.x = this.pos.x; next.z = this.pos.z; }
+      const climb = (gNext - gNow) / Math.max(1e-3, Math.hypot(next.x - this.pos.x, next.z - this.pos.z));
+      if (climb > 1.6 && gNext > gNow) { next.x = this.pos.x; next.z = this.pos.z; }
+    } else if (gNext > this.pos.y + .35) { next.x = this.pos.x; next.z = this.pos.z; } // a ledge above you is a wall
     this.pos.x = next.x; this.pos.z = next.z;
     this.pos.y += this.vel.y * dt;
     const ground = this.terrain.height(this.pos.x, this.pos.z);
@@ -141,7 +146,7 @@ export class Player {
       this.pos.y = ground; this.vel.y = 0; this.onGround = true;
     }
     else if (this.pos.y - ground > 0.15) this.onGround = false;
-    this.inWater = ground < -0.25;
+    this.inWater = !this.physics.gaps && ground < -0.25;
 
     // animate model
     const hs = Math.hypot(this.vel.x, this.vel.z);
