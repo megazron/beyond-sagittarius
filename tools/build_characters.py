@@ -15,6 +15,7 @@ from config import CHARS, MORPHS, CREW
 from scipy.spatial import cKDTree
 from multiprocessing import Pool
 import paint
+import suit
 
 OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'models', 'crew')
 LODS = {'': dict(body=2200, head=4000, cloth=6000, cost=4e-4), '.lod1': dict(body=1100, head=1800, cloth=2600, cost=4e-3)}
@@ -271,6 +272,11 @@ def build(c, cid, force=False):
         if opt.get('skirt'):
             skirt_weights(c, p, piv)
         p.tint, p.opt, p.asset = tint, opt, nm
+        if opt.get('islands'):
+            p.island = paint.uv_islands(p)
+            keep_f = ~np.isin(p.island, opt.get('drop', ()))
+            p.T, p.TU, p.island = p.T[keep_f], p.TU[keep_f], p.island[keep_f]
+            p.extra['_ACCENT'][np.unique(p.T[np.isin(p.island, paint.SUIT['satin'])])] = 1.0
         garments.append(p)
     # some source meshes have patches wound inside out: their normals must still face away from the body
     Nb0 = vnormals(V, tri_fan(base.faces, base.fuv, bodyf)[0])
@@ -297,6 +303,8 @@ def build(c, cid, force=False):
         vis = ~hid[g.T].all(1)
         if vis.sum() > 60:
             g.T, g.TU = g.T[vis], g.TU[vis]
+            if hasattr(g, 'island'):
+                g.island = g.island[vis]
     for g in garments:
         if 'boot' in g.asset or 'shoe' in g.asset:
             for o in garments:
@@ -324,6 +332,8 @@ def build(c, cid, force=False):
     dl |= erode(hid, Tall, 1)
     hw0 = rig.W[:, [rig.index[n] for n in ('head', 'jaw', 'eyeL', 'eyeR')]].sum(1)
     dl[hw0 > 0.3] = False
+    if cfg.get('fur'):  # a low open collar: the whole neck stays
+        dl[rig.W[:, rig.index['neck']] > 0.05] = False
     for i in bodyf:
         if not dl[base.faces[i]].all():
             keep.append(i)
@@ -344,6 +354,9 @@ def build(c, cid, force=False):
     # the neck seam must not move
     seam = np.zeros(len(V), bool)
     seam[np.intersect1d(T[hm].ravel(), T[~hm].ravel())] = True
+    furs = {}
+    if cfg.get('fur'):
+        furs = {n: fur_shells(V, Nall, T, TU, UV, rig.W, morphs, base.v, n) for n in (7, 3)}
     # importance: face features and fingers keep their detail
     imp = np.ones(len(V))
     for b, k in (('jaw', 14), ('eyeL', 14), ('eyeR', 14), ('finger3_2L', 3), ('finger3_2R', 3)):
@@ -365,6 +378,8 @@ def build(c, cid, force=False):
     if 'atlas' not in cfg:
         paint.cloth_atlas(cid, garments, OUT)
         paint.mark_map(cid, cfg, base, rig, OUT)
+        if cfg.get('fur'):
+            paint.fur_map(cid, base, rig, OUT)
     # --- LODs ---
     info = {}
     for suffix, L in LODS.items():
@@ -384,7 +399,7 @@ def build(c, cid, force=False):
         ibm = np.tile(np.eye(4), (len(piv), 1, 1))
         ibm[:, 3, :3] = -piv  # column-major: translation in last column -> row 3 in memory
         sk = g.skin(nodes, ibm.astype(np.float32), nodes[0])
-        M = {k: g.material(k) for k in ('skin', 'eyes', 'cornea', 'mouth', 'lash', 'cloth')}
+        M = {k: g.material(k) for k in ('skin', 'eyes', 'cornea', 'mouth', 'lash', 'cloth') + (('fur',) if furs else ())}
         total = 0
         rootc = [nodes[0]]
 
@@ -405,7 +420,9 @@ def build(c, cid, force=False):
         emit(mp, 'mouth')
         lb = merge([lash, brow], 'lash', uvmap=[(0, 0, 0.5, 1), (0.5, 0, 0.5, 1)], morphs=list(morphs))
         emit(lb, 'lash')
-        budget = L['cloth']
+        if furs:
+            emit(furs[7 if suffix == '' else 3], 'fur')
+        budget = L['cloth'] * cfg.get('cloth_k', 1)
         tot = sum(len(p.T) * p.opt.get('budget', 1) for p in garments)
         cl = []
         for p, rect in zip(garments, atlas):
@@ -423,6 +440,22 @@ def build(c, cid, force=False):
     meta.update(paint.head_profile(V, T[hm], piv[rig.index['head']]))
     json.dump(meta, open(f'{OUT}/{cid}.json', 'w'), separators=(',', ':'))
     print(cid, info, f'{time.time() - t0:.1f}s', flush=True)
+
+
+def fur_shells(V, N, T, TU, UV, W, morphs, neutral, layers):
+    """Beard and close-cut scalp as stacked shells of the real skin: same weights and same morphs,
+    so the beard rides the jaw and every mouth shape. Strand map alpha-tests each layer."""
+    be, sc = suit.beard(neutral), suit.scalp(neutral)
+    depth = np.maximum(be * 0.0135, sc * 0.0065)
+    sel = (depth[T] > 0.0004).any(1)
+    parts = []
+    for i in range(1, layers + 1):
+        h = i / layers
+        p = Part(V + N * (depth * h + 0.0017)[:, None], T[sel], TU[sel], UV, W, 'fur', morphs)
+        p.N = N
+        p.extra = {'_LAYER': np.full(len(V), h, np.float32)}
+        parts.append(p)
+    return merge(parts, 'fur', morphs=list(morphs))
 
 
 def fit_data(V, rig, piv, garments):

@@ -197,5 +197,21 @@ export function lashMaterial(brow: number) {
   return m;
 }
 
+/** Stacked shells of the real skin: each layer shows only the strands that reach it. */
+export function furMaterial(key: string, root: number, tip: number, lod: number) {
+  const m = new THREE.MeshStandardMaterial({ map: tex(`${key}_fur`, lod), roughness: 0.58 });
+  const u = { uRoot: { value: col(root) }, uTip: { value: col(tip) } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = `attribute float aLayer; varying float vLayer;\n` + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n  vLayer = aLayer;`);
+    sh.fragmentShader = `uniform vec3 uRoot, uTip; varying float vLayer;\n` + sh.fragmentShader.replace('#include <map_fragment>', /* glsl */ `
+      vec4 fs = texture2D(map, vMapUv);
+      if (fs.r < 0.06 + vLayer * 0.9) discard;
+      diffuseColor.rgb = mix(uRoot, uTip, vLayer * vLayer) * (0.65 + 0.7 * fs.g);`);
+  };
+  m.customProgramCacheKey = () => 'crew-fur';
+  return m;
+}
+
 export const mouthMaterial = () => new THREE.MeshStandardMaterial({ map: texPlain('teeth', true), roughness: 0.34 });
 export const corneaMaterial = () => new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.1, roughness: 0.04, metalness: 0.0, depthWrite: false });

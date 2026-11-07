@@ -16,10 +16,19 @@ Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 6, bottom: -2 }); su
 scene.add(sun, new THREE.HemisphereLight(0xbcd6e8, 0x394034, 1.3));
 const ground = new THREE.Mesh(new THREE.CircleGeometry(30, 40), new THREE.MeshStandardMaterial({ color: 0x35402f, roughness: 0.95 }));
 ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+// ?studio: a portrait setup that shows cloth and skin honestly (soft key, low fill, rim from behind)
+if (new URLSearchParams(location.search).has('studio')) {
+  scene.background = new THREE.Color(0x8f8c88);
+  sun.color.set(0xfff4e6); sun.intensity = 2.6; sun.position.set(-3, 5, 6);
+  const fill = new THREE.DirectionalLight(0xdfe8ff, 1.0); fill.position.set(5, 2, 4);
+  const rim = new THREE.DirectionalLight(0xffffff, 2.2); rim.position.set(2, 4, -6);
+  scene.add(fill, rim);
+  (ground.material as THREE.MeshStandardMaterial).color.set(0x77736e);
+}
 const cam = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 100);
 const alt = new URLSearchParams(location.search).get('skin') ?? undefined;
 const customs = new URLSearchParams(location.search).get('custom');
-const chars: Character[] = (window as unknown as { chars: Character[] }).chars = ids.map((id, i) => { const c = customs ? createCharacter('scientist', 1, randomLook({ name: 'x', gender: i % 2 ? 'f' : 'm' })) : createCharacter(id, 1, undefined, id === 'strong' ? alt : undefined); c.root.position.x = (i - 2.5) * 1.3; scene.add(c.root); return c; });
+const chars: Character[] = (window as unknown as { chars: Character[] }).chars = ids.map((id, i) => { const c = customs ? createCharacter('scientist', 1, randomLook({ name: 'x', gender: i % 2 ? 'f' : 'm' })) : createCharacter(id, Number(new URLSearchParams(location.search).get('detail') ?? 1), undefined, id === 'strong' ? alt : undefined); c.root.position.x = (i - 2.5) * 1.3; scene.add(c.root); return c; });
 let pose: CrewPose = 'stand', amount = 0, t = 0, phase = 0;
 const W = window as unknown as Record<string, unknown>;
 W.view = (i: number, d: number, yaw: number, h: number, dist: number) => {
@@ -53,7 +62,7 @@ W.slide = (i: number, v: number, n = 240, dt = 1 / 60) => {
   return { medianStanceSlide: res[res.length >> 1], p90: res[Math.floor(res.length * 0.9)], minFootY: Math.min(...lows) };
 };
 /** Deterministic driven take for video: speed and turn profile over time, camera following. */
-const grid = new THREE.GridHelper(200, 200, 0xc8d0c0, 0x7f8a7a); grid.position.y = 0.004; (grid.material as THREE.Material).transparent = true; (grid.material as THREE.Material).opacity = 0.5; scene.add(grid);
+const grid = new THREE.GridHelper(200, 200, 0xc8d0c0, 0x7f8a7a); grid.position.y = 0.004; grid.visible = !new URLSearchParams(location.search).has('studio'); (grid.material as THREE.Material).transparent = true; (grid.material as THREE.Material).opacity = 0.5; scene.add(grid);
 let driveT = 0, yawNow = 0;
 const profile = (s: number): [number, number] => {
   // seconds -> [m/s, rad/s]

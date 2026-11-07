@@ -6,7 +6,7 @@ import { buildHair, HAIRSTYLES, HAIR_CAP, skullFrom } from './hair';
 import { LOOKS, CrewId, Look } from './looks';
 import type { PlayerLook } from './custom';
 import { voice } from '../core/voice';
-import { AnimSet, CrewAsset, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, lashMaterial, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
+import { AnimSet, CrewAsset, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, furMaterial, lashMaterial, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
 import { addKit, Kit } from './kit';
 
 export type { CrewId } from './looks';
@@ -182,37 +182,39 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       scene.traverse((o) => { const s = o as THREE.SkinnedMesh; if (s.isSkinnedMesh) s.skeleton.calculateInverses(); });
     }
     // materials
-    const skinC = custom ? custom.skin : human ? 0x9a6a48 : L.face.skin;
-    const shadeC = custom ? new THREE.Color(custom.skin).multiplyScalar(0.5).getHex() : human ? 0x5c3420 : L.face.shade;
-    const lipC = custom ? new THREE.Color(custom.skin).lerp(new THREE.Color(0xa03040), 0.45).getHex() : human ? 0x7c3a30 : L.face.lip ? parseInt(L.face.lip.slice(1), 16) : new THREE.Color(L.face.shade).lerp(new THREE.Color(L.face.skin), 0.4).getHex();
+    const skinC = custom ? custom.skin : human ? 0xa27a5c : L.face.skin;
+    const shadeC = custom ? new THREE.Color(custom.skin).multiplyScalar(0.5).getHex() : human ? 0x5e3a2c : L.face.shade;
+    const lipC = custom ? new THREE.Color(custom.skin).lerp(new THREE.Color(0xa03040), 0.45).getHex() : human ? 0x7c463c : L.face.lip ? parseInt(L.face.lip.slice(1), 16) : new THREE.Color(L.face.shade).lerp(new THREE.Color(L.face.skin), 0.4).getHex();
     const glowC = custom ? custom.glow : human ? 0 : L.glow;
     const marks = custom ? MARK_OF[custom.marks] : human ? 'strong_suit' : id;
     const overC = marks === 'explorer' ? 0xf3e7cf : marks === 'strong' ? 0xe8c49a : 0x1e1e1e;
     const skin = skinMaterial(M.skin, marks, { skin: skinC, shade: shadeC, lip: lipC, glow: glowC, over: overC, glowK: human ? 0 : 1.15 }, lod);
-    const irisC = custom ? custom.iris : human ? 0x2a1a10 : L.face.iris;
+    const irisC = custom ? custom.iris : human ? 0x1e120b : L.face.iris;
     const eyes = eyeMaterial(irisC, (custom ? custom.eyeGlow : !human) ? 0.55 : 0);
     const browC = custom ? new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex() : human ? 0x1a100c : L.face.brow;
     const atlas = M.atlas;
     const cloth = new THREE.MeshStandardMaterial({ map: tex(`${atlas}_cloth`, lod, true), normalMap: tex(`${atlas}_cloth_n`, lod), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, side: THREE.DoubleSide });
-    const accent = { uAccent: { value: new THREE.Color(custom?.accent ?? 0xffffff) }, uAccentK: { value: custom ? 1 : 0 }, uDetail: { value: clothDetail() }, uHeightM: { value: heightM } };
+    const accent = { uAccent: { value: new THREE.Color(custom?.accent ?? 0xffffff) }, uAccentK: { value: custom ? 1 : 0 }, uDetail: { value: clothDetail() }, uHeightM: { value: heightM }, uSatin: { value: human ? 1 : 0 }, uDust: { value: human ? 0.12 : 1 } };
     applySway(cloth, sway, (sh) => {
       Object.assign(sh.uniforms, accent);
       sh.vertexShader = `attribute float aAccent; varying float vAccent; varying float vBindY;\n` + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n  vAccent = aAccent; vBindY = position.y;`);
-      sh.fragmentShader = `uniform vec3 uAccent; uniform float uAccentK, uHeightM; uniform sampler2D uDetail; varying float vAccent; varying float vBindY;\n` + sh.fragmentShader
+      sh.fragmentShader = `uniform vec3 uAccent; uniform float uAccentK, uHeightM, uSatin, uDust; uniform sampler2D uDetail; varying float vAccent; varying float vBindY;\n` + sh.fragmentShader
         .replace('#include <map_fragment>', `#include <map_fragment>
         diffuseColor.rgb = mix(diffuseColor.rgb, uAccent * (0.35 + dot(diffuseColor.rgb, vec3(1.1))), vAccent * uAccentK);
         // survivors of a crash: dust climbs from the ground, worn patches come and go
         float wearN = texture2D(uDetail, vMapUv * 5.0).b;
         float dust = (1.0 - smoothstep(0.0, 0.62, vBindY / uHeightM)) * 0.75 + smoothstep(0.55, 0.8, wearN) * 0.5;
-        dust = clamp(dust * (0.45 + wearN), 0.0, 1.0);
+        dust = clamp(dust * (0.45 + wearN), 0.0, 1.0) * uDust;
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.66, 0.6, 0.52) + vec3(0.035, 0.028, 0.02), dust);`)
         .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-        roughnessFactor = min(1.0, roughnessFactor + dust * 0.14);`)
+        roughnessFactor = min(1.0, roughnessFactor + dust * 0.14);
+        roughnessFactor = mix(roughnessFactor, 0.44, vAccent * uSatin);`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-        { vec2 dn = texture2D(uDetail, vMapUv * 26.0).xy * 2.0 - 1.0; normal = normalize(normal + tbn * vec3(dn * 0.5, 0.0)); }`);
+        { vec2 dn = texture2D(uDetail, vMapUv * 26.0).xy * 2.0 - 1.0; normal = normalize(normal + tbn * vec3(dn * 0.5 * (1.0 - vAccent * uSatin), 0.0)); }`);
     });
     cloth.customProgramCacheKey = () => 'crew-cloth';
     const mouth = mouthMaterial(), cornea = corneaMaterial(), lash = lashMaterial(browC);
+    const fur = human ? furMaterial('strong_suit', 0x140c09, 0x4a3426, lod) : undefined;
     const sphere = new THREE.Sphere(new THREE.Vector3(0, heightM * 0.5, 0), heightM * 1.1);
     scene.traverse((o) => {
       const m = o as THREE.SkinnedMesh;
@@ -220,9 +222,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       m.boundingSphere = sphere;
       m.geometry.boundingSphere = sphere;
       const name = (m.material as THREE.Material).name;
-      m.material = { skin, eyes, cornea, mouth, lash, cloth }[name] ?? m.material;
+      m.material = { skin, eyes, cornea, mouth, lash, cloth, fur }[name] ?? m.material;
       m.castShadow = name === 'skin' || name === 'cloth';
       m.receiveShadow = true;
+      if (name === 'fur') { m.castShadow = false; const ly = m.geometry.getAttribute('_layer'); if (ly) m.geometry.setAttribute('aLayer', ly); }
       if (name === 'cloth') {
         const g = m.geometry;
         const sw = g.getAttribute('_sway'), ac = g.getAttribute('_accent');
@@ -267,7 +270,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     // hair on the real head
     const headP = piv('head');
     const hairId = custom ? custom.hair : human ? 'suit' : id;
-    const hc = custom ? { root: new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex(), mid: custom.hairRoot, tip: custom.hairTip, shine: new THREE.Color(custom.hairTip).lerp(new THREE.Color(0xffffff), 0.5).getHex() } : human ? { root: 0x120c0a, mid: 0x1c120e, tip: 0x2a1a14, shine: 0x5a4a40 } : L.hair;
+    const hc = custom ? { root: new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex(), mid: custom.hairRoot, tip: custom.hairTip, shine: new THREE.Color(custom.hairTip).lerp(new THREE.Color(0xffffff), 0.5).getHex() } : human ? { root: 0x0e0907, mid: 0x1a110c, tip: 0x20150f, shine: 0x54443a } : L.hair;
     const hair = buildHair(HAIRSTYLES[hairId](), hc, sway, detail, HAIR_CAP[hairId][0], HAIR_CAP[hairId][1], skullFrom(M.skull.c, M.skull.r));
     bs.get('head')!.add(hair);
     // The decimated scan teeth break up in close-ups: use a clean mouth instead.

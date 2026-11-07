@@ -90,8 +90,17 @@ CHARS = {  # noqa
     ),
 }
 
+# A locked alternate skin: an ordinary man in a three-piece, drawn by hand from a description of the
+# clothes and build. No photograph is read by this build and none may enter the repo.
 CHARS['strong_suit'] = dict(
-    height=2.0, macro=dict(gender=1.0, muscle=0.8, weight=0.55, proportions=0.85), skin_src='m', look=dict(marks='none'),
-    clothes=[('toigo_male_suit_3', (0x2a, 0x21, 0x1c), {}), ('toigo_ankle_boots_male', (0x3a, 0x23, 0x18), {})])
+    height=2.0, macro=dict(gender=1.0, muscle=0.62, weight=0.78, proportions=0.75, race=(0.6, 0.1, 0.3)), skin_src='m', look=dict(marks='suit'),
+    extra=[('head/head-fat-incr.target', 0.45), ('head/head-round.target', 0.3), ('head/head-scale-horiz-incr.target', 0.12),
+           ('cheek/l-cheek-volume-incr.target', 0.5), ('cheek/r-cheek-volume-incr.target', 0.5),
+           ('nose/nose-width2-incr.target', 0.35), ('nose/nose-point-width-incr.target', 0.35), ('nose/nose-volume-incr.target', 0.2),
+           ('chin/chin-width-incr.target', 0.35), ('mouth/mouth-lowerlip-volume-incr.target', 0.3), ('mouth/mouth-upperlip-volume-incr.target', 0.15),
+           ('eyes/l-eye-scale-incr.target', 0.12), ('eyes/r-eye-scale-incr.target', 0.12)],
+    fur=True, cloth_k=1.8,
+    clothes=[('toigo_male_suit_3', (0x44, 0x30, 0x25), {'islands': 'suit', 'drop': (6, 7)}),
+             ('toigo_ankle_boots_male', (0x5c, 0x3a, 0x26), {'accent': True})])
 CREW = list(CHARS)
 CHARS.update(_custom())

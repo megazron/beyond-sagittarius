@@ -43,6 +43,10 @@ export interface Lock {
   sway?: number;
   /** Start direction override in head space. */
   dir?: [number, number, number];
+  /** Sideways wave along the lock: metres, and full waves over its length. */
+  wave?: [number, number];
+  /** Keep the lock this far off the skull (radius multiple), for hair with body. */
+  lift?: number;
 }
 
 function dirOf(az: number, el: number, o = new THREE.Vector3()) {
@@ -63,7 +67,7 @@ function grow(l: Lock, steps: number, S: Skull): { path: THREE.Vector3[]; side: 
   const ds = l.len / steps;
   const pts = [p.clone()];
   const v = new THREE.Vector3(), n = new THREE.Vector3();
-  const hug = !l.dir && droop >= 0;
+  const hug = (!l.dir || !!l.lift) && droop >= 0;
   for (let i = 0; i < steps; i++) {
     const t = i / steps;
     dir.y -= droop * ds;
@@ -76,9 +80,14 @@ function grow(l: Lock, steps: number, S: Skull): { path: THREE.Vector3[]; side: 
     dir.normalize();
     p.addScaledVector(dir, ds);
     v.copy(p).sub(S.c);
-    const r = v.length(), min = S.radius(v) * 1.035;
+    const r = v.length(), min = S.radius(v) * (l.lift ?? 1.035);
     if (r < min) p.copy(S.c).addScaledVector(v.normalize(), min);
+    else if (l.lift && r > min + 0.026) p.copy(S.c).addScaledVector(v.normalize(), min + 0.026); // body, never spikes
     pts.push(p.clone());
+  }
+  if (l.wave) {
+    const [amp, n] = l.wave, ph = (l.az * 7.3 + l.el * 3.1) % 6.28;
+    pts.forEach((q, i) => { const t = i / steps; q.addScaledVector(east, amp * Math.sin(t * n * 6.283 + ph) * Math.min(1, t * 2.2)); q.y += amp * 0.5 * Math.cos(t * n * 6.283 + ph) * t; });
   }
   return { path: pts, side: east };
 }
@@ -132,7 +141,7 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
     const w = l.w ?? 0.03, th = l.thick ?? w * 0.42;
     const g = sweep(smoothPath(path, steps + (detail < 0.8 ? 0 : 3)), {
       side,
-      width: (t) => w * Math.min(1, 0.7 + t * 2.5) * Math.pow(1 - t, 0.62),
+      width: (t) => w * Math.min(1, 0.7 + t * 2.5) * Math.pow(1 - t, l.lift ? 0.42 : 0.62),
       thick: (t) => th * Math.pow(1 - t, 0.5) + 0.0006,
       sides: detail < 0.8 ? 4 : 6,
     });
@@ -191,7 +200,7 @@ export type HairStyleId = 'scientist' | 'strong' | 'medic' | 'explorer' | 'build
 
 /** Per-style shell cut: back and front hairline elevation in degrees. */
 export const HAIR_CAP: Record<HairStyleId, [number, number]> = {
-  scientist: [-18, 54], strong: [44, 62], medic: [-28, 54], explorer: [-16, 52], builder: [30, 52], social: [-14, 54], megazron: [-22, 58], suit: [-10, 52],
+  scientist: [-18, 54], strong: [44, 62], medic: [-28, 54], explorer: [-16, 52], builder: [30, 52], social: [-14, 54], megazron: [-22, 58], suit: [38, 60],
 };
 
 /** Six original hairstyles. Each returns its list of locks. */
@@ -235,12 +244,26 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
     ...fan(-44 * D, 44 * D, 5, (az, i) => ({ az, el: 58 * D, len: 0.075 + (i % 2) * 0.02, droop: 2.4, w: 0.022, sway: 0.4, dir: [Math.sin(az) * 0.7, 0.2, 1] })),
     ...fan(115 * D, 245 * D, 8, (az) => ({ az, el: 26 * D, len: 0.07, droop: 2.4, w: 0.03, sway: 0.2 })),
   ],
-  // Thick wavy hair swept up and back, with a full groomed beard.
-  suit: () => [
-    ...fan(-62 * D, 62 * D, 12, (az, i) => ({ az, el: 60 * D, len: 0.17 + (i % 3) * 0.02, droop: 2.6, dir: [Math.sin(az) * 0.5, 0.4, -0.9], w: 0.04, thick: 0.02, curl: 0.15, sway: 0.25 })),
-    ...layer(78, 50, 310, 13, 0.16, 2.2, 0.046, { curl: 0.4, sway: 0.3 }),
-    ...layer(24, 80, 280, 12, 0.09, 2.2, 0.04, { sway: 0.15 }),
-  ],
+  // Short sides are fur shells on the skin. Above them: thick loose waves pushed up off the forehead,
+  // messy at the crown, a couple of locks falling forward.
+  suit: () => {
+    const r = mulberry32(77), j = (a: number) => (r() - 0.5) * 2 * a;
+    return [
+      // the mass: lifted waves running back over the top
+      ...fan(-66 * D, 66 * D, 15, (az): Lock => ({ az: az + j(0.05), el: (56 + j(4)) * D, len: 0.19 + j(0.03), droop: 1.5, dir: [Math.sin(az) * 0.5 + j(0.16), 1, -0.4 + j(0.2)], w: 0.036, thick: 0.017, lift: 1.2, wave: [0.011, 1.4 + r()], curl: 0.2, sway: 0.2 })),
+      ...fan(-80 * D, 80 * D, 13, (az): Lock => ({ az: az + j(0.06), el: (68 + j(4)) * D, len: 0.17 + j(0.03), droop: 1.9, dir: [Math.sin(az) * 0.7 + j(0.2), 0.9, -0.5 + j(0.25)], w: 0.036, thick: 0.017, lift: 1.27, wave: [0.012, 1.3 + r()], curl: 0.25, sway: 0.22 })),
+      // crown and back of the top
+      ...fan(70 * D, 290 * D, 15, (az): Lock => ({ az: az + j(0.08), el: (60 + j(9)) * D, len: 0.085 + j(0.02), droop: 2.2, dir: [Math.sin(az) * 0.9, 0.5, Math.cos(az) * 0.9 + j(0.2)], w: 0.034, thick: 0.015, lift: 1.13, wave: [0.009, 1.2 + r()], sway: 0.2 })),
+      ...fan(55 * D, 305 * D, 11, (az): Lock => ({ az: az + j(0.1), el: (80 + j(5)) * D, len: 0.1 + j(0.02), droop: 2, dir: [Math.sin(az) + j(0.3), 0.75, Math.cos(az) + j(0.3)], w: 0.034, thick: 0.015, lift: 1.3, wave: [0.012, 1.5 + r()], curl: 0.5, sway: 0.25 })),
+      // the top blends into the close-cut back and sides: no ledge
+      ...fan(62 * D, 298 * D, 17, (az): Lock => ({ az: az + j(0.05), el: (42 + j(5)) * D, len: 0.075 + j(0.015), droop: 2.4, dir: [Math.sin(az) * 0.5, -0.4, Math.cos(az) * 0.5], w: 0.03, thick: 0.011, lift: 1.05, wave: [0.005, 1.2], sway: 0.12 })),
+      // at the hairline: short, so no skin shows between the roots
+      ...fan(-74 * D, 74 * D, 12, (az): Lock => ({ az, el: (48 + j(3)) * D, len: 0.09, droop: 1.2, dir: [Math.sin(az) * 0.4, 1, -0.1], w: 0.032, thick: 0.014, lift: 1.1, wave: [0.005, 1], sway: 0.12 })),
+      // two short locks that slipped forward
+      { az: 16 * D, el: 66 * D, len: 0.075, droop: 3, dir: [0.3, 0.8, 1], w: 0.022, thick: 0.009, lift: 1.1, wave: [0.008, 1.6], sway: 0.5 },
+      { az: -22 * D, el: 67 * D, len: 0.06, droop: 3, dir: [-0.3, 0.9, 1], w: 0.02, thick: 0.009, lift: 1.1, wave: [0.007, 1.5], sway: 0.5 },
+    ];
+  },
   // Long pale hair that floats upward at the ends, as if gravity is a suggestion.
   megazron: () => [
     ...layer(78, 70, 290, 18, 0.46, 5, 0.05, { out: 0, sway: 1 }),

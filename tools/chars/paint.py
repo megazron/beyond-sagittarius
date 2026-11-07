@@ -6,6 +6,7 @@ from PIL import Image, ImageDraw, ImageFilter
 from scipy.ndimage import gaussian_filter, binary_dilation, distance_transform_edt
 from scipy.spatial import cKDTree
 import mh
+import suit
 
 RES = 1024  # position map resolution
 
@@ -44,6 +45,82 @@ def detail_normal(L, strength=2.0):
     return ((n * 0.5 + 0.5) * 255).astype(np.uint8)
 
 
+# The suit's source texture keeps each piece on its own uv island, so each can be its own cloth.
+SUIT = dict(satin=(10, 20, 11, 21), shirt=(8, 9, 34, 35), bib=(9,), pocket=(23,), buttons=(0, 1, 2, 3, 4, 5, 24, 25, 26), stitch=(27, 36))
+
+
+def uv_islands(p):
+    """Island id of every triangle of a garment, from uv connectivity."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    r = np.concatenate([p.TU[:, 0], p.TU[:, 1]]); c = np.concatenate([p.TU[:, 1], p.TU[:, 2]])
+    n = len(p.UV)
+    _, lab = connected_components(coo_matrix((np.ones(len(r)), (r, c)), shape=(n, n)), directed=False)
+    return lab[p.TU[:, 0]]
+
+
+def suit_cloth(p, L, w, h):
+    """Three-piece from one mesh: wool, satin lapels, a pale shirt, and a waistcoat painted on the bib."""
+    uvp = np.mod(p.UV, 1.0) * [w, h]
+
+    def mask(ids):
+        m = Image.new('L', (w, h), 0)
+        dr = ImageDraw.Draw(m)
+        for t in p.TU[np.isin(p.island, ids)]:
+            dr.polygon([tuple(uvp[t[0]]), tuple(uvp[t[1]]), tuple(uvp[t[2]])], fill=255)
+        return binary_dilation(np.asarray(m) > 0, iterations=2)
+
+    wool = np.array(p.tint, np.float32) / 255
+    rs = np.random.default_rng(9)
+    fleck = gaussian_filter(rs.normal(0, 1, L.shape), 0.8).astype(np.float32)
+    drape = gaussian_filter(L, 2.0)
+    Ln = np.clip(drape / max(float(np.median(drape)), .02), .78, 1.2)
+    a = (Ln * (1 + fleck * .11))[..., None] * wool
+    sat = mask(SUIT['satin'])
+    a[sat] = wool * 1.16 * (1 + fleck[sat, None] * .02)
+    shirt = mask(SUIT['shirt'])
+    blue = np.array((0xa6, 0xc6, 0xea), np.float32) / 255
+    a[shirt] = blue * np.clip(L[shirt] / max(float(np.median(L[shirt])), .02), .86, 1.06)[:, None]
+    a[mask(SUIT['pocket'])] = wool * .92
+    a[mask(SUIT['buttons'])] = np.array((0x26, 0x19, 0x12), np.float32) / 255
+    a[mask(SUIT['stitch'])] = wool * .6
+    # waistcoat: positions over the bib decide where the V opens
+    o = p.clo.obj
+    bib = np.zeros((h, w), bool)
+    X = np.zeros((h, w), np.float32); Y = np.zeros((h, w), np.float32)
+    for tp, tu in zip(p.T[np.isin(p.island, SUIT['bib'])], p.TU[np.isin(p.island, SUIT['bib'])]):
+        q = uvp[tu]
+        x0, y0 = np.floor(q.min(0)).astype(int) - 1
+        x1, y1 = np.ceil(q.max(0)).astype(int) + 2
+        xs, ys = np.meshgrid(np.arange(max(x0, 0), min(x1, w)) + .5, np.arange(max(y0, 0), min(y1, h)) + .5)
+        d = (q[1, 1] - q[2, 1]) * (q[0, 0] - q[2, 0]) + (q[2, 0] - q[1, 0]) * (q[0, 1] - q[2, 1])
+        if abs(d) < 1e-9:
+            continue
+        l0 = ((q[1, 1] - q[2, 1]) * (xs - q[2, 0]) + (q[2, 0] - q[1, 0]) * (ys - q[2, 1])) / d
+        l1 = ((q[2, 1] - q[0, 1]) * (xs - q[2, 0]) + (q[0, 0] - q[2, 0]) * (ys - q[2, 1])) / d
+        l2 = 1 - l0 - l1
+        ins = (l0 > -.03) & (l1 > -.03) & (l2 > -.03)
+        if ins.any():
+            yy, xx = np.nonzero(ins)
+            yy = yy + max(y0, 0); xx = xx + max(x0, 0)
+            ww = np.stack([l0[ins], l1[ins], l2[ins]], 1)
+            X[yy, xx] = ww @ o.v[tp, 0]; Y[yy, xx] = ww @ o.v[tp, 1]; bib[yy, xx] = True
+    # the cut mesh gives a ragged field: smooth it so the V is one clean line
+    wgt = np.maximum(gaussian_filter(bib.astype(np.float32), 7), 1e-3)
+    X = gaussian_filter(X * bib, 7) / wgt; Y = gaussian_filter(Y * bib, 7) / wgt
+    V0, V1, HW = 5.5, 6.6, .32                                          # point of the V, top, half width at top
+    edge = np.clip((Y - V0) / (V1 - V0), 0, 1) * HW
+    gap = np.abs(X) - edge
+    vest = bib & (gap > 0)
+    a[vest] = wool * .86 * (1 + fleck[vest, None] * .1)
+    a[bib & (gap > 0) & (gap < .035)] = wool * .52                      # the waistcoat's edge
+    a[bib & (Y > V0) & (gap < 0) & (np.abs(X) < .012)] = blue * .72     # shirt placket
+    a[bib & (Y < V0) & (np.abs(X) < .012)] = wool * .5                  # waistcoat front
+    for by in (5.2, 4.72, 4.25):
+        a[bib & (np.hypot(X - .035, Y - by) < .05)] = np.array((0x26, 0x19, 0x12), np.float32) / 255
+    return np.clip(a, 0, 1)
+
+
 def cloth_atlas(cid, garments, out, size=2048):
     rects = tile_layout(len(garments))
     A = Image.new('RGB', (size, size), (200, 200, 200))
@@ -76,6 +153,8 @@ def cloth_atlas(cid, garments, out, size=2048):
             Ln = 1 + (Ln - 1) * p.opt.get('contrast', 1.0)
             c = np.array(p.tint, np.float32) / 255
             a = np.clip(Ln[..., None] * c, 0, 1)
+        if p.opt.get('islands'):
+            a = suit_cloth(p, L, w, h)
         A.paste(Image.fromarray((a * 255).astype(np.uint8)), (int(r[0] * size), int(r[1] * size)))
         nt = mat.get('normalmapTexture')
         if nt and os.path.exists(nt) and not p.opt.get('flat'):
@@ -260,11 +339,55 @@ def marks(look, maps, cid):
 SKIN_SRC = {'m': 'young_caucasian_male', 'f': 'young_caucasian_female'}
 
 
+def fur_map(cid, base, rig, out, size=2048):
+    """Strand map for the fur shells: R strand height, G tone. Strands follow the fall of the face."""
+    P = position_maps(base, rig)['P']
+    k = size // P.shape[0]
+    P2 = np.repeat(np.repeat(P, k, 0), k, 1)
+    be, sc = suit.beard(P2), suit.scalp(P2)
+    gy, gx = np.gradient(gaussian_filter(P2[..., 1], 3))
+    sp = np.hypot(*np.gradient(gaussian_filter(P2[..., 2], 3))) + np.hypot(gx, gy) + 1e-4  # dm per texel, roughly
+    rs = np.random.default_rng(31)
+    R = Image.new('L', (size, size), 0); G = Image.new('L', (size, size), 128)
+    dr, dg = ImageDraw.Draw(R), ImageDraw.Draw(G)
+    seeds = []
+    for m, n, ln, curl in ((be, 170000, .13, .75), (sc, 150000, .06, .55)):
+        ys, xs = np.nonzero(m > .03)
+        pick = rs.integers(0, len(ys), n)
+        keep = rs.random(n) < m[ys[pick], xs[pick]] ** 1.5
+        y, x = ys[pick][keep], xs[pick][keep]
+        seeds.append((x, y, m[y, x], np.full(len(x), ln), np.full(len(x), curl)))
+    x, y, mv, ln, curl = [np.concatenate(c) for c in zip(*seeds)]
+    v = (.3 + .7 * rs.random(len(x))) * (.12 + .88 * mv ** 1.3)
+    order = np.argsort(v)
+    ang = np.arctan2(-gy[y, x], -gx[y, x]) + rs.normal(0, 1, len(x)) * curl
+    Lp = np.clip(ln * (.6 + .8 * rs.random(len(x))) / sp[y, x], 3, 22)
+    tone = rs.integers(70, 200, len(x))
+    for i in order:
+        c, s_ = np.cos(ang[i]), np.sin(ang[i])
+        x0, y0, l = float(x[i]), float(y[i]), float(Lp[i])
+        hv = int(v[i] * 255)
+        dr.line([x0, y0, x0 + c * l * .55, y0 + s_ * l * .55], fill=hv, width=2)
+        dr.line([x0 + c * l * .55, y0 + s_ * l * .55, x0 + c * l, y0 + s_ * l], fill=int(hv * .7), width=1)
+        dg.line([x0, y0, x0 + c * l, y0 + s_ * l], fill=int(tone[i]), width=2)
+    I = Image.merge('RGB', (R, G, Image.new('L', (size, size), 0)))
+    save_webp(I, f'{out}/tex/{cid}_fur.webp', 86)
+    save_webp(I.resize((size // 2, size // 2), Image.LANCZOS), f'{out}/tex/{cid}_fur.m.webp', 82)
+
+
 def mark_map(cid, cfg, base, rig, out):
     """Per-character paint: R glow, G dark marks, B overlay (scar, tape, smudge)."""
     maps = position_maps(base, rig)
     key = cfg['look']['marks']
-    em, dark, over = marks(key, maps, cid)
+    if key == 'suit':
+        # roots under the fur: the skin itself is dark where the hair grows, with a soft fade at the edges
+        P = maps['P']
+        rs = np.random.default_rng(3)
+        speck = np.clip(.72 + gaussian_filter(rs.normal(0, 1, P.shape[:2]), .7) * 1.1, 0, 1)
+        dark = np.maximum.reduce([suit.beard(P) ** 1.4 * speck * .9, suit.scalp(P) ** 1.4 * speck * .9, suit.brows(P) * .85]).astype(np.float32)
+        em, over = np.zeros_like(dark), []
+    else:
+        em, dark, over = marks(key, maps, cid)
     b = np.zeros_like(em)
     for m, _c in over:
         b = np.maximum(b, m.astype(np.float32))
