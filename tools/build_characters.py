@@ -332,8 +332,7 @@ def build(c, cid, force=False):
     dl |= erode(hid, Tall, 1)
     hw0 = rig.W[:, [rig.index[n] for n in ('head', 'jaw', 'eyeL', 'eyeR')]].sum(1)
     dl[hw0 > 0.3] = False
-    if cfg.get('fur'):  # a low open collar: the whole neck stays
-        dl[rig.W[:, rig.index['neck']] > 0.05] = False
+    dl[rig.W[:, rig.index['neck']] > 0.6] = False  # the whole neck stays: collars sit on it, and a culled neck shows the inside of the head
     for i in bodyf:
         if not dl[base.faces[i]].all():
             keep.append(i)
@@ -371,7 +370,8 @@ def build(c, cid, force=False):
     mouth_t = asset_part(c, f'{mh.SYS}/teeth/teeth_base/teeth_base.mhclo', Vdm, scale, off, morphs, 'teeth')
     tongue = asset_part(c, f'{mh.SYS}/tongue/tongue01/tongue01.mhclo', Vdm, scale, off, morphs, 'tongue')
     lash = asset_part(c, f'{mh.SYS}/eyelashes/eyelashes01/eyelashes01.mhclo', Vdm, scale, off, morphs, 'lash')
-    brow = asset_part(c, f'{mh.SYS}/eyebrows/eyebrow001/eyebrow001.mhclo', Vdm, scale, off, morphs, 'brow')
+    bid = cfg.get('brow', 'eyebrow001')
+    brow = asset_part(c, f'{mh.SYS}/eyebrows/{bid}/{bid}.mhclo', Vdm, scale, off, morphs, 'brow')
     # --- textures ---
     os.makedirs(f'{OUT}/tex', exist_ok=True)
     atlas = paint.tile_layout(len(garments))
@@ -432,7 +432,7 @@ def build(c, cid, force=False):
         g.j['scenes'][0]['nodes'] = [root]
         size = g.write(f'{OUT}/{cid}{suffix}.glb')
         info[suffix or 'web'] = dict(tris=total, kb=size // 1024)
-    meta = dict(height=cfg['height'], skin=cfg['skin_src'], atlas=cfg.get('atlas', cid), pivots={n: [round(float(x), 4) for x in piv[i]] for i, n in enumerate(rig.names)})
+    meta = dict(height=cfg['height'], skin=cfg['skin_src'], lash='lash' if bid == 'eyebrow001' else f'lash_{bid}', atlas=cfg.get('atlas', cid), pivots={n: [round(float(x), 4) for x in piv[i]] for i, n in enumerate(rig.names)})
     for k in vb:
         if not k.endswith('_dm'):
             meta[k + '_pivots'] = [[round(float(x), 4) for x in r] for r in (rig.pivots(vb[k + '_dm']) * scale + off)]

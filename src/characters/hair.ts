@@ -150,6 +150,7 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
   parts.push(capShell(capLow, capFront, skull));
   const geo = mergeGeometries(parts)!;
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.46, metalness: 0.0, side: THREE.DoubleSide });
+  mat.userData.film = { kind: 'hair', ...colors };
   const u = {
     uRoot: { value: new THREE.Color(colors.root) },
     uMid: { value: new THREE.Color(colors.mid) },

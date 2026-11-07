@@ -8,7 +8,7 @@ const BASE = `${import.meta.env.BASE_URL}models/crew/`;
 export interface ClipMeta { loop: boolean; speed: number; kind: string; dur: number; hand: string; take: string; }
 export interface AnimSet { refLeg: number; refHip: number; meta: Record<string, ClipMeta>; clips: Map<string, THREE.AnimationClip>; }
 export interface CrewMeta {
-  height: number; skin: 'm' | 'f'; atlas: string;
+  height: number; skin: string; lash?: string; atlas: string;
   pivots: Record<string, [number, number, number]>;
   skull: { c: number[]; r: number[][] };
   fit: Record<'waist' | 'neck' | 'chest', [number, number, number, number]>;
@@ -127,8 +127,9 @@ export const clothDetail = () => detailTile('detail_cloth');
 export interface SkinLook { skin: number; shade: number; lip: number; glow: number; over: number; glowK: number; }
 
 /** Photo detail, species colour: the neutral map is recoloured here, so every skin keeps its pores. */
-export function skinMaterial(sex: 'm' | 'f', marks: string, l: SkinLook, lod: number) {
+export function skinMaterial(sex: string, marks: string, l: SkinLook, lod: number) {
   const m = new THREE.MeshStandardMaterial({ map: tex(`skin_${sex}`, lod), normalMap: tex(`skin_${sex}_n`, lod), normalScale: new THREE.Vector2(0.55, 0.55), roughness: 0.52 });
+  m.userData.film = { kind: 'skin', sex, marks, ...l };
   const u = {
     uSkin: { value: col(l.skin) }, uShade: { value: col(l.shade) }, uLip: { value: col(l.lip) }, uGlow: { value: col(l.glow) }, uOver: { value: col(l.over) },
     uGlowK: { value: l.glowK }, uMarks: { value: texPlain(`${marks}_marks`) },
@@ -170,6 +171,7 @@ export function skinMaterial(sex: 'm' | 'f', marks: string, l: SkinLook, lod: nu
 
 export function eyeMaterial(iris: number, glow: number) {
   const m = new THREE.MeshStandardMaterial({ map: texPlain('eye'), roughness: 0.18 });
+  m.userData.film = { kind: 'eye', iris, glow };
   const u = { uIris: { value: col(iris) }, uEyeGlow: { value: glow } };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
@@ -186,8 +188,9 @@ export function eyeMaterial(iris: number, glow: number) {
   return m;
 }
 
-export function lashMaterial(brow: number) {
-  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7, alphaMap: texPlain('lash'), transparent: true, depthWrite: false, side: THREE.DoubleSide, alphaTest: 0.02 });
+export function lashMaterial(brow: number, map = 'lash') {
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7, alphaMap: texPlain(map), transparent: true, depthWrite: false, side: THREE.DoubleSide, alphaTest: 0.02 });
+  m.userData.film = { kind: 'lash', brow, map };
   const u = { uBrow: { value: col(brow) } };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
@@ -200,6 +203,7 @@ export function lashMaterial(brow: number) {
 /** Stacked shells of the real skin: each layer shows only the strands that reach it. */
 export function furMaterial(key: string, root: number, tip: number, lod: number) {
   const m = new THREE.MeshStandardMaterial({ map: tex(`${key}_fur`, lod), roughness: 0.58 });
+  m.userData.film = { kind: 'fur', key, root, tip };
   const u = { uRoot: { value: col(root) }, uTip: { value: col(tip) } };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);

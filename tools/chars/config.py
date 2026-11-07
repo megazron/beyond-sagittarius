@@ -16,6 +16,56 @@ MORPHS = {
 }
 
 
+def _pair(t, w):
+    """A left and right target at the same weight: t holds {s} for the side."""
+    return [(t.format(s='l'), w), (t.format(s='r'), w)]
+
+
+# Six different skulls, all from MakeHuman's CC0 shape targets. Bone first (head, cheek, jaw, brow ridge),
+# then eyes, nose and mouth, then age. Each also gets its own skin source and brow.
+FACES = {
+    # Zenvik: long and gaunt, high forehead, narrow hooked nose, deep tired eyes, thin mouth. Mid thirties.
+    'scientist': [('head/head-oval.target', 0.6), ('head/head-scale-horiz-decr.target', 0.3), ('head/head-scale-vert-incr.target', 0.3),
+                  ('forehead/forehead-scale-vert-incr.target', 0.6), ('chin/chin-height-incr.target', 0.4), ('chin/chin-width-decr.target', 0.5),
+                  *_pair('cheek/{s}-cheek-volume-decr.target', 0.8), *_pair('cheek/{s}-cheek-bones-incr.target', 0.5),
+                  *_pair('eyes/{s}-eye-push1-in.target', 0.3), *_pair('eyes/{s}-eye-bag-incr.target', 0.4), *_pair('eyes/{s}-eye-height2-incr.target', 0.3),
+                  ('nose/nose-scale-vert-incr.target', 0.6), ('nose/nose-width2-decr.target', 0.5), ('nose/nose-hump-incr.target', 0.5), ('nose/nose-point-down.target', 0.3),
+                  ('mouth/mouth-upperlip-volume-decr.target', 0.5), ('mouth/mouth-lowerlip-volume-decr.target', 0.4), ('mouth/mouth-scale-horiz-decr.target', 0.2),
+                  ('head/head-age-incr.target', 0.2)],
+    # Draxum: a slab. Square jaw, heavy brow ridge, small deep eyes, broken wide nose, thick neck. Late thirties.
+    'strong': [('head/head-square.target', 0.9), ('head/head-scale-horiz-incr.target', 0.15), ('chin/chin-width-incr.target', 0.9), ('chin/chin-bones-incr.target', 0.8),
+               ('chin/chin-prominent-incr.target', 0.5), ('chin/chin-jaw-drop-incr.target', 0.3), ('forehead/forehead-trans-forward.target', 0.8), ('forehead/forehead-scale-vert-decr.target', 0.4),
+               *_pair('cheek/{s}-cheek-bones-incr.target', 0.7), *_pair('eyes/{s}-eye-scale-decr.target', 0.45), *_pair('eyes/{s}-eye-push1-in.target', 0.7),
+               ('nose/nose-width2-incr.target', 0.7), ('nose/nose-width3-incr.target', 0.6), ('nose/nose-flaring-incr.target', 0.5), ('nose/nose-hump-incr.target', 0.5),
+               ('mouth/mouth-scale-horiz-incr.target', 0.3), ('mouth/mouth-upperlip-volume-decr.target', 0.3), ('head/head-age-incr.target', 0.3)],
+    # The medic: tapered, high sharp cheekbones, long almond eyes with a lifted outer corner, fine straight nose. Late forties.
+    'medic': [('head/head-invertedtriangular.target', 0.55), ('head/head-scale-vert-incr.target', 0.12), ('chin/chin-width-decr.target', 0.3),
+              *_pair('cheek/{s}-cheek-bones-incr.target', 1.0), *_pair('cheek/{s}-cheek-volume-decr.target', 0.5),
+              *_pair('eyes/{s}-eye-corner2-up.target', 0.8), *_pair('eyes/{s}-eye-epicanthus-in.target', 0.5), *_pair('eyes/{s}-eye-height2-decr.target', 0.3),
+              ('nose/nose-greek-incr.target', 0.7), ('nose/nose-width2-decr.target', 0.3), ('nose/nose-scale-vert-incr.target', 0.2),
+              ('mouth/mouth-scale-horiz-decr.target', 0.15), ('mouth/mouth-angles-down.target', 0.15), ('head/head-age-incr.target', 0.6)],
+    # Skyvra: heart-shaped, big round eyes, short upturned nose, a wide mouth that never shuts, sharp little chin. Early twenties.
+    'explorer': [('head/head-invertedtriangular.target', 0.9), ('chin/chin-triangle.target', 0.5), ('chin/chin-prominent-incr.target', 0.3),
+                 *_pair('eyes/{s}-eye-scale-incr.target', 0.55), *_pair('eyes/{s}-eye-height2-incr.target', 0.5),
+                 ('nose/nose-scale-vert-decr.target', 0.5), ('nose/nose-point-up.target', 0.8), ('nose/nose-width1-decr.target', 0.3), ('nose/nose-nostrils-angle-up.target', 0.5),
+                 ('mouth/mouth-scale-horiz-incr.target', 0.5), ('mouth/mouth-angles-up.target', 0.3), ('mouth/mouth-lowerlip-volume-incr.target', 0.2)],
+    # The builder: wide and weathered, low forehead, jowls, a big soft nose, small creased eyes. Mid fifties.
+    'builder': [('head/head-round.target', 0.8), ('head/head-fat-incr.target', 0.9), ('head/head-scale-horiz-incr.target', 0.25), ('forehead/forehead-scale-vert-decr.target', 0.7),
+                ('chin/chin-width-incr.target', 0.5), *_pair('cheek/{s}-cheek-volume-incr.target', 1.0), *_pair('cheek/{s}-cheek-trans-down.target', 0.6),
+                *_pair('eyes/{s}-eye-scale-decr.target', 0.12), *_pair('eyes/{s}-eye-bag-incr.target', 0.35), *_pair('eyes/{s}-eye-height2-incr.target', 0.5),
+                ('nose/nose-volume-incr.target', 0.8), ('nose/nose-point-width-incr.target', 0.9), ('nose/nose-width3-incr.target', 0.4), ('nose/nose-point-down.target', 0.4),
+                ('mouth/mouth-lowerlip-volume-incr.target', 0.5), ('mouth/mouth-angles-down.target', 0.2), ('head/head-age-incr.target', 0.85)],
+    # The social one: small and round, huge wide-set eyes, tiny nose, full lips, soft short chin. Nineteen.
+    'social': [('head/head-round.target', 0.55), ('head/head-scale-vert-decr.target', 0.15), ('chin/chin-height-decr.target', 0.5), ('chin/chin-width-decr.target', 0.45),
+               ('forehead/forehead-scale-vert-incr.target', 0.3), *_pair('cheek/{s}-cheek-volume-incr.target', 0.45),
+               *_pair('eyes/{s}-eye-scale-incr.target', 1.0), *_pair('eyes/{s}-eye-height2-incr.target', 0.8), *_pair('eyes/{s}-eye-height1-incr.target', 0.4), *_pair('eyes/{s}-eye-trans-out.target', 0.45), *_pair('eyes/{s}-eye-corner2-up.target', 0.3),
+               ('nose/nose-scale-horiz-decr.target', 0.4), ('nose/nose-scale-vert-decr.target', 0.5), ('nose/nose-point-width-decr.target', 0.5),
+               ('mouth/mouth-upperlip-volume-incr.target', 0.8), ('mouth/mouth-lowerlip-volume-incr.target', 0.8), ('mouth/mouth-cupidsbow-incr.target', 0.6)],
+}
+SKIN_OF = {'scientist': 'sci', 'strong': 'str', 'medic': 'med', 'explorer': 'exp', 'builder': 'bld', 'social': 'soc'}
+BROW_OF = {'scientist': 'eyebrow004', 'strong': 'eyebrow009', 'medic': 'eyebrow002', 'explorer': 'eyebrow006', 'builder': 'eyebrow011', 'social': 'eyebrow003'}
+
+
 def _custom():
     out = {}
     for g, gv in (('m', 1.0), ('f', 0.0)):
@@ -24,7 +74,9 @@ def _custom():
                 height=1.76 if g == 'm' else 1.68, macro=dict(gender=gv, muscle=0.5, weight=0.5, proportions=0.8, cup=0.5),
                 build_slim=dict(gender=gv, muscle=0.35, weight=0.1, proportions=0.8, cup=0.4),
                 build_heavy=dict(gender=gv, muscle=0.8, weight=0.95, proportions=0.6, cup=0.7),
-                skin_src='m' if g == 'm' else 'f', clothes=CHARS[o]['clothes'], atlas=o, lods=('',))
+                skin_src='m' if g == 'm' else 'f', clothes=CHARS[o]['clothes'], atlas=o, lods=('',),
+                # the player's own head follows the outfit's face at a gentler weight, so a creator look stays theirs
+                extra=[(t, w * 0.7) for t, w in FACES[o]], brow=BROW_OF[o])
     return out
 
 
@@ -102,5 +154,7 @@ CHARS['strong_suit'] = dict(
     fur=True, cloth_k=1.8,
     clothes=[('toigo_male_suit_3', (0x44, 0x30, 0x25), {'islands': 'suit', 'drop': (6, 7)}),
              ('toigo_ankle_boots_male', (0x5c, 0x3a, 0x26), {'accent': True})])
+for _id, _f in FACES.items():
+    CHARS[_id].update(extra=CHARS[_id].get('extra', []) + _f, skin_src=SKIN_OF[_id], brow=BROW_OF[_id])
 CREW = list(CHARS)
 CHARS.update(_custom())

@@ -7,6 +7,7 @@ from scipy.ndimage import gaussian_filter, binary_dilation, distance_transform_e
 from scipy.spatial import cKDTree
 import mh
 import suit
+from config import CHARS
 
 RES = 1024  # position map resolution
 
@@ -336,7 +337,9 @@ def marks(look, maps, cid):
     return em, dark, over
 
 
-SKIN_SRC = {'m': 'young_caucasian_male', 'f': 'young_caucasian_female'}
+# Each crew member's pores, creases and age come from their own CC0 scan-based skin.
+SKIN_SRC = {'m': 'young_caucasian_male', 'f': 'young_caucasian_female', 'sci': 'young_asian_male', 'str': 'middleage_african_male', 'med': 'middleage_asian_female',
+            'exp': 'young_caucasian_female2', 'bld': 'old_caucasian_male', 'soc': 'young_african_female'}
 
 
 def fur_map(cid, base, rig, out, size=2048):
@@ -433,7 +436,7 @@ def shared_maps(base, rig, out):
         if os.path.exists(f'{out}/tex/skin_{g}.webp'):
             continue
         d = f'{mh.SYS}/skins/{src}'
-        tex = [f for f in os.listdir(d) if f.endswith('diffuse.png')][0]
+        tex = sorted(f for f in os.listdir(d) if f.endswith('.png'))[0]
         a = srgb2lin(np.asarray(Image.open(f'{d}/{tex}').convert('RGB'), np.float32) / 255)
         S = a.shape[0]
         lum = a @ np.array([0.3, 0.6, 0.1], np.float32)
@@ -464,10 +467,11 @@ def shared_maps(base, rig, out):
     I = Image.fromarray((np.clip(np.stack([R, iris, pupil], -1), 0, 1) * 255).astype(np.uint8)).resize((512, 512), Image.LANCZOS)
     save_webp(I, f'{out}/tex/eye.webp', 90)
     # lashes left, brows right, in alpha
-    A = Image.new('L', (1024, 512), 0)
-    for f, x in ((f'{mh.SYS}/eyelashes/eyelashes01/eyelashes01.png', 0), (f'{mh.SYS}/eyebrows/eyebrow001/eyebrow001.png', 512)):
-        A.paste(Image.open(f).convert('RGBA').split()[3], (x, 0))
-    Image.merge('RGB', (A, A, A)).save(f'{out}/tex/lash.webp', 'WEBP', quality=86, method=6)
+    for b in sorted(set(c.get('brow', 'eyebrow001') for c in CHARS.values())):
+        A = Image.new('L', (1024, 512), 0)
+        for f, x in ((f'{mh.SYS}/eyelashes/eyelashes01/eyelashes01.png', 0), (f'{mh.SYS}/eyebrows/{b}/{b}.png', 512)):
+            A.paste(Image.open(f).convert('RGBA').split()[3].resize((512, 512), Image.LANCZOS), (x, 0))
+        Image.merge('RGB', (A, A, A)).save(f"{out}/tex/{'lash' if b == 'eyebrow001' else 'lash_' + b}.webp", 'WEBP', quality=86, method=6)
     Image.open(f'{mh.SYS}/teeth/teeth_base/teeth.png').convert('RGB').resize((512, 512), Image.LANCZOS).save(f'{out}/tex/teeth.webp', 'WEBP', quality=80, method=6)
 
 

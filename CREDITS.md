@@ -94,7 +94,14 @@ species ears, skin colouring, glowing marks, props and hair are this project's o
 | Asset | Source | Author | Licence |
 | --- | --- | --- | --- |
 | Base mesh, targets, rig, weights | https://github.com/makehumancommunity/makehuman | MakeHuman Team, Data Collection AB, Joel Palmius, Jonas Hauquier | CC0 1.0 |
-| Eyes, teeth, tongue, eyelashes, eyebrows, young male and female skin | [MakeHuman system assets](https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html) | MakeHuman Team | CC0 1.0 |
+| Eyes, teeth, tongue, eyelashes, twelve eyebrows, skin sources | [MakeHuman system assets](https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html) | MakeHuman Team | CC0 1.0 (each file states "explicitly released as CC0 in september 2020") |
+| Face shapes (head, cheek, chin, forehead, eye, nose and mouth targets) | https://github.com/makehumancommunity/makehuman | MakeHuman Team | CC0 1.0 |
+
+Each of the six crew has their own head, recipe in `FACES` in `tools/chars/config.py`, and their own skin detail:
+young_asian_male (Zenvik), middleage_african_male (Draxum), middleage_asian_female (Lyrra), young_caucasian_female2
+(Skyvra), old_caucasian_male (Bolzar), young_african_female (Nuvexa). Only the brightness and crease detail of a skin is
+used; the colour is the species colour. No third-party face pack is used: the free rigged heads found were non-commercial
+or paid, so they were left out.
 
 Clothing from the MakeHuman community asset packs, refit to each body, recoloured and reduced:
 

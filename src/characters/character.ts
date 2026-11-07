@@ -194,6 +194,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const browC = custom ? new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex() : human ? 0x1a100c : L.face.brow;
     const atlas = M.atlas;
     const cloth = new THREE.MeshStandardMaterial({ map: tex(`${atlas}_cloth`, lod, true), normalMap: tex(`${atlas}_cloth_n`, lod), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, side: THREE.DoubleSide });
+    cloth.userData.film = { kind: 'cloth', atlas, satin: human };
     const accent = { uAccent: { value: new THREE.Color(custom?.accent ?? 0xffffff) }, uAccentK: { value: custom ? 1 : 0 }, uDetail: { value: clothDetail() }, uHeightM: { value: heightM }, uSatin: { value: human ? 1 : 0 }, uDust: { value: human ? 0.12 : 1 } };
     applySway(cloth, sway, (sh) => {
       Object.assign(sh.uniforms, accent);
@@ -213,7 +214,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         { vec2 dn = texture2D(uDetail, vMapUv * 26.0).xy * 2.0 - 1.0; normal = normalize(normal + tbn * vec3(dn * 0.5 * (1.0 - vAccent * uSatin), 0.0)); }`);
     });
     cloth.customProgramCacheKey = () => 'crew-cloth';
-    const mouth = mouthMaterial(), cornea = corneaMaterial(), lash = lashMaterial(browC);
+    const mouth = mouthMaterial(), cornea = corneaMaterial(), lash = lashMaterial(browC, M.lash);
     const fur = human ? furMaterial('strong_suit', 0x140c09, 0x4a3426, lod) : undefined;
     const sphere = new THREE.Sphere(new THREE.Vector3(0, heightM * 0.5, 0), heightM * 1.1);
     scene.traverse((o) => {
