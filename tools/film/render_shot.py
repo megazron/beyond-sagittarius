@@ -8,9 +8,11 @@ import argparse, base64, glob, json, math, os, struct, sys
 import numpy as np
 import bpy
 from mathutils import Matrix, Vector
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import face as FACE
 
 ap = argparse.ArgumentParser()
-for n, d in (('--dump', None), ('--out', None), ('--plate', ''), ('--tex', '~/bs-film/tex')):
+for n, d in (('--dump', None), ('--out', None), ('--plate', ''), ('--tex', '~/bs-film/tex'), ('--perf', ''), ('--facedir', '~/bs-film/face')):
     ap.add_argument(n, default=d)
 for n, d in (('--first', 0), ('--last', 0), ('--samples', 48), ('--w', 1280), ('--step', 1), ('--exposure', 0)):
     ap.add_argument(n, type=float if n == '--exposure' else int, default=d)
@@ -113,6 +115,21 @@ def mesh_of(info):
     return me
 
 
+PERF = json.load(open(os.path.expanduser(a.perf))) if a.perf else {}   # {crew id: [cues]}, times in seconds
+FD = {}
+def face_of(key):
+    if key not in FD:
+        p = f'{os.path.expanduser(a.facedir)}/{key}.npz'
+        z = np.load(p) if os.path.exists(p) else None
+        FD[key] = (list(z['names']), z['delta'].astype(np.float32), z['bind']) if z is not None else None
+    return FD[key]
+ID_OF = {'scientist': 'custom_m_scientist'}
+def who_of(info):
+    f = info['material'].get('film') or {}
+    if f.get('kind') != 'skin' or info.get('name') != 'skin_head': return None
+    return f.get('marks')
+
+
 frames = list(range(a.first, a.last + 1))
 data = {}
 for f in frames:
@@ -140,13 +157,21 @@ for k, fs in ids.items():
             for f in frames:
                 r = recs.get(f)
                 if r and 'baked' in r:
-                    q = b64f(r['baked']).reshape(-1, 3); last = np.stack([q[:, 0], -q[:, 2], q[:, 1]], 1).astype('<f4')
+                    q = b64f(r['baked']).reshape(-1, 3)
+                    wid = who_of(info)
+                    fd = face_of(ID_OF.get(wid, wid)) if wid and PERF.get(wid) else None
+                    if fd and len(fd[2]) == len(q):
+                        q = FACE.apply(q.copy(), fd[2], fd[1], fd[0], FACE.track(fd[0], PERF[wid], f / 24, seed=len(wid)))
+                    last = np.stack([q[:, 0], -q[:, 2], q[:, 1]], 1).astype('<f4')
                 if last is None:
                     q = b64f(next(iter(x for x in recs.values() if 'baked' in x))['baked']).reshape(-1, 3); last = np.stack([q[:, 0], -q[:, 2], q[:, 1]], 1).astype('<f4')
                 w.write(last.tobytes())
+        if info.get('name') in ('skin_head', 'cloth'):
+            pass
         mc = o.modifiers.new('film', 'MESH_CACHE'); mc.cache_format = 'PC2'; mc.filepath = path; mc.frame_start = frames[0]; mc.deform_mode = 'OVERWRITE'
-        o.data.cycles.use_motion_blur = True if hasattr(o.data, 'cycles') else None
         o.cycles.use_deform_motion = True
+        if info.get('name') in ('skin_head', 'skin_body', 'cloth'):
+            sb = o.modifiers.new('sub', 'SUBSURF'); sb.levels = 0; sb.render_levels = 1  # the game head is thin for a close-up
     else:
         for f, r in recs.items():
             o.matrix_world = C @ Matrix(np.array(r['m']).reshape(4, 4).T.tolist())
