@@ -7,6 +7,7 @@ import { voice } from '../core/voice';
 import { Cutscene, Beat, addCutsceneRig } from './cutscene';
 import { deckScene, fightScene, stageDeck } from './scenes';
 import { createCharacter, Character, CrewId } from '../characters/character';
+import { flail, mixLimbs, FALL, STANDING } from './montage';
 import type { PlayerLook, CrewSkins } from '../characters/custom';
 
 export interface CineUI {
@@ -425,18 +426,24 @@ export class Cinematic {
           f.position.y = base.y + g * f.userData.rise * local * 0.55;
           f.rotation.x += spin.x * 0.016 * g; f.rotation.y += spin.y * 0.016 * g; f.rotation.z += spin.z * 0.016 * g;
         }
+        // the deck goes out from under them: staggered, then thrown, then off their feet
         intr.crew.forEach((c, i) => {
-          c.root.position.y = -2.2 + g * (0.15 + 0.08 * Math.sin(local * 1.3 + i));
-          c.armL.rotation.z = -0.4 * g - 0.3 * Math.sin(local * 2 + i) * g;
-          c.armR.rotation.z = 0.4 * g + 0.3 * Math.sin(local * 2.2 + i) * g;
-          c.root.rotation.z = Math.sin(local * 0.7 + i) * 0.15 * g;
+          const hit = smoothstep(0.2 + i * 0.12, 1.5 + i * 0.12, local), up = smoothstep(2 + (i % 3) * 0.3, 5, local), side = i % 2 ? 1 : -1;
+          if (!c.root.userData.mark) c.root.userData.mark = c.root.position.clone();
+          const m = c.root.userData.mark as THREE.Vector3;
+          c.root.position.set(m.x + side * hit * 0.5 + Math.sin(local * 3.1 + i) * 0.1 * hit, -2.2 + up * (0.5 + (i % 3) * 0.28) + Math.sin(local * 2.3 + i * 2) * 0.06 * up, m.z - hit * 0.7 - up * up * 0.9);
+          c.root.rotation.x = -hit * 0.28 - up * (0.7 + (i % 3) * 0.3) + Math.sin(local * 2.6 + i) * 0.1 * hit;
+          c.root.rotation.z = side * hit * 0.24 + side * up * 0.7 + Math.sin(local * 3.3 + i * 3) * 0.1 * hit;
+          c.setLimbs(mixLimbs(STANDING, flail({ ...FALL.spread, openHands: true }, local, i * 2.9, 0.35 + 0.45 * up), smoothstep(0, 1, hit)));
+          c.setFace({ fear: 0.3 + 0.6 * hit, open: 0.1 + 0.45 * hit });
+          c.look2(Math.sin(local * 2.4 + i * 1.7) * 0.7 * hit, Math.sin(local * 1.9 + i) * 0.25 * hit);
         });
         this.shake = 0.035 + 0.03 * Math.max(0, Math.sin(local * 3));
       },
     });
 
     // the rest happens in the title sequence: montage.ts
-    this.cue(52.4, () => this.finish());
+    this.cue(52.4, () => { intr.crew.forEach((c) => { c.setLimbs(null); c.setFace(null); c.look2(0, 0); delete c.root.userData.mark; }); this.finish(); });
   }
 
   update(dt: number) {

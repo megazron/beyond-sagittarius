@@ -19,12 +19,44 @@ const after = (b: number, at: number, len = 1) => (b < at ? 0 : Math.exp(-((b - 
 const shakeAt = (time: number, amp: number, out: THREE.Vector3) => out.set(Math.sin(time * 37) + Math.sin(time * 61) * 0.6, Math.sin(time * 43 + 1) + Math.sin(time * 71) * 0.6, 0).multiplyScalar(amp);
 const wob = (d: Dir, time: number, seed: number, amt = 0.12): Dir => [d[0] + Math.sin(time * 1.1 + seed) * amt, d[1] + Math.sin(time * 0.9 + seed * 2) * amt, d[2] + Math.sin(time * 1.3 + seed * 3) * amt];
 
+/** Smooth noise, -1..1: three sines that never line up, so no joint ever repeats or rests. */
+const nz = (t: number, s: number) => (Math.sin(t + s) + Math.sin(t * 1.73 + s * 2.3) * 0.6 + Math.sin(t * 2.91 + s * 3.7) * 0.3) / 1.9;
+const nzDir = (d: Dir, t: number, s: number, a: number): Dir => [d[0] + nz(t, s) * a, d[1] + nz(t * 1.1, s + 5) * a, d[2] + nz(t * 0.9, s + 11) * a];
+/**
+ * A thrown body never holds a shape. Every joint chases its own path around the base pose, and
+ * forearms and shins run behind the joint above them, so a limb whips instead of pivoting.
+ * k is the violence (0 calm, 1 flung), t is seconds.
+ */
+export function flail(base: Limbs, t: number, seed: number, k: number): Limbs {
+  const lag = 0.32, w = 2.6 + k * 2.2, T = t * w;
+  const o: Limbs = { ...base };
+  const d = (x: Dir | undefined, f: Dir, tt: number, s: number, a: number) => nzDir(x ?? f, tt, s, a);
+  o.armL = d(base.armL, [1, 0.3, 0], T, seed, 0.95 * k); o.foreL = d(base.foreL, [1, 0.6, 0.2], T - lag * w, seed + 1, 1.15 * k);
+  o.armR = d(base.armR, [-1, 0.3, 0], T * 0.93, seed + 2, 0.95 * k); o.foreR = d(base.foreR, [-1, 0.6, 0.2], T * 0.93 - lag * w, seed + 3, 1.15 * k);
+  o.legL = d(base.legL, [0.3, -1, 0], T * 0.8, seed + 4, 0.6 * k); o.shinL = d(base.shinL, [0.2, -1, -0.5], T * 0.8 - lag * w, seed + 5, 0.75 * k);
+  o.legR = d(base.legR, [-0.3, -1, 0], T * 0.86, seed + 6, 0.6 * k); o.shinR = d(base.shinR, [-0.2, -1, -0.5], T * 0.86 - lag * w, seed + 7, 0.75 * k);
+  o.bend = (base.bend ?? 0) + nz(T * 0.7, seed + 8) * 0.55 * k;
+  o.twist = (base.twist ?? 0) + nz(T * 0.6, seed + 9) * 0.7 * k;
+  return o;
+}
+/** Blend two limb sets: from a body on its feet to the same body in the air. */
+export function mixLimbs(a: Limbs, b: Limbs, k: number): Limbs {
+  const o: Limbs = { ...b };
+  for (const n of ['armL', 'armR', 'foreL', 'foreR', 'legL', 'legR', 'shinL', 'shinR'] as const) {
+    const x = a[n], y = b[n];
+    if (x && y) o[n] = [x[0] + (y[0] - x[0]) * k, x[1] + (y[1] - x[1]) * k, x[2] + (y[2] - x[2]) * k];
+  }
+  return o;
+}
+/** Hands down, feet under: where a standing body's limbs already are. */
+export const STANDING: Limbs = { armL: [0.18, -1, 0.02], foreL: [0.14, -1, 0.14], armR: [-0.18, -1, 0.02], foreR: [-0.14, -1, 0.14], legL: [0.08, -1, 0], shinL: [0.06, -1, -0.04], legR: [-0.08, -1, 0], shinR: [-0.06, -1, -0.04] };
+
 /** Fill-in for the order they land in; the player is always last. */
 const ORDER: CrewId[] = ['strong', 'medic', 'builder', 'explorer', 'social', 'scientist'];
 const TRAIL: Record<CrewId, number> = { scientist: 0x45f0e0, strong: 0xff6a12, medic: 0xb58cff, explorer: 0xff4560, builder: 0x63ff6a, social: 0xffd23c, megazron: 0xffffff } as Record<CrewId, number>;
 
 /** Bodies in free fall: where each one's arms and legs are trying to go. */
-const FALL: Record<string, Limbs> = {
+export const FALL: Record<string, Limbs> = {
   spread: { armL: [1, 0.3, 0.15], foreL: [0.9, 0.65, 0.2], armR: [-1, 0.3, 0.15], foreR: [-0.9, 0.65, 0.2], legL: [0.32, -1, -0.28], shinL: [0.2, -1, -0.65], legR: [-0.28, -1, -0.1], shinR: [-0.22, -1, -0.4], hair: [0, 1, 0], openHands: true },
   strong: { armL: [1, 0.05, 0.5], foreL: [0.25, 0.9, 0.5], armR: [-1, 0.2, 0.55], foreR: [-0.3, 0.3, 1], legL: [0.45, -0.9, 0.3], shinL: [0.25, -1, -0.5], legR: [-0.4, -1, -0.2], shinR: [-0.25, -1, -0.5], bend: 0.3, hair: [0, 1, -0.3] },
   medic: { armL: [0.3, -0.85, 0.45], foreL: [-0.85, 0.3, 0.42], armR: [-0.3, -0.85, 0.45], foreR: [0.85, 0.22, 0.46], legL: [0.08, -1, 0.05], shinL: [0.02, -1, -0.15], legR: [-0.02, -1, 0.15], shinR: [0.08, -1, -0.1], hair: [0, 1, 0] },
@@ -495,7 +527,7 @@ export class Montage {
     for (const tr of [...this.trails, ...this.worldTrails]) tr.mesh.visible = false;
     this.embers.points.visible = false; this.debris.mesh.visible = false; this.shards.mesh.visible = false; this.crack.visible = false;
     if (this.dust) { [this.dust, this.smoke, this.fire, this.spray].forEach((b) => (b.points.visible = false)); [this.scorch, this.ringFx, this.plate, this.heat, this.trunk].forEach((o) => (o.visible = false)); }
-    for (const id of ORDER) if (this.cast[id]) { this.cast[id].root.visible = false; this.cast[id].setLimbs(null); this.cast[id].setFace(null); }
+    for (const id of ORDER) if (this.cast[id]) { this.cast[id].root.visible = false; this.cast[id].setLimbs(null); this.cast[id].setFace(null); this.cast[id].look2(0, 0); }
     this.seen.clear();
   }
 
@@ -615,10 +647,14 @@ export class Montage {
       this.fx = { exposure: 0.8 };
     }, breakShip);
 
+    // Thrown, not lifted: each one goes at their own moment, and the rotation builds as they go.
     const lift = (id: CrewId, i: number, k: number, b: number) => {
-      const c = this.cast[id];
-      const mark = DECK[id], p = V(mark[0], -2.2 + k * (1 + (i % 3) * 0.3), lerp(mark[1], mark[1] - 2.2, k * k));
-      this.act(id, p, new THREE.Quaternion().setFromEuler(new THREE.Euler(k * -0.5 * (i % 2 ? 1 : 0.6), Math.PI + (i - 2.5) * 0.15, k * (i - 2.5) * 0.12)), 'float', { ...FALL.spread, armL: wob(FALL.spread.armL!, b, i), armR: wob(FALL.spread.armR!, b, i + 2), hair: [0, 1, -1] }, { fear: 0.8, open: 0.35 });
+      const t = b * BEAT, go = smoothstep(0.04 * i, 0.5 + 0.05 * i, k), g2 = go * go;
+      const mark = DECK[id], side = i % 2 ? 1 : -1;
+      const p = V(mark[0] + side * g2 * 0.9 + nz(t * 2.1, i) * 0.25 * go, -2.2 + go * (1.1 + (i % 3) * 0.45) + nz(t * 1.7, i + 3) * 0.2 * go, lerp(mark[1], mark[1] - 3.4, g2));
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-g2 * (1.6 + (i % 3) * 0.7) + nz(t * 2, i) * 0.3 * go, Math.PI + (i - 2.5) * 0.15 + side * g2 * 1.8, side * g2 * (1 + (i % 2)) + nz(t * 2.4, i + 7) * 0.25 * go));
+      const c = this.act(id, p, q, 'float', mixLimbs(STANDING, flail({ ...FALL.spread, openHands: true }, t, i * 3.1, 0.75), smoothstep(0, 0.3, go)), { fear: 0.4 + 0.5 * go, open: 0.15 + 0.45 * go });
+      c.look2(nz(t * 2.4, i + 2) * 0.9, nz(t * 1.8, i + 4) * 0.35);
       return c;
     };
     P(16, 20, 'interior', (k, b) => {
@@ -629,7 +665,7 @@ export class Montage {
       (this.crack.material as THREE.ShaderMaterial).uniforms.uK.value = crack * 1.5;
       if (k > 0.45) this.shards.update((k - 0.45) * 4, tmp.set(0, 0.05, -1), 1.2, 4, -3.2, 0.3);
       else this.shards.mesh.visible = false;
-      ORDER.forEach((id, n) => lift(id, n, smoothstep(0.25, 1, k), b));
+      ORDER.forEach((id, n) => lift(id, n, k, b));
       i.alarmLight.intensity = 6 + 14 * after(b % 1, 0, 0.6);
       i.mainLight.intensity = 1.2;
       i.consoleLight.intensity = 1.5;
@@ -644,11 +680,19 @@ export class Montage {
       const i = set.interior;
       i.alarmLight.intensity = 8 + 14 * after(b % 1, 0, 0.6);
       i.mainLight.intensity = 1.2;
-      const p = V(-1.5, -1.0, -0.2);
-      this.act('strong', p, new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.5, Math.PI * 0.86, 0.12)), 'float', {
-        ...FALL.strong, armL: [0.55, 0.85, -0.2], foreL: [0.45, 0.9, -0.1], armR: wob([-0.3, 0.1, 1], b, 1, 0.05), foreR: [-0.2, 0.1, 1], openHands: true, hair: [0, 0.4, 1],
-      }, { frown: 0.8, open: 0.45, squint: 0.2 });
+      // one hand on the rib, and the whole body swinging from it in the gale
+      const t = b * BEAT;
+      const p = V(-1.5 + nz(t * 2.6, 1) * 0.22, -1.0 + nz(t * 2.2, 2) * 0.16, -0.2 + nz(t * 1.9, 3) * 0.16);
+      const body = flail({ ...FALL.strong, armR: [-0.3, 0.1, 1], foreR: [-0.2, 0.1, 1], openHands: true, hair: [0, 0.4, 1] }, t, 4, 0.5);
+      this.act('strong', p, new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.5 + nz(t * 2.1, 5) * 0.3, Math.PI * 0.86 + nz(t * 1.7, 6) * 0.3, 0.12 + nz(t * 2.4, 7) * 0.26)), 'float', { ...body, armL: [0.55, 0.85, -0.2], foreL: [0.45, 0.9, -0.1] }, { frown: 0.8, open: 0.45, squint: 0.2 });
       const c = this.cast.strong;
+      c.look2(nz(t * 2, 8) * 0.55, nz(t * 1.6, 9) * 0.2);
+      // the others go past him and out of the window
+      (['explorer', 'builder'] as CrewId[]).forEach((id, n) => {
+        const u = clamp((k - 0.12 - n * 0.36) / 0.5, 0, 1);
+        if (u <= 0 || u >= 1) { this.cast[id].root.visible = false; return; }
+        this.act(id, V(lerp(-2.6, -0.4, u) + n * 0.5, -1.2 + u * 1.1, lerp(1.6, -4.4, u)), new THREE.Quaternion().setFromEuler(new THREE.Euler(u * 5 + n, u * 3.4, u * 2.6)), 'float', flail({ ...FALL.spread, openHands: true }, t, n * 7, 0.9), { fear: 0.9, open: 0.6 });
+      });
       const h = c.head.getWorldPosition(tmp);
       this.lens(V(h.x + 1.3 - k * 0.3, h.y - 0.1, h.z - 2.3 + k * 0.5).add(shakeAt(b, 0.012, this.tmp2)), V(h.x, h.y - 0.15, h.z), 34, 2.4, 0.012, 0.06);
       this.setRig([{ p: V(h.x + 1.2, h.y + 0.6, h.z - 1.4), color: 0xff4030, i: 12 }, { p: V(h.x - 1.2, h.y + 0.2, h.z + 1.4), color: 0xff9a50, i: 9 }]);
@@ -659,16 +703,19 @@ export class Montage {
     P(24, 28, 'deep', (k, b) => {
       const e = easeInOut(k), R = lerp(1.0, 1.9, e * e);
       ship.group.visible = false;
-      const spin = b * 0.012;
+      const spin = b * 0.03;
       ORDER.forEach((id, i) => {
         const a = (i / 6) * Math.PI * 2 + spin;
         const radial = V(Math.cos(a), 0, Math.sin(a));
         const up = radial.clone().negate(), fwd = V(0, -1, 0), left = up.clone().cross(fwd);
         const m = new THREE.Matrix4().makeBasis(left, up, fwd);
-        const h = 1.75;
-        this.act(id, radial.clone().multiplyScalar(R + h), new THREE.Quaternion().setFromRotationMatrix(m), 'float', {
-          armL: wob([1, 0.32, 0.02], b, i, 0.03), armR: wob([-1, 0.32, 0.02], b, i + 1, 0.03), legL: [0.22, -1, 0.05], shinL: [0.15, -1, 0.3], legR: [-0.2, -1, 0], shinR: [-0.15, -1, 0.25], openHands: true, hair: [0, 0.2, 1],
+        const h = 1.75, t = b * BEAT;
+        // the grip is going: arms still reach, bodies pitch and roll against each other, legs kick for nothing
+        const roll = new THREE.Quaternion().setFromEuler(new THREE.Euler(nz(t * 1.5, i) * 0.45 * (0.4 + e), nz(t * 1.2, i + 2) * 0.4 * (0.4 + e), nz(t * 1.7, i + 4) * 0.5 * (0.4 + e)));
+        const c = this.act(id, radial.clone().multiplyScalar(R + h + nz(t * 1.4, i + 6) * 0.14), new THREE.Quaternion().setFromRotationMatrix(m).multiply(roll), 'float', {
+          ...flail({ armL: [1, 0.32, 0.02], armR: [-1, 0.32, 0.02], legL: [0.22, -1, 0.05], shinL: [0.15, -1, 0.3], legR: [-0.2, -1, 0], shinR: [-0.15, -1, 0.25], openHands: true, hair: [0, 0.2, 1] }, t, i * 2.7, 0.22 + 0.3 * e),
         }, { fear: 0.5, frown: 0.5 });
+        c.look2(nz(t * 1.6, i + 8) * 0.7, nz(t * 1.3, i + 9) * 0.25);
       });
       this.hole(1.2, -26, -1.2);
       this.fx = { exposure: 0.7 };
@@ -685,8 +732,9 @@ export class Montage {
         // the arm's length differs per body: steer the body so the wrist lands on its mark
         const w = this.handOf(c, side);
         if (c.root.visible && this.seen.has(id)) o.set(o.x + want - w.x, o.y - w.y, o.z - w.z);
-        return this.act(id, o, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, tilt)), 'float', side === 'L'
-          ? { ...FALL.spread, armL: [1, 0.05, 0], foreL: [1, 0.02, 0], openHands: true } : { ...FALL.spread, armR: [-1, 0.05, 0], foreR: [-1, 0.02, 0], openHands: true }, FACE[id]);
+        const t = b * BEAT, loose = flail({ ...FALL.spread, openHands: true }, t, side === 'L' ? 3 : 9, 0.3);
+        return this.act(id, o, new THREE.Quaternion().setFromEuler(new THREE.Euler(nz(t * 1.1, 2) * 0.1, nz(t * 0.9, 4) * 0.1, tilt + nz(t, side === 'L' ? 6 : 8) * 0.08)), 'float', side === 'L'
+          ? { ...loose, armL: [1, 0.05 + nz(t * 2, 1) * 0.06, nz(t * 1.6, 3) * 0.05], foreL: [1, 0.02 + nz(t * 2.4, 2) * 0.08, nz(t * 1.9, 5) * 0.06] } : { ...loose, armR: [-1, 0.05 + nz(t * 2, 7) * 0.06, nz(t * 1.6, 9) * 0.05], foreR: [-1, 0.02 + nz(t * 2.4, 8) * 0.08, nz(t * 1.9, 11) * 0.06] }, FACE[id]);
       };
       fit(this.cast.explorer, 'L', -gap, 'explorer', this.markL, -0.03);
       fit(this.cast.scientist, 'R', gap, 'scientist', this.markR, 0.03);
@@ -717,11 +765,13 @@ export class Montage {
       this.fx = { flash: [f * 1.2, f * 1.15, f * 1.1], zoom: 0.12 * (1 - k), lines: 0.8 * (1 - k), exposure: 0.7 };
     }, () => set.show('deep'));
 
-    const fly = (from: number, to: number, id: CrewId, n: number, o: { cam: (k: number) => THREE.Vector3; aim?: THREE.Vector3; roll?: (k: number) => number; spin?: (b: number) => THREE.Euler; dir: THREE.Vector3; fov?: number }) => {
+    const fly = (from: number, to: number, id: CrewId, n: number, o: { cam: (k: number) => THREE.Vector3; aim?: THREE.Vector3; roll?: (k: number) => number; spin?: (b: number) => THREE.Euler; dir: THREE.Vector3; fov?: number; thrash?: number }) => {
       P(from, to, 'deep', (k, b) => {
         ship.group.visible = false;
         const eu = o.spin ? o.spin(b) : new THREE.Euler(-1.1, 0, 0);
-        const c = this.act(id, V(0, -0.9, 0), new THREE.Quaternion().setFromEuler(eu), 'float', { ...FALL[id], armL: wob(FALL[id].armL!, b * 0.5, n), armR: wob(FALL[id].armR!, b * 0.5, n + 1) }, FACE[id]);
+        const t = b * BEAT;
+        const c = this.act(id, V(nz(t * 2.6, n) * 0.3, -0.9 + nz(t * 2.2, n + 3) * 0.3, nz(t * 2, n + 6) * 0.25), new THREE.Quaternion().setFromEuler(eu), 'float', flail(FALL[id], t, n * 4.3, o.thrash ?? 0.8), FACE[id]);
+        c.look2(nz(t * 2.7, n + 1) * 0.8, nz(t * 2.1, n + 2) * 0.3);
         const col = id === 'scientist' ? this.playerGlow() : TRAIL[id];
         const h = c.chest.getWorldPosition(tmp).clone();
         const cam = this.lens(o.cam(k).add(shakeAt(b, 0.012, this.tmp2)), o.aim ?? h, o.fov ?? 32, 3.2, 0.006, o.roll ? o.roll(k) : 0);
@@ -737,12 +787,12 @@ export class Montage {
         this.fx = { zoom: 0.02 + hit * 0.05, flash: [hit * 0.1, hit * 0.1, hit * 0.1], lines: 0.15, exposure: 0.75 };
       }, () => set.show('deep'));
     };
-    fly(36, 38, 'strong', 0, { dir: V(0.8, 0.1, -0.6).normalize(), cam: (k) => V(lerp(3.2, 2.2, k), 0.4, 3.4), roll: (k) => 0.3 - k * 0.5, spin: (b) => new THREE.Euler(-1.0, b * 0.55, 0.4) });
-    fly(38, 40, 'medic', 1, { dir: V(-0.9, 0.2, -0.2).normalize(), cam: (k) => V(-1.3, -1.6 + k * 0.5, 2.8), roll: (k) => -0.25 + k * 0.3, spin: () => new THREE.Euler(-0.3, 0.3, -0.5) });
-    fly(40, 42, 'explorer', 2, { dir: V(0.2, -0.3, 0.92).normalize(), cam: (k) => V(0.8, 0.6, -3.1 - k * 0.8), spin: () => new THREE.Euler(0.8, Math.PI, 0.15) });
-    fly(42, 44, 'builder', 3, { dir: V(-0.3, 0.2, 0.9).normalize(), cam: (k) => V(0.5, -0.5, lerp(5, 2.1, k)), spin: (b) => new THREE.Euler(-0.5, 0.2, 0.2 + b * 0.04) });
-    fly(44, 46, 'social', 4, { dir: V(-0.95, -0.1, 0.25).normalize(), cam: (k) => V(0.3, 0.7, 3.2 - k * 0.7), roll: (k) => 0.35 - k * 0.3, spin: () => new THREE.Euler(-0.4, -0.5, 0.5) });
-    fly(46, 48, 'scientist', 5, { dir: V(0, -0.1, 1).normalize(), cam: (k) => V(0.15, 0.3, lerp(1.9, 3.8, k)), spin: () => new THREE.Euler(-0.15, 0, 0.08) });
+    fly(36, 38, 'strong', 0, { dir: V(0.8, 0.1, -0.6).normalize(), cam: (k) => V(lerp(3.2, 2.2, k), 0.4, 3.4), roll: (k) => 0.3 - k * 0.5, spin: (b) => new THREE.Euler(-1.0 + b * 0.5, b * 1.5, 0.4 + b * 0.35), thrash: 1 });
+    fly(38, 40, 'medic', 1, { dir: V(-0.9, 0.2, -0.2).normalize(), cam: (k) => V(-1.3, -1.6 + k * 0.5, 2.8), roll: (k) => -0.25 + k * 0.3, spin: (b) => new THREE.Euler(-0.3 + (b - 38) * 0.32, 0.3 + (b - 38) * 0.22, -0.5 + (b - 38) * 0.5), thrash: 0.3 });
+    fly(40, 42, 'explorer', 2, { dir: V(0.2, -0.3, 0.92).normalize(), cam: (k) => V(0.8, 0.6, -3.1 - k * 0.8), spin: (b) => new THREE.Euler(0.8 + nz(b, 1) * 0.5, Math.PI + nz(b * 0.8, 2) * 0.6, 0.15 + (b - 40) * 0.8), thrash: 0.85 });
+    fly(42, 44, 'builder', 3, { dir: V(-0.3, 0.2, 0.9).normalize(), cam: (k) => V(0.5, -0.5, lerp(5, 2.1, k)), spin: (b) => new THREE.Euler(-0.5 + (b - 42) * 0.7, 0.2 + nz(b, 3) * 0.4, 0.2 + (b - 42) * 0.9), thrash: 0.55 });
+    fly(44, 46, 'social', 4, { dir: V(-0.95, -0.1, 0.25).normalize(), cam: (k) => V(0.3, 0.7, 3.2 - k * 0.7), roll: (k) => 0.35 - k * 0.3, spin: (b) => new THREE.Euler(-0.4 + (b - 44) * 0.9, -0.5 + (b - 44) * 1.1, 0.5 + nz(b, 5) * 0.5), thrash: 0.75 });
+    fly(46, 48, 'scientist', 5, { dir: V(0, -0.1, 1).normalize(), cam: (k) => V(0.15, 0.3, lerp(1.9, 3.8, k)), spin: (b) => new THREE.Euler(-0.15 + nz(b * 0.9, 7) * 0.4, nz(b * 0.7, 8) * 0.5, 0.08 + (b - 46) * 0.7), thrash: 0.85 });
 
     P(48, 52, 'deep', (k, b) => {
       ship.group.visible = false;

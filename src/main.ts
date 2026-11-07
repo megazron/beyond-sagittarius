@@ -733,6 +733,7 @@ window.addEventListener('resize', () => {
   advance(sec: number) { hold.pending = sec; },
   get frames() { return hold.done; },
   film: { seek(b: number) { film.seek(b); }, get playing() { return film.playing; }, get beat() { return film.beat; }, get seconds() { return film.lengthSeconds; }, start() { state = 'film'; renderer.setScene(cine.scene, cine.camera, false); ui.show('title', false); ui.show('cine', true); ui.fade('black', 0, 0); void film.play(() => {}); } },
+  stageInfo() { return renderer.stageInfo(); },
   cineTime() { return cine.time; },
   get stagePlaying() { return cine.staged; },
   gameScene(id: 'rescue' | 'camp' | 'beacon') { game?.debugScene(id); },

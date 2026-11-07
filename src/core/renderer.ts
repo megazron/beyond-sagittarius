@@ -577,6 +577,9 @@ export class Renderer {
     if (this.temporal) this.temporal.camera = camera;
   }
 
+  /** What is on stage and through which lens: the offline film renderer reads this. */
+  stageInfo() { return { scene: this.renderPass.scene, camera: this.renderPass.camera as THREE.PerspectiveCamera, focus: this.dof?.focus ?? 0, aperture: this.dof?.enabled ? this.dof.aperture : 0 }; }
+
   /**
    * Lens for the next frames: focus distance in metres and aperture as the blur
    * diameter (fraction of screen height) of something infinitely far. 0 = off.
