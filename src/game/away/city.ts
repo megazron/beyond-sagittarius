@@ -220,6 +220,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const frameM = new THREE.MeshStandardMaterial({ color: 0xece4d6, roughness: 0.7 });
   const tankM = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.6 });
   const railM = new THREE.MeshStandardMaterial({ color: 0x3b3f44, roughness: 0.5, metalness: 0.6 });
+  const ledMats = [0x6ff7ff, 0xff6ec7, 0xffc36b].map((c) => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(2.2), toneMapped: false }));
+  const podM = new THREE.MeshStandardMaterial({ color: 0x9fc0d6, roughness: 0.08, metalness: 0.5, emissive: 0xffd9a8, emissiveIntensity: 0.35 });
   const awnings = [stripes('#c0392b', '#f4e6d0'), stripes('#16a085', '#f0f0e0'), stripes('#f39c12', '#fff6e0'), stripes('#2c3e94', '#f2efe6'), stripes('#8e44ad', '#fbe9ff')];
   const lit = (map: THREE.Texture, k = 0.6) => new THREE.MeshStandardMaterial({ map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: k, roughness: 0.5 });
   const plane = (w: number, h: number, m: THREE.Material, x: number, y: number, z: number, yaw: number) => { const p = add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), m)); p.position.set(x, y, z); p.rotation.y = yaw; return p; };
@@ -237,6 +239,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       const face = side * FRONT, out = -side; // `out` points from the wall into the street
       if (!inFlat) solid(box(depth, h, len - 0.3, wallM, side * (FRONT + depth / 2), h / 2, zc));
       box(depth + 0.3, 0.6, len - 0.1, parapetM, side * (FRONT + depth / 2), h + 0.3, zc);
+      // 2189 on an old street: an LED line along every roof, and smart-glass pods hung off the upper floors
+      const led = add(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, len - 0.3), ledMats[k % ledMats.length])); led.position.set(face + out * 0.18, h + 0.62, zc);
+      if (floors >= 3 && rnd() < 0.55) {
+        const py = (1 + Math.floor(rnd() * (floors - 1))) * 3.3 + 1.6, pz = zc + (rnd() - 0.5) * (len - 6);
+        box(1.7, 2.6, 3.2, podM, face + out * 0.85, py, pz).castShadow = true;
+        box(1.72, 0.12, 3.22, ledMats[(k + 1) % ledMats.length], face + out * 0.85, py - 1.3, pz).castShadow = false;
+      }
       if (rich) for (let t = 0; t < 1 + Math.floor(rnd() * 2); t++) {
         const tk = add(new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 1.3, 16), tankM)); tk.position.set(side * (FRONT + 3 + rnd() * 6), h + 1.25, zc + (rnd() - 0.5) * (len - 3)); tk.castShadow = true;
       }
@@ -264,7 +273,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         if (shop) {
           for (const dz of [-3.15, 3.15]) box(0.3, 3.4, 0.3, frameM, face + out * 0.15, 1.7 + FLOOR, shop.z + dz);
           box(0.3, 0.3, 6.6, frameM, face + out * 0.15, 3.25 + FLOOR, shop.z); box(0.35, 0.25, 6.6, frameM, face + out * 0.17, 0.12 + FLOOR, shop.z);
-          plane(6, 2.7, lit(shelves(shop.hue), 0.55), face - out * 0.4, 1.6 + FLOOR, shop.z, out > 0 ? Math.PI / 2 : -Math.PI / 2);
+          plane(6, 2.7, lit(shelves(shop.hue), 1.0), face + out * 0.03, 1.6 + FLOOR, shop.z, out > 0 ? Math.PI / 2 : -Math.PI / 2); // the lit interior, on the wall behind the glass
           plane(6, 2.7, new THREE.MeshStandardMaterial({ color: 0x9fb8c8, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.4 }), face + out * 0.33, 1.6 + FLOOR, shop.z, out > 0 ? Math.PI / 2 : -Math.PI / 2);
           plane(6.2, 1.15, lit(sign(shop.name, shop.bg, shop.fg)), face + out * 0.32, 3.85 + FLOOR, shop.z, out > 0 ? Math.PI / 2 : -Math.PI / 2);
           if (rich) { const pl = add(new THREE.PointLight(0xffc98a, 6, 9, 2)); pl.position.set(face + out * 1.6, 3.0, shop.z); }
@@ -441,6 +450,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   }
 
   const future = buildFuture(scene, { rich, N, S, FRONT, FLOOR, shops: SHOPS });
+  blocks.push(...future.solids);
   scene.traverse((o) => { if (o !== ground && o.userData.ground === undefined) o.userData.ground = false; });
   const tasks: AwayTask[] = TASKS.map((x) => ({ id: x.id, pos: new THREE.Vector3(x.x, hx(x.x), x.z), radius: x.r ?? 1.8, label: label(`city.task.${x.id}`), need: x.need }));
   // townsfolk and friends answer whenever you like; they never count towards leaving

@@ -39,6 +39,7 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   seed = 77;
   const { rich, N, S, FRONT, FLOOR } = o;
   const updates: ((dt: number, t: number) => void)[] = [];
+  const solids: THREE.Box3[] = [];
   const add = <T extends THREE.Object3D>(x: T) => { scene.add(x); return x; };
 
   // ---- towers behind both sides, stepping up away from the street; merged per material ----
@@ -69,7 +70,7 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     const g = mergeGeometries(list.map((x) => (x.index ? x.toNonIndexed() : x)), false); if (!g) return;
     const mesh = add(new THREE.Mesh(g, m)); mesh.castShadow = shadows; mesh.receiveShadow = shadows; mesh.userData.ground = false;
   };
-  merged(towerG, towerM, rich); merged(crownG, crownM); merged(sailG, sailM); merged(mastG, mastM);
+  merged(towerG, towerM, false); // towers would put the whole street in shade at this sun merged(crownG, crownM); merged(sailG, sailM); merged(mastG, mastM);
   // blinking aircraft lights on the tallest masts
   const blink = new THREE.InstancedMesh(new THREE.SphereGeometry(0.35, 6, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff3030).multiplyScalar(3) }), tops.length);
   tops.forEach((p, i) => blink.setMatrixAt(i, new THREE.Matrix4().makeTranslation(p.x, p.y + 11, p.z - 1)));
@@ -138,25 +139,33 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   updates.push((dt) => { adT += dt; if (adT > 4.5) { adT = 0; for (const s of screens) { s.k++; drawAd(s.c, s.k); s.t.needsUpdate = true; } } });
 
   // ---- the maglev guideway down the middle of the street, and a second tram that glides past ----
+  // the street tram's glowing track at road level, and the sky-rail above: a guideway on pylons, 9 m up
   const rail = add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, N - S), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x4ff3ff).multiplyScalar(1.8), toneMapped: false })));
   rail.position.set(-2.2, 0.03, (N + S) / 2); rail.userData.ground = false;
+  const SKY = 9, guideM = new THREE.MeshStandardMaterial({ color: 0xdfe3e8, roughness: 0.4, metalness: 0.5 });
+  const guide = add(new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.7, N - S + 60), guideM)); guide.position.set(2.4, SKY - 0.6, (N + S) / 2); guide.castShadow = true;
+  const gline = add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, N - S + 60), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x4ff3ff).multiplyScalar(2), toneMapped: false }))); gline.position.set(2.4, SKY - 0.22, (N + S) / 2);
+  const pylonG: THREE.BufferGeometry[] = [];
+  for (let z = S - 20; z < N + 20; z += 22) solids.push(new THREE.Box3(new THREE.Vector3(1.95, 0, z - 0.45), new THREE.Vector3(2.85, SKY, z + 0.45))), pylonG.push(new THREE.CylinderGeometry(0.35, 0.5, SKY - 0.9, 10).translate(2.4, (SKY - 0.9) / 2, z).toNonIndexed());
+  const pylons = add(new THREE.Mesh(mergeGeometries(pylonG, false)!, guideM)); pylons.castShadow = true;
   const glider = new THREE.Group(); add(glider);
   const gm = new THREE.MeshStandardMaterial({ color: 0xf2f4f6, roughness: 0.25, metalness: 0.5 });
   const gbody = new THREE.Mesh(new THREE.CapsuleGeometry(1.3, 10, 6, 16), gm); gbody.rotation.x = Math.PI / 2; gbody.position.y = 1.9; gbody.scale.set(1, 1, 0.95); glider.add(gbody);
   const gwin = new THREE.Mesh(new THREE.CapsuleGeometry(1.32, 9, 4, 16, ), new THREE.MeshStandardMaterial({ color: 0x223344, emissive: 0xffe6c0, emissiveIntensity: 0.4, roughness: 0.1 })); gwin.rotation.x = Math.PI / 2; gwin.position.y = 2.15; gwin.scale.set(1.0, 1, 0.35); glider.add(gwin);
   const gglow = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.5), toneMapped: false })); gglow.position.y = 0.5; glider.add(gglow);
   glider.traverse((x) => { x.userData.ground = false; (x as THREE.Mesh).castShadow = true; });
-  glider.position.set(2.2, 0, S - 40);
+  glider.position.set(2.4, SKY - 0.6, S - 40);
   updates.push((dt) => { glider.position.z += dt * 14; if (glider.position.z > N + 40) glider.position.z = S - 60; });
 
   // ---- hover traffic and drones overhead: instanced, moving along lanes ----
   const cars = rich ? 26 : 12, drones = rich ? 18 : 8;
   const carG = mergeGeometries([new THREE.CapsuleGeometry(0.9, 2.4, 4, 10).rotateX(Math.PI / 2).toNonIndexed(), new THREE.BoxGeometry(1.6, 0.25, 2.2).translate(0, -0.55, 0).toNonIndexed()], false)!;
-  const carM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.6 });
+  const carM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25, metalness: 0.3, emissive: 0x223344, emissiveIntensity: 0.6 });
   const carI = new THREE.InstancedMesh(carG, carM, cars); carI.castShadow = rich; carI.userData.ground = false;
   const carLights = new THREE.InstancedMesh(new THREE.BoxGeometry(1.4, 0.1, 0.1), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe0b0).multiplyScalar(3), toneMapped: false }), cars);
   const lanes = Array.from({ length: cars }, (_, i) => ({ x: (i % 4 - 1.5) * 4.5, y: 16 + (i % 3) * 5 + rnd() * 2, z: S + rnd() * (N - S), v: (i % 2 ? 1 : -1) * (10 + rnd() * 9) }));
-  lanes.forEach((_, i) => carI.setColorAt(i, new THREE.Color().setHSL(rnd(), 0.5, 0.55)));
+  lanes.forEach((_, i) => carI.setColorAt(i, new THREE.Color().setHSL(rnd(), 0.35, 0.82)));
+  const under = new THREE.InstancedMesh(new THREE.BoxGeometry(1.2, 0.05, 2.6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.5), toneMapped: false }), cars); add(under);
   add(carI); add(carLights);
   const droneG = mergeGeometries([new THREE.BoxGeometry(0.5, 0.12, 0.5).toNonIndexed(), ...[[-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35], [0.35, 0.35]].map(([x, z]) => new THREE.CylinderGeometry(0.18, 0.18, 0.03, 10).translate(x, 0.08, z).toNonIndexed())], false)!;
   const droneI = new THREE.InstancedMesh(droneG, new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.5, metalness: 0.6 }), drones); droneI.userData.ground = false;
@@ -168,13 +177,13 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     lanes.forEach((l, i) => {
       l.z += l.v * dt; if (l.z > N + 30) l.z = S - 30; if (l.z < S - 30) l.z = N + 30;
       Q.setFromAxisAngle(UP, l.v > 0 ? 0 : Math.PI); P.set(l.x, l.y + Math.sin(t * 0.8 + i) * 0.3, l.z);
-      carI.setMatrixAt(i, M.compose(P, Q, SC)); P.z += (l.v > 0 ? 1.9 : -1.9); carLights.setMatrixAt(i, M.compose(P, Q, SC));
+      carI.setMatrixAt(i, M.compose(P, Q, SC)); P.y -= 0.85; under.setMatrixAt(i, M.compose(P, Q, SC)); P.y += 0.85; P.z += (l.v > 0 ? 1.9 : -1.9); carLights.setMatrixAt(i, M.compose(P, Q, SC));
     });
     dpaths.forEach((d, i) => {
       const a = t * d.w + d.p; P.set(d.cx + Math.cos(a) * d.r, d.y + Math.sin(t * 1.3 + i) * 0.4, d.cz + Math.sin(a) * d.r);
       Q.setFromAxisAngle(UP, -a); droneI.setMatrixAt(i, M.compose(P, Q, SC)); P.y -= 0.12; droneL.setMatrixAt(i, M.compose(P, Q, SC));
     });
-    carI.instanceMatrix.needsUpdate = carLights.instanceMatrix.needsUpdate = droneI.instanceMatrix.needsUpdate = droneL.instanceMatrix.needsUpdate = true;
+    carI.instanceMatrix.needsUpdate = carLights.instanceMatrix.needsUpdate = under.instanceMatrix.needsUpdate = droneI.instanceMatrix.needsUpdate = droneL.instanceMatrix.needsUpdate = true;
   });
 
   // ---- delivery bots on the pavements: little boxes on wheels with a face ----
@@ -224,5 +233,5 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     (s.g.children[s.g.children.length - 1] as THREE.Mesh).scale.setScalar(0.7 + Math.sin(t * 30) * 0.1);
   }));
 
-  return { update: (dt: number, t: number) => { for (const u of updates) u(dt, t); } };
+  return { solids, update: (dt: number, t: number) => { for (const u of updates) u(dt, t); } };
 }
