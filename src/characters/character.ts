@@ -341,14 +341,20 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   function keepArmsOut(bs: Map<string, THREE.Bone>) {
     if (!torsoR && !torsoBody.length) return;
     root.updateWorldMatrix(true, true);
-    const seg = TORSO.map(([a, b]) => [bs.get(a)!.getWorldPosition(new THREE.Vector3()), bs.get(b)!.getWorldPosition(new THREE.Vector3())] as const);
+    // world matrices are fresh from the update above: read positions straight off them, no walk up the parents
+    const wp = (b: THREE.Object3D) => new THREE.Vector3().setFromMatrixPosition(b.matrixWorld);
+    const seg = TORSO.map(([a, b]) => [wp(bs.get(a)!), wp(bs.get(b)!)] as const);
     if (!torsoR) {
       // the skinned, morphed skin as it really stands, in world space: the raw attribute is not the body you see
       const per: number[][] = TORSO.map(() => []), v = new THREE.Vector3();
+      // clothes count only above the hips: a coat's skirt flares away from the body and is not torso
+      const hip = seg[0][0], up = seg[2][1].clone().sub(hip), upL2 = up.lengthSq();
       for (const m of torsoBody) {
         m.updateWorldMatrix(true, false);
+        const cloth = m.name === 'cloth';
         for (let i = 0; i < m.geometry.attributes.position.count; i += 2) {
           m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld); let best = 9, k = -1;
+          if (cloth && SA.copy(v).sub(hip).dot(up) / upL2 < .05) continue;
           seg.forEach(([a, b], j) => { const d = segDist(v, a, b); if (d < best) { best = d; k = j; } });
           if (k >= 0 && best < .3) per[k].push(best);
         }
@@ -357,12 +363,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       torsoLen = seg.map(([a, b]) => a.distanceTo(b));
     }
     for (const s of ['L', 'R']) {
-      const upper = bs.get(`upperarm${s}`)!, sh = upper.getWorldPosition(new THREE.Vector3());
+      const upper = bs.get(`upperarm${s}`)!, sh = wp(upper);
       let turned = 0;
       for (let it = 0; it < 7 && turned < .7; it++) {
         let worst = 0, at: THREE.Vector3 | null = null, axisPt: THREE.Vector3 | null = null;
         for (const n of [`hand${s}`, `finger3_2${s}`, `lowerarm${s}`]) {
-          const p = bs.get(n)?.getWorldPosition(new THREE.Vector3()); if (!p) continue;
+          const bn = bs.get(n); if (!bn) continue; const p = wp(bn);
           seg.forEach(([a, b], j) => {
             const pen = torsoR![j] * (a.distanceTo(b) / (torsoLen[j] || 1)) + 0.015 - segDist(p, a, b); // bind units to world
             if (pen > worst) { worst = pen; at = p; const ab = b.clone().sub(a), t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / ab.lengthSq())); axisPt = a.clone().addScaledVector(ab, t); }
