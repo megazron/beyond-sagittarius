@@ -564,6 +564,15 @@ export class Renderer {
   }
 
   setScene(scene: THREE.Scene, camera: THREE.PerspectiveCamera, aoEnabled: boolean) {
+    // a stage can ask for image-based light from its own sky: shade then reads as sky-lit, not black
+    const sky = scene.userData.skyForEnv as THREE.Object3D | undefined;
+    if (sky && !scene.environment) {
+      const env = new THREE.Scene(); env.add(sky.clone());
+      const pm = new THREE.PMREMGenerator(this.renderer);
+      scene.environment = pm.fromScene(env, 0.02).texture; pm.dispose();
+      scene.environmentIntensity = (scene.userData.envIntensity as number | undefined) ?? 1;
+    }
+    if (scene.userData.ao) aoEnabled = true;
     this.renderPass.scene = scene;
     this.renderPass.camera = camera;
     if (this.ao) {

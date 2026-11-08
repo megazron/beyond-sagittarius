@@ -51,8 +51,8 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   const towerG: THREE.BufferGeometry[] = [], crownG: THREE.BufferGeometry[] = [], sailG: THREE.BufferGeometry[] = [], mastG: THREE.BufferGeometry[] = [];
   const put = (list: THREE.BufferGeometry[], g: THREE.BufferGeometry, x: number, y: number, z: number, ry = 0, rx = 0) => { g.rotateX(rx); g.rotateY(ry); g.translate(x, y, z); list.push(g); };
   const tops: THREE.Vector3[] = [];
-  for (const side of [-1, 1]) for (let z = N - 6; z > S + 10; z -= 16 + rnd() * 10) {
-    const x = side * (FRONT + 18 + rnd() * 14), h = 34 + rnd() * 70, w = 9 + rnd() * 6, d = 9 + rnd() * 6;
+  for (const side of [-1, 1]) for (let z = N - 6; z > S + 10; z -= 14 + rnd() * 8) {
+    const x = side * (FRONT + 15 + rnd() * 8), h = 50 + rnd() * 90, w = 9 + rnd() * 6, d = 9 + rnd() * 6;
     // a podium, the shaft, a setback, and a crown
     const shaft = new THREE.BoxGeometry(w, h, d); const uv = shaft.attributes.uv as THREE.BufferAttribute;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / 8, uv.getY(i) * h / 16);
@@ -81,7 +81,7 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   const glowM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.2) });
   const bridges = rich ? [40, 6, -34] : [6];
   for (const z of bridges) {
-    const y = 26 + rnd() * 10, span = 2 * (FRONT + 22);
+    const y = 17 + rnd() * 6, span = 2 * (FRONT + 17);
     const tube = add(new THREE.Mesh(new THREE.CapsuleGeometry(1.8, span - 3.6, 4, 12), bridgeM)); tube.rotation.z = Math.PI / 2; tube.position.set(0, y, z); tube.userData.ground = false;
     const strip = add(new THREE.Mesh(new THREE.BoxGeometry(span, 0.12, 0.25), glowM)); strip.position.set(0, y - 1.7, z);
   }
@@ -95,18 +95,23 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     g.strokeRect(6, 6, g.canvas.width - 12, g.canvas.height - 12);
   });
   const additive = (map: THREE.Texture, k = 2.5) => new THREE.MeshBasicMaterial({ map, color: new THREE.Color(k, k, k), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
-  const blades: [string, string, number, number][] = [['CHAI', '#ffb347', 1, 18], ['MEHNDI', '#ff6ec7', -1, -26], ['BIRYANI', '#7cff9a', -1, 4], ['RISHTA.AI', '#7fd8ff', 1, -40], ['DAWAI', '#5fffd0', 1, -12], ['SNAPGRAM', '#ff5d8f', -1, 36]];
-  for (const [txt, col, side, z] of blades) {
-    const v = add(new THREE.Mesh(new THREE.PlaneGeometry(0.9, Math.min(6, txt.length * 0.62 + 0.5)), additive(neon(txt, col, true), 2.2)));
-    v.position.set(side * (FRONT - 0.9), 6.5, z); v.rotation.y = 0; v.userData.ground = false;
+  const words: [string, string][] = [['CHAI', '#ffb347'], ['MEHNDI', '#ff6ec7'], ['BIRYANI', '#7cff9a'], ['RISHTA.AI', '#7fd8ff'], ['DAWAI', '#5fffd0'], ['SNAPGRAM', '#ff5d8f'],
+    ['PAAN', '#b6ff6e'], ['CHAAT', '#ffd36e'], ['SIM CARDS', '#9fd8ff'], ['TAILOR', '#ff9f6e'], ['HOVER REPAIR', '#6ef7ff'], ['JALEBI', '#ffb36e'], ['GOLD', '#ffe36e'], ['NEURO SPA', '#c79fff']];
+  const texCache = new Map<string, THREE.Texture>();
+  for (let i = 0, n = rich ? 26 : 12; i < n; i++) {
+    const [txt, col] = words[i % words.length], side = i % 2 ? 1 : -1, z = N - 8 - (i / n) * (N - S - 16) + (rnd() - 0.5) * 4;
+    const key = txt + col; if (!texCache.has(key)) texCache.set(key, neon(txt, col, true));
+    const tall = Math.min(6, txt.length * 0.55 + 0.5);
+    const v = add(new THREE.Mesh(new THREE.PlaneGeometry(0.85, tall), additive(texCache.get(key)!, 2.2)));
+    v.position.set(side * (FRONT - 0.7), 3.6 + tall / 2 + rnd() * 4, z); v.userData.ground = false;
   }
   // holograms floating over the shops they belong to, slowly turning and flickering
   const holos: THREE.Mesh[] = [];
   for (const sh of o.shops) {
-    const h = add(new THREE.Mesh(new THREE.PlaneGeometry(5, 1.25), additive(neon(sh.name, sh.fg === '#202024' ? '#bfe9ff' : sh.fg, false), 1.8)));
-    h.position.set(sh.side * (FRONT - 2.2), 5.6 + FLOOR, sh.z); h.userData.ground = false; holos.push(h);
+    const h = add(new THREE.Mesh(new THREE.PlaneGeometry(8, 2), additive(neon(sh.name, sh.fg === '#202024' ? '#bfe9ff' : sh.fg, false), 1.8)));
+    h.position.set(sh.side * (FRONT - 3.8), 7.0 + FLOOR, sh.z); h.userData.ground = false; holos.push(h);
     const beam = add(new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.4, 16, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fe9ff).multiplyScalar(0.6), transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false })));
-    beam.position.set(sh.side * (FRONT - 2.2), 4.6 + FLOOR, sh.z); beam.rotation.x = Math.PI;
+    beam.position.set(sh.side * (FRONT - 3.8), 5.6 + FLOOR, sh.z); beam.scale.set(1.6, 1.4, 1.6); beam.rotation.x = Math.PI;
   }
   updates.push((_, t) => holos.forEach((h, i) => {
     h.rotation.y = Math.sin(t * 0.4 + i) * 0.5;
@@ -163,16 +168,16 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   const carM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25, metalness: 0.3, emissive: 0x223344, emissiveIntensity: 0.6 });
   const carI = new THREE.InstancedMesh(carG, carM, cars); carI.castShadow = rich; carI.userData.ground = false;
   const carLights = new THREE.InstancedMesh(new THREE.BoxGeometry(1.4, 0.1, 0.1), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe0b0).multiplyScalar(3), toneMapped: false }), cars);
-  const lanes = Array.from({ length: cars }, (_, i) => ({ x: (i % 4 - 1.5) * 4.5, y: 16 + (i % 3) * 5 + rnd() * 2, z: S + rnd() * (N - S), v: (i % 2 ? 1 : -1) * (10 + rnd() * 9) }));
+  const lanes = Array.from({ length: cars }, (_, i) => ({ x: (i % 4 - 1.5) * 4.5, y: 10 + (i % 3) * 3.5 + rnd() * 1.5, z: S + rnd() * (N - S), v: (i % 2 ? 1 : -1) * (10 + rnd() * 9) }));
   lanes.forEach((_, i) => carI.setColorAt(i, new THREE.Color().setHSL(rnd(), 0.35, 0.82)));
   const under = new THREE.InstancedMesh(new THREE.BoxGeometry(1.2, 0.05, 2.6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.5), toneMapped: false }), cars); add(under);
   add(carI); add(carLights);
   const droneG = mergeGeometries([new THREE.BoxGeometry(0.5, 0.12, 0.5).toNonIndexed(), ...[[-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35], [0.35, 0.35]].map(([x, z]) => new THREE.CylinderGeometry(0.18, 0.18, 0.03, 10).translate(x, 0.08, z).toNonIndexed())], false)!;
   const droneI = new THREE.InstancedMesh(droneG, new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.5, metalness: 0.6 }), drones); droneI.userData.ground = false;
   const droneL = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 6, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fffd4).multiplyScalar(3), toneMapped: false }), drones);
-  const dpaths = Array.from({ length: drones }, () => ({ cx: (rnd() - 0.5) * 14, cz: S + 10 + rnd() * (N - S - 20), r: 2 + rnd() * 6, y: 7 + rnd() * 6, w: 0.3 + rnd() * 0.5, p: rnd() * 6 }));
+  const dpaths = Array.from({ length: drones }, () => ({ cx: (rnd() - 0.5) * 12, cz: S + 10 + rnd() * (N - S - 20), r: 2 + rnd() * 5, y: 4.5 + rnd() * 4, w: 0.3 + rnd() * 0.5, p: rnd() * 6 }));
   add(droneI); add(droneL);
-  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(1, 1, 1), UP = new THREE.Vector3(0, 1, 0);
+  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(1.6, 1.6, 1.6), UP = new THREE.Vector3(0, 1, 0);
   updates.push((dt, t) => {
     lanes.forEach((l, i) => {
       l.z += l.v * dt; if (l.z > N + 30) l.z = S - 30; if (l.z < S - 30) l.z = N + 30;
@@ -214,6 +219,17 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     const k = (t * 0.25 + q.p) % 1; q.s.position.set(q.base.x + Math.sin(t + q.p * 9) * 0.15 * k, q.base.y + k * 1.6, q.base.z);
     q.s.scale.setScalar(0.3 + k * 0.9); q.s.material.opacity = 0.45 * (1 - k);
   }));
+
+  // ---- the hero: an orbital liner holding station above the spaceport, framed by the street from its first step ----
+  const hero = new THREE.Group(); add(hero); hero.position.set(-6, 70, S - 120); hero.rotation.set(0.08, 0.5, 0.12);
+  const heroHull = new THREE.MeshStandardMaterial({ color: 0xe9eef4, roughness: 0.3, metalness: 0.5, emissive: 0x22313f, emissiveIntensity: 0.3, fog: false });
+  const hb = new THREE.Mesh(new THREE.CapsuleGeometry(12, 110, 8, 32), heroHull); hb.rotation.x = Math.PI / 2; hero.add(hb);
+  const ringH = new THREE.Mesh(new THREE.TorusGeometry(26, 2.2, 12, 64), heroHull); ringH.position.z = 10; hero.add(ringH);
+  const ringGlow = new THREE.Mesh(new THREE.TorusGeometry(26, 0.6, 8, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.5), toneMapped: false, fog: false })); ringGlow.position.z = 10; hero.add(ringGlow);
+  for (let i = 0; i < 4; i++) { const sp = new THREE.Mesh(new THREE.BoxGeometry(1.2, 26, 1.2), heroHull); sp.position.z = 10; sp.rotation.z = (i * Math.PI) / 4; hero.add(sp); }
+  const eng = new THREE.Mesh(new THREE.CircleGeometry(9, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9fdcff).multiplyScalar(2.8), toneMapped: false, fog: false })); eng.position.z = -67; eng.rotation.y = Math.PI; hero.add(eng);
+  hero.traverse((x) => { x.userData.ground = false; });
+  updates.push((dt) => { ringH.rotation.z += dt * 0.05; ringGlow.rotation.z = ringH.rotation.z; });
 
   // ---- ships at the end of the street: shuttles rising from the pads and settling again ----
   const shipM = new THREE.MeshStandardMaterial({ color: 0xeef1f5, roughness: 0.3, metalness: 0.5 });
