@@ -25,6 +25,8 @@ export class Away {
   private pace = 1;
   /** Seconds after coming back during which interact is ignored. */
   quiet = 0;
+  private seen = new Set<number>();
+  private vista: { yaw: number; pitch: number; t: number } | null = null;
 
   constructor(private camera: THREE.PerspectiveCamera, private input: Input, private ui: UI, private detail: number, private show: (s: THREE.Scene | null) => void) {}
 
@@ -32,7 +34,7 @@ export class Away {
   enter(id: CrewId, location: string, done: () => void, job = 0) {
     const stage = make(location, t, job, this.detail);
     this.pace = 1;
-    this.stage = stage; this.who = id; this.onDone = done; this.location = location; this.done.clear(); this.busy = false;
+    this.stage = stage; this.who = id; this.onDone = done; this.location = location; this.done.clear(); this.busy = false; this.seen.clear(); this.vista = null;
     const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: (fx, fz, cx, cz) => stage.clearance?.(fx, fz, cx, cz) ?? 1 }, this.camera, this.detail, id);
     p.physics = { gravity: stage.gravity, jump: stage.jump, gaps: true };
     p.model.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; } });
@@ -70,6 +72,14 @@ export class Away {
     if (!s || !p) return;
     this.ui.setStageObjective(t(`away.${this.location}.place`), this.next?.label ?? null);
     p.update(dt, this.input, canMove && !this.busy, 100, this.pace);
+    // a hero view: the camera turns to it once, eases back, and the player can always look away
+    const v = s.vistas?.find((b, i) => !this.seen.has(i) && p.pos.x > b.x0 && p.pos.x < b.x1 && p.pos.z > b.z0 && p.pos.z < b.z1);
+    if (v) { this.seen.add(s.vistas!.indexOf(v)); this.vista = { ...v, t: v.secs }; }
+    if (this.vista) {
+      const k = 1 - Math.exp(-Math.min(dt, 0.25) * 4), V = this.vista;
+      p.yaw += Math.atan2(Math.sin(V.yaw - p.yaw), Math.cos(V.yaw - p.yaw)) * k; p.pitch += (V.pitch - p.pitch) * k;
+      if ((V.t -= dt) <= 0 || this.input.lookDX || this.input.lookDY) this.vista = null;
+    }
     s.update(dt, time);
     // falling off the ice costs nothing but the walk back
     if (p.pos.y < -30) { p.spawn(s.spawn.x, s.spawn.z, 0); this.ui.toast(t('away.fell')); }

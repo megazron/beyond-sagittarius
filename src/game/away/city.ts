@@ -7,6 +7,7 @@ import { loadTexture } from '../../core/assets';
 import type { AwayStage, AwayTask } from './stage';
 import type { StageBody } from './kit';
 import { buildFuture } from './cityfuture';
+import { buildMega } from './citymega';
 
 /**
  * Port Sahil, Taravel, 2189: the last normal afternoon. One long bazaar street from the flat (north-east corner)
@@ -135,7 +136,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   seed = 1234567; // the same city every time
   const rich = detail >= 1; // phones get fewer props, people and lights
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0xf2b88a, 38, 210); // warm evening haze gives the street depth
+  const HAZE = new THREE.Color(0x4a4468);
+  scene.fog = new THREE.Fog(HAZE, 45, 300); // blue-hour haze: the far city fades to violet
   const blocks: THREE.Box3[] = [];
   const add = <T extends THREE.Object3D>(o: T) => { scene.add(o); return o; };
   const solid = (m: THREE.Object3D) => { m.updateMatrixWorld(true); blocks.push(new THREE.Box3().setFromObject(m)); return m; };
@@ -149,16 +151,16 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // ---- sky: warm horizon to deep blue, the sun, and Taravel's ringed neighbour ----
   const skyMesh = add(new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { sun: { value: new THREE.Vector3(-0.38, 0.34, -0.86).normalize() } },
+    uniforms: { sun: { value: new THREE.Vector3(-0.3, 0.035, -0.95).normalize() } },
     vertexShader: 'varying vec3 d; void main(){ d = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
     fragmentShader: `varying vec3 d; uniform vec3 sun;
-      void main(){ float h = clamp(d.y, -0.1, 1.); vec3 top = vec3(.2, .38, .7), hor = vec3(1., .74, .48), low = vec3(.92, .64, .44);
-        vec3 c = mix(hor, top, pow(max(h, 0.), .55)); c = mix(low, c, smoothstep(-.1, .05, d.y));
+      void main(){ float h = clamp(d.y, -0.1, 1.); vec3 top = vec3(.035, .06, .17), hor = vec3(.98, .46, .4), low = vec3(.3, .22, .32);
+        vec3 c = mix(hor, mix(vec3(.42, .3, .55), top, smoothstep(.08, .5, h)), smoothstep(0., .14, h)); c = mix(low, c, smoothstep(-.1, .05, d.y));
         float s = max(dot(d, sun), 0.); c += vec3(1., .75, .45) * (pow(s, 700.) * 6. + pow(s, 10.) * .3);
         gl_FragColor = vec4(c, 1.); }`,
   })));
   // the renderer turns this sky into image-based light: shade reads as sky-lit, not black
-  scene.userData.skyForEnv = skyMesh; scene.userData.envIntensity = 1.6; scene.userData.ao = rich;
+  scene.userData.skyForEnv = skyMesh; scene.userData.envIntensity = 1.5; scene.userData.ao = rich;
   const planet = add(new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, depthWrite: false, transparent: true, opacity: 0.85, map: canvasTex(512, 512, (g) => {
     g.translate(256, 256); g.rotate(-0.35);
     g.strokeStyle = 'rgba(240,220,200,.45)'; g.lineWidth = 10; g.beginPath(); g.ellipse(0, 0, 230, 60, 0, Math.PI, 2 * Math.PI); g.stroke();
@@ -169,8 +171,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   planet.position.set(120, 150, -260); planet.scale.setScalar(150);
 
   // late afternoon: a low warm sun down the street, cool sky fill
-  add(new THREE.HemisphereLight(0xbfd4ff, 0xc8925f, 1.0)); // bounce off warm paving
-  const sun = new THREE.DirectionalLight(0xffb878, 3.2); // golden hour, low, straight down the street from the spaceport end
+  add(new THREE.HemisphereLight(0x8a96d8, 0xb07a58, 1.35)); // the city's own glow: violet sky above, warm street light bouncing below // bounce off warm paving
+  const sun = new THREE.DirectionalLight(0xff9a70, 1.4); // the last of the sun, a rim from the spaceport end: the city is the light now
   sun.position.set(-30, 30, -70); sun.castShadow = true;
   sun.shadow.mapSize.set(rich ? 2048 : 1024, rich ? 2048 : 1024); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
   Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 90, bottom: -90, far: 240 });
@@ -201,7 +203,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const ground = add(new THREE.Mesh(strip(xs, 2.5), paving)); ground.receiveShadow = true; ground.userData.ground = true;
   // the road and the kerbs: the same vertices, drawn over in depth instead of lifted, never something to stand on
   const over = (m: THREE.MeshStandardMaterial, k = 2) => Object.assign(m, { polygonOffset: true, polygonOffsetFactor: -k, polygonOffsetUnits: -k });
-  const roadM = over(new THREE.MeshStandardMaterial({ color: 0x9a948e, roughness: 0.92 })); tex('road', [roadM]);
+  const roadM = over(new THREE.MeshStandardMaterial({ color: 0x5a5658, roughness: 0.32, metalness: 0.15 })); // wet after the evening wash tex('road', [roadM]);
   const road = add(new THREE.Mesh(strip([-4, 4], 4), roadM)); road.receiveShadow = true; road.userData.ground = false;
   const kerbM = over(new THREE.MeshStandardMaterial({ color: 0xc8c0b2, roughness: 0.8 }));
   for (const sd of [-1, 1]) { const kb = add(new THREE.Mesh(strip(sd < 0 ? [-4.35, -4] : [4, 4.35], 1), kerbM)); kb.receiveShadow = true; kb.userData.ground = false; }
@@ -218,7 +220,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   facades.forEach((f, i) => tex(f.set, facadeMats[i]));
   const parapetM = new THREE.MeshStandardMaterial({ color: 0xd8d0c4, roughness: 0.9 }); tex('parapet', [parapetM], [1, 1], '512');
   const glassM = new THREE.MeshStandardMaterial({ color: 0x1b2430, roughness: 0.08, metalness: 0.6 });
-  const litM = new THREE.MeshStandardMaterial({ color: 0x2a1c10, emissive: 0xffc37a, emissiveIntensity: 1.1, roughness: 0.3 });
+  const litM = new THREE.MeshStandardMaterial({ color: 0x2a1c10, emissive: 0xffc37a, emissiveIntensity: 1.8, roughness: 0.3 });
   const frameM = new THREE.MeshStandardMaterial({ color: 0xece4d6, roughness: 0.7 });
   const tankM = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.6 });
   const railM = new THREE.MeshStandardMaterial({ color: 0x3b3f44, roughness: 0.5, metalness: 0.6 });
@@ -355,7 +357,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
 
   // ---- pools of light on the paving: under the lamps and in front of every lit shop ----
   const poolTex = canvasTex(128, 128, (g) => { const r = g.createRadialGradient(64, 64, 4, 64, 64, 62); r.addColorStop(0, 'rgba(255,200,130,.9)'); r.addColorStop(1, 'rgba(255,200,130,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128); });
-  const poolM = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 });
+  const poolM = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 });
   const pool = (x: number, z: number, r: number) => { const m = add(new THREE.Mesh(new THREE.PlaneGeometry(r * 2, r * 2), poolM)); m.rotation.x = -Math.PI / 2; m.position.set(x, hx(x) + 0.01, z); m.userData.ground = false; };
   for (const sh of SHOPS) pool(sh.side * (FRONT - 1.6), sh.z, 3.6);
 
@@ -364,6 +366,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     const lz = z + (sd > 0 ? 7 : 0);
     place(rnd() < 0.5 ? 'street_lamp_01' : 'street_lamp_02', sd * 4.8, FLOOR, lz, sd > 0 ? -Math.PI / 2 : Math.PI / 2);
     pool(sd * 4.6, lz, 2.6);
+    const head = add(new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd9a0).multiplyScalar(3), toneMapped: false }))); head.position.set(sd * 4.2, 4.5, lz);
     blocks.push(new THREE.Box3(new THREE.Vector3(sd * 4.8 - 0.2, 0, lz - 0.2), new THREE.Vector3(sd * 4.8 + 0.2, 5, lz + 0.2)));
   }
   // the chai stall: a brass pot on a table, the tea set, plastic chairs that have seen things
@@ -542,6 +545,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
 
   const future = buildFuture(scene, { rich, N, S, FRONT, FLOOR, shops: SHOPS });
   blocks.push(...future.solids);
+  const mega = buildMega(scene, { rich, N, S, FRONT, haze: HAZE });
   scene.traverse((o) => { if (o !== ground && o.userData.ground === undefined) o.userData.ground = false; });
   // people stood in threes, talking, on the pavements
   const groups: [number, number][] = rich ? [[6.6, 34], [-6.4, 12], [6.4, -8], [-6.6, -36], [6.2, -58]] : [[6.6, 34], [-6.6, -36]];
@@ -574,6 +578,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
 
   return {
     scene, gravity: 22, jump: 6.2, spawn: new THREE.Vector3(12.4, FLOOR, 68.4), tasks, people, clearance,
+    // the hero views: stepping out of the flat, and the run to the gate
+    vistas: [{ x0: 4, x1: FRONT - 0.4, z0: 63, z1: 69, yaw: 0, pitch: 0.42, secs: 4 }, { x0: -8, x1: 8, z0: -40, z1: -30, yaw: 0, pitch: 0.3, secs: 3.5 }],
     height: (x) => hx(x),
     collide(p, r) {
       for (const b of blocks) {
@@ -604,6 +610,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       }
       ringLight.rotation.z += dt;
       future.update(dt, time);
+      mega.update(dt, time);
     },
     dispose() { scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry.dispose(); }); },
   };

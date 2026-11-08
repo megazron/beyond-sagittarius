@@ -98,7 +98,7 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   const words: [string, string][] = [['CHAI', '#ffb347'], ['MEHNDI', '#ff6ec7'], ['BIRYANI', '#7cff9a'], ['RISHTA.AI', '#7fd8ff'], ['DAWAI', '#5fffd0'], ['SNAPGRAM', '#ff5d8f'],
     ['PAAN', '#b6ff6e'], ['CHAAT', '#ffd36e'], ['SIM CARDS', '#9fd8ff'], ['TAILOR', '#ff9f6e'], ['HOVER REPAIR', '#6ef7ff'], ['JALEBI', '#ffb36e'], ['GOLD', '#ffe36e'], ['NEURO SPA', '#c79fff']];
   const texCache = new Map<string, THREE.Texture>();
-  for (let i = 0, n = rich ? 26 : 12; i < n; i++) {
+  for (let i = 0, n = rich ? 54 : 18; i < n; i++) {
     const [txt, col] = words[i % words.length], side = i % 2 ? 1 : -1, z = N - 8 - (i / n) * (N - S - 16) + (rnd() - 0.5) * 4;
     const key = txt + col; if (!texCache.has(key)) texCache.set(key, neon(txt, col, true));
     const tall = Math.min(6, txt.length * 0.55 + 0.5);
@@ -106,16 +106,18 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     v.position.set(side * (FRONT - 0.7), 3.6 + tall / 2 + rnd() * 4, z); v.userData.ground = false;
   }
   // holograms floating over the shops they belong to, slowly turning and flickering
-  const holos: THREE.Mesh[] = [];
+  const holos: THREE.Group[] = [];
   for (const sh of o.shops) {
-    const h = add(new THREE.Mesh(new THREE.PlaneGeometry(8, 2), additive(neon(sh.name, sh.fg === '#202024' ? '#bfe9ff' : sh.fg, false), 1.8)));
+    // two one-sided faces back to back: the name reads the right way from both ends of the street
+    const hm = additive(neon(sh.name, sh.fg === '#202024' ? '#bfe9ff' : sh.fg, false), 1.8); hm.side = THREE.FrontSide;
+    const h = add(new THREE.Group()); for (const ry of [0, Math.PI]) { const f = new THREE.Mesh(new THREE.PlaneGeometry(8, 2), hm); f.rotation.y = ry; f.userData.ground = false; h.add(f); }
     h.position.set(sh.side * (FRONT - 3.8), 7.0 + FLOOR, sh.z); h.userData.ground = false; holos.push(h);
     const beam = add(new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.4, 16, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fe9ff).multiplyScalar(0.6), transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false })));
     beam.position.set(sh.side * (FRONT - 3.8), 5.6 + FLOOR, sh.z); beam.scale.set(1.6, 1.4, 1.6); beam.rotation.x = Math.PI;
   }
   updates.push((_, t) => holos.forEach((h, i) => {
     h.rotation.y = Math.sin(t * 0.4 + i) * 0.5;
-    (h.material as THREE.MeshBasicMaterial).opacity = 0.75 + 0.25 * Math.sin(t * 23 + i * 7) * (Math.sin(t * 0.7 + i) > 0.9 ? 1 : 0.1);
+    ((h.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.75 + 0.25 * Math.sin(t * 23 + i * 7) * (Math.sin(t * 0.7 + i) > 0.9 ? 1 : 0.1);
   }));
 
   // ---- ad screens on the towers: they change every few seconds ----
