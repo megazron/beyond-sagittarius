@@ -1039,5 +1039,10 @@
   "away.moon.ember": "Feed the ember",
   "away.clouds.place": "Sulva, the cloud deck",
   "away.clouds.patch": "Patch the float",
-  "away.clouds.relay": "Raise the relay"
+  "away.clouds.relay": "Raise the relay",
+  "away.ring.intro": "Tarnkin blood doesn't freeze, it just gets slow. So I got slow. The pod cracks ice into air. I've been breathing a boulder for two days.",
+  "away.scree.intro": "No air out here. Ortek plates seal when I hold my breath, and I can hold it a long time. Long enough to build a door, anyway.",
+  "away.wreck.intro": "The lichen in my skin dried me out like seeds in a packet. I wake when the sun comes round. Eleven minutes. Then I sleep again.",
+  "away.moon.intro": "Korrath don't need oxygen. We burn what Titan's sky is made of. This moon's sky is the same. It tastes like home, which is the worst part.",
+  "away.clouds.intro": "Air floats in this atmosphere. So does my pod, and so do I. Fifty kilometres of cloud under me and no signal. Iconic."
 }

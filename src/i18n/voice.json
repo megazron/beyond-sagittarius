@@ -296,6 +296,11 @@
     "mz.br.rec.mercy": "megazron",
     "mz.br.rec.nerve": "megazron",
     "mz.br.rec.humour": "megazron",
-    "mz.br.rec.none": "megazron"
+    "mz.br.rec.none": "megazron",
+    "away.ring.intro": "explorer",
+    "away.scree.intro": "builder",
+    "away.wreck.intro": "medic",
+    "away.moon.intro": "strong",
+    "away.clouds.intro": "social"
   }
 }

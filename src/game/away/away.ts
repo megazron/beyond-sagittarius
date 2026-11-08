@@ -28,7 +28,7 @@ export class Away {
 
   enter(id: CrewId, location: string, done: () => void) {
     const stage = make(location, t);
-    this.stage = stage; this.who = id; this.onDone = done; this.done.clear(); this.busy = false;
+    this.stage = stage; this.who = id; this.onDone = done; this.location = location; this.done.clear(); this.busy = false;
     const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: () => 1 }, this.camera, this.detail, id);
     p.physics = { gravity: stage.gravity, jump: stage.jump, gaps: true };
     stage.scene.add(p.model.root);
@@ -36,6 +36,8 @@ export class Away {
     this.player = p; this.active = true;
     this.show(stage.scene);
     this.ui.setPrompt(null);
+    // why they are alive at all, in their own words, the moment you arrive
+    window.setTimeout(() => { if (this.who === id) this.ui.say(`away.${location}.intro`, `crew.${id}.name`, 6); }, 900);
   }
 
   private open(k: AwayTask) { return !this.done.has(k.id) && (k.need ?? []).every((n) => this.done.has(n)); }
@@ -47,13 +49,14 @@ export class Away {
   /** Test hook: stand beside a task. */
   teleport(x: number, z: number) { this.player?.spawn(x, z, 0); }
 
-  /** The level the HUD is showing, so the quest line can name the job in hand. */
+  /** The level the HUD returns to. */
   level = 1;
+  private location = '';
 
   update(dt: number, time: number, canMove: boolean) {
     const s = this.stage, p = this.player;
     if (!s || !p) return;
-    this.ui.setObjective(this.level, this.next?.label ?? null);
+    this.ui.setStageObjective(t(`away.${this.location}.place`), this.next?.label ?? null);
     p.update(dt, this.input, canMove && !this.busy, 100, 1);
     s.update(dt, time);
     // falling off the ice costs nothing but the walk back

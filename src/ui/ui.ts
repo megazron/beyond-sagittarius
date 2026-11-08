@@ -212,6 +212,7 @@ export class UI implements CineUI {
   }
 
   setObjective(level: number, progress: string | null) {
+    if (level < 0) return; // a stage panel repaints itself every frame
     const prev = this.objectiveState;
     this.objectiveState = { level, progress };
     if (prev.level !== level || prev.progress !== progress) this.flare();
@@ -224,6 +225,16 @@ export class UI implements CineUI {
     $('obj-title').textContent = t(`level.${level}.title`);
     $('obj-desc').textContent = level <= PLAYABLE_LEVELS ? t(`level.${level}.desc`) : t('level.locked');
     $('obj-progress').textContent = progress ?? '';
+  }
+
+  /** On someone else's stage: where they are, and the job in hand. */
+  setStageObjective(place: string, task: string | null) {
+    const prev = this.objectiveState;
+    this.objectiveState = { level: -1, progress: task };
+    if (prev.level !== -1 || prev.progress !== task) this.flare();
+    $('obj-title').textContent = place;
+    $('obj-desc').textContent = '';
+    $('obj-progress').textContent = task ?? '';
   }
 
   private lastInv: { inv: Record<string, number>; tools: string[] } = { inv: {}, tools: [] };
