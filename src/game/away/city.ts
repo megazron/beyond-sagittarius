@@ -531,6 +531,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   for (const f of FRIENDS) person(f.id, createCharacter(f.id, detail), f.x, f.z, f.yaw, f.pose);
   const someone = (lineage: PlayerLook['lineage'], i: number) => createCharacter('scientist', detail * 0.8, { ...defaultLook(), ...randomLook({ name: '', gender: i % 2 ? 'f' : 'm' }), lineage, ...LINEAGES[lineage] } as PlayerLook);
   FOLK.forEach((f, i) => person(f.id, someone(f.lineage, i), f.x, f.z, f.yaw, f.pose));
+  // Mir: a chai stall regular in a three-piece, the same man as the suit skin and the Drexon cameo
+  person('mir', createCharacter('strong', detail, undefined, 'suit'), 5.0, 15.4, Math.PI / 2 + 0.5, 'idle');
   // walkers: up and down the pavements' outer edge, clear of the stalls
   const lineages = Object.keys(LINEAGES) as PlayerLook['lineage'][];
   for (let i = 0, n = rich ? 16 : 5; i < n; i++) {

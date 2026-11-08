@@ -793,6 +793,7 @@ window.addEventListener('resize', () => {
   swimProbe() { return { x: player.pos.x, y: player.pos.y, depth: -world.terrain.height(player.pos.x, player.pos.z), swimming: player.swimming }; },
   awayLeave() { game?.away?.leave(); },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
+  awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
   cineTime() { return cine.time; },
   get stagePlaying() { return cine.staged; },
   gameScene(id: 'rescue' | 'camp' | 'beacon') { game?.debugScene(id); },

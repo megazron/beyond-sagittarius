@@ -45,6 +45,6 @@ def scalp(P):
 def brows(P):
     """0..1: heavy straight brows, thicker towards the nose."""
     x, y, z = np.abs(P[..., 0]), P[..., 1], P[..., 2]
-    mid = np.interp(x, [.08, .3, .5, .66], [7.47, 7.54, 7.55, 7.46])
+    mid = np.interp(x, [.08, .3, .5, .66], [7.50, 7.53, 7.53, 7.50])  # straight, not arched
     half = np.interp(x, [.08, .3, .66], [.05, .042, .012])
     return _step(.08, .12, x) * (1 - _step(.62, .68, x)) * (1 - _step(half * .7, half * 1.25, np.abs(y - mid))) * _step(.7, .9, z)

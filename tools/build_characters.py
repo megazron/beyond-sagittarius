@@ -532,7 +532,7 @@ def fur_shells(V, N, T, TU, UV, W, morphs, neutral, layers):
     """Beard and close-cut scalp as stacked shells of the real skin: same weights and same morphs,
     so the beard rides the jaw and every mouth shape. Strand map alpha-tests each layer."""
     be, sc = suit.beard(neutral), suit.scalp(neutral)
-    depth = np.maximum(be * 0.0135, sc * 0.0065)
+    depth = np.maximum(be * 0.0165, sc * 0.0065)  # a full, dense beard
     sel = (depth[T] > 0.0004).any(1)
     parts = []
     for i in range(1, layers + 1):

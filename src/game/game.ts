@@ -63,6 +63,7 @@ export class Game {
     }, job);
   }
 
+  private mirTurn = 1;
   /** The playable prologue: Port Sahil before the trip. Each list item and each person speaks when you get there. */
   prologue(save: SaveData, done: () => void) {
     if (!this.away) return;
@@ -71,7 +72,9 @@ export class Game {
     this.away.onTask = (id, go) => {
       const who = id.startsWith('talk.') ? id.slice(5) : null;
       const crew = who && ['strong', 'medic', 'explorer', 'builder', 'social'].includes(who);
-      if (who) this.ui.say(crew ? `city.friend.${who}` : `city.npc.${who}`, crew ? `crew.${who}.name` : `city.who.${who}`, 4.5);
+      // Mir has two things to say, in turn
+      const line = who === 'mir' ? `city.npc.mir${(this.mirTurn = (this.mirTurn + 1) % 2) ? '' : '2'}` : `city.npc.${who}`;
+      if (who) this.ui.say(crew ? `city.friend.${who}` : line, crew ? `crew.${who}.name` : `city.who.${who}`, 5);
       else this.ui.say(`city.done.${id}`, 'crew.scientist.name', 4.5);
       go();
     };

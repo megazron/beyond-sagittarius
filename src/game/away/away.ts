@@ -59,7 +59,7 @@ export class Away {
   get grounded() { return !!this.player?.onGround; }
 
   /** Test hook: stand beside a task. */
-  teleport(x: number, z: number) { this.player?.spawn(x, z, 0); }
+  teleport(x: number, z: number, yaw = 0) { this.player?.spawn(x, z, yaw); }
 
   /** The level the HUD returns to. */
   level = 1;
