@@ -6,6 +6,7 @@ import { LINEAGES, randomLook, PlayerLook, defaultLook } from '../../characters/
 import { loadTexture } from '../../core/assets';
 import type { AwayStage, AwayTask } from './stage';
 import type { StageBody } from './kit';
+import { buildFuture } from './cityfuture';
 
 /**
  * Port Sahil, Taravel, 2189: the last normal afternoon. One long bazaar street from the flat (north-east corner)
@@ -148,7 +149,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // ---- sky: warm horizon to deep blue, the sun, and Taravel's ringed neighbour ----
   add(new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { sun: { value: new THREE.Vector3(-0.5, 0.2, -0.84).normalize() } },
+    uniforms: { sun: { value: new THREE.Vector3(-0.42, 0.62, -0.62).normalize() } },
     vertexShader: 'varying vec3 d; void main(){ d = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
     fragmentShader: `varying vec3 d; uniform vec3 sun;
       void main(){ float h = clamp(d.y, -0.1, 1.); vec3 top = vec3(.2, .38, .7), hor = vec3(1., .74, .48), low = vec3(.92, .64, .44);
@@ -166,9 +167,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   planet.position.set(120, 150, -260); planet.scale.setScalar(150);
 
   // late afternoon: a low warm sun down the street, cool sky fill
-  add(new THREE.HemisphereLight(0xbcd6ff, 0x8a6a4a, 0.85));
-  const sun = new THREE.DirectionalLight(0xffcf9a, 2.8);
-  sun.position.set(-40, 34, -60); sun.castShadow = true;
+  add(new THREE.HemisphereLight(0xcfe0ff, 0xb08a64, 1.5));
+  const sun = new THREE.DirectionalLight(0xffd6a6, 3.4);
+  sun.position.set(-34, 62, -50); sun.castShadow = true;
   sun.shadow.mapSize.set(rich ? 2048 : 1024, rich ? 2048 : 1024); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
   Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 90, bottom: -90, far: 240 });
   add(sun); add(sun.target);
@@ -261,7 +262,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         // ground floor: a lit shopfront where the list sends you, roller shutters elsewhere
         const shop = shopAt(side, z, z - len);
         if (shop) {
-          box(0.3, 3.4, 6.6, frameM, face + out * 0.15, 1.7 + FLOOR, shop.z);
+          for (const dz of [-3.15, 3.15]) box(0.3, 3.4, 0.3, frameM, face + out * 0.15, 1.7 + FLOOR, shop.z + dz);
+          box(0.3, 0.3, 6.6, frameM, face + out * 0.15, 3.25 + FLOOR, shop.z); box(0.35, 0.25, 6.6, frameM, face + out * 0.17, 0.12 + FLOOR, shop.z);
           plane(6, 2.7, lit(shelves(shop.hue), 0.55), face - out * 0.4, 1.6 + FLOOR, shop.z, out > 0 ? Math.PI / 2 : -Math.PI / 2);
           plane(6, 2.7, new THREE.MeshStandardMaterial({ color: 0x9fb8c8, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.4 }), face + out * 0.33, 1.6 + FLOOR, shop.z, out > 0 ? Math.PI / 2 : -Math.PI / 2);
           plane(6.2, 1.15, lit(sign(shop.name, shop.bg, shop.fg)), face + out * 0.32, 3.85 + FLOOR, shop.z, out > 0 ? Math.PI / 2 : -Math.PI / 2);
@@ -274,8 +276,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         // an awning over the pavement: striped cloth, tilted down to the street
         const am = new THREE.MeshStandardMaterial({ map: awnings[k % awnings.length].clone(), side: THREE.DoubleSide, roughness: 0.9 });
         am.map!.repeat.set(1, (len - 1.4) / 2); am.map!.needsUpdate = true;
-        const aw = add(new THREE.Mesh(new THREE.PlaneGeometry(2.4, len - 1.4), am));
-        aw.rotation.set(-Math.PI / 2, out * 0.25, 0, 'XYZ'); aw.position.set(face + out * 1.15, 3.05 + FLOOR, zc); aw.castShadow = true;
+        const aw = add(new THREE.Mesh(new THREE.PlaneGeometry(1.7, len - 1.4), am));
+        aw.rotation.set(-Math.PI / 2, out * 0.3, 0, 'XYZ'); aw.position.set(face + out * 0.8, 3.75 + FLOOR, zc); aw.castShadow = true;
       }
       z -= len; k++;
     }
@@ -382,11 +384,12 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     const tram = add(new THREE.Group());
     const liv = new THREE.MeshStandardMaterial({ color: 0x0f7d74, roughness: 0.45, metalness: 0.3 }), cream = new THREE.MeshStandardMaterial({ color: 0xf4ead2, roughness: 0.5 });
     const part = (g: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = true; tram.add(o); return o; };
-    part(new THREE.BoxGeometry(2.6, 2.4, 13), liv, 0, 1.75, 0);
-    part(new THREE.BoxGeometry(2.64, 0.9, 12.4), glassM, 0, 2.15, 0);
-    part(new THREE.BoxGeometry(2.4, 0.3, 12.6), cream, 0, 3.05, 0);
-    part(new THREE.BoxGeometry(2.2, 0.06, 12), new THREE.MeshBasicMaterial({ color: 0x8ff7ff }), 0, 0.42, 0);
-    part(new THREE.BoxGeometry(0.06, 2.0, 1.3), cream, -1.33, 1.5, 3);
+    const capsule = new THREE.Mesh(new THREE.CapsuleGeometry(1.3, 10.4, 6, 16), new THREE.MeshStandardMaterial({ color: 0xf2f4f6, roughness: 0.25, metalness: 0.5 })); capsule.rotation.x = Math.PI / 2; capsule.position.y = 1.9; capsule.castShadow = true; tram.add(capsule);
+    void liv;
+    const band = new THREE.Mesh(new THREE.CapsuleGeometry(1.32, 9.4, 4, 16), new THREE.MeshStandardMaterial({ color: 0x223344, emissive: 0xffe6c0, emissiveIntensity: 0.4, roughness: 0.1 })); band.rotation.x = Math.PI / 2; band.position.y = 2.15; band.scale.set(1, 1, 0.35); tram.add(band);
+    part(new THREE.BoxGeometry(1.6, 0.08, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.5), toneMapped: false }), 0, 0.5, 0);
+    part(new THREE.BoxGeometry(0.08, 2.0, 1.3), new THREE.MeshStandardMaterial({ color: 0x0f7d74, roughness: 0.4 }), -1.3, 1.6, 3);
+    void cream;
     tram.position.set(-2.2, 0, -9);
     blocks.push(new THREE.Box3(new THREE.Vector3(-3.5, 0, -15.5), new THREE.Vector3(-0.9, 3.5, -2.5)));
     const shelter = add(new THREE.Group()); shelter.position.set(-6.8, FLOOR, -6);
@@ -403,8 +406,21 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const gate = add(new THREE.Mesh(new THREE.TorusGeometry(9, 0.6, 12, 48, Math.PI), new THREE.MeshStandardMaterial({ color: 0xdfe6ee, metalness: 0.6, roughness: 0.3 })));
   gate.position.set(0, 0, S + 1); gate.castShadow = true;
   plane(8, 1.2, lit(sign('SPACEPORT · BOARDING', '#10233d', '#9fd8ff'), 0.7), 0, 7.2, S + 1.05, 0);
-  const liner = add(new THREE.Mesh(new THREE.CapsuleGeometry(14, 60, 8, 24), new THREE.MeshStandardMaterial({ color: 0xf4f6fa, metalness: 0.5, roughness: 0.35 })));
-  liner.rotation.z = Math.PI / 2; liner.position.set(0, 26, S - 70);
+  {
+    const apron = add(new THREE.Mesh(new THREE.PlaneGeometry(160, 120), over(new THREE.MeshStandardMaterial({ color: 0xbfc3c6, roughness: 0.85 }), 1)));
+    apron.rotation.x = -Math.PI / 2; apron.position.set(0, 0, S - 62); apron.receiveShadow = true; apron.userData.ground = false;
+    const hull = new THREE.MeshStandardMaterial({ color: 0xf6f7fa, metalness: 0.35, roughness: 0.3 }), trim = new THREE.MeshStandardMaterial({ color: 0x0f7d74, emissive: 0x2ff0e0, emissiveIntensity: 0.6 });
+    const liner = add(new THREE.Group()); liner.position.set(10, 14, S - 70); liner.rotation.y = 0.35;
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(9, 70, 8, 32), hull); body.rotation.x = Math.PI / 2; body.castShadow = true; liner.add(body);
+    const stripe = new THREE.Mesh(new THREE.CylinderGeometry(9.08, 9.08, 70, 32, 1, true, -0.25, 0.5), trim); stripe.rotation.x = Math.PI / 2; liner.add(stripe);
+    for (const sx of [-1, 1]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(14, 0.8, 18), hull); fin.position.set(sx * 13, -3, 22); fin.rotation.z = sx * -0.15; fin.castShadow = true; liner.add(fin); }
+    for (let i = 0; i < 18; i++) { const w = new THREE.Mesh(new THREE.CircleGeometry(0.7, 12), new THREE.MeshBasicMaterial({ color: 0xffe2b0 })); w.position.set(-9.05, 1.5, -30 + i * 3.4); w.rotation.y = -Math.PI / 2; liner.add(w); }
+    const term = new THREE.MeshStandardMaterial({ color: 0xdfe4ea, metalness: 0.2, roughness: 0.4 });
+    box(30, 8, 10, term, -26, 4, S - 30); plane(28, 3, glassM, -26, 4.5, S - 24.9, 0);
+    plane(10, 1.4, lit(sign('TERMINAL 2 · TARAVEL', '#10233d', '#9fd8ff'), 0.7), -26, 9.0, S - 24.9, 0);
+    const ramp = add(new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 38), term)); ramp.position.set(4, 5.5, S - 40); ramp.rotation.x = -0.27; ramp.castShadow = true;
+    for (let i = 0; i < 6; i++) { const l = add(new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), new THREE.MeshBasicMaterial({ color: 0x8ff7ff }))); l.position.set(i % 2 ? 6 : 2, 0.3 + (i >> 1) * 3.5, S - 22 - (i >> 1) * 12); }
+  }
 
   // ---- people ----
   const people: CityPerson[] = [];
@@ -424,6 +440,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     person(`walker${i}`, someone(lineages[i % lineages.length], i + 3), x, za + rnd() * (zb - za), 0, 'idle', { z0: za, z1: zb, dir: rnd() < 0.5 ? 1 : -1, speed: 1.1 + rnd() * 0.5 });
   }
 
+  const future = buildFuture(scene, { rich, N, S, FRONT, FLOOR, shops: SHOPS });
+  scene.traverse((o) => { if (o !== ground && o.userData.ground === undefined) o.userData.ground = false; });
   const tasks: AwayTask[] = TASKS.map((x) => ({ id: x.id, pos: new THREE.Vector3(x.x, hx(x.x), x.z), radius: x.r ?? 1.8, label: label(`city.task.${x.id}`), need: x.need }));
   // townsfolk and friends answer whenever you like; they never count towards leaving
   for (const p of people) if (!p.walk) tasks.push({ id: `talk.${p.id}`, pos: p.pos, radius: 1.6, label: label('city.talk'), optional: true, repeat: true });
@@ -476,6 +494,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         } else { q.phase += dt; q.fig.animate(q.pose, q.phase, 0, time, dt); }
       }
       ringLight.rotation.z += dt;
+      future.update(dt, time);
     },
     dispose() { scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry.dispose(); }); },
   };
