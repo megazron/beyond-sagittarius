@@ -6,8 +6,9 @@ import type { UI } from '../../ui/ui';
 import { t } from '../../i18n';
 import type { AwayStage, AwayTask } from './stage';
 import { buildStage, STAGES } from './kit';
+import { buildCity } from './city';
 
-const make = (loc: string, label: (k: string) => string, job: number) => buildStage(loc, STAGES[loc], label, job);
+const make = (loc: string, label: (k: string) => string, job: number, detail: number) => (loc === 'city' ? buildCity(label, detail) : buildStage(loc, STAGES[loc], label, job));
 
 /** Playing someone else, somewhere else: their stage, their tasks, the same controls on every device. */
 export class Away {
@@ -29,7 +30,7 @@ export class Away {
 
   /** `job`: 0 for their story, a level number for that level's work. */
   enter(id: CrewId, location: string, done: () => void, job = 0) {
-    const stage = make(location, t, job);
+    const stage = make(location, t, job, this.detail);
     this.pace = 1;
     this.stage = stage; this.who = id; this.onDone = done; this.location = location; this.done.clear(); this.busy = false;
     const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: () => 1 }, this.camera, this.detail, id);
@@ -50,10 +51,10 @@ export class Away {
     if (!job) window.setTimeout(() => { if (this.who === id) this.ui.say(`away.${location}.intro`, `crew.${id}.name`, 6); }, 900);
   }
 
-  private open(k: AwayTask) { return !this.done.has(k.id) && (k.need ?? []).every((n) => this.done.has(n)); }
+  private open(k: AwayTask) { return (k.repeat || !this.done.has(k.id)) && (k.need ?? []).every((n) => this.done.has(n)); }
 
   /** The next thing to do: what the quest line and marker point at. */
-  get next() { return this.stage?.tasks.find((k) => this.open(k)) ?? null; }
+  get next() { return this.stage?.tasks.find((k) => !k.optional && this.open(k)) ?? null; }
   get position() { return this.player?.pos ?? null; }
   get grounded() { return !!this.player?.onGround; }
 
@@ -82,7 +83,7 @@ export class Away {
     k.run?.();
     const go = () => {
       this.done.add(k.id); this.busy = false;
-      if (this.stage!.tasks.every((x) => this.done.has(x.id))) this.leave();
+      if (this.stage!.tasks.every((x) => x.optional || this.done.has(x.id))) this.leave();
     };
     if (this.onTask) this.onTask(k.id, go); else go();
   }

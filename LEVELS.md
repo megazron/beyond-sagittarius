@@ -3,6 +3,61 @@
 Real status of every level. Update it in the same commit as the level.
 Done means objectives, world content, NPCs, cutscene, dubbing, codex and smoke test.
 
+## Prologue: Port Sahil (designed, being built)
+
+Status: design and first code, behind `?prologue=1` until it is good enough to replace the old opening. Not in the shipped flow yet.
+
+**Title card:** black, one line, nothing else: **TARAVEL · 2189**. Taravel is the hub world where the five lineages and ours first settled side by side. None of the six has ever stood on Earth (`dlg.10.4`, `mz.ch1.2`), and it is home to all of them. The year is the one the game already uses (`cine.year`).
+
+**The city:** Port Sahil, Taravel's spaceport town. *Sahil* means shore in Urdu and Hindi: the last shore before space. It is warm late afternoon. There is one walkable main street, the Bazaar, about 140 m long, with lanes off it. It runs from the six friends' shared flat at the north end to the spaceport gate at the south end, where the liner waits. Hover-autos, cricket in a side lane, washing lines, holo-ads, chai steam. Everything is flat paving with kerbs and steps, built on one height function like the stages, so the ground test covers it.
+
+**Shops (parodies):**
+
+| Shop | What happens there |
+| --- | --- |
+| Lamazon Orbit | Parcel lockers. Nuvexa's "sale" ticket for the trip came from here (`op.12`). The player collects her parcel. |
+| Capple Store | "Genius Booth". Zenvik's cracked phone is ready, at a price the clerk says with a straight face. |
+| Chai Cosmos | Chai stall. Uncle keeps a tab, and Skyvra keeps a ledger of who owes her snacks. |
+| Biryani Supernova | Dhaba with a queue. Draxum is in it, and crying at the holo-advert above it. |
+| Dawai Dome | Pharmacy. Lyrra buys "three kinds of burn cream" (`op.8`). |
+| Pixel Mehndi | Salon and phone covers. Where the rishta aunty lurks. |
+
+**The six, doing their normal things when you arrive:**
+- **Draxum:** in the biryani queue, then carrying everyone's luggage.
+- **Lyrra:** at the pharmacy, politely terrifying the pharmacist.
+- **Skyvra:** at Chai Cosmos, collecting snack debts.
+- **Bolzar:** fixing the tram stop's door. "It'll hold."
+- **Nuvexa:** filming a Snapgram reel at the fountain.
+- **Zenvik** (the player): late, with a list.
+
+**The player's list. It is the tutorial: every step teaches one control on every device.**
+
+1. **Ammi calls (look, move).** The day opens in the flat, packing. Ammi asks if you ate. Eat the paratha on the counter.
+2. **Pack (interact, carry).** Pick up the charger, the jacket ("tell her I wore the jacket") and the snacks. Your bag shows in the inventory (menu).
+3. **Capple Store:** pick up the phone. This is the first conversation with a shop NPC.
+4. **Lamazon locker:** collect Nuvexa's parcel. Inside is a travel adapter and a suspicious amount of glitter.
+5. **Chai Cosmos:** settle up with Skyvra. Your first choice: pay the snack debt, or argue it. She remembers.
+6. **Tram stop:** hold the door while Bolzar fixes it (hold interact). "It'll hold." It does not, quite.
+7. **The fountain:** Nuvexa's ring light is somewhere in the square. Find it with the marker and the compass.
+8. **Run (sprint, jump).** The liner's boarding call. Sprint the Bazaar, jump the cricket kids' stumps and the chai crates, and reach the gate as the others arrive one by one.
+
+At the gate the six walk up the ramp together. Then fade to black, then MegaZroN (rendered), then the deck film onward (rendered).
+
+**People:** about 25 townsfolk built from the custom-body system, each with a one-line reply on interact, in Gen Z and desi voice:
+- Chai uncle: "Beta, chai is free, the opinions cost extra."
+- Rishta aunty: "So handsome, so late, so single."
+- A delivery drone that apologises.
+- The cricket kids, the hover-auto driver, the Capple clerk, the Lamazon locker AI, and a tea-stall cat.
+
+Interacting never blocks the way. Every line is voiced in all three languages before the city ships.
+
+**Built from:**
+- `src/game/away/city.ts`: the stage, on the same `AwayStage` interface as the Scatter stages.
+- `Game.prologue()`: hands it to `Away`.
+- A title card in `main.ts`.
+
+NPCs and the five friends are `createCharacter` bodies playing the existing clips (stand, write, argue, selfie, cheer, idle). Touch and gamepad come for free from `Away`. `tools/ground_test.py` gets a `city` case. `tools/smoke.py` and `tools/mobile_smoke.py` will walk the list.
+
 ## Prologue and Chapter One: The First 24 Hours
 
 | # | Level | Status |

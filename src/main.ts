@@ -40,6 +40,7 @@ import { techState } from './game/tech/tech';
 import { openCodex, showSafetyCard, consentGiven, stopSpeech } from './ui/science';
 
 type State = 'loading' | 'title' | 'cinematic' | 'game' | 'narrator' | 'film' | 'flashback';
+const PROLOGUE = new URLSearchParams(location.search).has('prologue');
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 lockViewport();
@@ -344,6 +345,39 @@ function startNewGame(look: PlayerLook = defaultLook()) {
   applyPlayer(look, settings.skins ?? {});
   ui.show('title', false);
   void voice.load();
+  // the playable prologue, while it is reviewed: ?prologue=1
+  if (PROLOGUE) { playPrologue(() => openingFilms()); return; }
+  openingFilms();
+}
+
+/** Black, then one line: the planet and the year. Nothing else. */
+function titleCard(then: () => void) {
+  const el = document.createElement('div');
+  el.id = 'title-card'; el.textContent = t('city.title');
+  el.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;color:#f2ead8;font:600 clamp(28px,5vw,64px) Rajdhani,sans-serif;letter-spacing:.35em;opacity:0;transition:opacity 1.2s;z-index:60';
+  document.body.appendChild(el);
+  requestAnimationFrame(() => (el.style.opacity = '1'));
+  setTimeout(() => { el.style.opacity = '0'; }, 3400);
+  setTimeout(() => { el.remove(); then(); }, 4700);
+}
+
+/** Port Sahil: the player's list on the last normal afternoon, then the opening films. */
+function playPrologue(then: () => void) {
+  ui.fade('black', 1, 0.4);
+  titleCard(() => whenWorldReady(() => {
+    ui.show('loading', false);
+    state = 'game';
+    const save = newSave(); save.names = { ...pendingNames }; save.player = { ...pendingLook }; save.skins = settings.skins ?? {};
+    applyPlayer(save.player, save.skins);
+    game.prologue(save, () => { input.enabled = false; ui.show('hud', false); ui.fade('black', 1, 0.8); setTimeout(then, 900); });
+    ui.show('hud', true);
+    input.enabled = true;
+    ui.fade('black', 0, 1.2);
+  }));
+}
+
+/** MegaZroN, the deck, the title sequence, then the wake-up. */
+function openingFilms() {
   playVault('intro', () => {
     state = 'cinematic';
     ui.show('cine', true);
@@ -747,7 +781,7 @@ window.addEventListener('resize', () => {
     const a = game?.away, on = a?.active && a.stage;
     const ray = new THREE.Raycaster(), D = new THREE.Vector3(0, -1, 0);
     const targets: THREE.Object3D[] = [];
-    if (on) a.stage!.scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && !(m as THREE.SkinnedMesh).isSkinnedMesh && !(m as THREE.InstancedMesh).isInstancedMesh && m.geometry.type === 'PlaneGeometry') targets.push(m); });
+    if (on) a.stage!.scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && !(m as THREE.SkinnedMesh).isSkinnedMesh && !(m as THREE.InstancedMesh).isInstancedMesh && (m.userData.ground ?? m.geometry.type === 'PlaneGeometry')) targets.push(m); });
     else world.terrain.group.children.forEach((c) => { const l = c as THREE.LOD; if (l.isLOD) targets.push(l.levels[0].object); });
     const down = (x: number, z: number) => { ray.set(new THREE.Vector3(x, 600, z), D); ray.far = 1200; const h = ray.intersectObjects(targets, false)[0]; return h ? h.point.y : null; };
     const body = on ? a.position! : player.pos;

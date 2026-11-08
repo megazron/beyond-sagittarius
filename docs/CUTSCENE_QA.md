@@ -112,6 +112,42 @@ Honest list. Rendered means a Cycles film from `tools/film/`, played by `src/cin
 | Camp and beacon radio scenes | Real-time |
 | The four other reveals | Not made. Waiting on the owner's review of the story |
 
+## Render plan from the narrator onward
+
+Order is fixed: the black hole entry is locked first, then the narrator, then each scene after it. Every scene goes through the same pipeline:
+1. A dev stage under `dev/` drives the scene from the real game code.
+2. `tools/film/edl.py` times it to the voice takes.
+3. `tools/film/dump.py --stage` dumps it.
+4. `tools/film/rig_dump_check.py` gates it.
+5. `render_all.sh` renders it.
+6. `encode.sh` encodes it with the mix.
+7. I watch it frame by frame before it goes to the owner.
+
+| Scene | Content | Length (est.) | Render budget (est.) | State |
+| --- | --- | --- | --- | --- |
+| Black hole entry | deck, the event, the six pulled apart | 67 s, 1611 frames | 10 s per frame on a1, 30 to 50 s on the deck: about 15 h | rendering |
+| MegaZroN intro (Vault) | `mz.intro.1` to `.5`: wide, push-in, orrery, hands on the Ledger, close | about 45 s, 1080 frames | one character, a large interior: about 25 s per frame, about 8 h | next, after the entry locks |
+| Vault l3, l7, ch1, ch2 | the narrator's returns | 30 to 60 s each | about 6 h each | after the intro is approved |
+| The six reveal films | one per crew member, after the owner reviews the Scatter | 30 to 45 s each | about 6 h each | waiting on the owner |
+
+**MegaZroN intro, the shots** (from `vaultScript('intro')`, kept so the real-time fallback and the film match):
+
+| Shot | Line | Framing | Action |
+| --- | --- | --- | --- |
+| 1 `wide` | `mz.intro.1` | Wide on the Vault: the Ledger lectern, the orrery, the black hole through the dome. MegaZroN small, back to camera | Turns, sees us, sighs |
+| 2 `push` | `mz.intro.2` | Slow push-in to a mid shot | Presents himself, one hand to the Ledger |
+| 3 `orrery` | `mz.intro.3` | Over his shoulder onto the orrery: six lights in a ring | Points; the six lights drift apart on "Then the worst" |
+| 4 `hands` | `mz.intro.4` | Insert on the Ledger | His hand writes; the ink glows and settles |
+| 5 `close` | `mz.intro.5` | Close-up, eye line just off the lens | Holds the look, the faintest smile, cut to black |
+
+What it needs that the entry didn't:
+- A Vault set at film grade, with the deck's look-dev applied: materials, practicals, greebles.
+- MegaZroN's robe in cloth that passes the clipping gate.
+- Face performance from `tools/film/face.py` on the five lines.
+- The Ledger's ink as an animated emissive.
+
+The voice is the approved Chatterbox take, re-done in the full re-voice with direction per phrase.
+
 ## Line timing
 
 `python tools/line_timing.py` reports lines over 4.5 s, lines of 3 s or more with no pause in the audio, and for the timed opening how long the picture would freeze or a line would run past its shot. The real-time opening stretches its shots to the takes of the current language (`fitToVoice`), so the freeze figure is what the written timeline asks for, not what plays. Rendered scenes are cut to the takes by `tools/film/edl.py`, which fails if a line outlasts its shot.

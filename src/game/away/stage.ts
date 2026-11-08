@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /** One task on a stage: walk to it, press interact. `need` holds it back until earlier tasks are done. */
-export interface AwayTask { id: string; pos: THREE.Vector3; radius: number; label: string; need?: string[]; count?: number; run?: () => void }
+export interface AwayTask { id: string; pos: THREE.Vector3; radius: number; label: string; need?: string[]; count?: number; run?: () => void; optional?: boolean; repeat?: boolean }
 
 /** A place that isn't the green world. The player walks on `height`, and `collide` keeps them on it. */
 export interface AwayStage {
