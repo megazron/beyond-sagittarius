@@ -38,11 +38,10 @@ export function bindRemap(input: Input, s: Settings, save: (s: Settings) => void
     b.textContent = '…';
     msg.textContent = t(dev === 'kb' ? 'settings.bindPressKey' : 'settings.bindPressPad');
     audio.uiListen();
-    const stop = window.setTimeout(() => { if (input.capture) { input.capture = null; msg.textContent = ''; redraw(); } }, 6000);
+    // gives up after 6 s of play time, not wall time: a stalled frame never eats the window to press
     input.capture = {
-      dev,
+      dev, left: 6,
       done: (code) => {
-        clearTimeout(stop);
         msg.textContent = '';
         if (code === null) { redraw(); return; }
         if (dev === 'kb') input.bindKey(a, code as string); else input.bindPad(a, code as number);

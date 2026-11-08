@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import face as FACE
 
 ap = argparse.ArgumentParser()
-for n, d in (('--dump', None), ('--out', None), ('--plate', ''), ('--tex', '~/bs-film/tex'), ('--perf', ''), ('--facedir', '~/bs-film/face'), ('--hole', '')):
+for n, d in (('--dump', None), ('--out', None), ('--plate', ''), ('--tex', '~/bs-film/tex'), ('--perf', ''), ('--facedir', '~/bs-film/face'), ('--hole', ''), ('--closeup', '')):
     ap.add_argument(n, default=d)
 for n, d in (('--first', 0), ('--last', 0), ('--samples', 48), ('--w', 1280), ('--step', 1), ('--exposure', 0)):
     ap.add_argument(n, type=float if n == '--exposure' else int, default=d)
@@ -61,10 +61,18 @@ def material(d):
     def normal(path, k):
         t = tex(path, True); nm = N.new('ShaderNodeNormalMap'); nm.inputs['Strength'].default_value = k; L.new(t.outputs[0], nm.inputs['Color']); L.new(nm.outputs[0], I['Normal'])
     kind = f.get('kind')
-    if kind == 'skin':
+    if kind == 'pbr':
+        # a CC0 set from tools/fetch_assets.py, tiled and tinted
+        tc = N.new('ShaderNodeTexCoord'); mp = N.new('ShaderNodeMapping'); r = f.get('repeat', 4); mp.inputs['Scale'].default_value = (r, r, r); L.new(tc.outputs['UV'], mp.inputs['Vector'])
+        d_ = tex(f"{PUB}/../../../textures/{f['set']}/diff_1k.webp"); L.new(mp.outputs[0], d_.inputs['Vector'])
+        mx = N.new('ShaderNodeMix'); mx.data_type = 'RGBA'; mx.blend_type = 'MULTIPLY'; mx.inputs['Factor'].default_value = 1; L.new(d_.outputs[0], mx.inputs['A']); mx.inputs['B'].default_value = hexc(f.get('tint', 0xffffff)); L.new(mx.outputs['Result'], I['Base Color'])
+        n_ = tex(f"{PUB}/../../../textures/{f['set']}/nor_1k.webp", True); L.new(mp.outputs[0], n_.inputs['Vector']); nm = N.new('ShaderNodeNormalMap'); nm.inputs['Strength'].default_value = 1.2; L.new(n_.outputs[0], nm.inputs['Color']); L.new(nm.outputs[0], I['Normal'])
+        I['Metallic'].default_value = d.get('metalness', .6); I['Roughness'].default_value = max(.25, d.get('roughness', .45))
+    elif kind == 'skin':
         key = f"{f['marks']}_{f['sex']}_{f['skin']:06x}"
-        t = tex(f'{TEXD}/{key}.png'); L.new(t.outputs[0], I['Base Color']); L.new(t.outputs[0], I['Subsurface Radius'])
-        I['Subsurface Weight'].default_value = .55; I['Subsurface Scale'].default_value = .012; I['Roughness'].default_value = .46; I['Specular IOR Level'].default_value = .45
+        t = tex(f'{TEXD}/{key}.png'); L.new(t.outputs[0], I['Base Color']); I['Subsurface Radius'].default_value = (1.0, .36, .2)  # flesh scatters red furthest
+        I['Subsurface Weight'].default_value = .6; I['Subsurface Scale'].default_value = .009; I['Roughness'].default_value = .42; I['Specular IOR Level'].default_value = .5
+        I['Coat Weight'].default_value = .08; I['Coat Roughness'].default_value = .45
         normal(f"{PUB}/skin_{f['sex']}_n.webp", .6)
         if f.get('glowK', 0) > 0:
             g = tex(f'{TEXD}/{key}_glow.png', True); L.new(g.outputs[0], I['Emission Strength']); I['Emission Color'].default_value = hexc(f['glow'])
@@ -74,7 +82,7 @@ def material(d):
     elif kind == 'hair':
         at = N.new('ShaderNodeAttribute'); at.attribute_name = 'aT'
         ramp = N.new('ShaderNodeValToRGB'); e = ramp.color_ramp.elements; e[0].color = hexc(f['root']); e[1].color = hexc(f['tip']); e.new(.3).color = hexc(f['mid'])
-        L.new(at.outputs['Fac'], ramp.inputs[0]); L.new(ramp.outputs[0], I['Base Color']); I['Roughness'].default_value = .36; I['Coat Weight'].default_value = .25
+        L.new(at.outputs['Fac'], ramp.inputs[0]); L.new(ramp.outputs[0], I['Base Color']); I['Roughness'].default_value = .3; I['Coat Weight'].default_value = .35; I['Coat Roughness'].default_value = .2; I['Sheen Weight'].default_value = .5; I['Sheen Roughness'].default_value = .35
     elif kind == 'eye':
         I['Base Color'].default_value = hexc(f['iris']); I['Roughness'].default_value = .08; I['Coat Weight'].default_value = 1
         t = tex(f'{PUB}/eye.webp', True); sp = N.new('ShaderNodeSeparateColor'); L.new(t.outputs[0], sp.inputs[0])
@@ -174,6 +182,10 @@ for k, fs in ids.items():
         o.cycles.use_deform_motion = True
         if info.get('name') == 'skin_head':
             sb = o.modifiers.new('sub', 'SUBSURF'); sb.levels = 0; sb.render_levels = 1  # the game head is thin for a close-up
+        elif info.get('name') == 'cloth' and not os.environ.get('NO_CLOTH_SUB'):
+            # game cloth is low poly and reads as facets under practicals: weld the uv seams, then one smooth level
+            wd = o.modifiers.new('weld', 'WELD'); wd.merge_threshold = 1e-4
+            sb = o.modifiers.new('sub', 'SUBSURF'); sb.levels = 0; sb.render_levels = 1; sb.uv_smooth = 'PRESERVE_BOUNDARIES'
     else:
         for f, r in recs.items():
             o.matrix_world = C @ Matrix(np.array(r['m']).reshape(4, 4).T.tolist())
@@ -191,6 +203,12 @@ for f, d in data.items():
     cd.lens = 12 / math.tan(math.radians(c['fov']) / 2); cd.keyframe_insert('lens', frame=f)
     cd.dof.focus_distance = max(c['focus'], .3) if c['focus'] else 40; cd.dof.keyframe_insert('focus_distance', frame=f)
     cd.dof.aperture_fstop = max(.8, min(16, .012 / max(c['aperture'], 1e-4) * 1.4)) if c['aperture'] else 22; cd.dof.keyframe_insert('aperture_fstop', frame=f)
+    if a.closeup:  # QA: the same view direction, pulled in to 0.55 m from a point (three.js coords), sharp
+        q = [float(x) for x in a.closeup.split(',')]; P = C @ Vector(q[:3]); fw = cam.matrix_world.to_quaternion() @ Vector((0, 0, -1))
+        if len(q) == 6:  # an explicit view direction, three.js coords
+            fw = (C @ Vector(q[3:])).normalized(); cam.rotation_quaternion = fw.to_track_quat('-Z', 'Y'); cam.keyframe_insert('rotation_quaternion', frame=f)
+        cam.location = P - fw * .55; cam.keyframe_insert('location', frame=f); cd.lens = 12 / math.tan(math.radians(20)); cd.keyframe_insert('lens', frame=f)
+        cd.dof.aperture_fstop = 22; cd.dof.keyframe_insert('aperture_fstop', frame=f)
 
 # light: the game's own rig, in real watts, plus the black hole itself as the world
 for i in range(8):

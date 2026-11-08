@@ -23,11 +23,12 @@ window.__filmDump = (() => {
     for (const a of ['aT', 'aLayer']) { const v = g.attributes[a]; if (v) { const f = new Float32Array(v.count); for (let i = 0; i < v.count; i++) f[i] = v.getX(i); o[a] = b64(f); } }
     return o;
   };
+  const BONES = new Set(['hips', 'spine1', 'chest', 'neck', 'handL', 'handR', 'finger3_2L', 'finger3_2R', 'lowerarmL', 'lowerarmR']);
   const shown = (o) => { for (let q = o; q; q = q.parent) if (!q.visible) return false; return true; };
   return () => {
     const st = __bs.stageInfo(), scene = st.scene, cam = st.camera;
     scene.updateMatrixWorld(true); cam.updateMatrixWorld(true);
-    const out = { beat: __bs.film.beat, camera: { m: Array.from(cam.matrixWorld.elements), fov: cam.fov, focus: st.focus, aperture: st.aperture }, lights: [], meshes: [], fresh: {} };
+    const out = { bones: {}, beat: __bs.film.beat, camera: { m: Array.from(cam.matrixWorld.elements), fov: cam.fov, focus: st.focus, aperture: st.aperture }, lights: [], meshes: [], fresh: {} };
     if (window.__hole) out.hole = { on: 1, p: window.__hole, warp: 0 };
     const v = cam.position.clone();
     scene.traverse((o) => {
@@ -39,6 +40,11 @@ window.__filmDump = (() => {
       if (!o.isMesh) return;
       const m = Array.isArray(o.material) ? o.material[0] : o.material;
       const rec = { id: o.uuid, m: Array.from(o.matrixWorld.elements) };
+      // the skeleton too, for the clipping check: the torso line and the hands
+      if (o.isSkinnedMesh) {
+        const sk = o.skeleton.bones[0].uuid; rec.skel = sk; // one id per character: every part shares its root bone
+        if (!out.bones[sk]) { out.bones[sk] = {}; for (const b of o.skeleton.bones) if (BONES.has(b.name)) { b.getWorldPosition(v); out.bones[sk][b.name] = [v.x, v.y, v.z]; } }
+      }
       if (!seen.has(o.uuid)) { seen.add(o.uuid); out.fresh[o.uuid] = { name: o.name, parent: o.parent?.name ?? '', material: mat(m), geo: geom(o), skinned: !!o.isSkinnedMesh, instanced: !!o.isInstancedMesh }; }
       if (o.isInstancedMesh) rec.inst = b64(new Float32Array(o.instanceMatrix.array.slice(0, o.count * 16)));
       const moving = o.isSkinnedMesh || (o.morphTargetInfluences && o.morphTargetInfluences.some((x) => x !== 0)) || o.geometry.attributes.position.usage === 35048;

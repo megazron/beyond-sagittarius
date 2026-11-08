@@ -186,6 +186,30 @@ def resolve_layers(inner_P, outer, margin):
     return out
 
 
+
+def follow(inner_P, inner_W, outers, keep=None, reach=0.035, near=0.012, far=0.05):
+    """Whatever lies just under a garment skins with the garment's own weights, so in any pose the two
+    move together and the gap made at bind holds. Near an opening it fades back to its own weights,
+    so the edge stays continuous with what is not covered. Skirts hang free and are never followed."""
+    W = inner_W.copy(); best = np.full(len(inner_P), 9.)
+    for o in outers:
+        if o.opt.get('skirt'): continue
+        used = np.unique(o.T)
+        e = {}
+        for t in o.T:
+            for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+                k = (min(a_, b_), max(a_, b_)); e[k] = e.get(k, 0) + 1
+        rim = np.unique([k[0] for k, n in e.items() if n == 1])
+        d, j = cKDTree(o.P[used]).query(inner_P, workers=1); j = used[j]
+        under = (d < reach) & (np.einsum('ij,ij->i', inner_P - o.P[j], o.N[j]) < 0) & (d < best)
+        if keep is not None: under &= ~keep
+        if not under.any(): continue
+        rd = cKDTree(o.P[rim]).query(inner_P[under], workers=1)[0] if len(rim) else np.full(under.sum(), 9.)
+        k = np.clip((rd - near) / (far - near), 0, 1)[:, None]
+        W[under] = inner_W[under] * (1 - k) + o.W[j[under]] * k
+        best[under] = d[under]
+    return W / np.maximum(W.sum(1, keepdims=True), 1e-9)
+
 def covered(P, N, garments, reach=0.035):
     """Vertices hidden under a garment: one lies just outside them, facing the same way."""
     hid = np.zeros(len(P), bool)
@@ -271,6 +295,12 @@ def build(c, cid, force=False):
         deleted.update(p.clo.delete)
         if opt.get('skirt'):
             skirt_weights(c, p, piv)
+        # a sleeve follows the forearm, never the hand: a cuff weighted to the hand leaps when the wrist turns
+        for sd in 'LR':
+            to = c.rig.index[f'forearmtw{sd}']
+            for bn, bi in c.rig.index.items():
+                if bn == f'hand{sd}' or (bn.startswith('finger') and bn.endswith(sd)):
+                    p.W[:, to] += p.W[:, bi]; p.W[:, bi] = 0
         p.tint, p.opt, p.asset = tint, opt, nm
         if opt.get('islands'):
             p.island = paint.uv_islands(p)
@@ -293,6 +323,8 @@ def build(c, cid, force=False):
         g = garments[i]
         for o in outer:
             g.P = resolve_layers(g.P, o, 0.012)
+        if not g.opt.get('skirt'):
+            g.W = follow(g.P, g.W, outer)
         # whatever an outer layer really covers is cut, along exact sight lines
         hid = np.zeros(len(g.P), bool)
         Ng = g.N
@@ -300,6 +332,17 @@ def build(c, cid, force=False):
         for o in outer:
             hid |= ray_covered(g.P, Ng, o, used & ~hid, 0.1, True)
         hid = erode(hid, g.T, 3)
+        # an inner layer deep under an outer one never shows, and in motion it pokes through: remove it
+        for o in outer:
+            e = {}
+            for t in o.T:
+                for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+                    k = (min(a_, b_), max(a_, b_)); e[k] = e.get(k, 0) + 1
+            rim = np.unique([k[0] for k, n in e.items() if n == 1])
+            if not len(rim): continue
+            d, j = cKDTree(o.P).query(g.P, workers=1)
+            inside = (d < .05) & (np.einsum('ij,ij->i', g.P - o.P[j], o.N[j]) < -.001)
+            hid |= inside & (cKDTree(o.P[rim]).query(g.P, workers=1)[0] > .06) & used
         vis = ~hid[g.T].all(1)
         if vis.sum() > 60:
             g.T, g.TU = g.T[vis], g.TU[vis]
@@ -330,6 +373,18 @@ def build(c, cid, force=False):
     for g in garments:
         hid |= ray_covered(V, Nb, g, bodyv & ~hid)
     dl |= erode(hid, Tall, 1)
+    # skin deep under a garment never shows, but in motion it pokes through: remove it, except near openings
+    for g in garments:
+        e = {}
+        for t in g.T:
+            for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+                k = (min(a_, b_), max(a_, b_)); e[k] = e.get(k, 0) + 1
+        rim = np.unique([k[0] for k, n in e.items() if n == 1])
+        if not len(rim): continue
+        d, j = cKDTree(g.P).query(V, workers=1)
+        inside = (d < .04) & (np.einsum('ij,ij->i', V - g.P[j], g.N[j]) < -.002)
+        far = cKDTree(g.P[rim]).query(V, workers=1)[0] > .05
+        dl |= inside & far & bodyv
     hw0 = rig.W[:, [rig.index[n] for n in ('head', 'jaw', 'eyeL', 'eyeR')]].sum(1)
     dl[hw0 > 0.3] = False
     dl[rig.W[:, rig.index['neck']] > 0.6] = False  # the whole neck stays: collars sit on it, and a culled neck shows the inside of the head
@@ -343,10 +398,13 @@ def build(c, cid, force=False):
     hm = hw[T].mean(1) > 0.5
     Vb = V
     for o in garments:
-        Vb = resolve_layers(Vb, o, 0.016)
+        Vb = resolve_layers(Vb, o, float(os.environ.get('BODY_MARGIN', 0.016)))
     bm = {k: vb[k] for k in vb if not k.endswith('_dm')}
     head = Part(V, T[hm], TU[hm], UV, rig.W, 'skin_head', {**morphs, **bm})
-    body = Part(Vb, T[~hm], TU[~hm], UV, rig.W, 'skin_body', bm)
+    # the neck and head keep their own weights: the head is a separate mesh and must meet the body exactly
+    neckish = rig.W[:, [rig.index[n] for n in ('head', 'jaw', 'eyeL', 'eyeR', 'neck')]].sum(1) > 0
+    Wb = follow(Vb, rig.W, garments, keep=neckish) if not os.environ.get('NO_FOLLOW') else rig.W
+    body = Part(Vb, T[~hm], TU[~hm], UV, Wb, 'skin_body', bm)
     # keep shared normals across the neck seam
     Nall = vnormals(V, T)
     head.N = Nall; body.N = Nall

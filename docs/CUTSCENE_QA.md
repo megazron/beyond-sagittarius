@@ -115,3 +115,27 @@ Honest list. Rendered means a Cycles film from `tools/film/`, played by `src/cin
 ## Line timing
 
 `python tools/line_timing.py` reports lines over 4.5 s, lines of 3 s or more with no pause in the audio, and for the timed opening how long the picture would freeze or a line would run past its shot. The real-time opening stretches its shots to the takes of the current language (`fitToVoice`), so the freeze figure is what the written timeline asks for, not what plays. Rendered scenes are cut to the takes by `tools/film/edl.py`, which fails if a line outlasts its shot.
+
+## Clipping gate
+
+Two checks, both measured on the meshes the player or the camera actually sees.
+
+- `python tools/rig_check.py` plays every clip on every body (the six crew, the suit and every custom build) in `dev/rig.html`. It reports hand runs, garment runs and one-frame vertex leaps per body and clip.
+- `python tools/film/rig_dump_check.py <dump> --timing <timing.json>` runs over a film dump: every frame, every character, reported per shot. It measures:
+  - **Hand:** how deep any hand vertex sits behind the body's own surface (torso and thighs). Both are told apart in the frame where that body's hands are furthest from it.
+  - **Through cloth:** how far covered skin comes out through the garment over it. Openings (cuffs, collars, hems) are excluded.
+  - **Leap:** one-frame vertex jumps.
+
+  Exit 1 fails the shot. `render_all.sh` holds back any shot that fails, so nothing clipped is rendered.
+- `--closeup=x,y,z[,dx,dy,dz]` on `tools/film/render_shot.py` renders a sharp frame 0.55 m from a point, from the shot's camera direction or a given one. Every flagged frame is looked at this way before a threshold is trusted.
+
+What the checks found, and the fixes:
+
+- **Skin under a garment kept its own skin weights while the garment used MakeHuman's interpolated ones.** Under a big pose (arms up in the d2 tumble) the two skinned apart, and the strong's side came through his shirt. Covered skin now takes the weights of the garment over it, fading back to its own weights near openings and at the neck. Inner garments do the same under outer ones. Skirts hang free and are never followed.
+- **The medic's satchel sat across the side of her right hip** and swallowed her hanging hand. It now lies flat against the hip, a little behind the side seam and high enough to clear the ground when she sits.
+- **The arm guard measured the torso from the raw mesh attribute, which is not the body you see.** The real shape also comes from morph targets and quantisation. So slim bodies got a torso about 9 cm thick and no protection: a hand on the hip vanished into the coat in `selfie`, `argue` and `cheer`. Heavy bodies got 30 cm and their arms were shoved out. The guard now measures the skinned, morphed skin in world space the first time the body is posed, and scales with the body.
+- **Tried and dropped:** a torso guard built from each body's measured cross-section instead of capsules. It made heavy bodies worse, and once the measurement bug above was fixed, the capsules were enough.
+- **Sleeve cuffs were weighted up to 91% to the hand,** so a fast wrist turn threw the cuff (scientist `wave`, 6.8 cm in one frame). Garment weights on the hand and fingers now go to the forearm twist bone.
+- **A posed limb aimed nearly opposite to the clip** used the shortest turn, which has no stable axis, so its roll could flip between frames. It now keeps last frame's axis near that case.
+- **The leap test counted fast, smooth flailing as a pop** (scientist `float` at full flail: the lower arm turning about 30 degrees a frame, steadily). A pop starts from nothing, so a leap now also needs the vertex to move at least 2.5 times faster than it did the frame before.
+- **Game cloth is low poly and read as facets under the deck practicals.** Film renders weld the uv seams and add one smooth level on cloth.

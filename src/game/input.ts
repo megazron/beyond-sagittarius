@@ -57,7 +57,7 @@ export class Input {
   /** Edges for menu navigation this frame (ui/nav.ts reads them). */
   menu: MenuKeys = noMenu();
   /** The remap screen is listening: the next key or button goes here. */
-  capture: { dev: 'kb' | 'pad'; done: (code: string | number | null) => void } | null = null;
+  capture: { dev: 'kb' | 'pad'; left?: number; done: (code: string | number | null) => void } | null = null;
   vibration = true;
   private padDown = new Set<number>();
   private padHit = new Set<number>();
@@ -179,6 +179,7 @@ export class Input {
 
   /** Read the pad once per frame, before anything asks about input. */
   poll(dt: number) {
+    if (this.capture?.left !== undefined && (this.capture.left -= Math.min(dt, .1)) <= 0) { const c = this.capture; this.capture = null; c.done(null); }
     this.menu = noMenu();
     this.padHit.clear();
     this.pollPads();

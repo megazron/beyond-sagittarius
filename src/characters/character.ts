@@ -52,6 +52,10 @@ const Q = new THREE.Quaternion(), Q2 = new THREE.Quaternion(), E = new THREE.Eul
 const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3(), V4 = new THREE.Vector3(), V5 = new THREE.Vector3();
 
 /** Rotate a bone by a world-space rotation. */
+const TORSO: [string, string][] = [['hips', 'spine1'], ['spine1', 'chest'], ['chest', 'neck']];
+const SA = new THREE.Vector3(), SB = new THREE.Vector3();
+function segDist(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3) { const ab = SB.copy(b).sub(a), t = Math.max(0, Math.min(1, SA.copy(p).sub(a).dot(ab) / ab.lengthSq())); return p.distanceTo(SA.copy(a).addScaledVector(ab, t)); }
+
 function worldRotate(b: THREE.Object3D, dq: THREE.Quaternion) {
   b.getWorldQuaternion(Q);
   Q.premultiply(dq);
@@ -268,6 +272,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const xx = new THREE.Vector3().crossVectors(d, zz);
       g.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xx, d, zz));
     }
+    // the torso as three capsules, measured from this body's own skin the first time it is posed (keepArmsOut)
+    torsoR = null; torsoBody = null;
+    scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && m.name === 'skin_body') torsoBody = m; });
     // hair on the real head
     const headP = piv('head');
     const hairId = custom ? custom.hair : human ? 'suit' : id;
@@ -304,6 +311,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     void texturesReady().then(ready);
   };
 
+  let torsoR: number[] | null = null, torsoLen: number[] = [], torsoBody: THREE.SkinnedMesh | null = null; // read by keepArmsOut
   const go = () => { const a = animNow(), as = assetNow(key, lod); if (a && as) { attach(as, a); return true; } return false; };
   if (!go()) Promise.all([loadAnim(), loadAsset(key, lod)]).then(([a, as]) => attach(as, a)).catch((e) => console.error('[crew]', key, e));
 
@@ -328,6 +336,53 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
 
   let limpOn = false;
 
+  /** Hands and forearms never sink into the torso: the upper arm swings out just enough to clear it. */
+  function keepArmsOut(bs: Map<string, THREE.Bone>) {
+    if (!torsoR && !torsoBody) return;
+    root.updateWorldMatrix(true, true);
+    const seg = TORSO.map(([a, b]) => [bs.get(a)!.getWorldPosition(new THREE.Vector3()), bs.get(b)!.getWorldPosition(new THREE.Vector3())] as const);
+    if (!torsoR) {
+      // the skinned, morphed skin as it really stands, in world space: the raw attribute is not the body you see
+      const m = torsoBody!, per: number[][] = TORSO.map(() => []), v = new THREE.Vector3();
+      m.updateWorldMatrix(true, false); m.skeleton.update();
+      for (let i = 0; i < m.geometry.attributes.position.count; i += 2) {
+        m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld); let best = 9, k = -1;
+        seg.forEach(([a, b], j) => { const d = segDist(v, a, b); if (d < best) { best = d; k = j; } });
+        if (k >= 0 && best < .3) per[k].push(best);
+      }
+      torsoR = per.map((x) => { x.sort((a, b) => a - b); return x.length ? x[Math.floor(x.length * .45)] : .1; });
+      torsoLen = seg.map(([a, b]) => a.distanceTo(b));
+    }
+    for (const s of ['L', 'R']) {
+      const upper = bs.get(`upperarm${s}`)!, sh = upper.getWorldPosition(new THREE.Vector3());
+      let turned = 0;
+      for (let it = 0; it < 7 && turned < .7; it++) {
+        let worst = 0, at: THREE.Vector3 | null = null, axisPt: THREE.Vector3 | null = null;
+        for (const n of [`hand${s}`, `finger3_2${s}`, `lowerarm${s}`]) {
+          const p = bs.get(n)?.getWorldPosition(new THREE.Vector3()); if (!p) continue;
+          seg.forEach(([a, b], j) => {
+            const pen = torsoR![j] * (a.distanceTo(b) / (torsoLen[j] || 1)) + 0.015 - segDist(p, a, b); // bind units to world
+            if (pen > worst) { worst = pen; at = p; const ab = b.clone().sub(a), t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / ab.lengthSq())); axisPt = a.clone().addScaledVector(ab, t); }
+          });
+        }
+        if (!at || !axisPt || worst <= 0) break;
+        // swing the arm about the shoulder, towards where that point would be clear of the body
+        const arm = (at as THREE.Vector3).clone().sub(sh), away = (at as THREE.Vector3).clone().sub(axisPt as THREE.Vector3);
+        // deep inside, the way out from the spine says little: lean on the arm's own side, the elbow goes out
+        const [ca, cb] = seg[1], cab = cb.clone().sub(ca), side = sh.clone().sub(ca.clone().addScaledVector(cab, Math.max(0, Math.min(1, sh.clone().sub(ca).dot(cab) / cab.lengthSq()))));
+        side.addScaledVector(cab, -side.dot(cab) / cab.lengthSq());
+        if (away.lengthSq() > 1e-8) away.normalize();
+        if (side.lengthSq() > 1e-8) away.addScaledVector(side.normalize(), 1.5);
+        if (away.lengthSq() < 1e-8) away.copy(new THREE.Vector3(s === 'L' ? 1 : -1, 0, 0).applyQuaternion(root.getWorldQuaternion(new THREE.Quaternion())));
+        const axis = new THREE.Vector3().crossVectors(arm, away.normalize());
+        if (axis.lengthSq() < 1e-8) break;
+        const ang = Math.min(.5, .7 - turned, worst / Math.max(.2, arm.length()) * 1.3); turned += ang;
+        worldRotate(upper, new THREE.Quaternion().setFromAxisAngle(axis.normalize(), ang));
+        upper.updateWorldMatrix(false, true);
+      }
+    }
+  }
+
   function locomotion(speed: number, dt: number) {
     // stylised walk -> brisk walk -> run -> sprint, phase locked so feet stay in step
     const m = A!.meta;
@@ -343,6 +398,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     return knots.map(([n], i) => ({ n, w: w[i] }));
   }
 
+  const aimAxis = new Map<string, THREE.Vector3>();
   /** Lays the set pose over the clip: each bone turns to point the requested way. */
   function applyLimbs(l: Limbs, bs: Map<string, THREE.Bone>) {
     if (l.bend) { bs.get('spine1')!.quaternion.multiply(Q.setFromEuler(E.set(l.bend * 0.5, 0, 0))); bs.get('chest')!.quaternion.multiply(Q.setFromEuler(E.set(l.bend * 0.5, 0, 0))); }
@@ -355,7 +411,16 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       p.updateWorldMatrix(true, true);
       const from = c.getWorldPosition(V3).sub(p.getWorldPosition(V4)).normalize();
       const to = V5.set(d[0], d[1], d[2]).normalize().applyQuaternion(rq);
-      worldRotate(p, new THREE.Quaternion().setFromUnitVectors(from, to));
+      // nearly opposite, the shortest turn has no axis of its own and the limb's roll flips frame to frame:
+      // keep turning about last frame's axis, then close the small gap that is left
+      const ax = new THREE.Vector3().crossVectors(from, to), prev = aimAxis.get(a);
+      if (ax.length() > .3 || !prev) { if (ax.lengthSq() > 1e-10) aimAxis.set(a, ax.normalize()); worldRotate(p, new THREE.Quaternion().setFromUnitVectors(from, to)); return; }
+      const k = prev.clone().addScaledVector(from, -prev.dot(from));
+      if (k.lengthSq() < 1e-6) { worldRotate(p, new THREE.Quaternion().setFromUnitVectors(from, to)); return; }
+      k.normalize();
+      const q1 = new THREE.Quaternion().setFromAxisAngle(k, Math.acos(THREE.MathUtils.clamp(from.dot(to), -1, 1)));
+      const q = new THREE.Quaternion().setFromUnitVectors(from.clone().applyQuaternion(q1), to).multiply(q1);
+      aimAxis.set(a, k); worldRotate(p, q);
     };
     aim('upperarmL', 'lowerarmL', l.armL); aim('lowerarmL', 'handL', l.foreL ?? l.armL);
     aim('upperarmR', 'lowerarmR', l.armR); aim('lowerarmR', 'handR', l.foreR ?? l.armR);
@@ -438,6 +503,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       }
     }
     if (limbs) applyLimbs(limbs, bs);
+    keepArmsOut(bs);
     // head look-at, clamped and shared with the neck; the eyes lead
     // someone to look at: only within what a neck can do, otherwise ease back to the front
     let wantY = 0, wantX = 0;

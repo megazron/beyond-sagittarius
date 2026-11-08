@@ -129,8 +129,10 @@ export function addKit(k: KitInput): Kit {
     }
     case 'medic': {
       const bag = leather(0x7a4a2a, 0.55), b = belt(cloth(0x1aa79a), 1.03);
-      const sat = add(rbox(0.2, 0.15, 0.075, 0.02), bag, hips, -b.rx - 0.03, b.y - 0.14, b.z + 0.03);
-      sat.rotation.z = 0.08;
+      // flat against the right hip, a little behind the side seam, out of the hanging hand's way: a bag at the side eats the hand
+      const th = 0.6, sx = -Math.cos(th), sz = -Math.sin(th);
+      const sat = add(rbox(0.2, 0.15, 0.075, 0.02), bag, hips, sx * (b.rx + 0.045), b.y - 0.085, b.z + sz * (b.rz + 0.045));
+      sat.rotation.set(0, Math.atan2(sx, sz), 0.08);
       add(rbox(0.205, 0.07, 0.08, 0.018), leather(0x5e351b, 0.5), sat, 0, 0.05, 0.002);
       add(rbox(0.024, 0.016, 0.006, 0.003), metal(0xc9a86a), sat, 0, 0.018, 0.043);
       const [cx, cz, cy, cc] = fit.chest; const ch = piv('chest');
