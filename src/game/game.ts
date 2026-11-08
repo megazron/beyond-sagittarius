@@ -29,6 +29,20 @@ type Mode = 'wake' | 'play' | 'dead' | 'scene' | 'craft' | 'talk' | 'away';
 /** Survival rules, the First-24-Hours objective chain and the wake-up sequence. */
 export class Game {
   private sinceLevel = 0;
+  private swimWarned = false;
+  /** What a crew member's work on their own ground does for you down here: their role, across space. */
+  private favour(id: CrewId) {
+    const s = this.save, f = (s.favours ??= {});
+    if (id === 'explorer') {
+      // from orbit she can see what you can't: the nearest things worth picking up
+      const p = this.player.pos;
+      f.pins = this.world.items.items.filter((it) => it.active && (it.gate ?? 0) <= s.level).sort((a, b) => a.pos.distanceToSquared(p) - b.pos.distanceToSquared(p)).slice(0, 5).map((it) => [it.pos.x, it.pos.z]);
+    } else if (id === 'builder') f.sure = true;
+    else if (id === 'medic') { s.stats.health = 100; s.stats.stamina = 100; }
+    else if (id === 'strong') f.tirelessDay = s.day;
+    this.ui.toast(t(`away.fav.${id}`));
+  }
+
   /** Someone whose moment has come and whose story hasn't been told. Skyvra's is in Level 9 itself. */
   get revealDue() { const s = this.save; return s.replay ? undefined : ROSTER.find((r) => r.location && r.id !== 'explorer' && s.level >= r.unlock && !s.flags[`played.${r.id}`]); }
 
@@ -37,13 +51,16 @@ export class Game {
     if (!this.away) return;
     this.mode = 'away';
     this.away.level = this.save.level;
+    const first = !this.save.flags[`played.${id}`];
+    const jobKey = `job.${id}.${this.save.level}`, job = !first && !this.save.flags[jobKey] ? this.save.level : 0;
     this.away.enter(id, location, () => {
       this.mode = 'play';
-      const first = !this.save.flags[`played.${id}`];
       this.save.flags[`played.${id}`] = true;
-      if (first) { this.ui.toast(t('away.switchHint')); this.persist(); }
+      if (first) this.ui.toast(t('away.switchHint'));
+      else if (job) { this.save.flags[jobKey] = true; this.favour(id); }
+      this.persist();
       done?.();
-    });
+    }, job);
   }
 
   mode: Mode = 'wake';
@@ -160,7 +177,9 @@ export class Game {
   startCraft(n: TechNode) {
     if (this.mode !== 'play') return;
     this.enterPanel('craft');
-    this.craft.start(n, !!this.save.flags[`tip-${n.id}`], (ok) => this.endCraft(n, ok));
+    // Bolzar's favour covers one build, start to finish
+    this.craft.sure = !!this.save.favours?.sure;
+    this.craft.start(n, !!this.save.flags[`tip-${n.id}`], (ok) => { if (ok && this.craft.sure && this.save.favours) { this.save.favours.sure = false; this.craft.sure = false; } this.endCraft(n, ok); });
   }
 
   /** Materials are only spent on success: a ruined run costs dignity, not progress. */
@@ -483,7 +502,14 @@ export class Game {
     // stats
     st.thirst = clamp(st.thirst - dt * 0.16, 0, 100);
     st.hunger = clamp(st.hunger - dt * 0.07, 0, 100);
-    if (p.sprinting) st.stamina = clamp(st.stamina - dt * 16, 0, 100);
+    if (!p.swimming) this.swimWarned = false;
+    if (p.swimming) {
+      // swimming is work; Ulari lungs were made for cold water and make it half the work
+      const lungs = (s.player?.lineage ?? 'ulari') === 'ulari' ? 0.5 : 1;
+      st.stamina = clamp(st.stamina - dt * (p.sprinting ? 9 : 3.2) * lungs, 0, 100);
+      if (st.stamina <= 0) { st.health -= dt * 3; if (!this.swimWarned) { this.swimWarned = true; this.ui.toast(t('msg.swimTired')); } }
+      if (!s.flags.swamOnce) { s.flags.swamOnce = true; this.ui.toast(t('msg.swim')); }
+    } else if (p.sprinting && s.favours?.tirelessDay !== s.day) st.stamina = clamp(st.stamina - dt * 16, 0, 100);
     else st.stamina = clamp(st.stamina + dt * (p.speedNow > 0.5 ? 8 : 14), 0, 100);
     if (st.thirst <= 0 || st.hunger <= 0) st.health -= dt * 0.6;
     else if (st.thirst > 40 && st.hunger > 40) st.health = Math.min(100, st.health + dt * 0.12);

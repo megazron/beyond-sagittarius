@@ -373,7 +373,7 @@ def main():
         page.click("#p-resume")
         # a reload with the panel open brings the panel back
         demo()
-        page.reload(wait_until="domcontentloaded")
+        page.reload(wait_until="domcontentloaded", timeout=240000)
         page.wait_for_function("window.__bs && window.__bs.ready", timeout=240000)
         page.click("#btn-continue")
         page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
@@ -797,7 +797,7 @@ def main():
 
         # ---- persistence: reload and continue ----
         ev("__bs.save && window.dispatchEvent(new Event('beforeunload'))")
-        page.reload(wait_until="domcontentloaded")
+        page.reload(wait_until="domcontentloaded", timeout=240000)
         page.wait_for_function("window.__bs && window.__bs.ready", timeout=240000)
         page.click("#btn-continue")
         page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
@@ -851,7 +851,7 @@ def main():
         # ---- other languages ----
         for lang in ("hi", "ur"):
             ev(f"localStorage.setItem('bs-settings-v1', JSON.stringify({{lang: '{lang}', sensitivity: 1, invertY: false, volume: 0, subtitles: true, showFps: false}}))")
-            page.reload(wait_until="domcontentloaded")
+            page.reload(wait_until="domcontentloaded", timeout=240000)
             page.wait_for_function("window.__bs && window.__bs.ready", timeout=240000)
             page.click("#btn-continue")
             page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)

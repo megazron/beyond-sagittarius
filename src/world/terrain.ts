@@ -90,7 +90,24 @@ export class Terrain {
     this.heightTex.needsUpdate = true;
   }
 
+  /**
+   * The ground as it is drawn: the same lattice, the same triangle split and the same planar interpolation
+   * as the nearest terrain mesh. Feet, props, animals and the camera all stand on what you see.
+   */
   height(x: number, z: number): number {
+    const step = 100 / this.q.terrainSegments;
+    const gx = (x + HALF) / step, gz = (z + HALF) / step;
+    const i = Math.floor(gx), j = Math.floor(gz), tx = gx - i, tz = gz - j;
+    const X = -HALF + i * step, Z = -HALF + j * step;
+    const hb = this.field(X + step, Z), hc = this.field(X, Z + step);
+    // each quad is two triangles split along b to c, as chunkGeometry winds them
+    if (tx + tz <= 1) { const ha = this.field(X, Z); return ha + (hb - ha) * tx + (hc - ha) * tz; }
+    const hd = this.field(X + step, Z + step);
+    return hd + (hc - hd) * (1 - tx) + (hb - hd) * (1 - tz);
+  }
+
+  /** The smooth sampled field the mesh is built from. */
+  field(x: number, z: number): number {
     const res = this.res;
     const fx = clamp((x + HALF) / this.cell, 0, res - 1.001);
     const fz = clamp((z + HALF) / this.cell, 0, res - 1.001);
@@ -103,8 +120,8 @@ export class Terrain {
 
   normal(x: number, z: number, out = new THREE.Vector3()): THREE.Vector3 {
     const e = this.cell;
-    const hx = this.height(x + e, z) - this.height(x - e, z);
-    const hz = this.height(x, z + e) - this.height(x, z - e);
+    const hx = this.field(x + e, z) - this.field(x - e, z);
+    const hz = this.field(x, z + e) - this.field(x, z - e);
     return out.set(-hx, 2 * e, -hz).normalize();
   }
 
@@ -154,7 +171,7 @@ export class Terrain {
     for (let j = 0; j <= seg; j++) {
       for (let i = 0; i <= seg; i++) {
         const x = cx + i * step, z = cz + j * step;
-        put(x, this.height(x, z), z);
+        put(x, this.field(x, z), z);
       }
     }
     for (let j = 0; j < seg; j++) {

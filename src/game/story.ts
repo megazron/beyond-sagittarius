@@ -375,7 +375,9 @@ export class Story {
         break;
       }
     }
-    h.pos.x += vx * dt; h.pos.z += vz * dt;
+    // it won't follow you into the lake: it paces the shore
+    const hx = h.pos.x + vx * dt, hz = h.pos.z + vz * dt;
+    if (this.world.terrain.height(hx, hz) > -0.3) { h.pos.x = hx; h.pos.z = hz; }
     this.world.forest.collide(h.pos, 0.5);
     h.pos.y = this.world.terrain.height(h.pos.x, h.pos.z);
     h.speed = Math.hypot(vx, vz);

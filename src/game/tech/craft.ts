@@ -109,7 +109,11 @@ export class Craft {
     $('mg-prog').parentElement!.classList.toggle('hidden', st.kind === 'mix');
   }
 
+  /** Bolzar talked you through it: this build can't fail. */
+  sure = false;
+
   private fail() {
+    if (this.sure) { this.misses = 0; this.hits = Math.max(this.hits, 0); return; }
     this.failed = true;
     this.holding = false;
     this.flash = '';

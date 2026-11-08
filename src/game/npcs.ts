@@ -41,6 +41,9 @@ const look = (lineage: PlayerLook['lineage'], o: Partial<PlayerLook>): PlayerLoo
  * through the dialogue panel: choices, trades, small quests, taught tricks
  * (`tip-<tech>` flags make a minigame easier) and reactions to the save.
  */
+/** Ground drier than this is walkable for people who aren't swimming. */
+const DRY = -0.3;
+
 export class Npcs {
   private list: Npc[] = [];
   private built = false;
@@ -304,8 +307,13 @@ export class Npcs {
         if (d < 0.6) {
           n.speed *= 0.8;
           if (n.wait <= 0) {
-            const a = Math.random() * Math.PI * 2, r = Math.random() * n.roam;
-            n.target.set(n.home.x + Math.cos(a) * r, 0, n.home.z + Math.sin(a) * r);
+            // somewhere to stand: never out into the lake
+            for (let k = 0; k < 8; k++) {
+              const a = Math.random() * Math.PI * 2, r = Math.random() * n.roam;
+              n.target.set(n.home.x + Math.cos(a) * r, 0, n.home.z + Math.sin(a) * r);
+              if (this.world.terrain.height(n.target.x, n.target.z) > DRY) break;
+              n.target.set(n.pos.x, 0, n.pos.z);
+            }
             n.wait = 3 + Math.random() * 6;
           }
         } else if (n.wait > 5.5) n.speed = 0;
@@ -313,8 +321,8 @@ export class Npcs {
           n.speed += (1.5 - n.speed) * (1 - Math.exp(-dt * 4));
           const yaw = Math.atan2(n.target.x - n.pos.x, n.target.z - n.pos.z);
           n.yaw += Math.atan2(Math.sin(yaw - n.yaw), Math.cos(yaw - n.yaw)) * (1 - Math.exp(-dt * 6));
-          n.pos.x += Math.sin(n.yaw) * n.speed * dt;
-          n.pos.z += Math.cos(n.yaw) * n.speed * dt;
+          const nx = n.pos.x + Math.sin(n.yaw) * n.speed * dt, nz = n.pos.z + Math.cos(n.yaw) * n.speed * dt;
+          if (this.world.terrain.height(nx, nz) > DRY) { n.pos.x = nx; n.pos.z = nz; } else { n.target.set(n.pos.x, 0, n.pos.z); n.speed = 0; }
           this.world.forest.collide(n.pos, 0.35);
         }
       }

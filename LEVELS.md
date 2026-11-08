@@ -47,7 +47,16 @@ methane moon, a loose band of rubble, and a hot cloud-wrapped planet closer to t
 | Draxum | Hadrik | Haul ice, break bedrock, feed the ember | Stage and tasks work from Level 22. No reveal film, no voiced lines |
 | Nuvexa | Sulva | Patch the float, raise the relay | Stage and tasks work when forced by test only. Her unlock is in the Bronze Age, which does not exist yet |
 
-Levels with per-character tasks: 9, 14, 19, 22. All other levels are Zenvik only. Switching is the Crew tab's Play as, on keyboard, touch and gamepad through the same menu, and only after that person's story has been told. Stages are blocky first passes.
+Every level from someone's unlock on has a job for them: Play as from the Crew tab, once per level, with the work in new places each time. Their role pays off down on the green world, the only way it can across space:
+
+| Who | Job pays off as |
+| --- | --- |
+| Skyvra | From orbit she pins the nearest finds on your map |
+| Bolzar | He talks you through your next build: it can't fail |
+| Lyrra | Her advice: health and stamina restored |
+| Draxum | His drills: sprinting costs no stamina for the rest of the day |
+
+So per-character work exists at levels 9 to 22 for Skyvra, 14 to 22 for Bolzar, 19 to 22 for Lyrra and 22 for Draxum. Nuvexa has none yet. Switching is the Crew tab's Play as, on keyboard, touch and gamepad through the same menu, and only after that person's story has been told. Stages have textured relief ground (CC0 Poly Haven sets), shadows that follow you, faceted rock, and the lineage in play: Skyvra's breath frosts, Bolzar's plates glow as he seals, Lyrra's lichen lights in the sun and she slows in the dark, Draxum's seams burn. Still short of the green world: no grass or foliage equivalent, few props.
 
 **Skyvra.** She is physically present in Levels 9 and 10 and at the camp through Chapter Two.
 

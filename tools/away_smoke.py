@@ -36,6 +36,29 @@ with sync_playwright() as pw:
         time.sleep(1)
         print(loc, 'mode after:', page.evaluate('__bs.mode'), flush=True)
         if page.evaluate('__bs.mode') != 'play': fails.append(f"{loc}: did not come back")
+    # a second visit is that level's job, and it pays off down here
+    page.evaluate("__bs.save.stats.health = 30"); page.evaluate("__bs.goAway('medic', 'wreck')"); time.sleep(3)
+    for _ in range(14):
+        s = page.evaluate('__bs.away')
+        if not s: break
+        for _try in range(5):
+            page.evaluate('__bs.awayGoNext()'); time.sleep(1.5); page.keyboard.press('KeyE'); time.sleep(1.5)
+            n = page.evaluate('__bs.away')
+            if not n or n['next'] != s['next']: break
+    time.sleep(1)
+    hp = page.evaluate('__bs.save.stats.health'); print('health after Lyrra\'s job:', hp, flush=True)
+    if hp < 99: fails.append(f'medic job did not heal: {hp}')
+    page.evaluate("__bs.goAway('explorer', 'ring')"); time.sleep(3)
+    for _ in range(14):
+        s = page.evaluate('__bs.away')
+        if not s: break
+        for _try in range(5):
+            page.evaluate('__bs.awayGoNext()'); time.sleep(1.5); page.keyboard.press('KeyE'); time.sleep(1.5)
+            n = page.evaluate('__bs.away')
+            if not n or n['next'] != s['next']: break
+    time.sleep(1)
+    pins = page.evaluate('(__bs.save.favours && __bs.save.favours.pins || []).length'); print('pins from Skyvra:', pins, flush=True)
+    if pins < 1: fails.append('scout job left no pins')
     # the Crew tab offers whoever has had their story told
     page.keyboard.press('KeyC'); time.sleep(4)
     print('play buttons:', page.evaluate("[...document.querySelectorAll('.crew-play')].map((b) => b.dataset.play)"), flush=True)

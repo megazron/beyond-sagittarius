@@ -15,6 +15,10 @@ const angleTo = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b
  * camera follows a damped focus point, bobs with the stride, kicks its FOV when
  * sprinting and pulls in softly when a tree comes between it and the player.
  */
+/** The lake's surface, where you start to swim, where you can stand again, and how low a swimmer floats. */
+export const WATER_Y = 0;
+const SWIM_IN = 1.25, SWIM_OUT = 1.05, FLOAT = 1.3;
+
 export class Player {
   model: Character;
   pos = new THREE.Vector3();
@@ -29,6 +33,9 @@ export class Player {
   sprinting = false;
   blockedDeep = false;
   inWater = false;
+  /** Out of your depth: floating, head above water. */
+  swimming = false;
+  private swimLift = 0;
   sensitivity = 1;
   invertY = false;
   /** Body pose (the wake-up lies down, cutscenes can override). */
@@ -101,7 +108,8 @@ export class Player {
     const moving = len > 0.05;
     this.sprinting = moving && canMove && input.held('sprint') && stamina > 2 && mz > 0;
     let speed = (this.sprinting ? 7.2 : 4.0) * slow;
-    if (this.inWater) speed *= 0.55;
+    if (this.swimming) speed = (this.sprinting ? 2.6 : 1.7) * slow;
+    else if (this.inWater) speed *= 0.55;
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
     const rx = -fz, rz = fx;
     const wx = (fx * mz + rx * mx) * speed, wz = (fz * mz + rz * mx) * speed;
@@ -112,7 +120,7 @@ export class Player {
     this.vel.x += (wx - this.vel.x) * k;
     this.vel.z += (wz - this.vel.z) * k;
 
-    if (canMove && this.onGround && input.act('jump')) { this.vel.y = this.physics.jump; this.onGround = false; }
+    if (canMove && this.onGround && !this.swimming && input.act('jump')) { this.vel.y = this.physics.jump; this.onGround = false; }
     this.vel.y -= this.physics.gravity * dt;
 
     const next = this.pos.clone();
@@ -133,19 +141,26 @@ export class Player {
     const gNow = this.terrain.height(this.pos.x, this.pos.z);
     this.blockedDeep = false;
     if (!this.physics.gaps) {
-      if (gNext < -1.1 && gNext < gNow) { this.blockedDeep = true; next.x = this.pos.x; next.z = this.pos.z; }
       const climb = (gNext - gNow) / Math.max(1e-3, Math.hypot(next.x - this.pos.x, next.z - this.pos.z));
       if (climb > 1.6 && gNext > gNow) { next.x = this.pos.x; next.z = this.pos.z; }
     } else if (gNext > this.pos.y + .35) { next.x = this.pos.x; next.z = this.pos.z; } // a ledge above you is a wall
     this.pos.x = next.x; this.pos.z = next.z;
     this.pos.y += this.vel.y * dt;
     const ground = this.terrain.height(this.pos.x, this.pos.z);
+    // chest deep and you swim; shallow enough to stand and you walk out
+    const depth = WATER_Y - ground;
+    if (!this.physics.gaps) this.swimming = this.swimming ? depth > SWIM_OUT : depth > SWIM_IN;
+    if (this.swimming) { this.pos.y = WATER_Y - FLOAT; this.vel.y = 0; this.onGround = true; }
+    else {
     if (this.pos.y <= ground) {
       if (!this.onGround && this.vel.y < -4) audio.human('land', 0.5);
       if (!this.onGround && this.vel.y < -3) this.dipV -= Math.min(1.6, -this.vel.y * 0.2); // landing weight
       this.pos.y = ground; this.vel.y = 0; this.onGround = true;
     }
+    // walking downhill keeps your feet on the ground instead of stepping off into the air
+    else if (this.onGround && this.vel.y <= 0 && this.pos.y - ground < 0.45) { this.pos.y = ground; this.vel.y = 0; }
     else if (this.pos.y - ground > 0.15) this.onGround = false;
+    }
     this.inWater = !this.physics.gaps && ground < -0.25;
 
     // animate model
@@ -159,10 +174,12 @@ export class Player {
     }
     this.walkPhase += dt * hs * 2.1;
     this.model.root.position.copy(this.pos);
-    if (this.inWater) this.model.root.position.y = Math.max(this.pos.y, -0.55);
+    if (this.inWater && !this.swimming) this.model.root.position.y = Math.max(this.pos.y, -0.55);
+    // treading water keeps the head up; swimming lies the body flat along the surface
+    if (this.swimming) { this.swimLift += (clamp(hs / 1.4, 0, 1) - this.swimLift) * (1 - Math.exp(-dt * 3)); this.model.root.position.y = WATER_Y - FLOAT + this.swimLift * 0.85; }
     this.model.root.rotation.y = this.facing + Math.PI;
     this.model.root.updateMatrixWorld();
-    this.model.animate(this.onGround || this.pose !== 'idle' ? this.pose : 'jump', this.walkPhase, clamp(hs / 4, 0, 1.3), performance.now() / 1000, dt);
+    this.model.animate(this.swimming && this.pose === 'idle' ? 'swim' : this.onGround || this.pose !== 'idle' ? this.pose : 'jump', this.walkPhase, clamp(hs / 4, 0, 1.3), performance.now() / 1000, dt);
 
     this.updateCamera(dt);
   }

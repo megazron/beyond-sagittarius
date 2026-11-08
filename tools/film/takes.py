@@ -7,17 +7,26 @@ import argparse, json, os, re, time
 import numpy as np, soundfile as sf, librosa, torch
 from chatterbox.tts import ChatterboxTTS
 from faster_whisper import WhisperModel
-ap = argparse.ArgumentParser(); ap.add_argument('scene'); ap.add_argument('out'); ap.add_argument('--n', type=int, default=3); ap.add_argument('--refs', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tts', 'refs'))
+ap = argparse.ArgumentParser(); ap.add_argument('scene'); ap.add_argument('out'); ap.add_argument('--n', type=int, default=3); ap.add_argument('--lang', default='en'); ap.add_argument('--cpu', action='store_true'); ap.add_argument('--refs', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tts', 'refs'))
 a = ap.parse_args(); out = os.path.expanduser(a.out); os.makedirs(out, exist_ok=True)
 d = json.load(open(a.scene)); log = f'{out}/takes.json'; done = json.load(open(log)) if os.path.exists(log) else {}
-m = ChatterboxTTS.from_pretrained(device='cuda' if torch.cuda.is_available() else 'cpu')
+dev = 'cpu' if a.cpu or not torch.cuda.is_available() else 'cuda'
+if a.lang == 'en':
+    m = ChatterboxTTS.from_pretrained(device=dev)
+else:
+    # Hindi on the multilingual model; Urdu through it too, written in Devanagari (tools/tts/ur2deva.py)
+    import sys as _s; _s.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tts'))
+    from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+    m = ChatterboxMultilingualTTS.from_pretrained(torch.device(dev))
+    if a.lang == 'ur':
+        from ur2deva import urdu_line_to_devanagari
 W = WhisperModel('small', device='cpu', compute_type='int8')
-norm = lambda s: re.sub(r"[^a-z' ]", '', s.lower()).split()
+norm = lambda s: re.sub(r"[^\w' ]", '', s.lower()).split()
 
 
 def score(w, sr, text):
     y = librosa.resample(w, orig_sr=sr, target_sr=16000)
-    h = norm(' '.join(s.text for s in W.transcribe(y, language='en')[0])); t = norm(text)
+    h = norm(' '.join(s.text for s in W.transcribe(y, language=a.lang)[0])); t = norm(text)
     ok = sum(1 for x in t if x in h) / max(1, len(t))
     f0 = librosa.pyin(librosa.resample(w, orig_sr=sr, target_sr=22050), fmin=60, fmax=500, sr=22050)[0]; g = f0[~np.isnan(f0)]
     rng = float(np.ptp(12 * np.log2(g / np.median(g)))) if len(g) > 5 else 0
@@ -37,7 +46,10 @@ for s in d['shots']:
             if key in done: continue
             best = None; t0 = time.time()
             for k in range(a.n):
-                w = m.generate(ph, audio_prompt_path=f"{a.refs}/{l['who']}_en.wav", exaggeration=l.get('ex', .8), cfg_weight=.3, temperature=.8 + .05 * k).squeeze().cpu().numpy()
+                kw = dict(audio_prompt_path=f"{a.refs}/{l['who']}_{'en' if a.lang == 'en' else 'hi'}.wav", exaggeration=l.get('ex', .8), cfg_weight=.3, temperature=.8 + .05 * k)
+                if a.lang == 'en': w = m.generate(ph, **kw)
+                else: w = m.generate(urdu_line_to_devanagari(ph) if a.lang == 'ur' else ph, language_id='hi', **kw)
+                w = w.squeeze().cpu().numpy()
                 w = trim(w, m.sr); ok, rng = score(w, m.sr, ph); r = ok * 100 + min(rng, 14)
                 if best is None or r > best[0]: best = (r, w, ok, rng)
                 if ok == 1 and rng > 7: break

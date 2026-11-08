@@ -66,6 +66,22 @@
 "hand": null,
 "dur": 2.9
 },
+"swim": {
+"loop": true,
+"speed": 0.0,
+"kind": "loop",
+"take": "ual:Swim_Fwd_Loop",
+"hand": null,
+"dur": 1.3333333333333333
+},
+"swim_idle": {
+"loop": true,
+"speed": 0.0,
+"kind": "loop",
+"take": "ual:Swim_Idle_Loop",
+"hand": null,
+"dur": 3.3333333333333335
+},
 "limp": {
 "loop": true,
 "speed": 0.7112840920004426,

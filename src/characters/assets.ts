@@ -135,6 +135,7 @@ export function skinMaterial(sex: string, marks: string, l: SkinLook, lod: numbe
     uGlowK: { value: l.glowK }, uMarks: { value: texPlain(`${marks}_marks`) },
     uDetail: { value: detailTile('detail_skin') }, uScatter: { value: scatterOf(l.skin) },
   };
+  m.userData.u = u; // stages turn a lineage's marks up and down
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.fragmentShader = `uniform vec3 uSkin, uShade, uLip, uGlow, uOver, uScatter; uniform float uGlowK; uniform sampler2D uMarks, uDetail;\n` + sh.fragmentShader

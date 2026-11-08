@@ -1044,5 +1044,12 @@
   "away.scree.intro": "No air out here. Ortek plates seal when I hold my breath, and I can hold it a long time. Long enough to build a door, anyway.",
   "away.wreck.intro": "The lichen in my skin dried me out like seeds in a packet. I wake when the sun comes round. Eleven minutes. Then I sleep again.",
   "away.moon.intro": "Korrath don't need oxygen. We burn what Titan's sky is made of. This moon's sky is the same. It tastes like home, which is the worst part.",
-  "away.clouds.intro": "Air floats in this atmosphere. So does my pod, and so do I. Fifty kilometres of cloud under me and no signal. Iconic."
+  "away.clouds.intro": "Air floats in this atmosphere. So does my pod, and so do I. Fifty kilometres of cloud under me and no signal. Iconic.",
+  "away.fav.explorer": "{f:explorer} marked the nearest finds on your map from up there.",
+  "away.fav.builder": "{f:builder} talked you through it. Your next build won't fail.",
+  "away.fav.medic": "{f:medic}'s advice worked. You feel whole again.",
+  "away.fav.strong": "{f:strong}'s drills paid off. You won't tire today.",
+  "away.fav.social": "{f:social}'s voice on the channel lifts everyone.",
+  "msg.swim": "Out of your depth. Swimming costs stamina, so keep an eye on it.",
+  "msg.swimTired": "Too tired to swim. Get to the shore."
 }

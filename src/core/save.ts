@@ -11,6 +11,8 @@ export interface SaveData {
   completed: number[];
   stats: { health: number; thirst: number; hunger: number; stamina: number };
   inventory: Record<string, number>;
+  /** What the crew's work on their own stages bought you: map pins, a sure build, a tireless day. */
+  favours?: { pins?: [number, number][]; sure?: boolean; tirelessDay?: number };
   pos: [number, number, number];
   yaw: number;
   timeOfDay: number; // hours 0-24

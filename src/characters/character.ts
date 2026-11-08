@@ -20,7 +20,7 @@ export type Dir = [number, number, number];
  */
 export interface Limbs { armL?: Dir; armR?: Dir; foreL?: Dir; foreR?: Dir; legL?: Dir; legR?: Dir; shinL?: Dir; shinR?: Dir; bend?: number; twist?: number; openHands?: boolean; hair?: Dir }
 export type Face = Partial<Record<'smile' | 'frown' | 'fear' | 'squint' | 'open' | 'blink', number>>;
-export type CrewPose = 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'injured' | 'wave' | 'lie' | 'point' | 'cheer' | 'facepalm' | 'selfie' | 'shout' | 'argue' | 'present' | 'write' | 'jump';
+export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'injured' | 'wave' | 'lie' | 'point' | 'cheer' | 'facepalm' | 'selfie' | 'shout' | 'argue' | 'present' | 'write' | 'jump';
 
 /** Mocap style per character: how they stand and how they walk. */
 const STYLE: Record<string, { walk: string; idle: string; rate: number }> = {
@@ -43,7 +43,7 @@ const EXPR: Partial<Record<CrewPose, Record<string, number>>> = {
   cheer: { smile: 0.95, open: 0.25 }, wave: { smile: 0.6 }, selfie: { smile: 0.85 }, present: { smile: 0.3 }, shout: { frown: 0.75, open: 0.65 },
   argue: { frown: 0.6 }, facepalm: { frown: 0.55, squint: 0.5 }, injured: { fear: 0.45, frown: 0.2 }, sit: { smile: 0.1 }, lie: { blink: 0.92 },
 };
-const FULL_BODY = new Set<CrewPose>(['sit', 'injured', 'lie', 'jump', 'float']);
+const FULL_BODY = new Set<CrewPose>(['sit', 'injured', 'lie', 'jump', 'float', 'swim']);
 const MARK_OF: Record<string, string> = { dots: 'scientist', cracks: 'strong', veins: 'medic', stripes: 'explorer', plates: 'builder', stars: 'social' };
 
 const bones = (root: THREE.Object3D) => { const m = new Map<string, THREE.Bone>(); root.traverse((o) => { if ((o as THREE.Bone).isBone) m.set(o.name, o as THREE.Bone); }); return m; };
@@ -393,7 +393,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (limp && speed < 2) gaitPhase = (gaitPhase + dt / A!.meta.limp.dur * (speed / Math.max(A!.meta.limp.speed * legScale, 0.05))) % 1;
       for (const p of parts) if (p.w > 0) action(p.n, true).target += p.w;
     } else {
-      const name = kind === 'idle' ? style.idle : kind === 'walk' ? 'stand' : kind;
+      const name = kind === 'idle' ? style.idle : kind === 'walk' ? 'stand' : kind === 'swim' ? (speed > 0.35 ? 'swim' : 'swim_idle') : kind;
       const s = action(clips!.has(name) ? name : 'stand', false);
       s.target = 1;
       s.a.timeScale = style.rate;

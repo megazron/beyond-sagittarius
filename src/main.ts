@@ -445,6 +445,7 @@ function openMapTab() {
   const L = world.layout, m = game.objectivePoint();
   const pins: MapPin[] = [{ x: L.camp.x, z: L.camp.z, icon: 'camp', label: t('map.camp') }];
   if (m) pins.push({ x: m.x, z: m.z, icon: 'marker', cls: 'goal', label: document.getElementById('obj-title')!.textContent ?? '' });
+  for (const [x, z] of game.save.favours?.pins ?? []) pins.push({ x, z, icon: 'marker', cls: 'scout', label: t('crew.explorer.name') });
   drawMap((x, z) => world.terrain.height(x, z), { x: player.pos.x, z: player.pos.z, yaw: player.yaw }, pins, quality.name === 'mobile' ? 360 : 720);
 }
 
@@ -741,6 +742,21 @@ window.addEventListener('resize', () => {
   goAway(id: CrewId, loc: string) { game?.goAway(id, loc); },
   get away() { const a = game?.away; return a?.active ? { who: a.who, next: a.next?.id ?? null, done: [...a.done], pos: a.position?.toArray() } : null; },
   get revealDue() { return !!game?.revealDue; },
+  /** Ground truth for tests: the drawn surface under the feet and under the camera, by ray, against what is drawn. */
+  groundProbe() {
+    const a = game?.away, on = a?.active && a.stage;
+    const ray = new THREE.Raycaster(), D = new THREE.Vector3(0, -1, 0);
+    const targets: THREE.Object3D[] = [];
+    if (on) a.stage!.scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && !(m as THREE.SkinnedMesh).isSkinnedMesh && !(m as THREE.InstancedMesh).isInstancedMesh && m.geometry.type === 'PlaneGeometry') targets.push(m); });
+    else world.terrain.group.children.forEach((c) => { const l = c as THREE.LOD; if (l.isLOD) targets.push(l.levels[0].object); });
+    const down = (x: number, z: number) => { ray.set(new THREE.Vector3(x, 600, z), D); ray.far = 1200; const h = ray.intersectObjects(targets, false)[0]; return h ? h.point.y : null; };
+    const body = on ? a.position! : player.pos;
+    const cam = camera.position;
+    const grounded = on ? a.grounded : player.onGround;
+    return { x: body.x, z: body.z, feet: body.y, drawn: down(body.x, body.z), cam: cam.y, camDrawn: down(cam.x, cam.z), mode: game?.mode, grounded };
+  },
+  swimProbe() { return { x: player.pos.x, y: player.pos.y, depth: -world.terrain.height(player.pos.x, player.pos.z), swimming: player.swimming }; },
+  awayLeave() { game?.away?.leave(); },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   cineTime() { return cine.time; },
   get stagePlaying() { return cine.staged; },

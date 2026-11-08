@@ -54,6 +54,11 @@ TEXTURES = {
 }
 # Bark of the fir and of the pine scans replaces the old generic bark for the forest.
 TEXTURES["bark_fir"] = ("fir_tree_01", ["bark_diff", "bark_nor_gl"], [1024, 512])
+# the crew's other places: ring ice, asteroid regolith, the wreck's hull, the methane moon's ground
+TEXTURES["ice"] = ("snow_02", ["diff", "nor"], [1024, 512])
+TEXTURES["regolith"] = ("moon_dusted_02", ["diff", "nor"], [1024, 512])
+TEXTURES["hull"] = ("metal_plate_02", ["diff", "nor"], [1024, 512])
+TEXTURES["frozen"] = ("mud_cracked_dry_03", ["diff", "nor"], [1024, 512])
 HDRIS = {"sky": ("misty_pines", "1k")}
 
 # out name, Poly Haven id, node filter (None = whole file), kind, LOD triangle targets.
@@ -129,7 +134,10 @@ def cached(cache: pathlib.Path, url: str) -> pathlib.Path:
 
 
 def fetch_textures(cache: pathlib.Path, report: dict):
+    only = [x for x in __import__('os').environ.get('ONLY_TEX', '').split(',') if x]
     for name, (asset, maps, sizes) in TEXTURES.items():
+        if only and name not in only:
+            continue
         files = json.loads(get(API + asset))
         out = TEX / name
         out.mkdir(parents=True, exist_ok=True)

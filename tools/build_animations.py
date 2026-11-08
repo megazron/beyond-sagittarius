@@ -32,6 +32,8 @@ CLIPS = {
     'sprint':     ('ual:Sprint_Loop', None, None, 'ucycle', None),
     'jump':       ('ual:Jump_Loop', None, None, 'uair', None),
     'crouch':     ('ual:Crouch_Idle_Loop', None, None, 'uloop', None),
+    'swim':       ('ual:Swim_Fwd_Loop', None, None, 'uair', None),
+    'swim_idle':  ('ual:Swim_Idle_Loop', None, None, 'uair', None),
     'limp':       ('139_19', None, None, 'cycle', 'relaxed'),
     'sit':        ('82_05', 1.5, 15.0, 'loop', 'relaxed'),
     'wave':       ('141_16', 0.3, 1.7, 'pingpong', 'open'),
