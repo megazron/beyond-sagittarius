@@ -84,6 +84,65 @@ The water normal map (FFT wave spectrum) and the hydraulic erosion of the mounta
 Clouds, the sky, the giant planet and the moon are shaders. The Windows build can add 4K versions of the same
 assets (`tools/fetch_assets.py --desktop`, not in this repository).
 
+### Port Sahil (the prologue city)
+
+Re-downloaded and packed by `tools/fetch_city.py`: textures to WebP in `public/textures/city/`, models as 1k glTF with 512 px textures, packed with gltfpack into `public/models/city/`.
+
+| Used for | Asset | Source | Licence |
+| --- | --- | --- | --- |
+| City facades | Painted Plaster Wall | https://polyhaven.com/a/painted_plaster_wall | CC0 |
+| City facades, weathered | Peeling Painted Wall | https://polyhaven.com/a/peeling_painted_wall | CC0 |
+| City facades, brick | Painted Worn Brick | https://polyhaven.com/a/painted_worn_brick | CC0 |
+| City pavement | Brick Pavement 02 | https://polyhaven.com/a/brick_pavement_02 | CC0 |
+| City road | Asphalt 02 | https://polyhaven.com/a/asphalt_02 | CC0 |
+| Shop shutters | Painted Metal Shutter | https://polyhaven.com/a/painted_metal_shutter | CC0 |
+| Stall wood | Brown Planks 05 | https://polyhaven.com/a/brown_planks_05 | CC0 |
+| Rooftop parapets | Concrete Block Wall | https://polyhaven.com/a/concrete_block_wall | CC0 |
+| The flat, floor | Floor Tiles 06 | https://polyhaven.com/a/floor_tiles_06 | CC0 |
+| The flat, walls | Blue Plaster Wall | https://polyhaven.com/a/blue_plaster_wall | CC0 |
+| City props and the flat | Rollershutter Door | https://polyhaven.com/a/rollershutter_door | CC0 |
+| City props and the flat | Rollershutter Window 01 | https://polyhaven.com/a/rollershutter_window_01 | CC0 |
+| City props and the flat | Street Lamp 01 | https://polyhaven.com/a/street_lamp_01 | CC0 |
+| City props and the flat | Street Lamp 02 | https://polyhaven.com/a/street_lamp_02 | CC0 |
+| City props and the flat | Metal Trash Can | https://polyhaven.com/a/metal_trash_can | CC0 |
+| City props and the flat | Utility Box 01 | https://polyhaven.com/a/utility_box_01 | CC0 |
+| City props and the flat | Power Box 01 | https://polyhaven.com/a/power_box_01 | CC0 |
+| City props and the flat | Fire Hydrant | https://polyhaven.com/a/fire_hydrant | CC0 |
+| City props and the flat | Modular Street Seating | https://polyhaven.com/a/modular_street_seating | CC0 |
+| City props and the flat | Painted Wooden Bench | https://polyhaven.com/a/painted_wooden_bench | CC0 |
+| City props and the flat | Potted Plant 01 | https://polyhaven.com/a/potted_plant_01 | CC0 |
+| City props and the flat | Potted Plant 02 | https://polyhaven.com/a/potted_plant_02 | CC0 |
+| City props and the flat | Planter Box 01 | https://polyhaven.com/a/planter_box_01 | CC0 |
+| City props and the flat | Security Light | https://polyhaven.com/a/security_light | CC0 |
+| City props and the flat | Caged Hanging Light | https://polyhaven.com/a/caged_hanging_light | CC0 |
+| City props and the flat | Trashbag | https://polyhaven.com/a/trashbag | CC0 |
+| City props and the flat | Plastic Monobloc Chair 01 | https://polyhaven.com/a/plastic_monobloc_chair_01 | CC0 |
+| City props and the flat | Plastic Crate 01 | https://polyhaven.com/a/plastic_crate_01 | CC0 |
+| City props and the flat | Plastic Crate 02 | https://polyhaven.com/a/plastic_crate_02 | CC0 |
+| City props and the flat | Wooden Crate 01 | https://polyhaven.com/a/wooden_crate_01 | CC0 |
+| City props and the flat | Cardboard Box 01 | https://polyhaven.com/a/cardboard_box_01 | CC0 |
+| City props and the flat | Wicker Basket 01 | https://polyhaven.com/a/wicker_basket_01 | CC0 |
+| City props and the flat | Wicker Basket 02 | https://polyhaven.com/a/wicker_basket_02 | CC0 |
+| City props and the flat | Food Apple 01 | https://polyhaven.com/a/food_apple_01 | CC0 |
+| City props and the flat | Food Pomegranate 01 | https://polyhaven.com/a/food_pomegranate_01 | CC0 |
+| City props and the flat | Food Lime 01 | https://polyhaven.com/a/food_lime_01 | CC0 |
+| City props and the flat | Food Pears Asian 01 | https://polyhaven.com/a/food_pears_asian_01 | CC0 |
+| City props and the flat | Brass Pot 01 | https://polyhaven.com/a/brass_pot_01 | CC0 |
+| City props and the flat | Brass Diya Lantern | https://polyhaven.com/a/brass_diya_lantern | CC0 |
+| City props and the flat | Tea Set 01 | https://polyhaven.com/a/tea_set_01 | CC0 |
+| City props and the flat | Folding Wooden Stool | https://polyhaven.com/a/folding_wooden_stool | CC0 |
+| City props and the flat | Round Wooden Table 01 | https://polyhaven.com/a/round_wooden_table_01 | CC0 |
+| City props and the flat | Pot Enamel 01 | https://polyhaven.com/a/pot_enamel_01 | CC0 |
+| City props and the flat | Ceiling Fan | https://polyhaven.com/a/ceiling_fan | CC0 |
+| City props and the flat | Sofa 02 | https://polyhaven.com/a/sofa_02 | CC0 |
+| City props and the flat | Old Bed Frame | https://polyhaven.com/a/old_bed_frame | CC0 |
+| City props and the flat | Drawer Cabinet | https://polyhaven.com/a/drawer_cabinet | CC0 |
+| City props and the flat | Dining Table | https://polyhaven.com/a/dining_table | CC0 |
+| City props and the flat | Dining Chair 02 | https://polyhaven.com/a/dining_chair_02 | CC0 |
+| City props and the flat | Wall Clock | https://polyhaven.com/a/wall_clock | CC0 |
+| City props and the flat | Vintage Electric Kettle | https://polyhaven.com/a/vintage_electric_kettle | CC0 |
+| City props and the flat | Wooden Bookshelf Worn | https://polyhaven.com/a/wooden_bookshelf_worn | CC0 |
+
 ## Characters
 
 The crew are skinned MakeHuman bodies built offline by `tools/build_characters.py`; only MakeHuman's

@@ -11,6 +11,8 @@ export interface AwayStage {
   spawn: THREE.Vector3;
   height(x: number, z: number): number;
   collide(p: THREE.Vector3, r: number): void;
+  /** How far the camera may pull back before a wall (0 to 1). Open stages leave it out. */
+  clearance?(fx: number, fz: number, cx: number, cz: number): number;
   tasks: AwayTask[];
   update(dt: number, time: number): void;
   dispose?(): void;

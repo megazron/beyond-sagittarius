@@ -618,10 +618,11 @@ function tick(step: number) {
   } else if (state === 'narrator') {
     vault.update(dt);
   } else if (state === 'game') {
-    touch.show(input.device === 'touch' && game.mode === 'play' && !paused && !ui.modalOpen());
+    touch.show(input.device === 'touch' && (game.mode === 'play' || game.mode === 'away') && !paused && !ui.modalOpen());
     touch.update();
-    if (state === 'game') ui.track(camera);
     if (!paused && game.mode !== 'dead') game.update(dt, elapsed);
+    // after the update: a prompt set this frame is placed this frame, never drawn once in the corner
+    if (state === 'game') ui.track(camera);
     const focus = player.pos;
     if (photo) { camera.position.copy(photo.from); camera.lookAt(photo.to); }
     world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer);

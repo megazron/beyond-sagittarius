@@ -33,7 +33,7 @@ export class Away {
     const stage = make(location, t, job, this.detail);
     this.pace = 1;
     this.stage = stage; this.who = id; this.onDone = done; this.location = location; this.done.clear(); this.busy = false;
-    const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: () => 1 }, this.camera, this.detail, id);
+    const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: (fx, fz, cx, cz) => stage.clearance?.(fx, fz, cx, cz) ?? 1 }, this.camera, this.detail, id);
     p.physics = { gravity: stage.gravity, jump: stage.jump, gaps: true };
     p.model.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; } });
     // the lineage, in play: the stage lights their marks and sets their pace
