@@ -273,8 +273,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       g.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xx, d, zz));
     }
     // the torso as three capsules, measured from this body's own skin the first time it is posed (keepArmsOut)
-    torsoR = null; torsoBody = null;
-    scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && m.name === 'skin_body') torsoBody = m; });
+    // the surface you see: body skin and the clothes over it (a full suit leaves almost no body skin)
+    torsoR = null; torsoBody = [];
+    scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && (m.name === 'skin_body' || m.name === 'cloth')) torsoBody.push(m); });
     // hair on the real head
     const headP = piv('head');
     const hairId = custom ? custom.hair : human ? 'suit' : id;
@@ -311,7 +312,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     void texturesReady().then(ready);
   };
 
-  let torsoR: number[] | null = null, torsoLen: number[] = [], torsoBody: THREE.SkinnedMesh | null = null; // read by keepArmsOut
+  let torsoR: number[] | null = null, torsoLen: number[] = [], torsoBody: THREE.SkinnedMesh[] = []; // read by keepArmsOut
   const go = () => { const a = animNow(), as = assetNow(key, lod); if (a && as) { attach(as, a); return true; } return false; };
   if (!go()) Promise.all([loadAnim(), loadAsset(key, lod)]).then(([a, as]) => attach(as, a)).catch((e) => console.error('[crew]', key, e));
 
@@ -338,17 +339,19 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
 
   /** Hands and forearms never sink into the torso: the upper arm swings out just enough to clear it. */
   function keepArmsOut(bs: Map<string, THREE.Bone>) {
-    if (!torsoR && !torsoBody) return;
+    if (!torsoR && !torsoBody.length) return;
     root.updateWorldMatrix(true, true);
     const seg = TORSO.map(([a, b]) => [bs.get(a)!.getWorldPosition(new THREE.Vector3()), bs.get(b)!.getWorldPosition(new THREE.Vector3())] as const);
     if (!torsoR) {
       // the skinned, morphed skin as it really stands, in world space: the raw attribute is not the body you see
-      const m = torsoBody!, per: number[][] = TORSO.map(() => []), v = new THREE.Vector3();
-      m.updateWorldMatrix(true, false); m.skeleton.update();
-      for (let i = 0; i < m.geometry.attributes.position.count; i += 2) {
-        m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld); let best = 9, k = -1;
-        seg.forEach(([a, b], j) => { const d = segDist(v, a, b); if (d < best) { best = d; k = j; } });
-        if (k >= 0 && best < .3) per[k].push(best);
+      const per: number[][] = TORSO.map(() => []), v = new THREE.Vector3();
+      for (const m of torsoBody) {
+        m.updateWorldMatrix(true, false);
+        for (let i = 0; i < m.geometry.attributes.position.count; i += 2) {
+          m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld); let best = 9, k = -1;
+          seg.forEach(([a, b], j) => { const d = segDist(v, a, b); if (d < best) { best = d; k = j; } });
+          if (k >= 0 && best < .3) per[k].push(best);
+        }
       }
       torsoR = per.map((x) => { x.sort((a, b) => a - b); return x.length ? x[Math.floor(x.length * .45)] : .1; });
       torsoLen = seg.map(([a, b]) => a.distanceTo(b));

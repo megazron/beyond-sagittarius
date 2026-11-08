@@ -3,7 +3,7 @@
   LD_LIBRARY_PATH=/usr/lib/wsl/lib ~/bs-voice/.venv-tts2/bin/python tools/film/takes.py tools/film/entry.json ~/bs-film/vo/entry [--n 3]
 
 Resumable. Writes <out>/<shot>.<line>.<phrase>.wav and takes.json (seconds, word score, pitch range)."""
-import argparse, json, os, re, time, unicodedata
+import argparse, difflib, json, os, re, time, unicodedata
 import numpy as np, soundfile as sf, librosa, torch
 from chatterbox.tts import ChatterboxTTS
 from faster_whisper import WhisperModel
@@ -25,13 +25,25 @@ W = WhisperModel('small', device='cpu', compute_type='int8')
 norm = lambda s: re.sub(r"[^\w\u0900-\u097F' ]", '', unicodedata.normalize('NFC', s).lower()).split()
 
 
+FOLD = str.maketrans('छठढथधफभखघझटड', 'चतदतदपबकगजतद')
+def skel(s):
+    """Hindi and Urdu as Whisper (small) spells them: marks dropped, aspirated and retroflex letters folded."""
+    return ''.join(c for c in unicodedata.normalize('NFD', s) if not unicodedata.category(c).startswith('M')).translate(FOLD).replace(' ', '')
+
+
 def score(w, sr, text):
+    """Share of the line heard (0..1), and whether the take said more than the line: a ramble."""
     y = librosa.resample(w, orig_sr=sr, target_sr=16000)
-    h = norm(' '.join(s.text for s in W.transcribe(y, language=a.lang)[0])); t = norm(text)
-    ok = sum(1 for x in t if x in h) / max(1, len(t))
+    raw = ' '.join(s.text for s in W.transcribe(y, language=a.lang)[0]); h = norm(raw); t = norm(text)
+    if a.lang == 'en': ok = sum(1 for x in t if x in h) / max(1, len(t))
+    else: ok = difflib.SequenceMatcher(None, skel(' '.join(t)), skel(' '.join(h))).ratio()
+    return ok, len(h) > len(t) + 1
+
+
+def pitch(w, sr):
     f0 = librosa.pyin(librosa.resample(w, orig_sr=sr, target_sr=22050), fmin=60, fmax=500, sr=22050)[0]; g = f0[~np.isnan(f0)]
     rng = float(np.ptp(12 * np.log2(g / np.median(g)))) if len(g) > 5 else 0
-    return ok, rng
+    return rng
 
 
 def trim(w, sr):
@@ -49,15 +61,15 @@ for s in d['shots']:
             # a phrase has a natural length: a take far past it is the model rambling, however well it scores
             want = .35 + .075 * len(re.sub(r'\s', '', ph))
             for k in range(a.n * 2):
-                if k >= a.n and best is not None and best[2] >= .99 and best[4]: break
+                if k >= a.n and best is not None and best[2] >= .85 and best[4]: break
                 kw = dict(audio_prompt_path=f"{a.refs}/{l['who']}_{'en' if a.lang == 'en' else 'hi'}.wav", exaggeration=l.get('ex', .8), cfg_weight=.3, temperature=.8 + .05 * (k % 4))
                 if a.lang == 'en': w = m.generate(ph, **kw)
                 else: w = m.generate(urdu_line_to_devanagari(ph)[0] if a.lang == 'ur' else ph, language_id='hi', **kw)
                 w = w.squeeze().cpu().numpy()
-                w = trim(w, m.sr); ok, rng = score(w, m.sr, ph); sane = len(w) / m.sr < 2.2 * want + .6
+                w = trim(w, m.sr); ok, extra = score(w, m.sr, ph); rng = pitch(w, m.sr); sane = len(w) / m.sr < 2.2 * want + .6 and not extra
                 r = ok * 100 + min(rng, 14) - (0 if sane else 80)
                 if best is None or r > best[0]: best = (r, w, ok, rng, sane)
-                if ok == 1 and rng > 7 and sane: break
+                if ok >= (1 if a.lang == 'en' else .85) and rng > 7 and sane: break
             sf.write(f'{out}/{key}.wav', best[1], m.sr)
             done[key] = dict(sec=round(len(best[1]) / m.sr, 3), words=round(best[2], 2), pitch=round(best[3], 1), text=ph)
             json.dump(done, open(log, 'w'), indent=0); print(key, done[key], round(time.time() - t0), 's', flush=True)

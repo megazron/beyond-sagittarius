@@ -23,7 +23,7 @@ const TORSO: [string, string][] = [['hips', 'spine1'], ['spine1', 'chest'], ['ch
 
 /** Radius of each torso segment from the body at rest: how far the skin sits from the bone line. */
 function radii(c: Character) {
-  const pos = meshes(c, 'skin_body').map(world);
+  const pos = [...meshes(c, 'skin_body'), ...meshes(c, 'cloth')].map(world); // the surface you see: a full suit leaves almost no body skin
   const segs = TORSO.map(([a, b]) => [bone(c, a), bone(c, b)] as const);
   const per: number[][] = segs.map(() => []);
   for (const f of pos) for (let i = 0; i < f.length; i += 3) {

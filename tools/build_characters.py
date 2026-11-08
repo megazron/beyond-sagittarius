@@ -187,7 +187,7 @@ def resolve_layers(inner_P, outer, margin):
 
 
 
-def follow(inner_P, inner_W, outers, keep=None, reach=0.035, near=0.012, far=0.05):
+def follow(inner_P, inner_W, outers, keep=None, reach=0.035, near=0.012, far=0.05, tight=None):
     """Whatever lies just under a garment skins with the garment's own weights, so in any pose the two
     move together and the gap made at bind holds. Near an opening it fades back to its own weights,
     so the edge stays continuous with what is not covered. Skirts hang free and are never followed."""
@@ -205,7 +205,10 @@ def follow(inner_P, inner_W, outers, keep=None, reach=0.035, near=0.012, far=0.0
         if keep is not None: under &= ~keep
         if not under.any(): continue
         rd = cKDTree(o.P[rim]).query(inner_P[under], workers=1)[0] if len(rim) else np.full(under.sum(), 9.)
-        k = np.clip((rd - near) / (far - near), 0, 1)[:, None]
+        k = np.clip((rd - near) / (far - near), 0, 1)
+        if tight is not None:  # at the shoulder an armhole opens wide: follow the garment right up to its edge
+            k[tight[under]] = np.clip(rd[tight[under]] / .02, 0, 1)
+        k = k[:, None]
         W[under] = inner_W[under] * (1 - k) + o.W[j[under]] * k
         best[under] = d[under]
     return W / np.maximum(W.sum(1, keepdims=True), 1e-9)
@@ -383,7 +386,7 @@ def build(c, cid, force=False):
         if not len(rim): continue
         d, j = cKDTree(g.P).query(V, workers=1)
         inside = (d < .04) & (np.einsum('ij,ij->i', V - g.P[j], g.N[j]) < -.002)
-        far = cKDTree(g.P[rim]).query(V, workers=1)[0] > .05
+        far = cKDTree(g.P[rim]).query(V, workers=1)[0] > .10  # 10 cm of skin stays round every opening: a raised arm opens an armhole that wide
         dl |= inside & far & bodyv
     hw0 = rig.W[:, [rig.index[n] for n in ('head', 'jaw', 'eyeL', 'eyeR')]].sum(1)
     dl[hw0 > 0.3] = False
@@ -403,7 +406,10 @@ def build(c, cid, force=False):
     head = Part(V, T[hm], TU[hm], UV, rig.W, 'skin_head', {**morphs, **bm})
     # the neck and head keep their own weights: the head is a separate mesh and must meet the body exactly
     neckish = rig.W[:, [rig.index[n] for n in ('head', 'jaw', 'eyeL', 'eyeR', 'neck')]].sum(1) > 0
-    Wb = follow(Vb, rig.W, garments, keep=neckish) if not os.environ.get('NO_FOLLOW') else rig.W
+    # shoulders and forearms: an armhole opens wide, and a cuff now follows the forearm, not the bending wrist
+    arms = [rig.index[n] for n in ('clavicleL', 'clavicleR', 'upperarmL', 'upperarmR', 'lowerarmL', 'lowerarmR', 'forearmtwL', 'forearmtwR', 'handL', 'handR')]
+    tight = rig.W[:, arms].sum(1) > .15
+    Wb = follow(Vb, rig.W, garments, keep=neckish, tight=tight) if not os.environ.get('NO_FOLLOW') else rig.W
     body = Part(Vb, T[~hm], TU[~hm], UV, Wb, 'skin_body', bm)
     # keep shared normals across the neck seam
     Nall = vnormals(V, T)

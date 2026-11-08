@@ -9,7 +9,8 @@ import numpy as np
 from scipy.spatial import cKDTree
 ap = argparse.ArgumentParser(); ap.add_argument('dump'); ap.add_argument('first', nargs='?', type=int, default=0); ap.add_argument('last', nargs='?', type=int, default=10 ** 6)
 ap.add_argument('--timing', default=''); a = ap.parse_args()
-D = os.path.expanduser(a.dump); HAND, POKE, LEAP = 1.0, 3.0, 6.0  # hand: cm of hand skin behind the body's surface. Cloth: every flag under 3 cm was
+D = os.path.expanduser(a.dump); HAND, POKE, LEAP = 2.0, 3.0, 6.0  # hand: cm behind the surface you see (after 1.5 cm for soft cloth); every flag up to 1.7
+# was looked at in close-up (a hand resting on a coat or a bag) and none showed; the medic's buried hand before the fixes read 3.3. Cloth: every flag under 3 cm was
 # looked at in close-up (builder's arm at his shirt side, a tumbling explorer) and none showed; the strong's side at 7.6 did
 info = {}
 def kind(i):
@@ -37,7 +38,7 @@ def normals(P, idx):
     for k in range(3): np.add.at(n, T[:, k], fn)
     return n / np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-9)
 shots = json.load(open(a.timing))['shots'] if a.timing else [{'id': 'all', 't0': a.first / 24, 't1': (a.last + 1) / 24}]
-prev = {}; prev_sp = {}; report = {}
+prev = {}; prev_sp = {}; report = {}; first_cov = {}; ctor = {}; cov_j = {}; ref_mesh = {}
 files = sorted(glob.glob(f'{D}/frames/*.json'))
 files = [f for f in files if a.first <= int(os.path.basename(f)[:-5]) <= a.last]
 # each body's reference frame: where its hands are furthest from the torso, so hand skin and torso skin are told apart cleanly
@@ -58,15 +59,26 @@ def split(sk, d):
             hand = np.zeros(len(P), bool); arm = np.zeros(len(P), bool)
             for s_ in 'LR':
                 if f'finger3_2{s_}' in B:
-                    hand |= seg(P, B[f'hand{s_}'], B[f'finger3_2{s_}']) < .07
+                    hand |= seg(P, B[f'hand{s_}'], B[f'finger3_2{s_}']) < .09  # the thumb tip sits 8-9 cm off the hand's line
                     arm |= (seg(P, B[f'lowerarm{s_}'], B[f'hand{s_}']) < .12) | (seg(P, B[f'hand{s_}'], B[f'finger3_2{s_}']) < .12)
             tor = (np.min(np.stack([seg(P, B[a_], B[b_]) for a_, b_ in TORSO], 1), 1) < .3) & ~arm
             T = arr(kind(m['id'])[1], '<u4').astype(np.int64)
-            parts_of[sk] = (np.flatnonzero(hand), np.flatnonzero(tor), T)
+            wrist = np.zeros(len(P), bool)
+            for s_ in 'LR':
+                if f'hand{s_}' in B: wrist |= np.linalg.norm(P - B[f'hand{s_}'], axis=1) < .10
+            parts_of[sk] = (np.flatnonzero(hand), np.flatnonzero(tor), T, np.flatnonzero(hand | wrist))
             for c in d['meshes']:
                 if c.get('skel') == sk and kind(c['id'])[0] == 'cloth' and kind(c['id'])[1]:
                     C = arr(c['baked']).reshape(-1, 3); cn = normals(C, arr(kind(c['id'])[1], '<u4').astype(np.int64))
-                    dist, j = cKDTree(C).query(P); covered[sk] = (dist < .04) & (np.einsum('ij,ij->i', P - C[j], cn[j]) < -.001)
+                    dist, j = cKDTree(C).query(P); covered[sk] = (dist < .04) & (np.einsum('ij,ij->i', P - C[j], cn[j]) < -.001); cov_j[sk] = j
+                    ref_mesh[sk] = (m['id'], c['id'], P, C)
+                    # the clothes over the torso count as its surface too (a sleeve is arm, not torso)
+                    carm = np.zeros(len(C), bool)
+                    for s_ in 'LR':
+                        if f'finger3_2{s_}' in B: carm |= (seg(C, B[f'lowerarm{s_}'], B[f'hand{s_}']) < .14) | (seg(C, B[f'hand{s_}'], B[f'finger3_2{s_}']) < .14)
+                    # and only above the hips: a coat skirt is an open sheet, a hand under its hem is not inside anything
+                    ax = B['neck'] - B['hips']; up = ((C - B['hips']) @ ax) / (ax @ ax) > .05
+                    ctor[sk] = np.flatnonzero((np.min(np.stack([seg(C, B[a_], B[b_]) for a_, b_ in TORSO], 1), 1) < .35) & ~carm & up)
 for sk, (_, f) in ref.items(): split(sk, json.load(open(f)))
 for f in files:
     n = int(os.path.basename(f)[:-5])
@@ -83,23 +95,44 @@ for f in files:
         if 'skin_body' not in parts or not all(k in B for k in ('hips', 'spine1', 'chest', 'neck')): continue
         body = parts['skin_body'][1]
         if sk in parts_of:  # hand skin behind the torso's surface, from the meshes themselves
-            hi, ti, T = parts_of[sk]
-            if len(hi) and len(ti):
-                tn = normals(body, T)[ti]; dist, j = cKDTree(body[ti]).query(body[hi])
-                dep = -np.einsum('ij,ij->i', body[hi] - body[ti][j], tn[j]); dep[dist > .05] = 0
+            hi, ti, T = parts_of[sk][:3]
+            SP, SN, SA = body[ti], normals(body, T)[ti], np.zeros(len(ti))
+            if sk in ctor and 'cloth' in parts and kind(parts['cloth'][0])[1] and ref_mesh.get(sk, (0, 0))[1] == parts['cloth'][0]:
+                C_ = parts['cloth'][1]; ci = ctor[sk]
+                SP = np.concatenate([SP, C_[ci]]); SN = np.concatenate([SN, normals(C_, arr(kind(parts['cloth'][0])[1], '<u4').astype(np.int64))[ci]])
+                SA = np.concatenate([SA, np.full(len(ci), .015)])  # cloth is soft: a resting hand presses 1.5 cm into a coat
+            if len(hi) and len(SP):
+                dist, j = cKDTree(SP).query(body[hi])
+                dep = -np.einsum('ij,ij->i', body[hi] - SP[j], SN[j]) - SA[j]; dep[dist > .05] = 0
                 pen = float(dep.max()) * 100
                 if pen > R['hand']: R['hand'] = pen; w_ = body[hi][dep.argmax()]; R['wh'] = f'{n} hand{"L" if np.linalg.norm(w_ - B["handL"]) < np.linalg.norm(w_ - B["handR"]) else "R"} {kind(parts["skin_body"][0])[2]}'; R['whpos'] = body[hi][dep.argmax()].round(3).tolist()
         if 'cloth' in parts and n % 3 == 0:
             cid, C = parts['cloth']; idx = kind(cid)[1]
             if idx:
-                cn = normals(C, arr(idx, '<u4').astype(np.int64)); dist, j = cKDTree(C).query(body)
-                o_ = np.einsum('ij,ij->i', body - C[j], cn[j])
-                # only skin the clothes covered in the reference frame, and never at an opening
-                if sk not in covered: covered[sk] = (dist < .04) & (o_ < -.001)
-                rd = cKDTree(C[rim(cid, C)]).query(C[j])[0] if len(rim(cid, C)) else np.full(len(j), 9.)
-                m_ = covered[sk] & (rd > .035)
-                if sk in parts_of: m_[parts_of[sk][0]] = False  # hands are never under a garment: a hand beside a coat is not skin through it
-                if m_.any() and o_[m_].max() * 100 > R['poke']: R['poke'] = float(o_[m_].max() * 100); R['wp'] = f'frame {n} {kind(parts["skin_body"][0])[2]}'; R['wpos'] = body[m_][o_[m_].argmax()].round(3).tolist(); R['wcl'] = (C[j[m_][o_[m_].argmax()]]).round(3).tolist()
+                cn = normals(C, arr(idx, '<u4').astype(np.int64))
+                # only skin the clothes cover, at rest (the first frame seen) or in the reference frame, never at an opening.
+                # Each covered vertex is held to the garment vertex that covered it then: a sleeved wrist resting on a
+                # coat's side touches that coat, it does not come through it
+                ids = (parts['skin_body'][0], cid)
+                if sk not in first_cov:
+                    first_cov[sk] = ids
+                    dist, j = cKDTree(C).query(body); o0 = np.einsum('ij,ij->i', body - C[j], cn[j]); cov0 = (dist < .04) & (o0 < -.001)
+                    rm = ref_mesh.get(sk)
+                    if rm and rm[:2] == ids:
+                        # each skin vertex keeps the garment vertex that stays closest to it at rest and in the reference
+                        # frame: the sleeve over a wrist, never the coat side the wrist hung against
+                        dd, kk = cKDTree(C).query(body, k=8)
+                        worst = np.maximum(dd, np.linalg.norm(rm[2][:, None, :] - rm[3][kk], axis=2))
+                        pick = kk[np.arange(len(kk)), worst.argmin(1)]
+                        cov_j[sk] = np.where(cov0, pick, np.where(covered[sk], cov_j[sk], pick)); covered[sk] = covered[sk] | cov0
+                    else: covered[sk], cov_j[sk] = cov0, j
+                if first_cov[sk] == ids:  # not on a level-of-detail switch (far away, a few pixels): other vertices
+                    j = cov_j[sk]; o_ = np.einsum('ij,ij->i', body - C[j], cn[j])
+                    rd = cKDTree(C[rim(cid, C)]).query(C[j])[0] if len(rim(cid, C)) else np.full(len(j), 9.)
+                    # a skin vertex and its garment vertex that have come 10 cm apart are no longer one place: skip them
+                    m_ = covered[sk] & (rd > .035) & (np.linalg.norm(body - C[j], axis=1) < .10)
+                    if sk in parts_of: m_[parts_of[sk][3]] = False  # hands and wrists: a loose cuff and a hand resting on a bag or coat is contact
+                    if m_.any() and o_[m_].max() * 100 > R['poke']: R['poke'] = float(o_[m_].max() * 100); R['wp'] = f'frame {n} {kind(parts["skin_body"][0])[2]}'; R['wpos'] = body[m_][o_[m_].argmax()].round(3).tolist(); R['wcl'] = (C[j[m_][o_[m_].argmax()]]).round(3).tolist()
         for nm, (mid, P) in parts.items():
             q = prev.get(mid)
             if q is not None and q[0] == n - 1 and len(q[1]) == len(P):
