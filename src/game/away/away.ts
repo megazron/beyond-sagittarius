@@ -1,3 +1,4 @@
+import type { CrewSkins } from '../../characters/custom';
 import * as THREE from 'three';
 import { Player } from '../player';
 import type { CrewId } from '../../characters/character';
@@ -8,7 +9,7 @@ import type { AwayStage, AwayTask } from './stage';
 import { buildStage, STAGES } from './kit';
 import { buildCity } from './city';
 
-const make = (loc: string, label: (k: string) => string, job: number, detail: number) => (loc === 'city' ? buildCity(label, detail) : buildStage(loc, STAGES[loc], label, job));
+const make = (loc: string, label: (k: string) => string, job: number, detail: number) => (loc === 'city' ? buildCity(label, detail) : buildStage(loc, STAGES[loc], label, job, detail));
 
 /** Playing someone else, somewhere else: their stage, their tasks, the same controls on every device. */
 export class Away {
@@ -36,7 +37,7 @@ export class Away {
     const stage = make(location, t, job, this.detail);
     this.pace = 1;
     this.stage = stage; this.who = id; this.onDone = done; this.location = location; this.done.clear(); this.busy = false; this.seen.clear(); this.vista = null;
-    const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: (fx, fz, cx, cz) => stage.clearance?.(fx, fz, cx, cz) ?? 1 }, this.camera, this.detail, id);
+    const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: (fx, fz, cx, cz) => stage.clearance?.(fx, fz, cx, cz) ?? 1 }, this.camera, this.detail, id, id === 'strong' && this.skins.strong === 'suit' ? 'suit' : undefined); // the crew's chosen skin, on their own stage too
     p.physics = { gravity: stage.gravity, jump: stage.jump, gaps: true };
     p.model.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; } });
     // the lineage, in play: the stage lights their marks and sets their pace
@@ -63,6 +64,12 @@ export class Away {
   /** Test hook: the camera's aim and any hero view in progress. */
   get camState() { const p = this.player; return p ? { yaw: p.yaw, pitch: p.pitch, x: p.pos.x, z: p.pos.z, vista: this.vista, seen: [...this.seen] } : null; }
 
+  /** The skins chosen in the skins menu (set by main whenever they change). */
+  skins: CrewSkins = {};
+
+  /** Test hook (recording clips): the camera circles a point instead of following the player. */
+  orbit: { x: number; y: number; z: number; r: number; a: number; h: number } | null = null;
+
   /** Test hook: stand beside a task. */
   teleport(x: number, z: number, yaw = 0) { this.player?.spawn(x, z, yaw); }
 
@@ -87,6 +94,7 @@ export class Away {
       if (this.input.lookDX || this.input.lookDY) this.settle = 0;
       else if (this.settle <= 0) p.pitch = -0.18; // whatever the frame rate, it ends at the usual eye line
     }
+    if (this.orbit) { const o = this.orbit; this.camera.position.set(o.x + Math.sin(o.a) * o.r, o.y + o.h, o.z + Math.cos(o.a) * o.r); this.camera.lookAt(o.x, o.y + o.h * 0.55, o.z); }
     s.update(dt, time, this.camera);
     // falling off the ice costs nothing but the walk back
     if (p.pos.y < -30) { p.spawn(s.spawn.x, s.spawn.z, 0); this.ui.toast(t('away.fell')); }

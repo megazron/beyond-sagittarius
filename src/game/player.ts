@@ -58,8 +58,8 @@ export class Player {
   /** Stages other than the green world set their own gravity, and let you jump across open gaps. */
   physics = { gravity: 14, jump: 5.2, gaps: false };
 
-  constructor(private terrain: Pick<Terrain, 'height'>, private forest: Pick<Forest, 'collide' | 'blocks' | 'clearance'>, public camera: THREE.PerspectiveCamera, detail = 1, id: CrewId = 'scientist') {
-    this.model = createCharacter(id, detail);
+  constructor(private terrain: Pick<Terrain, 'height'>, private forest: Pick<Forest, 'collide' | 'blocks' | 'clearance'>, public camera: THREE.PerspectiveCamera, detail = 1, id: CrewId = 'scientist', skin?: string) {
+    this.model = createCharacter(id, detail, undefined, skin);
     this.baseFov = camera.fov;
     this.model.setGround((x, z) => this.terrain.height(x, z));
   }

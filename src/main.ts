@@ -189,8 +189,10 @@ function showStage(on: boolean) {
 }
 
 let castKey = '';
+let lastSkins: CrewSkins = {};
 function applyPlayer(look: PlayerLook, skins: CrewSkins) {
   setPlayer(look);
+  lastSkins = skins; if (game?.away) game.away.skins = skins;
   applyCrewNames(look.name ? { scientist: look.name } : {});
   setPortraitCast(look, skins, detail());
   // rebuilding figures is expensive: only when the look really changed
@@ -698,6 +700,7 @@ async function boot() {
   world.scene.add(player.model.root);
   game = new Game(world, player, input, ui, (id) => touch.highlight(id), (text) => ui.hint(text));
   game.away = new Away(camera, input, ui, detail(), (sc) => (sc ? renderer.setScene(sc, camera, false) : renderer.setScene(world.scene, camera, true)));
+  game.away.skins = lastSkins;
   game.onLevelComplete = onLevelDone;
   game.timersOff = !!settings.noTimers;
   // warm up shaders so the first in-game frame doesn't hitch
@@ -795,6 +798,7 @@ window.addEventListener('resize', () => {
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
   get awayCam() { return game?.away?.camState ?? null; },
+  awayOrbit(o: { x: number; y: number; z: number; r: number; a: number; h: number } | null) { if (game?.away) game.away.orbit = o; },
   cineTime() { return cine.time; },
   get stagePlaying() { return cine.staged; },
   gameScene(id: 'rescue' | 'camp' | 'beacon') { game?.debugScene(id); },

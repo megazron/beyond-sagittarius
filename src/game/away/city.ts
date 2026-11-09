@@ -645,7 +645,12 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           const want = w.dir > 0 ? 0 : Math.PI; q.yaw += Math.atan2(Math.sin(want - q.yaw), Math.cos(want - q.yaw)) * (1 - Math.exp(-dt * 5));
           q.pos.y = hx(q.pos.x); q.fig.root.rotation.y = q.yaw; q.phase += dt * w.speed * 2.2;
           q.fig.animate('walk', q.phase, Math.min(1.1, w.speed / 3), time, dt);
-        } else { q.phase += dt; q.fig.animate(q.pose, q.phase, 0, time, dt); }
+        } else {
+          q.phase += dt;
+          // Mir talks with his hands now and then, between sips: a few seconds of gesture in every twelve
+          const pose = q.id === 'mir' ? ((time + 3) % 12 < 3.2 ? ((time + 3) % 24 < 12 ? 'present' : 'argue') : 'idle') : q.pose;
+          q.fig.animate(pose, q.phase, 0, time, dt);
+        }
       }
       ringLight.rotation.z += dt;
       future.update(dt, time);
