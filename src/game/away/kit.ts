@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { AwayStage, AwayTask } from './stage';
 import { mulberry32, Simplex } from '../../core/noise';
 import { loadTexture } from '../../core/assets';
+import { dressStage } from './scatter';
 
 export type Trait = 'frost' | 'plates' | 'lichen' | 'ember' | 'float';
 
@@ -33,7 +34,7 @@ export interface StageDef {
 export interface StageBody { root: THREE.Object3D; glow(k: number): void; slow(k: number): void }
 
 /** A location from data: textured ground with real relief, shadows, a sky, and the lineage trait in play. */
-export function buildStage(name: string, d: StageDef, label: (k: string) => string, job = 0): AwayStage & { bind(b: StageBody): void } {
+export function buildStage(name: string, d: StageDef, label: (k: string) => string, job = 0, detail = 1): AwayStage & { bind(b: StageBody): void } {
   const scene = new THREE.Scene(); scene.background = new THREE.Color(d.sky);
   if (d.fog) scene.fog = new THREE.FogExp2(d.sky, d.fog);
   const rnd = mulberry32(name.length * 91 + 7), noise = new Simplex(name.length * 13 + 3);
@@ -84,7 +85,7 @@ export function buildStage(name: string, d: StageDef, label: (k: string) => stri
     const m = new THREE.Mesh(g, ground); m.receiveShadow = true; m.castShadow = true; scene.add(m);
     // stones and loose blocks on top: the eye reads scale from them
     const rg = rockGeo(b.x);
-    const n = Math.round(b.r * 2.2), rocks = new THREE.InstancedMesh(rg, rockM, n);
+    const n = d.tex === 'hull' ? 0 : Math.round(b.r * 2.2), rocks = new THREE.InstancedMesh(rg, rockM, n); // on a hull the art pass lays ship debris instead
     const M = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), t = new THREE.Vector3();
     for (let i = 0; i < n; i++) {
       const a = rnd() * 6.283, rr = (.35 + .6 * Math.sqrt(rnd())) * b.r, x = b.x + Math.cos(a) * rr, z = b.z + Math.sin(a) * rr, sc = .15 + rnd() * rnd() * .9;
@@ -103,20 +104,19 @@ export function buildStage(name: string, d: StageDef, label: (k: string) => stri
     const lake = new THREE.Mesh(new THREE.CircleGeometry(400, 64), new THREE.MeshStandardMaterial({ color: 0x1a0e06, roughness: .06, metalness: .2 }));
     lake.rotation.x = -Math.PI / 2; lake.position.y = d.lakes; lake.receiveShadow = true; scene.add(lake);
   }
-  if (d.body) {
+  // the giants and the sky come from the art pass (scatter.ts); the old flat body stays only where it has none
+  if (d.body && name !== 'ring' && name !== 'moon') {
     const b = new THREE.Mesh(new THREE.SphereGeometry(d.body.r, 64, 40), new THREE.MeshStandardMaterial({ color: d.body.color, roughness: .9 })); b.position.set(...d.body.at); scene.add(b);
     if (d.body.ring) { const r = new THREE.Mesh(new THREE.RingGeometry(d.body.r * 1.3, d.body.r * d.body.ring, 128, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color(d.body.color).lerp(new THREE.Color(0xffffff), .45), transparent: true, opacity: .22, side: THREE.DoubleSide, fog: false, depthWrite: false })); r.position.copy(b.position); r.lookAt(0, 0, 0); r.rotateX(1.42); scene.add(r); }
   }
-  { const n = 4000, p = new Float32Array(n * 3), c = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) { const v = new THREE.Vector3(rnd() - .5, rnd() - .5, rnd() - .5).normalize().multiplyScalar(3000); p.set([v.x, v.y, v.z], i * 3); const w = .5 + rnd() * .5; c.set([w, w * (.9 + rnd() * .1), w * (.85 + rnd() * .2)], i * 3); }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3)); g.setAttribute('color', new THREE.BufferAttribute(c, 3));
-    scene.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 1.8, sizeAttenuation: false, vertexColors: true, fog: false, transparent: true, opacity: d.fog ? .15 : 1 }))); }
+  // stars: the art pass's sky carries them (scatter.ts)
 
   // light: a hard sun that throws shadows around wherever you are, and very little else
   const sun = new THREE.DirectionalLight(d.sun, d.sunI); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 140 }); sun.shadow.bias = -.0004; sun.shadow.normalBias = .04;
   scene.add(sun, sun.target, new THREE.HemisphereLight(d.sun, d.ambientG, d.ambient));
   const sunDir = new THREE.Vector3(.55, .62, .4).normalize();
+  const dressed = dressStage(name, scene, pads, padAt, sunDir, rockGeo, rockM, detail >= 1, d.tex === 'hull');
 
   // a job on a later visit: the work is in new places each time
   const spots: [number, number][] = job ? d.gather.spots.map((_, i) => { const r2 = mulberry32(job * 31 + i * 7); const b = pads[1 + ((i + job) % (pads.length - 1))] ?? pads[0]; const a = r2() * 6.283, rr = r2() * b.r * .7; return [b.x + Math.cos(a) * rr, b.z + Math.sin(a) * rr]; }) : d.gather.spots;
@@ -140,7 +140,8 @@ export function buildStage(name: string, d: StageDef, label: (k: string) => stri
     scene, gravity: d.gravity, jump: d.jump, spawn: new THREE.Vector3(pads[0].x, 0, pads[0].z + 2), tasks,
     height: padAt, collide() { /* the height function is the only wall */ },
     bind(b) { body = b; },
-    update(dt, time) {
+    update(dt, time, cam) {
+      dressed(dt, time, cam ?? null);
       bits.forEach((m, i) => { m.rotation.y = time * .7 + i; });
       const at = body?.root.position ?? new THREE.Vector3();
       // light that follows: the shadow box stays on the player
@@ -191,6 +192,6 @@ export const STAGES: Record<string, StageDef> = {
     gather: { id: 'ice', color: 0xe8e0d0, spots: [[8, 5], [21, 4], [-19, -5]] }, steps: [{ id: 'break', at: [35, -4] }, { id: 'ember', at: [0, -6] }] },
   // Nuvexa: drifting in the one layer of a hot planet's clouds where the pressure is sane
   clouds: { sky: 0xd8b860, fog: .02, gravity: 3.2, jump: 4, tex: 'hull', tint: 0xe0d0a0, rough: .5, metal: .3, repeat: 1, relief: .05, scale: 20, sun: 0xfff0c8, sunI: 2, ambient: 1.1, ambientG: 0x8a6a30,
-    pads: P([0, 0, 7, 0], [13, 2, 4, .8], [22, -3, 4, 1.8], [-12, 4, 4, .5]), debris: { n: 160, color: 0xe8d8a0, near: 30, far: 200, size: 6 }, trait: 'float',
+    pads: P([0, 0, 7, 0], [13, 2, 4, .8], [22, -3, 4, 1.8], [-12, 4, 4, .5]), debris: { n: 0, color: 0xe8d8a0, near: 30, far: 200, size: 6 }, trait: 'float', // no rocks in a sky: the art pass draws its clouds
     gather: { id: 'patch', color: 0xffd23c, spots: [[3, -3], [13, 2], [-12, 4]] }, steps: [{ id: 'relay', at: [22, -3] }] },
 };
