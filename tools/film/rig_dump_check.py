@@ -132,6 +132,13 @@ for f in files:
                     # a skin vertex and its garment vertex that have come 10 cm apart are no longer one place: skip them
                     m_ = covered[sk] & (rd > .035) & (np.linalg.norm(body - C[j], axis=1) < .10)
                     if sk in parts_of: m_[parts_of[sk][3]] = False  # hands and wrists: a loose cuff and a hand resting on a bag or coat is contact
+                    # an arm that brushed the coat's side from outside was touching it, not under it: arm skin held to a garment
+                    # vertex that is not on that same arm (no sleeve there) is skipped once the arm swings away
+                    # (a sleeve or a vest strap stays within a few cm of the arm's bones; a coat side the arm hung against does not)
+                    for s_ in 'LR':
+                        if all(f'{b}{s_}' in B for b in ('upperarm', 'lowerarm', 'hand')):
+                            fa = lambda X: np.minimum(seg(X, B[f'upperarm{s_}'], B[f'lowerarm{s_}']), seg(X, B[f'lowerarm{s_}'], B[f'hand{s_}']))
+                            m_ &= ~((fa(body) < .10) & (fa(C[j]) > fa(body) + .05))
                     if m_.any() and o_[m_].max() * 100 > R['poke']: R['poke'] = float(o_[m_].max() * 100); R['wp'] = f'frame {n} {kind(parts["skin_body"][0])[2]}'; R['wpos'] = body[m_][o_[m_].argmax()].round(3).tolist(); R['wcl'] = (C[j[m_][o_[m_].argmax()]]).round(3).tolist()
         for nm, (mid, P) in parts.items():
             q = prev.get(mid)

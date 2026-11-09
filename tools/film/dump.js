@@ -23,7 +23,7 @@ window.__filmDump = (() => {
     for (const a of ['aT', 'aLayer']) { const v = g.attributes[a]; if (v) { const f = new Float32Array(v.count); for (let i = 0; i < v.count; i++) f[i] = v.getX(i); o[a] = b64(f); } }
     return o;
   };
-  const BONES = new Set(['hips', 'spine1', 'chest', 'neck', 'handL', 'handR', 'finger3_2L', 'finger3_2R', 'lowerarmL', 'lowerarmR']);
+  const BONES = new Set(['hips', 'spine1', 'chest', 'neck', 'handL', 'handR', 'finger3_2L', 'finger3_2R', 'lowerarmL', 'lowerarmR', 'upperarmL', 'upperarmR']);
   const shown = (o) => { for (let q = o; q; q = q.parent) if (!q.visible) return false; return true; };
   return () => {
     const st = __bs.stageInfo(), scene = st.scene, cam = st.camera;
