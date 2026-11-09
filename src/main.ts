@@ -794,6 +794,7 @@ window.addEventListener('resize', () => {
   awayLeave() { game?.away?.leave(); },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
+  get awayCam() { return game?.away?.camState ?? null; },
   cineTime() { return cine.time; },
   get stagePlaying() { return cine.staged; },
   gameScene(id: 'rescue' | 'camp' | 'beacon') { game?.debugScene(id); },

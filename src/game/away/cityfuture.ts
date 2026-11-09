@@ -166,11 +166,12 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
 
   // ---- hover traffic and drones overhead: instanced, moving along lanes ----
   const cars = rich ? 26 : 12, drones = rich ? 18 : 8;
-  const carG = mergeGeometries([new THREE.CapsuleGeometry(0.9, 2.4, 4, 10).rotateX(Math.PI / 2).toNonIndexed(), new THREE.BoxGeometry(1.6, 0.25, 2.2).translate(0, -0.55, 0).toNonIndexed()], false)!;
+  // a hover car: a long low body, a canopy, two short fins; light at the nose and glow underneath
+  const carG = mergeGeometries([new THREE.CapsuleGeometry(0.55, 3.0, 4, 12).rotateX(Math.PI / 2).scale(1.25, 0.6, 1).toNonIndexed(), new THREE.SphereGeometry(0.55, 12, 8).scale(0.9, 0.5, 1.4).translate(0, 0.32, -0.2).toNonIndexed(), new THREE.BoxGeometry(2.6, 0.06, 0.7).translate(0, -0.05, 0.9).toNonIndexed()], false)!;
   const carM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25, metalness: 0.3, emissive: 0x223344, emissiveIntensity: 0.6 });
   const carI = new THREE.InstancedMesh(carG, carM, cars); carI.castShadow = rich; carI.userData.ground = false;
   const carLights = new THREE.InstancedMesh(new THREE.BoxGeometry(1.4, 0.1, 0.1), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe0b0).multiplyScalar(3), toneMapped: false }), cars);
-  const lanes = Array.from({ length: cars }, (_, i) => ({ x: (i % 4 - 1.5) * 4.5, y: 10 + (i % 3) * 3.5 + rnd() * 1.5, z: S + rnd() * (N - S), v: (i % 2 ? 1 : -1) * (10 + rnd() * 9) }));
+  const lanes = Array.from({ length: cars }, (_, i) => ({ x: (i % 4 - 1.5) * 4.5, y: 15 + (i % 3) * 4 + rnd() * 1.5, z: S + rnd() * (N - S), v: (i % 2 ? 1 : -1) * (10 + rnd() * 9) }));
   lanes.forEach((_, i) => carI.setColorAt(i, new THREE.Color().setHSL(rnd(), 0.35, 0.82)));
   const under = new THREE.InstancedMesh(new THREE.BoxGeometry(1.2, 0.05, 2.6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.5), toneMapped: false }), cars); add(under);
   add(carI); add(carLights);
@@ -179,7 +180,7 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   const droneL = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 6, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fffd4).multiplyScalar(3), toneMapped: false }), drones);
   const dpaths = Array.from({ length: drones }, () => ({ cx: (rnd() - 0.5) * 12, cz: S + 10 + rnd() * (N - S - 20), r: 2 + rnd() * 5, y: 4.5 + rnd() * 4, w: 0.3 + rnd() * 0.5, p: rnd() * 6 }));
   add(droneI); add(droneL);
-  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(1.6, 1.6, 1.6), UP = new THREE.Vector3(0, 1, 0);
+  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(1.25, 1.25, 1.25), UP = new THREE.Vector3(0, 1, 0);
   updates.push((dt, t) => {
     lanes.forEach((l, i) => {
       l.z += l.v * dt; if (l.z > N + 30) l.z = S - 30; if (l.z < S - 30) l.z = N + 30;

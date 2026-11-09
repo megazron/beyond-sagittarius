@@ -27,6 +27,7 @@ export class Away {
   quiet = 0;
   private seen = new Set<number>();
   private vista: { yaw: number; pitch: number; t: number } | null = null;
+  private settle = 0;
 
   constructor(private camera: THREE.PerspectiveCamera, private input: Input, private ui: UI, private detail: number, private show: (s: THREE.Scene | null) => void) {}
 
@@ -59,6 +60,8 @@ export class Away {
   get next() { return this.stage?.tasks.find((k) => !k.optional && this.open(k)) ?? null; }
   get position() { return this.player?.pos ?? null; }
   get grounded() { return !!this.player?.onGround; }
+  /** Test hook: the camera's aim and any hero view in progress. */
+  get camState() { const p = this.player; return p ? { yaw: p.yaw, pitch: p.pitch, x: p.pos.x, z: p.pos.z, vista: this.vista, seen: [...this.seen] } : null; }
 
   /** Test hook: stand beside a task. */
   teleport(x: number, z: number, yaw = 0) { this.player?.spawn(x, z, yaw); }
@@ -78,7 +81,11 @@ export class Away {
     if (this.vista) {
       const k = 1 - Math.exp(-Math.min(dt, 0.25) * 4), V = this.vista;
       p.yaw += Math.atan2(Math.sin(V.yaw - p.yaw), Math.cos(V.yaw - p.yaw)) * k; p.pitch += (V.pitch - p.pitch) * k;
-      if ((V.t -= dt) <= 0 || this.input.lookDX || this.input.lookDY) this.vista = null;
+      if ((V.t -= dt) <= 0 || this.input.lookDX || this.input.lookDY) { this.vista = null; this.settle = this.input.lookDX || this.input.lookDY ? 0 : 1.5; }
+    } else if (this.settle > 0) { // then back to the usual eye line
+      this.settle -= dt; p.pitch += (-0.18 - p.pitch) * (1 - Math.exp(-Math.min(dt, 0.25) * 3));
+      if (this.input.lookDX || this.input.lookDY) this.settle = 0;
+      else if (this.settle <= 0) p.pitch = -0.18; // whatever the frame rate, it ends at the usual eye line
     }
     s.update(dt, time);
     // falling off the ice costs nothing but the walk back
