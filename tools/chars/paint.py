@@ -387,7 +387,7 @@ def mark_map(cid, cfg, base, rig, out):
         P = maps['P']
         rs = np.random.default_rng(3)
         speck = np.clip(.72 + gaussian_filter(rs.normal(0, 1, P.shape[:2]), .7) * 1.1, 0, 1)
-        dark = np.maximum.reduce([suit.beard(P) ** 1.4 * speck * .9, suit.scalp(P) ** 1.4 * speck * .9, suit.brows(P) * .85]).astype(np.float32)
+        dark = np.maximum.reduce([suit.beard(P) ** 1.4 * speck * .9, suit.scalp(P) ** 1.4 * speck * .9, suit.brows(P) * .3]).astype(np.float32)
         em, over = np.zeros_like(dark), []
     else:
         em, dark, over = marks(key, maps, cid)

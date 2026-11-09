@@ -116,13 +116,14 @@ function capShell(lowDeg: number, frontDeg: number, S: Skull, volume = 0) {
     } }
   sp.computeVertexNormals();
   sp.translate(S.c.x, S.c.y, S.c.z);
-  const n = p.count, at = new Float32Array(n).fill(0.16), z = new Float32Array(n), ph = new Float32Array(n).fill(0.5), tan = new Float32Array(n * 3);
+  const n = p.count, at = new Float32Array(n).fill(volume > 0 ? 0.02 : 0.16), z = new Float32Array(n), ph = new Float32Array(n).fill(0.5), tan = new Float32Array(n * 3);
   const v = new THREE.Vector3(), down = new THREE.Vector3(0, -1, 0);
   for (let i = 0; i < n; i++) {
     v.set(p.getX(i) - S.c.x, p.getY(i) - S.c.y, p.getZ(i) - S.c.z).normalize();
     const tn = down.clone().addScaledVector(v, -down.dot(v)).normalize();
     tan[i * 3] = tn.x; tan[i * 3 + 1] = tn.y; tan[i * 3 + 2] = tn.z;
   }
+  { const uvA = sp.attributes.uv as THREE.BufferAttribute; for (let i = 0; i < uvA.count; i++) uvA.setXY(i, 0.5, 0.01); } // the cap samples the dense root band only
   sp.setAttribute('aT', new THREE.BufferAttribute(at, 1));
   sp.setAttribute('aTan', new THREE.BufferAttribute(tan, 3));
   sp.setAttribute('aSway', new THREE.BufferAttribute(z, 1));
@@ -132,8 +133,52 @@ function capShell(lowDeg: number, frontDeg: number, S: Skull, volume = 0) {
 
 export interface HairColors { root: number; mid: number; tip: number; shine: number }
 
+/** A flat strip along a grown lock, as wide as `w`, its normals pointing out from the skull: one hair card. */
+function card(path: THREE.Vector3[], w: number, S: Skull, u0: number, uw: number): THREE.BufferGeometry {
+  const n = path.length, pos: number[] = [], nor: number[] = [], uv: number[] = [], at: number[] = [], tan: number[] = [], idx: number[] = [];
+  const T = new THREE.Vector3(), N = new THREE.Vector3(), B = new THREE.Vector3();
+  for (let i = 0; i < n; i++) {
+    T.subVectors(path[Math.min(n - 1, i + 1)], path[Math.max(0, i - 1)]).normalize();
+    N.subVectors(path[i], S.c).normalize();
+    B.crossVectors(T, N).normalize();
+    const t = i / (n - 1), half = w * 0.5 * (1 - 0.35 * t * t);
+    for (const k of [-1, 1]) {
+      pos.push(path[i].x + B.x * half * k, path[i].y + B.y * half * k, path[i].z + B.z * half * k);
+      nor.push(N.x, N.y, N.z); uv.push(u0 + (k > 0 ? uw : 0), t); at.push(t); tan.push(T.x, T.y, T.z);
+    }
+    if (i < n - 1) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('aT', new THREE.Float32BufferAttribute(at, 1)); g.setAttribute('aTan', new THREE.Float32BufferAttribute(tan, 3));
+  g.setIndex(idx);
+  return g;
+}
+
+let strandTex: THREE.Texture | null = null;
+/** Many fine, softly waving strands with tapered, fading ends: the texture every hair card shows (drawn here, original). */
+function strands(): THREE.Texture {
+  if (strandTex) return strandTex;
+  const c = document.createElement('canvas'); c.width = 256; c.height = 512;
+  const g = c.getContext('2d')!, r = mulberry32(31);
+  g.clearRect(0, 0, 256, 512);
+  for (let i = 0; i < 260; i++) {
+    const x0 = r() * 256, amp = 3 + r() * 7, ph = r() * 6, len = 380 + r() * 132, wd = 0.8 + r() * 1.8;
+    g.beginPath(); g.moveTo(x0, 0);
+    for (let y = 8; y <= len; y += 8) g.lineTo(x0 + Math.sin(y / 70 + ph) * amp + (y / len) * (r() - 0.5) * 6, y);
+    const gr = g.createLinearGradient(0, 0, 0, len); const a = 0.55 + r() * 0.45;
+    gr.addColorStop(0, `rgba(255,255,255,${a})`); gr.addColorStop(0.75, `rgba(255,255,255,${a * 0.9})`); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.strokeStyle = gr; g.lineWidth = wd; g.stroke();
+  }
+  // a dense core near the root, so cards never show the scalp between strands
+  const core = g.createLinearGradient(0, 0, 0, 512); core.addColorStop(0, 'rgba(255,255,255,0.7)'); core.addColorStop(0.35, 'rgba(255,255,255,0.25)'); core.addColorStop(0.6, 'rgba(255,255,255,0)');
+  g.fillStyle = core; g.fillRect(24, 0, 208, 512);
+  strandTex = new THREE.CanvasTexture(c); strandTex.wrapS = THREE.RepeatWrapping; strandTex.anisotropy = 8; strandTex.flipY = false; // v = 0 is the root
+  return strandTex;
+}
+
 /** Sculpted anime hair: every lock is a tapered ribbon with its own phase. */
-export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms, detail = 1, capLow = -20, capFront = 50, skull: Skull = roundSkull, volume = 0, rough = 0.46): THREE.Mesh {
+export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms, detail = 1, capLow = -20, capFront = 50, skull: Skull = roundSkull, volume = 0, rough = 0.46, cards = false): THREE.Mesh {
   const rnd = mulberry32(locks.length * 37 + 5);
   const steps = detail < 0.8 ? 5 : 7;
   // on a real head one anime lock is a bundle of finer strands around the same path
@@ -144,7 +189,10 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
       return { ...l, az: l.az + k * (n > 3 ? 0.055 : 0.085) + (rnd() - 0.5) * 0.04, el: l.el + (rnd() - 0.5) * 0.06, len: l.len * (0.86 + rnd() * 0.22), w: (l.w ?? 0.03) * (n > 3 ? 0.32 : 0.46), thick: (l.thick ?? (l.w ?? 0.03) * 0.42) * 0.7 };
     });
   });
-  const parts = fine.map((l) => {
+  const parts = cards ? locks.map((l) => {
+    const { path } = grow(l, steps + 3, skull);
+    return swayByStrand(card(path, l.w ?? 0.035, skull, rnd() * 0.75, 0.22 + rnd() * 0.1), 0.15, l.sway ?? 1, rnd());
+  }) : fine.map((l) => {
     const { path, side } = grow(l, steps, skull);
     const w = l.w ?? 0.03, th = l.thick ?? w * 0.42;
     const g = sweep(smoothPath(path, steps + (detail < 0.8 ? 0 : 3)), {
@@ -158,7 +206,7 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
   });
   parts.push(capShell(capLow, capFront, skull, volume));
   const geo = mergeGeometries(parts)!;
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: rough, metalness: 0.0, side: THREE.DoubleSide });
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: rough, metalness: 0.0, side: THREE.DoubleSide, ...(cards ? { map: strands(), alphaTest: 0.32, envMapIntensity: 0.25 } : {}) });
   mat.userData.film = { kind: 'hair', ...colors };
   const u = {
     uRoot: { value: new THREE.Color(colors.root) },
@@ -210,9 +258,11 @@ export type HairStyleId = 'scientist' | 'strong' | 'medic' | 'explorer' | 'build
 
 /** Per-style shell cut: back and front hairline elevation in degrees. */
 /** Per-style body: how far the hair mass swells off the scalp at the top (fraction of skull radius). */
-export const HAIR_VOLUME: Partial<Record<HairStyleId, number>> = { suit: 0.27 };
+export const HAIR_VOLUME: Partial<Record<HairStyleId, number>> = { suit: 0.06 }; // the cards carry the volume; the cap stays under them
+/** Styles drawn as textured hair cards instead of swept strands. */
+export const HAIR_CARDS: Partial<Record<HairStyleId, boolean>> = { suit: true };
 /** Per-style surface: thick dry hair is matte. */
-export const HAIR_ROUGH: Partial<Record<HairStyleId, number>> = { suit: 0.78 };
+export const HAIR_ROUGH: Partial<Record<HairStyleId, number>> = { suit: 0.92 };
 
 export const HAIR_CAP: Record<HairStyleId, [number, number]> = {
   scientist: [-18, 54], strong: [44, 62], medic: [-28, 54], explorer: [-16, 52], builder: [30, 52], social: [-14, 54], megazron: [-22, 58], suit: [40, 58],
@@ -264,20 +314,26 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
   // Thick, dark, wavy: swept up and back off the forehead with real volume, short at the sides and back,
   // and a few loose waves that tumble forward at the top front without reaching the brows.
   suit: () => {
+    // hair cards (see HAIR_CARDS): thick soft waves swept up and back, a few falling forward, a short taper at the sides
     const r = mulberry32(77), j = (a: number) => (r() - 0.5) * 2 * a;
-    return [
-      // the front of the mass: rises off the hairline, then rolls back
-      ...fan(-48 * D, 48 * D, 17, (az): Lock => ({ az: az + j(0.04), el: (55 + j(3)) * D, len: 0.17 + j(0.025), droop: 0.45, dir: [Math.sin(az) * 0.15 + j(0.08), 1, -0.85 + j(0.12)], w: 0.034, thick: 0.019, lift: 1.28, wave: [0.011 + j(0.003), 1.4 + j(0.3)], sway: 0.35, soft: true })),
-      // the middle: longer waves running back over the top
-      ...fan(-50 * D, 50 * D, 15, (az): Lock => ({ az: az + j(0.06), el: (68 + j(4)) * D, len: 0.18 + j(0.03), droop: 0.7, dir: [Math.sin(az) * 0.3 + j(0.12), 0.7, -1 + j(0.15)], w: 0.036, thick: 0.019, lift: 1.33, wave: [0.013 + j(0.004), 1.6 + j(0.4)], sway: 0.4, soft: true })),
-      // the crown, lying back and down
-      ...fan(120 * D, 240 * D, 13, (az): Lock => ({ az: az + j(0.08), el: (74 + j(6)) * D, len: 0.11 + j(0.02), droop: 2.2, dir: [Math.sin(az) * 0.5, 0.1, Math.cos(az) * 0.8 + j(0.2)], w: 0.034, thick: 0.016, lift: 1.25, wave: [0.009, 1.3], sway: 0.3, soft: true })),
-      ...fan(92 * D, 268 * D, 13, (az): Lock => ({ az: az + j(0.06), el: (58 + j(5)) * D, len: 0.09 + j(0.015), droop: 1.8, dir: [Math.sin(az) * 0.7, 0.3, Math.cos(az) * 0.8], w: 0.032, thick: 0.014, lift: 1.14, wave: [0.006, 1.1], sway: 0.25, soft: true })),
-      // the top blends into the close-cut sides and back: short, lying flat, no ledge
-      ...fan(96 * D, 264 * D, 15, (az): Lock => ({ az: az + j(0.05), el: (44 + j(4)) * D, len: 0.06 + j(0.012), droop: 2.4, dir: [Math.sin(az) * 0.5, -0.3, Math.cos(az) * 0.5], w: 0.03, thick: 0.01, lift: 1.05, wave: [0.003, 1], sway: 0.15 })),
-      // the loose waves that fall forward at the top front, stopping above the brows
-      ...fan(-28 * D, 30 * D, 5, (az, i): Lock => ({ az: az + j(0.04), el: (70 + j(3)) * D, len: 0.11 + (i % 2) * 0.02, droop: 2.6, dir: [Math.sin(az) * 0.6 + j(0.2), 0.75, 0.55], w: 0.026, thick: 0.012, lift: 1.3, wave: [0.014, 1.8], curl: 0.35, sway: 0.6, soft: true })),
-    ];
+    const out: Lock[] = [];
+    // the top, in two layers: rises off the hairline, rolls back over the head
+    for (let layer = 0; layer < 3; layer++) for (let el = 50; el <= 82; el += 5) for (let az = -52; az <= 52; az += 7) {
+      const front = el < 62;
+      out.push({ az: (az + j(2.5)) * D, el: (el + j(1.5)) * D, len: (front ? 0.13 : 0.15) + j(0.02), droop: front ? 0.55 : 1.0,
+        dir: [Math.sin(az * D) * 0.3 + j(0.15), front ? 0.9 : 0.45 + j(0.15), -1], w: (front ? 0.026 : 0.038) + j(0.008), lift: 1.1 + layer * 0.08 + (front ? 0.06 : 0) + j(0.02),
+        wave: [0.016 + j(0.006), 1.3 + j(0.5)], curl: j(0.25), sway: 0.3 });
+    }
+    // the crown and the back of the top: lying back and down over the head
+    for (let el = 58; el <= 84; el += 6) for (let az = 112; az <= 248; az += 9) out.push({ az: (az + j(3)) * D, el: (el + j(2)) * D, len: 0.1 + j(0.015), droop: 1.6, dir: [Math.sin(az * D) * 0.5, 0.1, Math.cos(az * D)], w: 0.036, lift: 1.08, wave: [0.006, 1], sway: 0.25 });
+    // the loose waves that fall forward at the top front, stopping above the brows
+    for (const [az, el, len] of [[-26, 66, 0.09], [-14, 68, 0.1], [-2, 70, 0.08], [10, 69, 0.09], [22, 67, 0.075], [-8, 73, 0.07]]) out.push({ az: az * D, el: el * D, len, droop: 3, dir: [Math.sin(az * D) * 0.6 + j(0.2), 0.6, 0.7], w: 0.034, lift: 1.24, wave: [0.016, 1.6], curl: 0.4, sway: 0.5 });
+    // the sides and back: short, close, a clean taper down to the fade
+    for (let el = 24; el <= 52; el += 7) for (let az = 60; az <= 300; az += 10) {
+      if (az > 116 && az < 244 && el > 48) continue;
+      out.push({ az: (az + j(3)) * D, el: (el + j(2)) * D, len: 0.045 + (el - 24) * 0.0012, droop: 2, dir: [Math.sin(az * D) * 0.3, -0.5, Math.cos(az * D) * 0.4 - 0.4], w: 0.034, lift: 1.025, sway: 0.1 });
+    }
+    return out;
   },
   // Long pale hair that floats upward at the ends, as if gravity is a suggestion.
   megazron: () => [

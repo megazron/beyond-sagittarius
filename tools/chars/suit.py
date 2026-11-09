@@ -21,7 +21,7 @@ def beard(P):
     x, y, z = np.abs(P[..., 0]), P[..., 1], P[..., 2]
     top = np.interp(x, [0, .2, .34, .5, .64, .76, .9], [6.80, 6.80, 6.72, 6.74, 6.84, 7.02, 7.3])
     low = np.interp(x, [0, .4, .7], [6.02, 6.1, 6.3])
-    m = (1 - _step(top - .13, top + .05, y)) * _step(low - .05, low + .06, y)
+    m = (1 - _step(top - .24, top + .1, y)) * _step(low - .05, low + .06, y)  # a soft edge on the cheeks, no shell line
     m = m * _step(0.14, 0.34, z)                                        # stops at the sideburn
     lips = np.hypot(x / .25, (y - 6.615) / .082)
     m = m * _step(.9, 1.15, lips)
@@ -47,4 +47,4 @@ def brows(P):
     x, y, z = np.abs(P[..., 0]), P[..., 1], P[..., 2]
     mid = np.interp(x, [.08, .3, .5, .66], [7.50, 7.53, 7.53, 7.50])  # straight, not arched
     half = np.interp(x, [.08, .3, .66], [.05, .042, .012])
-    return _step(.08, .12, x) * (1 - _step(.62, .68, x)) * (1 - _step(half * .7, half * 1.25, np.abs(y - mid))) * _step(.7, .9, z)
+    return _step(.08, .14, x) * (1 - _step(.58, .7, x)) * (1 - _step(half * .4, half * 1.6, np.abs(y - mid))) * _step(.7, .9, z)  # no hard painted edge

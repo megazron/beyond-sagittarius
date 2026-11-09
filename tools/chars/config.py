@@ -151,7 +151,7 @@ CHARS['strong_suit'] = dict(
            ('nose/nose-width2-incr.target', 0.35), ('nose/nose-point-width-incr.target', 0.35), ('nose/nose-volume-incr.target', 0.2),
            ('chin/chin-width-incr.target', 0.35), ('mouth/mouth-lowerlip-volume-incr.target', 0.3), ('mouth/mouth-upperlip-volume-incr.target', 0.15),
            ('eyes/l-eye-scale-incr.target', 0.12), ('eyes/r-eye-scale-incr.target', 0.12)],
-    fur=True, cloth_k=1.8, brow='eyebrow004',  # straight, full brows
+    fur=True, cloth_k=1.8, brow='eyebrow002',  # natural, full but soft brows
     clothes=[('toigo_male_suit_3', (0x3a, 0x29, 0x20), {'islands': 'suit', 'drop': (6, 7)}),  # a dark brown three-piece, satin lapels
              ('shoes04', (0x5a, 0x36, 0x22), {})])  # brown leather lace-ups (MakeHuman system asset, CC0)
 for _id, _f in FACES.items():

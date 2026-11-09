@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { clamp } from '../core/noise';
 import { applySway, swayUniforms } from './sway';
-import { buildHair, HAIRSTYLES, HAIR_CAP, HAIR_VOLUME, HAIR_ROUGH, skullFrom } from './hair';
+import { buildHair, HAIRSTYLES, HAIR_CAP, HAIR_VOLUME, HAIR_ROUGH, HAIR_CARDS, skullFrom } from './hair';
 import { LOOKS, CrewId, Look } from './looks';
 import type { PlayerLook } from './custom';
 import { voice } from '../core/voice';
@@ -186,8 +186,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       scene.traverse((o) => { const s = o as THREE.SkinnedMesh; if (s.isSkinnedMesh) s.skeleton.calculateInverses(); });
     }
     // materials
-    const skinC = custom ? custom.skin : human ? 0x8f6044 : L.face.skin; // medium brown
-    const shadeC = custom ? new THREE.Color(custom.skin).multiplyScalar(0.5).getHex() : human ? 0x4c2c1e : L.face.shade;
+    const skinC = custom ? custom.skin : human ? 0xb5835f : L.face.skin; // a warm wheatish brown
+    const shadeC = custom ? new THREE.Color(custom.skin).multiplyScalar(0.5).getHex() : human ? 0x6a4430 : L.face.shade;
     const lipC = custom ? new THREE.Color(custom.skin).lerp(new THREE.Color(0xa03040), 0.45).getHex() : human ? 0x7c463c : L.face.lip ? parseInt(L.face.lip.slice(1), 16) : new THREE.Color(L.face.shade).lerp(new THREE.Color(L.face.skin), 0.4).getHex();
     const glowC = custom ? custom.glow : human ? 0 : L.glow;
     const marks = custom ? MARK_OF[custom.marks] : human ? 'strong_suit' : id;
@@ -195,7 +195,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const skin = skinMaterial(M.skin, marks, { skin: skinC, shade: shadeC, lip: lipC, glow: glowC, over: overC, glowK: human ? 0 : 1.15 }, lod);
     const irisC = custom ? custom.iris : human ? 0x1e120b : L.face.iris;
     const eyes = eyeMaterial(irisC, (custom ? custom.eyeGlow : !human) ? 0.55 : 0);
-    const browC = custom ? new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex() : human ? 0x1a100c : L.face.brow;
+    const browC = custom ? new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex() : human ? 0x2c1d14 : L.face.brow;
     const atlas = M.atlas;
     const cloth = new THREE.MeshStandardMaterial({ map: tex(`${atlas}_cloth`, lod, true), normalMap: tex(`${atlas}_cloth_n`, lod), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, side: THREE.DoubleSide });
     cloth.userData.film = { kind: 'cloth', atlas, satin: human };
@@ -280,7 +280,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const headP = piv('head');
     const hairId = custom ? custom.hair : human ? 'suit' : id;
     const hc = custom ? { root: new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex(), mid: custom.hairRoot, tip: custom.hairTip, shine: new THREE.Color(custom.hairTip).lerp(new THREE.Color(0xffffff), 0.5).getHex() } : human ? { root: 0x0c0806, mid: 0x18100b, tip: 0x22170f, shine: 0x2e241e } : L.hair;
-    const hair = buildHair(HAIRSTYLES[hairId](), hc, sway, detail, HAIR_CAP[hairId][0], HAIR_CAP[hairId][1], skullFrom(M.skull.c, M.skull.r), HAIR_VOLUME[hairId] ?? 0, HAIR_ROUGH[hairId] ?? 0.46);
+    const hair = buildHair(HAIRSTYLES[hairId](), hc, sway, detail, HAIR_CAP[hairId][0], HAIR_CAP[hairId][1], skullFrom(M.skull.c, M.skull.r), HAIR_VOLUME[hairId] ?? 0, HAIR_ROUGH[hairId] ?? 0.46, !!HAIR_CARDS[hairId]);
     bs.get('head')!.add(hair);
     // The decimated scan teeth break up in close-ups: use a clean mouth instead.
     const mouthBox = new THREE.Box3();
