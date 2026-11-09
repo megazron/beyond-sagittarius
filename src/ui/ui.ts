@@ -32,6 +32,8 @@ export interface Stats { health: number; thirst: number; hunger: number; stamina
 export class UI implements CineUI {
   private typeTimer = 0;
   private subTimer = 0;
+  /** Test hook: a said line stays up (recording on a held clock, where real seconds pass between frames). */
+  holdSubs = false;
   private lastSub: { key: string | null; speaker?: string } = { key: null };
   private lastCaption: string | null = null;
   private lastChapter: string[] | null = null;
@@ -103,7 +105,7 @@ export class UI implements CineUI {
     key = line.key; speakerKey = line.who;
     this.subtitle(key, speakerKey);
     const spoken = voice.duration(key);
-    this.subTimer = window.setTimeout(() => this.subtitle(null), Math.max(seconds, (spoken ?? 0) + 0.4) * 1000);
+    this.subTimer = window.setTimeout(() => { if (!this.holdSubs) this.subtitle(null); }, Math.max(seconds, (spoken ?? 0) + 0.4) * 1000);
   }
 
   caption(key: string | null) {

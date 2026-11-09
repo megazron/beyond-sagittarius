@@ -798,6 +798,7 @@ window.addEventListener('resize', () => {
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
   get awayCam() { return game?.away?.camState ?? null; },
+  holdSubs(on: boolean) { ui.holdSubs = on; },
   awayOrbit(o: { x: number; y: number; z: number; r: number; a: number; h: number } | null) { if (game?.away) game.away.orbit = o; },
   cineTime() { return cine.time; },
   get stagePlaying() { return cine.staged; },
