@@ -134,11 +134,18 @@ for f in files:
                     if sk in parts_of: m_[parts_of[sk][3]] = False  # hands and wrists: a loose cuff and a hand resting on a bag or coat is contact
                     # an arm that brushed the coat's side from outside was touching it, not under it: arm skin held to a garment
                     # vertex that is not on that same arm (no sleeve there) is skipped once the arm swings away
-                    # (a sleeve or a vest strap stays within a few cm of the arm's bones; a coat side the arm hung against does not)
+                    # bare arms: where no sleeve wraps a bone (garment all round it, not just beside it), skin along that bone is
+                    # never inside anything; an arm that brushed a vest or coat side and swung away is not through it
                     for s_ in 'LR':
-                        if all(f'{b}{s_}' in B for b in ('upperarm', 'lowerarm', 'hand')):
-                            fa = lambda X: np.minimum(seg(X, B[f'upperarm{s_}'], B[f'lowerarm{s_}']), seg(X, B[f'lowerarm{s_}'], B[f'hand{s_}']))
-                            m_ &= ~((fa(body) < .10) & (fa(C[j]) > fa(body) + .05))
+                        for a_, b_ in (('upperarm', 'lowerarm'), ('lowerarm', 'hand')):
+                            if f'{a_}{s_}' not in B or f'{b_}{s_}' not in B: continue
+                            A_, Z_ = B[f'{a_}{s_}'], B[f'{b_}{s_}']; ax = (Z_ - A_) / (np.linalg.norm(Z_ - A_) + 1e-9)
+                            t_ = (C - A_) @ ax; L_ = np.linalg.norm(Z_ - A_)
+                            r_ = C - A_ - np.outer(t_, ax); near_ = (t_ > L_ * .2) & (t_ < L_ * .8) & (np.linalg.norm(r_, axis=1) < .1)
+                            u_ = np.cross(ax, [0, 1, 0] if abs(ax[1]) < .9 else [1, 0, 0]); u_ /= np.linalg.norm(u_); v_ = np.cross(ax, u_)
+                            ang = np.arctan2(r_[near_] @ v_, r_[near_] @ u_); bins = len(np.unique(np.floor((ang + np.pi) / (np.pi / 6)).astype(int)))
+                            if bins >= 9: continue  # a sleeve: checked as usual
+                            m_ &= ~(seg(body, A_, Z_) < .1)
                     if m_.any() and o_[m_].max() * 100 > R['poke']: R['poke'] = float(o_[m_].max() * 100); R['wp'] = f'frame {n} {kind(parts["skin_body"][0])[2]}'; R['wpos'] = body[m_][o_[m_].argmax()].round(3).tolist(); R['wcl'] = (C[j[m_][o_[m_].argmax()]]).round(3).tolist()
         for nm, (mid, P) in parts.items():
             q = prev.get(mid)
