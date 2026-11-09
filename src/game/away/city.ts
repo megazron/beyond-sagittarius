@@ -8,6 +8,8 @@ import type { AwayStage, AwayTask } from './stage';
 import type { StageBody } from './kit';
 import { buildFuture } from './cityfuture';
 import { buildMega } from './citymega';
+import { buildDense, Facade } from './citydense';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
  * Port Sahil, Taravel, 2189: the last normal afternoon. One long bazaar street from the flat (north-east corner)
@@ -232,14 +234,30 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
 
   const shopAt = (side: number, z0b: number, z1b: number) => SHOPS.find((s) => s.side === side && s.z > z1b + 3.5 && s.z < z0b - 3.5);
   const FLAT = { side: 1, z0: 61, z1: 77 }; // the friends' flat: its own interior, built below
+  const facadesOut: Facade[] = [];
+  const greebles: Record<'ledge' | 'pipe' | 'panel', THREE.BufferGeometry[]> = { ledge: [], pipe: [], panel: [] };
+  // junctions: the canyon opens to side streets, and the skyline shows down them
+  const GAPS: Record<number, [number, number][]> = { 1: [[34, 26]], [-1]: [[-40, -48]] };
   const h0 = (_f: typeof FLAT) => 2 * 3.3 + 0.6;
   let k = 0;
   for (const side of [-1, 1]) {
     for (let z = N + 2; z > S + 6; ) {
       let len = 10 + Math.floor(rnd() * 5);
       const inFlat = side === FLAT.side && z > FLAT.z0;
+      const gap = (GAPS[side] ?? []).find(([a, b]) => z - len < a && z > b);
+      if (gap && !inFlat) {
+        if (z > gap[0]) len = z - gap[0]; // build up to the junction
+        else { // the side street: open to the far city, a wall at its end
+          blocks.push(new THREE.Box3(new THREE.Vector3(Math.min(side * (FRONT + 12), side * (FRONT + 13)), 0, gap[1]), new THREE.Vector3(Math.max(side * (FRONT + 12), side * (FRONT + 13)), 20, gap[0])));
+          box(4, 5.5, gap[0] - gap[1], pick(facadeMats[1]), side * (FRONT + 14.5), 2.75, (gap[0] + gap[1]) / 2); // low, so the far city shows over it
+          facadesOut.push({ side, z0: gap[0], z1: gap[1], h: 5.5 });
+          for (const zz of [gap[0], gap[1]]) blocks.push(new THREE.Box3(new THREE.Vector3(Math.min(side * FRONT, side * (FRONT + 13)), 0, zz - 0.2), new THREE.Vector3(Math.max(side * FRONT, side * (FRONT + 13)), 20, zz + 0.2)));
+          z = gap[1]; continue;
+        }
+      }
       if (inFlat) len = z - FLAT.z0;
-      const zc = z - len / 2, floors = inFlat ? 2 : 2 + Math.floor(rnd() * 2), h = floors * 3.3 + 0.6, depth = 12;
+      const zc = z - len / 2, floors = inFlat ? 2 : rnd() < 0.75 ? 2 : 3, h = floors * 3.3 + 0.6, depth = 12;
+      if (!inFlat) facadesOut.push({ side, z0: z, z1: z - len, h });
       const fi = k % 3 === 2 ? 2 : k % 5 === 1 ? 1 : 0, wallM = pick(facadeMats[fi]);
       const face = side * FRONT, out = -side; // `out` points from the wall into the street
       if (!inFlat) solid(box(depth, h, len - 0.3, wallM, side * (FRONT + depth / 2), h / 2, zc));
@@ -260,6 +278,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       }
       if (rich) for (let t = 0; t < 1 + Math.floor(rnd() * 2); t++) {
         const tk = add(new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 1.3, 16), tankM)); tk.position.set(side * (FRONT + 3 + rnd() * 6), h + 1.25, zc + (rnd() - 0.5) * (len - 3)); tk.castShadow = true;
+      }
+      // surface richness: a ledge at every floor, rain pipes, inset panels, slatted vents
+      if (!inFlat) {
+        for (let f = 1; f <= floors; f++) greebles.ledge.push(new THREE.BoxGeometry(0.28, 0.16, len - 0.4).translate(face + out * 0.14, f * 3.3 + 0.05, zc).toNonIndexed());
+        for (const pz of [zc - len / 2 + 0.6, zc + len / 2 - 0.6]) greebles.pipe.push(new THREE.CylinderGeometry(0.07, 0.07, h, 6).translate(face + out * 0.12, h / 2, pz).toNonIndexed());
+        for (let f = 1; f < floors; f++) for (let wz = zc - len / 2 + 2.9; wz < zc + len / 2 - 2.6; wz += 2.6) greebles.panel.push(new THREE.BoxGeometry(0.05, 1.1, 0.9).translate(face + out * 0.03, f * 3.3 + 1.4, wz).toNonIndexed());
+        if (rnd() < 0.5) for (let v = 0; v < 5; v++) greebles.pipe.push(new THREE.BoxGeometry(0.06, 0.06, 1.2).translate(face + out * 0.08, 3.9 + v * 0.12, zc + len / 2 - 1.6).toNonIndexed());
       }
       // upper floors: framed windows, some lit, AC units, balconies with washing
       for (let f = 1; f < floors; f++) {
@@ -302,6 +327,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       }
       z -= len; k++;
     }
+  }
+  for (const [k2, m] of [['ledge', parapetM], ['pipe', railM], ['panel', frameM]] as ['ledge' | 'pipe' | 'panel', THREE.Material][]) {
+    if (!greebles[k2].length) continue;
+    const g = add(new THREE.Mesh(mergeGeometries(greebles[k2], false)!, m)); g.castShadow = rich; g.receiveShadow = true;
   }
   // walls closing both ends of the street, so nobody walks off the map
   blocks.push(new THREE.Box3(new THREE.Vector3(-30, -1, N + 2), new THREE.Vector3(30, 20, N + 10)), new THREE.Box3(new THREE.Vector3(-30, -1, S - 12), new THREE.Vector3(30, 20, S - 1.5)));
@@ -538,7 +567,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   person('mir', createCharacter('strong', detail, undefined, 'suit'), 5.0, 15.4, Math.PI / 2 + 0.5, 'idle');
   // walkers: up and down the pavements' outer edge, clear of the stalls
   const lineages = Object.keys(LINEAGES) as PlayerLook['lineage'][];
-  for (let i = 0, n = rich ? 16 : 5; i < n; i++) {
+  for (let i = 0, n = rich ? 24 : 7; i < n; i++) {
     const sd = i % 2 ? 1 : -1, x = sd * (4.9 + rnd() * 0.5), za = S + 12 + rnd() * 30, zb = Math.min(za + 40 + rnd() * 50, N - 12);
     person(`walker${i}`, someone(lineages[i % lineages.length], i + 3), x, za + rnd() * (zb - za), 0, 'idle', { z0: za, z1: zb, dir: rnd() < 0.5 ? 1 : -1, speed: 1.1 + rnd() * 0.5 });
   }
@@ -546,9 +575,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const future = buildFuture(scene, { rich, N, S, FRONT, FLOOR, shops: SHOPS });
   blocks.push(...future.solids);
   const mega = buildMega(scene, { rich, N, S, FRONT, haze: HAZE });
+  const dense = buildDense(scene, { rich, FRONT, S, N, facades: facadesOut });
   scene.traverse((o) => { if (o !== ground && o.userData.ground === undefined) o.userData.ground = false; });
   // people stood in threes, talking, on the pavements
-  const groups: [number, number][] = rich ? [[6.6, 34], [-6.4, 12], [6.4, -8], [-6.6, -36], [6.2, -58]] : [[6.6, 34], [-6.6, -36]];
+  const groups: [number, number][] = rich ? [[6.6, 38], [-6.4, 12], [6.4, -8], [-6.6, -36], [6.2, -58], [-3, -66], [3.5, -69], [-5.5, -71], [5.5, -73]] : [[6.6, 38], [-6.6, -36], [-3, -66]];
   const talk: CrewPose[] = ['argue', 'idle', 'present', 'cheer', 'point', 'facepalm'];
   groups.forEach(([x, z], gi) => { for (let j = 0; j < 3; j++) {
     const a = (j / 3) * Math.PI * 2 + gi, px = x + Math.cos(a) * 0.75, pz = z + Math.sin(a) * 0.75;
@@ -597,7 +627,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       for (const q of people) { const dx = p.x - q.pos.x, dz = p.z - q.pos.z, dd = Math.hypot(dx, dz); if (dd < r + 0.3 && dd > 1e-6) { p.x = q.pos.x + dx / dd * (r + 0.3); p.z = q.pos.z + dz / dd * (r + 0.3); } }
     },
     bind() { /* the city asks nothing of the body: no lineage tricks on the last normal day */ },
-    update(dt, time) {
+    update(dt, time, cam) {
       for (const q of people) {
         const w = q.walk;
         if (w) {
@@ -611,6 +641,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       ringLight.rotation.z += dt;
       future.update(dt, time);
       mega.update(dt, time);
+      dense.update(dt, time, cam ?? null);
     },
     dispose() { scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry.dispose(); }); },
   };

@@ -16,6 +16,6 @@ export interface AwayStage {
   /** Hero views: the first time the player walks into a box, the camera turns to the view for a few seconds. */
   vistas?: { x0: number; x1: number; z0: number; z1: number; yaw: number; pitch: number; secs: number }[];
   tasks: AwayTask[];
-  update(dt: number, time: number): void;
+  update(dt: number, time: number, camera?: THREE.Camera): void;
   dispose?(): void;
 }

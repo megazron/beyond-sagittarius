@@ -87,7 +87,7 @@ export class Away {
       if (this.input.lookDX || this.input.lookDY) this.settle = 0;
       else if (this.settle <= 0) p.pitch = -0.18; // whatever the frame rate, it ends at the usual eye line
     }
-    s.update(dt, time);
+    s.update(dt, time, this.camera);
     // falling off the ice costs nothing but the walk back
     if (p.pos.y < -30) { p.spawn(s.spawn.x, s.spawn.z, 0); this.ui.toast(t('away.fell')); }
     const near = s.tasks.filter((k) => this.open(k) && Math.hypot(k.pos.x - p.pos.x, k.pos.z - p.pos.z) < k.radius && Math.abs(k.pos.y - p.pos.y) < 3)[0];

@@ -32,14 +32,14 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
   // ---- the Taravel Ring: an arch of the city's own, spanning the sky beyond the spaceport ----
   {
     const ringM = new THREE.MeshStandardMaterial({ color: far(0xb8c4d6, 0.45), roughness: 0.5, metalness: 0.4, fog: false, emissive: far(0x1a2438, 0.3), emissiveIntensity: 1 });
-    const ring = add(new THREE.Mesh(new THREE.TorusGeometry(900, 26, 16, 160, Math.PI), ringM));
-    ring.position.set(-250, -120, S - 1100); ring.rotation.set(0, 0.35, 0);
-    const lights = add(new THREE.Mesh(new THREE.TorusGeometry(900, 4, 6, 160, Math.PI), glowMat(0x7fe9ff, 1.8)));
+    const ring = add(new THREE.Mesh(new THREE.TorusGeometry(420, 18, 16, 160, Math.PI), ringM));
+    ring.position.set(-60, -150, S - 620); ring.rotation.set(0, 0.25, 0);
+    const lights = add(new THREE.Mesh(new THREE.TorusGeometry(420, 3, 6, 160, Math.PI), glowMat(0x7fe9ff, 1.8)));
     lights.position.copy(ring.position); lights.rotation.copy(ring.rotation); lights.scale.set(1, 1, 1.02);
     // the lit habitation bands along its flank: a dotted string of windows
     const dots = new THREE.InstancedMesh(new THREE.BoxGeometry(14, 3, 3), glowMat(0xffd6a0, 1.6), rich ? 220 : 90);
     for (let i = 0; i < dots.count; i++) {
-      const a = (i / dots.count) * Math.PI, r = 900 - 26 + (i % 3) * 4;
+      const a = (i / dots.count) * Math.PI, r = 420 - 18 + (i % 3) * 3;
       dots.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(Math.cos(a) * r, Math.sin(a) * r, 24), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), a + Math.PI / 2), new THREE.Vector3(1, 1, 1)));
     }
     const holder = add(new THREE.Group()); holder.position.copy(ring.position); holder.rotation.copy(ring.rotation); holder.add(dots); dots.userData.ground = false;
@@ -70,17 +70,22 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
 
   // ---- sky lanes: streams of traffic lights at four heights, sweeping across and along the city ----
   {
-    const per = rich ? 160 : 50, levels = [42, 70, 105, 150];
-    const lane: { y: number; a: number; r: number; cz: number; v: number }[] = [];
-    for (const y of levels) for (let i = 0; i < per; i++) lane.push({ y: y + (rnd() - 0.5) * 4, a: rnd() * Math.PI * 2, r: 140 + (y % 3) * 60 + rnd() * 6, cz: S - 60, v: (i % 2 ? 1 : -1) * (0.05 + rnd() * 0.02) });
+    const per = rich ? 130 : 40, levels = [24, 34, 48, 70];
+    // half run along the street (x fixed), half across it (z fixed): either way, streams of light overhead
+    const lane: { y: number; along: boolean; c: number; p: number; v: number }[] = [];
+    for (const y of levels) for (let i = 0; i < per; i++) {
+      const along = i % 2 === 0;
+      lane.push({ y: y + (rnd() - 0.5) * 3, along, c: along ? (rnd() - 0.5) * 70 : S - 40 + rnd() * (N - S + 80), p: rnd(), v: (i % 4 < 2 ? 1 : -1) * (0.035 + rnd() * 0.02) });
+    }
     const head = new THREE.InstancedMesh(new THREE.BoxGeometry(0.8, 0.5, 3.2), glowMat(0xfff0d8, 3), lane.length);
     const tail = new THREE.InstancedMesh(new THREE.BoxGeometry(0.8, 0.5, 3.2), glowMat(0xff4060, 3), lane.length);
     add(head); add(tail);
     const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(1, 1, 1), UP = new THREE.Vector3(0, 1, 0);
     updates.push((dt) => {
       lane.forEach((l, i) => {
-        l.a += l.v * dt;
-        P.set(Math.cos(l.a) * l.r, l.y, l.cz + Math.sin(l.a) * l.r * 1.6); Q.setFromAxisAngle(UP, -l.a + (l.v > 0 ? 0 : Math.PI));
+        l.p = (l.p + l.v * dt + 1) % 1;
+        if (l.along) { P.set(l.c, l.y, S - 260 + l.p * (N - S + 360)); Q.setFromAxisAngle(UP, l.v > 0 ? 0 : Math.PI); }
+        else { P.set(-260 + l.p * 520, l.y, l.c); Q.setFromAxisAngle(UP, l.v > 0 ? Math.PI / 2 : -Math.PI / 2); }
         (l.v > 0 ? head : tail).setMatrixAt(i, M.compose(P, Q, SC)); (l.v > 0 ? tail : head).setMatrixAt(i, M.compose(P.set(0, -9999, 0), Q, SC));
       });
       head.instanceMatrix.needsUpdate = tail.instanceMatrix.needsUpdate = true;
@@ -146,16 +151,40 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
   // ---- the launch tower at the spaceport, and a ship climbing a column of light ----
   {
     const tw = add(new THREE.Mesh(new THREE.BoxGeometry(10, 160, 10), new THREE.MeshStandardMaterial({ color: 0xc8ccd2, metalness: 0.6, roughness: 0.4 })));
-    tw.position.set(70, 80, S - 180); tw.castShadow = false;
-    for (let y = 10; y < 160; y += 12) { const l = add(new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.6, 10.4), glowMat(0xff3030, 2))); l.position.set(70, y, S - 180); }
+    tw.position.set(34, 80, S - 70); tw.castShadow = false;
+    for (let y = 10; y < 160; y += 12) { const l = add(new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.6, 10.4), glowMat(0xff3030, 2))); l.position.set(34, y, S - 70); }
     const ship = add(new THREE.Group());
     const hull = new THREE.Mesh(new THREE.CapsuleGeometry(6, 36, 6, 16), new THREE.MeshStandardMaterial({ color: 0xf0f2f6, metalness: 0.4, roughness: 0.3, fog: false }));
     ship.add(hull);
     const column = new THREE.Mesh(new THREE.CylinderGeometry(4, 16, 260, 24, 1, true), glowMat(0xbfe9ff, 1.6, 0.35)); column.position.y = -150; ship.add(column);
     ship.traverse((x) => { x.userData.ground = false; });
     updates.push((_, t) => {
-      const k = (t * 0.02) % 1; ship.position.set(86, 30 + k * k * 900, S - 180); ship.visible = k < 0.95;
+      const k = (t * 0.02) % 1; ship.position.set(48, 30 + k * k * 900, S - 70); ship.visible = k < 0.95;
       (column.material as THREE.MeshBasicMaterial).opacity = 0.25 + 0.15 * Math.sin(t * 20);
+    });
+  }
+
+  // ---- the spaceport as a spectacle: two great ships holding over the apron, searchlights sweeping the sky ----
+  {
+    const hullM = new THREE.MeshStandardMaterial({ color: 0xe8edf4, metalness: 0.45, roughness: 0.3 });
+    const ships: THREE.Group[] = [];
+    for (const [x, y, z, s] of [[-30, 38, S - 55, 1], [26, 58, S - 120, 1.4]] as [number, number, number, number][]) {
+      const g = add(new THREE.Group()); g.position.set(x, y, z); g.scale.setScalar(s);
+      const b = new THREE.Mesh(new THREE.CapsuleGeometry(5, 34, 6, 20), hullM); b.rotation.x = Math.PI / 2; g.add(b);
+      for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.BoxGeometry(14, 0.6, 8), hullM); w.position.set(sx * 9, -1, 6); w.rotation.z = sx * -0.12; g.add(w); }
+      const belly = new THREE.Mesh(new THREE.BoxGeometry(3, 0.2, 30), glowMat(0x7fe9ff, 2.4)); belly.position.y = -5.1; g.add(belly);
+      for (let i = 0; i < 10; i++) { const wl = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, 1.2), glowMat(0xffe2b0, 2)); wl.position.set(5.05, 1, -14 + i * 3); g.add(wl); }
+      const eng = new THREE.Mesh(new THREE.CircleGeometry(4, 24), glowMat(0x9fdcff, 2.8)); eng.position.z = -22; eng.rotation.y = Math.PI; g.add(eng);
+      g.traverse((x2) => { x2.userData.ground = false; }); ships.push(g);
+    }
+    const beams: THREE.Mesh[] = [];
+    for (let i = 0; i < (rich ? 6 : 3); i++) {
+      const bm = add(new THREE.Mesh(new THREE.CylinderGeometry(0.6, 9, 260, 16, 1, true), glowMat(0xbfe9ff, 0.7, 0.16)));
+      bm.geometry.translate(0, 130, 0); bm.position.set(-40 + i * 16, 0, S - 30 - (i % 2) * 30); beams.push(bm);
+    }
+    updates.push((_, t) => {
+      ships.forEach((g, i) => { g.position.y += Math.sin(t * 0.4 + i) * 0.01; g.rotation.y = 0.3 + Math.sin(t * 0.05 + i) * 0.1; });
+      beams.forEach((b, i) => { b.rotation.set(Math.sin(t * 0.3 + i) * 0.35, 0, Math.cos(t * 0.23 + i * 1.7) * 0.35); });
     });
   }
 
