@@ -345,9 +345,9 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
     // the top, in three layers: stands up off the hairline and rolls back, the most height at the front
     for (let layer = 0; layer < 3; layer++) for (let el = 52; el <= 82; el += 5) for (let az = -52; az <= 52; az += 6) {
       const front = el < 64, k = 1 - Math.abs(az) / 52; // fullest down the middle, lower towards the sides
-      out.push({ az: (az + j(2.5)) * D, el: (el + j(1.5)) * D, len: (front ? 0.14 : 0.15) + j(0.02), droop: front ? 0.45 : 0.95,
+      out.push({ az: (az + j(2.5)) * D, el: (el + j(1.5)) * D, len: (front ? 0.13 : 0.14) + j(0.02), droop: front ? 0.55 : 1.0,
         dir: [Math.sin(az * D) * 0.18 + j(0.1), front ? 1.15 : 0.55 + j(0.15), -1], w: (front ? 0.028 : 0.038) + j(0.008),
-        lift: 1.09 + layer * (0.055 + 0.025 * k) + (front ? 0.04 + 0.03 * k : 0) + j(0.02), // a full, rounded mass, not a tower
+        lift: 1.07 + layer * (0.048 + 0.02 * k) + (front ? 0.03 + 0.02 * k : 0) + j(0.02), // a full, rounded mass, not a tower
         wave: [0.026 + j(0.01), 1.5 + j(0.6)], curl: j(0.6), sway: 0.3 });
     }
     // the crown and the back of the top: lying back and down, close
@@ -358,6 +358,7 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
     // the sides and back: short and tidy, lying flat to the head, nothing past the ears
     for (let el = 24; el <= 54; el += 6) for (let az = 56; az <= 304; az += 9) {
       if (az > 116 && az < 244 && el > 54) continue;
+      if ((az < 78 || az > 282) && el < 46) continue; // in front of the ear the close-cut fur is the hair: card ends there would step the edge
       out.push({ az: (az + j(3)) * D, el: (el + j(2)) * D, len: 0.035 + (el - 24) * 0.0008, droop: 2.4, dir: [Math.sin(az * D) * 0.15, -0.6, Math.cos(az * D) * 0.3 - 0.4], w: 0.034, lift: 1.018, sway: 0.08 });
     }
     return out;

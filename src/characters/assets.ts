@@ -213,7 +213,9 @@ export function furMaterial(key: string, root: number, tip: number, lod: number)
       vec4 fs = texture2D(map, vMapUv);
       // fewer strands where the hair thins out: the edge frays, it never ends on a triangle
       // and a soft strand edge (alpha-to-coverage where the scene is multisampled): no hard, pixel-stepped outline
-      float fth = 0.06 + vLayer * 0.9 + (1.0 - smoothstep(0.0, 0.5, vDens)) * 0.5;
+      float edge = 1.0 - smoothstep(0.0, 0.22, vDens); // only the outermost band thins: the beard itself stays full
+      // at the edge each strand's own tone decides whether it is there: a ragged, natural line, never a smooth curve
+      float fth = 0.06 + vLayer * 0.9 + edge * (0.35 + (fs.g - 0.5) * 0.6);
       float fa = clamp((fs.r - fth) / 0.16 + 0.5, 0.0, 1.0);
       if (fa < 0.3) discard; // without multisampling this is the cut; with it the rest of the ramp becomes partial coverage
       diffuseColor.rgb = mix(uRoot, uTip, vLayer * vLayer) * (0.65 + 0.7 * fs.g); diffuseColor.a = (fa - 0.3) / 0.7;`);

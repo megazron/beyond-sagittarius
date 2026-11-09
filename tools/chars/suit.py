@@ -21,7 +21,7 @@ def beard(P):
     x, y, z = np.abs(P[..., 0]), P[..., 1], P[..., 2]
     top = np.interp(x, [0, .2, .34, .5, .64, .76, .9], [6.80, 6.80, 6.72, 6.74, 6.84, 7.02, 7.3])
     low = np.interp(x, [0, .4, .7], [6.02, 6.1, 6.3])
-    m = (1 - _step(top - .24, top + .1, y)) * _step(low - .05, low + .06, y)  # a soft edge on the cheeks, no shell line
+    m = (1 - _step(top - .24, top + .1, y)) * _step(low - .05, low + .3, y)  # thins out down the neck: no fur stands through the collar
     m = m * _step(0.14, 0.34, z)                                        # stops at the sideburn
     lips = np.hypot(x / .25, (y - 6.615) / .082)
     m = m * _step(.9, 1.15, lips)
