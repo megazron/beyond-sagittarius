@@ -47,9 +47,9 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   // ---- vertical neon blades on every facade, stacked from the pavement to the roofline ----
   const slots: { k: number; m: THREE.Matrix4; side: number; x: number; z: number; y: number; col: THREE.Color }[] = [];
   for (const f of o.facades) for (let z = f.z1 + 1.2; z < f.z0 - 1; z += rich ? 2.1 : 4.2) {
-    if (rnd() < 0.18) continue;
-    for (let y = 3.2; y < f.h - 1.2; y += 3.2 + rnd() * 1.2) {
-      if (rnd() < 0.25) continue;
+    if (rnd() < 0.1) continue;
+    for (let y = 2.1; y < f.h - 1.2; y += 2.8 + rnd() * 1.2) {
+      if (rnd() < 0.15) continue;
       const k = Math.floor(rnd() * SIGNS.length), x = f.side * (FRONT - 0.75 - rnd() * 0.25);
       const hgt = 2.2 + rnd() * 1.6;
       slots.push({ k, side: f.side, x, z, y: y + hgt / 2, col: new THREE.Color(SIGNS[k][1]), m: new THREE.Matrix4().compose(new THREE.Vector3(x, y + hgt / 2, z), new THREE.Quaternion(), new THREE.Vector3(0.75, hgt, 1)) });
@@ -113,27 +113,30 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
       }
     });
     const mat = new THREE.MeshBasicMaterial({ map: sheet, transparent: true, alphaTest: 0.4, color: new THREE.Color(0.55, 0.52, 0.6) });
-    const n = rich ? 240 : 80;
+    const n = rich ? 240 : 80, gateN = rich ? 140 : 45;
     const geo = new THREE.PlaneGeometry(1, 1); geo.translate(0, 0.5, 0);
     const offs = new Float32Array(n); for (let i = 0; i < n; i++) offs[i] = Math.floor(rnd() * 8) / 8;
     geo.setAttribute('aOff', new THREE.InstancedBufferAttribute(offs, 1));
     mat.onBeforeCompile = (sh) => {
       sh.vertexShader = 'attribute float aOff;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = vec2(uv.x / 8.0 + aOff, uv.y);');
     };
-    const im = new THREE.InstancedMesh(geo, mat, n);
+    const im = new THREE.InstancedMesh(geo, mat, n + gateN);
     const ppl = Array.from({ length: n }, (_, i) => {
       const side = i % 2 ? 1 : -1, x = side * (4.7 + rnd() * 3.8);
-      return { x, z: S + 4 + rnd() * (N - S - 14), v: (rnd() < 0.5 ? 1 : -1) * (0.8 + rnd() * 0.7), h: (offs[i] === 5 / 8 ? 1.15 : 1.65) + rnd() * 0.15, p: rnd() * 6 };
+      return { x, z: S + 4 + rnd() * (N - S - 14), v: (rnd() < 0.5 ? 1 : -1) * (0.8 + rnd() * 0.7), h: (offs[i] === 5 / 8 ? 1.15 : 1.65) + rnd() * 0.15, p: rnd() * 6, gate: false };
     });
+    // travellers thronging the gate plaza: across the whole width, milling slowly, life-size
+    for (let i = 0; i < gateN; i++) ppl.push({ x: (rnd() - 0.5) * 17, z: S + 2 + rnd() * 18, v: (rnd() - 0.5) * 0.5, h: 1.6 + rnd() * 0.25, p: rnd() * 6, gate: true });
     add(im);
     const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(), E = new THREE.Euler();
     updates.push((dt, t, cam) => {
       const cp = cam?.position;
       ppl.forEach((q, i) => {
-        q.z += q.v * dt; if (q.z > N - 10) q.z = S + 4; if (q.z < S + 4) q.z = N - 10;
+        q.z += q.v * dt;
+        if (q.gate) { if (q.z > S + 20) q.z = S + 2; if (q.z < S + 2) q.z = S + 20; } else { if (q.z > N - 10) q.z = S + 4; if (q.z < S + 4) q.z = N - 10; }
         // near the camera a card would show what it is: those stay in the distance (the animated people are near)
         const d = cp ? Math.hypot(q.x - cp.x, q.z - cp.z) : 99;
-        const vis = d > 16 ? 1 : 0;
+        const vis = d > (q.gate ? 6 : 9) ? 1 : 0; // closer than before: they read as people at street distance
         const bob = Math.abs(Math.sin(t * 6 * Math.abs(q.v) + q.p)) * 0.04;
         E.set(0, cp ? Math.atan2(cp.x - q.x, cp.z - q.z) : 0, 0); Q.setFromEuler(E);
         P.set(q.x, 0.14 + bob, q.z); SC.set(q.h * 0.42 * vis, q.h * vis, 1);

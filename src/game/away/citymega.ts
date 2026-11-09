@@ -33,7 +33,7 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
   {
     const ringM = new THREE.MeshStandardMaterial({ color: far(0xb8c4d6, 0.45), roughness: 0.5, metalness: 0.4, fog: false, emissive: far(0x1a2438, 0.3), emissiveIntensity: 1 });
     const ring = add(new THREE.Mesh(new THREE.TorusGeometry(420, 18, 16, 160, Math.PI), ringM));
-    ring.position.set(-60, -150, S - 620); ring.rotation.set(0, 0.25, 0);
+    ring.position.set(-30, -200, S - 420); ring.rotation.set(0, 0.12, 0); // seen through the gate, it fills the sky over the spaceport
     const lights = add(new THREE.Mesh(new THREE.TorusGeometry(420, 3, 6, 160, Math.PI), glowMat(0x7fe9ff, 1.8)));
     lights.position.copy(ring.position); lights.rotation.copy(ring.rotation); lights.scale.set(1, 1, 1.02);
     // the lit habitation bands along its flank: a dotted string of windows
@@ -151,15 +151,15 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
   // ---- the launch tower at the spaceport, and a ship climbing a column of light ----
   {
     const tw = add(new THREE.Mesh(new THREE.BoxGeometry(10, 160, 10), new THREE.MeshStandardMaterial({ color: 0xc8ccd2, metalness: 0.6, roughness: 0.4 })));
-    tw.position.set(34, 80, S - 70); tw.castShadow = false;
-    for (let y = 10; y < 160; y += 12) { const l = add(new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.6, 10.4), glowMat(0xff3030, 2))); l.position.set(34, y, S - 70); }
+    tw.position.set(24, 80, S - 58); tw.castShadow = false;
+    for (let y = 10; y < 160; y += 12) { const l = add(new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.6, 10.4), glowMat(0xff3030, 2))); l.position.set(24, y, S - 58); }
     const ship = add(new THREE.Group());
     const hull = new THREE.Mesh(new THREE.CapsuleGeometry(6, 36, 6, 16), new THREE.MeshStandardMaterial({ color: 0xf0f2f6, metalness: 0.4, roughness: 0.3, fog: false }));
     ship.add(hull);
     const column = new THREE.Mesh(new THREE.CylinderGeometry(4, 16, 260, 24, 1, true), glowMat(0xbfe9ff, 1.6, 0.35)); column.position.y = -150; ship.add(column);
     ship.traverse((x) => { x.userData.ground = false; });
     updates.push((_, t) => {
-      const k = (t * 0.02) % 1; ship.position.set(48, 30 + k * k * 900, S - 70); ship.visible = k < 0.95;
+      const k = (t * 0.02) % 1; ship.position.set(36, 30 + k * k * 900, S - 58); ship.visible = k < 0.95;
       (column.material as THREE.MeshBasicMaterial).opacity = 0.25 + 0.15 * Math.sin(t * 20);
     });
   }
@@ -168,7 +168,7 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
   {
     const hullM = new THREE.MeshStandardMaterial({ color: 0xe8edf4, metalness: 0.45, roughness: 0.3 });
     const ships: THREE.Group[] = [];
-    for (const [x, y, z, s] of [[-30, 38, S - 55, 1], [26, 58, S - 120, 1.4]] as [number, number, number, number][]) {
+    for (const [x, y, z, s] of [[-16, 22, S - 38, 1], [20, 34, S - 80, 1.5]] as [number, number, number, number][]) {
       const g = add(new THREE.Group()); g.position.set(x, y, z); g.scale.setScalar(s);
       const b = new THREE.Mesh(new THREE.CapsuleGeometry(5, 34, 6, 20), hullM); b.rotation.x = Math.PI / 2; g.add(b);
       for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.BoxGeometry(14, 0.6, 8), hullM); w.position.set(sx * 9, -1, 6); w.rotation.z = sx * -0.12; g.add(w); }

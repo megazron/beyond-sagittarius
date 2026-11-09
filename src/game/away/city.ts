@@ -232,6 +232,14 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const lit = (map: THREE.Texture, k = 0.6) => new THREE.MeshStandardMaterial({ map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: k, roughness: 0.5 });
   const plane = (w: number, h: number, m: THREE.Material, x: number, y: number, z: number, yaw: number) => { const p = add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), m)); p.position.set(x, y, z); p.rotation.y = yaw; return p; };
 
+  // ---- pools of light on the paving: under the lamps and in front of every lit shop ----
+  const poolTex = canvasTex(128, 128, (g) => { const r = g.createRadialGradient(64, 64, 4, 64, 64, 62); r.addColorStop(0, 'rgba(255,200,130,.9)'); r.addColorStop(1, 'rgba(255,200,130,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128); });
+  const poolM = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 });
+  const pool = (x: number, z: number, r: number) => { const m = add(new THREE.Mesh(new THREE.PlaneGeometry(r * 2, r * 2), poolM)); m.rotation.x = -Math.PI / 2; m.position.set(x, hx(x) + 0.01, z); m.userData.ground = false; };
+  // shared looks for the small shops: six lit interiors, a dozen names (desi trades in three scripts)
+  const shopFronts = [20, 45, 160, 210, 300, 340].map((h) => lit(shelves(h), 1.1));
+  const shopSigns = ['Sharma Tailors', 'Noor Opticals', 'Bombay Bytes', 'Lahore Lassi', 'Gupta Hover Parts', 'Haji Dry Fruits', 'Zaika Rolls', 'Raju Sim Cards', 'शर्मा स्वीट्स', 'नूर मोबाइल', 'حاجی ڈرائی فروٹس', 'زائقہ رولز']
+    .map((n, i) => lit(canvasTex(512, 96, (g) => { const c = ['#ffd36e', '#7fd8ff', '#ff6ec7', '#b6ff6e', '#ffffff', '#ff9f6e'][i % 6]; g.fillStyle = '#16121e'; g.fillRect(0, 0, 512, 96); g.strokeStyle = c; g.lineWidth = 5; g.strokeRect(4, 4, 504, 88); g.fillStyle = c; g.shadowColor = c; g.shadowBlur = 12; g.font = '700 46px Rajdhani, "Noto Sans Devanagari", "Noto Nastaliq Urdu", sans-serif'; g.textAlign = 'center'; g.fillText(n, 256, 64); }), 1.2));
   const shopAt = (side: number, z0b: number, z1b: number) => SHOPS.find((s) => s.side === side && s.z > z1b + 3.5 && s.z < z0b - 3.5);
   const FLAT = { side: 1, z0: 61, z1: 77 }; // the friends' flat: its own interior, built below
   const facadesOut: Facade[] = [];
@@ -317,7 +325,12 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         }
         for (let wz = zc - len / 2 + 2.2; wz < zc + len / 2 - 2; wz += 4.2) {
           if (shop && Math.abs(wz - shop.z) < 4.6) continue;
-          place(rnd() < 0.6 ? 'rollershutter_door' : 'rollershutter_window_01', face + out * 0.02, FLOOR, wz, out > 0 ? Math.PI / 2 : -Math.PI / 2);
+          if (rnd() < 0.72) { // open and lit: a little shop, its goods glowing, its name over the door
+            const yaw = out > 0 ? Math.PI / 2 : -Math.PI / 2;
+            plane(3.6, 2.6, shopFronts[Math.floor(rnd() * shopFronts.length)], face + out * 0.03, 1.45 + FLOOR, wz, yaw);
+            plane(3.4, 0.6, shopSigns[Math.floor(rnd() * shopSigns.length)], face + out * 0.06, 3.15 + FLOOR, wz, yaw);
+            pool(face + out * 1.4, wz, 2.2);
+          } else place(rnd() < 0.6 ? 'rollershutter_door' : 'rollershutter_window_01', face + out * 0.02, FLOOR, wz, out > 0 ? Math.PI / 2 : -Math.PI / 2);
         }
         // an awning over the pavement: striped cloth, tilted down to the street
         const am = new THREE.MeshStandardMaterial({ map: awnings[k % awnings.length].clone(), side: THREE.DoubleSide, roughness: 0.9 });
@@ -384,10 +397,6 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     poster('TARAVEL|TITANS|CUP FINAL', '#0d3b66', '#f4d35e', 12.0, zB - 0.17, Math.PI); poster('SIX|LINEAGES|ONE BRAIN CELL', '#ff5d8f', '#ffffff', 14.4, zA + 0.17, 0);
   }
 
-  // ---- pools of light on the paving: under the lamps and in front of every lit shop ----
-  const poolTex = canvasTex(128, 128, (g) => { const r = g.createRadialGradient(64, 64, 4, 64, 64, 62); r.addColorStop(0, 'rgba(255,200,130,.9)'); r.addColorStop(1, 'rgba(255,200,130,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128); });
-  const poolM = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 });
-  const pool = (x: number, z: number, r: number) => { const m = add(new THREE.Mesh(new THREE.PlaneGeometry(r * 2, r * 2), poolM)); m.rotation.x = -Math.PI / 2; m.position.set(x, hx(x) + 0.01, z); m.userData.ground = false; };
   for (const sh of SHOPS) pool(sh.side * (FRONT - 1.6), sh.z, 3.6);
 
   // ---- street life: lamps, stalls, the chai stall, furniture ----
@@ -609,7 +618,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   return {
     scene, gravity: 22, jump: 6.2, spawn: new THREE.Vector3(12.4, FLOOR, 68.4), tasks, people, clearance,
     // the hero views: stepping out of the flat, and the run to the gate
-    vistas: [{ x0: 4, x1: FRONT - 0.4, z0: 63, z1: 69, yaw: 0, pitch: 0.42, secs: 4 }, { x0: -8, x1: 8, z0: -40, z1: -30, yaw: 0, pitch: 0.3, secs: 3.5 }],
+    vistas: [{ x0: 4, x1: FRONT - 0.4, z0: 63, z1: 69, yaw: 0, pitch: 0.42, secs: 4 }, { x0: -8, x1: 8, z0: -40, z1: -30, yaw: 0, pitch: 0.3, secs: 3.5 }, { x0: -9, x1: 9, z0: -76, z1: -66, yaw: 0, pitch: 0.34, secs: 5 }],
     height: (x) => hx(x),
     collide(p, r) {
       for (const b of blocks) {
