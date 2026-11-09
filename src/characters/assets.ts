@@ -203,16 +203,20 @@ export function lashMaterial(brow: number, map = 'lash') {
 
 /** Stacked shells of the real skin: each layer shows only the strands that reach it. */
 export function furMaterial(key: string, root: number, tip: number, lod: number) {
-  const m = new THREE.MeshStandardMaterial({ map: tex(`${key}_fur`, lod), roughness: 0.58 });
+  const m = new THREE.MeshStandardMaterial({ map: tex(`${key}_fur`, lod), roughness: 0.88, envMapIntensity: 0.3, alphaToCoverage: true }); // matte: short black hair shows no grey sheet of reflection
   m.userData.film = { kind: 'fur', key, root, tip };
   const u = { uRoot: { value: col(root) }, uTip: { value: col(tip) } };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.vertexShader = `attribute float aLayer; varying float vLayer;\n` + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n  vLayer = aLayer;`);
-    sh.fragmentShader = `uniform vec3 uRoot, uTip; varying float vLayer;\n` + sh.fragmentShader.replace('#include <map_fragment>', /* glsl */ `
+    sh.vertexShader = `attribute float aLayer; attribute float aDens; varying float vLayer; varying float vDens;\n` + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n  vLayer = aLayer; vDens = aDens;`);
+    sh.fragmentShader = `uniform vec3 uRoot, uTip; varying float vLayer; varying float vDens;\n` + sh.fragmentShader.replace('#include <map_fragment>', /* glsl */ `
       vec4 fs = texture2D(map, vMapUv);
-      if (fs.r < 0.06 + vLayer * 0.9) discard;
-      diffuseColor.rgb = mix(uRoot, uTip, vLayer * vLayer) * (0.65 + 0.7 * fs.g);`);
+      // fewer strands where the hair thins out: the edge frays, it never ends on a triangle
+      // and a soft strand edge (alpha-to-coverage where the scene is multisampled): no hard, pixel-stepped outline
+      float fth = 0.06 + vLayer * 0.9 + (1.0 - smoothstep(0.0, 0.5, vDens)) * 0.5;
+      float fa = clamp((fs.r - fth) / 0.16 + 0.5, 0.0, 1.0);
+      if (fa < 0.3) discard; // without multisampling this is the cut; with it the rest of the ramp becomes partial coverage
+      diffuseColor.rgb = mix(uRoot, uTip, vLayer * vLayer) * (0.65 + 0.7 * fs.g); diffuseColor.a = (fa - 0.3) / 0.7;`);
   };
   m.customProgramCacheKey = () => 'crew-fur';
   return m;

@@ -79,6 +79,8 @@ def material(d):
     elif kind == 'cloth':
         L.new(tex(f"{PUB}/{f['atlas']}_cloth.webp").outputs[0], I['Base Color']); normal(f"{PUB}/{f['atlas']}_cloth_n.webp", .9)
         I['Roughness'].default_value = .78; I['Sheen Weight'].default_value = .5
+        if f.get('velvet'):  # deep pile: a bright cool sheen at grazing angles, matte face-on
+            I['Roughness'].default_value = .9; I['Sheen Weight'].default_value = 1.0; I['Sheen Roughness'].default_value = .32; I['Sheen Tint'].default_value = (.62, .68, 1.0, 1)
     elif kind == 'hair':
         at = N.new('ShaderNodeAttribute'); at.attribute_name = 'aT'
         ramp = N.new('ShaderNodeValToRGB'); e = ramp.color_ramp.elements; e[0].color = hexc(f['root']); e[1].color = hexc(f['tip']); e.new(.3).color = hexc(f['mid'])
@@ -96,7 +98,12 @@ def material(d):
         if kind == 'fur':
             at = N.new('ShaderNodeAttribute'); at.attribute_name = 'aLayer'; gt = N.new('ShaderNodeMath'); gt.operation = 'GREATER_THAN'
             mu = N.new('ShaderNodeMath'); mu.operation = 'MULTIPLY_ADD'; mu.inputs[1].default_value = .9; mu.inputs[2].default_value = .06
-            L.new(at.outputs['Fac'], mu.inputs[0]); L.new(sp.outputs[0], gt.inputs[0]); L.new(mu.outputs[0], gt.inputs[1]); L.new(gt.outputs[0], I['Alpha'])
+            L.new(at.outputs['Fac'], mu.inputs[0]); L.new(sp.outputs[0], gt.inputs[0]); L.new(gt.outputs[0], I['Alpha'])
+            # fewer strands where the hair thins (aDens, as in the game): the edge frays instead of ending on a triangle
+            dn = N.new('ShaderNodeAttribute'); dn.attribute_name = 'aDens'; ss = N.new('ShaderNodeMapRange'); ss.interpolation_type = 'SMOOTHSTEP'
+            ss.inputs['From Min'].default_value = .05; ss.inputs['From Max'].default_value = .6; ss.inputs['To Min'].default_value = .95; ss.inputs['To Max'].default_value = 0
+            L.new(dn.outputs['Fac'], ss.inputs['Value']); ad = N.new('ShaderNodeMath'); ad.operation = 'ADD'
+            L.new(mu.outputs[0], ad.inputs[0]); L.new(ss.outputs['Result'], ad.inputs[1]); L.new(ad.outputs[0], gt.inputs[1])
         else:
             L.new(sp.outputs[0], I['Alpha'])
     elif d.get('uColor') is not None or d['type'] == 'ShaderMaterial':
@@ -116,7 +123,7 @@ def mesh_of(info):
     if g.get('uv'):
         uv = b64f(g['uv']).reshape(-1, 2).copy(); uv[:, 1] = 1 - uv[:, 1]
         l = me.uv_layers.new(name='UVMap'); l.data.foreach_set('uv', uv[idx].ravel())
-    for k in ('aT', 'aLayer'):
+    for k in ('aT', 'aLayer', 'aDens'):
         if g.get(k):
             at = me.attributes.new(k, 'FLOAT', 'POINT'); at.data.foreach_set('value', b64f(g[k]))
     me.polygons.foreach_set('use_smooth', [True] * len(me.polygons)); me.update()

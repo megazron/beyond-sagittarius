@@ -95,16 +95,16 @@ function grow(l: Lock, steps: number, S: Skull): { path: THREE.Vector3[]; side: 
 }
 
 /** Smooth under-shell: the mass the locks lie on, cut along the hairline. */
-function capShell(lowDeg: number, frontDeg: number, S: Skull, volume = 0) {
+function capShell(lowDeg: number, frontDeg: number, S: Skull, volume = 0, fray = false) {
   const sp = new THREE.SphereGeometry(1, 30, 22);
   const p = sp.attributes.position, idx = sp.index!;
   const keep = (i: number) => {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i), r = Math.hypot(x, y, z);
     const az = Math.atan2(x, z), back = (1 - Math.cos(az)) / 2;
-    return y / r > Math.sin(((frontDeg + (lowDeg - frontDeg) * Math.pow(back, 0.7)) * Math.PI) / 180);
+    return y / r > Math.sin(((frontDeg + (lowDeg - frontDeg) * Math.pow(back, 0.7)) * Math.PI) / 180) - (fray ? 0.06 : 0); // with cards: a band past the line, faded out below
   };
   const out: number[] = [];
-  for (let i = 0; i < idx.count; i += 3) { const a = idx.getX(i), b = idx.getX(i + 1), c = idx.getX(i + 2); if (keep(a) && keep(b) && keep(c)) out.push(a, b, c); }
+  for (let i = 0; i < idx.count; i += 3) { const a = idx.getX(i), b = idx.getX(i + 1), c = idx.getX(i + 2); if (fray ? keep(a) || keep(b) || keep(c) : keep(a) && keep(b) && keep(c)) out.push(a, b, c); }
   sp.setIndex(out);
   { const q = new THREE.Vector3();
     // `volume`: hair with body swells off the scalp, most at the top and front-top, nothing at the hairline
@@ -123,7 +123,13 @@ function capShell(lowDeg: number, frontDeg: number, S: Skull, volume = 0) {
     const tn = down.clone().addScaledVector(v, -down.dot(v)).normalize();
     tan[i * 3] = tn.x; tan[i * 3 + 1] = tn.y; tan[i * 3 + 2] = tn.z;
   }
-  { const uvA = sp.attributes.uv as THREE.BufferAttribute; for (let i = 0; i < uvA.count; i++) uvA.setXY(i, 0.5, 0.01); } // the cap samples the dense root band only
+  { // the cap samples the dense root band, and towards the hairline slides down the strands to their fading tips:
+    // on hair cards the line frays strand by strand instead of following the sphere's triangle steps
+    const uvA = sp.attributes.uv as THREE.BufferAttribute, line = (az: number) => Math.sin(((frontDeg + (lowDeg - frontDeg) * Math.pow((1 - Math.cos(az)) / 2, 0.7)) * Math.PI) / 180);
+    for (let i = 0; i < uvA.count; i++) {
+      v.set(p.getX(i) - S.c.x, p.getY(i) - S.c.y, p.getZ(i) - S.c.z).normalize(); const az = Math.atan2(v.x, v.z), d = v.y - line(az);
+      const f = Math.max(0, Math.min(1, (d + 0.06) / 0.16)); uvA.setXY(i, az / (Math.PI * 2) * 7, 0.01 + 0.97 * (1 - f * f * (3 - 2 * f)));
+    } }
   sp.setAttribute('aT', new THREE.BufferAttribute(at, 1));
   sp.setAttribute('aTan', new THREE.BufferAttribute(tan, 3));
   sp.setAttribute('aSway', new THREE.BufferAttribute(z, 1));
@@ -204,7 +210,7 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
     });
     return swayByStrand(g, 0.12, l.sway ?? 1, rnd());
   });
-  parts.push(capShell(capLow, capFront, skull, volume));
+  parts.push(capShell(capLow, capFront, skull, volume, cards));
   const geo = mergeGeometries(parts)!;
   // cards: no broad surface sheen at all (a flat card would shine as one grey sheet); the only highlight is the strand one below,
   // alpha-to-coverage softens the card edges wherever the scene is multisampled (a plain alpha test elsewhere)
@@ -237,13 +243,15 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
           #ifdef USE_MAP
             // one value per drawn strand: each strand its own shade and its own highlight offset, so the shine breaks into streaks
             float sid = fract(sin(floor(vMapUv.x * 256.0) * 12.9898 + 4.1) * 43758.5453);
-            diffuseColor.rgb = (diffuseColor.rgb * 2.4 + vec3(0.011, 0.0075, 0.005)) * (0.75 + 0.45 * sid); // dark brown, not ink: the reference reads brown in light
+            diffuseColor.rgb = vec3(0.0116, 0.0052, 0.0116) * (0.8 + 0.4 * sid) * (0.8 + 0.2 * smoothstep(0.0, 0.4, vT)); // black: the reference's darkest hair value (#1c101c), one sample
             float wrapL = clamp(dot(normal, Lv) * 0.5 + 0.5, 0.0, 1.0);
             float th = dot(Tn, Hh) + (vPh - 0.5) * 0.28 + (vT - 0.35) * 0.4 + (sid - 0.5) * 0.45;
             // Marschner-style pair: a faint near-white primary, a broader secondary in the hair's own colour shifted towards the tips
             float s1 = sqrt(max(0.0, 1.0 - th * th)), th2 = th - 0.22, s2 = sqrt(max(0.0, 1.0 - th2 * th2));
-            vec3 hi = vec3(0.62, 0.55, 0.48) * pow(s1, 80.0) * 0.16 * (0.3 + 0.7 * sid) + (diffuseColor.rgb * 2.0 + vec3(0.02, 0.014, 0.008)) * pow(s2, 18.0) * 0.32;
-            totalEmissiveRadiance += hi * Li * wrapL * smoothstep(0.3, 0.8, diffuseColor.a);
+            vec3 hi = vec3(0.5, 0.56, 0.68) * (pow(s1, 70.0) * 0.14 + pow(s2, 14.0) * 0.025) * (0.3 + 0.7 * sid); // a faint cool sheen, so black still reads as hair
+            // each lock catches the light a little differently, and a soft sky fill keeps the top of the head out of black
+            totalEmissiveRadiance += hi * Li * wrapL * smoothstep(0.3, 0.8, diffuseColor.a) * (0.55 + 0.9 * vPh);
+            totalEmissiveRadiance += vec3(0.006, 0.0065, 0.008) * (0.4 + 0.6 * clamp(normal.y, 0.0, 1.0)) * (0.8 + 0.4 * vPh); // a cool sky fill: locks separate, the mass stays black
           #else
           // Kajiya-Kay strand highlight, shifted per lock and along its length
           float th = dot(Tn, Hh) + (vPh - 0.5) * 0.28 + (vT - 0.35) * 0.55;
@@ -330,26 +338,27 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
   // Thick, dark, wavy: swept up and back off the forehead with real volume, short at the sides and back,
   // and a few loose waves that tumble forward at the top front without reaching the brows.
   suit: () => {
-    // hair cards (see HAIR_CARDS): thick soft waves swept up and back, a few falling forward, a short taper at the sides
+    // hair cards (see HAIR_CARDS), after the reference: a tall, full top swept up and back like a loose quiff,
+    // thick wavy locks tumbling forward over the forehead, and short, tidy sides and back close to the head
     const r = mulberry32(77), j = (a: number) => (r() - 0.5) * 2 * a;
     const out: Lock[] = [];
-    // the top, in two layers: rises off the hairline, rolls back over the head
-    for (let layer = 0; layer < 3; layer++) for (let el = 50; el <= 82; el += 5) for (let az = -64; az <= 64; az += 7) {
-      const front = el < 62, edge = Math.abs(az) > 42; // at the edges the waves roll out and down over the temples, as in the reference
-      out.push({ az: (az + j(2.5)) * D, el: (el + j(1.5)) * D, len: (front ? 0.13 : 0.15) + j(0.02), droop: edge ? 2.3 : front ? 0.55 : 1.0,
-        dir: [Math.sin(az * D) * (edge ? 0.42 : 0.3) + j(0.15), edge ? 0.3 : front ? 0.9 : 0.45 + j(0.15), -1], w: (front ? 0.026 : 0.038) + j(0.008), lift: 1.08 + layer * 0.065 + (front ? 0.05 : 0) + j(0.02),
-        wave: [0.02 + j(0.007), 1.3 + j(0.5)], curl: edge ? 0.35 + j(0.2) : j(0.3), sway: 0.3 });
+    // the top, in three layers: stands up off the hairline and rolls back, the most height at the front
+    for (let layer = 0; layer < 3; layer++) for (let el = 52; el <= 82; el += 5) for (let az = -52; az <= 52; az += 6) {
+      const front = el < 64, k = 1 - Math.abs(az) / 52; // fullest down the middle, lower towards the sides
+      out.push({ az: (az + j(2.5)) * D, el: (el + j(1.5)) * D, len: (front ? 0.14 : 0.15) + j(0.02), droop: front ? 0.45 : 0.95,
+        dir: [Math.sin(az * D) * 0.18 + j(0.1), front ? 1.15 : 0.55 + j(0.15), -1], w: (front ? 0.028 : 0.038) + j(0.008),
+        lift: 1.09 + layer * (0.055 + 0.025 * k) + (front ? 0.04 + 0.03 * k : 0) + j(0.02), // a full, rounded mass, not a tower
+        wave: [0.026 + j(0.01), 1.5 + j(0.6)], curl: j(0.6), sway: 0.3 });
     }
-    // the crown and the back of the top: lying back and down over the head
-    for (let el = 58; el <= 84; el += 6) for (let az = 112; az <= 248; az += 9) out.push({ az: (az + j(3)) * D, el: (el + j(2)) * D, len: 0.1 + j(0.015), droop: 1.6, dir: [Math.sin(az * D) * 0.5, 0.1, Math.cos(az * D)], w: 0.036, lift: 1.08, wave: [0.006, 1], sway: 0.25 });
-    // the loose waves that fall forward at the top front, stopping above the brows
-    for (const [az, el, len] of [[-26, 66, 0.09], [-14, 68, 0.1], [-2, 70, 0.08], [10, 69, 0.09], [22, 67, 0.075], [-8, 73, 0.07]]) out.push({ az: az * D, el: el * D, len, droop: 3, dir: [Math.sin(az * D) * 0.6 + j(0.2), 0.6, 0.7], w: 0.034, lift: 1.24, wave: [0.016, 1.6], curl: 0.4, sway: 0.5 });
-    // the sides and back: short, close, a clean taper down to the fade
-    for (let el = 24; el <= 52; el += 7) for (let az = 60; az <= 300; az += 10) {
-      if (az > 116 && az < 244 && el > 48) continue;
-      // the upper sides are fuller than a fade: a soft mass above the ears that widens the head, as in the reference
-      const full = el >= 38 && (az < 115 || az > 245);
-      out.push({ az: (az + j(3)) * D, el: (el + j(2)) * D, len: full ? 0.075 + j(0.01) : 0.045 + (el - 24) * 0.0012, droop: 2, dir: [Math.sin(az * D) * (full ? 0.6 : 0.3), -0.5, Math.cos(az * D) * 0.4 - 0.4], w: 0.034, lift: full ? 1.06 : 1.025, wave: full ? [0.01, 1.4] : undefined, curl: full ? 0.3 : 0, sway: 0.1 });
+    // the crown and the back of the top: lying back and down, close
+    for (let el = 60; el <= 84; el += 6) for (let az = 116; az <= 244; az += 9) out.push({ az: (az + j(3)) * D, el: (el + j(2)) * D, len: 0.075 + j(0.012), droop: 2.2, dir: [Math.sin(az * D) * 0.3, 0.05, Math.cos(az * D)], w: 0.036, lift: 1.05, wave: [0.006, 1], sway: 0.2 });
+    // thick waves and curls falling forward over the forehead from the top of the quiff, stopping above the brows
+    for (const [az, el, len] of [[-26, 66, 0.1], [-20, 67, 0.13], [-12, 69, 0.13], [-4, 71, 0.12], [4, 70, 0.13], [12, 68, 0.12], [20, 66, 0.11], [-24, 73, 0.11], [-8, 75, 0.11], [8, 74, 0.11], [22, 72, 0.1], [0, 78, 0.1]])
+      out.push({ az: (az + j(2)) * D, el: el * D, len: len + j(0.015), droop: 3.2, dir: [Math.sin(az * D) * 0.35 + j(0.15), 0.75, 0.75], w: 0.055, lift: 1.26 + j(0.03), wave: [0.024, 1.8 + j(0.4)], curl: 0.65 + j(0.2), sway: 0.5 });
+    // the sides and back: short and tidy, lying flat to the head, nothing past the ears
+    for (let el = 24; el <= 54; el += 6) for (let az = 56; az <= 304; az += 9) {
+      if (az > 116 && az < 244 && el > 54) continue;
+      out.push({ az: (az + j(3)) * D, el: (el + j(2)) * D, len: 0.035 + (el - 24) * 0.0008, droop: 2.4, dir: [Math.sin(az * D) * 0.15, -0.6, Math.cos(az * D) * 0.3 - 0.4], w: 0.034, lift: 1.018, sway: 0.08 });
     }
     return out;
   },

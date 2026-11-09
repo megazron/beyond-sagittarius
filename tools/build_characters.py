@@ -539,7 +539,9 @@ def fur_shells(V, N, T, TU, UV, W, morphs, neutral, layers):
         h = i / layers
         p = Part(V + N * (depth * h + 0.0017)[:, None], T[sel], TU[sel], UV, W, 'fur', morphs)
         p.N = N
-        p.extra = {'_LAYER': np.full(len(V), h, np.float32)}
+        # how dense the hair grows here: the shader thins the strands with it, so a beard or hairline edge frays out softly
+        # instead of ending on the shell's triangle edges
+        p.extra = {'_LAYER': np.full(len(V), h, np.float32), '_DENS': np.clip(np.maximum(be, sc), 0, 1).astype(np.float32)}
         parts.append(p)
     return merge(parts, 'fur', morphs=list(morphs))
 

@@ -198,7 +198,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const browC = custom ? new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex() : human ? 0x2c1d14 : L.face.brow;
     const atlas = M.atlas;
     const cloth = new THREE.MeshStandardMaterial({ map: tex(`${atlas}_cloth`, lod, true), normalMap: tex(`${atlas}_cloth_n`, lod), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, side: THREE.DoubleSide });
-    cloth.userData.film = { kind: 'cloth', atlas, satin: human };
+    cloth.userData.film = { kind: 'cloth', atlas, satin: human, velvet: id === 'megazron' }; // the narrator's coat is velvet in the films
     const accent = { uAccent: { value: new THREE.Color(custom?.accent ?? 0xffffff) }, uAccentK: { value: custom ? 1 : 0 }, uDetail: { value: clothDetail() }, uHeightM: { value: heightM }, uSatin: { value: human ? 1 : 0 }, uDust: { value: human ? 0.12 : 1 } };
     applySway(cloth, sway, (sh) => {
       Object.assign(sh.uniforms, accent);
@@ -219,7 +219,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     });
     cloth.customProgramCacheKey = () => 'crew-cloth';
     const mouth = mouthMaterial(), cornea = corneaMaterial(), lash = lashMaterial(browC, M.lash);
-    const fur = human ? furMaterial('strong_suit', 0x140c09, 0x4a3426, lod) : undefined;
+    const fur = human ? furMaterial('strong_suit', 0x0e080b, 0x2a1d22, lod) : undefined;
     const sphere = new THREE.Sphere(new THREE.Vector3(0, heightM * 0.5, 0), heightM * 1.1);
     scene.traverse((o) => {
       const m = o as THREE.SkinnedMesh;
@@ -230,7 +230,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       m.material = { skin, eyes, cornea, mouth, lash, cloth, fur }[name] ?? m.material;
       m.castShadow = name === 'skin' || name === 'cloth';
       m.receiveShadow = true;
-      if (name === 'fur') { m.castShadow = false; const ly = m.geometry.getAttribute('_layer'); if (ly) m.geometry.setAttribute('aLayer', ly); }
+      if (name === 'fur') { m.castShadow = false; const ly = m.geometry.getAttribute('_layer'); if (ly) m.geometry.setAttribute('aLayer', ly); const dn = m.geometry.getAttribute('_dens'); m.geometry.setAttribute('aDens', dn ?? new THREE.BufferAttribute(new Float32Array(m.geometry.getAttribute('position').count).fill(1), 1)); }
       if (name === 'cloth') {
         const g = m.geometry;
         const sw = g.getAttribute('_sway'), ac = g.getAttribute('_accent');
