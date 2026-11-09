@@ -22,7 +22,7 @@ def beard(P):
     top = np.interp(x, [0, .2, .34, .5, .64, .76, .9], [6.80, 6.80, 6.72, 6.74, 6.84, 7.02, 7.3])
     low = np.interp(x, [0, .4, .7], [6.02, 6.1, 6.3])
     m = (1 - _step(top - .24, top + .1, y)) * _step(low - .05, low + .3, y)  # thins out down the neck: no fur stands through the collar
-    m = m * _step(0.14, 0.34, z)                                        # stops at the sideburn
+    m = m * _step(0.08, 0.42, z)                                        # fades out into the sideburn
     lips = np.hypot(x / .25, (y - 6.615) / .082)
     m = m * _step(.9, 1.15, lips)
     nose = np.hypot(x / .2, (y - 6.86) / .08)
@@ -36,7 +36,8 @@ def scalp(P):
     line = np.interp(x, [0, .3, .55, .68, .74], [8.06, 8.03, 7.9, 7.72, 7.45])  # forehead, temple
     front = _step(line - .09, line + .07, y)
     side = _step(6.6, 6.82, y) * (1 - _step(.3, .46, z))                # beside and behind the ear
-    burn = _step(.6, .68, x) * (1 - _step(.88, .98, z)) * _step(6.85, 6.95, y)   # sideburn, in front of the ear
+    # sideburn, in front of the ear: a stubble gradient from the beard up into the side hair, not a solid block
+    burn = _step(.6, .68, x) * (1 - _step(.84, 1.0, z)) * _step(6.8, 6.95, y) * (.35 + .65 * _step(7.0, 7.3, y))
     nape = (1 - _step(.0, .22, z)) * _step(6.52, 6.66, y)
     m = np.maximum.reduce([front, side, burn, nape])
     return m * (1 - _ear(P))

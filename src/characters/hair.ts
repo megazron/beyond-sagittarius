@@ -385,8 +385,8 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
     const clump = (az: number, el: number, len: number, lift: number, o: Partial<Lock> = {}): Lock => {
       // every clump leaves the scalp in its own direction: forward, back, sideways, all mixed
       const t = r() * 6.283;
-      return { az: az * D, el: el * D, len, droop: 1.2 + r() * 1.2, dir: [Math.cos(t) * 0.8 + Math.sin(az * D) * 0.4, 0.35 + r() * 0.5, Math.sin(t) * 0.8 + Math.cos(az * D) * 0.2], w: 0.038 + r() * 0.016,
-        lift, wave: [0.016 + r() * 0.012, 1 + r() * 1.2], curl: j(0.9), sway: 0.25, ...o };
+      return { az: az * D, el: el * D, len, droop: 1.2 + r() * 1.2, dir: [Math.cos(t) * 0.8 + Math.sin(az * D) * 0.4, 0.35 + r() * 0.5, Math.sin(t) * 0.8 + Math.cos(az * D) * 0.2], w: 0.04 + r() * 0.016,
+        lift, wave: [0.018 + r() * 0.012, 0.9 + r() * 1.0], curl: j(0.9), sway: 0.25, ...o }; // loose waves
     };
     // the top: three layers of clumps over the whole crown, the outer ones standing a little higher at the crown
     for (let layer = 0; layer < 3; layer++) for (let el = 48; el <= 86; el += 6) {
@@ -399,8 +399,8 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
     // the fringe: loose curls tumbling onto the forehead, longer and more of them on his right (negative azimuth)
     for (let az = -62; az <= 34; az += 7) {
       const right = az < -8, n = right ? 2 : 1;
-      for (let k = 0; k < n; k++) out.push(clump(az + j(3), 60 + j(5), (right ? 0.1 : 0.08) + r() * 0.025, 1.1 + j(0.02),
-        { droop: 3.4, dir: [Math.sin(az * D) * 0.5 + j(0.3), 0.3, 0.9], w: 0.036, curl: 0.5 + j(0.4), wave: [0.016 + r() * 0.008, 2 + r()] }));
+      for (let k = 0; k < n; k++) out.push(clump(az + j(3), 63 + j(4), (right ? 0.09 : 0.072) + r() * 0.02, 1.1 + j(0.02), // resting on the upper forehead, well above the brows
+        { droop: 3.0, dir: [Math.sin(az * D) * 0.5 + j(0.3), 0.3, 0.9], w: 0.036, curl: 0.5 + j(0.4), wave: [0.016 + r() * 0.008, 2 + r()] }));
     }
     // the sides and back: medium-short, curling, fullest above and around the ears; nothing slicked flat
     for (let el = 22; el <= 46; el += 6) for (let az = 52; az <= 308; az += 13) {
