@@ -45,8 +45,8 @@ function giant(r: number, c0: THREE.Color, c1: THREE.Color, sunDir: THREE.Vector
     const rm = new THREE.ShaderMaterial({
       uniforms: { uSun: u.uSun, uR0: { value: r * 1.25 }, uR1: { value: r * ring }, uCol: { value: c1.clone().lerp(new THREE.Color(0xffffff), 0.35) }, uRp: { value: r } },
       transparent: true, side: THREE.DoubleSide, depthWrite: false, fog: false,
-      vertexShader: /* glsl */ `varying vec3 vL; varying vec3 vW; void main(){ vL = position; vW = (modelMatrix * vec4(position,1.0)).xyz; gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.0); }`,
-      fragmentShader: /* glsl */ `uniform vec3 uSun, uCol; uniform float uR0, uR1, uRp; varying vec3 vL; varying vec3 vW;
+      vertexShader: /* glsl */ `varying vec3 vL; varying vec3 vW; varying vec3 vC; void main(){ vL = position; vW = (modelMatrix * vec4(position,1.0)).xyz; vC = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz; gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.0); }`,
+      fragmentShader: /* glsl */ `uniform vec3 uSun, uCol; uniform float uR0, uR1, uRp; varying vec3 vL; varying vec3 vW; varying vec3 vC;
         ${NOISE_GLSL}
         void main(){
           float rr = length(vL.xy), k = (rr - uR0) / (uR1 - uR0);
@@ -54,7 +54,7 @@ function giant(r: number, c0: THREE.Color, c1: THREE.Color, sunDir: THREE.Vector
           float d = 0.35 + 0.65 * vnoise2(vec2(k * 90.0, 0.5)) * vnoise2(vec2(k * 23.0, 3.1));
           d *= smoothstep(0.0, 0.04, k) * smoothstep(1.0, 0.9, k) * (1.0 - 0.85 * smoothstep(0.47, 0.49, k) * smoothstep(0.55, 0.53, k));
           // the planet's shadow: the ring point seen from the sun, behind the planet
-          vec3 c = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz, p = vW - c;
+          vec3 p = vW - vC; // the ring's centre is the planet's (the ring mesh sits on it)
           float along = dot(p, uSun); float off = length(p - uSun * along);
           float sh = (along < 0.0 && off < uRp) ? 0.08 : 1.0;
           gl_FragColor = vec4(uCol * (0.25 + 1.1 * sh), d * 0.85);
