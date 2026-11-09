@@ -104,29 +104,47 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     const sheet = canvasTex(512, 128, (g) => { // eight figures: saris, kurtas, suits, kids, a vendor with a tray
       const cols = [['#c0392b', '#f1c40f'], ['#2c3e94', '#ecf0f1'], ['#16a085', '#f39c12'], ['#8e44ad', '#ffe0f0'], ['#2c2c2c', '#9fd8ff'], ['#d35400', '#ffffff'], ['#27ae60', '#f5e6c8'], ['#34495e', '#ff6ec7']];
       for (let i = 0; i < 8; i++) {
-        const x = i * 64 + 32, kid = i === 5, s = kid ? 0.7 : 1, [a, b] = cols[i];
-        g.fillStyle = '#4a3226'; g.beginPath(); g.arc(x, 128 - 108 * s, 9 * s, 0, 7); g.fill();
-        g.fillStyle = a; g.beginPath(); g.moveTo(x - 13 * s, 128 - 96 * s); g.lineTo(x + 13 * s, 128 - 96 * s); g.lineTo(x + (i % 2 ? 16 : 11) * s, 128 - 40 * s); g.lineTo(x - (i % 2 ? 16 : 11) * s, 128 - 40 * s); g.fill();
-        g.fillStyle = b; g.fillRect(x - 10 * s, 128 - 92 * s, 4 * s, 34 * s);
-        g.fillStyle = '#1e1e26'; g.fillRect(x - 9 * s, 128 - 40 * s, 7 * s, 40 * s); g.fillRect(x + 2 * s, 128 - 40 * s, 7 * s, 40 * s);
-        if (i === 6) { g.fillStyle = '#c8a46a'; g.fillRect(x - 18, 128 - 110, 36, 6); }
+        const x = i * 64 + 32, kid = i === 5, s = kid ? 0.7 : 1, [a, b] = cols[i], Y = (v: number) => 128 - v * s;
+        // legs, slightly apart and tapering, then the body with round shoulders, arms, neck and head
+        g.fillStyle = '#1e1e26';
+        g.beginPath(); g.moveTo(x - 9 * s, Y(42)); g.lineTo(x - 1 * s, Y(42)); g.lineTo(x - 3 * s, Y(1)); g.lineTo(x - 8 * s, Y(1)); g.fill();
+        g.beginPath(); g.moveTo(x + 1 * s, Y(42)); g.lineTo(x + 9 * s, Y(42)); g.lineTo(x + 8 * s, Y(1)); g.lineTo(x + 3 * s, Y(1)); g.fill();
+        g.fillStyle = a; g.beginPath();
+        g.moveTo(x - 7 * s, Y(99)); g.quadraticCurveTo(x - 15 * s, Y(98), x - 14 * s, Y(88));
+        g.lineTo(x - (i % 2 ? 17 : 11) * s, Y(38)); g.lineTo(x + (i % 2 ? 17 : 11) * s, Y(38));
+        g.lineTo(x + 14 * s, Y(88)); g.quadraticCurveTo(x + 15 * s, Y(98), x + 7 * s, Y(99)); g.fill();
+        g.lineCap = 'round'; g.strokeStyle = a; g.lineWidth = 5 * s;
+        g.beginPath(); g.moveTo(x - 14 * s, Y(90)); g.lineTo(x - 17 * s, Y(60)); g.moveTo(x + 14 * s, Y(90)); g.lineTo(x + 16 * s, Y(62)); g.stroke();
+        g.fillStyle = b; g.beginPath(); g.moveTo(x - 10 * s, Y(94)); g.lineTo(x - 5 * s, Y(94)); g.lineTo(x - 2 * s, Y(56)); g.lineTo(x - 8 * s, Y(56)); g.fill();
+        g.fillStyle = '#6b4632'; g.fillRect(x - 3 * s, Y(104), 6 * s, 7 * s);
+        g.beginPath(); g.ellipse(x, Y(110), 7.5 * s, 9 * s, 0, 0, 7); g.fill();
+        g.fillStyle = i === 3 ? a : '#17110e'; g.beginPath(); g.ellipse(x, Y(114), 8 * s, 6 * s, 0, Math.PI, 0); g.fill(); // hair (a dupatta on one)
+        if (i === 6) { g.fillStyle = '#c8a46a'; g.fillRect(x - 18, 128 - 124, 36, 6); }
       }
+      // a soft edge, so a card never shows a cut-out outline
+      const c2 = document.createElement('canvas'); c2.width = 512; c2.height = 128; const g2 = c2.getContext('2d')!;
+      g2.filter = 'blur(1.2px)'; g2.drawImage(g.canvas, 0, 0); g.clearRect(0, 0, 512, 128); g.drawImage(c2, 0, 0);
     });
-    const mat = new THREE.MeshBasicMaterial({ map: sheet, transparent: true, alphaTest: 0.4, color: new THREE.Color(0.55, 0.52, 0.6) });
+    const mat = new THREE.MeshBasicMaterial({ map: sheet, transparent: true, alphaTest: 0.22, color: new THREE.Color(0.55, 0.52, 0.6) });
     const n = rich ? 240 : 80, gateN = rich ? 140 : 45;
     const geo = new THREE.PlaneGeometry(1, 1); geo.translate(0, 0.5, 0);
     const offs = new Float32Array(n + gateN); for (let i = 0; i < n + gateN; i++) offs[i] = Math.floor(rnd() * 8) / 8; // every card its own figure, gate crowd included
     geo.setAttribute('aOff', new THREE.InstancedBufferAttribute(offs, 1));
     mat.onBeforeCompile = (sh) => {
-      sh.vertexShader = 'attribute float aOff;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = vec2(uv.x / 8.0 + aOff, uv.y);');
+      sh.vertexShader = 'attribute float aOff;\nvarying float vH;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = vec2(uv.x / 8.0 + aOff, uv.y); vH = uv.y;');
+      // darker towards the feet, as a lit street shades people from below
+      sh.fragmentShader = 'varying float vH;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= 0.55 + 0.45 * smoothstep(0.0, 0.6, vH);');
     };
     const im = new THREE.InstancedMesh(geo, mat, n + gateN);
     const ppl = Array.from({ length: n }, (_, i) => {
       const side = i % 2 ? 1 : -1, x = side * (4.7 + rnd() * 3.8);
-      return { x, z: S + 4 + rnd() * (N - S - 14), v: (rnd() < 0.5 ? 1 : -1) * (0.8 + rnd() * 0.7), h: (offs[i] === 5 / 8 ? 1.15 : 1.65) + rnd() * 0.15, p: rnd() * 6, gate: false };
+      return { x, z: S + 4 + rnd() * (N - S - 14), v: (rnd() < 0.5 ? 1 : -1) * (0.8 + rnd() * 0.7), h: (offs[i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: false };
     });
     // travellers thronging the gate plaza: across the whole width, milling slowly, life-size
-    for (let i = 0; i < gateN; i++) ppl.push({ x: (rnd() - 0.5) * 17, z: S + 2 + rnd() * 18, v: (rnd() - 0.5) * 0.5, h: 1.6 + rnd() * 0.25, p: rnd() * 6, gate: true });
+    for (let i = 0; i < gateN; i++) ppl.push({ x: (rnd() - 0.5) * 17, z: S + 2 + rnd() * 18, v: (rnd() - 0.5) * 0.5, h: (offs[n + i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: true });
+    // each card its own shade: a little warmer or cooler, lighter or darker, so no two neighbours match
+    const TC = new THREE.Color();
+    for (let i = 0; i < n + gateN; i++) { const k = 0.78 + rnd() * 0.42; im.setColorAt(i, TC.setRGB(k * (0.94 + rnd() * 0.12), k * (0.94 + rnd() * 0.1), k * (0.94 + rnd() * 0.12))); }
     add(im);
     const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(), E = new THREE.Euler();
     updates.push((dt, t, cam) => {
@@ -139,7 +157,7 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
         const vis = d > (q.gate ? 11 : 9) ? 1 : 0; // near the camera the animated people take over
         const bob = Math.abs(Math.sin(t * 6 * Math.abs(q.v) + q.p)) * 0.04;
         E.set(0, cp ? Math.atan2(cp.x - q.x, cp.z - q.z) : 0, 0); Q.setFromEuler(E);
-        P.set(q.x, 0.14 + bob, q.z); SC.set(q.h * 0.42 * vis, q.h * vis, 1);
+        P.set(q.x, 0.14 + bob, q.z); SC.set(q.h * q.wd * vis, q.h * vis, 1);
         im.setMatrixAt(i, M.compose(P, Q, SC));
       });
       im.instanceMatrix.needsUpdate = true;

@@ -206,7 +206,11 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
   });
   parts.push(capShell(capLow, capFront, skull, volume));
   const geo = mergeGeometries(parts)!;
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: rough, metalness: 0.0, side: THREE.DoubleSide, ...(cards ? { map: strands(), alphaTest: 0.32, envMapIntensity: 0.25 } : {}) });
+  // cards: no broad surface sheen at all (a flat card would shine as one grey sheet); the only highlight is the strand one below,
+  // alpha-to-coverage softens the card edges wherever the scene is multisampled (a plain alpha test elsewhere)
+  const mat = cards
+    ? new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 1, metalness: 0, specularIntensity: 0, side: THREE.DoubleSide, map: strands(), alphaTest: 0.32, alphaToCoverage: true, envMapIntensity: 0.6 })
+    : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: rough, metalness: 0.0, side: THREE.DoubleSide });
   mat.userData.film = { kind: 'hair', ...colors };
   const u = {
     uRoot: { value: new THREE.Color(colors.root) },
@@ -230,11 +234,23 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
             vec3 Lv = normalize(vec3(0.3, 0.8, 0.5)); float Li = 0.6;
           #endif
           vec3 Hh = normalize(Lv + Vv);
+          #ifdef USE_MAP
+            // one value per drawn strand: each strand its own shade and its own highlight offset, so the shine breaks into streaks
+            float sid = fract(sin(floor(vMapUv.x * 256.0) * 12.9898 + 4.1) * 43758.5453);
+            diffuseColor.rgb = (diffuseColor.rgb * 2.4 + vec3(0.011, 0.0075, 0.005)) * (0.75 + 0.45 * sid); // dark brown, not ink: the reference reads brown in light
+            float wrapL = clamp(dot(normal, Lv) * 0.5 + 0.5, 0.0, 1.0);
+            float th = dot(Tn, Hh) + (vPh - 0.5) * 0.28 + (vT - 0.35) * 0.4 + (sid - 0.5) * 0.45;
+            // Marschner-style pair: a faint near-white primary, a broader secondary in the hair's own colour shifted towards the tips
+            float s1 = sqrt(max(0.0, 1.0 - th * th)), th2 = th - 0.22, s2 = sqrt(max(0.0, 1.0 - th2 * th2));
+            vec3 hi = vec3(0.62, 0.55, 0.48) * pow(s1, 80.0) * 0.16 * (0.3 + 0.7 * sid) + (diffuseColor.rgb * 2.0 + vec3(0.02, 0.014, 0.008)) * pow(s2, 18.0) * 0.32;
+            totalEmissiveRadiance += hi * Li * wrapL * smoothstep(0.3, 0.8, diffuseColor.a);
+          #else
           // Kajiya-Kay strand highlight, shifted per lock and along its length
           float th = dot(Tn, Hh) + (vPh - 0.5) * 0.28 + (vT - 0.35) * 0.55;
           float s = sqrt(max(0.0, 1.0 - th * th));
           float band = pow(s, 90.0) * 0.55 + pow(s, 16.0) * 0.06;
           totalEmissiveRadiance += uShine * band * Li;
+          #endif
           // soft self-shadow towards the roots keeps the locks separated
           diffuseColor.rgb *= 0.72 + 0.28 * smoothstep(0.0, 0.3, vT);
         }`);
@@ -318,11 +334,11 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
     const r = mulberry32(77), j = (a: number) => (r() - 0.5) * 2 * a;
     const out: Lock[] = [];
     // the top, in two layers: rises off the hairline, rolls back over the head
-    for (let layer = 0; layer < 3; layer++) for (let el = 50; el <= 82; el += 5) for (let az = -52; az <= 52; az += 7) {
-      const front = el < 62;
-      out.push({ az: (az + j(2.5)) * D, el: (el + j(1.5)) * D, len: (front ? 0.13 : 0.15) + j(0.02), droop: front ? 0.55 : 1.0,
-        dir: [Math.sin(az * D) * 0.3 + j(0.15), front ? 0.9 : 0.45 + j(0.15), -1], w: (front ? 0.026 : 0.038) + j(0.008), lift: 1.1 + layer * 0.08 + (front ? 0.06 : 0) + j(0.02),
-        wave: [0.016 + j(0.006), 1.3 + j(0.5)], curl: j(0.25), sway: 0.3 });
+    for (let layer = 0; layer < 3; layer++) for (let el = 50; el <= 82; el += 5) for (let az = -64; az <= 64; az += 7) {
+      const front = el < 62, edge = Math.abs(az) > 42; // at the edges the waves roll out and down over the temples, as in the reference
+      out.push({ az: (az + j(2.5)) * D, el: (el + j(1.5)) * D, len: (front ? 0.13 : 0.15) + j(0.02), droop: edge ? 2.3 : front ? 0.55 : 1.0,
+        dir: [Math.sin(az * D) * (edge ? 0.42 : 0.3) + j(0.15), edge ? 0.3 : front ? 0.9 : 0.45 + j(0.15), -1], w: (front ? 0.026 : 0.038) + j(0.008), lift: 1.08 + layer * 0.065 + (front ? 0.05 : 0) + j(0.02),
+        wave: [0.02 + j(0.007), 1.3 + j(0.5)], curl: edge ? 0.35 + j(0.2) : j(0.3), sway: 0.3 });
     }
     // the crown and the back of the top: lying back and down over the head
     for (let el = 58; el <= 84; el += 6) for (let az = 112; az <= 248; az += 9) out.push({ az: (az + j(3)) * D, el: (el + j(2)) * D, len: 0.1 + j(0.015), droop: 1.6, dir: [Math.sin(az * D) * 0.5, 0.1, Math.cos(az * D)], w: 0.036, lift: 1.08, wave: [0.006, 1], sway: 0.25 });
@@ -331,7 +347,9 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
     // the sides and back: short, close, a clean taper down to the fade
     for (let el = 24; el <= 52; el += 7) for (let az = 60; az <= 300; az += 10) {
       if (az > 116 && az < 244 && el > 48) continue;
-      out.push({ az: (az + j(3)) * D, el: (el + j(2)) * D, len: 0.045 + (el - 24) * 0.0012, droop: 2, dir: [Math.sin(az * D) * 0.3, -0.5, Math.cos(az * D) * 0.4 - 0.4], w: 0.034, lift: 1.025, sway: 0.1 });
+      // the upper sides are fuller than a fade: a soft mass above the ears that widens the head, as in the reference
+      const full = el >= 38 && (az < 115 || az > 245);
+      out.push({ az: (az + j(3)) * D, el: (el + j(2)) * D, len: full ? 0.075 + j(0.01) : 0.045 + (el - 24) * 0.0012, droop: 2, dir: [Math.sin(az * D) * (full ? 0.6 : 0.3), -0.5, Math.cos(az * D) * 0.4 - 0.4], w: 0.034, lift: full ? 1.06 : 1.025, wave: full ? [0.01, 1.4] : undefined, curl: full ? 0.3 : 0, sway: 0.1 });
     }
     return out;
   },
