@@ -183,8 +183,45 @@ function strands(): THREE.Texture {
   return strandTex;
 }
 
+let curlTex: THREE.Texture | null = null;
+/**
+ * Curly hair, drawn here (original): four clumps across the texture, each a bundle of fine strands winding round a
+ * shared helix (seen from the side, so each turn reads as a loop), loose at the edges, fading at the tips.
+ * One card shows about one clump; many small cards at mixed angles make the mop.
+ */
+function curls(): THREE.Texture {
+  if (curlTex) return curlTex;
+  const c = document.createElement('canvas'); c.width = 256; c.height = 512;
+  const g = c.getContext('2d')!, r = mulberry32(57);
+  g.clearRect(0, 0, 256, 512); g.lineCap = 'round';
+  for (let k = 0; k < 4; k++) {
+    // loose, wavy curls, not tight coils
+    const cx = 32 + k * 64, period = 80 + r() * 40, amp = 15 + r() * 7, ph0 = r() * 6.28, len = 400 + r() * 100;
+    for (let i = 0; i < 70; i++) {
+      // each strand follows the clump's helix with its own small offsets, so the clump stays a clump but frays
+      const dx = (r() - 0.5) * 14, dph = (r() - 0.5) * 0.7, da = 0.75 + r() * 0.5, wd = 0.7 + r() * 1.3, end = len * (0.8 + r() * 0.2);
+      const a = 0.5 + r() * 0.5;
+      g.beginPath();
+      for (let y = 0; y <= end; y += 3) {
+        const t = y / period * 6.283 + ph0 + dph, x = cx + dx * (0.4 + y / end) + Math.sin(t) * amp * da * Math.min(1, 0.35 + y / 120);
+        // the helix seen side-on: the back of each turn goes up a little, so the strand loops
+        const yy = y - Math.cos(t) * amp * 0.45 * da * Math.min(1, y / 80);
+        if (y === 0) g.moveTo(x, yy); else g.lineTo(x, yy);
+      }
+      const gr = g.createLinearGradient(0, 0, 0, end);
+      gr.addColorStop(0, `rgba(255,255,255,${a})`); gr.addColorStop(0.7, `rgba(255,255,255,${a * 0.9})`); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.strokeStyle = gr; g.lineWidth = wd; g.stroke();
+    }
+  }
+  // a denser root, so no scalp shows between clumps
+  const core = g.createLinearGradient(0, 0, 0, 512); core.addColorStop(0, 'rgba(255,255,255,0.6)'); core.addColorStop(0.25, 'rgba(255,255,255,0.15)'); core.addColorStop(0.45, 'rgba(255,255,255,0)');
+  g.fillStyle = core; g.fillRect(0, 0, 256, 512);
+  curlTex = new THREE.CanvasTexture(c); curlTex.wrapS = THREE.RepeatWrapping; curlTex.anisotropy = 8; curlTex.flipY = false;
+  return curlTex;
+}
+
 /** Sculpted anime hair: every lock is a tapered ribbon with its own phase. */
-export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms, detail = 1, capLow = -20, capFront = 50, skull: Skull = roundSkull, volume = 0, rough = 0.46, cards = false): THREE.Mesh {
+export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms, detail = 1, capLow = -20, capFront = 50, skull: Skull = roundSkull, volume = 0, rough = 0.46, cards: boolean | 'curly' = false): THREE.Mesh {
   const rnd = mulberry32(locks.length * 37 + 5);
   const steps = detail < 0.8 ? 5 : 7;
   // on a real head one anime lock is a bundle of finer strands around the same path
@@ -197,7 +234,9 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
   });
   const parts = cards ? locks.map((l) => {
     const { path } = grow(l, steps + 3, skull);
-    return swayByStrand(card(path, l.w ?? 0.035, skull, rnd() * 0.75, 0.22 + rnd() * 0.1), 0.15, l.sway ?? 1, rnd());
+    // curly: one card shows one clump of the texture (a quarter of its width)
+    const u0 = cards === 'curly' ? Math.floor(rnd() * 4) * 0.25 + 0.01 : rnd() * 0.75, uw = cards === 'curly' ? 0.23 : 0.22 + rnd() * 0.1;
+    return swayByStrand(card(path, l.w ?? 0.035, skull, u0, uw), 0.15, l.sway ?? 1, rnd());
   }) : fine.map((l) => {
     const { path, side } = grow(l, steps, skull);
     const w = l.w ?? 0.03, th = l.thick ?? w * 0.42;
@@ -210,12 +249,12 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
     });
     return swayByStrand(g, 0.12, l.sway ?? 1, rnd());
   });
-  parts.push(capShell(capLow, capFront, skull, volume, cards));
+  parts.push(capShell(capLow, capFront, skull, volume, !!cards));
   const geo = mergeGeometries(parts)!;
   // cards: no broad surface sheen at all (a flat card would shine as one grey sheet); the only highlight is the strand one below,
   // alpha-to-coverage softens the card edges wherever the scene is multisampled (a plain alpha test elsewhere)
   const mat = cards
-    ? new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 1, metalness: 0, specularIntensity: 0, side: THREE.DoubleSide, map: strands(), alphaTest: 0.32, alphaToCoverage: true, envMapIntensity: 0.6 })
+    ? new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 1, metalness: 0, specularIntensity: 0, side: THREE.DoubleSide, map: cards === 'curly' ? curls() : strands(), alphaTest: 0.32, alphaToCoverage: true, envMapIntensity: 0.6 })
     : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: rough, metalness: 0.0, side: THREE.DoubleSide });
   mat.userData.film = { kind: 'hair', ...colors };
   const u = {
@@ -243,12 +282,12 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
           #ifdef USE_MAP
             // one value per drawn strand: each strand its own shade and its own highlight offset, so the shine breaks into streaks
             float sid = fract(sin(floor(vMapUv.x * 256.0) * 12.9898 + 4.1) * 43758.5453);
-            diffuseColor.rgb = vec3(0.0116, 0.0052, 0.0116) * (0.8 + 0.4 * sid) * (0.8 + 0.2 * smoothstep(0.0, 0.4, vT)); // black: the reference's darkest hair value (#1c101c), one sample
+            diffuseColor.rgb = vec3(0.0122, 0.0075, 0.0060) * (0.75 + 0.5 * sid) * (0.75 + 0.25 * smoothstep(0.0, 0.4, vT)); // very dark brown-black, matte
             float wrapL = clamp(dot(normal, Lv) * 0.5 + 0.5, 0.0, 1.0);
             float th = dot(Tn, Hh) + (vPh - 0.5) * 0.28 + (vT - 0.35) * 0.4 + (sid - 0.5) * 0.45;
             // Marschner-style pair: a faint near-white primary, a broader secondary in the hair's own colour shifted towards the tips
             float s1 = sqrt(max(0.0, 1.0 - th * th)), th2 = th - 0.22, s2 = sqrt(max(0.0, 1.0 - th2 * th2));
-            vec3 hi = vec3(0.5, 0.56, 0.68) * (pow(s1, 70.0) * 0.14 + pow(s2, 14.0) * 0.025) * (0.3 + 0.7 * sid); // a faint cool sheen, so black still reads as hair
+            vec3 hi = vec3(0.55, 0.5, 0.48) * (pow(s1, 40.0) * 0.07 + pow(s2, 10.0) * 0.02) * (0.3 + 0.7 * sid) * smoothstep(0.0, 0.6, normal.y + 0.3); // a soft sheen on the curl tops only
             // each lock catches the light a little differently, and a soft sky fill keeps the top of the head out of black
             totalEmissiveRadiance += hi * Li * wrapL * smoothstep(0.3, 0.8, diffuseColor.a) * (0.55 + 0.9 * vPh);
             totalEmissiveRadiance += vec3(0.006, 0.0065, 0.008) * (0.4 + 0.6 * clamp(normal.y, 0.0, 1.0)) * (0.8 + 0.4 * vPh); // a cool sky fill: locks separate, the mass stays black
@@ -284,7 +323,7 @@ export type HairStyleId = 'scientist' | 'strong' | 'medic' | 'explorer' | 'build
 /** Per-style body: how far the hair mass swells off the scalp at the top (fraction of skull radius). */
 export const HAIR_VOLUME: Partial<Record<HairStyleId, number>> = { suit: 0.06 }; // the cards carry the volume; the cap stays under them
 /** Styles drawn as textured hair cards instead of swept strands. */
-export const HAIR_CARDS: Partial<Record<HairStyleId, boolean>> = { suit: true };
+export const HAIR_CARDS: Partial<Record<HairStyleId, true | 'curly'>> = { suit: 'curly' };
 /** Per-style surface: thick dry hair is matte. */
 export const HAIR_ROUGH: Partial<Record<HairStyleId, number>> = { suit: 0.92 };
 
@@ -338,28 +377,35 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
   // Thick, dark, wavy: swept up and back off the forehead with real volume, short at the sides and back,
   // and a few loose waves that tumble forward at the top front without reaching the brows.
   suit: () => {
-    // hair cards (see HAIR_CARDS), after the reference: a tall, full top swept up and back like a loose quiff,
-    // thick wavy locks tumbling forward over the forehead, and short, tidy sides and back close to the head
-    const r = mulberry32(77), j = (a: number) => (r() - 0.5) * 2 * a;
+    // hair cards with the curl texture (HAIR_CARDS: 'curly'), after the reference: a messy, tousled, curly-wavy mop of
+    // many small clumps going different ways, rounded, a little higher at the crown and fuller at the top corners;
+    // loose curls falling onto the forehead, more on his right; sides medium-short with curl and fullness round the ears
+    const r = mulberry32(91), j = (a: number) => (r() - 0.5) * 2 * a;
     const out: Lock[] = [];
-    // the top, in three layers: stands up off the hairline and rolls back, the most height at the front
-    for (let layer = 0; layer < 3; layer++) for (let el = 52; el <= 82; el += 5) for (let az = -52; az <= 52; az += 6) {
-      const front = el < 64, k = 1 - Math.abs(az) / 52; // fullest down the middle, lower towards the sides
-      out.push({ az: (az + j(2.5)) * D, el: (el + j(1.5)) * D, len: (front ? 0.13 : 0.14) + j(0.02), droop: front ? 0.55 : 1.0,
-        dir: [Math.sin(az * D) * 0.18 + j(0.1), front ? 1.15 : 0.55 + j(0.15), -1], w: (front ? 0.028 : 0.038) + j(0.008),
-        lift: 1.07 + layer * (0.048 + 0.02 * k) + (front ? 0.03 + 0.02 * k : 0) + j(0.02), // a full, rounded mass, not a tower
-        wave: [0.026 + j(0.01), 1.5 + j(0.6)], curl: j(0.6), sway: 0.3 });
+    const clump = (az: number, el: number, len: number, lift: number, o: Partial<Lock> = {}): Lock => {
+      // every clump leaves the scalp in its own direction: forward, back, sideways, all mixed
+      const t = r() * 6.283;
+      return { az: az * D, el: el * D, len, droop: 1.2 + r() * 1.2, dir: [Math.cos(t) * 0.8 + Math.sin(az * D) * 0.4, 0.35 + r() * 0.5, Math.sin(t) * 0.8 + Math.cos(az * D) * 0.2], w: 0.038 + r() * 0.016,
+        lift, wave: [0.016 + r() * 0.012, 1 + r() * 1.2], curl: j(0.9), sway: 0.25, ...o };
+    };
+    // the top: three layers of clumps over the whole crown, the outer ones standing a little higher at the crown
+    for (let layer = 0; layer < 3; layer++) for (let el = 48; el <= 86; el += 6) {
+      const step = el > 76 ? 30 : 15;
+      for (let az = -180; az < 180; az += step) {
+        const crown = THREE.MathUtils.smoothstep(el, 64, 84), corner = Math.exp(-(((Math.abs(az) - 45) / 25) ** 2)) * THREE.MathUtils.smoothstep(el, 52, 66);
+        out.push(clump(az + j(step * 0.4), el + j(2.5), 0.075 + r() * 0.035, 1.08 + layer * 0.035 + crown * 0.045 + corner * 0.02 + j(0.008)));
+      }
     }
-    // the crown and the back of the top: lying back and down, close
-    for (let el = 60; el <= 84; el += 6) for (let az = 116; az <= 244; az += 9) out.push({ az: (az + j(3)) * D, el: (el + j(2)) * D, len: 0.075 + j(0.012), droop: 2.2, dir: [Math.sin(az * D) * 0.3, 0.05, Math.cos(az * D)], w: 0.036, lift: 1.05, wave: [0.006, 1], sway: 0.2 });
-    // thick waves and curls falling forward over the forehead from the top of the quiff, stopping above the brows
-    for (const [az, el, len] of [[-26, 66, 0.1], [-20, 67, 0.13], [-12, 69, 0.13], [-4, 71, 0.12], [4, 70, 0.13], [12, 68, 0.12], [20, 66, 0.11], [-24, 73, 0.11], [-8, 75, 0.11], [8, 74, 0.11], [22, 72, 0.1], [0, 78, 0.1]])
-      out.push({ az: (az + j(2)) * D, el: el * D, len: len + j(0.015), droop: 3.2, dir: [Math.sin(az * D) * 0.35 + j(0.15), 0.75, 0.75], w: 0.055, lift: 1.26 + j(0.03), wave: [0.024, 1.8 + j(0.4)], curl: 0.65 + j(0.2), sway: 0.5 });
-    // the sides and back: short and tidy, lying flat to the head, nothing past the ears
-    for (let el = 24; el <= 54; el += 6) for (let az = 56; az <= 304; az += 9) {
-      if (az > 116 && az < 244 && el > 54) continue;
-      if ((az < 78 || az > 282) && el < 46) continue; // in front of the ear the close-cut fur is the hair: card ends there would step the edge
-      out.push({ az: (az + j(3)) * D, el: (el + j(2)) * D, len: 0.035 + (el - 24) * 0.0008, droop: 2.4, dir: [Math.sin(az * D) * 0.15, -0.6, Math.cos(az * D) * 0.3 - 0.4], w: 0.034, lift: 1.018, sway: 0.08 });
+    // the fringe: loose curls tumbling onto the forehead, longer and more of them on his right (negative azimuth)
+    for (let az = -62; az <= 34; az += 7) {
+      const right = az < -8, n = right ? 2 : 1;
+      for (let k = 0; k < n; k++) out.push(clump(az + j(3), 60 + j(5), (right ? 0.1 : 0.08) + r() * 0.025, 1.1 + j(0.02),
+        { droop: 3.4, dir: [Math.sin(az * D) * 0.5 + j(0.3), 0.3, 0.9], w: 0.036, curl: 0.5 + j(0.4), wave: [0.016 + r() * 0.008, 2 + r()] }));
+    }
+    // the sides and back: medium-short, curling, fullest above and around the ears; nothing slicked flat
+    for (let el = 22; el <= 46; el += 6) for (let az = 52; az <= 308; az += 13) {
+      const ear = Math.exp(-(((Math.abs(180 - az) - 90) / 22) ** 2));
+      out.push(clump(az + j(5), el + j(2), 0.045 + ear * 0.02 + r() * 0.012, 1.04 + ear * 0.025 + j(0.006), { droop: 2.2, dir: [Math.sin(az * D) * 0.4 + j(0.4), -0.2 + r() * 0.4, Math.cos(az * D) * 0.4 + j(0.4)] }));
     }
     return out;
   },

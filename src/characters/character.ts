@@ -280,7 +280,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const headP = piv('head');
     const hairId = custom ? custom.hair : human ? 'suit' : id;
     const hc = custom ? { root: new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex(), mid: custom.hairRoot, tip: custom.hairTip, shine: new THREE.Color(custom.hairTip).lerp(new THREE.Color(0xffffff), 0.5).getHex() } : human ? { root: 0x0c0806, mid: 0x18100b, tip: 0x22170f, shine: 0x2e241e } : L.hair;
-    const hair = buildHair(HAIRSTYLES[hairId](), hc, sway, detail, HAIR_CAP[hairId][0], HAIR_CAP[hairId][1], skullFrom(M.skull.c, M.skull.r), HAIR_VOLUME[hairId] ?? 0, HAIR_ROUGH[hairId] ?? 0.46, !!HAIR_CARDS[hairId]);
+    const hair = buildHair(HAIRSTYLES[hairId](), hc, sway, detail, HAIR_CAP[hairId][0], HAIR_CAP[hairId][1], skullFrom(M.skull.c, M.skull.r), HAIR_VOLUME[hairId] ?? 0, HAIR_ROUGH[hairId] ?? 0.46, HAIR_CARDS[hairId] ?? false);
     bs.get('head')!.add(hair);
     // The decimated scan teeth break up in close-ups: use a clean mouth instead.
     const mouthBox = new THREE.Box3();
