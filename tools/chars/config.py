@@ -135,9 +135,9 @@ CHARS = {  # noqa
     'megazron': dict(
         look=dict(skin=0x23213c, shade=0x09081a, iris=0xffc36a, brow=0xe8e4f6, glow=0xd8dcff, marks='stars', ear='long'),
         height=2.08, macro=dict(gender=1.0, muscle=0.3, weight=0.12, height=1.0, proportions=0.9),
-        skin_src='m', deep_collar=0.04,  # the coat's high collar over a turning neck (see build_characters.py)
+        skin_src='m', deep_collar=0.04, deep_body=0.045,  # the coat's high collar over a turning neck (see build_characters.py)
         clothes=[('toigo_wool_pants', (0x0a, 0x0b, 0x16), {}),
-                 ('punkduck_winter_coat', (0x14, 0x1a, 0x3c), {'skirt': True}),
+                 ('punkduck_winter_coat', (0x14, 0x1a, 0x3c), {'skirt': True, 'follow_top': True}),
                  ('mindfront_shoes_biker_boots_male', (0x0c, 0x0c, 0x12), {})],
     ),
 }

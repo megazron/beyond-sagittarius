@@ -193,10 +193,16 @@ def follow(inner_P, inner_W, outers, keep=None, reach=0.035, near=0.012, far=0.0
     so the edge stays continuous with what is not covered. Skirts hang free and are never followed."""
     W = inner_W.copy(); best = np.full(len(inner_P), 9.)
     for o in outers:
-        if o.opt.get('skirt'): continue
-        used = np.unique(o.T)
+        T_ = o.T
+        if o.opt.get('skirt'):
+            # a long coat: its top is a jacket and is followed like one (an arm that rises pulls the chest under it along);
+            # only the skirt below the waist hangs free
+            if 'follow_above' not in o.opt: continue
+            T_ = o.T[o.P[o.T][:, :, 1].min(1) > o.opt['follow_above']]
+            if not len(T_): continue
+        used = np.unique(T_)
         e = {}
-        for t in o.T:
+        for t in T_:
             for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
                 k = (min(a_, b_), max(a_, b_)); e[k] = e.get(k, 0) + 1
         rim = np.unique([k[0] for k, n in e.items() if n == 1])
@@ -298,6 +304,7 @@ def build(c, cid, force=False):
         deleted.update(p.clo.delete)
         if opt.get('skirt'):
             skirt_weights(c, p, piv)
+            if opt.get('follow_top'): opt['follow_above'] = float(piv[c.rig.index['hips']][1] + 0.18)  # the waist up: the thighs keep their own weights under the skirt
         # a sleeve follows the forearm, never the hand: a cuff weighted to the hand leaps when the wrist turns
         for sd in 'LR':
             to = c.rig.index[f'forearmtw{sd}']
@@ -411,6 +418,16 @@ def build(c, cid, force=False):
             tree = cKDTree(o.P); d, j = tree.query(Vb, workers=1); s = np.einsum('ij,ij->i', Vb - o.P[j], o.N[j])
             m = (d < .05) & (s <= 0) & (s > -cfg['deep_collar']) & (nw > .15) & (Vb[:, 2] < cz)
             Vb[m] -= o.N[j[m]] * (s[m] + cfg['deep_collar'])[:, None]
+    if cfg.get('deep_body'):
+        # a long open coat over a bare chest: when an arm goes up the fronts pull and the belly skin they cover came
+        # out between them; covered torso skin sits deeper, the skin left bare at the opening stays where it is
+        # the belly and chest only (hip weight counts above the hip joint): the legs keep their own fit to the trousers
+        hy = float(np.average(Vb[:, 1], weights=rig.W[:, rig.index['hips']] + 1e-9))
+        tw = sum(rig.W[:, rig.index[n]] for n in ('spine', 'spine1', 'chest') if n in rig.index) + rig.W[:, rig.index['hips']] * (Vb[:, 1] > hy + .06)
+        for o in garments:
+            tree = cKDTree(o.P); d, j = tree.query(Vb, workers=1); s = np.einsum('ij,ij->i', Vb - o.P[j], o.N[j])
+            m = (d < .05) & (s <= 0) & (s > -cfg['deep_body']) & (tw > .3)
+            Vb[m] -= o.N[j[m]] * (s[m] + cfg['deep_body'])[:, None]
     bm = {k: vb[k] for k in vb if not k.endswith('_dm')}
     head = Part(V, T[hm], TU[hm], UV, rig.W, 'skin_head', {**morphs, **bm})
     # the neck and head keep their own weights: the head is a separate mesh and must meet the body exactly
