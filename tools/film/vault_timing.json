@@ -1,0 +1,87 @@
+{
+"length": 37.82,
+"shots": [
+{
+"id": "wide",
+"act": "Intro",
+"t0": 0.0,
+"t1": 7.48,
+"action": "Wide on the Vault: the Ledger lectern, the orrery, the black hole through the dome. MegaZroN small, back to camera. Turns, sees us, sighs"
+},
+{
+"id": "push",
+"act": "Intro",
+"t0": 7.48,
+"t1": 16.05,
+"action": "Slow push-in to a mid shot. Presents himself, one hand to the Ledger"
+},
+{
+"id": "orrery",
+"act": "Intro",
+"t0": 16.05,
+"t1": 23.07,
+"action": "Over his shoulder onto the orrery: six lights in a ring. Points; the six lights drift apart on \"Then the worst\""
+},
+{
+"id": "hands",
+"act": "Intro",
+"t0": 23.07,
+"t1": 30.01,
+"action": "Insert on the Ledger. His hand writes; the ink glows and settles"
+},
+{
+"id": "close",
+"act": "Intro",
+"t0": 30.01,
+"t1": 37.82,
+"action": "Close on his face. Amused, a little tired; he waits for us to try"
+}
+],
+"lines": [
+{
+"key": "wide.0.0",
+"who": "megazron",
+"t0": 0.6,
+"t1": 6.93,
+"text": "Oh good. Another one. Wipe your feet. This is the edge of a black hole and I have just had it cleaned.",
+"emotion": "calm",
+"k": 0.7
+},
+{
+"key": "push.0.0",
+"who": "megazron",
+"t0": 7.73,
+"t1": 15.5,
+"text": "I am MegaZroN, keeper of the Last Ledger. I write down how every story ends. Yes, yours. No, you may not see it.",
+"emotion": "calm",
+"k": 0.7
+},
+{
+"key": "orrery.0.0",
+"who": "megazron",
+"t0": 16.3,
+"t1": 22.52,
+"text": "Six friends are about to have the funniest day of their lives. Then the worst. It's a tight schedule.",
+"emotion": "wry",
+"k": 0.7
+},
+{
+"key": "hands.0.0",
+"who": "megazron",
+"t0": 23.32,
+"t1": 29.46,
+"text": "Everything you do goes in here. Who you trust, and how many times you walk into a tree.",
+"emotion": "calm",
+"k": 0.7
+},
+{
+"key": "close.0.0",
+"who": "megazron",
+"t0": 30.26,
+"t1": 37.27,
+"text": "Go on, then. Try to surprise me. Nobody has in nine thousand years, but I do love watching people try.",
+"emotion": "wry",
+"k": 0.7
+}
+]
+}

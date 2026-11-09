@@ -84,6 +84,18 @@ The water normal map (FFT wave spectrum) and the hydraulic erosion of the mounta
 Clouds, the sky, the giant planet and the moon are shaders. The Windows build can add 4K versions of the same
 assets (`tools/fetch_assets.py --desktop`, not in this repository).
 
+### The Vault of the Last Ledger (the narrator's hall)
+
+Re-downloaded by `tools/fetch_vault.py`: textures to WebP in `public/textures/vault/`, used by the rendered films.
+
+| Used for | Asset | Source | Licence |
+| --- | --- | --- | --- |
+| Vault floor | Granite Tile 02 | https://polyhaven.com/a/granite_tile_02 | CC0 |
+| Vault pillars and roof | Granite Wall | https://polyhaven.com/a/granite_wall | CC0 |
+| Brass rings, shelves, orrery | Metal Plate | https://polyhaven.com/a/metal_plate | CC0 |
+| Writing desk | Dark Wood | https://polyhaven.com/a/dark_wood | CC0 |
+| The Ledger's cover | Brown Leather | https://polyhaven.com/a/brown_leather | CC0 |
+
 ### Port Sahil (the prologue city)
 
 Re-downloaded and packed by `tools/fetch_city.py`: textures to WebP in `public/textures/city/`, models as 1k glTF with 512 px textures, packed with gltfpack into `public/models/city/`.

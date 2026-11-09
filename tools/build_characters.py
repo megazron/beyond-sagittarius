@@ -402,6 +402,15 @@ def build(c, cid, force=False):
     Vb = V
     for o in garments:
         Vb = resolve_layers(Vb, o, float(os.environ.get('BODY_MARGIN', 0.016)))
+    if cfg.get('deep_collar'):
+        # a high collar over a turning neck: the skin it covers at the back sits deeper under it, so the nape, twisting
+        # with the head, never comes out through the collar (only the back half: the front edge stays where it is)
+        nw = rig.W[:, rig.index['neck']] + rig.W[:, rig.index['head']]
+        cz = float(np.average(Vb[nw > .3][:, 2])) if (nw > .3).any() else 0.
+        for o in garments:
+            tree = cKDTree(o.P); d, j = tree.query(Vb, workers=1); s = np.einsum('ij,ij->i', Vb - o.P[j], o.N[j])
+            m = (d < .05) & (s <= 0) & (s > -cfg['deep_collar']) & (nw > .15) & (Vb[:, 2] < cz)
+            Vb[m] -= o.N[j[m]] * (s[m] + cfg['deep_collar'])[:, None]
     bm = {k: vb[k] for k in vb if not k.endswith('_dm')}
     head = Part(V, T[hm], TU[hm], UV, rig.W, 'skin_head', {**morphs, **bm})
     # the neck and head keep their own weights: the head is a separate mesh and must meet the body exactly

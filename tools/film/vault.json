@@ -1,0 +1,106 @@
+{
+ "scene": "MegaZroN intro (Vault)",
+ "note": "Takes: the game voice lines (public/audio/vo/en) until the re-voice; rerun edl.py and perf.py after it.",
+ "shots": [
+  {
+   "id": "wide",
+   "act": "Intro",
+   "min": 4.0,
+   "action": "Wide on the Vault: the Ledger lectern, the orrery, the black hole through the dome. MegaZroN small, back to camera. Turns, sees us, sighs",
+   "lines": [
+    {
+     "who": "megazron",
+     "react": 0.6,
+     "emotion": "calm",
+     "k": 0.7,
+     "phrases": [
+      [
+       "Oh good. Another one. Wipe your feet. This is the edge of a black hole and I have just had it cleaned.",
+       0.0
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "push",
+   "act": "Intro",
+   "min": 4.0,
+   "action": "Slow push-in to a mid shot. Presents himself, one hand to the Ledger",
+   "lines": [
+    {
+     "who": "megazron",
+     "react": 0.25,
+     "emotion": "calm",
+     "k": 0.7,
+     "phrases": [
+      [
+       "I am MegaZroN, keeper of the Last Ledger. I write down how every story ends. Yes, yours. No, you may not see it.",
+       0.0
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "orrery",
+   "act": "Intro",
+   "min": 4.0,
+   "action": "Over his shoulder onto the orrery: six lights in a ring. Points; the six lights drift apart on \"Then the worst\"",
+   "lines": [
+    {
+     "who": "megazron",
+     "react": 0.25,
+     "emotion": "wry",
+     "k": 0.7,
+     "phrases": [
+      [
+       "Six friends are about to have the funniest day of their lives. Then the worst. It's a tight schedule.",
+       0.0
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "hands",
+   "act": "Intro",
+   "min": 4.0,
+   "action": "Insert on the Ledger. His hand writes; the ink glows and settles",
+   "lines": [
+    {
+     "who": "megazron",
+     "react": 0.25,
+     "emotion": "calm",
+     "k": 0.7,
+     "phrases": [
+      [
+       "Everything you do goes in here. Who you trust, and how many times you walk into a tree.",
+       0.0
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "close",
+   "act": "Intro",
+   "min": 4.0,
+   "action": "Close on his face. Amused, a little tired; he waits for us to try",
+   "lines": [
+    {
+     "who": "megazron",
+     "react": 0.25,
+     "emotion": "wry",
+     "k": 0.7,
+     "phrases": [
+      [
+       "Go on, then. Try to surprise me. Nobody has in nine thousand years, but I do love watching people try.",
+       0.0
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}

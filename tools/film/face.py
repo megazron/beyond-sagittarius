@@ -17,6 +17,7 @@ EMO = {
     'tender': {**B(.4), 'mouth-corner-puller': .25, 'eye-left-slit': .2, 'eye-right-slit': .2},
     'shock': {**B(.5), 'eyebrows-left-up': .8, 'eyebrows-right-up': .8, 'eye-left-opened-up': 1, 'eye-right-opened-up': 1, 'mouth-part-later': .4},
     'suspicion': {'eyebrows-left-down': .75, 'eyebrows-right-up': .25, 'eye-left-slit': .5, 'eye-right-slit': .3, 'mouth-compression': .4},
+    'wry': {'mouth-corner-puller': .5, 'eyebrows-left-up': .35},  # the narrator, amused at us
     'calm': {},
 }
 TREMBLE = {'grief': .28, 'fear': .2, 'strain': .12}

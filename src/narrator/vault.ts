@@ -77,6 +77,9 @@ export class Vault {
     const stone = new THREE.MeshStandardMaterial({ color: 0x26262e, roughness: 0.72 });
     const brass = new THREE.MeshStandardMaterial({ color: 0xb08a4e, roughness: 0.34, metalness: 0.95 });
     const brassDark = new THREE.MeshStandardMaterial({ color: 0x6a4e2c, roughness: 0.5, metalness: 0.9 });
+    // in the rendered film each surface is a real CC0 material (tools/fetch_vault.py), tiled and tinted to these colours
+    const film = (m: THREE.Material, set: string, repeat: number, tint: number) => { m.userData.film = { kind: 'pbr', set: `vault/${set}`, repeat, tint }; };
+    film(basalt, 'floor', 9, 0x3c3c48); film(stone, 'pillar', 2, 0x6a6a76); film(brass, 'brass', 3, 0xd9a85c); film(brassDark, 'brass', 3, 0x8a6236);
 
     // polished floor with inlaid rings (the room reflects the disk)
     const floor = new THREE.Mesh(new THREE.CircleGeometry(11, 96), basalt);
@@ -115,6 +118,8 @@ export class Vault {
     // the writing desk and the Ledger
     const desk = new THREE.Group(); desk.position.set(0, 0, 0.82); s.add(desk);
     const wood = new THREE.MeshStandardMaterial({ color: 0x2a1610, roughness: 0.42 });
+    film(wood, 'desk', 1, 0x8a5a44);
+    const leather = new THREE.MeshStandardMaterial({ color: 0x3a1c12, roughness: 0.55 }); film(leather, 'binding', 1, 0x9a6a50);
     const top = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.07, 0.72), wood); top.position.y = 1.08; top.rotation.x = 0.24; top.castShadow = true; desk.add(top);
     const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.24, 1.04, 12), wood); leg.position.y = 0.52; desk.add(leg);
     const c = document.createElement('canvas'); c.width = 512; c.height = 256;
@@ -123,8 +128,12 @@ export class Vault {
     g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(253, 0, 6, 256);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
     this.page = new THREE.MeshStandardMaterial({ map: tex, color: 0x6e6658, roughness: 0.8, emissive: 0xffc98a, emissiveMap: tex, emissiveIntensity: 0.02 });
-    const book = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.07, 0.56), [wood, wood, this.page, wood, wood, wood]);
+    film(this.page, 'page', 1, 0xfff0dc); // the film's page: the same writing, drawn at full size by tools/fetch_vault.py
+    // the Ledger: a leather-bound block with its open pages as their own sheet (one material per mesh, so the film reads both)
+    const book = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.07, 0.56), leather);
     book.position.set(0, 1.15, 0); book.rotation.x = 0.24; desk.add(book);
+    const pages = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.53).rotateX(-Math.PI / 2), this.page);
+    pages.position.y = 0.036; book.add(pages);
     // quill that keeps writing without a hand
     const feather = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.34, 8).rotateZ(Math.PI).scale(0.5, 1, 1.4), new THREE.MeshStandardMaterial({ color: 0xf0ece0, emissive: 0xffc36a, emissiveIntensity: 0.15, roughness: 0.6 }));
     feather.position.y = 0.17; this.quill.add(feather); this.quill.position.set(0.3, 1.26, 0.86); this.quill.rotation.z = -0.5; s.add(this.quill);
@@ -232,7 +241,9 @@ export class Vault {
     this.host.root.updateMatrixWorld();
     this.host.animate(this.pose, 0, 0, t0, dt);
     this.host.look2(0, 0);
-    this.host.setLookTarget(this.pose === 'write' ? null : this.camera.position);
+    // he looks at us, except while he shows us the orrery: then at the orrery (the over-shoulder camera sits low, and
+    // looking down at it buried his chin in his collar)
+    this.host.setLookTarget(this.pose === 'write' ? null : this.shot === 'orrery' ? this.orrery.position : this.camera.position);
     const lvl = voice.level();
     this.halo.intensity = 0.5 + lvl * 2.5;
     this.key.intensity = 7 + Math.sin(t0 * 7.3) * 0.12 + Math.sin(t0 * 3.1) * 0.2;
