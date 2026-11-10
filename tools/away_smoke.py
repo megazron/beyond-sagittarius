@@ -65,5 +65,5 @@ with sync_playwright() as pw:
     if page.evaluate("document.querySelectorAll('.crew-play').length") < 5: fails.append('crew tab does not offer all five')
     b.close()
 httpd.shutdown()
-print(('FAILED ' + '; '.join(fails)) if fails else 'OK: five stages entered, every task done, back on the green world, Play as offered', flush=True)
+print(('FAILED ' + '; '.join(fails)) if fails else 'OK: five stages entered, every task done, back on Verdaxis, Play as offered', flush=True)
 sys.exit(1 if fails else 0)

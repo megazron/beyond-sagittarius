@@ -363,7 +363,7 @@ function titleCard(then: () => void) {
   setTimeout(() => { el.remove(); then(); }, 4700);
 }
 
-/** Port Sahil: the player's list on the last normal afternoon, then the opening films. */
+/** Zenvora: the player's list on the last normal afternoon, then the opening films. */
 function playPrologue(then: () => void) {
   ui.fade('black', 1, 0.4);
   titleCard(() => whenWorldReady(() => {

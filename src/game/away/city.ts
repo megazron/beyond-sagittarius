@@ -12,7 +12,7 @@ import { buildDense, Facade } from './citydense';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
- * Port Sahil, Taravel, 2189: the last normal afternoon. One long bazaar street from the flat (north-east corner)
+ * Zenvora, Taravel, 2189: the last normal afternoon. One long bazaar street from the flat (north-east corner)
  * to the spaceport gate (south). The player's list runs down it, and each step teaches one control.
  *
  * Ground is exact by construction: height changes only across the street (road, kerb ramp, pavement and everything
@@ -238,8 +238,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const pool = (x: number, z: number, r: number) => { const m = add(new THREE.Mesh(new THREE.PlaneGeometry(r * 2, r * 2), poolM)); m.rotation.x = -Math.PI / 2; m.position.set(x, hx(x) + 0.01, z); m.userData.ground = false; };
   // shared looks for the small shops: six lit interiors, a dozen names (desi trades in three scripts)
   const shopFronts = [20, 45, 160, 210, 300, 340].map((h) => lit(shelves(h), 1.1));
-  const shopSigns = ['Sharma Tailors', 'Noor Opticals', 'Bombay Bytes', 'Lahore Lassi', 'Gupta Hover Parts', 'Haji Dry Fruits', 'Zaika Rolls', 'Raju Sim Cards', 'शर्मा स्वीट्स', 'नूर मोबाइल', 'حاجی ڈرائی فروٹس', 'زائقہ رولز']
-    .map((n, i) => lit(canvasTex(512, 96, (g) => { const c = ['#ffd36e', '#7fd8ff', '#ff6ec7', '#b6ff6e', '#ffffff', '#ff9f6e'][i % 6]; g.fillStyle = '#16121e'; g.fillRect(0, 0, 512, 96); g.strokeStyle = c; g.lineWidth = 5; g.strokeRect(4, 4, 504, 88); g.fillStyle = c; g.shadowColor = c; g.shadowBlur = 12; g.font = '700 46px Rajdhani, "Noto Sans Devanagari", "Noto Nastaliq Urdu", sans-serif'; g.textAlign = 'center'; g.fillText(n, 256, 64); }), 1.2));
+  const shopSigns = ['Sharma Nano-Tailors', 'Noor Holo-Opticals', 'Nebula Bytes', 'Lunar Lassi', 'Gupta Hover Parts', 'Haji Orbital Dry Fruits', 'Zaika Zero-G Rolls', 'Raju Neural SIMs', 'शर्मा स्पेस स्वीट्स', 'नूर होलो-मोबाइल', 'حاجی مداری میوے', 'زائقہ زیرو جی رولز']
+    .map((n, i) => lit(canvasTex(512, 96, (g) => { const c = ['#ffd36e', '#7fd8ff', '#ff6ec7', '#b6ff6e', '#ffffff', '#ff9f6e'][i % 6]; g.fillStyle = '#16121e'; g.fillRect(0, 0, 512, 96); g.strokeStyle = c; g.lineWidth = 5; g.strokeRect(4, 4, 504, 88); g.fillStyle = c; g.shadowColor = c; g.shadowBlur = 12; g.font = '700 46px Rajdhani, "Noto Sans Devanagari", "Noto Nastaliq Urdu", sans-serif'; g.textAlign = 'center'; g.fillText(n, 256, 64, 480); }), 1.2));
   const shopAt = (side: number, z0b: number, z1b: number) => SHOPS.find((s) => s.side === side && s.z > z1b + 3.5 && s.z < z0b - 3.5);
   const FLAT = { side: 1, z0: 61, z1: 77 }; // the friends' flat: its own interior, built below
   const facadesOut: Facade[] = [];
@@ -451,11 +451,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   }
   // hanging signs at every height, sticking out over the pavement
   {
-    const names = ['Sharma Tailors', 'Noor Opticals', 'Bombay Bytes', 'Lahore Lassi', 'Qmail Repairs', 'Gupta Hover Parts', 'Meera Mehndi', 'Haji Dry Fruits', 'Zaika Rolls', 'Raju Sim Cards', 'Pyaar Photos', 'Saturn Sweets'];
+    const names = ['Sharma Nano-Tailors', 'Noor Holo-Opticals', 'Nebula Bytes', 'Lunar Lassi', 'Qmail Repairs', 'Gupta Hover Parts', 'Meera Laser Mehndi', 'Haji Orbital Dry Fruits', 'Zaika Zero-G Rolls', 'Raju Neural SIMs', 'Pyaar Holo-Photos', 'Saturn Sweets'];
     const cols = ['#ffd36e', '#7fd8ff', '#ff6ec7', '#b6ff6e', '#ffffff', '#ff9f6e'];
     for (let i = 0, n = rich ? 22 : 10; i < n; i++) {
       const side = i % 2 ? 1 : -1, z = N - 6 - (i / n) * (N - S - 14) + (rnd() - 0.5) * 3, y = 3.0 + rnd() * 4.5;
-      const t = canvasTex(256, 96, (g) => { const c = cols[i % cols.length]; g.fillStyle = '#1b1b24'; g.fillRect(0, 0, 256, 96); g.strokeStyle = c; g.lineWidth = 5; g.strokeRect(4, 4, 248, 88); g.fillStyle = c; g.font = '700 30px Rajdhani, sans-serif'; g.textAlign = 'center'; g.fillText(names[i % names.length], 128, 58); });
+      const t = canvasTex(256, 96, (g) => { const c = cols[i % cols.length]; g.fillStyle = '#1b1b24'; g.fillRect(0, 0, 256, 96); g.strokeStyle = c; g.lineWidth = 5; g.strokeRect(4, 4, 248, 88); g.fillStyle = c; g.font = '700 30px Rajdhani, sans-serif'; g.textAlign = 'center'; g.fillText(names[i % names.length], 128, 58, 236); });
       const sg = add(new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.6), new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.9, side: THREE.DoubleSide })));
       sg.position.set(side * (FRONT - 0.9), y, z); sg.userData.ground = false;
       box(0.9, 0.04, 0.04, railM, side * (FRONT - 0.45), y + 0.32, z).castShadow = false;

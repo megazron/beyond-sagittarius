@@ -3,13 +3,13 @@
 Real status of every level. Update it in the same commit as the level.
 Done means objectives, world content, NPCs, cutscene, dubbing, codex and smoke test.
 
-## Prologue: Port Sahil (designed, being built)
+## Prologue: Zenvora (designed, being built)
 
 Status: design and first code, behind `?prologue=1` until it is good enough to replace the old opening. Not in the shipped flow yet.
 
 **Title card:** black, one line, nothing else: **TARAVEL · 2189**. Taravel is the hub world where the five lineages and ours first settled side by side. None of the six has ever stood on Earth (`dlg.10.4`, `mz.ch1.2`), and it is home to all of them. The year is the one the game already uses (`cine.year`).
 
-**The city:** Port Sahil, Taravel's spaceport town. *Sahil* means shore in Urdu and Hindi: the last shore before space. It is warm late afternoon. There is one walkable main street, the Bazaar, about 140 m long, with lanes off it. It runs from the six friends' shared flat at the north end to the spaceport gate at the south end, where the liner waits. Hover-autos, cricket in a side lane, washing lines, holo-ads, chai steam. Everything is flat paving with kerbs and steps, built on one height function like the stages, so the ground test covers it.
+**The city:** Zenvora, Taravel's spaceport town: the last stop before space. It is warm late afternoon. There is one walkable main street, the Bazaar, about 140 m long, with lanes off it. It runs from the six friends' shared flat at the north end to the spaceport gate at the south end, where the liner waits. Hover-autos, cricket in a side lane, washing lines, holo-ads, chai steam. Everything is flat paving with kerbs and steps, built on one height function like the stages, so the ground test covers it.
 
 **Shops (parodies):**
 
@@ -79,30 +79,30 @@ NPCs and the five friends are `createCharacter` bodies playing the existing clip
 The table is in `src/game/away/roster.ts` and `kit.ts`, so it is easy to change. The owner is still reviewing it. The opening shows the six separate and only the player's landing. Everyone else's fate is
 revealed in their own film at the moment they unlock, then the player controls them on their own ground.
 
-The system: one green world (the player's), a ringed giant in its sky (the second "world" of `wake.line2`), the giant's
+The system: one green world, Verdaxis (the player's), a ringed giant in its sky (the second "world" of `wake.line2`), the giant's
 methane moon, a loose band of rubble, and a hot cloud-wrapped planet closer to the star. All names are working titles.
 
 | Unlock | Who | Where | Lineage trait that keeps them alive | Real science it leans on | Own tasks |
 | --- | --- | --- | --- | --- | --- |
-| Start | Zenvik, Ulari | The green world, surface | Under-ice lungs and cold-water diving reflex; the player's own lineage can change this | Mammalian dive reflex | Research, analysis, the science tree |
-| Level 9 | Skyvra, Tarnkin | The Long Ice: an ice boulder in the giant's ring, pod 2 wedged in it | Antifreeze blood and torpor; the tail is a balance organ in near-zero gravity. The pod cracks ring ice into air | Antifreeze glycoproteins in polar fish; ground squirrels that supercool below 0 C | Tracking, navigating boulder to boulder, scouting |
-| End of Stone Age (14) | Bolzar, Ortek | The Scree: a rubble asteroid, airless | Mineral dermal plates that seal; oxygen banked in muscle for hours outside | Scaly-foot snail iron armour; seal myoglobin | Welding shelter from hull, tools, machines |
+| Start | Zenvik, Ulari | Verdaxis (Verdaxis), surface | Under-ice lungs and cold-water diving reflex; the player's own lineage can change this | Mammalian dive reflex | Research, analysis, the science tree |
+| Level 9 | Skyvra, Tarnkin | Cryovale: an ice boulder in the giant's ring, pod 2 wedged in it | Antifreeze blood and torpor; the tail is a balance organ in near-zero gravity. The pod cracks ring ice into air | Antifreeze glycoproteins in polar fish; ground squirrels that supercool below 0 C | Tracking, navigating boulder to boulder, scouting |
+| End of Stone Age (14) | Bolzar, Ortek | Shardrift: a rubble asteroid, airless | Mineral dermal plates that seal; oxygen banked in muscle for hours outside | Scaly-foot snail iron armour; seal myoglobin | Welding shelter from hull, tools, machines |
 | After soap (19) | Lyrra, Vael | Open space, adrift in a tumbling hull section, no ground at all | Lichen symbiont in her violet skin: she dries down into dormancy and wakes when the wreck turns into sunlight, so her radio only works in bursts | Tardigrade and lichen survival in open vacuum (ESA exposure tests); retinal based purple photosynthesis | Self surgery, growing lichen for air, triage over radio |
-| Agriculture (21 or next) | Draxum, Korrath | Hadrik: the giant's methane moon, nitrogen air, lakes of liquid methane | Titan foundry lineage: burns hydrogen and acetylene instead of oxygen, ember seams hold body heat | Proposed Titan biochemistry (McKay 2005) | Heavy carry, breaking ice bedrock, defences |
-| Bronze Age | Nuvexa, Sirelle | Sulva: the cloud deck of the hot planet, drifting at the one height with sane pressure | Venus cloud lineage: acid-proof skin, and breathable air is a lifting gas in thick carbon dioxide, so her pod simply floats | Air is buoyant in a CO2 atmosphere (Venus aerostat studies) | Morale, negotiation with whatever lives in the clouds, signal relays |
+| Agriculture (21 or next) | Draxum, Korrath | Methryx: the giant's methane moon, nitrogen air, lakes of liquid methane | Titan foundry lineage: burns hydrogen and acetylene instead of oxygen, ember seams hold body heat | Proposed Titan biochemistry (McKay 2005) | Heavy carry, breaking ice bedrock, defences |
+| Bronze Age | Nuvexa, Sirelle | Aerolis: the cloud deck of the hot planet, drifting at the one height with sane pressure | Venus cloud lineage: acid-proof skin, and breathable air is a lifting gas in thick carbon dioxide, so her pod simply floats | Air is buoyant in a CO2 atmosphere (Venus aerostat studies) | Morale, negotiation with whatever lives in the clouds, signal relays |
 
 **Who can be played, as built:**
 
 | Who | Stage | Tasks | State |
 | --- | --- | --- | --- |
-| Zenvik | The green world | Everything in levels 1 to 22 | Done |
-| Skyvra | The Long Ice | Splint (the quick-time), three ice, the pod, the dish | Playable at Level 9, part of the story. No reveal film yet |
-| Bolzar | The Scree | Salvage hull plate, weld the seal | Stage and tasks work from Level 14. No reveal film, no voiced lines |
+| Zenvik | Verdaxis (Verdaxis) | Everything in levels 1 to 22 | Done |
+| Skyvra | Cryovale | Splint (the quick-time), three ice, the pod, the dish | Playable at Level 9, part of the story. No reveal film yet |
+| Bolzar | Shardrift | Salvage hull plate, weld the seal | Stage and tasks work from Level 14. No reveal film, no voiced lines |
 | Lyrra | The wreck | Tend lichen, close the wound, send in the sun window | Stage and tasks work from Level 19. No reveal film, no voiced lines |
-| Draxum | Hadrik | Haul ice, break bedrock, feed the ember | Stage and tasks work from Level 22. No reveal film, no voiced lines |
-| Nuvexa | Sulva | Patch the float, raise the relay | Stage and tasks work when forced by test only. Her unlock is in the Bronze Age, which does not exist yet |
+| Draxum | Methryx | Haul ice, break bedrock, feed the ember | Stage and tasks work from Level 22. No reveal film, no voiced lines |
+| Nuvexa | Aerolis | Patch the float, raise the relay | Stage and tasks work when forced by test only. Her unlock is in the Bronze Age, which does not exist yet |
 
-Every level from someone's unlock on has a job for them: Play as from the Crew tab, once per level, with the work in new places each time. Their role pays off down on the green world, the only way it can across space:
+Every level from someone's unlock on has a job for them: Play as from the Crew tab, once per level, with the work in new places each time. Their role pays off down on Verdaxis, the only way it can across space:
 
 | Who | Job pays off as |
 | --- | --- |
@@ -111,12 +111,12 @@ Every level from someone's unlock on has a job for them: Play as from the Crew t
 | Lyrra | Her advice: health and stamina restored |
 | Draxum | His drills: sprinting costs no stamina for the rest of the day |
 
-So per-character work exists at levels 9 to 22 for Skyvra, 14 to 22 for Bolzar, 19 to 22 for Lyrra and 22 for Draxum. Nuvexa has none yet. Switching is the Crew tab's Play as, on keyboard, touch and gamepad through the same menu, and only after that person's story has been told. Stages have textured relief ground (CC0 Poly Haven sets), shadows that follow you, faceted rock, and the lineage in play: Skyvra's breath frosts, Bolzar's plates glow as he seals, Lyrra's lichen lights in the sun and she slows in the dark, Draxum's seams burn. Still short of the green world: no grass or foliage equivalent, few props.
+So per-character work exists at levels 9 to 22 for Skyvra, 14 to 22 for Bolzar, 19 to 22 for Lyrra and 22 for Draxum. Nuvexa has none yet. Switching is the Crew tab's Play as, on keyboard, touch and gamepad through the same menu, and only after that person's story has been told. Stages have textured relief ground (CC0 Poly Haven sets), shadows that follow you, faceted rock, and the lineage in play: Skyvra's breath frosts, Bolzar's plates glow as he seals, Lyrra's lichen lights in the sun and she slows in the dark, Draxum's seams burn. Still short of Verdaxis: no grass or foliage equivalent, few props.
 
 **Skyvra.** She is physically present in Levels 9 and 10 and at the camp through Chapter Two.
 
 - Option B, chosen and built: she is on the ring. Level 8 finds her signal, Level 9 is her survival film and the first character switch: the splint quick-time becomes something the player does as her. The fire and accusation choices stay, over radio. After the beacon she appears at camp as a flickering projection, so Chapter Two conversations keep working. Meets "everyone somewhere different" literally.
-- Option A: she stays on the green world, in a far region. Cheapest, least re-recording, but two of the six share a world.
+- Option A: she stays on Verdaxis, in a far region. Cheapest, least re-recording, but two of the six share a world.
 
 **What has to change** (either option unless noted):
 

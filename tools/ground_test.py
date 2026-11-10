@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Does everyone stand on the ground that is drawn? Walks the player over a grid and up the steepest slopes of the
-green world, then over every stage, and compares the feet and the camera with the drawn surface found by ray.
+"""Does everyone stand on the ground that is drawn? Walks the player over a grid and up the steepest slopes of
+Verdaxis, then over every stage, and compares the feet and the camera with the drawn surface found by ray.
 Fails if the feet are more than 4 cm off it, or the camera dips below it.
 
   python tools/ground_test.py [--quality web|mobile|ultra]"""

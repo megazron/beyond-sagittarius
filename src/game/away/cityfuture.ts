@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
- * Port Sahil's 2189 layer, over the bazaar street: towers stepping up behind it with solar sails and antenna
+ * Zenvora's 2189 layer, over the bazaar street: towers stepping up behind it with solar sails and antenna
  * clusters, sky bridges, neon and holographic brand signs, ad screens that change, a maglev guideway with a tram
  * gliding in, hover traffic and drones overhead, delivery bots on the pavements, steam off the chai and the
  * biryani, and ships rising from the spaceport at the end of the street.

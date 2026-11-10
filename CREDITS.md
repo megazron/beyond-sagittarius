@@ -96,7 +96,7 @@ Re-downloaded by `tools/fetch_vault.py`: textures to WebP in `public/textures/va
 | Writing desk | Dark Wood | https://polyhaven.com/a/dark_wood | CC0 |
 | The Ledger's cover | Brown Leather | https://polyhaven.com/a/brown_leather | CC0 |
 
-### Port Sahil (the prologue city)
+### Zenvora (the prologue city)
 
 Re-downloaded and packed by `tools/fetch_city.py`: textures to WebP in `public/textures/city/`, models as 1k glTF with 512 px textures, packed with gltfpack into `public/models/city/`.
 

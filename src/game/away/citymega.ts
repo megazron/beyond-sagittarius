@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
- * Port Sahil at true 2189 scale, over the human-scale bazaar: the Taravel Ring arching over the whole city,
+ * Zenvora at true 2189 scale, over the human-scale bazaar: the Taravel Ring arching over the whole city,
  * supertalls of 200 to 600 m whose lit crowns fade into the haze, stacked sky lanes streaming with traffic
  * lights, levitating platforms, a koi of light swimming above the street, a message tower in three scripts,
  * and a launch tower with a ship climbing on a column of light. Original; the bazaar below keeps its warmth.
@@ -134,7 +134,7 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
   {
     const c = document.createElement('canvas'); c.width = 128; c.height = 1024;
     const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;
-    const words = ['WELCOME TO PORT SAHIL', 'पोर्ट साहिल में स्वागत है', 'پورٹ ساحل میں خوش آمدید', 'LAST SHORE BEFORE THE STARS'];
+    const words = ['WELCOME TO ZENVORA', 'ज़ेनवोरा में स्वागत है', 'زینوورا میں خوش آمدید', 'LAST STOP BEFORE THE STARS'];
     let off = 0;
     const draw = () => {
       const g = c.getContext('2d')!; g.fillStyle = '#05101e'; g.fillRect(0, 0, 128, 1024);

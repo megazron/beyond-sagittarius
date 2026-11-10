@@ -46,7 +46,7 @@ export class Game {
   /** Someone whose moment has come and whose story hasn't been told. Skyvra's is in Level 9 itself. */
   get revealDue() { const s = this.save; return s.replay ? undefined : ROSTER.find((r) => r.location && r.id !== 'explorer' && s.level >= r.unlock && !s.flags[`played.${r.id}`]); }
 
-  /** Hand control to a crew member on their own stage; the green world waits. */
+  /** Hand control to a crew member on their own stage; Verdaxis waits. */
   goAway(id: CrewId, location: string, done?: () => void) {
     if (!this.away) return;
     this.mode = 'away';
@@ -64,7 +64,7 @@ export class Game {
   }
 
   private mirTurn = 1;
-  /** The playable prologue: Port Sahil before the trip. Each list item and each person speaks when you get there. */
+  /** The playable prologue: Zenvora before the trip. Each list item and each person speaks when you get there. */
   prologue(save: SaveData, done: () => void) {
     if (!this.away) return;
     this.save = save;

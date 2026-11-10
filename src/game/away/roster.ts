@@ -6,7 +6,7 @@ import type { CrewId } from '../../characters/looks';
 
 export interface RosterEntry {
   id: CrewId;
-  /** The stage they play on; undefined means the green world. */
+  /** The stage they play on; undefined means Verdaxis. */
   location?: 'ring' | 'scree' | 'wreck' | 'moon' | 'clouds';
   /** First level they can be played. */
   unlock: number;

@@ -153,7 +153,7 @@ export function createPod(terrain: Terrain, forest: Forest, x = 4.5, z = -3.5, y
   };
 }
 
-/** Collectable stones and branches + glowpod (safe) and thornberry (toxic) bushes. */
+/** Collectable stones and branches + glowpod (safe) and thornix (toxic) bushes. */
 export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, pack: ModelPack | null = null, q: Quality | null = null) {
   const group = new THREE.Group();
   const items: Item[] = [];

@@ -1,4 +1,4 @@
-"""Downloads and packs the CC0 assets of Port Sahil (the prologue city).
+"""Downloads and packs the CC0 assets of Zenvora (the prologue city).
 
 Everything comes from Poly Haven (CC0, https://polyhaven.com/license):
 textures for facades, pavement, road and the flat's interior go to public/textures/city/<name>/,

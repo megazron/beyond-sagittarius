@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * Street-level density for Port Sahil: neon on every facade from the pavement to the roofline (Kabukicho density,
+ * Street-level density for Zenvora: neon on every facade from the pavement to the roofline (Kabukicho density,
  * desi storytelling), big screens, impostor crowds filling the far street in both directions, and the neon's
  * reflection smeared on the wet road. Every sign design is one InstancedMesh; the crowd is one InstancedMesh of
  * camera-facing cards; reflections are one more. Phones get about a third of everything.
