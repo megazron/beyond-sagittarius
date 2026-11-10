@@ -68,6 +68,8 @@ export interface Settings {
   noTimers?: boolean;
   /** Path branches taken in any run on this device (the path tree unmasks them). */
   paths?: string[];
+  /** Skip the playable Zenvora prologue on new games (for replays). */
+  skipPrologue?: boolean;
   /** Set from the title-screen settings: run the tutorial on the next session. */
   replayTutorial?: boolean;
 }

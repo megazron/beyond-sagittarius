@@ -102,7 +102,7 @@ def main():
         page.on('console', lambda m: errors.append(f'console.{m.type}: {m.text}') if m.type == 'error' else None)
         page.add_init_script(f"localStorage.setItem('bs-settings-v1', JSON.stringify({{lang: '{a.lang}', sensitivity: 1, invertY: false, volume: 0, subtitles: true, showFps: false}}))")
         page.add_init_script("localStorage.setItem('bs-consent-v1', '1')")  # same test-profile setting as smoke.py
-        page.goto(f'http://127.0.0.1:{a.port}/index.html?quality={a.quality}', wait_until='domcontentloaded', timeout=120000)
+        page.goto(f'http://127.0.0.1:{a.port}/index.html?prologue=0&quality={a.quality}', wait_until='domcontentloaded', timeout=120000)
         page.wait_for_function("window.__bs && window.__bs.state === 'title'", timeout=90000)
         page.wait_for_function('window.__bs.ready', timeout=300000)
         # CSS fades run on the wall clock: make them instant so a frame shows the fade's end state

@@ -55,7 +55,7 @@ def main():
     SHOTS.mkdir(parents=True, exist_ok=True)
     httpd = serve(args.port)
     errors: list[str] = []
-    url = f"http://127.0.0.1:{args.port}/index.html?quality={args.quality}"
+    url = f"http://127.0.0.1:{args.port}/index.html?prologue=0&quality={args.quality}"
     with sync_playwright() as p:
         browser = launch(p)
         page = browser.new_page(viewport={"width": 1600, "height": 900})

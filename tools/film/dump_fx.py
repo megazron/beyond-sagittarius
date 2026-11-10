@@ -11,7 +11,7 @@ with sync_playwright() as pw:
     b = launch(pw); page = b.new_page(viewport={'width': 64, 'height': 36})
     page.add_init_script("localStorage.setItem('bs-settings-v1', JSON.stringify({lang: 'en', sensitivity: 1, invertY: false, volume: 0, subtitles: false, showFps: false}))")
     page.add_init_script("localStorage.setItem('bs-consent-v1', '1')")
-    page.goto('http://127.0.0.1:4188/index.html?quality=mobile', wait_until='domcontentloaded', timeout=120000)
+    page.goto('http://127.0.0.1:4188/index.html?prologue=0&quality=mobile', wait_until='domcontentloaded', timeout=120000)
     page.wait_for_function("window.__bs && window.__bs.ready", timeout=300000)
     page.evaluate('__bs.hold(true)'); page.evaluate('__bs.film.start()'); time.sleep(1)
     for f in range(int(132 * BEAT * FPS)):

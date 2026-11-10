@@ -145,7 +145,7 @@ def main():
     failures = check_i18n() + check_voice()
     httpd = serve(args.port)
     errors: list[str] = []
-    url = f"http://127.0.0.1:{args.port}/index.html?quality={args.quality}"
+    url = f"http://127.0.0.1:{args.port}/index.html?prologue=0&quality={args.quality}"
     log = lambda *a: print(*a, flush=True)
     with sync_playwright() as p:
         browser = launch(p)

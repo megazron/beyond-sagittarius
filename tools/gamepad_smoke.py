@@ -36,7 +36,7 @@ def main():
         page = browser.new_page(viewport={"width": 1280, "height": 720})
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.add_init_script(STUB)
-        page.goto(f"http://127.0.0.1:{args.port}/index.html?quality=web", wait_until="domcontentloaded", timeout=120000)
+        page.goto(f"http://127.0.0.1:{args.port}/index.html?prologue=0&quality=web", wait_until="domcontentloaded", timeout=120000)
         page.wait_for_function("window.__bs && window.__bs.ready", timeout=240000)
         ev = page.evaluate
         frames = lambda n=3: page.wait_for_function(f"(f => () => __bs.debug.frames >= f)(0) && __bs.debug.frames >= {ev('__bs.debug.frames') + n}", timeout=240000)

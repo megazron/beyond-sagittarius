@@ -415,6 +415,7 @@ export class UI implements CineUI {
       ['system', 'settings.tabSystem', `
         ${row('settings.timers', seg('timers', [['1', t('settings.on')], ['0', t('settings.off')]], s.noTimers ? '0' : '1'))}
         <div class="note">${escapeHtml(t('settings.timersNote'))}</div>
+        ${row('settings.prologue', seg('prologue', [['1', t('settings.on')], ['0', t('settings.off')]], s.skipPrologue ? '0' : '1'))}
         ${onTutorial ? row('settings.tutorial', `<button class="btn small" id="set-tut">${escapeHtml(t('settings.tutorialReplay'))}</button>`) : ''}
         ${onSkins ? row('menu.skins', `<button class="btn small" id="set-skins">${escapeHtml(t('menu.skins'))}</button>`) : ''}
         ${onLegal ? row('legal.title', `<button class="btn small" id="set-legal">${escapeHtml(t('legal.title'))}</button>`) : ''}`],
@@ -440,6 +441,12 @@ export class UI implements CineUI {
         if (name === 'quality') { if (v !== quality) onQuality(v as QualityName); return; }
         if (name === 'subLang' || name === 'voiceLang') {
           (s as unknown as Record<string, string>)[name] = v;
+          g.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+          onChange(s);
+          return;
+        }
+        if (name === 'prologue') {
+          s.skipPrologue = v === '0';
           g.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
           onChange(s);
           return;

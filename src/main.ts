@@ -40,7 +40,8 @@ import { techState } from './game/tech/tech';
 import { openCodex, showSafetyCard, consentGiven, stopSpeech } from './ui/science';
 
 type State = 'loading' | 'title' | 'cinematic' | 'game' | 'narrator' | 'film' | 'flashback';
-const PROLOGUE = new URLSearchParams(location.search).has('prologue');
+// the playable prologue opens every new game; ?prologue=0 (tests) or the settings switch (replays) skip it
+const PROLOGUE_PARAM = new URLSearchParams(location.search).get('prologue');
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 lockViewport();
@@ -347,8 +348,9 @@ function startNewGame(look: PlayerLook = defaultLook()) {
   applyPlayer(look, settings.skins ?? {});
   ui.show('title', false);
   void voice.load();
-  // the playable prologue, while it is reviewed: ?prologue=1
-  if (PROLOGUE) { playPrologue(() => openingFilms()); return; }
+  // title card, the playable Zenvora prologue, then MegaZroN and the film
+  const prologue = PROLOGUE_PARAM !== null ? PROLOGUE_PARAM !== '0' : !settings.skipPrologue;
+  if (prologue) { playPrologue(() => openingFilms()); return; }
   openingFilms();
 }
 

@@ -100,7 +100,7 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     ev = page.evaluate
     fail = lambda m: failures.append(f"[{tag}] {m}")
 
-    page.goto(f"http://127.0.0.1:{port}/index.html", wait_until="domcontentloaded", timeout=120000)
+    page.goto(f"http://127.0.0.1:{port}/index.html?prologue=0", wait_until="domcontentloaded", timeout=120000)
     page.wait_for_function("window.__bs && window.__bs.state === 'title'", timeout=60000)
     page.wait_for_function("window.__bs.ready", timeout=300000)
     q = ev("__bs.quality")
