@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { swayUniforms } from './sway';
 export { swayUniforms };
 
-const BASE = `${import.meta.env.BASE_URL}models/crew/`;
+const BASE = `${import.meta.env.BASE_URL}models/${DECREEP ? 'crew_dc' : 'crew'}/`;
 
 export interface ClipMeta { loop: boolean; speed: number; kind: string; dur: number; hand: string; take: string; }
 export interface AnimSet { refLeg: number; refHip: number; meta: Record<string, ClipMeta>; clips: Map<string, THREE.AnimationClip>; }

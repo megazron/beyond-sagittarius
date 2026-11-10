@@ -17,7 +17,8 @@ from multiprocessing import Pool
 import paint
 import suit
 
-OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'models', 'crew')
+# APPEAL=1 builds the de-creep faces into their own folder, so the game's own crew stay untouched until approved
+OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'models', 'crew_dc' if os.environ.get('APPEAL') == '1' else 'crew')
 LODS = {'': dict(body=2200, head=4000, cloth=6000, cost=4e-4), '.lod1': dict(body=1100, head=1800, cloth=2600, cost=4e-3)}
 if os.environ.get('NO_DECIM'):
     del LODS['.lod1']

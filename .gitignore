@@ -11,3 +11,4 @@ desktop-assets/
 .asset-cache/
 tools/tts/kokoro/.cache/
 tools/.line_pauses.json
+public/models/crew_dc/

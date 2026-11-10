@@ -154,7 +154,33 @@ CHARS['strong_suit'] = dict(
     fur=True, cloth_k=1.8, brow='eyebrow002',  # natural, full but soft brows
     clothes=[('toigo_male_suit_3', (0x3a, 0x29, 0x20), {'islands': 'suit', 'drop': (6, 7)}),  # a dark brown three-piece, satin lapels
              ('shoes04', (0x5a, 0x36, 0x22), {})])  # brown leather lace-ups (MakeHuman system asset, CC0)
+# The de-creep face pass (built only with APPEAL=1, into its own folder, for the owner's review): away from photoreal,
+# towards appealing. Larger eyes, softer rounder cheeks and jaw, fuller lips with a gentle resting smile, younger and
+# smoother, less brow ridge; smaller softer noses on the gaunt faces; Bolzar's jowls lifted. Each face stays itself.
+import os as _os
+APPEAL_ON = _os.environ.get('APPEAL') == '1'
+_soft = [*_pair('eyes/{s}-eye-scale-incr.target', 0.4), ('head/head-age-decr.target', 0.35), *_pair('cheek/{s}-cheek-volume-incr.target', 0.35),
+         ('chin/chin-bones-decr.target', 0.45), ('chin/chin-prominent-decr.target', 0.2), ('forehead/forehead-trans-backward.target', 0.35), ('eyebrows/eyebrows-trans-backward.target', 0.45),
+         ('mouth/mouth-upperlip-volume-incr.target', 0.3), ('mouth/mouth-lowerlip-volume-incr.target', 0.35), ('mouth/mouth-angles-up.target', 0.3), ('nose/nose-scale-horiz-decr.target', 0.15)]
+_gaunt = [*_pair('cheek/{s}-cheek-volume-incr.target', 0.55), *_pair('cheek/{s}-cheek-bones-decr.target', 0.35), ('nose/nose-hump-decr.target', 0.6),
+          ('nose/nose-scale-vert-decr.target', 0.4), ('nose/nose-point-width-decr.target', 0.2), *_pair('eyes/{s}-eye-bag-decr.target', 0.5)]
+APPEAL = {
+    'scientist': _soft + _gaunt + [('head/head-scale-horiz-incr.target', 0.15)],
+    'medic': _soft + _gaunt + [('head/head-age-decr.target', 0.35)],
+    'strong': _soft + _gaunt + [('chin/chin-width-decr.target', 0.3), *_pair('eyes/{s}-eye-scale-incr.target', 0.25), ('forehead/forehead-trans-backward.target', 0.3)],
+    'explorer': _soft,
+    'builder': _soft + [('head/head-fat-decr.target', 0.5), *_pair('cheek/{s}-cheek-volume-decr.target', 0.6), *_pair('cheek/{s}-cheek-trans-up.target', 0.5),
+                        ('head/head-age-decr.target', 0.3), ('nose/nose-volume-decr.target', 0.35), *_pair('eyes/{s}-eye-bag-decr.target', 0.5)],
+    'social': [*_pair('cheek/{s}-cheek-volume-incr.target', 0.2), ('mouth/mouth-angles-up.target', 0.3), ('chin/chin-bones-decr.target', 0.3)],
+    'megazron': _soft + [*_pair('cheek/{s}-cheek-volume-incr.target', 0.3)],
+    'strong_suit': [*_pair('eyes/{s}-eye-scale-incr.target', 0.3), ('head/head-age-decr.target', 0.2), ('mouth/mouth-angles-up.target', 0.25),
+                    ('forehead/forehead-trans-backward.target', 0.3), ('eyebrows/eyebrows-trans-backward.target', 0.35), ('chin/chin-bones-decr.target', 0.25)],
+}
+
 for _id, _f in FACES.items():
     CHARS[_id].update(extra=CHARS[_id].get('extra', []) + _f, skin_src=SKIN_OF[_id], brow=BROW_OF[_id])
+if APPEAL_ON:
+    for _id, _f in APPEAL.items():
+        if _id in CHARS: CHARS[_id]['extra'] = CHARS[_id].get('extra', []) + _f
 CREW = list(CHARS)
 CHARS.update(_custom())

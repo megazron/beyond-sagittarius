@@ -447,12 +447,21 @@ def shared_maps(base, rig, out):
         r = lum / np.median(lum[mask])
         red = (a[..., 0] - a[..., 2]) / np.maximum(lum, 1e-3)
         flush = np.clip((red - np.median(red[mask])) * 1.6, 0, 1)
+        if os.environ.get('APPEAL') == '1':
+            # appealing, not photoreal: pores and blotches softened, and a gentle flush on the cheeks, nose and ears
+            r_ = lum / np.median(lum[mask]); lum = np.median(lum[mask]) * (gaussian_filter(r_, 2.2) * .7 + r_ * .3)
+            P = np.asarray(maps['P'], np.float32); P = np.stack([np.asarray(Image.fromarray(P[..., i]).resize((S, S), Image.BILINEAR)) for i in range(3)], -1)
+            x, y, z = np.abs(P[..., 0]), P[..., 1], P[..., 2]
+            g2 = lambda cx, cy, sx, sy, zmin: np.exp(-(((x - cx) / sx) ** 2 + ((y - cy) / sy) ** 2)) * (z > zmin)
+            blush = np.maximum.reduce([g2(.42, 7.0, .17, .16, .3) * .55, g2(0, 6.97, .09, .09, .7) * .4, g2(.76, 7.12, .08, .2, -1) * .45])
+            flush = np.clip(flush * .6 + blush, 0, 1)
+            r = lum / np.median(lum[mask])
         rgb = np.stack([np.clip(r / 2, 0, 1), flush, np.zeros_like(r)], -1)
         I = Image.fromarray((rgb * 255).astype(np.uint8))
         save_webp(I, f'{out}/tex/skin_{g}.webp', 88)
         save_webp(I.resize((1024, 1024), Image.LANCZOS), f'{out}/tex/skin_{g}.m.webp', 82)
         Lh = lum / np.maximum(gaussian_filter(lum, 10), 1e-3) - 1
-        N = Image.fromarray(detail_normal(gaussian_filter(Lh, .6) * 3.2, 1.0))
+        N = Image.fromarray(detail_normal(gaussian_filter(Lh, .6) * 3.2, 1.0)) if os.environ.get('APPEAL') != '1' else Image.fromarray(detail_normal(gaussian_filter(Lh, 1.4) * 1.5, 1.0))
         save_webp(N, f'{out}/tex/skin_{g}_n.webp', 74)
         save_webp(N.resize((1024, 1024), Image.LANCZOS), f'{out}/tex/skin_{g}_n.m.webp', 70)
     # eyes: R sclera/fibre brightness, G iris mask, B pupil
