@@ -256,6 +256,36 @@ def ray_covered(P, N, garment, sel, reach=0.16, both=False):
     return hit
 
 
+def seen_from_outside(P, N, cand, occluders, dirs=40, reach=0.6):
+    """Which candidate vertices can be seen from outside: a ray from the vertex in any of `dirs` directions over its
+    outward hemisphere (down to 12 degrees above the surface) that hits no occluder within `reach` means some camera
+    sees it. Only skin that no direction can see may be hidden. Occluders: the garments and the head."""
+    rng = np.random.default_rng(3); g = rng.normal(size=(dirs * 3, 3)); g /= np.linalg.norm(g, axis=1, keepdims=True)
+    tris = []
+    for o in occluders:
+        q = o.decimated(3000, None, None, 1e-3) if hasattr(o, 'decimated') else o
+        tris.append((q.P[q.T[:, 0]], q.P[q.T[:, 1]], q.P[q.T[:, 2]]))
+    A = np.concatenate([t[0] for t in tris]); B = np.concatenate([t[1] for t in tris]); C = np.concatenate([t[2] for t in tris])
+    e1, e2 = B - A, C - A
+    seen = np.zeros(len(P), bool); todo = np.nonzero(cand)[0]
+    for k in range(len(g)):
+        if not len(todo): break
+        d0 = g[k]
+        for s0 in range(0, len(todo), 384):
+            ii = todo[s0:s0 + 384]; n = N[ii]
+            d = d0[None, :] * np.sign((n @ d0))[:, None]; cosn = np.abs(n @ d0)
+            ok = cosn > 0.21                     # only directions out of the surface, not grazing it
+            o = P[ii] + n * 0.003
+            pv = np.cross(d[:, None, :], e2[None]); det = np.einsum('rtc,tc->rt', pv, e1)
+            inv = 1 / np.where(np.abs(det) < 1e-12, 1e-12, det); tv = o[:, None, :] - A[None]
+            u = np.einsum('rtc,rtc->rt', tv, pv) * inv; qv = np.cross(tv, e1[None]); v = np.einsum('rc,rtc->rt', d, qv) * inv
+            t = np.einsum('rtc,tc->rt', qv, e2) * inv
+            hit = ((u >= -0.01) & (v >= -0.01) & (u + v <= 1.02) & (t > 0) & (t < reach)).any(1)
+            seen[ii[ok & ~hit]] = True
+        todo = todo[~seen[todo]]
+    return seen
+
+
 def erode(hid, T, rings=2):
     """Keep a margin of real surface inside every hidden region, so openings show no hole."""
     h = hid.copy()
@@ -398,6 +428,17 @@ def build(c, cid, force=False):
         dl |= inside & far & bodyv
     hw0 = rig.W[:, [rig.index[n] for n in ('head', 'jaw', 'eyeL', 'eyeR')]].sum(1)
     dl[hw0 > 0.3] = False
+    # never cull skin a camera can see: every culled vertex is tested by rays over its whole outward hemisphere against
+    # the garments and the head; any vertex with a clear line out stays (an open collar, a loose cuff, a short sleeve)
+    from types import SimpleNamespace
+    headP = SimpleNamespace(P=V, T=Tall[hw0[Tall].mean(1) > .5]) if (hw0[Tall].mean(1) > .5).any() else None
+    occ = list(garments) + ([headP] if headP is not None else [])
+    seen = seen_from_outside(V, Nb, dl & bodyv, occ)
+    if seen.any(): print(f'  {cid}: {int(seen.sum())} culled vertices are visible from outside: kept', flush=True)
+    # and a ring of margin round them, so the edge of what is culled is never at a visible seam
+    for _ in range(2):
+        nb = np.zeros(len(V), bool); m = seen[Tall].any(1); nb[np.unique(Tall[m])] = True; seen |= nb
+    dl &= ~seen
     dl[rig.W[:, rig.index['neck']] > 0.6] = False  # the whole neck stays: collars sit on it, and a culled neck shows the inside of the head
     for i in bodyf:
         if not dl[base.faces[i]].all():

@@ -98,7 +98,9 @@ export class Away {
     s.update(dt, time, this.camera);
     // falling off the ice costs nothing but the walk back
     if (p.pos.y < -30) { p.spawn(s.spawn.x, s.spawn.z, 0); this.ui.toast(t('away.fell')); }
-    const near = s.tasks.filter((k) => this.open(k) && Math.hypot(k.pos.x - p.pos.x, k.pos.z - p.pos.z) < k.radius && Math.abs(k.pos.y - p.pos.y) < 3)[0];
+    // the nearest one, not the first in the list: beside Mir, E talks to Mir even with a friend a step further off
+    const dist = (k: { pos: THREE.Vector3 }) => Math.hypot(k.pos.x - p.pos.x, k.pos.z - p.pos.z);
+    const near = s.tasks.filter((k) => this.open(k) && dist(k) < k.radius && Math.abs(k.pos.y - p.pos.y) < 3).sort((x, y) => dist(x) - dist(y))[0];
     this.ui.setPrompt(near && !this.busy ? near.label : null);
     if (near && !this.busy && canMove && this.input.act('interact')) this.finish(near);
   }

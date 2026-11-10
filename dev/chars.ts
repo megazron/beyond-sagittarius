@@ -39,6 +39,7 @@ W.view = (i: number, d: number, yaw: number, h: number, dist: number) => {
   cam.lookAt(c.x, d, c.z);
   const el = W.eyeLight as THREE.PointLight | undefined; if (el) el.position.copy(cam.position).add(new THREE.Vector3(0.15, 0.25, 0));
 };
+W.viewAt = (x: number, y: number, z: number, yaw: number, up: number, dist: number) => { cam.position.set(x + Math.sin(yaw) * dist, y + up, z + Math.cos(yaw) * dist); cam.lookAt(x, y, z); };
 W.pose = (p: CrewPose, a = 0) => { pose = p; amount = a; };
 // review hooks for the de-creep pass: someone to look at, and a spoken line without audio (a syllable envelope)
 W.gaze = (i: number, x: number, y: number, z: number) => chars[i].setLookTarget(new THREE.Vector3(x, y, z));
@@ -46,6 +47,18 @@ W.say = (i: number, sec: number) => chars[i].say(sec);
 { const v = voice as unknown as { mouth: (o: { open: number; round: number; wide: number }) => void };
   v.mouth = (o) => { const syl = Math.max(0, Math.sin(t * 13.5)) * (0.55 + 0.45 * Math.sin(t * 3.1 + 1)), gap = Math.sin(t * 1.7) > -0.75 ? 1 : 0;
     o.open = syl * gap; o.round = Math.max(0, Math.sin(t * 4.3)) * 0.5 * gap; o.wide = Math.max(0, Math.sin(t * 5.9 + 2)) * 0.5 * gap; }; }
+// skin gate: every skin surface shaded flat grey from the front and flag magenta from behind; any magenta pixel on
+// screen is the inside of a body seen through a hole (culled skin a camera can see). Clothes and hair render grey both
+// sides (a coat's lining is meant to be seen); the background is black.
+W.flagMode = () => {
+  scene.background = new THREE.Color(0x000000); ground.visible = false; grid.visible = false;
+  const flag = new THREE.ShaderMaterial({ side: THREE.DoubleSide, vertexShader: `#include <common>\n#include <skinning_pars_vertex>\n#include <morphtarget_pars_vertex>\nvarying vec3 vN;\nvoid main(){\n#include <beginnormal_vertex>\n#include <morphnormal_vertex>\n#include <skinbase_vertex>\n#include <skinnormal_vertex>\n#include <begin_vertex>\n#include <morphtarget_vertex>\n#include <skinning_vertex>\nvN = normalize(normalMatrix * objectNormal);\ngl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);}`,
+    fragmentShader: `varying vec3 vN; void main(){ gl_FragColor = gl_FrontFacing ? vec4(vec3(0.35 + 0.4 * abs(vN.z)), 1.0) : vec4(1.0, 0.0, 1.0, 1.0); }` });
+  const grey = new THREE.MeshBasicMaterial({ color: 0x777777, side: THREE.DoubleSide });
+  scene.traverse((o) => { const m = o as THREE.Mesh; if (!m.isMesh || m === ground) return; m.material = m.name.startsWith('skin') ? flag : grey; });
+};
+W.flagCount = () => { const g = r.getContext(); const w = g.drawingBufferWidth, h = g.drawingBufferHeight, px = new Uint8Array(w * h * 4); g.readPixels(0, 0, w, h, g.RGBA, g.UNSIGNED_BYTE, px);
+  let n = 0; for (let i = 0; i < px.length; i += 4) if (px[i] > 200 && px[i + 1] < 60 && px[i + 2] > 200) n++; return n; };
 // the eye light: a small soft source by the lens, so eyes are never dead sockets (de-creep only)
 if (DECREEP) { const eyeLight = new THREE.PointLight(0xfff2e0, 0.55, 6, 1.5); scene.add(eyeLight); W.eyeLight = eyeLight; }
 
