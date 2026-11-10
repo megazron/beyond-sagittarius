@@ -252,6 +252,7 @@ def main():
                 ev("__bs.tutorialNext()")
         def hold_until(keys, step_next):
             """Hold keys, turning if something blocks the way, until the tutorial moves on."""
+            last = None
             for i in range(12):
                 # re-press each round: a late pointer-lock grant blurs the window and drops held keys
                 for k in keys:
@@ -264,7 +265,11 @@ def main():
                 log("  still on", tu["step"], "at", [round(v, 1) for v in ev("__bs.debug.player")], "keys", keys)
                 if i == 1:
                     log("  input:", ev("__bs.inputState"))
-                ev(f"__bs.look({i * 1.3}, -0.15)")
+                # turn only when something blocks the way: turning every round walks a small circle that never gets anywhere
+                pos = ev("__bs.debug.player")
+                if i and last is not None and ((pos[0] - last[0]) ** 2 + (pos[2] - last[2]) ** 2) ** 0.5 < 0.4:
+                    ev(f"__bs.look({i * 1.3}, -0.15)")
+                last = pos
             for k in keys:
                 page.keyboard.up(k)
 
