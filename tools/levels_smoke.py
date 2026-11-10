@@ -275,6 +275,8 @@ def main():
                 page.keyboard.up(k)
 
         expect_step("move")
+        # the look drag must be over before walking: a held button slows him to a shuffle and holds the view
+        page.mouse.move(640, 360); page.mouse.up(); ev("__bs.step(0.2)")
         hold_until(["KeyW"], "sprint")
         expect_step("sprint")
         if os.environ.get("BS_STOP_AFTER_MOVE"):
