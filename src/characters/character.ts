@@ -565,17 +565,18 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // a mouth that shuts fully between syllables; the stare shapes (wide 'fear' eyes at rest) are gone
       const talk = speak > 0 ? lip.open : 0, idle = wob(t * 0.6, id.length * 3.1);
       if (speak > 0 && lip.open < 0.1) easeMorph('open', 0, 1 - Math.exp(-dt * 60));
-      easeMorph('smile', (ex.smile ?? Math.max(smileBase, 0.12)) + idle * 0.05 + talk * 0.12, r);
+      easeMorph('smile', (ex.smile ?? Math.max(smileBase, 0.24)) + idle * 0.05 + talk * 0.12, r);
       easeMorph('frown', ex.frown ?? 0, r);
-      easeMorph('fear', (ex.fear ?? 0) + hurt * 0.1 + talk * 0.1 + Math.max(0, wob(t * 0.35, 9)) * 0.06, r);
-      easeMorph('squint', (ex.squint ?? 0) + eyeShape.squint * 0.7 + Math.max(0, idle) * 0.08 + (morph.smile ?? 0) * 0.15, r);
+      // brows barely lifted at rest (more reads as worry)
+      easeMorph('fear', (ex.fear ?? 0.04) + hurt * 0.1 + talk * 0.08 + Math.max(0, wob(t * 0.35, 9)) * 0.06, r);
+      easeMorph('squint', (ex.squint ?? 0) + eyeShape.squint * 0.3 + Math.max(0, idle) * 0.06 + (morph.smile ?? 0) * 0.12, r);
       // blinks: irregular, sometimes double, quick to close and slower to open
       blinkAt -= dt;
       if (blinkAt <= 0) { blinkT = 0.2; blinkAt = Math.random() < 0.15 ? 0.32 : 1.6 + Math.random() * Math.random() * 6.5; }
       if (blinkT > 0) blinkT -= dt;
       const bk = blinkT > 0 ? 1 - blinkT / 0.2 : 1, bl = blinkT > 0 ? (bk < 0.3 ? bk / 0.3 : 1 - (bk - 0.3) / 0.7) : 0;
       // the upper lid rests over the top of the iris: relaxed, never round and staring; it follows the eye down
-      const restLid = Math.max(ex.blink ?? eyeShape.blink, 0.17) + clamp(eyeAimX + lx, 0, 0.4) * 0.35;
+      const restLid = Math.min(Math.max(ex.blink ?? eyeShape.blink, 0.15), ex.blink ?? 0.2) + clamp(eyeAimX + lx, 0, 0.4) * 0.35;
       setMorph('blink', Math.max(bl, Math.min(0.92, restLid)));
     } else {
     easeMorph('smile', ex.smile ?? smileBase, r);

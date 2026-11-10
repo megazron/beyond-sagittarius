@@ -192,12 +192,14 @@ export function eyeMaterial(iris: number, glow: number) {
         // the upper lid's soft shadow over the top of the ball
         vec3 scl = vec3(0.80, 0.77, 0.74) * pow(ey.r, 1.3) * 1.1;
         float limb = smoothstep(0.35, 0.95, ey.g) ;
-        vec3 irs = uIris * (0.22 + 1.25 * ey.r * limb) + uIris * uIris * 0.25;
+        // pale irises read as blank, dead eyes: every iris is deepened and saturated towards its own hue
+        float iLum = dot(uIris, vec3(0.3, 0.6, 0.1)); vec3 hue = mix(vec3(iLum), uIris, 1.7); hue = max(hue, vec3(0.0)) * (0.5 / max(iLum, 0.25));
+        vec3 irs = hue * (0.10 + 0.95 * ey.r * limb);
         diffuseColor.rgb = mix(scl, irs, ey.g) * (1.0 - ey.b * 0.98);
         float lidSh = smoothstep(0.05, 0.75, normalize(vNormal).y);
         diffuseColor.rgb *= 1.0 - 0.55 * lidSh;` : ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += uIris * ey.g * (1.0 - ey.b) * uEyeGlow * (0.3 + ey.r) * ${DECREEP ? '0.45' : '1.0'};
+        totalEmissiveRadiance += uIris * ey.g * (1.0 - ey.b) * uEyeGlow * (0.3 + ey.r) * ${DECREEP ? '0.08' : '1.0'};
         ${DECREEP ? /* glsl */ `
         { // the cornea's highlight: a small bright window and a soft second one, from a key that sits up and to the side
           vec3 Nn = normalize(vNormal), Vv = normalize(vViewPosition);
