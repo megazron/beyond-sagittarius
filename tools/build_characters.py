@@ -428,6 +428,14 @@ def build(c, cid, force=False):
             tree = cKDTree(o.P); d, j = tree.query(Vb, workers=1); s = np.einsum('ij,ij->i', Vb - o.P[j], o.N[j])
             m = (d < .05) & (s <= 0) & (s > -cfg['deep_body']) & (tw > .3)
             Vb[m] -= o.N[j[m]] * (s[m] + cfg['deep_body'])[:, None]
+    if cfg.get('deep_shoulder'):
+        # a sleeveless top over a big shoulder: raised in a fall, the deltoid it covers came through at the armhole seam;
+        # covered skin weighted to the clavicle and upper arm sits deeper under it, bare skin past the armhole stays put
+        sw = sum(rig.W[:, rig.index[n]] for n in ('clavicleL', 'clavicleR', 'upperarmL', 'upperarmR') if n in rig.index)
+        for o in garments:
+            tree = cKDTree(o.P); d, j = tree.query(Vb, workers=1); s = np.einsum('ij,ij->i', Vb - o.P[j], o.N[j])
+            m = (d < .04) & (s <= 0) & (s > -cfg['deep_shoulder']) & (sw > .25)
+            Vb[m] -= o.N[j[m]] * (s[m] + cfg['deep_shoulder'])[:, None]
     bm = {k: vb[k] for k in vb if not k.endswith('_dm')}
     head = Part(V, T[hm], TU[hm], UV, rig.W, 'skin_head', {**morphs, **bm})
     # the neck and head keep their own weights: the head is a separate mesh and must meet the body exactly

@@ -120,7 +120,7 @@ CHARS = {  # noqa
     'builder': dict(
         look=dict(skin=0x6fa867, shade=0x2c6a48, iris=0xff9a32, brow=0x123a30, glow=0xffa030, marks='plates', ear='round'),
         height=1.57, macro=dict(gender=1.0, muscle=0.72, weight=1.0, height=0.2, proportions=0.35),
-        skin_src='m',
+        skin_src='m', deep_shoulder=0.025,  # the worksuit's armholes over big shoulders (see build_characters.py)
         clothes=[('male_worksuit01', None, {}),
                  ('mindfront_shoes_biker_boots_male', (0x3a, 0x2c, 0x20), {})],
     ),
