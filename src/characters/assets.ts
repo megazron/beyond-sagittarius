@@ -1,3 +1,4 @@
+import { DECREEP } from './decreep';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { swayUniforms } from './sway';
@@ -159,6 +160,10 @@ export function skinMaterial(sex: string, marks: string, l: SkinLook, lod: numbe
         sc = mix(sc, uShade * 0.35, mk.g);
         sc = mix(sc, uOver * clamp(sr, 0.6, 1.2), mk.b);
         sc = mix(sc, uGlow, mk.r * 0.5);
+        ${DECREEP ? /* glsl */ `
+        // blood under the skin: a warm undertone everywhere, whatever the lineage's colour, and a little more in the lips
+        sc = mix(sc, sc * vec3(1.16, 0.97, 0.92) + vec3(0.012, 0.0, 0.0), 0.6);
+        sc = mix(sc, uLip * 1.05, sk.g * 0.25);` : ''}
         diffuseColor.rgb = sc;`)
       .replace('#include <emissivemap_fragment>', /* glsl */ `#include <emissivemap_fragment>
         totalEmissiveRadiance += uGlow * mk.r * uGlowK;
@@ -166,12 +171,12 @@ export function skinMaterial(sex: string, marks: string, l: SkinLook, lod: numbe
         float rimS = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0);
         totalEmissiveRadiance += mix(sc, uSkin, 0.5) * rimS * 0.1;`);
   };
-  m.customProgramCacheKey = () => 'crew-skin';
+  m.customProgramCacheKey = () => (DECREEP ? 'crew-skin2' : 'crew-skin');
   return m;
 }
 
 export function eyeMaterial(iris: number, glow: number) {
-  const m = new THREE.MeshStandardMaterial({ map: texPlain('eye'), roughness: 0.18 });
+  const m = new THREE.MeshStandardMaterial({ map: texPlain('eye'), roughness: DECREEP ? 0.1 : 0.18 });
   m.userData.film = { kind: 'eye', iris, glow };
   const u = { uIris: { value: col(iris) }, uEyeGlow: { value: glow } };
   m.onBeforeCompile = (sh) => {
@@ -181,11 +186,28 @@ export function eyeMaterial(iris: number, glow: number) {
         vec3 ey = texture2D(map, vMapUv).rgb;
         vec3 sclera = vec3(0.78, 0.8, 0.84) * pow(ey.r, 1.6) * 1.2;
         vec3 irisC = uIris * (0.35 + ey.r * 1.3);
-        diffuseColor.rgb = mix(sclera, irisC, ey.g) * (1.0 - ey.b * 0.97);`)
+        diffuseColor.rgb = mix(sclera, irisC, ey.g) * (1.0 - ey.b * 0.97);
+        ${DECREEP ? /* glsl */ `
+        // a living eye: a warm, slightly darker white; depth in the iris (dark limbal ring, lighter towards the pupil);
+        // the upper lid's soft shadow over the top of the ball
+        vec3 scl = vec3(0.80, 0.77, 0.74) * pow(ey.r, 1.3) * 1.1;
+        float limb = smoothstep(0.35, 0.95, ey.g) ;
+        vec3 irs = uIris * (0.22 + 1.25 * ey.r * limb) + uIris * uIris * 0.25;
+        diffuseColor.rgb = mix(scl, irs, ey.g) * (1.0 - ey.b * 0.98);
+        float lidSh = smoothstep(0.05, 0.75, normalize(vNormal).y);
+        diffuseColor.rgb *= 1.0 - 0.55 * lidSh;` : ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += uIris * ey.g * (1.0 - ey.b) * uEyeGlow * (0.3 + ey.r);`);
+        totalEmissiveRadiance += uIris * ey.g * (1.0 - ey.b) * uEyeGlow * (0.3 + ey.r) * ${DECREEP ? '0.45' : '1.0'};
+        ${DECREEP ? /* glsl */ `
+        { // the cornea's highlight: a small bright window and a soft second one, from a key that sits up and to the side
+          vec3 Nn = normalize(vNormal), Vv = normalize(vViewPosition);
+          float h1 = pow(max(dot(reflect(-normalize(vec3(-0.35, 0.55, 0.75)), Nn), Vv), 0.0), 420.0);
+          float h2 = pow(max(dot(reflect(-normalize(vec3(0.45, -0.15, 0.85)), Nn), Vv), 0.0), 160.0);
+          totalEmissiveRadiance += vec3(1.0, 0.98, 0.95) * (h1 * 1.6 + h2 * 0.12) * (1.0 - 0.6 * lidSh);
+          // the wet line along the lower lid
+          totalEmissiveRadiance += vec3(0.9) * smoothstep(-0.55, -0.8, Nn.y) * 0.05; }` : ''}`);
   };
-  m.customProgramCacheKey = () => 'crew-eye';
+  m.customProgramCacheKey = () => (DECREEP ? 'crew-eye2' : 'crew-eye');
   return m;
 }
 

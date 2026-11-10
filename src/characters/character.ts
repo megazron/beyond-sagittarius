@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DECREEP } from './decreep';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { clamp } from '../core/noise';
 import { applySway, swayUniforms } from './sway';
@@ -48,6 +49,8 @@ const MARK_OF: Record<string, string> = { dots: 'scientist', cracks: 'strong', v
 
 const bones = (root: THREE.Object3D) => { const m = new Map<string, THREE.Bone>(); root.traverse((o) => { if ((o as THREE.Bone).isBone) m.set(o.name, o as THREE.Bone); }); return m; };
 const lip = { open: 0, round: 0, wide: 0 };
+/** Smooth value noise in -1..1 for micro-movement (idle expressions, eye drift). */
+const wob = (t: number, k: number) => Math.sin(t * 0.7 + k * 1.3) * 0.5 + Math.sin(t * 1.31 + k * 2.1) * 0.3 + Math.sin(t * 2.9 + k) * 0.2;
 const Q = new THREE.Quaternion(), Q2 = new THREE.Quaternion(), E = new THREE.Euler();
 const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3(), V4 = new THREE.Vector3(), V5 = new THREE.Vector3();
 
@@ -148,7 +151,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let blinkAt = 2 + Math.random() * 3, blinkT = 0, speak = 0;
   let limbs: Limbs | null = null, faceSet: Face | null = null;
   const fingerRest = new Map<THREE.Bone, THREE.Quaternion>();
-  let gaitPhase = 0, inited = false, hipDrop = 0, sacAt = 1, sacX = 0, sacY = 0, firstFrame = true;
+  let gaitPhase = 0, inited = false, hipDrop = 0, sacAt = 1, sacX = 0, sacY = 0, firstFrame = true, eyeAimX = 0, eyeAimY = 0;
   const footOff = [0, 0];
   const pin = [new THREE.Vector3(), new THREE.Vector3()], pinOff = [new THREE.Vector3(), new THREE.Vector3()], pinned = [false, false];
   const trackPos = new THREE.Vector3();
@@ -532,8 +535,17 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       headB.quaternion.multiply(Q.setFromEuler(E.set(lx * 0.6, ly * 0.6, 0)));
     }
     sacAt -= dt;
-    if (sacAt <= 0) { sacAt = 1.2 + Math.random() * 3; sacX = (Math.random() - 0.5) * 0.05; sacY = (Math.random() - 0.5) * 0.09; }
+    if (sacAt <= 0) { sacAt = DECREEP ? 0.5 + Math.random() * 2.2 : 1.2 + Math.random() * 3; sacX = (Math.random() - 0.5) * 0.05; sacY = (Math.random() - 0.5) * 0.09; if (DECREEP && Math.random() < 0.18) blinkAt = Math.min(blinkAt, 0.05); }
     eyeY += (sacY + clamp(yawRate * 0.08, -0.25, 0.25) - eyeY) * (1 - Math.exp(-dt * 20));
+    if (DECREEP) {
+      // the eyes finish the look the head only half makes, converge on what they look at, and never sit dead still
+      const restY = clamp(wantY - ly * 1.0, -0.45, 0.45) * (gaze ? 1 : 0), restX = clamp(wantX - lx * 1.0, -0.3, 0.3) * (gaze ? 1 : 0);
+      eyeAimY += (restY - eyeAimY) * (1 - Math.exp(-dt * 14)); eyeAimX += (restX - eyeAimX) * (1 - Math.exp(-dt * 14));
+      const dist = gaze ? Math.max(0.35, V2.distanceTo(gaze)) : 3, verg = Math.atan(0.032 / dist);
+      const jx = wob(t * 9, 3) * 0.004, jy = wob(t * 11, 7) * 0.006;
+      bs.get('eyeL')!.quaternion.setFromEuler(E.set(sacX + eyeAimX + jx, eyeY + eyeAimY - verg + jy, 0));
+      bs.get('eyeR')!.quaternion.setFromEuler(E.set(sacX + eyeAimX + jx, eyeY + eyeAimY + verg + jy, 0));
+    } else
     for (const n of ['eyeL', 'eyeR']) bs.get(n)!.quaternion.setFromEuler(E.set(sacX, eyeY, 0));
     chestB.scale.setScalar(1 + bp * 0.0025);
 
@@ -548,6 +560,24 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     easeMorph('round', lip.round * 0.55, 1 - Math.exp(-dt * 22));
     easeMorph('wide', lip.wide * 0.5, 1 - Math.exp(-dt * 22));
     bs.get('jaw')!.rotation.x = (morph.open ?? 0) * 0.2;
+    if (DECREEP) {
+      // never a dead-neutral face: a soft resting smile that drifts, brows and cheeks that move with speech,
+      // a mouth that shuts fully between syllables; the stare shapes (wide 'fear' eyes at rest) are gone
+      const talk = speak > 0 ? lip.open : 0, idle = wob(t * 0.6, id.length * 3.1);
+      if (speak > 0 && lip.open < 0.1) easeMorph('open', 0, 1 - Math.exp(-dt * 60));
+      easeMorph('smile', (ex.smile ?? Math.max(smileBase, 0.12)) + idle * 0.05 + talk * 0.12, r);
+      easeMorph('frown', ex.frown ?? 0, r);
+      easeMorph('fear', (ex.fear ?? 0) + hurt * 0.1 + talk * 0.1 + Math.max(0, wob(t * 0.35, 9)) * 0.06, r);
+      easeMorph('squint', (ex.squint ?? 0) + eyeShape.squint * 0.7 + Math.max(0, idle) * 0.08 + (morph.smile ?? 0) * 0.15, r);
+      // blinks: irregular, sometimes double, quick to close and slower to open
+      blinkAt -= dt;
+      if (blinkAt <= 0) { blinkT = 0.2; blinkAt = Math.random() < 0.15 ? 0.32 : 1.6 + Math.random() * Math.random() * 6.5; }
+      if (blinkT > 0) blinkT -= dt;
+      const bk = blinkT > 0 ? 1 - blinkT / 0.2 : 1, bl = blinkT > 0 ? (bk < 0.3 ? bk / 0.3 : 1 - (bk - 0.3) / 0.7) : 0;
+      // the upper lid rests over the top of the iris: relaxed, never round and staring; it follows the eye down
+      const restLid = Math.max(ex.blink ?? eyeShape.blink, 0.17) + clamp(eyeAimX + lx, 0, 0.4) * 0.35;
+      setMorph('blink', Math.max(bl, Math.min(0.92, restLid)));
+    } else {
     easeMorph('smile', ex.smile ?? smileBase, r);
     easeMorph('frown', ex.frown ?? 0, r);
     easeMorph('fear', (ex.fear ?? 0) + eyeShape.fear + hurt * 0.1, r);
@@ -557,6 +587,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (blinkT > 0) blinkT -= dt;
     const bl = blinkT > 0 ? Math.sin((blinkT / 0.15) * Math.PI) : 0;
     setMorph('blink', Math.max(bl, ex.blink ?? eyeShape.blink));
+    }
 
     // ---- feet: planted where they land, on the real ground ----
     if (ground && standing && root.visible) {
