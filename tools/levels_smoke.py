@@ -268,7 +268,7 @@ def main():
                     log("  input:", ev("__bs.inputState"))
                 # turn only when something blocks the way: turning every round walks a small circle that never gets anywhere
                 pos = ev("__bs.debug.player")
-                if i and last is not None and ((pos[0] - last[0]) ** 2 + (pos[2] - last[2]) ** 2) ** 0.5 < 0.4:
+                if i and last is not None and ((pos[0] - last[0]) ** 2 + (pos[2] - last[2]) ** 2) ** 0.5 < 0.1:
                     ev(f"__bs.look({i * 1.3}, -0.15)")
                 last = pos
             for k in keys:
