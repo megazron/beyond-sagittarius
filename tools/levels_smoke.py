@@ -150,6 +150,7 @@ def main():
     with sync_playwright() as p:
         browser = launch(p)
         page = browser.new_page(viewport={"width": 1280, "height": 720})
+        page.set_default_timeout(120000)  # clicks and waits on a loaded machine: generous, and they return as soon as the page is ready
         page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
         page.on("console", lambda m: errors.append(f"console.{m.type}: {m.text}") if m.type == "error" else None)
         page.add_init_script("if (!localStorage.getItem('bs-settings-v1')) localStorage.setItem('bs-settings-v1', JSON.stringify({lang: 'en', sensitivity: 1, invertY: false, volume: 0, subtitles: true, showFps: false}))")
@@ -197,7 +198,7 @@ def main():
 
         # ---- name screen ----
         page.click("#btn-new")
-        page.wait_for_selector("#nm-scientist", timeout=10000)
+        page.wait_for_selector("#nm-scientist", timeout=60000)
         page.fill("#nm-scientist", PLAYER)
         time.sleep(0.5)
         shot("00-names")
@@ -220,7 +221,7 @@ def main():
         page.wait_for_function("window.__bs.state === 'game' && window.__bs.mode === 'wake'", timeout=60000)
         time.sleep(1)
         page.keyboard.press("Enter")
-        page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
+        page.wait_for_function("window.__bs.mode === 'play'", timeout=180000)
         names = ev("__bs.save.names")
         log("names in save:", names)
         if names.get("scientist") != PLAYER or "explorer" in names:
@@ -286,8 +287,10 @@ def main():
         page.keyboard.press("KeyE"); ev("__bs.step(0.2)")
         log("  after E:", ev("({prompt: __bs.prompt, player: __bs.debug.player, inv: __bs.save.inventory, tut: __bs.tutorial})"))
         expect_step("menu")
-        page.keyboard.press("KeyI"); time.sleep(0.3)
-        if not page.locator(".inv-list").count():
+        page.keyboard.press("KeyI")
+        try:  # a loaded machine can take seconds to draw a menu: poll for it, don't guess a delay
+            page.wait_for_selector(".inv-list", timeout=20000)
+        except Exception:
             failures.append("inventory did not open")
         page.keyboard.press("KeyI"); time.sleep(0.3)
         page.keyboard.press("KeyC"); time.sleep(0.3); page.keyboard.press("KeyC"); time.sleep(0.3)
@@ -381,7 +384,7 @@ def main():
         page.reload(wait_until="domcontentloaded", timeout=240000)
         page.wait_for_function("window.__bs && window.__bs.ready", timeout=240000)
         page.click("#btn-continue")
-        page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
+        page.wait_for_function("window.__bs.mode === 'play'", timeout=180000)
         ev("__bs.step(1)")
         if not ev("__bs.branch.open"):
             failures.append("reload with a choice open dropped the choice")
@@ -805,7 +808,7 @@ def main():
         page.reload(wait_until="domcontentloaded", timeout=240000)
         page.wait_for_function("window.__bs && window.__bs.ready", timeout=240000)
         page.click("#btn-continue")
-        page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
+        page.wait_for_function("window.__bs.mode === 'play'", timeout=180000)
         ev("__bs.step(2)")
         re = ev("({level: __bs.level, names: __bs.save.names, crew: __bs.crew})")
         log("after reload:", re)
@@ -833,7 +836,7 @@ def main():
         page.wait_for_selector(".path-tree", timeout=5000)
         page.click("#tab-pause")
         page.click("#p-quit")
-        page.wait_for_function("window.__bs.state === 'title'", timeout=10000)
+        page.wait_for_function("window.__bs.state === 'title'", timeout=60000)
         page.click("#btn-chapters")
         page.wait_for_selector("[data-ch='1']", timeout=5000)
         shot("17-chapters")
@@ -843,7 +846,7 @@ def main():
         page.click("#pt-replay")
         page.wait_for_function("window.__bs.state === 'game' && window.__bs.mode === 'wake'", timeout=60000)
         page.keyboard.press("Enter")
-        page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
+        page.wait_for_function("window.__bs.mode === 'play'", timeout=180000)
         ev("__bs.step(1)")
         ev("window.dispatchEvent(new Event('beforeunload'))")
         rp = ev("({replay: __bs.save.replay, level: __bs.level, log: __bs.branch.state.log.length, tut: __bs.tutorial})")
@@ -859,7 +862,7 @@ def main():
             page.reload(wait_until="domcontentloaded", timeout=240000)
             page.wait_for_function("window.__bs && window.__bs.ready", timeout=240000)
             page.click("#btn-continue")
-            page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
+            page.wait_for_function("window.__bs.mode === 'play'", timeout=180000)
             time.sleep(3)
             d = ev("document.documentElement.dir")
             if lang == "ur" and d != "rtl":
