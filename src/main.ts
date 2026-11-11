@@ -774,7 +774,7 @@ window.addEventListener('resize', () => {
   setTime(h: number) { if (game?.save) game.save.timeOfDay = h; },
   cineSeek(t: number) { cine.seek(t); },
   /** Freeze the clock (true) and step it by hand; `frames` counts finished steps. */
-  hold(on: boolean) { hold.on = on; film.manual = on; },
+  hold(on: boolean) { hold.on = on; film.manual = on; voice.manual = on ? () => elapsed : null; },
   advance(sec: number) { hold.pending = sec; },
   get frames() { return hold.done; },
   film: { get fx() { return film.lensFx; }, get video() { return film.videoOn; }, seek(b: number) { film.seek(b); }, get playing() { return film.playing; }, get beat() { return film.beat; }, get seconds() { return film.lengthSeconds; }, start() { state = 'film'; renderer.setScene(cine.scene, cine.camera, false); ui.show('title', false); ui.show('cine', true); ui.fade('black', 0, 0); void film.play(() => {}); } },

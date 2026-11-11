@@ -106,6 +106,8 @@ class Voice {
     this.lastKey = key; this.played++;
     this.stop();
     const tk = ++this.token;
+    // on a held clock (recordings) the mouth runs on the game's time, from the moment the line starts
+    if (this.manual && dur !== null) { this.lipFile = f; this.startedAt = this.manual(); this.manualEnd = this.startedAt + dur; }
     if (!audio.ctx) return dur;
     void this.fetchBuffer(f).then((b) => {
       if (!b || tk !== this.token || !audio.ctx) return;
@@ -114,7 +116,7 @@ class Voice {
       s.connect(audio.voiceIn());
       s.onended = () => { if (this.src === s) { this.src = null; audio.duck(false); } };
       s.start();
-      this.startedAt = audio.ctx.currentTime; this.lipFile = f;
+      if (!this.manual) { this.startedAt = audio.ctx.currentTime; this.lipFile = f; }
       this.src = s;
       audio.duck(true);
     });
@@ -122,13 +124,16 @@ class Voice {
   }
 
   stop() {
-    this.token++;
+    this.token++; this.manualEnd = 0;
     if (this.src) { try { this.src.stop(); } catch { /* already over */ } this.src = null; audio.duck(false); }
   }
 
   private lips: Partial<Record<Lang, Record<string, string>>> = {};
   private lipFile: string | null = null;
   private startedAt = 0;
+  /** Test hook: the clock the mouth reads (the game's held clock while frames are recorded), or null for the audio clock. */
+  manual: (() => number) | null = null;
+  private manualEnd = 0;
   private async loadLips(lang: Lang) {
     if (this.lips[lang]) return;
     this.lips[lang] = {};
@@ -141,11 +146,13 @@ class Voice {
    */
   mouth(out: { open: number; round: number; wide: number }) {
     out.open = out.round = out.wide = 0;
-    if (!this.src || !this.lipFile || !audio.ctx) return out;
-    const tr = this.lips[this.lang]?.[this.lipFile];
+    const now = this.manual ? this.manual() : audio.ctx?.currentTime ?? 0;
+    const file = this.lipFile;
+    if (!file || (this.manual ? now > this.manualEnd : !this.src || !audio.ctx)) return out;
+    const tr = this.lips[this.lang]?.[file];
     if (!tr) return out;
     const [a, b, c] = tr.split('|');
-    const f = (audio.ctx.currentTime - this.startedAt) * 25, i = Math.floor(f), k = f - i;
+    const f = (now - this.startedAt) * 25, i = Math.floor(f), k = f - i;
     const at = (s: string) => { if (i < 0 || i + 1 >= s.length) return 0; return ((s.charCodeAt(i) - 48) * (1 - k) + (s.charCodeAt(i + 1) - 48) * k) / 9; };
     out.open = at(a); out.round = at(b); out.wide = at(c);
     return out;

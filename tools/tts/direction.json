@@ -1350,6 +1350,24 @@
 "tags": [],
 "fx": ""
 },
+"city.npc.mir": {
+"emotion": "warm",
+"intensity": 0.35,
+"pace": 0.97,
+"pre": 0.0,
+"post": 0.15,
+"tags": [],
+"fx": ""
+},
+"city.npc.mir2": {
+"emotion": "warm",
+"intensity": 0.35,
+"pace": 0.97,
+"pre": 0.0,
+"post": 0.15,
+"tags": [],
+"fx": ""
+},
 "codex.knapping.text": {
 "emotion": "dry",
 "intensity": 0.35,

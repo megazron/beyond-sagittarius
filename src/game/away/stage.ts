@@ -17,5 +17,7 @@ export interface AwayStage {
   vistas?: { x0: number; x1: number; z0: number; z1: number; yaw: number; pitch: number; secs: number }[];
   tasks: AwayTask[];
   update(dt: number, time: number, camera?: THREE.Camera): void;
+  /** Someone on the stage speaks to the player for this long: they turn to face them, look at them, and talk. */
+  talk?(id: string, seconds: number, listener: THREE.Vector3): void;
   dispose?(): void;
 }

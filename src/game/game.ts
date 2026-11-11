@@ -74,7 +74,11 @@ export class Game {
       const crew = who && ['strong', 'medic', 'explorer', 'builder', 'social'].includes(who);
       // Mir has two things to say, in turn
       const line = who === 'mir' ? `city.npc.mir${(this.mirTurn = (this.mirTurn + 1) % 2) ? '' : '2'}` : `city.npc.${who}`;
-      if (who) this.ui.say(crew ? `city.friend.${who}` : line, crew ? `crew.${who}.name` : `city.who.${who}`, 5);
+      if (who) {
+        const key = crew ? `city.friend.${who}` : line;
+        this.ui.say(key, crew ? `crew.${who}.name` : `city.who.${who}`, 5);
+        this.away!.talk(who, voice.duration(key) ?? 3.5);
+      }
       else this.ui.say(`city.done.${id}`, 'crew.scientist.name', 4.5);
       go();
     };

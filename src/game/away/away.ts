@@ -115,6 +115,11 @@ export class Away {
     if (this.onTask) this.onTask(k.id, go); else go();
   }
 
+  /** A person on the stage answers the player: they face the player and talk for as long as the line lasts. */
+  talk(id: string, seconds: number) {
+    if (this.stage && this.player) this.stage.talk?.(id, seconds, this.player.model.root.position);
+  }
+
   leave() {
     const s = this.stage;
     if (s && this.player) s.scene.remove(this.player.model.root);

@@ -563,6 +563,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   }
   // ---- people ----
   const people: CityPerson[] = [];
+  // who is talking to the player right now, and the way they faced before
+  let talking: { q: CityPerson; until: number; at: THREE.Vector3; rest: number } | null = null, clock = 0;
+  const eye = new THREE.Vector3();
   const person = (id: string, fig: Character, x: number, z: number, yaw: number, pose: CrewPose, walk?: CityPerson['walk']) => {
     fig.root.position.set(x, hx(x), z); fig.root.rotation.y = yaw;
     fig.setGround((px) => hx(px));
@@ -636,7 +639,26 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       for (const q of people) { const dx = p.x - q.pos.x, dz = p.z - q.pos.z, dd = Math.hypot(dx, dz); if (dd < r + 0.3 && dd > 1e-6) { p.x = q.pos.x + dx / dd * (r + 0.3); p.z = q.pos.z + dz / dd * (r + 0.3); } }
     },
     bind() { /* the city asks nothing of the body: no lineage tricks on the last normal day */ },
+    talk(id, seconds, listener) {
+      const q = people.find((x) => x.id === id);
+      if (!q) return;
+      if (talking && talking.q !== q) talking.q.fig.setLookTarget(null);
+      talking = { q, until: clock + seconds + 0.6, at: listener, rest: talking?.q === q ? talking.rest : q.yaw };
+      q.fig.say(seconds);
+    },
     update(dt, time, cam) {
+      clock = time;
+      if (talking) {
+        // the one you spoke to turns to you (a little first, the head and eyes do the rest) and looks you in the eye
+        const k = talking, q = k.q, on = time < k.until;
+        const face = Math.atan2(k.at.x - q.pos.x, k.at.z - q.pos.z);
+        const d = Math.atan2(Math.sin(face - k.rest), Math.cos(face - k.rest));
+        const want = on ? k.rest + THREE.MathUtils.clamp(d, -1.4, 1.4) * 0.8 : k.rest;
+        q.yaw += Math.atan2(Math.sin(want - q.yaw), Math.cos(want - q.yaw)) * (1 - Math.exp(-dt * 3));
+        q.fig.root.rotation.y = q.yaw;
+        if (on) q.fig.setLookTarget(eye.set(k.at.x, k.at.y + 1.62, k.at.z));
+        else { q.fig.setLookTarget(null); if (Math.abs(q.yaw - k.rest) < 0.01) { q.yaw = k.rest; talking = null; } }
+      }
       for (const q of people) {
         const w = q.walk;
         if (w) {
@@ -648,7 +670,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         } else {
           q.phase += dt;
           // Mir talks with his hands now and then, between sips: a few seconds of gesture in every twelve
-          const pose = q.id === 'mir' ? ((time + 3) % 12 < 3.2 ? ((time + 3) % 24 < 12 ? 'present' : 'argue') : 'idle') : q.pose;
+          // and while he talks to you, his hands keep going
+          const toYou = talking?.q === q && time < talking.until;
+          const pose = q.id === 'mir' ? (toYou ? ((time % 7) < 3.5 ? 'present' : 'argue') : (time + 3) % 12 < 3.2 ? ((time + 3) % 24 < 12 ? 'present' : 'argue') : 'idle') : q.pose;
           q.fig.animate(pose, q.phase, 0, time, dt);
         }
       }
