@@ -34,6 +34,7 @@ with sync_playwright() as pw:
                         yaw = k * math.pi / 4; up = .12 if spot == 'neck' else .05
                         pg.evaluate(f"viewAt({p[0]}, {p[1]}, {p[2]}, {yaw}, {up}, {dist}); step(1)")
                         n = pg.evaluate('flagCount()')
+                        if n > 320 * 320 * 0.35: continue  # the camera itself ended up inside a limb or the body: not a view anyone gets
                         key = (who, pose, spot)
                         if n > worst.get(key, (-1,))[0]: worst[key] = (n, k)
                         if n > a.limit and a.shots: pg.screenshot(path=f'{a.shots}/{who}_{pose}_{spot}_{k}.png')
