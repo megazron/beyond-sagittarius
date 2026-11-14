@@ -95,13 +95,17 @@ export class Cinematic {
     this.idle(0);
   }
 
+  private titleShift = 0;
   /** Slow orbital view of Earth used behind the title screen. */
   idle(dt: number) {
     this.time += dt;
     this.setVisible('earth');
     const a = this.time * 0.02;
-    this.camera.position.set(Math.sin(a) * 40 - 70, 30, 300 + Math.cos(a) * 20);
-    this.lookTarget.set(-20, 10, 0);
+    // Urdu puts the menu on the right: the planet eases over to the left so the menu never sits on it
+    const want = document.documentElement.dir === 'rtl' && this.camera.aspect > 1.2 ? 0.36 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 300 * this.camera.aspect : 0;
+    this.titleShift += (want - this.titleShift) * (dt > 0 ? 1 - Math.exp(-dt * 3) : 1);
+    this.camera.position.set(Math.sin(a) * 40 - 70 + this.titleShift, 30, 300 + Math.cos(a) * 20);
+    this.lookTarget.set(-20 + this.titleShift, 10, 0);
     this.camera.lookAt(this.lookTarget);
     this.ship.group.position.set(-28, 22, 205);
     this.ship.group.lookAt(V(-200, 40, 400));

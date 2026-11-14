@@ -34,8 +34,8 @@
   --safe-t: env(safe-area-inset-top); --safe-r: env(safe-area-inset-right); --safe-b: env(safe-area-inset-bottom); --safe-l: env(safe-area-inset-left);
 }
 /* Hindi: squared Rajdhani for UI, Noto for reading. Urdu: Naskh for UI, Nastaliq for anything spoken or told. */
-body.lang-hi { --font-ui: 'Rajdhani', 'Barlow Condensed', sans-serif; --font-body: 'Noto Sans Devanagari', 'Barlow', sans-serif; --font-readout: 'Rajdhani', 'VT323', sans-serif; --track: 0; }
-body.lang-ur { --font-ui: 'Noto Naskh Arabic', 'Barlow Condensed', serif; --font-body: 'Noto Naskh Arabic', 'Barlow', serif; --font-story: 'Noto Nastaliq Urdu', 'Noto Naskh Arabic', serif; --font-readout: 'Noto Naskh Arabic', 'VT323', serif; --track: 0; }
+body.lang-hi { --font-ui: 'Rajdhani', 'Barlow Condensed', 'Noto Naskh Arabic', sans-serif; --font-body: 'Noto Sans Devanagari', 'Barlow', 'Noto Naskh Arabic', sans-serif; --font-readout: 'Rajdhani', 'VT323', 'Noto Naskh Arabic', sans-serif; --track: 0; }
+body.lang-ur { --font-ui: 'Noto Naskh Arabic', 'Barlow Condensed', 'Noto Sans Devanagari', serif; --font-body: 'Noto Naskh Arabic', 'Barlow', 'Noto Sans Devanagari', serif; --font-story: 'Noto Nastaliq Urdu', 'Noto Naskh Arabic', 'Barlow', 'Noto Sans Devanagari', serif; --font-readout: 'Noto Naskh Arabic', 'VT323', 'Noto Sans Devanagari', serif; --track: 0; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: var(--paper); font-family: var(--font-body); overscroll-behavior: none; -webkit-text-size-adjust: 100%; touch-action: none; }
@@ -82,6 +82,9 @@ body.lang-ur .tagline { font-family: var(--font-story); line-height: 2.3; }
 .lang-row { display: flex; gap: 2px; margin-top: 18px; margin-inline-start: -10px; }
 .title-foot { position: absolute; bottom: calc(var(--safe-b) + 16px); inset-inline-start: calc(var(--safe-l) + 6vw); font-size: 12px; color: var(--dim); }
 .link-btn { background: none; border: none; font: inherit; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; padding: 4px; }
+/* on a touch screen the small inline link gets a finger-sized hit area without moving the line it sits in */
+body.touch .link-btn { position: relative; }
+body.touch .link-btn::after { content: ''; position: absolute; inset: -12px -10px; }
 
 /* Buttons are words. Focus is a mark and a brighter word, never a box. */
 .btn { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 6px 12px 6px 22px; font: 600 clamp(20px, 2vw, 25px)/1.15 var(--font-ui); letter-spacing: var(--track); color: var(--dim); text-decoration: none; text-align: start; background: none; border: none; cursor: pointer; transition: color 0.12s, padding 0.12s; }
@@ -364,7 +367,9 @@ body.lang-ur .legal { line-height: 2.1; }
 .swatches { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
 .swatches button { width: 26px; height: 26px; border: none; padding: 0; cursor: pointer; }
 .swatches button.active, .swatches button:focus-visible, body.dev-pad .swatches button:focus { outline: 2px solid var(--paper); outline-offset: 2px; }
-.creator ~ .actions { position: sticky; bottom: -12px; padding: 6px 0; background: rgba(8, 7, 5, 0.94); }
+/* the options scroll in their own box and the buttons sit under it: a sticky button bar let the rows show through it */
+.creator { flex: 1 1 auto; min-height: 0; overflow-y: auto; touch-action: pan-y; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--faint) transparent; padding-inline-end: 4px; }
+.creator ~ .actions { flex: none; margin-top: 8px; padding: 6px 0 0; border-top: 1px solid var(--faint); }
 
 /* ===== Small screens ===== */
 @media (max-width: 760px), (max-height: 520px) {
@@ -386,7 +391,9 @@ body.lang-ur .legal { line-height: 2.1; }
   .swatches { justify-content: flex-start; } .swatches button { width: 34px; height: 34px; }
 }
 @media (max-width: 760px) and (orientation: portrait) {
-  #title { justify-content: flex-end; padding-bottom: calc(var(--safe-b) + 48px); padding-inline-end: 6vw; }
+  #title { justify-content: flex-end; padding-bottom: calc(var(--safe-b) + 10px); padding-inline-end: 6vw; }
+  /* in the flow under the language row: a footer wrapped over two or three lines (Urdu) sat on the language buttons and took their taps */
+  .title-foot { position: static; margin-top: 12px; max-width: 100%; line-height: 1.5; }
   .game-logo { width: min(320px, 82vw); }
   .tagline { margin: 10px 0 14px; }
   .pause-side { display: none; }
@@ -414,7 +421,7 @@ body.lang-ur .legal { line-height: 2.1; }
 
 /* The creator's figure is on the main canvas; the options sit beside it */
 #modal:has(.creator) { background: none; pointer-events: none; display: flex; justify-content: flex-end; align-items: center; }
-#modal:has(.creator) .modal-card { pointer-events: auto; inset: 0 0 0 auto; width: min(560px, 48vw); background: rgba(8, 7, 5, 0.9); overflow: auto; }
+#modal:has(.creator) .modal-card { pointer-events: auto; inset: 0 0 0 auto; width: min(560px, 48vw); background: rgba(8, 7, 5, 0.9); overflow: hidden; }
 @media (orientation: portrait) {
   #modal:has(.creator) { align-items: flex-end; justify-content: center; }
   #modal:has(.creator) .modal-card { inset: auto 0 0 0; width: 100%; height: 56%; }
