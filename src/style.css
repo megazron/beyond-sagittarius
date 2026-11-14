@@ -184,6 +184,11 @@ body.lang-ur .obj-desc { line-height: 1.9; }
 body.touch .prompt .gl { display: none; }
 /* pickups and notes: a few lines, bottom corner */
 .toasts { position: absolute; bottom: calc(var(--safe-b) + 66px); inset-inline-start: calc(var(--safe-l) + 24px); display: flex; flex-direction: column; gap: 3px; align-items: flex-start; max-width: min(420px, 62vw); }
+/* with a keyboard the toasts and the subtitle share the bottom of the screen: each keeps to its own side (they overlapped at 1280 wide) */
+@media (min-width: 761px) {
+  body:not(.touch) .toasts { max-width: clamp(220px, 50vw - 380px, 420px); }
+  body:not(.touch):has(#hud:not(.hidden)) .subtitle { max-width: min(860px, 88vw, calc(100vw - 2 * (clamp(220px, 50vw - 380px, 420px) + 48px))); }
+}
 .toast { font-size: 15px; line-height: 1.35; animation: toast 5s ease forwards; }
 body.lang-ur .toast { line-height: 1.9; }
 @keyframes toast { 0% { opacity: 0; transform: translateY(6px); } 6% { opacity: 1; transform: none; } 85% { opacity: 1; } 100% { opacity: 0; } }
@@ -562,3 +567,9 @@ body.lang-ur .pt-b, body.lang-ur .pt-ends li { line-height: 2; }
 .pt-ends li.now { color: var(--ink); }
 .menu.chapters small { display: block; font: 500 14px var(--font-ui); color: var(--dim); text-transform: none; letter-spacing: 0; }
 .menu.chapters .btn:disabled { opacity: 0.6; }
+/* a line said while a controls hint is up goes above the hint: they sat on the same line */
+body:has(#hud:not(.hidden) #tutorial:not(.hidden)) .subtitle { bottom: calc(var(--safe-b) + 9vh + 64px); }
+body.touch:has(#hud:not(.hidden) #tutorial:not(.hidden)) .subtitle { bottom: calc(var(--safe-b) + 214px); }
+@media (max-height: 520px) and (orientation: landscape) {
+  body:has(#hud:not(.hidden) #tutorial:not(.hidden)) .subtitle, body.touch:has(#hud:not(.hidden) #tutorial:not(.hidden)) .subtitle { bottom: calc(var(--safe-b) + 128px); }
+}
