@@ -24,6 +24,10 @@ import { Cutscene, Beat, SceneBranch } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
 import { apply, collectPayoffs, DECISIONS, LINE_RULES, QTES, record, resolveLine, test } from './branch';
 
+/** Line of sight for cutscene cameras. */
+const SIGHT = new THREE.Raycaster();
+const WAKE_UP = new THREE.Vector3(0, 0.22, 0);
+
 type Mode = 'wake' | 'play' | 'dead' | 'scene' | 'craft' | 'talk' | 'away';
 
 /** Survival rules, the First-24-Hours objective chain and the wake-up sequence. */
@@ -156,6 +160,12 @@ export class Game {
       actors: { scientist: this.player.model, explorer: this.world.explorer },
       subtitle: (k, sp) => this.ui.subtitle(k, sp),
       cameraOk: (p) => !this.world.forest.blocks(p.x, p.z, 0.5) && p.y > this.world.terrain.height(p.x, p.z) + 0.35,
+      lineBlocked: (from, to) => {
+        const d = to.clone().sub(from), len = d.length();
+        SIGHT.set(from, d.divideScalar(len)); SIGHT.far = len - 0.3; SIGHT.camera = this.player.camera; SIGHT.params.Points.threshold = 0;
+        const shown = (o: THREE.Object3D | null): boolean => !o || (o.visible && shown(o.parent));
+        return SIGHT.intersectObject(this.world.camp.root, true).some((x) => shown(x.object) && !((x.object as THREE.Mesh).material as THREE.Material).transparent);
+      },
       onDone: () => {
         this.scene = null;
         this.mode = 'play';
@@ -457,7 +467,9 @@ export class Game {
     const p = this.player.pos;
     const head = new THREE.Vector3(p.x, p.y + 1.0, p.z);
     const sky = this.world.sky;
-    const lookSky = head.clone().addScaledVector(sky.giantDir.clone().lerp(sky.moonDir, 0.35).normalize(), 50);
+    // "two worlds in the sky": the giant sits in the lower middle of the frame (the old aim, a third of the way to
+    // the moon, a quarter turn away, left both at the edges or behind the pines)
+    const lookSky = head.clone().addScaledVector(sky.giantDir.clone().add(WAKE_UP).normalize(), 50);
     const lookCreature = this.world.creature.position.clone();
     const lookA = lookSky.clone().lerp(lookCreature, smoothstep(11.5, 14.5, w));
     const scripted = new THREE.PerspectiveCamera();

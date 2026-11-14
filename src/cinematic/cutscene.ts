@@ -62,6 +62,8 @@ export interface CutsceneCtx {
   onDone: () => void;
   /** Can a camera stand here? Walls, trees, the ground. */
   cameraOk?: (p: THREE.Vector3) => boolean;
+  /** Is a prop (a post, a frame, a wall) between the camera and this point? */
+  lineBlocked?: (from: THREE.Vector3, to: THREE.Vector3) => boolean;
 }
 
 const headOf = (c: Character) => new THREE.Vector3().setFromMatrixPosition(c.head.matrixWorld).add(new THREE.Vector3(0, 0.12, 0));
@@ -155,6 +157,7 @@ export class Cutscene {
     if (facing < 0.2) cost += (0.2 - facing) * 6;
     if (facing < -0.1) cost += 40; // the back of a speaker's head is the worst shot there is
     if (this.ctx.cameraOk && !this.ctx.cameraOk(cam)) cost += 20;
+    if (this.ctx.lineBlocked?.(cam, h)) cost += 30; // a post across the face (the beacon's legs filled the radio shots)
     return cost;
   }
 
@@ -175,6 +178,8 @@ export class Cutscene {
     const on = who && who !== 'megazron' ? this.ctx.actors[who] : undefined;
     const a = on?.root.visible ? on : undefined; // a voice on the radio is nobody to frame
     const cam = this.ctx.camera, s = this.shot;
+    // a voice on the radio has nobody to frame: the shot still swings clear around whoever it is on
+    if (!a && s && this.fresh && s.track?.root.visible) { this.clearShot(s.track, headOf(s.track), s); this.fresh = false; }
     if (!a || !s) return;
     const h = headOf(a);
     // only coverage built on the speaker can swing: a set-up aimed at something else stays put

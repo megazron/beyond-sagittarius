@@ -20,6 +20,9 @@ import type { PostSource } from '../core/renderer';
 import { applyMetal } from './pbr';
 import { loadModelPack, loadFoliageCard } from './models';
 
+/** Where a new game wakes up (Player.spawn(0, 2) in main). */
+const WAKE_SPAWN = { x: 0, z: 2 };
+
 /** The alien planet: terrain, sky, forest, water, props, lights and fog. */
 export class World {
   scene = new THREE.Scene();
@@ -74,6 +77,9 @@ export class World {
     const [pack, fir, pine, leaf] = await assets;
     this.forest = new Forest(this.terrain, this.q, pack, { fir, pine, leaf });
     reserveLayout(this.forest, this.layout);
+    // the wake-up looks from the spawn up at the giant: open ground that way, or its line played over pine trees
+    const g = this.sky.giantDir, n = Math.hypot(g.x, g.z);
+    for (const d of [7, 13, 19, 26, 34, 42]) this.forest.reserve(WAKE_SPAWN.x + (g.x / n) * d, WAKE_SPAWN.z + (g.z / n) * d, 2.5 + d * 0.18);
     this.forest.build();
     onProgress(0.94);
     await new Promise((r) => setTimeout(r, 0));
