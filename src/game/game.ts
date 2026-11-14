@@ -468,7 +468,7 @@ export class Game {
     const head = new THREE.Vector3(p.x, p.y + 1.0, p.z);
     const sky = this.world.sky;
     // "two worlds in the sky": the giant sits in the lower middle of the frame (the old aim, a third of the way to
-    // the moon, a quarter turn away, left both at the edges or behind the pines)
+    // the moon, far across the sky, left both at the edges or behind the pines)
     const lookSky = head.clone().addScaledVector(sky.giantDir.clone().add(WAKE_UP).normalize(), 50);
     const lookCreature = this.world.creature.position.clone();
     const lookA = lookSky.clone().lerp(lookCreature, smoothstep(11.5, 14.5, w));
