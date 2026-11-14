@@ -449,7 +449,7 @@ def shared_maps(base, rig, out):
         flush = np.clip((red - np.median(red[mask])) * 1.6, 0, 1)
         if os.environ.get('APPEAL') == '1':
             # appealing, not photoreal: pores and blotches softened, and a gentle flush on the cheeks, nose and ears
-            r_ = lum / np.median(lum[mask]); lum = np.median(lum[mask]) * (gaussian_filter(r_, 2.2) * .7 + r_ * .3)
+            r_ = lum / np.median(lum[mask]); lum = np.median(lum[mask]) * (gaussian_filter(r_, 3.0) * .82 + r_ * .18)
             P = np.asarray(maps['P'], np.float32); P = np.stack([np.asarray(Image.fromarray(P[..., i]).resize((S, S), Image.BILINEAR)) for i in range(3)], -1)
             x, y, z = np.abs(P[..., 0]), P[..., 1], P[..., 2]
             g2 = lambda cx, cy, sx, sy, zmin: np.exp(-(((x - cx) / sx) ** 2 + ((y - cy) / sy) ** 2)) * (z > zmin)
@@ -461,7 +461,7 @@ def shared_maps(base, rig, out):
         save_webp(I, f'{out}/tex/skin_{g}.webp', 88)
         save_webp(I.resize((1024, 1024), Image.LANCZOS), f'{out}/tex/skin_{g}.m.webp', 82)
         Lh = lum / np.maximum(gaussian_filter(lum, 10), 1e-3) - 1
-        N = Image.fromarray(detail_normal(gaussian_filter(Lh, .6) * 3.2, 1.0)) if os.environ.get('APPEAL') != '1' else Image.fromarray(detail_normal(gaussian_filter(Lh, 1.4) * 1.5, 1.0))
+        N = Image.fromarray(detail_normal(gaussian_filter(Lh, .6) * 3.2, 1.0)) if os.environ.get('APPEAL') != '1' else Image.fromarray(detail_normal(gaussian_filter(Lh, 1.8) * 1.0, 1.0))
         save_webp(N, f'{out}/tex/skin_{g}_n.webp', 74)
         save_webp(N.resize((1024, 1024), Image.LANCZOS), f'{out}/tex/skin_{g}_n.m.webp', 70)
     # eyes: R sclera/fibre brightness, G iris mask, B pupil
@@ -470,11 +470,21 @@ def shared_maps(base, rig, out):
     H = L.shape[0]
     yy, xx = np.mgrid[0:H, 0:H] / H
     iris = np.zeros((H, H), np.float32); pupil = np.zeros((H, H), np.float32)
+    # de-creep: a larger iris leaves less white round it (white all round the iris reads as a stare)
+    ri, rp = (.146, .047) if os.environ.get('APPEAL') == '1' else (.122, .04)
     for cx, cy in ((.705, .297), (.29, .71)):
         d = np.hypot(xx - cx, yy - cy)
-        iris = np.maximum(iris, np.clip((.122 - d) / .012, 0, 1))
-        pupil = np.maximum(pupil, np.clip((.04 - d) / .01, 0, 1))
-    fib = L / max(float(np.median(L[iris > .9])), .02) * .5
+        iris = np.maximum(iris, np.clip((ri - d) / .012, 0, 1))
+        pupil = np.maximum(pupil, np.clip((rp - d) / .01, 0, 1))
+    Li = L
+    if ri != .122:  # the source iris, scaled out to the larger one (its fibres, not the white, fill the new ring)
+        from scipy.ndimage import map_coordinates
+        sy, sx = yy.copy(), xx.copy()
+        for cx, cy in ((.705, .297), (.29, .71)):
+            m = np.hypot(xx - cx, yy - cy) < ri + .015
+            sx[m] = cx + (xx[m] - cx) * .122 / ri; sy[m] = cy + (yy[m] - cy) * .122 / ri
+        Li = map_coordinates(L, [sy * H, sx * H], order=1, mode='nearest').astype(np.float32)
+    fib = Li / max(float(np.median(Li[iris > .9])), .02) * .5
     R = L * (1 - iris) + np.clip(fib, 0, 1) * iris
     I = Image.fromarray((np.clip(np.stack([R, iris, pupil], -1), 0, 1) * 255).astype(np.uint8)).resize((512, 512), Image.LANCZOS)
     save_webp(I, f'{out}/tex/eye.webp', 90)
