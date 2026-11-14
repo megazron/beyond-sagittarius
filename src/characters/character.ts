@@ -52,6 +52,7 @@ const lip = { open: 0, round: 0, wide: 0 };
 /** Smooth value noise in -1..1 for micro-movement (idle expressions, eye drift). */
 const wob = (t: number, k: number) => Math.sin(t * 0.7 + k * 1.3) * 0.5 + Math.sin(t * 1.31 + k * 2.1) * 0.3 + Math.sin(t * 2.9 + k) * 0.2;
 const Q = new THREE.Quaternion(), Q2 = new THREE.Quaternion(), E = new THREE.Euler();
+const TQ = new THREE.Quaternion(), TH = new THREE.Quaternion();
 const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3(), V4 = new THREE.Vector3(), V5 = new THREE.Vector3();
 
 /** Rotate a bone by a world-space rotation. */
@@ -136,6 +137,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const gazeAt = new THREE.Vector3();
   let gaze: THREE.Vector3 | null = null, gazeY = 0, gazeX = 0;
   let B: Map<string, THREE.Bone> | null = null;
+  // the forearm's own axis per side (rest frames carry no rotation, so it is the same in the twist bone and the hand)
+  const twistAx: Record<string, THREE.Vector3> = {};
   let mixer: THREE.AnimationMixer | null = null;
   let clips: Map<string, THREE.AnimationClip> | null = null;
   let A: AnimSet | null = null;
@@ -165,6 +168,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const M = asset.meta;
     const bs = bones(scene);
     B = bs; A = a;
+    for (const sd of ['L', 'R']) twistAx[sd] = new THREE.Vector3(...M.pivots[`hand${sd}`]).sub(new THREE.Vector3(...M.pivots[`forearmtw${sd}`])).normalize();
     const piv = (n: string) => new THREE.Vector3(...M.pivots[n]);
     // creator build slider: move joints with the morphs, then rebind
     const build = custom ? custom.build : 0.5;
@@ -548,6 +552,24 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     } else
     for (const n of ['eyeL', 'eyeR']) bs.get(n)!.quaternion.setFromEuler(E.set(sacX, eyeY, 0));
     chestB.scale.setScalar(1 + bp * 0.0025);
+
+    // ---- wrists: half the hand's roll goes to the forearm ----
+    // all of it on the hand pinched the wrist skin, which blends hand and forearm, into a fold you saw from inside
+    // (linear skinning's candy wrapper); the hand still ends up exactly where the clip put it
+    for (const sd of ['L', 'R']) {
+      const hb = bs.get(`hand${sd}`), fb = bs.get(`forearmtw${sd}`), ax = twistAx[sd];
+      if (!hb || !fb || !ax) continue;
+      const q = hb.quaternion, d = q.x * ax.x + q.y * ax.y + q.z * ax.z;
+      TQ.set(ax.x * d, ax.y * d, ax.z * d, q.w);
+      if (TQ.lengthSq() < 1e-8) continue;
+      TQ.normalize(); TH.identity().slerp(TQ, 0.5);
+      fb.quaternion.multiply(TH);
+      hb.quaternion.premultiply(TH.invert());
+    }
+
+    // the thumb's root bone turns in less than the clip asks: the skin from the thumb's base to the wrist blends it
+    // with the hand and the forearm, and a full fist folded it over itself in a groove you saw into
+    for (const sd of ['L', 'R']) { const t1 = bs.get(`finger1_1${sd}`); if (t1) t1.quaternion.slerp(Q.identity(), 0.45); }
 
     // ---- face ----
     const r = 1 - Math.exp(-dt * 10);
