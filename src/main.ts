@@ -519,12 +519,19 @@ function openPanel(kind: MenuTab) { if (canPlay()) { freeze(); showTab(kind); } 
 
 /** Tap the inventory input for the full list, hold it for the wheel. */
 let invT0 = 0;
-function invStart() { if (canPlay() && !wheel.open) invT0 = performance.now(); }
-function invEnd() {
+function invStart(at = performance.now()) { if (canPlay() && !wheel.open) invT0 = at; }
+/**
+ * Tap or hold is decided by how long the input was really down (the events' own times), not by when the next frame
+ * ran: after a slow frame a quick tap had already opened the wheel, and letting go then closed it, so the list never opened.
+ */
+function invEnd(at = performance.now()) {
   if (!invT0) return;
+  const held = at - invT0;
   invT0 = 0;
-  if (wheel.open) wheel.close(true); else openPanel('inventory');
+  if (wheel.open && held >= HOLD_MS) wheel.close(true);
+  else { if (wheel.open) wheel.close(false); openPanel('inventory'); }
 }
+const HOLD_MS = 220;
 
 /** Menu shortcuts: the same input closes what it opened. */
 function menuKey(tab: MenuTab) {
@@ -554,10 +561,10 @@ window.addEventListener('keydown', (e) => {
   else if (a === 'codex') menuKey('codex');
   else if (a === 'inventory') {
     e.preventDefault();
-    if (ui.modalOpen()) menuKey('inventory'); else if (!e.repeat) invStart();
+    if (ui.modalOpen()) menuKey('inventory'); else if (!e.repeat) invStart(e.timeStamp);
   }
 });
-window.addEventListener('keyup', (e) => { if (input.actionFor(e.code) === 'inventory') invEnd(); });
+window.addEventListener('keyup', (e) => { if (input.actionFor(e.code) === 'inventory') invEnd(e.timeStamp); });
 
 /** Pad buttons that do what the keys above do. */
 let padInv = false;
@@ -609,7 +616,7 @@ function tick(step: number) {
   input.poll(dt);
   nav.update();
   padFrame();
-  if (invT0 && !wheel.open && performance.now() - invT0 > 220 && canPlay()) wheel.show(game.save.inventory, game.story.tools());
+  if (invT0 && !wheel.open && performance.now() - invT0 > HOLD_MS && canPlay()) wheel.show(game.save.inventory, game.story.tools());
   if (wheel.open) {
     wheel.update(input.lookDX, input.lookDY, input.padAim.x, input.padAim.y);
     input.lookDX = input.lookDY = 0;
