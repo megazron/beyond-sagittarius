@@ -478,6 +478,13 @@ def build(c, cid, force=False):
             tree = cKDTree(o.P); d, j = tree.query(Vb, workers=1); s = np.einsum('ij,ij->i', Vb - o.P[j], o.N[j])
             m = (d < .04) & (s <= 0) & (s > -cfg['deep_shoulder']) & (sw > .25)
             Vb[m] -= o.N[j[m]] * (s[m] + cfg['deep_shoulder'])[:, None]
+    # the head is never pushed under a garment, so the body may not be either where it meets the head: the seam
+    # stays exactly where the head's edge is, and the push fades in over 6 cm. Pushed, the skin under the chin and jaw
+    # pulled away from the head's edge and opened a gap you could see through (the see-through neck)
+    sm = np.zeros(len(V), bool); sm[np.intersect1d(T[hm].ravel(), T[~hm].ravel())] = True
+    if sm.any():
+        k = np.clip((cKDTree(V[sm]).query(V, workers=1)[0] - 0.004) / 0.06, 0, 1)[:, None]
+        Vb = V + (Vb - V) * k
     bm = {k: vb[k] for k in vb if not k.endswith('_dm')}
     head = Part(V, T[hm], TU[hm], UV, rig.W, 'skin_head', {**morphs, **bm})
     # the neck and head keep their own weights: the head is a separate mesh and must meet the body exactly
@@ -486,7 +493,9 @@ def build(c, cid, force=False):
     arms = [rig.index[n] for n in ('clavicleL', 'clavicleR', 'upperarmL', 'upperarmR', 'lowerarmL', 'lowerarmR', 'forearmtwL', 'forearmtwR', 'handL', 'handR')]
     tight = rig.W[:, arms].sum(1) > .15
     Wb = follow(Vb, rig.W, garments, keep=neckish, tight=tight) if not os.environ.get('NO_FOLLOW') else rig.W
-    body = Part(Vb, T[~hm], TU[~hm], UV, Wb, 'skin_body', bm)
+    # the face's shapes (jaw open, smile, the lineage's ears) reach below the head/body split, down the neck: the body
+    # carries them too, on the same vertices, or the head's lower edge moves away from the neck and leaves a hole
+    body = Part(Vb, T[~hm], TU[~hm], UV, Wb, 'skin_body', {**morphs, **bm})
     # keep shared normals across the neck seam
     Nall = vnormals(V, T)
     head.N = Nall; body.N = Nall
@@ -520,6 +529,14 @@ def build(c, cid, force=False):
         paint.mark_map(cid, cfg, base, rig, OUT)
         if cfg.get('fur'):
             paint.fur_map(cid, base, rig, OUT)
+    # the joints keep the body's own triangles: decimated, the neck, hands and ankles became long slivers spanning
+    # bones that bend apart, and posed they folded inside out
+    W0, ix = rig.W, rig.index
+    joints = W0[:, ix['neck']] > 0.03
+    for sd in 'LR':
+        # the whole hand: decimated, fingers folded through each other and the wrist went inside out
+        joints |= sum(W0[:, ix[n]] for n in ix if n == f'hand{sd}' or (n.startswith('finger') and n.endswith(sd))) > 0.03
+        joints |= (W0[:, ix[f'foot{sd}']] > 0.03) & (W0[:, ix[f'lowerleg{sd}']] > 0.03)
     # --- LODs ---
     info = {}
     for suffix, L in LODS.items():
@@ -550,7 +567,7 @@ def build(c, cid, force=False):
             rootc.append(n)
             total += tris
 
-        locked = seam.copy()
+        locked = seam.copy() | joints
         hd = head.decimated(L['head'], locked, imp, L['cost'])
         emit(hd, 'skin')
         if FILM_FACE and suffix == '':
@@ -683,5 +700,6 @@ if __name__ == '__main__':
     paint.shared_maps(ctx0.base, ctx0.rig, OUT)
     ids = a.only.split(',') if a.only else list(CHARS)
     ids = [i for i in ids if a.force or a.only or not os.path.exists(f'{OUT}/{i}.json')]
-    with Pool(min(3, len(ids) or 1)) as pool:
+    # one worker by default: each takes about 1 GB and the machine runs other jobs (BUILD_WORKERS=3 when it is free)
+    with Pool(min(int(os.environ.get("BUILD_WORKERS", 1)), len(ids) or 1)) as pool:
         pool.map(job, ids, 1)

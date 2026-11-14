@@ -57,6 +57,21 @@ W.flagMode = () => {
   const grey = new THREE.MeshBasicMaterial({ color: 0x777777, side: THREE.DoubleSide });
   scene.traverse((o) => { const m = o as THREE.Mesh; if (!m.isMesh || m === ground) return; m.material = m.name.startsWith('skin') ? flag : grey; });
 };
+// the camera inside a body or a garment (a sweep angle that lands in the hip as the hand swings past): the first
+// surface on the way to the target is seen from behind, or sits so close the near plane cuts it open. Not a view anyone gets; the skin gate skips it.
+const rc = new THREE.Raycaster(), rcN = new THREE.Vector3();
+W.camInside = (x: number, y: number, z: number) => {
+  const to = new THREE.Vector3(x, y, z), dir = to.clone().sub(cam.position); const far = dir.length(); dir.normalize();
+  rc.set(cam.position, dir); rc.near = 0; rc.far = far - 0.02;
+  const ms: THREE.Object3D[] = [];
+  scene.traverseVisible((o) => { const m = o as THREE.SkinnedMesh; if (m.isMesh && m !== ground) { if (m.isSkinnedMesh) { m.computeBoundingSphere(); m.computeBoundingBox(); } ms.push(m); } });
+  const hits = rc.intersectObjects(ms, false).filter((h) => h.face);
+  const hit = hits[0];
+  if (!hit) return false;
+  if (hit.distance < cam.near * 1.6) return true; // a surface at the lens is cut open by the near plane: the same thing
+  rcN.copy(hit.face!.normal).transformDirection(hit.object.matrixWorld);
+  return rcN.dot(dir) > 0;
+};
 W.flagCount = () => { const g = r.getContext(); const w = g.drawingBufferWidth, h = g.drawingBufferHeight, px = new Uint8Array(w * h * 4); g.readPixels(0, 0, w, h, g.RGBA, g.UNSIGNED_BYTE, px);
   let n = 0; for (let i = 0; i < px.length; i += 4) if (px[i] > 200 && px[i + 1] < 60 && px[i + 2] > 200) n++; return n; };
 // the eye light: a small soft source by the lens, so eyes are never dead sockets (de-creep only)
