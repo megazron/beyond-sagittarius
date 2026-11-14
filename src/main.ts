@@ -25,7 +25,7 @@ import { MenuNav } from './ui/nav';
 import { Wheel } from './ui/wheel';
 import { drawMap, MapPin } from './ui/map';
 import type { MenuTab } from './ui/ui';
-import { setPortraitCast, setPortraitRenderer } from './ui/portraits';
+import { setPortraitCast, setPortraitRenderer, portraitFrame } from './ui/portraits';
 import { preloadCrew } from './characters/character';
 import { setTextureWarmer } from './core/assets';
 import { defaultLook, PlayerLook, CrewSkins } from './characters/custom';
@@ -581,7 +581,8 @@ window.addEventListener('beforeunload', () => { if (state === 'game' && game?.mo
 document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'game' && game?.mode === 'play') game.persist(); });
 
 // ---------------- boot ----------------
-const clock = new THREE.Clock();
+const clock = new THREE.Timer(); // THREE.Clock is deprecated (a console warning every load)
+clock.connect(document);
 let elapsed = 0;
 let fpsAcc = 0, fpsFrames = 0, fpsLast = performance.now();
 
@@ -591,6 +592,7 @@ const hold = { on: false, pending: 0, done: 0 };
 function frame() {
   requestAnimationFrame(frame);
   frameCount++;
+  clock.update();
   const real = Math.min(clock.getDelta(), 0.05);
   if (!hold.on) { tick(real); draw(real); return; }
   if (hold.pending <= 0) return;
@@ -639,6 +641,7 @@ function draw(dt: number) {
   const activeCam = stage.active ? stage.camera : state === 'game' ? camera : state === 'narrator' ? vault.camera : state === 'film' && film.inWorld ? film.wcam : cine.camera;
   const designFov = activeCam.fov;
   fitFov(activeCam);
+  portraitFrame();
   if (!(state === 'film' && film.videoOn)) renderer.render(dt, elapsed);
   if (activeCam.fov !== designFov) { activeCam.fov = designFov; activeCam.updateProjectionMatrix(); }
   input.endFrame();

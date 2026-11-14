@@ -8,6 +8,9 @@ let cacheKey = '';
 let look: PlayerLook | undefined, skins: CrewSkins = {}, detail = 1;
 
 let mainRenderer: THREE.WebGLRenderer | null = null;
+let job: (() => void) | null = null;
+/** Call once per frame right before the game renders: draws a waiting bust, which the game's frame then covers. */
+export function portraitFrame() { const j = job; job = null; j?.(); }
 export function setPortraitRenderer(r: THREE.WebGLRenderer) { mainRenderer = r; }
 
 /** New portraits next time the panel opens. */
@@ -42,12 +45,16 @@ export function portraits(): Promise<Record<string, string>> {
           const h = new THREE.Vector3().setFromMatrixPosition(c.head.matrixWorld);
           cam.position.set(h.x + 0.2, h.y + 0.12, h.z + 1.2);
           cam.lookAt(h.x, h.y + 0.06, h.z);
-          await new Promise((f) => requestAnimationFrame(f));
-          r.setRenderTarget(null);
-          r.setScissorTest(true); r.setViewport(0, 0, W / pr, H / pr); r.setScissor(0, 0, W / pr, H / pr);
-          r.render(scene, cam);
-          g.drawImage(r.domElement, 0, r.domElement.height - H, W, H, 0, 0, W, H);
-          r.setScissorTest(false); r.setViewport(0, 0, size.x, size.y);
+          // drawn inside the game's own frame, just before the game draws over it: drawn on a frame of its own,
+          // each bust showed for a frame in the corner of the screen behind the panel
+          await new Promise<void>((done) => { job = () => {
+            r.setRenderTarget(null);
+            r.setScissorTest(true); r.setViewport(0, 0, W / pr, H / pr); r.setScissor(0, 0, W / pr, H / pr);
+            r.render(scene, cam);
+            g.drawImage(r.domElement, 0, r.domElement.height - H, W, H, 0, 0, W, H);
+            r.setScissorTest(false); r.setViewport(0, 0, size.x, size.y);
+            done();
+          }; });
           out[id] = canvas.toDataURL('image/webp', 0.86);
           scene.remove(c.root);
         }
