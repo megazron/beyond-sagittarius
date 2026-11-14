@@ -6,6 +6,7 @@ import { Terrain, HALF, LAKE } from './terrain';
 import { applyBark, chainCompile } from './pbr';
 import { foliageAtlas, coniferCrown, broadCrown, CROWN_LODS } from './foliage';
 import { modelMaterial, modelMats, type ModelPack, type ModelInfo } from './models';
+import { nearFade } from '../core/nearfade';
 
 export const windUniforms = { uTime: { value: 0 }, uWind: { value: 1 } };
 
@@ -149,6 +150,7 @@ function windify(mat: THREE.Material, amp: number, flutter = 0) {
       transformed.z += cos(uTime * 0.9 + ip.z * 0.07) * sw * 0.7;
       ${flutter > 0 ? `transformed.y += sin(uTime * 2.3 + position.x * 1.7 + position.z * 1.3 + ip.x) * ${flutter.toFixed(3)} * uWind;` : ''}`,
     );
+    nearFade(mat, sh); // a branch right at the lens dissolves instead of filling the screen
   };
 }
 

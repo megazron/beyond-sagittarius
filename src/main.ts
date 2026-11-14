@@ -1,5 +1,6 @@
 import './style.css';
 import * as THREE from 'three';
+import { NEAR_FADE } from './core/nearfade';
 import { setLang, setPlayer, t, Lang } from './i18n';
 import { detectQuality, isPhone, saveQualityChoice, QualityName } from './core/quality';
 import { desktop } from './core/desktop';
@@ -641,6 +642,8 @@ function draw(dt: number) {
   const activeCam = stage.active ? stage.camera : state === 'game' ? camera : state === 'narrator' ? vault.camera : state === 'film' && film.inWorld ? film.wcam : cine.camera;
   const designFov = activeCam.fov;
   fitFov(activeCam);
+  // props that pass right by the follow camera dissolve; cutscenes and films are framed by hand
+  NEAR_FADE.value = state === 'game' && game && (game.mode === 'play' || game.mode === 'away' || game.mode === 'dead') && !photo ? 1 : 0;
   portraitFrame();
   if (!(state === 'film' && film.videoOn)) renderer.render(dt, elapsed);
   if (activeCam.fov !== designFov) { activeCam.fov = designFov; activeCam.updateProjectionMatrix(); }
