@@ -43,15 +43,20 @@ class Run:
         self.page.screenshot(path=str(d / f'{tag}.jpg'), type='jpeg', quality=72, timeout=180000)
         self.n += 1
 
-    def play(self, folder, running, step=None, limit=400):
-        """Step and shoot until `running` (a JS expression) goes false."""
+    def play(self, folder, running, step=None, limit=400, drive=None):
+        """Step and shoot until `running` (a JS expression) goes false. `drive` plays a playable stage between frames."""
         step = step or self.step
         t, last = 0.0, time.time()
         while self.page.evaluate(running) and t < limit:
             if self.page.evaluate('__bs.branch.open'):
-                # a choice or quick-time beat waits for a player: take the first option
-                self.page.keyboard.press('Digit1')
+                # a choice or quick-time beat waits for a player: take the first option (E answers a quick-time beat)
+                if self.page.locator('#qte-btn').is_visible():
+                    self.page.keyboard.press('KeyE')
+                else:
+                    self.page.keyboard.press('Digit1')
                 self.page.evaluate('__bs.skip()')
+            elif drive:
+                drive(self)
             self.advance(step)
             t += step
             self.shot(folder, f'{t:06.1f}')
@@ -60,6 +65,16 @@ class Run:
                 last = time.time()
         print(f'{folder}: {t:.0f} s', flush=True)
         return t
+
+
+def drive_away(r):
+    """On an away stage: every third frame, step to the next task and press E, as a player would."""
+    p = r.page
+    a = p.evaluate('__bs.away')
+    if a and a['next'] and r.n % 3 == 0:
+        p.evaluate('__bs.awayGoNext()')
+        r.advance(0.2)
+        p.keyboard.press('KeyE')
 
 
 def to_game(r):
@@ -150,7 +165,8 @@ def main():
                 ('vault-l7', "__bs.sceneTest('l7')", "__bs.state === 'narrator'"),
                 ('vault-ch1', "__bs.sceneTest('ch1')", "__bs.state === 'narrator'"),
                 ('fight', "__bs.sceneTest('fight')", "__bs.state === 'flashback'"),
-                ('rescue', "__bs.gameScene('rescue')", "__bs.mode === 'scene'"),
+                # the rescue is played: Skyvra's ring is an away stage with tasks, a quick-time beat and the radio
+                ('rescue', "__bs.gameScene('rescue')", "__bs.mode === 'away'"),
                 ('camp', "__bs.gameScene('camp')", "__bs.mode === 'scene'"),
                 ('beacon', "__bs.gameScene('beacon')", "__bs.mode === 'scene'"),
             ]:
@@ -161,7 +177,7 @@ def main():
                 page.wait_for_function(state, timeout=30000)
                 time.sleep(1.2)
                 page.evaluate('__bs.hold(true)')
-                r.play(name, state)
+                r.play(name, state, drive=drive_away if name == 'rescue' else None)
                 page.evaluate('__bs.hold(false)')
                 page.wait_for_function("__bs.state === 'game' && __bs.mode === 'play'", timeout=60000)
                 time.sleep(1.5)

@@ -425,7 +425,9 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     n = next(x for x in ev("__bs.npcs") if x["id"] == "trader")
     ev(f"__bs.teleport({n['pos'][0] + 1}, {n['pos'][2]}, 0)")
     ev("__bs.step(0.1)")
-    time.sleep(0.3)
+    # the touch buttons come back on the game's next real frame after a menu closes, and the button means "use" only
+    # once the prompt is up: on a slow software-GL frame the tap used to land before either (the button was hidden)
+    page.wait_for_function("document.body.classList.contains('can-act') && getComputedStyle(document.getElementById('tb-act')).display !== 'none' && document.getElementById('tb-act').getBoundingClientRect().width > 0", timeout=60000)
     touch.tap(*centre(page, "#tb-act"))
     time.sleep(0.3)
     ev("__bs.step(0.1)")
