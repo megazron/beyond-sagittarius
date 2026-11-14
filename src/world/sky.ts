@@ -28,6 +28,13 @@ function cloudNoise(): THREE.DataTexture {
   return t;
 }
 
+/**
+ * The moon, the giant and its rings are drawn at the back of the depth range: they are far bigger and further
+ * than the world's terrain, but at their scene distance (1100 to 1700 m) the far side of the map was behind them
+ * and they drew over distant mountains. `z` keeps their order among themselves.
+ */
+const SKY_DEPTH = (z: string) => `gl_Position.z = ${z} * gl_Position.w;`;
+
 /** Ring opacity at radius r in sky units; used by the rings and by the shadow they cast. */
 const RING_GLSL = /* glsl */ `
   float ringDensity(float r){
@@ -163,7 +170,7 @@ export class Sky {
         uniforms: this.bodyUniforms,
         fog: false,
         transparent: true,
-        vertexShader: `varying vec3 vN; varying vec3 vWN; void main(){ vN = normalize(position); vWN = normalize(mat3(modelMatrix)*normal); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+        vertexShader: `varying vec3 vN; varying vec3 vWN; void main(){ vN = normalize(position); vWN = normalize(mat3(modelMatrix)*normal); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); ${SKY_DEPTH('0.99999')} }`,
         fragmentShader: /* glsl */ `
           uniform vec3 uSunDir, uHorizon; uniform float uDay; varying vec3 vN; varying vec3 vWN;
           ${NOISE_GLSL}
@@ -189,7 +196,7 @@ export class Sky {
         uniforms: this.bodyUniforms,
         fog: false,
         transparent: true,
-        vertexShader: `varying vec3 vN; varying vec3 vWN; varying vec3 vWP; void main(){ vN = normalize(position); vWN = normalize(mat3(modelMatrix)*normal); vWP=(modelMatrix*vec4(position,1.0)).xyz; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+        vertexShader: `varying vec3 vN; varying vec3 vWN; varying vec3 vWP; void main(){ vN = normalize(position); vWN = normalize(mat3(modelMatrix)*normal); vWP=(modelMatrix*vec4(position,1.0)).xyz; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); ${SKY_DEPTH('0.999994')} }`,
         fragmentShader: /* glsl */ `
           uniform vec3 uSunDir, uHorizon, uRingN, uGiantPos; uniform float uDay, uTime; varying vec3 vN; varying vec3 vWN; varying vec3 vWP;
           ${NOISE_GLSL}
@@ -242,12 +249,16 @@ export class Sky {
         side: THREE.DoubleSide,
         depthWrite: false,
         fog: false,
-        vertexShader: `varying vec2 vP; varying vec3 vWP; void main(){ vP = position.xy; vWP = (modelMatrix*vec4(position,1.0)).xyz; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+        vertexShader: `varying vec2 vP; varying vec3 vWP; void main(){ vP = position.xy; vWP = (modelMatrix*vec4(position,1.0)).xyz; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); ${SKY_DEPTH('0.999994')} }`,
         fragmentShader: /* glsl */ `
           uniform float uDay; uniform vec3 uHorizon, uSunDir, uGiantPos; varying vec2 vP; varying vec3 vWP;
           ${NOISE_GLSL}
           ${RING_GLSL}
           void main(){
+            // the far side of the rings goes behind the planet (both sit at sky depth, so the depth test cannot tell)
+            vec3 rd = vWP - cameraPosition; float len = length(rd); rd /= len;
+            vec3 oc = cameraPosition - uGiantPos; float bq = dot(oc, rd), cq = dot(oc, oc) - 210.0 * 210.0, h = bq * bq - cq;
+            if (h > 0.0 && -bq - sqrt(h) < len) discard;
             float r = length(vP);
             float a = ringDensity(r);
             float b = vnoise2(vec2(r * 0.09, 0.5));
