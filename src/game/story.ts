@@ -614,6 +614,9 @@ export class Story {
     fig.animate(this.scenePose?.() ?? pose, c.phase, clamp(c.speed / 4, 0, 1.3), time, dt);
     fig.setName(t('crew.explorer.name'), t('crew.explorer.role'));
     fig.setTagVisible(this.scenePose ? 0 : smoothstep(16, 6, c.pos.distanceTo(p.pos)));
+    // the name tag sits over a standing head: seated by the fire it floated a metre above her
+    const tag = fig.root.children.find((o) => (o as THREE.Sprite).isSprite);
+    if (tag) { tag.userData.standY ??= tag.position.y; tag.position.y = tag.userData.standY - (pose === 'sit' && !this.scenePose ? 0.75 : 0); }
     fig.setSplint(this.flag('splint'));
   }
 
@@ -646,24 +649,24 @@ export class Story {
       { run: push('beacon.medic'), key: 'rad.medic', who: 'medic', fallback: 'br.rad.static', shot: () => cover.mid(z, -0.5, 2.2), poses: { scientist: 'stand' } },
       { run: push('beacon.builder'), key: 'rad.builder', who: 'builder', swap: [{ if: { flag: 'c1.bigFire' }, key: 'br.rad.builder.smoke' }], fallback: 'br.rad.static', shot: () => cover.mid(z, 0.45, 2.4), poses: { scientist: 'stand' } },
       { run: push('beacon.social'), key: 'rad.social', who: 'social', fallback: 'br.rad.static', shot: () => cover.close(z, 0.4, 1.3), poses: { scientist: 'stand', explorer: 'stand' } },
-      { key: 'dlg.10.3', who: 'explorer', shot: () => cover.close(z, -0.4, 1.1), poses: { explorer: 'stand', scientist: 'stand' }, after: 0.7 },
+      { key: 'dlg.10.3', who: 'explorer', shot: () => cover.close(z, 0.4, 1.1), poses: { explorer: 'stand', scientist: 'stand' }, after: 0.7 },
       { run: () => { alert(1)(); audio.tone(40, 2.5, 'sawtooth', 0.25, 0, 10); }, hold: 2.2, shot: skyShot, poses: { explorer: 'stand', scientist: 'stand' } },
       { run: alert(2), key: 'beacon.unknown2', hold: 2.4, shot: beaconShot },
       { run: alert(3), key: 'beacon.unknown3', hold: 2.4, shot: () => cover.close(z, 0.2, 0.9), after: 0.8 },
       { key: 'dlg.10.4', who: 'explorer', shot: () => cover.close(z, 0.35, 1.0) },
-      { key: 'dlg.10.5', who: 'scientist', shot: () => cover.close(z, -0.3), after: 0.9 },
+      { key: 'dlg.10.5', who: 'scientist', shot: () => cover.close(z, 0.3), after: 0.9 },
       { run: () => this.ui.deviceLines(null), key: 'dlg.10.6', who: 'explorer', shot: () => cover.close(z, 0.35, 1), poses: { explorer: 'stand' } },
       { key: 'dlg.10.7', who: 'scientist', shot: () => cover.close(z, 0.3, 0.95), after: 0.5 },
       { key: 'dlg.10.8', who: 'explorer', shot: () => cover.close(z, 0.35, 1.0), poses: { explorer: 'stand' }, after: 0.8 },
-      { choice: 'c1.accuse', shot: () => cover.close(z, -0.2, 1), poses: { explorer: 'stand', scientist: 'stand' } },
-      { key: 'dlg.10.9', who: 'scientist', if: TRUTH, shot: () => cover.close(z, -0.2, 0.85), after: 1.1 },
-      { key: 'dlg.10.10', who: 'explorer', if: TRUTH, swap: [{ if: HARD_TO_BELIEVE, key: 'br.acc.doubt' }], shot: () => cover.close(z, -0.2, 0.9), after: 1 },
-      { key: 'br.acc.proof', who: 'scientist', if: PROOF, shot: () => cover.close(z, -0.2, 0.85), poses: { scientist: 'present' }, after: 0.9 },
-      { key: 'br.acc.proof.r', who: 'explorer', if: PROOF, shot: () => cover.close(z, -0.2, 0.9), after: 1 },
+      { choice: 'c1.accuse', shot: () => cover.close(z, 0.2, 1), poses: { explorer: 'stand', scientist: 'stand' } },
+      { key: 'dlg.10.9', who: 'scientist', if: TRUTH, shot: () => cover.close(z, 0.2, 0.85), after: 1.1 },
+      { key: 'dlg.10.10', who: 'explorer', if: TRUTH, swap: [{ if: HARD_TO_BELIEVE, key: 'br.acc.doubt' }], shot: () => cover.close(z, 0.2, 0.9), after: 1 },
+      { key: 'br.acc.proof', who: 'scientist', if: PROOF, shot: () => cover.close(z, 0.2, 0.85), poses: { scientist: 'present' }, after: 0.9 },
+      { key: 'br.acc.proof.r', who: 'explorer', if: PROOF, shot: () => cover.close(z, 0.2, 0.9), after: 1 },
       { key: 'br.acc.joke', who: 'scientist', if: JOKED, shot: () => cover.close(z, 0.3, 0.95), poses: { scientist: 'present' }, after: 1.3 },
       { key: 'br.acc.joke.r', who: 'explorer', if: JOKED, shot: () => cover.close(z, 0.2, 0.9), poses: { scientist: 'stand' }, after: 1 },
-      { hold: 2.8, if: SAID_NOTHING, shot: () => cover.close(z, -0.2, 0.85) },
-      { key: 'br.acc.silent.r', who: 'explorer', if: SAID_NOTHING, shot: () => cover.close(z, -0.2, 0.9), after: 1 },
+      { hold: 2.8, if: SAID_NOTHING, shot: () => cover.close(z, 0.2, 0.85) },
+      { key: 'br.acc.silent.r', who: 'explorer', if: SAID_NOTHING, shot: () => cover.close(z, 0.2, 0.9), after: 1 },
       // nobody closed the channel: the others heard all of it
       { key: 'br.rad.medic.truth', who: 'medic', if: SPOKE_PLAINLY, shot: skyShot },
       { key: 'br.rad.strong.truth', who: 'strong', if: SPOKE_PLAINLY, shot: () => cover.mid(z, 0.45, 2.4), after: 0.8 },

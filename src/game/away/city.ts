@@ -391,7 +391,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     }) }), 3))); rug.rotation.x = -Math.PI / 2; rug.position.set(12.4, FLOOR, 68.8); rug.userData.ground = false;
     const poster = (title: string, bg: string, fg: string, x: number, z: number, yaw: number) => plane(0.8, 1.1, new THREE.MeshStandardMaterial({ roughness: 0.6, map: canvasTex(256, 360, (g) => {
       g.fillStyle = bg; g.fillRect(0, 0, 256, 360); g.fillStyle = fg; g.font = '700 34px Rajdhani, sans-serif'; g.textAlign = 'center';
-      title.split('|').forEach((l, i) => g.fillText(l, 128, 70 + i * 40));
+      title.split('|').forEach((l, i) => g.fillText(l, 128, 70 + i * 40, 232));
       for (let i = 0; i < 6; i++) { g.beginPath(); g.arc(40 + i * 35, 260, 14, 0, Math.PI * 2); g.fill(); g.fillRect(28 + i * 35, 276, 24, 40); }
     }) }), x, 1.9 + FLOOR, z, yaw);
     poster('TARAVEL|TITANS|CUP FINAL', '#0d3b66', '#f4d35e', 12.0, zB - 0.17, Math.PI); poster('SIX|LINEAGES|ONE BRAIN CELL', '#ff5d8f', '#ffffff', 14.4, zA + 0.17, 0);

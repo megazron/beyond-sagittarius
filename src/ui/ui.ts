@@ -24,7 +24,7 @@ export const PLAYABLE_LEVELS = 21;
 const CREW = CREW_IDS;
 
 export type MenuTab = 'pause' | 'map' | 'inventory' | 'objectives' | 'codex' | 'crew' | 'ledger';
-const TABS: [MenuTab, string, string][] = [['pause', 'pause', 'tab.game'], ['map', 'planet', 'tab.map'], ['inventory', 'inventory', 'tab.inventory'], ['objectives', 'objectives', 'tab.goals'], ['codex', 'codex', 'menu.codex'], ['crew', 'crew', 'tab.crew'], ['ledger', 'objectives', 'br.path.title']];
+const TABS: [MenuTab, string, string][] = [['pause', 'pause', 'tab.game'], ['map', 'planet', 'tab.map'], ['inventory', 'inventory', 'tab.inventory'], ['objectives', 'objectives', 'tab.goals'], ['codex', 'codex', 'menu.codex'], ['crew', 'crew', 'tab.crew'], ['ledger', 'book', 'br.path.title']];
 const ALL_ITEMS = ['stone', 'branch', 'tinder', 'frond', 'flint', 'vine', 'scrap', 'fruit', 'nodule', 'fibre', 'clay', 'sand', 'limestone', 'brine', 'ash', 'oilnut', 'sugarpod', 'lichen', 'blade', 'cord', 'pot', 'charcoal', 'lime', 'salt', 'glass', 'soap', 'brew', 'vinegar'];
 
 export interface Stats { health: number; thirst: number; hunger: number; stamina: number }
