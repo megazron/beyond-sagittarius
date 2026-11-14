@@ -796,6 +796,16 @@ window.addEventListener('resize', () => {
     return { x: body.x, z: body.z, feet: body.y, drawn: down(body.x, body.z), cam: cam.y, camDrawn: down(cam.x, cam.z), mode: game?.mode, grounded };
   },
   swimProbe() { return { x: player.pos.x, y: player.pos.y, depth: -world.terrain.height(player.pos.x, player.pos.z), swimming: player.swimming }; },
+  /** Test hook: where a person on the away stage is (their head, in the world) and which way they face. */
+  awayPerson(id: string) {
+    const q = (game?.away?.stage as { people?: { id: string; yaw: number; pos: THREE.Vector3; fig: { head: THREE.Object3D } }[] } | null)?.people?.find((p) => p.id === id);
+    return q ? { head: q.fig.head.getWorldPosition(new THREE.Vector3()).toArray(), yaw: q.yaw, pos: q.pos.toArray() } : null;
+  },
+  /** Test hook for recordings: passers-by within r of a point are hidden (they walk through whoever stands on their line). */
+  awayClear(x: number, z: number, r: number) {
+    const ps = (game?.away?.stage as { people?: { pos: THREE.Vector3; walk?: unknown; fig: { root: THREE.Object3D } }[] } | null)?.people ?? [];
+    for (const p of ps) if (p.walk) p.fig.root.visible = Math.hypot(p.pos.x - x, p.pos.z - z) > r;
+  },
   awayLeave() { game?.away?.leave(); },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
