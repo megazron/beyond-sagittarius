@@ -1,6 +1,6 @@
 // Dev-only turntable for the crew (not part of the build): vite, then /dev/chars.html
 import * as THREE from 'three';
-import { randomLook } from '../src/characters/custom';
+import { randomLook, OUTFITS } from '../src/characters/custom';
 import { createCharacter, CrewId, Character, CrewPose } from '../src/characters/character';
 import { voice } from '../src/core/voice';
 import { DECREEP } from '../src/characters/decreep';
@@ -30,7 +30,17 @@ if (new URLSearchParams(location.search).has('studio')) {
 const cam = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 100);
 const alt = new URLSearchParams(location.search).get('skin') ?? undefined;
 const customs = new URLSearchParams(location.search).get('custom');
-const chars: Character[] = (window as unknown as { chars: Character[] }).chars = ids.map((id, i) => { const c = customs ? createCharacter('scientist', 1, randomLook({ name: 'x', gender: i % 2 ? 'f' : 'm' })) : createCharacter(id, Number(new URLSearchParams(location.search).get('detail') ?? 1), undefined, id === 'strong' ? alt : undefined); c.root.position.x = (i - 2.5) * 1.3; scene.add(c.root); return c; });
+// ?custom=all: every creator outfit in both builds (twelve townsfolk), each with a fixed random look, so the skin gate
+// sees all of them on every run instead of two picked at random
+const lookOf = (i: number) => {
+  if (customs !== 'all') return randomLook({ name: 'x', gender: i % 2 ? 'f' : 'm' });
+  let s = 0x9e3779b9 ^ (i * 7919); const rnd = Math.random;
+  Math.random = () => { s = (s + 0x6d2b79f5) | 0; let x = Math.imul(s ^ (s >>> 15), 1 | s); x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x; return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+  const l = randomLook({ name: 'x', gender: i % 2 ? 'f' : 'm' }); Math.random = rnd;
+  return { ...l, outfit: OUTFITS[i >> 1] };
+};
+const roster: CrewId[] = customs === 'all' ? OUTFITS.flatMap((o) => [o, o] as CrewId[]) : ids;
+const chars: Character[] = (window as unknown as { chars: Character[] }).chars = roster.map((id, i) => { const c = customs ? createCharacter('scientist', 1, lookOf(i)) : createCharacter(id, Number(new URLSearchParams(location.search).get('detail') ?? 1), undefined, id === 'strong' ? alt : undefined); c.root.position.x = (i - 2.5) * 1.3; scene.add(c.root); return c; });
 let pose: CrewPose = 'stand', amount = 0, t = 0, phase = 0;
 const W = window as unknown as Record<string, unknown>;
 W.view = (i: number, d: number, yaw: number, h: number, dist: number) => {

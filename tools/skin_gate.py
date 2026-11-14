@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Skin gate: no character ever shows the inside of its body. Every skin surface is shaded grey from the front and
-magenta from behind; for every crew member, MegaZroN, Mir and two townsfolk, in the poses the game uses, close-ups of
-the neck and collar, both wrists and both ankles from 8 angles are rendered and the magenta pixels counted.
+magenta from behind; for every crew member, MegaZroN, Mir and all twelve creator bodies (six outfits, both builds),
+in the poses the game uses, close-ups of the neck and collar, both wrists and both ankles from 8 angles are rendered
+and the magenta pixels counted.
   python tools/skin_gate.py [--url http://localhost:5197/dev/chars.html] [--shots DIR] [--limit 25]
 Fails if any close-up shows more than --limit flag pixels (a few stray edge pixels are not a hole)."""
 import argparse, math, os, sys, pathlib
@@ -13,16 +14,17 @@ ap.add_argument('--limit', type=int, default=25); ap.add_argument('--only', defa
 POSES = [('idle', 0), ('walk', .9), ('point', 0), ('cheer', 0), ('sit', 0), ('argue', 0)]
 SPOTS = [('neck', 'neck', .55), ('wristL', 'handL', .5), ('wristR', 'handR', .5), ('ankleL', 'footL', .55), ('ankleR', 'footR', .55)]
 NAMES = ['zenvik', 'draxum', 'lyrra', 'skyvra', 'bolzar', 'nuvexa', 'megazron']
+OUTFITS = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social']  # src/characters/custom.ts, both builds of each
 worst, fails = {}, []
 if a.shots: os.makedirs(a.shots, exist_ok=True)
 with sync_playwright() as pw:
     b = launch(pw)
-    for page_q, idxs, label in (('', range(7), None), ('&skin=suit', [1], 'mir'), ('&custom=1', [0, 1], 'townsfolk')):
+    for page_q, idxs, label in (('', range(7), None), ('&skin=suit', [1], 'mir'), ('&custom=all', range(12), 'townsfolk')):
         pg = b.new_page(viewport={'width': 320, 'height': 320}); pg.set_default_timeout(600000)
         pg.goto(a.url + '?studio=1' + page_q); pg.wait_for_function('window.ready===true', timeout=600000)
         pg.evaluate('flagMode()')
         for i in idxs:
-            who = label if label and label != 'townsfolk' else (f'townsfolk{i}' if label == 'townsfolk' else NAMES[i])
+            who = label if label and label != 'townsfolk' else (f'custom_{"mf"[i % 2]}_{OUTFITS[i >> 1]}' if label == 'townsfolk' else NAMES[i])
             if a.only and who not in a.only.split(','): continue
             pg.evaluate(f"chars.forEach((c,j)=>c.root.visible=j==={i})")
             for pose, amt in POSES:
@@ -46,5 +48,8 @@ for (who, pose, spot), (n, k) in sorted(worst.items()):
 by = {}
 for (who, pose, spot), (n, k) in worst.items(): by[who] = max(by.get(who, 0), n)
 print('worst flag pixels per character:', ', '.join(f'{w} {n}' for w, n in sorted(by.items())))
+nf = {}
+for (who, pose, spot), (n, k) in worst.items(): nf[who] = nf.get(who, 0) + (n > a.limit)
+print('close-ups over the limit per character:', ', '.join(f'{w} {n}' for w, n in sorted(nf.items())))
 print(('FAILED ' + str(len(fails)) + ':\n - ' + '\n - '.join(fails[:40])) if fails else f'OK: no close-up shows the inside of a body (limit {a.limit} px)')
 sys.exit(1 if fails else 0)

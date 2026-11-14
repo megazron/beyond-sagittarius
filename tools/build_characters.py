@@ -74,6 +74,7 @@ def write_prim(g, part, skin, mat):
     fn = np.cross(P[tri[:, 1]] - P[tri[:, 0]], P[tri[:, 2]] - P[tri[:, 0]])
     vn = part.N[pv][tri].sum(1)
     bad = np.einsum('ij,ij->i', fn, vn) < 0
+    if getattr(part, 'capped', 0): bad[-part.capped:] = False  # a hole's cap faces along the limb, across its normals
     tri[bad] = tri[bad][:, [0, 2, 1]]
     idx = tri.ravel().astype(np.uint32)
     attrs = {'POSITION': g.accessor(P, F32, target=34962, minmax=True)}
@@ -188,7 +189,7 @@ def resolve_layers(inner_P, outer, margin):
 
 
 
-def follow(inner_P, inner_W, outers, keep=None, reach=0.035, near=0.012, far=0.05, tight=None):
+def follow(inner_P, inner_W, outers, keep=None, reach=0.035, near=0.012, far=0.05, tight=None, hold=None):
     """Whatever lies just under a garment skins with the garment's own weights, so in any pose the two
     move together and the gap made at bind holds. Near an opening it fades back to its own weights,
     so the edge stays continuous with what is not covered. Skirts hang free and are never followed."""
@@ -215,6 +216,8 @@ def follow(inner_P, inner_W, outers, keep=None, reach=0.035, near=0.012, far=0.0
         k = np.clip((rd - near) / (far - near), 0, 1)
         if tight is not None:  # at the shoulder an armhole opens wide: follow the garment right up to its edge
             k[tight[under]] = np.clip(rd[tight[under]] / .02, 0, 1)
+        if hold is not None:  # skin that must keep (some of) its own weights whatever covers it
+            k = k * (1 - hold[under])
         k = k[:, None]
         W[under] = inner_W[under] * (1 - k) + o.W[j[under]] * k
         best[under] = d[under]
@@ -231,6 +234,10 @@ def covered(P, N, garments, reach=0.035):
 
 
 def ray_covered(P, N, garment, sel, reach=0.16, both=False):
+    return cached('cover', lambda: _ray_covered(P, N, garment, sel, reach, both), P, N, garment.P, garment.T, sel, np.array([reach, both]))
+
+
+def _ray_covered(P, N, garment, sel, reach=0.16, both=False):
     """Vertices whose outward normal runs into the garment: true for loose sleeves and skirts too."""
     g = garment.decimated(2600, None, None, 1e-3)
     A, B, C = g.P[g.T[:, 0]], g.P[g.T[:, 1]], g.P[g.T[:, 2]]
@@ -284,6 +291,208 @@ def seen_from_outside(P, N, cand, occluders, dirs=40, reach=0.6):
             seen[ii[ok & ~hit]] = True
         todo = todo[~seen[todo]]
     return seen
+
+
+def boundary_loops(T):
+    """Closed loops of open edges, each in the winding its triangles give it (a -> b as a triangle runs)."""
+    und = {}
+    for t in T:
+        for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+            k = (min(a_, b_), max(a_, b_)); und[k] = und.get(k, 0) + 1
+    nxt = {}
+    for t in T:
+        for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+            if und[(min(a_, b_), max(a_, b_))] == 1:
+                nxt.setdefault(int(a_), []).append(int(b_))
+    loops = []
+    while nxt:
+        s = next(iter(nxt)); loop = [s]; cur = s; closed = False
+        while cur in nxt:
+            b_ = nxt[cur].pop()
+            if not nxt[cur]: del nxt[cur]
+            if b_ == s: closed = True; break
+            loop.append(b_); cur = b_
+        if not closed: continue  # an open chain (a non-manifold corner) is not a hole that can be closed
+        # two holes that touch at a corner come out as one figure-eight: split it into simple loops
+        out, at = [], {}
+        for v in loop:
+            if v in at:
+                k = at[v]; sub = out[k:]; out = out[:k]
+                for x in sub: at.pop(x, None)
+                if len(sub) >= 3: loops.append(sub)
+            at[v] = len(out); out.append(v)
+        if len(out) >= 3: loops.append(out)
+    return loops
+
+
+def pose_mats(rig, piv, qs):
+    """Bone matrices (n, 4, 4) for local rotations `qs` (name -> x, y, z, w) about each joint's pivot: the rest frames
+    carry no rotation, so this is what the game's skeleton does with the same quaternions."""
+    from scipy.spatial.transform import Rotation
+    par = rig.parents(); M = [None] * len(rig.names)
+    def get(i):
+        if M[i] is None:
+            A = np.eye(4); q = qs.get(rig.names[i])
+            if q is not None:
+                A[:3, :3] = Rotation.from_quat(q).as_matrix(); A[:3, 3] = piv[i] - A[:3, :3] @ piv[i]
+            M[i] = get(par[i]) @ A if par[i] >= 0 else A
+        return M[i]
+    return np.array([get(i) for i in range(len(rig.names))])
+
+
+def skin_pts(P, W, M):
+    """Linear blend skinning of points P with weights W under bone matrices M."""
+    return np.einsum('vb,bij,vj->vi', W, M[:, :3, :], np.c_[P, np.ones(len(P))])
+
+
+class Posed:
+    """The skin in a set of the game's own poses (tools/chars/cap_poses.json, taken from the clips): a cap must stay
+    under the skin in all of them, not only at bind."""
+    def __init__(self, rig, piv, P, W, T, sel):
+        qs = json.load(open(os.path.join(os.path.dirname(__file__), 'chars', 'cap_poses.json')))
+        self.M, self.surf = [], []
+        for f in qs:
+            M = pose_mats(rig, piv, f['q']); Pp = skin_pts(P, W, M); Np = vnormals(Pp, T)
+            self.M.append(M); self.surf.append((cKDTree(Pp[sel]), Pp[sel], Np[sel]))
+
+    def outside(self, loopP, loopW, c, w):
+        n = 0
+        for M, (tree, sp, sn) in zip(self.M, self.surf):
+            lp = skin_pts(loopP, loopW, M); cp = skin_pts(c[None], w[None], M)[0]
+            smp = np.concatenate([cp[None]] + [lp * (1 - f) + cp * f for f in (0.2, 0.5, 0.8)])
+            _, j = tree.query(smp, workers=1)
+            n += int((np.einsum('ij,ij->i', smp - sp[j], sn[j]) > 0.001).sum())
+        return n
+
+
+def cap_holes(part, skip, surf_P, surf_N, pivots, posed=None):
+    """Close every hole culled out of the skin with a fan to its centre, wound to face out of the body. Where a garment
+    hides skin, the skin is cut away; the cut edge could still be seen down the gap between a cuff, a boot top or an
+    open coat and the body, and through it the inside of the limb (nothing: skin is drawn from the front only). Closed,
+    the gap shows skin. A cap is only kept if all of it lies under the uncut skin (`surf_P`/`surf_N`), so it is never
+    a flat sheet seen on its own."""
+    loops = [l for l in boundary_loops(part.T) if len(l) >= 3 and skip[l].mean() < 0.5]
+    if not loops:
+        return part, 0, 0
+    P, W, N, UV = [part.P], [part.W], [part.N], [part.UV]
+    morph = {k: [d] for k, d in part.morph.items()}
+    extra = {k: [a] for k, a in part.extra.items()}
+    cu = {}
+    for t, tu in zip(part.T, part.TU):
+        for x, u in zip(t, tu): cu.setdefault(int(x), int(u))
+    tree = cKDTree(surf_P)
+    newT, newTU = [], []
+    nv, nu = len(part.P), len(part.UV)
+    kept = dropped = 0
+    for loop in loops:
+        L = np.array(loop)
+        c0 = part.P[L].mean(0); w0 = part.W[L].mean(0); w0 /= max(w0.sum(), 1e-9)
+        # where the cap's centre goes and what it follows: the loop's own centre and mean weights, or (a loop bent over
+        # the shoulder or round the hip) drawn in towards one of the nearest joints and turning with it. A point on a
+        # joint's pivot turns with that joint and stays put, where a hip loop's mean weights swung its centre out through
+        # the thigh as the leg lifted. Every candidate lies under the skin at bind; the one that stays under it best in
+        # the game's poses wins
+        cands = [(c0, w0)]
+        # or sunk straight in under the loop (a loop on a flat or hollow patch, its centre on or above the skin)
+        _, jn = tree.query(part.P[L], workers=1); nin = surf_N[jn].mean(0); nin /= max(np.linalg.norm(nin), 1e-9)
+        for d_ in (.015, .03, .05):
+            cands.append((c0 - nin * d_, w0))
+        for b in np.argsort(np.linalg.norm(pivots - c0, axis=1))[:3]:
+            oh = np.zeros_like(w0); oh[b] = 1
+            for f_ in (.25, .5, .75, 1):
+                cands.append((c0 * (1 - f_) + pivots[b] * f_, w0 * (1 - f_) + oh * f_))
+        best = None
+        for c, w in cands:
+            smp = np.array([c] + [part.P[L[i]] * (1 - f) + c * f for i in range(len(L)) for f in (0.2, 0.5, 0.8)])
+            _, j = tree.query(smp, workers=1)
+            if (np.einsum('ij,ij->i', smp - surf_P[j], surf_N[j]) > 0.001).any(): continue
+            sc = posed.outside(part.P[L], part.W[L], c, w) if posed is not None else 0
+            if best is None or sc < best[0]: best = (sc, c, w)
+            if sc == 0: break
+        if best is None:
+            if os.environ.get('CAP_DEBUG'): print(f'    open hole: {len(L)} edges at {np.round(c0, 3)}', flush=True)
+            dropped += 1
+            continue
+        _, c, w = best
+        if os.environ.get('CAP_DEBUG') and best[0]: print(f'    cap at {np.round(c0, 3)} ({len(L)} edges) comes out in poses: {best[0]} points', flush=True)
+        P.append(c[None]); W.append(w[None])
+        n = np.cross(part.P[L] - c, np.roll(part.P[L], -1, 0) - c).sum(0)
+        N.append(-(n / max(np.linalg.norm(n), 1e-12))[None])
+        for k in morph: morph[k].append(part.morph[k][L].mean(0)[None])
+        for k in extra: extra[k].append(part.extra[k][L].mean(0)[None])
+        UV.append(part.UV[[cu[int(x)] for x in L]].mean(0)[None])
+        for i in range(len(L)):
+            a_, b_ = int(L[i]), int(L[(i + 1) % len(L)])
+            newT.append((b_, a_, nv)); newTU.append((cu[b_], cu[a_], nu))
+        nv += 1; nu += 1; kept += 1
+    if not kept:
+        return part, 0, dropped
+    o = Part.__new__(Part)
+    o.P = np.concatenate(P); o.W = np.concatenate(W); o.N = np.concatenate(N); o.UV = np.concatenate(UV)
+    o.T = np.concatenate([part.T, np.array(newT, np.int64)]); o.TU = np.concatenate([part.TU, np.array(newTU, np.int64)])
+    o.name = part.name; o.morph = {k: np.concatenate(v) for k, v in morph.items()}; o.extra = {k: np.concatenate(v) for k, v in extra.items()}
+    o.capped = len(newT)
+    return o, kept, dropped
+
+
+def smooth_weights(W, T, region_cols, it):
+    """Spread the weights of a few bones over the skin they share, `it` rounds of averaging with the neighbours,
+    only where those bones carry nearly all of a vertex. Each vertex keeps its total on those bones, so every other
+    bone is untouched. Linear skinning folds skin over itself where the weight jumps from one bone to the next across
+    a narrow band and the two bones turn far apart; spread wider, the same turn stretches the skin instead."""
+    import scipy.sparse as sp
+    n = len(W)
+    e = np.r_[T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]]
+    A = sp.coo_matrix((np.ones(len(e)), (e[:, 0], e[:, 1])), (n, n)).tocsr(); A = ((A + A.T) > 0).astype(float)
+    A = sp.diags(1 / np.maximum(A.sum(1).A1, 1)) @ A
+    W = W.copy()
+    for cols in region_cols:
+        S = W[:, cols].copy(); tot = S.sum(1, keepdims=True)
+        reg = (tot[:, 0] > 0.9) & (S[:, :-1].sum(1) > 0.01)
+        for _ in range(it):
+            S[reg] = S[reg] * 0.5 + (A @ S)[reg] * 0.5
+        S = S / np.maximum(S.sum(1, keepdims=True), 1e-9) * tot
+        W[:, cols] = np.where(reg[:, None], S, W[:, cols])
+    return W
+
+
+def skin_weights(rig, T):
+    """The rig's weights, spread at the thumb's root and the wrist: the skin from the thumb's base across the palm to the
+    wrist was weighted straight from the hand to the thumb's middle bone, and the hand to the forearm's twist over a
+    few millimetres, so a thumb turned in or a bent wrist folded it over itself."""
+    if os.environ.get('NO_HANDW'):
+        return rig.W
+    ix = rig.index
+    thumb = [[ix[f'finger1_1{sd}'], ix[f'finger1_2{sd}'], ix[f'hand{sd}'], ix[f'forearmtw{sd}']] for sd in 'LR']
+    wrist = [[ix[f'hand{sd}'], ix[f'forearmtw{sd}'], ix[f'lowerarm{sd}']] for sd in 'LR']
+    return smooth_weights(smooth_weights(rig.W, T, thumb, 16), T, wrist, 8)
+
+
+def cached(tag, fn, *inputs):
+    """CULL_CACHE=dir keeps the slow sight-line tests between builds, keyed on every input array, so a rebuild that
+    changes nothing they see takes seconds instead of minutes. Off by default."""
+    d = os.environ.get('CULL_CACHE')
+    if not d:
+        return fn()
+    import hashlib
+    h = hashlib.sha1(tag.encode())
+    def add(x):
+        if isinstance(x, (tuple, list)):
+            for y in x: add(y)
+        else:
+            a = np.ascontiguousarray(x); h.update(str(a.shape).encode() + str(a.dtype).encode()); h.update(a.tobytes())
+    add(inputs)
+    f = os.path.join(d, f'{tag}_{h.hexdigest()}.npy')
+    if os.path.exists(f):
+        return np.load(f)
+    r = fn(); os.makedirs(d, exist_ok=True); np.save(f, r)
+    return r
+
+
+def seam_guard(rig, V):
+    """The neck and head: never sunk (the head meets the body there exactly)."""
+    ix = rig.index
+    return rig.W[:, [ix[n] for n in ('head', 'jaw', 'eyeL', 'eyeR', 'neck')]].sum(1) > 0.3
 
 
 def erode(hid, T, rings=2):
@@ -433,15 +642,35 @@ def build(c, cid, force=False):
     from types import SimpleNamespace
     headP = SimpleNamespace(P=V, T=Tall[hw0[Tall].mean(1) > .5]) if (hw0[Tall].mean(1) > .5).any() else None
     occ = list(garments) + ([headP] if headP is not None else [])
-    seen = seen_from_outside(V, Nb, dl & bodyv, occ)
+    seen = cached('seen', lambda: seen_from_outside(V, Nb, dl & bodyv, occ), V, Nb, dl & bodyv, [(o.P, o.T) for o in occ])
     if seen.any(): print(f'  {cid}: {int(seen.sum())} culled vertices are visible from outside: kept', flush=True)
     # and a ring of margin round them, so the edge of what is culled is never at a visible seam
     for _ in range(2):
         nb = np.zeros(len(V), bool); m = seen[Tall].any(1); nb[np.unique(Tall[m])] = True; seen |= nb
     dl &= ~seen
     dl[rig.W[:, rig.index['neck']] > 0.6] = False  # the whole neck stays: collars sit on it, and a culled neck shows the inside of the head
+    # the foot inside a shoe: everything of it below the shoe's opening is hidden whatever it does, so all of it goes.
+    # Kept (the sight-line test above saw toes that came out through the toe cap), it was pushed back under the shoe
+    # vertex by vertex, each along its own nearest normal, and the toes stood out of the boot as spikes
+    footcut = np.zeros(len(V), bool)
+    for g in garments:
+        if 'boot' not in g.asset and 'shoe' not in g.asset: continue
+        rim = boundary_loops(g.T)
+        for sgn in (1, -1):
+            # the shoe's opening: the highest open edge loop on this side (an open sole or a seam hole lower down is not it)
+            side = [l for l in rim if np.mean(g.P[l, 0]) * sgn > 0 and len(l) >= 8]
+            if not side: continue
+            op = max(side, key=lambda l: np.mean(g.P[l, 1]))
+            top = float(np.percentile(g.P[op, 1], 10)) - 0.015
+            if os.environ.get('CAP_DEBUG'): print(f'    {g.asset} opening {"LR"[sgn < 0]}: {len(op)} edges, foot culled below {top:.3f} m', flush=True)
+            fw = sum(rig.W[:, rig.index[f'{n}{"L" if sgn > 0 else "R"}']] for n in ('foot', 'toe'))
+            footcut |= bodyv & (V[:, 0] * sgn > 0) & (V[:, 1] < top) & (fw > 0.5)
+    dl |= footcut
+    LINER = not os.environ.get('NO_LINER')
+    # with LINER the hidden skin is kept (sunk, below) except the foot inside a shoe, which is cut and its ankle capped:
+    # a shoe fits the foot too closely for skin sunk under it, and the toes came out through an ankle boot's sides
     for i in bodyf:
-        if not dl[base.faces[i]].all():
+        if not (footcut if LINER else dl)[base.faces[i]].all():
             keep.append(i)
     T, TU = tri_fan(base.faces, base.fuv, keep)
     UV = np.stack([base.vt[:, 0], 1 - base.vt[:, 1]], 1)
@@ -451,6 +680,12 @@ def build(c, cid, force=False):
     Vb = V
     for o in garments:
         Vb = resolve_layers(Vb, o, float(os.environ.get('BODY_MARGIN', 0.016)))
+    # the hand is never pushed under a sleeve: each vertex went in along its own nearest normal of the cuff, so the thumb's
+    # web, where a long sleeve hangs over it, was crumpled over itself at bind and showed its inside in every pose.
+    # The push fades out from the wrist (hand weight 0) to where the hand has it by a third
+    if not os.environ.get('PUSH_HAND'):
+        hw_ = sum(rig.W[:, rig.index[n]] for n in rig.index if n[:-1] == 'hand' or n.startswith('finger'))
+        Vb = V + (Vb - V) * (1 - np.clip(hw_ / 0.35, 0, 1))[:, None]
     if cfg.get('deep_collar'):
         # a high collar over a turning neck: the skin it covers at the back sits deeper under it, so the nape, twisting
         # with the head, never comes out through the collar (only the back half: the front edge stays where it is)
@@ -478,6 +713,28 @@ def build(c, cid, force=False):
             tree = cKDTree(o.P); d, j = tree.query(Vb, workers=1); s = np.einsum('ij,ij->i', Vb - o.P[j], o.N[j])
             m = (d < .04) & (s <= 0) & (s > -cfg['deep_shoulder']) & (sw > .25)
             Vb[m] -= o.N[j[m]] * (s[m] + cfg['deep_shoulder'])[:, None]
+    # the push is smoothed over the skin: each vertex went in along its own nearest normal of the garment, and where the
+    # garment's edge or a collar's rim is ragged, neighbours went different ways and the skin crumpled over itself at
+    # bind (the base of the neck under a sweater's collar, the thumb under a cuff); moved together, it stays a surface.
+    # A light second pass then puts back under the cloth anything the smoothing let out
+    def bind_flips(P_):
+        n0 = np.cross(V[T[:, 1]] - V[T[:, 0]], V[T[:, 2]] - V[T[:, 0]]); n1 = np.cross(P_[T[:, 1]] - P_[T[:, 0]], P_[T[:, 2]] - P_[T[:, 0]])
+        return int((np.einsum('ij,ij->i', n0, n1) < 0).sum())
+    f0 = bind_flips(Vb)
+    if not os.environ.get('NO_PUSH_SMOOTH'):
+        import scipy.sparse as sp
+        e = np.r_[Tall[:, [0, 1]], Tall[:, [1, 2]], Tall[:, [2, 0]]]
+        A = sp.coo_matrix((np.ones(len(e)), (e[:, 0], e[:, 1])), (len(V), len(V))).tocsr(); A = ((A + A.T) > 0).astype(float)
+        A = sp.diags(1 / np.maximum(A.sum(1).A1, 1)) @ A
+        D = Vb - V
+        for _ in range(8):
+            D = D * 0.5 + (A @ D) * 0.5
+        Vb = V + D
+        for o in garments:
+            Vb = resolve_layers(Vb, o, 0.006)
+        if not os.environ.get('PUSH_HAND'):  # and still not the hand (see above)
+            Vb = V + (Vb - V) * (1 - np.clip(hw_ / 0.35, 0, 1))[:, None]
+    if os.environ.get('CAP_DEBUG'): print(f'    skin folded over itself at bind: {f0} triangles pushed, {bind_flips(Vb)} after smoothing', flush=True)
     # the head is never pushed under a garment, so the body may not be either where it meets the head: the seam
     # stays exactly where the head's edge is, and the push fades in over 6 cm. Pushed, the skin under the chin and jaw
     # pulled away from the head's edge and opened a gap you could see through (the see-through neck)
@@ -492,7 +749,33 @@ def build(c, cid, force=False):
     # shoulders and forearms: an armhole opens wide, and a cuff now follows the forearm, not the bending wrist
     arms = [rig.index[n] for n in ('clavicleL', 'clavicleR', 'upperarmL', 'upperarmR', 'lowerarmL', 'lowerarmR', 'forearmtwL', 'forearmtwR', 'handL', 'handR')]
     tight = rig.W[:, arms].sum(1) > .15
-    Wb = follow(Vb, rig.W, garments, keep=neckish, tight=tight) if not os.environ.get('NO_FOLLOW') else rig.W
+    Wh = skin_weights(rig, Tall)
+    # the hand keeps its own weights under a cuff: a sleeve follows the forearm, and skin from the wrist to the thumb's
+    # base that took the sleeve's weights stayed with the forearm while the thumb and hand beside it turned, and folded
+    hand = sum(Wh[:, rig.index[n]] for n in rig.index if n[:-1] == 'hand' or n.startswith('finger'))
+    Wb = follow(Vb, Wh, garments, keep=neckish, tight=tight, hold=np.clip(hand / 0.35, 0, 1)) if not os.environ.get('NO_FOLLOW') else Wh
+    if LINER:
+        # skin no camera sees is not cut away but sunk: drawn in towards its own bone, down to 40% of its depth, it stays one
+        # closed surface under the clothes. Cut away, its edge could be seen down the gap between a cuff, a boot top or
+        # an open coat and the body, and through it the inside of the limb or the torso, where skin is drawn from the
+        # front only; capped flat, a cap came out of the body as a joint bent. Sunk this deep it never reaches the
+        # garment over it, and the cut's edge is now a slope down into the body that faces out like the skin round it
+        liner = dl & bodyv & ~footcut & ~seam_guard(rig, V)
+        par = rig.parents(); child = {}
+        for i_, p_ in enumerate(par):
+            if p_ >= 0 and p_ not in child: child[p_] = i_
+        b = Wb[liner].argmax(1)
+        a = piv[b]; e = np.array([piv[child[x]] if x in child else piv[x] for x in b])
+        ab = e - a; tt = np.clip(np.einsum('ij,ij->i', Vb[liner] - a, ab) / np.maximum(np.einsum('ij,ij->i', ab, ab), 1e-9), 0, 1)
+        q = a + ab * tt[:, None]
+        # by rings from the skin that stays: a tenth deeper each ring, so the slope down is gentle and never folds over
+        ring = np.full(len(V), 99); ring[~liner] = 0
+        e_ = np.r_[Tall[:, [0, 1]], Tall[:, [1, 2]], Tall[:, [2, 0]]]
+        for r_ in range(1, 8):
+            fr = ring[e_[:, 0]] == r_ - 1; nb = e_[fr, 1]; nb = nb[ring[nb] > r_]; ring[nb] = r_
+        f = np.maximum(0.4, 1 - 0.1 * ring[liner])[:, None]
+        Vb = Vb.copy(); Vb[liner] = q + (Vb[liner] - q) * f
+        for k in bm: bm[k] = bm[k].copy(); bm[k][liner] *= f
     # the face's shapes (jaw open, smile, the lineage's ears) reach below the head/body split, down the neck: the body
     # carries them too, on the same vertices, or the head's lower edge moves away from the neck and leaves a hole
     body = Part(Vb, T[~hm], TU[~hm], UV, Wb, 'skin_body', {**morphs, **bm})
@@ -511,6 +794,8 @@ def build(c, cid, force=False):
         imp += rig.W[:, rig.index[b]] * k
     mdelta = sum(np.abs(d).max(1) for d in morphs.values())
     imp += np.clip(mdelta * 400, 0, 12)
+    if LINER:
+        imp[liner] = 0.05  # the sunk skin is never seen: its triangles go first when the body is decimated
     # --- extras: eyes, teeth, tongue, lashes, brows ---
     eyes = asset_part(c, f'{mh.SYS}/eyes/high-poly/high-poly.mhclo', Vdm, scale, off, None, 'eyes')
     cm = (eyes.UV[eyes.TU].mean(1) > 0.86).all(1)
@@ -537,6 +822,11 @@ def build(c, cid, force=False):
         # the whole hand: decimated, fingers folded through each other and the wrist went inside out
         joints |= sum(W0[:, ix[n]] for n in ix if n == f'hand{sd}' or (n.startswith('finger') and n.endswith(sd))) > 0.03
         joints |= (W0[:, ix[f'foot{sd}']] > 0.03) & (W0[:, ix[f'lowerleg{sd}']] > 0.03)
+        # elbows, knees, shoulders and hips too: decimated, an elbow folded through itself in a long sliver you saw down the
+        # sleeve, an armpit through a vest's armhole and a hip, from waist to thigh, down a jacket's open front
+        for b_ in (f'lowerarm{sd}', f'lowerleg{sd}', f'upperarm{sd}', f'upperleg{sd}'):
+            joints |= np.linalg.norm(V - piv[ix[b_]], axis=1) < 0.12
+    posed = Posed(rig, piv, Vb, Wb, Tall, bodyv) if not os.environ.get('NO_CAPS') else None
     # --- LODs ---
     info = {}
     for suffix, L in LODS.items():
@@ -573,6 +863,9 @@ def build(c, cid, force=False):
         if FILM_FACE and suffix == '':
             film_face(cid, hd, Vdm, scale, lb_parts=(lash, brow))
         bb = body.decimated(L['body'], locked, imp, L['cost'])
+        if not os.environ.get('NO_CAPS'):
+            bb, nk, nd = cap_holes(bb, seam, V[bodyv], Nb[bodyv], piv, posed)
+            if suffix == '': print(f'  {cid}: {nk} skin holes capped' + (f', {nd} left open (a cap would show)' if nd else ''), flush=True)
         emit(bb, 'skin')
         emit(eyes.decimated(500 if suffix == '' else 200), 'eyes')
         emit(cornea.decimated(200 if suffix == '' else 80), 'cornea')
