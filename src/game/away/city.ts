@@ -119,6 +119,43 @@ const FOLK: { id: string; x: number; z: number; yaw: number; pose: CrewPose; lin
   { id: 'tourist', x: 5.5, z: -36, yaw: 2.2, pose: 'selfie', lineage: 'sirelle' },
 ];
 
+const CELL = 12, UP = new THREE.Vector3(0, 1, 0), TMP_M = new THREE.Matrix4(), TMP_V = new THREE.Vector3();
+/** A stretch of street on one side: small enough that what is off screen is still culled. */
+const cellOf = (x: number, z: number) => `${Math.floor(z / CELL)}:${x < -4 ? -1 : x > 4 ? 1 : 0}`;
+
+/**
+ * The street is built from hundreds of separate boxes and planes, a draw call each (and another in the shadow
+ * pass). Static ones that share a material and shadow flags become one mesh per 12 m of street and side; what moves or
+ * changes later is passed in `keep`. Same pixels, a fraction of the draws.
+ */
+function mergeStatic(scene: THREE.Scene, keep: Set<THREE.Object3D>) {
+  const groups = new Map<string, THREE.Mesh[]>(), ids = new Map<THREE.Material, number>();
+  for (const o of scene.children) {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || (m as THREE.SkinnedMesh).isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh || keep.has(m) || m.userData.keep || m.children.length || Array.isArray(m.material)) continue;
+    const mat = m.material as THREE.Material, g = m.geometry;
+    if ((mat.transparent && mat.blending !== THREE.AdditiveBlending) || m.renderOrder !== 0 || !m.frustumCulled || m.userData.ground === true) continue;
+    if (Object.keys(g.morphAttributes).length) continue; // groups do not matter: one material draws the whole geometry
+    m.updateMatrixWorld(true);
+    if (m.matrixWorld.determinant() <= 0) continue;
+    if (!ids.has(mat)) ids.set(mat, ids.size);
+    const attrs = Object.entries(g.attributes).map(([k, a]) => `${k}:${a.itemSize}:${(a as THREE.BufferAttribute).array.constructor.name}:${a.normalized}`).sort().join(',');
+    if (!g.boundingBox) g.computeBoundingBox();
+    const c = g.boundingBox!.getCenter(TMP_V).applyMatrix4(m.matrixWorld);
+    const key = [ids.get(mat), +m.castShadow, +m.receiveShadow, cellOf(c.x, c.z), attrs, !!g.index].join('|');
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(m);
+  }
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const merged = mergeGeometries(list.map((m) => m.geometry.clone().applyMatrix4(m.matrixWorld)), false);
+    if (!merged) continue;
+    const a = list[0], out = new THREE.Mesh(merged, a.material);
+    out.castShadow = a.castShadow; out.receiveShadow = a.receiveShadow; out.userData.ground = false; out.name = 'merged';
+    for (const m of list) scene.remove(m);
+    scene.add(out);
+  }
+}
+
 // ---------- models (CC0, Poly Haven, packed by tools/fetch_city.py) ----------
 const gl = new GLTFLoader(); gl.setMeshoptDecoder(MeshoptDecoder);
 const modelCache = new Map<string, Promise<THREE.Object3D>>();
@@ -146,9 +183,14 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const box = (w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number, tile = 3) => {
     const o = new THREE.Mesh(boxGeo(w, h, d, tile), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; return add(o);
   };
-  const place = (name: string, x: number, y: number, z: number, yaw: number, scale = 1) => void model(name).then((m) => {
-    const o = m.clone(); o.position.set(x, y, z); o.rotation.y = yaw; o.scale.setScalar(scale); add(o);
-  }).catch(() => undefined);
+  // props are drawn as instances, one draw per model part per stretch of street: as separate clones the
+  // shutters, chairs, crates and lamps cost a draw call each per pass (thousands a frame on a phone)
+  const placed = new Map<string, { name: string; at: THREE.Matrix4[] }>();
+  const place = (name: string, x: number, y: number, z: number, yaw: number, scale = 1) => {
+    const key = `${name}|${cellOf(x, z)}`;
+    const e = placed.get(key) ?? placed.set(key, { name, at: [] }).get(key)!;
+    e.at.push(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(UP, yaw), new THREE.Vector3(scale, scale, scale)));
+  };
 
   // ---- sky: warm horizon to deep blue, the sun, and Taravel's ringed neighbour ----
   const skyMesh = add(new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.ShaderMaterial({
@@ -179,6 +221,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   sun.shadow.mapSize.set(rich ? 2048 : 1024, rich ? 2048 : 1024); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
   Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 90, bottom: -90, far: 240 });
   add(sun); add(sun.target);
+  // on phones the shadow map (the whole street) is redrawn every third frame: the sun never moves, only people do
+  sun.shadow.autoUpdate = rich;
+  let shadowFrame = 0;
 
   // ---- textures: Poly Haven sets, one tile in metres ----
   const tex = (set: string, mats: THREE.MeshStandardMaterial[], rep: [number, number] = [1, 1], size: '1k' | '512' = rich ? '1k' : '512') => {
@@ -382,9 +427,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     ] as [string, number, number, number, number, number][]) place(n, x, y, z, yaw, sc);
     for (const b of [[13.2, 66.4, 0.6, 0.8], [10.2, 69.2, 0.5, 1.0], [14.6, 70.2, 0.9, 1.1], [15.6, 66.2, 0.4, 1.4]]) blocks.push(new THREE.Box3(new THREE.Vector3(b[0] - b[2], 0, b[1] - b[3]), new THREE.Vector3(b[0] + b[2], 1, b[1] + b[3])));
     const plate = add(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.02, 24), new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.4 }))); plate.position.set(13.1, FLOOR + 0.64, 66.2);
-    const para = add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.012, 24), new THREE.MeshStandardMaterial({ color: 0xd9a35a, roughness: 0.8 }))); para.position.set(13.1, FLOOR + 0.66, 66.2);
+    const para = add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.012, 24), new THREE.MeshStandardMaterial({ color: 0xd9a35a, roughness: 0.8 }))); para.position.set(13.1, FLOOR + 0.66, 66.2); para.name = 'paratha'; para.userData.keep = true;
     box(0.55, 0.4, 0.3, new THREE.MeshStandardMaterial({ color: 0x2c4a6a, roughness: 0.8 }), 12.0, FLOOR + 0.2, 70.6);
-    const jacket = box(0.5, 0.06, 0.4, new THREE.MeshStandardMaterial({ color: 0x7a3b2e, roughness: 0.95 }), 10.3, FLOOR + 0.55, 68.6); jacket.rotation.y = 0.4;
+    const jacket = box(0.5, 0.06, 0.4, new THREE.MeshStandardMaterial({ color: 0x7a3b2e, roughness: 0.95 }), 10.3, FLOOR + 0.55, 68.6); jacket.rotation.y = 0.4; jacket.name = 'jacket'; jacket.userData.keep = true;
     const rug = add(new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.6), over(new THREE.MeshStandardMaterial({ roughness: 1, map: canvasTex(512, 352, (g) => {
       g.fillStyle = '#8e2b2b'; g.fillRect(0, 0, 512, 352); g.strokeStyle = '#e8c27a'; g.lineWidth = 14; g.strokeRect(20, 20, 472, 312);
       g.fillStyle = '#e8c27a'; g.beginPath(); g.moveTo(256, 110); g.lineTo(330, 176); g.lineTo(256, 242); g.lineTo(182, 176); g.closePath(); g.fill();
@@ -584,6 +629,19 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     person(`walker${i}`, someone(lineages[i % lineages.length], i + 3), x, za + rnd() * (zb - za), 0, 'idle', { z0: za, z1: zb, dir: rnd() < 0.5 ? 1 : -1, speed: 1.1 + rnd() * 0.5 });
   }
 
+  for (const { name, at } of placed.values()) void model(name).then((src) => {
+    src.updateMatrixWorld(true);
+    src.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const im = new THREE.InstancedMesh(m.geometry, m.material, at.length);
+      at.forEach((w, i) => im.setMatrixAt(i, TMP_M.multiplyMatrices(w, m.matrixWorld)));
+      im.castShadow = im.receiveShadow = true; im.userData.ground = false;
+      im.computeBoundingSphere(); add(im);
+    });
+  }).catch(() => undefined);
+  mergeStatic(scene, new Set<THREE.Object3D>([ground, skyMesh, ringLight]));
+
   const future = buildFuture(scene, { rich, N, S, FRONT, FLOOR, shops: SHOPS });
   blocks.push(...future.solids);
   const mega = buildMega(scene, { rich, N, S, FRONT, haze: HAZE });
@@ -597,7 +655,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     person(`group${gi}_${j}`, someone(lineages[(gi + j) % lineages.length], gi * 3 + j + 30), px, pz, Math.atan2(x - px, z - pz), talk[(gi + j) % talk.length]);
   } });
 
-  const tasks: AwayTask[] = TASKS.map((x) => ({ id: x.id, pos: new THREE.Vector3(x.x, hx(x.x), x.z), radius: x.r ?? 1.8, label: label(`city.task.${x.id}`), need: x.need }));
+  // what a task uses up goes: the paratha is eaten, the jacket goes in the bag (both stayed where they were)
+  const gone: Record<string, string> = { paratha: 'paratha', pack: 'jacket' };
+  const tasks: AwayTask[] = TASKS.map((x) => ({ id: x.id, pos: new THREE.Vector3(x.x, hx(x.x), x.z), radius: x.r ?? 1.8, label: label(`city.task.${x.id}`), need: x.need,
+    run: gone[x.id] ? () => { const o = scene.getObjectByName(gone[x.id]); if (o) o.visible = false; } : undefined }));
   // townsfolk and friends answer whenever you like; they never count towards leaving
   for (const p of people) if (!p.walk && !p.id.startsWith('group')) tasks.push({ id: `talk.${p.id}`, pos: p.pos, radius: 1.6, label: label('city.talk'), optional: true, repeat: true });
 
@@ -648,6 +709,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     },
     update(dt, time, cam) {
       clock = time;
+      if (!rich && shadowFrame++ % 3 === 0) sun.shadow.needsUpdate = true;
       if (talking) {
         // the one you spoke to turns to you (a little first, the head and eyes do the rest) and looks you in the eye
         const k = talking, q = k.q, on = time < k.until;

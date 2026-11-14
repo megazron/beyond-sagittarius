@@ -49,7 +49,7 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   for (const f of o.facades) for (let z = f.z1 + 1.2; z < f.z0 - 1; z += rich ? 2.1 : 4.2) {
     if (rnd() < 0.1) continue;
     // from just above the follow camera's height: a blade at 2.1 m stuck out over the pavement where the camera passes
-    for (let y = 2.9; y < f.h - 1.2; y += 2.8 + rnd() * 1.2) {
+    for (let y = 2.9; y < f.h - 0.4; y += 2.6 + rnd() * 1.1) {
       if (rnd() < 0.15) continue;
       const k = Math.floor(rnd() * SIGNS.length), x = f.side * (FRONT - 0.75 - rnd() * 0.25);
       const hgt = 2.2 + rnd() * 1.6;
