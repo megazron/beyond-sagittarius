@@ -795,7 +795,7 @@ def build(c, cid, force=False):
     mdelta = sum(np.abs(d).max(1) for d in morphs.values())
     imp += np.clip(mdelta * 400, 0, 12)
     if LINER:
-        imp[liner] = 0.05  # the sunk skin is never seen: its triangles go first when the body is decimated
+        imp[liner] = float(os.environ.get("LINER_IMP", 0.3))  # the sunk skin is never seen: its triangles go first when the body is decimated
     # --- extras: eyes, teeth, tongue, lashes, brows ---
     eyes = asset_part(c, f'{mh.SYS}/eyes/high-poly/high-poly.mhclo', Vdm, scale, off, None, 'eyes')
     cm = (eyes.UV[eyes.TU].mean(1) > 0.86).all(1)
