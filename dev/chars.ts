@@ -93,6 +93,70 @@ W.camInside = (x: number, y: number, z: number) => {
   rcN.copy(hit.face!.normal).transformDirection(hit.object.matrixWorld);
   return rcN.dot(dir) > 0;
 };
+// the near plane cuts a body or a garment away somewhere in the frame, not only on the ray to the target (the lens a
+// few centimetres from a coat: the cloth between the lens and the near plane is not drawn and the skin under it shows,
+// at a corner of the screen or across all of it). Not a view anyone gets, the same as the camera inside it. Every
+// skinned triangle, posed as drawn (morphs and bones), is clipped to the sliver of the view in front of the near plane
+// (the pyramid from a tenth of the near distance out to the near plane's rectangle: a surface that only grazes the
+// lens itself shows as a line, not as a hole): what is left of them was cut away. A cut counts once it
+// takes at least minPx pixels out of the picture (the gate's own limit: a smaller cut cannot show more than that).
+const ncV = new THREE.Vector3();
+W.nearCut = (minPx = 25) => {
+  cam.updateMatrixWorld(); const inv = cam.matrixWorldInverse, n = cam.near;
+  const ty = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2), tx = ty * cam.aspect;
+  // half-spaces as f(p) >= 0, p = [x, y, z] in camera space (looking down -z)
+  const planes: ((p: number[]) => number)[] = [(p) => -p[2] - n * 0.1, (p) => n + p[2], (p) => -tx * p[2] - p[0], (p) => -tx * p[2] + p[0], (p) => -ty * p[2] - p[1], (p) => -ty * p[2] + p[1]];
+  // the part of a triangle in that sliver, as screen pixels (what the cut takes out of the picture)
+  const ph = r.getContext().drawingBufferHeight, pw = r.getContext().drawingBufferWidth;
+  const clip = (poly: number[][]) => {
+    for (const f of planes) {
+      const out: number[][] = [];
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i], b = poly[(i + 1) % poly.length], fa = f(a), fb = f(b);
+        if (fa >= 0) out.push(a);
+        if ((fa >= 0) !== (fb >= 0)) { const s = fa / (fa - fb); out.push([a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s, a[2] + (b[2] - a[2]) * s]); }
+      }
+      poly = out; if (poly.length < 3) return 0;
+    }
+    const q = poly.map((p) => [p[0] / (-p[2] * tx) * pw / 2, p[1] / (-p[2] * ty) * ph / 2]);
+    let a2 = 0; for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length]; a2 += a[0] * b[1] - b[0] * a[1]; }
+    return Math.abs(a2) / 2;
+  };
+  let cut = false, px = 0;
+  scene.traverseVisible((o) => {
+    const m = o as THREE.SkinnedMesh; if (cut || !m.isSkinnedMesh) return;
+    const g = m.geometry, pos = g.getAttribute('position'), idx = g.getIndex();
+    const P = new Float32Array(pos.count * 3);
+    let close = false;
+    for (let i = 0; i < pos.count; i++) {
+      m.getVertexPosition(i, ncV); ncV.applyMatrix4(m.matrixWorld).applyMatrix4(inv);
+      P[i * 3] = ncV.x; P[i * 3 + 1] = ncV.y; P[i * 3 + 2] = ncV.z;
+      if (ncV.z > -n) close = true;
+    }
+    if (!close) return;
+    const nt = idx ? idx.count / 3 : pos.count / 3;
+    for (let t = 0; t < nt && !cut; t++) {
+      const v = [0, 1, 2].map((k) => (idx ? idx.getX(t * 3 + k) : t * 3 + k));
+      if (v.every((i) => P[i * 3 + 2] < -n) || v.every((i) => P[i * 3 + 2] > 0)) continue;
+      px += clip(v.map((i) => [P[i * 3], P[i * 3 + 1], P[i * 3 + 2]]));
+      if (px >= minPx) { cut = true; W.nearWhy = { mesh: m.name, tri: v, px }; }
+    }
+  });
+  return cut;
+};
+// probe: the near plane moved (a cut it made shows as the difference)
+W.setNear = (n: number) => { cam.near = n; cam.updateProjectionMatrix(); };
+// probe: each visible mesh's nearest vertex along the view (metres) and whether it is skinned
+W.nearest = () => {
+  cam.updateMatrixWorld(); const out: [string, boolean, number][] = [];
+  scene.traverseVisible((o) => {
+    const m = o as THREE.SkinnedMesh; if (!m.isMesh || m === ground) return;
+    const pos = m.geometry.getAttribute('position'); let z = 1e9;
+    for (let i = 0; i < pos.count; i++) { m.getVertexPosition(i, ncV); ncV.applyMatrix4(m.matrixWorld).applyMatrix4(cam.matrixWorldInverse); z = Math.min(z, -ncV.z); }
+    out.push([m.name || m.type, !!m.isSkinnedMesh, +z.toFixed(4)]);
+  });
+  return out.sort((a, b) => a[2] - b[2]).slice(0, 8);
+};
 // skin gate probe: what is under some screen pixels (first surface along the ray, front or back): mesh, triangle, bones
 W.probeHits = (pts: [number, number][]) => {
   const out: unknown[] = []; const ms: THREE.Object3D[] = [];

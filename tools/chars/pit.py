@@ -25,6 +25,8 @@ MERGE = 0.08  # radians: keys closer than this are one
 NSHAPE = int(os.environ.get('PIT_N', 8))  # corrective shapes per side
 RIDGE = float(os.environ.get('PIT_RIDGE', 1e-3))
 RIM = float(os.environ.get('PIT_RIM', 0.04))  # metres: skin this near a garment's edge is not held under it in a pose
+UNTANGLE = int(os.environ.get('PIT_UNTANGLE', 40))  # rounds of relaxing what is still folded after the solve
+MAXMOVE = float(os.environ.get('PIT_MAXMOVE', 0.04))  # metres: no vertex moves further than this from where the skinning put it
 
 
 def boundary(T):
@@ -104,6 +106,8 @@ def correctives(V, Vb, W, T, names, par, piv, poses, garments, joints, sunk=None
     I = np.tile(np.eye(4), (len(names), 1, 1))
     shapes, info = {}, {}
     regs = {}
+    An = sp.diags(1 / np.maximum(Adj.sum(1).A1, 1)) @ Adj
+    TR = {jt['name']: np.nonzero(jt['region'][T].any(1))[0] for jt in joints}
     for jt in joints:
         s = jt['name']; reg = jt['region']; fr = np.nonzero(reg)[0]
         Lr = L[fr]; Ar = Adj[fr][:, fr]
@@ -146,6 +150,18 @@ def correctives(V, Vb, W, T, names, par, piv, poses, garments, joints, sunk=None
             tgt = P[fr] + (X - P[fr]) + need; c = np.maximum(c, np.where(np.linalg.norm(push, axis=1) > 1e-5, 0.05, 1e-3))
         # and the corrective as a whole stays a correction: nothing moves more than 4 cm from where the skinning put it
         dX = X - P[fr]; X = P[fr] + dX * np.minimum(1, 0.04 / np.maximum(np.linalg.norm(dX, axis=1), 1e-9))[:, None]
+        # and what is still folded is untangled: the skin of each turned-over triangle is relaxed towards its
+        # neighbours (the region's edge stays put) until it faces out again. Keeping its own local shape, compressed
+        # skin (the armpit with the arm down) buckles; relaxed, it stretches flat the way skin does
+        if UNTANGLE:
+            Xa = P.copy(); Xa[fr] = X; tr = TR[s]
+            for _ in range(UNTANGLE):
+                f = flips(T[tr], V, Xa, R)
+                if not f.any(): break
+                mv = np.zeros(n, bool); mv[T[tr][f].ravel()] = True; mv = ((An @ mv.astype(float)) > 0) | mv; mv &= reg
+                Xa[mv] = Xa[mv] * 0.5 + (An @ Xa)[mv] * 0.5
+            X = Xa[fr]
+            dX = X - P[fr]; X = P[fr] + dX * np.minimum(1, MAXMOVE / np.maximum(np.linalg.norm(dX, axis=1), 1e-9))[:, None]
         return P, R, X
 
     cov0 = np.zeros(n, bool)
@@ -210,3 +226,20 @@ def correctives(V, Vb, W, T, names, par, piv, poses, garments, joints, sunk=None
             if os.environ.get('PIT_DEBUG') == '2': log(f'      {f["pose"]} {b1} -> {a1}')
         log(f'    {", ".join(info)} over all {len(Ms)} poses: {b} folded triangles -> {a}')
     return shapes, info, Vb
+
+
+def posed_skin(Vb, W, T, names, par, piv, poses, shapes=None, info=None, builds=()):
+    """The skin in each pose as the game draws it (the correctives mixed as character.ts mixes them), and again with
+    each of `builds` (the creator's slim and heavy body shapes, at full) on top: positions and vertex normals,
+    (k, n, 3) each."""
+    ix = {nm: i for i, nm in enumerate(names)}; Ps, Ns = [], []
+    for f, B in [(f, None) for f in poses] + [(f, B) for B in builds for f in poses]:
+        M = pose_mats(names, par, piv, f['q']); Vc = Vb.copy() if B is None else Vb + B
+        for s, k in (info or {}).items():
+            K = np.array(k['dirs']); u = turn(M, ix, k['bone'], k['ref'])
+            cc = np.clip(kernel(u[None], K)[0] @ np.array(k['w']), -np.array(k['lim']), np.array(k['lim']))
+            for j in range(k['n']): Vc += cc[j] * shapes[f'{s}{j}']
+        P = lbs(Vc, W, M); fn = np.cross(P[T[:, 1]] - P[T[:, 0]], P[T[:, 2]] - P[T[:, 0]]); N = np.zeros_like(P)
+        for c in range(3): np.add.at(N, T[:, c], fn)
+        Ps.append(P.astype(np.float32)); Ns.append((N / np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-12)).astype(np.float32))
+    return np.array(Ps), np.array(Ns)

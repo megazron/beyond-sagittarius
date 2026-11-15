@@ -2,7 +2,8 @@
 """Skin gate: no character ever shows the inside of its body. Every skin surface is shaded grey from the front and
 magenta from behind; for every crew member, MegaZroN, Mir and all twelve creator bodies (six outfits, both builds),
 in the poses the game uses, close-ups of the neck and collar, both wrists and both ankles from 8 angles are rendered
-and the magenta pixels counted.
+and the magenta pixels counted. A view with the camera inside a body or a garment, or with the near plane cutting one
+open anywhere in the frame, is not a view anyone gets and is skipped (listed in the report).
   python tools/skin_gate.py [--url http://localhost:5197/dev/chars.html] [--shots DIR] [--limit 25]
 Fails if any close-up shows more than --limit flag pixels (a few stray edge pixels are not a hole).
 --detail 0.5 checks the light LOD (phones, low quality) instead of the full one."""
@@ -16,7 +17,7 @@ POSES = [('idle', 0), ('walk', .9), ('point', 0), ('cheer', 0), ('sit', 0), ('ar
 SPOTS = [('neck', 'neck', .55), ('wristL', 'handL', .5), ('wristR', 'handR', .5), ('ankleL', 'footL', .55), ('ankleR', 'footR', .55)]
 NAMES = ['zenvik', 'draxum', 'lyrra', 'skyvra', 'bolzar', 'nuvexa', 'megazron']
 OUTFITS = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social']  # src/characters/custom.ts, both builds of each
-worst, fails = {}, []
+worst, fails, nearskip = {}, [], []
 if a.shots: os.makedirs(a.shots, exist_ok=True)
 with sync_playwright() as pw:
     b = launch(pw)
@@ -37,6 +38,10 @@ with sync_playwright() as pw:
                         yaw = k * math.pi / 4; up = .12 if spot == 'neck' else .05
                         pg.evaluate(f"viewAt({p[0]}, {p[1]}, {p[2]}, {yaw}, {up}, {dist}); step(1)")
                         if pg.evaluate(f'camInside({p[0]}, {p[1]}, {p[2]})'): continue  # the camera itself is inside a limb, the body or a garment: not a view anyone gets
+                        if pg.evaluate(f'nearCut({a.limit})'):  # or the near plane cuts a body or a garment open anywhere in the frame: the same
+                            nearskip.append(f'{who} {pose} {spot} {k * 45} deg ({pg.evaluate("flagCount()")} px)')
+                            if a.shots: pg.screenshot(path=f'{a.shots}/near_{who}_{pose}_{spot}_{k}.png')
+                            continue
                         n = pg.evaluate('flagCount()')
                         if n > 320 * 320 * 0.35: continue
                         key = (who, pose, spot)
@@ -52,5 +57,6 @@ print('worst flag pixels per character:', ', '.join(f'{w} {n}' for w, n in sorte
 nf = {}
 for (who, pose, spot), (n, k) in worst.items(): nf[who] = nf.get(who, 0) + (n > a.limit)
 print('close-ups over the limit per character:', ', '.join(f'{w} {n}' for w, n in sorted(nf.items())))
+print(f'views skipped because the near plane cuts a body or garment open in the frame: {len(nearskip)}' + ''.join('\n   ' + v for v in nearskip))
 print(('FAILED ' + str(len(fails)) + ':\n - ' + '\n - '.join(fails)) if fails else f'OK: no close-up shows the inside of a body (limit {a.limit} px)')
 sys.exit(1 if fails else 0)

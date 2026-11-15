@@ -50,10 +50,11 @@ class Part:
         self.N = vnormals(P, T)
         self.extra = extra or {}
 
-    def decimated(self, target, locked=None, importance=None, maxcost=4e-4, bone=None, near=None):
+    def decimated(self, target, locked=None, importance=None, maxcost=4e-4, bone=None, near=None, posed=None):
         if len(self.T) <= target or os.environ.get('NO_DECIM'):
             return self
-        T2, tu = simplify(self.P, self.T, self.TU, target, locked, importance, maxcost=maxcost, bone=bone, near=near)
+        T2, tu = simplify(self.P, self.T, self.TU, target, locked, importance, maxcost=maxcost, bone=bone, near=near,
+                          posed=posed[0] if posed is not None else None, posedN=posed[1] if posed is not None else None)
         o = Part.__new__(Part)
         o.P, o.T, o.TU, o.UV, o.W, o.name, o.morph, o.N, o.extra = self.P, T2, tu, self.UV, self.W, self.name, self.morph, self.N, self.extra
         return o
@@ -434,6 +435,56 @@ def cap_holes(part, skip, surf_P, surf_N, pivots, posed=None):
     o.name = part.name; o.morph = {k: np.concatenate(v) for k, v in morph.items()}; o.extra = {k: np.concatenate(v) for k, v in extra.items()}
     o.capped = len(newT)
     return o, kept, dropped
+
+
+def eye_sockets(part, eyesP):
+    """The back of each eye's opening, closed inside the head: a fan from the edge of the lids to a point behind the
+    eyeball. Where an eyeball does not fill the opening of its lids (the corners, a creator's larger eyes) the view went
+    past it into the head and out through the back of it, which is drawn from the outside only. The fan is the head's
+    own skin and starts at the lids' own edge, so it can only be seen through that gap, never through the face; its
+    middle faces into the head, so it is shaded as the shadowed corner of an eye. Nothing of the face moves."""
+    loops = boundary_loops(part.T)
+    if not loops or not len(eyesP):
+        return part
+    P, W, N, UV = [part.P], [part.W], [part.N], [part.UV]
+    morph = {k: [d] for k, d in part.morph.items()}
+    extra = {k: [a] for k, a in part.extra.items()}
+    cu = {}
+    for t, tu in zip(part.T, part.TU):
+        for x, u in zip(t, tu): cu.setdefault(int(x), int(u))
+    newT, newTU = [], []
+    nv, nu = len(part.P), len(part.UV)
+    fwd = np.array([0., 0., 1.])
+    for sgn in (1, -1):
+        e = eyesP[eyesP[:, 0] * sgn > 0]
+        if len(e) < 8: continue
+        c_eye = e.mean(0); r = float(np.linalg.norm(e - c_eye, axis=1).max())
+        # the opening of this eye's lids: the open loop whose middle is nearest the eyeball, within its own size
+        near = [l for l in loops if len(l) >= 6 and np.linalg.norm(part.P[l].mean(0) - c_eye) < r * 1.2]
+        if not near: continue
+        L = np.array(min(near, key=lambda l: np.linalg.norm(part.P[l].mean(0) - c_eye)))
+        c = c_eye - fwd * r * 0.8
+        w = part.W[L].mean(0); w /= max(w.sum(), 1e-9)
+        P.append(c[None]); W.append(w[None]); N.append(-fwd[None])
+        for k in morph: morph[k].append(part.morph[k][L].mean(0)[None] * 0.5)
+        for k in extra: extra[k].append(part.extra[k][L].mean(0)[None])
+        UV.append(part.UV[[cu[int(x)] for x in L]].mean(0)[None])
+        view = c_eye + fwd * 0.3
+        for i in range(len(L)):
+            a_, b_ = int(L[i]), int(L[(i + 1) % len(L)])
+            t = (a_, b_, nv)
+            n_ = np.cross(part.P[b_] - part.P[a_], c - part.P[a_])
+            if n_ @ (view - (part.P[a_] + part.P[b_] + c) / 3) < 0: t = (b_, a_, nv)
+            newT.append(t); newTU.append((cu[t[0]], cu[t[1]], nu))
+        nv += 1; nu += 1
+    if not newT:
+        return part
+    o = Part.__new__(Part)
+    o.P = np.concatenate(P); o.W = np.concatenate(W); o.N = np.concatenate(N); o.UV = np.concatenate(UV)
+    o.T = np.concatenate([part.T, np.array(newT, np.int64)]); o.TU = np.concatenate([part.TU, np.array(newTU, np.int64)])
+    o.name = part.name; o.morph = {k: np.concatenate(v) for k, v in morph.items()}; o.extra = {k: np.concatenate(v) for k, v in extra.items()}
+    o.capped = len(newT)  # wound by hand: write_prim leaves them as they are
+    return o
 
 
 def smooth_weights(W, T, region_cols, it):
@@ -853,9 +904,37 @@ def build(c, cid, force=False):
         # sunk skin is solved too, keeping the shape it was sunk to (lifted back to its own shape, it came out at a vest's
         # neckline); under an armhole it folded just the same and showed through the gap
         poses = json.load(open(os.path.join(os.path.dirname(__file__), 'chars', 'cap_poses.json')))
+        # and this body's own (tools/chars/capture_poses.py): its arms clear its own torso, so its shoulders take their own turns
+        own = os.path.join(os.path.dirname(__file__), 'chars', 'poses', f'{cid}.json')
+        if os.path.exists(own) and not os.environ.get('NO_OWN_POSES'):
+            poses = poses + json.load(open(own))
         shapes, pitinfo, Vb = pit.correctives(V, Vb, Wb, Tall, rig.names, rig.parents(), piv, poses, garments, joints, sunk=liner if LINER else None,
                                               log=(lambda m: print(f'  {cid}:{m}', flush=True)) if os.environ.get('CAP_DEBUG') or os.environ.get('PIT_DEBUG') else None)
         bm.update(shapes)
+    # the skin in the game's poses, as drawn (correctives mixed in): decimation keeps every triangle facing out in all
+    # of them (tools/chars/simplify.py)
+    posedB = None
+    if not os.environ.get('NO_POSED_DECIM'):
+        pq = poses if not os.environ.get('NO_PSD') else json.load(open(os.path.join(os.path.dirname(__file__), 'chars', 'cap_poses.json')))
+        posedB = pit.posed_skin(Vb, Wb, Tall, rig.names, rig.parents(), piv, pq, bm if pitinfo else None, pitinfo,
+                                [bm[k] for k in ('build_slim', 'build_heavy') if k in bm])
+    # and every face shape and lineage feature at full (the ears, a smile, a blink): decimated without this, a triangle
+    # at the temple turned over under the long ears and showed its back above the brow
+    def shaped(P0, deltas):
+        Ps, Ns = [], []
+        for D in deltas:
+            P_ = P0 + D; N_ = vnormals(P_, Tall); Ps.append(P_.astype(np.float32)); Ns.append(N_.astype(np.float32))
+        return np.array(Ps), np.array(Ns)
+    fd = [d for k, d in morphs.items() if np.abs(d).max() > 1e-6]
+    # the face mixes its shapes (a squinting smile, a blink while talking) and wears one lineage's ears: every pair of
+    # expressions, with each ear shape or none
+    ex = [morphs[k] for k in MORPHS if k in morphs]
+    ears = [None] + [morphs[k] for k in ('ear_fin', 'ear_long', 'ear_tuft') if k in morphs and np.abs(morphs[k]).max() > 1e-6]
+    combos = [ex[a] + ex[b] + (e if e is not None else 0) for a in range(len(ex)) for b in range(a + 1, len(ex)) for e in ears]
+    shapedH = shaped(V, fd + combos + [bm[k] for k in ('build_slim', 'build_heavy') if k in bm]) if not os.environ.get('NO_POSED_DECIM') else None
+    if posedB is not None:
+        sb = shaped(Vb, fd)
+        posedB = (np.concatenate([posedB[0], sb[0]]), np.concatenate([posedB[1], sb[1]]))
     body = Part(Vb, T[~hm], TU[~hm], UV, Wb, 'skin_body', {**morphs, **bm})
     # keep shared normals across the neck seam
     Nall = vnormals(V, T)
@@ -969,11 +1048,13 @@ def build(c, cid, force=False):
         hlock = locked
         if suffix:
             hlock = locked | (sum(np.abs(morphs[k_]).max(1) for k_ in ('smile', 'open', 'round', 'wide')) > 0.001) | (W0[:, ix['jaw']] > 0.05)
-        hd = head.decimated(L['head'], hlock, imp, min(L['cost'], LODS['']['cost']), bone_of, near_b)
+        hd = head.decimated(L['head'], hlock, imp, min(L['cost'], LODS['']['cost']), bone_of, near_b, shapedH)
+        if not os.environ.get('NO_SOCKETS'):
+            hd = eye_sockets(hd, eyes.P)
         emit(hd, 'skin')
         if FILM_FACE and suffix == '':
             film_face(cid, hd, Vdm, scale, lb_parts=(lash, brow))
-        bb = body.decimated(L['body'], locked, bimp, L['cost'], bone_of, near_b)
+        bb = body.decimated(L['body'], locked, bimp, L['cost'], bone_of, near_b, posedB)
         if os.environ.get('LOD_DEBUG'): print(f'    {suffix or "full"}: head {len(hd.T)}, body {len(bb.T)} ({int(locked[np.unique(body.T)].sum())} of {len(np.unique(body.T))} vertices held)', flush=True)
         budget = L['cloth'] * cfg.get('cloth_k', 1) * float(os.environ.get('CLOTH_K', 1))
         tot = sum(len(p.T) * p.opt.get('budget', 1) for p in garments)

@@ -4,14 +4,18 @@ import heapq
 import numpy as np
 
 
-def simplify(P, F, FU, target, locked=None, importance=None, boundary_w=1e5, seam_w=30.0, maxcost=1e-4, bone=None, near=None):
+def simplify(P, F, FU, target, locked=None, importance=None, boundary_w=1e5, seam_w=30.0, maxcost=1e-4, bone=None, near=None, posed=None, posedN=None):
     """P (n,3) positions, F (m,3) triangles, FU (m,3) per-corner uv ids.
     Returns (kept triangles, their uv ids). A collapse is only legal if every uv island around
     the removed vertex maps onto a uv of the survivor through a shared triangle, so seams
     shrink along themselves and never tear.
     bone (n,) and near (b, b): each vertex's own bone and which bones may share a triangle (the same, parent and child);
     a collapse that would leave a triangle spanning two bones that move apart (one thigh to the other across the
-    crotch) is not taken."""
+    crotch) is not taken.
+    posed (k, n, 3) and posedN (k, n, 3): every vertex and the full surface's normal there in k of the game's poses; a
+    collapse that would leave a triangle facing into the body in any of them (where the triangles it replaces faced
+    out) is not taken. Checked at bind only, a long triangle across a bending joint, sunk under the clothes, turned
+    over as the joint bent and came out through them."""
     n = len(P)
     F = np.asarray(F, np.int64).copy()
     FU = np.asarray(FU, np.int64).copy()
@@ -113,6 +117,15 @@ def simplify(P, F, FU, target, locked=None, importance=None, boundary_w=1e5, sea
             if l1 < 1e-12 or n0 @ n1 < 0.25 * np.linalg.norm(n0) * l1:
                 bad = True
                 break
+        if not bad and posed is not None:
+            ts = [F[fi] for fi in vf[u] - shared]
+            if ts:
+                tt = np.array(ts); tn = np.where(tt == u, v, tt)
+                A = posed[:, tt]; B = posed[:, tn]  # (k, t, 3, 3)
+                n0 = np.cross(A[:, :, 1] - A[:, :, 0], A[:, :, 2] - A[:, :, 0]); n1 = np.cross(B[:, :, 1] - B[:, :, 0], B[:, :, 2] - B[:, :, 0])
+                ref = posedN[:, tt].sum(2)
+                if ((np.einsum('kti,kti->kt', n1, ref) < 0) & (np.einsum('kti,kti->kt', n0, ref) >= 0)).any():
+                    bad = True
         if bad:
             continue
         for fi in shared:

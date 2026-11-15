@@ -316,35 +316,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     clips = clipsFor(`${key}`, legScale, a);
     mixer = new THREE.AnimationMixer(scene);
     fig.scale.setScalar(custom ? custom.height : 1);
-    eyeSockets(scene, bs.get('head')!, eyes);
     fig.visible = true;
     void texturesReady().then(ready);
   };
 
   let pitK: CrewMeta['pit'] | null = null;
-  /** A dark cup behind each eyeball, inside the head. Where an eyeball does not fill the opening of its lids (the corners,
-   * the creator's larger eyes) the view went past it into the head and out through the back of it, which is drawn from
-   * the outside only: a sliver of whatever was behind the head showed in the corner of the eye. Only the back of the
-   * eye is cupped, from just behind its middle, and only its inside is drawn, so nothing in front of the eye changes. */
-  function eyeSockets(scene: THREE.Object3D, head: THREE.Bone, eyeMat: THREE.Material) {
-    let em: THREE.SkinnedMesh | null = null;
-    scene.traverse((o) => { if ((o as THREE.Mesh).isMesh && (o as THREE.Mesh).material === eyeMat) em = o as THREE.SkinnedMesh; });
-    const m = em as THREE.SkinnedMesh | null;
-    if (!m) return;
-    root.updateMatrixWorld(true);
-    const pos = m.geometry.getAttribute('position'), v = new THREE.Vector3(), sides: THREE.Vector3[][] = [[], []];
-    for (let i = 0; i < pos.count; i++) { m.getVertexPosition(i, v); head.worldToLocal(v.applyMatrix4(m.matrixWorld)); sides[v.x > 0 ? 0 : 1].push(v.clone()); }
-    const mat = new THREE.MeshBasicMaterial({ color: 0x120607, side: THREE.BackSide });
-    for (const pts of sides) {
-      if (pts.length < 8) continue;
-      const c = pts.reduce((a, p) => a.add(p), new THREE.Vector3()).divideScalar(pts.length);
-      const r = Math.max(...pts.map((p) => p.distanceTo(c)));
-      const cup = new THREE.Mesh(new THREE.SphereGeometry(r * 1.12, 18, 8, 0, Math.PI * 2, 0, Math.PI * 0.47), mat);
-      cup.rotation.x = -Math.PI / 2; cup.position.copy(c); cup.name = 'eyeSocket'; cup.castShadow = false;
-      head.add(cup);
-    }
-  }
-
   let torsoR: number[] | null = null, torsoLen: number[] = [], torsoBody: THREE.SkinnedMesh[] = []; // read by keepArmsOut
   const go = () => { const a = animNow(), as = assetNow(key, lod); if (a && as) { attach(as, a); return true; } return false; };
   if (!go()) Promise.all([loadAnim(), loadAsset(key, lod)]).then(([a, as]) => attach(as, a)).catch((e) => console.error('[crew]', key, e));
