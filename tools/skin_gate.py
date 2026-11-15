@@ -4,13 +4,14 @@ magenta from behind; for every crew member, MegaZroN, Mir and all twelve creator
 in the poses the game uses, close-ups of the neck and collar, both wrists and both ankles from 8 angles are rendered
 and the magenta pixels counted.
   python tools/skin_gate.py [--url http://localhost:5197/dev/chars.html] [--shots DIR] [--limit 25]
-Fails if any close-up shows more than --limit flag pixels (a few stray edge pixels are not a hole)."""
+Fails if any close-up shows more than --limit flag pixels (a few stray edge pixels are not a hole).
+--detail 0.5 checks the light LOD (phones, low quality) instead of the full one."""
 import argparse, math, os, sys, pathlib
 from playwright.sync_api import sync_playwright
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from smoke import launch  # noqa: E402
 ap = argparse.ArgumentParser(); ap.add_argument('--url', default='http://localhost:5197/dev/chars.html'); ap.add_argument('--shots', default='')
-ap.add_argument('--limit', type=int, default=25); ap.add_argument('--only', default=''); a = ap.parse_args()
+ap.add_argument('--limit', type=int, default=25); ap.add_argument('--detail', default='1'); ap.add_argument('--only', default=''); a = ap.parse_args()
 POSES = [('idle', 0), ('walk', .9), ('point', 0), ('cheer', 0), ('sit', 0), ('argue', 0)]
 SPOTS = [('neck', 'neck', .55), ('wristL', 'handL', .5), ('wristR', 'handR', .5), ('ankleL', 'footL', .55), ('ankleR', 'footR', .55)]
 NAMES = ['zenvik', 'draxum', 'lyrra', 'skyvra', 'bolzar', 'nuvexa', 'megazron']
@@ -21,12 +22,12 @@ with sync_playwright() as pw:
     b = launch(pw)
     for page_q, idxs, label in (('', range(7), None), ('&skin=suit', [1], 'mir'), ('&custom=all', range(12), 'townsfolk')):
         pg = b.new_page(viewport={'width': 320, 'height': 320}); pg.set_default_timeout(600000)
-        pg.goto(a.url + '?studio=1' + page_q); pg.wait_for_function('window.ready===true', timeout=600000)
+        pg.goto(a.url + f'?studio=1&gate=1&detail={a.detail}' + page_q); pg.wait_for_function('window.ready===true', timeout=600000)
         pg.evaluate('flagMode()')
         for i in idxs:
             who = label if label and label != 'townsfolk' else (f'custom_{"mf"[i % 2]}_{OUTFITS[i >> 1]}' if label == 'townsfolk' else NAMES[i])
             if a.only and who not in a.only.split(','): continue
-            pg.evaluate(f"chars.forEach((c,j)=>c.root.visible=j==={i})")
+            pg.evaluate(f"gateStart({i})")  # own seed and clock: the same build gives the same numbers, with or without --only
             for pose, amt in POSES:
                 pg.evaluate(f"pose('{pose}', {amt}); step(45)")
                 for spot, bone, dist in SPOTS:
@@ -51,5 +52,5 @@ print('worst flag pixels per character:', ', '.join(f'{w} {n}' for w, n in sorte
 nf = {}
 for (who, pose, spot), (n, k) in worst.items(): nf[who] = nf.get(who, 0) + (n > a.limit)
 print('close-ups over the limit per character:', ', '.join(f'{w} {n}' for w, n in sorted(nf.items())))
-print(('FAILED ' + str(len(fails)) + ':\n - ' + '\n - '.join(fails[:40])) if fails else f'OK: no close-up shows the inside of a body (limit {a.limit} px)')
+print(('FAILED ' + str(len(fails)) + ':\n - ' + '\n - '.join(fails)) if fails else f'OK: no close-up shows the inside of a body (limit {a.limit} px)')
 sys.exit(1 if fails else 0)

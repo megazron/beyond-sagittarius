@@ -4,6 +4,7 @@ import { randomLook, OUTFITS } from '../src/characters/custom';
 import { createCharacter, CrewId, Character, CrewPose } from '../src/characters/character';
 import { voice } from '../src/core/voice';
 import { DECREEP } from '../src/characters/decreep';
+import { preloadCrew } from '../src/characters/assets';
 
 const ids: CrewId[] = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social', 'megazron'];
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -32,15 +33,25 @@ const alt = new URLSearchParams(location.search).get('skin') ?? undefined;
 const customs = new URLSearchParams(location.search).get('custom');
 // ?custom=all: every creator outfit in both builds (twelve townsfolk), each with a fixed random look, so the skin gate
 // sees all of them on every run instead of two picked at random
+// mulberry32: a repeatable Math.random for the skin gate
+const seeded = (seed: number) => { let s = seed | 0; return () => { s = (s + 0x6d2b79f5) | 0; let x = Math.imul(s ^ (s >>> 15), 1 | s); x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x; return ((x ^ (x >>> 14)) >>> 0) / 4294967296; }; };
+// ?gate: the same build gives the same numbers on every run. Clip start times, blinks, glances and sway phases are
+// random, and the bodies attach in whatever order their files arrive; here every file is loaded first, so they attach
+// in roster order on a seeded Math.random, and gateStart() gives each character its own seed and clock, so a body's
+// pose in a close-up never depends on who was looked at before it (or on --only).
+const GATE = new URLSearchParams(location.search).has('gate');
+let solo = false;
 const lookOf = (i: number) => {
   if (customs !== 'all') return randomLook({ name: 'x', gender: i % 2 ? 'f' : 'm' });
-  let s = 0x9e3779b9 ^ (i * 7919); const rnd = Math.random;
-  Math.random = () => { s = (s + 0x6d2b79f5) | 0; let x = Math.imul(s ^ (s >>> 15), 1 | s); x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x; return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+  const rnd = Math.random;
+  Math.random = seeded(0x9e3779b9 ^ (i * 7919));
   const l = randomLook({ name: 'x', gender: i % 2 ? 'f' : 'm' }); Math.random = rnd;
   return { ...l, outfit: OUTFITS[i >> 1] };
 };
 const roster: CrewId[] = customs === 'all' ? OUTFITS.flatMap((o) => [o, o] as CrewId[]) : ids;
-const chars: Character[] = (window as unknown as { chars: Character[] }).chars = roster.map((id, i) => { const c = customs ? createCharacter('scientist', 1, lookOf(i)) : createCharacter(id, Number(new URLSearchParams(location.search).get('detail') ?? 1), undefined, id === 'strong' ? alt : undefined); c.root.position.x = (i - 2.5) * 1.3; scene.add(c.root); return c; });
+const detail = Number(new URLSearchParams(location.search).get('detail') ?? 1);
+const chars: Character[] = (window as unknown as { chars: Character[] }).chars = [];
+const make = () => roster.forEach((id, i) => { const c = customs ? createCharacter('scientist', detail, lookOf(i)) : createCharacter(id, detail, undefined, id === 'strong' ? alt : undefined); c.root.position.x = (i - 2.5) * 1.3; scene.add(c.root); chars.push(c); });
 let pose: CrewPose = 'stand', amount = 0, t = 0, phase = 0;
 const W = window as unknown as Record<string, unknown>;
 W.view = (i: number, d: number, yaw: number, h: number, dist: number) => {
@@ -82,12 +93,29 @@ W.camInside = (x: number, y: number, z: number) => {
   rcN.copy(hit.face!.normal).transformDirection(hit.object.matrixWorld);
   return rcN.dot(dir) > 0;
 };
+// skin gate probe: what is under some screen pixels (first surface along the ray, front or back): mesh, triangle, bones
+W.probeHits = (pts: [number, number][]) => {
+  const out: unknown[] = []; const ms: THREE.Object3D[] = [];
+  scene.traverseVisible((o) => { const m = o as THREE.SkinnedMesh; if (m.isMesh && m !== ground) { if (m.isSkinnedMesh) { m.computeBoundingSphere(); } ms.push(m); } });
+  for (const [x, y] of pts) {
+    rc.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1), cam); rc.near = 0; rc.far = 100;
+    const h = rc.intersectObjects(ms, false)[0]; if (!h || !h.face) { out.push(null); continue; }
+    const m = h.object as THREE.SkinnedMesh, g = m.geometry, si = g.getAttribute('skinIndex'), sw = g.getAttribute('skinWeight');
+    const bones = [h.face.a, h.face.b, h.face.c].map((v) => { const r: string[] = []; if (si) for (let j = 0; j < 4; j++) { const w = sw.getComponent(v, j); if (w > 0.05) r.push(`${m.skeleton.bones[si.getComponent(v, j)].name}:${w.toFixed(2)}`); } return r.join(' '); });
+    const fn = h.face.normal.clone().transformDirection(m.matrixWorld);
+    out.push({ mesh: m.name, face: [h.face.a, h.face.b, h.face.c], back: fn.dot(rc.ray.direction) > 0, d: +h.distance.toFixed(3), bones });
+  }
+  return out;
+};
 W.flagCount = () => { const g = r.getContext(); const w = g.drawingBufferWidth, h = g.drawingBufferHeight, px = new Uint8Array(w * h * 4); g.readPixels(0, 0, w, h, g.RGBA, g.UNSIGNED_BYTE, px);
   let n = 0; for (let i = 0; i < px.length; i += 4) if (px[i] > 200 && px[i + 1] < 60 && px[i + 2] > 200) n++; return n; };
 // the eye light: a small soft source by the lens, so eyes are never dead sockets (de-creep only)
 if (DECREEP) { const eyeLight = new THREE.PointLight(0xfff2e0, 0.55, 6, 1.5); scene.add(eyeLight); W.eyeLight = eyeLight; }
 
-W.step = (n: number, dt = 1 / 30) => { for (let k = 0; k < n; k++) { t += dt; phase += dt * 7 * amount; chars.forEach((c) => { c.root.updateMatrixWorld(); c.animate(pose, phase, amount, t, dt); }); } r.render(scene, cam); };
+W.renderNow = () => r.render(scene, cam);
+W.step = (n: number, dt = 1 / 30) => { for (let k = 0; k < n; k++) { t += dt; phase += dt * 7 * amount; chars.forEach((c) => { if (solo && !c.root.visible) return; c.root.updateMatrixWorld(); c.animate(pose, phase, amount, t, dt); }); } r.render(scene, cam); };
+/** Skin gate: show only character i, on its own seed and clock; from now on only visible characters animate. */
+W.gateStart = (i: number) => { chars.forEach((c, j) => { c.root.visible = j === i; }); Math.random = seeded(0x2545f491 + i * 977); t = 0; phase = 0; solo = true; };
 /** Foot slide probe: walk a character at v m/s over flat ground, report world drift of planted feet. */
 W.slide = (i: number, v: number, n = 240, dt = 1 / 60) => {
   const c = chars[i]; const res: number[] = [];
@@ -177,4 +205,6 @@ W.film = (i: number, v: number, k: number) => {
   r.render(scene, cam);
 };
 (W.view as Function)(-1, 1, 0, 1.3, 11);
-Promise.all(chars.map((c) => c.whenReady)).then(() => { (W.step as Function)(4); setTimeout(() => { (W.step as Function)(2); W.ready = true; }, 3000); });
+const keys = customs === 'all' ? roster.map((o, i) => `custom_${i % 2 ? 'f' : 'm'}_${o}`) : roster.map((id) => (id === 'strong' && alt ? 'strong_suit' : id));
+(GATE ? (Math.random = seeded(0x51a7e), preloadCrew(keys, detail)) : Promise.resolve()).then(() => { make(); return Promise.all(chars.map((c) => c.whenReady)); })
+  .then(() => { (W.step as Function)(4); setTimeout(() => { (W.step as Function)(2); W.ready = true; }, 3000); });
