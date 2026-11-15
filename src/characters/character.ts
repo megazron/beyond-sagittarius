@@ -7,7 +7,7 @@ import { buildHair, HAIRSTYLES, HAIR_CAP, HAIR_VOLUME, HAIR_ROUGH, HAIR_CARDS, s
 import { LOOKS, CrewId, Look } from './looks';
 import type { PlayerLook } from './custom';
 import { voice } from '../core/voice';
-import { AnimSet, CrewAsset, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, furMaterial, lashMaterial, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
+import { AnimSet, CrewAsset, CrewMeta, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, furMaterial, lashMaterial, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
 import { addKit, Kit } from './kit';
 
 export type { CrewId } from './looks';
@@ -307,6 +307,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const stock = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), new THREE.MeshStandardMaterial({ color: 0x0c0d1c, roughness: 0.8 }));
       stock.scale.set(0.95, 1.7, 0.78); stock.position.set(n.x, n.y - 0.17, n.z + 0.02); chestBone.add(stock);
     }
+    pitK = M.pit ?? null;
     kit = addKit({ id, custom, human, bones: bs, meta: M, look: L, sway, skinC, glowC, shadeC, detail, heightM });
     kit.splint.visible = pendingSplint;
     // clips
@@ -315,9 +316,34 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     clips = clipsFor(`${key}`, legScale, a);
     mixer = new THREE.AnimationMixer(scene);
     fig.scale.setScalar(custom ? custom.height : 1);
+    eyeSockets(scene, bs.get('head')!, eyes);
     fig.visible = true;
     void texturesReady().then(ready);
   };
+
+  let pitK: CrewMeta['pit'] | null = null;
+  /** A dark cup behind each eyeball, inside the head. Where an eyeball does not fill the opening of its lids (the corners,
+   * the creator's larger eyes) the view went past it into the head and out through the back of it, which is drawn from
+   * the outside only: a sliver of whatever was behind the head showed in the corner of the eye. Only the back of the
+   * eye is cupped, from just behind its middle, and only its inside is drawn, so nothing in front of the eye changes. */
+  function eyeSockets(scene: THREE.Object3D, head: THREE.Bone, eyeMat: THREE.Material) {
+    let em: THREE.SkinnedMesh | null = null;
+    scene.traverse((o) => { if ((o as THREE.Mesh).isMesh && (o as THREE.Mesh).material === eyeMat) em = o as THREE.SkinnedMesh; });
+    const m = em as THREE.SkinnedMesh | null;
+    if (!m) return;
+    root.updateMatrixWorld(true);
+    const pos = m.geometry.getAttribute('position'), v = new THREE.Vector3(), sides: THREE.Vector3[][] = [[], []];
+    for (let i = 0; i < pos.count; i++) { m.getVertexPosition(i, v); head.worldToLocal(v.applyMatrix4(m.matrixWorld)); sides[v.x > 0 ? 0 : 1].push(v.clone()); }
+    const mat = new THREE.MeshBasicMaterial({ color: 0x120607, side: THREE.BackSide });
+    for (const pts of sides) {
+      if (pts.length < 8) continue;
+      const c = pts.reduce((a, p) => a.add(p), new THREE.Vector3()).divideScalar(pts.length);
+      const r = Math.max(...pts.map((p) => p.distanceTo(c)));
+      const cup = new THREE.Mesh(new THREE.SphereGeometry(r * 1.12, 18, 8, 0, Math.PI * 2, 0, Math.PI * 0.47), mat);
+      cup.rotation.x = -Math.PI / 2; cup.position.copy(c); cup.name = 'eyeSocket'; cup.castShadow = false;
+      head.add(cup);
+    }
+  }
 
   let torsoR: number[] | null = null, torsoLen: number[] = [], torsoBody: THREE.SkinnedMesh[] = []; // read by keepArmsOut
   const go = () => { const a = animNow(), as = assetNow(key, lod); if (a && as) { attach(as, a); return true; } return false; };
@@ -682,7 +708,21 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     sway.uTime.value = t;
     sway.uFlutter.value = 0.003 + Math.min(amount, 1) * 0.007;
     kit?.update(t, amount);
+    if (pitK) correctives(bs);
     void phase;
+  }
+
+  /** Pose-driven corrective shapes (tools/chars/pit.py) for the shoulders, the neck and the hips: each region's bone turn
+   * in its parent's frame (the upper arm in the chest's) mixes its shapes by radial basis interpolation over the game's
+   * own poses, so the armpit keeps its shape with the arm at the side, forward or up, where linear skinning folded it
+   * through itself. */
+  function correctives(bs: Map<string, THREE.Bone>) {
+    for (const [name, k] of Object.entries(pitK!)) {
+      // the driving bone's turn in its reference's frame: which way it points and how it is rolled
+      bs.get(k.ref)!.getWorldQuaternion(Q).invert().multiply(bs.get(k.bone)!.getWorldQuaternion(Q2));
+      const phi = k.dirs.map((d) => { const a = 2 * Math.acos(Math.min(1, Math.abs(Q.x * d[0] + Q.y * d[1] + Q.z * d[2] + Q.w * d[3]))) / k.sigma; return Math.exp(-a * a); });
+      for (let m = 0; m < k.n; m++) { let c = 0; for (let i = 0; i < phi.length; i++) c += phi[i] * k.w[i][m]; setMorph(`${name}${m}`, clamp(c, -k.lim[m], k.lim[m])); }
+    }
   }
 
   return {

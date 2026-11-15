@@ -16,10 +16,11 @@ from scipy.spatial import cKDTree
 from multiprocessing import Pool
 import paint
 import suit
+import pit
 
 # APPEAL=1 builds the de-creep faces into their own folder, so the game's own crew stay untouched until approved
 OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'models', 'crew_dc' if os.environ.get('APPEAL') == '1' else 'crew')
-LODS = {'': dict(body=int(os.environ.get('BODY_BUDGET', 2200)), head=4000, cloth=6000, cost=4e-4), '.lod1': dict(body=1100, head=1800, cloth=2600, cost=4e-3)}
+LODS = {'': dict(body=int(os.environ.get('BODY_BUDGET', 2200)), head=int(os.environ.get('HEAD_BUDGET', 4800)), cloth=6000, cost=4e-4), '.lod1': dict(body=1100, head=1800, cloth=2600, cost=4e-3)}
 if os.environ.get('NO_DECIM'):
     del LODS['.lod1']
 
@@ -49,10 +50,10 @@ class Part:
         self.N = vnormals(P, T)
         self.extra = extra or {}
 
-    def decimated(self, target, locked=None, importance=None, maxcost=4e-4):
+    def decimated(self, target, locked=None, importance=None, maxcost=4e-4, bone=None, near=None):
         if len(self.T) <= target or os.environ.get('NO_DECIM'):
             return self
-        T2, tu = simplify(self.P, self.T, self.TU, target, locked, importance, maxcost=maxcost)
+        T2, tu = simplify(self.P, self.T, self.TU, target, locked, importance, maxcost=maxcost, bone=bone, near=near)
         o = Part.__new__(Part)
         o.P, o.T, o.TU, o.UV, o.W, o.name, o.morph, o.N, o.extra = self.P, T2, tu, self.UV, self.W, self.name, self.morph, self.N, self.extra
         return o
@@ -816,6 +817,45 @@ def build(c, cid, force=False):
         for k in bm: bm[k] = bm[k].copy(); bm[k][liner] *= f
     # the face's shapes (jaw open, smile, the lineage's ears) reach below the head/body split, down the neck: the body
     # carries them too, on the same vertices, or the head's lower edge moves away from the neck and leaves a hole
+    pitinfo = None
+    if not os.environ.get('NO_PSD'):
+        # pose-driven corrective shapes (tools/chars/pit.py): each region driven by one bone's turn in its parent's frame
+        ixr = rig.index
+        handw = sum(Wb[:, ixr[n]] for n in ixr if n[:-1] == 'hand' or n.startswith('finger'))
+        headw = Wb[:, [ixr[n] for n in ('head', 'jaw', 'eyeL', 'eyeR', 'neck')]].sum(1)
+        pinned = (handw > 0.01) | (headw > 0.02) | ~bodyv
+        _, Adj = pit.laplacian(Tall, len(V))
+        taken = pinned.copy()
+        def area(bones_, other, grow):
+            wa = Wb[:, [ixr[b_] for b_ in bones_]].sum(1)
+            reg = (wa > 0.02) & (wa < 0.98) & (Wb[:, [ixr[o_] for o_ in other]].sum(1) > 0.01)
+            for _ in range(grow): reg |= (Adj @ reg.astype(float)) > 0
+            reg &= ~taken; taken[reg] = True
+            return reg
+        joints = []
+        for sd in 'LR':
+            # the shoulder: where the upper arm hands over to the chest (the armpit, the top of the shoulder)
+            joints.append(dict(name=f'pit{sd}', bone=f'upperarm{sd}', ref='chest', region=area((f'clavicle{sd}', f'upperarm{sd}'), (f'upperarm{sd}',), 6)))
+        # the neck: the nape and the throat crease through themselves when the head goes back or down. Only the body's side
+        # of the seam moves (the seam and the head mesh stay where they are)
+        onhead = np.zeros(len(V), bool); onhead[T[hm].ravel()] = True
+        nreg = (Wb[:, ixr['neck']] > 0.02) & ~onhead & (handw <= 0.01) & bodyv
+        for jt in joints: nreg &= ~jt['region']
+        joints.append(dict(name='nape', bone='head', ref='chest', region=nreg))
+        # the hips: sat down, the skin where the thigh meets the hip and the seat folded through itself, and a trouser's
+        # crotch or a hem showed it
+        for sd in 'LR':
+            hreg = (Wb[:, ixr[f'upperleg{sd}']] > 0.02) & (Wb[:, ixr[f'upperleg{sd}']] < 0.98) & (Wb[:, [ixr['hips'], ixr['spine']]].sum(1) > 0.01)
+            for _ in range(4): hreg |= (Adj @ hreg.astype(float)) > 0
+            hreg &= bodyv & (handw <= 0.01) & ~footcut
+            for jt in joints: hreg &= ~jt['region']
+            joints.append(dict(name=f'hip{sd}', bone=f'upperleg{sd}', ref='hips', region=hreg))
+        # sunk skin is solved too, keeping the shape it was sunk to (lifted back to its own shape, it came out at a vest's
+        # neckline); under an armhole it folded just the same and showed through the gap
+        poses = json.load(open(os.path.join(os.path.dirname(__file__), 'chars', 'cap_poses.json')))
+        shapes, pitinfo, Vb = pit.correctives(V, Vb, Wb, Tall, rig.names, rig.parents(), piv, poses, garments, joints, sunk=liner if LINER else None,
+                                              log=(lambda m: print(f'  {cid}:{m}', flush=True)) if os.environ.get('CAP_DEBUG') or os.environ.get('PIT_DEBUG') else None)
+        bm.update(shapes)
     body = Part(Vb, T[~hm], TU[~hm], UV, Wb, 'skin_body', {**morphs, **bm})
     # keep shared normals across the neck seam
     Nall = vnormals(V, T)
@@ -874,6 +914,13 @@ def build(c, cid, force=False):
         for g in garments:
             n_ = facing(g, Vb[surf])
             if os.environ.get('CAP_DEBUG') and n_: print(f'    {g.asset}: {n_} edges of facing inside its openings', flush=True)
+    Adj0 = pit.laplacian(Tall, len(V))[1]
+    # decimation never leaves a triangle across two bones that move apart: a long one from one thigh to the other across
+    # the crotch, sunk under the trousers, opened with every step and showed its back between a vest and the belt
+    bone_of = Wb.argmax(1)
+    near_b = np.eye(len(rig.names), dtype=bool)
+    for i_, p_ in enumerate(rig.parents()):
+        if p_ >= 0: near_b[i_, p_] = near_b[p_, i_] = True
     posed = Posed(rig, piv, Vb, Wb, Tall, bodyv) if not os.environ.get('NO_CAPS') else None
     # --- LODs ---
     info = {}
@@ -905,12 +952,29 @@ def build(c, cid, force=False):
             rootc.append(n)
             total += tris
 
-        locked = seam.copy() | joints
-        hd = head.decimated(L['head'], locked, imp, L['cost'])
+        # the eyelids keep every triangle: decimated, a lid folded over itself as it blinked and showed its back
+        lids = sum(np.abs(morphs[k_]).max(1) for k_ in ('blink', 'squint')) > 0.0005
+        for _ in range(2): lids |= (Adj0 @ lids.astype(float)) > 0  # and a margin round them, or the fold moved to the corner
+        locked = seam.copy() | joints | lids
+        bimp = imp
+        if suffix and LINER:
+            # the light body: skin sunk under the clothes is never seen, so its triangles go first and its joints are
+            # not held (two rings in from the edge of what is seen stay as they are)
+            deep = liner.copy()
+            for _ in range(2): deep &= ~((Adj0 @ (~liner).astype(float)) > 0)
+            locked = seam | lids | (joints & ~deep)
+            bimp = imp.copy(); bimp[deep] = 0.02
+        # the face keeps the full one's error bound, and on the light one the mouth keeps every triangle (decimated,
+        # its corners folded when it smiled or talked)
+        hlock = locked
+        if suffix:
+            hlock = locked | (sum(np.abs(morphs[k_]).max(1) for k_ in ('smile', 'open', 'round', 'wide')) > 0.001) | (W0[:, ix['jaw']] > 0.05)
+        hd = head.decimated(L['head'], hlock, imp, min(L['cost'], LODS['']['cost']), bone_of, near_b)
         emit(hd, 'skin')
         if FILM_FACE and suffix == '':
             film_face(cid, hd, Vdm, scale, lb_parts=(lash, brow))
-        bb = body.decimated(L['body'], locked, imp, L['cost'])
+        bb = body.decimated(L['body'], locked, bimp, L['cost'], bone_of, near_b)
+        if os.environ.get('LOD_DEBUG'): print(f'    {suffix or "full"}: head {len(hd.T)}, body {len(bb.T)} ({int(locked[np.unique(body.T)].sum())} of {len(np.unique(body.T))} vertices held)', flush=True)
         budget = L['cloth'] * cfg.get('cloth_k', 1) * float(os.environ.get('CLOTH_K', 1))
         tot = sum(len(p.T) * p.opt.get('budget', 1) for p in garments)
         # the clothes keep their shape at every LOD (the error bound of the full one): flattened on the lighter one, a coat's
@@ -939,6 +1003,7 @@ def build(c, cid, force=False):
         if not k.endswith('_dm'):
             meta[k + '_pivots'] = [[round(float(x), 4) for x in r] for r in (rig.pivots(vb[k + '_dm']) * scale + off)]
     meta['fit'] = fitd
+    if pitinfo: meta['pit'] = pitinfo
     meta.update(paint.head_profile(V, T[hm], piv[rig.index['head']]))
     json.dump(meta, open(f'{OUT}/{cid}.json', 'w'), separators=(',', ':'))
     print(cid, info, f'{time.time() - t0:.1f}s', flush=True)

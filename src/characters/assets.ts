@@ -14,6 +14,9 @@ export interface CrewMeta {
   skull: { c: number[]; r: number[][] };
   fit: Record<'waist' | 'neck' | 'chest', [number, number, number, number]>;
   build_slim_pivots?: number[][]; build_heavy_pivots?: number[][];
+  /** pose-driven correctives (tools/chars/pit.py), per region: the bone whose turn in ref's frame drives them, the key
+   * turns (quaternions, the last is the bind pose), each key's weights for the n shapes, their limits, the kernel width */
+  pit?: Record<string, { bone: string; ref: string; dirs: number[][]; w: number[][]; lim: number[]; n: number; sigma: number }>;
 }
 export interface CrewAsset { scene: THREE.Group; meta: CrewMeta; }
 

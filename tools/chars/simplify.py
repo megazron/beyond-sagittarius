@@ -4,11 +4,14 @@ import heapq
 import numpy as np
 
 
-def simplify(P, F, FU, target, locked=None, importance=None, boundary_w=1e5, seam_w=30.0, maxcost=1e-4):
+def simplify(P, F, FU, target, locked=None, importance=None, boundary_w=1e5, seam_w=30.0, maxcost=1e-4, bone=None, near=None):
     """P (n,3) positions, F (m,3) triangles, FU (m,3) per-corner uv ids.
     Returns (kept triangles, their uv ids). A collapse is only legal if every uv island around
     the removed vertex maps onto a uv of the survivor through a shared triangle, so seams
-    shrink along themselves and never tear."""
+    shrink along themselves and never tear.
+    bone (n,) and near (b, b): each vertex's own bone and which bones may share a triangle (the same, parent and child);
+    a collapse that would leave a triangle spanning two bones that move apart (one thigh to the other across the
+    crotch) is not taken."""
     n = len(P)
     F = np.asarray(F, np.int64).copy()
     FU = np.asarray(FU, np.int64).copy()
@@ -96,6 +99,8 @@ def simplify(P, F, FU, target, locked=None, importance=None, boundary_w=1e5, sea
             nv.update(F[fi])
         common = (nu & nv) - {u, v}
         if len(common) > len(shared):
+            continue
+        if bone is not None and not all(near[bone[v], bone[w]] for w in nu - {u}):
             continue
         bad = False
         for fi in vf[u] - shared:
