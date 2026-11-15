@@ -74,7 +74,7 @@ def _custom():
                 height=1.76 if g == 'm' else 1.68, macro=dict(gender=gv, muscle=0.5, weight=0.5, proportions=0.8, cup=0.5),
                 build_slim=dict(gender=gv, muscle=0.35, weight=0.1, proportions=0.8, cup=0.4),
                 build_heavy=dict(gender=gv, muscle=0.8, weight=0.95, proportions=0.6, cup=0.7),
-                skin_src='m' if g == 'm' else 'f', clothes=CHARS[o]['clothes'], atlas=o, lods=('',),
+                skin_src='m' if g == 'm' else 'f', clothes=CHARS[o]['clothes'], atlas=o, lods=('',), cloth_k=CHARS[o].get('cloth_k', 1),
                 # the player's own head follows the outfit's face at a gentler weight, so a creator look stays theirs
                 extra=[(t, w * 0.7) for t, w in FACES[o]], brow=BROW_OF[o])
     return out
@@ -86,7 +86,7 @@ CHARS = {  # noqa
         look=dict(skin=0x57b3ad, shade=0x1c6f88, iris=0x7ffcff, brow=0x12305a, glow=0x6ff6e6, marks='dots', ear='fin'),
         height=1.76, macro=dict(gender=1.0, muscle=0.28, weight=0.22, proportions=0.7),
         extra=[('nose/nose-scale-horiz-decr.target', 0.15)],
-        skin_src='m',
+        skin_src='m', cloth_k=2.5,  # the long coat keeps its round shoulders: decimated flat, the skin came out through it
         clothes=[('toigo_wool_pants', (0x2c, 0x34, 0x40), {}),
                  ('toigo_basic_tucked_t-shirt', (0x1f, 0x2d, 0x3f), {'accent': True}),
                  ('mindfront_cardigan_long_open_front', (0xd2, 0xd4, 0xce), {'skirt': True, 'inflate': 0.004}),

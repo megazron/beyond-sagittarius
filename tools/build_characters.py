@@ -19,7 +19,7 @@ import suit
 
 # APPEAL=1 builds the de-creep faces into their own folder, so the game's own crew stay untouched until approved
 OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'models', 'crew_dc' if os.environ.get('APPEAL') == '1' else 'crew')
-LODS = {'': dict(body=2200, head=4000, cloth=6000, cost=4e-4), '.lod1': dict(body=1100, head=1800, cloth=2600, cost=4e-3)}
+LODS = {'': dict(body=int(os.environ.get('BODY_BUDGET', 2200)), head=4000, cloth=6000, cost=4e-4), '.lod1': dict(body=1100, head=1800, cloth=2600, cost=4e-3)}
 if os.environ.get('NO_DECIM'):
     del LODS['.lod1']
 
@@ -495,6 +495,44 @@ def seam_guard(rig, V):
     return rig.W[:, [ix[n] for n in ('head', 'jaw', 'eyeL', 'eyeR', 'neck')]].sum(1) > 0.3
 
 
+def facing(g, skin, reach=0.06, into=0.006):
+    """A garment's openings get a facing, as a sewn garment has: a band from the edge in to the skin under it, so the
+    gap between an armhole, a cuff or a hem and the body shows cloth, not the skin folding in under it. It rides on the
+    garment's own weights at the edge. Only where the skin is within `reach`; it ends `into` under the skin."""
+    loops = boundary_loops(g.T)
+    if not loops:
+        return 0
+    tree = cKDTree(skin)
+    cu = {}
+    for t, tu in zip(g.T, g.TU):
+        for x, u in zip(t, tu): cu.setdefault(int(x), int(u))
+    newP, src, T_, TU_ = [], [], [], []
+    base = len(g.P); edges = 0
+    for loop in loops:
+        L = np.array(loop)
+        d, j = tree.query(g.P[L], workers=1)
+        ok = d < reach
+        inner = {}
+        for i in range(len(L)):
+            a, b = int(L[i]), int(L[(i + 1) % len(L)])
+            if not (ok[i] and ok[(i + 1) % len(L)]): continue
+            for k_, v in ((i, a), ((i + 1) % len(L), b)):
+                if v not in inner:
+                    dv = skin[j[k_]] - g.P[v]; ln = max(np.linalg.norm(dv), 1e-9)
+                    inner[v] = base + len(newP); newP.append(g.P[v] + dv * (ln + into) / ln); src.append(v)
+            T_.append((a, b, inner[b])); T_.append((a, inner[b], inner[a]))
+            TU_.append((cu[a], cu[b], cu[b])); TU_.append((cu[a], cu[b], cu[a]))
+            edges += 1
+    if not edges:
+        return 0
+    src = np.array(src)
+    g.P = np.concatenate([g.P, np.array(newP)]); g.W = np.concatenate([g.W, g.W[src]]); g.N = np.concatenate([g.N, g.N[src]])
+    g.morph = {k: np.concatenate([d_, d_[src]]) for k, d_ in g.morph.items()}
+    g.extra = {k: np.concatenate([a_, a_[src]]) for k, a_ in g.extra.items()}
+    g.T = np.concatenate([g.T, np.array(T_, np.int64)]); g.TU = np.concatenate([g.TU, np.array(TU_, np.int64)])
+    return edges
+
+
 def erode(hid, T, rings=2):
     """Keep a margin of real surface inside every hidden region, so openings show no hole."""
     h = hid.copy()
@@ -821,11 +859,21 @@ def build(c, cid, force=False):
     for sd in 'LR':
         # the whole hand: decimated, fingers folded through each other and the wrist went inside out
         joints |= sum(W0[:, ix[n]] for n in ix if n == f'hand{sd}' or (n.startswith('finger') and n.endswith(sd))) > 0.03
+    for sd in 'LR':
         joints |= (W0[:, ix[f'foot{sd}']] > 0.03) & (W0[:, ix[f'lowerleg{sd}']] > 0.03)
         # elbows, knees, shoulders and hips too: decimated, an elbow folded through itself in a long sliver you saw down the
         # sleeve, an armpit through a vest's armhole and a hip, from waist to thigh, down a jacket's open front
         for b_ in (f'lowerarm{sd}', f'lowerleg{sd}', f'upperarm{sd}', f'upperleg{sd}'):
             joints |= np.linalg.norm(V - piv[ix[b_]], axis=1) < 0.12
+        # and the armpit, where the upper arm hands over to the chest: a sleeveless top shows it whole
+        if not os.environ.get('NO_PIT_LOCK'):
+            joints |= (W0[:, ix[f'upperarm{sd}']] > 0.03) & (sum(W0[:, ix[n]] for n in ('chest', 'spine1', 'spine')) > 0.03)
+    fitd = fit_data(V, rig, piv, garments)  # ring sizes for belts and scarves, from the garments as they are worn (no facings)
+    if not os.environ.get('NO_BAND'):
+        surf = bodyv & ~(liner if LINER else dl)
+        for g in garments:
+            n_ = facing(g, Vb[surf])
+            if os.environ.get('CAP_DEBUG') and n_: print(f'    {g.asset}: {n_} edges of facing inside its openings', flush=True)
     posed = Posed(rig, piv, Vb, Wb, Tall, bodyv) if not os.environ.get('NO_CAPS') else None
     # --- LODs ---
     info = {}
@@ -863,6 +911,12 @@ def build(c, cid, force=False):
         if FILM_FACE and suffix == '':
             film_face(cid, hd, Vdm, scale, lb_parts=(lash, brow))
         bb = body.decimated(L['body'], locked, imp, L['cost'])
+        budget = L['cloth'] * cfg.get('cloth_k', 1) * float(os.environ.get('CLOTH_K', 1))
+        tot = sum(len(p.T) * p.opt.get('budget', 1) for p in garments)
+        # the clothes keep their shape at every LOD (the error bound of the full one): flattened on the lighter one, a coat's
+        # shoulders and a trouser's seat cut inside the skin under them and it showed through
+        ccost = min(L['cost'], LODS['']['cost'])
+        cl = [p.decimated(max(300, int(budget * len(p.T) * p.opt.get('budget', 1) / tot)), None, None, ccost * (0.25 if p.opt.get('budget') else 1)) for p in garments]
         if not os.environ.get('NO_CAPS'):
             bb, nk, nd = cap_holes(bb, seam, V[bodyv], Nb[bodyv], piv, posed)
             if suffix == '': print(f'  {cid}: {nk} skin holes capped' + (f', {nd} left open (a cap would show)' if nd else ''), flush=True)
@@ -875,11 +929,6 @@ def build(c, cid, force=False):
         emit(lb, 'lash')
         if furs:
             emit(furs[7 if suffix == '' else 3], 'fur')
-        budget = L['cloth'] * cfg.get('cloth_k', 1)
-        tot = sum(len(p.T) * p.opt.get('budget', 1) for p in garments)
-        cl = []
-        for p, rect in zip(garments, atlas):
-            cl.append(p.decimated(max(300, int(budget * len(p.T) * p.opt.get('budget', 1) / tot)), None, None, L['cost'] * (0.25 if p.opt.get('budget') else 1)))
         emit(merge(cl, 'cloth', uvmap=atlas, morphs=[k for k in ('build_slim', 'build_heavy') if k in vb]), 'cloth')
         root = g.node(name='crew', children=rootc)
         g.j['scenes'][0]['nodes'] = [root]
@@ -889,7 +938,7 @@ def build(c, cid, force=False):
     for k in vb:
         if not k.endswith('_dm'):
             meta[k + '_pivots'] = [[round(float(x), 4) for x in r] for r in (rig.pivots(vb[k + '_dm']) * scale + off)]
-    meta['fit'] = fit_data(V, rig, piv, garments)
+    meta['fit'] = fitd
     meta.update(paint.head_profile(V, T[hm], piv[rig.index['head']]))
     json.dump(meta, open(f'{OUT}/{cid}.json', 'w'), separators=(',', ':'))
     print(cid, info, f'{time.time() - t0:.1f}s', flush=True)

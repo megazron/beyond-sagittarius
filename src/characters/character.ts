@@ -571,6 +571,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     // with the hand and the forearm, and a full fist folded it over itself in a groove you saw into
     for (const sd of ['L', 'R']) { const t1 = bs.get(`finger1_1${sd}`); if (t1) t1.quaternion.slerp(Q.identity(), 0.45); }
 
+    // relaxed hands: the clips close the fingers into tight fists and claws; a third of the way back to the open rest
+    // pose reads as a hand at ease (a pointing finger stays pointing, a fist stays a loose fist)
+    fingerRest.forEach((q, b) => { if (!b.name.startsWith('finger1_1')) b.quaternion.slerp(q, 0.3); });
+
     // ---- face ----
     const r = 1 - Math.exp(-dt * 10);
     const ex: Face = faceSet ?? EXPR[kind] ?? {};
