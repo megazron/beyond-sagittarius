@@ -7,7 +7,7 @@ import { buildHair, HAIRSTYLES, HAIR_CAP, HAIR_VOLUME, HAIR_ROUGH, HAIR_CARDS, s
 import { LOOKS, CrewId, Look } from './looks';
 import type { PlayerLook } from './custom';
 import { voice } from '../core/voice';
-import { AnimSet, CrewAsset, CrewMeta, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, furMaterial, lashMaterial, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
+import { AnimSet, CrewAsset, CrewMeta, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, furMaterial, hasLod1, lashMaterial, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
 import { addKit, Kit } from './kit';
 
 export type { CrewId } from './looks';
@@ -22,6 +22,17 @@ export type Dir = [number, number, number];
 export interface Limbs { armL?: Dir; armR?: Dir; foreL?: Dir; foreR?: Dir; legL?: Dir; legR?: Dir; shinL?: Dir; shinR?: Dir; bend?: number; twist?: number; openHands?: boolean; hair?: Dir }
 export type Face = Partial<Record<'smile' | 'frown' | 'fear' | 'squint' | 'open' | 'blink', number>>;
 export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'injured' | 'wave' | 'lie' | 'point' | 'cheer' | 'facepalm' | 'selfie' | 'shout' | 'argue' | 'present' | 'write' | 'jump';
+
+/**
+ * What a body costs per frame, by how it is seen. A body no game camera has drawn for a few frames (behind you, round
+ * a corner) is posed at a quarter of the frame rate, a far one at a half or a third; the pose-driven corrective
+ * shapes are mixed only for a body drawn within `correctiveNear` metres (further off they cannot be told apart, and at
+ * zero the GPU skips them); between half that and `correctiveNear` they are mixed every other pose. Past `shadowFar`
+ * metres a body casts no shadow; past `lodFar` a full-detail body is swapped for its light build. A crowd body (townsfolk,
+ * walkers, people in groups: `setCrowd`) never mixes correctives and takes the light build and loses its shadow sooner
+ * (`crowdLodFar`, `crowdShadowFar`). Test pages that pose a body many times before drawing it once switch `throttle` off.
+ */
+export const CHAR_BUDGET = { throttle: true, correctiveNear: 9, lodFar: 11, shadowFar: 28, crowdLodFar: 6, crowdShadowFar: 14 };
 
 /** Mocap style per character: how they stand and how they walk. */
 const STYLE: Record<string, { walk: string; idle: string; rate: number }> = {
@@ -228,7 +239,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const mouth = mouthMaterial(), cornea = corneaMaterial(), lash = lashMaterial(browC, M.lash);
     const fur = human ? furMaterial('strong_suit', 0x0e080b, 0x2a1d22, lod) : undefined;
     const sphere = new THREE.Sphere(new THREE.Vector3(0, heightM * 0.5, 0), heightM * 1.1);
-    scene.traverse((o) => {
+    const dress = (sc: THREE.Object3D) => sc.traverse((o) => {
       const m = o as THREE.SkinnedMesh;
       if (!m.isMesh) return;
       m.boundingSphere = sphere;
@@ -236,7 +247,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const name = (m.material as THREE.Material).name;
       m.material = { skin, eyes, cornea, mouth, lash, cloth, fur }[name] ?? m.material;
       m.castShadow = name === 'skin' || name === 'cloth';
+      if (m.castShadow) castable.add(m);
       m.receiveShadow = true;
+      m.onBeforeRender = seen;
       if (name === 'fur') { m.castShadow = false; const ly = m.geometry.getAttribute('_layer'); if (ly) m.geometry.setAttribute('aLayer', ly); const dn = m.geometry.getAttribute('_dens'); m.geometry.setAttribute('aDens', dn ?? new THREE.BufferAttribute(new Float32Array(m.geometry.getAttribute('position').count).fill(1), 1)); }
       if (name === 'cloth') {
         const g = m.geometry;
@@ -256,8 +269,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         put('build_slim', bw.slim); put('build_heavy', bw.heavy);
         const ears = custom ? custom.ears : human ? 'round' : ({ scientist: 'fin', medic: 'long', explorer: 'tuft', megazron: 'long' } as Record<string, string>)[id];
         if (ears && ears !== 'round') put(`ear_${ears}`, 1);
+        for (const k in morph) put(k, morph[k]);
       }
     });
+    dress(scene);
     // shoes reach below the bare sole: stand on them, not through them
     scene.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -307,7 +322,24 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const stock = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), new THREE.MeshStandardMaterial({ color: 0x0c0d1c, roughness: 0.8 }));
       stock.scale.set(0.95, 1.7, 0.78); stock.position.set(n.x, n.y - 0.17, n.z + 0.02); chestBone.add(stock);
     }
-    pitK = M.pit ?? null;
+    pitK = M.pit ?? null; corrRegions = [];
+    // the light body for distance (game LOD): the full one near the camera, the .lod1 build further off. Both ride on
+    // this skeleton and take the same materials and morphs; only one is drawn
+    lodSets = [[], []];
+    scene.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh && o.visible) lodSets[0].push(o as THREE.SkinnedMesh); });
+    if (lod === 0 && CHAR_BUDGET.lodFar < Infinity && hasLod1(key)) {
+      const skel = lodSets[0][0]?.skeleton;
+      void loadAsset(key, 1).then((as1) => {
+        if (!skel || lodSets[0].length === 0) return;
+        const s1 = cloneSkinned(as1.scene) as THREE.Group;
+        dress(s1);
+        const host = lodSets[0][0].parent!;
+        const ms: THREE.SkinnedMesh[] = [];
+        s1.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && (m.material as THREE.Material) !== mouth) ms.push(m); });
+        for (const m of ms) { m.bind(skel, m.bindMatrix); host.add(m); m.visible = false; }
+        lodSets[1] = ms;
+      }).catch(() => { /* no light build: the full body everywhere */ });
+    }
     kit = addKit({ id, custom, human, bones: bs, meta: M, look: L, sway, skinC, glowC, shadeC, detail, heightM });
     kit.splint.visible = pendingSplint;
     // clips
@@ -321,6 +353,30 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   };
 
   let pitK: CrewMeta['pit'] | null = null;
+  // per region: its shapes' morph names and the bones from just below its reference down to its driving bone
+  let corrRegions: { k: NonNullable<CrewMeta['pit']>[string]; keys: string[]; chain: THREE.Object3D[]; phi: Float64Array }[] = [];
+  // how this body is seen (CHAR_BUDGET): animate() calls since a game camera last drew it, and that camera's distance
+  let sinceDrawn = 99, camD = 0, skipN = 0, skipDt = 0, corrOn = false, corrN = 0, crowd = false;
+  let lodSets: THREE.SkinnedMesh[][] = [[], []], lodOn = 0;
+  const castable = new Set<THREE.Object3D>(); // the meshes that cast a shadow when near
+  let shadowsOn = true;
+  function pickLod() {
+    // a far body's shadow is a few pixels: it is left out of the shadow map
+    const sh = camD < (crowd ? CHAR_BUDGET.crowdShadowFar : CHAR_BUDGET.shadowFar) * (shadowsOn ? 1.1 : 0.9);
+    if (sh !== shadowsOn) { shadowsOn = sh; for (const set of lodSets) for (const m of set) m.castShadow = sh && castable.has(m); }
+    if (!lodSets[1].length) return;
+    const want = camD > (crowd ? CHAR_BUDGET.crowdLodFar : CHAR_BUDGET.lodFar) * (lodOn ? 0.9 : 1.1) ? 1 : 0;
+    if (want === lodOn) return;
+    lodOn = want;
+    for (const m of lodSets[0]) m.visible = want === 0;
+    for (const m of lodSets[1]) m.visible = want === 1;
+  }
+  function seen(this: THREE.Object3D, _r: THREE.WebGLRenderer, _s: THREE.Scene, c: THREE.Camera) {
+    if (!(c as THREE.PerspectiveCamera).isPerspectiveCamera) return; // the sun's shadow camera does not count
+    sinceDrawn = 0;
+    const a = c.matrixWorld.elements, b = this.matrixWorld.elements;
+    camD = Math.hypot(a[12] - b[12], a[13] - b[13], a[14] - b[14]);
+  }
   let torsoR: number[] | null = null, torsoLen: number[] = [], torsoBody: THREE.SkinnedMesh[] = []; // read by keepArmsOut
   const go = () => { const a = animNow(), as = assetNow(key, lod); if (a && as) { attach(as, a); return true; } return false; };
   if (!go()) Promise.all([loadAnim(), loadAsset(key, lod)]).then(([a, as]) => attach(as, a)).catch((e) => console.error('[crew]', key, e));
@@ -449,6 +505,14 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
 
   function animate(kind: CrewPose, phase: number, amount: number, t: number, dt: number) {
     if (!mixer || !B) return;
+    if (CHAR_BUDGET.throttle && !firstFrame) { // the first pose is always set at once: never a frame of bind pose
+      pickLod();
+      sinceDrawn++;
+      const every = sinceDrawn > 3 ? 4 : camD > 45 ? 3 : camD > 22 ? 2 : 1;
+      skipDt += dt;
+      if (++skipN < every) return;
+      dt = Math.min(skipDt, 0.2); skipN = 0; skipDt = 0;
+    }
     const bs = B;
     // real ground speed and turn rate: gait follows the body, whatever the caller says about it
     root.getWorldPosition(tmp);
@@ -684,7 +748,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     sway.uTime.value = t;
     sway.uFlutter.value = 0.003 + Math.min(amount, 1) * 0.007;
     kit?.update(t, amount);
-    if (pitK) correctives(bs);
+    if (pitK) {
+      // only a body drawn close to a game camera: further off the shapes cannot be told apart, and a crowd never has them
+      const near = !CHAR_BUDGET.throttle || (!crowd && sinceDrawn <= 2 && camD < CHAR_BUDGET.correctiveNear);
+      if (near) { if (!CHAR_BUDGET.throttle || camD < CHAR_BUDGET.correctiveNear * 0.5 || (++corrN & 1)) correctives(bs); corrOn = true; }
+      else if (corrOn) { corrOn = false; for (const r of corrRegions) for (const k of r.keys) setMorph(k, 0); }
+    }
     void phase;
   }
 
@@ -693,11 +762,20 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
    * own poses, so the armpit keeps its shape with the arm at the side, forward or up, where linear skinning folded it
    * through itself. */
   function correctives(bs: Map<string, THREE.Bone>) {
-    for (const [name, k] of Object.entries(pitK!)) {
-      // the driving bone's turn in its reference's frame: which way it points and how it is rolled
-      bs.get(k.ref)!.getWorldQuaternion(Q).invert().multiply(bs.get(k.bone)!.getWorldQuaternion(Q2));
-      const phi = k.dirs.map((d) => { const a = 2 * Math.acos(Math.min(1, Math.abs(Q.x * d[0] + Q.y * d[1] + Q.z * d[2] + Q.w * d[3]))) / k.sigma; return Math.exp(-a * a); });
-      for (let m = 0; m < k.n; m++) { let c = 0; for (let i = 0; i < phi.length; i++) c += phi[i] * k.w[i][m]; setMorph(`${name}${m}`, clamp(c, -k.lim[m], k.lim[m])); }
+    if (!corrRegions.length) {
+      for (const [name, k] of Object.entries(pitK!)) {
+        const ref = bs.get(k.ref)!, chain: THREE.Object3D[] = [];
+        for (let o: THREE.Object3D | null = bs.get(k.bone)!; o && o !== ref; o = o.parent) chain.unshift(o);
+        corrRegions.push({ k, keys: Array.from({ length: k.n }, (_, m) => `${name}${m}`), chain, phi: new Float64Array(k.dirs.length) });
+      }
+    }
+    for (const r of corrRegions) {
+      const k = r.k;
+      // the driving bone's turn in its reference's frame (which way it points and how it is rolled): the product of the
+      // local turns between them, with no walk up to the root
+      Q.identity(); for (const o of r.chain) Q.multiply(o.quaternion);
+      for (let i = 0; i < k.dirs.length; i++) { const d = k.dirs[i]; const a = 2 * Math.acos(Math.min(1, Math.abs(Q.x * d[0] + Q.y * d[1] + Q.z * d[2] + Q.w * d[3]))) / k.sigma; r.phi[i] = Math.exp(-a * a); }
+      for (let m = 0; m < k.n; m++) { let c = 0; for (let i = 0; i < r.phi.length; i++) c += r.phi[i] * k.w[i][m]; setMorph(r.keys[m], clamp(c, -k.lim[m], k.lim[m])); }
     }
   }
 
@@ -712,6 +790,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** Mouth moves while > 0 (seconds of speech left). */
     /** Hand-set pose over the clip (null gives the body back to the clip). */
     setLimbs(l: Limbs | null) { limbs = l; },
+    /** One of a crowd (CHAR_BUDGET): no corrective shapes, the light build and no shadow from closer in. */
+    setCrowd(on: boolean) { crowd = on; },
     /** Held expression (null goes back to what the pose asks for). */
     setFace(f: Face | null) { faceSet = f; },
     say(seconds: number) { speak = Math.max(speak, seconds); },

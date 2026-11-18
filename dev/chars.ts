@@ -1,7 +1,8 @@
 // Dev-only turntable for the crew (not part of the build): vite, then /dev/chars.html
 import * as THREE from 'three';
 import { randomLook, OUTFITS } from '../src/characters/custom';
-import { createCharacter, CrewId, Character, CrewPose } from '../src/characters/character';
+import { createCharacter, CrewId, Character, CrewPose, CHAR_BUDGET } from '../src/characters/character';
+CHAR_BUDGET.throttle = false; CHAR_BUDGET.lodFar = Infinity; // the gate poses a body many times before it draws it once: every call must count
 import { voice } from '../src/core/voice';
 import { DECREEP } from '../src/characters/decreep';
 import { preloadCrew } from '../src/characters/assets';

@@ -50,9 +50,10 @@ export function loadAnim() {
 }
 export const animNow = () => anim;
 
+/** Whether a body ships a light `.lod1` build (the creator bodies do not: held hands, lids and mouth left little to take). */
+export const hasLod1 = (key: string) => !key.startsWith('custom_');
 export function loadAsset(key: string, lod: number) {
-  const custom = key.startsWith('custom_');
-  const file = lod && !custom ? `${key}.lod1` : key;
+  const file = lod && hasLod1(key) ? `${key}.lod1` : key;
   const id = `${file}`;
   let p = assets.get(id);
   if (!p) {
@@ -67,7 +68,7 @@ export function loadAsset(key: string, lod: number) {
   return p;
 }
 export function assetNow(key: string, lod: number) {
-  return loaded.get(lod && !key.startsWith('custom_') ? `${key}.lod1` : key);
+  return loaded.get(lod && hasLod1(key) ? `${key}.lod1` : key);
 }
 
 /** Load everything the first frames need, so characters appear without a pop. */

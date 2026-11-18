@@ -126,7 +126,19 @@ so one set of clips fits every body. Skin is a neutral photo map coloured in the
 the character creator's colours, marks and ears work on the same mesh. Creator bodies add slim and heavy
 morphs. At runtime `src/characters/character.ts` plays clips through `THREE.AnimationMixer` with crossfades,
 phase-locked walk/run/sprint blending, per-character walk and idle styles, leg IK onto the terrain, clamped head look,
-blinks, speech and expression morphs. Frame rate on real GPUs for this version has not been measured.
+blinks, speech and expression morphs.
+
+What a body costs per frame is set in `CHAR_BUDGET` (`src/characters/character.ts`): past `lodFar` metres the light
+build is drawn, past `shadowFar` the body casts no shadow, a body no camera has drawn for a few frames is posed at a
+quarter rate (far ones at a half or a third), and the pose-driven corrective shapes (morph targets, mixed on the GPU;
+the CPU only works out their weights) are mixed only within `correctiveNear`, every other pose in its outer half. A
+crowd body (`setCrowd`: Zenvora's townsfolk, walkers and groups) never mixes them, and takes the light build and drops
+its shadow sooner. Test pages switch `throttle` off.
+
+Frame time: `tools/frame_time.py --soft` plays the Zenvora street, the Vault, free play and the camp scene and reports
+frame time, draw calls and triangles sent to WebGL per frame; `--dist`/`--public` point it at an older build, so
+commits can be compared. `tools/crowd_cpu.py` times the bodies' own CPU work on a street of sixty (`dev/crowd.html`),
+`--tree` in an older checkout.
 
 ## Project layout
 

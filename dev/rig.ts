@@ -1,6 +1,7 @@
 // Dev-only: plays every pose on every body and measures what a viewer would see go wrong. tools/rig_check.py drives it.
 import * as THREE from 'three';
-import { createCharacter, Character, CrewPose } from '../src/characters/character';
+import { createCharacter, Character, CrewPose, CHAR_BUDGET } from '../src/characters/character';
+CHAR_BUDGET.throttle = false; CHAR_BUDGET.lodFar = Infinity;
 import { randomLook } from '../src/characters/custom';
 import { flail, FALL } from '../src/cinematic/montage';
 

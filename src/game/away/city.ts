@@ -618,7 +618,12 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     people.push({ id, fig, pos: fig.root.position, yaw, pose, phase: rnd() * 10, walk });
   };
   for (const f of FRIENDS) person(f.id, createCharacter(f.id, detail), f.x, f.z, f.yaw, f.pose);
-  const someone = (lineage: PlayerLook['lineage'], i: number) => createCharacter('scientist', detail * 0.8, { ...defaultLook(), ...randomLook({ name: '', gender: i % 2 ? 'f' : 'm' }), lineage, ...LINEAGES[lineage] } as PlayerLook);
+  // the townsfolk, the walkers and the people stood in groups are a crowd (CHAR_BUDGET): no corrective shapes, the light
+  // build and no shadow from closer in
+  const someone = (lineage: PlayerLook['lineage'], i: number) => {
+    const c = createCharacter('scientist', detail * 0.8, { ...defaultLook(), ...randomLook({ name: '', gender: i % 2 ? 'f' : 'm' }), lineage, ...LINEAGES[lineage] } as PlayerLook);
+    c.setCrowd(true); return c;
+  };
   FOLK.forEach((f, i) => person(f.id, someone(f.lineage, i), f.x, f.z, f.yaw, f.pose));
   // Mir: a chai stall regular in a three-piece, the same man as the suit skin and the Drexon cameo
   person('mir', createCharacter('strong', detail, undefined, 'suit'), 5.0, 15.4, Math.PI / 2 + 0.5, 'idle');
