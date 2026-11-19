@@ -115,11 +115,16 @@ roll out (you can start with a staged rollout, for example 20%). Review of the f
 
 ## 7. Copy the files to Windows for uploading
 
-The bundle is about 127 MB, so it is not copied to Downloads automatically. In WSL:
+The release bundle of 2026-11-19 (1.0.0, versionCode 1, after the release QA) is already in
+`Downloads\BeyondSagittarius_PlayStore\beyond-sagittarius-1.0.0-1.aab`, next to this guide. Upload that one.
+`store/release.sh` does not copy to Windows by itself (the bundle is about 130 MB); after a later release, in WSL:
 
-    cp ~/beyond-sagittarius-release/*.aab /mnt/c/Users/<you>/Downloads/
+    cp ~/beyond-sagittarius-release/*.aab /mnt/c/Users/<you>/Downloads/BeyondSagittarius_PlayStore/
 
 Or in Windows Explorer open `\\wsl$\Ubuntu\home\<you>\beyond-sagittarius-release\`.
+The screenshots were taken again from this build (the title now shows v1.0.0): upload the ones in
+`Downloads\BeyondSagittarius_PlayStore\screenshots-1.0.0\` (the same files as `store/screenshots/`), not the older
+`screenshots\` folder there.
 
 ## 8. Updates (one command)
 
@@ -153,6 +158,12 @@ Version scheme: `versionName` is what players see (1.0.0, 1.1.0 for new levels, 
   Play identity verification already counts; nothing extra to do.
 
 ## 10. What was tested before the first upload (2026-11-19)
+
+Release QA, the same day: I played the build through as a player on desktop and phone-sized touch, the Android app's
+own files and the Electron app. Everything found, fixed or left, is in `docs/QA_RELEASE.md` in the repo. The bundle
+was rebuilt after it (`store/release.sh --same`: versionCode 1 had not been uploaded yet). All of these passed on it:
+build and typecheck, smoke, levels_smoke (levels 1 to 22), prologue_smoke, mobile_smoke, cutscene_qa, app_smoke and
+the Electron smoke.
 
 - `tools/android/check_aab.py`: package id, version 1.0.0 (1), minSdk 29, targetSdk 36, no user permissions,
   no native code (16 KB rule met), bundle marked PAGE_ALIGNMENT_16K, download size about 126 MB, signed with the upload key.
