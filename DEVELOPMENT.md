@@ -23,6 +23,7 @@ python3 tools/smoke.py --quality web          # boot, cinematic, wake-up, world 
 python3 tools/levels_smoke.py --quality web   # tutorial, scenes, levels end to end
 python3 tools/mobile_smoke.py                 # iPhone 13 portrait, Pixel 7 landscape, real touch events
 python3 tools/prologue_smoke.py --quality web # a new game's opening: MegaZroN, Zenvora, the take-off, the films
+python3 tools/text_fit.py --before            # every string in every UI slot, en/hi/ur, 360 px phone to 4K: fails on overflow
 npm run smoke:desktop                         # boots the Electron app under Xvfb, drives it over CDP
 ```
 
@@ -30,6 +31,13 @@ A new game opens on MegaZroN in the Vault, then the title card and the playable 
 and the liner lifting off over the city (the city stage's `outro`, letterboxed, with its Skip), a card for orbit, and
 then the deck, the title sequence and the wake-up. Continue skips all of it; Chapters has "The opening" to watch it
 again (in the replay slot, so the story stays as it was); the System setting and `?prologue=0` leave the city out.
+
+Text fit: every place the game writes words is a slot in `src/ui/fit.ts` (subtitles, banners, buttons, objectives,
+the dialogue box, title cards, menus). When a slot's text or the screen changes it wraps, then shrinks to the slot's
+smallest size, then cuts to its line count with an ellipsis that opens in full on a tap. Words painted into textures
+(Zenvora's shop signs, neon, posters) go through `src/core/canvastext.ts`, which draws a text smaller about its anchor
+when it would run off its sign. `tools/text_fit.py` puts every string into every slot it can take at nine screen sizes
+in three languages; `--before` also measures with fitting off.
 
 `levels_smoke.py` plays through the real interaction code by teleporting to each
 objective and pressing E via `window.__bs`, and advances game time with

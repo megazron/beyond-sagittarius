@@ -37,6 +37,8 @@ import { Vault, vaultScript } from './narrator/vault';
 import { Montage } from './cinematic/montage';
 import { onLangChange } from './i18n';
 import { fitFov, lockViewport, tryFullscreen } from './core/viewport';
+import { startFit, auditFit, fitState, refitAll } from './ui/fit';
+import { canvasFitStats } from './core/canvastext';
 import { TECH, AGES } from './game/tech/data';
 import { techState } from './game/tech/tech';
 import { openCodex, showSafetyCard, consentGiven, stopSpeech } from './ui/science';
@@ -49,6 +51,7 @@ const canvas = document.getElementById('c') as HTMLCanvasElement;
 lockViewport();
 const settings: Settings = loadSettings();
 setLang(settings.lang);
+startFit();
 const quality = detectQuality();
 const ui = new UI();
 function applyLanguages() {
@@ -900,6 +903,11 @@ window.addEventListener('resize', () => {
   groundAt(x: number, z: number) { return world.terrain.height(x, z); },
   get crew() { return game?.story.debugCrew(); },
   get layout() { const L = world.layout; return L ? Object.fromEntries(Object.entries(L).map(([k, v]) => [k, (v as THREE.Vector3).toArray()])) : null; },
+  /** Text fit: every string in every UI slot, in a language (tools/text_fit.py). fit=false measures the old layout. */
+  fitAudit(lang: Lang, fit = true, menus = false) { setLang(lang); fitState.on = fit; const r = auditFit({ fit, menus }); fitState.on = true; refitAll(); return r; },
+  setLang(l: Lang) { setLang(l); },
+  get canvasFit() { return { ...canvasFitStats }; },
+  openMenu(which: 'settings' | 'legal' | 'chapters') { if (which === 'settings') document.getElementById('btn-settings')?.click(); else if (which === 'legal') document.getElementById('btn-legal')?.click(); else document.getElementById('btn-chapters')?.click(); },
   quality: quality.name,
   get world() { return world; },
   get debug() {

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { fitCanvasText } from '../../core/canvastext';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { createCharacter, Character, CrewId, CrewPose } from '../../characters/character';
@@ -45,7 +46,7 @@ const pick = <T,>(a: T[]) => a[Math.floor(rnd() * a.length)];
 
 function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
-  draw(c.getContext('2d')!);
+  fitCanvasText(c.getContext('2d')!, draw);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   return t;
 }

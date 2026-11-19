@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { fitCanvasText } from '../../core/canvastext';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
@@ -17,7 +18,7 @@ const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147
 
 function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
-  draw(c.getContext('2d')!);
+  fitCanvasText(c.getContext('2d')!, draw);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   return t;
 }

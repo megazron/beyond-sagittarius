@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { fitCanvasText } from '../../core/canvastext';
 
 /**
  * Street-level density for Zenvora: neon on every facade from the pavement to the roofline (Kabukicho density,
@@ -14,7 +15,7 @@ let seed = 4242;
 const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 
 function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d')!);
+  const c = document.createElement('canvas'); c.width = w; c.height = h; fitCanvasText(c.getContext('2d')!, draw);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { fitCanvasText } from '../../core/canvastext';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
@@ -18,7 +19,7 @@ const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147
 const glowMat = (c: number, k = 2.5, opacity = 1) => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(k), toneMapped: false, fog: false, transparent: opacity < 1, opacity, depthWrite: opacity >= 1 });
 
 function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d')!);
+  const c = document.createElement('canvas'); c.width = w; c.height = h; fitCanvasText(c.getContext('2d')!, draw);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 

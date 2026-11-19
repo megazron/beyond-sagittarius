@@ -36,6 +36,9 @@ with sync_playwright() as pw:
         if not page.wait_for_selector('#title-card', timeout=60000): fails.append('no title card')
         page.wait_for_function("window.__bs.mode === 'away' && window.__bs.away && window.__bs.away.who", timeout=300000)
         if a.shot: page.screenshot(path=f'{a.shot}_city.jpg', type='jpeg', quality=85, timeout=180000)
+        cf = page.evaluate('__bs.canvasFit')
+        print(f"Zenvora's painted signs: {cf['drawn']} texts, {cf['shrunk']} drawn smaller to stay on their sign, {cf['squeezed']} squeezed", flush=True)
+        if cf['drawn'] == 0: fails.append('no painted sign text went through the fitter')
         done = 0
         for _ in range(30):
             s = page.evaluate('__bs.away')

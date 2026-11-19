@@ -576,3 +576,12 @@ body.touch:has(#hud:not(.hidden) #tutorial:not(.hidden)) .subtitle { bottom: cal
 @media (max-height: 520px) and (orientation: landscape) {
   body:has(#hud:not(.hidden) #tutorial:not(.hidden)) .subtitle, body.touch:has(#hud:not(.hidden) #tutorial:not(.hidden)) .subtitle { bottom: calc(var(--safe-b) + 128px); }
 }
+
+/* Text fit (src/ui/fit.ts): wrap, then shrink, then cut with an ellipsis that opens on a tap */
+body:not(.fit-off) #subtitle .line, body:not(.fit-off) #caption, body:not(.fit-off) #chapter > div, body:not(.fit-off) #mission > div, body:not(.fit-off) #ai-alert, body:not(.fit-off) #device > div, body:not(.fit-off) .quest > div, body:not(.fit-off) #prompt .ptext, body:not(.fit-off) .toast, body:not(.fit-off) #banner > div, body:not(.fit-off) #memory, body:not(.fit-off) .tut-text, body:not(.fit-off) #wheel .wmid > div, body:not(.fit-off) #craft > div, body:not(.fit-off) #craft .mgb, body:not(.fit-off) #dlg-who, body:not(.fit-off) #dlg-line, body:not(.fit-off) #dlg-choices .btn, body:not(.fit-off) #film-card > div > div, body:not(.fit-off) #film-title > div, body:not(.fit-off) .btn, body:not(.fit-off) .tagline, body:not(.fit-off) .modal-card label, body:not(.fit-off) .modal-card .tab span { overflow-wrap: break-word; }
+body:not(.fit-off) #ft-main { white-space: normal; text-wrap: balance; }
+body:not(.fit-off) #chapter .c2, body:not(.fit-off) #banner .b-title, body:not(.fit-off) #banner .b-sub, body:not(.fit-off) #fc-name { text-wrap: balance; }
+body:not(.fit-off) .fit-clip { display: -webkit-box !important; -webkit-box-orient: vertical; -webkit-line-clamp: var(--fit-lines, 2); line-clamp: var(--fit-lines, 2); overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+body:not(.fit-off) .fit-clip.fit-open { -webkit-line-clamp: unset; line-clamp: none; overflow: visible; }
+body.fit-audit *, body.fit-audit *::before, body.fit-audit *::after { animation: none !important; transition: none !important; }
+body.fit-audit .quest .obj-desc { max-height: none; opacity: 1; }
