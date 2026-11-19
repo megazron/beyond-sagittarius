@@ -13,7 +13,9 @@ npm run preview    # serve dist/ at http://localhost:4173
 
 ## Tests
 
-Headless Chromium through Playwright. Software GL is fine.
+Headless Chromium through Playwright, pinned to 1.63 (1.64's Chromium hangs on the tutorial's mouse-look drag). Make
+the test venv once with `tools/test_env.sh` (`~/.venvs/bs-test`); every test re-runs itself under it
+(`tools/pw_pin.py`), so `python3 tools/...` works from any Python. Software GL is fine.
 
 ```bash
 npm run build
@@ -64,7 +66,7 @@ Hardware back and app pause/resume reach the game through `src/core/android.ts`.
 store/release.sh 1.0.1      # bump, build, sync, sign, check: AAB in ~/beyond-sagittarius-release/
 npx cap sync android        # after any `npm run build`, to refresh android/app/src/main/assets/public
 python3 tools/android/check_aab.py <aab>          # target SDK, permissions, 16 KB pages, download size
-~/.venvs/ehd/bin/python tools/android/app_smoke.py   # the bundled files in an emulated phone with a fake Capacitor bridge
+python3 tools/android/app_smoke.py                # the bundled files in an emulated phone with a fake Capacitor bridge
 python3 tools/android/make_icons.py               # launcher icons, splash, store icon and feature graphic
 python3 tools/android/privacy_page.py             # PRIVACY.md -> public/privacy.html
 ```

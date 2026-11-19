@@ -419,35 +419,50 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     shot("14-codex-entry")
     touch.tap(*centre(page, "#m-close"))
     ev("__bs.step(0.3)")
-    n = next(x for x in ev("__bs.npcs") if x["id"] == "trader")
-    ev(f"__bs.teleport({n['pos'][0] + 1}, {n['pos'][2]}, 0)")
-    ev("__bs.step(0.2)")
-    n = next(x for x in ev("__bs.npcs") if x["id"] == "trader")
-    ev(f"__bs.teleport({n['pos'][0] + 1}, {n['pos'][2]}, 0)")
-    ev("__bs.step(0.1)")
-    # the touch buttons come back on the game's next real frame after a menu closes, and the button means "use" only
-    # once the prompt is up: on a slow software-GL frame the tap used to land before either (the button was hidden)
-    page.wait_for_function("document.body.classList.contains('can-act') && getComputedStyle(document.getElementById('tb-act')).display !== 'none' && document.getElementById('tb-act').getBoundingClientRect().width > 0", timeout=60000)
-    touch.tap(*centre(page, "#tb-act"))
-    time.sleep(0.3)
-    ev("__bs.step(0.1)")
-    page.wait_for_selector("#dialog:not(.hidden)", timeout=10000)
+    # The tap is read on the game's next real frame, which on software GL can take seconds, and the trader wanders
+    # meanwhile. So the test waits on the game's state, not the clock: stand next to him, wait until Use is up, tap, and
+    # wait for the dialogue to open. Only if the game says the tap was not taken (back in play, no dialogue) does it
+    # stand next to him again and tap again; it never taps while one is pending.
+    ready = "document.body.classList.contains('can-act') && getComputedStyle(document.getElementById('tb-act')).display !== 'none' && document.getElementById('tb-act').getBoundingClientRect().width > 0"
+    for attempt in range(3):
+        n = next(x for x in ev("__bs.npcs") if x["id"] == "trader")
+        ev(f"__bs.teleport({n['pos'][0] + 1}, {n['pos'][2]}, 0)")
+        ev("__bs.step(0.1)")
+        page.wait_for_function(ready, timeout=60000)
+        touch.tap(*centre(page, "#tb-act"))
+        try:
+            page.wait_for_function("!!__bs.talk", timeout=30000)
+            break
+        except Exception:
+            print(f"  trader: tap {attempt + 1} was not taken (mode {ev('__bs.mode')}, prompt {ev('__bs.prompt')!r}), again", flush=True)
+    if not ev("!!__bs.talk"):
+        fail("touch Use did not open the trader's dialogue")
+    page.wait_for_selector("#dialog:not(.hidden)", timeout=60000)
     time.sleep(0.3)
     shot("15-dialogue")
     b = page.locator("#dialog").bounding_box()
     if b["x"] < -1 or b["x"] + b["width"] > vw + 1 or b["y"] < -1 or b["y"] + b["height"] > vh + 1:
         fail(f"dialogue panel off-screen: {b}")
     touch.tap(*centre(page, '#dlg-choices button[data-c="ch.trade"]'))
-    time.sleep(0.2)
-    if ev("__bs.talk.node") != "shop":
+    try:
+        page.wait_for_function("__bs.talk && __bs.talk.node === 'shop'", timeout=20000)
+    except Exception:
+        pass
+    if (ev("__bs.talk") or {}).get("node") != "shop":
         fail("dialogue choice did not work by touch")
     touch.tap(*centre(page, '#dlg-choices button[data-c="ch.tradeflint"]'))
-    time.sleep(0.2)
-    if ev("__bs.save.inventory.flint") < 1:
+    try:
+        page.wait_for_function("(__bs.save.inventory.flint || 0) >= 1", timeout=20000)
+    except Exception:
+        pass
+    if (ev("__bs.save.inventory.flint") or 0) < 1:
         fail("touch trade did not deliver")
     touch.tap(*centre(page, '#dlg-choices button[data-c="ch.bye"]'))
-    time.sleep(0.2)
-    ev("__bs.step(0.2)")
+    for _ in range(40):
+        ev("__bs.step(0.1)")
+        if ev("__bs.mode") == "play":
+            break
+        time.sleep(0.25)
     if ev("__bs.mode") != "play":
         fail("did not return to play after the dialogue")
     ctx.close()

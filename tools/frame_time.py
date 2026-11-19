@@ -8,6 +8,8 @@ triangles each frame sends to WebGL (every pass: shadows, the scene, post), whic
 --soft draws with SwiftShader (WSL's d3d12 GL path ran at about one frame a second here). --dist/--public measure an
 older build made without copying public/; builds from before the prologue was the default need --url-extra '&prologue=1'."""
 import argparse, json, pathlib, sys, time
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import pw_pin  # noqa: E402,F401  (re-runs under the pinned Playwright)
 from playwright.sync_api import sync_playwright
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import functools, http.server, os, threading  # noqa: E402

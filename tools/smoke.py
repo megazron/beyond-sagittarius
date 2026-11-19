@@ -12,6 +12,8 @@ import sys
 import threading
 import time
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import pw_pin  # noqa: E402,F401  (re-runs under the pinned Playwright)
 from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent

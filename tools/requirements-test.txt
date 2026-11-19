@@ -1,0 +1,2 @@
+# The browser tests' Python packages. Playwright stays on 1.63: 1.64's Chromium hangs on the tutorial's mouse-look drag.
+playwright==1.63.0

@@ -264,8 +264,8 @@ def main():
                 if not tu or tu["step"] == step_next:
                     break
                 log("  still on", tu["step"], "at", [round(v, 1) for v in ev("__bs.debug.player")], "keys", keys)
-                if i == 1:
-                    log("  input:", ev("__bs.inputState"))
+                if i in (1, 6):
+                    log("  input:", ev("__bs.inputState"), ev("({paused: __bs.paused, modal: !document.getElementById('modal').classList.contains('hidden'), lock: !!document.pointerLockElement, yaw: __bs.debug.yaw, tut: __bs.tutorial, state: __bs.state, frames: __bs.debug.frames})"))
                 # turn only when something blocks the way: turning every round walks a small circle that never gets anywhere
                 pos = ev("__bs.debug.player")
                 if i and last is not None and ((pos[0] - last[0]) ** 2 + (pos[2] - last[2]) ** 2) ** 0.5 < 0.1:

@@ -7,7 +7,7 @@ Checks: boots offline from the bundle, runs as the Android platform, New Game to
 back opens and closes the pause menu, back skips a scene, background pauses and silences audio,
 Continue after a restart, back on the title asks before exiting. Also writes Play Store screenshots.
 
-    ~/.venvs/ehd/bin/python tools/android/app_smoke.py [--shots store/screenshots] [--size 960x540] [--scale 2]
+    python3 tools/android/app_smoke.py [--shots store/screenshots] [--size 960x540] [--scale 2]
 """
 import argparse, functools, http.server, json, pathlib, sys, threading, time
 
@@ -122,8 +122,13 @@ def main():
         s0 = ev('__bs.state')
         if s0 in ('narrator', 'cinematic', 'film', 'flashback'):
             shot('02-intro')
-            ev("__fire('backButton', {canGoBack: false})"); time.sleep(2)
-            if ev('__bs.state') == s0 and s0 != 'film': fail(f'back did not skip the {s0} scene')
+            ev("__fire('backButton', {canGoBack: false})")
+            # skipped = that scene stopped: the Vault stops playing at once, though the state stays 'narrator' through
+            # the title card that follows it; the other scenes hand over to the next state
+            gone = f"__bs.state !== '{s0}'" + (" || !__bs.vault.playing" if s0 == 'narrator' else '')
+            try: page.wait_for_function(gone, timeout=10000)
+            except Exception: pass
+            if not ev(gone) and s0 != 'film': fail(f'back did not skip the {s0} scene')
             else: ok(f'back skips the {s0} scene')
         if not to_play(): fail(f'never reached play: {ev("[__bs.state, __bs.mode]")}')
         else: ok(f'new game reaches play (mode {ev("__bs.mode")}: the playable prologue)')
