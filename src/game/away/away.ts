@@ -80,6 +80,11 @@ export class Away {
   update(dt: number, time: number, canMove: boolean) {
     const s = this.stage, p = this.player;
     if (!s || !p) return;
+    if (s.outro?.active) {
+      this.ui.setPrompt(null); s.update(dt, time, this.camera);
+      if (s.outro.active && s.outro.remaining < 0.9 && !this.outroFade) { this.outroFade = true; this.ui.fade('black', 1, 0.8); } // it ends in black
+      return;
+    }
     this.ui.setStageObjective(t(`away.${this.location}.place`), this.next?.label ?? null);
     p.update(dt, this.input, canMove && !this.busy, 100, this.pace);
     // a hero view: the camera turns to it once, eases back, and the player can always look away
@@ -110,7 +115,7 @@ export class Away {
     k.run?.();
     const go = () => {
       this.done.add(k.id); this.busy = false;
-      if (this.stage!.tasks.every((x) => x.optional || this.done.has(x.id))) this.leave();
+      if (this.stage!.tasks.every((x) => x.optional || this.done.has(x.id))) this.closing();
     };
     if (this.onTask) this.onTask(k.id, go); else go();
   }
@@ -119,6 +124,34 @@ export class Away {
   talk(id: string, seconds: number) {
     if (this.stage && this.player) this.stage.talk?.(id, seconds, this.player.model.root.position);
   }
+
+  /** Every task done: the stage's closing scene if it has one (letterboxed, skippable), then away. */
+  private closing() {
+    const s = this.stage;
+    if (!s?.outro || !this.player) { this.leave(); return; }
+    this.busy = true; this.outroFade = false;
+    this.input.enabled = false;
+    this.onOutro?.(true);
+    // whoever takes over after it fades in on their own (the prologue keeps the black for the orbit card)
+    s.outro.start(this.player.model, () => { this.onOutro?.(false); this.input.enabled = true; this.busy = false; if (!this.keepBlack) this.ui.fade('black', 0, 0.6); this.leave(); });
+  }
+  /** Main shows the letterbox and the Skip button while a closing scene plays. */
+  onOutro: ((on: boolean) => void) | null = null;
+  private outroFade = false;
+  get outroOn() { return !!this.stage?.outro?.active; }
+  /** The prologue keeps the black after the closing scene: the orbit card comes next, not this world. */
+  keepBlack = false;
+  /** Skip: a quick fade to black first, so the cut never shows the world behind the stage. */
+  skipOutro() {
+    const o = this.stage?.outro;
+    if (!o?.active || this.skipping) return;
+    this.skipping = true; this.outroFade = true;
+    this.ui.fade('black', 1, 0.3);
+    setTimeout(() => { this.skipping = false; o.skip(); }, 340);
+  }
+  private skipping = false;
+  /** Test hook (cutscene_qa, recordings): every task done at once, so the closing scene plays now. */
+  debugOutro() { if (this.stage) { for (const k of this.stage.tasks) if (!k.optional) this.done.add(k.id); this.closing(); } }
 
   leave() {
     const s = this.stage;

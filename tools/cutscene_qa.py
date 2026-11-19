@@ -9,7 +9,7 @@ sees the same film a real GPU does. One frame per second by default.
   python tools/cutscene_qa.py --out DIR --film-beats 8,24,28 frames at chosen montage beats
   python tools/cutscene_qa.py --out DIR --sheets docs/screenshots/qa   also write contact sheets
 
-Scenes: opening (Vault intro, departure, deck, the event), film, wake, vault-l3, vault-l7, vault-ch1,
+Scenes: opening (Vault intro, departure, deck, the event), takeoff (Zenvora: the six board, the liner lifts off), film, wake, vault-l3, vault-l7, vault-ch1,
 fight, rescue, camp, beacon. Needs a built dist/ (npm run build).
 """
 import argparse
@@ -24,7 +24,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from smoke import launch, serve  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-ALL = ['opening', 'film', 'wake', 'vault-l3', 'vault-l7', 'vault-ch1', 'fight', 'rescue', 'camp', 'beacon']
+ALL = ['opening', 'takeoff', 'film', 'wake', 'vault-l3', 'vault-l7', 'vault-ch1', 'fight', 'rescue', 'camp', 'beacon']
 
 
 class Run:
@@ -160,6 +160,19 @@ def main():
             if 'wake' in want:
                 r.play('wake', "__bs.mode === 'wake'", limit=40)
             to_game(r)
+            if 'takeoff' in want:
+                # the take-off that closes the Zenvora prologue (the new-game order: Vault, Zenvora, take-off, films)
+                page.evaluate('__bs.hold(false)')
+                page.evaluate("__bs.goAway('scientist', 'city')")
+                page.wait_for_function("__bs.mode === 'away' && __bs.away && __bs.away.who", timeout=120000)
+                time.sleep(2)
+                page.evaluate('__bs.awayOutro()')
+                page.wait_for_function('__bs.awayOutroOn', timeout=30000)
+                page.evaluate('__bs.hold(true)')
+                r.play('takeoff', '__bs.awayOutroOn', step=0.5, limit=30)
+                page.evaluate('__bs.hold(false)')
+                page.wait_for_function("__bs.state === 'game' && __bs.mode === 'play'", timeout=60000)
+                time.sleep(1.5)
             for name, go, state in [
                 ('vault-l3', "__bs.sceneTest('l3')", "__bs.state === 'narrator'"),
                 ('vault-l7', "__bs.sceneTest('l7')", "__bs.state === 'narrator'"),

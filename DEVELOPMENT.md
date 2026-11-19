@@ -20,8 +20,14 @@ npm run build
 python3 tools/smoke.py --quality web          # boot, cinematic, wake-up, world shots
 python3 tools/levels_smoke.py --quality web   # tutorial, scenes, levels end to end
 python3 tools/mobile_smoke.py                 # iPhone 13 portrait, Pixel 7 landscape, real touch events
+python3 tools/prologue_smoke.py --quality web # a new game's opening: MegaZroN, Zenvora, the take-off, the films
 npm run smoke:desktop                         # boots the Electron app under Xvfb, drives it over CDP
 ```
+
+A new game opens on MegaZroN in the Vault, then the title card and the playable Zenvora prologue, the six boarding
+and the liner lifting off over the city (the city stage's `outro`, letterboxed, with its Skip), a card for orbit, and
+then the deck, the title sequence and the wake-up. Continue skips all of it; Chapters has "The opening" to watch it
+again (in the replay slot, so the story stays as it was); the System setting and `?prologue=0` leave the city out.
 
 `levels_smoke.py` plays through the real interaction code by teleporting to each
 objective and pressing E via `window.__bs`, and advances game time with

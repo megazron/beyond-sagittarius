@@ -570,6 +570,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   });
   plane(10, 2.5, new THREE.MeshBasicMaterial({ map: board, color: new THREE.Color(1.4, 1.4, 1.4), toneMapped: false }), 0, 9.2, S + 1.2, 0);
 
+  let linerG: THREE.Group | null = null;
   // ---- the spaceport: the apron, pads with light rings, the terminal's long canopy, the liner docked with its bridge ----
   {
     const apronM = over(new THREE.MeshStandardMaterial({ color: 0xc9ccd0, roughness: 0.8 }), 1); tex('road', [apronM], [30, 24]);
@@ -588,7 +589,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     for (let i = 0; i < 9; i++) box(0.4, 10, 0.4, gateM, -66 + i * 7, 5, S - 12.8);
     plane(14, 2, lit(sign('TERMINAL 2 · TARAVEL', '#10233d', '#9fd8ff'), 0.9), -38, 11.5, S - 12.6, 0);
     // the liner on its pad, and the boarding bridge reaching out to it
-    const liner = add(new THREE.Group()); liner.position.set(16, 9, S - 66); liner.rotation.y = 0.5;
+    const liner = add(new THREE.Group()); liner.position.set(16, 9, S - 66); liner.rotation.y = 0.5; linerG = liner;
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(7.5, 52, 8, 32), hull); body.rotation.x = Math.PI / 2; body.castShadow = true; liner.add(body);
     const stripe = new THREE.Mesh(new THREE.CylinderGeometry(7.58, 7.58, 52, 32, 1, true, -0.25, 0.5), cyan); stripe.rotation.x = Math.PI / 2; liner.add(stripe);
     for (const sx of [-1, 1]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(12, 0.7, 14), hull); fin.position.set(sx * 11, -2.5, 16); fin.rotation.z = sx * -0.18; fin.castShadow = true; liner.add(fin); }
@@ -684,7 +685,84 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     return best;
   };
 
+  // ---- the take-off: the six walk out through the gate to the terminal, the liner lifts off its pad and climbs over the
+  // city towards the one in orbit. Three shots, about fourteen seconds; the camera is the game's own ----
+  const OUTRO = 14;
+  let outroT = -1, outroDone: (() => void) | null = null;
+  const boarding = new Map<CityPerson, THREE.Vector3>();
+  const plumes: THREE.Mesh[] = [];
+  const eyeP = new THREE.Vector3(), aimP = new THREE.Vector3(), linerHome = new THREE.Vector3();
+  const smooth = (a: number, b: number, x: number) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+  function startOutro(playerFig: Character | null, done: () => void) {
+    outroT = 0; outroDone = done;
+    const crew = people.filter((q) => FRIENDS.some((f) => f.id === q.id));
+    const all: CityPerson[] = [...crew];
+    if (playerFig) all.unshift({ id: 'player', fig: playerFig, pos: playerFig.root.position, yaw: 0, pose: 'idle', phase: 0 });
+    // in a loose group at the gate, facing the spaceport (south, -z)
+    all.forEach((q, i) => {
+      q.pos.set(-2.6 + (i % 3) * 2.1 + (i > 2 ? 0.9 : 0), hx(0), S + 6.5 + Math.floor(i / 3) * 1.6);
+      q.yaw = Math.PI; q.fig.root.rotation.y = Math.PI; q.fig.root.visible = true; q.fig.setLookTarget(null);
+      boarding.set(q, new THREE.Vector3(q.pos.x * 0.6, 0, S - 16 - i * 0.8));
+    });
+    if (linerG) {
+      linerHome.copy(linerG.position);
+      if (!plumes.length) {
+        const pm = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9fdcff).multiplyScalar(1.8), transparent: true, opacity: 0, toneMapped: false, depthWrite: false });
+        // lift jets under the fins, and the main drive at the stern
+        for (const [px, py, pz, rx] of [[-11, -4, 16, Math.PI], [11, -4, 16, Math.PI], [-6, -6, -16, Math.PI], [6, -6, -16, Math.PI], [0, 0, -34, -Math.PI / 2]] as number[][]) {
+          const c = new THREE.Mesh(new THREE.ConeGeometry(rx < 0 ? 4 : 1.8, rx < 0 ? 22 : 9, 16, 1, true), pm); c.position.set(px, py - (rx < 0 ? 0 : 4.5), pz + (rx < 0 ? -11 : 0)); c.rotation.x = rx; linerG.add(c); plumes.push(c);
+        }
+      }
+    }
+  }
+  function endOutro() {
+    if (outroT < 0) return;
+    outroT = -1;
+    const d = outroDone; outroDone = null; d?.();
+  }
+  function outro(dt: number, time: number, cam?: THREE.PerspectiveCamera) {
+    outroT += dt;
+    const T = outroT;
+    // the six walk out through the gate and are gone into the terminal
+    for (const [q, to] of boarding) {
+      const dx = to.x - q.pos.x, dz = to.z - q.pos.z, d = Math.hypot(dx, dz);
+      const v = T < 0.6 ? 0 : Math.min(1.35, d / Math.max(dt, 1e-3));
+      if (d > 0.05) { q.pos.x += dx / d * v * dt; q.pos.z += dz / d * v * dt; }
+      q.pos.y = hx(q.pos.x); q.phase += dt * v * 2.2;
+      q.fig.root.rotation.y = Math.atan2(dx, dz);
+      q.fig.animate(v > 0.1 ? 'walk' : 'idle', q.phase, v / 3, time, dt);
+      if (q.pos.z < S - 8) q.fig.root.visible = false;
+    }
+    // the liner: the lift jets light, it rises off its pad, noses up and climbs away towards the one in orbit
+    if (linerG) {
+      const lift = smooth(4.2, 7, T), climb = Math.max(0, T - 7);
+      linerG.position.set(linerHome.x - climb * climb * 0.8, linerHome.y + lift * 22 + climb * climb * 2.6, linerHome.z - climb * climb * 3.2);
+      linerG.rotation.x = -smooth(6.5, 9.5, T) * 0.32;
+      const jets = smooth(3.6, 4.6, T) * (1 + Math.sin(time * 40) * 0.08);
+      for (let i = 0; i < plumes.length; i++) { const m = plumes[i]; (m.material as THREE.MeshBasicMaterial).opacity = (i === plumes.length - 1 ? smooth(6.8, 8, T) : jets * (1 - smooth(10, 12, T))) * 0.6; }
+    }
+    if (cam) {
+      const L = linerG ? linerG.position : linerHome;
+      if (T < 4.4) {
+        // behind the group at the gate, the docked liner beyond them
+        const k = smooth(0, 4.4, T);
+        eyeP.set(4.5 - k * 2, 2.1 + k * 0.6, S + 13 - k * 3); aimP.set(4, 4 + k * 2, S - 40);
+      } else if (T < 9.4) {
+        // high over the apron, clear of the terminal's canopy: the whole liner on its pad as it lifts
+        const k = smooth(4.4, 9.4, T);
+        eyeP.set(linerHome.x - 38 + k * 3, linerHome.y + 22 + k * 2, linerHome.z + 30); aimP.set(L.x, L.y, L.z);
+      } else {
+        // over the street, the city lights below, the liner climbing away
+        const k = smooth(9.4, OUTRO, T);
+        eyeP.set(3, 26 + k * 10, 30 - k * 20); aimP.set(L.x * 0.7, L.y * 0.8, L.z * 0.85);
+      }
+      cam.position.copy(eyeP); cam.lookAt(aimP);
+    }
+    if (T >= OUTRO) endOutro();
+  }
+
   return {
+    outro: { start: startOutro, skip: endOutro, get active() { return outroT >= 0; }, get remaining() { return outroT >= 0 ? OUTRO - outroT : 0; } },
     scene, gravity: 22, jump: 6.2, spawn: new THREE.Vector3(12.4, FLOOR, 68.4), tasks, people, clearance,
     // the hero views: stepping out of the flat, and the run to the gate
     vistas: [{ x0: 4, x1: FRONT - 0.4, z0: 63, z1: 69, yaw: 0, pitch: 0.42, secs: 4 }, { x0: -8, x1: 8, z0: -40, z1: -30, yaw: 0, pitch: 0.3, secs: 3.5 }, { x0: -9, x1: 9, z0: -76, z1: -66, yaw: 0, pitch: 0.34, secs: 5 }],
@@ -726,7 +804,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         if (on) q.fig.setLookTarget(eye.set(k.at.x, k.at.y + 1.62, k.at.z));
         else { q.fig.setLookTarget(null); if (Math.abs(q.yaw - k.rest) < 0.01) { q.yaw = k.rest; talking = null; } }
       }
+      if (outroT >= 0) outro(dt, time, cam as THREE.PerspectiveCamera | undefined);
       for (const q of people) {
+        if (boarding.has(q)) continue;
         const w = q.walk;
         if (w) {
           q.pos.z += w.dir * w.speed * dt;

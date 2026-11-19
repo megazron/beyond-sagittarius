@@ -613,12 +613,13 @@ export class UI implements CineUI {
   }
 
   /** Chapter select on the title. */
-  openChapters(list: { id: number; title: string; played: boolean; note: string }[], onOpen: (id: number) => void, onClose: () => void) {
+  openChapters(list: { id: number; title: string; played: boolean; note: string }[], onOpen: (id: number) => void, onClose: () => void, onOpening?: () => void) {
     this.openModal(`<h2>${escapeHtml(t('br.chapters'))}</h2><div class="menu-page">
       <div class="note">${escapeHtml(t('br.chapters.note'))}</div>
-      <div class="menu chapters">${list.map((c) => `<button class="btn ${c.played ? 'primary' : ''}" data-ch="${c.id}" ${c.played ? '' : 'disabled'}><span>${escapeHtml(t(c.title))}${c.played ? '' : `<small>${escapeHtml(t(c.note))}</small>`}</span></button>`).join('')}</div></div>
+      <div class="menu chapters">${onOpening ? `<button class="btn" id="ch-opening"><span>${escapeHtml(t('br.opening'))}<small>${escapeHtml(t('br.opening.note'))}</small></span></button>` : ''}${list.map((c) => `<button class="btn ${c.played ? 'primary' : ''}" data-ch="${c.id}" ${c.played ? '' : 'disabled'}><span>${escapeHtml(t(c.title))}${c.played ? '' : `<small>${escapeHtml(t(c.note))}</small>`}</span></button>`).join('')}</div></div>
       ${this.foot('menu.back')}`);
     $('modal-card').querySelectorAll<HTMLButtonElement>('[data-ch]').forEach((b) => b.addEventListener('click', () => onOpen(+b.dataset.ch!)));
+    document.getElementById('ch-opening')?.addEventListener('click', () => { this.closeModal(); onOpening?.(); });
     $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
   }
 

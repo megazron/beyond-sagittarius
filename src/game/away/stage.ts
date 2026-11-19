@@ -20,4 +20,7 @@ export interface AwayStage {
   /** Someone on the stage speaks to the player for this long: they turn to face them, look at them, and talk. */
   talk?(id: string, seconds: number, listener: THREE.Vector3): void;
   dispose?(): void;
+  /** A closing scene once every task is done (the take-off from Zenvora): it drives the camera, the player's body and
+   * its people, and calls `done` at its end or when skipped. */
+  outro?: { start(player: import('../../characters/character').Character | null, done: () => void): void; skip(): void; readonly active: boolean; readonly remaining: number };
 }

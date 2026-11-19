@@ -300,7 +300,22 @@ function openChapters() {
   ui.openChapters(list, (id) => {
     const ch = CHAPTERS.find((c) => c.id === id)!;
     openPathTree(main, ch, openChapters, { standalone: true, replay: ch.replayable ? () => startReplay(ch) : undefined });
-  }, refreshTitle);
+  }, refreshTitle, replayOpening);
+}
+
+/** The whole opening again (chapter select), in the replay slot with your own look and names; the story stays as it was. */
+function replayOpening() {
+  const base = loadSave();
+  audio.start();
+  if (input.device === 'touch') tryFullscreen();
+  useSlot('replay');
+  clearSave();
+  pendingLook = base?.player ?? defaultLook();
+  pendingNames = { ...(base?.names ?? {}) } as CrewNames;
+  applyPlayer(pendingLook, settings.skins ?? {});
+  ui.show('title', false);
+  void voice.load();
+  playOpening(true, true);
 }
 
 /** Plays a chapter again in the replay slot; the main story stays as it was. */
@@ -350,16 +365,32 @@ function startNewGame(look: PlayerLook = defaultLook()) {
   applyPlayer(look, settings.skins ?? {});
   ui.show('title', false);
   void voice.load();
-  // title card, the playable Zenvora prologue, then MegaZroN and the film
+  // MegaZroN's cold open, the playable Zenvora prologue and the take-off, then the films and the wake-up
   const prologue = PROLOGUE_PARAM !== null ? PROLOGUE_PARAM !== '0' : !settings.skipPrologue;
-  if (prologue) { playPrologue(() => openingFilms()); return; }
-  openingFilms();
+  playOpening(prologue, false);
 }
 
-/** Black, then one line: the planet and the year. Nothing else. */
-function titleCard(then: () => void) {
+/**
+ * The opening, in order: MegaZroN in the Vault (the cold open), the title card and Zenvora on the last normal
+ * afternoon, the six boarding and the liner lifting off over the city, a card for orbit, then the deck, the title
+ * sequence and the wake-up. Every scene has its Skip. `replay` (chapter select) plays it in the replay slot and
+ * ends on the title screen; ?prologue=0 and the settings switch leave the city out.
+ */
+function playOpening(withCity: boolean, replay: boolean) {
+  const films = () => {
+    state = 'cinematic';
+    ui.show('cine', true);
+    document.getElementById('btn-skip')!.classList.remove('hidden');
+    renderer.setScene(cine.scene, cine.camera, false);
+    cine.start(() => playFilm(replay));
+  };
+  playVault('intro', () => (withCity ? playPrologue(() => titleCard(films, 'takeoff.card')) : films()));
+}
+
+/** Black, then one line: the planet and the year (or, after the take-off, where the liner is). Nothing else. */
+function titleCard(then: () => void, key = 'city.title') {
   const el = document.createElement('div');
-  el.id = 'title-card'; el.textContent = t('city.title');
+  el.id = 'title-card'; el.textContent = t(key);
   el.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;color:#f2ead8;font:600 clamp(28px,5vw,64px) Rajdhani,sans-serif;letter-spacing:.35em;opacity:0;transition:opacity 1.2s;z-index:60';
   document.body.appendChild(el);
   requestAnimationFrame(() => (el.style.opacity = '1'));
@@ -382,25 +413,14 @@ function playPrologue(then: () => void) {
   }));
 }
 
-/** MegaZroN, the deck, the title sequence, then the wake-up. */
-function openingFilms() {
-  playVault('intro', () => {
-    state = 'cinematic';
-    ui.show('cine', true);
-    document.getElementById('btn-skip')!.classList.remove('hidden');
-    renderer.setScene(cine.scene, cine.camera, false);
-    cine.start(() => playFilm());
-  });
-}
-
-/** The title sequence, then the wake-up. */
-function playFilm() {
+/** The title sequence, then the wake-up (or, replaying the opening, back to the title screen). */
+function playFilm(replay = false) {
   state = 'film';
   ui.fade('black', 0, 0);
   ui.subtitle(null);
   void film.play(() => {
     ui.fade('black', 1, 0.2);
-    setTimeout(() => whenWorldReady(() => enterWorld(true)), 240);
+    setTimeout(() => (replay ? (useSlot('main'), ui.show('cine', false), showTitle(), ui.fade('black', 0, 0.8)) : whenWorldReady(() => enterWorld(true))), 240);
   });
 }
 
@@ -462,6 +482,7 @@ function skipCurrent() {
   else if (state === 'narrator') vault.skip();
   else if (state === 'game' && game?.mode === 'wake') game.skipWake();
   else if (state === 'game' && game?.mode === 'scene') game.skipScene();
+  else if (state === 'game' && game?.away?.outroOn) game.away.skipOutro();
 }
 
 // ---------------- pause / menus ----------------
@@ -545,7 +566,7 @@ document.addEventListener('pointerlockchange', () => {
 });
 input.onPadLost(() => { if (input.device === 'pad') openPause(); });
 
-const inScene = () => state === 'cinematic' || state === 'film' || state === 'narrator' || state === 'flashback' || (state === 'game' && (game.mode === 'wake' || game.mode === 'scene'));
+const inScene = () => state === 'cinematic' || state === 'film' || state === 'narrator' || state === 'flashback' || (state === 'game' && (game.mode === 'wake' || game.mode === 'scene' || !!game.away?.outroOn));
 
 window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement)?.tagName === 'INPUT' && (e.target as HTMLInputElement).type !== 'range') return; // typing a name
@@ -733,6 +754,11 @@ async function boot() {
   game = new Game(world, player, input, ui, (id) => touch.highlight(id), (text) => ui.hint(text));
   game.away = new Away(camera, input, ui, detail(), (sc) => (sc ? renderer.setScene(sc, camera, false) : renderer.setScene(world.scene, camera, true)));
   game.away.skins = lastSkins;
+  // the take-off from Zenvora is a scene like any other: letterboxed, with its Skip
+  game.away.onOutro = (on) => {
+    ui.show('cine', on); ui.show('hud', !on);
+    document.getElementById('btn-skip')!.classList.toggle('hidden', !on);
+  };
   game.onLevelComplete = onLevelDone;
   game.timersOff = !!settings.noTimers;
   // warm up shaders so the first in-game frame doesn't hitch
@@ -837,6 +863,9 @@ window.addEventListener('resize', () => {
     for (const p of ps) if (p.walk) p.fig.root.visible = Math.hypot(p.pos.x - x, p.pos.z - z) > r;
   },
   awayLeave() { game?.away?.leave(); },
+  /** Test hook: every Zenvora task done at once, so the take-off plays now. */
+  awayOutro() { game?.away?.debugOutro(); },
+  get awayOutroOn() { return !!game?.away?.outroOn; },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
   get awayCam() { return game?.away?.camState ?? null; },

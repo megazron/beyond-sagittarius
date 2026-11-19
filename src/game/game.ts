@@ -86,7 +86,8 @@ export class Game {
       else this.ui.say(`city.done.${id}`, 'crew.scientist.name', 4.5);
       go();
     };
-    this.away.enter('scientist', 'city', () => { this.away!.onTask = null; save.flags.prologueDone = true; done(); });
+    this.away.keepBlack = true;
+    this.away.enter('scientist', 'city', () => { this.away!.onTask = null; this.away!.keepBlack = false; save.flags.prologueDone = true; done(); });
   }
 
   mode: Mode = 'wake';

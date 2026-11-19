@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""The default new-game flow: title card, the playable Zenvora prologue (every task done with the real interact
-input), then the opening films start. Also checks that the settings switch skips it.
+"""The default new-game flow: MegaZroN's cold open in the Vault, the title card, the playable Zenvora prologue (every
+task done with the real interact input), the take-off (letterboxed, skipped with its own button), the orbit card, then
+the opening films. Also checks that the settings switch leaves the city out.
   python tools/prologue_smoke.py [--quality web] [--shot PATH]"""
 import argparse, pathlib, sys, time
 from playwright.sync_api import sync_playwright
@@ -25,6 +26,13 @@ with sync_playwright() as pw:
             if page.evaluate('__bs.mode') == 'away': fails.append('settings switch did not skip the prologue')
             else: print('skip: opening films directly, mode', page.evaluate('__bs.mode'), flush=True)
             page.close(); continue
+        # the cold open comes first now: MegaZroN, skippable
+        try:
+            page.wait_for_function("window.__bs.state === 'narrator' && window.__bs.vault.playing", timeout=120000)
+            print('cold open: MegaZroN in the Vault', flush=True)
+            page.click('#btn-skip')
+        except Exception:
+            fails.append('the new game did not open on MegaZroN')
         if not page.wait_for_selector('#title-card', timeout=60000): fails.append('no title card')
         page.wait_for_function("window.__bs.mode === 'away' && window.__bs.away && window.__bs.away.who", timeout=300000)
         if a.shot: page.screenshot(path=f'{a.shot}_city.jpg', type='jpeg', quality=85, timeout=180000)
@@ -41,12 +49,27 @@ with sync_playwright() as pw:
             done += 1
         print('prologue tasks done', done, flush=True)
         try:
-            # the prologue ends, then MegaZroN's Vault, then the films
-            page.wait_for_function("!window.__bs.away && ['narrator', 'cinematic'].includes(window.__bs.state)", timeout=180000)
+            # the take-off: letterboxed, with its Skip
+            page.wait_for_function('__bs.awayOutroOn', timeout=60000)
+            if not page.locator('#btn-skip').is_visible(): fails.append('the take-off has no Skip button')
+            page.evaluate('__bs.step(0.1)'); time.sleep(2)
+            if a.shot: page.screenshot(path=f'{a.shot}_takeoff.jpg', type='jpeg', quality=85, timeout=180000)
+            page.click('#btn-skip')
+            print('take-off played and skipped', flush=True)
+        except Exception:
+            fails.append('no take-off scene after the last task')
+        try:
+            page.wait_for_function("document.querySelector('#title-card') && document.querySelector('#title-card').textContent.includes('ORBIT')", timeout=60000)
+            print('orbit card', flush=True)
+        except Exception:
+            fails.append('no orbit card after the take-off')
+        try:
+            # then the films
+            page.wait_for_function("!window.__bs.away && window.__bs.state === 'cinematic'", timeout=180000)
             print('after the prologue: state', page.evaluate('__bs.state'), flush=True)
         except Exception:
             fails.append('the prologue never handed over to the opening films')
         page.close()
     b.close()
-print(('FAILED ' + '; '.join(fails)) if fails else 'OK: title card, the Zenvora prologue to the end, the opening films; the switch skips it')
+print(('FAILED ' + '; '.join(fails)) if fails else 'OK: MegaZroN, the title card, the Zenvora prologue to the end, the take-off, the orbit card, the opening films; the switch skips the city')
 sys.exit(1 if fails else 0)
