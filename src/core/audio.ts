@@ -90,6 +90,14 @@ export class Audio {
 
   voiceIn(): AudioNode { return this.buses!.voice; }
   duck(on: boolean) { this.ducked = on; this.applyMix(); }
+  private slept = false;
+  /** Silence everything while the page or app is hidden, and pick up where it was after. */
+  sleep(on: boolean) {
+    const c = this.ctx;
+    if (!c) return;
+    if (on && c.state === 'running') { this.slept = true; void c.suspend(); }
+    else if (!on && this.slept) { this.slept = false; void c.resume(); }
+  }
   voiceLevel() {
     if (!this.buses) return 0;
     this.buses.analyser.getByteTimeDomainData(this.meter);

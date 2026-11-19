@@ -31,7 +31,8 @@
   --font-readout: 'VT323', 'Rajdhani', 'Noto Naskh Arabic', monospace;
   --track: 0.06em;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 12px rgba(0, 0, 0, 0.55);
-  --safe-t: env(safe-area-inset-top); --safe-r: env(safe-area-inset-right); --safe-b: env(safe-area-inset-bottom); --safe-l: env(safe-area-inset-left);
+  /* The Android app sets --safe-area-inset-* itself where its WebView reports no env() insets. */
+  --safe-t: var(--safe-area-inset-top, env(safe-area-inset-top)); --safe-r: var(--safe-area-inset-right, env(safe-area-inset-right)); --safe-b: var(--safe-area-inset-bottom, env(safe-area-inset-bottom)); --safe-l: var(--safe-area-inset-left, env(safe-area-inset-left));
 }
 /* Hindi: squared Rajdhani for UI, Noto for reading. Urdu: Naskh for UI, Nastaliq for anything spoken or told. */
 body.lang-hi { --font-ui: 'Rajdhani', 'Barlow Condensed', 'Noto Naskh Arabic', sans-serif; --font-body: 'Noto Sans Devanagari', 'Barlow', 'Noto Naskh Arabic', sans-serif; --font-readout: 'Rajdhani', 'VT323', 'Noto Naskh Arabic', sans-serif; --track: 0; }

@@ -17,9 +17,15 @@
     "voice:overrides": "python3 tools/tts/voice_overrides.py"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4",
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/cli": "^8.6.2",
     "@types/three": "^0.187.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.6"

@@ -23,6 +23,7 @@ import { openCreator, CreatorStage } from './ui/creator';
 import { applyIcons } from './ui/icons';
 import { initGlyphs, refreshGlyphs } from './ui/glyphs';
 import { MenuNav } from './ui/nav';
+import { initAndroid, isNativeApp } from './core/android';
 import { Wheel } from './ui/wheel';
 import { drawMap, MapPin } from './ui/map';
 import type { MenuTab } from './ui/ui';
@@ -116,7 +117,7 @@ let replaying: number | null = null;
 let photo: { from: THREE.Vector3; to: THREE.Vector3 } | null = null;
 
 document.getElementById('quality-badge')!.textContent = quality.name.toUpperCase();
-document.getElementById('btn-download')!.classList.toggle('hidden', !!desktop || isPhone());
+document.getElementById('btn-download')!.classList.toggle('hidden', !!desktop || isPhone() || isNativeApp());
 if (desktop) {
   document.getElementById('version-badge')!.textContent = `v${desktop.version}`;
   const quit = document.getElementById('btn-quit-desktop')!;
@@ -586,7 +587,23 @@ function padFrame() {
 }
 
 window.addEventListener('beforeunload', () => { if (state === 'game' && game?.mode === 'play') game.persist(); });
-document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'game' && game?.mode === 'play') game.persist(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && state === 'game' && game?.mode === 'play') game.persist();
+  audio.sleep(document.hidden); // phones keep a page's sound playing behind other apps otherwise
+});
+
+// The Android app: back closes the top menu, pauses play or skips a scene; on the title it asks before leaving.
+void initAndroid({
+  back() {
+    if (inScene()) { skipCurrent(); return true; }
+    if (nav.back()) return true;
+    if (ui.modalOpen() && paused) { resume(); return true; }
+    if (state === 'game') { openPause(); return true; }
+    return false;
+  },
+  hidden() { if (state === 'game' && game?.mode === 'play') game.persist(); openPause(); },
+  exitQuestion: () => t('app.exit'),
+});
 
 // ---------------- boot ----------------
 const clock = new THREE.Timer(); // THREE.Clock is deprecated (a console warning every load)
