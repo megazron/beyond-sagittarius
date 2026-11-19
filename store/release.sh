@@ -22,6 +22,14 @@ if [ "${1:-}" != "--same" ]; then
 fi
 echo "== Beyond Sagittarius $name (versionCode $code)"
 
+# Release gate: only the owner signs off a release, after playing it. Green tests are not enough.
+REVIEW="store/review/$name.md"
+if [ "${BS_INTERNAL_TEST:-0}" != 1 ] && ! grep -qx "Owner approved: yes" "$REVIEW" 2>/dev/null; then
+  echo "Release blocked: $REVIEW must contain the line 'Owner approved: yes', written by the owner after playing this build."
+  echo "Start from store/review/TEMPLATE.md. For a build that is only for the owner's own internal test, run with BS_INTERNAL_TEST=1."
+  exit 2
+fi
+
 $HEAVY npm run build
 npx cap sync android
 (cd android && $HEAVY ./gradlew --no-daemon --max-workers=4 -Dorg.gradle.jvmargs=-Xmx3g bundleRelease)

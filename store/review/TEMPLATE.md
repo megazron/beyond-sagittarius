@@ -1,0 +1,23 @@
+# Release review: Beyond Sagittarius <version>
+
+I fill this in after playing the build on a real phone and on desktop. Agents prepare the clips and the checklist; only I write the approval line.
+
+## Played on
+- Phone:
+- Desktop:
+
+## Checklist (each one seen in real play, not only in tests)
+- [ ] People stay visible when I walk up to them
+- [ ] Buildings, rooms and doors feel human-sized; the city feels big and alive
+- [ ] Minimap and GPS lead me to the objective
+- [ ] Every line is voiced; music and sounds everywhere
+- [ ] Characters move while doing tasks and while talking
+- [ ] No text runs out of any banner, button or subtitle (en, hi, ur)
+- [ ] The intro tells the story: Zenvora, take-off, the pull into Sagittarius, the Vault
+- [ ] No clothes or skin poking through in play
+- [ ] Smooth enough on my phone
+- [ ] Nothing else that bothers me (list below)
+
+## Notes
+
+Owner approved: no
