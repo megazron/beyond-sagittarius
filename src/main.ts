@@ -180,6 +180,9 @@ function whenWorldReady(fn: () => void) {
 }
 
 const detail = () => (quality.name === 'mobile' ? 0.6 : quality.name === 'cinematic' ? 1.4 : 1);
+/** Your own body is the one always in front of the camera: phones draw it with the full build (the light one's coat
+ * showed specks of what is under it from the follow camera). */
+const PLAYER_DETAIL = () => Math.max(detail(), 0.8);
 let pendingLook: PlayerLook = defaultLook();
 
 /** Applies the player's look and name to everything that shows them. */
@@ -204,7 +207,7 @@ function applyPlayer(look: PlayerLook, skins: CrewSkins) {
   if (key === castKey) return;
   castKey = key;
   cine.setCast(look, skins);
-  if (player) player.setLook(look, detail(), () => game?.story.reattachSpear());
+  if (player) player.setLook(look, PLAYER_DETAIL(), () => game?.story.reattachSpear());
 }
 
 /** New game: make your character, then the prologue. */
@@ -748,7 +751,7 @@ async function boot() {
   const crewAll = preloadCrew(['strong', 'medic', 'builder', 'social', 'megazron'], detail());
   await world.build((p) => ui.setLoading(p));
   await crewReady.catch((e) => console.warn('[crew]', e));
-  player = new Player(world.terrain, world.forest, camera, quality.name === 'mobile' ? 0.6 : 1);
+  player = new Player(world.terrain, world.forest, camera, PLAYER_DETAIL());
   player.sensitivity = settings.sensitivity;
   player.invertY = settings.invertY;
   world.scene.add(player.model.root);

@@ -158,9 +158,10 @@ Skin and cloth: skin a garment covers in every pose the game takes (`tools/chars
 poses) and that stays at least 6 cm from all of the garment's openings can only be seen by coming out through the
 cloth, so it is deleted (`posed_cover` in `build_characters.py`). The rest of the hidden skin is sunk in towards its
 bones (`LINER=0` keeps it at full depth, which came out through the cloth more often in play), skin near an opening
-takes the garment's weights (`follow`) and the opening gets a facing down to it. In the game every garment is drawn a
-few millimetres nearer the camera per layer (`CLOTH_PULL`, by the atlas tile's layer in the body's JSON), so where
-skin or an inner garment comes within a few millimetres of the layer over it, the outer one still wins. The light
+takes the garment's weights (`follow`) and the opening gets a facing down to it. In the game every garment is drawn
+6 mm nearer the camera than the skin (`CLOTH_LIFT`) and a few millimetres more per layer (`CLOTH_PULL`, by the atlas
+tile's layer in the body's JSON), so where skin or an inner garment comes close to the layer over it, the outer one
+still wins. The light
 `.lod1` builds (every body, the creator ones too) decimate the joints as well. `CULL_CACHE=~/.cache/bs-cull` keeps the
 slow sight-line tests between builds; `CREW_OUT=DIR` builds somewhere other than `public/models/crew`.
 

@@ -1,7 +1,7 @@
 // Dev-only turntable for the crew (not part of the build): vite, then /dev/chars.html
 import * as THREE from 'three';
 import { randomLook, OUTFITS } from '../src/characters/custom';
-import { createCharacter, CrewId, Character, CrewPose, CHAR_BUDGET, CLOTH_PULL } from '../src/characters/character';
+import { createCharacter, CrewId, Character, CrewPose, CHAR_BUDGET, CLOTH_PULL, CLOTH_LIFT } from '../src/characters/character';
 CHAR_BUDGET.throttle = false; CHAR_BUDGET.lodFar = Infinity; // the gate poses a body many times before it draws it once: every call must count
 import { voice } from '../src/core/voice';
 import { DECREEP } from '../src/characters/decreep';
@@ -184,14 +184,14 @@ if (DECREEP) { const eyeLight = new THREE.PointLight(0xfff2e0, 0.55, 6, 1.5); sc
 const POKE_MM = 12;
 let tileLayer = [1, 2, 3, 4], tiles = 4;
 W.setLayers = (layers: number[]) => { tiles = layers.length; tileLayer = [...layers, 9, 9, 9, 9].slice(0, 4); };
-const layerVS = `#include <common>\n#include <skinning_pars_vertex>\n#include <morphtarget_pars_vertex>\nuniform float uTiles; uniform vec4 uTileLayer; uniform float uBase; uniform float uPull;\nvarying float vLayer; varying float vViewZ;\nvoid main(){\n#include <beginnormal_vertex>\n#include <morphnormal_vertex>\n#include <skinbase_vertex>\n#include <skinnormal_vertex>\n#include <begin_vertex>\n#include <morphtarget_vertex>\n#include <skinning_vertex>\n
+const layerVS = `#include <common>\n#include <skinning_pars_vertex>\n#include <morphtarget_pars_vertex>\nuniform float uTiles; uniform vec4 uTileLayer; uniform float uBase; uniform float uPull; uniform float uLift;\nvarying float vLayer; varying float vViewZ;\nvoid main(){\n#include <beginnormal_vertex>\n#include <morphnormal_vertex>\n#include <skinbase_vertex>\n#include <skinnormal_vertex>\n#include <begin_vertex>\n#include <morphtarget_vertex>\n#include <skinning_vertex>\n
   float L = uBase;
   if (uBase > 0.5 && uBase < 1.5) { int k = 0; if (uTiles < 1.5) k = 0; else if (uTiles < 2.5) k = uv.x >= 0.5 ? 1 : 0; else k = (uv.x >= 0.5 ? 1 : 0) + (uv.y >= 0.46875 ? 2 : 0); L = uTileLayer[k]; }
   vLayer = L; vec4 mv = modelViewMatrix * vec4(transformed, 1.0);
-  if (L > 0.25 && L < 50.0) mv.xyz *= max(0.0, 1.0 - L * uPull / max(length(mv.xyz), 1e-3)); // as the game draws cloth (CLOTH_PULL)
+  if (L > 0.25 && L < 50.0) mv.xyz *= max(0.0, 1.0 - (uLift + L * uPull) / max(length(mv.xyz), 1e-3)); // as the game draws cloth (CLOTH_LIFT, CLOTH_PULL)
   vViewZ = -mv.z; gl_Position = projectionMatrix * mv; }`;
 const enc = `vec3 encD(float d){ float m = clamp(d * 1000.0, 0.0, 16777000.0); return vec3(floor(m / 65536.0), mod(floor(m / 256.0), 256.0), mod(floor(m), 256.0)) / 255.0; }`;
-const mk = (frag: string, side: THREE.Side = THREE.DoubleSide) => new THREE.ShaderMaterial({ side, vertexShader: layerVS, fragmentShader: frag, uniforms: { uTiles: { value: 4 }, uTileLayer: { value: new THREE.Vector4() }, uBase: { value: 0 }, uMin: { value: 0 }, uPull: { value: CLOTH_PULL } } });
+const mk = (frag: string, side: THREE.Side = THREE.DoubleSide) => new THREE.ShaderMaterial({ side, vertexShader: layerVS, fragmentShader: frag, uniforms: { uTiles: { value: 4 }, uTileLayer: { value: new THREE.Vector4() }, uBase: { value: 0 }, uMin: { value: 0 }, uPull: { value: CLOTH_PULL }, uLift: { value: CLOTH_LIFT } } });
 // id: r = layer * 40 + 20 (skin from behind 250), g/b/a unused; depth: packed view depth (mm) of whatever is drawn
 const idMat = () => mk(`varying float vLayer; varying float vViewZ; void main(){ float c = vLayer > 50.0 ? 240.0 : vLayer * 40.0 + 20.0; if (vLayer < 0.25 && !gl_FrontFacing) c = 250.0; gl_FragColor = vec4(c / 255.0, 0.0, 0.0, 1.0); }`);
 const depMat = () => mk(`${enc}\nuniform float uMin; varying float vLayer; varying float vViewZ; void main(){ if (vLayer <= uMin || vLayer > 50.0) discard; gl_FragColor = vec4(encD(vViewZ), 1.0); }`);

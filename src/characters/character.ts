@@ -39,6 +39,12 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
  * dev/chars.ts (the play capture) draws its passes the same way.
  */
 export const CLOTH_PULL = 0.003;
+/**
+ * And every garment this much more on top of that, over the skin: a raised arm stretches a sweater thinner than the
+ * skin under it was sunk for (Nuvexa's selfie on the deck showed her chest through it). The gap between two garments
+ * stays CLOTH_PULL.
+ */
+export const CLOTH_LIFT = 0.006;
 
 export const CHAR_BUDGET = { throttle: true, correctiveNear: 9, lodFar: 11, shadowFar: 28, crowdLodFar: 6, crowdShadowFar: 14 };
 
@@ -227,16 +233,16 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     cloth.userData.film = { kind: 'cloth', atlas, satin: human, velvet: id === 'megazron' }; // the narrator's coat is velvet in the films
     const lay = M.layers ?? [];
     const accent = { uAccent: { value: new THREE.Color(custom?.accent ?? 0xffffff) }, uAccentK: { value: custom ? 1 : 0 }, uDetail: { value: clothDetail() }, uHeightM: { value: heightM }, uSatin: { value: human ? 1 : 0 }, uDust: { value: human ? 0.12 : 1 },
-      uTiles: { value: lay.length }, uTileLayer: { value: new THREE.Vector4(...[...lay, 1, 1, 1, 1].slice(0, 4)) }, uPull: { value: lay.length ? CLOTH_PULL : 0 } };
+      uTiles: { value: lay.length }, uTileLayer: { value: new THREE.Vector4(...[...lay, 1, 1, 1, 1].slice(0, 4)) }, uPull: { value: lay.length ? CLOTH_PULL : 0 }, uLift: { value: lay.length ? CLOTH_LIFT : 0 } };
     applySway(cloth, sway, (sh) => {
       Object.assign(sh.uniforms, accent);
-      sh.vertexShader = `attribute float aAccent; varying float vAccent; varying float vBindY; uniform float uTiles, uPull; uniform vec4 uTileLayer;\n` + sh.vertexShader
+      sh.vertexShader = `attribute float aAccent; varying float vAccent; varying float vBindY; uniform float uTiles, uPull, uLift; uniform vec4 uTileLayer;\n` + sh.vertexShader
         .replace('#include <begin_vertex>', `#include <begin_vertex>\n  vAccent = aAccent; vBindY = position.y;`)
         // the garment's layer from its atlas tile (tools/chars/paint.py tile_layout), and the pull towards the camera
         .replace('#include <project_vertex>', `#include <project_vertex>
         { int k = uTiles < 1.5 ? 0 : uTiles < 2.5 ? (uv.x >= 0.5 ? 1 : 0) : (uv.x >= 0.5 ? 1 : 0) + (uv.y >= 0.46875 ? 2 : 0);
           float L = k == 0 ? uTileLayer.x : k == 1 ? uTileLayer.y : k == 2 ? uTileLayer.z : uTileLayer.w;
-          mvPosition.xyz *= max(0.0, 1.0 - L * uPull / max(length(mvPosition.xyz), 1e-3)); gl_Position = projectionMatrix * mvPosition; }`);
+          mvPosition.xyz *= max(0.0, 1.0 - (uLift + L * uPull) / max(length(mvPosition.xyz), 1e-3)); gl_Position = projectionMatrix * mvPosition; }`);
       sh.fragmentShader = `uniform vec3 uAccent; uniform float uAccentK, uHeightM, uSatin, uDust; uniform sampler2D uDetail; varying float vAccent; varying float vBindY;\n` + sh.fragmentShader
         .replace('#include <map_fragment>', `#include <map_fragment>
         diffuseColor.rgb = mix(diffuseColor.rgb, uAccent * (0.35 + dot(diffuseColor.rgb, vec3(1.1))), vAccent * uAccentK);
