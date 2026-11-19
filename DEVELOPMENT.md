@@ -48,6 +48,24 @@ Pushing a `desktop-v*` tag builds on `windows-latest` and attaches the files to 
 Release (`.github/workflows/desktop.yml`). Saves stay in
 `%APPDATA%\Beyond Sagittarius`. F11 toggles fullscreen.
 
+## Android build (Google Play)
+
+Capacitor 8 wraps the built game in `android/` (package `com.megazron.beyondsagittarius`, target and
+compile SDK 36, min SDK 29). Everything ships inside the app; it has no permissions, not even internet.
+Hardware back and app pause/resume reach the game through `src/core/android.ts`.
+
+```bash
+store/release.sh 1.0.1      # bump, build, sync, sign, check: AAB in ~/beyond-sagittarius-release/
+npx cap sync android        # after any `npm run build`, to refresh android/app/src/main/assets/public
+python3 tools/android/check_aab.py <aab>          # target SDK, permissions, 16 KB pages, download size
+~/.venvs/ehd/bin/python tools/android/app_smoke.py   # the bundled files in an emulated phone with a fake Capacitor bridge
+python3 tools/android/make_icons.py               # launcher icons, splash, store icon and feature graphic
+python3 tools/android/privacy_page.py             # PRIVACY.md -> public/privacy.html
+```
+
+Needs `~/tools/android-sdk` (cmdline-tools, platform 36, build-tools 36) and JDK 21. The upload key lives in
+`~/beyond-sagittarius-keys/`, never in git. The Play Store steps are in `store/PLAYSTORE_GUIDE.md`.
+
 ## Deploy
 
 `vite.config.ts` uses `base: './'`, so the build works from any sub-path.

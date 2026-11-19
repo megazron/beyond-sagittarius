@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bs_space">#05060A</color>
+    <color name="colorPrimary">#05060A</color>
+    <color name="colorPrimaryDark">#05060A</color>
+    <color name="colorAccent">#FFB35C</color>
+</resources>
