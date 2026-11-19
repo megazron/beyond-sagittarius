@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { modelMaterial, modelMats, type ModelPack } from './models';
 import type { Quality } from '../core/quality';
 import { mulberry32, smoothstep } from '../core/noise';
@@ -246,15 +247,20 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
       const m = new THREE.Mesh(shrubScan.geo, shrubScan.mat);
       m.scale.setScalar(0.62 + rnd() * 0.2); m.rotation.y = rnd() * 6;
       bush.add(m);
-    } else for (let s = 0; s < 6; s++) {
-      const st = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.04, 1.1, 5), stemMat);
-      st.position.y = 0.5; st.rotation.set((rnd() - 0.5) * 0.9, 0, (rnd() - 0.5) * 0.9);
-      bush.add(st);
-      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 5), leafMat);
-      leaf.scale.set(1, 0.18, 0.5);
-      leaf.position.set((rnd() - 0.5) * 0.9, 0.5 + rnd() * 0.6, (rnd() - 0.5) * 0.9);
-      leaf.rotation.set(rnd(), rnd() * 6, rnd() * 0.5);
-      bush.add(leaf);
+    } else {
+      // stems and leaves baked into one mesh each: a bush is two draw calls, not twelve (phones count draw calls)
+      const stems: THREE.BufferGeometry[] = [], leaves: THREE.BufferGeometry[] = [];
+      for (let s = 0; s < 6; s++) {
+        const st = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.04, 1.1, 5));
+        st.position.y = 0.5; st.rotation.set((rnd() - 0.5) * 0.9, 0, (rnd() - 0.5) * 0.9);
+        st.updateMatrix(); stems.push(st.geometry.applyMatrix4(st.matrix));
+        const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 5));
+        leaf.scale.set(1, 0.18, 0.5);
+        leaf.position.set((rnd() - 0.5) * 0.9, 0.5 + rnd() * 0.6, (rnd() - 0.5) * 0.9);
+        leaf.rotation.set(rnd(), rnd() * 6, rnd() * 0.5);
+        leaf.updateMatrix(); leaves.push(leaf.geometry.applyMatrix4(leaf.matrix));
+      }
+      bush.add(new THREE.Mesh(mergeGeometries(stems), stemMat), new THREE.Mesh(mergeGeometries(leaves), leafMat));
     }
     bush.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     group.add(bush);
@@ -265,13 +271,16 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
       m.scale.y = safe ? 1.3 : 1;
       fruit.add(m);
       if (!safe) {
+        // the thorns are one mesh: ten separate cones a fruit were most of the draw calls on the shore
+        const thorns: THREE.BufferGeometry[] = [];
         for (let k = 0; k < 10; k++) {
-          const th = new THREE.Mesh(thornGeo, stemMat);
+          const th = new THREE.Object3D();
           const dir = new THREE.Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize();
           th.position.copy(dir).multiplyScalar(0.09);
           th.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-          fruit.add(th);
+          th.updateMatrix(); thorns.push(thornGeo.clone().applyMatrix4(th.matrix));
         }
+        fruit.add(new THREE.Mesh(mergeGeometries(thorns), stemMat));
       }
       const fa = (f / 3) * Math.PI * 2 + rnd();
       fruit.position.set(bx + Math.cos(fa) * 0.42, h + 0.75 + rnd() * 0.35, bz + Math.sin(fa) * 0.42);
@@ -292,7 +301,9 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
         const d = it.pos.distanceTo(player);
         const ring = it.obj.getObjectByName('ring') as THREE.Mesh | undefined;
         if (ring) {
-          (ring.material as THREE.MeshBasicMaterial).opacity = smoothstep(9, 3, d) * (0.5 + 0.3 * Math.sin(t * 4));
+          const near = smoothstep(9, 3, d);
+          ring.visible = near > 0; // a ring further off than 9 m is invisible: not drawn at all
+          (ring.material as THREE.MeshBasicMaterial).opacity = near * (0.5 + 0.3 * Math.sin(t * 4));
           ring.scale.setScalar(1 + 0.1 * Math.sin(t * 4));
         }
         if (it.type === 'fruit') it.obj.position.y += Math.sin(t * 1.5 + it.pos.x) * 0.0005;

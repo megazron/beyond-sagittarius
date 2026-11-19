@@ -678,7 +678,7 @@ function tick(step: number) {
     if (state === 'game') ui.track(camera);
     const focus = player.pos;
     if (photo) { camera.position.copy(photo.from); camera.lookAt(photo.to); }
-    world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer);
+    world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer, renderer.stageInfo().scene === world.scene);
   }
   if (stage.active) stage.update(dt);
 }

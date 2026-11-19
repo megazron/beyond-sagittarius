@@ -110,7 +110,9 @@ const PRESETS: Record<QualityName, Quality> = {
     hdri: false,
     aoScale: 0,
     shadowSoftness: 1,
-    shadowRange: 70,
+    // 45 m: the 512 map is sharper over less ground, and the shadow pass draws about half the casters (phones are
+    // bound by draw calls)
+    shadowRange: 45,
     pcss: false,
     post: false,
     msaa: 0,

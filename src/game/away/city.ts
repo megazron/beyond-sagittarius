@@ -33,6 +33,8 @@ const hx = (x: number) => {
   return PROFILE[PROFILE.length - 1][1];
 };
 const FLOOR = 0.14;
+/** Phones: townsfolk past this many metres from the camera are not drawn. */
+const PHONE_CROWD_FAR = 26;
 
 export interface CityPerson { id: string; fig: Character; pos: THREE.Vector3; yaw: number; pose: CrewPose; phase: number; walk?: { z0: number; z1: number; dir: number; speed: number } }
 
@@ -621,9 +623,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   for (const f of FRIENDS) person(f.id, createCharacter(f.id, detail), f.x, f.z, f.yaw, f.pose);
   // the townsfolk, the walkers and the people stood in groups are a crowd (CHAR_BUDGET): no corrective shapes, the light
   // build and no shadow from closer in
+  const crowd = new Set<Character>();
   const someone = (lineage: PlayerLook['lineage'], i: number) => {
     const c = createCharacter('scientist', detail * 0.8, { ...defaultLook(), ...randomLook({ name: '', gender: i % 2 ? 'f' : 'm' }), lineage, ...LINEAGES[lineage] } as PlayerLook);
-    c.setCrowd(true); return c;
+    c.setCrowd(true); crowd.add(c); return c;
   };
   FOLK.forEach((f, i) => person(f.id, someone(f.lineage, i), f.x, f.z, f.yaw, f.pose));
   // Mir: a chai stall regular in a three-piece, the same man as the suit skin and the Drexon cameo
@@ -805,6 +808,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         else { q.fig.setLookTarget(null); if (Math.abs(q.yaw - k.rest) < 0.01) { q.yaw = k.rest; talking = null; } }
       }
       if (outroT >= 0) outro(dt, time, cam as THREE.PerspectiveCamera | undefined);
+      // phones: a townsperson further off than PHONE_CROWD_FAR is not drawn (the painted crowd in the haze stands in for
+      // them). Each body is a dozen draw calls, and on a phone the draw calls, not the triangles, set the frame time.
+      if (!rich && cam) for (const q of people) {
+        if (!crowd.has(q.fig)) continue;
+        const d = Math.hypot(q.pos.x - cam.position.x, q.pos.z - cam.position.z);
+        q.fig.root.visible = d < PHONE_CROWD_FAR * (q.fig.root.visible ? 1.08 : 1);
+      }
       for (const q of people) {
         if (boarding.has(q)) continue;
         const w = q.walk;

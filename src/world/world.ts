@@ -147,7 +147,12 @@ export class World {
     return [this.sky.group, this.grass.mesh, this.water.mesh];
   }
 
-  update(dt: number, time: number, hours: number, focus: THREE.Vector3, cam: THREE.Camera, renderer: THREE.WebGLRenderer) {
+  /**
+   * `drawn` false: another stage is on screen (Zenvora, a crewmate's stage). Light, sky and time still run (the stage's
+   * exposure follows them), but the grass, the forest and the lake's mirrored render of the whole world are left alone:
+   * the lake used to redraw the planet for a camera standing in the city (5.7 M triangles a frame on Ultra).
+   */
+  update(dt: number, time: number, hours: number, focus: THREE.Vector3, cam: THREE.Camera, renderer: THREE.WebGLRenderer, drawn = true) {
     const sky = this.sky;
     sky.update(hours, cam.position, time);
     const e = sky.sunDir.y;
@@ -191,10 +196,12 @@ export class World {
     this.forest.setSun(this.lightDir, this.sun.color);
 
     windUniforms.uTime.value = time;
-    this.grass.update(focus);
     this.water.update(time, day, envTex);
-    this.forest.update(cam.position);
-    this.water.reflect(renderer, this.scene, cam as THREE.PerspectiveCamera, [this.water.mesh, this.grass.mesh]);
+    if (drawn) {
+      this.grass.update(focus);
+      this.forest.update(cam.position);
+      this.water.reflect(renderer, this.scene, cam as THREE.PerspectiveCamera, [this.water.mesh, this.grass.mesh]);
+    }
     this.pod.update(time);
     this.pod2.update(time + 7.3);
     this.camp.update(time, dt, focus);
