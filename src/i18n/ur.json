@@ -509,7 +509,7 @@
   "legal.parodyH": "افسانہ اور پیروڈی",
   "legal.parody": "کردار اور واقعات فرضی ہیں۔ Lamazon جیسے نام مزاح کے لیے گھڑی ہوئی پیروڈی ہیں۔ کوئی اصلی کمپنی اس گیم سے وابستہ نہیں اور نہ ہی اس کی تائید کرتی ہے۔",
   "legal.licencesH": "لائسنس اور کریڈٹ",
-  "legal.licences": "گیم کا کوڈ، آرٹ اور کہانی: جملہ حقوق محفوظ، megazron۔ three.js (MIT) سے بنا۔ ٹیکسچر، ماڈل اور HDRI، Poly Haven سے CC0 ہیں۔ آوازیں مصنوعی ہیں۔ ہر لائسنس کی مکمل فہرست GitHub پر CREDITS.md میں ہے۔",
+  "legal.licences": "گیم کا کوڈ، آرٹ اور کہانی: جملہ حقوق محفوظ، megazron۔ three.js (MIT) سے بنا؛ Android ایپ Capacitor (MIT) سے۔ ٹیکسچر، اسکین کیے ماڈل اور HDRI: Poly Haven (CC0)۔ جسم: MakeHuman (CC0)۔ کپڑے: MakeHuman کمیونٹی کے اثاثے، کچھ CC BY کے تحت Elvaerwyn، Mindfront اور punkduck کے (فٹ کیے، ہلکے کیے اور رنگ بدلے)، باقی CC0۔ اینیمیشن: Quaternius (CC0) اور CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu)۔ فونٹ: SIL Open Font License۔ آوازیں مصنوعی ہیں (Kokoro-82M، Apache-2.0)۔ ہر لائسنس کی مکمل فہرست GitHub پر CREDITS.md میں ہے۔",
   "legal.readFull": "مکمل دستاویزات GitHub پر",
   "legal.privacyLink": "پرائیویسی پالیسی",
   "age.stone": "پتھر کا دور",

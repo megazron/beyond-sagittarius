@@ -509,7 +509,7 @@
   "legal.parodyH": "Fiction and parody",
   "legal.parody": "Characters and events are made up. Names such as Lamazon are invented parodies used for humour. No real company is involved or endorses this game.",
   "legal.licencesH": "Licences and credits",
-  "legal.licences": "Game code, art and story: all rights reserved, megazron. Built with three.js (MIT). Textures, models and the HDRI are CC0 from Poly Haven. Voices are synthetic. The full list with every licence is in CREDITS.md on GitHub.",
+  "legal.licences": "Game code, art and story: all rights reserved, megazron. Built with three.js (MIT); the Android app with Capacitor (MIT). Textures, scanned models and the HDRI: Poly Haven (CC0). Bodies: MakeHuman (CC0). Clothes: MakeHuman community assets, some under CC BY by Elvaerwyn, Mindfront and punkduck (fitted, reduced and recoloured), the rest CC0. Animation: Quaternius (CC0) and the CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu). Fonts: SIL Open Font License. Voices are synthetic (Kokoro-82M, Apache-2.0). The full list with every licence is in CREDITS.md on GitHub.",
   "legal.readFull": "Full texts on GitHub",
   "legal.privacyLink": "Privacy policy",
   "age.stone": "Stone Age",

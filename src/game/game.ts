@@ -626,8 +626,10 @@ export class Game {
     }
     // a station that is still missing materials yields to a pickable item in reach
     const reach = act ? this.nearestItem() : null;
-    // ...and someone walking past doesn't stand between you and what's at your feet
-    const nearItem = reach && (act!.missing?.length || ((act!.id.startsWith('npc-') || act!.id === 'skyvra') && Math.hypot(reach.pos.x - p.pos.x, reach.pos.z - p.pos.z) < ad)) ? reach : null;
+    // ...and someone walking past doesn't stand between you and what's at your feet: an item within a step wins over a
+    // person even when they stand closer (a roaming local who stops beside you on a frond used to take every press)
+    const rd = reach ? Math.hypot(reach.pos.x - p.pos.x, reach.pos.z - p.pos.z) : Infinity;
+    const nearItem = reach && (act!.missing?.length || ((act!.id.startsWith('npc-') || act!.id === 'skyvra') && (rd < ad || rd < 1.2))) ? reach : null;
     if (act && !nearItem) {
       this.interactTarget = { kind: 'action', action: act };
       this.ui.setPrompt(act.missing?.length ? t('prompt.need', { action: act.label, list: act.missing.join(', ') }) : act.label, this.anchor(act.pos, 1));

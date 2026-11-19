@@ -20,6 +20,7 @@ at home. Dangerous procedures stay high-level or are left out.
 | Library | Use | Licence |
 | --- | --- | --- |
 | [three.js](https://threejs.org) (r187) incl. `examples/jsm` post-processing (EffectComposer, UnrealBloomPass, GTAOPass, FXAAPass, OutputPass, ShaderPass), loaders (HDRLoader, GLTFLoader, meshopt decoder), SunLight and `BufferGeometryUtils` | Rendering | MIT |
+| [Capacitor](https://capacitorjs.com) (`@capacitor/core`, `app`, `splash-screen`, `android`) | Android app runtime and native bridge | MIT |
 | [Electron](https://www.electronjs.org) (includes Chromium; its notices ship as `LICENSES.chromium.html` in the download) | Desktop build runtime | MIT |
 | [electron-builder](https://www.electron.build) | Desktop packaging (dev only) | MIT |
 | [Vite](https://vitejs.dev) | Build tool (dev only) | MIT |

@@ -3,9 +3,9 @@
 Real status of every level. Update it in the same commit as the level.
 Done means objectives, world content, NPCs, cutscene, dubbing, codex and smoke test.
 
-## Prologue: Zenvora (designed, being built)
+## Prologue: Zenvora (shipped)
 
-Status: design and first code, behind `?prologue=1` until it is good enough to replace the old opening. Not in the shipped flow yet.
+Status: in the shipped flow. A new game plays MegaZroN's cold open, the title card, Zenvora with the player's list, the take-off and the orbit card, then the deck, the title sequence and the wake-up. The System setting and `?prologue=0` leave the city out; Chapters has "The opening" to watch it again. Below is the design it was built from.
 
 **Title card:** black, one line, nothing else: **TARAVEL · 2189**. Taravel is the hub world where the five lineages and ours first settled side by side. None of the six has ever stood on Earth (`dlg.10.4`, `mz.ch1.2`), and it is home to all of them. The year is the one the game already uses (`cine.year`).
 

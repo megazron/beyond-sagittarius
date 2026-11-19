@@ -117,6 +117,7 @@ let replaying: number | null = null;
 let photo: { from: THREE.Vector3; to: THREE.Vector3 } | null = null;
 
 document.getElementById('quality-badge')!.textContent = quality.name.toUpperCase();
+document.getElementById('version-badge')!.textContent = `v${__APP_VERSION__}`;
 document.getElementById('btn-download')!.classList.toggle('hidden', !!desktop || isPhone() || isNativeApp());
 if (desktop) {
   document.getElementById('version-badge')!.textContent = `v${desktop.version}`;
