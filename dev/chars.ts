@@ -1,7 +1,7 @@
 // Dev-only turntable for the crew (not part of the build): vite, then /dev/chars.html
 import * as THREE from 'three';
 import { randomLook, OUTFITS } from '../src/characters/custom';
-import { createCharacter, CrewId, Character, CrewPose, CHAR_BUDGET } from '../src/characters/character';
+import { createCharacter, CrewId, Character, CrewPose, CHAR_BUDGET, CLOTH_PULL } from '../src/characters/character';
 CHAR_BUDGET.throttle = false; CHAR_BUDGET.lodFar = Infinity; // the gate poses a body many times before it draws it once: every call must count
 import { voice } from '../src/core/voice';
 import { DECREEP } from '../src/characters/decreep';
@@ -177,6 +177,91 @@ W.flagCount = () => { const g = r.getContext(); const w = g.drawingBufferWidth, 
 // the eye light: a small soft source by the lens, so eyes are never dead sockets (de-creep only)
 if (DECREEP) { const eyeLight = new THREE.PointLight(0xfff2e0, 0.55, 6, 1.5); scene.add(eyeLight); W.eyeLight = eyeLight; }
 
+// ---- play capture (tools/play_capture.py): the game's own follow camera and flag passes for skin and cloth in motion ----
+// Layers: body skin 0, footwear 0.5 (it goes on under the trouser hem), each other garment 1 + its order in the outfit.
+// A visible surface with a more outer layer lying just behind it (within POKE_MM) has come out through that layer:
+// skin through cloth (yellow) or an inner garment through an outer one (cyan). Skin seen from behind is magenta.
+const POKE_MM = 12;
+let tileLayer = [1, 2, 3, 4], tiles = 4;
+W.setLayers = (layers: number[]) => { tiles = layers.length; tileLayer = [...layers, 9, 9, 9, 9].slice(0, 4); };
+const layerVS = `#include <common>\n#include <skinning_pars_vertex>\n#include <morphtarget_pars_vertex>\nuniform float uTiles; uniform vec4 uTileLayer; uniform float uBase; uniform float uPull;\nvarying float vLayer; varying float vViewZ;\nvoid main(){\n#include <beginnormal_vertex>\n#include <morphnormal_vertex>\n#include <skinbase_vertex>\n#include <skinnormal_vertex>\n#include <begin_vertex>\n#include <morphtarget_vertex>\n#include <skinning_vertex>\n
+  float L = uBase;
+  if (uBase > 0.5 && uBase < 1.5) { int k = 0; if (uTiles < 1.5) k = 0; else if (uTiles < 2.5) k = uv.x >= 0.5 ? 1 : 0; else k = (uv.x >= 0.5 ? 1 : 0) + (uv.y >= 0.46875 ? 2 : 0); L = uTileLayer[k]; }
+  vLayer = L; vec4 mv = modelViewMatrix * vec4(transformed, 1.0);
+  if (L > 0.25 && L < 50.0) mv.xyz *= max(0.0, 1.0 - L * uPull / max(length(mv.xyz), 1e-3)); // as the game draws cloth (CLOTH_PULL)
+  vViewZ = -mv.z; gl_Position = projectionMatrix * mv; }`;
+const enc = `vec3 encD(float d){ float m = clamp(d * 1000.0, 0.0, 16777000.0); return vec3(floor(m / 65536.0), mod(floor(m / 256.0), 256.0), mod(floor(m), 256.0)) / 255.0; }`;
+const mk = (frag: string, side: THREE.Side = THREE.DoubleSide) => new THREE.ShaderMaterial({ side, vertexShader: layerVS, fragmentShader: frag, uniforms: { uTiles: { value: 4 }, uTileLayer: { value: new THREE.Vector4() }, uBase: { value: 0 }, uMin: { value: 0 }, uPull: { value: CLOTH_PULL } } });
+// id: r = layer * 40 + 20 (skin from behind 250), g/b/a unused; depth: packed view depth (mm) of whatever is drawn
+const idMat = () => mk(`varying float vLayer; varying float vViewZ; void main(){ float c = vLayer > 50.0 ? 240.0 : vLayer * 40.0 + 20.0; if (vLayer < 0.25 && !gl_FrontFacing) c = 250.0; gl_FragColor = vec4(c / 255.0, 0.0, 0.0, 1.0); }`);
+const depMat = () => mk(`${enc}\nuniform float uMin; varying float vLayer; varying float vViewZ; void main(){ if (vLayer <= uMin || vLayer > 50.0) discard; gl_FragColor = vec4(encD(vViewZ), 1.0); }`);
+const kindOf = (m: THREE.Mesh) => { const n = m.name; if (n.startsWith('skin_body')) return 0; if (n === 'cloth') return 1; return 99; };
+const saved = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+let rt: THREE.WebGLRenderTarget | null = null;
+const read = () => { const g = r.getContext(); const w = g.drawingBufferWidth, h = g.drawingBufferHeight, px = new Uint8Array(w * h * 4); g.readPixels(0, 0, w, h, g.RGBA, g.UNSIGNED_BYTE, px); return { w, h, px }; };
+const withMats = (make: (m: THREE.Mesh, k: number) => THREE.Material | null, bg: number) => {
+  const old = scene.background; scene.background = new THREE.Color(bg); const gv = ground.visible, gr = grid.visible; ground.visible = false; grid.visible = false;
+  scene.traverse((o) => { const m = o as THREE.Mesh; if (!m.isMesh || m === ground) return; saved.set(m, m.material); const k = kindOf(m); const x = make(m, k); if (x) m.material = x; else m.visible = false; });
+  const g = r.getContext(); const w = g.drawingBufferWidth, h = g.drawingBufferHeight;
+  if (!rt || rt.width !== w || rt.height !== h) { rt?.dispose(); rt = new THREE.WebGLRenderTarget(w, h, { samples: 0, colorSpace: THREE.NoColorSpace }); }
+  // no MSAA and no tone mapping: an edge pixel keeps one surface's id and depth instead of a blend of two
+  const tm = r.toneMapping; r.toneMapping = THREE.NoToneMapping; r.setRenderTarget(rt); r.render(scene, cam);
+  const px = new Uint8Array(w * h * 4); r.readRenderTargetPixels(rt, 0, 0, w, h, px); r.setRenderTarget(null); r.toneMapping = tm;
+  const out = { w, h, px };
+  saved.forEach((v, m) => { m.material = v; m.visible = true; }); saved.clear(); scene.background = old; ground.visible = gv; grid.visible = gr;
+  return out;
+};
+const cache = new Map<string, THREE.ShaderMaterial>();
+const getM = (key: string, f: () => THREE.ShaderMaterial, base: number) => { let m = cache.get(key); if (!m) { m = f(); cache.set(key, m); } m.uniforms.uBase.value = base; m.uniforms.uTiles.value = tiles; (m.uniforms.uTileLayer.value as THREE.Vector4).fromArray(tileLayer); return m; };
+/** Flag passes over the current view: counts and (with shot) a composite of the shaded frame with every flag pixel painted. */
+W.poke = (shot = false) => {
+  const hidden: THREE.Object3D[] = []; scene.traverse((o) => { if ((o as THREE.Mesh).isMesh && !o.visible) hidden.push(o); });
+  const keepHidden = (m: THREE.Mesh) => hidden.includes(m);
+  const shade = shot ? (r.render(scene, cam), read()) : null;
+  const id = withMats((m, k) => keepHidden(m) ? null : getM('id' + k, idMat, k === 0 ? 0 : k === 1 ? 1 : 99), 0x000000);
+  const layers = [0, 0.5, ...tileLayer.filter((x) => x < 9)];
+  const dep = new Map<number, Uint8Array>();
+  for (const L of [...new Set(layers)]) {
+    const res = withMats((m, k) => { if (keepHidden(m) || k === 99) return null; const x = getM('d' + k, depMat, k === 0 ? 0 : 1); x.uniforms.uMin.value = L; return x; }, 0xffffff);
+    dep.set(L, res.px);
+  }
+  const vis = withMats((m, k) => { if (keepHidden(m)) return null; const x = getM('v' + k, depMat, k === 0 ? 0 : k === 1 ? 1 : 99); x.uniforms.uMin.value = -1; return k === 99 ? getM('v99', depMat, 0) : x; }, 0xffffff);
+  const { w, h } = id; let skinPoke = 0, clothPoke = 0, back = 0;
+  const D = (px: Uint8Array, i: number) => px[i] * 65536 + px[i + 1] * 256 + px[i + 2];
+  const flag = new Uint8Array(w * h);
+  for (let i = 0, p = 0; i < id.px.length; i += 4, p++) {
+    const c = id.px[i]; if (c === 0 || c === 240) continue;
+    if (c === 250) { back++; flag[p] = 3; continue; }
+    const Lv = (c - 20) / 40, dv = D(vis.px, i);
+    const ks = [...dep.keys()].filter((L) => L >= Lv - 1e-3).sort((a, b) => a - b); if (!ks.length) continue;
+    const px = dep.get(ks[0])!; if (px[i] === 255 && px[i + 1] === 255 && px[i + 2] === 255) continue;
+    const dd = D(px, i) - dv;
+    if (dd > 0 && dd < POKE_MM) { if (Lv < 0.25) { skinPoke++; flag[p] = 1; } else { clothPoke++; flag[p] = 2; } }
+  }
+  let url = '';
+  if (shot && shade) {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g2 = cv.getContext('2d')!; const im = g2.createImageData(w, h);
+    const C = [[0, 0, 0], [255, 230, 0], [0, 230, 255], [255, 0, 255]];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const s = ((h - 1 - y) * w + x) * 4, d = (y * w + x) * 4, f = flag[(h - 1 - y) * w + x];
+      if (f) { im.data[d] = C[f][0]; im.data[d + 1] = C[f][1]; im.data[d + 2] = C[f][2]; } else { im.data[d] = shade.px[s]; im.data[d + 1] = shade.px[s + 1]; im.data[d + 2] = shade.px[s + 2]; } im.data[d + 3] = 255; }
+    g2.putImageData(im, 0, 0); url = cv.toDataURL('image/jpeg', 0.82);
+  }
+  return { skinPoke, clothPoke, back, url };
+};
+/** The game's follow camera (src/game/player.ts: fov 60, near 0.1, 5.2 m out by default) round character i. */
+W.followCam = (i: number, yawOff: number, dist = 5.2, pitch = 0.22, fov = 60) => {
+  const c = chars[i]; cam.fov = fov; cam.near = 0.1; cam.updateProjectionMatrix();
+  const p = c.root.position, y = c.root.rotation.y + yawOff, fy = p.y + 1.45;
+  cam.position.set(p.x - Math.sin(y) * Math.cos(pitch) * dist, fy + Math.sin(pitch) * dist, p.z - Math.cos(y) * Math.cos(pitch) * dist); cam.lookAt(p.x, fy - 0.15, p.z);
+};
+/** One step of character i alone: pose, ground speed (m/s, really moving), turn rate (rad/s). */
+W.act = (i: number, kind: CrewPose, v: number, w: number, dt = 1 / 30, talk = false) => {
+  const c = chars[i]; chars.forEach((o, j) => { o.root.visible = j === i; }); c.setGround(() => 0);
+  if (talk) c.say(0.5);
+  t += dt; c.root.rotation.y += w * dt; c.root.position.x += Math.sin(c.root.rotation.y) * v * dt; c.root.position.z += Math.cos(c.root.rotation.y) * v * dt;
+  c.root.updateMatrixWorld(true); c.animate(kind, 0, v / 4, t, dt); // drawn only when a pass or a clip frame needs it (throttle is off here)
+};
+W.resetPos = (i: number) => { const c = chars[i]; c.root.position.set(0, 0, 0); c.root.rotation.y = 0; };
 W.renderNow = () => r.render(scene, cam);
 W.step = (n: number, dt = 1 / 30) => { for (let k = 0; k < n; k++) { t += dt; phase += dt * 7 * amount; chars.forEach((c) => { if (solo && !c.root.visible) return; c.root.updateMatrixWorld(); c.animate(pose, phase, amount, t, dt); }); } r.render(scene, cam); };
 /** Skin gate: show only character i, on its own seed and clock; from now on only visible characters animate. */

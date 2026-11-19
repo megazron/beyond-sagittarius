@@ -19,7 +19,7 @@ import suit
 import pit
 
 # APPEAL=1 builds the de-creep faces into their own folder, so the game's own crew stay untouched until approved
-OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'models', 'crew_dc' if os.environ.get('APPEAL') == '1' else 'crew')
+OUT = os.environ.get('CREW_OUT') or os.path.join(os.path.dirname(__file__), '..', 'public', 'models', 'crew_dc' if os.environ.get('APPEAL') == '1' else 'crew')
 LODS = {'': dict(body=int(os.environ.get('BODY_BUDGET', 2200)), head=int(os.environ.get('HEAD_BUDGET', 4800)), cloth=6000, cost=4e-4), '.lod1': dict(body=1100, head=1800, cloth=2600, cost=4e-3)}
 if os.environ.get('NO_DECIM'):
     del LODS['.lod1']
@@ -547,6 +547,35 @@ def seam_guard(rig, V):
     return rig.W[:, [ix[n] for n in ('head', 'jaw', 'eyeL', 'eyeR', 'neck')]].sum(1) > 0.3
 
 
+def posed_cover(P, W, cand, garments, rig, piv, poses, near=0.06):
+    """The coverage mask: which hidden skin vertices (`cand`, hidden at bind) never come near a garment's opening in any
+    pose the game takes. Skin can only be seen through an opening (a cuff, a collar, an armhole that widens as the arm
+    rises), so skin that stays `near` or further from every opening in every pose is never seen, and if it ever
+    reaches the cloth over it, it comes out through the fabric: it is deleted. Skin near an opening stays (the facing
+    meets it). Garments and skin are posed with their own weights, as the game draws them."""
+    ok = cand.copy(); idx = np.nonzero(ok)[0]
+    rims = []
+    for g in garments:
+        e = {}
+        for t in g.T:
+            for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+                k = (min(a_, b_), max(a_, b_)); e[k] = e.get(k, 0) + 1
+        r = np.unique([k[0] for k, n in e.items() if n == 1])
+        # an edge another garment covers is no opening (a shirt's hem tucked into trousers, where a coat hides the rest
+        # of a shirt and it was cut away)
+        others = [o for o in garments if o is not g]
+        if len(r) and others: r = r[~covered(g.P[r], g.N[r], others, 0.04)]
+        if len(r): rims.append((g.P[r], g.W[r]))
+    for f in [None] + list(poses):
+        if not len(idx) or not rims: break
+        M = pose_mats(rig, piv, f['q']) if f else np.tile(np.eye(4), (len(rig.names), 1, 1))
+        Pp = skin_pts(P[idx], W[idx], M)
+        R = np.concatenate([skin_pts(rp, rw, M) for rp, rw in rims])
+        far = cKDTree(R).query(Pp, workers=1)[0] > near
+        ok[idx[~far]] = False; idx = idx[far]
+    return ok
+
+
 def facing(g, skin, reach=0.06, into=0.006):
     """A garment's openings get a facing, as a sewn garment has: a band from the edge in to the skin under it, so the
     gap between an armhole, a cuff or a hem and the body shows cloth, not the skin folding in under it. It rides on the
@@ -737,6 +766,7 @@ def build(c, cid, force=False):
     # and a ring of margin round them, so the edge of what is culled is never at a visible seam
     for _ in range(2):
         nb = np.zeros(len(V), bool); m = seen[Tall].any(1); nb[np.unique(Tall[m])] = True; seen |= nb
+    hidden_bind = dl.copy()  # everything a garment covers at bind, before the sight-line test gives some of it back
     dl &= ~seen
     dl[rig.W[:, rig.index['neck']] > 0.6] = False  # the whole neck stays: collars sit on it, and a culled neck shows the inside of the head
     # the foot inside a shoe: everything of it below the shoe's opening is hidden whatever it does, so all of it goes.
@@ -756,11 +786,12 @@ def build(c, cid, force=False):
             fw = sum(rig.W[:, rig.index[f'{n}{"L" if sgn > 0 else "R"}']] for n in ('foot', 'toe'))
             footcut |= bodyv & (V[:, 0] * sgn > 0) & (V[:, 1] < top) & (fw > 0.5)
     dl |= footcut
-    LINER = not os.environ.get('NO_LINER')
-    # with LINER the hidden skin is kept (sunk, below) except the foot inside a shoe, which is cut and its ankle capped:
-    # a shoe fits the foot too closely for skin sunk under it, and the toes came out through an ankle boot's sides
+    # Skin a garment covers in every pose the game takes, clear of its openings, is deleted (posed_cover, below, once the
+    # weights are known); the rest of the hidden skin is sunk in towards its bones (LINER, on by default: LINER=0 keeps it
+    # at full depth, which came out through the cloth more often in play), and the garment's openings get facings
+    LINER = os.environ.get('LINER', '1') == '1'
     for i in bodyf:
-        if not (footcut if LINER else dl)[base.faces[i]].all():
+        if not footcut[base.faces[i]].all():
             keep.append(i)
     T, TU = tri_fan(base.faces, base.fuv, keep)
     UV = np.stack([base.vt[:, 0], 1 - base.vt[:, 1]], 1)
@@ -844,6 +875,19 @@ def build(c, cid, force=False):
     # base that took the sleeve's weights stayed with the forearm while the thumb and hand beside it turned, and folded
     hand = sum(Wh[:, rig.index[n]] for n in rig.index if n[:-1] == 'hand' or n.startswith('finger'))
     Wb = follow(Vb, Wh, garments, keep=neckish, tight=tight, hold=np.clip(hand / 0.35, 0, 1)) if not os.environ.get('NO_FOLLOW') else Wh
+    poses = json.load(open(os.path.join(os.path.dirname(__file__), 'chars', 'cap_poses.json')))
+    # and this body's own (tools/chars/capture_poses.py): its arms clear its own torso, so its shoulders take their own turns
+    own = os.path.join(os.path.dirname(__file__), 'chars', 'poses', f'{cid}.json')
+    if os.path.exists(own) and not os.environ.get('NO_OWN_POSES'):
+        poses = poses + json.load(open(own))
+    cut = np.zeros(len(V), bool)
+    if not os.environ.get('NO_COVER'):
+        # the coverage mask: skin hidden at bind (dl) that stays under some garment, clear of its openings, in every pose
+        # (the sight-line test above keeps far too much under a loose garment: rays leak through its decimated stand-in; skin
+        # seen down an opening is near that opening, and the opening's facing closes the view beyond)
+        cut = posed_cover(Vb, Wb, hidden_bind & bodyv & ~footcut & ~seam_guard(rig, V), garments, rig, piv, poses)
+        cut = erode(cut, Tall, 1)  # a ring of margin stays under the cloth at every cut edge
+        if os.environ.get('CAP_DEBUG'): print(f'    {cid}: {int(cut.sum())} of {int((hidden_bind & bodyv).sum())} hidden skin vertices deleted (covered in all {len(poses)} poses)', flush=True)
     if LINER:
         # skin no camera sees is not cut away but sunk: drawn in towards its own bone, down to 40% of its depth, it stays one
         # closed surface under the clothes. Cut away, its edge could be seen down the gap between a cuff, a boot top or
@@ -874,7 +918,7 @@ def build(c, cid, force=False):
         ixr = rig.index
         handw = sum(Wb[:, ixr[n]] for n in ixr if n[:-1] == 'hand' or n.startswith('finger'))
         headw = Wb[:, [ixr[n] for n in ('head', 'jaw', 'eyeL', 'eyeR', 'neck')]].sum(1)
-        pinned = (handw > 0.01) | (headw > 0.02) | ~bodyv
+        pinned = (handw > 0.01) | (headw > 0.02) | ~bodyv | cut  # nothing to correct where the skin is gone
         _, Adj = pit.laplacian(Tall, len(V))
         taken = pinned.copy()
         def area(bones_, other, grow):
@@ -901,13 +945,8 @@ def build(c, cid, force=False):
             hreg &= bodyv & (handw <= 0.01) & ~footcut
             for jt in joints: hreg &= ~jt['region']
             joints.append(dict(name=f'hip{sd}', bone=f'upperleg{sd}', ref='hips', region=hreg))
-        # sunk skin is solved too, keeping the shape it was sunk to (lifted back to its own shape, it came out at a vest's
-        # neckline); under an armhole it folded just the same and showed through the gap
-        poses = json.load(open(os.path.join(os.path.dirname(__file__), 'chars', 'cap_poses.json')))
-        # and this body's own (tools/chars/capture_poses.py): its arms clear its own torso, so its shoulders take their own turns
-        own = os.path.join(os.path.dirname(__file__), 'chars', 'poses', f'{cid}.json')
-        if os.path.exists(own) and not os.environ.get('NO_OWN_POSES'):
-            poses = poses + json.load(open(own))
+        # a region left with little skin to see (all of it under a sleeve or a trouser leg) has nothing worth a shape
+        joints = [jt for jt in joints if int(jt['region'].sum()) >= int(os.environ.get('PIT_MIN', 40))]
         shapes, pitinfo, Vb = pit.correctives(V, Vb, Wb, Tall, rig.names, rig.parents(), piv, poses, garments, joints, sunk=liner if LINER else None,
                                               log=(lambda m: print(f'  {cid}:{m}', flush=True)) if os.environ.get('CAP_DEBUG') or os.environ.get('PIT_DEBUG') else None)
         bm.update(shapes)
@@ -935,7 +974,8 @@ def build(c, cid, force=False):
     if posedB is not None:
         sb = shaped(Vb, fd)
         posedB = (np.concatenate([posedB[0], sb[0]]), np.concatenate([posedB[1], sb[1]]))
-    body = Part(Vb, T[~hm], TU[~hm], UV, Wb, 'skin_body', {**morphs, **bm})
+    bmask = ~hm & ~cut[T].all(1)
+    body = Part(Vb, T[bmask], TU[bmask], UV, Wb, 'skin_body', {**morphs, **bm})
     # keep shared normals across the neck seam
     Nall = vnormals(V, T)
     head.N = Nall; body.N = Nall
@@ -989,7 +1029,7 @@ def build(c, cid, force=False):
             joints |= (W0[:, ix[f'upperarm{sd}']] > 0.03) & (sum(W0[:, ix[n]] for n in ('chest', 'spine1', 'spine')) > 0.03)
     fitd = fit_data(V, rig, piv, garments)  # ring sizes for belts and scarves, from the garments as they are worn (no facings)
     if not os.environ.get('NO_BAND'):
-        surf = bodyv & ~(liner if LINER else dl)
+        surf = bodyv & ~((liner | cut) if LINER else cut)
         for g in garments:
             n_ = facing(g, Vb[surf])
             if os.environ.get('CAP_DEBUG') and n_: print(f'    {g.asset}: {n_} edges of facing inside its openings', flush=True)
@@ -1036,12 +1076,15 @@ def build(c, cid, force=False):
         for _ in range(2): lids |= (Adj0 @ lids.astype(float)) > 0  # and a margin round them, or the fold moved to the corner
         locked = seam.copy() | joints | lids
         bimp = imp
+        if suffix:
+            # the light body is seen from further off: its joints are decimated too (the posed decimation still keeps every
+            # triangle facing out in all of the game's poses); held, the light builds came out barely lighter than the full
+            # ones (27.5k triangles against 28.6k on Draxum)
+            locked = seam | lids
         if suffix and LINER:
-            # the light body: skin sunk under the clothes is never seen, so its triangles go first and its joints are
-            # not held (two rings in from the edge of what is seen stay as they are)
+            # skin sunk under the clothes is never seen, so its triangles go first
             deep = liner.copy()
             for _ in range(2): deep &= ~((Adj0 @ (~liner).astype(float)) > 0)
-            locked = seam | lids | (joints & ~deep)
             bimp = imp.copy(); bimp[deep] = 0.02
         # the face keeps the full one's error bound, and on the light one the mouth keeps every triangle (decimated,
         # its corners folded when it smiled or talked)
@@ -1079,7 +1122,9 @@ def build(c, cid, force=False):
         g.j['scenes'][0]['nodes'] = [root]
         size = g.write(f'{OUT}/{cid}{suffix}.glb')
         info[suffix or 'web'] = dict(tris=total, kb=size // 1024)
-    meta = dict(height=cfg['height'], skin=cfg['skin_src'], lash='lash' if bid == 'eyebrow001' else f'lash_{bid}', atlas=cfg.get('atlas', cid), pivots={n: [round(float(x), 4) for x in piv[i]] for i, n in enumerate(rig.names)})
+    # each atlas tile's garment layer (footwear goes on under the trouser hem): the game draws cloth nearer the camera by it
+    lay = [0.5 if ('boot' in n or 'shoe' in n) else 1 + i for i, (n, _, _) in enumerate(cfg['clothes'])]
+    meta = dict(layers=lay, height=cfg['height'], skin=cfg['skin_src'], lash='lash' if bid == 'eyebrow001' else f'lash_{bid}', atlas=cfg.get('atlas', cid), pivots={n: [round(float(x), 4) for x in piv[i]] for i, n in enumerate(rig.names)})
     for k in vb:
         if not k.endswith('_dm'):
             meta[k + '_pivots'] = [[round(float(x), 4) for x in r] for r in (rig.pivots(vb[k + '_dm']) * scale + off)]

@@ -16,6 +16,8 @@ export interface CrewMeta {
   build_slim_pivots?: number[][]; build_heavy_pivots?: number[][];
   /** pose-driven correctives (tools/chars/pit.py), per region: the bone whose turn in ref's frame drives them, the key
    * turns (quaternions, the last is the bind pose), each key's weights for the n shapes, their limits, the kernel width */
+  /** Each atlas tile's garment layer, in the outfit's order (footwear 0.5, then 1, 2 and so on outwards). */
+  layers?: number[];
   pit?: Record<string, { bone: string; ref: string; dirs: number[][]; w: number[][]; lim: number[]; n: number; sigma: number }>;
 }
 export interface CrewAsset { scene: THREE.Group; meta: CrewMeta; }
@@ -50,8 +52,8 @@ export function loadAnim() {
 }
 export const animNow = () => anim;
 
-/** Whether a body ships a light `.lod1` build (the creator bodies do not: held hands, lids and mouth left little to take). */
-export const hasLod1 = (key: string) => !key.startsWith('custom_');
+/** Whether a body ships a light `.lod1` build (every body does now, the creator bodies too). */
+export const hasLod1 = (_key: string) => true;
 export function loadAsset(key: string, lod: number) {
   const file = lod && hasLod1(key) ? `${key}.lod1` : key;
   const id = `${file}`;

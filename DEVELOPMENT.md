@@ -146,6 +146,22 @@ morphs. At runtime `src/characters/character.ts` plays clips through `THREE.Anim
 phase-locked walk/run/sprint blending, per-character walk and idle styles, leg IK onto the terrain, clamped head look,
 blinks, speech and expression morphs.
 
+Skin and cloth: skin a garment covers in every pose the game takes (`tools/chars/cap_poses.json` and each body's own
+poses) and that stays at least 6 cm from all of the garment's openings can only be seen by coming out through the
+cloth, so it is deleted (`posed_cover` in `build_characters.py`). The rest of the hidden skin is sunk in towards its
+bones (`LINER=0` keeps it at full depth, which came out through the cloth more often in play), skin near an opening
+takes the garment's weights (`follow`) and the opening gets a facing down to it. In the game every garment is drawn a
+few millimetres nearer the camera per layer (`CLOTH_PULL`, by the atlas tile's layer in the body's JSON), so where
+skin or an inner garment comes within a few millimetres of the layer over it, the outer one still wins. The light
+`.lod1` builds (every body, the creator ones too) decimate the joints as well. `CULL_CACHE=~/.cache/bs-cull` keeps the
+slow sight-line tests between builds; `CREW_OUT=DIR` builds somewhere other than `public/models/crew`.
+
+Skin and cloth in play: `tools/play_capture.py --serve --soft` plays every body through idle, walk, run, turn, sit,
+talk, argue, point and cheer from the game's follow camera and counts skin out through cloth (yellow), an inner
+garment out through an outer one (cyan; an inner layer seen in front of an outer garment's own facing at an opening
+counts too) and skin seen from behind (magenta). It writes frame sheets, a JSON report, `--big` full-size worst views
+and `--clips` short MP4s. Run it from a checkout nobody edits while it runs: Vite reloads the page on any change.
+
 What a body costs per frame is set in `CHAR_BUDGET` (`src/characters/character.ts`): past `lodFar` metres the light
 build is drawn, past `shadowFar` the body casts no shadow, a body no camera has drawn for a few frames is posed at a
 quarter rate (far ones at a half or a third), and the pose-driven corrective shapes (morph targets, mixed on the GPU;

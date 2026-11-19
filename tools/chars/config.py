@@ -74,7 +74,7 @@ def _custom():
                 height=1.76 if g == 'm' else 1.68, macro=dict(gender=gv, muscle=0.5, weight=0.5, proportions=0.8, cup=0.5),
                 build_slim=dict(gender=gv, muscle=0.35, weight=0.1, proportions=0.8, cup=0.4),
                 build_heavy=dict(gender=gv, muscle=0.8, weight=0.95, proportions=0.6, cup=0.7),
-                skin_src='m' if g == 'm' else 'f', clothes=CHARS[o]['clothes'], atlas=o, lods=('',), cloth_k=CHARS[o].get('cloth_k', 1),
+                skin_src='m' if g == 'm' else 'f', clothes=CHARS[o]['clothes'], atlas=o, lods=('', '.lod1'), cloth_k=CHARS[o].get('cloth_k', 1),
                 # the player's own head follows the outfit's face at a gentler weight, so a creator look stays theirs
                 extra=[(t, w * 0.7) for t, w in FACES[o]], brow=BROW_OF[o])
     return out

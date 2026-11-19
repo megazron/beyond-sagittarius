@@ -32,6 +32,14 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
  * walkers, people in groups: `setCrowd`) never mixes correctives and takes the light build and loses its shadow sooner
  * (`crowdLodFar`, `crowdShadowFar`). Test pages that pose a body many times before drawing it once switch `throttle` off.
  */
+/**
+ * Cloth is drawn a little nearer the camera than it lies, by garment layer (the outfit's order: footwear 0.5, then 1, 2
+ * and so on outwards): this many metres per layer, along the line of sight, so its outline on screen is unchanged. Where
+ * skin and an inner garment come within a few millimetres of the layer over them in motion, the outer one still wins.
+ * dev/chars.ts (the play capture) draws its passes the same way.
+ */
+export const CLOTH_PULL = 0.003;
+
 export const CHAR_BUDGET = { throttle: true, correctiveNear: 9, lodFar: 11, shadowFar: 28, crowdLodFar: 6, crowdShadowFar: 14 };
 
 /** Mocap style per character: how they stand and how they walk. */
@@ -217,10 +225,18 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const atlas = M.atlas;
     const cloth = new THREE.MeshStandardMaterial({ map: tex(`${atlas}_cloth`, lod, true), normalMap: tex(`${atlas}_cloth_n`, lod), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, side: THREE.DoubleSide });
     cloth.userData.film = { kind: 'cloth', atlas, satin: human, velvet: id === 'megazron' }; // the narrator's coat is velvet in the films
-    const accent = { uAccent: { value: new THREE.Color(custom?.accent ?? 0xffffff) }, uAccentK: { value: custom ? 1 : 0 }, uDetail: { value: clothDetail() }, uHeightM: { value: heightM }, uSatin: { value: human ? 1 : 0 }, uDust: { value: human ? 0.12 : 1 } };
+    const lay = M.layers ?? [];
+    const accent = { uAccent: { value: new THREE.Color(custom?.accent ?? 0xffffff) }, uAccentK: { value: custom ? 1 : 0 }, uDetail: { value: clothDetail() }, uHeightM: { value: heightM }, uSatin: { value: human ? 1 : 0 }, uDust: { value: human ? 0.12 : 1 },
+      uTiles: { value: lay.length }, uTileLayer: { value: new THREE.Vector4(...[...lay, 1, 1, 1, 1].slice(0, 4)) }, uPull: { value: lay.length ? CLOTH_PULL : 0 } };
     applySway(cloth, sway, (sh) => {
       Object.assign(sh.uniforms, accent);
-      sh.vertexShader = `attribute float aAccent; varying float vAccent; varying float vBindY;\n` + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n  vAccent = aAccent; vBindY = position.y;`);
+      sh.vertexShader = `attribute float aAccent; varying float vAccent; varying float vBindY; uniform float uTiles, uPull; uniform vec4 uTileLayer;\n` + sh.vertexShader
+        .replace('#include <begin_vertex>', `#include <begin_vertex>\n  vAccent = aAccent; vBindY = position.y;`)
+        // the garment's layer from its atlas tile (tools/chars/paint.py tile_layout), and the pull towards the camera
+        .replace('#include <project_vertex>', `#include <project_vertex>
+        { int k = uTiles < 1.5 ? 0 : uTiles < 2.5 ? (uv.x >= 0.5 ? 1 : 0) : (uv.x >= 0.5 ? 1 : 0) + (uv.y >= 0.46875 ? 2 : 0);
+          float L = k == 0 ? uTileLayer.x : k == 1 ? uTileLayer.y : k == 2 ? uTileLayer.z : uTileLayer.w;
+          mvPosition.xyz *= max(0.0, 1.0 - L * uPull / max(length(mvPosition.xyz), 1e-3)); gl_Position = projectionMatrix * mvPosition; }`);
       sh.fragmentShader = `uniform vec3 uAccent; uniform float uAccentK, uHeightM, uSatin, uDust; uniform sampler2D uDetail; varying float vAccent; varying float vBindY;\n` + sh.fragmentShader
         .replace('#include <map_fragment>', `#include <map_fragment>
         diffuseColor.rgb = mix(diffuseColor.rgb, uAccent * (0.35 + dot(diffuseColor.rgb, vec3(1.1))), vAccent * uAccentK);
@@ -236,6 +252,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         { vec2 dn = texture2D(uDetail, vMapUv * 26.0).xy * 2.0 - 1.0; normal = normalize(normal + tbn * vec3(dn * 0.5 * (1.0 - vAccent * uSatin), 0.0)); }`);
     });
     cloth.customProgramCacheKey = () => 'crew-cloth';
+    // where cloth and the skin under it meet at the same depth (a cuff on the wrist, a collar on the neck), the cloth wins
+    cloth.polygonOffset = true; cloth.polygonOffsetFactor = -1; cloth.polygonOffsetUnits = -2;
     const mouth = mouthMaterial(), cornea = corneaMaterial(), lash = lashMaterial(browC, M.lash);
     const fur = human ? furMaterial('strong_suit', 0x0e080b, 0x2a1d22, lod) : undefined;
     const sphere = new THREE.Sphere(new THREE.Vector3(0, heightM * 0.5, 0), heightM * 1.1);
