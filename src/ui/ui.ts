@@ -545,7 +545,7 @@ export class UI implements CineUI {
     this.openModal(`<h2>${escapeHtml(t('legal.title'))}</h2><div class="legal">
       <p class="note">${escapeHtml(t('legal.template'))}</p>
       ${['terms', 'privacy', 'safety', 'parody', 'licences'].map(sec).join('')}
-      <p><a href="https://github.com/megazron/beyond-sagittarius#readme" target="_blank" rel="noopener">${escapeHtml(t('legal.readFull'))}</a></p></div>
+      <p><a href="https://megazron.github.io/beyond-sagittarius/privacy.html" target="_blank" rel="noopener">${escapeHtml(t('legal.privacyLink'))}</a> · <a href="https://github.com/megazron/beyond-sagittarius#readme" target="_blank" rel="noopener">${escapeHtml(t('legal.readFull'))}</a></p></div>
       ${this.foot('menu.back')}`);
     $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
   }
