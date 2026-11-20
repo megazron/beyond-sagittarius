@@ -230,7 +230,7 @@ class Debris {
   }
 }
 
-interface FilmShot { from: number; to: number; where: 'deep' | 'interior' | 'home' | 'world'; enter?: () => void; at: (k: number, b: number) => void; }
+interface FilmShot { from: number; to: number; where: 'deep' | 'interior' | 'home' | 'world'; enter?: () => void; at: (k: number, b: number) => void; /** Do not cut away from this shot while a line is still being said. */ holdVoice?: boolean }
 
 /** Where each one comes down: the world's own places, the distances the beacon reports in Level 10. */
 interface Landing { id: CrewId; at: THREE.Vector3; hit: THREE.Vector3; hours: number; boost: number; from: THREE.Vector3; wide: [THREE.Vector3, THREE.Vector3]; close: [THREE.Vector3, THREE.Vector3]; yaw: number; dir: THREE.Vector3 }
@@ -239,6 +239,9 @@ interface Landing { id: CrewId; at: THREE.Vector3; hit: THREE.Vector3; hours: nu
  * "The Scatter": the title sequence between the deck and the wake-up. Every frame is a
  * function of music time, so a slow frame drops, and the picture never drifts off the beat.
  */
+/** Where each of the six comes down on the world's face, as seen in the planet shot (across, up): six different regions. */
+const SPREAD: [number, number][] = [[-0.78, 0.36], [0.72, 0.46], [-0.4, -0.52], [0.5, -0.4], [0.9, -0.02], [0.02, 0.06]];
+
 export class Montage {
   private set: Cinematic['set'];
   private trails: Trail[] = [];
@@ -267,6 +270,8 @@ export class Montage {
   private time = 0;
   private lastCue = -1;
   private onDone: (() => void) | null = null;
+  /** Seconds the picture runs behind the music (shots held for a line). */
+  private lag = 0;
   private cues: { b: number; fn: () => void; done?: boolean }[] = [];
   private lands: Landing[] = [];
   private el: { root: HTMLElement; card: HTMLElement; name: HTMLElement; role: HTMLElement; loc: HTMLElement; bar: HTMLElement; title: HTMLElement; main: HTMLElement; sub: HTMLElement };
@@ -473,7 +478,7 @@ export class Montage {
     this.cues.forEach((c) => (c.done = false));
     for (const id of ORDER) { const c = this.cast[id]; c.root.rotation.set(0, 0, 0); this.group.add(c.root); c.root.visible = false; }
     this.trails[5].color = this.playerGlow();
-    this.time = 0; this.cur = null; this.inWorld = false; this.lastCue = -1;
+    this.time = 0; this.lag = 0; this.cur = null; this.inWorld = false; this.lastCue = -1;
     this.el.root.classList.remove('hidden');
     this.el.card.style.opacity = '0'; this.el.title.style.opacity = '0';
     // the rendered film if there is one; test runs on a held clock always use the real-time scene
@@ -495,6 +500,7 @@ export class Montage {
   skip() { if (this.playing) this.finish(); }
 
   private finish() {
+    for (const el of this.tags) el.style.opacity = '0';
     this.playing = false;
     this.video?.close(); this.video = null;
     this.score?.stop(); this.score = null;
@@ -585,6 +591,26 @@ export class Montage {
     s.position.copy(dir).normalize().multiplyScalar(100); s.color.set(color); s.intensity = i;
   }
 
+  private tags: HTMLElement[] = [];
+  private tagsOn = false;
+  /** A name riding on a trail's head (the planet shot): null hides it. */
+  private tag(i: number, at: THREE.Vector3 | null, cam: THREE.Camera) {
+    let el = this.tags[i];
+    if (!el) {
+      el = document.createElement('div');
+      el.style.cssText = 'position:absolute;left:0;top:0;font:600 clamp(11px,1.5vw,18px) var(--font-ui);letter-spacing:.16em;text-transform:uppercase;white-space:nowrap;pointer-events:none;text-shadow:0 0 8px #000,0 0 2px #000;will-change:transform;opacity:0;transition:opacity .25s';
+      this.el.root.appendChild(el); this.tags[i] = el;
+    }
+    if (!at) { el.style.opacity = '0'; return; }
+    const id = ORDER[i], c = new THREE.Color(id === 'scientist' ? this.playerGlow() : TRAIL[id]).lerp(new THREE.Color(1, 1, 1), 0.45);
+    const name = t(`crew.${id}.name`);
+    if (el.textContent !== name) el.textContent = name;
+    el.style.color = `#${c.getHexString()}`;
+    const p = at.clone().project(cam), w = this.el.root.clientWidth || window.innerWidth, h = this.el.root.clientHeight || window.innerHeight;
+    el.style.transform = `translate(${((p.x * 0.5 + 0.5) * w + 14).toFixed(1)}px, ${((-p.y * 0.5 + 0.5) * h - 22).toFixed(1)}px)`;
+    el.style.opacity = '1';
+  }
+
   private card(id: CrewId | null, show: number) {
     const e = this.el;
     if (!id) { e.card.style.opacity = '0'; return; }
@@ -611,7 +637,10 @@ export class Montage {
       { b: 20.4, fn: () => { this.ui.subtitle('cine.line8', 'crew.strong.name'); this.cast.strong.say(voice.duration('cine.line8') ?? 2); } },
       { b: 27.4, fn: () => this.ui.subtitle('op.21', 'crew.explorer.name') },
       { b: 31, fn: () => this.ui.subtitle(null) },
-      { b: 129.2, fn: () => this.ui.subtitle('film.scientist', 'crew.scientist.name') },
+      ...ORDER.slice(0, 5).map((id, i) => ({ b: beat.impacts[i] + 1.3, fn: () => { this.ui.subtitle(`film.${id}`, `crew.${id}.name`); this.cast[id].say(voice.duration(`film.${id}`) ?? 1.4); } })),
+      ...ORDER.slice(0, 5).map((_, i) => ({ b: beat.impacts[i] + 5.95, fn: () => this.ui.subtitle(null) })),
+      // early enough to be said whole before the title leaves (it was cut off after one word at 129.2)
+      { b: Math.min(123, S.end - ((voice.duration('film.scientist') ?? 2.5) + 0.8) / BEAT), fn: () => this.ui.subtitle('film.scientist', 'crew.scientist.name') },
     );
 
     // ---- Act I: The Horizon ----
@@ -840,12 +869,20 @@ export class Montage {
       const e = easeInOut(k);
       const a = lerp(-0.55, -0.32, e);
       const cam = this.lens(V(Math.sin(a) * 1160, 160 - e * 40, Math.cos(a) * 1160), V(-90, -30 + e * 60, 0), 34, 0, 0, -0.1 + e * 0.05);
+      // six lights out of one point in the sky, fanning out to six different parts of the world below: this is where
+      // the six are torn apart for good, and each trail carries its name until it goes into the air
+      const fwd = this.tmp.copy(cam.position).normalize(), right = this.tmp2.crossVectors(V(0, 1, 0), fwd).normalize(), up = this.tmp3.crossVectors(fwd, right);
+      const origin = fwd.clone().multiplyScalar(980).addScaledVector(right, -520).addScaledVector(up, 560);
       this.trails.forEach((tr, i) => {
         tr.color = i === 5 ? this.playerGlow() : TRAIL[ORDER[i]];
-        const start = V(-420 + i * 90, 520 - i * 24, 380 - i * 40), end = V(-210 + i * 42 + Math.sin(i * 3) * 30, 90 + Math.cos(i * 2) * 40, 330 - i * 12);
-        const head = smoothstep(0.1 + i * 0.05, 0.85 + i * 0.02, k);
-        tr.draw((s, o) => o.lerpVectors(start, end, Math.max(0, head - s * 0.32)), cam, 1.6 + head * 1.6, b, head > 0 ? 1.6 : 0);
+        const [sx, sy] = SPREAD[i];
+        const end = fwd.clone().addScaledVector(right, sx).addScaledVector(up, sy).normalize().multiplyScalar(402);
+        const start = origin.clone().addScaledVector(right, i * 6).addScaledVector(up, -i * 4);
+        const head = smoothstep(0.06 + i * 0.03, 0.8 + i * 0.03, k);
+        tr.draw((s, o) => o.lerpVectors(start, end, Math.max(0, head - s * 0.3)), cam, 1.6 + head * 1.6, b, head > 0 ? 1.6 : 0);
+        this.tag(i, head > 0.12 && head < 0.97 ? start.clone().lerp(end, head) : null, cam);
       });
+      this.tagsOn = true;
       const u = set.dome.uniforms;
       u.uBH.value = 0; u.uWarp.value = 0; u.uOther.value = 0; u.uNebula.value = 0.6;
       const pf = after(b, 56, 0.6) * 0.15;
@@ -853,20 +890,13 @@ export class Montage {
     }, () => set.show('home'));
 
     // ---- Act III: The Landing ----
-    // Where the others went is not shown. Six lights drift apart, and on each hit one flares and is gone.
-    P(62, 102, 'deep', (k, b) => {
-      ship.group.visible = false;
-      const cam = this.lens(V(Math.sin(b * .02) * 1.2, Math.cos(b * .017) * .8, 46 + k * 10), V(0, 0, 0), 42, 0, 0, b * .004);
-      this.hole(0, 0, -6000);
-      this.trails.forEach((tr, i) => {
-        const id = ORDER[i], hit = i < 5 ? beat.impacts[i] : 1e9, after_ = b - hit;
-        if (after_ > 1.6) { tr.mesh.visible = false; return; }
-        tr.color = i === 5 ? this.playerGlow() : TRAIL[id];
-        const d = dirs[i], reach = 8 + (b - 62) * .62, flare = after_ > 0 ? (1 - after_ / 1.6) * 3.4 : 1;
-        tr.draw((u, o) => { o.copy(d).multiplyScalar(reach * (1 - u * .34)); o.x += Math.sin(u * 3 + i) * u * 1.4; o.y += Math.cos(u * 3 + i) * u * 1.4; }, cam, .12 * flare, b, .8);
-      });
-      this.fx = { exposure: .55, flash: beat.impacts.some((h: number) => b >= h && b < h + .3) ? [.05, .05, .06] : undefined };
-    }, () => set.show('deep'));
+    // Each of the other five comes down where its trail was heading over the planet: the comet in on a long lens, the
+    // hit on the downbeat, then them, a name and a place, and one line said to its end before the next one falls.
+    ORDER.slice(0, 5).forEach((id, i) => {
+      const imp = beat.impacts[i], nextTo = imp + 6;
+      P(imp - 2, imp + 0.9, 'world', (k, b) => this.wide(id, b, imp), () => this.setLand(id));
+      this.shots.push({ from: imp + 0.9, to: nextTo, where: 'world', at: (k, b) => this.closeShot(id, k, b, imp), holdVoice: true });
+    });
 
     // ---- Act IV: The player comes down ----
     P(102, 108, 'world', (k, b) => this.lookUp(k, b), () => this.setLand('scientist'));
@@ -976,7 +1006,7 @@ export class Montage {
       { p: pos.clone().lerp(to, 0.45).addScaledVector(side, 1.2).add(V(0, 1.1, 0)), color: 0xffe8d0, i: 9, d: 10 },
       { p: to.clone().addScaledVector(back, 1.3).addScaledVector(side, -1).add(V(0, 0.7, 0)), color: col, i: 3.5, d: 7 },
     ]);
-    this.card(id, (b - (imp + 1.75)) / 0.5);
+    this.card(id, (b - (imp + 1.1)) / 0.5);
     if (b >= imp + 5.6) this.el.card.style.opacity = '0';
   }
 
@@ -1046,9 +1076,16 @@ export class Montage {
   update(dt: number) {
     if (!this.playing) return;
     const now = this.manual ? undefined : this.score?.now();
-    this.time = now !== undefined ? Math.max(now, this.time) : this.time + dt;
+    const was = this.time;
+    this.time = now !== undefined ? Math.max(now - this.lag, this.time) : this.time + dt;
+    // a line is never cut by the edit: a shot that carries one holds until it has been said (the picture falls a
+    // little behind the music, and catches up while the player's light is still far off)
+    const cur = this.cur;
+    if (cur?.holdVoice && this.time / BEAT >= cur.to && voice.remaining() > 0.05) { this.lag += this.time - Math.min(was, cur.to * BEAT - 0.001); this.time = Math.min(was, cur.to * BEAT - 0.001); }
+    else if (this.lag > 0 && this.time / BEAT >= 102 && this.time / BEAT < 107.5) { const d = Math.min(this.lag, dt * 0.8); this.lag -= d; this.time += d; }
     const b = this.time / BEAT;
-    if (b >= S.end) { this.finish(); return; }
+    // never leave on a line still being said
+    if (b >= S.end) { if (voice.remaining() > 0) { this.time = (S.end - 0.02) * BEAT; return; } this.finish(); return; }
     const land = !!this.world();
     const bb = !land && b >= S.landing - 2 ? S.end - 0.01 : b;
     if (bb !== b) { this.finish(); return; }
@@ -1076,7 +1113,9 @@ export class Montage {
       shot.enter?.();
     }
     for (const c of this.cues) if (!c.done && b >= c.b) { c.done = true; c.fn(); }
+    this.tagsOn = false;
     if (shot) shot.at(clamp((b - shot.from) / (shot.to - shot.from), 0, 1), b);
+    if (!this.tagsOn) for (const el of this.tags) el.style.opacity = '0';
     // shots that place a body by where its hand ended up need one solved pose first, or their first frame snaps
     if (shot && entered) {
       for (const id of this.seen) { const c = this.cast[id]; c.root.updateMatrixWorld(); const pose = this.poses[id] ?? 'float'; this.posed[id] = pose; c.animate(pose, 0, 0, this.time, 1.2); }

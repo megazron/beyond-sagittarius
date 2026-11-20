@@ -910,7 +910,7 @@ window.addEventListener('resize', () => {
   get tech() { return { ages: [...AGES], nodes: TECH.map((n) => ({ id: n.id, age: n.age, status: n.status, requires: n.requires, state: game?.save ? techState(game.save, n) : null })) }; },
   get subtitleText() { return document.querySelector('#subtitle .line')?.textContent; },
   sayTest(k: string) { ui.subtitle(k, 'mz.name', true); },
-  get voice() { return { last: voice.lastKey, played: voice.played }; },
+  get voice() { return { last: voice.lastKey, played: voice.played, cuts: voice.cuts, remaining: voice.remaining() }; },
   voiceDuration(k: string) { return voice.duration(k); },
   get vault() { return { playing: vault.playing, line: vault.lineIndex }; },
   skip() { skipCurrent(); },

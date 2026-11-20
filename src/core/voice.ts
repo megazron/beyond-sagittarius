@@ -116,7 +116,11 @@ class Voice {
     const f = this.file(key);
     if (!f) return null;
     const dur = this.seconds(f);
+    // a line that starts while another is still being said cuts it off: written down, so tests can refuse it
+    const left = this.remaining();
+    if (left > 0.25 && this.lastKey && this.lastKey !== key) { this.cuts.push({ cut: this.lastKey, by: key, left: Math.round(left * 100) / 100 }); if (this.cuts.length > 200) this.cuts.shift(); }
     this.lastKey = key; this.played++;
+    this.endsAt = this.clock() + (dur ?? 0);
     if (this.manual) { this.log.push({ path: `audio/vo/${this.langOf(f)}/${f}.${this.ext}`, at: this.manual(), vol: 1 }); if (this.log.length > 400) this.log.shift(); }
     this.stop();
     const tk = ++this.token;
@@ -137,8 +141,15 @@ class Voice {
     return dur;
   }
 
+  /** Lines cut off by the next line since load (not by Skip): { cut, by, left seconds }. */
+  cuts: { cut: string; by: string; left: number }[] = [];
+  private endsAt = 0;
+  private clock() { return this.manual ? this.manual() : performance.now() / 1000; }
+  /** Seconds of the current line still to be said (0 when nobody is speaking). */
+  remaining() { return Math.max(0, this.endsAt - this.clock()); }
+
   stop() {
-    this.token++; this.manualEnd = 0;
+    this.token++; this.manualEnd = 0; this.endsAt = 0;
     if (this.src) { try { this.src.stop(); } catch { /* already over */ } this.src = null; audio.duck(false); }
   }
 
