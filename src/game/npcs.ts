@@ -29,6 +29,7 @@ interface Npc {
   roam: number;
   pose: CrewPose;
   greeted: boolean;
+  stepAcc?: number;
 }
 
 const LOOK = new THREE.Vector3();
@@ -334,6 +335,11 @@ export class Npcs {
         if (!n.greeted && n.id !== 'cameo') { n.greeted = true; n.pose = 'wave'; this.after(2, () => (n.pose = 'idle')); }
       } else if (dist > 20) n.greeted = false;
       n.phase += dt * n.speed * 2.2;
+      // heard walking when near: steps on the moss, where they are
+      if (n.speed > 0.3 && dist < 16) {
+        n.stepAcc = (n.stepAcc ?? 0) + n.speed * dt;
+        if (n.stepAcc >= 0.6 + 0.22 * n.speed) { n.stepAcc = 0; audio.step('grass', 0.3, { x: n.pos.x, y: n.pos.y + 0.05, z: n.pos.z }); }
+      }
       n.fig.root.position.copy(n.pos);
       n.fig.root.rotation.y = n.yaw;
       n.fig.root.updateMatrixWorld();
@@ -342,6 +348,14 @@ export class Npcs {
       n.fig.setName(t(`npc.${n.id}.name`), t(`npc.${n.id}.role`));
       n.fig.setTagVisible(smoothstep(14, 5, dist));
     }
+  }
+
+  /** A line in a conversation: whoever's name it is says it (the mouth follows the voice; no stock gesture). */
+  speak(whoKey: string, seconds: number) {
+    const id = /^npc\.([a-z]+)\.name$/.exec(whoKey)?.[1];
+    const n = this.list.find((x) => x.id === id);
+    if (!n) return;
+    n.fig.say(seconds);
   }
 
   debug() { return this.list.map((n) => ({ id: n.id, pos: n.pos.toArray(), visible: n.fig.root.visible })); }

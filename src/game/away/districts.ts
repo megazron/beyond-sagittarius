@@ -656,21 +656,21 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
     peds.push(p);
   }
   // people staying put: on the benches, at shop windows, chatting in twos and threes, filming, waiting at shelters
-  const stayPoses = ['idle', 'selfie', 'write', 'argue', 'present', 'point', 'cheer'];
+  const stayPoses = ['idle', 'selfie', 'write', 'idle', 'sit']; // no stock emotes on a loop: standing, on the phone, writing, sitting
   for (const bn of benches.filter(() => rnd() < 0.5)) peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: 'sit', x: bn.x, z: bn.z, yaw: bn.yaw + Math.PI, t: 0 });
   for (const sf of shopfronts.filter(() => rnd() < (rich ? 0.22 : 0.1))) {
     const n = rnd() < 0.5 ? 1 : 2 + Math.floor(rnd() * 2), bx = sf.x + sf.nx * 1.6, bz = sf.z + sf.nz * 1.6;
     for (let j = 0; j < n; j++) {
       const a = (j / n) * Math.PI * 2 + rnd(), r = n > 1 ? 0.7 : 0;
       const x = bx + Math.cos(a) * r, z = bz + Math.sin(a) * r;
-      peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: n > 1 ? pick(['argue', 'idle', 'present', 'cheer', 'point']) : pick(stayPoses), x, z, yaw: n > 1 ? Math.atan2(bx - x, bz - z) : Math.atan2(-sf.nx, -sf.nz), t: 0 });
+      peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: n > 1 ? 'idle' : pick(stayPoses), x, z, yaw: n > 1 ? Math.atan2(bx - x, bz - z) : Math.atan2(-sf.nx, -sf.nz), t: 0 });
     }
   }
   // the park: strollers on its paths, people on the lawns
   for (let i = 0; i < (rich ? 40 : 14); i++) {
     const x = (rnd() - 0.5) * 150, z = 205 + rnd() * 90;
     if (Math.hypot(x - 40, z - 262) < 17) continue;
-    peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: pick(['sit', 'idle', 'selfie', 'cheer', 'argue']), x, z, yaw: rnd() * 6.28, t: 0 });
+    peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: pick(['sit', 'idle', 'selfie', 'sit', 'idle']), x, z, yaw: rnd() * 6.28, t: 0 });
   }
   const pedSolid = (x: number, z: number) => solids.some((b) => b.max.y > 0.8 && x > b.min.x - 0.3 && x < b.max.x + 0.3 && z > b.min.z - 0.3 && z < b.max.z + 0.3);
   for (let i = peds.length - 1; i >= 0; i--) if (peds[i].mode === 'stay' && peds[i].pose !== 'sit' && pedSolid(peds[i].x, peds[i].z)) peds.splice(i, 1);

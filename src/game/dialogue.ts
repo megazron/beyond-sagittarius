@@ -132,7 +132,7 @@ export class Dialogue {
     const key = this.said.get(id)!;
     $('dlg-who').textContent = t(node.who);
     $('dlg-line').textContent = t(key);
-    if (fresh && !node.quiet) voice.play(key);
+    if (fresh && !node.quiet) { const d = voice.play(key); this.onLine?.(node.who, d ?? Math.min(6, 1 + t(key).length * 0.055)); }
     const all = typeof node.choices === 'function' ? node.choices() : node.choices;
     this.list = all.filter((c) => !c.show || c.show());
     $('dlg-choices').innerHTML = this.list.map((c, i) => {
@@ -163,6 +163,9 @@ export class Dialogue {
     this.end = null;
     end?.();
   }
+
+  /** Someone says a line: their name key and how long it lasts (the game moves their mouth and hands). */
+  onLine: ((whoKey: string, seconds: number) => void) | null = null;
 
   debug() { return this.tree ? { node: this.current, line: $('dlg-line').textContent, choices: this.list.map((c) => c.label) } : null; }
 }

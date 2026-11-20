@@ -5,9 +5,11 @@ import type { CrewId } from '../../characters/character';
 import type { Input } from '../input';
 import type { UI } from '../../ui/ui';
 import { t } from '../../i18n';
+import { audio } from '../../core/audio';
 import type { AwayStage, AwayTask } from './stage';
 import { buildStage, STAGES } from './kit';
 import { buildCity } from './city';
+import type { TaskKind } from '../../characters/character';
 
 const make = (loc: string, label: (k: string) => string, job: number, detail: number) => (loc === 'city' ? buildCity(label, detail) : buildStage(loc, STAGES[loc], label, job, detail));
 
@@ -40,6 +42,8 @@ export class Away {
     // the body you play is drawn with its full build, phones too (see PLAYER_DETAIL in main.ts)
     const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: (fx, fz, cx, cz) => stage.clearance?.(fx, fz, cx, cz) ?? 1 }, this.camera, Math.max(this.detail, 0.8), id, id === 'strong' && this.skins.strong === 'suit' ? 'suit' : undefined); // the crew's chosen skin, on their own stage too
     p.physics = { gravity: stage.gravity, jump: stage.jump, gaps: true };
+    // what the feet hear: Zenvora's paving and the flat's floorboards, ice on the ring, rock and metal elsewhere
+    p.surface = location === 'city' ? (x, z) => (x > 9.4 && z > 61 && z < 77 ? 'wood' : 'stone') : location === 'ring' ? () => 'snow' : location === 'clouds' ? () => 'wood' : location === 'wreck' ? () => 'metal' : () => 'stone';
     p.model.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; } });
     // the lineage, in play: the stage lights their marks and sets their pace
     stage.bind({
@@ -77,6 +81,10 @@ export class Away {
   /** The level the HUD returns to. */
   level = 1;
   private location = '';
+  /** Which stage is playing (the soundscape picks its music and beds by it). */
+  get where() { return this.active ? this.location : null; }
+  /** In the friends' flat in Zenvora: behind the street wall on the east side, between its two party walls. */
+  get indoors() { const p = this.player?.pos; return this.location === 'city' && !!p && p.x > 9.4 && p.z > 61 && p.z < 77; }
 
   update(dt: number, time: number, canMove: boolean) {
     const s = this.stage, p = this.player;
@@ -102,6 +110,7 @@ export class Away {
     }
     if (this.orbit) { const o = this.orbit; this.camera.position.set(o.x + Math.sin(o.a) * o.r, o.y + o.h, o.z + Math.cos(o.a) * o.r); this.camera.lookAt(o.x, o.y + o.h * 0.55, o.z); }
     s.update(dt, time, this.camera);
+    this.crowdSteps(dt);
     // falling off the ice costs nothing but the walk back
     if (p.pos.y < -30) { p.spawn(s.spawn.x, s.spawn.z, 0); this.ui.toast(t('away.fell')); }
     // the nearest one, not the first in the list: beside Mir, E talks to Mir even with a friend a step further off
@@ -111,8 +120,35 @@ export class Away {
     if (near && !this.busy && canMove && this.input.act('interact')) this.finish(near);
   }
 
+  private stepAcc = new Map<object, number>();
+  /** Passers-by near the camera are heard walking: their own steps, placed where they are. */
+  private crowdSteps(dt: number) {
+    const people = (this.stage as { people?: { pos: THREE.Vector3; walk?: { speed: number }; fig: { root: THREE.Object3D } }[] } | null)?.people;
+    if (!people || this.location !== 'city') return;
+    const c = this.camera.position;
+    for (const q of people) {
+      if (!q.walk || !q.fig.root.visible) continue;
+      const d = Math.hypot(q.pos.x - c.x, q.pos.z - c.z);
+      if (d > 10) { this.stepAcc.delete(q); continue; }
+      const acc = (this.stepAcc.get(q) ?? Math.random()) + q.walk.speed * dt, stride = 0.6 + 0.22 * q.walk.speed;
+      if (acc >= stride) { audio.step('stone', 0.22, { x: q.pos.x, y: q.pos.y + 0.05, z: q.pos.z }); this.stepAcc.set(q, acc - stride); } else this.stepAcc.set(q, acc);
+    }
+  }
+
   private finish(k: AwayTask) {
     this.busy = true;
+    // the hands do the job: eat, pack, take the phone, open the locker, drink the chai, hold the tram door...
+    const base = k.id.startsWith('talk.') ? 'talk' : k.id.replace(/[_\-.]?\d+$/, '');
+    const job: Record<string, TaskKind> = { paratha: 'eat', pack: 'carry', phone: 'phone', parcel: 'open', chai: 'drink', tram: 'open', ring: 'pickup',
+      splint: 'fix', ice: 'fix', cracker: 'use', dish: 'use', plate: 'pickup', weld: 'fix', lichen: 'plant', suture: 'fix', burst: 'use', break: 'fix', ember: 'use', patch: 'fix', relay: 'use' };
+    const kind = job[base];
+    if (kind && this.player) {
+      const at = kind === 'eat' || kind === 'carry' ? null : k.pos.clone().setY(Math.max(k.pos.y, this.player.pos.y) + (kind === 'open' ? 1.15 : kind === 'use' ? 0.95 : 0));
+      this.player.act(kind, at);
+      // and they are heard: a chew, a zip, a door, a locker
+      const fx: Record<string, [string, number, number]> = { paratha: ['eat', 0.55, 0.6], pack: ['zip', 0.5, 0.4], phone: ['type', 0.35, 0.3], parcel: ['door_open', 0.45, 0.3], chai: ['drink', 0.5, 0.6], tram: ['hatch_close', 0.4, 0.5], ring: ['splash', 0.3, 0.3], weld: ['field', 0.4, 0.2], ice: ['stone', 0.5, 0.3], break: ['stone', 0.6, 0.3], plate: ['metal', 0.45, 0.4], patch: ['cloth', 0.45, 0.3] };
+      const f = fx[base]; if (f) audio.sample(f[0], f[1], { delay: f[2] });
+    }
     k.run?.();
     const go = () => {
       this.done.add(k.id); this.busy = false;

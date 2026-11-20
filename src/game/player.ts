@@ -6,7 +6,7 @@ import type { Terrain } from '../world/terrain';
 import type { Forest } from '../world/forest';
 import type { Input } from './input';
 import { HALF } from '../world/terrain';
-import { audio } from '../core/audio';
+import { audio, type Surface } from '../core/audio';
 
 const angleTo = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
 
@@ -55,6 +55,9 @@ export class Player {
   private dip = 0;
   private dipV = 0;
 
+  /** What a footstep sounds like here (the planet is grass and moss). */
+  surface: (x: number, z: number) => Surface = () => 'grass';
+  private stepAcc = 0;
   /** Stages other than Verdaxis set their own gravity, and let you jump across open gaps. */
   physics = { gravity: 14, jump: 5.2, gaps: false };
 
@@ -84,7 +87,26 @@ export class Player {
     this.snapCamera();
   }
 
+  /** Seconds the body is busy with its hands (act): it stays where it is, turned to the work. */
+  private busyT = 0;
+  private busyFace: number | null = null;
+  /** Do a task with the hands (see Character.doTask), standing still for it and turned towards `at`. */
+  act(kind: import('../characters/character').TaskKind, at?: THREE.Vector3 | null, seconds?: number, prop?: import('../characters/character').PropKind | null) {
+    this.model.doTask(kind, { at, seconds, prop });
+    const t = this.model.task;
+    this.busyT = Math.max(this.busyT, (t?.dur ?? 1) * 0.85);
+    this.busyFace = at ? Math.atan2(-(at.x - this.pos.x), -(at.z - this.pos.z)) : null;
+    if (at && Math.hypot(at.x - this.pos.x, at.z - this.pos.z) < 0.05) this.busyFace = null;
+  }
+  get busy() { return this.busyT > 0; }
+  /** Stop what the hands are doing (a panel closed, the job is over). */
+  endAct() { this.model.stopTask(); this.busyT = 0; this.busyFace = null; }
+
   update(dt: number, input: Input, canMove: boolean, stamina: number, slow: number) {
+    if (this.busyT > 0) {
+      this.busyT -= dt; canMove = false;
+      if (this.busyFace !== null) { const d = angleTo(this.facing, this.busyFace); this.facing += d * (1 - Math.exp(-dt * 8)); }
+    }
     // look
     const sens = 0.0024 * this.sensitivity;
     this.yaw -= input.lookDX * sens;
@@ -173,6 +195,16 @@ export class Player {
       this.facing += d * (1 - Math.exp(-dt * 10));
     }
     this.walkPhase += dt * hs * 2.1;
+    // a footstep every stride's length: longer strides the faster you go
+    if (this.onGround && !this.swimming && hs > 0.6) {
+      this.stepAcc += hs * dt;
+      const stride = 0.6 + 0.22 * hs;
+      if (this.stepAcc >= stride) {
+        this.stepAcc -= stride;
+        if (this.inWater) audio.sample('splash', 0.12, { rate: 1.3 });
+        else audio.step(this.surface(this.pos.x, this.pos.z), this.sprinting ? 0.55 : 0.38);
+      }
+    } else this.stepAcc = Math.min(this.stepAcc, 0.3);
     this.model.root.position.copy(this.pos);
     if (this.inWater && !this.swimming) this.model.root.position.y = Math.max(this.pos.y, -0.55);
     // treading water keeps the head up; swimming lies the body flat along the surface

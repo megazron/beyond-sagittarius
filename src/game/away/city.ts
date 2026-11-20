@@ -135,23 +135,23 @@ const TASKS: { id: string; x: number; z: number; r?: number; need?: string[] }[]
 /** Where the five are, and what they're doing when you get there. */
 const FRIENDS: { id: CrewId; x: number; z: number; yaw: number; pose: CrewPose }[] = [
   { id: 'strong', x: -6.6, z: 2.5, yaw: Math.PI / 2, pose: 'idle' },
-  { id: 'medic', x: 7.4, z: -14, yaw: -Math.PI / 2, pose: 'argue' },
+  { id: 'medic', x: 7.4, z: -14, yaw: -Math.PI / 2, pose: 'idle' },
   { id: 'explorer', x: 6.2, z: 17.4, yaw: -Math.PI / 2, pose: 'write' },
-  { id: 'builder', x: -5.0, z: -8.6, yaw: Math.PI / 2, pose: 'present' },
+  { id: 'builder', x: -5.0, z: -8.6, yaw: Math.PI / 2, pose: 'idle' },
   { id: 'social', x: -1.5, z: -40.5, yaw: 0.3, pose: 'selfie' },
 ];
 
 /** Townsfolk standing: where, and the one line each gives you (`city.npc.*`). */
 const FOLK: { id: string; x: number; z: number; yaw: number; pose: CrewPose; lineage: PlayerLook['lineage'] }[] = [
   { id: 'chaiwala', x: 8.4, z: 11.6, yaw: -Math.PI / 2, pose: 'idle', lineage: 'ortek' },
-  { id: 'aunty', x: -7.6, z: -28, yaw: Math.PI / 2, pose: 'argue', lineage: 'sirelle' },
-  { id: 'clerk', x: 8.9, z: 46.2, yaw: -Math.PI / 2, pose: 'present', lineage: 'vael' },
+  { id: 'aunty', x: -7.6, z: -28, yaw: Math.PI / 2, pose: 'idle', lineage: 'sirelle' },
+  { id: 'clerk', x: 8.9, z: 46.2, yaw: -Math.PI / 2, pose: 'idle', lineage: 'vael' },
   { id: 'driver', x: 3, z: 22, yaw: 0, pose: 'idle', lineage: 'korrath' },
-  { id: 'kid1', x: -1, z: -60, yaw: 0.4, pose: 'cheer', lineage: 'tarnkin' },
-  { id: 'kid2', x: 2, z: -63, yaw: -2.6, pose: 'point', lineage: 'ulari' },
+  { id: 'kid1', x: -1, z: -60, yaw: 0.4, pose: 'idle', lineage: 'tarnkin' },
+  { id: 'kid2', x: 2, z: -63, yaw: -2.6, pose: 'idle', lineage: 'ulari' },
   { id: 'queue1', x: -6.6, z: 4.2, yaw: Math.PI / 2, pose: 'idle', lineage: 'tarnkin' },
-  { id: 'queue2', x: -6.6, z: 5.9, yaw: Math.PI / 2, pose: 'write', lineage: 'vael' },
-  { id: 'pharma', x: 8.9, z: -17.2, yaw: -Math.PI / 2, pose: 'facepalm', lineage: 'ulari' },
+  { id: 'queue2', x: -6.6, z: 5.9, yaw: Math.PI / 2, pose: 'idle', lineage: 'vael' },
+  { id: 'pharma', x: 8.9, z: -17.2, yaw: -Math.PI / 2, pose: 'idle', lineage: 'ulari' },
   { id: 'tourist', x: 5.5, z: -36, yaw: 2.2, pose: 'selfie', lineage: 'sirelle' },
 ];
 
@@ -841,7 +841,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
 
   // the side streets: people at the shopfronts, window shopping and talking
   sideStreets.forEach((st, si) => {
-    const poses: CrewPose[] = ['idle', 'point', 'argue', 'present', 'idle', 'write'];
+    const poses: CrewPose[] = ['idle', 'idle', 'write', 'idle', 'idle', 'write'];
     for (let j = 0; j < 6; j++) {
       const d = FRONT + 14 + j * 5.2, dz = j % 2 ? 1 : -1, z = (dz > 0 ? st.z0 : st.z1) - dz * 1.3;
       person(`group_ss${si}_${j}`, someone(lineages[(si * 2 + j) % lineages.length], 100 + si * 7 + j), st.side * d, z, dz > 0 ? 0 : Math.PI, poses[j]);
@@ -849,7 +849,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   });
   // the squares: a pair talking by the landmark, someone sat on a bench, a couple taking a photo
   plazas.forEach((pz, pi) => {
-    const sd = Math.sign(pz.x), poses: [number, number, number, CrewPose][] = [[-2.2, 4.2, 0, 'argue'], [-2.2, 5.6, Math.PI, 'idle'], [-4, 5, sd > 0 ? -Math.PI / 2 : Math.PI / 2, 'sit'], [3, -5, 0.8, 'selfie'], [3.8, -5.6, 0.6, 'cheer']];
+    const sd = Math.sign(pz.x), poses: [number, number, number, CrewPose][] = [[-2.2, 4.2, 0, 'idle'], [-2.2, 5.6, Math.PI, 'idle'], [-4, 5, sd > 0 ? -Math.PI / 2 : Math.PI / 2, 'sit'], [3, -5, 0.8, 'selfie'], [3.8, -5.6, 0.6, 'idle']];
     poses.forEach(([dx, dz, yaw, pose], j) => person(`group_sq${pi}_${j}`, someone(lineages[(pi * 3 + j) % lineages.length], 80 + pi * 5 + j), pz.x - sd * dx, pz.z + dz, yaw, pose));
   });
 
@@ -1005,11 +1005,17 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   scene.traverse((o) => { if (o !== ground && o.userData.ground === undefined) o.userData.ground = false; });
   // people stood in threes, talking, on the pavements
   const groups: [number, number][] = rich ? [[6.6, 38], [-6.4, 12], [6.4, -8], [-6.6, -36], [6.2, -58], [-3, -66], [3.5, -69], [-5.5, -71], [5.5, -73]] : [[6.6, 38], [-6.6, -36], [-3, -66]];
-  const talk: CrewPose[] = ['argue', 'idle', 'present', 'cheer', 'point', 'facepalm'];
-  groups.forEach(([x, z], gi) => { for (let j = 0; j < 3; j++) {
-    const a = (j / 3) * Math.PI * 2 + gi, px = x + Math.cos(a) * 0.75, pz = z + Math.sin(a) * 0.75;
-    person(`group${gi}_${j}`, someone(lineages[(gi + j) % lineages.length], gi * 3 + j + 30), px, pz, Math.atan2(x - px, z - pz), talk[(gi + j) % talk.length]);
-  } });
+  // no stock emotes on a loop: they stand easy, look at whoever in the three is talking, and the talker's mouth moves
+  const chats: { members: CityPerson[]; next: number; who: number }[] = [];
+  groups.forEach(([x, z], gi) => {
+    const members: CityPerson[] = [];
+    for (let j = 0; j < 3; j++) {
+      const a = (j / 3) * Math.PI * 2 + gi, px = x + Math.cos(a) * 0.75, pz = z + Math.sin(a) * 0.75;
+      person(`group${gi}_${j}`, someone(lineages[(gi + j) % lineages.length], gi * 3 + j + 30), px, pz, Math.atan2(x - px, z - pz), 'idle');
+      members.push(people[people.length - 1]);
+    }
+    chats.push({ members, next: Math.random() * 3, who: 0 });
+  });
 
   // what a task uses up goes: the paratha is eaten, the jacket goes in the bag (both stayed where they were)
   const gone: Record<string, string> = { paratha: 'paratha', pack: 'jacket' };
@@ -1284,18 +1290,29 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           q.fig.animate('walk', q.phase, Math.min(1.1, w.speed / 3), time, dt);
         } else {
           q.phase += dt;
-          // Mir talks with his hands now and then, between sips: a few seconds of gesture in every twelve
-          // and while he talks to you, his hands keep going
-          const toYou = talking?.q === q && time < talking.until;
-          // you walk up: they look at you, and the first time you come close they wave
+          // you walk up: they look at you, and the first time you come close they wave (once: a greeting, not a loop)
           if (you && talking?.q !== q) {
             const d = Math.hypot(you.position.x - q.pos.x, you.position.z - q.pos.z);
             if (d < 4) { q.fig.setLookTarget(eye.set(you.position.x, you.position.y + 1.6, you.position.z)); if (!q.met) { q.met = true; q.greet = time + 1.6; } }
-            else if (d > 5 && q.met !== undefined) { q.fig.setLookTarget(null); if (d > 9) q.met = false; }
+            else if (d > 5 && q.met !== undefined) {
+              // the threes on the pavement go back to each other at their next turn to talk (chats, below)
+              if (!q.id.startsWith('group')) q.fig.setLookTarget(null);
+              if (d > 9) q.met = false;
+            }
           }
-          const pose = q.greet && time < q.greet && !FRIENDS.some((f) => f.id === q.id) ? 'wave' : q.id === 'mir' ? (toYou ? ((time % 7) < 3.5 ? 'present' : 'argue') : (time + 3) % 12 < 3.2 ? ((time + 3) % 24 < 12 ? 'present' : 'argue') : 'idle') : q.pose;
+          const pose = q.greet && time < q.greet && !FRIENDS.some((f) => f.id === q.id) ? 'wave' : q.pose;
           q.fig.animate(pose, q.phase, 0, time, dt);
         }
+      }
+      // the threes on the pavement take turns: one talks a few seconds, the other two look at them
+      for (const c of chats) {
+        if (time < c.next) continue;
+        c.who = (c.who + 1 + Math.floor(Math.random() * 2)) % 3;
+        const dur = 1.6 + Math.random() * 2.6, talker = c.members[c.who];
+        c.next = time + dur + 0.3 + Math.random() * 0.8;
+        talker.fig.say(dur);
+        talker.fig.setLookTarget(eye.copy(c.members[(c.who + 1) % 3].pos).setY(c.members[(c.who + 1) % 3].pos.y + 1.6).clone());
+        for (const m of c.members) if (m !== talker) m.fig.setLookTarget(talker.pos.clone().setY(talker.pos.y + 1.6));
       }
       ringLight.rotation.z += dt;
       future.update(dt, time);

@@ -222,7 +222,8 @@ export class Story {
         this.strikes++;
         this.world.camp.strikeSparks();
         this.thrustT = 0.35;
-        audio.tone(2400, 0.06, 'square', 0.12, 0, -1800);
+        if (!audio.sample('flint', 0.7)) audio.tone(2400, 0.06, 'square', 0.12, 0, -1800);
+        audio.sample('stone', 0.4);
         if (this.strikes === 1) this.ui.say('dlg.4.2', 'crew.scientist.name', 2);
         if (this.strikes === 2) this.ui.say('dlg.4.3', 'crew.scientist.name', 3);
         if (this.strikes < 3) { this.ui.toast(t(`msg.strike${this.strikes}`)); return; }

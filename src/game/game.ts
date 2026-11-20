@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { TaskKind } from '../characters/character';
 import type { Away } from './away/away';
 import { ROSTER } from './away/roster';
 import type { CrewId } from '../characters/character';
@@ -126,6 +127,7 @@ export class Game {
     };
     onLangChange(() => this.tutorial.refresh());
     this.story = new Story(world, player, ui, () => this.save, (sec, fn) => this.after(sec, fn), (amount) => this.hurt(amount), (beats, then) => this.playScene(beats, then));
+    this.dialogue.onLine = (who, sec) => this.story.npcs.speak(who, sec);
     this.story.hooks = { away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
     this.craft.onFail = () => {
       const c = (this.save.crafts ??= { failed: 0 });
@@ -190,9 +192,12 @@ export class Game {
     this.input.releasePointer();
     this.ui.setPrompt(null);
     this.player.pose = 'idle';
+    // at the workbench the hands keep working for as long as the craft panel is open
+    if (mode === 'craft') { const p = this.player, f = this.tmpV.set(-Math.sin(p.facing), 0, -Math.cos(p.facing)); p.act('fix', new THREE.Vector3(p.pos.x + f.x * 0.5, p.pos.y + 0.75, p.pos.z + f.z * 0.5), 600); }
   }
 
   private leavePanel() {
+    if (this.mode === 'craft') this.player.endAct();
     this.mode = 'play';
     document.body.classList.remove('in-panel');
     this.input.enabled = true;
@@ -355,7 +360,6 @@ export class Game {
       if (open) this.after(0.6, () => this.playScene([open.kind === 'decision' ? { choice: open.id } : { qte: open.id }]));
     }
     this.player.model.root.visible = true;
-    audio.startWind();
   }
 
   /** Show what exists at this point of the story and hasn't been picked up. */
@@ -660,10 +664,11 @@ export class Game {
     const target = this.interactTarget;
     if (!target || this.mode !== 'play') return;
     const s = this.save, st = s.stats;
-    if (target.kind === 'strike') { this.story.strike(); return; }
+    if (target.kind === 'strike') { this.player.act('fix', this.world.layout?.camp ?? null, 1.2); this.story.strike(); return; }
     if (target.kind === 'action') {
       const a = target.action;
       if (a.missing?.length) { this.ui.toast(t('msg.need', { list: a.missing.join(', ') })); audio.uiClick(); return; }
+      this.actAnim(a.id, a.pos);
       a.run();
       this.refreshObjective();
       return;
@@ -671,15 +676,20 @@ export class Game {
     if (target.kind === 'water') {
       if (st.thirst > 97) { this.ui.toast(t('msg.drinkFull')); return; }
       st.thirst = clamp(st.thirst + 35, 0, 100);
-      audio.tone(300, 0.25, 'sine', 0.15, 0, 200);
+      { const p = this.player, f = this.tmpV.set(-Math.sin(p.facing), 0, -Math.cos(p.facing)); this.player.act('drink', new THREE.Vector3(p.pos.x + f.x * 0.7, p.pos.y - 0.2, p.pos.z + f.z * 0.7), undefined, null); }
+      if (!audio.sample('drink', 0.6, { delay: 0.5 })) audio.tone(300, 0.25, 'sine', 0.15, 0, 200);
+      audio.sample('splash', 0.25, { rate: 1.4, delay: 0.2 });
       if (!s.flags.drank) { s.flags.drank = true; this.ui.toast(t('msg.drink')); this.ui.say('j.4', 'crew.scientist.name', 4); }
       return;
     }
     const it = target.item;
     if (PICKABLE.has(it.type)) {
       s.inventory[it.type] = (s.inventory[it.type] ?? 0) + 1;
-      this.collect(it);
-      audio.blip();
+      // the hand gets there first: the thing leaves the ground when the fingers close on it
+      this.player.act('pickup', it.obj.getWorldPosition(new THREE.Vector3()));
+      this.collect(it, 0.5);
+      audio.sample(it.type === 'stone' || it.type === 'flint' ? 'stone' : it.type === 'branch' ? 'wood' : 'leather', 0.35, { delay: 0.35 });
+      audio.pickup();
       this.ui.toast(t('msg.picked', { item: t(`item.${it.type}`) }));
       this.ui.setInventory(s.inventory, this.story.tools());
       this.refreshObjective();
@@ -687,22 +697,25 @@ export class Game {
     }
     if (!it.examined) {
       it.examined = true;
+      this.player.act('use', it.obj.getWorldPosition(new THREE.Vector3()), 1.4);
       s.flags[`ex-${it.id}`] = true;
       this.ui.toast(t(it.type === 'fruit' ? 'fruit.examineBlue' : 'fruit.examineRed'));
       audio.uiClick();
       return;
     }
-    this.collect(it);
+    this.player.act('eat');
+    this.collect(it, 0.35);
     if (it.type === 'fruit') {
       st.hunger = clamp(st.hunger + 38, 0, 100);
       st.health = clamp(st.health + 5, 0, 100);
       s.flags.ateSafe = true;
       this.ui.toast(t('fruit.ateBlue'));
-      audio.blip();
+      if (!audio.sample('eat', 0.6, { delay: 0.6 })) audio.blip();
     } else {
       st.hunger = clamp(st.hunger + 6, 0, 100);
       st.health = clamp(st.health - 28, 0, 100);
       s.flags.ateRed = true;
+      audio.sample('eat', 0.6, { delay: 0.6 });
       this.ui.toast(t('fruit.ateRed'));
       this.ui.say('j.5', 'crew.scientist.name', 3);
       this.ui.damage();
@@ -711,8 +724,26 @@ export class Game {
     }
   }
 
-  private collect(it: Item) {
+  /** What the hands do for an action (Story's actions by id). */
+  private actAnim(id: string, at: THREE.Vector3) {
+    // Story's action ids (story.ts, npcs.ts, chapter2.ts): building is two-handed work at the spot, the radio and the
+    // tuner go to the ear or the screen, a person is talked to with the hands, a workbench is worked
+    const kind: TaskKind | null = /^(pit|shelter|beacon|spear|salvage|splint)$/.test(id) ? 'fix'
+      : /^(tune)$/.test(id) ? 'type' : /^(answer|radio)$/.test(id) ? 'phone'
+      : /^npc-/.test(id) ? null : /^craft-/.test(id) ? null : /^(give|c1\.)/.test(id) ? 'give'
+      : /^(rest|sleep)$/.test(id) ? null : 'use';
+    if (!kind) return;
+    const near = kind === 'type' || kind === 'phone' || kind === 'give';
+    this.player.act(kind, near ? null : at, kind === 'fix' ? 2.4 : kind === 'phone' ? 3 : undefined);
+    // and the work is heard
+    const fx: Partial<Record<TaskKind, [string, number]>> = { fix: [id === 'beacon' || id === 'salvage' ? 'metal' : id === 'shelter' ? 'wood' : 'stone', 0.55], type: ['console', 0.35], use: ['soft', 0.4] };
+    const f = fx[kind];
+    if (f) { audio.sample(f[0], f[1], { delay: 0.35 }); if (kind === 'fix') { audio.sample(f[0], f[1] * 0.8, { delay: 0.95 }); audio.sample(f[0], f[1] * 0.7, { delay: 1.6 }); } }
+  }
+
+  private collect(it: Item, after = 0) {
     it.active = false;
+    if (after > 0) { const o = it.obj; window.setTimeout(() => { if (!it.active) o.visible = false; }, after * 1000); } else
     it.obj.visible = false;
     if (!this.save.collected.includes(it.id)) this.save.collected.push(it.id);
   }
