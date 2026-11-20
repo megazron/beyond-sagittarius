@@ -421,7 +421,7 @@ export class Montage {
     this.trunk.position.copy(tp).add(V(0, 14, 0)); this.trunk.visible = false;
     const a = tp.clone().addScaledVector(td, 1.85); a.y = T.height(a.x, a.z);
     const aSide = V(td.z, 0, -td.x);
-    land('strong', a, a.clone().addScaledVector(td, 6), 18.9, 1.5, 1, above(a.clone().addScaledVector(td, 62).add(V(20, 34, 0)), 30), a.clone().addScaledVector(aSide, 3.1).addScaledVector(td, 0.7).add(V(0, 0.9, 0)), a.clone().add(V(0, 1.45, 0)).addScaledVector(td, -0.5), face(a, tp));
+    land('strong', a, a.clone().addScaledVector(td, 6), 18.2, 2.6, 1, above(a.clone().addScaledVector(td, 62).add(V(20, 34, 0)), 30), a.clone().addScaledVector(aSide, 3.1).addScaledVector(td, 0.7).add(V(0, 0.9, 0)), a.clone().add(V(0, 1.45, 0)).addScaledVector(td, -0.5), face(a, tp));
 
     // Lyrra: splashes down mid-lake, wades to the shore in front of us
     const d = V(-0.75, 0, -0.66).normalize(), c0 = V(LAKE.x, 0, LAKE.z);
@@ -867,17 +867,19 @@ export class Montage {
 
     P(56, 62, 'home', (k, b) => {
       const e = easeInOut(k);
-      const a = lerp(-0.55, -0.32, e);
-      const cam = this.lens(V(Math.sin(a) * 1160, 160 - e * 40, Math.cos(a) * 1160), V(-90, -30 + e * 60, 0), 34, 0, 0, -0.1 + e * 0.05);
+      // from the day side and far enough back to see the whole world with sky round it: the fan of six has to read
+      const a = lerp(1.5, 1.72, e);
+      const cam = this.lens(V(Math.sin(a) * 1520, 170 - e * 40, Math.cos(a) * 1520), V(0, -10 + e * 30, 0).addScaledVector(V(Math.cos(a), 0, -Math.sin(a)), 70), 34, 0, 0, -0.06 + e * 0.04);
       // six lights out of one point in the sky, fanning out to six different parts of the world below: this is where
       // the six are torn apart for good, and each trail carries its name until it goes into the air
       const fwd = this.tmp.copy(cam.position).normalize(), right = this.tmp2.crossVectors(V(0, 1, 0), fwd).normalize(), up = this.tmp3.crossVectors(fwd, right);
-      const origin = fwd.clone().multiplyScalar(980).addScaledVector(right, -520).addScaledVector(up, 560);
+      // the point they break from is in shot, in the sky up and to the left of the world
+      const origin = fwd.clone().multiplyScalar(320).addScaledVector(right, -640).addScaledVector(up, 345);
       this.trails.forEach((tr, i) => {
         tr.color = i === 5 ? this.playerGlow() : TRAIL[ORDER[i]];
         const [sx, sy] = SPREAD[i];
         const end = fwd.clone().addScaledVector(right, sx).addScaledVector(up, sy).normalize().multiplyScalar(402);
-        const start = origin.clone().addScaledVector(right, i * 6).addScaledVector(up, -i * 4);
+        const start = origin;
         const head = smoothstep(0.06 + i * 0.03, 0.8 + i * 0.03, k);
         tr.draw((s, o) => o.lerpVectors(start, end, Math.max(0, head - s * 0.3)), cam, 1.6 + head * 1.6, b, head > 0 ? 1.6 : 0);
         this.tag(i, head > 0.12 && head < 0.97 ? start.clone().lerp(end, head) : null, cam);
@@ -886,7 +888,9 @@ export class Montage {
       const u = set.dome.uniforms;
       u.uBH.value = 0; u.uWarp.value = 0; u.uOther.value = 0; u.uNebula.value = 0.6;
       const pf = after(b, 56, 0.6) * 0.15;
-      this.fx = { flash: [pf, pf, pf], exposure: 1 };
+      // the break itself: a flash where the one light becomes six
+      const br = after(b, 56.4, 0.9) * 0.35;
+      this.fx = { flash: [pf + br, pf + br, pf + br * 0.9], exposure: 1.15 };
     }, () => set.show('home'));
 
     // ---- Act III: The Landing ----
