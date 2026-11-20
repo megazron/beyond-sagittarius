@@ -13,7 +13,7 @@ import type { PlayerLook, CrewSkins } from '../characters/custom';
 export interface CineUI {
   subtitle(key: string | null, speakerKey?: string): void;
   caption(key: string | null): void;
-  chapter(keys: string[] | null): void;
+  chapter(keys: string[] | null, solid?: boolean): void;
   mission(keys: string[] | null): void;
   aiAlert(key: string | null): void;
   fade(color: 'black' | 'white', to: number, seconds: number): void;
@@ -23,6 +23,9 @@ interface Cue { t: number; fn: () => void; done?: boolean; voiced?: boolean; key
 interface Shot { start: number; end: number; enter?: () => void; update: (k: number, local: number) => void; done?: boolean }
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+
+/** Seconds of black before the first shot, for the chapter card. */
+const PRE = -4.4;
 
 export class Cinematic {
   scene = new THREE.Scene();
@@ -114,7 +117,7 @@ export class Cinematic {
 
   start(onDone: () => void) {
     this.onDone = onDone;
-    this.time = 0;
+    this.time = PRE;
     this.playing = true;
     this.fitToVoice();
     this.cues.forEach((c) => (c.done = false));
@@ -296,8 +299,10 @@ export class Cinematic {
     const shipStart = V(-6, 20, 170);
 
     // ---- Scene 1: Departure ----
-    this.cue(0.3, () => ui.chapter(['cine.year', 'cine.chapter']));
-    this.cue(5.0, () => ui.chapter(null));
+    // the chapter card stands on its own black before the first picture, never on top of the planet
+    // (the card brings its own black: the fade layer sits above the cinematic and would hide it)
+    this.cue(-4.1, () => { ui.chapter(['cine.year', 'cine.chapter'], true); ui.fade('black', 0, 0); });
+    this.cue(-0.02, () => { ui.fade('black', 1, 0); ui.chapter(null); });
     this.vcue(5.4, 'cine.caption1', () => ui.caption('cine.caption1'));
     this.cues.push({ t: 14.0, voiced: true, fn: () => ui.caption(null) });
     this.vcue(14.2, 'cine.line1', () => ui.subtitle('cine.line1', 'crew.explorer.name'));

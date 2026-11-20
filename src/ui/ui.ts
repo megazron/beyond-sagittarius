@@ -125,9 +125,11 @@ export class UI implements CineUI {
     el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
   }
 
-  chapter(keys: string[] | null) {
+  /** A chapter card. `solid`: on its own black, in front of everything the cinematic draws. */
+  chapter(keys: string[] | null, solid = false) {
     this.lastChapter = keys;
     const el = $('chapter');
+    el.classList.toggle('solid', !!keys && solid);
     if (!keys) { el.classList.add('hidden'); return; }
     el.innerHTML = '';
     keys.forEach((k, i) => {
