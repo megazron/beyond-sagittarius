@@ -170,7 +170,7 @@ def key(code, down):
 
 
 TAP = """(async () => {
-  const s = window.__bs.audioTap(); if (!s) return 0;
+  const s = window.__bs && window.__bs.audioTap ? window.__bs.audioTap() : null; if (!s) return 0;  // a dev page has no game: pictures only
   const mr = new MediaRecorder(s, { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 160000 });
   const chunks = []; mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
   window.__rec = { mr, chunks, t0: 0 };
@@ -185,7 +185,7 @@ STOP = """(async () => {
   window.__rec = null; return btoa(s); })()"""
 
 w.call('Page.navigate', url=URL)
-wait("window.__bs && window.__bs.ready", 180)
+wait(PLAN.get("ready", "window.__bs && window.__bs.ready"), 180)
 for st in PLAN['steps']:
     if 'rec' in st:
         d = os.path.join(OUT, 'rec_' + st['rec']); os.makedirs(d, exist_ok=True)
