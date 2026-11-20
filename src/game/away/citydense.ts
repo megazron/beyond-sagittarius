@@ -10,7 +10,8 @@ import { nearFade } from '../../core/nearfade';
  */
 
 export interface Facade { side: number; z0: number; z1: number; h: number }
-export interface DenseOpts { rich: boolean; FRONT: number; S: number; N: number; facades: Facade[] }
+export interface StandIn { x: number; y: number; z: number; h: number; k: number; yaw?: number; walk?: boolean }
+export interface DenseOpts { /** Where what is seen from the whole city goes (the stand-in cards). */ top?: THREE.Object3D; rich: boolean; FRONT: number; S: number; N: number; facades: Facade[] }
 
 let seed = 4242;
 const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
@@ -47,7 +48,11 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   /** The painted crowd: where each card is and which way it walks; `taken` cards are hidden (a real body walks them). */
   let cards: { x: number; z: number; v: number; gate: boolean }[] = [], taken = new Uint8Array(0);
   /** Stand-ins: a card where a far body is not drawn (city.ts fills it each frame). */
-  let standIns: (list: { x: number; y: number; z: number; h: number; k: number }[], cam: THREE.Camera | null) => void = () => undefined;
+  let standIns: (list: StandIn[], cam: THREE.Camera | null) => void = () => undefined;
+  /** Baked impostors (impostor.ts) take over from the painted figures when they are ready. */
+  let imp: { cols: number; rows: number; variants: number } | null = null;
+  const grid = { value: new THREE.Vector2(1 / 8, 1) };
+  let setAtlas: (t: THREE.Texture, cols: number, rows: number, variants: number) => void = () => undefined, setLight: (c: THREE.Color) => void = () => undefined;
   const add = <T extends THREE.Object3D>(x: T) => { x.userData.ground = false; scene.add(x); return x; };
 
   // ---- vertical neon blades on every facade, stacked from the pavement to the roofline ----
@@ -94,7 +99,7 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   const big = o.facades.filter((f) => f.h > 8 && f.z0 - f.z1 > 9);
   for (let i = 0; i < big.length; i += rich ? 2 : 5) {
     const f = big[i], c = document.createElement('canvas'); c.width = 512; c.height = 288; draw(c, i);
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.userData.live = true; // redrawn: stays its own texture
     const w = Math.min(8, f.z0 - f.z1 - 3), scr = add(new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.56), new THREE.MeshBasicMaterial({ map: t, color: new THREE.Color(1.7, 1.7, 1.7), toneMapped: false })));
     scr.position.set(f.side * (FRONT - 0.12), f.h - w * 0.4, (f.z0 + f.z1) / 2); scr.rotation.y = f.side > 0 ? -Math.PI / 2 : Math.PI / 2;
     screens.push({ c, t, k: i });
@@ -145,9 +150,12 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     const n = rich ? 240 : 80, gateN = rich ? 70 : 30;
     const geo = new THREE.PlaneGeometry(1, 1); geo.translate(0, 0.5, 0);
     const offs = new Float32Array(n + gateN); for (let i = 0; i < n + gateN; i++) offs[i] = Math.floor(rnd() * 8) / 8; // every card its own figure, gate crowd included
-    geo.setAttribute('aOff', new THREE.InstancedBufferAttribute(offs, 1));
+    const tiles = new Float32Array((n + gateN) * 2); for (let i = 0; i < n + gateN; i++) tiles[i * 2] = offs[i];
+    const tileA = new THREE.InstancedBufferAttribute(tiles, 2); tileA.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('aTile', tileA);
     mat.onBeforeCompile = (sh) => {
-      sh.vertexShader = 'attribute float aOff;\nvarying float vH;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = vec2(uv.x / 8.0 + aOff, uv.y); vH = uv.y;');
+      sh.uniforms.uGrid = grid;
+      sh.vertexShader = 'attribute vec2 aTile;\nuniform vec2 uGrid;\nvarying float vH;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = aTile + uv * uGrid; vH = uv.y;');
       // darker towards the feet, as a lit street shades people from below
       sh.fragmentShader = 'varying float vH;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= 0.55 + 0.45 * smoothstep(0.0, 0.6, vH);');
     };
@@ -165,25 +173,40 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     for (let i = 0; i < n + gateN; i++) { const k = 0.78 + rnd() * 0.42; im.setColorAt(i, TC.setRGB(k * (0.94 + rnd() * 0.12), k * (0.94 + rnd() * 0.1), k * (0.94 + rnd() * 0.12))); }
     add(im);
     const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(), E = new THREE.Euler();
+    let time = 0;
+    /** The atlas tile for a card: which body, seen from which side (rel: the camera's bearing from the way they face), which walk frame (phase < 0: standing). */
+    const tileOf = (arr: Float32Array, i: number, who: number, rel: number, phase: number) => {
+      const A = imp!, view = ((Math.round(rel / (Math.PI / 2)) % 4) + 4) % 4, v = ((who % A.variants) + A.variants) % A.variants;
+      const frame = phase < 0 ? A.rows - 1 : Math.floor(phase % 1 * (A.rows - 1) + (A.rows - 1)) % (A.rows - 1);
+      arr[i * 2] = (v * 4 + view) / A.cols; arr[i * 2 + 1] = frame / A.rows;
+    };
+    const baseCol = new THREE.Color(0.55, 0.52, 0.6);
+    setAtlas = (t, cols, rows, variants) => { imp = { cols, rows, variants }; mat.map = t; mat.alphaTest = 0.5; mat.needsUpdate = true; grid.value.set(1 / cols, 1 / rows); baseCol.setRGB(1, 1, 1); };
+    setLight = (c) => { mat.color.copy(baseCol).multiply(c); };
     // far townsfolk: past a few dozen metres a body (a dozen draw calls, tens of thousands of triangles) is swapped for
     // a card of the same height, so the street stays full and nobody blinks out
     {
-      const CAP = 640, g2 = geo.clone(), o2 = new Float32Array(CAP);
-      for (let i = 0; i < CAP; i++) o2[i] = Math.floor(rnd() * 8) / 8;
-      g2.setAttribute('aOff', new THREE.InstancedBufferAttribute(o2, 1));
+      const CAP = 640, g2 = geo.clone(), o2 = new Float32Array(CAP * 2);
+      for (let i = 0; i < CAP; i++) o2[i * 2] = Math.floor(rnd() * 8) / 8;
+      const t2 = new THREE.InstancedBufferAttribute(o2, 2); t2.setUsage(THREE.DynamicDrawUsage);
+      g2.setAttribute('aTile', t2);
       const si = new THREE.InstancedMesh(g2, mat, CAP); si.count = 0; si.frustumCulled = false;
       for (let i = 0; i < CAP; i++) si.setColorAt(i, new THREE.Color(0.9, 0.88, 0.92));
-      add(si);
+      si.userData.ground = false; si.matrixAutoUpdate = false; (o.top ?? scene).add(si);
       const M2 = new THREE.Matrix4(), Q2 = new THREE.Quaternion(), P2 = new THREE.Vector3(), S2 = new THREE.Vector3(), E2 = new THREE.Euler();
       standIns = (list, cam) => {
+        time = performance.now() / 1000;
         const cp = cam?.position; let n = 0;
         for (const q of list) {
           if (n >= CAP) break;
-          E2.set(0, cp ? Math.atan2(cp.x - q.x, cp.z - q.z) : 0, 0); Q2.setFromEuler(E2);
-          P2.set(q.x, q.y, q.z); S2.set(q.h * 0.42, q.h, 1);
+          const a = cp ? Math.atan2(cp.x - q.x, cp.z - q.z) : 0;
+          E2.set(0, a, 0); Q2.setFromEuler(E2);
+          const k = q.h / 1.72;
+          P2.set(q.x, q.y, q.z); if (imp) S2.set(1.1 * k, 2.0 * k, 1); else S2.set(q.h * 0.42, q.h, 1);
+          if (imp) tileOf(o2, n, q.k, a - (q.yaw ?? 0), q.walk ? time * 1.7 + q.k : -1);
           si.setMatrixAt(n++, M2.compose(P2, Q2, S2));
         }
-        si.count = n; si.instanceMatrix.needsUpdate = true;
+        si.count = n; si.instanceMatrix.needsUpdate = true; if (imp) t2.needsUpdate = true;
       };
     }
     updates.push((dt, t, cam) => {
@@ -195,14 +218,17 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
         // drawn, so nobody vanishes as you walk up
         const vis = taken[i] ? 0 : 1;
         const bob = Math.abs(Math.sin(t * 6 * Math.abs(q.v) + q.p)) * 0.04;
-        E.set(0, cp ? Math.atan2(cp.x - q.x, cp.z - q.z) : 0, 0); Q.setFromEuler(E);
-        P.set(q.x, 0.14 + bob, q.z); SC.set(q.h * q.wd * vis, q.h * vis, 1);
+        const a = cp ? Math.atan2(cp.x - q.x, cp.z - q.z) : 0;
+        E.set(0, a, 0); Q.setFromEuler(E);
+        if (imp) { const k = q.h / 1.72; P.set(q.x, 0.14, q.z); SC.set(1.1 * k * vis, 2.0 * k * vis, 1); tileOf(tiles, i, i, a - (q.v > 0 ? 0 : Math.PI), Math.abs(q.v) > 0.3 ? t * Math.abs(q.v) * 1.3 + q.p : -1); }
+        else { P.set(q.x, 0.14 + bob, q.z); SC.set(q.h * q.wd * vis, q.h * vis, 1); }
         im.setMatrixAt(i, M.compose(P, Q, SC));
       });
-      im.instanceMatrix.needsUpdate = true;
+      im.instanceMatrix.needsUpdate = true; if (imp) tileA.needsUpdate = true;
     });
   }
 
-  return { update: (dt: number, t: number, cam: THREE.Camera | null) => { for (const u of updates) u(dt, t, cam); }, get cards() { return cards; }, get taken() { return taken; },
-    standIns: (list: { x: number; y: number; z: number; h: number; k: number }[], cam: THREE.Camera | null) => standIns(list, cam) };
+  return { update: (dt: number, t: number, cam: THREE.Camera | null, on = true) => { if (on) for (const u of updates) u(dt, t, cam); }, get cards() { return cards; }, get taken() { return taken; },
+    standIns: (list: StandIn[], cam: THREE.Camera | null) => standIns(list, cam),
+    setAtlas: (t: THREE.Texture, cols: number, rows: number, variants: number) => setAtlas(t, cols, rows, variants), setLight: (c: THREE.Color) => setLight(c) };
 }

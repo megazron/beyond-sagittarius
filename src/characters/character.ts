@@ -11,6 +11,7 @@ import { voice } from '../core/voice';
 import { AnimSet, CrewAsset, CrewMeta, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, furMaterial, hasLod1, lashMaterial, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
 import { addKit, Kit } from './kit';
 import { mergeRigid } from './rigid';
+import { perfBody } from '../core/perfhud';
 
 export type { CrewId } from './looks';
 export { preloadCrew } from './assets';
@@ -69,9 +70,9 @@ export const CLOTH_LIFT = 0.006;
 export const CLOTH_HOLES = { filled: 0 };
 
 /** Phones (the light build everywhere): face details past this many metres from the camera are not drawn. */
-const FACE_FAR: Record<string, number> = { cornea: 9, lash: 14 };
+const FACE_FAR: Record<string, number> = { cornea: 3, lash: 3.5, eyes: 9 };
 /** A crowd body further off than these is drawn without them (every preset): eyes, their shine and the lashes are a pixel or two. */
-const CROWD_FACE_FAR: Record<string, number> = { cornea: 7, lash: 10, eyes: 14 };
+const CROWD_FACE_FAR: Record<string, number> = { cornea: 5, lash: 7, eyes: 12 };
 
 // a body's shadow pass costs far more than its own draw on a laptop GPU (skinned and morphed depth): a crowd body never
 // casts one (the stage lays a soft contact shadow under it instead), others only near the camera
@@ -159,7 +160,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const root = new THREE.Group();
   root.userData.isCharacter = true; // stage mergers leave bodies alone
   // shown again: back in three.js's matrix pass at once, whoever shows it (animate() takes it out while it is hidden)
-  { let shown = true; Object.defineProperty(root, 'visible', { get: () => shown, set: (v: boolean) => { shown = v; if (v) root.matrixWorldAutoUpdate = true; } }); }
+  { let shown = true; Object.defineProperty(root, 'visible', { get: () => shown, set: (v: boolean) => { shown = v; if (v) root.matrixWorldAutoUpdate = true; } });
+    // while hidden, three.js's matrix pass does not walk its sixty bones and its meshes at all
+    const walk = THREE.Object3D.prototype.updateMatrixWorld; root.updateMatrixWorld = function (force?: boolean) { if (shown) walk.call(this, force); }; }
   const fig = new THREE.Group();
   fig.visible = false;
   root.add(fig);
@@ -474,6 +477,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   // per region: its shapes' morph names and the bones from just below its reference down to its driving bone
   let corrRegions: { k: NonNullable<CrewMeta['pit']>[string]; keys: string[]; chain: THREE.Object3D[]; phi: Float64Array }[] = [];
   // how this body is seen (CHAR_BUDGET): animate() calls since a game camera last drew it, and that camera's distance
+  let perfStamp = 0;
   let sinceDrawn = 99, camD = 0, skipN = 0, skipDt = 0, corrOn = false, corrN = 0, crowd = false;
   let lodSets: THREE.SkinnedMesh[][] = [[], []], lodOn = 0, rigid: THREE.SkinnedMesh[] = [], hairs: [THREE.Object3D | null, THREE.Object3D | null] = [null, null], hairOn = 0;
   const castable = new Set<THREE.Object3D>(); // the meshes that cast a shadow when near
@@ -499,7 +503,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   }
   function seen(this: THREE.Object3D, _r: THREE.WebGLRenderer, _s: THREE.Scene, c: THREE.Camera) {
     if (!(c as THREE.PerspectiveCamera).isPerspectiveCamera) return; // the sun's shadow camera does not count
-    sinceDrawn = 0;
+    sinceDrawn = 0; perfStamp = perfBody(perfStamp);
     const a = c.matrixWorld.elements, b = this.matrixWorld.elements;
     camD = Math.hypot(a[12] - b[12], a[13] - b[13], a[14] - b[14]);
   }
@@ -763,7 +767,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       root.matrixWorldAutoUpdate = true;
       pickLod();
       sinceDrawn++;
-      const every = sinceDrawn > 3 ? 4 : camD > 45 ? 3 : camD > 22 ? 2 : 1;
+      // phones: a crowd body more than a few metres off is posed every other frame
+      const every = sinceDrawn > 3 ? 4 : camD > 45 ? 3 : camD > 22 ? 2 : crowd && lod === 1 && camD > 6 ? 2 : 1;
       skipDt += dt;
       if (++skipN < every) return;
       dt = Math.min(skipDt, 0.2); skipN = 0; skipDt = 0;

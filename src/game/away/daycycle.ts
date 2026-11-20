@@ -3,14 +3,14 @@ import { FACADE } from './facade';
 import { nearFade } from '../../core/nearfade';
 
 /**
- * Zenvora's time of day and weather. The prologue starts in the golden hour (17:40) and the evening comes on while you
- * play (an hour every four minutes): the sun goes down the street, the sky goes through pink and violet to night, the
+ * Zenvora's time of day and weather. The prologue starts as the sun touches the horizon (17:51), the neon already on,
+ * and the evening comes on while you play (an hour every seven minutes): the sun goes down the street, the sky goes through pink and violet to night, the
  * windows and street lamps come on, the haze thickens. Rain (`?weather=rain`, or now and then) brings an overcast sky,
  * streaks round the camera, and wet ground: darker, glossier, with puddles that hold the sky and the neon.
  *
  * `?tod=HH.H` freezes the clock at an hour (pictures, tests), `?weather=clear|rain` sets the weather.
  */
-export interface DayState { hour: number; night: number; rain: number; sunDir: THREE.Vector3; elev: number }
+export interface DayState { hour: number; night: number; rain: number; sunDir: THREE.Vector3; elev: number; exposure: number; bloom: number; threshold: number }
 
 const q = new URLSearchParams(typeof location === 'undefined' ? '' : location.search);
 const FIXED = q.has('tod') ? Number(q.get('tod')) : null;
@@ -58,8 +58,8 @@ export function skyMaterial() {
 }
 
 export function dayCycle(o: { sky: THREE.ShaderMaterial; sun: THREE.DirectionalLight; hemi: THREE.HemisphereLight; fog: THREE.Fog; rich: boolean; scene: THREE.Scene }) {
-  const st: DayState = { hour: FIXED ?? 16.9, night: 0, rain: WEATHER === 'rain' ? 1 : 0, sunDir: new THREE.Vector3(), elev: 0 };
-  const RATE = 1 / 240; // game hours a second
+  const st: DayState = { exposure: 1, bloom: 1, threshold: 1.15, hour: FIXED ?? 17.85, night: 0, rain: WEATHER === 'rain' ? 1 : 0, sunDir: new THREE.Vector3(), elev: 0 };
+  const RATE = 1 / 420; // game hours a second
   const C = (h: number) => new THREE.Color(h);
   // the rain: streaks in a box that follows the camera, one draw
   const N = o.rich ? 5000 : 1600, R = 26, TOP = 22;
@@ -81,7 +81,7 @@ export function dayCycle(o: { sky: THREE.ShaderMaterial; sun: THREE.DirectionalL
       st.elev = st.sunDir.y;
       const e = st.elev;
       st.night = THREE.MathUtils.smoothstep(-e, -0.1, 0.12); // 0 above 6 degrees, 1 well below the horizon
-      FACADE.night.value = st.night; FACADE.wet.value = st.rain;
+      FACADE.night.value = st.night; FACADE.wet.value = Math.max(st.rain, 0.3); // the streets were washed this evening: damp, with puddles, even when dry
       const u = o.sky.uniforms; u.sun.value.copy(st.sunDir); u.uNight.value = st.night; u.uRain.value = st.rain; u.uTime.value = time;
       // sunlight: white high up, gold and then red near the horizon, gone below it (the moon takes over, cool and dim)
       const day = THREE.MathUtils.smoothstep(e, -0.03, 0.08), gold = 1 - THREE.MathUtils.smoothstep(e, 0.05, 0.4);
@@ -96,8 +96,12 @@ export function dayCycle(o: { sky: THREE.ShaderMaterial; sun: THREE.DirectionalL
       hemiSky.copy(C(0x9ab6e8)).lerp(C(0x8a86c8), gold).lerp(C(0x1a2040), st.night);
       hemiGnd.copy(C(0xb09070)).lerp(C(0x7a5a48), gold).lerp(C(0x2a1c18), st.night); // the street's own light bouncing off the paving
       o.hemi.color.copy(hemiSky); o.hemi.groundColor.copy(hemiGnd);
-      o.hemi.intensity = (0.9 + 1.0 * (1 - st.night)) * (1 - st.rain * 0.3) + st.night * 0.25;
-      o.scene.environmentIntensity = 0.5 + 1.0 * (1 - st.night);
+      o.hemi.intensity = (0.72 + 1.1 * (1 - st.night)) * (1 - st.rain * 0.3);
+      o.scene.environmentIntensity = 0.5 + 0.85 * (1 - st.night);
+      // the lens: by day the light is strong and the exposure low, so lit signs and shop windows sit under the sunlit
+      // walls and nothing whites out; as night comes the exposure opens and the neon becomes the light, with its bloom
+      st.exposure = THREE.MathUtils.lerp(0.62, 1.12, st.night) * (1 - 0.1 * gold * (1 - st.night));
+      st.bloom = 0.3 + 0.7 * st.night; st.threshold = THREE.MathUtils.lerp(3.2, 1.0, st.night);
       fogC.copy(C(0xb8c4d8)).lerp(C(0xc89a88), gold).lerp(C(0x1c1a2c), st.night).lerp(C(0x6a7078).multiplyScalar(1 - 0.75 * st.night), st.rain * 0.7);
       o.fog.color.copy(fogC);
       o.fog.near = 40 - st.rain * 20; o.fog.far = (o.rich ? 520 : 320) * (1 - st.rain * 0.45) * (1 - st.night * 0.25);
@@ -134,6 +138,8 @@ export function wetify(m: THREE.MeshStandardMaterial, puddles = 1) {
       float wH(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float wN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(wH(i), wH(i + vec2(1, 0)), f.x), mix(wH(i + vec2(0, 1)), wH(i + vec2(1, 1)), f.x), f.y); }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
+        // wear: the ground is never one tone (patches the size of a lorry, and finer mottling)
+        diffuseColor.rgb *= 0.8 + 0.38 * (wN(vWetP.xz * 0.045) * 0.6 + wN(vWetP.xz * 0.37) * 0.4);
         wPud = uWet * smoothstep(0.52, 0.62, wN(vWetP.xz * 0.16) * 0.7 + wN(vWetP.xz * 0.7) * 0.3) * ${puddles.toFixed(2)};
         diffuseColor.rgb *= mix(1.0, 0.55, uWet) * (1.0 - 0.35 * wPud);`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>

@@ -488,6 +488,8 @@ export class Renderer {
   private frame = 0;
   private shed = 0;
   private aoWanted = false;
+  private triedAt = -99;
+  private holdUntil = 0;
 
   constructor(canvas: HTMLCanvasElement, public quality: Quality) {
     Renderer.current = this;
@@ -625,6 +627,16 @@ export class Renderer {
     if (f.exposure !== undefined) this.renderer.toneMappingExposure = f.exposure;
   }
 
+  /**
+   * A stage's own exposure and bloom (Zenvora by the hour: bright light and a low exposure by day, so lit signs do not
+   * white out; a high exposure at night, when they are the light). No arguments puts the defaults back.
+   */
+  setLook(exposure = 1, bloomK = 1, threshold = 1.15) {
+    this.renderer.toneMappingExposure = exposure;
+    this.bloom.strength = this.quality.bloomStrength * 0.32 * bloomK;
+    this.bloom.threshold = threshold;
+  }
+
   resize() {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h);
@@ -663,7 +675,12 @@ export class Renderer {
       const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
       this.temporal!.jitter(cam, size.x, size.y, this.frame++);
     }
-    this.composer.render(dt);
+    // phones in a scene that asks for it (Zenvora): straight to the screen, no post chain at all. Bloom and the grade
+    // are a dozen full-screen passes; on a phone they cost more than the street. The title lens still gets the chain.
+    const u = this.final.uniforms, fv = u.uFlash.value as THREE.Vector3;
+    if (!this.quality.post && this.renderPass.scene.userData.direct && !u.uZoom.value && !u.uInk.value && !u.uLines.value && fv.x + fv.y + fv.z === 0) {
+      this.renderer.setRenderTarget(null); this.renderer.render(this.renderPass.scene, cam);
+    } else this.composer.render(dt);
     if (jittered) cam.clearViewOffset();
     if (this.quality.dynamicResolution) this.adaptResolution(dt, time);
   }
@@ -700,10 +717,13 @@ export class Renderer {
       const floor = q.minPixelRatio + (maxPr - q.minPixelRatio) * 0.45;
       if (pr <= floor && this.shed < 2) this.setShed(this.shed + 1);
       else pr = Math.max(q.minPixelRatio, pr - (over > 1.3 ? 0.12 : 0.06));
-    } else if (avg < budget * 0.85) {
-      if (pr < maxPr) pr = Math.min(maxPr, pr + 0.04);
+    } else if (avg < budget * 0.85 || (avg < budget * 1.02 && time > this.holdUntil)) {
+      // headroom, or holding the target (a display that caps the frame rate never shows headroom): try a step sharper.
+      // If that step then misses the target, the drop above takes it back and it is not tried again for a while.
+      if (pr < maxPr) { pr = Math.min(maxPr, pr + 0.04); this.triedAt = time; }
       else if (this.shed > 0) this.setShed(this.shed - 1);
     }
+    if (avg > budget * 1.04 && time - this.triedAt < 2.5) this.holdUntil = time + 20;
     this.lastAdjust = time;
     this.frameTimes.length = 0;
     if (Math.abs(pr - this.pixelRatio) > 0.005) {

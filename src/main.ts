@@ -27,6 +27,7 @@ import { initAndroid, isNativeApp } from './core/android';
 import { Wheel } from './ui/wheel';
 import { MapPin, interactiveMap, planetLayer } from './ui/map';
 import { Minimap, MapLayer, MapPoint, routeOf } from './ui/minimap';
+import { PERF, perfFrame } from './core/perfhud';
 import { GpsTrail } from './world/gps';
 import type { AwayStage } from './game/away/stage';
 import type { MenuTab } from './ui/ui';
@@ -77,6 +78,7 @@ onLangChange(() => void voice.load());
 let renderer: Renderer;
 try {
   renderer = new Renderer(canvas, quality);
+  renderer.renderer.info.autoReset = false; // counted per frame, over every pass (perfhud.ts)
 } catch (e) {
   document.getElementById('loading')!.innerHTML = '<div class="loader-text">WebGL2 is required to play BEYOND SAGITTARIUS.</div>';
   throw e;
@@ -514,6 +516,7 @@ function resume() { ui.closeModal(); paused = false; input.enabled = true; audio
 
 // ---- the minimap, the full map and the GPS route ----
 const minimap = new Minimap(document.getElementById('hud')!, () => { if (canPlay() && !paused) menuKey('map'); });
+if (quality.name === 'mobile') minimap.interval = 0.16;
 const gps = new GpsTrail();
 let planetL: MapLayer | null = null;
 const mapPlanet = () => (planetL ??= planetLayer((x, z) => world.terrain.height(x, z), quality.name === 'mobile' ? 360 : 720));
@@ -530,17 +533,21 @@ function navState() {
   return { layer, pos, goal: goalV ? { x: goalV.x, z: goalV.z } : null, pts, ground: away && st ? (x: number, z: number) => st.height(x, z) : (x: number, z: number) => world.terrain.height(x, z), scene: away && st ? st.scene : world.scene };
 }
 let navT = 0, navCache: ReturnType<typeof navState> | null = null;
+let navRoute: [number, number][] | null = null, navTgt: { x: number; z: number } | null = null;
 function navFrame(dt: number) {
   const on = state === 'game' && !!game && (game.mode === 'play' || game.mode === 'away') && !paused && !photo && !game.away?.outroOn;
   minimap.el.classList.toggle('off', !on);
   if (!on) { gps.update(null, () => 0, elapsed); return; }
   navT -= dt;
-  if (navT <= 0 || !navCache) { navT = 0.25; navCache = navState(); }
-  const n = navCache;
+  const fresh = navT <= 0 || !navCache;
+  if (fresh) { navT = 0.25; navCache = navState(); }
+  const n = navCache!;
   minimap.setLayer(n.layer);
   if (!n.pos || !n.layer) { gps.update(null, () => 0, elapsed); return; }
   const tgt = minimap.target(n.pos.x, n.pos.z, n.goal);
-  const route = tgt ? routeOf(n.layer, n.pos.x, n.pos.z, tgt.x, tgt.z) : null;
+  // the route is worked out four times a second, not every frame (the chevrons still move every frame)
+  if (fresh || !tgt || tgt !== navTgt) { navTgt = tgt; navRoute = tgt ? routeOf(n.layer, n.pos.x, n.pos.z, tgt.x, tgt.z) : null; }
+  const route = navRoute;
   const pts = [...n.pts];
   if (n.goal) pts.push({ ...n.goal, kind: 'goal' });
   if (minimap.waypoint) pts.push({ ...minimap.waypoint, kind: 'way' });
@@ -707,11 +714,12 @@ function frame() {
   frameCount++;
   clock.update();
   const real = Math.min(clock.getDelta(), 0.05);
-  if (!hold.on) { tick(real); draw(real); return; }
+  if (!hold.on) { const t0 = performance.now(); tick(real); const t1 = performance.now(); draw(real); perfFrame(renderer.renderer, real, t1 - t0, performance.now() - t1); return; }
   if (hold.pending <= 0) return;
   for (let left = hold.pending; left > 1e-6; left -= 1 / 30) tick(Math.min(left, 1 / 30));
   hold.pending = 0;
   draw(1 / 30);
+  perfFrame(renderer.renderer, 1 / 30, 0, 0);
   hold.done++;
 }
 
@@ -875,6 +883,8 @@ window.addEventListener('resize', () => {
   get endings() { return game?.save ? { stay: endingFor(game.save, 'stay', ENDINGS).id, home: endingFor(game.save, 'home', ENDINGS).id } : null; },
   get inputState() { return { keys: Array.from(input.keys), enabled: input.enabled, active: document.activeElement?.tagName, activeId: document.activeElement?.id, mode: game?.mode, pose: player?.pose, vel: player?.vel.toArray(), onGround: player?.onGround, water: player?.inWater, blocked: player?.blockedDeep }; },
   get longTasks() { return longTasks; },
+  /** Frame budget: fps, update and draw ms, draw calls, triangles, bodies drawn (tools/perf_gate.py, ?perf=1). */
+  get perf() { return { ...PERF }; },
   sceneTest(id: 'l3' | 'l7' | 'ch1' | 'intro' | 'fight') { if (id === 'fight') playFlashback(() => backToWorld()); else playVault(id, backToWorld); },
   nextBeat() { cine.debugNext(); game?.scene?.debugNext(); },
   get frameReport() { return frameReport; },
@@ -955,6 +965,9 @@ window.addEventListener('resize', () => {
   },
   /** Test hook: the painted crowd near the camera (14 m), the real bodies walking it, and cards hidden with no body. */
   awayCrowd() { const st = game?.away?.stage as { crowdState?: () => { near: number; bodies: number; lost: number } } | null; return st?.crowdState?.() ?? { near: 0, bodies: 0, lost: 0 }; },
+  /** Test hook: 'body', 'card' or 'none' for a person on the away stage (tools/crowd_smoke.py). */
+  awayDrawnAs(id: string) { return (game?.away?.stage as { drawnAs?: (id: string) => string } | null)?.drawnAs?.(id) ?? 'none'; },
+  get awayPerf() { return (game?.away?.stage as { perfState?: unknown } | null)?.perfState ?? null; },
   awayLeave() { game?.away?.leave(); },
   /** Test hook: every Zenvora task done at once, so the take-off plays now. */
   awayOutro() { game?.away?.debugOutro(); },

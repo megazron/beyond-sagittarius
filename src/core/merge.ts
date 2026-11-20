@@ -46,12 +46,12 @@ export function materialSignature(m: THREE.Material, loose: false | 'tint' | 'pb
 
 const plainHook = THREE.Object3D.prototype.onBeforeRender, plainAfter = THREE.Object3D.prototype.onAfterRender;
 /** Can this mesh be merged with its siblings at all? */
-export function mergeable(o: THREE.Object3D): o is THREE.Mesh {
+export function mergeable(o: THREE.Object3D, anyBlend = false): o is THREE.Mesh {
   const m = o as THREE.Mesh;
   if (!m.isMesh || (m as THREE.SkinnedMesh).isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh || (m as unknown as { isBatchedMesh?: boolean }).isBatchedMesh) return false;
   if (m.children.length || m.name || m.userData.keep || !m.visible || Array.isArray(m.material) || m.onBeforeRender !== plainHook || m.onAfterRender !== plainAfter) return false;
   const mat = m.material as THREE.Material;
-  if ((mat.transparent && mat.blending !== THREE.AdditiveBlending) || m.renderOrder !== 0 || !m.frustumCulled || m.layers.mask !== 1) return false;
+  if ((mat.transparent && mat.blending !== THREE.AdditiveBlending && !anyBlend) || m.renderOrder !== 0 || !m.frustumCulled || m.layers.mask !== 1) return false;
   if (Object.keys(m.geometry.morphAttributes).length || m.geometry.drawRange.count !== Infinity || m.geometry.drawRange.start !== 0) return false;
   return true;
 }
@@ -68,6 +68,8 @@ export interface MergeOpts {
   pbr?: boolean;
   /** Fewest meshes worth merging. */
   min?: number;
+  /** Phones: transparent meshes merge too (their order within one merge is then fixed, not sorted by depth). */
+  anyBlend?: boolean;
 }
 
 const tintable = (m: THREE.Material, g: THREE.BufferGeometry) => !g.attributes.color && !(m as THREE.MeshStandardMaterial).vertexColors
@@ -115,15 +117,17 @@ export function mergeChildren(parent: THREE.Object3D, opts: MergeOpts = {}) {
     return k;
   };
   for (const o of parent.children) {
-    if (!mergeable(o)) continue;
+    if (!mergeable(o, opts.anyBlend)) continue;
     o.updateMatrix();
     if (o.matrix.determinant() <= 0) continue;
     const g = o.geometry, mat = o.material as THREE.Material;
-    const attrs = Object.entries(g.attributes).map(([k, a]) => `${k}:${a.itemSize}:${(a as THREE.BufferAttribute).array.constructor.name}:${a.normalized}`).sort().join(',');
+    // untextured standard materials merge whatever their geometry carries: only positions and normals are kept
+    const bare = !!opts.pbr && pbrable(mat, g) && !!g.attributes.normal;
+    const attrs = bare ? 'bare' : Object.entries(g.attributes).map(([k, a]) => `${k}:${a.itemSize}:${(a as THREE.BufferAttribute).array.constructor.name}:${a.normalized}`).sort().join(',');
     let cell = '';
     if (opts.cell) { if (!g.boundingBox) g.computeBoundingBox(); cell = opts.cell(g.boundingBox!.getCenter(TMP).applyMatrix4(o.matrix)); }
     let ud = ''; try { ud = JSON.stringify(o.userData); } catch { continue; }
-    const key = [keyOf(mat, g), +o.castShadow, +o.receiveShadow, cell, attrs, !!g.index, ud].join('|');
+    const key = [keyOf(mat, g), +o.castShadow, +o.receiveShadow, cell, attrs, bare ? false : !!g.index, ud].join('|');
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(o);
   }
   let saved = 0;
@@ -134,7 +138,9 @@ export function mergeChildren(parent: THREE.Object3D, opts: MergeOpts = {}) {
     const pbr = mats.length > 1 && !!opts.pbr && mats.every((m) => pbrable(m, list[0].geometry)) && new Set(mats.map(look)).size > 1;
     const tinted = !pbr && new Set(mats.map((m) => m.color?.getHex())).size > 1;
     const geos = list.map((m) => {
-      const g = m.geometry.clone().applyMatrix4(m.matrix), mm = m.material as THREE.MeshStandardMaterial, n = g.attributes.position.count;
+      let g = m.geometry.clone().applyMatrix4(m.matrix); const mm = m.material as THREE.MeshStandardMaterial;
+      if (opts.pbr && pbrable(mm, m.geometry) && g.attributes.normal) { if (g.index) g = g.toNonIndexed(); for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k); }
+      const n = g.attributes.position.count;
       const fill = (name: string, v: number[]) => { const a = new Float32Array(n * v.length); for (let i = 0; i < n; i++) a.set(v, i * v.length); g.setAttribute(name, new THREE.BufferAttribute(a, v.length)); };
       if (tinted || pbr) fill('color', [mm.color.r, mm.color.g, mm.color.b]);
       if (pbr) { fill('aPbr', [mm.roughness, mm.metalness]); const e = mm.emissive.clone().multiplyScalar(mm.emissiveIntensity); fill('aGlow', [e.r, e.g, e.b]); }
@@ -185,4 +191,90 @@ export function watchChanges(root: THREE.Object3D) {
 export function freezeTree(root: THREE.Object3D) {
   root.traverse((o) => { o.updateMatrix(); o.matrixAutoUpdate = false; });
   root.updateMatrixWorld(true);
+}
+
+/**
+ * Many small canvases, one texture. A street is full of things that each painted their own canvas (a shop's shelves, a
+ * sign, a poster, a banner): each is then its own material and its own draw call. This packs the canvases of every
+ * mesh under `root` that `take` allows into a few big atlases, points each mesh's uvs at its place, and gives all the
+ * meshes with the same kind of material one material per atlas, so `mergeChildren` can then merge them. A texture that
+ * is redrawn later (`texture.userData.live`), tiles (repeat wrapping) or is offset is left alone.
+ */
+export function atlasCanvases(root: THREE.Object3D, take: (o: THREE.Mesh, m: THREE.Material) => boolean, size = 4096, oneSide = false) {
+  type Std = THREE.MeshStandardMaterial;
+  // a lit canvas's own brightness is painted into the atlas (dimmer ones darker), so lit signs of every brightness
+  // share one material; with `oneSide`, single- and double-sided ones do too (all drawn double-sided)
+  // phones (`oneSide`): the colour a canvas is multiplied by and its opacity are painted into the atlas as well, so
+  // every opaque unlit canvas shares one material, every see-through one another, every lit one a third
+  const sig = (m: Std) => oneSide ? [m.type, m.transparent, m.blending, m.toneMapped, m.depthWrite, m.fog, m.polygonOffset ? m.polygonOffsetFactor : 0, m.emissiveMap ? 'lit' : '', m.map?.colorSpace].join('|') : [m.type, oneSide ? 0 : m.side, m.transparent, m.blending, m.toneMapped, m.color?.getHexString(), m.opacity, m.depthWrite, m.depthTest, m.fog, m.alphaTest, m.polygonOffset, m.polygonOffsetFactor,
+    m.roughness, m.metalness, m.emissive?.getHexString(), m.emissiveMap ? 'lit' : m.emissiveIntensity, !!m.emissiveMap, m.map?.colorSpace, m.envMapIntensity].join('|');
+  const groups = new Map<string, { mesh: THREE.Mesh; mat: Std; cv: HTMLCanvasElement }[]>();
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh, m = mesh.material as Std;
+    if (!mesh.isMesh || (mesh as THREE.InstancedMesh).isInstancedMesh || (mesh as THREE.SkinnedMesh).isSkinnedMesh || Array.isArray(m) || !m || !take(mesh, m)) return;
+    if (m.type !== 'MeshStandardMaterial' && m.type !== 'MeshBasicMaterial') return;
+    if (m.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile) return;
+    const t = m.map, cv = t?.image as HTMLCanvasElement | undefined;
+    if (!t || !(t as THREE.CanvasTexture).isCanvasTexture || !cv || !cv.getContext || t.userData.live || t.wrapS === THREE.RepeatWrapping || t.wrapT === THREE.RepeatWrapping) return;
+    if (t.offset.x || t.offset.y || t.repeat.x !== 1 || t.repeat.y !== 1 || t.rotation || !t.flipY) return;
+    if ((m.emissiveMap && m.emissiveMap !== t) || m.normalMap || m.alphaMap || m.roughnessMap || m.metalnessMap || m.aoMap) return;
+    if (cv.width > size / 2 || cv.height > size / 2 || !mesh.geometry.attributes.uv) return;
+    const k = sig(m);
+    (groups.get(k) ?? groups.set(k, []).get(k)!).push({ mesh, mat: m, cv });
+  });
+  let saved = 0;
+  const PAD = 4;
+  for (const list of groups.values()) {
+    if (new Set(list.map((x) => x.cv)).size < 2) continue;
+    // shelf packing, tallest first; a canvas used by several meshes is placed once
+    const cvs = [...new Set(list.map((x) => x.cv))].sort((a, b) => b.height - a.height);
+    const lit = !!list[0].mat.emissiveMap, K = lit ? Math.max(...list.map((x) => x.mat.emissiveIntensity)) : 1;
+    const gain = new Map<HTMLCanvasElement, number>(); if (lit) for (const x of list) gain.set(x.cv, Math.max(gain.get(x.cv) ?? 0, x.mat.emissiveIntensity / K));
+    // the tint and the opacity of each canvas's material (loose mode); KC keeps colours brighter than white (glowing panels)
+    const KC = oneSide && !lit ? Math.max(1, ...list.map((x) => Math.max(x.mat.color.r, x.mat.color.g, x.mat.color.b))) : 1;
+    const tint = new Map<HTMLCanvasElement, { c: THREE.Color; a: number }>();
+    if (oneSide && !lit) for (const x of list) if (!tint.has(x.cv)) tint.set(x.cv, { c: x.mat.color.clone().multiplyScalar(1 / KC), a: x.mat.transparent ? x.mat.opacity : 1 });
+    const sheets: { c: HTMLCanvasElement; g: CanvasRenderingContext2D; x: number; y: number; row: number; at: Map<HTMLCanvasElement, [number, number]> }[] = [];
+    const sheet = () => { const c = document.createElement('canvas'); c.width = c.height = size; const s = { c, g: c.getContext('2d')!, x: PAD, y: PAD, row: 0, at: new Map<HTMLCanvasElement, [number, number]>() }; sheets.push(s); return s; };
+    let cur = sheet();
+    const where = new Map<HTMLCanvasElement, typeof cur>();
+    for (const cv of cvs) {
+      if (cur.x + cv.width + PAD > size) { cur.x = PAD; cur.y += cur.row + PAD; cur.row = 0; }
+      if (cur.y + cv.height + PAD > size) cur = sheet();
+      const tn = tint.get(cv);
+      if (tn && (tn.a < 0.999 || tn.c.r < 0.999 || tn.c.g < 0.999 || tn.c.b < 0.999)) {
+        const tmp = document.createElement('canvas'); tmp.width = cv.width; tmp.height = cv.height; const tg = tmp.getContext('2d')!;
+        tg.drawImage(cv, 0, 0); tg.globalCompositeOperation = 'multiply'; tg.fillStyle = `#${tn.c.clone().convertLinearToSRGB().getHexString()}`; tg.fillRect(0, 0, cv.width, cv.height);
+        tg.globalCompositeOperation = 'destination-in'; tg.drawImage(cv, 0, 0);
+        cur.g.globalAlpha = tn.a; cur.g.drawImage(tmp, cur.x, cur.y); cur.g.globalAlpha = 1;
+      } else cur.g.drawImage(cv, cur.x, cur.y);
+      const gk = gain.get(cv) ?? 1; if (gk < 0.999) { cur.g.fillStyle = `rgba(0,0,0,${(1 - gk).toFixed(3)})`; cur.g.fillRect(cur.x, cur.y, cv.width, cv.height); }
+      cur.at.set(cv, [cur.x, cur.y]); where.set(cv, cur);
+      cur.x += cv.width + PAD; cur.row = Math.max(cur.row, cv.height);
+    }
+    const mats = new Map<typeof cur, Std>();
+    const done = new Set<THREE.BufferGeometry>();
+    for (const it of list) {
+      const s = where.get(it.cv)!, [x, y] = s.at.get(it.cv)!;
+      let m = mats.get(s);
+      if (!m) {
+        // the sheet is cut down to what it holds
+        const used = Math.min(size, s.y + s.row + PAD), c2 = document.createElement('canvas'); c2.width = size; c2.height = Math.max(4, used);
+        c2.getContext('2d')!.drawImage(s.c, 0, 0); s.c = c2;
+        const t = new THREE.CanvasTexture(c2); t.colorSpace = it.mat.map!.colorSpace; t.anisotropy = it.mat.map!.anisotropy;
+        m = it.mat.clone(); m.map = t; if (it.mat.emissiveMap) { m.emissiveMap = t; m.emissiveIntensity = K; } if (oneSide) { m.side = THREE.DoubleSide; if (!lit) { m.color.setScalar(KC); m.opacity = 1; } else m.color.set(0xffffff); } m.userData = { ...it.mat.userData }; mats.set(s, m);
+      }
+      const H = s.c.height;
+      // a geometry shared with other meshes gets its own copy before its uvs move
+      let g = it.mesh.geometry;
+      if (done.has(g) || true) { g = g.clone(); it.mesh.geometry = g; }
+      done.add(g);
+      const uv = g.attributes.uv as THREE.BufferAttribute;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, (x + uv.getX(i) * it.cv.width) / size, 1 - (y + (1 - uv.getY(i)) * it.cv.height) / H);
+      uv.needsUpdate = true;
+      it.mesh.material = m; saved++;
+    }
+    for (const it of list) it.mat.map?.dispose();
+  }
+  return saved;
 }

@@ -30,12 +30,51 @@ export interface FacadeOpts {
   roughness?: number;
   /** The street floor is shopfronts (lit glass and a sign band) where the hash says so. */
   shops?: number;
+  /** Phones: no room behind the glass (the interior mapping), just dark panes and lit ones. */
+  simple?: boolean;
 }
 
 export function facadeMaterial(o: FacadeOpts = {}) {
   const tile = o.tile ?? 3;
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: o.roughness ?? 0.88, metalness: 0 });
   m.userData.noMerge = true; // its look comes from the attributes: never merged into another material
+  const ROOM = o.simple ? `vec3 inside = vec3(0.03), glow = vec3(0.0);
+          { float lit = street ? shop : step(h, mix(0.08, 0.38, uNight)) * step(0.5, fl);
+            glow = mix(vec3(1.0, 0.74, 0.46), vec3(0.78, 0.9, 1.0), step(0.7, fHash(vec3(bay, fl, seed + 9.0)))) * lit * (0.25 + 0.8 * uNight); }` : `          vec3 inside = vec3(0.0), glow = vec3(0.0);
+          if (fWin > 0.001) {
+          vec3 V = normalize(vWp - cameraPosition);
+          vec3 T = alongX ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
+          vec3 dir = vec3(dot(V, T), V.y, -dot(V, vWn)); // x along the wall, y up, z into the room
+          float W = bw, Hh = fh, Dp = street ? bw * 1.6 : bw * 0.9;
+          vec3 p0 = vec3(fx * W, fy * Hh, 0.0);
+          float tx = dir.x > 0.0 ? (W - p0.x) / dir.x : -p0.x / min(dir.x, -1e-4);
+          float ty = dir.y > 0.0 ? (Hh - p0.y) / dir.y : -p0.y / min(dir.y, -1e-4);
+          float tz = Dp / max(dir.z, 1e-4);
+          float t = min(tx, min(ty, tz));
+          vec3 q = p0 + dir * t;
+          float lit = street ? shop : step(h, mix(0.08, 0.38, uNight)) * step(0.5, fl);
+          vec3 tone = mix(vec3(1.0, 0.74, 0.46), vec3(0.78, 0.9, 1.0), step(0.7, fHash(vec3(bay, fl, seed + 9.0))));
+          vec3 wallC = mix(vec3(0.62, 0.56, 0.5), 0.45 + 0.4 * cos(6.2831 * (h + vec3(0.0, 0.3, 0.6))), 0.15);
+          vec3 room;
+          if (t == tz) {
+            // the back wall: a picture, a shelf or the shop's racks
+            // a shop's back wall: shelves a hand apart, their boards, goods of every size with gaps, under a strip of light
+            float row = floor(q.y / 0.42), ry = fract(q.y / 0.42), cx = floor(q.x * 7.0);
+            float gh = fHash(vec3(cx, row, seed)), gw = fract(q.x * 7.0);
+            vec3 goods = (0.28 + 0.34 * cos(6.2831 * (fHash(vec3(cx, row, seed + 2.0)) + vec3(0.0, 0.33, 0.67)))) * (0.6 + 0.6 * gh);
+            float item = step(0.12, ry) * step(ry, 0.3 + 0.55 * gh) * step(0.08, gw) * step(gw, 0.92) * step(0.14, gh);
+            vec3 shopWall = mix(wallC * 0.34, goods, item) * (1.0 - 0.75 * step(ry, 0.1)) * (0.75 + 0.5 * smoothstep(0.0, 1.0, ry));
+            room = street ? shopWall : wallC * (0.85 + 0.3 * step(0.8, fHash(vec3(floor(q.x * 2.0), fl, seed))));
+          } else if (t == ty) room = dir.y > 0.0 ? vec3(0.95, 0.92, 0.86) * (1.2 - 0.6 * q.z / Dp) : vec3(0.32, 0.22, 0.16) * (0.6 + 0.4 * fract(q.x * 1.3));
+          else room = wallC * 0.8;
+          float depthK = 1.0 - 0.5 * clamp(q.z / Dp, 0.0, 1.0);
+          float curtain = step(0.65, fHash(vec3(bay, fl, seed + 3.0))) * smoothstep(0.3, 0.42, abs(fx - 0.5)) * (street ? 0.0 : 1.0);
+          room = mix(room, vec3(0.75, 0.6, 0.45), curtain);
+          // daylight inside the room is dim; a lit room glows
+          inside = room * depthK * (0.05 + 0.04 * (1.0 - uNight));
+          glow = room * depthK * tone * lit * (street ? (0.5 + 1.1 * uNight) : (0.3 + 1.0 * uNight)) * (0.75 + 0.5 * fHash(vec3(bay, fl, seed + 5.0)));
+          }
+`;
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uNight = FACADE.night; sh.uniforms.uWet = FACADE.wet;
     sh.vertexShader = sh.vertexShader
@@ -96,36 +135,7 @@ export function facadeMaterial(o: FacadeOpts = {}) {
           // a mullion down the middle of the punched windows
           float mull = (style < 0.5 && !street) ? (1.0 - smoothstep(0.012, 0.012 + aa, abs(fx - 0.5))) * fWin : 0.0;
           // ---- the room behind the glass (interior mapping): a box as deep as the bay is wide, seen through the pane ----
-          vec3 inside = vec3(0.0), glow = vec3(0.0);
-          if (fWin > 0.001) {
-          vec3 V = normalize(vWp - cameraPosition);
-          vec3 T = alongX ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
-          vec3 dir = vec3(dot(V, T), V.y, -dot(V, vWn)); // x along the wall, y up, z into the room
-          float W = bw, Hh = fh, Dp = street ? bw * 1.6 : bw * 0.9;
-          vec3 p0 = vec3(fx * W, fy * Hh, 0.0);
-          float tx = dir.x > 0.0 ? (W - p0.x) / dir.x : -p0.x / min(dir.x, -1e-4);
-          float ty = dir.y > 0.0 ? (Hh - p0.y) / dir.y : -p0.y / min(dir.y, -1e-4);
-          float tz = Dp / max(dir.z, 1e-4);
-          float t = min(tx, min(ty, tz));
-          vec3 q = p0 + dir * t;
-          float lit = street ? shop : step(h, mix(0.08, 0.38, uNight)) * step(0.5, fl);
-          vec3 tone = mix(vec3(1.0, 0.74, 0.46), vec3(0.78, 0.9, 1.0), step(0.7, fHash(vec3(bay, fl, seed + 9.0))));
-          vec3 wallC = mix(vec3(0.62, 0.56, 0.5), 0.45 + 0.4 * cos(6.2831 * (h + vec3(0.0, 0.3, 0.6))), 0.15);
-          vec3 room;
-          if (t == tz) {
-            // the back wall: a picture, a shelf or the shop's racks
-            float shelf = street ? step(0.5, fract(q.y * 1.6)) * 0.5 + 0.5 : 1.0;
-            vec3 goods = 0.35 + 0.3 * cos(6.2831 * (fHash(vec3(floor(q.x * 3.0), floor(q.y * 1.6), seed)) + vec3(0.0, 0.33, 0.67)));
-            room = street ? mix(wallC * 0.6, goods, 0.5 * step(0.35, fract(q.y * 1.6))) * shelf : wallC * (0.85 + 0.3 * step(0.8, fHash(vec3(floor(q.x * 2.0), fl, seed))));
-          } else if (t == ty) room = dir.y > 0.0 ? vec3(0.95, 0.92, 0.86) * (1.2 - 0.6 * q.z / Dp) : vec3(0.32, 0.22, 0.16) * (0.6 + 0.4 * fract(q.x * 1.3));
-          else room = wallC * 0.8;
-          float depthK = 1.0 - 0.5 * clamp(q.z / Dp, 0.0, 1.0);
-          float curtain = step(0.65, fHash(vec3(bay, fl, seed + 3.0))) * smoothstep(0.3, 0.42, abs(fx - 0.5)) * (street ? 0.0 : 1.0);
-          room = mix(room, vec3(0.75, 0.6, 0.45), curtain);
-          // daylight inside the room is dim; a lit room glows
-          inside = room * depthK * (0.05 + 0.04 * (1.0 - uNight));
-          glow = room * depthK * tone * lit * (street ? (0.25 + 0.9 * uNight) : (0.3 + 1.0 * uNight)) * (0.75 + 0.5 * fHash(vec3(bay, fl, seed + 5.0)));
-          }
+${ROOM}
           float reveal = fWin * smoothstep(hi.y - 0.1, hi.y, fy);
           diffuseColor.rgb = mix(diffuseColor.rgb, inside + vec3(0.02, 0.025, 0.03), fWin);
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.5 + vec3(0.07), max(fFrame, mull));
@@ -148,7 +158,7 @@ export function facadeMaterial(o: FacadeOpts = {}) {
         totalEmissiveRadiance += fGlow;`);
     nearFade(m, sh);
   };
-  m.customProgramCacheKey = () => `facade|${tile}|${o.shops ?? 0.75}|nearfade`;
+  m.customProgramCacheKey = () => `facade|${tile}|${o.shops ?? 0.75}|${o.simple ? 's' : 'r'}|nearfade`;
   return m;
 }
 

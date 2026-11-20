@@ -4,6 +4,7 @@ import { facadeMaterial, facadeBox, FACADE } from './facade';
 import { broadCrown, CROWN_LODS } from '../../world/foliage';
 import { loadTexture } from '../../core/assets';
 import { fitCanvasText } from '../../core/canvastext';
+import { carKit } from './cars';
 
 /**
  * Zenvora beyond the bazaar: a real street grid round the old town. Downtown towers to the east, a market quarter and
@@ -100,21 +101,24 @@ const ADS: [string, string, string, string][] = [
 
 export interface DistrictPerson { x: number; z: number; yaw: number; pose: string; speed: number; id: number }
 
-export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: THREE.Material; road: THREE.Material; kerb: THREE.Material; label: (k: string) => string }) {
+export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: number; place: (name: string, x: number, y: number, z: number, yaw: number, scale?: number) => void; paving: THREE.Material; road: THREE.Material; kerb: THREE.Material; label: (k: string) => string }) {
   seed = 77;
-  const { rich } = o;
-  const add = <T extends THREE.Object3D>(x: T) => { x.userData.ground = false; scene.add(x); return x; };
+  const { rich, tier } = o;
+  // nothing built here moves as an object (cars and bulbs move by instance): no matrix refresh per frame
+  const add = <T extends THREE.Object3D>(x: T) => { x.userData.ground = false; x.matrixAutoUpdate = false; x.updateMatrix(); scene.add(x); return x; };
   const solids: THREE.Box3[] = [];
   const solid = (x0: number, z0: number, x1: number, z1: number, h = 30) => solids.push(new THREE.Box3(new THREE.Vector3(Math.min(x0, x1), -2, Math.min(z0, z1)), new THREE.Vector3(Math.max(x0, x1), h, Math.max(z0, z1))));
 
   // ---- zones: 160 m squares; each holds its own merged meshes ----
-  const ZONE = 160;
-  const zones = new Map<string, { cx: number; cz: number; near: THREE.Object3D[]; geo: Record<string, THREE.BufferGeometry[]> }>();
+  const ZONE = tier === 0 ? 320 : 160;
+  const zones = new Map<string, { cx: number; cz: number; near: THREE.Object3D[]; walls?: THREE.Object3D[]; geo: Record<string, THREE.BufferGeometry[]> }>();
   const zoneOf = (x: number, z: number) => {
     const ix = Math.floor(x / ZONE), iz = Math.floor(z / ZONE), k = `${ix}:${iz}`;
     return zones.get(k) ?? zones.set(k, { cx: (ix + 0.5) * ZONE, cz: (iz + 0.5) * ZONE, near: [], geo: {} }).get(k)!;
   };
-  const put = (kind: string, x: number, z: number, g: THREE.BufferGeometry) => { const zn = zoneOf(x, z); (zn.geo[kind] ??= []).push(g); };
+  // phones: one wall finish, and the metalwork and lamp heads drawn with the rest of the kit (a draw per kind per zone)
+  const PHONE_KIND: Record<string, string> = { metal: 'kit', lamp: 'kit', wall_brick: 'wall_plaster', wall_glass: 'wall_plaster' };
+  const put = (kind: string, x: number, z: number, g: THREE.BufferGeometry) => { const zn = zoneOf(x, z), k = tier === 0 ? PHONE_KIND[kind] ?? kind : kind; (zn.geo[k] ??= []).push(g); };
 
   // ---- materials ----
   const tex = (set: string, m: THREE.MeshStandardMaterial, size: '512' | '1k' = rich ? '1k' : '512') => {
@@ -123,8 +127,8 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
       m.map = a2; m.normalMap = n2; m.needsUpdate = true;
     }).catch(() => undefined);
   };
-  const wallMats = { plaster: facadeMaterial({ tile: 3 }), brick: facadeMaterial({ tile: 2.5 }), glass: facadeMaterial({ tile: 4, roughness: 0.55, shops: 0.9 }) };
-  tex('plaster', wallMats.plaster); tex('brick', wallMats.brick); tex('parapet', wallMats.glass, '512');
+  const wallMats = { plaster: facadeMaterial({ tile: 3, simple: tier === 0 }), brick: facadeMaterial({ tile: 2.5 }), glass: facadeMaterial({ tile: 4, roughness: 0.55, shops: 0.9 }) };
+  if (tier > 0) { tex('plaster', wallMats.plaster); tex('brick', wallMats.brick); tex('parapet', wallMats.glass, '512'); }
   const kitM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: 0.2 });
   const metalM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.8 });
   const lampM = new THREE.MeshStandardMaterial({ color: 0x222222, emissive: 0xffe2b0, emissiveIntensity: 0.2, roughness: 0.4 });
@@ -215,12 +219,41 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
     brick: [0xffffff, 0xf0d8d0, 0xd8c8c0].map((c) => new THREE.Color(c)),
     glass: [0xbcd0e0, 0xd8dee6, 0xa8c0cc, 0xe8e0d0, 0xc0c8d8].map((c) => new THREE.Color(c)),
   };
-  const kitBox = (kind: string, x: number, y: number, z: number, w: number, h: number, d: number, col: number, zx = x, zz = z) => {
-    const g = new THREE.BoxGeometry(w, h, d).toNonIndexed(); g.translate(x, y + h / 2, z);
+  /** Any geometry into a zone's kit, in one colour. */
+  const kitGeo = (kind: string, g0: THREE.BufferGeometry, col: number, zx: number, zz: number) => {
+    const g = g0.index ? g0.toNonIndexed() : g0;
     const c = new THREE.Color(col), n = g.attributes.position.count, a = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
     g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.deleteAttribute('uv');
     put(kind, zx, zz, g);
+  };
+  const kitBox = (kind: string, x: number, y: number, z: number, w: number, h: number, d: number, col: number, zx = x, zz = z) => kitGeo(kind, new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z), col, zx, zz);
+  /** A box lying along a wall: `len` along it, `out` deep from it, centred `off` out from the face point (fx, fz). */
+  const wallBox = (kind: string, fx: number, fz: number, nx: number, nz: number, y: number, len: number, h: number, out: number, off: number, col: number, shift = 0) =>
+    kitBox(kind, fx + nx * off + (nx ? 0 : shift), y, fz + nz * off + (nx ? shift : 0), nx ? out : len, h, nx ? len : out, col, fx, fz);
+  const AWN = [0xb03a2e, 0x1f6f5c, 0xc98a1b, 0x2c3e7a, 0x6d3b7a, 0xd8d2c0, 0x3a3a3e];
+  /** What a street floor is made of besides the wall: piers, a plinth, a fascia for the sign, a door, an awning. */
+  const shopKit = (fx: number, fz: number, nx: number, nz: number, w: number, fh: number) => {
+    const trim = pick([0x2a2c30, 0x3a2e26, 0x1e2a36, 0x4a4640, 0x202020]);
+    for (const sgn of [-1, 1]) wallBox('kit', fx, fz, nx, nz, FLOOR, 0.34, fh * 0.98, 0.2, 0.1, trim, sgn * (w / 2 - 0.17));
+    wallBox('kit', fx, fz, nx, nz, FLOOR, w - 0.7, 0.32, 0.12, 0.06, trim);
+    wallBox('kit', fx, fz, nx, nz, FLOOR + fh * 0.76, w - 0.7, fh * 0.2, 0.22, 0.11, 0x101114);
+    // the door, off centre: a frame, a leaf, a bright handle
+    const dsh = (rnd() - 0.5) * (w - 3.4), dc = pick([0x6a3a2a, 0x24405a, 0x2f4f3a, 0x8a8478, 0x30343a]);
+    wallBox('kit', fx, fz, nx, nz, FLOOR, 1.34, 2.36, 0.12, 0.06, trim, dsh);
+    wallBox('kit', fx, fz, nx, nz, FLOOR + 0.04, 1.06, 2.16, 0.1, 0.1, dc, dsh);
+    wallBox('metal', fx, fz, nx, nz, FLOOR + 1.0, 0.05, 0.22, 0.05, 0.17, 0xc8c4b8, dsh + 0.38);
+    wallBox('kit', fx, fz, nx, nz, FLOOR, 1.5, 0.06, 0.5, 0.25, 0x8a857c, dsh); // the step
+    if (rnd() < 0.6 && fh < 4) {
+      // an awning: cloth sloping out over the pavement, on two arms
+      const aw = Math.min(w - 1, 3 + rnd() * 3), sh = (rnd() - 0.5) * (w - aw - 0.8), col = pick(AWN), tilt = 0.32;
+      const g = new THREE.BoxGeometry(nx ? 1.5 : aw, 0.05, nx ? aw : 1.5);
+      if (nx) g.rotateZ(-nx * tilt); else g.rotateX(nz * tilt);
+      g.translate(fx + nx * 0.86 + (nx ? 0 : sh), FLOOR + fh * 0.72, fz + nz * 0.86 + (nx ? sh : 0));
+      kitGeo('kit', g, col, fx, fz);
+      const v = new THREE.BoxGeometry(nx ? 0.04 : aw, 0.22, nx ? aw : 0.04).translate(fx + nx * 1.56 + (nx ? 0 : sh), FLOOR + fh * 0.72 - 0.34, fz + nz * 1.56 + (nx ? sh : 0));
+      kitGeo('kit', v, col, fx, fz);
+    }
   };
   const footprints: { x0: number; z0: number; x1: number; z1: number; h: number; kind: BlockKind }[] = [];
   /** One building: a box (or a podium and setbacks), its roof kit, its collision. */
@@ -241,6 +274,11 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
     } else {
       // a parapet round the roof, and what lives up there: plant rooms, water tanks, AC units
       const pc = finish === 'glass' ? 0x9aa0a8 : 0xd8d0c4;
+      // a cornice under the parapet and a string course over the street floor: edges that catch the light
+      if (finish !== 'glass') for (const [yy, hh, oo] of [[top - 0.32, 0.3, 0.26], [FLOOR + fh - 0.12, 0.2, 0.14]] as number[][]) {
+        kitBox('kit', cx, yy, z0 - oo / 2, w + oo * 2, hh, oo, pc, cx, cz); kitBox('kit', cx, yy, z1 + oo / 2, w + oo * 2, hh, oo, pc, cx, cz);
+        kitBox('kit', x0 - oo / 2, yy, cz, oo, hh, d, pc, cx, cz); kitBox('kit', x1 + oo / 2, yy, cz, oo, hh, d, pc, cx, cz);
+      }
       kitBox('kit', cx, top, z0 + 0.15, w, 0.9, 0.3, pc, cx, cz); kitBox('kit', cx, top, z1 - 0.15, w, 0.9, 0.3, pc, cx, cz);
       kitBox('kit', x0 + 0.15, top, cz, 0.3, 0.9, d - 0.6, pc, cx, cz); kitBox('kit', x1 - 0.15, top, cz, 0.3, 0.9, d - 0.6, pc, cx, cz);
       for (let i = 0, n = 1 + Math.floor(rnd() * 3); i < n; i++) kitBox('kit', x0 + 2 + rnd() * (w - 5), top, z0 + 2 + rnd() * (d - 5), 1.5 + rnd() * 2.5, 1.2 + rnd() * 2, 1.5 + rnd() * 2.5, pick([0x9a9a9a, 0xbfbfbf, 0x6f7377, 0x2a2a2a]), cx, cz);
@@ -253,9 +291,10 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
   const balconies = (x0: number, z0: number, x1: number, z1: number, floors: number, nx: number, nz: number) => {
     const along = nx === 0, L = along ? x1 - x0 : z1 - z0, bays = Math.max(1, Math.round(L / 2.7)), bw = L / bays;
     for (let f = 1; f < floors; f++) for (let b = 0; b < bays; b++) {
-      if ((b + f) % 2) continue;
       const u = (along ? x0 : z0) + (b + 0.5) * bw, y = FLOOR + f * 3.2;
       const fx = nx > 0 ? x1 : nx < 0 ? x0 : u, fz = nz > 0 ? z1 : nz < 0 ? z0 : u;
+      // an air conditioner under the odd window, on its bracket
+      if ((b + f) % 2) { if (rnd() < 0.16) { wallBox('kit', fx, fz, nx, nz, y + 0.2, 0.8, 0.5, 0.36, 0.2, 0xd4d2cc); wallBox('metal', fx, fz, nx, nz, y + 0.14, 0.86, 0.05, 0.4, 0.2, 0x30343a); } continue; }
       const px = fx + nx * 0.6, pz = fz + nz * 0.6, w = along ? bw * 0.9 : 1.2, d = along ? 1.2 : bw * 0.9;
       kitBox('kit', px, y - 0.1, pz, w, 0.14, d, 0xd8d2c8, x0, z0);
       kitBox('metal', px + nx * 0.58, y + 0.04, pz + nz * 0.58, along ? w : 0.05, 1.0, along ? 0.05 : d, 0x30343a, x0, z0);
@@ -267,7 +306,9 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
   const front = (x0: number, z0: number, x1: number, z1: number, nx: number, nz: number, fh = 3.2) => {
     // the ground floor's sign over the shop, on the wall facing the street
     const along = nx === 0, c = along ? (x0 + x1) / 2 : (z0 + z1) / 2;
-    shopfronts.push({ x: nx > 0 ? x1 : nx < 0 ? x0 : c, z: nz > 0 ? z1 : nz < 0 ? z0 : c, nx, nz, w: Math.min(9, (along ? x1 - x0 : z1 - z0) - 1.5), fh });
+    const fx = nx > 0 ? x1 : nx < 0 ? x0 : c, fz = nz > 0 ? z1 : nz < 0 ? z0 : c, wd = along ? x1 - x0 : z1 - z0;
+    shopfronts.push({ x: fx, z: fz, nx, nz, w: Math.min(9, wd - 1.5), fh });
+    if (tier > 0 || rnd() < 0.5) shopKit(fx, fz, nx, nz, wd, fh);
   };
   /** A block ringed by buildings on its four sides (a closed courtyard behind). */
   const perimeter = (b: Block, depth: [number, number], floors: [number, number], finishes: ('plaster' | 'brick' | 'glass')[], style: number, lot: [number, number], balc: boolean) => {
@@ -366,6 +407,9 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
     const sides: [number, number, number, number, number, number][] = [ // start, end, fixed, axis (0: along x), normal x, normal z
       [I.x0 + 8, I.x1 - 8, I.z0, 0, 0, -1], [I.x0 + 8, I.x1 - 8, I.z1, 0, 0, 1], [I.z0 + 8, I.z1 - 8, I.x0, 1, -1, 0], [I.z0 + 8, I.z1 - 8, I.x1, 1, 1, 0],
     ];
+    // kerbstones: a pale stone edge to every pavement
+    kitBox('kit', (I.x0 + I.x1) / 2, 0, I.z0 + 0.25, I.x1 - I.x0, 0.15, 0.2, 0xb6b2a8, (I.x0 + I.x1) / 2, I.z0 + 4); kitBox('kit', (I.x0 + I.x1) / 2, 0, I.z1 - 0.25, I.x1 - I.x0, 0.15, 0.2, 0xb6b2a8, (I.x0 + I.x1) / 2, I.z1 - 4);
+    kitBox('kit', I.x0 + 0.25, 0, (I.z0 + I.z1) / 2, 0.2, 0.15, I.z1 - I.z0, 0xb6b2a8, I.x0 + 4, (I.z0 + I.z1) / 2); kitBox('kit', I.x1 - 0.25, 0, (I.z0 + I.z1) / 2, 0.2, 0.15, I.z1 - I.z0, 0xb6b2a8, I.x1 - 4, (I.z0 + I.z1) / 2);
     for (const [a, c, f, ax, nx, nz] of sides) {
       let i = 0;
       for (let u = a; u <= c; u += 12, i++) {
@@ -374,7 +418,12 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
         if (i % 2 === 0) lampAt(kx, kz, nx, nz);
         else if (b.kind !== 'market' || rnd() < 0.5) trees.push([kx - nx * 0.5, kz - nz * 0.5, 0.55 + rnd() * 0.25]);
         if (i % 5 === 3) { benchAt(kx - nx * 1.6, kz - nz * 1.6, nx, nz); }
-        if (i % 7 === 5) { kitBox('metal', kx - nx * 0.4, FLOOR, kz - nz * 0.4, 0.5, 0.95, 0.5, 0x2f5f3a, kx, kz); solid(kx - nx * 0.4 - 0.3, kz - nz * 0.4 - 0.3, kx - nx * 0.4 + 0.3, kz - nz * 0.4 + 0.3, 1); }
+        // scanned street furniture (Poly Haven, CC0), drawn through the city's prop atlas: bins, hydrants, service boxes
+        const px = kx - nx * 0.45, pz = kz - nz * 0.45, yaw = Math.atan2(-nx, -nz);
+        if (i % 7 === 5) { o.place('metal_trash_can', px, FLOOR, pz, yaw); solid(px - 0.3, pz - 0.3, px + 0.3, pz + 0.3, 1); }
+        else if (i % 9 === 2) { o.place('fire_hydrant', px, FLOOR, pz, yaw); solid(px - 0.25, pz - 0.25, px + 0.25, pz + 0.25, 0.9); }
+        else if (i % 11 === 6) { o.place('utility_box_01', px, FLOOR, pz, yaw); solid(px - 0.4, pz - 0.4, px + 0.4, pz + 0.4, 1.2); }
+        else if (i % 6 === 1 && (b.kind === 'market' || b.kind === 'res' || b.kind === 'water')) { o.place('planter_box_01', kx - nx * 2.9, FLOOR, kz - nz * 2.9, yaw); }
         if (i === 4 && rnd() < 0.5) shelterAt(kx - nx * 1.4, kz - nz * 1.4, nx, nz);
       }
     }
@@ -382,8 +431,8 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
   const lampAt = (x: number, z: number, nx: number, nz: number) => {
     kitBox('metal', x, FLOOR, z, 0.16, 7, 0.16, 0x33373c, x, z);
     kitBox('metal', x + nx * 1.1, FLOOR + 6.9, z + nz * 1.1, nx ? 2.2 : 0.12, 0.12, nz ? 2.2 : 0.12, 0x33373c, x, z);
-    const head = new THREE.BoxGeometry(nx ? 0.9 : 0.36, 0.12, nz ? 0.9 : 0.36).toNonIndexed(); head.translate(x + nx * 2, FLOOR + 6.86, z + nz * 2);
-    put('lamp', x, z, head);
+    if (tier === 0) kitBox('kit', x + nx * 2, FLOOR + 6.8, z + nz * 2, nx ? 0.9 : 0.36, 0.12, nz ? 0.9 : 0.36, 0xfff0d0, x, z);
+    else { const head = new THREE.BoxGeometry(nx ? 0.9 : 0.36, 0.12, nz ? 0.9 : 0.36).toNonIndexed(); head.translate(x + nx * 2, FLOOR + 6.86, z + nz * 2); put('lamp', x, z, head); }
     lamps.push(new THREE.Vector3(x + nx * 2, FLOOR, z + nz * 2));
     solid(x - 0.15, z - 0.15, x + 0.15, z + 0.15, 7);
   };
@@ -403,6 +452,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
     solid(x - nx * 0.75 - (nx ? 0.1 : 2.2), z - nz * 0.75 - (nz ? 0.1 : 2.2), x - nx * 0.75 + (nx ? 0.1 : 2.2), z - nz * 0.75 + (nz ? 0.1 : 2.2), 2.6);
   };
   const benches: { x: number; z: number; yaw: number }[] = [];
+  let manholes: THREE.Object3D | null = null;
   for (const b of BLOCKS) furnish(b);
   for (let z = -86; z < 306; z += 14) { lampAt(-279.5, z, 1, 0); if (z % 28 === 0) benchAt(-276, z + 7, 1, 0); else trees.push([-262, z + 7, 0.9]); }
 
@@ -424,9 +474,27 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
   const poolTex = canvasTex(128, 128, (g) => { const r = g.createRadialGradient(64, 64, 4, 64, 64, 62); r.addColorStop(0, 'rgba(255,214,160,.85)'); r.addColorStop(0.5, 'rgba(255,200,140,.3)'); r.addColorStop(1, 'rgba(255,200,140,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128); });
   const poolMat = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6, toneMapped: false });
   const poolGeo = new THREE.PlaneGeometry(1, 1); poolGeo.rotateX(-Math.PI / 2);
-  const pools = new THREE.InstancedMesh(poolGeo, poolMat, Math.max(1, lamps.length));
-  lamps.forEach((l, i) => pools.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(l.x, FLOOR + 0.02, l.z), new THREE.Quaternion(), new THREE.Vector3(11, 1, 11))));
+  // under every lamp, and spilling out of every shop window on to its pavement
+  const spills = shopfronts.map((sf) => new THREE.Vector3(sf.x + sf.nx * 2.2, FLOOR + 0.02, sf.z + sf.nz * 2.2));
+  const pools = new THREE.InstancedMesh(poolGeo, poolMat, Math.max(1, lamps.length + spills.length));
+  lamps.forEach((l, i) => pools.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(l.x, FLOOR + 0.02, l.z), new THREE.Quaternion(), new THREE.Vector3(13, 1, 13))));
+  spills.forEach((l, i) => pools.setMatrixAt(lamps.length + i, new THREE.Matrix4().compose(l, new THREE.Quaternion(), new THREE.Vector3(8, 1, 8))));
   pools.frustumCulled = false; add(pools);
+
+  // ---- manhole covers and drain grates set into the roads: one instanced draw ----
+  {
+    const tex = canvasTex(128, 128, (g) => {
+      g.fillStyle = '#2a2a2c'; g.beginPath(); g.arc(64, 64, 60, 0, 7); g.fill();
+      g.strokeStyle = '#55565a'; g.lineWidth = 5; g.beginPath(); g.arc(64, 64, 56, 0, 7); g.stroke(); g.lineWidth = 3;
+      for (let i = -3; i <= 3; i++) { g.beginPath(); g.moveTo(64 + i * 14, 20); g.lineTo(64 + i * 14, 108); g.stroke(); g.beginPath(); g.moveTo(20, 64 + i * 14); g.lineTo(108, 64 + i * 14); g.stroke(); }
+    });
+    const at: [number, number][] = [];
+    for (const r of ROADS) if (r.cars) for (let u = r.a + 17; u < r.b - 10; u += 31 + rnd() * 14) { const off = pick([-4.3, -1.5, 1.7, 4.4]); if (!atNode(r.along === 'z' ? r.c : u, r.along === 'z' ? u : r.c, 10)) at.push(r.along === 'z' ? [r.c + off, u] : [u, r.c + off]); }
+    const g = new THREE.CircleGeometry(0.42, 20); g.rotateX(-Math.PI / 2);
+    const im = new THREE.InstancedMesh(g, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55, metalness: 0.6, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 }), Math.max(1, at.length));
+    at.forEach(([x, z], i) => im.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, 0.006, z)));
+    im.count = at.length; im.frustumCulled = false; im.receiveShadow = true; add(im); manholes = im;
+  }
 
   // ---- shop signs over the street floor, billboards on the roofs: two atlases, instanced ----
   const COLS = 4, sw = 512, shh = 96;
@@ -439,7 +507,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
   const signRows = Math.ceil(BRANDS.length / COLS);
   const signs = atlasPlanes(signAtlas, COLS, signRows, shopfronts.filter(() => rnd() < 0.85).map((s) => {
     const y = FLOOR + s.fh * 0.855, w = Math.min(s.w, 6.5), h = Math.min(s.fh * 0.17, w * shh / sw * 1.15);
-    return { x: s.x + s.nx * 0.06, y, z: s.z + s.nz * 0.06, w: Math.min(w, h * sw / shh * 0.95), h, yaw: Math.atan2(s.nx, s.nz), tile: Math.floor(rnd() * BRANDS.length) };
+    return { x: s.x + s.nx * 0.24, y, z: s.z + s.nz * 0.24, w: Math.min(w, h * sw / shh * 0.95), h, yaw: Math.atan2(s.nx, s.nz), tile: Math.floor(rnd() * BRANDS.length) };
   }));
   add(signs.mesh);
   const adAtlas = canvasTex(1024, 512 * ADS.length, (g) => ADS.forEach(([a, b, fg, bg], i) => {
@@ -502,9 +570,11 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
       m.castShadow = kind.startsWith('wall') || kind === 'kit' || kind === 'metal' || kind === 'leaf';
       m.receiveShadow = true;
       m.userData.district = kind;
+      m.frustumCulled = true;
       add(m);
       if (kind === 'road' || kind === 'pave') m.userData.ground = true;
       if (NEAR_KINDS.has(kind)) zn.near.push(m);
+      if (kind.startsWith('wall')) (zn.walls ??= []).push(m);
     }
     zn.geo = {};
   }
@@ -512,11 +582,13 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
   // ---- traffic: cars on lanes, turning at junctions, stopping at red and for anyone on a crossing ----
   type Edge = { r: Road; from: number; to: number; dir: number }; // along the road from `from` to `to` (u values)
   const nodeAt = (x: number, z: number) => sigNodes.find((n) => Math.abs(n.x - x) < 0.1 && Math.abs(n.z - z) < 0.1);
-  const stops = (r: Road) => nodes.filter((n) => n.roads.includes(r)).map((n) => (r.along === 'z' ? n.z : n.x)).sort((a, b) => a - b);
+  // every road's junctions along it, worked out once (it was a filter, a map and a sort per car per frame)
+  const stopsOf = new Map<Road, { up: number[]; down: number[] }>();
+  for (const r of ROADS) { const up = nodes.filter((n) => n.roads.includes(r)).map((n) => (r.along === 'z' ? n.z : n.x)).sort((a, b) => a - b); stopsOf.set(r, { up, down: [...up].reverse() }); }
   interface Car { r: Road; u: number; dir: number; lane: number; v: number; vmax: number; col: THREE.Color; turn: { p0: THREE.Vector3; p1: THREE.Vector3; c: THREE.Vector3; t: number; len: number; next: Road; nu: number; ndir: number } | null; x: number; z: number; yaw: number }
   const carRoads = ROADS.filter((r) => r.cars);
   const cars: Car[] = [];
-  const NCAR = rich ? 70 : 28;
+  const NCAR = [20, 40, 70][tier];
   const carCols = [0xf4f4f6, 0x1b1b1f, 0x8a8f96, 0xc0392b, 0x2c3e94, 0x16a085, 0xf2d64b, 0xe8e2d4, 0x5a3a7a, 0xff8c42].map((c) => new THREE.Color(c));
   for (let i = 0; i < NCAR; i++) {
     const r = pick(carRoads), dir = rnd() < 0.5 ? 1 : -1;
@@ -528,26 +600,11 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
     const off = laneOff(dir, lane, r.along);
     return r.along === 'z' ? out.set(r.c + off, 0, u) : out.set(u, 0, r.c + off);
   };
-  // the car body: a low wedge with a glass canopy, lamps front and back, glow underneath
-  const shape = new THREE.Shape();
-  shape.moveTo(-2.3, 0.35); shape.lineTo(2.25, 0.35); shape.quadraticCurveTo(2.45, 0.5, 2.35, 0.78); shape.lineTo(1.2, 0.95); shape.lineTo(0.4, 1.38);
-  shape.lineTo(-1.2, 1.4); shape.quadraticCurveTo(-2.1, 1.25, -2.35, 0.9); shape.lineTo(-2.3, 0.35);
-  const bodyG = new THREE.ExtrudeGeometry(shape, { depth: 1.86, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.08, bevelSegments: 2, curveSegments: 6 });
-  bodyG.translate(0, 0, -0.93); bodyG.rotateY(-Math.PI / 2); // nose towards +z
-  const glassG = new THREE.ExtrudeGeometry((() => { const s = new THREE.Shape(); s.moveTo(1.12, 0.97); s.lineTo(0.42, 1.36); s.lineTo(-1.1, 1.38); s.quadraticCurveTo(-1.8, 1.25, -1.95, 1.0); s.lineTo(1.12, 0.97); return s; })(), { depth: 1.7, bevelEnabled: false });
-  glassG.translate(0, 0.02, -0.85); glassG.rotateY(-Math.PI / 2);
-  const lightG = mergeGeometries([
-    ...[-0.65, 0.65].map((x) => new THREE.BoxGeometry(0.45, 0.12, 0.06).translate(x, 0.72, 2.4)),
-    ...[-0.7, 0.7].map((x) => new THREE.BoxGeometry(0.4, 0.1, 0.06).translate(x, 0.82, -2.4)),
-    new THREE.BoxGeometry(1.5, 0.04, 3.6).translate(0, 0.08, 0),
-  ].map((g) => g.toNonIndexed()))!;
-  { const n = lightG.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const z = lightG.attributes.position.getZ(i), y = lightG.attributes.position.getY(i); const c = y < 0.2 ? [0.4, 2.2, 2.6] : z > 0 ? [3, 2.8, 2.4] : [3, 0.15, 0.1]; a.set(c, i * 3); } lightG.setAttribute('color', new THREE.BufferAttribute(a, 3)); }
-  const carBodyM = new THREE.MeshStandardMaterial({ roughness: 0.22, metalness: 0.55 });
-  const carGlassM = new THREE.MeshStandardMaterial({ color: 0x0c1218, roughness: 0.05, metalness: 0.9 });
-  const carLightM = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
-  const PARKED = rich ? 40 : 14;
+  // ---- the cars (cars.ts): three draws for every car in the districts ----
+  const { bodyG, glassG, lightG, carBodyM, carGlassM, carLightM } = carKit();
+  const PARKED = [8, 22, 40][tier];
   const carMesh = [new THREE.InstancedMesh(bodyG, carBodyM, NCAR + PARKED), new THREE.InstancedMesh(glassG, carGlassM, NCAR + PARKED), new THREE.InstancedMesh(lightG, carLightM, NCAR + PARKED)];
-  for (const m of carMesh) { m.frustumCulled = false; m.castShadow = m !== carMesh[2]; add(m); }
+  for (const m of carMesh) { m.frustumCulled = false; m.castShadow = tier > 0 && m !== carMesh[2]; add(m); }
   cars.forEach((c, i) => carMesh[0].setColorAt(i, c.col));
   // parked along the outer lane of the quieter streets
   const parked: { x: number; z: number; yaw: number }[] = [];
@@ -580,7 +637,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
     const straight = opts.find((q) => q.r === c.r);
     return straight && rnd() < 0.55 ? straight : pick(opts);
   };
-  const crossers: THREE.Vector3[] = []; // people on the zebras now (and the player), set each frame
+  const crossers: THREE.Vector3[] = []; let crossN = 0; // people on the zebras now, set each frame (the first crossN)
   const driveCars = (dt: number, you: THREE.Vector3 | null, cam: THREE.Vector3) => {
     const k = Math.min(dt, 0.1);
     for (let i = 0; i < cars.length; i++) {
@@ -597,7 +654,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
       }
       if (!c.turn) {
         // the next junction ahead on this road and its stop line
-        const st = stops(c.r), ahead = c.dir > 0 ? st.find((s) => s > c.u + 0.5) : [...st].reverse().find((s) => s < c.u - 0.5);
+        const st = stopsOf.get(c.r)!, ahead = c.dir > 0 ? st.up.find((s) => s > c.u + 0.5) : st.down.find((s) => s < c.u - 0.5);
         let want = c.vmax;
         const endU = c.dir > 0 ? c.r.b - 8 : c.r.a + 8;
         const nu = ahead ?? endU, gap = (nu - c.u) * c.dir;
@@ -608,7 +665,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
         for (const o of cars) if (o !== c && !o.turn && o.r === c.r && o.dir === c.dir && o.lane === c.lane) { const g = (o.u - c.u) * c.dir; if (g > 0 && g < 30) want = Math.min(want, Math.max(0, g - 6.5) * 0.8); }
         // anyone on the road in front: a walker on a zebra, or you
         pos(c.r, c.u, c.dir, c.lane, T1);
-        for (const p of crossers) { const fx = (c.r.along === 'z' ? p.z - T1.z : p.x - T1.x) * c.dir, sx = c.r.along === 'z' ? p.x - T1.x : p.z - T1.z; if (fx > 0 && fx < 14 && Math.abs(sx) < 1.8) want = Math.min(want, Math.max(0, fx - 4) * 0.7); }
+        for (let ci = 0; ci < crossN; ci++) { const p = crossers[ci]; const fx = (c.r.along === 'z' ? p.z - T1.z : p.x - T1.x) * c.dir, sx = c.r.along === 'z' ? p.x - T1.x : p.z - T1.z; if (fx > 0 && fx < 14 && Math.abs(sx) < 1.8) want = Math.min(want, Math.max(0, fx - 4) * 0.7); }
         if (you) { const fx = (c.r.along === 'z' ? you.z - T1.z : you.x - T1.x) * c.dir, sx = c.r.along === 'z' ? you.x - T1.x : you.z - T1.z; if (fx > 0 && fx < 16 && Math.abs(sx) < 1.9) want = Math.min(want, Math.max(0, fx - 4) * 0.7); }
         c.v += (want - c.v) * (1 - Math.exp(-k * (want < c.v ? 4 : 1.2)));
         c.u += c.dir * c.v * k;
@@ -647,7 +704,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
     out.x = R.x0; out.z = R.z1 - u; out.yaw = Math.PI; return out;
   };
   const peds: Ped[] = [];
-  const NPED = rich ? 340 : 120;
+  const NPED = [80, 200, 340][tier];
   const P0 = { x: 0, z: 0, yaw: 0 };
   for (let i = 0; i < NPED; i++) {
     const b = pick(walkBlocks), off = 0.9 + rnd() * 2.4, s = rnd() * perim(b, off);
@@ -692,7 +749,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
     return { x0: p.x, z0: p.z, x1, z1, axis: (dx ? 'z' : 'x') as 'x' | 'z', nb, ns };
   };
   const walkPeds = (dt: number, you: THREE.Vector3 | null) => {
-    crossers.length = 0;
+    crossN = 0;
     for (const p of peds) {
       if (p.mode === 'stay') continue;
       if (p.mode === 'walk') {
@@ -719,13 +776,17 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
         const cr = p.cross!, L = Math.hypot(cr.x1 - cr.x0, cr.z1 - cr.z0);
         p.t += (p.v * 1.15 * dt) / L;
         if (p.t >= 1) { p.b = cr.nb; p.s = cr.ns; p.mode = 'walk'; p.cross = undefined; }
-        else { p.x = cr.x0 + (cr.x1 - cr.x0) * p.t; p.z = cr.z0 + (cr.z1 - cr.z0) * p.t; crossers.push(new THREE.Vector3(p.x, 0, p.z)); }
+        else { p.x = cr.x0 + (cr.x1 - cr.x0) * p.t; p.z = cr.z0 + (cr.z1 - cr.z0) * p.t; (crossers[crossN] ??= new THREE.Vector3()).set(p.x, 0, p.z); crossN++; }
       }
     }
   };
 
   // ---- streaming: what is small is drawn only within reach of the camera ----
-  const NEAR_R = rich ? 260 : 170;
+  const NEAR_R = [130, 210, 260][tier];
+  const ground: THREE.Object3D[] = [], extras: THREE.Object3D[] = [];
+  scene.traverse((x) => { const k = x.userData.district as string | undefined; if (k === 'road' || k === 'pave' || k === 'grass') ground.push(x); });
+  extras.push(signs.mesh, ads.mesh, pools, bulbMesh, ...carMesh); if (manholes) extras.push(manholes);
+  let wasDeep = false;
   let lastPhase = -2, acc = 0;
   return {
     solids,
@@ -734,19 +795,23 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
     nodes: sigNodes,
     bounds: BOUNDS,
     footprints,
-    update(dt: number, t: number, cam: THREE.Camera | null, you: THREE.Vector3 | null) {
+    update(dt: number, t: number, cam: THREE.Camera | null, you: THREE.Vector3 | null, deep = false) {
       phase = phaseAt(t);
       if (phase !== lastPhase) { lastPhase = phase; setBulbs(); }
       if (waterTex) waterTex.offset.set(t * 0.004, t * 0.0025);
       lampM.emissiveIntensity = 0.2 + FACADE.night.value * 5;
-      poolMat.opacity = FACADE.night.value * 0.55;
+      poolMat.opacity = Math.min(0.75, 0.12 + FACADE.night.value * 0.9);
       if (!cam) return;
       acc += dt;
       if (acc > 0.25) {
         acc = 0;
-        for (const zn of zones.values()) { const d = Math.hypot(zn.cx - cam.position.x, zn.cz - cam.position.z) - ZONE * 0.7; for (const m of zn.near) m.visible = d < NEAR_R; }
-        signs.mesh.visible = ads.mesh.visible = true;
+        // deep in the old town none of the districts' streets shows (their buildings still stand over its roofs)
+        for (const zn of zones.values()) { const d = Math.hypot(zn.cx - cam.position.x, zn.cz - cam.position.z) - ZONE * 0.7; for (const m of zn.near) m.visible = !deep && d < NEAR_R;
+          // phones: from deep in the old town only the nearer districts' buildings stand over its roofs
+          if (tier === 0 && zn.walls) for (const m of zn.walls) m.visible = !deep || d < 150; }
+        if (deep !== wasDeep) { wasDeep = deep; for (const m of ground) m.visible = !deep; for (const m of extras) m.visible = !deep; }
       }
+      if (deep) return;
       walkPeds(dt, you);
       driveCars(dt, you, cam.position);
     },
@@ -765,7 +830,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: T
     },
     /** The map: roads, pavements, buildings, the park, the bay, district names. */
     paint(g: CanvasRenderingContext2D, X: (x: number) => number, Y: (z: number) => number) {
-      const R = (x0: number, z0: number, x1: number, z1: number, c: string) => { g.fillStyle = c; g.fillRect(X(Math.min(x0, x1)), Y(Math.min(z0, z1)), Math.abs(X(x1) - X(x0)), Math.abs(Y(z1) - Y(z0))); };
+      const R = (x0: number, z0: number, x1: number, z1: number, c: string) => { g.fillStyle = c; g.fillRect(Math.min(X(x0), X(x1)), Math.min(Y(z0), Y(z1)), Math.abs(X(x1) - X(x0)), Math.abs(Y(z1) - Y(z0))); };
       R(-1400, -104, -281, 324, '#16303b');
       for (const b of [...BLOCKS, ...STRIPS]) R(b.x0, b.z0, b.x1, b.z1, '#7d766c');
       for (const r of ROADS) r.along === 'z' ? R(r.c - r.hw, r.a - r.hw, r.c + r.hw, r.b + r.hw, '#34323a') : R(r.a - r.hw, r.c - r.hw, r.b + r.hw, r.c + r.hw, '#34323a');

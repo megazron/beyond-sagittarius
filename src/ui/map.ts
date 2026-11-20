@@ -77,18 +77,19 @@ export function interactiveMap(L: import('./minimap').MapLayer, player: { x: num
   ctl.innerHTML = `<button class="mz" data-z="1.4" aria-label="${t('map.zoomIn')}">+</button><button class="mz" data-z="0.714" aria-label="${t('map.zoomOut')}">&minus;</button><button class="mc">${t('map.centre')}</button><button class="mw">${t('map.clear')}</button>`;
   wrap.appendChild(ctl);
   const fit = () => { const b = wrap.getBoundingClientRect(); canvas.width = Math.max(2, Math.floor(b.width)); canvas.height = Math.max(2, Math.floor(b.height)); if (!view.k) view.k = Math.min(canvas.width, canvas.height) / (L.span * 2.2); };
-  const toPx = (x: number, z: number) => ({ x: canvas.width / 2 + (x - view.cx) * view.k, y: canvas.height / 2 + (z - view.cz) * view.k });
-  const toW = (px: number, py: number) => ({ x: view.cx + (px - canvas.width / 2) / view.k, z: view.cz + (py - canvas.height / 2) / view.k });
+  const sg = L.northPlusZ ? -1 : 1; // Zenvora's north is +z: the map is turned half round, north still up
+  const toPx = (x: number, z: number) => ({ x: canvas.width / 2 + (x - view.cx) * view.k * sg, y: canvas.height / 2 + (z - view.cz) * view.k * sg });
+  const toW = (px: number, py: number) => ({ x: view.cx + (px - canvas.width / 2) / view.k * sg, z: view.cz + (py - canvas.height / 2) / view.k * sg });
   const draw = () => {
     fit();
     const g = canvas.getContext('2d')!;
     g.fillStyle = '#c9bfa6'; g.fillRect(0, 0, canvas.width, canvas.height);
-    const a = toPx(x0, z0), b = toPx(x1, z1);
+    const a = sg > 0 ? toPx(x0, z0) : toPx(x1, z1), b = sg > 0 ? toPx(x1, z1) : toPx(x0, z0);
     g.imageSmoothingEnabled = true; g.drawImage(src, a.x, a.y, b.x - a.x, b.y - a.y);
     const w = way.get(), out = document.getElementById('map-pins')!;
     const all = [...pins, ...(w ? [{ x: w.x, z: w.z, icon: 'marker', cls: 'way', label: t('map.waypoint') }] : [])];
     out.innerHTML = all.map((p) => { const q = toPx(p.x, p.z); return `<span class="pin ${p.cls ?? ''}" style="left:${q.x}px;top:${q.y}px">${icon(p.icon)}${p.label ? `<em>${p.label.replace(/</g, '')}</em>` : ''}</span>`; }).join('')
-      + (() => { const q = toPx(player.x, player.z); return `<span class="pin you" style="left:${q.x}px;top:${q.y}px;transform:translate(-50%,-50%) rotate(${player.heading}rad)"><svg class="ic" viewBox="0 0 24 24"><path class="f" d="M12 2l7 19-7-5-7 5z"/></svg></span>`; })();
+      + (() => { const q = toPx(player.x, player.z); return `<span class="pin you" style="left:${q.x}px;top:${q.y}px;transform:translate(-50%,-50%) rotate(${player.heading + (sg < 0 ? Math.PI : 0)}rad)"><svg class="ic" viewBox="0 0 24 24"><path class="f" d="M12 2l7 19-7-5-7 5z"/></svg></span>`; })();
     (ctl.querySelector('.mw') as HTMLElement).style.visibility = w ? 'visible' : 'hidden';
   };
   const zoom = (f: number) => { view.k = Math.max(0.05, Math.min(40, view.k * f)); draw(); };
@@ -102,7 +103,7 @@ export function interactiveMap(L: import('./minimap').MapLayer, player: { x: num
   canvas.addEventListener('pointermove', (e) => {
     const o = pts.get(e.pointerId); if (!o) return;
     const dx = e.offsetX - o.x, dy = e.offsetY - o.y; o.x = e.offsetX; o.y = e.offsetY; moved += Math.abs(dx) + Math.abs(dy);
-    if (pts.size === 1) { view.cx -= dx / view.k; view.cz -= dy / view.k; draw(); }
+    if (pts.size === 1) { view.cx -= dx / view.k * sg; view.cz -= dy / view.k * sg; draw(); }
     else if (pts.size === 2) { const [p, q] = [...pts.values()]; const d = Math.hypot(p.x - q.x, p.y - q.y); if (pinch > 0) zoom(d / pinch); pinch = d; }
   });
   const up = (e: PointerEvent) => {

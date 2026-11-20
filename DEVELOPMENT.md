@@ -24,7 +24,8 @@ python3 tools/levels_smoke.py --quality web   # tutorial, scenes, levels end to 
 python3 tools/mobile_smoke.py                 # iPhone 13 portrait, Pixel 7 landscape, real touch events
 python3 tools/prologue_smoke.py --quality web # a new game's opening: MegaZroN, Zenvora, the take-off, the films
 python3 tools/text_fit.py --before            # every string in every UI slot, en/hi/ur, 360 px phone to 4K: fails on overflow
-python3 tools/crowd_smoke.py                  # Zenvora: walk up to townsfolk (2.5 to 28 m) on Mobile and Web, every body stays drawn
+python3 tools/crowd_smoke.py                  # Zenvora: walk up to townsfolk (2.5 to 28 m) on Mobile and Web: each is a body or a card, never nothing
+python3 tools/perf_gate.py                    # Zenvora: draw calls, triangles and bodies per preset per spot against budgets
 python3 tools/city_tour.py --out DIR [--clips] # pictures (and short MP4s) of Zenvora, the minimap, the GPS line and the full map
 npm run smoke:desktop                         # boots the Electron app under Xvfb, drives it over CDP
 ```
@@ -226,11 +227,38 @@ shop, chat and film; near the camera a pool of real bodies (14, 6 on phones) tak
 cards. Cars follow lanes, turn at junctions, stop at red lights and for anyone on a crossing (the player too).
 Original names only on signs and billboards.
 
-Time and weather (`src/game/away/daycycle.ts`): the prologue starts at 16:54 and an hour passes every four minutes:
+Time and weather (`src/game/away/daycycle.ts`): the prologue starts at 17:51, as the sun touches the horizon and the neon is already on, and an hour passes every seven minutes:
 the sun, the sky (gold, pink, violet, night with stars), the sky's image-based light (refreshed every few game
 minutes), the haze, lit windows and lamps all follow it. `?tod=HH.H` fixes the hour, `?weather=rain` brings rain:
 streaks round the camera, an overcast sky, and wet ground (`wetify`: darker, glossier, puddles that mirror the sky).
-The final grade is tinted by quarter (the bazaar warm, downtown cool, the bay teal).
+The exposure and the bloom follow the hour (strong light and a low exposure by day so lit signs do not white out, an
+open exposure at night when they are the light). The streets stay damp, with puddles, even when it is not raining.
+The final grade is tinted by quarter (the bazaar warm, downtown cool, the bay teal). `?probe=1` turns on an
+experimental reflection probe that follows the camera (`probe.ts`); it is off by default because its first rounds
+white the picture out on a real GPU.
+
+Frame budget in Zenvora. `?perf=1` shows frames a second, update and draw milliseconds, draw calls, triangles and
+bodies drawn (`src/core/perfhud.ts`; the same numbers are `__bs.perf`). The city builds itself for one of three tiers
+(phones, Web, Ultra and up) and what each may spend is fixed in code:
+
+- Real bodies: at most 2, 7 or 14 at once besides the player (`BODY_CAP`); the six of the story and whoever is nearest
+  get them. Everyone else is an impostor card: eight townsfolk are drawn once at load into an atlas, six walk frames and
+  one standing from four sides (`impostor.ts`), and a card shows the frame and side that fit, tinted by the hour.
+  Whoever stands between the camera and you, or within arm's reach of the lens, is not drawn until they move on.
+- The old town is one group, not drawn, animated or walked for matrices when the camera is out in the districts; deep
+  inside it the districts' streets, cars and people are not drawn or simulated (their buildings still show over the
+  roofs). `skipStatic` makes the scene refresh the matrices of only what can move.
+- Props: per stretch of street the light builds of every model are baked into one mesh on a shared texture atlas (one
+  draw for a stretch's lamps, shutters, crates and fruit); only within a few metres do the scans take over (never on
+  phones). The districts' bins, hydrants and service boxes go through the same atlas.
+- Canvases: every shop's shelves, sign, poster and banner is packed on to shared atlases before the static merge
+  (`atlasCanvases` in `core/merge.ts`), so they merge into a few meshes per stretch.
+- Shadows: Ultra every frame, Web every other, phones a static shadow redrawn when the camera has gone 9 m; no body
+  casts a shadow on phones (contact shadows). Phones draw the city straight to the screen with no post chain.
+- Cars, walkers and furniture counts, zone sizes and wall finishes are per tier (`districts.ts`).
+
+`tools/perf_gate.py` holds this: under software GL it cannot time frames, so at nine spots on each preset it fails if a
+frame's draw calls, triangles or bodies drawn go over the preset's budget.
 
 GPU review: `tools/gpu_tour.py` drives the owner's Windows Chrome (started with `--remote-debugging-port=9333`) over
 the DevTools protocol from the Windows Python, takes stills, frame rate, draw calls, triangles, a census of what the

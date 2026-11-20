@@ -17,6 +17,8 @@ export interface MapLayer {
   route?(ax: number, az: number, bx: number, bz: number): [number, number][];
   /** Metres across the minimap. */
   span: number;
+  /** North is +z here (Zenvora): the map is drawn turned half round, so north is still up. Default: north is -z. */
+  northPlusZ?: boolean;
 }
 export interface MapPoint { x: number; z: number; kind: 'goal' | 'person' | 'place' | 'way'; label?: string }
 
@@ -28,7 +30,8 @@ export function layerCanvas(L: MapLayer) {
   const [x0, z0, x1, z1] = L.bounds;
   c = document.createElement('canvas');
   c.width = Math.max(2, Math.round((x1 - x0) * L.pxPerM)); c.height = Math.max(2, Math.round((z1 - z0) * L.pxPerM));
-  L.paint(c.getContext('2d')!, (x) => (x - x0) * L.pxPerM, (z) => (z - z0) * L.pxPerM);
+  if (L.northPlusZ) L.paint(c.getContext('2d')!, (x) => (x1 - x) * L.pxPerM, (z) => (z1 - z) * L.pxPerM);
+  else L.paint(c.getContext('2d')!, (x) => (x - x0) * L.pxPerM, (z) => (z - z0) * L.pxPerM);
   painted.set(L.id, c);
   return c;
 }
@@ -42,6 +45,8 @@ export class Minimap {
   readonly el: HTMLCanvasElement;
   private layer: MapLayer | null = null;
   private acc = 1;
+  /** Seconds between redraws (phones: twice as long). */
+  interval = 0.08;
   /** Set from the full map: a point you chose. The route goes there until you reach it or clear it. */
   waypoint: { x: number; z: number } | null = null;
 
@@ -66,12 +71,13 @@ export class Minimap {
   draw(dt: number, px: number, pz: number, heading: number, pts: MapPoint[], route: [number, number][] | null) {
     const L = this.layer;
     if (!L) return;
-    this.acc += dt; if (this.acc < 0.08) return; this.acc = 0;
+    this.acc += dt; if (this.acc < this.interval) return; this.acc = 0;
     const c = this.el, size = Math.round(c.clientWidth * Math.min(2, window.devicePixelRatio || 1));
     if (!size) return;
     if (c.width !== size) c.width = c.height = size;
     const g = c.getContext('2d')!, r = size / 2, k = size / L.span; // px per metre on the disc
-    const src = layerCanvas(L), [x0, z0] = L.bounds;
+    const src = layerCanvas(L), [x0, z0, x1, z1] = L.bounds, sg = L.northPlusZ ? -1 : 1;
+    if (L.northPlusZ) heading += Math.PI;
     g.clearRect(0, 0, size, size);
     g.save();
     g.beginPath(); g.arc(r, r, r - 1, 0, Math.PI * 2); g.clip();
@@ -80,9 +86,9 @@ export class Minimap {
     g.translate(r, r); g.rotate(-heading);
     const s = k / L.pxPerM;
     g.globalAlpha = 0.92;
-    g.drawImage(src, (x0 - px) * k, (z0 - pz) * k, src.width * s, src.height * s);
+    g.drawImage(src, ((L.northPlusZ ? x1 : x0) - px) * k * sg, ((L.northPlusZ ? z1 : z0) - pz) * k * sg, src.width * s, src.height * s);
     g.globalAlpha = 1;
-    const P = (x: number, z: number): [number, number] => [(x - px) * k, (z - pz) * k];
+    const P = (x: number, z: number): [number, number] => [(x - px) * k * sg, (z - pz) * k * sg];
     if (route && route.length > 1) {
       g.strokeStyle = COL.goal; g.lineWidth = Math.max(2, size / 45); g.lineJoin = g.lineCap = 'round';
       g.beginPath(); route.forEach(([x, z], i) => { const [u, v] = P(x, z); if (i) g.lineTo(u, v); else g.moveTo(u, v); }); g.stroke();

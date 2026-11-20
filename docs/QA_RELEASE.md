@@ -115,3 +115,62 @@ Numbers moved by a few fps between runs: the other agents' jobs shared the lapto
 Build and typecheck, `smoke.py`, `levels_smoke.py`, `prologue_smoke.py`, `mobile_smoke.py`, `crowd_smoke.py` (with the
 new district checks: every walker within 30 m of the camera is a body or a card), `cutscene_qa.py` and
 `tools/android/app_smoke.py` after `npx cap sync android`, all under `~/.venvs/bs-test` (Playwright 1.63, SwiftShader).
+
+## Zenvora, frame rate and look (1.2)
+
+The owner's review of 1.1: the frame rate blocks everything (phones at 1.4 to 3 fps on the proxy, Ultra 6 to 18 fps in
+the old town on his RTX A500; his targets are Mobile 30, Web 60, Ultra 30 and up), and the "after" pictures were washed
+out, the district buildings flat, the ground empty, the cars blobs, the far people cardboard, the map upside down, and
+people stood in front of the camera.
+
+| # | Where | What I found | Severity | Status |
+| --- | --- | --- | --- | --- |
+| 25 | Zenvora, every preset | The frame was spent in three.js's own work per draw call and per object. A fifth of a phone's frame went to refreshing matrices of thousands of objects that never move (hidden bodies' bones too); every body's shadow pass cost more than its own draw; every shop sign, shelf and poster was its own material; a hundred scanned props were a draw each. See "Frame budget in Zenvora" in DEVELOPMENT.md for what replaced each. | blocker (performance) | improved, see the numbers |
+| 26 | Zenvora | Far people were flat painted cards. They are now pictures of the game's own bodies, baked at load (six walk frames and one standing, from four sides), lit by the hour. Real bodies are capped per preset (2, 7, 14) and go to whoever is nearest. | major | improved |
+| 27 | Zenvora, Web and Ultra | Washed out: strong light, the same exposure all day, and bloom on everything bright. The exposure and the bloom now follow the hour, and the prologue starts at sunset with the neon on. | major | fixed |
+| 28 | Districts | Flat boxes: street floors now have piers, a plinth, a fascia with the sign on it, a door with its frame and step, awnings; cornices and string courses; air conditioners; shelves and goods behind the shop glass; light spilling from shop windows and under every lamp. | major | improved |
+| 29 | Districts | Empty ground: kerbstones, manhole covers, worn and mottled paving and tarmac, damp with puddles; scanned bins, hydrants, service boxes and planters along the pavements. | major | improved |
+| 30 | Cars | Blobs: an original saloon with wheels in arches, a glass cabin on pillars, bumpers, a grille and lamps, in the districts and in the bazaar (the capsules are gone). | major | fixed |
+| 31 | Map | North was at the bottom (Zenvora's north is +z). The minimap and the full map are turned so north is up. | major | fixed |
+| 32 | Camera | People stood in the lens. A body or card within arm's reach of the camera, or on the line from the camera to you, is not drawn until it has moved on. | major | fixed |
+| 33 | Web | The dynamic resolution never came back up on a display that caps the frame rate (it waited for headroom a capped display never shows), so Web stayed at its lowest sharpness. It now tries a step sharper whenever it is holding the target. | major | fixed |
+| 34 | Reflections | A reflection probe that follows the camera is written (`?probe=1`) but off: on the real GPU it whites the picture out and I have not found why. Wet ground and glass still mirror the sky only. | minor | left |
+
+### Numbers (1.2, Windows Chrome on the RTX A500, `tools/gpu_tour.py`, the other heavy jobs held off)
+
+| Preset | Before (1.1) | Now |
+| --- | --- | --- |
+| Web, 1280 x 720 | not measured | 59 to 60 fps at all nine spots (130 to 540 draws) |
+| Web, 1920 x 1080 | not measured | 57 to 60 fps (resolution scale 0.74 to 1.0) |
+| Ultra, 1280 x 720 | 6 to 18 fps in the old town, 23 to 47 in the districts | 36 to 60 fps (36 once in the bazaar, 52 to 60 elsewhere; 180 to 660 draws) |
+| Ultra, 1920 x 1080 | not measured | 56 to 60 fps |
+| Mobile preset, 844 x 390, 4x CPU slowdown | 1.4 to 3 fps | flat 31 to 41, bazaar 30 to 32, crowd 19 to 26, gate 24 to 27, square 30 to 31, downtown 41 to 53, market 31 to 39, waterfront 32 to 52, park 36 to 45 (two runs; 44 to 143 draws) |
+
+Those are the best runs, taken before I rebased on to main. On the landed tree, later the same day, two back-to-back
+runs with my other jobs held off gave lower numbers, and the tree before the rebase measured in the same sitting was
+lower too, so most of the gap is the machine and a little is the merge (the six friends are now always real bodies
+within 9 m, and main added work per frame):
+
+| Preset | Landed tree, 1280 x 720 |
+| --- | --- |
+| Web | bazaar 41 to 42, crowd 49 to 50, gate 44 to 47, flat 52 to 54, square 51 to 54, districts 57 to 60 (resolution scale 0.6 in the old town) |
+| Ultra (one run) | bazaar 30, crowd 34, gate 26, flat 42, square 47, districts 50 to 58 |
+| Mobile preset, 844 x 390, 4x CPU slowdown | flat 28 to 30, bazaar 22 to 33, crowd 25 to 28, gate 29 to 31, square 13 to 25, downtown 32 to 35, market 22 to 23, waterfront 27 to 38, park 30 to 36 |
+
+So the targets are not held: Web is under 60 in the old town on a bad run, Ultra dipped to 26 at the gate, and phones
+are under 30 at several spots. Runs differ by a quarter or more between themselves: the laptop is shared.
+
+### Still below the bar (1.2)
+
+- Frame rate is not at target everywhere (table above): Web 41 to 54 in the old town on the landed tree against a
+  target of 60, Ultra 26 to 34 at the gate and in the crowd, phones 13 to 33 in the old town. What is left there is
+  about a hundred different materials in view (each a draw) and the bodies.
+- No real phone has run it. The proxy is Chrome's CPU slowdown on a laptop; it says nothing of a phone's GPU.
+- Reflections: sky only (the probe is off, item 34). No screen-space reflections.
+- On phones the district shop windows are flat lit panes (no room behind the glass), there is no bloom or grade, and
+  near people beyond the two real bodies are low-resolution cards.
+- A car can stand between the camera and you (bodies are cleared from the lens, cars are not), and a tall body just
+  outside arm's reach can still fill the bottom of the frame.
+- Buildings are still boxes above the street floor: shader windows, with real depth only in the shopfronts, cornices,
+  balconies and roof clutter.
+- Textures are WebP, not KTX2. The planet is 1.4 km across as it was; I did not enlarge it.

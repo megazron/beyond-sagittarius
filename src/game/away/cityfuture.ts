@@ -139,7 +139,7 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   for (const [side, z, y] of (rich ? adSpots : adSpots.slice(0, 2))) {
     const c = document.createElement('canvas'); c.width = 512; c.height = 288;
     const k = screens.length; drawAd(c, k);
-    const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;
+    const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; tx.userData.live = true;
     const scr = add(new THREE.Mesh(new THREE.PlaneGeometry(16, 9), new THREE.MeshBasicMaterial({ map: tx, color: new THREE.Color(1.6, 1.6, 1.6), toneMapped: false })));
     scr.position.set(side * (FRONT + 17.5), y, z); scr.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; scr.userData.ground = false;
     screens.push({ c, t: tx, k });
@@ -182,6 +182,8 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   const droneL = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 6, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fffd4).multiplyScalar(3), toneMapped: false }), drones);
   const dpaths = Array.from({ length: drones }, () => ({ cx: (rnd() - 0.5) * 12, cz: S + 10 + rnd() * (N - S - 20), r: 2 + rnd() * 5, y: 4.5 + rnd() * 4, w: 0.3 + rnd() * 0.5, p: rnd() * 6 }));
   add(droneI); add(droneL);
+  // phones: the lanes overhead are left out (five draw calls a frame for dots in the sky)
+  if (!rich) for (const m of [carI, carLights, under, droneI, droneL]) m.visible = false;
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(1.25, 1.25, 1.25), UP = new THREE.Vector3(0, 1, 0);
   updates.push((dt, t) => {
     lanes.forEach((l, i) => {
@@ -199,7 +201,7 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   // ---- delivery bots on the pavements: little boxes on wheels with a face ----
   const botFace = canvasTex(128, 64, (g) => { g.fillStyle = '#10161f'; g.fillRect(0, 0, 128, 64); g.fillStyle = '#7fffd4'; g.beginPath(); g.arc(42, 30, 8, 0, 7); g.arc(86, 30, 8, 0, 7); g.fill(); g.fillRect(48, 46, 32, 4); });
   const bots: { g: THREE.Group; z0: number; z1: number; dir: number }[] = [];
-  for (let i = 0; i < (rich ? 4 : 2); i++) {
+  for (let i = 0; i < (rich ? 4 : 0); i++) {
     const g = new THREE.Group();
     const b = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.5, 0.7), new THREE.MeshStandardMaterial({ color: i % 2 ? 0xff9900 : 0xf4f4f6, roughness: 0.4 })); b.position.y = 0.42; g.add(b);
     const f = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.2), new THREE.MeshBasicMaterial({ map: botFace, color: new THREE.Color(1.5, 1.5, 1.5), toneMapped: false })); f.position.set(0, 0.5, 0.36); g.add(f);
@@ -217,7 +219,7 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   // ---- steam off the chai and the biryani: a few soft sprites rising ----
   const puff = canvasTex(64, 64, (g) => { const r = g.createRadialGradient(32, 32, 2, 32, 32, 30); r.addColorStop(0, 'rgba(255,255,255,.55)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); });
   const steam: { s: THREE.Sprite; base: THREE.Vector3; p: number }[] = [];
-  for (const [x, y, z] of [[6.4, 1.2, 12.6], [-8.6, 1.6, 0], [-8.6, 1.6, 1.4]] as [number, number, number][]) for (let i = 0; i < (rich ? 6 : 3); i++) {
+  for (const [x, y, z] of [[6.4, 1.2, 12.6], [-8.6, 1.6, 0], [-8.6, 1.6, 1.4]] as [number, number, number][]) for (let i = 0; i < (rich ? 6 : 0); i++) {
     const s = add(new THREE.Sprite(new THREE.SpriteMaterial({ map: puff, transparent: true, depthWrite: false, opacity: 0.5 }))); steam.push({ s, base: new THREE.Vector3(x, y, z), p: i / 6 });
   }
   updates.push((dt, t) => steam.forEach((q) => {
@@ -240,7 +242,7 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   const shipM = new THREE.MeshStandardMaterial({ color: 0xeef1f5, roughness: 0.3, metalness: 0.5 });
   const flameM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9fdcff).multiplyScalar(3), transparent: true, opacity: 0.8, toneMapped: false });
   const ships: { g: THREE.Group; x: number; z: number; p: number }[] = [];
-  for (let i = 0; i < (rich ? 3 : 2); i++) {
+  for (let i = 0; i < (rich ? 3 : 1); i++) {
     const g = new THREE.Group();
     const hull = new THREE.Mesh(new THREE.CapsuleGeometry(2.2, 9, 4, 16), shipM); g.add(hull);
     for (const a of [0, 2.1, 4.2]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4, 3), shipM); fin.position.set(Math.cos(a) * 2.4, -4, Math.sin(a) * 2.4); fin.rotation.y = -a; g.add(fin); }

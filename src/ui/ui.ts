@@ -230,8 +230,12 @@ export class UI implements CineUI {
   }
 
   /** On someone else's stage: where they are, and the job in hand. */
+  private stagePlace = '';
   setStageObjective(place: string, task: string | null) {
     const prev = this.objectiveState;
+    // called every frame by a stage: only a change touches the page (each write re-ran the text fit and a layout)
+    if (prev.level === -1 && prev.progress === task && this.stagePlace === place) return;
+    this.stagePlace = place;
     this.objectiveState = { level: -1, progress: task };
     if (prev.level !== -1 || prev.progress !== task) this.flare();
     $('obj-title').textContent = place;

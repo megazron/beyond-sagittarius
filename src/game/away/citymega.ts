@@ -71,7 +71,7 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
   }
 
   // ---- sky lanes: streams of traffic lights at four heights, sweeping across and along the city ----
-  {
+  if (rich) { // phones: left out (each is a handful of draw calls a frame for a detail in the sky)
     const per = rich ? 130 : 40, levels = [24, 34, 48, 70];
     // half run along the street (x fixed), half across it (z fixed): either way, streams of light overhead
     const lane: { y: number; along: boolean; c: number; p: number; v: number }[] = [];
@@ -95,7 +95,7 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
   }
 
   // ---- levitating platforms: plazas hanging in the air, lit underneath, little towers on top ----
-  {
+  if (rich) { // phones: left out (each is a handful of draw calls a frame for a detail in the sky)
     const deck = new THREE.MeshStandardMaterial({ color: 0xd8dde4, roughness: 0.4, metalness: 0.5 });
     const plats: { g: THREE.Group; y: number; p: number }[] = [];
     for (const [x, y, z, r] of (rich ? [[-70, 95, -40, 22], [90, 140, -120, 30], [-40, 180, -260, 26], [60, 75, 60, 16]] : [[-70, 95, -40, 22], [90, 140, -120, 30]]) as [number, number, number, number][]) {
@@ -111,7 +111,7 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
   }
 
   // ---- a koi of light, forty metres long, swimming slowly above the bazaar ----
-  {
+  if (rich) { // phones: left out (each is a handful of draw calls a frame for a detail in the sky)
     const segs = rich ? 26 : 14;
     const koi = add(new THREE.Group());
     const parts: THREE.Mesh[] = [];
@@ -133,9 +133,9 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
   }
 
   // ---- the message tower: a slab of light scrolling the city's greeting in three scripts ----
-  {
+  if (rich) { // phones: left out (each is a handful of draw calls a frame for a detail in the sky)
     const c = document.createElement('canvas'); c.width = 128; c.height = 1024;
-    const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;
+    const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; tx.userData.live = true;
     const words = ['WELCOME TO ZENVORA', 'ज़ेनवोरा में स्वागत है', 'زینوورا میں خوش آمدید', 'LAST STOP BEFORE THE STARS'];
     let off = 0;
     const draw = () => {
@@ -167,7 +167,7 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
   }
 
   // ---- the spaceport as a spectacle: two great ships holding over the apron, searchlights sweeping the sky ----
-  {
+  if (rich) { // phones: left out (each is a handful of draw calls a frame for a detail in the sky)
     const hullM = new THREE.MeshStandardMaterial({ color: 0xe8edf4, metalness: 0.45, roughness: 0.3 });
     const ships: THREE.Group[] = [];
     for (const [x, y, z, s] of [[-16, 22, S - 38, 1], [20, 34, S - 80, 1.5]] as [number, number, number, number][]) {

@@ -71,6 +71,11 @@ class WS:
                 return r['result']
             s.handle(r)
 
+# tabs left by an earlier run of this tool keep drawing: close them first
+for old_tab in json.load(urllib.request.urlopen(f'http://127.0.0.1:{PORT}/json')):
+    if old_tab.get('type') == 'page' and URL.split('?')[0] in old_tab.get('url', ''):
+        try: urllib.request.urlopen(f"http://127.0.0.1:{PORT}/json/close/{old_tab['id']}").read()
+        except Exception: pass
 t = json.load(urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{PORT}/json/new?about:blank', method='PUT')))
 w = WS(t['webSocketDebuggerUrl']); w.call('Page.enable'); w.call('Runtime.enable')
 W, H = PLAN.get('size', [1280, 720])
@@ -92,9 +97,9 @@ def wait(x, sec):
 def shot(n):
     open(os.path.join(OUT, f'{n}.jpg'), 'wb').write(base64.b64decode(w.call('Page.captureScreenshot', format='jpeg', quality=88)['data']))
 # frame rate over a few seconds, the worst frame, and the draw calls and triangles of the last frame
-FPS = """new Promise(r=>{const gl=__bs.gl;gl.info.autoReset=false;gl.info.reset();let n=0,t0=performance.now(),last=t0,worst=0,calls=0,tris=0;function f(t){n++;worst=Math.max(worst,t-last);last=t;
-calls=Math.max(calls,gl.info.render.calls);tris=Math.max(tris,gl.info.render.triangles);gl.info.reset();
-if(t-t0<SEC)requestAnimationFrame(f);else{gl.info.autoReset=true;r({fps:+(n*1000/(t-t0)).toFixed(1),worst_ms:+worst.toFixed(0),calls,tris,pr:+gl.getPixelRatio().toFixed(2)})}}requestAnimationFrame(f)})"""
+FPS = """new Promise(r=>{const gl=__bs.gl;let n=0,t0=performance.now(),last=t0,worst=0,calls=0,tris=0,bodies=0,sk=0,tick=0,draw=0;function f(t){n++;worst=Math.max(worst,t-last);last=t;
+const p=__bs.perf||{calls:0,tris:0,bodies:0,skinned:0,tick:0,draw:0};calls=Math.max(calls,p.calls);tris=Math.max(tris,p.tris);bodies=Math.max(bodies,p.bodies);sk=Math.max(sk,p.skinned);tick=p.tick;draw=p.draw;
+if(t-t0<SEC)requestAnimationFrame(f);else r({fps:+(n*1000/(t-t0)).toFixed(1),worst_ms:+worst.toFixed(0),calls,tris,bodies,skinned:sk,update_ms:+tick.toFixed(1),draw_ms:+draw.toFixed(1),pr:+gl.getPixelRatio().toFixed(2)})}requestAnimationFrame(f)})"""
 # one frame's draws and triangles by what they belong to: a body, a prop, scenery; main camera or shadow camera
 CENSUS = """new Promise(res=>{const r=__bs.gl,orig=r.renderBufferDirect,out={};
 r.renderBufferDirect=function(cam,sc,g,m,obj,grp){let k='scene';for(let o=obj;o;o=o.parent){if(o.userData&&o.userData.isCharacter){k='body';break}}
@@ -135,6 +140,7 @@ for st in PLAN['steps']:
         if st.get('fps', 3): row.update(ev(FPS.replace('SEC', str(st.get('fps', 3) * 1000)), True))
         if st.get('census'): row['census'] = ev(CENSUS, True)
         if st.get('ctime'): row['ctime'] = ev(CTIME, True)
+        if st.get('js'): row['js'] = ev(st['js'], True)
         if st.get('profile'):
             # the main thread's self time by function over a few seconds (top 25)
             w.call('Profiler.enable'); w.call('Profiler.setSamplingInterval', interval=200); w.call('Profiler.start'); time.sleep(st['profile'])
@@ -183,3 +189,5 @@ for st in PLAN['steps']:
 report['errors'] = errs[:10]
 json.dump(report, open(os.path.join(OUT, 'report.json'), 'w'), indent=1)
 print('errors', errs[:5])
+try: urllib.request.urlopen(f"http://127.0.0.1:{PORT}/json/close/{t['id']}").read()
+except Exception: pass
