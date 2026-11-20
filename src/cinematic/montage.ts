@@ -445,7 +445,7 @@ export class Montage {
 
     // The player: the clearing where the wake-up starts
     const z = at(0, 2);
-    land('scientist', z, z.clone(), 5.8, 1.1, 1, z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(-2.6, 0.55, 3.6)), z.clone().add(V(0, 1.1, 0)), 0.35);
+    land('scientist', z, z.clone(), 19.3, 1.1, 1, z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(-2.6, 0.55, 3.6)), z.clone().add(V(0, 1.1, 0)), 0.35);
     this.lands[5].wide = [z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(5, 24, -14))];
     this.lands[5].from = V(0.18, 1, -0.4).normalize();
   }
@@ -592,6 +592,7 @@ export class Montage {
   }
 
   private sysOn = false;
+  private homeSun: THREE.Vector3 | null = null;
   private sys: { group: THREE.Group; at: Record<CrewId, THREE.Vector3> } | null = null;
   /** The system the six are thrown into, for the wide shot: simple lit bodies, each where one of them comes down. */
   private system() {
@@ -615,6 +616,8 @@ export class Montage {
     at.builder = ball(70, 0x6f5a4a, V(-520, -420, 500), { flat: true }).position;
     // the cloud planet, nearer the star, gold (Nuvexa)
     at.social = ball(210, 0xe8c25a, V(1500, -520, 700), { emissive: 0x6a4a10, rough: 1 }).position;
+    // lit from our side of the system, so every world shows its day side and not a thin crescent
+    const sun = new THREE.DirectionalLight(0xfff2dc, 2.6); sun.position.set(-1400, 1500, 3000); g.add(sun, sun.target);
     this.set.scene.add(g); g.visible = false;
     return (this.sys = { group: g, at });
   }
@@ -625,27 +628,32 @@ export class Montage {
   private worldStage(id: CrewId) {
     if (!this.stageG) {
       this.stageG = new THREE.Group(); this.set.scene.add(this.stageG);
-      const mk = (name: string, ground: number, rough: number, extra: (g: THREE.Group) => void) => {
+      const mk = (name: string, ground: number, rough: number, extra: (g: THREE.Group) => void, relief = 1, amb: [number, number, number] = [0x8090a0, 0x202020, 0.5]) => {
         const g = new THREE.Group(); g.name = name;
-        const geo = new THREE.CircleGeometry(60, 48); geo.rotateX(-Math.PI / 2);
+        const geo = new THREE.PlaneGeometry(2400, 2400, 160, 160); geo.rotateX(-Math.PI / 2);
         // a little relief, so it is ground and not a plate
-        const p = geo.getAttribute('position'); for (let i = 0; i < p.count; i++) p.setY(i, Math.sin(p.getX(i) * 0.9) * Math.cos(p.getZ(i) * 0.7) * 0.12);
+        const p = geo.getAttribute('position'); for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i), far = Math.min(1, Math.hypot(x, z) / 300); p.setY(i, Math.sin(x * 0.9) * Math.cos(z * 0.7) * 0.12 * (1 - far) + (Math.sin(x * 0.021) + Math.cos(z * 0.017)) * 6 * far * relief); }
         geo.computeVertexNormals();
         g.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: ground, roughness: rough })));
+        g.add(new THREE.HemisphereLight(amb[0], amb[1], amb[2]));
         extra(g); this.stageG!.add(g); return g;
       };
       const rock = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number) => { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true })); m.position.set(x, y, z); m.rotation.set(x, y, z); g.add(m); return m; };
       const sky = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number, emissive = 0) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 24), new THREE.MeshStandardMaterial({ color, roughness: 1, emissive, emissiveIntensity: 0.5 })); m.position.set(x, y, z); g.add(m); return m; };
       // Methryx: black slush, orange haze, the ringed giant huge on the horizon
-      mk('strong', 0x1a1410, 0.5, (g) => { sky(g, 240, -160, 70, -520, 0xcdb48a, 0x3a2a10); const r = new THREE.Mesh(new THREE.RingGeometry(300, 480, 64), new THREE.MeshBasicMaterial({ color: 0xd8c9a8, transparent: true, opacity: 0.5, side: THREE.DoubleSide })); r.position.set(-160, 70, -520); r.rotation.set(-1.3, 0.3, 0); g.add(r); rock(g, 1.2, 3, 0.2, -4, 0x2a211a); rock(g, 0.7, -4, 0.1, -2, 0x2a211a); });
+      mk('strong', 0x1a1410, 0.5, (g) => { sky(g, 240, -160, 70, -520, 0xcdb48a, 0x3a2a10); const r = new THREE.Mesh(new THREE.RingGeometry(300, 480, 64), new THREE.MeshBasicMaterial({ color: 0xd8c9a8, transparent: true, opacity: 0.5, side: THREE.DoubleSide })); r.position.set(-160, 70, -520); r.rotation.set(-1.3, 0.3, 0); g.add(r); rock(g, 1.2, 3, 0.2, -4, 0x2a211a); rock(g, 0.7, -4, 0.1, -2, 0x2a211a); rock(g, 2.2, -7, 0.5, -9, 0x2a211a); rock(g, 3.5, 11, 1, -18, 0x241c16);
+        // a black methane lake behind him, flat and glossy
+        const lake = new THREE.Mesh(new THREE.CircleGeometry(26, 48), new THREE.MeshStandardMaterial({ color: 0x050403, roughness: 0.08, metalness: 0.6 })); lake.rotation.x = -Math.PI / 2; lake.position.set(4, 0.14, -34); lake.scale.set(1.6, 1, 0.7); g.add(lake); }, 0.6, [0xc8803a, 0x1a0e06, 0.55]);
       // the grey moon: dust, hard light, a torn piece of hull
-      mk('medic', 0x8a8a90, 1, (g) => { const h = new THREE.Mesh(new THREE.BoxGeometry(5, 3.2, 0.25), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); h.position.set(-3.5, 1.2, -4); h.rotation.set(0.2, 0.5, 0.35); g.add(h); rock(g, 0.9, 4, 0.2, -5, 0x77777c); });
+      mk('medic', 0x8a8a90, 1, (g) => { const h = new THREE.Mesh(new THREE.BoxGeometry(5, 3.2, 0.25), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); h.position.set(-3.5, 1.2, -4); h.rotation.set(0.2, 0.5, 0.35); g.add(h); rock(g, 0.9, 4, 0.2, -5, 0x77777c); rock(g, 0.5, 2, 0.1, -2.5, 0x77777c); rock(g, 2.6, -11, 0.7, -14, 0x6c6c72); rock(g, 6, 22, 2, -44, 0x64646a); rock(g, 0.35, -1.5, 0.08, 1.2, 0x808086); }, 1, [0x8088a0, 0x18181c, 0.35]);
       // the asteroid: bare tumbling rock, nothing else but stars
-      mk('explorer', 0x4a4640, 1, (g) => { rock(g, 2.4, -5, 0.6, -6, 0x55504a); rock(g, 1.1, 4, 0.3, -3, 0x55504a); rock(g, 5, 14, 9, -40, 0x3c3a36); rock(g, 3, -22, 14, -60, 0x3c3a36); });
+      mk('explorer', 0x4a4640, 1, (g) => { rock(g, 2.4, -5, 0.6, -6, 0x55504a); rock(g, 1.1, 4, 0.3, -3, 0x55504a); rock(g, 5, 14, 9, -40, 0x3c3a36); rock(g, 3, -22, 14, -60, 0x3c3a36); rock(g, 0.6, 2, 0.15, 1, 0x55504a); rock(g, 1.6, 9, 4, -22, 0x3c3a36); rock(g, 0.9, -12, 7, -30, 0x3c3a36); rock(g, 2.2, 30, 18, -80, 0x33312e); }, 0.25, [0x6a7890, 0x101014, 0.4]);
       // Shardrift: split cliffs, old metal
-      mk('builder', 0x5a4636, 1, (g) => { rock(g, 9, -9, 5, -12, 0x4a392c); rock(g, 12, 13, 7, -16, 0x4a392c); rock(g, 6, 0, 2, -20, 0x3a2c22); });
+      mk('builder', 0x5a4636, 1, (g) => { rock(g, 9, -9, 5, -12, 0x4a392c); rock(g, 12, 13, 7, -16, 0x4a392c); rock(g, 6, 0, 2, -20, 0x3a2c22); rock(g, 1.1, 3.5, 0.3, -2.5, 0x4a392c);
+        // old metal in the split: ribs of something that was built here long ago
+        for (let i = 0; i < 4; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.3, 7, 0.3), new THREE.MeshStandardMaterial({ color: 0x8a8f96, roughness: 0.45, metalness: 0.8 })); b.position.set(-3 + i * 2.1, 3, -10 - i * 0.6); b.rotation.set(0.1 * i, 0, 0.18 - i * 0.12); g.add(b); } }, 1.6, [0xb09a84, 0x1c140e, 0.7]);
       // Aerolis: a raft of hull on gold cloud to every horizon
-      mk('social', 0xe2c46a, 1, (g) => { const d = new THREE.Mesh(new THREE.BoxGeometry(6, 0.3, 4), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); d.position.set(0, 0.16, 0); d.rotation.set(0.03, 0.4, -0.04); g.add(d); for (let i = 0; i < 9; i++) sky(g, 14 + (i % 3) * 8, Math.cos(i * 0.7) * (60 + i * 6), -6 + (i % 2) * 5, -70 + Math.sin(i * 0.7) * 50, 0xf0d890, 0x6a5010); });
+      mk('social', 0xe2c46a, 1, (g) => { const d = new THREE.Mesh(new THREE.BoxGeometry(6, 0.3, 4), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); d.position.set(0, 0.16, 0); d.rotation.set(0.03, 0.4, -0.04); g.add(d); for (let i = 0; i < 9; i++) sky(g, 14 + (i % 3) * 8, Math.cos(i * 0.7) * (60 + i * 6), -6 + (i % 2) * 5, -70 + Math.sin(i * 0.7) * 50, 0xf0d890, 0x2a2008); }, 0, [0xffe9b0, 0x8a6a30, 0.6]);
       this.stageG.children.forEach((c, i) => c.position.set(i * 4000, -20000, 0));
     }
     for (const c of this.stageG.children) c.visible = c.name === id;
@@ -659,7 +667,7 @@ export class Montage {
     const u = this.set.dome.uniforms;
     u.uBH.value = 0; u.uWarp.value = 0;
     // each sky its own: orange haze, hard black, deep stars, dusty brown, gold
-    const SKY: Record<string, [number, number, number]> = { strong: [0.5, 1, 0.95], medic: [0.05, 0, 0.9], explorer: [0.35, 0, 1], builder: [0.6, 1, 0.7], social: [0.9, 1, 0.95] };
+    const SKY: Record<string, [number, number, number]> = { strong: [0.5, 1, 0.85], medic: [0.05, 0, 0.9], explorer: [0.35, 0, 1], builder: [0.6, 1, 1.05], social: [0.9, 1, 0.8] };
     const [neb, other, exposure] = SKY[id];
     u.uNebula.value = neb; u.uOther.value = other;
     const k = clamp((b - (imp - 2)) / 8, 0, 1), drift = easeInOut(k);
@@ -679,7 +687,7 @@ export class Montage {
     }
     // key light per world, and the colour of their own trail from behind
     const KEY: Record<string, number> = { strong: 0xffb070, medic: 0xffffff, explorer: 0xdfe8ff, builder: 0xffd0a0, social: 0xffe6a0 };
-    this.setRig([{ p: o.clone().add(V(3, 4, 4)), color: KEY[id], i: id === 'medic' ? 60 : 34, d: 18 }, { p: o.clone().add(V(-2.5, 1.5, -2.5)), color: col, i: 14, d: 9 }, { p: o.clone().add(V(0, 9, -14)), color: KEY[id], i: 16, d: 70 }]);
+    this.setRig([{ p: o.clone().add(V(3, 4, 4)), color: KEY[id], i: ({ medic: 48, builder: 60, social: 22, strong: 26 } as Record<string, number>)[id] ?? 34, d: 18 }, { p: o.clone().add(V(-2.5, 1.5, -2.5)), color: col, i: 14, d: 9 }, { p: o.clone().add(V(0, 9, -14)), color: KEY[id], i: id === 'builder' ? 40 : 10, d: 70 }]);
     const f = after(b, imp, 0.45) * 0.8, c2 = new THREE.Color(col).lerp(new THREE.Color(1, 1, 1), 0.7);
     this.fx = { flash: [c2.r * f, c2.g * f, c2.b * f], zoom: 0.05 * after(b, imp, 0.6), exposure };
     this.card(id, (b - (imp + 1.1)) / 0.5);
@@ -984,6 +992,9 @@ export class Montage {
         this.tag(i, head > 0.1 && head < 0.985 ? at(head, new THREE.Vector3()) : null, cam);
       });
       this.tagsOn = true; this.sysOn = true;
+      const hs = (set.home.material as THREE.ShaderMaterial).uniforms.uSun.value as THREE.Vector3;
+      if (!this.homeSun) this.homeSun = hs.clone();
+      hs.set(-0.42, 0.45, 0.79).normalize();
       const u = set.dome.uniforms;
       u.uBH.value = 0; u.uWarp.value = 0; u.uOther.value = 0; u.uNebula.value = 0.6;
       const pf = after(b, 56, 0.6) * 0.15;
@@ -1219,6 +1230,7 @@ export class Montage {
     if (shot) shot.at(clamp((b - shot.from) / (shot.to - shot.from), 0, 1), b);
     if (!this.tagsOn) for (const el of this.tags) el.style.opacity = '0';
     if (!this.sysOn && this.sys) this.sys.group.visible = false;
+    if (!this.sysOn && this.homeSun) { ((this.set.home.material as THREE.ShaderMaterial).uniforms.uSun.value as THREE.Vector3).copy(this.homeSun); this.homeSun = null; }
     if (!this.stageOn && this.stageG) this.stageG.visible = false;
     if (this.vacuum !== wasVac) audio.vacuum(this.vacuum);
     // shots that place a body by where its hand ended up need one solved pose first, or their first frame snaps

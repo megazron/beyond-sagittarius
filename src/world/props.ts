@@ -27,7 +27,7 @@ export interface Item {
   gate?: number;
 }
 
-/** Crashed escape pod with smoke, sparks and debris at the spawn point. */
+/** A torn piece of the liner's hull (the code still calls it the pod) with smoke, sparks and debris. */
 export function createPod(terrain: Terrain, forest: Forest, x = 4.5, z = -3.5, yaw = 0.8, seed = 11) {
   const group = new THREE.Group();
   const y = terrain.height(x, z);
@@ -38,23 +38,27 @@ export function createPod(terrain: Terrain, forest: Forest, x = 4.5, z = -3.5, y
   const stripe = new THREE.MeshStandardMaterial({ color: 0xff7a2a, roughness: 0.55, emissive: 0x401000 });
   const burnt = new THREE.MeshStandardMaterial({ color: 0x1b1714, metalness: 0.3, roughness: 0.9 });
   const glass = new THREE.MeshStandardMaterial({ color: 0x0b1420, metalness: 0.9, roughness: 0.1, emissive: 0x0a2a44, emissiveIntensity: 0.6 });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.1, 2.2, 8, 24), hull);
+  // a torn section of the liner's hull, not a pod: an open curve of plating with its ribs showing, one cracked port
+  hull.side = THREE.DoubleSide; burnt.side = THREE.DoubleSide;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 3.6, 28, 4, true, 0.5, 3.6), hull);
   body.rotation.z = Math.PI / 2;
-  group.add(body);
-  const shield = new THREE.Mesh(new THREE.SphereGeometry(1.18, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), burnt);
-  shield.rotation.z = Math.PI / 2; shield.position.x = -1.1; shield.scale.set(1, 0.6, 1);
-  group.add(shield);
-  const win = new THREE.Mesh(new THREE.SphereGeometry(0.7, 20, 10, 0, Math.PI, 0, Math.PI / 2), glass);
-  win.position.set(0.8, 0.7, 0); win.rotation.x = -Math.PI / 2; win.scale.set(1, 1, 0.5);
-  group.add(win);
-  for (const sx of [-0.4, 0.9]) {
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(1.13, 1.13, 0.16, 32, 1, true), stripe);
-    band.rotation.z = Math.PI / 2; band.position.x = sx; group.add(band);
+  { // a ragged edge where it tore away
+    const p = body.geometry.getAttribute('position'); const r = mulberry32(seed * 7 + 1);
+    for (let i = 0; i < p.count; i++) { const k = r(); if (Math.abs(p.getY(i)) > 1.7) p.setY(i, p.getY(i) * (0.82 + k * 0.3)); }
+    body.geometry.computeVertexNormals();
   }
+  group.add(body);
+  const win = new THREE.Mesh(new THREE.CircleGeometry(0.34, 20), glass);
+  win.position.set(0.5, 1.2, -0.92); win.rotation.set(-0.95, Math.PI, 0);
+  group.add(win);
+  for (const sx of [-1.1, 0, 1.1]) {
+    const rib = new THREE.Mesh(new THREE.TorusGeometry(1.44, 0.07, 6, 28, 3.6), burnt);
+    rib.rotation.set(0, Math.PI / 2, 0.5 - Math.PI / 2 + 3.6 / 2 + 0.2); rib.position.x = sx; group.add(rib);
+  }
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(1.52, 1.52, 0.18, 28, 1, true, 0.5, 3.6), stripe);
+  band.rotation.z = Math.PI / 2; band.position.x = 0.55; (stripe as THREE.MeshStandardMaterial).side = THREE.DoubleSide; group.add(band);
   const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.4, 5), burnt);
-  antenna.position.set(1.2, 1.2, -0.3); antenna.rotation.z = -0.5; group.add(antenna);
-  const thruster = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 0.5, 16), burnt);
-  thruster.rotation.z = Math.PI / 2; thruster.position.x = 2.3; group.add(thruster);
+  antenna.position.set(1.2, 1.5, -0.3); antenna.rotation.z = -0.5; group.add(antenna);
   const hatch = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.08, 1.4), hull);
   hatch.position.set(0.4, -0.2, 1.6); hatch.rotation.set(0.9, 0.2, 0.1);
   group.add(hatch);

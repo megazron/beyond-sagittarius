@@ -415,10 +415,15 @@ export class Game {
     const slots: [string, number][] = [['wake.line1', 4.4], ['wake.line2', 3.6], ['wake.line3', 3.4], ['wake.line4', 4.2], ['wake.line5', 3.8]];
     this.wakeRate = 1 / Math.max(1, ...slots.map(([k, s]) => ((voice.duration(k) ?? 0) + 0.3) / s));
     this.wakeCues = [
-      { t: 0.4, fn: () => ui.fade('black', 0, 4) },
-      { t: 1.6, fn: () => ui.say('wake.line1', 'crew.scientist.name', 3.4) },
+      // he came down at dusk and it is midday now: say so, on black, before his eyes open
+      { t: 0.05, fn: () => ui.chapter(['wake.nextday'], true) },
+      { t: 1.9, fn: () => ui.chapter(null) },
+      { t: 2.0, fn: () => ui.fade('black', 0, 4) },
+      { t: 2.4, fn: () => ui.say('wake.line1', 'crew.scientist.name', 3.4) },
       { t: 4.0, fn: () => { ui.device(['wake.device1', 'wake.device2', 'wake.device3']); audio.beep(); } },
       { t: 6.2, fn: () => ui.say('wake.line2', 'crew.scientist.name', 3.6) },
+      // the device dies here, in his hand: the last thing on it is its own battery
+      { t: 8.9, fn: () => { ui.device(['wake.device4']); audio.beep(); } },
       { t: 10.0, fn: () => { ui.device(null); ui.say('wake.line3', 'crew.scientist.name', 3.4); } },
       { t: 13.6, fn: () => { ui.say('wake.line4', 'crew.scientist.name', 3.6); audio.thud(); } },
       { t: 18.0, fn: () => ui.say('wake.line5', 'crew.scientist.name', 3.6) },
@@ -501,6 +506,9 @@ export class Game {
     const s = this.save;
     const st = s.stats;
     s.timeOfDay += dt / 50; // one in-game hour = 50 s
+    // the first day does not run out on him: he wakes at midday and the light waits in the late afternoon until the
+    // night level begins (an unscripted night before "Survive the First Night" made that one the second)
+    if (s.day === 1 && s.level < 7 && s.timeOfDay > 18.6 && s.timeOfDay < 19.5) s.timeOfDay = 18.6;
     if (s.timeOfDay >= 24) { s.timeOfDay -= 24; s.day++; }
     if (Math.abs(s.timeOfDay - 19.2) < dt / 50 && !s.flags.nightMsg) { s.flags.nightMsg = true; this.ui.toast(t('msg.night')); }
 

@@ -133,7 +133,7 @@ export function newSave(): SaveData {
     inventory: emptyInventory(),
     pos: [0, 0, 0],
     yaw: 0,
-    timeOfDay: 8.2,
+    timeOfDay: 12.5, // he came down at dusk and wakes at midday (the card says "The next day")
     day: 1,
     flags: {},
     collected: [],
