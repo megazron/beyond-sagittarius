@@ -106,9 +106,11 @@ export class Audio {
 
   private applyMix() {
     if (!this.ctx || !this.buses) return;
-    const t = this.ctx.currentTime, d = this.ducked ? 0.45 : 1, b = this.buses;
-    b.music.gain.setTargetAtTime(this.mix.music * d, t, 0.12);
-    b.sfx.gain.setTargetAtTime(this.mix.sfx * (this.ducked ? 0.7 : 1), t, 0.12);
+    // under a spoken line the music drops to a third and the effects to half, fast, and come back slowly: a line said
+    // over the title sequence's loudest bars ("You still owe me snacks!") was lost at the old 0.45 and 0.7
+    const t = this.ctx.currentTime, d = this.ducked ? 0.3 : 1, b = this.buses, tc = this.ducked ? 0.05 : 0.3;
+    b.music.gain.setTargetAtTime(this.mix.music * d, t, tc);
+    b.sfx.gain.setTargetAtTime(this.mix.sfx * (this.ducked ? 0.5 : 1), t, tc);
     b.voice.gain.setTargetAtTime(this.mix.voice, t, 0.05);
   }
 
