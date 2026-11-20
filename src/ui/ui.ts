@@ -92,8 +92,13 @@ export class UI implements CineUI {
     clearTimeout(this.subTimer);
     if (key && !quiet) voice.play(key);
     if (!key || !this.subtitlesOn) { el.classList.add('hidden'); return; }
-    (el.querySelector('.speaker') as HTMLElement).textContent = speakerKey ? this.subT(speakerKey) : '';
-    (el.querySelector('.line') as HTMLElement).textContent = this.subT(key);
+    // a line that names its own speakers ("Ammi: ... Me: ...") needs no name in front; one that starts with the
+    // speaker's own name says it once
+    let who = speakerKey ? this.subT(speakerKey) : '', text = this.subT(key);
+    if (who && text.startsWith(`${who}:`)) text = text.slice(who.length + 1).trim();
+    else if (/^[^\s:]{1,16}: |[.!?।۔]\s+[^\s:]{1,16}: /.test(text)) who = '';
+    (el.querySelector('.speaker') as HTMLElement).textContent = who;
+    (el.querySelector('.line') as HTMLElement).textContent = text;
     this.subStyle(el);
     el.classList.remove('hidden');
   }
