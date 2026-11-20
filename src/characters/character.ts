@@ -37,9 +37,11 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
  * Cloth is drawn a little nearer the camera than it lies, by garment layer (the outfit's order: footwear 0.5, then 1, 2
  * and so on outwards): this many metres per layer, along the line of sight, so its outline on screen is unchanged. Where
  * skin and an inner garment come within a few millimetres of the layer over them in motion, the outer one still wins.
- * dev/chars.ts (the play capture) draws its passes the same way.
+ * dev/chars.ts (the play capture) draws its passes the same way. 7 mm (was 3): in tools/play_capture.py Nuvexa's
+ * flagged pixels fell from 33,600 to 25,800 over every action and view; the lab coat's count did not move (its inner
+ * shirt really is outside the coat at the lapels, which needs the garment rebuilt).
  */
-export const CLOTH_PULL = 0.003;
+export const CLOTH_PULL = 0.007;
 /**
  * And every garment this much more on top of that, over the skin: a raised arm stretches a sweater thinner than the
  * skin under it was sunk for (Nuvexa's selfie on the deck showed her chest through it). The gap between two garments
