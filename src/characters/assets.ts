@@ -192,11 +192,14 @@ export function skinMaterial(sex: string, marks: string, l: SkinLook, lod: numbe
     uSkin: { value: col(l.skin) }, uShade: { value: col(l.shade) }, uLip: { value: col(l.lip) }, uGlow: { value: col(l.glow) }, uOver: { value: col(l.over) },
     uGlowK: { value: l.glowK }, uMarks: { value: texPlain(`${marks}_marks`) },
     uDetail: { value: detailTile('detail_skin') }, uScatter: { value: scatterOf(l.skin) },
+    uCloth: { value: null as THREE.Texture | null }, uUnderAccent: { value: new THREE.Color(0xffffff) }, uUnderAccentK: { value: 0 },
   };
   m.userData.u = u; // stages turn a lineage's marks up and down
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.fragmentShader = `uniform vec3 uSkin, uShade, uLip, uGlow, uOver, uScatter; uniform float uGlowK; uniform sampler2D uMarks, uDetail;\n` + sh.fragmentShader
+    // skin a garment encloses is drawn as that garment (under.ts): aUnder = the cloth's uv, 1 when covered, its accent
+    sh.vertexShader = `attribute vec4 aUnder; varying vec4 vUnder;\n` + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n  vUnder = aUnder;`);
+    sh.fragmentShader = `uniform vec3 uSkin, uShade, uLip, uGlow, uOver, uScatter, uUnderAccent; uniform float uGlowK, uUnderAccentK; uniform sampler2D uMarks, uDetail, uCloth; varying vec4 vUnder;\n` + sh.fragmentShader
       // subsurface look: light wraps past the terminator, further in the skin's own colour
       .replace('#include <lights_physical_pars_fragment>', THREE.ShaderChunk.lights_physical_pars_fragment.replace(
         'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );',
@@ -221,14 +224,20 @@ export function skinMaterial(sex: string, marks: string, l: SkinLook, lod: numbe
         // blood under the skin: a warm undertone everywhere, whatever the lineage's colour, and a little more in the lips
         sc = mix(sc, sc * vec3(1.16, 0.97, 0.92) + vec3(0.012, 0.0, 0.0), 0.6);
         sc = mix(sc, uLip * 1.05, sk.g * 0.25);` : ''}
-        diffuseColor.rgb = sc;`)
+        diffuseColor.rgb = sc;
+        float under = step(0.995, vUnder.z);
+        if (under > 0.5) {
+          vec3 cl = texture2D(uCloth, vUnder.xy).rgb;
+          cl = mix(cl, uUnderAccent * (0.35 + dot(cl, vec3(1.1))), vUnder.w * uUnderAccentK);
+          diffuseColor.rgb = cl * 0.8; mk = vec3(0.0); // a touch darker: it sits in the garment's shade
+        }`)
       .replace('#include <emissivemap_fragment>', /* glsl */ `#include <emissivemap_fragment>
         totalEmissiveRadiance += uGlow * mk.r * uGlowK;
         // light bleeding through thin skin at grazing angles
         float rimS = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0);
         totalEmissiveRadiance += mix(sc, uSkin, 0.5) * rimS * 0.1;`);
   };
-  m.customProgramCacheKey = () => (DECREEP ? 'crew-skin2' : 'crew-skin');
+  m.customProgramCacheKey = () => (DECREEP ? 'crew-skin3' : 'crew-skin1u');
   return m;
 }
 

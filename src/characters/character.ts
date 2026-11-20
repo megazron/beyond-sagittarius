@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { fillSmallHoles } from './holes';
+import { underCloth } from './under';
 import { DECREEP } from './decreep';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { clamp } from '../core/noise';
@@ -68,6 +69,8 @@ export const CLOTH_PULL = 0.007;
 export const CLOTH_LIFT = 0.006;
 /** Holes closed in garment meshes since load (holes.ts), for the tests. */
 export const CLOTH_HOLES = { filled: 0 };
+/** Body vertices drawn as their garment since load (under.ts), for the tests. */
+export const UNDER_CLOTH = { verts: 0 };
 
 /** Phones (the light build everywhere): face details past this many metres from the camera are not drawn. */
 const FACE_FAR: Record<string, number> = { cornea: 3, lash: 3.5, eyes: 9 };
@@ -362,6 +365,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       }
     });
     dress(scene);
+    // skin the garment encloses is drawn as the garment (under.ts), so a gap or a stretched seam never shows body
+    { let sb: THREE.SkinnedMesh | null = null, cl: THREE.SkinnedMesh | null = null;
+      scene.updateMatrixWorld(true);
+      scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (!m.isSkinnedMesh) return; if (m.name === 'skin_body') sb = m; else if (m.name === 'cloth') cl = m; });
+      if (sb && cl) { UNDER_CLOTH.verts += underCloth(sb, cl); const u = skin.userData.u as Record<string, { value: unknown }>; u.uCloth.value = cloth.map; u.uUnderAccent.value = accent.uAccent.value; u.uUnderAccentK.value = accent.uAccentK.value; } }
     // shoes reach below the bare sole: stand on them, not through them
     scene.traverse((o) => {
       const m = o as THREE.Mesh;
