@@ -239,9 +239,6 @@ interface Landing { id: CrewId; at: THREE.Vector3; hit: THREE.Vector3; hours: nu
  * "The Scatter": the title sequence between the deck and the wake-up. Every frame is a
  * function of music time, so a slow frame drops, and the picture never drifts off the beat.
  */
-/** Where each of the six comes down on the world's face, as seen in the planet shot (across, up): six different regions. */
-const SPREAD: [number, number][] = [[-0.78, 0.36], [0.72, 0.46], [-0.4, -0.52], [0.5, -0.4], [0.9, -0.02], [0.02, 0.06]];
-
 export class Montage {
   private set: Cinematic['set'];
   private trails: Trail[] = [];
@@ -501,6 +498,9 @@ export class Montage {
 
   private finish() {
     for (const el of this.tags) el.style.opacity = '0';
+    if (this.sys) this.sys.group.visible = false;
+    if (this.stageG) this.stageG.visible = false;
+    if (this.vacuum) { this.vacuum = false; audio.vacuum(false); }
     this.playing = false;
     this.video?.close(); this.video = null;
     this.score?.stop(); this.score = null;
@@ -590,6 +590,104 @@ export class Montage {
     const s = this.set.sun;
     s.position.copy(dir).normalize().multiplyScalar(100); s.color.set(color); s.intensity = i;
   }
+
+  private sysOn = false;
+  private sys: { group: THREE.Group; at: Record<CrewId, THREE.Vector3> } | null = null;
+  /** The system the six are thrown into, for the wide shot: simple lit bodies, each where one of them comes down. */
+  private system() {
+    if (this.sys) return this.sys;
+    const g = new THREE.Group(), at = {} as Record<CrewId, THREE.Vector3>;
+    const ball = (r: number, color: number, p: THREE.Vector3, o: { emissive?: number; rough?: number; flat?: boolean } = {}) => {
+      const m = new THREE.Mesh(o.flat ? new THREE.IcosahedronGeometry(r, 1) : new THREE.SphereGeometry(r, 48, 24), new THREE.MeshStandardMaterial({ color, roughness: o.rough ?? 0.9, emissive: o.emissive ?? 0, emissiveIntensity: 0.35, flatShading: !!o.flat }));
+      m.position.copy(p); g.add(m); return m;
+    };
+    // the green world (the planet we play) is the set's own `home` at the origin, radius 400
+    at.scientist = V(-60, 230, 320);
+    // the ringed giant, far behind and to the right, and its haze-orange moon (Draxum)
+    const giant = ball(520, 0xcdb48a, V(1900, 260, -2300));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(680, 1150, 96), new THREE.MeshBasicMaterial({ color: 0xd8c9a8, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
+    ring.position.copy(giant.position); ring.rotation.set(-1.25, 0.25, 0); g.add(ring);
+    at.strong = ball(95, 0xd07a2a, V(1150, 520, -1500), { emissive: 0x5a2a08 }).position;
+    // the band of rock between: Skyvra's is one of these
+    for (let i = 0; i < 26; i++) { const a = i * 0.47; const r = ball(10 + (i * 7) % 16, 0x77726a, V(700 + Math.cos(a) * 520 + i * 9, -180 + Math.sin(i * 1.3) * 70, -500 + Math.sin(a) * 420), { flat: true }); if (i === 9) at.explorer = r.position; }
+    // a small grey moon with one bright rim (Lyrra), and a broken moonlet (Bolzar)
+    at.medic = ball(80, 0x9a9aa2, V(-900, 380, -900)).position;
+    at.builder = ball(70, 0x6f5a4a, V(-520, -420, 500), { flat: true }).position;
+    // the cloud planet, nearer the star, gold (Nuvexa)
+    at.social = ball(210, 0xe8c25a, V(1500, -520, 700), { emissive: 0x6a4a10, rough: 1 }).position;
+    this.set.scene.add(g); g.visible = false;
+    return (this.sys = { group: g, at });
+  }
+
+  private stageG: THREE.Group | null = null;
+  private stageOn = false;
+  /** A piece of each world to stand on, with its sky: built once, shown one at a time, far from everything else. */
+  private worldStage(id: CrewId) {
+    if (!this.stageG) {
+      this.stageG = new THREE.Group(); this.set.scene.add(this.stageG);
+      const mk = (name: string, ground: number, rough: number, extra: (g: THREE.Group) => void) => {
+        const g = new THREE.Group(); g.name = name;
+        const geo = new THREE.CircleGeometry(60, 48); geo.rotateX(-Math.PI / 2);
+        // a little relief, so it is ground and not a plate
+        const p = geo.getAttribute('position'); for (let i = 0; i < p.count; i++) p.setY(i, Math.sin(p.getX(i) * 0.9) * Math.cos(p.getZ(i) * 0.7) * 0.12);
+        geo.computeVertexNormals();
+        g.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: ground, roughness: rough })));
+        extra(g); this.stageG!.add(g); return g;
+      };
+      const rock = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number) => { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true })); m.position.set(x, y, z); m.rotation.set(x, y, z); g.add(m); return m; };
+      const sky = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number, emissive = 0) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 24), new THREE.MeshStandardMaterial({ color, roughness: 1, emissive, emissiveIntensity: 0.5 })); m.position.set(x, y, z); g.add(m); return m; };
+      // Methryx: black slush, orange haze, the ringed giant huge on the horizon
+      mk('strong', 0x1a1410, 0.5, (g) => { sky(g, 240, -160, 70, -520, 0xcdb48a, 0x3a2a10); const r = new THREE.Mesh(new THREE.RingGeometry(300, 480, 64), new THREE.MeshBasicMaterial({ color: 0xd8c9a8, transparent: true, opacity: 0.5, side: THREE.DoubleSide })); r.position.set(-160, 70, -520); r.rotation.set(-1.3, 0.3, 0); g.add(r); rock(g, 1.2, 3, 0.2, -4, 0x2a211a); rock(g, 0.7, -4, 0.1, -2, 0x2a211a); });
+      // the grey moon: dust, hard light, a torn piece of hull
+      mk('medic', 0x8a8a90, 1, (g) => { const h = new THREE.Mesh(new THREE.BoxGeometry(5, 3.2, 0.25), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); h.position.set(-3.5, 1.2, -4); h.rotation.set(0.2, 0.5, 0.35); g.add(h); rock(g, 0.9, 4, 0.2, -5, 0x77777c); });
+      // the asteroid: bare tumbling rock, nothing else but stars
+      mk('explorer', 0x4a4640, 1, (g) => { rock(g, 2.4, -5, 0.6, -6, 0x55504a); rock(g, 1.1, 4, 0.3, -3, 0x55504a); rock(g, 5, 14, 9, -40, 0x3c3a36); rock(g, 3, -22, 14, -60, 0x3c3a36); });
+      // Shardrift: split cliffs, old metal
+      mk('builder', 0x5a4636, 1, (g) => { rock(g, 9, -9, 5, -12, 0x4a392c); rock(g, 12, 13, 7, -16, 0x4a392c); rock(g, 6, 0, 2, -20, 0x3a2c22); });
+      // Aerolis: a raft of hull on gold cloud to every horizon
+      mk('social', 0xe2c46a, 1, (g) => { const d = new THREE.Mesh(new THREE.BoxGeometry(6, 0.3, 4), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); d.position.set(0, 0.16, 0); d.rotation.set(0.03, 0.4, -0.04); g.add(d); for (let i = 0; i < 9; i++) sky(g, 14 + (i % 3) * 8, Math.cos(i * 0.7) * (60 + i * 6), -6 + (i % 2) * 5, -70 + Math.sin(i * 0.7) * 50, 0xf0d890, 0x6a5010); });
+      this.stageG.children.forEach((c, i) => c.position.set(i * 4000, -20000, 0));
+    }
+    for (const c of this.stageG.children) c.visible = c.name === id;
+    this.stageG.visible = true; this.stageOn = true;
+    return this.stageG.children.find((c) => c.name === id)!.position;
+  }
+
+  /** One of the five comes down on their own world: the light in, the hit, them, the card, the line. */
+  private arrive(id: CrewId, i: number, b: number, imp: number) {
+    const o = this.worldStage(id), col = TRAIL[id], tt = (b - imp) * BEAT, hit = b >= imp;
+    const u = this.set.dome.uniforms;
+    u.uBH.value = 0; u.uWarp.value = 0;
+    // each sky its own: orange haze, hard black, deep stars, dusty brown, gold
+    const SKY: Record<string, [number, number, number]> = { strong: [0.5, 1, 0.95], medic: [0.05, 0, 0.9], explorer: [0.35, 0, 1], builder: [0.6, 1, 0.7], social: [0.9, 1, 0.95] };
+    const [neb, other, exposure] = SKY[id];
+    u.uNebula.value = neb; u.uOther.value = other;
+    const k = clamp((b - (imp - 2)) / 8, 0, 1), drift = easeInOut(k);
+    const cam = this.lens(this.tmp.copy(o).add(V(1.6 - drift * 0.5, 1.35, 4.6 - drift * 0.6)).add(hit ? shakeAt(b, 0.5 * after(b, imp, 1.0), this.tmp2) : V(0, 0, 0)).clone(), this.tmp3.copy(o).add(V(0, 1.05, 0)).clone(), 34, 4.6, 0.004);
+    // the light comes down the sky to where they will be
+    const tr = this.trails[i]; tr.color = col;
+    if (!hit) { const h = clamp((b - (imp - 2)) / 2, 0, 1); const from = o.clone().add(V(-40, 60, -70)), to = o.clone().add(V(0, 0.4, 0)); tr.draw((s, out) => out.lerpVectors(from, to, Math.max(0, h - s * 0.35)), cam, 0.9, b, 2); }
+    else tr.mesh.visible = false;
+    if (hit) {
+      const q = (x: number, y: number) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, 0, 'YXZ'));
+      // one held pose each, for who they are: no stock gesture on a loop
+      const POSE: Record<string, [CrewPose, number, Face]> = { strong: ['injured', 0.25, { frown: 0.5, squint: 0.3 }], medic: ['stand', -0.2, { squint: 0.2 }], explorer: ['sit', 0.3, { frown: 0.6 }], builder: ['sit', -0.25, { smile: 0.2 }], social: ['selfie', 0.15, { smile: 0.3 }] };
+      const [pose, yaw, face] = POSE[id];
+      const c = this.act(id, o.clone().add(V(0, 0.02, 0)), q(0, yaw), pose, null, face);
+      c.look2(-yaw * 0.6, 0);
+      this.embers.set({ at: o.clone().add(V(0, 0.3, 0)), c0: col, c1: 0x202020, life: 1.6, speed: 5, drag: 1.4, grav: id === 'explorer' ? 0 : -2, size: 0.06, grow: 0.4, stagger: 0.1 }).play(tt);
+    }
+    // key light per world, and the colour of their own trail from behind
+    const KEY: Record<string, number> = { strong: 0xffb070, medic: 0xffffff, explorer: 0xdfe8ff, builder: 0xffd0a0, social: 0xffe6a0 };
+    this.setRig([{ p: o.clone().add(V(3, 4, 4)), color: KEY[id], i: id === 'medic' ? 60 : 34, d: 18 }, { p: o.clone().add(V(-2.5, 1.5, -2.5)), color: col, i: 14, d: 9 }, { p: o.clone().add(V(0, 9, -14)), color: KEY[id], i: 16, d: 70 }]);
+    const f = after(b, imp, 0.45) * 0.8, c2 = new THREE.Color(col).lerp(new THREE.Color(1, 1, 1), 0.7);
+    this.fx = { flash: [c2.r * f, c2.g * f, c2.b * f], zoom: 0.05 * after(b, imp, 0.6), exposure };
+    this.card(id, (b - (imp + 1.1)) / 0.5);
+    if (b >= imp + 5.6) this.el.card.style.opacity = '0';
+    // Skyvra has no air round her: the world goes silent but for what she hears inside her own head
+    this.vacuum = id === 'explorer' && hit;
+  }
+  private vacuum = false;
 
   private tags: HTMLElement[] = [];
   private tagsOn = false;
@@ -867,24 +965,25 @@ export class Montage {
 
     P(56, 62, 'home', (k, b) => {
       const e = easeInOut(k);
-      // from the day side and far enough back to see the whole world with sky round it: the fan of six has to read
-      const a = lerp(1.5, 1.72, e);
-      const cam = this.lens(V(Math.sin(a) * 1520, 170 - e * 40, Math.cos(a) * 1520), V(0, -10 + e * 30, 0).addScaledVector(V(Math.cos(a), 0, -Math.sin(a)), 70), 34, 0, 0, -0.06 + e * 0.04);
-      // six lights out of one point in the sky, fanning out to six different parts of the world below: this is where
-      // the six are torn apart for good, and each trail carries its name until it goes into the air
-      const fwd = this.tmp.copy(cam.position).normalize(), right = this.tmp2.crossVectors(V(0, 1, 0), fwd).normalize(), up = this.tmp3.crossVectors(fwd, right);
-      // the point they break from is in shot, in the sky up and to the left of the world
-      const origin = fwd.clone().multiplyScalar(320).addScaledVector(right, -640).addScaledVector(up, 345);
+      // one system, six worlds: the green world near us, the ringed giant and its orange moon beyond, a grey moon, a
+      // broken moonlet, a band of rock, and the cloud planet sunward. Six lights break from one point and each goes to a
+      // different one, its name on it until it gets there.
+      const sys = this.system();
+      sys.group.visible = true;
+      const cam = this.lens(V(-260 + e * 120, 420 - e * 60, 2500 - e * 160), V(520, 40, -300), 40, 0, 0, -0.03 + e * 0.03);
+      const origin = this.tmp.set(-520, 1250, -300);
       this.trails.forEach((tr, i) => {
-        tr.color = i === 5 ? this.playerGlow() : TRAIL[ORDER[i]];
-        const [sx, sy] = SPREAD[i];
-        const end = fwd.clone().addScaledVector(right, sx).addScaledVector(up, sy).normalize().multiplyScalar(402);
-        const start = origin;
-        const head = smoothstep(0.06 + i * 0.03, 0.8 + i * 0.03, k);
-        tr.draw((s, o) => o.lerpVectors(start, end, Math.max(0, head - s * 0.3)), cam, 1.6 + head * 1.6, b, head > 0 ? 1.6 : 0);
-        this.tag(i, head > 0.12 && head < 0.97 ? start.clone().lerp(end, head) : null, cam);
+        const id = ORDER[i];
+        tr.color = i === 5 ? this.playerGlow() : TRAIL[id];
+        const end = sys.at[id];
+        const head = smoothstep(0.08 + i * 0.03, 0.82 + i * 0.03, k);
+        // a bowed path, so six lines from one point do not read as one
+        const mid = this.tmp2.copy(origin).lerp(end, 0.5).add(this.tmp3.set(Math.sin(i * 2.4) * 260, 160 + Math.cos(i * 1.7) * 120, Math.cos(i * 2.4) * 200));
+        const at = (t: number, o: THREE.Vector3) => { const a = 1 - t; return o.set(a * a * origin.x + 2 * a * t * mid.x + t * t * end.x, a * a * origin.y + 2 * a * t * mid.y + t * t * end.y, a * a * origin.z + 2 * a * t * mid.z + t * t * end.z); };
+        tr.draw((s, o) => at(Math.max(0, head - s * 0.28), o), cam, 2.4 + head * 2, b, head > 0 ? 1.7 : 0);
+        this.tag(i, head > 0.1 && head < 0.985 ? at(head, new THREE.Vector3()) : null, cam);
       });
-      this.tagsOn = true;
+      this.tagsOn = true; this.sysOn = true;
       const u = set.dome.uniforms;
       u.uBH.value = 0; u.uWarp.value = 0; u.uOther.value = 0; u.uNebula.value = 0.6;
       const pf = after(b, 56, 0.6) * 0.15;
@@ -894,12 +993,11 @@ export class Montage {
     }, () => set.show('home'));
 
     // ---- Act III: The Landing ----
-    // Each of the other five comes down where its trail was heading over the planet: the comet in on a long lens, the
-    // hit on the downbeat, then them, a name and a place, and one line said to its end before the next one falls.
+    // Each of the other five comes down on a world of its own: its own sky, its own ground. The light comes in, the
+    // hit lands on the downbeat, then them, a name and a world, and one line said to its end before the next one falls.
     ORDER.slice(0, 5).forEach((id, i) => {
-      const imp = beat.impacts[i], nextTo = imp + 6;
-      P(imp - 2, imp + 0.9, 'world', (k, b) => this.wide(id, b, imp), () => this.setLand(id));
-      this.shots.push({ from: imp + 0.9, to: nextTo, where: 'world', at: (k, b) => this.closeShot(id, k, b, imp), holdVoice: true });
+      const imp = beat.impacts[i];
+      this.shots.push({ from: imp - 2, to: imp + 6, where: 'deep', at: (k, b) => this.arrive(id, i, b, imp), enter: () => set.show('deep'), holdVoice: true });
     });
 
     // ---- Act IV: The player comes down ----
@@ -1117,9 +1215,12 @@ export class Montage {
       shot.enter?.();
     }
     for (const c of this.cues) if (!c.done && b >= c.b) { c.done = true; c.fn(); }
-    this.tagsOn = false;
+    this.tagsOn = false; this.sysOn = false; this.stageOn = false; const wasVac = this.vacuum; this.vacuum = false;
     if (shot) shot.at(clamp((b - shot.from) / (shot.to - shot.from), 0, 1), b);
     if (!this.tagsOn) for (const el of this.tags) el.style.opacity = '0';
+    if (!this.sysOn && this.sys) this.sys.group.visible = false;
+    if (!this.stageOn && this.stageG) this.stageG.visible = false;
+    if (this.vacuum !== wasVac) audio.vacuum(this.vacuum);
     // shots that place a body by where its hand ended up need one solved pose first, or their first frame snaps
     if (shot && entered) {
       for (const id of this.seen) { const c = this.cast[id]; c.root.updateMatrixWorld(); const pose = this.poses[id] ?? 'float'; this.posed[id] = pose; c.animate(pose, 0, 0, this.time, 1.2); }
