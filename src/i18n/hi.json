@@ -509,7 +509,7 @@
   "legal.parodyH": "कल्पना और पैरोडी",
   "legal.parody": "पात्र और घटनाएँ काल्पनिक हैं। Lamazon जैसे नाम हँसी के लिए गढ़ी हुई पैरोडी हैं। कोई असली कंपनी इस गेम से जुड़ी नहीं है और न ही इसका समर्थन करती है।",
   "legal.licencesH": "लाइसेंस और श्रेय",
-  "legal.licences": "गेम का कोड, कला और कहानी: सर्वाधिकार सुरक्षित, megazron। three.js (MIT) से बना; Android ऐप Capacitor (MIT) से। टेक्सचर, स्कैन किए मॉडल और HDRI: Poly Haven (CC0)। शरीर: MakeHuman (CC0)। कपड़े: MakeHuman समुदाय के एसेट, कुछ CC BY के तहत Elvaerwyn, Mindfront और punkduck के (फ़िट किए, हल्के किए और रंग बदले), बाकी CC0। एनिमेशन: Quaternius (CC0) और CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu)। फ़ॉन्ट: SIL Open Font License। आवाज़ें कृत्रिम हैं (Kokoro-82M, Apache-2.0)। हर लाइसेंस की पूरी सूची GitHub पर CREDITS.md में है।",
+  "legal.licences": "गेम का कोड, कला और कहानी: सर्वाधिकार सुरक्षित, megazron। three.js (MIT) से बना; Android ऐप Capacitor (MIT) से। टेक्सचर, स्कैन किए मॉडल और HDRI: Poly Haven (CC0)। शरीर: MakeHuman (CC0)। कपड़े: MakeHuman समुदाय के एसेट, कुछ CC BY के तहत Elvaerwyn, Mindfront और punkduck के (फ़िट किए, हल्के किए और रंग बदले), बाकी CC0। एनिमेशन: Quaternius (CC0) और CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu)। फ़ॉन्ट: SIL Open Font License। संगीत: Kevin MacLeod (incompetech.com), CC BY 4.0। साउंड इफ़ेक्ट और माहौल: Kenney (CC0) और CC0 वाली Freesound रिकॉर्डिंग। आवाज़ें कृत्रिम हैं (Chatterbox, MIT, और Kokoro-82M, Apache-2.0); ज़ेनवोरा के लोगों की आवाज़ें LibriTTS-R रेफ़रेंस क्लिप से बनी हैं (Google, CC BY 4.0)। हर लाइसेंस की पूरी सूची GitHub पर CREDITS.md में है।",
   "legal.readFull": "पूरे दस्तावेज़ GitHub पर",
   "legal.privacyLink": "प्राइवेसी पॉलिसी",
   "age.stone": "पाषाण युग",
@@ -1123,5 +1123,15 @@
   "city.map.d.waterfront": "समुद्र तट",
   "city.map.d.north": "उत्तर बस्ती",
   "city.map.d.park": "रिंग पार्क",
-  "city.map.d.bay": "ज़ेनवोरा खाड़ी"
+  "city.map.d.bay": "ज़ेनवोरा खाड़ी",
+  "pull.ai1": "कोर्स सुधार विफल। यान विसंगति की ओर खिंच रहा है। सभी यात्री, संभल जाएँ।",
+  "pull.strong": "मेरी ड्रिंक साइड में क्यों तैर रही है?",
+  "pull.medic": "सब लोग बेल्ट बाँधो। ये डॉक्टर का ऑर्डर है।",
+  "pull.social": "मैं लाइव जा रही हूँ। अगर ये अंत है, तो कम से कम कंटेंट तो बनेगा।",
+  "pull.explorer": "हम धीमे नहीं हो रहे। हम तेज़ क्यों हो रहे हैं?!",
+  "pull.builder": "टिकेगा। टिकेगा। नहीं टिकेगा।",
+  "pull.scientist": "ये तूफ़ान नहीं है। कोई चीज़ हमें अंदर खींच रही है, और वो छोड़ती नहीं।",
+  "pull.ai2": "ज्वारीय दबाव गंभीर। हल की मज़बूती 19 प्रतिशत। अलविदा।",
+  "mz.pull.1": "और नन्हे यात्रियो, ब्लैक होल छुट्टियों के साथ यही करता है।",
+  "mz.pull.2": "इतने परेशान मत दिखो। पहले चैप्टर में कोई नहीं मरता। ख़ैर। ज़्यादा देर के लिए नहीं।"
 }

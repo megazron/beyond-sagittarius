@@ -1,0 +1,15 @@
+{
+ "_comment": "Zenvora townsfolk reference clips from LibriTTS-R dev-clean (CC BY 4.0). speaker = corpus speaker id. Built by libritts_refs.py into refs/<name>_en.wav.",
+ "ammi": {"speaker": "3576", "note": "warm, low, unhurried"},
+ "aunty": {"speaker": "2035", "note": "bright, quick, nosy"},
+ "pharma": {"speaker": "6319", "note": "calm, patient"},
+ "queue2": {"speaker": "1988", "note": "brisk"},
+ "chaiwala": {"speaker": "2803", "note": "deep, slow, amused"},
+ "clerk": {"speaker": "2086", "note": "quick, salesy"},
+ "driver": {"speaker": "777", "note": "very fast"},
+ "queue1": {"speaker": "5536", "note": "low, weary"},
+ "tourist": {"speaker": "3170", "note": "light, curious"},
+ "locker": {"speaker": "6295", "note": "low; made machine-like with fx"},
+ "kid1": {"speaker": "3081", "note": "high; pitched up into a kid"},
+ "kid2": {"speaker": "3536", "note": "high; pitched up into a kid"}
+}

@@ -14,7 +14,19 @@
     "local",
     "hermit",
     "traveller",
-    "cameo"
+    "cameo",
+    "ammi",
+    "chaiwala",
+    "aunty",
+    "clerk",
+    "driver",
+    "kid1",
+    "kid2",
+    "queue1",
+    "queue2",
+    "pharma",
+    "tourist",
+    "locker"
   ],
   "lines": {
     "cine.caption1": "megazron",
@@ -303,6 +315,109 @@
     "away.scree.intro": "builder",
     "away.wreck.intro": "medic",
     "away.moon.intro": "strong",
-    "away.clouds.intro": "social"
+    "away.clouds.intro": "social",
+    "city.done.paratha": "scene",
+    "city.done.pack": "scene",
+    "city.done.phone": "scene",
+    "city.done.parcel": "scene",
+    "city.done.chai": "scene",
+    "city.done.tram": "scene",
+    "city.done.ring": "scene",
+    "city.done.gate": "scene",
+    "city.friend.strong": "scene",
+    "city.friend.medic": "scene",
+    "city.friend.explorer": "scene",
+    "city.friend.builder": "scene",
+    "city.friend.social": "scene",
+    "city.npc.chaiwala": "chaiwala",
+    "city.npc.aunty": "aunty",
+    "city.npc.clerk": "clerk",
+    "city.npc.driver": "driver",
+    "city.npc.kid1": "kid1",
+    "city.npc.kid2": "kid2",
+    "city.npc.queue1": "queue1",
+    "city.npc.queue2": "queue2",
+    "city.npc.pharma": "pharma",
+    "city.npc.tourist": "tourist",
+    "away.city.intro": "scientist",
+    "pull.ai1": "ship",
+    "pull.strong": "strong",
+    "pull.medic": "medic",
+    "pull.social": "social",
+    "pull.explorer": "explorer",
+    "pull.builder": "builder",
+    "pull.scientist": "scientist",
+    "pull.ai2": "ship",
+    "mz.pull.1": "megazron",
+    "mz.pull.2": "megazron"
+  },
+  "scenes": {
+    "_comment": "Lines several people speak: 'Name: words' starts that person's part; text before any name is the player's.",
+    "names": {
+      "Ammi": "ammi",
+      "Me": "scientist",
+      "Clerk": "clerk",
+      "Locker": "locker",
+      "Skyvra": "explorer",
+      "Bolzar": "builder",
+      "Nuvexa": "social",
+      "Draxum": "strong",
+      "Lyrra": "medic"
+    },
+    "direction": {
+      "ammi": {
+        "emotion": "warm",
+        "intensity": 0.6
+      },
+      "clerk": {
+        "emotion": "deadpan",
+        "intensity": 0.5
+      },
+      "locker": {
+        "emotion": "flat",
+        "intensity": 0.3,
+        "fx": ""
+      },
+      "explorer": {
+        "emotion": "smug",
+        "intensity": 0.6
+      },
+      "builder": {
+        "emotion": "easy",
+        "intensity": 0.55
+      },
+      "social": {
+        "emotion": "hype",
+        "intensity": 0.7
+      },
+      "strong": {
+        "emotion": "sad",
+        "intensity": 0.5
+      },
+      "medic": {
+        "emotion": "sarcasm",
+        "intensity": 0.5
+      },
+      "scientist": {
+        "emotion": "anxious",
+        "intensity": 0.5
+      },
+      "scientist_f": {
+        "emotion": "anxious",
+        "intensity": 0.5
+      }
+    },
+    "split": {
+      "city.done.tram": [
+        [
+          "builder",
+          "Hold it, hold it… done. It'll hold."
+        ],
+        [
+          "scientist",
+          "The door slides shut, then gently falls off the other side."
+        ]
+      ]
+    }
   }
 }

@@ -65,7 +65,7 @@ def main():
         rnd.shuffle(keys)
         scores = []
         for k in keys[:args.sample]:
-            segs, _ = model.transcribe(pcm(d / f'{k}.mp3'), language=lang, beam_size=2)
+            segs, _ = model.transcribe(pcm(d / f'{k}.ogg'), language=lang, beam_size=2)
             hyp = ' '.join(s.text for s in segs)
             scores.append((round(cer(norm(texts[k]), norm(hyp)), 3), k, hyp))
         scores.sort()

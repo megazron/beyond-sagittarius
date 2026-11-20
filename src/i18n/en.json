@@ -509,7 +509,7 @@
   "legal.parodyH": "Fiction and parody",
   "legal.parody": "Characters and events are made up. Names such as Lamazon are invented parodies used for humour. No real company is involved or endorses this game.",
   "legal.licencesH": "Licences and credits",
-  "legal.licences": "Game code, art and story: all rights reserved, megazron. Built with three.js (MIT); the Android app with Capacitor (MIT). Textures, scanned models and the HDRI: Poly Haven (CC0). Bodies: MakeHuman (CC0). Clothes: MakeHuman community assets, some under CC BY by Elvaerwyn, Mindfront and punkduck (fitted, reduced and recoloured), the rest CC0. Animation: Quaternius (CC0) and the CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu). Fonts: SIL Open Font License. Voices are synthetic (Kokoro-82M, Apache-2.0). The full list with every licence is in CREDITS.md on GitHub.",
+  "legal.licences": "Game code, art and story: all rights reserved, megazron. Built with three.js (MIT); the Android app with Capacitor (MIT). Textures, scanned models and the HDRI: Poly Haven (CC0). Bodies: MakeHuman (CC0). Clothes: MakeHuman community assets, some under CC BY by Elvaerwyn, Mindfront and punkduck (fitted, reduced and recoloured), the rest CC0. Animation: Quaternius (CC0) and the CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu). Fonts: SIL Open Font License. Music: Kevin MacLeod (incompetech.com), CC BY 4.0. Sound effects and ambience: Kenney (CC0) and Freesound recordings marked CC0. Voices are synthetic (Chatterbox, MIT, and Kokoro-82M, Apache-2.0); the townsfolk of Zenvora are voiced from LibriTTS-R reference clips (Google, CC BY 4.0). The full list with every licence is in CREDITS.md on GitHub.",
   "legal.readFull": "Full texts on GitHub",
   "legal.privacyLink": "Privacy policy",
   "age.stone": "Stone Age",
@@ -1123,5 +1123,15 @@
   "city.map.d.waterfront": "Waterfront",
   "city.map.d.north": "Northside",
   "city.map.d.park": "Ring Park",
-  "city.map.d.bay": "Zenvora Bay"
+  "city.map.d.bay": "Zenvora Bay",
+  "pull.ai1": "COURSE CORRECTION FAILED. VESSEL IS BEING DRAWN TOWARDS THE ANOMALY. ALL PASSENGERS, BRACE.",
+  "pull.strong": "Why is my drink floating sideways?",
+  "pull.medic": "Everyone, strap in. That's a medical order.",
+  "pull.social": "I'm going live. If this is the end, it's going to be content.",
+  "pull.explorer": "We're not slowing down. Why are we speeding up?!",
+  "pull.builder": "It'll hold. It'll hold. It will not hold.",
+  "pull.scientist": "It's not a storm. Something is pulling us in, and it doesn't let go.",
+  "pull.ai2": "TIDAL STRESS CRITICAL. HULL INTEGRITY 19 PERCENT. GOODBYE.",
+  "mz.pull.1": "And that, little travellers, is what a black hole does to a holiday.",
+  "mz.pull.2": "Don't look so worried. Nobody dies in the first chapter. Well. Not for long."
 }

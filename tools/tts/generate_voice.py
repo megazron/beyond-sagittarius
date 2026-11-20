@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Render every voiced line of BEYOND SAGITTARIUS to small MP3s (en / hi / ur).
+"""Render every voiced line of BEYOND SAGITTARIUS to small Opus files (en / hi / ur).
 
 Inputs : src/i18n/voice.json (key -> speaker), src/i18n/{en,hi,ur}.json, read at run time
 Config : tools/tts/voices.json (casting), direction.json (delivery per line),
          pronunciations.json, refs/ (synthetic reference clips, see make_refs.py)
-Output : public/audio/vo/<lang>/<key>.mp3 (+ <key>~anon.mp3) and index.json
-         {key: duration_seconds}. Mono 24 kHz MP3, loudness-normalised.
+Output : public/audio/vo/<lang>/<key>.ogg (+ <key>~anon.ogg) and index.json
+         {key: duration_seconds}. Mono Opus in Ogg, 28 kb/s, loudness-normalised (the cache keeps FLAC).
 
 Chatterbox on CPU is slow, so this is built to be interrupted: every take is cached
 in tools/tts/.cache by a hash of its inputs, and each finished line is published
@@ -17,6 +17,7 @@ Run:  npm run voice -- [--lang en,hi,ur] [--only 'dlg.9.*'] [--force] [--limit 2
 from __future__ import annotations
 
 import argparse
+import contextlib
 import fnmatch
 import hashlib
 import json
@@ -41,7 +42,7 @@ FFMPEG = shutil.which('ffmpeg') or str(Path.home() / '.local' / 'bin' / 'ffmpeg'
 
 TARGET_LUFS = -18.0
 PEAK_LIMIT = 0.89          # ~ -1 dBFS
-MP3_BITRATE = '48k'
+OPUS = ['-c:a', 'libopus', '-b:a', '28k', '-application', 'audio', '-frame_duration', '20']
 LANGS = ('en', 'hi', 'ur')
 MAX_TAKES = 3
 
@@ -203,11 +204,74 @@ def spoken_text(raw, key, lang, strings, hi_strings, lexicon):
     return respell(text, lexicon.get(lang, {}))
 
 
-def build_jobs(lang, voice_map, voices, direction, strings, hi_strings, lexicon, only):
+def scene_parts(text: str, cast: dict, default: str):
+    """'Ammi: Did you eat? Me: I am eating.' -> [('ammi', 'Did you eat?'), ('scientist', 'I am eating.')].
+    Only the names in `cast` start a new speaker, so 'Contents: one adapter' stays inside the line."""
+    pat = re.compile(r'(?:^|(?<=[.!?…]\s))(' + '|'.join(re.escape(n) for n in sorted(cast, key=len, reverse=True)) + r'):\s*')
+    parts, who, at = [], default, 0
+    for m in pat.finditer(text):
+        seg = text[at:m.start()].strip()
+        if seg:
+            parts.append((who, seg))
+        who, at = cast[m.group(1)], m.end()
+    seg = text[at:].strip()
+    if seg:
+        parts.append((who, seg))
+    return parts
+
+
+def job_hash(job):
+    return hashlib.sha1(json.dumps({'v': SCRIPT_VERSION, **{k: v for k, v in job.items() if k != 'key'}},
+                                   sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:20]
+
+
+def turbo_hash(job, vkey, lang, turbo):
+    """Turbo for keys that ask for it, unless a full Chatterbox take of the line is already cached (that one stays)."""
+    if not (turbo and lang == 'en' and turbo(vkey)):
+        return None
+    if (CACHE / lang / f'{job_hash(job)}.json').exists():
+        return None
+    job['engine'] = 'turbo'
+    return job_hash(job)
+
+
+def build_jobs(lang, voice_map, voices, direction, strings, hi_strings, lexicon, only, turbo=False):
     jobs = []
     for key, speaker in voice_map['lines'].items():
         if key not in strings:
             log(f'  WARN [{lang}] missing key {key}')
+            continue
+        if speaker == 'scene':
+            # several people in one line: each part in its own voice, joined afterwards (English only: the
+            # speaker names are matched in the English text; Hindi and Urdu play these in English with their subtitles)
+            if lang != 'en':
+                continue
+            sc = voice_map['scenes']
+            d = direction['lines'].get(key) or {'emotion': 'dry', 'intensity': 0.5, 'pace': 1.0, 'pre': 0, 'post': 0.2, 'tags': [], 'fx': ''}
+            for vkey, me in ((key, 'scientist'), (f'{key}~f', 'scientist_f')):
+                if only and not any(fnmatch.fnmatchcase(vkey, o) or fnmatch.fnmatchcase(key, o) for o in only):
+                    continue
+                cast_map = {n: (me if w == 'scientist' else w) for n, w in sc['names'].items()}
+                fixed = sc.get('split', {}).get(key)
+                parts = [(me if w == 'scientist' else w, x) for w, x in fixed] if fixed else scene_parts(strings[key], cast_map, me)
+                if vkey.endswith('~f') and all(w != me for w, _ in parts):
+                    continue  # the player says nothing here: one take serves both
+                for i, (who, seg) in enumerate(parts):
+                    cast = voices['speakers'][who]
+                    c = {**voices['defaults'], **cast.get('all', {}), **cast.get(lang, {})}
+                    pd = {**d, 'pre': 0, 'post': 0}
+                    pd.update(sc.get('direction', {}).get(who, {}))
+                    ex, cfg, temp = direction['emotions'][pd['emotion']]
+                    job = {'lang': lang, 'key': f'{vkey}@{i}', 'speaker': who, 'text': respell(display_text(clean_text(seg, lang, key)), lexicon.get(lang, {})),
+                           'dir': pd, 'cast': c, 'exaggeration': round(min(1.2, ex * (0.6 + 0.8 * pd['intensity'])), 3), 'cfg': cfg,
+                           'temperature': temp, 'ref': f"{c['ref']}_en"}
+                    job['fx'] = [x for x in (direction['fx'].get(pd['fx']), c.get('fx')) if x]
+                    h = turbo_hash(job, vkey, lang, turbo)
+                    h = h or hashlib.sha1(json.dumps({'v': SCRIPT_VERSION, **{k: v for k, v in job.items() if k != 'key'}},
+                                                sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:20]
+                    job.update(hash=h, mp3=str(CACHE / lang / f'{h}.flac'), meta=str(CACHE / lang / f'{h}.json'),
+                               part_of=vkey, part=i, parts=len(parts), post=d.get('post', 0.2))
+                    jobs.append(job)
             continue
         variants = [(key, strings[key])]
         if NAME_RE.search(strings[key]) and f'vo.anon.{key}' in strings:
@@ -231,36 +295,58 @@ def build_jobs(lang, voice_map, voices, direction, strings, hi_strings, lexicon,
                    'exaggeration': round(min(1.2, ex * (0.6 + 0.8 * d['intensity'])), 3), 'cfg': cfg, 'temperature': temp,
                    'ref': f"{c['ref']}_{'en' if lang == 'en' else 'hi'}"}
             job['fx'] = [x for x in (direction['fx'].get(d['fx']), c.get('fx')) if x]
-            h = hashlib.sha1(json.dumps({'v': SCRIPT_VERSION, **{k: v for k, v in job.items() if k != 'key'}},
+            h = turbo_hash(job, vkey, lang, turbo)
+            h = h or hashlib.sha1(json.dumps({'v': SCRIPT_VERSION, **{k: v for k, v in job.items() if k != 'key'}},
                                         sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:20]
-            job.update(hash=h, mp3=str(CACHE / lang / f'{h}.mp3'), meta=str(CACHE / lang / f'{h}.json'))
+            job.update(hash=h, mp3=str(CACHE / lang / f'{h}.flac'), meta=str(CACHE / lang / f'{h}.json'))
             jobs.append(job)
     return jobs
 
 
 # --------------------------------------------------------------------------- render
 class Engine:
-    def __init__(self, threads):
+    def __init__(self, threads, device='cpu'):
         import torch
         torch.set_num_threads(threads)
-        self.torch, self._m, self._asr = torch, {}, None
+        self.torch, self._m, self._asr, self.device = torch, {}, None, device
+        self.turbo = False
 
     def model(self, name):
         if name not in self._m:
             self._m.clear()                  # one model in RAM at a time
-            if name == 'en':
+            if name == 'turbo':
+                from chatterbox.tts_turbo import ChatterboxTurboTTS
+                self._m[name] = ChatterboxTurboTTS.from_pretrained(self.device)
+            elif name == 'en':
                 from chatterbox.tts import ChatterboxTTS
-                self._m[name] = ChatterboxTTS.from_pretrained('cpu')
+                self._m[name] = ChatterboxTTS.from_pretrained(self.device)
             else:
                 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
-                self._m[name] = ChatterboxMultilingualTTS.from_pretrained(self.torch.device('cpu'))
+                self._m[name] = ChatterboxMultilingualTTS.from_pretrained(self.torch.device(self.device))
+            if self.device == 'cuda' and hasattr(self._m[name], 't3'):
+                # the text-to-token model in half precision: a 4 GB laptop GPU shared with the desktop holds it, and
+                # a line takes about 2.5x its length instead of 15x on the CPU (the decoder stays in full precision)
+                self._m[name].t3.half()
+                self.torch.cuda.empty_cache()
         return self._m[name]
 
     def synth(self, job, seed):
         self.torch.manual_seed(seed)
-        ref = str(HERE / 'refs' / f"{job['ref']}.wav")
+        ref = HERE / 'refs' / f"{job['ref']}.wav"
+        if not ref.exists():  # no Hindi reference for this one: the English clip carries the voice into Hindi
+            ref = HERE / 'refs' / f"{job['ref'].rsplit('_', 1)[0]}_en.wav"
+        ref = str(ref)
+        amp = self.torch.autocast('cuda', dtype=self.torch.float16) if self.device == 'cuda' else contextlib.nullcontext()
+        with amp:
+            return self._synth(job, ref)
+
+    def _synth(self, job, ref):
         kw = dict(audio_prompt_path=ref, exaggeration=job['exaggeration'], cfg_weight=job['cfg'], temperature=job['temperature'])
-        if job['lang'] == 'en':
+        if job.get('engine') == 'turbo':
+            # Turbo: a one-step decoder, several times faster; it reads emotion from the text and the reference only
+            m = self.model('turbo')
+            w = m.generate(job['text'], audio_prompt_path=ref, temperature=job['temperature'])
+        elif job['lang'] == 'en':
             m = self.model('en')
             w = m.generate(job['text'], **kw)
         else:
@@ -313,10 +399,38 @@ def finish(y, sr, job):
         y = np.concatenate([np.zeros(int(d['pre'] * SR), np.float32), y, np.zeros(int(d['post'] * SR), np.float32)])
         sf.write(o, y, SR, subtype='FLOAT')
         Path(job['mp3']).parent.mkdir(parents=True, exist_ok=True)
-        tmp = job['mp3'] + '.tmp.mp3'
+        tmp = job['mp3'] + '.tmp.flac'
         _ff(['-i', str(o), '-af', f'alimiter=limit={PEAK_LIMIT}:attack=2:release=40:level=false', '-ac', '1', '-ar', str(SR),
-             '-c:a', 'libmp3lame', '-b:a', MP3_BITRATE, '-write_xing', '1', '-map_metadata', '-1', tmp])
+             '-c:a', 'flac', '-map_metadata', '-1', tmp])
         os.replace(tmp, job['mp3'])
+    return round(len(y) / SR, 2)
+
+
+def opus(src, dst: Path):
+    tmp = str(dst) + '.tmp.ogg'
+    _ff(['-i', str(src), '-ac', '1', *OPUS, '-map_metadata', '-1', tmp])
+    os.replace(tmp, dst)
+
+
+def join_parts(parts, dst: Path) -> float:
+    """One line from its speakers' parts: a short beat between people, the line's own tail at the end."""
+    import numpy as np
+    import soundfile as sf
+    with tempfile.TemporaryDirectory() as td:
+        ys = []
+        for i, p in enumerate(parts):
+            w = Path(td, f'{i}.wav')
+            _ff(['-i', p['mp3'], '-ac', '1', '-ar', str(SR), '-c:a', 'pcm_f32le', str(w)])
+            y, _ = sf.read(w, dtype='float32')
+            gap = 0.0 if i == 0 else (0.12 if p['speaker'] == parts[i - 1]['speaker'] else 0.32)
+            ys += [np.zeros(int(gap * SR), np.float32), y]
+        ys.append(np.zeros(int(parts[0]['post'] * SR), np.float32))
+        y = np.concatenate(ys)
+        o = Path(td, 'o.wav')
+        sf.write(o, y, SR, subtype='FLOAT')
+        tmp = str(dst) + '.tmp.ogg'
+        _ff(['-i', str(o), '-ac', '1', *OPUS, '-map_metadata', '-1', tmp])
+        os.replace(tmp, dst)
     return round(len(y) / SR, 2)
 
 
@@ -343,14 +457,24 @@ def publish(lang, jobs, out_root, prune):
     d.mkdir(parents=True, exist_ok=True)
     idx_p = d / 'index.json'
     index = load_json(idx_p) if idx_p.exists() else {}
+    groups = {}
     for j in jobs:
+        if 'part_of' in j:
+            groups.setdefault(j['part_of'], []).append(j)
+    for vkey, parts in groups.items():
+        parts.sort(key=lambda j: j['part'])
+        if len(parts) == parts[0]['parts'] and all(Path(p['meta']).exists() for p in parts):
+            index[vkey] = join_parts(parts, d / f'{vkey}.ogg')
+    for j in jobs:
+        if 'part_of' in j:
+            continue
         if Path(j['meta']).exists():
-            shutil.copyfile(j['mp3'], d / f"{j['key']}.mp3")
+            opus(j['mp3'], d / f"{j['key']}.ogg")
             index[j['key']] = load_json(Path(j['meta']))['duration']
     if prune:
-        keep = {j['key'] for j in jobs}
+        keep = {j.get('part_of', j['key']) for j in jobs}
         index = {k: v for k, v in index.items() if k in keep}
-        for f in d.glob('*.mp3'):
+        for f in [*d.glob('*.ogg'), *d.glob('*.mp3')]:
             if f.stem not in keep:
                 f.unlink()
                 log(f'  removed stale {f}')
@@ -368,6 +492,8 @@ def main():
     ap.add_argument('--force', action='store_true', help='ignore cache')
     ap.add_argument('--out', default=str(OUT_ROOT))
     ap.add_argument('--threads', type=int, default=16)
+    ap.add_argument('--device', default='cpu', help='cpu or cuda (Chatterbox fits a 4 GB GPU)')
+    ap.add_argument('--turbo', action='append', default=[], help='key globs rendered with Chatterbox Turbo (fast; no exaggeration control)')
     ap.add_argument('--max-cer', type=float, default=0.15, help='retake above this (Hindi and Urdu get +0.15: Whisper is weaker there)')
     ap.add_argument('--limit', type=int, default=0, help='stop after N new lines')
     ap.add_argument('--dry-run', action='store_true', help='print the text each line will read')
@@ -383,7 +509,7 @@ def main():
     hi_strings = load_json(I18N / 'hi.json')
     out_root = Path(args.out)
 
-    per_lang = {l: build_jobs(l, voice_map, voices, direction, load_json(I18N / f'{l}.json'), hi_strings, lexicon, only) for l in langs}
+    per_lang = {l: build_jobs(l, voice_map, voices, direction, load_json(I18N / f'{l}.json'), hi_strings, lexicon, only, (lambda k: any(fnmatch.fnmatchcase(k, o) for o in args.turbo)) if args.turbo else False) for l in langs}
     if args.dry_run:
         for l in langs:
             for j in per_lang[l]:
@@ -393,9 +519,10 @@ def main():
     for l in langs:
         jobs = per_lang[l]
         todo = [j for j in jobs if args.force or not Path(j['meta']).exists()]
+        todo.sort(key=lambda j: j.get('engine', ''))  # one model loaded at a time: all of one engine, then the other
         log(f'[{l}] {len(jobs)} lines, {len(todo)} to render')
         for n, j in enumerate(todo, 1):
-            engine = engine or Engine(args.threads)
+            engine = engine or Engine(args.threads, args.device)
             m = render(engine, j, args.max_cer + (0 if l == 'en' else 0.15))
             log(f"  [{n}/{len(todo)}] {l} {j['key']:<20} {m['duration']:5.2f}s cer {m['cer']:.2f} take {m['take']} in {m['secs']:.0f}s")
             publish(l, [j], out_root, False)

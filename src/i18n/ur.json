@@ -509,7 +509,7 @@
   "legal.parodyH": "افسانہ اور پیروڈی",
   "legal.parody": "کردار اور واقعات فرضی ہیں۔ Lamazon جیسے نام مزاح کے لیے گھڑی ہوئی پیروڈی ہیں۔ کوئی اصلی کمپنی اس گیم سے وابستہ نہیں اور نہ ہی اس کی تائید کرتی ہے۔",
   "legal.licencesH": "لائسنس اور کریڈٹ",
-  "legal.licences": "گیم کا کوڈ، آرٹ اور کہانی: جملہ حقوق محفوظ، megazron۔ three.js (MIT) سے بنا؛ Android ایپ Capacitor (MIT) سے۔ ٹیکسچر، اسکین کیے ماڈل اور HDRI: Poly Haven (CC0)۔ جسم: MakeHuman (CC0)۔ کپڑے: MakeHuman کمیونٹی کے اثاثے، کچھ CC BY کے تحت Elvaerwyn، Mindfront اور punkduck کے (فٹ کیے، ہلکے کیے اور رنگ بدلے)، باقی CC0۔ اینیمیشن: Quaternius (CC0) اور CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu)۔ فونٹ: SIL Open Font License۔ آوازیں مصنوعی ہیں (Kokoro-82M، Apache-2.0)۔ ہر لائسنس کی مکمل فہرست GitHub پر CREDITS.md میں ہے۔",
+  "legal.licences": "گیم کا کوڈ، آرٹ اور کہانی: جملہ حقوق محفوظ، megazron۔ three.js (MIT) سے بنا؛ Android ایپ Capacitor (MIT) سے۔ ٹیکسچر، اسکین کیے ماڈل اور HDRI: Poly Haven (CC0)۔ جسم: MakeHuman (CC0)۔ کپڑے: MakeHuman کمیونٹی کے اثاثے، کچھ CC BY کے تحت Elvaerwyn، Mindfront اور punkduck کے (فٹ کیے، ہلکے کیے اور رنگ بدلے)، باقی CC0۔ اینیمیشن: Quaternius (CC0) اور CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu)۔ فونٹ: SIL Open Font License۔ موسیقی: Kevin MacLeod (incompetech.com)، CC BY 4.0۔ صوتی اثرات اور ماحول: Kenney (CC0) اور CC0 والی Freesound ریکارڈنگز۔ آوازیں مصنوعی ہیں (Chatterbox، MIT، اور Kokoro-82M، Apache-2.0)؛ زینوورا کے لوگوں کی آوازیں LibriTTS-R ریفرنس کلپس سے بنی ہیں (Google، CC BY 4.0)۔ ہر لائسنس کی مکمل فہرست GitHub پر CREDITS.md میں ہے۔",
   "legal.readFull": "مکمل دستاویزات GitHub پر",
   "legal.privacyLink": "پرائیویسی پالیسی",
   "age.stone": "پتھر کا دور",
@@ -1123,5 +1123,15 @@
   "city.map.d.waterfront": "ساحل",
   "city.map.d.north": "شمالی بستی",
   "city.map.d.park": "رنگ پارک",
-  "city.map.d.bay": "زینوورا خلیج"
+  "city.map.d.bay": "زینوورا خلیج",
+  "pull.ai1": "راستے کی درستی ناکام۔ جہاز بے قاعدگی کی طرف کھنچ رہا ہے۔ تمام مسافر، سنبھل جائیں۔",
+  "pull.strong": "میری ڈرنک ایک طرف کیوں تیر رہی ہے؟",
+  "pull.medic": "سب لوگ بیلٹ باندھو۔ یہ ڈاکٹر کا حکم ہے۔",
+  "pull.social": "میں لائیو جا رہی ہوں۔ اگر یہ آخر ہے، تو کم از کم کانٹینٹ تو بنے گا۔",
+  "pull.explorer": "ہم آہستہ نہیں ہو رہے۔ ہم تیز کیوں ہو رہے ہیں؟!",
+  "pull.builder": "ٹکے گا۔ ٹکے گا۔ نہیں ٹکے گا۔",
+  "pull.scientist": "یہ طوفان نہیں ہے۔ کوئی چیز ہمیں اندر کھینچ رہی ہے، اور وہ چھوڑتی نہیں۔",
+  "pull.ai2": "مدّی دباؤ نازک۔ ڈھانچے کی مضبوطی 19 فیصد۔ خدا حافظ۔",
+  "mz.pull.1": "اور ننھے مسافرو، بلیک ہول چھٹیوں کے ساتھ یہی کرتا ہے۔",
+  "mz.pull.2": "اتنے پریشان مت دکھو۔ پہلے باب میں کوئی نہیں مرتا۔ خیر۔ زیادہ دیر کے لیے نہیں۔"
 }

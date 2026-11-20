@@ -35,7 +35,7 @@ def main():
         new = json.loads((tmp / lang / 'index.json').read_text())
         for k, dur in new.items():
             if k not in idx:
-                shutil.copy(tmp / lang / f'{k}.mp3', VO / lang / f'{k}.mp3')
+                subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(tmp / lang / f'{k}.mp3'), '-ac', '1', '-c:a', 'libopus', '-b:a', '28k', str(VO / lang / f'{k}.ogg')], check=True)
                 idx[k] = dur
         (VO / lang / 'index.json').write_text(json.dumps(idx, ensure_ascii=False, indent=0))
         print(lang, 'now', len(idx), flush=True)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Mouth tracks for every voice clip, read from the audio itself.
 
-For each public/audio/vo/<lang>/*.mp3 this writes one entry in lipsync.json:
+For each public/audio/vo/<lang>/*.ogg this writes one entry in lipsync.json:
 25 frames per second, three values 0..9 per frame as a digit string:
   open  : loudness envelope (jaw)
   round : share of energy below 700 Hz in voiced frames (oo, oh)
@@ -60,7 +60,7 @@ def main():
     for d in sorted((ROOT / 'public' / 'audio' / 'vo').iterdir()):
         if not d.is_dir():
             continue
-        out = {f.stem: track(pcm(f)) for f in sorted(d.glob('*.mp3'))}
+        out = {f.stem: track(pcm(f)) for f in sorted(d.glob('*.ogg'))}
         (d / 'lipsync.json').write_text(json.dumps(out, separators=(',', ':')))
         print(d.name, len(out), (d / 'lipsync.json').stat().st_size // 1024, 'KiB')
 

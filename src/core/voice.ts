@@ -22,11 +22,15 @@ class Voice {
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
   private src: AudioBufferSourceNode | null = null;
   private token = 0;
+  /** Test hook (recordings): every line started on a held clock, to lay the soundtrack under recorded frames. */
+  log: { path: string; at: number; vol: number }[] = [];
   /** Last line started (read by the tests). */
   lastKey: string | null = null;
   played = 0;
 
   async load(lang: Lang = this.lang) {
+    // lines nobody has dubbed in Hindi or Urdu yet are spoken in English, under their own subtitles
+    if (lang !== 'en') await this.load('en');
     void this.loadLips(lang);
     this.takesLoaded ??= fetch(`${BASE}audio/voice/override/index.json`)
       .then(async (r) => { if (r.ok) this.takes = await r.json(); })
@@ -39,25 +43,34 @@ class Voice {
     } catch { this.index[lang] = {}; }
   }
 
+  /** Generated takes are Opus in Ogg (tools/tts/generate_voice.py). */
+  private ext = 'ogg';
   /** Spoken language; null follows the game language. */
   override: Lang | null = null;
   private get lang(): Lang { return this.override ?? getLang(); }
 
+  /** The language a take is spoken in: the game's, or English where that language has no take of it. */
+  private langOf(file: string): Lang {
+    const has = (l: Lang) => this.takes[l]?.[file] !== undefined || this.index[l]?.[file] !== undefined;
+    return has(this.lang) || !has('en') ? this.lang : 'en';
+  }
   private has(file: string): boolean {
-    return this.takes[this.lang]?.[file] !== undefined || this.index[this.lang]?.[file] !== undefined;
+    const l = this.langOf(file);
+    return this.takes[l]?.[file] !== undefined || this.index[l]?.[file] !== undefined;
   }
 
   private seconds(file: string): number {
-    return this.takes[this.lang]?.[file]?.d ?? this.index[this.lang]![file];
+    const l = this.langOf(file);
+    return this.takes[l]?.[file]?.d ?? this.index[l]![file];
   }
 
   /** URLs to try for a line, best first. Safari may refuse .ogg, so mp3/m4a win when both exist. */
   private urls(file: string): string[] {
-    const lang = this.lang, name = encodeURIComponent(file);
+    const lang = this.langOf(file), name = encodeURIComponent(file);
     const formats = this.takes[lang]?.[file]?.f ?? [];
     const recorded = ['mp3', 'm4a', 'ogg'].filter((e) => formats.includes(e))
       .map((e) => `${BASE}audio/voice/override/${lang}/${name}.${e}`);
-    return this.index[lang]?.[file] !== undefined ? [...recorded, `${BASE}audio/vo/${lang}/${name}.mp3`] : recorded;
+    return this.index[lang]?.[file] !== undefined ? [...recorded, `${BASE}audio/vo/${lang}/${name}.${this.ext}`] : recorded;
   }
 
   /** File key for a line: name-free take if a crewmate named in it was renamed. */
@@ -104,6 +117,7 @@ class Voice {
     if (!f) return null;
     const dur = this.seconds(f);
     this.lastKey = key; this.played++;
+    if (this.manual) { this.log.push({ path: `audio/vo/${this.langOf(f)}/${f}.${this.ext}`, at: this.manual(), vol: 1 }); if (this.log.length > 400) this.log.shift(); }
     this.stop();
     const tk = ++this.token;
     // on a held clock (recordings) the mouth runs on the game's time, from the moment the line starts
@@ -135,6 +149,7 @@ class Voice {
   manual: (() => number) | null = null;
   private manualEnd = 0;
   private async loadLips(lang: Lang) {
+    if (lang !== 'en') void this.loadLips('en');
     if (this.lips[lang]) return;
     this.lips[lang] = {};
     try { const r = await fetch(`${BASE}audio/vo/${lang}/lipsync.json`); if (r.ok) this.lips[lang] = await r.json(); } catch { /* mouths stay shut */ }
@@ -149,7 +164,7 @@ class Voice {
     const now = this.manual ? this.manual() : audio.ctx?.currentTime ?? 0;
     const file = this.lipFile;
     if (!file || (this.manual ? now > this.manualEnd : !this.src || !audio.ctx)) return out;
-    const tr = this.lips[this.lang]?.[file];
+    const tr = this.lips[this.langOf(file)]?.[file];
     if (!tr) return out;
     const [a, b, c] = tr.split('|');
     const f = (now - this.startedAt) * 25, i = Math.floor(f), k = f - i;

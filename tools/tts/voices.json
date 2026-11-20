@@ -116,6 +116,95 @@
     "ref": "cameo",
     "pace": 0.97
    }
+  },
+  "ammi": {
+   "role": "the player's mother, on a video call: warm, worried, firm. Reference: LibriTTS-R dev-clean (CC BY 4.0), see libritts_cast.json",
+   "all": {
+    "ref": "ammi",
+    "pace": 0.97
+   }
+  },
+  "chaiwala": {
+   "role": "chai stall uncle: deep, slow, amused. Reference: LibriTTS-R dev-clean (CC BY 4.0), see libritts_cast.json",
+   "all": {
+    "ref": "chaiwala",
+    "pace": 0.95,
+    "pitch": -1
+   }
+  },
+  "aunty": {
+   "role": "rishta aunty: bright, quick, nosy. Reference: LibriTTS-R dev-clean (CC BY 4.0), see libritts_cast.json",
+   "all": {
+    "ref": "aunty",
+    "pace": 1.05,
+    "pitch": 0.5
+   }
+  },
+  "clerk": {
+   "role": "Capple store clerk: quick, bored salesman. Reference: LibriTTS-R dev-clean (CC BY 4.0), see libritts_cast.json",
+   "all": {
+    "ref": "clerk",
+    "pace": 1.04
+   }
+  },
+  "driver": {
+   "role": "hover-auto driver: fast haggler. Reference: LibriTTS-R dev-clean (CC BY 4.0), see libritts_cast.json",
+   "all": {
+    "ref": "driver",
+    "pace": 1.1
+   }
+  },
+  "kid1": {
+   "role": "cricket kid: loud, cheeky. Reference: LibriTTS-R dev-clean (CC BY 4.0), see libritts_cast.json",
+   "all": {
+    "ref": "kid1",
+    "pace": 1.08,
+    "fx": "rubberband=pitch=1.22:formant=shifted"
+   }
+  },
+  "kid2": {
+   "role": "cricket kid: smug, cheeky. Reference: LibriTTS-R dev-clean (CC BY 4.0), see libritts_cast.json",
+   "all": {
+    "ref": "kid2",
+    "pace": 1.05,
+    "fx": "rubberband=pitch=1.18:formant=shifted"
+   }
+  },
+  "queue1": {
+   "role": "hungry man in the biryani queue: low, weary. Reference: LibriTTS-R dev-clean (CC BY 4.0), see libritts_cast.json",
+   "all": {
+    "ref": "queue1",
+    "pace": 0.95
+   }
+  },
+  "queue2": {
+   "role": "hungry woman in the biryani queue: brisk, dreamy about food. Reference: LibriTTS-R dev-clean (CC BY 4.0), see libritts_cast.json",
+   "all": {
+    "ref": "queue2",
+    "pace": 1.0
+   }
+  },
+  "pharma": {
+   "role": "pharmacist: calm, patient, a little tired. Reference: LibriTTS-R dev-clean (CC BY 4.0), see libritts_cast.json",
+   "all": {
+    "ref": "pharma",
+    "pace": 0.98
+   }
+  },
+  "tourist": {
+   "role": "tourist: light, curious, a bit lost. Reference: LibriTTS-R dev-clean (CC BY 4.0), see libritts_cast.json",
+   "all": {
+    "ref": "tourist",
+    "pace": 1.02
+   }
+  },
+  "locker": {
+   "role": "parcel locker: a cheerful machine. Reference: LibriTTS-R dev-clean (CC BY 4.0), see libritts_cast.json",
+   "all": {
+    "ref": "locker",
+    "pace": 1.02,
+    "fx": "highpass=f=320,lowpass=f=5200,aecho=0.8:0.6:4:0.3,acrusher=bits=10:mix=0.25,equalizer=f=1800:t=q:w=1:g=4"
+   }
   }
  }
 }
