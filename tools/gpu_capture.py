@@ -53,6 +53,7 @@ class CDP:
         while b'\r\n\r\n' not in b:
             b += s.c.recv(1)
         s.i, s.lock, s.waiting, s.events = 0, threading.Lock(), {}, queue.Queue()
+        s.idlock = threading.Lock()
         s.on_event = None
         threading.Thread(target=s.reader, daemon=True).start()
 
@@ -96,9 +97,13 @@ class CDP:
                 s.on_event(r)
 
     def call(s, method, **params):
-        s.i += 1; q = queue.Queue(); s.waiting[s.i] = q
-        s.frame(json.dumps({'id': s.i, 'method': method, 'params': params}).encode())
+        # frames are acknowledged from their own threads: the id must be taken under a lock, or two calls share one
+        # and an answer goes to the wrong caller (a recording then died with a timeout while the page was fine)
+        with s.idlock:
+            s.i += 1; i = s.i; q = queue.Queue(); s.waiting[i] = q
+        s.frame(json.dumps({'id': i, 'method': method, 'params': params}).encode())
         r = q.get(timeout=120)
+        s.waiting.pop(i, None)
         if 'error' in r:
             raise RuntimeError(r['error'])
         return r['result']
