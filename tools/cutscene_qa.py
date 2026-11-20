@@ -194,6 +194,12 @@ def main():
                 page.evaluate('__bs.hold(false)')
                 page.wait_for_function("__bs.state === 'game' && __bs.mode === 'play'", timeout=60000)
                 time.sleep(1.5)
+        # lines cut off by the next line while the scenes ran (the game writes them down): listed, so a new one is seen
+        try:
+            for c in page.evaluate('__bs.voice.cuts')[:20]:
+                print(f"line cut short: {c['cut']} by {c['by']} with {c['left']} s left", flush=True)
+        except Exception:
+            pass
         b.close()
     httpd.shutdown()
     real = [e for e in errors if 'fonts.g' not in e and 'net::ERR' not in e]
