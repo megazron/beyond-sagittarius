@@ -41,6 +41,10 @@ const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
 /** What each task holds unless told otherwise. */
 const TASK_PROP: Partial<Record<TaskKind, PropKind>> = { eat: 'food', drink: 'cup', phone: 'phone', carry: 'box', fix: 'tool', type: 'phone' };
 const LOW_TASKS: Partial<Record<TaskKind, number>> = { pickup: 1, drink: 1, fix: 0.85, plant: 1 };
+/** What the fingers of every character did since the page loaded (read by the checks): the largest bend of any finger
+ * joint from its rest, in radians, and the fastest any joint turned, in radians a second. */
+export const HANDS = { maxCurl: 0, maxRate: 0, frames: 0 };
+
 export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'injured' | 'wave' | 'lie' | 'point' | 'cheer' | 'facepalm' | 'selfie' | 'shout' | 'argue' | 'present' | 'write' | 'jump';
 
 /**
@@ -245,6 +249,21 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   // idle life: a look around now and then, the weight moving from foot to foot
   let idleLookAt = 3 + Math.random() * 5, idleLook = 0, idleLookWant = 0, idleShift = Math.random() * 6;
   const fingerRest = new Map<THREE.Bone, THREE.Quaternion>();
+  // Hands are posed here and nowhere else. The clips' own finger keys are not played: they are a mix of tight fists,
+  // claws and hand-keyed loops, and blending from one clip to the next made the fingers crunch. Each hand holds one
+  // authored shape (at ease, open, round a thing, pointing) and moves to the next one smoothly, inside what a finger
+  // can do.
+  type HandShape = 'relaxed' | 'open' | 'grip' | 'point';
+  const SHAPES: Record<HandShape, number[][]> = { // degrees of curl per joint: index, middle, ring, little, thumb
+    relaxed: [[12, 28, 18], [18, 32, 22], [22, 36, 24], [26, 38, 26], [10, 12, 10]],
+    open: [[2, 6, 4], [2, 6, 4], [3, 6, 4], [4, 8, 4], [0, 4, 4]],
+    grip: [[48, 74, 46], [50, 76, 48], [52, 76, 48], [54, 76, 46], [16, 22, 24]],
+    point: [[2, 6, 4], [58, 90, 60], [62, 90, 60], [64, 90, 58], [20, 28, 28]],
+  };
+  const fingers: { b: THREE.Bone; side: 'L' | 'R'; q: Record<HandShape, THREE.Quaternion>; cur: THREE.Quaternion }[] = [];
+  let handOpen = false, handsSet = false;
+  let selfieT = 0, selfieHeld = false; const V4s = new THREE.Vector3();
+  const selfM = { a: new THREE.Vector3(), b: new THREE.Vector3(), l: new THREE.Matrix4(), q0: new THREE.Quaternion(), qi: new THREE.Quaternion(), x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), m: new THREE.Matrix4(), q: new THREE.Quaternion() };
   let gaitPhase = 0, inited = false, hipDrop = 0, sacAt = 1, sacX = 0, sacY = 0, firstFrame = true, eyeAimX = 0, eyeAimY = 0;
   const footOff = [0, 0];
   const pin = [new THREE.Vector3(), new THREE.Vector3()], pinOff = [new THREE.Vector3(), new THREE.Vector3()], pinned = [false, false];
@@ -389,6 +408,26 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     fig.add(scene);
     scene.updateMatrixWorld(true);
     bs.forEach((b, n) => { if (n.startsWith('finger')) fingerRest.set(b, b.quaternion.clone()); });
+    {
+      const P3 = (n: string) => new THREE.Vector3(...M.pivots[n]);
+      const col = [4, 0, 1, 2, 3]; // finger1 is the thumb
+      for (const [sd, sg] of [['L', 1], ['R', -1]] as ['L' | 'R', number][]) {
+        if (!M.pivots[`finger3_1${sd}`] || !M.pivots[`finger5_1${sd}`]) continue;
+        const d = P3(`finger3_1${sd}`).sub(P3(`hand${sd}`)).normalize();
+        const n = new THREE.Vector3().crossVectors(d, P3(`finger2_1${sd}`).sub(P3(`finger5_1${sd}`))).multiplyScalar(sg).normalize();
+        for (let f = 1; f <= 5; f++) {
+          if (!M.pivots[`finger${f}_2${sd}`]) continue;
+          const hinge = new THREE.Vector3().crossVectors(P3(`finger${f}_2${sd}`).sub(P3(`finger${f}_1${sd}`)).normalize(), n).normalize();
+          for (let j = 1; j <= 3; j++) {
+            const b = bs.get(`finger${f}_${j}${sd}`); if (!b) continue;
+            const rest = fingerRest.get(b)!;
+            const q = {} as Record<HandShape, THREE.Quaternion>;
+            for (const k of Object.keys(SHAPES) as HandShape[]) q[k] = rest.clone().multiply(new THREE.Quaternion().setFromAxisAngle(hinge, SHAPES[k][col[f - 1]][j - 1] * Math.PI / 180));
+            fingers.push({ b, side: sd, q, cur: q.relaxed.clone() });
+          }
+        }
+      }
+    }
     // handles onto the skeleton
     const on = (g: THREE.Object3D, n: string) => { g.position.set(0, 0, 0); bs.get(n)!.add(g); };
     on(body, 'hips'); on(chest, 'chest'); on(head, 'head'); on(legL, 'upperlegL'); on(legR, 'upperlegR');
@@ -650,7 +689,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     aim('upperarmR', 'lowerarmR', l.armR); aim('lowerarmR', 'handR', l.foreR ?? l.armR);
     aim('upperlegL', 'lowerlegL', l.legL); aim('lowerlegL', 'footL', l.shinL ?? l.legL);
     aim('upperlegR', 'lowerlegR', l.legR); aim('lowerlegR', 'footR', l.shinR ?? l.legR);
-    if (l.openHands) fingerRest.forEach((q, b) => b.quaternion.copy(q));
+    if (l.openHands) handOpen = true;
   }
 
   /** 0..1: how far into its task the body is (eases in, holds, eases out). */
@@ -820,7 +859,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (limp && speed < 2) gaitPhase = (gaitPhase + dt / A!.meta.limp.dur * (speed / Math.max(A!.meta.limp.speed * legScale, 0.05))) % 1;
       for (const p of parts) if (p.w > 0) action(p.n, true).target += p.w;
     } else {
-      const name = kind === 'idle' ? style.idle : kind === 'walk' ? 'stand' : kind === 'swim' ? (speed > 0.35 ? 'swim' : 'swim_idle') : kind;
+      const name = kind === 'idle' ? style.idle : kind === 'walk' ? 'stand' : kind === 'swim' ? (speed > 0.35 ? 'swim' : 'swim_idle') : kind === 'selfie' ? style.idle : kind; // the selfie is acted on top of the idle (selfieArm), not a clip
       const s = action(clips!.has(name) ? name : 'stand', false);
       s.target = 1;
       s.a.timeScale = style.rate;
@@ -872,6 +911,41 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (task) taskArms(bs, kind, t, dt);
     else if (kind === 'idle' && !gaze && speak <= 0 && !moving) idleLife(bs, t, dt);
     else { idleLook *= Math.exp(-dt * 3); }
+    // ---- the selfie: one authored action, not a clip ----
+    // The arm comes up and out to her right, the phone stands upright with its screen to her face, she looks into it;
+    // it is held with a slow breath of movement, and goes down the way it came. The clip that did this before swung
+    // the hand through a half turn between keys.
+    selfieT += ((kind === 'selfie' && !task ? 1 : 0) - selfieT) * (1 - Math.exp(-dt * 2.6));
+    const sw = selfieT * selfieT * (3 - 2 * selfieT);
+    if (sw > 0.004 && !task) {
+      root.updateWorldMatrix(true, true);
+      const up = bs.get('upperarmR')!, lo = bs.get('lowerarmR')!, hd = bs.get('handR')!, head = bs.get('head')!;
+      const fwd = V4.set(0, 0, 1).transformDirection(root.matrixWorld), side = V5.set(-1, 0, 0).transformDirection(root.matrixWorld);
+      head.getWorldPosition(SA);
+      const goal = SB.copy(SA).addScaledVector(side, 0.27).addScaledVector(fwd, 0.4).add(V1.set(0, 0.1 + Math.sin(t * 0.9) * 0.008, 0));
+      const qu = (taskQ.get('selfU') ?? taskQ.set('selfU', new THREE.Quaternion()).get('selfU')!).copy(up.quaternion);
+      const ql = (taskQ.get('selfL') ?? taskQ.set('selfL', new THREE.Quaternion()).get('selfL')!).copy(lo.quaternion);
+      solveLeg(up, lo, hd, goal.clone());
+      up.quaternion.copy(qu.slerp(up.quaternion, sw)); lo.quaternion.copy(ql.slerp(lo.quaternion, sw));
+      up.updateWorldMatrix(false, true);
+      // the hand: fingers up, the screen (the hand's rest +z) towards her eyes
+      hd.getWorldPosition(V4s);
+      // which way the fingers and the screen lie in the hand's own frame, read from the skeleton as it is
+      hd.getWorldQuaternion(selfM.q0);
+      const fl = selfM.a.copy(bs.get('finger3_1R')!.getWorldPosition(V1)).sub(V4s).normalize().applyQuaternion(selfM.qi.copy(selfM.q0).invert());
+      const nl = selfM.b.set(0, -1, 0); nl.addScaledVector(fl, -nl.dot(fl)).normalize(); // the palm: what holds the phone faces her
+      selfM.y.crossVectors(nl, fl); selfM.l.makeBasis(fl, selfM.y, nl);
+      const upW = selfM.x.set(0, 1, 0).addScaledVector(side, 0.1).addScaledVector(fwd, 0.1).normalize();
+      const toHead = selfM.z.copy(SA).add(V1.set(0, 0.04, 0)).sub(V4s).normalize();
+      toHead.addScaledVector(upW, -toHead.dot(upW)).normalize();
+      selfM.y.crossVectors(toHead, upW);
+      selfM.m.makeBasis(upW, selfM.y, toHead).multiply(selfM.l.transpose()); selfM.q.setFromRotationMatrix(selfM.m);
+      hd.parent!.getWorldQuaternion(Q).invert(); selfM.q.premultiply(Q);
+      hd.quaternion.slerp(selfM.q, sw);
+      if (!gaze) headLook(bs, V4s, sw * 0.7);
+      if (id !== 'social') showProp(bs, 'phone', sw); // Nuvexa's own phone is part of her
+    } else if (selfieHeld && !task) showProp(bs, null, 0);
+    selfieHeld = sw > 0.004;
     // head look-at, clamped and shared with the neck; the eyes lead
     // someone to look at: only within what a neck can do, otherwise ease back to the front
     let wantY = 0, wantX = 0;
@@ -919,13 +993,23 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       hb.quaternion.premultiply(TH.invert());
     }
 
-    // the thumb's root bone turns in less than the clip asks: the skin from the thumb's base to the wrist blends it
-    // with the hand and the forearm, and a full fist folded it over itself in a groove you saw into
-    for (const sd of ['L', 'R']) { const t1 = bs.get(`finger1_1${sd}`); if (t1) t1.quaternion.slerp(Q.identity(), 0.45); }
-
-    // relaxed hands: the clips close the fingers into tight fists and claws; a third of the way back to the open rest
-    // pose reads as a hand at ease (a pointing finger stays pointing, a fist stays a loose fist)
-    fingerRest.forEach((q, b) => { if (!b.name.startsWith('finger1_1')) b.quaternion.slerp(q, 0.3); });
+    // ---- hands: one authored shape each, reached smoothly; nothing from the clips ----
+    {
+      const shapeR: HandShape = handOpen ? 'open' : (propOn && propOn.parent === bs.get('handR')) || kind === 'selfie' || kind === 'write' ? 'grip' : kind === 'point' ? 'point' : 'relaxed';
+      const shapeL: HandShape = handOpen ? 'open' : 'relaxed';
+      const a = handsSet ? 1 - Math.exp(-dt * 6) : 1;
+      let worst = 0, step = 0;
+      for (const f of fingers) {
+        const to = f.q[f.side === 'R' ? shapeR : shapeL];
+        if (dt > 0 && handsSet) step = Math.max(step, f.cur.angleTo(to) * a / dt);
+        f.cur.slerp(to, a); f.b.quaternion.copy(f.cur);
+        worst = Math.max(worst, f.cur.angleTo(fingerRest.get(f.b)!));
+      }
+      handsSet = true; handOpen = false;
+      if (worst > HANDS.maxCurl) HANDS.maxCurl = worst;
+      if (step > HANDS.maxRate) HANDS.maxRate = step;
+      HANDS.frames++;
+    }
 
     // ---- face ----
     const r = 1 - Math.exp(-dt * 10);
