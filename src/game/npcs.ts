@@ -33,6 +33,8 @@ interface Npc {
 }
 
 const LOOK = new THREE.Vector3();
+/** Where the player comes down and wakes (world spawn). */
+const LANDING = { x: 0, z: 2 };
 const look = (lineage: PlayerLook['lineage'], o: Partial<PlayerLook>): PlayerLook => ({ ...defaultLook(), lineage, ...LINEAGES[lineage], ...o });
 
 /**
@@ -68,7 +70,7 @@ export class Npcs {
       this.world.scene.add(fig.root);
       this.list.push({ id, fig, home, pos: home.clone(), target: home.clone(), yaw: 0, phase: 0, speed: 0, wait: 1 + Math.random() * 3, roam, pose: 'idle', greeted: false });
     };
-    add('trader', createCharacter('scientist', d, look('ortek', { outfit: 'builder', hair: 'builder', hairRoot: 0x6a2bd0, hairTip: 0xffb0e6, height: 0.94, build: 0.8, gender: 'm', eye: 'squint', accent: 0xffb13a })), at(L.camp.x + 26, L.camp.z - 18), 26);
+    add('trader', createCharacter('scientist', d, look('ortek', { outfit: 'builder', hair: 'builder', hairRoot: 0x6a2bd0, hairTip: 0xffb0e6, height: 0.94, build: 0.8, gender: 'm', eye: 'squint', accent: 0xffb13a })), at(L.camp.x + 46, L.camp.z - 32), 16);
     add('local', createCharacter('scientist', d, look('vael', { skin: 0x2f8f8f, ears: 'fin', tail: true, marks: 'stars', glow: 0x7fff8a, outfit: 'explorer', hair: 'medic', hairRoot: 0x12a48c, hairTip: 0xb6ff5a, height: 0.92, build: 0.1, gender: 'f', eye: 'doll', iris: 0x7fff8a })), at(L.pod.x - 34, L.pod.z + 30), 18);
     add('hermit', createCharacter('scientist', d, look('korrath', { skin: 0x8f5b3f, horns: false, outfit: 'medic', hair: 'medic', hairRoot: 0xb6b8dc, hairTip: 0xe9e6f8, height: 0.96, build: 0.05, gender: 'm', eye: 'tired', iris: 0xffc23a })), at(L.ridge.x + 7, L.ridge.z + 5), 3);
     add('trav', createCharacter('scientist', d, look('sirelle', { skin: 0xe6c3a0, marks: 'dots', glow: 0xffa030, outfit: 'social', hair: 'scientist', hairRoot: 0x2a1a14, hairTip: 0x6a4a34, gender: 'm', build: 0.55, eye: 'tired', iris: 0x8a5a34, eyeGlow: false })), at(L.pod2.x + 18, L.pod2.z - 12), 7);
@@ -299,7 +301,9 @@ export class Npcs {
     const p = this.player.pos;
     for (const n of this.list) {
       const dist = n.pos.distanceTo(p);
-      const near = dist < 140;
+      // you wake up alone: nobody is anywhere near for the first two levels, and nobody ever wanders up to the landing
+      // site on their own (the story has not introduced them; you find them by going out)
+      const near = dist < 140 && this.s.level >= 3;
       n.fig.root.visible = near;
       if (!near) continue;
       if (n.roam > 0) {
@@ -312,7 +316,7 @@ export class Npcs {
             for (let k = 0; k < 8; k++) {
               const a = Math.random() * Math.PI * 2, r = Math.random() * n.roam;
               n.target.set(n.home.x + Math.cos(a) * r, 0, n.home.z + Math.sin(a) * r);
-              if (this.world.terrain.height(n.target.x, n.target.z) > DRY) break;
+              if (this.world.terrain.height(n.target.x, n.target.z) > DRY && Math.hypot(n.target.x - LANDING.x, n.target.z - LANDING.z) > 30) break;
               n.target.set(n.pos.x, 0, n.pos.z);
             }
             n.wait = 3 + Math.random() * 6;
