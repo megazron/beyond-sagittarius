@@ -897,6 +897,9 @@ export class Game {
     for (let k = 0; k < Math.round(sec / dt); k++) {
       if (this.mode === 'dead') break;
       this.update(dt, time + k * dt);
+      // a mouse move turns the view once, as it does on a real frame: when the browser stops drawing (headless pointer
+      // lock does), nothing else clears it, and every step would turn again and walk the player in circles
+      this.input.lookDX = this.input.lookDY = 0;
     }
   }
 
