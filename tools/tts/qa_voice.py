@@ -29,8 +29,31 @@ def pcm(path: Path) -> np.ndarray:
     return np.frombuffer(raw, dtype=np.float32)
 
 
+_ONES = 'zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen'.split()
+_TENS = '  twenty thirty forty fifty sixty seventy eighty ninety'.split(' ')
+
+
+def _words(n: int) -> str:
+    if n < 20:
+        return _ONES[n]
+    if n < 100:
+        return _TENS[n // 10] + ('' if n % 10 == 0 else ' ' + _ONES[n % 10])
+    if n < 1000:
+        return _ONES[n // 100] + ' hundred' + ('' if n % 100 == 0 else ' ' + _words(n % 100))
+    if n < 1000000:
+        return _words(n // 1000) + ' thousand' + ('' if n % 1000 == 0 else ' ' + _words(n % 1000))
+    return str(n)
+
+
+def spell_numbers(s: str) -> str:
+    """Whisper writes '26,000' and '1%' where the script says 'twenty-six thousand' and 'one percent': the same
+    words. Spelled out before the comparison, so a correct take is not scored as drift."""
+    s = re.sub(r'(?<=\d),(?=\d{3})', '', s).replace('%', ' percent')
+    return re.sub(r'\d+', lambda m: _words(int(m.group(0))), s)
+
+
 def norm(s: str) -> str:
-    s = unicodedata.normalize('NFKC', s).lower()
+    s = spell_numbers(unicodedata.normalize('NFKC', s).lower())
     s = re.sub(r'\{[nf]:[a-z]+\}', '', s)
     return ''.join(c for c in s if unicodedata.category(c)[0] in 'LM' or c.isdigit())
 

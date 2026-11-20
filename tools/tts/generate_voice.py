@@ -434,11 +434,11 @@ def join_parts(parts, dst: Path) -> float:
     return round(len(y) / SR, 2)
 
 
-def render(engine, job, max_cer):
+def render(engine, job, max_cer, takes=MAX_TAKES):
     """Best of up to MAX_TAKES seeds: stop at the first take close enough to the script."""
     t0, best = time.time(), None
     seed0 = int(job['hash'][:6], 16)
-    for n in range(MAX_TAKES):
+    for n in range(takes):
         y, sr = engine.synth(job, seed0 + n)
         c = engine.cer(y, sr, job)
         if best is None or c < best[0]:
@@ -496,6 +496,7 @@ def main():
     ap.add_argument('--turbo', action='append', default=[], help='key globs rendered with Chatterbox Turbo (fast; no exaggeration control)')
     ap.add_argument('--max-cer', type=float, default=0.15, help='retake above this (Hindi and Urdu get +0.15: Whisper is weaker there)')
     ap.add_argument('--limit', type=int, default=0, help='stop after N new lines')
+    ap.add_argument('--takes', type=int, default=MAX_TAKES, help='seeds to try per line before keeping the closest (with --force and --only, to redo a line that drifted)')
     ap.add_argument('--dry-run', action='store_true', help='print the text each line will read')
     args = ap.parse_args()
     warnings.filterwarnings('ignore')
@@ -523,7 +524,7 @@ def main():
         log(f'[{l}] {len(jobs)} lines, {len(todo)} to render')
         for n, j in enumerate(todo, 1):
             engine = engine or Engine(args.threads, args.device)
-            m = render(engine, j, args.max_cer + (0 if l == 'en' else 0.15))
+            m = render(engine, j, args.max_cer + (0 if l == 'en' else 0.15), args.takes)
             log(f"  [{n}/{len(todo)}] {l} {j['key']:<20} {m['duration']:5.2f}s cer {m['cer']:.2f} take {m['take']} in {m['secs']:.0f}s")
             publish(l, [j], out_root, False)
             done += 1
