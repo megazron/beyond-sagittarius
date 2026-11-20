@@ -93,3 +93,84 @@ export function underCloth(skin: THREE.SkinnedMesh, cloth: THREE.SkinnedMesh): n
   g.userData.under = count;
   return count;
 }
+
+/**
+ * The same for one garment under another: Lyrra's shirt came through her coat as jagged shards in close-ups. A cloth
+ * vertex whose cone of rays mostly hits a garment of a higher layer (the coat over the shirt) is drawn with that outer
+ * garment's texture (`aOver`). Where the outer garment is open (a coat's front) the cone finds air and the inner one
+ * shows as itself. `layers` is the body's layer per atlas tile, as the cloth shader reads it.
+ */
+export function overCloth(cloth: THREE.SkinnedMesh, layers: number[]): number {
+  const g = cloth.geometry;
+  if (g.userData.over !== undefined) return g.userData.over as number;
+  const index = g.getIndex(), uv = g.getAttribute('uv'), pos = g.getAttribute('position'), nor = g.getAttribute('normal');
+  if (!index || !uv || !pos || !nor || layers.length < 2) { g.userData.over = 0; return 0; }
+  const tiles = layers.length;
+  const layerOf = (i: number) => { const u = uv.getX(i), w = uv.getY(i); const k = tiles < 3 ? (u >= 0.5 ? 1 : 0) : (u >= 0.5 ? 1 : 0) + (w >= 0.46875 ? 2 : 0); return layers[k] ?? 1; };
+  const v = new THREE.Vector3(), C = new Float32Array(pos.count * 3), L = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) { cloth.getVertexPosition(i, v); v.applyMatrix4(cloth.matrixWorld); C[i * 3] = v.x; C[i * 3 + 1] = v.y; C[i * 3 + 2] = v.z; L[i] = layerOf(i); }
+  const idx = index.array as ArrayLike<number>, nt = idx.length / 3;
+  const grid = new Map<number, number[]>();
+  const key = (x: number, y: number, z: number) => ((x + 512) * 1024 + (y + 512)) * 1024 + (z + 512);
+  const cell = (a: number) => Math.floor(a / CELL);
+  for (let t = 0; t < nt; t++) {
+    const a = idx[t * 3] * 3, b = idx[t * 3 + 1] * 3, c = idx[t * 3 + 2] * 3;
+    for (let x = cell(Math.min(C[a], C[b], C[c])); x <= cell(Math.max(C[a], C[b], C[c])); x++)
+      for (let y = cell(Math.min(C[a + 1], C[b + 1], C[c + 1])); y <= cell(Math.max(C[a + 1], C[b + 1], C[c + 1])); y++)
+        for (let z = cell(Math.min(C[a + 2], C[b + 2], C[c + 2])); z <= cell(Math.max(C[a + 2], C[b + 2], C[c + 2])); z++) { const k = key(x, y, z); let l = grid.get(k); if (!l) grid.set(k, l = []); l.push(t); }
+  }
+  const REACH2 = 0.04, seen = new Set<number>();
+  const cast = (ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, above: number) => {
+    let best = REACH2, bt = -1, bu = 0, bv = 0;
+    seen.clear();
+    const ex = ox + dx * REACH2, ey = oy + dy * REACH2, ez = oz + dz * REACH2;
+    for (let x = cell(Math.min(ox, ex)); x <= cell(Math.max(ox, ex)); x++) for (let y = cell(Math.min(oy, ey)); y <= cell(Math.max(oy, ey)); y++) for (let z = cell(Math.min(oz, ez)); z <= cell(Math.max(oz, ez)); z++) {
+      const l = grid.get(key(x, y, z));
+      if (!l) continue;
+      for (const t of l) {
+        if (seen.has(t)) continue;
+        seen.add(t);
+        if (L[idx[t * 3]] <= above) continue; // only garments over this one
+        const a = idx[t * 3] * 3, b = idx[t * 3 + 1] * 3, c = idx[t * 3 + 2] * 3;
+        const e1x = C[b] - C[a], e1y = C[b + 1] - C[a + 1], e1z = C[b + 2] - C[a + 2], e2x = C[c] - C[a], e2y = C[c + 1] - C[a + 1], e2z = C[c + 2] - C[a + 2];
+        const px = dy * e2z - dz * e2y, py = dz * e2x - dx * e2z, pz = dx * e2y - dy * e2x;
+        const det = e1x * px + e1y * py + e1z * pz;
+        if (Math.abs(det) < 1e-12) continue;
+        const inv = 1 / det, tx = ox - C[a], ty = oy - C[a + 1], tz = oz - C[a + 2];
+        const u = (tx * px + ty * py + tz * pz) * inv;
+        if (u < 0 || u > 1) continue;
+        const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
+        const w = (dx * qx + dy * qy + dz * qz) * inv;
+        if (w < 0 || u + w > 1) continue;
+        const dist = (e2x * qx + e2y * qy + e2z * qz) * inv;
+        if (dist > -0.004 && dist < best) { best = dist; bt = t; bu = u; bv = w; }
+      }
+    }
+    return bt < 0 ? null : ([best, bt, bu, bv] as const);
+  };
+  const top = Math.max(...layers);
+  const out = new Float32Array(pos.count * 3);
+  const n = new THREE.Vector3(), t1 = new THREE.Vector3(), t2 = new THREE.Vector3(), d = new THREE.Vector3();
+  let count = 0;
+  for (let i = 0; i < pos.count; i++) {
+    if (L[i] >= top) continue;
+    n.fromBufferAttribute(nor, i).normalize();
+    t1.set(Math.abs(n.y) < 0.9 ? 0 : 1, Math.abs(n.y) < 0.9 ? 1 : 0, 0).cross(n).normalize(); t2.crossVectors(n, t1);
+    let hits = 0, first: readonly [number, number, number, number] | null = null;
+    for (let r = 0; r < 7; r++) {
+      if (r === 0) d.copy(n);
+      else { const a = (r - 1) * Math.PI / 3; d.copy(n).addScaledVector(t1, Math.cos(a) * 0.9).addScaledVector(t2, Math.sin(a) * 0.9).normalize(); }
+      const h = cast(C[i * 3], C[i * 3 + 1], C[i * 3 + 2], d.x, d.y, d.z, L[i]);
+      if (h) { hits++; if (!first || h[0] < first[0]) first = h; }
+    }
+    if (hits < NEED || !first) continue;
+    const [, t, u, w] = first, a = idx[t * 3], b = idx[t * 3 + 1], c = idx[t * 3 + 2], k = 1 - u - w;
+    out[i * 3] = uv.getX(a) * k + uv.getX(b) * u + uv.getX(c) * w;
+    out[i * 3 + 1] = uv.getY(a) * k + uv.getY(b) * u + uv.getY(c) * w;
+    out[i * 3 + 2] = 1;
+    count++;
+  }
+  g.setAttribute('aOver', new THREE.BufferAttribute(out, 3));
+  g.userData.over = count;
+  return count;
+}

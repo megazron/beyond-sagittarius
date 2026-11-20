@@ -44,6 +44,7 @@ import { fitFov, lockViewport, tryFullscreen } from './core/viewport';
 import { startFit, auditFit, fitState, refitAll } from './ui/fit';
 import { canvasFitStats } from './core/canvastext';
 import { soundscape, soundscapeState } from './core/soundscape';
+import { CLOTH_HOLES, UNDER_CLOTH } from './characters/character';
 import { TECH, AGES } from './game/tech/data';
 import { techState } from './game/tech/tech';
 import { openCodex, showSafetyCard, consentGiven, stopSpeech } from './ui/science';
@@ -1007,6 +1008,8 @@ window.addEventListener('resize', () => {
   setLang(l: Lang) { setLang(l); },
   get canvasFit() { return { ...canvasFitStats }; },
   get sound() { return soundscapeState(); },
+  /** Repairs made to the characters' meshes since load (holes closed, texture and normal fixes, skin and cloth drawn as their cover). */
+  get meshFixes() { return { ...CLOTH_HOLES, ...UNDER_CLOTH }; },
   audioTap() { audio.start(); return audio.tap(); },
   openMenu(which: 'settings' | 'legal' | 'chapters') { if (which === 'settings') document.getElementById('btn-settings')?.click(); else if (which === 'legal') document.getElementById('btn-legal')?.click(); else document.getElementById('btn-chapters')?.click(); },
   quality: quality.name,

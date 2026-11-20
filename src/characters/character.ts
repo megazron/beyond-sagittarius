@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { fillSmallHoles } from './holes';
-import { underCloth } from './under';
+import { fillSmallHoles, fixOpposedNormals } from './holes';
+import { underCloth, overCloth } from './under';
 import { DECREEP } from './decreep';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { clamp } from '../core/noise';
@@ -68,9 +68,9 @@ export const CLOTH_PULL = 0.007;
  */
 export const CLOTH_LIFT = 0.006;
 /** Holes closed in garment meshes since load (holes.ts), for the tests. */
-export const CLOTH_HOLES = { filled: 0 };
+export const CLOTH_HOLES = { filled: 0, normals: 0 };
 /** Body vertices drawn as their garment since load (under.ts), for the tests. */
-export const UNDER_CLOTH = { verts: 0 };
+export const UNDER_CLOTH = { verts: 0, over: 0 };
 
 /** Phones (the light build everywhere): face details past this many metres from the camera are not drawn. */
 const FACE_FAR: Record<string, number> = { cornea: 3, lash: 3.5, eyes: 9 };
@@ -302,15 +302,17 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       uTiles: { value: lay.length }, uTileLayer: { value: new THREE.Vector4(...[...lay, 1, 1, 1, 1].slice(0, 4)) }, uPull: { value: lay.length ? CLOTH_PULL : 0 }, uLift: { value: lay.length ? CLOTH_LIFT : 0 } };
     applySway(cloth, sway, (sh) => {
       Object.assign(sh.uniforms, accent);
-      sh.vertexShader = `attribute float aAccent; varying float vAccent; varying float vBindY; uniform float uTiles, uPull, uLift; uniform vec4 uTileLayer;\n` + sh.vertexShader
-        .replace('#include <begin_vertex>', `#include <begin_vertex>\n  vAccent = aAccent; vBindY = position.y;`)
+      sh.vertexShader = `attribute float aAccent; attribute vec3 aOver; varying vec3 vOver; varying float vAccent; varying float vBindY; uniform float uTiles, uPull, uLift; uniform vec4 uTileLayer;\n` + sh.vertexShader
+        .replace('#include <begin_vertex>', `#include <begin_vertex>\n  vAccent = aAccent; vBindY = position.y; vOver = aOver;`)
         // the garment's layer from its atlas tile (tools/chars/paint.py tile_layout), and the pull towards the camera
         .replace('#include <project_vertex>', `#include <project_vertex>
         { int k = uTiles < 1.5 ? 0 : uTiles < 2.5 ? (uv.x >= 0.5 ? 1 : 0) : (uv.x >= 0.5 ? 1 : 0) + (uv.y >= 0.46875 ? 2 : 0);
           float L = k == 0 ? uTileLayer.x : k == 1 ? uTileLayer.y : k == 2 ? uTileLayer.z : uTileLayer.w;
           mvPosition.xyz *= max(0.0, 1.0 - (uLift + L * uPull) / max(length(mvPosition.xyz), 1e-3)); gl_Position = projectionMatrix * mvPosition; }`);
-      sh.fragmentShader = `uniform vec3 uAccent; uniform float uAccentK, uHeightM, uSatin, uDust; uniform sampler2D uDetail; varying float vAccent; varying float vBindY;\n` + sh.fragmentShader
+      sh.fragmentShader = `uniform vec3 uAccent; uniform float uAccentK, uHeightM, uSatin, uDust; uniform sampler2D uDetail; varying float vAccent; varying float vBindY; varying vec3 vOver;\n` + sh.fragmentShader
+        // an inner garment that an outer one encloses is drawn as the outer one (under.ts)
         .replace('#include <map_fragment>', `#include <map_fragment>
+        if (vOver.z > 0.995) diffuseColor.rgb = texture2D(map, vOver.xy).rgb * 0.92;
         diffuseColor.rgb = mix(diffuseColor.rgb, uAccent * (0.35 + dot(diffuseColor.rgb, vec3(1.1))), vAccent * uAccentK);
         // survivors of a crash: dust climbs from the ground, worn patches come and go
         float wearN = texture2D(uDetail, vMapUv * 5.0).b;
@@ -323,7 +325,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         { vec2 dn = texture2D(uDetail, vMapUv * 26.0).xy * 2.0 - 1.0; normal = normalize(normal + tbn * vec3(dn * 0.5 * (1.0 - vAccent * uSatin), 0.0)); }`);
     });
-    cloth.customProgramCacheKey = () => 'crew-cloth';
+    cloth.customProgramCacheKey = () => 'crew-cloth2';
     // where cloth and the skin under it meet at the same depth (a cuff on the wrist, a collar on the neck), the cloth wins
     cloth.polygonOffset = true; cloth.polygonOffsetFactor = -1; cloth.polygonOffsetUnits = -2;
     const mouth = mouthMaterial(), cornea = corneaMaterial(), lash = lashMaterial(browC, M.lash);
@@ -369,6 +371,14 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     { let sb: THREE.SkinnedMesh | null = null, cl: THREE.SkinnedMesh | null = null;
       scene.updateMatrixWorld(true);
       scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (!m.isSkinnedMesh) return; if (m.name === 'skin_body') sb = m; else if (m.name === 'cloth') cl = m; });
+      // corners lit from the wrong side (welded flaps) get their triangle's own normal: once per geometry, before the
+      // passes below read the mesh
+      if (cl && (cl as THREE.SkinnedMesh).geometry.userData.normals === undefined) {
+        const m = cl as THREE.SkinnedMesh, n0 = m.geometry.getAttribute('position').count;
+        m.geometry.userData.normals = fixOpposedNormals(m.geometry, (i, out) => { if (i < n0) m.getVertexPosition(i, out); });
+        CLOTH_HOLES.normals += m.geometry.userData.normals;
+      }
+      if (cl) UNDER_CLOTH.over += overCloth(cl, lay);
       if (sb && cl) { UNDER_CLOTH.verts += underCloth(sb, cl); const u = skin.userData.u as Record<string, { value: unknown }>; u.uCloth.value = cloth.map; u.uUnderAccent.value = accent.uAccent.value; u.uUnderAccentK.value = accent.uAccentK.value; } }
     // shoes reach below the bare sole: stand on them, not through them
     scene.traverse((o) => {

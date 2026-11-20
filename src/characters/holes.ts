@@ -63,3 +63,55 @@ export function fillSmallHoles(g: THREE.BufferGeometry, maxPerimeter = 0.11, max
   if (g.drawRange.count !== Infinity) g.setDrawRange(g.drawRange.start, g.drawRange.count + add.length);
   return filled;
 }
+
+/**
+ * Corners whose shading normal points away from their own triangle (a pocket flap welded to the cloth behind it when
+ * the mesh was reduced) are lit from the wrong side and draw as pale or dark shards across a coat or a vest: thousands
+ * on Draxum's vest and Lyrra's coat. Such a corner gets a vertex of its own carrying the triangle's own normal.
+ * `rest` gives each vertex's rest position in one space (the meshes are quantised: their raw positions are not metres).
+ */
+export function fixOpposedNormals(g: THREE.BufferGeometry, rest: (i: number, out: THREE.Vector3) => void): number {
+  const index = g.getIndex(), nor = g.getAttribute('normal') as THREE.BufferAttribute;
+  if (!index || !nor) return 0;
+  plain(g);
+  const idx = Array.from(index.array as ArrayLike<number>), nt = idx.length / 3, count = nor.count;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), fn = new THREE.Vector3(), vn = new THREE.Vector3();
+  const extra: { from: number; x: number; y: number; z: number }[] = [];
+  for (let t = 0; t < nt; t++) {
+    rest(idx[t * 3], a); rest(idx[t * 3 + 1], b); rest(idx[t * 3 + 2], c);
+    fn.copy(b).sub(a).cross(c.sub(a));
+    if (fn.lengthSq() < 1e-16) continue;
+    fn.normalize();
+    for (let e = 0; e < 3; e++) {
+      const i = idx[t * 3 + e];
+      vn.fromBufferAttribute(nor, i).normalize();
+      if (vn.dot(fn) >= 0.2) continue;
+      extra.push({ from: i, x: fn.x, y: fn.y, z: fn.z });
+      idx[t * 3 + e] = count + extra.length - 1;
+    }
+  }
+  if (!extra.length) return 0;
+  const total = count + extra.length;
+  for (const name of Object.keys(g.attributes)) {
+    const at = g.attributes[name] as THREE.BufferAttribute, old = at.array as unknown as { constructor: new (n: number) => ArrayLike<number> & { set(a: ArrayLike<number>): void; [i: number]: number } };
+    const arr = new old.constructor(total * at.itemSize);
+    arr.set(at.array as ArrayLike<number>);
+    for (let j = 0; j < extra.length; j++) for (let k = 0; k < at.itemSize; k++) arr[(count + j) * at.itemSize + k] = (at.array as ArrayLike<number>)[extra[j].from * at.itemSize + k];
+    const na = new THREE.BufferAttribute(arr as unknown as THREE.TypedArray, at.itemSize, at.normalized);
+    if (name === 'normal') for (let j = 0; j < extra.length; j++) na.setXYZ(count + j, extra[j].x, extra[j].y, extra[j].z);
+    g.setAttribute(name, na);
+  }
+  g.setIndex(new THREE.BufferAttribute(new (total > 65535 ? Uint32Array : Uint16Array)(idx), 1));
+  return extra.length;
+}
+
+/** Attributes packed into a shared buffer (the loader does that to a garment's normals) become arrays of their own, as plain numbers. */
+function plain(g: THREE.BufferGeometry) {
+  for (const name of Object.keys(g.attributes)) {
+    const a = g.attributes[name] as THREE.BufferAttribute & { isInterleavedBufferAttribute?: boolean };
+    if (!a.isInterleavedBufferAttribute) continue;
+    const out = new Float32Array(a.count * a.itemSize);
+    for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) out[i * a.itemSize + k] = a.getComponent(i, k);
+    g.setAttribute(name, new THREE.BufferAttribute(out, a.itemSize));
+  }
+}
