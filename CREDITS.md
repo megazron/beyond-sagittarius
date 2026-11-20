@@ -219,19 +219,79 @@ trial numbers are listed in `CLIPS` in that tool and in `public/models/crew/anim
 
 ## Music
 
-The title theme "The Scatter" (`public/audio/music/`) is an original composition, synthesised from scratch by `tools/make_theme.py`. No samples, no borrowed melody. It is part of this project's own work.
+The title sequence's theme "The Scatter" (`public/audio/music/theme*.mp3`) is an original composition, synthesised from scratch by `tools/make_theme.py`. No samples, no borrowed melody. It is part of this project's own work.
+
+The music for each place is by Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 4.0
+(https://creativecommons.org/licenses/by/4.0/). Changes made: cut to a loop with a crossfade, loudness matched,
+re-encoded as Opus (`tools/fetch_sounds.py`).
+
+| Where | Track | Licence |
+| --- | --- | --- |
+| title | "Odyssey" by Kevin MacLeod (incompetech.com) | CC BY 4.0 |
+| vault | "Phantom from Space" by Kevin MacLeod (incompetech.com) | CC BY 4.0 |
+| zenvora | "Naraina" by Kevin MacLeod (incompetech.com) | CC BY 4.0 |
+| deck | "Clean Soul" by Kevin MacLeod (incompetech.com) | CC BY 4.0 |
+| pull | "Shadowlands 1 - Horizon" by Kevin MacLeod (incompetech.com) | CC BY 4.0 |
+| planet_day | "Destiny Day" by Kevin MacLeod (incompetech.com) | CC BY 4.0 |
+| planet_night | "Stay the Course" by Kevin MacLeod (incompetech.com) | CC BY 4.0 |
+| danger | "Shadowlands 4 - Breath" by Kevin MacLeod (incompetech.com) | CC BY 4.0 |
+
+## Sound effects and ambience
+
+Built by `tools/fetch_sounds.py` into `public/audio/sfx/` (cut, looped with a crossfade, loudness matched, Opus).
+
+- Footsteps (stone, grass, wood, carpet, snow), impacts, doors, cloth, coins, leather, pots, paper, hatches, consoles,
+  thrusters, engines and the interface sounds: Kenney (kenney.nl), RPG Audio, Impact Sounds, Interface Sounds and
+  Sci-Fi Sounds packs, CC0 1.0.
+- From Freesound, each marked CC0 1.0 on its own page (checked again by the build):
+
+| Sounds | Recording | Licence |
+| --- | --- | --- |
+| amb_bazaar | [India Trivandrum Street Market](https://freesound.org/people/Alcappuccino/sounds/263635/) by Alcappuccino | CC0 |
+| amb_street | [DELHI ATMO street traffic horns walk voices bazaar](https://freesound.org/people/SoundEnsemble/sounds/516655/) by SoundEnsemble | CC0 |
+| amb_traffic | [Traffic medium city dry road](https://freesound.org/people/nickpursehouse/sounds/110310/) by nickpursehouse | CC0 |
+| amb_cafe | [0105coffeehouse](https://freesound.org/people/moxobna/sounds/46310/) by moxobna | CC0 |
+| amb_planet_day | [Planet Jungle Animals Birds Alien Sci-fi Fantasy Ambience](https://freesound.org/people/szegvari/sounds/629107/) by szegvari | CC0 |
+| amb_planet_night | [Forest at night, crickets, cicadas and insects in the Sian Ka'an Biosphere Reserve](https://freesound.org/people/felix.blume/sounds/328293/) by felix.blume | CC0 |
+| amb_wind | [Soft Tonal Wind_01](https://freesound.org/people/janbezouska/sounds/397091/) by janbezouska | CC0 |
+| amb_room | [Room_Tone_Ambience_Medium_Control_Low_Hum](https://freesound.org/people/gchase/sounds/144046/) by gchase | CC0 |
+| amb_ship | [S40-13 Alien hum or space ship interior](https://freesound.org/people/craigsmith/sounds/675339/) by craigsmith | CC0 |
+| amb_lake | [LakeWavesOct25th2015](https://freesound.org/people/kvgarlic/sounds/326097/) by kvgarlic | CC0 |
+| amb_fire | [Crackling Fire](https://freesound.org/people/Sauron974/sounds/204348/) by Sauron974 | CC0 |
+| eat_1, eat_2 | [Chewing Crunch Cornflakes Eating Munch](https://freesound.org/people/Borgory/sounds/548367/) by Borgory | CC0 |
+| eat_3 | [Munching Food](https://freesound.org/people/Kodack/sounds/256311/) by Kodack | CC0 |
+| drink_1 | [Drink Sip and Swallow](https://freesound.org/people/OwlStorm/sounds/320139/) by OwlStorm | CC0 |
+| type_1, type_2 | [Keyboard Typing](https://freesound.org/people/Trollarch2/sounds/331656/) by Trollarch2 | CC0 |
+| zip_1 | [Bag Zipper](https://freesound.org/people/OwlStorm/sounds/212180/) by OwlStorm | CC0 |
+| splash_1 | [SPLASH](https://freesound.org/people/petenice/sounds/9508/) by petenice | CC0 |
+| launch | [Rocket Launch](https://freesound.org/people/qubodup/sounds/182794/) by qubodup | CC0 |
+| rumble | [Cinematic Deep Rumble](https://freesound.org/people/swiftoid/sounds/184313/) by swiftoid | CC0 |
+| horn_1 | [car horn](https://freesound.org/people/keweldog/sounds/182474/) by keweldog | CC0 |
+| horn_2 | [Car horn beep beep two beeps honk honk](https://freesound.org/people/AmishRob/sounds/423990/) by AmishRob | CC0 |
+| flint_1 | [Flint Strike](https://freesound.org/people/Za-Games/sounds/539973/) by Za-Games | CC0 |
+
+Made for this game, with no recording in them (`tools/make_sounds.py`): the rain beds (`amb_rain`, `amb_rain_in`), the
+distant city sirens, the birdsong, the hover cars going by, and the far crowd walla (`amb_walla`, the game's own
+synthetic voice lines run backwards, pitched and smeared so no word is left). The footsteps on the liner's deck plates
+(`step_metal_*`) are cut from Kenney's CC0 light metal impacts.
+
+The breaths, gasps, grunts, yelps, screams, laughs and crowd in `public/audio/sfx/human/` are cut from CC0 Freesound
+recordings listed in `tools/tts/fetch_human.py`. Every other interface tone is synthesised in the browser.
 
 ## Voices
 
-All dubbing in `public/audio/vo/` is synthetic speech rendered locally by `tools/tts/generate_voice.py`.
+All dubbing in `public/audio/vo/` is synthetic speech rendered locally by `tools/tts/generate_voice.py`. Who
+sounds like what is in [docs/VOICE_CAST.md](docs/VOICE_CAST.md).
 
 | Component | Use | Licence |
 | --- | --- | --- |
+| [Chatterbox](https://github.com/resemble-ai/chatterbox) (Resemble AI), English and multilingual models | Text to speech for every line, conditioned on a reference clip per character | MIT |
+| [LibriTTS-R](https://www.openslr.org/141/) (Google LLC; Koizumi et al., 2023), from LibriVox recordings | Reference clips for the Zenvora townsfolk: corpus readers 3576, 2035, 6319, 1988, 2803, 2086, 777, 5536, 3170, 6295, 3081 and 3536 (`tools/tts/libritts_cast.json`); short whole utterances, joined and loudness matched | CC BY 4.0 |
 | [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (hexgrad), model weights and voicepacks | Text to speech, English and Hindi voices (also used for Urdu) | Apache-2.0 |
 | [kokoro](https://github.com/hexgrad/kokoro) Python package | Inference | Apache-2.0 |
 | [misaki](https://github.com/hexgrad/misaki) | Grapheme-to-phoneme | Apache-2.0 |
 | [espeak-ng](https://github.com/espeak-ng/espeak-ng) via `espeakng-loader` | Hindi and Urdu phonemes, build-time tool only; not distributed with the game and its GPL-3.0 does not cover the generated audio | GPL-3.0 (tool) |
-| [FFmpeg](https://ffmpeg.org) | Pitch, room and filter effects, MP3 encoding, build-time only | LGPL/GPL (tool) |
+| [FFmpeg](https://ffmpeg.org) | Pitch, room and filter effects, Opus encoding, build-time only | LGPL/GPL (tool) |
 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) with Whisper small | Build-time quality check of the audio only; nothing from it ships | MIT |
 
 ## Fonts

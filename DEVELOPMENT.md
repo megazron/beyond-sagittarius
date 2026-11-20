@@ -41,6 +41,13 @@ smallest size, then cuts to its line count with an ellipsis that opens in full o
 when it would run off its sign. `tools/text_fit.py` puts every string into every slot it can take at nine screen sizes
 in three languages; `--before` also measures with fitting off.
 
+Real play on the real GPU, with its sound: `tools/gpu_capture.py` drives a Windows-side Chrome over the DevTools
+protocol (start it with `--remote-debugging-port=9334 --autoplay-policy=no-user-gesture-required`), records the page
+with the DevTools screencast (HUD and subtitles included) and the game's own master bus with a MediaRecorder
+(`__bs.audioTap()`), both stamped on one clock; `python3 tools/gpu_capture.py --join DIR` makes MP4s with sound. A
+plan file lists the steps (wait, eval, keys held, recordings); run the script with the Windows Python, since WSL cannot
+reach Chrome's port.
+
 `levels_smoke.py` plays through the real interaction code by teleporting to each
 objective and pressing E via `window.__bs`, and advances game time with
 `__bs.step()`. The scripts take `--out` or `--shots DIR` for screenshots and fall

@@ -152,7 +152,8 @@ export class Craft {
     if (st.kind === 'tap') {
       if (this.inBand()) {
         this.hits++; this.flash = 'mg.tap.hit'; this.flashT = 0.9;
-        audio.tone(1800, 0.08, 'square', 0.14, 0, -900);
+        // the strike itself: stone on stone for the early ages, metal later
+        if (!audio.sample(this.node && /glass|metal|smelt|bronze|iron|forge|wire/.test(this.node.id) ? 'metal' : 'stone', 0.7)) audio.tone(1800, 0.08, 'square', 0.14, 0, -900);
         this.prog = this.hits / st.hits;
         if (this.hits >= st.hits) { this.advance(); return; }
         this.pickZone();
@@ -176,12 +177,12 @@ export class Craft {
     const st = this.step;
     if (st.kind === 'mix') {
       this.v = Math.min(1, Math.max(0, this.v + side * 0.07));
-      audio.blip();
+      if (!audio.sample('pot', 0.35, { rate: side < 0 ? 0.9 : 1.1 })) audio.blip();
     } else if (st.kind === 'rhythm') {
       if (side === this.side) return; // alternate, don't mash one side
       this.side = side;
       this.v = Math.min(1, this.v + 0.13);
-      audio.tone(side < 0 ? 240 : 300, 0.05, 'triangle', 0.06, 0, -60);
+      if (!audio.sample('wood', 0.3, { rate: side < 0 ? 0.85 : 1 })) audio.tone(side < 0 ? 240 : 300, 0.05, 'triangle', 0.06, 0, -60);
     }
     this.render();
   }

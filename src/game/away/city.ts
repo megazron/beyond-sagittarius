@@ -1113,6 +1113,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
 
   return {
     outro: { start: startOutro, skip: endOutro, get active() { return outroT >= 0; }, get remaining() { return outroT >= 0 ? OUTRO - outroT : 0; } },
+    // what the sky is doing, for the ears (soundscape.ts lays the rain bed under the street)
+    get weather() { return { rain: day.state.rain, night: day.state.night }; },
     mapLayer: {
       id: 'zenvora', bounds: [DIST_BOUNDS[0] - 20, DIST_BOUNDS[1] - 6, DIST_BOUNDS[2] + 6, DIST_BOUNDS[3] + 6], pxPerM: 3, span: 80,
       paint(g, X, Y) {

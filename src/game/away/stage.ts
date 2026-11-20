@@ -18,6 +18,8 @@ export interface AwayStage {
   tasks: AwayTask[];
   update(dt: number, time: number, camera?: THREE.Camera): void;
   /** Someone on the stage speaks to the player for this long: they turn to face them, look at them, and talk. */
+  /** The sky over the stage, when it has weather: rain 0..1 (heard as well as seen). */
+  weather?: { rain: number; night: number };
   talk?(id: string, seconds: number, listener: THREE.Vector3): void;
   dispose?(): void;
   /** The stage top-down, for the minimap, the full map and the GPS route. */

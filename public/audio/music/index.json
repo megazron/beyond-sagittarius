@@ -1,0 +1,42 @@
+{
+"title": {
+"f": "title.ogg",
+"d": 150.0,
+"title": "Odyssey"
+},
+"vault": {
+"f": "vault.ogg",
+"d": 150.0,
+"title": "Phantom from Space"
+},
+"zenvora": {
+"f": "zenvora.ogg",
+"d": 165.0,
+"title": "Naraina"
+},
+"deck": {
+"f": "deck.ogg",
+"d": 150.0,
+"title": "Clean Soul"
+},
+"pull": {
+"f": "pull.ogg",
+"d": 120.0,
+"title": "Shadowlands 1 - Horizon"
+},
+"planet_day": {
+"f": "planet_day.ogg",
+"d": 160.0,
+"title": "Destiny Day"
+},
+"planet_night": {
+"f": "planet_night.ogg",
+"d": 150.0,
+"title": "Stay the Course"
+},
+"danger": {
+"f": "danger.ogg",
+"d": 120.0,
+"title": "Shadowlands 4 - Breath"
+}
+}

@@ -42,6 +42,7 @@ import { onLangChange } from './i18n';
 import { fitFov, lockViewport, tryFullscreen } from './core/viewport';
 import { startFit, auditFit, fitState, refitAll } from './ui/fit';
 import { canvasFitStats } from './core/canvastext';
+import { soundscape, soundscapeState } from './core/soundscape';
 import { TECH, AGES } from './game/tech/data';
 import { techState } from './game/tech/tech';
 import { openCodex, showSafetyCard, consentGiven, stopSpeech } from './ui/science';
@@ -747,12 +748,23 @@ function tick(step: number) {
   }
   navFrame(dt);
   if (stage.active) stage.update(dt);
+  soundscape({
+    state, mode: game?.mode, away: game?.away?.where ?? null, indoors: game?.away?.indoors, hours: state === 'game' ? game?.save?.timeOfDay : undefined,
+    pos: state === 'game' && game?.mode !== 'away' ? player?.pos : undefined, danger: state === 'game' && !!game?.story?.houndEngaged(),
+    fire: state === 'game' && game?.save?.flags.fire ? world.layout?.camp ?? null : null,
+    // weather, when the world has it (an optional `weather.rain` 0..1 on the world or the away stage)
+    rain: (game?.away?.active ? (game.away as unknown as { stage?: { weather?: { rain?: number } } }).stage?.weather?.rain : (world as unknown as { weather?: { rain?: number } }).weather?.rain) ?? 0,
+    dt: paused ? 0 : dt,
+  });
 }
+const earFwd = new THREE.Vector3();
 
 function draw(dt: number) {
   // portrait screens: widen the vertical FOV so the horizontal view stays usable
   const activeCam = stage.active ? stage.camera : state === 'game' ? camera : state === 'narrator' ? vault.camera : state === 'film' && film.inWorld ? film.wcam : cine.camera;
   const designFov = activeCam.fov;
+  activeCam.getWorldDirection(earFwd);
+  audio.listen(activeCam.position, earFwd);
   fitFov(activeCam);
   // props that pass right by the follow camera dissolve; cutscenes and films are framed by hand
   NEAR_FADE.value = state === 'game' && game && (game.mode === 'play' || game.mode === 'away' || game.mode === 'dead') && !photo ? 1 : 0;
@@ -823,6 +835,8 @@ async function boot() {
   game.away.skins = lastSkins;
   // the take-off from Zenvora is a scene like any other: letterboxed, with its Skip
   game.away.onOutro = (on) => {
+    // the liner lifts off: engines, then the long roar of the climb
+    if (on) { audio.sample('launch', 0.85, { delay: 1.2 }); audio.sample('thruster', 0.5, { delay: 0.6 }); }
     ui.show('cine', on); ui.show('hud', !on);
     document.getElementById('btn-skip')!.classList.toggle('hidden', !on);
   };
@@ -897,7 +911,10 @@ window.addEventListener('resize', () => {
   setTime(h: number) { if (game?.save) game.save.timeOfDay = h; },
   cineSeek(t: number) { cine.seek(t); },
   /** Freeze the clock (true) and step it by hand; `frames` counts finished steps. */
-  hold(on: boolean) { hold.on = on; film.manual = on; voice.manual = on ? () => elapsed : null; },
+  hold(on: boolean) { hold.on = on; film.manual = on; voice.manual = on ? () => elapsed : null; audio.manual = on ? () => elapsed : null; },
+  /** What was played on the held clock: lines, sounds, music, beds (laid under recorded frames). */
+  get soundLog() { return [...voice.log, ...audio.log]; },
+  get clock() { return elapsed; },
   advance(sec: number) { hold.pending = sec; },
   get frames() { return hold.done; },
   film: { get fx() { return film.lensFx; }, get video() { return film.videoOn; }, seek(b: number) { film.seek(b); }, get playing() { return film.playing; }, get beat() { return film.beat; }, get seconds() { return film.lengthSeconds; }, start() { state = 'film'; renderer.setScene(cine.scene, cine.camera, false); ui.show('title', false); ui.show('cine', true); ui.fade('black', 0, 0); void film.play(() => {}); } },
@@ -976,6 +993,8 @@ window.addEventListener('resize', () => {
   fitAudit(lang: Lang, fit = true, menus = false) { setLang(lang); fitState.on = fit; const r = auditFit({ fit, menus }); fitState.on = true; refitAll(); return r; },
   setLang(l: Lang) { setLang(l); },
   get canvasFit() { return { ...canvasFitStats }; },
+  get sound() { return soundscapeState(); },
+  audioTap() { audio.start(); return audio.tap(); },
   openMenu(which: 'settings' | 'legal' | 'chapters') { if (which === 'settings') document.getElementById('btn-settings')?.click(); else if (which === 'legal') document.getElementById('btn-legal')?.click(); else document.getElementById('btn-chapters')?.click(); },
   quality: quality.name,
   get world() { return world; },

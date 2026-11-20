@@ -3,6 +3,36 @@ const BASE = import.meta.env.BASE_URL;
 /** Recorded human sounds in public/audio/sfx/human/ (index.json: name -> files). */
 export type HumanSound = 'gasp' | 'grunt' | 'yelp' | 'scream' | 'land' | 'breath' | 'laugh' | 'crowd';
 
+export type Surface = 'stone' | 'grass' | 'wood' | 'carpet' | 'snow' | 'metal';
+export type Space = 'open' | 'street' | 'room' | 'ship' | 'hall';
+/** Reverb per space: tail length, brightness (low-pass on the tail, Hz), early reflections, send level. */
+const SPACES: Record<Exclude<Space, 'open'>, { secs: number; bright: number; early: number; wet: number }> = {
+  street: { secs: 1.1, bright: 5000, early: 0.5, wet: 0.16 },
+  room: { secs: 0.55, bright: 3800, early: 0.8, wet: 0.2 },
+  ship: { secs: 1.4, bright: 7000, early: 0.9, wet: 0.24 },
+  hall: { secs: 3.2, bright: 4200, early: 0.4, wet: 0.32 },
+};
+/** Beds that are outside: heard through the walls when you are in. */
+const OUTDOOR_BEDS = new Set(['amb_bazaar', 'amb_street', 'amb_traffic', 'amb_walla', 'amb_rain', 'amb_wind']);
+/** A room's answer: decaying stereo noise, a few early reflections, the top rolled off as it dies. */
+function impulse(ctx: BaseAudioContext, secs: number, bright: number, early: number) {
+  const sr = ctx.sampleRate, n = Math.floor(sr * secs), b = ctx.createBuffer(2, n, sr);
+  for (let c = 0; c < 2; c++) {
+    const d = b.getChannelData(c);
+    let z = 0;
+    for (let i = 0; i < n; i++) {
+      const t = i / n;
+      // a one-pole low-pass whose corner falls from `bright` to a third of it as the tail dies
+      const fc = bright * (1 - 0.66 * t), a = Math.exp(-2 * Math.PI * fc / sr);
+      z = z * a + (Math.random() * 2 - 1) * (1 - a);
+      d[i] = z * Math.pow(1 - t, 3) * 2.5;
+    }
+    // early reflections: a handful of taps in the first 60 ms
+    for (let r = 0; r < 7; r++) { const i = Math.floor(sr * (0.007 + Math.random() * 0.055)); if (i < n) d[i] += (Math.random() < 0.5 ? -1 : 1) * early * (0.6 - r * 0.06); }
+  }
+  return b;
+}
+
 // WebAudio soundscape synthesised at runtime, plus a few recorded human sounds.
 export class Audio {
   ctx: AudioContext | null = null;
@@ -34,6 +64,7 @@ export class Audio {
     this.buses = { music, sfx, voice, analyser };
     this.applyMix();
     void this.loadHumans();
+    void this.loadSfx().then(() => this.preloadSfx('ui_', 'pickup', 'step_'));
   }
 
   private loadHumans() {
@@ -89,6 +120,62 @@ export class Audio {
   }
 
   voiceIn(): AudioNode { return this.buses!.voice; }
+
+  // ---------------------------------------------------------------- the space you are in
+  // Everything in the world (effects, beds, voices a little) is sent to a reverb shaped like where you stand, and the
+  // beds that belong outside (street, traffic, crowd, rain) go through a low-pass that closes when you go in.
+  private outdoor: BiquadFilterNode | null = null;
+  private outdoorGain: GainNode | null = null;
+  private get outdoorOut(): AudioNode {
+    if (!this.ctx) return this.master;
+    if (!this.outdoor) {
+      const f = this.ctx.createBiquadFilter(), g = this.ctx.createGain();
+      f.type = 'lowpass'; f.frequency.value = 20000; f.Q.value = 0.5;
+      f.connect(g).connect(this.sfxOut);
+      this.outdoor = f; this.outdoorGain = g;
+    }
+    return this.outdoor;
+  }
+  private inside = 0;
+  /** 0 outside, 1 indoors with the windows shut: the outside beds lose their top and some level. */
+  setIndoors(k: number) {
+    if (!this.ctx || Math.abs(k - this.inside) < 0.01) return;
+    this.inside = k;
+    const t = this.ctx.currentTime;
+    void this.outdoorOut;
+    this.outdoor!.frequency.setTargetAtTime(20000 * Math.pow(650 / 20000, k), t, 0.25);
+    this.outdoorGain!.gain.setTargetAtTime(1 - 0.45 * k, t, 0.25);
+  }
+  private spaces = new Map<Space, { conv: ConvolverNode; wet: GainNode }>();
+  private space: Space = 'open';
+  /** Reverb for where the ears are: open air, a street between buildings, a room, the liner's deck, the Vault. */
+  setSpace(sp: Space) {
+    const ctx = this.ctx;
+    if (!ctx || !this.buses || sp === this.space) return;
+    this.space = sp;
+    const t = ctx.currentTime;
+    for (const [k, v] of this.spaces) if (k !== sp) v.wet.gain.setTargetAtTime(0, t, 0.4);
+    if (sp === 'open') return;
+    let s = this.spaces.get(sp);
+    if (!s) {
+      const P = SPACES[sp];
+      const conv = ctx.createConvolver(), wet = ctx.createGain();
+      conv.buffer = impulse(ctx, P.secs, P.bright, P.early);
+      wet.gain.value = 0;
+      this.buses.sfx.connect(conv); conv.connect(wet).connect(this.master);
+      // voices get the room too, but less: they must stay clear
+      const vs = ctx.createGain(); vs.gain.value = 0.35; this.buses.voice.connect(vs).connect(conv);
+      s = { conv, wet }; this.spaces.set(sp, s);
+    }
+    s.wet.gain.setTargetAtTime(SPACES[sp].wet, t, 0.4);
+  }
+  private tapNode: MediaStreamAudioDestinationNode | null = null;
+  /** What the speakers get, as a stream (recordings of real play: tools/gpu_capture.py). */
+  tap(): MediaStream | null {
+    if (!this.ctx) return null;
+    if (!this.tapNode) { this.tapNode = this.ctx.createMediaStreamDestination(); this.master.connect(this.tapNode); }
+    return this.tapNode.stream;
+  }
   duck(on: boolean) { this.ducked = on; this.applyMix(); }
   private slept = false;
   /** Silence everything while the page or app is hidden, and pick up where it was after. */
@@ -230,19 +317,19 @@ export class Audio {
   }
   /** One UI sound per moment: code that still calls uiClick next to the global handler stays single. */
   private once(ms = 45) { const n = performance.now(); if (n - this.lastUi < ms) return false; this.lastUi = n; return true; }
-  uiClick() { if (this.once()) { this.tick(2300, 1.4, 0.05, 0.28); this.tone(170, 0.07, 'sine', 0.13, 0, -70); } }
+  uiClick() { if (this.once() && !this.sample('ui_click', 0.32)) { this.tick(2300, 1.4, 0.05, 0.28); this.tone(170, 0.07, 'sine', 0.13, 0, -70); } }
   uiMove() { if (this.once(30)) this.tick(3400, 3, 0.025, 0.12); }
-  uiBack() { if (this.once()) { this.tick(1500, 1.4, 0.05, 0.2); this.tone(240, 0.09, 'sine', 0.1, 0, -120); } }
-  uiToggle() { if (this.once()) { this.tick(2800, 2, 0.03, 0.2); this.tick(1900, 2, 0.03, 0.14, 0.035); } }
+  uiBack() { if (this.once() && !this.sample('ui_back', 0.32)) { this.tick(1500, 1.4, 0.05, 0.2); this.tone(240, 0.09, 'sine', 0.1, 0, -120); } }
+  uiToggle() { if (this.once() && !this.sample('ui_toggle', 0.3)) { this.tick(2800, 2, 0.03, 0.2); this.tick(1900, 2, 0.03, 0.14, 0.035); } }
   uiSlider(v: number) { if (this.once(55)) this.tick(900 + v * 1800, 6, 0.03, 0.14); }
-  uiOpen() { this.tick(700, 0.8, 0.16, 0.16); this.tone(210, 0.14, 'sine', 0.07, 0, 170); }
-  uiClose() { this.tick(520, 0.8, 0.13, 0.13); this.tone(320, 0.12, 'sine', 0.06, 0, -170); }
+  uiOpen() { if (this.sample('ui_open', 0.28)) return; this.tick(700, 0.8, 0.16, 0.16); this.tone(210, 0.14, 'sine', 0.07, 0, 170); }
+  uiClose() { if (this.sample('ui_close', 0.28)) return; this.tick(520, 0.8, 0.13, 0.13); this.tone(320, 0.12, 'sine', 0.06, 0, -170); }
   uiTab() { if (this.once()) { this.tick(1200, 1, 0.08, 0.15); this.tick(2600, 2, 0.03, 0.1, 0.03); } }
   uiWheel() { this.tick(1600, 1, 0.1, 0.12); this.tone(300, 0.1, 'sine', 0.06, 0, 200); }
-  uiDenied() { this.tone(130, 0.08, 'square', 0.05); this.tone(110, 0.1, 'square', 0.05, 0.09); }
+  uiDenied() { if (this.sample('ui_error', 0.3)) return; this.tone(130, 0.08, 'square', 0.05); this.tone(110, 0.1, 'square', 0.05, 0.09); }
   uiListen() { this.tone(980, 0.09, 'sine', 0.07); }
   uiBound() { this.tone(980, 0.06, 'sine', 0.07); this.tone(1470, 0.1, 'sine', 0.07, 0.06); }
-  pickup() { this.tick(1100, 1.2, 0.06, 0.16); this.tone(620, 0.09, 'sine', 0.06, 0.02, 180); }
+  pickup() { if (this.sample('pickup', 0.5)) return; this.tick(1100, 1.2, 0.06, 0.16); this.tone(620, 0.09, 'sine', 0.06, 0.02, 180); }
   hurt() { this.tone(160, 0.5, 'sawtooth', 0.15, 0, -90); }
   beep() { this.tone(1046, 0.08, 'square', 0.05); }
   thud() { this.tone(48, 1.4, 'sine', 0.5, 0, -18); this.tone(70, 0.6, 'triangle', 0.2); }
@@ -254,6 +341,226 @@ export class Audio {
     const g = ctx.createGain(); g.gain.setValueAtTime(0.0, ctx.currentTime);
     g.gain.linearRampToValueAtTime(0.6, ctx.currentTime + 2.5); g.gain.linearRampToValueAtTime(0, ctx.currentTime + 4);
     src.connect(f).connect(g).connect(this.sfxOut); src.start(); src.stop(ctx.currentTime + 4.2);
+  }
+
+  /** Test hook (recordings): the clock frames are recorded on; while set, what is played is written to `log`. */
+  manual: (() => number) | null = null;
+  log: { path: string; at: number; vol: number; loop?: boolean; until?: number }[] = [];
+  private note(path: string, vol: number, delay = 0, loop = false) {
+    if (!this.manual) return;
+    const at = this.manual() + delay;
+    if (loop) for (const e of this.log) if (e.loop && e.until === undefined && e.path === path) e.until = at;
+    this.log.push({ path, at, vol, loop: loop || undefined });
+    if (this.log.length > 800) this.log.shift();
+  }
+  private endLoop(path: string) { if (!this.manual) return; const at = this.manual(); for (const e of this.log) if (e.loop && e.until === undefined && e.path === path) e.until = at; }
+
+  // ---------------------------------------------------------------- recorded soundscape
+  // public/audio/sfx/index.json and music/index.json (tools/fetch_sounds.py): name -> file. `step_grass` picks one of
+  // step_grass_1..5 at random, never the same one twice running.
+  private sfxIdx: Promise<Record<string, { f: string; d: number; loop: boolean }>> | null = null;
+  private sfxNames: Record<string, { f: string; d: number; loop: boolean }> = {};
+  private musicIdx: Record<string, { f: string; d: number }> = {};
+  private sfxBuf = new Map<string, Promise<AudioBuffer | null>>();
+  private ready = new Map<string, AudioBuffer>();
+  private lastPick = new Map<string, string>();
+  private loadSfx() {
+    this.sfxIdx ??= (async () => {
+      try {
+        const [a, b] = await Promise.all([fetch(`${BASE}audio/sfx/index.json`), fetch(`${BASE}audio/music/index.json`)]);
+        if (a.ok) this.sfxNames = await a.json();
+        if (b.ok) this.musicIdx = await b.json();
+      } catch { /* no recorded sound: the synthesised one stays */ }
+      return this.sfxNames;
+    })();
+    return this.sfxIdx;
+  }
+  private buf(path: string): Promise<AudioBuffer | null> {
+    let p = this.sfxBuf.get(path);
+    if (!p) {
+      p = (async () => {
+        try {
+          const r = await fetch(`${BASE}audio/${path}`);
+          const b = r.ok && this.ctx ? await this.ctx.decodeAudioData(await r.arrayBuffer()) : null;
+          if (b) this.ready.set(path, b);
+          return b;
+        } catch { return null; }
+      })();
+      this.sfxBuf.set(path, p);
+    }
+    return p;
+  }
+  private variants(name: string) {
+    const n = this.sfxNames;
+    if (n[name]) return [name];
+    const out: string[] = [];
+    for (let i = 1; n[`${name}_${i}`]; i++) out.push(`${name}_${i}`);
+    return out;
+  }
+  private pick(name: string) {
+    const v = this.variants(name);
+    if (!v.length) return null;
+    const last = this.lastPick.get(name), pool = v.length > 1 ? v.filter((x) => x !== last) : v;
+    const k = pool[Math.floor(Math.random() * pool.length)];
+    this.lastPick.set(name, k);
+    return `sfx/${this.sfxNames[k].f}`;
+  }
+  /** Decode ahead: every sound whose name starts with one of these. */
+  preloadSfx(...prefixes: string[]) {
+    if (!this.ctx) return;
+    void this.loadSfx().then((n) => { for (const k in n) if (prefixes.some((p) => k.startsWith(p))) void this.buf(`sfx/${n[k].f}`); });
+  }
+  /** Is there a recorded sound by this name (or numbered takes of it)? */
+  hasSfx(name: string) { return this.variants(name).length > 0; }
+
+  private panner(at: { x: number; y: number; z: number }, near: number, far: number) {
+    const ctx = this.ctx!, p = ctx.createPanner();
+    p.panningModel = 'HRTF'; p.distanceModel = 'inverse'; p.refDistance = near; p.maxDistance = far; p.rolloffFactor = 1.1;
+    p.positionX.value = at.x; p.positionY.value = at.y; p.positionZ.value = at.z;
+    return p;
+  }
+  /** Where the ears are: the camera. Call every frame the world is heard. */
+  private ear = { x: 0, y: 0, z: 0 };
+  /** Where the ears are now (the camera). */
+  get earPos(): { readonly x: number; readonly y: number; readonly z: number } { return this.ear; }
+  listen(pos: { x: number; y: number; z: number }, fwd: { x: number; y: number; z: number }, up = { x: 0, y: 1, z: 0 }) {
+    this.ear.x = pos.x; this.ear.y = pos.y; this.ear.z = pos.z;
+    const l = this.ctx?.listener;
+    if (!l) return;
+    if (l.positionX) {
+      const t = this.ctx!.currentTime;
+      l.positionX.setTargetAtTime(pos.x, t, 0.02); l.positionY.setTargetAtTime(pos.y, t, 0.02); l.positionZ.setTargetAtTime(pos.z, t, 0.02);
+      l.forwardX.setTargetAtTime(fwd.x, t, 0.02); l.forwardY.setTargetAtTime(fwd.y, t, 0.02); l.forwardZ.setTargetAtTime(fwd.z, t, 0.02);
+      l.upX.value = up.x; l.upY.value = up.y; l.upZ.value = up.z;
+    } else { l.setPosition(pos.x, pos.y, pos.z); l.setOrientation(fwd.x, fwd.y, fwd.z, up.x, up.y, up.z); }
+  }
+
+  /**
+   * A one-shot recorded sound. With `at` it sits in the world (HRTF, fading with distance from `near` to `far` m).
+   * Returns false when it is not loaded yet (it starts loading), so callers can fall back to a synthesised one.
+   */
+  sample(name: string, vol = 0.8, o: { at?: { x: number; y: number; z: number }; near?: number; far?: number; rate?: number; delay?: number; outside?: boolean } = {}): boolean {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running') return false;
+    if (!this.sfxIdx) { void this.loadSfx(); return false; }
+    const path = this.pick(name);
+    if (!path) return false;
+    if (this.manual) {
+      // the log carries what the ears would hear: the panner's inverse-distance fall-off from where the camera is
+      const near = o.near ?? 2, d = o.at ? Math.max(near, Math.hypot(o.at.x - this.ear.x, o.at.y - this.ear.y, o.at.z - this.ear.z)) : near;
+      this.note(path, vol * near / (near + 1.1 * (d - near)), o.delay ?? 0);
+    }
+    const b = this.ready.get(path);
+    if (!b) { void this.buf(path); return false; }
+    const src = ctx.createBufferSource(), g = ctx.createGain();
+    src.buffer = b; src.playbackRate.value = (o.rate ?? 1) * (0.95 + Math.random() * 0.1); g.gain.value = vol;
+    let node: AudioNode = src.connect(g);
+    if (o.at) node = node.connect(this.panner(o.at, o.near ?? 2, o.far ?? 60));
+    // a sound placed outside while you are in: through the walls (muffled), like the street beds
+    node.connect(o.at && o.outside ? this.outdoorOut : this.sfxOut);
+    src.start(ctx.currentTime + (o.delay ?? 0));
+    return true;
+  }
+
+  /** A footstep on a surface: stone, grass, wood, carpet, snow, metal. */
+  step(surface: Surface, vol = 0.5, at?: { x: number; y: number; z: number }) {
+    this.sample(`step_${surface}`, vol, at ? { at, near: 1.5, far: 25 } : {});
+  }
+
+  private beds = new Map<string, { src: AudioBufferSourceNode; g: GainNode; want: number }>();
+  private bedWant: Record<string, number> = {};
+  /**
+   * The ambience: name -> level (0..1) for every bed that should be playing; the rest fade out. Beds are stereo
+   * loops (city murmur, traffic, wind, birds, room tone, ship hum).
+   */
+  setBeds(want: Record<string, number>, fade = 2.5) {
+    this.bedWant = want;
+    const ctx = this.ctx;
+    if (!ctx) return;
+    void this.loadSfx().then(async () => {
+      if (this.bedWant !== want) return;
+      for (const [name, b] of this.beds) if (!(name in want)) {
+        this.endLoop(`sfx/${this.sfxNames[name]?.f}`);
+        b.g.gain.setTargetAtTime(0, ctx.currentTime, fade / 3);
+        const s = b.src; window.setTimeout(() => { try { s.stop(); } catch { /* over */ } }, fade * 1000 + 200);
+        this.beds.delete(name);
+      }
+      for (const [name, v] of Object.entries(want)) {
+        const cur = this.beds.get(name);
+        if (cur) { cur.want = v; cur.g.gain.setTargetAtTime(v, ctx.currentTime, fade / 3); continue; }
+        const e = this.sfxNames[name];
+        if (!e) continue;
+        const buf = await this.buf(`sfx/${e.f}`);
+        if (!buf || this.bedWant !== want || this.beds.has(name)) continue;
+        const src = ctx.createBufferSource(), g = ctx.createGain();
+        src.buffer = buf; src.loop = true; g.gain.value = 0;
+        src.connect(g).connect(OUTDOOR_BEDS.has(name) ? this.outdoorOut : this.sfxOut);
+        src.start(ctx.currentTime, Math.random() * buf.duration);
+        g.gain.setTargetAtTime(v, ctx.currentTime, fade / 3);
+        this.beds.set(name, { src, g, want: v });
+        this.note(`sfx/${e.f}`, v, 0, true);
+      }
+    });
+  }
+  /** Change one bed's level without touching the others (inside/outside, day/night). */
+  bedLevel(name: string, v: number, fade = 1.2) {
+    const b = this.beds.get(name);
+    if (this.bedWant[name] !== undefined) this.bedWant[name] = v;
+    if (b && this.ctx) { b.want = v; b.g.gain.setTargetAtTime(v, this.ctx.currentTime, fade / 3); }
+  }
+
+  private track: { name: string; src: AudioBufferSourceNode; g: GainNode } | null = null;
+  private trackWant: string | null = null;
+  /** Music for where you are: crossfades from what is playing; null fades it out. Tracks loop. */
+  music(name: string | null, vol = 1, fade = 3) {
+    if (this.trackWant === name && this.track?.name === name) { if (this.track && this.ctx) this.track.g.gain.setTargetAtTime(vol, this.ctx.currentTime, fade / 3); return; }
+    this.trackWant = name;
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const old = this.track;
+    if (old && old.name !== name) {
+      this.endLoop(`music/${this.musicIdx[old.name]?.f}`);
+      old.g.gain.setTargetAtTime(0, ctx.currentTime, fade / 3);
+      window.setTimeout(() => { try { old.src.stop(); } catch { /* over */ } }, fade * 1000 + 300);
+      this.track = null;
+    }
+    if (!name) return;
+    void this.loadSfx().then(async () => {
+      const e = this.musicIdx[name];
+      if (!e || this.trackWant !== name) return;
+      const buf = await this.buf(`music/${e.f}`);
+      if (!buf || this.trackWant !== name || this.track?.name === name) return;
+      const src = ctx.createBufferSource(), g = ctx.createGain();
+      src.buffer = buf; src.loop = true; g.gain.value = 0;
+      src.connect(g).connect(this.musicOut); src.start();
+      g.gain.setTargetAtTime(vol, ctx.currentTime, fade / 3);
+      this.track = { name, src, g };
+      this.note(`music/${e.f}`, vol, 0, true);
+    });
+  }
+  get musicPlaying() { return this.track?.name ?? null; }
+  get bedsPlaying() { return [...this.beds.keys()]; }
+
+  /** A looping sound fixed in the world (a fire, an engine, a fountain): move it, change its level, stop it. */
+  emitter(name: string, at: { x: number; y: number; z: number }, vol = 0.8, near = 3, far = 50) {
+    const ctx = this.ctx;
+    let live: { src: AudioBufferSourceNode; g: GainNode; p: PannerNode } | null = null, stopped = false;
+    if (ctx) void this.loadSfx().then(async () => {
+      const e = this.sfxNames[name] ?? this.sfxNames[`${name}_1`];
+      if (!e) return;
+      const buf = await this.buf(`sfx/${e.f}`);
+      if (!buf || stopped) return;
+      const src = ctx.createBufferSource(), g = ctx.createGain(), p = this.panner(at, near, far);
+      src.buffer = buf; src.loop = true; g.gain.value = 0;
+      src.connect(g).connect(p).connect(this.sfxOut); src.start(ctx.currentTime, Math.random() * buf.duration);
+      g.gain.setTargetAtTime(vol, ctx.currentTime, 0.4);
+      live = { src, g, p };
+    });
+    return {
+      move(v: { x: number; y: number; z: number }) { at = v; if (live) { live.p.positionX.value = v.x; live.p.positionY.value = v.y; live.p.positionZ.value = v.z; } },
+      set(v: number) { vol = v; if (live && ctx) live.g.gain.setTargetAtTime(v, ctx.currentTime, 0.2); },
+      stop() { stopped = true; if (live && ctx) { const l = live; l.g.gain.setTargetAtTime(0, ctx.currentTime, 0.2); window.setTimeout(() => { try { l.src.stop(); } catch { /* over */ } }, 900); live = null; } },
+    };
   }
 
   alarm(on: boolean) {
