@@ -96,7 +96,8 @@ export class UI implements CineUI {
     // speaker's own name says it once
     let who = speakerKey ? this.subT(speakerKey) : '', text = this.subT(key);
     if (who && text.startsWith(`${who}:`)) text = text.slice(who.length + 1).trim();
-    else if (/^[^\s:]{1,16}: |[.!?।۔]\s+[^\s:]{1,16}: /.test(text)) who = '';
+    // (only Zenvora's exchanges are written that way; "Landing: crooked." and "Mood: no." are one person talking)
+    else if (key.startsWith('city.') && /^[^\s:]{1,16}: /.test(text)) who = '';
     (el.querySelector('.speaker') as HTMLElement).textContent = who;
     (el.querySelector('.line') as HTMLElement).textContent = text;
     this.subStyle(el);
