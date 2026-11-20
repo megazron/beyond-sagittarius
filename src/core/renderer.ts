@@ -31,10 +31,12 @@ const FinalShader = {
     uInkDark: { value: new THREE.Vector3(0.02, 0.02, 0.05) },
     uInkLight: { value: new THREE.Vector3(1, 1, 1) },
     uLines: { value: 0 },
+    // phones draw below the screen's own resolution: a light contrast-adaptive sharpen before the upscale
+    uSharpen: { value: 0 },
   },
   vertexShader: QUAD_VS,
   fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; uniform float uTime, uVignette, uGrain, uAberration, uZoom, uInk, uLines; uniform vec3 uTint, uFlash, uInkDark, uInkLight; uniform vec2 uZoomAt;
+    uniform sampler2D tDiffuse; uniform float uTime, uVignette, uGrain, uAberration, uZoom, uInk, uLines, uSharpen; uniform vec3 uTint, uFlash, uInkDark, uInkLight; uniform vec2 uZoomAt;
     varying vec2 vUv;
     float ign(vec2 p){ return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
     // Print-film response, per channel: lifted toe, soft shoulder (what a 3D LUT would bake in).
@@ -51,6 +53,15 @@ const FinalShader = {
         vec2 o = d * r2 * uAberration * 3.0;   // only towards the corners, like a real lens
         col = vec3(texture2D(tDiffuse, vUv + o).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - o).b);
       } else col = texture2D(tDiffuse, vUv).rgb;
+      if (uSharpen > 0.0) {
+        // four neighbours; the gain backs off where they already differ a lot, so edges do not ring
+        vec2 px = 1.0 / vec2(textureSize(tDiffuse, 0));
+        vec3 a = texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb, b = texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb;
+        vec3 c = texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb, e = texture2D(tDiffuse, vUv - vec2(0.0, px.y)).rgb;
+        vec3 mn = min(min(min(a, b), min(c, e)), col), mx = max(max(max(a, b), max(c, e)), col);
+        float k = uSharpen * clamp(1.0 - (mx.g - mn.g) / max(mx.g, 1e-3), 0.0, 1.0);
+        col = max(col + (col * 4.0 - a - b - c - e) * k * 0.25, 0.0);
+      }
       if (uZoom > 0.0) {
         // cheap motion blur for fast moves: everything smears away from one point
         vec2 dz = (vUv - uZoomAt) * uZoom;
@@ -559,6 +570,7 @@ export class Renderer {
     this.final.uniforms.uAberration.value = quality.aberration;
     this.composer.addPass(this.final);
     this.composer.setPixelRatio(this.pixelRatio);
+    this.setSharpen();
 
     window.addEventListener('resize', () => this.resize());
   }
@@ -698,7 +710,14 @@ export class Renderer {
       this.pixelRatio = pr;
       this.renderer.setPixelRatio(pr);
       this.composer.setPixelRatio(pr);
+      this.setSharpen();
     }
+  }
+
+  /** Phones: the further below the screen's own pixel ratio the frame is drawn, the more it is sharpened. */
+  private setSharpen() {
+    const dpr = window.devicePixelRatio || 1;
+    this.final.uniforms.uSharpen.value = this.quality.name === 'mobile' ? THREE.MathUtils.clamp((dpr / this.pixelRatio - 1) * 0.3, 0, 0.4) : 0;
   }
 
   /** 0 = everything on, 1 = AO off, 2 = AO and volumetrics off. */

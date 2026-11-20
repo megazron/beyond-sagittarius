@@ -11,6 +11,11 @@ import { buildFuture } from './cityfuture';
 import { buildMega } from './citymega';
 import { buildDense, Facade } from './citydense';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeChildren, passMaps, watchChanges } from '../../core/merge';
+import { buildDistricts, inOld, BOUNDS as DIST_BOUNDS } from './districts';
+import { navGrid } from './navgrid';
+import { dayCycle, skyMaterial, wetify } from './daycycle';
+import { Renderer } from '../../core/renderer';
 
 /**
  * Zenvora, Taravel, 2189: the last normal afternoon. One long bazaar street from the flat (north-east corner)
@@ -23,6 +28,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 
 const N = 78, S = -78; // street ends (z)
 const FRONT = 9.5; // building line, both sides
+/** The friends' flat, from the street wall back: room enough for the follow camera (it was 6.5 m). */
+const FLAT_D = 9.6;
 /** Across the street: [x, height]. Linear between, the same on both sides. */
 const PROFILE: [number, number][] = [[0, 0], [4, 0], [4.35, 0.14], [FRONT, 0.14]];
 const hx = (x: number) => {
@@ -35,9 +42,15 @@ const hx = (x: number) => {
 };
 const FLOOR = 0.14;
 /** Phones: townsfolk past this many metres from the camera are not drawn. */
-const PHONE_CROWD_FAR = 26;
+const PHONE_CROWD_FAR = 34;
+/** Other presets: townsfolk past this many metres are drawn as cards (citydense.ts stand-ins). */
+const CROWD_FAR = 34; // beyond the 30 m everyone must stay drawn within (tools/crowd_smoke.py), from a camera a few metres behind you
+/** Phones: props smaller than SMALL_PROP metres across (as a radius) are not drawn past SMALL_FAR metres. */
+const SMALL_PROP = 0.45, SMALL_FAR = 24;
+/** Props further than this from the camera (to their stretch of street) are drawn with their light build. */
+const PROP_NEAR = 14;
 
-export interface CityPerson { id: string; fig: Character; pos: THREE.Vector3; yaw: number; pose: CrewPose; phase: number; walk?: { z0: number; z1: number; dir: number; speed: number } }
+export interface CityPerson { id: string; fig: Character; pos: THREE.Vector3; yaw: number; pose: CrewPose; phase: number; walk?: { z0: number; z1: number; dir: number; speed: number; home?: number }; met?: boolean; greet?: number }
 
 // ---------- small makers ----------
 let seed = 1234567;
@@ -76,6 +89,26 @@ function boxGeo(w: number, h: number, d: number, tile = 3) {
   for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) { const k = f * 4 + i; uv.setXY(k, uv.getX(k) * dims[f][0] / tile, uv.getY(k) * dims[f][1] / tile); }
   return g;
 }
+
+/**
+ * Canvases of one width stacked into one texture, so the signs, shop windows and awnings that used them are one
+ * material (and merge per stretch of street) instead of one each. `tile` points a geometry's uvs at one of them;
+ * `flat` puts v at the tile's middle, for patterns that only change across (the stripes).
+ */
+function stack(cs: HTMLCanvasElement[]) {
+  const w = cs[0].width, H = cs.reduce((a, c) => a + c.height, 0);
+  const t = canvasTex(w, H, (g) => { let y = 0; for (const c of cs) { g.drawImage(c, 0, y); y += c.height; } });
+  const rows: [number, number][] = []; let y = 0;
+  // the canvas is flipped on upload: its first rows are the top of the texture
+  for (const c of cs) { rows.push([1 - (y + c.height) / H, 1 - y / H]); y += c.height; }
+  const tile = <G extends THREE.BufferGeometry>(g: G, i: number, flat = false) => {
+    const uv = g.attributes.uv as THREE.BufferAttribute, [v0, v1] = rows[i], us = cs[i].width / w;
+    for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * us, flat ? (v0 + v1) / 2 : v0 + uv.getY(k) * (v1 - v0));
+    return g;
+  };
+  return { t, tile };
+}
+const canvasOf = (t: THREE.Texture) => t.image as HTMLCanvasElement;
 
 /** Shops on the bazaar: name, side (-1 west, 1 east), z, sign colours. The names are parodies on purpose. */
 export const SHOPS: { id: string; name: string; side: number; z: number; bg: string; fg: string; hue: number }[] = [
@@ -122,41 +155,85 @@ const FOLK: { id: string; x: number; z: number; yaw: number; pose: CrewPose; lin
   { id: 'tourist', x: 5.5, z: -36, yaw: 2.2, pose: 'selfie', lineage: 'sirelle' },
 ];
 
-const CELL = 12, UP = new THREE.Vector3(0, 1, 0), TMP_M = new THREE.Matrix4(), TMP_V = new THREE.Vector3();
+const CELL = 26, UP = new THREE.Vector3(0, 1, 0), TMP_M = new THREE.Matrix4(), TMP_V = new THREE.Vector3();
 /** A stretch of street on one side: small enough that what is off screen is still culled. */
-const cellOf = (x: number, z: number) => `${Math.floor(z / CELL)}:${x < -4 ? -1 : x > 4 ? 1 : 0}`;
+const cellOf = (x: number, z: number, size = CELL) => `${Math.floor(z / size)}:${x < -4 ? -1 : x > 4 ? 1 : 0}`;
 
 /**
- * The street is built from hundreds of separate boxes and planes, a draw call each (and another in the shadow
- * pass). Static ones that share a material and shadow flags become one mesh per 12 m of street and side; what moves or
- * changes later is passed in `keep`. Same pixels, a fraction of the draws.
+ * The street is built from hundreds of separate boxes, planes, signs and lights, a draw call each (and another in the
+ * shadow pass). Whatever never moves, hides or changes colour (tried by running the city's own animations a few times
+ * first: `watchChanges`) is merged per material and shadow flags: on the street itself one mesh per stretch of street
+ * and side (12 m, 39 m on phones, where draw calls cost far more than drawing a little off screen), and inside the
+ * groups (ships, platforms, holograms) one per group. Materials that look the same are shared first. `keep` is what
+ * changes later for other reasons (tasks, the city's own update).
  */
-function mergeStatic(scene: THREE.Scene, keep: Set<THREE.Object3D>) {
-  const groups = new Map<string, THREE.Mesh[]>(), ids = new Map<THREE.Material, number>();
-  for (const o of scene.children) {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh || (m as THREE.SkinnedMesh).isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh || keep.has(m) || m.userData.keep || m.children.length || Array.isArray(m.material)) continue;
-    const mat = m.material as THREE.Material, g = m.geometry;
-    if ((mat.transparent && mat.blending !== THREE.AdditiveBlending) || m.renderOrder !== 0 || !m.frustumCulled || m.userData.ground === true) continue;
-    if (Object.keys(g.morphAttributes).length) continue; // groups do not matter: one material draws the whole geometry
-    m.updateMatrixWorld(true);
-    if (m.matrixWorld.determinant() <= 0) continue;
-    if (!ids.has(mat)) ids.set(mat, ids.size);
-    const attrs = Object.entries(g.attributes).map(([k, a]) => `${k}:${a.itemSize}:${(a as THREE.BufferAttribute).array.constructor.name}:${a.normalized}`).sort().join(',');
-    if (!g.boundingBox) g.computeBoundingBox();
-    const c = g.boundingBox!.getCenter(TMP_V).applyMatrix4(m.matrixWorld);
-    const key = [ids.get(mat), +m.castShadow, +m.receiveShadow, cellOf(c.x, c.z), attrs, !!g.index].join('|');
-    (groups.get(key) ?? groups.set(key, []).get(key)!).push(m);
-  }
-  for (const list of groups.values()) {
-    if (list.length < 2) continue;
-    const merged = mergeGeometries(list.map((m) => m.geometry.clone().applyMatrix4(m.matrixWorld)), false);
-    if (!merged) continue;
-    const a = list[0], out = new THREE.Mesh(merged, a.material);
-    out.castShadow = a.castShadow; out.receiveShadow = a.receiveShadow; out.userData.ground = false; out.name = 'merged';
-    for (const m of list) scene.remove(m);
-    scene.add(out);
-  }
+function mergeStatic(scene: THREE.Scene, keep: Set<THREE.Object3D>, cellM: number, animate: (t: number) => void) {
+  const watch = watchChanges(scene);
+  for (const t of [1.3, 4.7, 9.1, 23.5]) animate(t);
+  const { moved, recoloured } = watch.changed();
+  const side = (x: number) => (x < -4 ? -1 : x > 4 ? 1 : 0);
+  const shared = (m: THREE.Material) => !recoloured.has(m);
+  const visit = (o: THREE.Object3D) => {
+    if ((o as THREE.Bone).isBone || o.userData.isCharacter) return;
+    for (const c of [...o.children]) {
+      if (moved.has(c) || keep.has(c)) c.userData.keep = true;
+      visit(c);
+    }
+    mergeChildren(o, { shared, tint: true, pbr: true, cell: o === scene ? (c) => `${Math.floor(c.z / cellM)}:${side(c.x)}` : undefined });
+  };
+  visit(scene);
+  for (const c of keep) delete c.userData.keep;
+  for (const c of moved) delete c.userData.keep;
+  // what never moves keeps its local matrix: three.js then skips recomposing it every frame (a tenth of a phone's
+  // frame went to matrices). A moving parent still carries them along.
+  const freeze = (o: THREE.Object3D) => {
+    if ((o as THREE.Bone).isBone || o.userData.isCharacter) return;
+    if (!moved.has(o) && !keep.has(o)) { o.updateMatrix(); o.matrixAutoUpdate = false; }
+    for (const c of o.children) freeze(c);
+  };
+  for (const c of scene.children) freeze(c);
+  return moved;
+}
+
+/**
+ * From inside the flat the street is only seen through its door and its window. While the camera is in there, whatever
+ * outside neither opening shows is taken off the camera's layer (it still casts its shadow: the sun's shadow camera
+ * sees layer 1 too). The view out of the flat drew most of the street through the walls.
+ */
+function flatPortals(scene: THREE.Scene, room: THREE.Box3, x: number, openings: [number, number, number, number][], skip: (o: THREE.Object3D) => boolean) {
+  let cands: { o: THREE.Object3D; box: THREE.Box3 }[] = [], seenN = -1, hidden = false;
+  const collect = () => {
+    cands = [];
+    const visit = (o: THREE.Object3D) => {
+      if (skip(o)) return;
+      const m = o as THREE.Mesh;
+      if ((m.isMesh || (o as THREE.Sprite).isSprite || (o as THREE.Line).isLine || (o as THREE.Points).isPoints) && m.geometry) {
+        const box = new THREE.Box3().setFromObject(o, false);
+        if (!box.isEmpty() && !room.intersectsBox(box)) cands.push({ o, box }); // the flat's own walls and floor always draw
+      }
+      for (const c of o.children) visit(c);
+    };
+    visit(scene); seenN = scene.children.length;
+  };
+  const planes = [0, 1, 2, 3, 4].map(() => new THREE.Plane()), P = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const inside = (b: THREE.Box3) => planes.every((p) => p.distanceToPoint(new THREE.Vector3(p.normal.x > 0 ? b.max.x : b.min.x, p.normal.y > 0 ? b.max.y : b.min.y, p.normal.z > 0 ? b.max.z : b.min.z)) >= 0);
+  return (cam: THREE.Camera) => {
+    const c = cam.position;
+    if (!room.containsPoint(c)) { if (hidden) { for (const k of cands) k.o.layers.set(0); hidden = false; } return; }
+    if (seenN !== scene.children.length) { if (hidden) for (const k of cands) k.o.layers.set(0); collect(); }
+    const show = new Set<THREE.Object3D>();
+    for (const [z0, z1, y0, y1] of openings) {
+      P[0].set(x, y0, z0); P[1].set(x, y1, z0); P[2].set(x, y1, z1); P[3].set(x, y0, z1);
+      for (let i = 0; i < 4; i++) planes[i].setFromCoplanarPoints(c, P[i], P[(i + 1) % 4]);
+      planes[4].setFromCoplanarPoints(P[0], P[1], P[2]);
+      // a point out in the street on the line through the opening's middle is inside all five: face them towards it
+      const Q = new THREE.Vector3(x, (y0 + y1) / 2, (z0 + z1) / 2).multiplyScalar(2).sub(c);
+      for (const p of planes) if (p.distanceToPoint(Q) < 0) p.negate();
+      for (const k of cands) if (!show.has(k.o) && inside(k.box)) show.add(k.o);
+    }
+    for (const k of cands) k.o.layers.set(show.has(k.o) ? 0 : 1);
+    hidden = true;
+  };
 }
 
 // ---------- models (CC0, Poly Haven, packed by tools/fetch_city.py) ----------
@@ -174,7 +251,7 @@ function model(name: string) {
   return p;
 }
 
-export function buildCity(label: (k: string) => string, detail = 1): AwayStage & { bind(b: StageBody): void; people: CityPerson[] } {
+export function buildCity(label: (k: string) => string, detail = 1): AwayStage & { bind(b: StageBody): void; people: CityPerson[]; mapLayer: import('../../ui/minimap').MapLayer; crowdState(): { near: number; bodies: number; lost: number } } {
   seed = 1234567; // the same city every time
   const rich = detail >= 1; // phones get fewer props, people and lights
   const scene = new THREE.Scene();
@@ -189,25 +266,22 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // props are drawn as instances, one draw per model part per stretch of street: as separate clones the
   // shutters, chairs, crates and lamps cost a draw call each per pass (thousands a frame on a phone)
   const placed = new Map<string, { name: string; at: THREE.Matrix4[] }>();
+  // phones: fruit, tea sets, baskets and the like are not drawn from further than SMALL_FAR (a few pixels each)
+  const propCells: { c: THREE.Vector3; r: number; near: THREE.InstancedMesh[]; far: THREE.InstancedMesh[]; small: boolean; lod: number; model: { dirty: boolean } | null }[] = [];
+  let propTick = 0;
   const place = (name: string, x: number, y: number, z: number, yaw: number, scale = 1) => {
-    const key = `${name}|${cellOf(x, z)}`;
+    const key = `${name}|${cellOf(x, z, rich ? CELL : 39)}`; // phones: longer stretches, fewer draw calls
     const e = placed.get(key) ?? placed.set(key, { name, at: [] }).get(key)!;
     e.at.push(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(UP, yaw), new THREE.Vector3(scale, scale, scale)));
   };
 
   // ---- sky: warm horizon to deep blue, the sun, and Taravel's ringed neighbour ----
-  const skyMesh = add(new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.ShaderMaterial({
-    side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { sun: { value: new THREE.Vector3(-0.3, 0.035, -0.95).normalize() } },
-    vertexShader: 'varying vec3 d; void main(){ d = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
-    fragmentShader: `varying vec3 d; uniform vec3 sun;
-      void main(){ float h = clamp(d.y, -0.1, 1.); vec3 top = vec3(.035, .06, .17), hor = vec3(.98, .46, .4), low = vec3(.3, .22, .32);
-        vec3 c = mix(hor, mix(vec3(.42, .3, .55), top, smoothstep(.08, .5, h)), smoothstep(0., .14, h)); c = mix(low, c, smoothstep(-.1, .05, d.y));
-        float s = max(dot(d, sun), 0.); c += vec3(1., .75, .45) * (pow(s, 700.) * 6. + pow(s, 10.) * .3);
-        gl_FragColor = vec4(c, 1.); }`,
-  })));
+  // the sky follows the camera (a city 650 m across), and its time of day is daycycle.ts's
+  const skyMat = skyMaterial();
+  const skyMesh = add(new THREE.Mesh(new THREE.SphereGeometry(1800, 32, 16), skyMat));
+  const envSky = new THREE.Mesh(new THREE.SphereGeometry(40, 32, 16), skyMat); // the same sky, small enough for the light probe's camera
   // the renderer turns this sky into image-based light: shade reads as sky-lit, not black
-  scene.userData.skyForEnv = skyMesh; scene.userData.envIntensity = 1.5; scene.userData.ao = rich;
+  scene.userData.skyForEnv = envSky; scene.userData.envIntensity = 1.2; scene.userData.ao = rich;
   const planet = add(new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, depthWrite: false, transparent: true, opacity: 0.85, map: canvasTex(512, 512, (g) => {
     g.translate(256, 256); g.rotate(-0.35);
     g.strokeStyle = 'rgba(240,220,200,.45)'; g.lineWidth = 10; g.beginPath(); g.ellipse(0, 0, 230, 60, 0, Math.PI, 2 * Math.PI); g.stroke();
@@ -218,22 +292,31 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   planet.position.set(120, 150, -260); planet.scale.setScalar(150);
 
   // late afternoon: a low warm sun down the street, cool sky fill
-  add(new THREE.HemisphereLight(0x8a96d8, 0xb07a58, 1.35)); // the city's own glow: violet sky above, warm street light bouncing below // bounce off warm paving
+  const hemi = add(new THREE.HemisphereLight(0x8a96d8, 0xb07a58, 1.35)); // the city's own glow: violet sky above, warm street light bouncing below // bounce off warm paving
   const sun = new THREE.DirectionalLight(0xff9a70, 1.4); // the last of the sun, a rim from the spaceport end: the city is the light now
   sun.position.set(-30, 30, -70); sun.castShadow = true;
   sun.shadow.mapSize.set(rich ? 2048 : 1024, rich ? 2048 : 1024); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
-  Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 90, bottom: -90, far: 240 });
+  const SHADOW_R = rich ? 46 : 28, SUN_OFF = new THREE.Vector3(-30, 30, -70), SHV = new THREE.Vector3(), SHC = new THREE.Vector3();
+  Object.assign(sun.shadow.camera, { left: -SHADOW_R, right: SHADOW_R, top: SHADOW_R, bottom: -SHADOW_R, near: 1, far: 240 });
+  sun.shadow.camera.updateProjectionMatrix();
   add(sun); add(sun.target);
+  const stand: { x: number; y: number; z: number; h: number; k: number }[] = [];
+  const BLOBS = 80, BM = new THREE.Matrix4();
+  const blobs = new THREE.InstancedMesh((() => { const g = new THREE.PlaneGeometry(1.1, 1.1); g.rotateX(-Math.PI / 2); return g; })(), new THREE.MeshBasicMaterial({
+    map: canvasTex(64, 64, (g) => { const r = g.createRadialGradient(32, 32, 2, 32, 32, 31); r.addColorStop(0, 'rgba(0,0,0,.55)'); r.addColorStop(0.6, 'rgba(0,0,0,.25)'); r.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); }),
+    transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }), BLOBS);
+  blobs.count = 0; blobs.frustumCulled = false; blobs.userData.ground = false; blobs.renderOrder = 1; add(blobs);
   // on phones the shadow map (the whole street) is redrawn every third frame: the sun never moves, only people do
   sun.shadow.autoUpdate = rich;
   let shadowFrame = 0;
 
   // ---- textures: Poly Haven sets, one tile in metres ----
   const tex = (set: string, mats: THREE.MeshStandardMaterial[], rep: [number, number] = [1, 1], size: '1k' | '512' = rich ? '1k' : '512') => {
+    for (const m of mats) m.userData.late = `${set}|${rep}|${size}`; // its maps arrive later: shared only with the same set (mergeStatic)
     void Promise.all([loadTexture(`city/${set}`, 'diff', size), loadTexture(`city/${set}`, 'nor', size)]).then(([a, n]) => {
       for (const m of mats) {
         const a2 = a.clone(), n2 = n.clone(); a2.repeat.set(...rep); n2.repeat.set(...rep); a2.needsUpdate = n2.needsUpdate = true;
-        m.map = a2; m.normalMap = n2; m.needsUpdate = true;
+        m.map = a2; m.normalMap = n2; m.needsUpdate = true; passMaps(m);
       }
     }).catch(() => undefined);
   };
@@ -249,11 +332,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
     return g;
   };
-  const paving = new THREE.MeshStandardMaterial({ color: 0xe0d2c0, roughness: 0.9 }); tex('pavement', [paving]);
+  const paving = wetify(new THREE.MeshStandardMaterial({ color: 0xe0d2c0, roughness: 0.9 }), 0.6); tex('pavement', [paving]);
   const ground = add(new THREE.Mesh(strip(xs, 2.5), paving)); ground.receiveShadow = true; ground.userData.ground = true;
   // the road and the kerbs: the same vertices, drawn over in depth instead of lifted, never something to stand on
   const over = (m: THREE.MeshStandardMaterial, k = 2) => Object.assign(m, { polygonOffset: true, polygonOffsetFactor: -k, polygonOffsetUnits: -k });
-  const roadM = over(new THREE.MeshStandardMaterial({ color: 0x5a5658, roughness: 0.32, metalness: 0.15 })); // wet after the evening wash tex('road', [roadM]);
+  const roadM = wetify(over(new THREE.MeshStandardMaterial({ color: 0x6a6668, roughness: 0.8, metalness: 0 }))); tex('road', [roadM], [1, 1]);
   const road = add(new THREE.Mesh(strip([-4, 4], 4), roadM)); road.receiveShadow = true; road.userData.ground = false;
   const kerbM = over(new THREE.MeshStandardMaterial({ color: 0xc8c0b2, roughness: 0.8 }));
   for (const sd of [-1, 1]) { const kb = add(new THREE.Mesh(strip(sd < 0 ? [-4.35, -4] : [4, 4.35], 1), kerbM)); kb.receiveShadow = true; kb.userData.ground = false; }
@@ -276,7 +359,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const railM = new THREE.MeshStandardMaterial({ color: 0x3b3f44, roughness: 0.5, metalness: 0.6 });
   const ledMats = [0x6ff7ff, 0xff6ec7, 0xffc36b].map((c) => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(2.2), toneMapped: false }));
   const podM = new THREE.MeshStandardMaterial({ color: 0x9fc0d6, roughness: 0.08, metalness: 0.5, emissive: 0xffd9a8, emissiveIntensity: 0.35 });
-  const awnings = [stripes('#c0392b', '#f4e6d0'), stripes('#16a085', '#f0f0e0'), stripes('#f39c12', '#fff6e0'), stripes('#2c3e94', '#f2efe6'), stripes('#8e44ad', '#fbe9ff')];
+  const awnings: THREE.Texture[] = [stripes('#c0392b', '#f4e6d0'), stripes('#16a085', '#f0f0e0'), stripes('#f39c12', '#fff6e0'), stripes('#2c3e94', '#f2efe6'), stripes('#8e44ad', '#fbe9ff')];
+  // the stripes only change across, so the five share one texture, each awning reading one row of it
+  const stripeSet = stack(awnings.map(canvasOf));
+  const awningM = new THREE.MeshStandardMaterial({ map: stripeSet.t, side: THREE.DoubleSide, roughness: 0.9 });
   const lit = (map: THREE.Texture, k = 0.6) => new THREE.MeshStandardMaterial({ map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: k, roughness: 0.5 });
   const plane = (w: number, h: number, m: THREE.Material, x: number, y: number, z: number, yaw: number) => { const p = add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), m)); p.position.set(x, y, z); p.rotation.y = yaw; return p; };
 
@@ -285,15 +371,17 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const poolM = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 });
   const pool = (x: number, z: number, r: number) => { const m = add(new THREE.Mesh(new THREE.PlaneGeometry(r * 2, r * 2), poolM)); m.rotation.x = -Math.PI / 2; m.position.set(x, hx(x) + 0.01, z); m.userData.ground = false; };
   // shared looks for the small shops: six lit interiors, a dozen names (desi trades in three scripts)
-  const shopFronts = [20, 45, 160, 210, 300, 340].map((h) => lit(shelves(h), 1.1));
-  const shopSigns = ['Sharma Nano-Tailors', 'Noor Holo-Opticals', 'Nebula Bytes', 'Lunar Lassi', 'Gupta Hover Parts', 'Haji Orbital Dry Fruits', 'Zaika Zero-G Rolls', 'Raju Neural SIMs', 'शर्मा स्पेस स्वीट्स', 'नूर होलो-मोबाइल', 'حاجی مداری میوے', 'زائقہ زیرو جی رولز']
-    .map((n, i) => lit(canvasTex(512, 96, (g) => { const c = ['#ffd36e', '#7fd8ff', '#ff6ec7', '#b6ff6e', '#ffffff', '#ff9f6e'][i % 6]; g.fillStyle = '#16121e'; g.fillRect(0, 0, 512, 96); g.strokeStyle = c; g.lineWidth = 5; g.strokeRect(4, 4, 504, 88); g.fillStyle = c; g.shadowColor = c; g.shadowBlur = 12; g.font = '700 46px Rajdhani, "Noto Sans Devanagari", "Noto Nastaliq Urdu", sans-serif'; g.textAlign = 'center'; g.fillText(n, 256, 64, 480); }), 1.2));
+  const fronts = stack([20, 45, 160, 210, 300, 340].map((h) => canvasOf(shelves(h)))), frontM = lit(fronts.t, 1.1);
+  const shopSignsC = ['Sharma Nano-Tailors', 'Noor Holo-Opticals', 'Nebula Bytes', 'Lunar Lassi', 'Gupta Hover Parts', 'Haji Orbital Dry Fruits', 'Zaika Zero-G Rolls', 'Raju Neural SIMs', 'शर्मा स्पेस स्वीट्स', 'नूर होलो-मोबाइल', 'حاجی مداری میوے', 'زائقہ زیرو جی رولز']
+    .map((n, i) => canvasOf(canvasTex(512, 96, (g) => { const c = ['#ffd36e', '#7fd8ff', '#ff6ec7', '#b6ff6e', '#ffffff', '#ff9f6e'][i % 6]; g.fillStyle = '#16121e'; g.fillRect(0, 0, 512, 96); g.strokeStyle = c; g.lineWidth = 5; g.strokeRect(4, 4, 504, 88); g.fillStyle = c; g.shadowColor = c; g.shadowBlur = 12; g.font = '700 46px Rajdhani, "Noto Sans Devanagari", "Noto Nastaliq Urdu", sans-serif'; g.textAlign = 'center'; g.fillText(n, 256, 64, 480); })));
+  const signSet = stack(shopSignsC), signM = lit(signSet.t, 1.2);
   const shopAt = (side: number, z0b: number, z1b: number) => SHOPS.find((s) => s.side === side && s.z > z1b + 3.5 && s.z < z0b - 3.5);
   const FLAT = { side: 1, z0: 61, z1: 77 }; // the friends' flat: its own interior, built below
   const facadesOut: Facade[] = [];
   const greebles: Record<'ledge' | 'pipe' | 'panel', THREE.BufferGeometry[]> = { ledge: [], pipe: [], panel: [] };
   // junctions: the canyon opens to side streets, and the skyline shows down them
   const GAPS: Record<number, [number, number][]> = { 1: [[34, 26]], [-1]: [[-40, -48]] };
+  const sideStreets: { side: number; z0: number; z1: number; m: THREE.Material }[] = [];
   const h0 = (_f: typeof FLAT) => 2 * 3.3 + 0.6;
   let k = 0;
   for (const side of [-1, 1]) {
@@ -303,16 +391,14 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       const gap = (GAPS[side] ?? []).find(([a, b]) => z - len < a && z > b);
       if (gap && !inFlat) {
         if (z > gap[0]) len = z - gap[0]; // build up to the junction
-        else { // the side street: open to the far city, a wall at its end
-          blocks.push(new THREE.Box3(new THREE.Vector3(Math.min(side * (FRONT + 12), side * (FRONT + 13)), 0, gap[1]), new THREE.Vector3(Math.max(side * (FRONT + 12), side * (FRONT + 13)), 20, gap[0])));
-          box(4, 5.5, gap[0] - gap[1], pick(facadeMats[1]), side * (FRONT + 14.5), 2.75, (gap[0] + gap[1]) / 2); // low, so the far city shows over it
-          facadesOut.push({ side, z0: gap[0], z1: gap[1], h: 5.5 });
-          for (const zz of [gap[0], gap[1]]) blocks.push(new THREE.Box3(new THREE.Vector3(Math.min(side * FRONT, side * (FRONT + 13)), 0, zz - 0.2), new THREE.Vector3(Math.max(side * FRONT, side * (FRONT + 13)), 20, zz + 0.2)));
+        else { // a side street: built below, once the main street is up (sideStreet)
+          sideStreets.push({ side, z0: gap[0], z1: gap[1], m: pick(facadeMats[1]) });
+          for (const zz of [gap[0], gap[1]]) blocks.push(new THREE.Box3(new THREE.Vector3(Math.min(side * FRONT, side * (FRONT + 12)), 0, zz - 0.2), new THREE.Vector3(Math.max(side * FRONT, side * (FRONT + 12)), 20, zz + 0.2)));
           z = gap[1]; continue;
         }
       }
       if (inFlat) len = z - FLAT.z0;
-      const zc = z - len / 2, floors = inFlat ? 2 : rnd() < 0.75 ? 2 : 3, h = floors * 3.3 + 0.6, depth = 12;
+      const zc = z - len / 2, floors = inFlat ? 2 : rnd() < 0.55 ? 3 : 4, h = floors * 3.3 + 0.6, depth = 12;
       if (!inFlat) facadesOut.push({ side, z0: z, z1: z - len, h });
       const fi = k % 3 === 2 ? 2 : k % 5 === 1 ? 1 : 0, wallM = pick(facadeMats[fi]);
       const face = side * FRONT, out = -side; // `out` points from the wall into the street
@@ -375,15 +461,16 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           if (shop && Math.abs(wz - shop.z) < 4.6) continue;
           if (rnd() < 0.72) { // open and lit: a little shop, its goods glowing, its name over the door
             const yaw = out > 0 ? Math.PI / 2 : -Math.PI / 2;
-            plane(3.6, 2.6, shopFronts[Math.floor(rnd() * shopFronts.length)], face + out * 0.03, 1.45 + FLOOR, wz, yaw);
-            plane(3.4, 0.6, shopSigns[Math.floor(rnd() * shopSigns.length)], face + out * 0.06, 3.15 + FLOOR, wz, yaw);
+            fronts.tile(plane(3.6, 2.6, frontM, face + out * 0.03, 1.45 + FLOOR, wz, yaw).geometry, Math.floor(rnd() * 6));
+            signSet.tile(plane(3.4, 0.6, signM, face + out * 0.06, 3.15 + FLOOR, wz, yaw).geometry, Math.floor(rnd() * shopSignsC.length));
             pool(face + out * 1.4, wz, 2.2);
           } else place(rnd() < 0.6 ? 'rollershutter_door' : 'rollershutter_window_01', face + out * 0.02, FLOOR, wz, out > 0 ? Math.PI / 2 : -Math.PI / 2);
         }
         // an awning over the pavement: striped cloth, tilted down to the street
-        const am = new THREE.MeshStandardMaterial({ map: awnings[k % awnings.length].clone(), side: THREE.DoubleSide, roughness: 0.9 });
-        am.map!.repeat.set(1, (len - 1.4) / 2); am.map!.needsUpdate = true;
-        const aw = add(new THREE.Mesh(new THREE.PlaneGeometry(1.7, len - 1.4), am));
+        // one material per stripe, shared by every awning in it: the repeat along the street is in the uvs
+        const ag = new THREE.PlaneGeometry(1.7, len - 1.4), auv = ag.attributes.uv as THREE.BufferAttribute;
+        for (let i = 0; i < auv.count; i++) auv.setY(i, auv.getY(i) * (len - 1.4) / 2);
+        const aw = add(new THREE.Mesh(stripeSet.tile(ag, k % awnings.length, true), awningM));
         aw.rotation.set(-Math.PI / 2, out * 0.3, 0, 'XYZ'); aw.position.set(face + out * 0.8, 3.75 + FLOOR, zc); aw.castShadow = true;
       }
       z -= len; k++;
@@ -393,13 +480,88 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     if (!greebles[k2].length) continue;
     const g = add(new THREE.Mesh(mergeGeometries(greebles[k2], false)!, m)); g.castShadow = rich; g.receiveShadow = true;
   }
+  // ---- side streets: the two junctions open into lanes of their own, SIDE_L metres deep, lined with shops and flats,
+  // ending in a little square with a landmark (a light fountain, a statue of the first liner). The bazaar was one
+  // street; now it has corners to turn ----
+  const SIDE_L = 46, plazas: { x: number; z: number }[] = [];
+  for (const st of sideStreets) {
+    const { side, z0, z1 } = st, zc = (z0 + z1) / 2, wz = z0 - z1, xA = FRONT + 12, xE = FRONT + SIDE_L;
+    const X = (d: number) => side * d; // distance from the street centre line, out along the side street
+    // the lane: paving, a strip of road down the middle, lit edges
+    const lane = add(new THREE.Mesh(new THREE.PlaneGeometry(SIDE_L + 14, wz + 0.4), paving)); lane.rotation.x = -Math.PI / 2; lane.position.set(X(FRONT + (SIDE_L + 14) / 2), FLOOR - 0.001, zc); lane.receiveShadow = true; lane.userData.ground = false;
+    const mid = add(new THREE.Mesh(new THREE.PlaneGeometry(SIDE_L - 14, 3), roadM)); mid.rotation.x = -Math.PI / 2; mid.position.set(X(FRONT + 12 + (SIDE_L - 14) / 2 - 6), FLOOR + 0.002, zc); mid.receiveShadow = true; mid.userData.ground = false;
+    // both sides: buildings of three to six floors, their fronts on the lane, a lit shop on the ground floor of each
+    for (const dz of [1, -1]) {
+      const zf = dz > 0 ? z0 : z1; // the building line on this side of the lane
+      for (let x = xA; x < xE - 4; ) {
+        const w = 7 + Math.floor(rnd() * 4), floors = 3 + Math.floor(rnd() * 4), h = floors * 3.3 + 0.6, depth = 10, xm = x + w / 2;
+        const wall = pick(facadeMats[Math.floor(rnd() * 3)]);
+        solid(box(w - 0.2, h, depth, wall, X(xm), h / 2, zf + dz * depth / 2));
+        box(w, 0.5, depth + 0.3, parapetM, X(xm), h + 0.25, zf + dz * depth / 2);
+        const faceZ = zf - dz * 0.03, yaw = dz > 0 ? Math.PI : 0;
+        for (let f = 1; f < floors; f++) for (let wx = x + 1.3; wx < x + w - 1; wx += 2.4) {
+          box(1.2, 1.75, 0.12, frameM, X(wx), f * 3.3 + 1.5, faceZ - dz * 0.02);
+          box(0.95, 1.5, 0.06, rnd() < 0.3 ? litM : glassM, X(wx), f * 3.3 + 1.5, faceZ - dz * 0.08).castShadow = false;
+        }
+        fronts.tile(plane(Math.min(3.6, w - 2), 2.6, frontM, X(xm), 1.45 + FLOOR, faceZ - dz * 0.02, yaw).geometry, Math.floor(rnd() * 6));
+        signSet.tile(plane(Math.min(3.4, w - 2.2), 0.6, signM, X(xm), 3.15 + FLOOR, faceZ - dz * 0.05, yaw).geometry, Math.floor(rnd() * shopSignsC.length));
+        pool(X(xm), zf - dz * 1.4, 2.2);
+        add(new THREE.Mesh(new THREE.BoxGeometry(w - 0.3, 0.08, 0.08), ledMats[(k++) % ledMats.length])).position.set(X(xm), h + 0.55, faceZ - dz * 0.1);
+        x += w;
+      }
+    }
+    // lamps down the lane, alternating sides, each with its pool of light
+    for (let x = FRONT + 8, i = 0; x < FRONT + SIDE_L + 12; x += 9, i++) {
+      const lz = i % 2 ? z0 - 0.6 : z1 + 0.6;
+      place('street_lamp_02', X(x), FLOOR, lz, i % 2 ? Math.PI : 0);
+      pool(X(x), lz + (i % 2 ? -1.4 : 1.4), 3);
+    }
+    // the square at the end: open on three sides to more buildings, a landmark in the middle
+    const px = FRONT + SIDE_L + 8, pz = zc;
+    plazas.push({ x: X(px), z: pz });
+    const sq = add(new THREE.Mesh(new THREE.PlaneGeometry(18, 22), paving)); sq.rotation.x = -Math.PI / 2; sq.position.set(X(px), FLOOR - 0.001, pz); sq.receiveShadow = true; sq.userData.ground = false;
+    for (const [bx, bz, bw, bd] of [[px + 12, pz + 10, 6, 10], [px + 12, pz - 10, 6, 10], [px, pz + 14, 18, 6], [px, pz - 14, 18, 6], [FRONT + SIDE_L - 1, pz + 9.5, 3, 11], [FRONT + SIDE_L - 1, pz - 9.5, 3, 11]] as number[][]) {
+      const hh = 8 + Math.floor(rnd() * 3) * 3.3;
+      solid(box(bw, hh, bd, rnd() < 0.5 ? st.m : pick(facadeMats[0]), X(bx), hh / 2, bz));
+      box(bw + 0.2, 0.5, bd + 0.2, parapetM, X(bx), hh + 0.25, bz);
+    }
+    if (side > 0) {
+      // the light fountain: a basin, a ring of jets, a glowing column
+      const basin = add(new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.4, 0.6, 32), parapetM)); basin.position.set(X(px), 0.3, pz); basin.castShadow = basin.receiveShadow = true;
+      const water = add(new THREE.Mesh(new THREE.CircleGeometry(2.9, 32), new THREE.MeshStandardMaterial({ color: 0x1d4c63, roughness: 0.05, metalness: 0.3, emissive: 0x0b3a4a }))); water.rotation.x = -Math.PI / 2; water.position.set(X(px), 0.55, pz);
+      const col = add(new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 3.2, 12), ledMats[0])); col.position.set(X(px), 2, pz);
+      blocks.push(new THREE.Box3(new THREE.Vector3(X(px) - 3.3, 0, pz - 3.3), new THREE.Vector3(X(px) + 3.3, 0.7, pz + 3.3)));
+    } else {
+      // the statue: the first liner to leave Taravel, nose up on a plinth
+      const plinth = add(new THREE.Mesh(new THREE.BoxGeometry(3, 2, 3), parapetM)); plinth.position.set(X(px), 1, pz); plinth.castShadow = plinth.receiveShadow = true;
+      const ship = add(new THREE.Mesh(new THREE.CapsuleGeometry(0.6, 3.6, 6, 16), new THREE.MeshStandardMaterial({ color: 0xd4a94e, metalness: 0.9, roughness: 0.3 }))); ship.position.set(X(px), 4.3, pz); ship.rotation.z = 0.35; ship.castShadow = true;
+      blocks.push(new THREE.Box3(new THREE.Vector3(X(px) - 1.6, 0, pz - 1.6), new THREE.Vector3(X(px) + 1.6, 2, pz + 1.6)));
+    }
+    // shops on the square's three walls, lit like the bazaar's: the square is a place to be, not a dark yard
+    for (const [fx, fz, fyaw, n] of [[px + 8.9, pz, side > 0 ? -Math.PI / 2 : Math.PI / 2, 3], [px, pz + 10.9, Math.PI, 3], [px, pz - 10.9, 0, 3]] as number[][]) {
+      for (let i = 0; i < n; i++) {
+        const off = (i - (n - 1) / 2) * 5, ax = fz === pz ? X(fx) : X(px + off), az = fz === pz ? pz + off : fz;
+        const ys = fyaw;
+        fronts.tile(plane(3.6, 2.6, frontM, ax, 1.45 + FLOOR, az, ys).geometry, Math.floor(rnd() * 6));
+        signSet.tile(plane(3.4, 0.6, signM, ax + (fz === pz ? -side * 0.03 : 0), 3.15 + FLOOR, az + (fz === pz ? 0 : fz > pz ? -0.03 : 0.03), ys).geometry, Math.floor(rnd() * shopSignsC.length));
+        pool(fz === pz ? ax - side * 1.6 : ax, fz === pz ? az : az + (fz > pz ? -1.6 : 1.6), 2.6);
+      }
+    }
+    // the square lit like the street: lamps at its corners, pools of light, a warm light over the landmark on bigger screens
+    for (const [lx, lz] of [[px - 7, pz - 9], [px - 7, pz + 9], [px + 7, pz - 9], [px + 7, pz + 9]]) { place('street_lamp_01', X(lx), FLOOR, lz, 0); pool(X(lx), lz, 3.4); }
+    pool(X(px), pz, 7); pool(X(px - 5), pz, 4); pool(X(px + 4), pz + 5, 4); pool(X(px + 4), pz - 5, 4);
+    if (rich) { const pl = add(new THREE.PointLight(side > 0 ? 0x9fe9ff : 0xffd9a0, 22, 20, 1.4)); pl.position.set(X(px), 5, pz); }
+    for (const [bx, bz] of [[px - 4, pz + 5], [px - 4, pz - 5]]) place(side > 0 ? 'painted_wooden_bench' : 'modular_street_seating', X(bx), FLOOR, bz, side > 0 ? -Math.PI / 2 : Math.PI / 2);
+    // the square's far side opens on to the avenue (districts.ts): the way out of the old town to the rest of the city
+  }
+
   // walls closing both ends of the street, so nobody walks off the map
-  blocks.push(new THREE.Box3(new THREE.Vector3(-30, -1, N + 2), new THREE.Vector3(30, 20, N + 10)), new THREE.Box3(new THREE.Vector3(-30, -1, S - 12), new THREE.Vector3(30, 20, S - 1.5)));
-  box(19, 9, 1, facadeMats[0][1], 0, 4.5, N + 2.5);
+  // the north end opens through the old town's gate to the ring street and the city beyond; the gate end stays closed
+  blocks.push(new THREE.Box3(new THREE.Vector3(-30, -1, S - 12), new THREE.Vector3(30, 20, S - 1.5)));
 
   // ---- the flat: a small, cluttered home with a window on the street ----
   {
-    const x0 = FRONT, x1 = FRONT + 6.5, zA = 64, zB = 71.5, hgt = 3.1;
+    const x0 = FRONT, x1 = FRONT + FLAT_D, zA = 64, zB = 71.5, hgt = 2.95, B = FLAT_D - 6.5; // a 2.95 m ceiling, a 2.2 m door // B: the back of the room moved back
     const inM = new THREE.MeshStandardMaterial({ color: 0xf6dfbc, roughness: 0.95 }); tex('plaster', [inM], [1, 1], '512');
     const outM = facadeMats[0][4];
     const floorM = over(new THREE.MeshStandardMaterial({ color: 0xc8956a, roughness: 0.7 }), 1); tex('planks', [floorM], [3, 3], '512');
@@ -413,22 +575,22 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     // street wall: door at z 64.6 to 66.2, a window at z 68 to 70.4
     wall(0.3, hgt, 0.6, x0, hgt / 2 + FLOOR, 64.3, outM);
     wall(0.3, hgt, 1.8, x0, hgt / 2 + FLOOR, 67.1, outM); wall(0.3, hgt, 1.1, x0, hgt / 2 + FLOOR, 70.95, outM);
-    box(0.3, hgt - 2.3, 1.6, outM, x0, 2.3 + (hgt - 2.3) / 2 + FLOOR, 65.4);
+    box(0.3, hgt - 2.2, 1.6, outM, x0, 2.2 + (hgt - 2.2) / 2 + FLOOR, 65.4);
     wall(0.3, 1.0, 2.4, x0, 0.5 + FLOOR, 69.2, outM); box(0.3, hgt - 2.3, 2.4, outM, x0, 2.3 + (hgt - 2.3) / 2 + FLOOR, 69.2);
     box(0.08, 1.3, 2.4, new THREE.MeshStandardMaterial({ color: 0xbfd7e6, transparent: true, opacity: 0.15, roughness: 0.05 }), x0, 1.65 + FLOOR, 69.2);
     wall(0.3, hgt, zB - zA, x1, hgt / 2 + FLOOR, (zA + zB) / 2, inM); wall(x1 - x0, hgt, 0.3, (x0 + x1) / 2, hgt / 2 + FLOOR, zA, inM); wall(x1 - x0, hgt, 0.3, (x0 + x1) / 2, hgt / 2 + FLOOR, zB, inM);
     const ceil = add(new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, zB - zA), inM)); ceil.rotation.x = Math.PI / 2; ceil.position.set((x0 + x1) / 2, hgt + FLOOR, (zA + zB) / 2);
-    const lamp = add(new THREE.PointLight(0xffd9a0, rich ? 8 : 6, 9, 1.5)); lamp.position.set(12.8, 2.7, 68);
+    const lamp = add(new THREE.PointLight(0xffd9a0, rich ? 8 : 6, 9, 1.5)); lamp.position.set(FRONT + FLAT_D / 2, 2.7, 68);
     const fairy = add(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, zB - zA - 0.6), ledMats[2])); fairy.position.set(x1 - 0.2, 2.8, (zA + zB) / 2);
     plane(1.6, 0.4, lit(canvasTex(512, 128, (g) => { g.fillStyle = '#20324a'; g.fillRect(0, 0, 512, 128); g.fillStyle = '#f2ead8'; g.font = '600 64px Rajdhani, sans-serif'; g.textAlign = 'center'; g.fillText('FLAT 4B', 256, 86); }), 0.3), x0 - 0.17, 2.55 + FLOOR, 65.4, -Math.PI / 2);
     // the morning's clutter: a small table, a sofa under the window, a bed in the corner, shelves, a kettle
     for (const [n, x, y, z, yaw, sc] of [
       ['dining_table', 13.2, FLOOR, 66.4, Math.PI / 2, 0.8], ['dining_chair_02', 13.2, FLOOR, 65.4, 0, 1], ['sofa_02', 10.2, FLOOR, 69.2, Math.PI / 2, 0.9],
-      ['old_bed_frame', 14.6, FLOOR, 70.2, Math.PI / 2, 0.9], ['wooden_bookshelf_worn', 15.6, FLOOR, 65.2, -Math.PI / 2, 0.85], ['drawer_cabinet', 15.6, FLOOR, 67.2, -Math.PI / 2, 0.85],
+      ['old_bed_frame', 14.6 + B, FLOOR, 70.2, Math.PI / 2, 0.9], ['wooden_bookshelf_worn', 15.6 + B, FLOOR, 65.2, -Math.PI / 2, 0.85], ['drawer_cabinet', 15.6 + B, FLOOR, 67.2, -Math.PI / 2, 0.85],
       ['vintage_electric_kettle', 13.4, FLOOR + 0.63, 66.7, 0.4, 1], ['wall_clock', x1 - 0.2, 2.2, 68.6, -Math.PI / 2, 1], ['potted_plant_02', 10.4, FLOOR, 71, 0, 0.8],
-      ['ceiling_fan', 12.8, hgt + FLOOR - 0.05, 68, 0, 0.8], ['cardboard_box_01', 11.0, FLOOR, 64.7, 0.3, 0.8], ['wicker_basket_01', 15.2, FLOOR, 68.6, 0, 1],
+      ['ceiling_fan', FRONT + FLAT_D / 2, hgt + FLOOR - 0.05, 68, 0, 0.8], ['cardboard_box_01', 11.0, FLOOR, 64.7, 0.3, 0.8], ['wicker_basket_01', 15.2 + B, FLOOR, 68.6, 0, 1],
     ] as [string, number, number, number, number, number][]) place(n, x, y, z, yaw, sc);
-    for (const b of [[13.2, 66.4, 0.6, 0.8], [10.2, 69.2, 0.5, 1.0], [14.6, 70.2, 0.9, 1.1], [15.6, 66.2, 0.4, 1.4]]) blocks.push(new THREE.Box3(new THREE.Vector3(b[0] - b[2], 0, b[1] - b[3]), new THREE.Vector3(b[0] + b[2], 1, b[1] + b[3])));
+    for (const b of [[13.2, 66.4, 0.6, 0.8], [10.2, 69.2, 0.5, 1.0], [14.6 + B, 70.2, 0.9, 1.1], [15.6 + B, 66.2, 0.4, 1.4]]) blocks.push(new THREE.Box3(new THREE.Vector3(b[0] - b[2], 0, b[1] - b[3]), new THREE.Vector3(b[0] + b[2], 1, b[1] + b[3])));
     const plate = add(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.02, 24), new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.4 }))); plate.position.set(13.1, FLOOR + 0.64, 66.2);
     const para = add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.012, 24), new THREE.MeshStandardMaterial({ color: 0xd9a35a, roughness: 0.8 }))); para.position.set(13.1, FLOOR + 0.66, 66.2); para.name = 'paratha'; para.userData.keep = true;
     box(0.55, 0.4, 0.3, new THREE.MeshStandardMaterial({ color: 0x2c4a6a, roughness: 0.8 }), 12.0, FLOOR + 0.2, 70.6);
@@ -463,10 +625,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   ] as [string, number, number, number, number][]) place(n, x, y, z, yaw);
   blocks.push(new THREE.Box3(new THREE.Vector3(5.8, 0, 12), new THREE.Vector3(7.0, 1, 13.2)));
   // fruit stalls in the middle stretch, under striped canopies
+  const canopyM = new THREE.MeshStandardMaterial({ map: stripeSet.t, side: THREE.DoubleSide });
   for (const [x, z] of [[-6.4, 18], [6.4, 26], [-6.4, -20], [6.4, -26]] as [number, number][]) {
     for (const [n, dx, dy, dz, yaw] of [['wooden_crate_01', 0, 0, 0, 0.2], ['wooden_crate_01', 0, 0, 1, -0.1], ['wicker_basket_01', 0, 0.55, 0, 0], ['wicker_basket_02', 0, 0.55, 1, 0]] as [string, number, number, number, number][]) place(n, x + dx, FLOOR + dy, z + dz, yaw);
     for (const f of ['food_apple_01', 'food_pomegranate_01', 'food_lime_01', 'food_pears_asian_01']) place(f, x + (rnd() - 0.5) * 0.3, FLOOR + 0.72, z + rnd() * 1.0, rnd() * 6);
-    const canopy = add(new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.8), new THREE.MeshStandardMaterial({ map: awnings[(x > 0 ? 1 : 0) + (z > 0 ? 2 : 0)], side: THREE.DoubleSide })));
+    const canopy = add(new THREE.Mesh(stripeSet.tile(new THREE.PlaneGeometry(2.2, 2.8), (x > 0 ? 1 : 0) + (z > 0 ? 2 : 0), true), canopyM));
     canopy.rotation.set(-Math.PI / 2 + 0.12, 0, 0); canopy.position.set(x, 2.4, z + 0.5); canopy.castShadow = true;
     for (const dz of [-0.8, 1.8]) for (const dx of [-0.95, 0.95]) box(0.05, 2.3, 0.05, railM, x + dx, 1.2, z + dz);
     blocks.push(new THREE.Box3(new THREE.Vector3(x - 0.95, 0, z - 0.8), new THREE.Vector3(x + 0.95, 2, z + 1.8)));
@@ -491,8 +654,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     }
   }
   // stalls spilling onto the road: mats of goods at the kerb
+  const kerbMatM = over(new THREE.MeshStandardMaterial({ map: stripeSet.t, roughness: 1 }), 3);
   for (const [x, z] of (rich ? [[3.3, 30], [-3.3, 10], [3.3, -32], [-3.3, -16], [3.3, 48]] : [[3.3, 30], [-3.3, -16]]) as [number, number][]) {
-    const mat = add(new THREE.Mesh(new THREE.PlaneGeometry(1.3, 2.4), over(new THREE.MeshStandardMaterial({ map: awnings[Math.abs(Math.round(z)) % awnings.length], roughness: 1 }), 3))); mat.rotation.x = -Math.PI / 2; mat.position.set(x, 0, z); mat.userData.ground = false;
+    const mat = add(new THREE.Mesh(stripeSet.tile(new THREE.PlaneGeometry(1.3, 2.4), Math.abs(Math.round(z)) % awnings.length, true), kerbMatM)); mat.rotation.x = -Math.PI / 2; mat.position.set(x, 0, z); mat.userData.ground = false;
     for (const [n, dx, dz] of [['wicker_basket_01', 0, -0.6], ['plastic_crate_01', 0, 0.5], ['food_apple_01', 0.1, -0.6]] as [string, number, number][]) place(n, x + dx, n.startsWith('food') ? 0.3 : 0, z + dz, rnd() * 6);
     place('plastic_monobloc_chair_01', x + Math.sign(x) * 0.2, 0, z + 1.6, Math.sign(x) > 0 ? -Math.PI / 2 : Math.PI / 2);
     blocks.push(new THREE.Box3(new THREE.Vector3(x - 0.65, 0, z - 1.2), new THREE.Vector3(x + 0.65, 0.9, z + 2.1)));
@@ -501,13 +665,18 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   {
     const names = ['Sharma Nano-Tailors', 'Noor Holo-Opticals', 'Nebula Bytes', 'Lunar Lassi', 'Qmail Repairs', 'Gupta Hover Parts', 'Meera Laser Mehndi', 'Haji Orbital Dry Fruits', 'Zaika Zero-G Rolls', 'Raju Neural SIMs', 'Pyaar Holo-Photos', 'Saturn Sweets'];
     const cols = ['#ffd36e', '#7fd8ff', '#ff6ec7', '#b6ff6e', '#ffffff', '#ff9f6e'];
+    // one material for all of them: their canvases are stacked once the loop has drawn them
+    const hangM = new THREE.MeshStandardMaterial({ emissive: 0xffffff, emissiveIntensity: 0.9, side: THREE.DoubleSide });
+    const hung: [THREE.Mesh, HTMLCanvasElement][] = [];
     for (let i = 0, n = rich ? 22 : 10; i < n; i++) {
       const side = i % 2 ? 1 : -1, z = N - 6 - (i / n) * (N - S - 14) + (rnd() - 0.5) * 3, y = 3.0 + rnd() * 4.5;
       const t = canvasTex(256, 96, (g) => { const c = cols[i % cols.length]; g.fillStyle = '#1b1b24'; g.fillRect(0, 0, 256, 96); g.strokeStyle = c; g.lineWidth = 5; g.strokeRect(4, 4, 248, 88); g.fillStyle = c; g.font = '700 30px Rajdhani, sans-serif'; g.textAlign = 'center'; g.fillText(names[i % names.length], 128, 58, 236); });
-      const sg = add(new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.6), new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.9, side: THREE.DoubleSide })));
+      const sg = add(new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.6), hangM)); hung.push([sg, canvasOf(t)]);
       sg.position.set(side * (FRONT - 0.9), y, z); sg.userData.ground = false;
       box(0.9, 0.04, 0.04, railM, side * (FRONT - 0.45), y + 0.32, z).castShadow = false;
     }
+    const hs = stack(hung.map(([, c]) => c)); hangM.map = hangM.emissiveMap = hs.t;
+    hung.forEach(([m], i) => hs.tile(m.geometry, i));
   }
 
   // overhead: cables sagging across the street, and bunting on every other one
@@ -529,6 +698,36 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       }
     }
   }
+
+  // ---- traffic: hover taxis and cars gliding down both lanes, a metre off the road; they wait for you if you are in
+  // the way. Two instanced draws (bodies, light strips) whatever the count ----
+  const traffic: { x: number; z: number; v: number; speed: number; col: THREE.Color }[] = [];
+  const carBody = new THREE.CapsuleGeometry(0.8, 2.4, 4, 12); carBody.rotateX(Math.PI / 2); carBody.scale(1, 0.62, 1);
+  const carM = new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.45 });
+  const cars = new THREE.InstancedMesh(carBody, carM, rich ? 10 : 6);
+  const carGlow = new THREE.InstancedMesh(new THREE.BoxGeometry(1.25, 0.05, 3.2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.2), toneMapped: false }), cars.count);
+  const carCols = [0xf4f4f6, 0xffb347, 0x2c3e94, 0xc0392b, 0x16a085, 0x1b1b1f, 0xf2d64b];
+  for (let i = 0; i < cars.count; i++) {
+    const dir = i % 2 ? 1 : -1;
+    traffic.push({ x: dir * 1.7, z: S + 6 + rnd() * (N - S - 12), v: dir, speed: 6 + rnd() * 4, col: new THREE.Color(carCols[i % carCols.length]) });
+    cars.setColorAt(i, traffic[i].col);
+  }
+  cars.castShadow = true; cars.frustumCulled = carGlow.frustumCulled = false; add(cars); add(carGlow);
+  const CM = new THREE.Matrix4(), CQ = new THREE.Quaternion(), CP = new THREE.Vector3(), C1 = new THREE.Vector3(1, 1, 1), YAX = new THREE.Vector3(0, 1, 0);
+  const drive = (dt: number, time: number) => {
+    traffic.forEach((c, i) => {
+      // slow for you, or for the car ahead in the lane
+      let gap = 99;
+      if (you && Math.abs(you.position.x - c.x) < 1.6) { const ahead = (you.position.z - c.z) * c.v; if (ahead > 0) gap = Math.min(gap, ahead - 2.6); }
+      for (const o of traffic) if (o !== c && o.v === c.v) { const ahead = (o.z - c.z) * c.v; if (ahead > 0) gap = Math.min(gap, ahead - 5); }
+      const want = gap < 1 ? 0 : Math.min(c.speed, gap * 0.9);
+      c.z += c.v * want * dt;
+      if (c.z > N - 2) c.z = S + 4; if (c.z < S + 4) c.z = N - 2;
+      CP.set(c.x, 0.55 + Math.sin(time * 1.7 + i) * 0.04, c.z); CQ.setFromAxisAngle(YAX, c.v > 0 ? 0 : Math.PI);
+      cars.setMatrixAt(i, CM.compose(CP, CQ, C1)); CP.y = 0.1; carGlow.setMatrixAt(i, CM.compose(CP, CQ, C1));
+    });
+    cars.instanceMatrix.needsUpdate = carGlow.instanceMatrix.needsUpdate = true;
+  };
 
   // ---- the tram at its stop, and the shelter ----
   {
@@ -577,7 +776,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // ---- the spaceport: the apron, pads with light rings, the terminal's long canopy, the liner docked with its bridge ----
   {
     const apronM = over(new THREE.MeshStandardMaterial({ color: 0xc9ccd0, roughness: 0.8 }), 1); tex('road', [apronM], [30, 24]);
-    const apron = add(new THREE.Mesh(new THREE.PlaneGeometry(200, 160), apronM)); apron.rotation.x = -Math.PI / 2; apron.position.set(0, 0, S - 80); apron.receiveShadow = true; apron.userData.ground = false;
+    const apron = add(new THREE.Mesh(new THREE.PlaneGeometry(156, 160), apronM)); apron.rotation.x = -Math.PI / 2; apron.position.set(0, 0, S - 80); apron.receiveShadow = true; apron.userData.ground = false;
     const hull = new THREE.MeshStandardMaterial({ color: 0xf6f7fa, metalness: 0.35, roughness: 0.3 });
     const pad = (x: number, z: number, r: number) => {
       const ringP = add(new THREE.Mesh(new THREE.RingGeometry(r - 0.4, r, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2), toneMapped: false, polygonOffset: true, polygonOffsetFactor: -3 })));
@@ -615,6 +814,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // who is talking to the player right now, and the way they faced before
   let talking: { q: CityPerson; until: number; at: THREE.Vector3; rest: number } | null = null, clock = 0;
   const eye = new THREE.Vector3();
+  let you: THREE.Object3D | null = null; // the player's body, from bind()
   const person = (id: string, fig: Character, x: number, z: number, yaw: number, pose: CrewPose, walk?: CityPerson['walk']) => {
     fig.root.position.set(x, hx(x), z); fig.root.rotation.y = yaw;
     fig.setGround((px) => hx(px));
@@ -639,23 +839,169 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     person(`walker${i}`, someone(lineages[i % lineages.length], i + 3), x, za + rnd() * (zb - za), 0, 'idle', { z0: za, z1: zb, dir: rnd() < 0.5 ? 1 : -1, speed: 1.1 + rnd() * 0.5 });
   }
 
-  for (const { name, at } of placed.values()) void model(name).then((src) => {
+  // the side streets: people at the shopfronts, window shopping and talking
+  sideStreets.forEach((st, si) => {
+    const poses: CrewPose[] = ['idle', 'point', 'argue', 'present', 'idle', 'write'];
+    for (let j = 0; j < 6; j++) {
+      const d = FRONT + 14 + j * 5.2, dz = j % 2 ? 1 : -1, z = (dz > 0 ? st.z0 : st.z1) - dz * 1.3;
+      person(`group_ss${si}_${j}`, someone(lineages[(si * 2 + j) % lineages.length], 100 + si * 7 + j), st.side * d, z, dz > 0 ? 0 : Math.PI, poses[j]);
+    }
+  });
+  // the squares: a pair talking by the landmark, someone sat on a bench, a couple taking a photo
+  plazas.forEach((pz, pi) => {
+    const sd = Math.sign(pz.x), poses: [number, number, number, CrewPose][] = [[-2.2, 4.2, 0, 'argue'], [-2.2, 5.6, Math.PI, 'idle'], [-4, 5, sd > 0 ? -Math.PI / 2 : Math.PI / 2, 'sit'], [3, -5, 0.8, 'selfie'], [3.8, -5.6, 0.6, 'cheer']];
+    poses.forEach(([dx, dz, yaw, pose], j) => person(`group_sq${pi}_${j}`, someone(lineages[(pi * 3 + j) % lineages.length], 80 + pi * 5 + j), pz.x - sd * dx, pz.z + dz, yaw, pose));
+  });
+
+  // every prop in two builds (tools/lod_city.py): the scan near the camera, an eighth of its triangles further off and
+  // in the shadow map. The scans were 9.6 M triangles a frame down the street, and 5 M more in the shadow pass.
+  const instanced = (src: THREE.Object3D, at: THREE.Matrix4[]) => {
     src.updateMatrixWorld(true);
+    const out: THREE.InstancedMesh[] = [];
     src.traverse((o) => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
       const im = new THREE.InstancedMesh(m.geometry, m.material, at.length);
       at.forEach((w, i) => im.setMatrixAt(i, TMP_M.multiplyMatrices(w, m.matrixWorld)));
-      im.castShadow = im.receiveShadow = true; im.userData.ground = false;
-      im.computeBoundingSphere(); add(im);
+      im.castShadow = im.receiveShadow = true; im.userData.ground = false; im.userData.prop = true;
+      im.computeBoundingSphere(); add(im); out.push(im);
     });
+    return out;
+  };
+  // the light builds of one model, for the whole street at once: one draw per model part, holding the instances of every
+  // stretch that is not near the camera now (refilled when a stretch changes build). Per stretch they were 600 draws
+  // looking down the street from the gate.
+  const farOf = new Map<string, { parts: { im: THREE.InstancedMesh; base: THREE.Matrix4 }[]; cells: { at: THREE.Matrix4[]; pc: (typeof propCells)[number] }[]; dirty: boolean }>();
+  const total = new Map<string, number>();
+  for (const { name, at } of placed.values()) total.set(name, (total.get(name) ?? 0) + at.length);
+  const farFor = (name: string, src1: THREE.Object3D) => {
+    let f = farOf.get(name);
+    if (f) return f;
+    src1.updateMatrixWorld(true);
+    const parts: { im: THREE.InstancedMesh; base: THREE.Matrix4 }[] = [];
+    src1.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const im = new THREE.InstancedMesh(m.geometry, m.material, total.get(name) ?? 1);
+      im.count = 0; im.castShadow = rich; im.receiveShadow = true; im.userData.ground = false; im.userData.prop = true;
+      add(im); parts.push({ im, base: m.matrixWorld.clone() });
+    });
+    f = { parts, cells: [], dirty: true }; farOf.set(name, f);
+    return f;
+  };
+  const refillFar = () => {
+    for (const f of farOf.values()) {
+      if (!f.dirty) continue;
+      f.dirty = false;
+      for (const { im, base } of f.parts) {
+        let n = 0;
+        for (const c of f.cells) if (c.pc.lod === 1) for (const w of c.at) im.setMatrixAt(n++, TMP_M.multiplyMatrices(w, base));
+        im.count = n; im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere();
+      }
+    }
+  };
+  for (const { name, at } of placed.values()) void Promise.all([model(name), model(`${name}.lod1`).catch(() => null)]).then(([src, src1]) => {
+    const near = instanced(src, at);
+    const b = new THREE.Sphere(); near[0]?.boundingSphere && b.copy(near[0].boundingSphere);
+    for (const im of near) b.union(im.boundingSphere!);
+    let r = 0; src.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); r = Math.max(r, m.geometry.boundingSphere!.radius * m.matrixWorld.getMaxScaleOnAxis()); } });
+    const pc = { c: b.center.clone(), r: b.radius, near, far: [] as THREE.InstancedMesh[], small: r < SMALL_PROP, lod: 0, model: src1 ? farFor(name, src1) : null };
+    pc.model?.cells.push({ at, pc });
+    propCells.push(pc);
   }).catch(() => undefined);
-  mergeStatic(scene, new Set<THREE.Object3D>([ground, skyMesh, ringLight]));
-
   const future = buildFuture(scene, { rich, N, S, FRONT, FLOOR, shops: SHOPS });
   blocks.push(...future.solids);
   const mega = buildMega(scene, { rich, N, S, FRONT, haze: HAZE });
   const dense = buildDense(scene, { rich, FRONT, S, N, facades: facadesOut });
+  // ---- the crowd crowdPool: real bodies that take over the painted crowd near the camera. A card closer than TAKE metres
+  // is walked by a body from the crowd pool (the nearest first) and hidden; the body goes back when the card is far again.
+  // Before this, the cards simply vanished within 9 m and the street emptied as you walked into it.
+  const POOL = rich ? 14 : 8, TAKE = 14;
+  const crowdPool: { fig: Character; card: number; phase: number; dx: number }[] = [];
+  for (let i = 0; i < POOL; i++) {
+    const fig = someone(lineages[(i + 2) % lineages.length], i + 60);
+    fig.root.visible = false; fig.setGround((px) => hx(px)); add(fig.root);
+    crowdPool.push({ fig, card: -1, phase: rnd() * 10, dx: 0 });
+  }
+  const byCard = new Map<number, (typeof crowdPool)[number]>(), near: [number, number][] = [];
+  let lastCam: THREE.Vector3 | null = null;
+  const walkCrowd = (dt: number, time: number, cam: THREE.Camera) => {
+    lastCam = cam.position;
+    const cards = dense.cards, taken = dense.taken, c = cam.position;
+    near.length = 0;
+    for (let i = 0; i < cards.length; i++) { const d = Math.hypot(cards[i].x - c.x, cards[i].z - c.z); if (d < TAKE * (taken[i] ? 1.15 : 1)) near.push([d, i]); }
+    near.sort((a, b) => a[0] - b[0]);
+    const want = new Set(near.slice(0, POOL).map(([, i]) => i));
+    for (const b of crowdPool) if (b.card >= 0 && !want.has(b.card)) { taken[b.card] = 0; byCard.delete(b.card); b.card = -1; b.fig.root.visible = false; }
+    for (const i of want) if (!byCard.has(i)) { const b = crowdPool.find((x) => x.card < 0); if (!b) break; b.card = i; b.dx = 0; byCard.set(i, b); taken[i] = 1; b.fig.root.visible = true; }
+    for (const b of crowdPool) {
+      if (b.card < 0) continue;
+      const q = cards[b.card], sp = Math.abs(q.v), yaw = q.v > 0 ? 0 : Math.PI;
+      // nobody walks through you: a body about to reach you steps round (a card has no idea where you are)
+      let want = 0;
+      if (you) { const ahead = (you.position.z - q.z) * Math.sign(q.v || 1), ax = you.position.x - (q.x + b.dx); if (ahead > -0.6 && ahead < 2.6 && Math.abs(ax) < 1.1) want = -Math.sign(ax || 1) * 1.3; }
+      b.dx += (want - b.dx) * (1 - Math.exp(-dt * 4));
+      const bx = q.x + b.dx;
+      b.fig.root.position.set(bx, hx(bx), q.z); b.fig.root.rotation.y = yaw;
+      b.phase += dt * sp * 2.2;
+      b.fig.animate(sp > 0.3 ? 'walk' : 'idle', b.phase, Math.min(1.1, sp / 3), time, dt);
+    }
+  };
+
+  const moved = mergeStatic(scene, new Set<THREE.Object3D>([ground, skyMesh, ringLight, sun, sun.target, ...(linerG ? [linerG] : [])]), rich ? CELL : 39, (t) => { future.update(0.05, t); mega.update(0.05, t); dense.update(0.05, t, null); });
+  // ---- the rest of Zenvora: districts, traffic and people round the old town (districts.ts) ----
+  const dist = buildDistricts(scene, { rich, paving, road: roadM, kerb: kerbM, label });
+  blocks.push(...dist.solids);
+  const day = dayCycle({ sky: skyMat, sun, hemi, fog: scene.fog as THREE.Fog, rich, scene });
+  let envTex: THREE.Texture | null = null;
+  const refreshEnv = () => {
+    const r = Renderer.current?.renderer; if (!r) return;
+    const env = new THREE.Scene(); env.add(envSky);
+    const pm = new THREE.PMREMGenerator(r), t = pm.fromScene(env, 0.02, 0.1, 200).texture; pm.dispose();
+    envTex?.dispose(); envTex = t; scene.environment = t;
+  };
+  // the grade by quarter: the bazaar warm, downtown cool, the bay a little teal
+  const TINT = new THREE.Vector3(1, 1, 1), TW = new THREE.Vector3();
+  const H = (x: number, z: number) => (inOld(x, z) ? hx(x) : dist.height(x, z));
+  const nav = navGrid([DIST_BOUNDS[0], DIST_BOUNDS[1], DIST_BOUNDS[2], DIST_BOUNDS[3]], blocks, (x, z) => (H(x, z) < 0.07 ? 0.6 : 0));
+  // the district's walkers drawn as real bodies near the camera (a pool), as cards further off
+  const DPOOL = rich ? 14 : 6, DNEAR = 30;
+  const dpool: { fig: Character; ped: number; phase: number }[] = [];
+  for (let i = 0; i < DPOOL; i++) {
+    const fig = someone(lineages[(i + 4) % lineages.length], i + 140);
+    fig.root.visible = false; fig.setGround((px, pz) => H(px, pz ?? 0)); add(fig.root);
+    dpool.push({ fig, ped: -1, phase: rnd() * 10 });
+  }
+  const dnear: [number, number][] = [];
+  const pedsAt = new THREE.Vector3(1e9, 0, 0); // where the camera was when the walkers were last drawn (crowdState)
+  const drawPeds = (dt: number, time: number, cam: THREE.Camera) => {
+    const c = cam.position, ps = dist.peds;
+    pedsAt.copy(c);
+    dnear.length = 0;
+    for (let i = 0; i < ps.length; i++) { const d = Math.hypot(ps[i].x - c.x, ps[i].z - c.z); if (d < 190) dnear.push([d, i]); }
+    dnear.sort((a, b) => a[0] - b[0]);
+    const want = new Set<number>();
+    for (const [d, i] of dnear) { if (d > DNEAR || want.size >= DPOOL) break; want.add(i); }
+    for (const b of dpool) if (b.ped >= 0 && !want.has(b.ped)) { b.ped = -1; b.fig.root.visible = false; }
+    for (const i of want) if (!dpool.some((b) => b.ped === i)) { const b = dpool.find((x) => x.ped < 0); if (b) { b.ped = i; b.fig.root.visible = true; } }
+    const held = new Set(dpool.map((b) => b.ped));
+    for (const b of dpool) {
+      if (b.ped < 0) continue;
+      const q = ps[b.ped], walking = q.mode === 'walk' || q.mode === 'cross';
+      b.fig.root.position.set(q.x, H(q.x, q.z), q.z); b.fig.root.rotation.y = q.yaw;
+      // they notice you: within a few metres they look at you (and a walker steps round you, districts.ts)
+      if (you && Math.hypot(you.position.x - q.x, you.position.z - q.z) < 4.5) b.fig.setLookTarget(eye.set(you.position.x, you.position.y + 1.6, you.position.z)); else b.fig.setLookTarget(null);
+      b.phase += dt * (walking ? q.v * 2.2 : 1);
+      b.fig.animate(walking ? 'walk' : q.mode === 'wait' ? 'idle' : (q.pose as CrewPose), b.phase, walking ? Math.min(1.1, q.v / 3) : 0, time, dt);
+    }
+    for (const [d, i] of dnear) { if (held.has(i) && d <= DNEAR * 1.2) continue; const q = ps[i]; stand.push({ x: q.x, y: H(q.x, q.z) + (q.pose === 'sit' ? -0.45 : 0), z: q.z, h: q.pose === 'sit' ? 1.3 : 1.72, k: 1e6 + i }); }
+  };
+
+  // inside the flat: only what the door and the window show (the moving things, the people and the sky always)
+  const portals = flatPortals(scene, new THREE.Box3(new THREE.Vector3(FRONT + 0.15, -1, 64), new THREE.Vector3(FRONT + FLAT_D, 3.4, 71.5)), FRONT - 0.15,
+    [[64.6, 66.2, FLOOR - 0.1, 2.2 + FLOOR], [68.0, 70.4, 1.14, 2.44]],
+    (o) => moved.has(o) || !!o.userData.isCharacter || o === skyMesh || o === planet || ((o as THREE.InstancedMesh).isInstancedMesh && !o.userData.prop) || (o as THREE.Sprite).isSprite);
+  sun.shadow.camera.layers.enable(1); // what the flat hides still casts its shadow
   scene.traverse((o) => { if (o !== ground && o.userData.ground === undefined) o.userData.ground = false; });
   // people stood in threes, talking, on the pavements
   const groups: [number, number][] = rich ? [[6.6, 38], [-6.4, 12], [6.4, -8], [-6.6, -36], [6.2, -58], [-3, -66], [3.5, -69], [-5.5, -71], [5.5, -73]] : [[6.6, 38], [-6.6, -36], [-3, -66]];
@@ -767,10 +1113,60 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
 
   return {
     outro: { start: startOutro, skip: endOutro, get active() { return outroT >= 0; }, get remaining() { return outroT >= 0 ? OUTRO - outroT : 0; } },
+    mapLayer: {
+      id: 'zenvora', bounds: [DIST_BOUNDS[0] - 20, DIST_BOUNDS[1] - 6, DIST_BOUNDS[2] + 6, DIST_BOUNDS[3] + 6], pxPerM: 3, span: 80,
+      paint(g, X, Y) {
+        g.fillStyle = '#1b1922'; g.fillRect(0, 0, g.canvas.width, g.canvas.height);
+        dist.paint(g, X, Y);
+        const W = (x0: number, x1: number, z0: number, z1: number, c: string) => { g.fillStyle = c; g.fillRect(X(Math.min(x0, x1)), Y(Math.min(z0, z1)), Math.abs(X(x1) - X(x0)), Math.abs(Y(z1) - Y(z0))); };
+        W(-78, 78, S - 30, N + 4, '#1b1922');
+        W(-FRONT, FRONT, S - 30, N + 2, '#8b8378'); // pavements
+        W(-4, 4, S - 30, N + 2, '#3d3b44'); // the road
+        g.fillStyle = '#e9dfc8'; for (let z = S; z < N; z += 6) W(-0.08, 0.08, z - 1.5, z + 1.5, '#e9dfc8');
+        for (const f of facadesOut) W(f.side * FRONT, f.side * (FRONT + 12), f.z1 + 0.2, f.z0 - 0.2, f.h < 6 ? '#4a4556' : '#5d566c');
+        for (const st of sideStreets) {
+          const X2 = (d: number) => st.side * d, zc = (st.z0 + st.z1) / 2;
+          W(X2(FRONT + 12), X2(FRONT + SIDE_L - 2), st.z0, st.z0 + 10, '#5d566c'); W(X2(FRONT + 12), X2(FRONT + SIDE_L - 2), st.z1 - 10, st.z1, '#5d566c');
+          W(X2(FRONT), X2(FRONT + SIDE_L + 17), st.z1, st.z0, '#8b8378'); W(X2(FRONT + SIDE_L - 2), X2(FRONT + SIDE_L + 17), zc - 11, zc + 11, '#8b8378');
+          W(X2(FRONT + SIDE_L + 17), X2(FRONT + SIDE_L + 21), zc - 17, zc + 17, '#5d566c'); W(X2(FRONT + SIDE_L - 1), X2(FRONT + SIDE_L + 17), zc + 11, zc + 17, '#5d566c'); W(X2(FRONT + SIDE_L - 1), X2(FRONT + SIDE_L + 17), zc - 17, zc - 11, '#5d566c');
+          g.beginPath(); g.fillStyle = '#7fd8ff'; g.arc(X(X2(FRONT + SIDE_L + 8)), Y(zc), 10, 0, Math.PI * 2); g.fill();
+          g.fillStyle = '#f2ebdd'; g.fillText(label(st.side > 0 ? 'city.map.fountain' : 'city.map.statue'), X(X2(FRONT + SIDE_L + 8)), Y(zc) + 22);
+        }
+        W(FRONT, FRONT + FLAT_D, 64, 71.5, '#b39a6e'); // the flat
+        W(-12, 12, S - 30, S - 1.5, '#6f6a62'); // the gate plaza
+        W(-3, 3, S - 2.5, S - 0.5, '#e8a33d');
+        g.font = '600 13px Barlow, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        for (const sh of SHOPS) { g.fillStyle = '#f2ebdd'; g.fillText(sh.name, X(sh.side * (FRONT + 6)), Y(sh.z)); }
+        g.fillStyle = '#e8a33d'; g.fillText(label('city.map.gate'), X(0), Y(S - 14));
+        g.fillStyle = '#14120e'; g.fillText(label('city.map.flat'), X(FRONT + FLAT_D / 2), Y(67.7));
+      },
+      // along the street: out of (or into) the flat by its door, then down the pavement or the road
+      route(ax, az, bx, bz) {
+        // anywhere off the bazaar itself: the city's grid router (pavements first, roads crossed at junctions)
+        const street = (x: number, z: number) => Math.abs(x) < FRONT + FLAT_D && z > S - 2 && z < N + 2;
+        if (!street(ax, az) || !street(bx, bz)) return nav.route(ax, az, bx, bz);
+        const inFlat = (x: number, z: number) => x > FRONT && x < FRONT + FLAT_D && z > 64 && z < 71.5;
+        const pts: [number, number][] = [[ax, az]];
+        if (inFlat(ax, az) && !inFlat(bx, bz)) pts.push([FRONT + 0.8, 65.4], [FRONT - 1.2, 65.4]);
+        const tail: [number, number][] = inFlat(bx, bz) && !inFlat(ax, az) ? [[FRONT - 1.2, 65.4], [FRONT + 0.8, 65.4]] : [];
+        const [cx, cz] = pts[pts.length - 1], [ex, ez] = tail[0] ?? [bx, bz];
+        if (Math.abs(ez - cz) > 4) { const lane = (cx < 0 ? -1 : 1) * Math.max(5.4, Math.min(6.8, Math.abs(cx))); /* the middle of the pavement, clear of the awnings and the stalls */ if (Math.abs(lane - cx) > 0.5) pts.push([lane, cz]); pts.push([lane, ez]); }
+        return [...pts, ...tail, [bx, bz]];
+      },
+    },
+    crowdState() {
+      const cards = dense.cards, taken = dense.taken, c = lastCam;
+      let nearN = 0, lost = 0;
+      if (c) cards.forEach((q, i) => { if (Math.hypot(q.x - c.x, q.z - c.z) < TAKE) { nearN++; if (taken[i] && !(byCard.get(i)?.fig.root.visible)) lost++; } });
+      // the districts: every walker within 30 m of the camera is a body or a card, never nothing
+      let dnear = 0, dlost = 0;
+      dist.peds.forEach((q, i) => { if (Math.hypot(q.x - pedsAt.x, q.z - pedsAt.z) < 30) { dnear++; if (!dpool.some((b) => b.ped === i && b.fig.root.visible) && !stand.some((x) => x.k === 1e6 + i)) dlost++; } });
+      return { near: nearN, bodies: crowdPool.filter((b) => b.card >= 0 && b.fig.root.visible).length, lost, dnear, dbodies: dpool.filter((b) => b.ped >= 0 && b.fig.root.visible).length, dlost };
+    },
     scene, gravity: 22, jump: 6.2, spawn: new THREE.Vector3(12.4, FLOOR, 68.4), tasks, people, clearance,
     // the hero views: stepping out of the flat, and the run to the gate
     vistas: [{ x0: 4, x1: FRONT - 0.4, z0: 63, z1: 69, yaw: 0, pitch: 0.42, secs: 4 }, { x0: -8, x1: 8, z0: -40, z1: -30, yaw: 0, pitch: 0.3, secs: 3.5 }, { x0: -9, x1: 9, z0: -76, z1: -66, yaw: 0, pitch: 0.34, secs: 5 }],
-    height: (x) => hx(x),
+    height: (x, z) => H(x, z),
     collide(p, r) {
       for (const b of blocks) {
         if (p.y > b.max.y || p.y + 1.8 < b.min.y) continue;
@@ -784,9 +1180,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           }
         }
       }
+      dist.carCollide(p, r);
+      for (const c of traffic) { const dx = p.x - c.x; if (Math.abs(dx) < 0.9 + r && Math.abs(p.z - c.z) < 2.2 + r && p.y < 1.3) p.x = c.x + Math.sign(dx || 1) * (0.9 + r); }
       for (const q of people) { const dx = p.x - q.pos.x, dz = p.z - q.pos.z, dd = Math.hypot(dx, dz); if (dd < r + 0.3 && dd > 1e-6) { p.x = q.pos.x + dx / dd * (r + 0.3); p.z = q.pos.z + dz / dd * (r + 0.3); } }
     },
-    bind() { /* the city asks nothing of the body: no lineage tricks on the last normal day */ },
+    bind(b) { you = b.root; /* no lineage tricks on the last normal day: the city only wants to know where you are */ },
     talk(id, seconds, listener) {
       const q = people.find((x) => x.id === id);
       if (!q) return;
@@ -809,12 +1207,62 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         else { q.fig.setLookTarget(null); if (Math.abs(q.yaw - k.rest) < 0.01) { q.yaw = k.rest; talking = null; } }
       }
       if (outroT >= 0) outro(dt, time, cam as THREE.PerspectiveCamera | undefined);
-      // phones: a townsperson further off than PHONE_CROWD_FAR is not drawn (the painted crowd in the haze stands in for
-      // them). Each body is a dozen draw calls, and on a phone the draw calls, not the triangles, set the frame time.
-      if (!rich && cam) for (const q of people) {
-        if (!crowd.has(q.fig)) continue;
-        const d = Math.hypot(q.pos.x - cam.position.x, q.pos.z - cam.position.z);
-        q.fig.root.visible = d < PHONE_CROWD_FAR * (q.fig.root.visible ? 1.08 : 1);
+      if (cam) { portals(cam); walkCrowd(dt, time, cam); }
+      drive(dt, time);
+      dist.update(dt, time, cam ?? null, you ? you.position : null);
+      if (day.update(dt, time, cam ?? null)) refreshEnv();
+      poolM.opacity = 0.08 + 0.72 * day.state.night;
+      if (cam) {
+        skyMesh.position.copy(cam.position);
+        const p = cam.position, k = 1 - Math.exp(-dt * 0.8);
+        if (inOld(p.x, p.z)) TW.set(1.04, 1.0, 0.94); else if (p.x > 160) TW.set(0.96, 1.0, 1.05); else if (p.x < -200) TW.set(0.95, 1.02, 1.03); else if (p.z > 190) TW.set(0.98, 1.03, 0.96); else TW.set(1.0, 1.0, 1.0);
+        TINT.lerp(TW, k);
+        const f = Renderer.current?.final.uniforms.uTint.value as THREE.Vector3 | undefined; f?.copy(TINT);
+      }
+      // props: the scan within a few metres, the light build further off, nothing for the small ones far off on phones;
+      // only what is near casts a shadow (a cell at a time, a few times a second)
+      if (cam && (propTick++ % 6 === 0 || propCells.length < 4)) {
+        for (const pc of propCells) {
+          const d = pc.c.distanceTo(cam.position) - pc.r;
+          // small things (fruit, tea sets, baskets) far off are not drawn at all: a few pixels each
+          // and nothing at all past the haze
+          const smallFar = (pc.small && d > (rich ? SMALL_FAR * 2.5 : SMALL_FAR) * (pc.lod === 2 ? 0.92 : 1)) || d > (rich ? 210 : 120);
+          const want = smallFar ? 2 : pc.model && d > (rich ? PROP_NEAR : PROP_NEAR * 0.6) * (pc.lod === 1 ? 0.9 : 1) ? 1 : 0;
+          if (want !== pc.lod) { pc.lod = want; for (const im of pc.near) im.visible = want === 0; if (pc.model) pc.model.dirty = true; }
+          if (want === 0) for (const im of pc.near) im.castShadow = d < (rich ? 34 : 18);
+        }
+        refillFar();
+      }
+      // townsfolk further off than CROWD_FAR are not drawn as bodies: a card of their height stands where they are, so
+      // the street stays as full as it was and nobody blinks out. A body is a dozen draw calls and tens of thousands of
+      // triangles (both passes); a hundred of them were most of a laptop GPU's frame.
+      if (cam) {
+        stand.length = 0;
+        const far = rich ? CROWD_FAR : PHONE_CROWD_FAR;
+        for (const q of people) {
+          if (!crowd.has(q.fig) || boarding.has(q) || talking?.q === q) continue;
+          const d = Math.hypot(q.pos.x - cam.position.x, q.pos.z - cam.position.z);
+          const show = d < far * (q.fig.root.visible ? 1.08 : 1);
+          if (show !== q.fig.root.visible) q.fig.root.visible = show;
+          if (!show) stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: 0 });
+        }
+        drawPeds(dt, time, cam);
+        dense.standIns(stand, cam);
+        // a soft contact shadow under every body that casts none of its own (the crowd: CHAR_BUDGET.crowdShadowFar)
+        let nb = 0;
+        const blob = (x: number, z: number) => { if (nb < BLOBS) blobs.setMatrixAt(nb++, BM.makeTranslation(x, H(x, z) + 0.02, z)); };
+        for (const q of people) if (crowd.has(q.fig) && q.fig.root.visible) blob(q.pos.x, q.pos.z);
+        for (const b of crowdPool) if (b.card >= 0 && b.fig.root.visible) blob(b.fig.root.position.x, b.fig.root.position.z);
+        for (const b of dpool) if (b.ped >= 0 && b.fig.root.visible) blob(b.fig.root.position.x, b.fig.root.position.z);
+        blobs.count = nb; blobs.instanceMatrix.needsUpdate = true;
+      }
+      // the sun's shadow covers the ground round the camera, not the whole street: snapped to its texels, so it never
+      // swims, and moved only on frames that redraw it
+      if (cam && (rich || shadowFrame % 3 === 1)) {
+        const sc = sun.shadow.camera, texel = (sc.right - sc.left) / sun.shadow.mapSize.x;
+        cam.getWorldDirection(SHV); SHC.copy(cam.position).addScaledVector(SHV.setY(0).normalize(), SHADOW_R * 0.55);
+        SHC.x = Math.round(SHC.x / texel) * texel; SHC.z = Math.round(SHC.z / texel) * texel; SHC.y = 0;
+        sun.target.position.copy(SHC); sun.position.copy(SHC).addScaledVector((sun.userData.dir as THREE.Vector3 | undefined) ?? SUN_OFF.clone().normalize(), 90);
       }
       for (const q of people) {
         if (boarding.has(q)) continue;
@@ -822,6 +1270,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         if (w) {
           q.pos.z += w.dir * w.speed * dt;
           if (q.pos.z > w.z1) w.dir = -1; else if (q.pos.z < w.z0) w.dir = 1;
+          // someone in the way: step aside (towards the wall or the kerb, away from you), and back once past
+          if (you) {
+            const dz = (you.position.z - q.pos.z) * w.dir, dx = you.position.x - q.pos.x;
+            const side = w.home ?? (w.home = q.pos.x);
+            const want = dz > -0.5 && dz < 3.2 && Math.abs(dx) < 1.1 ? side - Math.sign(dx || 1) * 1.2 : side;
+            q.pos.x += (want - q.pos.x) * (1 - Math.exp(-dt * 4));
+          }
           const want = w.dir > 0 ? 0 : Math.PI; q.yaw += Math.atan2(Math.sin(want - q.yaw), Math.cos(want - q.yaw)) * (1 - Math.exp(-dt * 5));
           q.pos.y = hx(q.pos.x); q.fig.root.rotation.y = q.yaw; q.phase += dt * w.speed * 2.2;
           q.fig.animate('walk', q.phase, Math.min(1.1, w.speed / 3), time, dt);
@@ -830,7 +1285,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // Mir talks with his hands now and then, between sips: a few seconds of gesture in every twelve
           // and while he talks to you, his hands keep going
           const toYou = talking?.q === q && time < talking.until;
-          const pose = q.id === 'mir' ? (toYou ? ((time % 7) < 3.5 ? 'present' : 'argue') : (time + 3) % 12 < 3.2 ? ((time + 3) % 24 < 12 ? 'present' : 'argue') : 'idle') : q.pose;
+          // you walk up: they look at you, and the first time you come close they wave
+          if (you && talking?.q !== q) {
+            const d = Math.hypot(you.position.x - q.pos.x, you.position.z - q.pos.z);
+            if (d < 4) { q.fig.setLookTarget(eye.set(you.position.x, you.position.y + 1.6, you.position.z)); if (!q.met) { q.met = true; q.greet = time + 1.6; } }
+            else if (d > 5 && q.met !== undefined) { q.fig.setLookTarget(null); if (d > 9) q.met = false; }
+          }
+          const pose = q.greet && time < q.greet && !FRIENDS.some((f) => f.id === q.id) ? 'wave' : q.id === 'mir' ? (toYou ? ((time % 7) < 3.5 ? 'present' : 'argue') : (time + 3) % 12 < 3.2 ? ((time + 3) % 24 < 12 ? 'present' : 'argue') : 'idle') : q.pose;
           q.fig.animate(pose, q.phase, 0, time, dt);
         }
       }
@@ -839,6 +1300,6 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       mega.update(dt, time);
       dense.update(dt, time, cam ?? null);
     },
-    dispose() { scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry.dispose(); }); },
+    dispose() { (Renderer.current?.final.uniforms.uTint.value as THREE.Vector3 | undefined)?.set(1, 1, 1); envTex?.dispose(); scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry.dispose(); }); },
   };
 }

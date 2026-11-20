@@ -9,6 +9,7 @@ import type { PlayerLook } from './custom';
 import { voice } from '../core/voice';
 import { AnimSet, CrewAsset, CrewMeta, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, furMaterial, hasLod1, lashMaterial, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
 import { addKit, Kit } from './kit';
+import { mergeRigid } from './rigid';
 
 export type { CrewId } from './looks';
 export { preloadCrew } from './assets';
@@ -46,7 +47,16 @@ export const CLOTH_PULL = 0.003;
  */
 export const CLOTH_LIFT = 0.006;
 
-export const CHAR_BUDGET = { throttle: true, correctiveNear: 9, lodFar: 11, shadowFar: 28, crowdLodFar: 6, crowdShadowFar: 14 };
+/** Phones (the light build everywhere): face details past this many metres from the camera are not drawn. */
+const FACE_FAR: Record<string, number> = { cornea: 9, lash: 14 };
+/** A crowd body further off than these is drawn without them (every preset): eyes, their shine and the lashes are a pixel or two. */
+const CROWD_FACE_FAR: Record<string, number> = { cornea: 7, lash: 10, eyes: 14 };
+
+// a body's shadow pass costs far more than its own draw on a laptop GPU (skinned and morphed depth): a crowd body never
+// casts one (the stage lays a soft contact shadow under it instead), others only near the camera
+/** Crowd light builds with only their shape morphs, one per source geometry. */
+const STRIPPED = new WeakMap<THREE.BufferGeometry, { g: THREE.BufferGeometry; dict: Record<string, number> | undefined }>();
+export const CHAR_BUDGET = { throttle: true, correctiveNear: 9, lodFar: 11, shadowFar: 16, crowdLodFar: 6, crowdShadowFar: 0 };
 
 /** Mocap style per character: how they stand and how they walk. */
 const STYLE: Record<string, { walk: string; idle: string; rate: number }> = {
@@ -125,6 +135,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const heightM = (custom ? (custom.gender === 'f' ? 1.68 : 1.76) * custom.height : (human ? 2 : ({ scientist: 1.76, strong: 1.97, medic: 1.69, explorer: 1.71, builder: 1.57, social: 1.67, megazron: 2.08 } as Record<string, number>)[id]));
   const sway = swayUniforms();
   const root = new THREE.Group();
+  root.userData.isCharacter = true; // stage mergers leave bodies alone
+  // shown again: back in three.js's matrix pass at once, whoever shows it (animate() takes it out while it is hidden)
+  { let shown = true; Object.defineProperty(root, 'visible', { get: () => shown, set: (v: boolean) => { shown = v; if (v) root.matrixWorldAutoUpdate = true; } }); }
   const fig = new THREE.Group();
   fig.visible = false;
   root.add(fig);
@@ -328,6 +341,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const hc = custom ? { root: new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex(), mid: custom.hairRoot, tip: custom.hairTip, shine: new THREE.Color(custom.hairTip).lerp(new THREE.Color(0xffffff), 0.5).getHex() } : human ? { root: 0x0c0806, mid: 0x18100b, tip: 0x22170f, shine: 0x2e241e } : L.hair;
     const hair = buildHair(HAIRSTYLES[hairId](), hc, sway, detail, HAIR_CAP[hairId][0], HAIR_CAP[hairId][1], skullFrom(M.skull.c, M.skull.r), HAIR_VOLUME[hairId] ?? 0, HAIR_ROUGH[hairId] ?? 0.46, HAIR_CARDS[hairId] ?? false);
     bs.get('head')!.add(hair);
+    // the hair's light build: a quarter of the strands' triangles, drawn with the body's own light build (pickLod)
+    hairs = [hair, null];
+    if (detail >= 0.8) {
+      const low = buildHair(HAIRSTYLES[hairId](), hc, sway, 0.5, HAIR_CAP[hairId][0], HAIR_CAP[hairId][1], skullFrom(M.skull.c, M.skull.r), HAIR_VOLUME[hairId] ?? 0, HAIR_ROUGH[hairId] ?? 0.46, HAIR_CARDS[hairId] ?? false);
+      low.visible = false; bs.get('head')!.add(low); hairs[1] = low;
+    }
     // The decimated scan teeth break up in close-ups: use a clean mouth instead.
     const mouthBox = new THREE.Box3();
     scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.material as THREE.Material) === mouth) { m.geometry.computeBoundingBox(); mouthBox.union(m.geometry.boundingBox!); m.visible = false; } });
@@ -356,6 +375,26 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       void loadAsset(key, 1).then((as1) => {
         if (!skel || lodSets[0].length === 0) return;
         const s1 = cloneSkinned(as1.scene) as THREE.Group;
+        // a crowd body's light build keeps only the shape morphs (build, ears): face and corrective targets are a loop
+        // over fifty textures per vertex in every pass, for a face a few pixels high
+        if (crowd) s1.traverse((o) => {
+          const m = o as THREE.SkinnedMesh, dict = m.morphTargetDictionary;
+          if (!m.isSkinnedMesh || !dict) return;
+          const names = Object.keys(dict).sort((a, b) => dict[a] - dict[b]).filter((n) => n.startsWith('build_') || n.startsWith('ear_'));
+          const g0 = m.geometry, done = STRIPPED.get(g0);
+          if (done) { m.geometry = done.g; m.morphTargetDictionary = done.dict; m.morphTargetInfluences = done.dict ? names.map(() => 0) : undefined; return; }
+          // shares the light build's buffers: only the list of morph targets is new
+          const g = new THREE.BufferGeometry();
+          for (const [k, a] of Object.entries(g0.attributes)) g.setAttribute(k, a);
+          g.setIndex(g0.index); g.morphTargetsRelative = g0.morphTargetsRelative; g.boundingSphere = g0.boundingSphere; g.boundingBox = g0.boundingBox;
+          for (const gr of g0.groups) g.addGroup(gr.start, gr.count, gr.materialIndex);
+          if (names.length) for (const k of Object.keys(g0.morphAttributes) as ('position' | 'normal' | 'color')[]) { const src = m.geometry.morphAttributes[k]; if (src) g.morphAttributes[k] = names.map((n) => src[dict[n]]); }
+          else g.morphAttributes = {} as THREE.BufferGeometry['morphAttributes'];
+          m.geometry = g;
+          m.morphTargetDictionary = names.length ? Object.fromEntries(names.map((n, i) => [n, i])) : undefined;
+          m.morphTargetInfluences = names.length ? names.map(() => 0) : undefined;
+          STRIPPED.set(g0, { g, dict: m.morphTargetDictionary });
+        });
         dress(s1);
         const host = lodSets[0][0].parent!;
         const ms: THREE.SkinnedMesh[] = [];
@@ -366,6 +405,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     }
     kit = addKit({ id, custom, human, bones: bs, meta: M, look: L, sway, skinC, glowC, shadeC, detail, heightM });
     kit.splint.visible = pendingSplint;
+    // the props, the mouth and the stock ride the skeleton as one to three skinned meshes instead of a dozen and more
+    if (lodSets[0][0]) {
+      const b0 = lodSets[0][0];
+      try { rigid = mergeRigid(b0.skeleton, b0.bindMatrix, b0.parent!, new Set([...kit.live, hair, ...(hairs[1] ? [hairs[1]] : [])]), sphere); } catch (e) { console.warn('[crew] kit merge', e); }
+      for (const m of rigid) { m.onBeforeRender = seen; if (m.castShadow) castable.add(m); m.castShadow &&= shadowsOn; }
+    }
     // clips
     const leg = piv('upperlegL').distanceTo(piv('lowerlegL')) + piv('lowerlegL').distanceTo(piv('footL'));
     legScale = leg / a.refLeg;
@@ -381,13 +426,21 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let corrRegions: { k: NonNullable<CrewMeta['pit']>[string]; keys: string[]; chain: THREE.Object3D[]; phi: Float64Array }[] = [];
   // how this body is seen (CHAR_BUDGET): animate() calls since a game camera last drew it, and that camera's distance
   let sinceDrawn = 99, camD = 0, skipN = 0, skipDt = 0, corrOn = false, corrN = 0, crowd = false;
-  let lodSets: THREE.SkinnedMesh[][] = [[], []], lodOn = 0;
+  let lodSets: THREE.SkinnedMesh[][] = [[], []], lodOn = 0, rigid: THREE.SkinnedMesh[] = [], hairs: [THREE.Object3D | null, THREE.Object3D | null] = [null, null], hairOn = 0;
   const castable = new Set<THREE.Object3D>(); // the meshes that cast a shadow when near
   let shadowsOn = true;
   function pickLod() {
     // a far body's shadow is a few pixels: it is left out of the shadow map
     const sh = camD < (crowd ? CHAR_BUDGET.crowdShadowFar : CHAR_BUDGET.shadowFar) * (shadowsOn ? 1.1 : 0.9);
-    if (sh !== shadowsOn) { shadowsOn = sh; for (const set of lodSets) for (const m of set) m.castShadow = sh && castable.has(m); }
+    if (sh !== shadowsOn) { shadowsOn = sh; for (const set of [...lodSets, rigid]) for (const m of set) m.castShadow = sh && castable.has(m); }
+    // phones: the corneas' shine and the lashes and brows are under a pixel past a few metres, and a draw call each
+    if (lod === 1 || crowd) for (const m of lodSets[lod === 1 ? 0 : lodOn]) {
+      const far = (crowd ? CROWD_FACE_FAR : FACE_FAR)[m.name];
+      if (far) m.visible = camD < far * (m.visible ? 1.1 : 0.9);
+    }
+    for (const h of hairs) if (h) h.castShadow = sh;
+    const wantH = hairs[1] && camD > (crowd ? CHAR_BUDGET.crowdLodFar : CHAR_BUDGET.lodFar) * (hairOn ? 0.9 : 1.1) ? 1 : 0;
+    if (wantH !== hairOn) { hairOn = wantH; hairs[0]!.visible = wantH === 0; hairs[1]!.visible = wantH === 1; }
     if (!lodSets[1].length) return;
     const want = camD > (crowd ? CHAR_BUDGET.crowdLodFar : CHAR_BUDGET.lodFar) * (lodOn ? 0.9 : 1.1) ? 1 : 0;
     if (want === lodOn) return;
@@ -441,7 +494,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       for (const m of torsoBody) {
         m.updateWorldMatrix(true, false);
         const cloth = m.name === 'cloth';
-        for (let i = 0; i < m.geometry.attributes.position.count; i += 2) {
+        for (let i = 0, n = m.geometry.userData.torsoCount ?? m.geometry.attributes.position.count; i < n; i += 2) {
           m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld); let best = 9, k = -1;
           if (cloth && SA.copy(v).sub(hip).dot(up) / upL2 < .05) continue;
           seg.forEach(([a, b], j) => { const d = segDist(v, a, b); if (d < best) { best = d; k = j; } });
@@ -530,6 +583,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   function animate(kind: CrewPose, phase: number, amount: number, t: number, dt: number) {
     if (!mixer || !B) return;
     if (CHAR_BUDGET.throttle && !firstFrame) { // the first pose is always set at once: never a frame of bind pose
+      // a body its stage has hidden (a phone's far townsfolk, the crowd pool's idle bodies) is not posed at all; the
+      // moment it shows again it is posed straight away
+      // its sixty bones are not even carried along by three.js's matrix pass while it is hidden
+      if (!root.visible) { skipDt = Math.min(skipDt + dt, 0.2); skipN = 99; root.matrixWorldAutoUpdate = false; return; }
+      root.matrixWorldAutoUpdate = true;
       pickLod();
       sinceDrawn++;
       const every = sinceDrawn > 3 ? 4 : camD > 45 ? 3 : camD > 22 ? 2 : 1;

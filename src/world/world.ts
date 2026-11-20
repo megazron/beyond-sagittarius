@@ -15,6 +15,7 @@ import { createCharacter, Character } from '../characters/character';
 import { createHound } from './predator';
 import { Environment } from './environment';
 import { atmosphere, patchSceneFog } from './atmosphere';
+import { freezeTree } from '../core/merge';
 import { SunLight } from 'three/examples/jsm/lights/SunLight.js';
 import type { PostSource } from '../core/renderer';
 import { applyMetal } from './pbr';
@@ -139,6 +140,9 @@ export class World {
     s.userData.post = this.post;
     onProgress(1);
     addCutsceneRig(this.scene);
+    // the ground and the forest's instanced lists never move: their matrices are composed once (phones spent a tenth
+    // of a frame recomposing matrices)
+    freezeTree(this.terrain.group); freezeTree(this.forest.group);
     this.ready = true;
   }
 

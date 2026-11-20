@@ -55,7 +55,8 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
     skin.wrapS = skin.wrapT = THREE.RepeatWrapping;
     const n = rich ? 70 : 26, geos: THREE.BufferGeometry[] = [], crowns: THREE.BufferGeometry[] = [];
     for (let i = 0; i < n; i++) {
-      const side = i % 2 ? 1 : -1, x = side * (60 + rnd() * 340), z = N + 120 - rnd() * (N - S + 900), h = 200 + Math.pow(rnd(), 1.6) * 420, w = 22 + rnd() * 28;
+      const side = i % 2 ? 1 : -1, x = side * (370 + rnd() * 380), z = N + 120 - rnd() * (N - S + 900), h = 200 + Math.pow(rnd(), 1.6) * 420, w = 22 + rnd() * 28;
+      if (Math.abs(x) < 100 && Math.abs(z - (side > 0 ? 30 : -44)) < 32) continue; // not in a side street's square
       const g = new THREE.BoxGeometry(w, h, w, 1, 1, 1); const uv = g.attributes.uv as THREE.BufferAttribute;
       for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * w / 16, uv.getY(k) * h / 64);
       g.rotateY(rnd() * 0.6); g.translate(x, h / 2 - 2, z); geos.push(g.toNonIndexed());

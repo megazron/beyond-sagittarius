@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { fitCanvasText } from '../../core/canvastext';
+import { nearFade } from '../../core/nearfade';
 
 /**
  * Street-level density for Zenvora: neon on every facade from the pavement to the roofline (Kabukicho density,
@@ -43,6 +44,10 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   seed = 4242;
   const { rich, FRONT, S, N } = o;
   const updates: ((dt: number, t: number, cam: THREE.Camera | null) => void)[] = [];
+  /** The painted crowd: where each card is and which way it walks; `taken` cards are hidden (a real body walks them). */
+  let cards: { x: number; z: number; v: number; gate: boolean }[] = [], taken = new Uint8Array(0);
+  /** Stand-ins: a card where a far body is not drawn (city.ts fills it each frame). */
+  let standIns: (list: { x: number; y: number; z: number; h: number; k: number }[], cam: THREE.Camera | null) => void = () => undefined;
   const add = <T extends THREE.Object3D>(x: T) => { x.userData.ground = false; scene.add(x); return x; };
 
   // ---- vertical neon blades on every facade, stacked from the pavement to the roofline ----
@@ -57,13 +62,22 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
       slots.push({ k, side: f.side, x, z, y: y + hgt / 2, col: new THREE.Color(SIGNS[k][1]), m: new THREE.Matrix4().compose(new THREE.Vector3(x, y + hgt / 2, z), new THREE.Quaternion(), new THREE.Vector3(0.75, hgt, 1)) });
     }
   }
+  // every design on one atlas (16 x 2 tiles of 128 x 512): all the blades are one draw, each picks its tile
+  const COLS = 16, ROWS = Math.ceil(SIGNS.length / COLS);
+  const atlas = canvasTex(128 * COLS, 512 * ROWS, (g) => SIGNS.forEach((sg, k) => g.drawImage(blade(...sg).image as HTMLCanvasElement, (k % COLS) * 128, Math.floor(k / COLS) * 512)));
   const plane = new THREE.PlaneGeometry(1, 1);
-  for (let k = 0; k < SIGNS.length; k++) {
-    const mine = slots.filter((s) => s.k === k); if (!mine.length) continue;
-    const tex = blade(...SIGNS[k]);
-    const m = new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(2.1, 2.1, 2.1), toneMapped: false, side: THREE.DoubleSide });
-    const im = new THREE.InstancedMesh(plane, m, mine.length); mine.forEach((s, i) => im.setMatrixAt(i, s.m)); add(im);
-  }
+  const tile = new Float32Array(slots.length * 2);
+  // the canvas is flipped on upload: its top row of tiles is the top of the texture
+  slots.forEach((s, i) => { tile[i * 2] = (s.k % COLS) / COLS; tile[i * 2 + 1] = 1 - (Math.floor(s.k / COLS) + 1) / ROWS; });
+  const geo = plane.clone(); geo.setAttribute('aTile', new THREE.InstancedBufferAttribute(tile, 2));
+  const bm = new THREE.MeshBasicMaterial({ map: atlas, color: new THREE.Color(2.1, 2.1, 2.1), toneMapped: false, side: THREE.DoubleSide });
+  bm.onBeforeCompile = (sh) => {
+    sh.vertexShader = `attribute vec2 aTile;\n${sh.vertexShader}`.replace('#include <uv_vertex>', `#include <uv_vertex>\n  vMapUv = aTile + vMapUv * vec2(${1 / COLS}, ${1 / ROWS});`);
+    nearFade(bm, sh); // a blade passing the lens dissolves, as before
+  };
+  bm.customProgramCacheKey = () => 'sign-atlas|nearfade';
+  const blades = new THREE.InstancedMesh(geo, bm, Math.max(1, slots.length));
+  slots.forEach((s, i) => blades.setMatrixAt(i, s.m)); blades.count = slots.length; add(blades);
 
   // ---- big screens on the upper floors: ads that change, the brightest things in the street ----
   const ADS: [string, string, string][] = [
@@ -128,7 +142,7 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
       g2.filter = 'blur(1.2px)'; g2.drawImage(g.canvas, 0, 0); g.clearRect(0, 0, 512, 128); g.drawImage(c2, 0, 0);
     });
     const mat = new THREE.MeshBasicMaterial({ map: sheet, transparent: true, alphaTest: 0.22, color: new THREE.Color(0.55, 0.52, 0.6) });
-    const n = rich ? 240 : 80, gateN = rich ? 140 : 45;
+    const n = rich ? 240 : 80, gateN = rich ? 70 : 30;
     const geo = new THREE.PlaneGeometry(1, 1); geo.translate(0, 0.5, 0);
     const offs = new Float32Array(n + gateN); for (let i = 0; i < n + gateN; i++) offs[i] = Math.floor(rnd() * 8) / 8; // every card its own figure, gate crowd included
     geo.setAttribute('aOff', new THREE.InstancedBufferAttribute(offs, 1));
@@ -138,25 +152,48 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
       sh.fragmentShader = 'varying float vH;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= 0.55 + 0.45 * smoothstep(0.0, 0.6, vH);');
     };
     const im = new THREE.InstancedMesh(geo, mat, n + gateN);
+    taken = new Uint8Array(n + gateN);
     const ppl = Array.from({ length: n }, (_, i) => {
       const side = i % 2 ? 1 : -1, x = side * (4.7 + rnd() * 3.8);
       return { x, z: S + 4 + rnd() * (N - S - 14), v: (rnd() < 0.5 ? 1 : -1) * (0.8 + rnd() * 0.7), h: (offs[i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: false };
     });
     // travellers thronging the gate plaza: across the whole width, milling slowly, life-size
+    cards = ppl;
     for (let i = 0; i < gateN; i++) ppl.push({ x: (rnd() - 0.5) * 17, z: S + 2 + rnd() * 18, v: (rnd() - 0.5) * 0.5, h: (offs[n + i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: true });
     // each card its own shade: a little warmer or cooler, lighter or darker, so no two neighbours match
     const TC = new THREE.Color();
     for (let i = 0; i < n + gateN; i++) { const k = 0.78 + rnd() * 0.42; im.setColorAt(i, TC.setRGB(k * (0.94 + rnd() * 0.12), k * (0.94 + rnd() * 0.1), k * (0.94 + rnd() * 0.12))); }
     add(im);
     const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(), E = new THREE.Euler();
+    // far townsfolk: past a few dozen metres a body (a dozen draw calls, tens of thousands of triangles) is swapped for
+    // a card of the same height, so the street stays full and nobody blinks out
+    {
+      const CAP = 640, g2 = geo.clone(), o2 = new Float32Array(CAP);
+      for (let i = 0; i < CAP; i++) o2[i] = Math.floor(rnd() * 8) / 8;
+      g2.setAttribute('aOff', new THREE.InstancedBufferAttribute(o2, 1));
+      const si = new THREE.InstancedMesh(g2, mat, CAP); si.count = 0; si.frustumCulled = false;
+      for (let i = 0; i < CAP; i++) si.setColorAt(i, new THREE.Color(0.9, 0.88, 0.92));
+      add(si);
+      const M2 = new THREE.Matrix4(), Q2 = new THREE.Quaternion(), P2 = new THREE.Vector3(), S2 = new THREE.Vector3(), E2 = new THREE.Euler();
+      standIns = (list, cam) => {
+        const cp = cam?.position; let n = 0;
+        for (const q of list) {
+          if (n >= CAP) break;
+          E2.set(0, cp ? Math.atan2(cp.x - q.x, cp.z - q.z) : 0, 0); Q2.setFromEuler(E2);
+          P2.set(q.x, q.y, q.z); S2.set(q.h * 0.42, q.h, 1);
+          si.setMatrixAt(n++, M2.compose(P2, Q2, S2));
+        }
+        si.count = n; si.instanceMatrix.needsUpdate = true;
+      };
+    }
     updates.push((dt, t, cam) => {
       const cp = cam?.position;
       ppl.forEach((q, i) => {
         q.z += q.v * dt;
         if (q.gate) { if (q.z > S + 20) q.z = S + 2; if (q.z < S + 2) q.z = S + 20; } else { if (q.z > N - 10) q.z = S + 4; if (q.z < S + 4) q.z = N - 10; }
-        // near the camera a card would show what it is: those stay in the distance (the animated people are near)
-        const d = cp ? Math.hypot(q.x - cp.x, q.z - cp.z) : 99;
-        const vis = d > (q.gate ? 11 : 9) ? 1 : 0; // near the camera the animated people take over
+        // near the camera a real body takes a card's place (city.ts: the crowd pool walks it); a card nobody took stays
+        // drawn, so nobody vanishes as you walk up
+        const vis = taken[i] ? 0 : 1;
         const bob = Math.abs(Math.sin(t * 6 * Math.abs(q.v) + q.p)) * 0.04;
         E.set(0, cp ? Math.atan2(cp.x - q.x, cp.z - q.z) : 0, 0); Q.setFromEuler(E);
         P.set(q.x, 0.14 + bob, q.z); SC.set(q.h * q.wd * vis, q.h * vis, 1);
@@ -166,5 +203,6 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     });
   }
 
-  return { update: (dt: number, t: number, cam: THREE.Camera | null) => { for (const u of updates) u(dt, t, cam); } };
+  return { update: (dt: number, t: number, cam: THREE.Camera | null) => { for (const u of updates) u(dt, t, cam); }, get cards() { return cards; }, get taken() { return taken; },
+    standIns: (list: { x: number; y: number; z: number; h: number; k: number }[], cam: THREE.Camera | null) => standIns(list, cam) };
 }

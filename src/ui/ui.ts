@@ -253,12 +253,14 @@ export class UI implements CineUI {
   }
 
   /** Prompt that sits on the thing it is about. No anchor: low in the centre. */
+  private promptText = ''; private promptSize: [number, number] | null = null;
   setPrompt(text: string | null, anchor: THREE.Vector3 | null = null) {
     const el = $('prompt');
     document.body.classList.toggle('can-act', !!text);
     this.promptAnchor = anchor;
     if (!text) { el.classList.add('hidden'); return; }
-    (el.querySelector('.ptext') as HTMLElement).textContent = text;
+    // set every frame by the stages: only a new text touches the page (and is measured once, in track)
+    if (text !== this.promptText || el.classList.contains('hidden')) { (el.querySelector('.ptext') as HTMLElement).textContent = text; this.promptText = text; this.promptSize = null; }
     el.classList.remove('hidden');
   }
 
@@ -275,8 +277,9 @@ export class UI implements CineUI {
         const v = this.v.copy(this.promptAnchor).project(cam);
         if (v.z < 1 && Math.abs(v.x) < 1.2) { x = (v.x + 1) / 2 * w; y = (1 - v.y) / 2 * h; }
       }
-      const half = pr.offsetWidth / 2;
-      pr.style.transform = `translate(${Math.round(Math.max(half + 10, Math.min(w - half - 10, x)) - half)}px, ${Math.round(Math.max(70, Math.min(h - 130, y - pr.offsetHeight - 12)))}px)`;
+      this.promptSize ??= [pr.offsetWidth, pr.offsetHeight];
+      const half = this.promptSize[0] / 2;
+      pr.style.transform = `translate(${Math.round(Math.max(half + 10, Math.min(w - half - 10, x)) - half)}px, ${Math.round(Math.max(70, Math.min(h - 130, y - this.promptSize[1] - 12)))}px)`;
     }
     const m = $('wmark');
     if (!this.markPoint) { m.classList.add('hidden'); return; }

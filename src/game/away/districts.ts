@@ -1,0 +1,799 @@
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { facadeMaterial, facadeBox, FACADE } from './facade';
+import { broadCrown, CROWN_LODS } from '../../world/foliage';
+import { loadTexture } from '../../core/assets';
+import { fitCanvasText } from '../../core/canvastext';
+
+/**
+ * Zenvora beyond the bazaar: a real street grid round the old town. Downtown towers to the east, a market quarter and
+ * the waterfront to the west, flats and a park to the north, joined to the bazaar through its two squares and the old
+ * town's north gate. Roads have two lanes each way (left-hand traffic, as in the bazaar), kerbs, zebra crossings and
+ * signals; the pavements have lamps, trees, benches, bins, shelters and shop signs (original names only).
+ *
+ * Buildings are boxes drawn by the facade shader (facade.ts): every building of a zone is one draw per wall finish,
+ * always there, so the skyline never pops. What is small (furniture, signs, trees) is built per zone too and shown only
+ * within reach. The people and the traffic live here as well: the walkers loop the blocks, cross at the zebras when the
+ * signal lets them, sit, shop, chat and look at their phones; the cars follow their lanes, turn at junctions, stop at
+ * red lights and for anyone on a crossing (you too).
+ *
+ * Ground is exact by construction: `height` is the one function both the player and the meshes use (0 on a road, the
+ * pavement 14 cm up, a 35 cm ramp at every kerb).
+ */
+
+export const FLOOR = 0.14, KERB = 0.35, PAVE = 4;
+export interface Road { along: 'x' | 'z'; c: number; a: number; b: number; hw: number; cars: boolean }
+export type BlockKind = 'tower' | 'mid' | 'market' | 'water' | 'res' | 'park' | 'fill';
+export interface Block { x0: number; x1: number; z0: number; z1: number; kind: BlockKind }
+
+const AVE_E = [90, 170, 250, 330], AVE_W = [-90, -170, -250], ROWS = [-90, -10, 70, 150, 230, 310];
+export const ROADS: Road[] = [
+  ...AVE_E.map((c) => ({ along: 'z' as const, c, a: -90, b: 310, hw: 6, cars: true })),
+  ...AVE_W.map((c) => ({ along: 'z' as const, c, a: -90, b: 310, hw: 6, cars: true })),
+  { along: 'z', c: 0, a: 110, b: 190, hw: 6, cars: true },
+  { along: 'z', c: 0, a: 78, b: 110, hw: 4, cars: false }, // the bazaar's own road running on out of the north gate
+  ...ROWS.slice(0, 5).flatMap((c) => [{ along: 'x' as const, c, a: 90, b: 330, hw: 6, cars: true }, { along: 'x' as const, c, a: -250, b: -90, hw: 6, cars: true }]),
+  { along: 'x', c: 110, a: -90, b: 90, hw: 6, cars: true },
+  { along: 'x', c: 190, a: -90, b: 90, hw: 6, cars: true },
+  { along: 'x', c: 310, a: -250, b: 330, hw: 6, cars: true },
+];
+
+export const BLOCKS: Block[] = [];
+for (let r = 0; r < 5; r++) {
+  const z0 = ROWS[r], z1 = ROWS[r + 1];
+  BLOCKS.push({ x0: 90, x1: 170, z0, z1, kind: 'mid' }, { x0: 170, x1: 250, z0, z1, kind: 'tower' }, { x0: 250, x1: 330, z0, z1, kind: 'tower' });
+  BLOCKS.push({ x0: -170, x1: -90, z0, z1, kind: 'market' }, { x0: -250, x1: -170, z0, z1, kind: 'water' });
+}
+BLOCKS.push({ x0: -90, x1: 0, z0: 110, z1: 190, kind: 'res' }, { x0: 0, x1: 90, z0: 110, z1: 190, kind: 'res' }, { x0: -90, x1: 90, z0: 190, z1: 310, kind: 'park' });
+/** Pavement that is not a block: along the old town's edges and in front of the north gate. */
+const STRIPS: Block[] = [
+  { x0: 72.5, x1: 90, z0: -90, z1: 110, kind: 'fill' }, { x0: -90, x1: -72.5, z0: -90, z1: 110, kind: 'fill' },
+  { x0: -72.5, x1: 72.5, z0: 82, z1: 110, kind: 'fill' },
+  // the waterfront promenade and the far kerbs
+  { x0: -281, x1: -250, z0: -96, z1: 316, kind: 'fill' },
+  { x0: 330, x1: 340, z0: -96, z1: 316, kind: 'fill' }, { x0: -250, x1: 330, z0: 310, z1: 320, kind: 'fill' },
+  { x0: 84, x1: 336, z0: -100, z1: -90, kind: 'fill' }, { x0: -256, x1: -84, z0: -100, z1: -90, kind: 'fill' },
+];
+/** The walkable city: the old town is inside `inOld`. */
+export const BOUNDS: [number, number, number, number] = [-300, -104, 344, 324];
+export const inOld = (x: number, z: number) => Math.abs(x) < 78 && z < 82;
+
+/** Distance from a point to a road's centre line (out to its ends, square-capped). */
+function roadDist(r: Road, x: number, z: number) {
+  const [u, v] = r.along === 'z' ? [z, x] : [x, z];
+  const du = u < r.a ? r.a - u : u > r.b ? u - r.b : 0;
+  return Math.max(Math.abs(v - r.c), du > 0 ? du + r.hw - 0.001 : 0) - r.hw; // <= 0 on the road
+}
+/** Ground height off the old town: 0 on a road, FLOOR on the pavement, a ramp at the kerb. */
+export function districtHeight(x: number, z: number) {
+  let d = 99;
+  for (const r of ROADS) { const k = roadDist(r, x, z); if (k < d) d = k; }
+  if (x < -281) return -1.4; // the bay
+  return d <= 0 ? 0 : d >= KERB ? FLOOR : FLOOR * d / KERB;
+}
+
+let seed = 77;
+const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+const pick = <T,>(a: T[]) => a[Math.floor(rnd() * a.length)];
+
+function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; fitCanvasText(c.getContext('2d')!, draw);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+
+/** Original names only: shops, banks, hotels and screens of Zenvora. */
+const BRANDS: [string, string, string][] = [
+  ['NOVA NOODLES', '#ffcf5a', '#1a1206'], ['KESARI KITCHEN', '#ff9a3c', '#1e0a02'], ['ORBITAL OPTICS', '#9fe2ff', '#06121e'], ['PULSAR PHARMACY', '#6effc0', '#041a10'],
+  ['COMET COFFEE', '#f2d3a0', '#2a1406'], ['TARAVEL TELECOM', '#ff5d8f', '#1e0612'], ['ZENVORA BANK', '#f4f4f6', '#14233d'], ['HALO HOTEL', '#ffe8b0', '#2a1c08'],
+  ['MERIDIAN MART', '#b6ff6e', '#0e1a04'], ['DRIFT DENIM', '#7fb6ff', '#060e1e'], ['SAFFRON SKY', '#ffb347', '#1e0e04'], ['NEON NAAN', '#ff6ec7', '#1e0616'],
+  ['STARDUST SALON', '#e3b6ff', '#14061e'], ['QUASAR GAMES', '#6ef7ff', '#041618'], ['LOTUS LAUNDRY', '#ffc0d8', '#1e0a12'], ['VEGA VISION', '#ffffff', '#101418'],
+  ['ATLAS BOOKS', '#f2e6c8', '#2a2014'], ['MANGO MOON', '#ffd36e', '#1a1204'], ['ROCKET RICKSHAW', '#ff7b54', '#1a0804'], ['SKYLINE GYM', '#9fd8ff', '#06101a'],
+  ['नोवा नूडल्स', '#ffcf5a', '#1a1206'], ['केसरी किचन', '#ff9a3c', '#1e0a02'], ['सितारा स्वीट्स', '#ff8fd0', '#1e0616'], ['चाँद कैफ़े', '#bfe9ff', '#0b1420'],
+  ['ستارہ بیکری', '#ffd36e', '#1a1204'], ['چاند کیفے', '#9fd8ff', '#06101a'], ['زعفران ہوٹل', '#ffb347', '#1e0e04'], ['لوٹس لانڈری', '#ffc0d8', '#1e0a12'],
+];
+const ADS: [string, string, string, string][] = [
+  ['ZENVORA BANK', 'Your savings, now in orbit', '#f4f4f6', '#14233d'], ['HALO HOTEL', 'Sleep above the rings', '#ffe8b0', '#2a1c08'],
+  ['TARAVEL TELECOM', 'Six lineages. One signal.', '#ff5d8f', '#1e0612'], ['COMET COFFEE', 'Brewed at escape velocity', '#f2d3a0', '#2a1406'],
+  ['नोवा नूडल्स', 'हर गली, हर ग्रह', '#ffcf5a', '#1a1206'], ['چاند کیفے', 'چائے، چاند کے نیچے', '#9fd8ff', '#06101a'],
+  ['QUASAR GAMES', 'Level 99 is not a rumour', '#6ef7ff', '#041618'], ['SAFFRON SKY', 'Liner tickets from 9,999', '#ffb347', '#1e0e04'],
+];
+
+export interface DistrictPerson { x: number; z: number; yaw: number; pose: string; speed: number; id: number }
+
+export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; paving: THREE.Material; road: THREE.Material; kerb: THREE.Material; label: (k: string) => string }) {
+  seed = 77;
+  const { rich } = o;
+  const add = <T extends THREE.Object3D>(x: T) => { x.userData.ground = false; scene.add(x); return x; };
+  const solids: THREE.Box3[] = [];
+  const solid = (x0: number, z0: number, x1: number, z1: number, h = 30) => solids.push(new THREE.Box3(new THREE.Vector3(Math.min(x0, x1), -2, Math.min(z0, z1)), new THREE.Vector3(Math.max(x0, x1), h, Math.max(z0, z1))));
+
+  // ---- zones: 160 m squares; each holds its own merged meshes ----
+  const ZONE = 160;
+  const zones = new Map<string, { cx: number; cz: number; near: THREE.Object3D[]; geo: Record<string, THREE.BufferGeometry[]> }>();
+  const zoneOf = (x: number, z: number) => {
+    const ix = Math.floor(x / ZONE), iz = Math.floor(z / ZONE), k = `${ix}:${iz}`;
+    return zones.get(k) ?? zones.set(k, { cx: (ix + 0.5) * ZONE, cz: (iz + 0.5) * ZONE, near: [], geo: {} }).get(k)!;
+  };
+  const put = (kind: string, x: number, z: number, g: THREE.BufferGeometry) => { const zn = zoneOf(x, z); (zn.geo[kind] ??= []).push(g); };
+
+  // ---- materials ----
+  const tex = (set: string, m: THREE.MeshStandardMaterial, size: '512' | '1k' = rich ? '1k' : '512') => {
+    void Promise.all([loadTexture(`city/${set}`, 'diff', size), loadTexture(`city/${set}`, 'nor', size)]).then(([a, n]) => {
+      const a2 = a.clone(), n2 = n.clone(); a2.wrapS = a2.wrapT = n2.wrapS = n2.wrapT = THREE.RepeatWrapping; a2.needsUpdate = n2.needsUpdate = true;
+      m.map = a2; m.normalMap = n2; m.needsUpdate = true;
+    }).catch(() => undefined);
+  };
+  const wallMats = { plaster: facadeMaterial({ tile: 3 }), brick: facadeMaterial({ tile: 2.5 }), glass: facadeMaterial({ tile: 4, roughness: 0.55, shops: 0.9 }) };
+  tex('plaster', wallMats.plaster); tex('brick', wallMats.brick); tex('parapet', wallMats.glass, '512');
+  const kitM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: 0.2 });
+  const metalM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.8 });
+  const lampM = new THREE.MeshStandardMaterial({ color: 0x222222, emissive: 0xffe2b0, emissiveIntensity: 0.2, roughness: 0.4 });
+  const markM = new THREE.MeshStandardMaterial({ color: 0xe8e4d8, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  const leafM = new THREE.MeshStandardMaterial({ vertexColors: true, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.82, color: 0xb8d090 });
+  void loadTexture('foliage', 'leaf', rich ? '1k' : '512').then((t) => { leafM.map = t; leafM.needsUpdate = true; }).catch(() => undefined);
+  const grassM = new THREE.MeshStandardMaterial({ color: 0x7f9a52, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  void Promise.all([loadTexture('ground', 'diff', rich ? '1k' : '512'), loadTexture('ground', 'nor', rich ? '1k' : '512')]).then(([a, n]) => {
+    const a2 = a.clone(), n2 = n.clone(); a2.wrapS = a2.wrapT = n2.wrapS = n2.wrapT = THREE.RepeatWrapping; a2.repeat.set(0.2, 0.2); n2.repeat.set(0.2, 0.2); a2.needsUpdate = n2.needsUpdate = true;
+    grassM.map = a2; grassM.normalMap = n2; grassM.needsUpdate = true;
+  }).catch(() => undefined);
+
+  // ---- ground: roads (world-space uvs, so overlapping strips at junctions are the same pixels) and pavement slabs ----
+  const plane = (x0: number, z0: number, x1: number, z1: number, y: number, tile: number) => {
+    const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0); g.rotateX(-Math.PI / 2); g.translate((x0 + x1) / 2, y, (z0 + z1) / 2);
+    const p = g.attributes.position, uv = g.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / tile, -p.getZ(i) / tile);
+    return g;
+  };
+  for (const r of ROADS) {
+    const [x0, x1, z0, z1] = r.along === 'z' ? [r.c - r.hw, r.c + r.hw, r.a - r.hw, r.b + r.hw] : [r.a - r.hw, r.b + r.hw, r.c - r.hw, r.c + r.hw];
+    // in pieces, so each lies in its own zone (and is culled with it)
+    const L = r.along === 'z' ? z1 - z0 : x1 - x0, n = Math.max(1, Math.ceil(L / 80));
+    for (let i = 0; i < n; i++) {
+      const a = i / n, b = (i + 1) / n;
+      const g = r.along === 'z' ? plane(x0, z0 + (z1 - z0) * a, x1, z0 + (z1 - z0) * b, 0, 6) : plane(x0 + (x1 - x0) * a, z0, x0 + (x1 - x0) * b, z1, 0, 6);
+      g.computeBoundingBox(); const c = g.boundingBox!.getCenter(new THREE.Vector3());
+      put('road', c.x, c.z, g);
+    }
+  }
+  /** A pavement slab over a rect: a grid with a row and a column at every kerb breakpoint, heights from districtHeight. */
+  const slab = (b: Block) => {
+    const xs = new Set([b.x0, b.x1]), zs = new Set([b.z0, b.z1]);
+    for (const r of ROADS) for (const k of [r.c - r.hw - KERB, r.c - r.hw, r.c + r.hw, r.c + r.hw + KERB, r.a - r.hw - KERB, r.a - r.hw, r.b + r.hw, r.b + r.hw + KERB]) {
+      if (r.along === 'z') { if (k > b.x0 && k < b.x1) xs.add(k); } else if (k > b.z0 && k < b.z1) zs.add(k);
+    }
+    for (let x = Math.ceil(b.x0 / 20) * 20; x < b.x1; x += 20) xs.add(x);
+    for (let z = Math.ceil(b.z0 / 20) * 20; z < b.z1; z += 20) zs.add(z);
+    const X = [...xs].sort((a, c) => a - c), Z = [...zs].sort((a, c) => a - c);
+    // split into zone-sized pieces
+    for (let zi = 0; zi < Z.length - 1; ) {
+      const zEnd = Math.min(Z.length - 1, zi + 12);
+      const pos: number[] = [], uv: number[] = [], idx: number[] = [], W = X.length;
+      for (let j = zi; j <= zEnd; j++) for (const x of X) { pos.push(x, districtHeight(x, Z[j]), Z[j]); uv.push(x / 2.5, -Z[j] / 2.5); }
+      for (let j = 0; j < zEnd - zi; j++) for (let i = 0; i < W - 1; i++) { const a = j * W + i, c = a + W; idx.push(a, c, a + 1, a + 1, c, c + 1); }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+      put('pave', (b.x0 + b.x1) / 2, (Z[zi] + Z[zEnd]) / 2, g.toNonIndexed());
+      zi = zEnd;
+    }
+  };
+  for (const b of [...BLOCKS, ...STRIPS]) slab(b);
+  // the road the flat looks out on runs out of the north gate between kerbs: the old town's road is |x| < 4
+  // lane markings: a dashed centre line, lane dashes, and zebras and stop lines at every junction
+  const nodes: { x: number; z: number; roads: Road[] }[] = [];
+  for (const r of ROADS) for (const s of ROADS) {
+    if (r.along !== 'z' || s.along !== 'x' || !r.cars || !s.cars) continue;
+    if (s.c >= r.a - 0.1 && s.c <= r.b + 0.1 && r.c >= s.a - 0.1 && r.c <= s.b + 0.1) nodes.push({ x: r.c, z: s.c, roads: [r, s] });
+  }
+  const atNode = (x: number, z: number, m: number) => nodes.some((n) => Math.abs(n.x - x) < m && Math.abs(n.z - z) < m);
+  for (const r of ROADS) {
+    if (!r.cars) continue;
+    for (let u = r.a + 10; u < r.b - 10; u += 6) {
+      const ax = r.along === 'z';
+      if (atNode(ax ? r.c : u, ax ? u : r.c, r.hw + 5)) continue;
+      for (const off of [0, -3, 3]) {
+        const len = off === 0 ? 3 : 2, w = off === 0 ? 0.15 : 0.12;
+        const g = ax ? plane(r.c + off - w / 2, u, r.c + off + w / 2, u + len, 0.01, 1) : plane(u, r.c + off - w / 2, u + len, r.c + off + w / 2, 0.01, 1);
+        put('mark', ax ? r.c : u, ax ? u : r.c, g);
+      }
+    }
+  }
+  for (const n of nodes) for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    // a zebra across each arm, just outside the junction, and the stop line before it
+    const arm = n.roads.find((r) => (dx ? r.along === 'x' : r.along === 'z'));
+    if (!arm) continue;
+    const u = (dx ? n.x : n.z) + (dx || dz) * (6 + 2.2);
+    if (u < arm.a - 1 || u > arm.b + 1) continue;
+    for (let k = -5; k <= 5; k += 1.2) {
+      const g = dx ? plane(u - 1.6, n.z + k - 0.3, u + 1.6, n.z + k + 0.3, 0.012, 1) : plane(n.x + k - 0.3, u - 1.6, n.x + k + 0.3, u + 1.6, 0.012, 1);
+      put('mark', dx ? u : n.x, dx ? n.z : u, g);
+    }
+  }
+
+  // ---- buildings ----
+  const tints = {
+    plaster: [0xf1dcc0, 0xe9c4a0, 0xd9e4d6, 0xf0cdc6, 0xd2deea, 0xf4e6b4, 0xe6d6f0, 0xffffff].map((c) => new THREE.Color(c)),
+    brick: [0xffffff, 0xf0d8d0, 0xd8c8c0].map((c) => new THREE.Color(c)),
+    glass: [0xbcd0e0, 0xd8dee6, 0xa8c0cc, 0xe8e0d0, 0xc0c8d8].map((c) => new THREE.Color(c)),
+  };
+  const kitBox = (kind: string, x: number, y: number, z: number, w: number, h: number, d: number, col: number, zx = x, zz = z) => {
+    const g = new THREE.BoxGeometry(w, h, d).toNonIndexed(); g.translate(x, y + h / 2, z);
+    const c = new THREE.Color(col), n = g.attributes.position.count, a = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.deleteAttribute('uv');
+    put(kind, zx, zz, g);
+  };
+  const footprints: { x0: number; z0: number; x1: number; z1: number; h: number; kind: BlockKind }[] = [];
+  /** One building: a box (or a podium and setbacks), its roof kit, its collision. */
+  const building = (x0: number, z0: number, x1: number, z1: number, floors: number, finish: 'plaster' | 'brick' | 'glass', style: number, fh = 3.2) => {
+    const w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, h = floors * fh, sd = rnd() * 97, tint = pick(tints[finish]);
+    put(`wall_${finish}`, cx, cz, facadeBox(cx, cz, w, d, FLOOR, h, fh, style === 1 ? 1.6 : 2.7, sd, style, tint, FLOOR));
+    let top = FLOOR + h;
+    // towers step back as they rise
+    if (style === 1 && floors > 16) {
+      let ww = w, dd = d, fl = floors;
+      for (let s = 0; s < 2 && fl > 8; s++) {
+        ww *= 0.78; dd *= 0.78; const up = Math.round(fl * (0.3 + rnd() * 0.25)); fl -= up;
+        put('wall_glass', cx, cz, facadeBox(cx, cz, ww, dd, top, up * fh, fh, 1.6, sd + s + 1, 1, tint, FLOOR, [cx - ww / 2, cz - dd / 2]));
+        top += up * fh;
+      }
+      kitBox('kit', cx, top, cz, ww * 0.4, 4, dd * 0.4, 0x8a8f96, cx, cz);
+      kitBox('kit', cx, top + 4, cz, 0.4, 14, 0.4, 0xd0d4d8, cx, cz); // a mast
+    } else {
+      // a parapet round the roof, and what lives up there: plant rooms, water tanks, AC units
+      const pc = finish === 'glass' ? 0x9aa0a8 : 0xd8d0c4;
+      kitBox('kit', cx, top, z0 + 0.15, w, 0.9, 0.3, pc, cx, cz); kitBox('kit', cx, top, z1 - 0.15, w, 0.9, 0.3, pc, cx, cz);
+      kitBox('kit', x0 + 0.15, top, cz, 0.3, 0.9, d - 0.6, pc, cx, cz); kitBox('kit', x1 - 0.15, top, cz, 0.3, 0.9, d - 0.6, pc, cx, cz);
+      for (let i = 0, n = 1 + Math.floor(rnd() * 3); i < n; i++) kitBox('kit', x0 + 2 + rnd() * (w - 5), top, z0 + 2 + rnd() * (d - 5), 1.5 + rnd() * 2.5, 1.2 + rnd() * 2, 1.5 + rnd() * 2.5, pick([0x9a9a9a, 0xbfbfbf, 0x6f7377, 0x2a2a2a]), cx, cz);
+    }
+    solid(x0, z0, x1, z1, top);
+    footprints.push({ x0, z0, x1, z1, h: top, kind: 'mid' });
+    return top;
+  };
+  /** Balconies on a residential wall (side: the wall's outward normal). */
+  const balconies = (x0: number, z0: number, x1: number, z1: number, floors: number, nx: number, nz: number) => {
+    const along = nx === 0, L = along ? x1 - x0 : z1 - z0, bays = Math.max(1, Math.round(L / 2.7)), bw = L / bays;
+    for (let f = 1; f < floors; f++) for (let b = 0; b < bays; b++) {
+      if ((b + f) % 2) continue;
+      const u = (along ? x0 : z0) + (b + 0.5) * bw, y = FLOOR + f * 3.2;
+      const fx = nx > 0 ? x1 : nx < 0 ? x0 : u, fz = nz > 0 ? z1 : nz < 0 ? z0 : u;
+      const px = fx + nx * 0.6, pz = fz + nz * 0.6, w = along ? bw * 0.9 : 1.2, d = along ? 1.2 : bw * 0.9;
+      kitBox('kit', px, y - 0.1, pz, w, 0.14, d, 0xd8d2c8, x0, z0);
+      kitBox('metal', px + nx * 0.58, y + 0.04, pz + nz * 0.58, along ? w : 0.05, 1.0, along ? 0.05 : d, 0x30343a, x0, z0);
+    }
+  };
+  const lotsAlong = (a: number, b: number, min: number, max: number) => { const out: [number, number][] = []; for (let u = a; u < b - 1; ) { let w = min + rnd() * (max - min); if (b - (u + w) < min) w = b - u; out.push([u, u + w]); u += w; } return out; };
+  const inset = (b: Block) => ({ x0: b.x0 + 6 + PAVE, x1: b.x1 - 6 - PAVE, z0: b.z0 + 6 + PAVE, z1: b.z1 - 6 - PAVE });
+  const shopfronts: { x: number; z: number; nx: number; nz: number; w: number; fh: number }[] = [];
+  const front = (x0: number, z0: number, x1: number, z1: number, nx: number, nz: number, fh = 3.2) => {
+    // the ground floor's sign over the shop, on the wall facing the street
+    const along = nx === 0, c = along ? (x0 + x1) / 2 : (z0 + z1) / 2;
+    shopfronts.push({ x: nx > 0 ? x1 : nx < 0 ? x0 : c, z: nz > 0 ? z1 : nz < 0 ? z0 : c, nx, nz, w: Math.min(9, (along ? x1 - x0 : z1 - z0) - 1.5), fh });
+  };
+  /** A block ringed by buildings on its four sides (a closed courtyard behind). */
+  const perimeter = (b: Block, depth: [number, number], floors: [number, number], finishes: ('plaster' | 'brick' | 'glass')[], style: number, lot: [number, number], balc: boolean) => {
+    const I = inset(b), D = depth[0] + rnd() * (depth[1] - depth[0]);
+    for (const [u0, u1] of lotsAlong(I.x0, I.x1, lot[0], lot[1])) for (const [zz0, zz1, nz] of [[I.z0, I.z0 + D, -1], [I.z1 - D, I.z1, 1]] as [number, number, number][]) {
+      const fl = floors[0] + Math.floor(rnd() * (floors[1] - floors[0] + 1));
+      building(u0, zz0, u1, zz1, fl, pick(finishes), style); front(u0, zz0, u1, zz1, 0, nz);
+      if (balc) balconies(u0, zz0, u1, zz1, fl, 0, nz);
+    }
+    for (const [u0, u1] of lotsAlong(I.z0 + D, I.z1 - D, lot[0], lot[1])) for (const [xx0, xx1, nx] of [[I.x0, I.x0 + D, -1], [I.x1 - D, I.x1, 1]] as [number, number, number][]) {
+      const fl = floors[0] + Math.floor(rnd() * (floors[1] - floors[0] + 1));
+      building(xx0, u0, xx1, u1, fl, pick(finishes), style); front(xx0, u0, xx1, u1, nx, 0);
+      if (balc) balconies(xx0, u0, xx1, u1, fl, nx, 0);
+    }
+  };
+  const parks: Block[] = [];
+  for (const b of BLOCKS) {
+    if (b.kind === 'tower') {
+      const I = inset(b), two = rnd() < 0.5;
+      // a podium of shops filling the block, one or two towers on it
+      building(I.x0, I.z0, I.x1, I.z1, 3, 'glass', 2, 4.2);
+      for (const [x0, x1, z0, z1, dz] of [[I.x0, I.x1, I.z0, I.z1, 0]] as number[][]) { for (const [nx, nz] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) for (let k = 0; k < 3; k++) { const a = k / 3, b = (k + 1) / 3; if (nx) front(x0, z0 + (z1 - z0) * a, x1, z0 + (z1 - z0) * b, nx, nz, 4.2); else front(x0 + (x1 - x0) * a, z0, x0 + (x1 - x0) * b, z1, nx, nz, 4.2); } void dz; }
+      const tw = two ? 22 : 32, cs = two ? [[-0.25, -0.2], [0.25, 0.22]] : [[0, 0]];
+      for (const [fx, fz] of cs) {
+        const cx = (I.x0 + I.x1) / 2 + fx * (I.x1 - I.x0), cz = (I.z0 + I.z1) / 2 + fz * (I.z1 - I.z0), fl = 22 + Math.floor(Math.pow(rnd(), 1.4) * 34);
+        const top = building(cx - tw / 2, cz - tw / 2, cx + tw / 2, cz + tw / 2, fl, 'glass', 1);
+        void top;
+      }
+    } else if (b.kind === 'mid') perimeter(b, [14, 18], [6, 12], ['brick', 'plaster', 'glass'], 2, [16, 26], false);
+    else if (b.kind === 'market') perimeter(b, [12, 16], [3, 5], ['plaster', 'plaster', 'brick'], 0, [8, 13], true);
+    else if (b.kind === 'water') perimeter(b, [14, 18], [7, 13], ['plaster', 'glass', 'brick'], 0, [14, 22], true);
+    else if (b.kind === 'res') perimeter(b, [12, 15], [4, 7], ['plaster', 'brick'], 0, [12, 18], true);
+    else if (b.kind === 'park') parks.push(b);
+  }
+  // the old town's back streets: dense flats over the bazaar's roofs (the bazaar used to end at its own walls)
+  const OLD_FILL: [number, number, number, number, number, number][] = [
+    [21.5, -78, 72.5, 13, 5, 10], [21.5, 47, 72.5, 80, 5, 10], [9.6, 80, 21.5, 98, 3, 5], [21.5, 80, 72.5, 98, 4, 8],
+    [-72.5, -78, -21.5, -61, 5, 10], [-72.5, -27, -21.5, 80, 5, 10], [-21.5, 80, -9.6, 98, 3, 5], [-72.5, 80, -21.5, 98, 4, 8],
+  ];
+  for (const [x0, z0, x1, z1, f0, f1] of OLD_FILL) {
+    for (const [u0, u1] of lotsAlong(z0, z1, 12, 22)) {
+      const mid = (x0 + x1) / 2, split = x1 - x0 > 30;
+      for (const [a, b] of split ? [[x0, mid], [mid, x1]] : [[x0, x1]]) {
+        const fl = f0 + Math.floor(rnd() * (f1 - f0 + 1));
+        building(a, u0, b, u1, fl, pick(['plaster', 'plaster', 'brick'] as const), 0);
+        if (z0 >= 80) front(a, u0, b, u1, a > 0 ? -1 : 1, 0);
+      }
+    }
+  }
+  // edge of the city: towers beyond the east avenue and the north street, behind a low wall; the bay to the west
+  for (let z = -90; z < 330; z += 34 + rnd() * 20) building(344, z, 370 + rnd() * 10, z + 26 + rnd() * 6, 18 + Math.floor(rnd() * 30), 'glass', 1);
+  for (let x = -240; x < 340; x += 30 + rnd() * 20) building(x, 324, x + 22 + rnd() * 6, 352, 12 + Math.floor(rnd() * 26), pick(['glass', 'brick'] as const), rnd() < 0.5 ? 1 : 2);
+  solid(340, -110, 344, 330, 3); solid(72.5, -104, 84, -90, 3); solid(-84, -104, -72.5, -90, 3); solid(-260, 320, 344, 324, 3); solid(84, -104, 340, -100, 3); solid(-260, -104, -84, -100, 3); solid(-282, -110, -281, 330, 1.2);
+
+  // ---- the bay: deep water, a sea wall, railings along the promenade ----
+  {
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1400), (() => {
+      const m = new THREE.MeshStandardMaterial({ color: 0x0f3b4a, roughness: 0.08, metalness: 0.1 });
+      const nt = canvasTex(256, 256, (g) => { const id = g.createImageData(256, 256); for (let i = 0; i < 256 * 256; i++) { const x = i % 256, y = (i / 256) | 0; const v = 128 + 40 * Math.sin(x * 0.19 + Math.sin(y * 0.11) * 3) + 30 * Math.sin(y * 0.23 + x * 0.05); id.data[i * 4] = v; id.data[i * 4 + 1] = 255 - v * 0.5; id.data[i * 4 + 2] = 255; id.data[i * 4 + 3] = 255; } g.putImageData(id, 0, 0); });
+      nt.colorSpace = THREE.NoColorSpace; nt.wrapS = nt.wrapT = THREE.RepeatWrapping; nt.repeat.set(160, 140);
+      m.normalMap = nt; m.normalScale.set(0.35, 0.35); m.userData.water = nt;
+      return m;
+    })());
+    water.rotation.x = -Math.PI / 2; water.position.set(-282 - 800, -1.4, 110); water.receiveShadow = true; add(water);
+    waterTex = (water.material as THREE.MeshStandardMaterial).userData.water as THREE.Texture;
+    kitBox('kit', -282, -1.6, 110, 2, 1.74, 424, 0x8a8478, -270, 110);
+    for (let z = -94; z < 314; z += 2.5) kitBox('metal', -280.8, FLOOR, z, 0.08, 1.05, 0.08, 0x2a2e33, -270, z);
+    for (let z = -94; z < 314; z += 40) kitBox('metal', -280.8, FLOOR + 1.0, z + 20, 0.1, 0.08, 40, 0x3a3e43, -270, z + 20);
+  }
+
+  // ---- the park: lawns, paths, a pond, trees ----
+  const trees: [number, number, number][] = [];
+  for (const b of parks) {
+    const I = inset(b);
+    for (const [x0, z0, x1, z1] of [[I.x0, I.z0, -3, I.z1 - 0.01], [3, I.z0, I.x1, I.z1 - 0.01]] as number[][]) {
+      // lawns split by a cross of paths
+      const mz = (I.z0 + I.z1) / 2;
+      for (const [a, c] of [[z0, mz - 3], [mz + 3, z1]]) put('grass', (x0 + x1) / 2, (a + c) / 2, plane(x0, a, x1, c, FLOOR + 0.002, 1));
+    }
+    const px = 40, pz = 262;
+    const pond = new THREE.Mesh(new THREE.CircleGeometry(14, 48), new THREE.MeshStandardMaterial({ color: 0x1f4c56, roughness: 0.06, metalness: 0.1, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }));
+    pond.rotation.x = -Math.PI / 2; pond.position.set(px, FLOOR + 0.01, pz); add(pond);
+    for (let a = 0; a < 40; a++) { const t = a / 40 * Math.PI * 2; kitBox('kit', px + Math.cos(t) * 14.3, FLOOR, pz + Math.sin(t) * 14.3, 2.4, 0.45, 0.6, 0xc8c0b2, px, pz); }
+    solid(px - 13, pz - 13, px + 13, pz + 13, 0.5);
+    for (let i = 0; i < (rich ? 90 : 45); i++) {
+      const x = I.x0 + 4 + rnd() * (I.x1 - I.x0 - 8), z = I.z0 + 4 + rnd() * (I.z1 - I.z0 - 8);
+      if (Math.abs(x) < 6 || Math.abs(z - (I.z0 + I.z1) / 2) < 6 || Math.hypot(x - px, z - pz) < 18) continue;
+      trees.push([x, z, 0.8 + rnd() * 0.5]);
+    }
+  }
+
+  // ---- street furniture along every pavement: lamps, trees, benches, bins, bus shelters, signals ----
+  const lamps: THREE.Vector3[] = [];
+  const furnish = (b: Block) => {
+    const I = { x0: b.x0 + 6, x1: b.x1 - 6, z0: b.z0 + 6, z1: b.z1 - 6 }; // the kerb line
+    const sides: [number, number, number, number, number, number][] = [ // start, end, fixed, axis (0: along x), normal x, normal z
+      [I.x0 + 8, I.x1 - 8, I.z0, 0, 0, -1], [I.x0 + 8, I.x1 - 8, I.z1, 0, 0, 1], [I.z0 + 8, I.z1 - 8, I.x0, 1, -1, 0], [I.z0 + 8, I.z1 - 8, I.x1, 1, 1, 0],
+    ];
+    for (const [a, c, f, ax, nx, nz] of sides) {
+      let i = 0;
+      for (let u = a; u <= c; u += 12, i++) {
+        // just inside the kerb: out from the block edge by its normal is the road, so step back in
+        const kx = ax ? f - nx * 0.7 : u, kz = ax ? u : f - nz * 0.7;
+        if (i % 2 === 0) lampAt(kx, kz, nx, nz);
+        else if (b.kind !== 'market' || rnd() < 0.5) trees.push([kx - nx * 0.5, kz - nz * 0.5, 0.55 + rnd() * 0.25]);
+        if (i % 5 === 3) { benchAt(kx - nx * 1.6, kz - nz * 1.6, nx, nz); }
+        if (i % 7 === 5) { kitBox('metal', kx - nx * 0.4, FLOOR, kz - nz * 0.4, 0.5, 0.95, 0.5, 0x2f5f3a, kx, kz); solid(kx - nx * 0.4 - 0.3, kz - nz * 0.4 - 0.3, kx - nx * 0.4 + 0.3, kz - nz * 0.4 + 0.3, 1); }
+        if (i === 4 && rnd() < 0.5) shelterAt(kx - nx * 1.4, kz - nz * 1.4, nx, nz);
+      }
+    }
+  };
+  const lampAt = (x: number, z: number, nx: number, nz: number) => {
+    kitBox('metal', x, FLOOR, z, 0.16, 7, 0.16, 0x33373c, x, z);
+    kitBox('metal', x + nx * 1.1, FLOOR + 6.9, z + nz * 1.1, nx ? 2.2 : 0.12, 0.12, nz ? 2.2 : 0.12, 0x33373c, x, z);
+    const head = new THREE.BoxGeometry(nx ? 0.9 : 0.36, 0.12, nz ? 0.9 : 0.36).toNonIndexed(); head.translate(x + nx * 2, FLOOR + 6.86, z + nz * 2);
+    put('lamp', x, z, head);
+    lamps.push(new THREE.Vector3(x + nx * 2, FLOOR, z + nz * 2));
+    solid(x - 0.15, z - 0.15, x + 0.15, z + 0.15, 7);
+  };
+  const benchAt = (x: number, z: number, nx: number, nz: number) => {
+    const w = nx ? 0.5 : 1.8, d = nx ? 1.8 : 0.5;
+    kitBox('kit', x, FLOOR + 0.42, z, w, 0.08, d, 0x8a5a3a, x, z);
+    kitBox('kit', x - nx * 0.22, FLOOR + 0.5, z - nz * 0.22, nx ? 0.06 : 1.8, 0.45, nz ? 0.06 : 1.8, 0x8a5a3a, x, z);
+    for (const s of [-0.7, 0.7]) kitBox('metal', x + (nx ? 0 : s), FLOOR, z + (nx ? s : 0), nx ? 0.4 : 0.06, 0.42, nx ? 0.06 : 0.4, 0x2a2e33, x, z);
+    benches.push({ x: x - nx * 0.05, z: z - nz * 0.05, yaw: Math.atan2(nx, nz) });
+    solid(x - w / 2, z - d / 2, x + w / 2, z + d / 2, 0.9);
+  };
+  const shelterAt = (x: number, z: number, nx: number, nz: number) => {
+    const w = nx ? 1.6 : 4.4, d = nx ? 4.4 : 1.6;
+    kitBox('metal', x, FLOOR + 2.5, z, w, 0.1, d, 0xd8dde2, x, z);
+    kitBox('metal', x - nx * 0.75, FLOOR, z - nz * 0.75, nx ? 0.06 : 4.4, 2.5, nx ? 4.4 : 0.06, 0x9fb8c8, x, z);
+    for (const s of [-2.1, 2.1]) kitBox('metal', x + (nx ? 0 : s) - nx * 0.75, FLOOR, z + (nx ? s : 0) - nz * 0.75, 0.08, 2.5, 0.08, 0x30343a, x, z);
+    solid(x - nx * 0.75 - (nx ? 0.1 : 2.2), z - nz * 0.75 - (nz ? 0.1 : 2.2), x - nx * 0.75 + (nx ? 0.1 : 2.2), z - nz * 0.75 + (nz ? 0.1 : 2.2), 2.6);
+  };
+  const benches: { x: number; z: number; yaw: number }[] = [];
+  for (const b of BLOCKS) furnish(b);
+  for (let z = -86; z < 306; z += 14) { lampAt(-279.5, z, 1, 0); if (z % 28 === 0) benchAt(-276, z + 7, 1, 0); else trees.push([-262, z + 7, 0.9]); }
+
+  // trees: a trunk and a broad crown, merged per zone
+  {
+    const crown = broadCrown([[0, 5.2, 0, 2.2], [1.4, 4.6, 0.4, 1.6], [-1.2, 4.8, -0.6, 1.7], [0.3, 4.4, -1.4, 1.5], [-0.4, 4.3, 1.3, 1.5]], CROWN_LODS[rich ? 1 : 2], rich ? 1 : 0.7, 21);
+    const trunk = new THREE.CylinderGeometry(0.12, 0.2, 4.4, 6).toNonIndexed(); trunk.translate(0, 2.2, 0);
+    { const n = trunk.attributes.position.count, a = new Float32Array(n * 3).fill(0.32); for (let i = 0; i < n; i++) { a[i * 3] = 0.36; a[i * 3 + 2] = 0.26; } trunk.setAttribute('color', new THREE.BufferAttribute(a, 3)); trunk.deleteAttribute('uv'); }
+    const cr = crown.index ? crown.toNonIndexed() : crown;
+    for (const [x, z, s] of trees) {
+      const m = new THREE.Matrix4().compose(new THREE.Vector3(x, FLOOR, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6.28), new THREE.Vector3(s, s * (0.9 + rnd() * 0.2), s));
+      put('kit', x, z, trunk.clone().applyMatrix4(m));
+      const c = cr.clone().applyMatrix4(m); put('leaf', x, z, c);
+      solid(x - 0.25, z - 0.25, x + 0.25, z + 0.25, 4);
+    }
+  }
+
+  // ---- pools of lamplight on the pavement and the road: one additive draw, brighter as night comes ----
+  const poolTex = canvasTex(128, 128, (g) => { const r = g.createRadialGradient(64, 64, 4, 64, 64, 62); r.addColorStop(0, 'rgba(255,214,160,.85)'); r.addColorStop(0.5, 'rgba(255,200,140,.3)'); r.addColorStop(1, 'rgba(255,200,140,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128); });
+  const poolMat = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6, toneMapped: false });
+  const poolGeo = new THREE.PlaneGeometry(1, 1); poolGeo.rotateX(-Math.PI / 2);
+  const pools = new THREE.InstancedMesh(poolGeo, poolMat, Math.max(1, lamps.length));
+  lamps.forEach((l, i) => pools.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(l.x, FLOOR + 0.02, l.z), new THREE.Quaternion(), new THREE.Vector3(11, 1, 11))));
+  pools.frustumCulled = false; add(pools);
+
+  // ---- shop signs over the street floor, billboards on the roofs: two atlases, instanced ----
+  const COLS = 4, sw = 512, shh = 96;
+  const signAtlas = canvasTex(sw * COLS, shh * Math.ceil(BRANDS.length / COLS), (g) => BRANDS.forEach(([n, fg, bg], i) => {
+    const x = (i % COLS) * sw, y = Math.floor(i / COLS) * shh;
+    g.fillStyle = bg; g.fillRect(x, y, sw, shh); g.strokeStyle = fg; g.lineWidth = 4; g.strokeRect(x + 4, y + 4, sw - 8, shh - 8);
+    g.fillStyle = fg; g.shadowColor = fg; g.shadowBlur = 10; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '700 50px Rajdhani, "Noto Sans Devanagari", "Noto Nastaliq Urdu", sans-serif'; g.fillText(n, x + sw / 2, y + shh / 2 + 3, sw - 30); g.shadowBlur = 0;
+  }));
+  const signRows = Math.ceil(BRANDS.length / COLS);
+  const signs = atlasPlanes(signAtlas, COLS, signRows, shopfronts.filter(() => rnd() < 0.85).map((s) => {
+    const y = FLOOR + s.fh * 0.855, w = Math.min(s.w, 6.5), h = Math.min(s.fh * 0.17, w * shh / sw * 1.15);
+    return { x: s.x + s.nx * 0.06, y, z: s.z + s.nz * 0.06, w: Math.min(w, h * sw / shh * 0.95), h, yaw: Math.atan2(s.nx, s.nz), tile: Math.floor(rnd() * BRANDS.length) };
+  }));
+  add(signs.mesh);
+  const adAtlas = canvasTex(1024, 512 * ADS.length, (g) => ADS.forEach(([a, b, fg, bg], i) => {
+    const y = i * 512, gr = g.createLinearGradient(0, y, 1024, y + 512); gr.addColorStop(0, bg); gr.addColorStop(1, '#05060a');
+    g.fillStyle = gr; g.fillRect(0, y, 1024, 512); g.textAlign = 'center';
+    g.fillStyle = fg; g.shadowColor = fg; g.shadowBlur = 24; g.font = '700 120px Rajdhani, "Noto Sans Devanagari", "Noto Nastaliq Urdu", sans-serif'; g.fillText(a, 512, y + 230, 960);
+    g.shadowBlur = 0; g.fillStyle = '#ffffff'; g.font = '500 58px Rajdhani, "Noto Sans Devanagari", "Noto Nastaliq Urdu", sans-serif'; g.fillText(b, 512, y + 360, 960);
+  }));
+  const bill = footprints.filter((f) => f.h > 18 && f.h < 60 && rnd() < 0.3).map((f) => {
+    const w = Math.min(14, f.x1 - f.x0 - 2), side = rnd() < 0.5 ? -1 : 1;
+    return { x: (f.x0 + f.x1) / 2, y: f.h + 1.5 + w * 0.25, z: side < 0 ? f.z0 + 0.6 : f.z1 - 0.6, w, h: w * 0.5, yaw: side < 0 ? Math.PI : 0, tile: Math.floor(rnd() * ADS.length) };
+  });
+  const ads = atlasPlanes(adAtlas, 1, ADS.length, bill); add(ads.mesh);
+  for (const b of bill) kitBox('metal', b.x, b.y - b.h / 2 - 1.5, b.z, 0.3, 1.5, 0.3, 0x30343a, b.x, b.z);
+
+  // ---- traffic signals at every junction where three or more roads meet ----
+  const sigNodes = nodes.map((n) => ({ ...n, arms: [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => ROADS.some((r) => r.cars && (dx ? r.along === 'x' && Math.abs(r.c - n.z) < 0.1 && (dx > 0 ? r.b > n.x + 1 : r.a < n.x - 1) : r.along === 'z' && Math.abs(r.c - n.x) < 0.1 && (dz > 0 ? r.b > n.z + 1 : r.a < n.z - 1)))) }))
+    .filter((n) => n.arms.length >= 3);
+  const bulbs: { x: number; y: number; z: number; axis: 'x' | 'z'; k: number }[] = [];
+  for (const n of sigNodes) for (const [dx, dz] of n.arms) {
+    // a post on the near-side kerb of each arm, its head facing the traffic coming in on it
+    const px = n.x + dx * 8.4 + (dz ? 6.8 * (dz > 0 ? -1 : 1) : 0) * -1, pz = n.z + dz * 8.4 + (dx ? 6.8 * (dx > 0 ? 1 : -1) : 0);
+    kitBox('metal', px, FLOOR, pz, 0.18, 3.4, 0.18, 0x2a2e33, px, pz);
+    kitBox('metal', px, FLOOR + 3.2, pz, dz ? 0.34 : 0.34, 1.0, 0.34, 0x1a1c1f, px, pz);
+    for (let k = 0; k < 3; k++) bulbs.push({ x: px + dx * 0.18, y: FLOOR + 4.0 - k * 0.3, z: pz + dz * 0.18, axis: dx ? 'x' : 'z', k });
+    solid(px - 0.12, pz - 0.12, px + 0.12, pz + 0.12, 4);
+  }
+  const bulbM = new THREE.MeshBasicMaterial({ toneMapped: false });
+  const bulbMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.11, 8, 6), bulbM, Math.max(1, bulbs.length));
+  bulbs.forEach((b, i) => bulbMesh.setMatrixAt(i, new THREE.Matrix4().makeTranslation(b.x, b.y, b.z)));
+  add(bulbMesh);
+  const OFF = new THREE.Color(0x101010), RED = new THREE.Color(3, 0.3, 0.2), AMB = new THREE.Color(3, 1.8, 0.2), GRN = new THREE.Color(0.3, 3, 1.2);
+  // phase: 0 x-roads go, 1 x amber, 2 z-roads go, 3 z amber
+  const CYCLE = [14, 2.5, 14, 2.5];
+  let phase = -1;
+  const phaseAt = (t: number) => { const T = CYCLE.reduce((a, b) => a + b, 0); let u = t % T; for (let i = 0; i < 4; i++) { if (u < CYCLE[i]) return i; u -= CYCLE[i]; } return 0; };
+  /** Can traffic along this axis go now (green)? */
+  const go = (axis: 'x' | 'z') => (axis === 'x' ? phase === 0 : phase === 2);
+  const setBulbs = () => {
+    bulbs.forEach((b, i) => {
+      const green = go(b.axis), amber = b.axis === 'x' ? phase === 1 : phase === 3;
+      const c = b.k === 0 ? (!green && !amber ? RED : OFF) : b.k === 1 ? (amber ? AMB : OFF) : green ? GRN : OFF;
+      bulbMesh.setColorAt(i, c);
+    });
+    if (bulbMesh.instanceColor) bulbMesh.instanceColor.needsUpdate = true;
+  };
+
+  // ---- merge every zone's pieces: one mesh per kind per zone ----
+  const kindMat: Record<string, THREE.Material> = { road: o.road, pave: o.paving, mark: markM, kit: kitM, metal: metalM, lamp: lampM, leaf: leafM, grass: grassM, wall_plaster: wallMats.plaster, wall_brick: wallMats.brick, wall_glass: wallMats.glass };
+  const NEAR_KINDS = new Set(['kit', 'metal', 'lamp', 'leaf', 'mark']);
+  for (const zn of zones.values()) {
+    for (const [kind, gs] of Object.entries(zn.geo)) {
+      const gg = gs.map((g) => (g.index ? g.toNonIndexed() : g));
+      // the same attributes everywhere in one merge
+      const names = Object.keys(gg[0].attributes);
+      const ok = gg.filter((g) => names.every((n) => g.attributes[n]) && Object.keys(g.attributes).length === names.length);
+      const merged = mergeGeometries(ok, false);
+      if (!merged) continue;
+      const m = new THREE.Mesh(merged, kindMat[kind]);
+      m.castShadow = kind.startsWith('wall') || kind === 'kit' || kind === 'metal' || kind === 'leaf';
+      m.receiveShadow = true;
+      m.userData.district = kind;
+      add(m);
+      if (kind === 'road' || kind === 'pave') m.userData.ground = true;
+      if (NEAR_KINDS.has(kind)) zn.near.push(m);
+    }
+    zn.geo = {};
+  }
+
+  // ---- traffic: cars on lanes, turning at junctions, stopping at red and for anyone on a crossing ----
+  type Edge = { r: Road; from: number; to: number; dir: number }; // along the road from `from` to `to` (u values)
+  const nodeAt = (x: number, z: number) => sigNodes.find((n) => Math.abs(n.x - x) < 0.1 && Math.abs(n.z - z) < 0.1);
+  const stops = (r: Road) => nodes.filter((n) => n.roads.includes(r)).map((n) => (r.along === 'z' ? n.z : n.x)).sort((a, b) => a - b);
+  interface Car { r: Road; u: number; dir: number; lane: number; v: number; vmax: number; col: THREE.Color; turn: { p0: THREE.Vector3; p1: THREE.Vector3; c: THREE.Vector3; t: number; len: number; next: Road; nu: number; ndir: number } | null; x: number; z: number; yaw: number }
+  const carRoads = ROADS.filter((r) => r.cars);
+  const cars: Car[] = [];
+  const NCAR = rich ? 70 : 28;
+  const carCols = [0xf4f4f6, 0x1b1b1f, 0x8a8f96, 0xc0392b, 0x2c3e94, 0x16a085, 0xf2d64b, 0xe8e2d4, 0x5a3a7a, 0xff8c42].map((c) => new THREE.Color(c));
+  for (let i = 0; i < NCAR; i++) {
+    const r = pick(carRoads), dir = rnd() < 0.5 ? 1 : -1;
+    cars.push({ r, u: r.a + 8 + rnd() * (r.b - r.a - 16), dir, lane: rnd() < 0.5 ? 0 : 1, v: 0, vmax: 9 + rnd() * 5, col: pick(carCols), turn: null, x: 0, z: 0, yaw: 0 });
+  }
+  /** Lane centre offset from the road's centre line: left-hand traffic, inner lane 1.6 m, outer 4.4 m. */
+  const laneOff = (dir: number, lane: number, along: 'x' | 'z') => (along === 'z' ? dir : -dir) * (lane ? 4.4 : 1.6);
+  const pos = (r: Road, u: number, dir: number, lane: number, out: THREE.Vector3) => {
+    const off = laneOff(dir, lane, r.along);
+    return r.along === 'z' ? out.set(r.c + off, 0, u) : out.set(u, 0, r.c + off);
+  };
+  // the car body: a low wedge with a glass canopy, lamps front and back, glow underneath
+  const shape = new THREE.Shape();
+  shape.moveTo(-2.3, 0.35); shape.lineTo(2.25, 0.35); shape.quadraticCurveTo(2.45, 0.5, 2.35, 0.78); shape.lineTo(1.2, 0.95); shape.lineTo(0.4, 1.38);
+  shape.lineTo(-1.2, 1.4); shape.quadraticCurveTo(-2.1, 1.25, -2.35, 0.9); shape.lineTo(-2.3, 0.35);
+  const bodyG = new THREE.ExtrudeGeometry(shape, { depth: 1.86, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.08, bevelSegments: 2, curveSegments: 6 });
+  bodyG.translate(0, 0, -0.93); bodyG.rotateY(-Math.PI / 2); // nose towards +z
+  const glassG = new THREE.ExtrudeGeometry((() => { const s = new THREE.Shape(); s.moveTo(1.12, 0.97); s.lineTo(0.42, 1.36); s.lineTo(-1.1, 1.38); s.quadraticCurveTo(-1.8, 1.25, -1.95, 1.0); s.lineTo(1.12, 0.97); return s; })(), { depth: 1.7, bevelEnabled: false });
+  glassG.translate(0, 0.02, -0.85); glassG.rotateY(-Math.PI / 2);
+  const lightG = mergeGeometries([
+    ...[-0.65, 0.65].map((x) => new THREE.BoxGeometry(0.45, 0.12, 0.06).translate(x, 0.72, 2.4)),
+    ...[-0.7, 0.7].map((x) => new THREE.BoxGeometry(0.4, 0.1, 0.06).translate(x, 0.82, -2.4)),
+    new THREE.BoxGeometry(1.5, 0.04, 3.6).translate(0, 0.08, 0),
+  ].map((g) => g.toNonIndexed()))!;
+  { const n = lightG.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const z = lightG.attributes.position.getZ(i), y = lightG.attributes.position.getY(i); const c = y < 0.2 ? [0.4, 2.2, 2.6] : z > 0 ? [3, 2.8, 2.4] : [3, 0.15, 0.1]; a.set(c, i * 3); } lightG.setAttribute('color', new THREE.BufferAttribute(a, 3)); }
+  const carBodyM = new THREE.MeshStandardMaterial({ roughness: 0.22, metalness: 0.55 });
+  const carGlassM = new THREE.MeshStandardMaterial({ color: 0x0c1218, roughness: 0.05, metalness: 0.9 });
+  const carLightM = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+  const PARKED = rich ? 40 : 14;
+  const carMesh = [new THREE.InstancedMesh(bodyG, carBodyM, NCAR + PARKED), new THREE.InstancedMesh(glassG, carGlassM, NCAR + PARKED), new THREE.InstancedMesh(lightG, carLightM, NCAR + PARKED)];
+  for (const m of carMesh) { m.frustumCulled = false; m.castShadow = m !== carMesh[2]; add(m); }
+  cars.forEach((c, i) => carMesh[0].setColorAt(i, c.col));
+  // parked along the outer lane of the quieter streets
+  const parked: { x: number; z: number; yaw: number }[] = [];
+  for (let i = 0; i < PARKED; i++) {
+    const r = pick(carRoads.filter((x) => x.along === 'x')), u = r.a + 14 + rnd() * (r.b - r.a - 28);
+    if (nodes.some((n) => Math.abs((r.along === 'x' ? n.x : n.z) - u) < 14)) { i--; continue; }
+    const side = rnd() < 0.5 ? 1 : -1;
+    parked.push({ x: u, z: r.c + side * 5.2, yaw: side > 0 ? -Math.PI / 2 : Math.PI / 2 });
+    carMesh[0].setColorAt(NCAR + i, pick(carCols));
+    solid(u - 2.4, r.c + side * 5.2 - 1, u + 2.4, r.c + side * 5.2 + 1, 1.5);
+  }
+  const CM = new THREE.Matrix4(), CQ = new THREE.Quaternion(), CP = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1), ZERO = new THREE.Vector3(0, 0, 0), YAX = new THREE.Vector3(0, 1, 0), T1 = new THREE.Vector3();
+  parked.forEach((p, i) => { CM.compose(CP.set(p.x, 0.02, p.z), CQ.setFromAxisAngle(YAX, p.yaw), ONE); for (const m of carMesh) m.setMatrixAt(NCAR + i, CM); });
+  for (const m of carMesh) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  /** Pick where a car goes at the junction at u on its road: straight on if it can, else a turn. */
+  const nextAt = (c: Car, nu: number) => {
+    const nx = c.r.along === 'z' ? c.r.c : nu, nz = c.r.along === 'z' ? nu : c.r.c;
+    const opts: { r: Road; dir: number }[] = [];
+    for (const r of carRoads) {
+      const on = r.along === 'z' ? Math.abs(r.c - nx) < 0.1 && nz >= r.a - 0.1 && nz <= r.b + 0.1 : Math.abs(r.c - nz) < 0.1 && nx >= r.a - 0.1 && nx <= r.b + 0.1;
+      if (!on) continue;
+      const u = r.along === 'z' ? nz : nx;
+      for (const dir of [1, -1]) {
+        if (dir > 0 ? u > r.b - 8 : u < r.a + 8) continue;
+        if (r === c.r && dir !== c.dir) continue; // no U-turns
+        opts.push({ r, dir });
+      }
+    }
+    if (!opts.length) return { r: c.r, dir: -c.dir };
+    const straight = opts.find((q) => q.r === c.r);
+    return straight && rnd() < 0.55 ? straight : pick(opts);
+  };
+  const crossers: THREE.Vector3[] = []; // people on the zebras now (and the player), set each frame
+  const driveCars = (dt: number, you: THREE.Vector3 | null, cam: THREE.Vector3) => {
+    const k = Math.min(dt, 0.1);
+    for (let i = 0; i < cars.length; i++) {
+      const c = cars[i];
+      const far = Math.hypot(c.x - cam.x, c.z - cam.z) > 420;
+      if (c.turn) {
+        const tr = c.turn; tr.t += (c.v * k) / tr.len;
+        if (tr.t >= 1) { c.r = tr.next; c.u = tr.nu; c.dir = tr.ndir; c.turn = null; }
+        else {
+          const t = tr.t, a = (1 - t) * (1 - t), b = 2 * t * (1 - t), d = t * t;
+          const nx = a * tr.p0.x + b * tr.c.x + d * tr.p1.x, nz = a * tr.p0.z + b * tr.c.z + d * tr.p1.z;
+          c.yaw = Math.atan2(nx - c.x, nz - c.z) || c.yaw; c.x = nx; c.z = nz;
+        }
+      }
+      if (!c.turn) {
+        // the next junction ahead on this road and its stop line
+        const st = stops(c.r), ahead = c.dir > 0 ? st.find((s) => s > c.u + 0.5) : [...st].reverse().find((s) => s < c.u - 0.5);
+        let want = c.vmax;
+        const endU = c.dir > 0 ? c.r.b - 8 : c.r.a + 8;
+        const nu = ahead ?? endU, gap = (nu - c.u) * c.dir;
+        const sig = ahead !== undefined ? nodeAt(c.r.along === 'z' ? c.r.c : ahead, c.r.along === 'z' ? ahead : c.r.c) : undefined;
+        const stopD = gap - 9.2; // the stop line, before the zebra
+        if (sig && !go(c.r.along) && stopD > -0.5) want = Math.min(want, Math.max(0, stopD) * 0.9);
+        // the car ahead in the same lane
+        for (const o of cars) if (o !== c && !o.turn && o.r === c.r && o.dir === c.dir && o.lane === c.lane) { const g = (o.u - c.u) * c.dir; if (g > 0 && g < 30) want = Math.min(want, Math.max(0, g - 6.5) * 0.8); }
+        // anyone on the road in front: a walker on a zebra, or you
+        pos(c.r, c.u, c.dir, c.lane, T1);
+        for (const p of crossers) { const fx = (c.r.along === 'z' ? p.z - T1.z : p.x - T1.x) * c.dir, sx = c.r.along === 'z' ? p.x - T1.x : p.z - T1.z; if (fx > 0 && fx < 14 && Math.abs(sx) < 1.8) want = Math.min(want, Math.max(0, fx - 4) * 0.7); }
+        if (you) { const fx = (c.r.along === 'z' ? you.z - T1.z : you.x - T1.x) * c.dir, sx = c.r.along === 'z' ? you.x - T1.x : you.z - T1.z; if (fx > 0 && fx < 16 && Math.abs(sx) < 1.9) want = Math.min(want, Math.max(0, fx - 4) * 0.7); }
+        c.v += (want - c.v) * (1 - Math.exp(-k * (want < c.v ? 4 : 1.2)));
+        c.u += c.dir * c.v * k;
+        if (gap - c.v * k <= 0.3 + 6.2) {
+          // into the junction: a curve from here to the lane of the road it takes
+          const n = nextAt(c, nu);
+          const p0 = pos(c.r, c.u, c.dir, c.lane, new THREE.Vector3());
+          const exitU = (n.r.along === 'z' ? (c.r.along === 'z' ? nu : c.r.c) : (c.r.along === 'x' ? nu : c.r.c)) + n.dir * 7;
+          const lane = n.r === c.r ? c.lane : rnd() < 0.5 ? 0 : 1;
+          const p1 = pos(n.r, exitU, n.dir, lane, new THREE.Vector3());
+          const corner = new THREE.Vector3(c.r.along === 'z' ? p0.x : p1.x, 0, c.r.along === 'z' ? p1.z : p0.z);
+          const ctl = n.r === c.r ? p0.clone().add(p1).multiplyScalar(0.5) : corner;
+          if (n.r === c.r && n.dir === -c.dir) { c.dir = -c.dir; } // a dead end: turn round
+          else { c.turn = { p0, p1, c: ctl, t: 0, len: Math.max(4, p0.distanceTo(p1) * 1.1), next: n.r, nu: exitU, ndir: n.dir }; c.lane = lane; }
+        }
+        if (!c.turn) { pos(c.r, c.u, c.dir, c.lane, T1); c.x = T1.x; c.z = T1.z; c.yaw = c.r.along === 'z' ? (c.dir > 0 ? 0 : Math.PI) : (c.dir > 0 ? Math.PI / 2 : -Math.PI / 2); }
+      }
+      CQ.setFromAxisAngle(YAX, c.yaw);
+      CM.compose(CP.set(c.x, 0.02, c.z), CQ, far ? ZERO : ONE);
+      for (const m of carMesh) m.setMatrixAt(i, CM);
+    }
+    for (const m of carMesh) m.instanceMatrix.needsUpdate = true;
+  };
+
+  // ---- people: walkers round the blocks, crossing at the zebras; others sit, shop, chat, film, wait for a bus ----
+  type Ped = { b: Block; s: number; dir: number; off: number; v: number; mode: 'walk' | 'wait' | 'cross' | 'stay'; pose: string; x: number; z: number; yaw: number; t: number; cross?: { x0: number; z0: number; x1: number; z1: number; axis: 'x' | 'z'; nb: Block; ns: number } };
+  const walkBlocks = BLOCKS.filter((b) => b.kind !== 'park');
+  const ring = (b: Block, off: number) => ({ x0: b.x0 + 6 + off, x1: b.x1 - 6 - off, z0: b.z0 + 6 + off, z1: b.z1 - 6 - off });
+  const perim = (b: Block, off: number) => { const R = ring(b, off); return 2 * (R.x1 - R.x0 + R.z1 - R.z0); };
+  const onRing = (b: Block, off: number, s: number, out: { x: number; z: number; yaw: number }) => {
+    const R = ring(b, off), W = R.x1 - R.x0, H = R.z1 - R.z0, P = 2 * (W + H);
+    let u = ((s % P) + P) % P;
+    if (u < W) { out.x = R.x0 + u; out.z = R.z0; out.yaw = Math.PI / 2; return out; } u -= W;
+    if (u < H) { out.x = R.x1; out.z = R.z0 + u; out.yaw = 0; return out; } u -= H;
+    if (u < W) { out.x = R.x1 - u; out.z = R.z1; out.yaw = -Math.PI / 2; return out; } u -= W;
+    out.x = R.x0; out.z = R.z1 - u; out.yaw = Math.PI; return out;
+  };
+  const peds: Ped[] = [];
+  const NPED = rich ? 340 : 120;
+  const P0 = { x: 0, z: 0, yaw: 0 };
+  for (let i = 0; i < NPED; i++) {
+    const b = pick(walkBlocks), off = 0.9 + rnd() * 2.4, s = rnd() * perim(b, off);
+    const p: Ped = { b, s, dir: rnd() < 0.5 ? 1 : -1, off, v: 1.0 + rnd() * 0.6, mode: 'walk', pose: 'walk', x: 0, z: 0, yaw: 0, t: 0 };
+    onRing(b, off, s, P0); p.x = P0.x; p.z = P0.z; p.yaw = P0.yaw;
+    peds.push(p);
+  }
+  // people staying put: on the benches, at shop windows, chatting in twos and threes, filming, waiting at shelters
+  const stayPoses = ['idle', 'selfie', 'write', 'argue', 'present', 'point', 'cheer'];
+  for (const bn of benches.filter(() => rnd() < 0.5)) peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: 'sit', x: bn.x, z: bn.z, yaw: bn.yaw + Math.PI, t: 0 });
+  for (const sf of shopfronts.filter(() => rnd() < (rich ? 0.22 : 0.1))) {
+    const n = rnd() < 0.5 ? 1 : 2 + Math.floor(rnd() * 2), bx = sf.x + sf.nx * 1.6, bz = sf.z + sf.nz * 1.6;
+    for (let j = 0; j < n; j++) {
+      const a = (j / n) * Math.PI * 2 + rnd(), r = n > 1 ? 0.7 : 0;
+      const x = bx + Math.cos(a) * r, z = bz + Math.sin(a) * r;
+      peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: n > 1 ? pick(['argue', 'idle', 'present', 'cheer', 'point']) : pick(stayPoses), x, z, yaw: n > 1 ? Math.atan2(bx - x, bz - z) : Math.atan2(-sf.nx, -sf.nz), t: 0 });
+    }
+  }
+  // the park: strollers on its paths, people on the lawns
+  for (let i = 0; i < (rich ? 40 : 14); i++) {
+    const x = (rnd() - 0.5) * 150, z = 205 + rnd() * 90;
+    if (Math.hypot(x - 40, z - 262) < 17) continue;
+    peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: pick(['sit', 'idle', 'selfie', 'cheer', 'argue']), x, z, yaw: rnd() * 6.28, t: 0 });
+  }
+  const pedSolid = (x: number, z: number) => solids.some((b) => b.max.y > 0.8 && x > b.min.x - 0.3 && x < b.max.x + 0.3 && z > b.min.z - 0.3 && z < b.max.z + 0.3);
+  for (let i = peds.length - 1; i >= 0; i--) if (peds[i].mode === 'stay' && peds[i].pose !== 'sit' && pedSolid(peds[i].x, peds[i].z)) peds.splice(i, 1);
+  /** Where a walker at a corner can cross to: the block across the road, straight on. */
+  const across = (p: Ped, yaw0: number) => {
+    const R = ring(p.b, p.off);
+    const atX = Math.abs(p.x - R.x0) < 0.6 ? -1 : Math.abs(p.x - R.x1) < 0.6 ? 1 : 0, atZ = Math.abs(p.z - R.z0) < 0.6 ? -1 : Math.abs(p.z - R.z1) < 0.6 ? 1 : 0;
+    if (!atX || !atZ) return null;
+    // keep the way they were going: walking along x at this corner crosses the z-road ahead, and so on
+    const alongX = Math.abs(Math.sin(yaw0)) > 0.7;
+    const dx = alongX ? atX : 0, dz = alongX ? 0 : atZ;
+    const nb = walkBlocks.find((b) => (dx ? (dx > 0 ? Math.abs(b.x0 - p.b.x1) < 1 : Math.abs(b.x1 - p.b.x0) < 1) && b.z0 === p.b.z0 : (dz > 0 ? Math.abs(b.z0 - p.b.z1) < 1 : Math.abs(b.z1 - p.b.z0) < 1) && b.x0 === p.b.x0));
+    if (!nb) return null;
+    const R2 = ring(nb, p.off);
+    const x1 = dx ? (dx > 0 ? R2.x0 : R2.x1) : p.x, z1 = dz ? (dz > 0 ? R2.z0 : R2.z1) : p.z;
+    // the same corner on the new block's ring
+    let ns = 0; const W2 = R2.x1 - R2.x0, H2 = R2.z1 - R2.z0;
+    if (Math.abs(z1 - R2.z0) < 0.6) ns = Math.abs(x1 - R2.x0) < 0.6 ? 0 : W2; else ns = Math.abs(x1 - R2.x1) < 0.6 ? W2 + H2 : 2 * W2 + H2;
+    return { x0: p.x, z0: p.z, x1, z1, axis: (dx ? 'z' : 'x') as 'x' | 'z', nb, ns };
+  };
+  const walkPeds = (dt: number, you: THREE.Vector3 | null) => {
+    crossers.length = 0;
+    for (const p of peds) {
+      if (p.mode === 'stay') continue;
+      if (p.mode === 'walk') {
+        // turning a corner: sometimes cross the road instead (at the zebra, when the lights let them)
+        const R = ring(p.b, p.off), W = R.x1 - R.x0, H = R.z1 - R.z0, P = 2 * (W + H);
+        const side = (u: number) => (u < W ? 0 : u < W + H ? 1 : u < 2 * W + H ? 2 : 3);
+        const before = side(p.s), yaw0 = p.yaw;
+        p.s = (((p.s + p.dir * p.v * dt) % P) + P) % P;
+        const hit = side(p.s) !== before;
+        onRing(p.b, p.off, p.s, P0);
+        // step round you, like the bazaar's walkers
+        let ox = 0, oz = 0;
+        if (you) { const dx = you.x - P0.x, dz = you.z - P0.z, d = Math.hypot(dx, dz); if (d < 1.4 && d > 1e-3) { ox = -dx / d * (1.4 - d); oz = -dz / d * (1.4 - d); } }
+        p.x = P0.x + ox; p.z = P0.z + oz; p.yaw = p.dir > 0 ? P0.yaw : P0.yaw + Math.PI;
+        if (hit && rnd() < 0.45) { const c = across(p, yaw0); if (c) { p.cross = c; p.mode = 'wait'; p.t = 0; } }
+      } else if (p.mode === 'wait') {
+        p.t += dt;
+        // walk when traffic along the road being crossed has a red, and not into the amber
+        const cr = p.cross!;
+        const ok = cr.axis === 'z' ? phase === 0 : phase === 2;
+        p.yaw = Math.atan2(cr.x1 - cr.x0, cr.z1 - cr.z0);
+        if (ok && p.t > 0.4) { p.mode = 'cross'; p.t = 0; }
+      } else {
+        const cr = p.cross!, L = Math.hypot(cr.x1 - cr.x0, cr.z1 - cr.z0);
+        p.t += (p.v * 1.15 * dt) / L;
+        if (p.t >= 1) { p.b = cr.nb; p.s = cr.ns; p.mode = 'walk'; p.cross = undefined; }
+        else { p.x = cr.x0 + (cr.x1 - cr.x0) * p.t; p.z = cr.z0 + (cr.z1 - cr.z0) * p.t; crossers.push(new THREE.Vector3(p.x, 0, p.z)); }
+      }
+    }
+  };
+
+  // ---- streaming: what is small is drawn only within reach of the camera ----
+  const NEAR_R = rich ? 260 : 170;
+  let lastPhase = -2, acc = 0;
+  return {
+    solids,
+    height: districtHeight,
+    peds,
+    nodes: sigNodes,
+    bounds: BOUNDS,
+    footprints,
+    update(dt: number, t: number, cam: THREE.Camera | null, you: THREE.Vector3 | null) {
+      phase = phaseAt(t);
+      if (phase !== lastPhase) { lastPhase = phase; setBulbs(); }
+      if (waterTex) waterTex.offset.set(t * 0.004, t * 0.0025);
+      lampM.emissiveIntensity = 0.2 + FACADE.night.value * 5;
+      poolMat.opacity = FACADE.night.value * 0.55;
+      if (!cam) return;
+      acc += dt;
+      if (acc > 0.25) {
+        acc = 0;
+        for (const zn of zones.values()) { const d = Math.hypot(zn.cx - cam.position.x, zn.cz - cam.position.z) - ZONE * 0.7; for (const m of zn.near) m.visible = d < NEAR_R; }
+        signs.mesh.visible = ads.mesh.visible = true;
+      }
+      walkPeds(dt, you);
+      driveCars(dt, you, cam.position);
+    },
+    /** Collision with the cars for the player (they are solid, and stop for you). */
+    carCollide(p: THREE.Vector3, r: number) {
+      for (const c of cars) {
+        const dx = p.x - c.x, dz = p.z - c.z, s = Math.sin(c.yaw), co = Math.cos(c.yaw);
+        const lx = dx * co - dz * s, lz = dx * s + dz * co; // into the car's frame
+        if (Math.abs(lx) < 1 + r && Math.abs(lz) < 2.4 + r && p.y < 1.5) {
+          const px = Math.abs(lx) / (1 + r), pz = Math.abs(lz) / (2.4 + r);
+          let nlx = lx, nlz = lz;
+          if (px > pz) nlx = Math.sign(lx || 1) * (1 + r); else nlz = Math.sign(lz || 1) * (2.4 + r);
+          p.x = c.x + nlx * co + nlz * s; p.z = c.z - nlx * s + nlz * co;
+        }
+      }
+    },
+    /** The map: roads, pavements, buildings, the park, the bay, district names. */
+    paint(g: CanvasRenderingContext2D, X: (x: number) => number, Y: (z: number) => number) {
+      const R = (x0: number, z0: number, x1: number, z1: number, c: string) => { g.fillStyle = c; g.fillRect(X(Math.min(x0, x1)), Y(Math.min(z0, z1)), Math.abs(X(x1) - X(x0)), Math.abs(Y(z1) - Y(z0))); };
+      R(-1400, -104, -281, 324, '#16303b');
+      for (const b of [...BLOCKS, ...STRIPS]) R(b.x0, b.z0, b.x1, b.z1, '#7d766c');
+      for (const r of ROADS) r.along === 'z' ? R(r.c - r.hw, r.a - r.hw, r.c + r.hw, r.b + r.hw, '#34323a') : R(r.a - r.hw, r.c - r.hw, r.b + r.hw, r.c + r.hw, '#34323a');
+      for (const b of parks) R(b.x0 + 10, b.z0 + 10, b.x1 - 10, b.z1 - 10, '#4f6b3a');
+      g.fillStyle = '#2a5866'; g.beginPath(); g.arc(X(40), Y(262), 14 * Math.abs(X(1) - X(0)), 0, 7); g.fill();
+      for (const f of footprints) R(f.x0, f.z0, f.x1, f.z1, f.h > 40 ? '#6a6380' : f.h > 18 ? '#5d566c' : '#544e60');
+      g.font = '700 30px Barlow, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = 'rgba(242,235,221,0.85)';
+      for (const [k, x, z] of [['downtown', 250, 110], ['midtown', 130, 30], ['market', -130, 110], ['waterfront', -215, 30], ['north', 0, 150], ['park', -40, 250], ['bay', -330, 110]] as [string, number, number][]) g.fillText(o.label(`city.map.d.${k}`), X(x), Y(z));
+    },
+    debug: () => ({ cars: cars.length, peds: peds.length, zones: zones.size, nodes: sigNodes.length, phase }),
+  };
+}
+let waterTex: THREE.Texture | null = null;
+
+/** Planes that each show one tile of an atlas: one instanced draw. */
+function atlasPlanes(t: THREE.Texture, cols: number, rows: number, list: { x: number; y: number; z: number; w: number; h: number; yaw: number; tile: number }[]) {
+  const geo = new THREE.PlaneGeometry(1, 1), tile = new Float32Array(Math.max(1, list.length) * 2);
+  list.forEach((s, i) => { tile[i * 2] = (s.tile % cols) / cols; tile[i * 2 + 1] = 1 - (Math.floor(s.tile / cols) + 1) / rows; });
+  geo.setAttribute('aTile', new THREE.InstancedBufferAttribute(tile, 2));
+  const m = new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.4, side: THREE.DoubleSide });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uNight = FACADE.night;
+    sh.vertexShader = `attribute vec2 aTile;\n${sh.vertexShader}`.replace('#include <uv_vertex>', `#include <uv_vertex>\n  vMapUv = aTile + vMapUv * vec2(${(1 / cols).toFixed(5)}, ${(1 / rows).toFixed(5)});\n  vEmissiveMapUv = vMapUv;`);
+    sh.fragmentShader = `uniform float uNight;\n${sh.fragmentShader}`.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance *= 0.35 + 1.4 * uNight;');
+  };
+  m.customProgramCacheKey = () => `atlas-planes|${cols}x${rows}`;
+  const mesh = new THREE.InstancedMesh(geo, m, Math.max(1, list.length));
+  list.forEach((s, i) => mesh.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(s.x, s.y, s.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), s.yaw), new THREE.Vector3(s.w, s.h, 1))));
+  mesh.count = list.length; mesh.frustumCulled = false; mesh.userData.ground = false;
+  return { mesh };
+}

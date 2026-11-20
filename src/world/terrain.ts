@@ -210,15 +210,16 @@ export class Terrain {
   /** Builds chunked LOD meshes. Yields between chunks. */
   async buildMeshes(onProgress: (p: number) => void) {
     this.material = createTerrainMaterial(this.q, this);
-    const CH = 100;
+    // phones: 200 m chunks (a quarter of the draw calls) on the same lattice, so the ground you walk on is unchanged
+    const CH = this.q.terrainChunk, k2 = CH / 100;
     const n = WORLD_SIZE / CH;
-    const segs = [this.q.terrainSegments, this.q.terrainSegments / 2, Math.max(6, Math.round(this.q.terrainSegments * 0.375))];
+    const segs = [this.q.terrainSegments * k2, this.q.terrainSegments / 2 * k2, Math.max(6, Math.round(this.q.terrainSegments * 0.375)) * k2];
     let t0 = performance.now();
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
         const cx = -HALF + i * CH, cz = -HALF + j * CH;
         const lod = new THREE.LOD();
-        const dists = [0, 170, 380];
+        const dists = CH > 100 ? [0, 240, 450] : [0, 170, 380];
         segs.forEach((s, k) => {
           const m = new THREE.Mesh(this.chunkGeometry(cx, cz, CH, s), this.material);
           m.receiveShadow = true;

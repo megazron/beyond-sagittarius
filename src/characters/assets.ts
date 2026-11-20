@@ -61,6 +61,7 @@ export function loadAsset(key: string, lod: number) {
   if (!p) {
     p = (async () => {
       const [g, meta] = await Promise.all([gltf.loadAsync(`${BASE}${file}.glb`), fetch(`${BASE}${key}.json`).then((r) => r.json())]);
+      if (file !== key) try { joinSkin(g.scene); } catch (e) { console.warn("[crew] skin join", e); }
       const a: CrewAsset = { scene: g.scene, meta };
       loaded.set(id, a);
       return a;
@@ -69,6 +70,56 @@ export function loadAsset(key: string, lod: number) {
   }
   return p;
 }
+/**
+ * The light build's head and body skin are one mesh: they share the material and the skeleton, and the head's face
+ * shapes are the first of the body's, so the head takes zeros for the rest. One draw call a body less in every pass, for
+ * every body a phone draws and every far one elsewhere. The body's vertices come first (`torsoCount`, read by
+ * keepArmsOut, which measures the torso from the body alone); the full builds stay as they are (faces, films, play
+ * capture).
+ */
+function joinSkin(scene: THREE.Group) {
+  let head: THREE.SkinnedMesh | null = null, body: THREE.SkinnedMesh | null = null;
+  scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh) { if (m.name === 'skin_head') head = m; else if (m.name === 'skin_body') body = m; } });
+  if (!head || !body) return;
+  const h = (head as THREE.SkinnedMesh).geometry, b = (body as THREE.SkinnedMesh).geometry;
+  const hn = Object.keys((head as THREE.SkinnedMesh).morphTargetDictionary ?? {}), bn = Object.keys((body as THREE.SkinnedMesh).morphTargetDictionary ?? {});
+  // the same attributes, the same types, the same skin, and the head's shapes a prefix of the body's: otherwise leave them
+  const same = Object.keys(b.attributes).length === Object.keys(h.attributes).length && Object.entries(b.attributes).every(([k, a]) => {
+    const o = h.attributes[k]; return !!o && o.itemSize === a.itemSize && o.normalized === a.normalized && (o as THREE.BufferAttribute).array.constructor === (a as THREE.BufferAttribute).array.constructor;
+  });
+  if (!same || !b.index || !h.index || hn.some((n, i) => bn[i] !== n) || (head as THREE.SkinnedMesh).skeleton !== (body as THREE.SkinnedMesh).skeleton
+    || !(head as THREE.SkinnedMesh).bindMatrix.equals((body as THREE.SkinnedMesh).bindMatrix) || Object.keys(b.morphAttributes).some((k) => k !== 'position')) return;
+  const nb = b.attributes.position.count, nh = h.attributes.position.count;
+  const g = new THREE.BufferGeometry();
+  for (const [k, a] of Object.entries(b.attributes)) {
+    const A = a as THREE.BufferAttribute, H = h.attributes[k] as THREE.BufferAttribute, n = A.itemSize;
+    if (!(A as unknown as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute && !(H as unknown as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute) {
+      const C = A.array.constructor as new (n: number) => THREE.TypedArray;
+      const out = new C((nb + nh) * n);
+      out.set(A.array as ArrayLike<number>, 0); out.set(H.array as ArrayLike<number>, nb * n);
+      g.setAttribute(k, new THREE.BufferAttribute(out, n, A.normalized));
+    } else {
+      // quantized normals come interleaved (a stride of 4 bytes for 3): read them out as floats
+      const out = new Float32Array((nb + nh) * n);
+      [A, H].forEach((src, s) => { const o = s ? nb : 0; for (let i = 0; i < src.count; i++) for (let c = 0; c < n; c++) out[(o + i) * n + c] = src.getComponent(i, c); });
+      g.setAttribute(k, new THREE.BufferAttribute(out, n));
+    }
+  }
+  const bi = b.index.array, hi = h.index.array, idx = new Uint32Array(bi.length + hi.length);
+  idx.set(bi, 0); for (let i = 0; i < hi.length; i++) idx[bi.length + i] = hi[i] + nb;
+  g.setIndex(new THREE.BufferAttribute(nb + nh > 65535 ? idx : new Uint16Array(idx), 1));
+  g.morphTargetsRelative = b.morphTargetsRelative;
+  g.morphAttributes.position = (b.morphAttributes.position ?? []).map((t, i) => {
+    const out = new Float32Array((nb + nh) * 3), ht = h.morphAttributes.position?.[i];
+    out.set(t.array as ArrayLike<number>, 0);
+    if (ht && i < hn.length) out.set(ht.array as ArrayLike<number>, nb * 3);
+    return new THREE.BufferAttribute(out, 3);
+  });
+  g.userData.torsoCount = nb;
+  (body as THREE.SkinnedMesh).geometry = g;
+  (head as THREE.SkinnedMesh).removeFromParent();
+}
+
 export function assetNow(key: string, lod: number) {
   return loaded.get(lod && hasLod1(key) ? `${key}.lod1` : key);
 }

@@ -12,6 +12,8 @@ export interface Quality {
   shadowMapSize: number;
   shadowExtent: number;
   terrainSegments: number;
+  /** Metres per terrain chunk (a draw call each): 100, or 200 on phones. Segments scale with it. */
+  terrainChunk: 100 | 200;
   treeCount: number;
   plantCount: number;
   rockCount: number;
@@ -91,6 +93,7 @@ const PRESETS: Record<QualityName, Quality> = {
     shadowMapSize: 512,
     shadowExtent: 40,
     terrainSegments: 24,
+    terrainChunk: 200,
     treeCount: 1100,
     plantCount: 900,
     rockCount: 450,
@@ -141,6 +144,7 @@ const PRESETS: Record<QualityName, Quality> = {
     shadowMapSize: 2048,
     shadowExtent: 60,
     terrainSegments: 32,
+    terrainChunk: 100,
     treeCount: 3200,
     plantCount: 5000,
     rockCount: 900,
@@ -189,6 +193,7 @@ const PRESETS: Record<QualityName, Quality> = {
     shadowMapSize: 3072,
     shadowExtent: 80,
     terrainSegments: 64,
+    terrainChunk: 100,
     treeCount: 5000,
     plantCount: 9000,
     rockCount: 2400,
@@ -238,6 +243,7 @@ const PRESETS: Record<QualityName, Quality> = {
     shadowMapSize: 4096,
     shadowExtent: 80,
     terrainSegments: 96,
+    terrainChunk: 100,
     treeCount: 9000,
     plantCount: 14000,
     rockCount: 3600,

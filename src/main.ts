@@ -25,7 +25,10 @@ import { initGlyphs, refreshGlyphs } from './ui/glyphs';
 import { MenuNav } from './ui/nav';
 import { initAndroid, isNativeApp } from './core/android';
 import { Wheel } from './ui/wheel';
-import { drawMap, MapPin } from './ui/map';
+import { MapPin, interactiveMap, planetLayer } from './ui/map';
+import { Minimap, MapLayer, MapPoint, routeOf } from './ui/minimap';
+import { GpsTrail } from './world/gps';
+import type { AwayStage } from './game/away/stage';
 import type { MenuTab } from './ui/ui';
 import { setPortraitCast, setPortraitRenderer, portraitFrame } from './ui/portraits';
 import { preloadCrew } from './characters/character';
@@ -508,13 +511,69 @@ function freeze() {
 }
 function resume() { ui.closeModal(); paused = false; input.enabled = true; audio.duck(false); }
 
+// ---- the minimap, the full map and the GPS route ----
+const minimap = new Minimap(document.getElementById('hud')!, () => { if (canPlay() && !paused) menuKey('map'); });
+const gps = new GpsTrail();
+let planetL: MapLayer | null = null;
+const mapPlanet = () => (planetL ??= planetLayer((x, z) => world.terrain.height(x, z), quality.name === 'mobile' ? 360 : 720));
+const heading = () => { const d = camera.getWorldDirection(new THREE.Vector3()); return Math.atan2(d.x, -d.z); };
+/** What the map is of right now, where you are, where the objective is, and who is worth finding. */
+function navState() {
+  const away = game?.away?.active ? game.away : null, st = away?.stage as AwayStage | null | undefined;
+  const layer: MapLayer | null = away ? st?.mapLayer ?? null : game?.mode === 'play' ? mapPlanet() : null;
+  const pos = away ? away.position : player?.pos;
+  const goalV = away ? away.next?.pos ?? null : game?.objectivePoint() ?? null;
+  const pts: MapPoint[] = [];
+  if (away && st) for (const k of st.tasks) if (k.optional && k.id.startsWith('talk.')) pts.push({ x: k.pos.x, z: k.pos.z, kind: 'person' });
+  if (!away && world?.layout) pts.push({ x: world.layout.camp.x, z: world.layout.camp.z, kind: 'place' });
+  return { layer, pos, goal: goalV ? { x: goalV.x, z: goalV.z } : null, pts, ground: away && st ? (x: number, z: number) => st.height(x, z) : (x: number, z: number) => world.terrain.height(x, z), scene: away && st ? st.scene : world.scene };
+}
+let navT = 0, navCache: ReturnType<typeof navState> | null = null;
+function navFrame(dt: number) {
+  const on = state === 'game' && !!game && (game.mode === 'play' || game.mode === 'away') && !paused && !photo && !game.away?.outroOn;
+  minimap.el.classList.toggle('off', !on);
+  if (!on) { gps.update(null, () => 0, elapsed); return; }
+  navT -= dt;
+  if (navT <= 0 || !navCache) { navT = 0.25; navCache = navState(); }
+  const n = navCache;
+  minimap.setLayer(n.layer);
+  if (!n.pos || !n.layer) { gps.update(null, () => 0, elapsed); return; }
+  const tgt = minimap.target(n.pos.x, n.pos.z, n.goal);
+  const route = tgt ? routeOf(n.layer, n.pos.x, n.pos.z, tgt.x, tgt.z) : null;
+  const pts = [...n.pts];
+  if (n.goal) pts.push({ ...n.goal, kind: 'goal' });
+  if (minimap.waypoint) pts.push({ ...minimap.waypoint, kind: 'way' });
+  minimap.draw(dt, n.pos.x, n.pos.z, heading(), pts, route);
+  gps.attach(n.scene);
+  gps.update(route && Math.hypot(tgt!.x - n.pos.x, tgt!.z - n.pos.z) > 6 ? route : null, n.ground, elapsed);
+}
+
+// ?demo=city: a self-playing tour that films itself (src/core/demo.ts), for recording on a real GPU in a plain browser
+if (new URLSearchParams(location.search).get('demo') === 'city') void import('./core/demo').then(({ runDemo }) => runDemo({
+  canvas: renderer.renderer.domElement, minimap: minimap.el,
+  state: () => ({ state, mode: game?.mode ?? '', away: !!(game?.mode === 'away' && game.away?.active && game.away.who) }),
+  skip: () => skipCurrent(),
+  player: () => { const p = (game?.away as unknown as { player?: Player } | undefined)?.player; return p ? { pos: p.pos, yaw: p.yaw, setYaw: (y: number) => { p.yaw = y; } } : null; },
+  teleport: (x, z, yaw) => game?.away?.teleport(x, z, yaw),
+  setWaypoint: (w) => { minimap.waypoint = w; navT = 0; },
+  route: () => { const n = navCache, pos = n?.pos, tg = pos ? minimap.target(pos.x, pos.z, n!.goal) : null; return pos && tg && n?.layer ? routeOf(n.layer, pos.x, pos.z, tg.x, tg.z) : null; },
+  hold: (code, on) => { if (on) input.keys.add(code); else input.keys.delete(code); },
+  task: () => game?.away?.next?.label ?? '',
+}));
+
 function openMapTab() {
   ui.openMap(resume);
-  const L = world.layout, m = game.objectivePoint();
-  const pins: MapPin[] = [{ x: L.camp.x, z: L.camp.z, icon: 'camp', label: t('map.camp') }];
-  if (m) pins.push({ x: m.x, z: m.z, icon: 'marker', cls: 'goal', label: document.getElementById('obj-title')!.textContent ?? '' });
-  for (const [x, z] of game.save.favours?.pins ?? []) pins.push({ x, z, icon: 'marker', cls: 'scout', label: t('crew.explorer.name') });
-  drawMap((x, z) => world.terrain.height(x, z), { x: player.pos.x, z: player.pos.z, yaw: player.yaw }, pins, quality.name === 'mobile' ? 360 : 720);
+  const n = navState();
+  const layer = n.layer ?? mapPlanet(), pos = n.pos ?? player.pos;
+  const pins: MapPin[] = [];
+  if (!game.away?.active) {
+    const L = world.layout;
+    pins.push({ x: L.camp.x, z: L.camp.z, icon: 'camp', label: t('map.camp') });
+    for (const [x, z] of game.save.favours?.pins ?? []) pins.push({ x, z, icon: 'marker', cls: 'scout', label: t('crew.explorer.name') });
+  }
+  if (n.goal) pins.push({ x: n.goal.x, z: n.goal.z, icon: 'marker', cls: 'goal', label: (game.away?.active ? game.away.next?.label : document.getElementById('obj-title')!.textContent) ?? '' });
+  interactiveMap(layer, { x: pos.x, z: pos.z, heading: heading() }, pins, { get: () => minimap.waypoint, set: (p) => { minimap.waypoint = p; navT = 0; } },
+    `${game.away?.active ? '' : t('map.note') + ' '}${t('map.hint')}`);
 }
 
 function showTab(tab: MenuTab) {
@@ -686,6 +745,7 @@ function tick(step: number) {
     if (photo) { camera.position.copy(photo.from); camera.lookAt(photo.to); }
     world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer, renderer.stageInfo().scene === world.scene);
   }
+  navFrame(dt);
   if (stage.active) stage.update(dt);
 }
 
@@ -842,6 +902,8 @@ window.addEventListener('resize', () => {
   get frames() { return hold.done; },
   film: { get fx() { return film.lensFx; }, get video() { return film.videoOn; }, seek(b: number) { film.seek(b); }, get playing() { return film.playing; }, get beat() { return film.beat; }, get seconds() { return film.lengthSeconds; }, start() { state = 'film'; renderer.setScene(cine.scene, cine.camera, false); ui.show('title', false); ui.show('cine', true); ui.fade('black', 0, 0); void film.play(() => {}); } },
   stageInfo() { return renderer.stageInfo(); },
+  /** Test hook: the WebGLRenderer, for tools that count what each draw call is (tools/frame_time.py --census). */
+  get gl() { return renderer.renderer; },
   goAway(id: CrewId, loc: string) { game?.goAway(id, loc); },
   get away() { const a = game?.away; return a?.active ? { who: a.who, next: a.next?.id ?? null, done: [...a.done], pos: a.position?.toArray() } : null; },
   get revealDue() { return !!game?.revealDue; },
@@ -869,6 +931,13 @@ window.addEventListener('resize', () => {
     const ps = (game?.away?.stage as { people?: { pos: THREE.Vector3; walk?: unknown; fig: { root: THREE.Object3D } }[] } | null)?.people ?? [];
     for (const p of ps) if (p.walk) p.fig.root.visible = Math.hypot(p.pos.x - x, p.pos.z - z) > r;
   },
+  /** Test hook: the people on the away stage, with their root objects (tools/crowd_smoke.py counts their draws). */
+  awayPeople() {
+    const ps = (game?.away?.stage as { people?: { id: string; pos: THREE.Vector3; walk?: unknown; fig: { root: THREE.Object3D } }[] } | null)?.people ?? [];
+    return ps.map((p) => ({ id: p.id, walk: !!p.walk, pos: p.pos, root: p.fig.root }));
+  },
+  /** Test hook: the painted crowd near the camera (14 m), the real bodies walking it, and cards hidden with no body. */
+  awayCrowd() { const st = game?.away?.stage as { crowdState?: () => { near: number; bodies: number; lost: number } } | null; return st?.crowdState?.() ?? { near: 0, bodies: 0, lost: 0 }; },
   awayLeave() { game?.away?.leave(); },
   /** Test hook: every Zenvora task done at once, so the take-off plays now. */
   awayOutro() { game?.away?.debugOutro(); },

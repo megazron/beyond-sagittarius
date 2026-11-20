@@ -18,6 +18,8 @@ with sync_playwright() as pw:
         page.on('pageerror', lambda e: fails.append(f'pageerror: {str(e)[:200]}'))
         page.add_init_script(SET % (', skipPrologue: true' if skip else ''))
         page.add_init_script("localStorage.setItem('bs-consent-v1', '1')")
+        # every title card's text as it appears: a short card on a slow software-GL frame can come and go between polls
+        page.add_init_script("window.__cards = []; new MutationObserver(() => { const c = document.querySelector('#title-card'); if (c && c.textContent && window.__cards[window.__cards.length - 1] !== c.textContent) window.__cards.push(c.textContent); }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true })")
         page.goto(f'http://127.0.0.1:{a.port}/index.html?quality={a.quality}', wait_until='domcontentloaded', timeout=180000)
         page.wait_for_function('window.__bs && window.__bs.ready', timeout=300000)
         page.click('#btn-new'); page.wait_for_selector('#nm-ok', timeout=60000); page.click('#nm-ok')
@@ -62,7 +64,7 @@ with sync_playwright() as pw:
         except Exception:
             fails.append('no take-off scene after the last task')
         try:
-            page.wait_for_function("document.querySelector('#title-card') && document.querySelector('#title-card').textContent.includes('ORBIT')", timeout=60000)
+            page.wait_for_function("window.__cards.some((t) => t.includes('ORBIT'))", timeout=60000)
             print('orbit card', flush=True)
         except Exception:
             fails.append('no orbit card after the take-off')

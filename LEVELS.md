@@ -11,6 +11,8 @@ Status: in the shipped flow. A new game plays MegaZroN's cold open, the title ca
 
 **The city:** Zenvora, Taravel's spaceport town: the last stop before space. It is warm late afternoon. There is one walkable main street, the Bazaar, about 140 m long, with lanes off it. It runs from the six friends' shared flat at the north end to the spaceport gate at the south end, where the liner waits. Hover-autos, cricket in a side lane, washing lines, holo-ads, chai steam. Everything is flat paving with kerbs and steps, built on one height function like the stages, so the ground test covers it.
 
+Built since (1.1): the Bazaar is the old town of a larger city. Its two squares and a north gate open on a street grid of about 640 by 430 m: Downtown and Midtown to the east, the Market Quarter and the Waterfront on Zenvora Bay to the west, Northside and Ring Park to the north, with traffic, signals and people (`src/game/away/districts.ts`). The list still runs down the Bazaar; the rest is there to wander. The evening comes on while you play (`daycycle.ts`).
+
 **Shops (parodies):**
 
 | Shop | What happens there |

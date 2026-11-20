@@ -1,6 +1,7 @@
 import { t } from '../i18n';
 import { WORLD_SIZE, HALF } from '../world/terrain';
 import { icon } from './icons';
+import { layerCanvas as layerCanvasOf } from './minimap';
 
 type Height = (x: number, z: number) => number;
 let base: HTMLCanvasElement | null = null;
@@ -54,4 +55,66 @@ export function drawMap(height: Height, player: { x: number; z: number; yaw: num
   out.innerHTML = pins.map((p) => { const q = toPx(p.x, p.z); return `<span class="pin ${p.cls ?? ''}" style="left:${clamp(q.x, canvas.width)}px;top:${clamp(q.y, canvas.height)}px">${icon(p.icon)}${p.label ? `<em>${p.label.replace(/</g, '')}</em>` : ''}</span>`; }).join('')
     + `<span class="pin you" style="left:${canvas.width / 2}px;top:${canvas.height / 2}px;transform:translate(-50%,-50%) rotate(${-player.yaw}rad)"><svg class="ic" viewBox="0 0 24 24"><path class="f" d="M12 2l7 19-7-5-7 5z"/></svg></span>`;
   (document.querySelector('.map-note') as HTMLElement).textContent = t('map.note');
+}
+
+/** The planet as a map layer: the contour chart, for the minimap and the full map. */
+export function planetLayer(height: Height, res: number): import('./minimap').MapLayer {
+  return { id: 'planet', bounds: [-HALF, -HALF, HALF, HALF], pxPerM: res / WORLD_SIZE, span: 200, paint: (g) => { g.drawImage(chart(height, res), 0, 0); } };
+}
+
+/**
+ * The full map of a layer: drag to pan, wheel or pinch (or the buttons) to zoom, tap to set a waypoint (tap it again,
+ * or Clear, to remove it). North is up; you are the arrow.
+ */
+export function interactiveMap(L: import('./minimap').MapLayer, player: { x: number; z: number; heading: number }, pins: MapPin[],
+  way: { get(): { x: number; z: number } | null; set(p: { x: number; z: number } | null): void }, note: string) {
+  const canvas = document.getElementById('map-chart') as HTMLCanvasElement | null;
+  if (!canvas) return;
+  const wrap = canvas.parentElement!;
+  const src = layerCanvasOf(L), [x0, z0, x1, z1] = L.bounds;
+  const view = { cx: player.x, cz: player.z, k: 0 }; // k: px per metre on screen
+  const ctl = document.createElement('div'); ctl.className = 'map-ctl';
+  ctl.innerHTML = `<button class="mz" data-z="1.4" aria-label="${t('map.zoomIn')}">+</button><button class="mz" data-z="0.714" aria-label="${t('map.zoomOut')}">&minus;</button><button class="mc">${t('map.centre')}</button><button class="mw">${t('map.clear')}</button>`;
+  wrap.appendChild(ctl);
+  const fit = () => { const b = wrap.getBoundingClientRect(); canvas.width = Math.max(2, Math.floor(b.width)); canvas.height = Math.max(2, Math.floor(b.height)); if (!view.k) view.k = Math.min(canvas.width, canvas.height) / (L.span * 2.2); };
+  const toPx = (x: number, z: number) => ({ x: canvas.width / 2 + (x - view.cx) * view.k, y: canvas.height / 2 + (z - view.cz) * view.k });
+  const toW = (px: number, py: number) => ({ x: view.cx + (px - canvas.width / 2) / view.k, z: view.cz + (py - canvas.height / 2) / view.k });
+  const draw = () => {
+    fit();
+    const g = canvas.getContext('2d')!;
+    g.fillStyle = '#c9bfa6'; g.fillRect(0, 0, canvas.width, canvas.height);
+    const a = toPx(x0, z0), b = toPx(x1, z1);
+    g.imageSmoothingEnabled = true; g.drawImage(src, a.x, a.y, b.x - a.x, b.y - a.y);
+    const w = way.get(), out = document.getElementById('map-pins')!;
+    const all = [...pins, ...(w ? [{ x: w.x, z: w.z, icon: 'marker', cls: 'way', label: t('map.waypoint') }] : [])];
+    out.innerHTML = all.map((p) => { const q = toPx(p.x, p.z); return `<span class="pin ${p.cls ?? ''}" style="left:${q.x}px;top:${q.y}px">${icon(p.icon)}${p.label ? `<em>${p.label.replace(/</g, '')}</em>` : ''}</span>`; }).join('')
+      + (() => { const q = toPx(player.x, player.z); return `<span class="pin you" style="left:${q.x}px;top:${q.y}px;transform:translate(-50%,-50%) rotate(${player.heading}rad)"><svg class="ic" viewBox="0 0 24 24"><path class="f" d="M12 2l7 19-7-5-7 5z"/></svg></span>`; })();
+    (ctl.querySelector('.mw') as HTMLElement).style.visibility = w ? 'visible' : 'hidden';
+  };
+  const zoom = (f: number) => { view.k = Math.max(0.05, Math.min(40, view.k * f)); draw(); };
+  ctl.querySelectorAll<HTMLButtonElement>('.mz').forEach((bt) => bt.addEventListener('click', () => zoom(+bt.dataset.z!)));
+  (ctl.querySelector('.mc') as HTMLElement).addEventListener('click', () => { view.cx = player.x; view.cz = player.z; draw(); });
+  (ctl.querySelector('.mw') as HTMLElement).addEventListener('click', () => { way.set(null); draw(); });
+  canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.2 : 1 / 1.2); }, { passive: false });
+  // one finger (or the mouse) pans, two pinch; a tap that did not move sets the waypoint
+  const pts = new Map<number, { x: number; y: number }>(); let moved = 0, pinch = 0;
+  canvas.addEventListener('pointerdown', (e) => { canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.offsetX, y: e.offsetY }); moved = 0; if (pts.size === 2) { const [p, q] = [...pts.values()]; pinch = Math.hypot(p.x - q.x, p.y - q.y); } });
+  canvas.addEventListener('pointermove', (e) => {
+    const o = pts.get(e.pointerId); if (!o) return;
+    const dx = e.offsetX - o.x, dy = e.offsetY - o.y; o.x = e.offsetX; o.y = e.offsetY; moved += Math.abs(dx) + Math.abs(dy);
+    if (pts.size === 1) { view.cx -= dx / view.k; view.cz -= dy / view.k; draw(); }
+    else if (pts.size === 2) { const [p, q] = [...pts.values()]; const d = Math.hypot(p.x - q.x, p.y - q.y); if (pinch > 0) zoom(d / pinch); pinch = d; }
+  });
+  const up = (e: PointerEvent) => {
+    const was = pts.size; pts.delete(e.pointerId);
+    if (was !== 1 || moved > 8) return;
+    const w = toW(e.offsetX, e.offsetY), cur = way.get();
+    if (cur && Math.hypot(cur.x - w.x, cur.z - w.z) * view.k < 22) way.set(null);
+    else if (w.x > x0 && w.x < x1 && w.z > z0 && w.z < z1) way.set({ x: w.x, z: w.z });
+    draw();
+  };
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', (e) => pts.delete(e.pointerId));
+  (document.querySelector('.map-note') as HTMLElement).textContent = note;
+  draw();
+  return draw;
 }

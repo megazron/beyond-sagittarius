@@ -53,6 +53,7 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   const put = (list: THREE.BufferGeometry[], g: THREE.BufferGeometry, x: number, y: number, z: number, ry = 0, rx = 0) => { g.rotateX(rx); g.rotateY(ry); g.translate(x, y, z); list.push(g); };
   const tops: THREE.Vector3[] = [];
   for (const side of [-1, 1]) for (let z = N - 6; z > S + 10; z -= 14 + rnd() * 8) {
+    if (side > 0 ? z > 8 && z < 52 : z > -66 && z < -22) continue; // the side streets and their squares run through here
     const x = side * (FRONT + 15 + rnd() * 8), h = 50 + rnd() * 90, w = 9 + rnd() * 6, d = 9 + rnd() * 6;
     // a podium, the shaft, a setback, and a crown
     const shaft = new THREE.BoxGeometry(w, h, d); const uv = shaft.attributes.uv as THREE.BufferAttribute;

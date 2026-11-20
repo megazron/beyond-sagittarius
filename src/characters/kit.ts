@@ -11,7 +11,7 @@ export interface KitInput {
   id: CrewId; custom?: PlayerLook; human: boolean; bones: Map<string, THREE.Bone>; meta: CrewMeta; look: Look; sway: SwayUniforms;
   skinC: number; glowC: number; shadeC: number; detail: number; heightM: number;
 }
-export interface Kit { splint: THREE.Group; footH: number; update(t: number, amount: number): void; }
+export interface Kit { splint: THREE.Group; footH: number; live: THREE.Object3D[]; update(t: number, amount: number): void; }
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const cloth = (color: number, rough = 0.86) => new THREE.MeshStandardMaterial({ color, roughness: rough, side: THREE.DoubleSide, normalMap: weaveNormal(), normalScale: new THREE.Vector2(0.5, 0.5) });
@@ -261,6 +261,8 @@ export function addKit(k: KitInput): Kit {
 
   return {
     splint, footH: piv('footL').y,
+    // what moves or hides on its own: never merged into the body (rigid.ts)
+    live: [splint, ...(halo ? [halo] : []), ...scarfEnds, ...(tailBones.length ? [tailBones[0].parent!] : [])],
     update(t, amount) {
       if (halo) halo.rotation.z = t * 0.4;
       tailBones.forEach((b, i) => {

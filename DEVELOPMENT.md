@@ -24,6 +24,8 @@ python3 tools/levels_smoke.py --quality web   # tutorial, scenes, levels end to 
 python3 tools/mobile_smoke.py                 # iPhone 13 portrait, Pixel 7 landscape, real touch events
 python3 tools/prologue_smoke.py --quality web # a new game's opening: MegaZroN, Zenvora, the take-off, the films
 python3 tools/text_fit.py --before            # every string in every UI slot, en/hi/ur, 360 px phone to 4K: fails on overflow
+python3 tools/crowd_smoke.py                  # Zenvora: walk up to townsfolk (2.5 to 28 m) on Mobile and Web, every body stays drawn
+python3 tools/city_tour.py --out DIR [--clips] # pictures (and short MP4s) of Zenvora, the minimap, the GPS line and the full map
 npm run smoke:desktop                         # boots the Electron app under Xvfb, drives it over CDP
 ```
 
@@ -186,9 +188,58 @@ the CPU only works out their weights) are mixed only within `correctiveNear`, ev
 crowd body (`setCrowd`: Zenvora's townsfolk, walkers and groups) never mixes them, and takes the light build and drops
 its shadow sooner. Test pages switch `throttle` off.
 
+Draw calls: on a phone three.js's own work per draw call (state, uniforms, matrices) is most of a frame, so the game
+keeps them few. A body's rigid props (glasses, horns, belts, bags, the phone, the inside of the mouth and the teeth) are
+merged at load into one to three skinned meshes on its own skeleton (`src/characters/rigid.ts`: every vertex held by
+the bone its piece hung from; colour, roughness, metalness and glow per vertex). The light build (`.lod1`) draws its head
+and body skin as one mesh. Static scenery is merged by `src/core/merge.ts` (`mergeChildren`): Zenvora runs its own
+animations a few times first (`watchChanges`) and merges whatever did not move, hide or change colour, per material
+and per stretch of street (12 m, 39 m on phones); plain materials that differ only in colour, roughness, metalness or
+glow become one, with those per vertex. Signs, shop windows and awnings share stacked canvases (`stack` in city.ts),
+the neon blades one atlas. From inside the flat only what its door and window show is drawn (`flatPortals`). On phones
+(the Mobile preset) townsfolk past 36 m, small props past 24 m, planet items past 32 m and corneas and lashes past a
+few metres are not drawn, terrain chunks are 200 m (the same lattice), and the frame is sharpened before the upscale.
+
+Zenvora's people: the painted crowd (camera-facing cards, `citydense.ts`) fills the far street; near the camera
+(14 m) a pool of real bodies (8 on phones, 14 elsewhere) takes over the nearest cards and walks them, so nobody
+vanishes as you walk up (the cards used to be hidden within 9 m). Walkers step aside for you, people standing look at
+you and wave the first time you come close, and hover cars in both lanes wait if you are in the road. Two side
+streets open off the bazaar, each with shops and flats and a square at its end (a light fountain, a statue).
+
+Zenvora beyond the bazaar (`src/game/away/districts.ts`): a street grid round the old town, about 640 by 430 m.
+Downtown towers and Midtown to the east, the Market Quarter and the Waterfront on the bay to the west, Northside flats
+and Ring Park to the north; the old town opens to it through its two squares and its north gate. Roads have two lanes
+each way (left-hand traffic), kerbs, zebras, stop lines and signals at every junction of three or more roads. The
+ground is one function (`districtHeight`) for the player and the meshes: 0 on a road, the pavement 14 cm up, a 35 cm
+ramp at each kerb. Buildings are boxes drawn by `facade.ts` (punched, ribbon and curtain-wall windows, glass that
+mirrors the sky at a grazing angle and shows a room behind it head on, lit rooms that grow with the night, shopfronts
+and fascias on the street floor); every zone (160 m) is one draw per wall finish and never pops, its furniture, trees
+and markings are shown within 260 m (170 m on phones). Walkers loop the blocks and cross on the green; others sit,
+shop, chat and film; near the camera a pool of real bodies (14, 6 on phones) takes the nearest of them, the rest are
+cards. Cars follow lanes, turn at junctions, stop at red lights and for anyone on a crossing (the player too).
+Original names only on signs and billboards.
+
+Time and weather (`src/game/away/daycycle.ts`): the prologue starts at 16:54 and an hour passes every four minutes:
+the sun, the sky (gold, pink, violet, night with stars), the sky's image-based light (refreshed every few game
+minutes), the haze, lit windows and lamps all follow it. `?tod=HH.H` fixes the hour, `?weather=rain` brings rain:
+streaks round the camera, an overcast sky, and wet ground (`wetify`: darker, glossier, puddles that mirror the sky).
+The final grade is tinted by quarter (the bazaar warm, downtown cool, the bay teal).
+
+GPU review: `tools/gpu_tour.py` drives the owner's Windows Chrome (started with `--remote-debugging-port=9333`) over
+the DevTools protocol from the Windows Python, takes stills, frame rate, draw calls, triangles, a census of what the
+draws are (`census`) and a CPU profile (`profile`) at set spots, and records clips with the DevTools screencast;
+`python3 tools/gpu_tour.py --join DIR` makes the MP4s. `tools/lod_city.py` writes the props' light builds.
+
+Maps: a stage gives a `MapLayer` (`src/ui/minimap.ts`: its extent, a top-down paint, a router). The minimap (top right,
+turning with the camera; tap it for the full map) shows the objective (on the rim when off the disc), people to talk
+to, a waypoint and the route; the full map (M, the Map tab) pans, zooms (wheel, pinch, buttons) and sets a waypoint on
+a tap. The same route is laid on the ground as chevrons (`src/world/gps.ts`). The planet's layer is its contour chart.
+
 Frame time: `tools/frame_time.py --soft` plays the Zenvora street, the Vault, free play and the camp scene and reports
 frame time, draw calls and triangles sent to WebGL per frame; `--dist`/`--public` point it at an older build, so
-commits can be compared. `tools/crowd_cpu.py` times the bodies' own CPU work on a street of sixty (`dev/crowd.html`),
+commits can be compared. Phones: `--quality mobile --size 844x390 --throttle 4 --nodraw` is Chrome's mid-range phone
+model with draw calls counted but not executed (the main thread a phone spends); `--census --deep 5` lists one frame's
+draw calls by what they draw, `--profile PREFIX` the top self times. `tools/crowd_cpu.py` times the bodies' own CPU work on a street of sixty (`dev/crowd.html`),
 `--tree` in an older checkout.
 
 ## Project layout

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeChildren } from '../core/merge';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { modelMaterial, modelMats, type ModelPack } from './models';
 import type { Quality } from '../core/quality';
@@ -155,6 +156,11 @@ export function createPod(terrain: Terrain, forest: Forest, x = 4.5, z = -3.5, y
 }
 
 /** Collectable stones and branches + glowpod (safe) and thornix (toxic) bushes. */
+/** Phones: items further than this from you are not drawn (they come back as you walk up). */
+const ITEM_FAR = 32;
+/** Items are built from a few plain materials nothing changes later: merged into one mesh, colours per vertex. */
+const ITEM_MERGE = { shared: () => true, pbr: true, tint: true };
+
 export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, pack: ModelPack | null = null, q: Quality | null = null) {
   const group = new THREE.Group();
   const items: Item[] = [];
@@ -205,6 +211,7 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
         o.rotation.y = rnd() * 6;
       }
       o.children.forEach((c) => { c.castShadow = true; });
+      mergeChildren(o, ITEM_MERGE); // one draw, not one per stick and twig
       const ring = new THREE.Mesh(ringGeo, ringMat.clone());
       ring.position.y = 0.02; ring.name = 'ring';
       o.add(ring);
@@ -282,6 +289,7 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
         }
         fruit.add(new THREE.Mesh(mergeGeometries(thorns), stemMat));
       }
+      mergeChildren(fruit, ITEM_MERGE); // the red fruit and its thorns: one draw
       const fa = (f / 3) * Math.PI * 2 + rnd();
       fruit.position.set(bx + Math.cos(fa) * 0.42, h + 0.75 + rnd() * 0.35, bz + Math.sin(fa) * 0.42);
       group.add(fruit);
@@ -292,6 +300,7 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
 
   addStoryItems(terrain, forest, sites, group, items, ringGeo, ringMat, branchGeo, twig, branchMat);
 
+  const farOff = new Set<Item>();
   return {
     group,
     items,
@@ -299,6 +308,14 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
       for (const it of items) {
         if (!it.active) continue;
         const d = it.pos.distanceTo(player);
+        // phones: a stone, a stick or a fruit further off than ITEM_FAR is a pixel or two, and a draw call or three
+        if (q?.name === 'mobile') {
+          const near = d < ITEM_FAR * (farOff.has(it) ? 0.92 : 1);
+          if (near === farOff.has(it)) {
+            if (near) farOff.delete(it); else farOff.add(it);
+            for (const c of it.obj.children) if (c.name !== 'ring') c.visible = near;
+          }
+        }
         const ring = it.obj.getObjectByName('ring') as THREE.Mesh | undefined;
         if (ring) {
           const near = smoothstep(9, 3, d);
@@ -384,6 +401,8 @@ function addStoryItems(
     } else if (type === 'branch') {
       add(branchGeo, branchMat); add(twig, branchMat); o.rotation.y = rnd() * 6;
     }
+    // a tuft of moss and fibres, a fan of fronds, a coil of vine: one draw per material each, not one per piece
+    mergeChildren(o, ITEM_MERGE);
     const ring = new THREE.Mesh(ringGeo, ringMat.clone());
     ring.position.y = 0.02; ring.name = 'ring';
     o.add(ring);
