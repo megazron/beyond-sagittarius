@@ -195,7 +195,7 @@ for k, fs in ids.items():
             pass
         mc = o.modifiers.new('film', 'MESH_CACHE'); mc.cache_format = 'PC2'; mc.filepath = path; mc.frame_start = frames[0]; mc.deform_mode = 'OVERWRITE'
         o.cycles.use_deform_motion = True
-        if info.get('name') == 'skin_head':
+        if info.get('name') == 'skin_head' and not os.environ.get('NO_HEAD_SUB'):
             sb = o.modifiers.new('sub', 'SUBSURF'); sb.levels = 0; sb.render_levels = 1  # the game head is thin for a close-up
         elif info.get('name') == 'cloth' and not os.environ.get('NO_CLOTH_SUB'):
             # game cloth is low poly and reads as facets under practicals: weld the uv seams, then one smooth level
