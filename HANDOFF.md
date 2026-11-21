@@ -181,3 +181,19 @@ See the end of this file for the running log.
   they animate); bodies are ~14 draws each (Ultra bazaar 83 skinned draws, 11.6 fps); city.update ~5 ms and player
   ~3 ms a frame; program look-ups (getProgram) ~25 a frame from materials shared by batched and plain meshes and by
   bodies with different morph counts.
+- 00:00 LANDED a787854 on main (CI 44963286821 all green): items keep their own copy of the scan materials;
+  unifyLooks (merge.ts) moves plain singleton looks onto shared per-vertex materials before batchStatic; crowd bodies
+  past 6 m skip lashes and cornea; flat portals hide batched pieces from the camera pass only (userData.batchHide);
+  batchStatic splits a material on more than 256 pieces into several batches (without that the mobile crowd went
+  99 -> 128 draws, over its budget).
+- Measured after (A500, Web, n3 = dist-new2 ~67b6638): Zenvora draws flat 199, bazaar 207, crowd 344, gate 365,
+  square 183, downtown 178, market 145, waterfront 123, park 158; fps 23-40 in that run (n2 run: 26-48). Run-to-run
+  spread is 5-15 fps: compare builds back to back in one session before believing a few fps.
+- Mobile proxy (4x slowdown) 10-19 fps; profile: render 65 % (setProgram most of it), tick 25 % (away.update/city
+  1.1 s of 5.9 s, player 0.5 s, character animate 0.4 s).
+- Planet: with ~110-150 draws the overlay still shows 26-38 fps on Web and draw 15-24 ms: the next agent should first
+  run p15/plan_exp (plan_exp14_planet.json on the new build, queued as p15/exp_planet) to see if it is GPU-bound now.
+- Clips (34fddfc, ?perf=1) and README_review.txt in Downloads/BS_Game_v1.1/city_v1.5_GPU. Ultra clips were queued
+  (p15/qclips.sh) behind another agent's 30-minute job.
+- Not started: KTX2 (encoder works: ETC1S ~ the webp's size, UASTC 8x; normal maps need a decision), far-tree
+  impostors (the batches made far trees cheap in draw calls already), title first-frame freeze (26 programs).
