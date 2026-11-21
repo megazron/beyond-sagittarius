@@ -115,7 +115,10 @@ See the end of this file for the running log.
 - Arrival in Zenvora (main, warm 9444): 9.9 s JS build under the narrator end, then 6.9 s compile/upload, then a 4.8 s
   freeze in play (mode away) at t+5 s: 92f319e does not remove all of it.
 - Planet free play on Web: 31 fps walk, 1252 draws, 6.3 M tris (main, 15:20).
-- perf14: Renderer.compileFor (compileAsync into the post target) for world/cine/vault/stage before warmAll's draws.
+- perf14: tried Renderer.compileFor (compileAsync) for every scene before warmAll's draws: reverted at 18:20 (three's
+  compile takes every material, drawn or not: 185 programs instead of 149; on SwiftShader the GPU process was still
+  compiling after ready, the title's buttons froze and the combat play test timed out on #btn-new/#nm-ok). compileFor
+  stays for Renderer.precompile (the city).
 - 16:30 perf14 WIP (not yet measured on the GPU; Blender jobs held the heavy slots): precompile warms through the real
   post chain (shadow/AO variants) instead of a tiny plain render; hair geometry cached per style+head (4.6 s of the
   city build was forty heads of hair); forest LODs that start beyond the shadow range cast no shadow; far forest LODs
