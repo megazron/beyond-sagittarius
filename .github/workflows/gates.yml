@@ -34,6 +34,7 @@ jobs:
           - { name: perf_gate, run: 'python tools/perf_gate.py --out "$RUNNER_TEMP/perf.json"' }
           - { name: text_fit, run: 'python tools/text_fit.py --before --out "$RUNNER_TEMP/textfit.json"' }
           - { name: cutscene_qa, run: 'python tools/cutscene_qa.py --out "$RUNNER_TEMP/cutscene"' }
+          - { name: combat, run: 'node --experimental-strip-types tools/combat/sim_test.ts && python tools/combat/play_test.py' }
           - { name: app_smoke, cap: true, run: 'python tools/android/app_smoke.py --shots "$RUNNER_TEMP/shots"' }
     steps:
       - uses: actions/checkout@v4
