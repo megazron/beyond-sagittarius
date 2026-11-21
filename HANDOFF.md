@@ -29,3 +29,11 @@ injuries, seconds, stats }`. Ids: `hunt.first`, `night.defence`, `chase.escape`,
 
 ## State
 See the end of this file for the running log.
+
+### Log
+- 03:00 Sim + tests (186 checks) committed. Game side builds and runs: arena, hunt checked in headless Chromium and on
+  the GPU Chrome (port 9336, profile %TEMP%\bs-combat-gpu, preview server `npx vite preview --port 4651` in this tree).
+- Capture: `~/bs-cap/combat/mkplan.py` writes plans, `cap.sh NAME plan_X.json` records and joins, `sheet.sh` makes a
+  contact sheet, `round.sh NAME` = build + all clips + play test. Gates: `~/bs-cap/combat/gates.sh OUTDIR`.
+- Not landed yet. Next: look at every clip, fix what feels wrong, gates, fast-forward main, Pages, clips to
+  `Downloads/BS_Game_v1.1/combat/`.
