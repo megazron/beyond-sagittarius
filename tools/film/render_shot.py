@@ -119,17 +119,34 @@ def material(d):
     return m
 
 
-def mesh_of(info):
+def weld_map(P):
+    """Vertices at the same rest position (uv seams, the game's split normals) as one: (map old -> new, first old of
+    each new). Done once on the rest mesh, so the topology is the same in every frame and every motion step (a WELD
+    modifier merged by distance per frame, and a merge that changed between steps smeared the cloth across a frame)."""
+    key = np.round(P / 2e-5).astype(np.int64)
+    _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    return inv.ravel(), first
+
+
+def mesh_of(info, weld=False):
     g = info['geo']; P = b64f(g['pos']).reshape(-1, 3)
     idx = b64f(g['idx'], '<u4') if g.get('idx') else np.arange(len(P), dtype=np.uint32)
     me = bpy.data.meshes.new(info.get('name') or 'm')
-    me.from_pydata(P.tolist(), [], idx.reshape(-1, 3).tolist())
+    tri = idx.reshape(-1, 3); keep = np.arange(len(tri)); rep = None
+    if weld:
+        wm, rep = weld_map(P); t2 = wm[tri]
+        keep = np.where((t2[:, 0] != t2[:, 1]) & (t2[:, 1] != t2[:, 2]) & (t2[:, 0] != t2[:, 2]))[0]
+        me.from_pydata(P[rep].tolist(), [], t2[keep].tolist())
+    else:
+        me.from_pydata(P.tolist(), [], tri.tolist())
+    me['rep'] = [] if rep is None else rep.tolist()
     if g.get('uv'):
         uv = b64f(g['uv']).reshape(-1, 2).copy(); uv[:, 1] = 1 - uv[:, 1]
-        l = me.uv_layers.new(name='UVMap'); l.data.foreach_set('uv', uv[idx].ravel())
+        l = me.uv_layers.new(name='UVMap'); l.data.foreach_set('uv', uv[tri[keep].ravel()].ravel())
     for k in ('aT', 'aLayer', 'aDens'):
         if g.get(k):
-            at = me.attributes.new(k, 'FLOAT', 'POINT'); at.data.foreach_set('value', b64f(g[k]))
+            v = b64f(g[k]); v = v[rep] if rep is not None else v
+            at = me.attributes.new(k, 'FLOAT', 'POINT'); at.data.foreach_set('value', v)
     me.polygons.foreach_set('use_smooth', [True] * len(me.polygons)); me.update()
     return me
 
@@ -149,6 +166,73 @@ def who_of(info):
     return f.get('marks')
 
 
+def hair_material(f):
+    """Strands: Cycles' hair BSDF (Chiang), coloured root to tip by the game's own ramp, each strand a little different."""
+    m = bpy.data.materials.new('strands'); m.use_nodes = True; nt = m.node_tree; N, L = nt.nodes, nt.links
+    for x in list(N):
+        if x.type != 'OUTPUT_MATERIAL': N.remove(x)
+    h = N.new('ShaderNodeBsdfHairPrincipled'); h.model = 'CHIANG'; h.parametrization = 'COLOR'
+    at = N.new('ShaderNodeAttribute'); at.attribute_name = 'aT'
+    ramp = N.new('ShaderNodeValToRGB'); e = ramp.color_ramp.elements; e[0].color = hexc(f['root']); e[1].color = hexc(f['tip']); e.new(.3).color = hexc(f['mid'])
+    L.new(at.outputs['Fac'], ramp.inputs[0])
+    rn = N.new('ShaderNodeAttribute'); rn.attribute_name = 'rnd'
+    mul = N.new('ShaderNodeMix'); mul.data_type = 'RGBA'; mul.blend_type = 'MULTIPLY'; mul.inputs['Factor'].default_value = 1
+    jit = N.new('ShaderNodeMapRange'); jit.inputs['To Min'].default_value = .72; jit.inputs['To Max'].default_value = 1.12
+    L.new(rn.outputs['Fac'], jit.inputs['Value']); L.new(ramp.outputs[0], mul.inputs['A']); L.new(jit.outputs['Result'], mul.inputs['B'])
+    L.new(mul.outputs['Result'], h.inputs['Color'])
+    h.inputs['Roughness'].default_value = .4; h.inputs['Radial Roughness'].default_value = .45; h.inputs['Coat'].default_value = .08
+    L.new(h.outputs[0], N['Material Output'].inputs['Surface'])
+    return m
+
+
+def strands(src, info, n=int(os.environ.get('STRANDS', 45000)), seed=7):
+    """Hair as strands over the game's hair mesh (its clumps): roots spread over the surface, each strand walking up
+    the clump's root-to-tip gradient (the mesh's aT) and kept on the surface, a little above it for volume. The clump
+    mesh stays under them, darker, as the shadowed depth between strands. Parented to the mesh: it moves with it."""
+    from mathutils.bvhtree import BVHTree
+    g = info['geo']; P = b64f(g['pos']).reshape(-1, 3).astype(np.float64); T = b64f(g['aT']).astype(np.float64)
+    tri = (b64f(g['idx'], '<u4') if g.get('idx') else np.arange(len(P), dtype=np.uint32)).reshape(-1, 3).astype(np.int64)
+    A, B, Cc = P[tri[:, 0]], P[tri[:, 1]], P[tri[:, 2]]; e1, e2 = B - A, Cc - A; nr = np.cross(e1, e2); ar = np.linalg.norm(nr, axis=1)
+    ok = ar > 1e-12; nn = np.zeros_like(nr); nn[ok] = nr[ok] / ar[ok, None]
+    # the gradient of aT in each triangle's plane: G.e1 = dT1, G.e2 = dT2, G.n = 0
+    M = np.stack([e1, e2, nn], 1); M[~ok] = np.eye(3); rhs = np.stack([T[tri[:, 1]] - T[tri[:, 0]], T[tri[:, 2]] - T[tri[:, 0]], np.zeros(len(tri))], 1)
+    G = np.linalg.solve(M, rhs[..., None])[..., 0]; gl = np.linalg.norm(G, axis=1); good = ok & (gl > 1e-3)
+    G[good] /= gl[good, None]; G[~good] = 0
+    bvh = BVHTree.FromPolygons([tuple(x) for x in P.tolist()], tri.tolist(), all_triangles=True)
+    rng = np.random.default_rng(seed); w = ar * good; w /= w.sum()
+    ti = rng.choice(len(tri), n, p=w); u, v = rng.random(n), rng.random(n); fl = u + v > 1; u[fl], v[fl] = 1 - u[fl], 1 - v[fl]
+    roots = A[ti] + e1[ti] * u[:, None] + e2[ti] * v[:, None]
+    lift = rng.random(n) ** 1.6 * .0035; step = .0035; curves = []; tees = []
+    for i in range(n):
+        p = roots[i]; t = ti[i]; pts = []; ts = []
+        for _ in range(60):
+            q = p + nn[t] * lift[i]; pts.append(q); ts.append(T[tri[t]].mean())
+            if not good[t] or ts[-1] > .985: break
+            loc, nrm, j, _d = bvh.find_nearest(tuple(p + G[t] * step))
+            if j is None: break
+            p = np.array(loc); t = j
+        if len(pts) >= 3:
+            # a few strands run on past the clump's tip and stray: the edge of real hair is never a clean point
+            if rng.random() < .025:
+                d = pts[-1] - pts[-2]; d = d / max(np.linalg.norm(d), 1e-9); d = d + rng.normal(0, .12, 3)
+                for k in range(1, 3): pts.append(pts[-1] + d * step); ts.append(ts[-1])
+            # at most 14 points a strand (the curve is smooth between them): the strand count, not the points, is the look
+            pa = np.array(pts); ta = np.array(ts)
+            if len(pa) > 14:
+                sel = np.unique(np.round(np.linspace(0, len(pa) - 1, 14)).astype(int)); pa, ta = pa[sel], ta[sel]
+            curves.append(pa); tees.append(ta)
+    cv = bpy.data.hair_curves.new('strands'); cv.add_curves([len(c) for c in curves])
+    allp = np.concatenate(curves).astype(np.float32); cv.position_data.foreach_set('vector', allp.ravel())
+    rad = np.concatenate([np.linspace(1, .25, len(c)) for c in curves]).astype(np.float32) * 9e-5
+    ra = cv.attributes.get('radius') or cv.attributes.new('radius', 'FLOAT', 'POINT'); ra.data.foreach_set('value', rad)
+    tt = cv.attributes.new('aT', 'FLOAT', 'POINT'); tt.data.foreach_set('value', np.concatenate(tees).astype(np.float32))
+    rr = cv.attributes.new('rnd', 'FLOAT', 'CURVE'); rr.data.foreach_set('value', rng.random(len(curves)).astype(np.float32))
+    cv.materials.append(hair_material(info['material']['film']))
+    o = bpy.data.objects.new('strands', cv); sc.collection.objects.link(o); o.parent = src
+    print('strands:', len(curves), 'curves,', len(allp), 'points', flush=True)
+    return o
+
+
 frames = list(range(a.first, a.last + 1))
 data = {}
 for f in frames:
@@ -159,25 +243,41 @@ for f, d in data.items():
     for r in d['meshes']:
         if not r.get('points'): ids.setdefault(r['id'], []).append(f)
 print(len(data), 'frames,', len(ids), 'objects', flush=True)
+FOCUS_C = None
+if a.focus_id:
+    for f in sorted(data):
+        r = next((x for x in data[f]['meshes'] if x['id'] == a.focus_id and 'baked' in x), None)
+        if r: FOCUS_C = b64f(r['baked']).reshape(-1, 3).mean(0); break
 objs = {}
 for k, fs in ids.items():
     info = json.load(open(f'{DUMP}/fresh/{k}.json')); mat = info['material']
     if info['geo']['n'] < 3 or (mat['type'] == 'ShaderMaterial' and mat.get('uColor') is None): continue
     if info['instanced']: pass
-    me = mesh_of(info); me.materials.append(material(mat))
+    WELD = info.get('name') == 'cloth' and not os.environ.get('NO_CLOTH_SUB')
+    me = mesh_of(info, weld=WELD); me.materials.append(material(mat)); REP = np.array(me['rep'], np.int64) if WELD else None
     o = bpy.data.objects.new(info.get('name') or k[:8], me); sc.collection.objects.link(o); objs[k] = o
     o.cycles.use_camera_cull = True
     recs = {f: next(r for r in data[f]['meshes'] if r['id'] == k) for f in fs}
     baked = any('baked' in r for r in recs.values())
     if baked:
-        n = info['geo']['n']; path = f'{CACHE}/{k}.pc2'
+        n = len(me.vertices); path = f'{CACHE}/{k}.pc2'
+        # vertices the game appended to a mesh (split normals, filled holes) have no morph data, so the dump reads
+        # them as NaN: each takes its twin's position (same rest point). A NaN corner tore the collar into jags and,
+        # with motion blur, smeared a whole garment across one frame
+        P0 = b64f(info['geo']['pos']).reshape(-1, 3); wm0, first0 = weld_map(P0); twin = first0[wm0]
+        def unnan(q):
+            bad = ~np.isfinite(q).all(1)
+            if bad.any():
+                q = q.copy(); q[bad] = q[twin[bad]]; still = ~np.isfinite(q).all(1)
+                if still.any(): q[still] = np.nanmean(q[~still], 0)
+            return q
         with open(path, 'wb') as w:
             w.write(b'POINTCACHE2\0' + struct.pack('<iiffi', 1, n, float(frames[0]), 1.0, len(frames)))
             last = None
             for f in frames:
                 r = recs.get(f)
                 if r and 'baked' in r:
-                    q = b64f(r['baked']).reshape(-1, 3)
+                    q = unnan(b64f(r['baked']).reshape(-1, 3))
                     wid = who_of(info)
                     fd = face_of(ID_OF.get(wid, wid)) if wid and PERF.get(wid) else None
                     if fd and len(fd[2]) == len(q):
@@ -187,9 +287,12 @@ for k, fs in ids.items():
                         else:
                             lip = env = None  # a silent shot: no mouth track
                         q = FACE.apply(q.copy(), fd[2], fd[1], fd[0], FACE.track(fd[0], pf['cues'], f / 24, seed=len(wid), env=env, lip=lip, blinks=pf.get('blinks')))
+                    if REP is not None: q = q[REP]
                     last = np.stack([q[:, 0], -q[:, 2], q[:, 1]], 1).astype('<f4')
                 if last is None:
-                    q = b64f(next(iter(x for x in recs.values() if 'baked' in x))['baked']).reshape(-1, 3); last = np.stack([q[:, 0], -q[:, 2], q[:, 1]], 1).astype('<f4')
+                    q = unnan(b64f(next(iter(x for x in recs.values() if 'baked' in x))['baked']).reshape(-1, 3))
+                    if REP is not None: q = q[REP]
+                    last = np.stack([q[:, 0], -q[:, 2], q[:, 1]], 1).astype('<f4')
                 w.write(last.tobytes())
         if info.get('name') in ('skin_head', 'cloth'):
             pass
@@ -198,13 +301,23 @@ for k, fs in ids.items():
         if info.get('name') == 'skin_head' and not os.environ.get('NO_HEAD_SUB'):
             sb = o.modifiers.new('sub', 'SUBSURF'); sb.levels = 0; sb.render_levels = 1  # the game head is thin for a close-up
         elif info.get('name') == 'cloth' and not os.environ.get('NO_CLOTH_SUB'):
-            # game cloth is low poly and reads as facets under practicals: weld the uv seams, then one smooth level
-            wd = o.modifiers.new('weld', 'WELD'); wd.merge_threshold = 1e-4
+            # game cloth is low poly and reads as facets under practicals: one smooth level (the seams are welded in mesh_of)
             sb = o.modifiers.new('sub', 'SUBSURF'); sb.levels = 0; sb.render_levels = 1; sb.uv_smooth = 'PRESERVE_BOUNDARIES'
     else:
         for f, r in recs.items():
             o.matrix_world = C @ Matrix(np.array(r['m']).reshape(4, 4).T.tolist())
             o.keyframe_insert('location', frame=f); o.rotation_mode = 'QUATERNION'; o.keyframe_insert('rotation_quaternion', frame=f); o.keyframe_insert('scale', frame=f)
+        fk = (mat.get('film') or {}).get('kind')
+        if fk == 'hair' and FOCUS_C is not None and info['geo'].get('aT') and not os.environ.get('NO_STRANDS'):
+            r0 = next(iter(recs.values())); M0 = np.array(r0['m']).reshape(4, 4).T; P0 = b64f(info['geo']['pos']).reshape(-1, 3)
+            if np.linalg.norm((P0 @ M0[:3, :3].T + M0[:3, 3]).mean(0) - FOCUS_C) < .35:
+                # the close-up's own hair: strands over the clumps, the clump mesh darker and matte under them
+                strands(o, info)
+                bs_ = me.materials[0].node_tree.nodes['Principled BSDF'].inputs
+                bs_['Coat Weight'].default_value = 0; bs_['Roughness'].default_value = .6; bs_['Sheen Weight'].default_value = .2
+                rm = me.materials[0].node_tree.nodes.get('Color Ramp')
+                if rm:
+                    for el in rm.color_ramp.elements: el.color = tuple(c * .45 for c in el.color[:3]) + (1,)
     for f in frames:
         o.hide_render = f not in recs; o.keyframe_insert('hide_render', frame=f)
     if 'inst' in next(iter(recs.values())): print('instanced kept single:', o.name, flush=True)

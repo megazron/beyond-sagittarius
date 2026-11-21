@@ -549,12 +549,16 @@ export class Cinematic {
       update: (k, local) => {
         // slightly low (the shot list): under his eyeline as he looks down at the gauge, so his eyes read, not his lids
         lens(85); const h = head(sci, -0.12); this.camera.position.copy(h).add(V(lerp(0.5, 0.42, k), -0.17, -1.04)); this.lookTarget.copy(h).add(V(0, -0.04, 0)); // a close-up: about a metre, the push in by the lerp
-        sci.setFace({ frown: smoothstep(0, 0.8, local) * 0.55, squint: 0.25, blink: local > 1.1 && local < 1.35 ? 1 : 0 });
+        // no smile at all (his look's resting smile showed teeth and read as a smirk)
+        sci.setFace({ frown: smoothstep(0, 0.8, local) * 0.55, squint: 0.25, smile: 0, blink: local > 1.1 && local < 1.35 ? 1 : 0 });
+        // the dart: the eyes jump to the window and the head follows them fast, then both come back to the gauge
+        sci.setGazeRate(local > 1.3 ? 9 : 2.2);
         sci.setLookTarget(local < 1.4 ? ins.gaugeAt.getWorldPosition(new THREE.Vector3()) : local < 2.1 ? WIN : ins.gaugeAt.getWorldPosition(new THREE.Vector3()));
       },
     });
     // A5 his eyeline through the window: near the core the stars are short arcs, all bent the same way
     shotAt(S + 11.6, S + 14.4, {
+      enter: () => sci.setGazeRate(null),
       update: (k) => { lens(50); this.camera.position.copy(at(0.2, -0.45, -0.55)); this.lookTarget.copy(at(1.6, -0.2, -6)); d.uWarp.value = smoothstep(0, 1, k) * 0.55; d.uWarpDir.value.set(-0.6, 0.3, -1).normalize(); d.uBHPos.value.set(-40, 18, -lerp(420, 330, k)); },
     });
     // A6 Skyvra at the window, her back to us; she turns, head first, then her body; a half smile that does not hold

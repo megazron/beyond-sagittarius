@@ -208,7 +208,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   // ---- runtime state ----
   let pendingSplint = false, soleLift = 0;
   const gazeAt = new THREE.Vector3();
-  let gaze: THREE.Vector3 | null = null, gazeY = 0, gazeX = 0;
+  let gaze: THREE.Vector3 | null = null, gazeY = 0, gazeX = 0, gazeRate = 2.2;
   let B: Map<string, THREE.Bone> | null = null;
   // the forearm's own axis per side (rest frames carry no rotation, so it is the same in the twist bone and the hand)
   const twistAx: Record<string, THREE.Vector3> = {};
@@ -1005,7 +1005,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const yawTo = Math.atan2(V3.x, V3.z);
       if (Math.abs(yawTo) < 1.7) { wantY = yawTo; wantX = -Math.atan2(V3.y, Math.hypot(V3.x, V3.z)); }
     }
-    const gr = 1 - Math.exp(-dt * 2.2);
+    const gr = 1 - Math.exp(-dt * gazeRate);
     gazeY += (wantY - gazeY) * gr; gazeX += (wantX - gazeX) * gr;
     const ly = clamp(lookAt.y + gazeY + clamp(yawRate * 0.05, -0.15, 0.15), -1.1, 1.1), lx = clamp(lookAt.x + gazeX, -0.5, 0.5);
     if (ly || lx) {
@@ -1238,6 +1238,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     look2(y: number, x: number) { lookAt.y = y; lookAt.x = x; },
     /** World point to keep an eye on, or null. The neck clamps it. */
     setLookTarget(v: THREE.Vector3 | null) { if (v) { gaze = gazeAt.copy(v); } else gaze = null; },
+    /** How fast the head turns to the look target (per second; null = the usual 2.2). A dart is about 8: the eyes still lead. */
+    setGazeRate(r: number | null) { gazeRate = r ?? 2.2; },
     /** Height of the ground under a point: enables foot planting on slopes. */
     setGround(fn: ((x: number, z: number) => number) | null) { ground = fn; },
     /** Resolves when the skinned body is in place. */
