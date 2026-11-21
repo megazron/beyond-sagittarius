@@ -1,0 +1,967 @@
+{
+ "_comment": "Episode One as data: who you play in each scene, where, what you decide and what it sets. Crew ids: scientist Zenvik, strong Draxum, medic Lyrra, explorer Skyvra, builder Bolzar, social Nuvexa. Checked by tools/story_check.py: every flag read is set earlier, every scene's player is alive on every path that reaches it, every death needs at least two things the player could see. Line keys are filled in as each scene is written.",
+ "scenes": [
+  {
+   "id": "0.1",
+   "title": "The keeper",
+   "as": null,
+   "where": "vault",
+   "lines": 4
+  },
+  {
+   "id": "0.2",
+   "title": "Zenvora: the list",
+   "as": "scientist",
+   "where": "zenvora",
+   "lines": 40,
+   "decisions": [
+    {
+     "id": "e1.ammi",
+     "kind": "talk",
+     "options": [
+      {
+       "id": "call",
+       "tone": "kindness",
+       "effects": [
+        {
+         "flag": "ammi.called"
+        }
+       ]
+      },
+      {
+       "id": "text",
+       "tone": "joke",
+       "effects": []
+      },
+      {
+       "id": "later",
+       "tone": "silence",
+       "effects": []
+      }
+     ],
+     "fallback": "later"
+    },
+    {
+     "id": "e1.snacks",
+     "kind": "talk",
+     "options": [
+      {
+       "id": "pay",
+       "tone": "truth",
+       "effects": [
+        {
+         "trust": "explorer",
+         "by": 1
+        }
+       ]
+      },
+      {
+       "id": "argue",
+       "tone": "nerve",
+       "effects": [
+        {
+         "trust": "explorer",
+         "by": -1
+        }
+       ]
+      },
+      {
+       "id": "joke",
+       "tone": "joke",
+       "effects": []
+      }
+     ],
+     "fallback": "joke"
+    },
+    {
+     "id": "e1.ringlight",
+     "kind": "talk",
+     "options": [
+      {
+       "id": "tell",
+       "tone": "truth",
+       "effects": [
+        {
+         "trust": "social",
+         "by": -1
+        }
+       ]
+      },
+      {
+       "id": "keep",
+       "tone": "kindness",
+       "effects": [
+        {
+         "trust": "social",
+         "by": 1
+        }
+       ]
+      }
+     ],
+     "fallback": "keep"
+    }
+   ],
+   "qtes": [
+    {
+     "id": "e1.tramdoor",
+     "kind": "hold",
+     "pass": [
+      {
+       "trust": "builder",
+       "by": 1
+      }
+     ],
+     "fail": [
+      {
+       "flag": "bolzar.burn"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "0.3",
+   "title": "The gate",
+   "as": "social",
+   "where": "zenvora.gate",
+   "lines": 18,
+   "decisions": [
+    {
+     "id": "e1.photo",
+     "kind": "talk",
+     "options": [
+      {
+       "id": "front",
+       "tone": "nerve",
+       "effects": [
+        {
+         "trust": "strong",
+         "to": "social",
+         "by": -1
+        }
+       ]
+      },
+      {
+       "id": "back",
+       "tone": "kindness",
+       "effects": [
+        {
+         "trust": "strong",
+         "to": "social",
+         "by": 1
+        }
+       ]
+      }
+     ],
+     "fallback": "back"
+    }
+   ]
+  },
+  {
+   "id": "0.4",
+   "title": "Departure",
+   "as": "explorer",
+   "where": "boarding",
+   "lines": 16,
+   "decisions": [
+    {
+     "id": "e1.charger",
+     "kind": "talk",
+     "options": [
+      {
+       "id": "blame",
+       "tone": "truth",
+       "effects": [
+        {
+         "trust": "explorer",
+         "by": -1
+        }
+       ]
+      },
+      {
+       "id": "laugh",
+       "tone": "joke",
+       "effects": [
+        {
+         "trust": "explorer",
+         "by": 1
+        }
+       ]
+      }
+     ],
+     "fallback": "laugh"
+    }
+   ]
+  },
+  {
+   "id": "0.5",
+   "title": "Day 39",
+   "as": "strong",
+   "where": "liner.deck",
+   "lines": 24,
+   "decisions": [
+    {
+     "id": "e1.fight",
+     "kind": "talk",
+     "seconds": 8,
+     "options": [
+      {
+       "id": "say",
+       "tone": "truth",
+       "effects": [
+        {
+         "flag": "fight.said"
+        },
+        {
+         "trust": "strong",
+         "by": -2
+        }
+       ]
+      },
+      {
+       "id": "swallow",
+       "tone": "kindness",
+       "effects": []
+      },
+      {
+       "id": "walk",
+       "tone": "silence",
+       "effects": [
+        {
+         "trust": "strong",
+         "by": -1
+        }
+       ]
+      }
+     ],
+     "fallback": "walk"
+    }
+   ]
+  },
+  {
+   "id": "0.6",
+   "title": "Day 40, the lab",
+   "as": "scientist",
+   "where": "liner.lab",
+   "lines": 30,
+   "decisions": [
+    {
+     "id": "e1.reading",
+     "kind": "talk",
+     "options": [
+      {
+       "id": "pilot",
+       "tone": "truth",
+       "effects": [
+        {
+         "flag": "kits"
+        }
+       ]
+      },
+      {
+       "id": "tomorrow",
+       "tone": "silence",
+       "effects": [
+        {
+         "flag": "sat.on.it"
+        }
+       ]
+      },
+      {
+       "id": "skyvra",
+       "tone": "kindness",
+       "effects": [
+        {
+         "flag": "skyvra.knows"
+        },
+        {
+         "trust": "explorer",
+         "by": 1
+        }
+       ]
+      }
+     ],
+     "fallback": "tomorrow"
+    }
+   ]
+  },
+  {
+   "id": "0.7",
+   "title": "Day 41, the Event",
+   "as": "medic",
+   "also": [
+    "strong",
+    "scientist"
+   ],
+   "where": "liner",
+   "lines": 36,
+   "decisions": [
+    {
+     "id": "e1.reach",
+     "kind": "dilemma",
+     "as": "medic",
+     "seconds": 6,
+     "options": [
+      {
+       "id": "nuvexa",
+       "tone": "kindness",
+       "effects": [
+        {
+         "flag": "hurt.bolzar"
+        }
+       ]
+      },
+      {
+       "id": "bolzar",
+       "tone": "kindness",
+       "effects": [
+        {
+         "flag": "hurt.nuvexa"
+        }
+       ]
+      },
+      {
+       "id": "neither",
+       "tone": "silence",
+       "effects": [
+        {
+         "flag": "hurt.nuvexa"
+        },
+        {
+         "flag": "hurt.bolzar"
+        }
+       ]
+      }
+     ],
+     "fallback": "neither"
+    },
+    {
+     "id": "e1.handcore",
+     "kind": "dilemma",
+     "as": "scientist",
+     "seconds": 5,
+     "options": [
+      {
+       "id": "hand",
+       "tone": "kindness",
+       "effects": [
+        {
+         "flag": "held.on"
+        },
+        {
+         "trust": "explorer",
+         "by": 2
+        }
+       ]
+      },
+      {
+       "id": "core",
+       "tone": "truth",
+       "effects": [
+        {
+         "flag": "took.core"
+        },
+        {
+         "trust": "explorer",
+         "by": -2
+        }
+       ]
+      },
+      {
+       "id": "freeze",
+       "tone": "silence",
+       "effects": []
+      }
+     ],
+     "fallback": "freeze"
+    }
+   ],
+   "qtes": [
+    {
+     "id": "e1.bulkhead",
+     "kind": "hold",
+     "as": "strong",
+     "pass": [
+      {
+       "flag": "held.door"
+      }
+     ],
+     "fail": [
+      {
+       "flag": "hurt.draxum"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "1.1",
+   "title": "Waking",
+   "as": "scientist",
+   "where": "verdaxis",
+   "lines": 20,
+   "reads": [
+    "kits"
+   ],
+   "decisions": [
+    {
+     "id": "e1.fruit",
+     "kind": "action",
+     "options": [
+      {
+       "id": "eat",
+       "tone": "nerve",
+       "effects": [
+        {
+         "flag": "poisoned"
+        }
+       ]
+      },
+      {
+       "id": "test",
+       "tone": "truth",
+       "effects": []
+      },
+      {
+       "id": "hungry",
+       "tone": "silence",
+       "effects": []
+      }
+     ],
+     "fallback": "hungry"
+    }
+   ]
+  },
+  {
+   "id": "1.2",
+   "title": "The asteroid",
+   "as": "explorer",
+   "where": "asteroid",
+   "lines": 22,
+   "reads": [
+    "held.on",
+    "took.core"
+   ],
+   "decisions": [
+    {
+     "id": "e1.boot",
+     "kind": "action",
+     "options": [
+      {
+       "id": "crawl",
+       "tone": "nerve",
+       "effects": [
+        {
+         "flag": "skyvra.crawled"
+        }
+       ]
+      },
+      {
+       "id": "wait",
+       "tone": "truth",
+       "effects": [
+        {
+         "flag": "skyvra.waited"
+        }
+       ]
+      }
+     ],
+     "fallback": "wait"
+    }
+   ],
+   "qtes": [
+    {
+     "id": "e1.cutboot",
+     "kind": "hold",
+     "if": {
+      "flag": "skyvra.crawled"
+     },
+     "pass": [],
+     "fail": [
+      {
+       "flag": "skyvra.cut"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "1.3",
+   "title": "Stones, tools, shelter",
+   "as": "scientist",
+   "where": "verdaxis",
+   "lines": 24,
+   "reads": [
+    "fight.said",
+    "ammi.called"
+   ]
+  },
+  {
+   "id": "1.4",
+   "title": "Shardrift",
+   "as": "builder",
+   "where": "shardrift",
+   "lines": 20,
+   "reads": [
+    "hurt.bolzar",
+    "bolzar.burn"
+   ],
+   "decisions": [
+    {
+     "id": "e1.plate",
+     "kind": "action",
+     "options": [
+      {
+       "id": "roof",
+       "tone": "truth",
+       "effects": [
+        {
+         "flag": "bolzar.roof"
+        }
+       ]
+      },
+      {
+       "id": "mirror",
+       "tone": "nerve",
+       "effects": [
+        {
+         "flag": "bolzar.mirror"
+        }
+       ]
+      }
+     ],
+     "fallback": "roof"
+    }
+   ]
+  },
+  {
+   "id": "1.5",
+   "title": "Methryx",
+   "as": "strong",
+   "where": "methryx",
+   "lines": 22,
+   "reads": [
+    "hurt.draxum"
+   ],
+   "decisions": [
+    {
+     "id": "e1.cub",
+     "kind": "dilemma",
+     "options": [
+      {
+       "id": "kill",
+       "tone": "nerve",
+       "effects": [
+        {
+         "flag": "cub.killed"
+        }
+       ]
+      },
+      {
+       "id": "leave",
+       "tone": "silence",
+       "effects": [
+        {
+         "flag": "cub.left"
+        }
+       ]
+      },
+      {
+       "id": "feed",
+       "tone": "kindness",
+       "effects": [
+        {
+         "flag": "cub.fed"
+        }
+       ]
+      }
+     ],
+     "fallback": "leave"
+    }
+   ]
+  },
+  {
+   "id": "1.6",
+   "title": "Fire",
+   "as": "scientist",
+   "where": "verdaxis",
+   "lines": 14,
+   "decisions": [
+    {
+     "id": "e1.fire",
+     "kind": "action",
+     "options": [
+      {
+       "id": "high",
+       "tone": "nerve",
+       "effects": [
+        {
+         "flag": "fire.high"
+        }
+       ]
+      },
+      {
+       "id": "low",
+       "tone": "truth",
+       "effects": [
+        {
+         "flag": "fire.low"
+        }
+       ]
+      }
+     ],
+     "fallback": "low"
+    }
+   ]
+  },
+  {
+   "id": "1.7",
+   "title": "Aerolis",
+   "as": "social",
+   "where": "aerolis",
+   "lines": 30,
+   "reads": [
+    "hurt.nuvexa"
+   ],
+   "decisions": [
+    {
+     "id": "e1.cross",
+     "kind": "dilemma",
+     "options": [
+      {
+       "id": "stay",
+       "tone": "kindness",
+       "effects": [
+        {
+         "flag": "nuvexa.stayed"
+        }
+       ]
+      },
+      {
+       "id": "cross",
+       "tone": "nerve",
+       "effects": [
+        {
+         "flag": "nuvexa.crossed"
+        }
+       ]
+      }
+     ],
+     "fallback": "stay"
+    }
+   ],
+   "qtes": [
+    {
+     "id": "e1.climb",
+     "kind": "climb",
+     "if": {
+      "flag": "nuvexa.crossed"
+     },
+     "pass": [],
+     "fail": [
+      {
+       "flag": "nuvexa.slipped"
+      }
+     ]
+    }
+   ],
+   "deaths": [
+    {
+     "kill": "social",
+     "cause": "fell through the cloud",
+     "if": {
+      "all": [
+       {
+        "flag": "nuvexa.crossed"
+       },
+       {
+        "flag": "nuvexa.slipped"
+       }
+      ]
+     },
+     "seen": [
+      "e1.cross",
+      "e1.climb",
+      "hurt.nuvexa"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "1.8",
+   "title": "The grey moon",
+   "as": "medic",
+   "where": "thalwen",
+   "lines": 18,
+   "reads": [
+    "kits"
+   ],
+   "decisions": [
+    {
+     "id": "e1.dose",
+     "kind": "dilemma",
+     "if": {
+      "flag": "kits"
+     },
+     "options": [
+      {
+       "id": "use",
+       "tone": "nerve",
+       "effects": [
+        {
+         "flag": "dose.used"
+        }
+       ]
+      },
+      {
+       "id": "save",
+       "tone": "kindness",
+       "effects": [
+        {
+         "flag": "dose.saved"
+        }
+       ]
+      }
+     ],
+     "fallback": "save"
+    }
+   ]
+  },
+  {
+   "id": "1.9",
+   "title": "The first night",
+   "as": "scientist",
+   "where": "verdaxis",
+   "lines": 20,
+   "reads": [
+    "poisoned",
+    "cub.killed"
+   ],
+   "decisions": [
+    {
+     "id": "e1.night",
+     "kind": "action",
+     "seconds": 6,
+     "options": [
+      {
+       "id": "hide",
+       "tone": "truth",
+       "effects": [
+        {
+         "flag": "e1.night.hide"
+        }
+       ]
+      },
+      {
+       "id": "brace",
+       "tone": "nerve",
+       "effects": [
+        {
+         "flag": "e1.night.brace"
+        }
+       ]
+      },
+      {
+       "id": "run",
+       "tone": "silence",
+       "effects": [
+        {
+         "flag": "e1.night.run"
+        }
+       ]
+      }
+     ],
+     "fallback": "hide"
+    }
+   ],
+   "qtes": [
+    {
+     "id": "e1.brace",
+     "kind": "press",
+     "if": {
+      "flag": "e1.night.brace"
+     },
+     "pass": [],
+     "fail": [
+      {
+       "flag": "scarred"
+      }
+     ]
+    },
+    {
+     "id": "e1.predator",
+     "kind": "breath",
+     "pass": [],
+     "fail": [
+      {
+       "flag": "scarred"
+      }
+     ],
+     "if": {
+      "any": [
+       {
+        "flag": "e1.night.hide"
+       },
+       {
+        "flag": "e1.night.run"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "1.10",
+   "title": "A voice in the static",
+   "as": "strong",
+   "where": "methryx",
+   "lines": 34,
+   "reads": [
+    "fight.said",
+    "hurt.bolzar",
+    "bolzar.mirror",
+    "hurt.draxum"
+   ],
+   "decisions": [
+    {
+     "id": "e1.go",
+     "kind": "dilemma",
+     "seconds": 8,
+     "options": [
+      {
+       "id": "go",
+       "tone": "nerve",
+       "effects": [
+        {
+         "flag": "draxum.went"
+        }
+       ]
+      },
+      {
+       "id": "wait",
+       "tone": "truth",
+       "effects": [
+        {
+         "flag": "draxum.waited"
+        }
+       ]
+      }
+     ],
+     "fallback": "wait"
+    }
+   ],
+   "qtes": [
+    {
+     "id": "e1.ridge",
+     "kind": "climb",
+     "if": {
+      "flag": "draxum.went"
+     },
+     "pass": [
+      {
+       "flag": "draxum.bolzar.together"
+      }
+     ],
+     "fail": []
+    }
+   ],
+   "deaths": [
+    {
+     "kill": "builder",
+     "cause": "the cold, alone, under no roof",
+     "if": {
+      "all": [
+       {
+        "flag": "draxum.waited"
+       },
+       {
+        "flag": "hurt.bolzar"
+       },
+       {
+        "flag": "bolzar.mirror"
+       }
+      ]
+     },
+     "seen": [
+      "e1.reach",
+      "e1.plate",
+      "e1.go"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "1.11",
+   "title": "The long dark",
+   "as": "explorer",
+   "where": "asteroid",
+   "lines": 16,
+   "requires": {
+    "flag": "skyvra.waited"
+   },
+   "reads": [
+    "held.on"
+   ],
+   "deaths": [
+    {
+     "kill": "explorer",
+     "cause": "she did not see the dawn",
+     "if": {
+      "all": [
+       {
+        "flag": "skyvra.waited"
+       },
+       {
+        "not": {
+         "flag": "held.on"
+        }
+       }
+      ]
+     },
+     "seen": [
+      "e1.boot",
+      "e1.handcore"
+     ],
+     "pending": "CONTINUITY E2: v2 had fire.low; she cannot see Verdaxis from her sky"
+    }
+   ]
+  },
+  {
+   "id": "1.12",
+   "title": "Morning",
+   "as": "scientist",
+   "where": "verdaxis",
+   "lines": 30,
+   "decisions": [
+    {
+     "id": "e1.piece",
+     "kind": "action",
+     "options": [
+      {
+       "id": "touch",
+       "tone": "nerve",
+       "effects": [
+        {
+         "flag": "vision"
+        }
+       ]
+      },
+      {
+       "id": "wrap",
+       "tone": "truth",
+       "effects": []
+      }
+     ],
+     "fallback": "wrap"
+    }
+   ]
+  },
+  {
+   "id": "1.13",
+   "title": "The Ledger",
+   "as": null,
+   "where": "vault",
+   "lines": 60
+  }
+ ]
+}
