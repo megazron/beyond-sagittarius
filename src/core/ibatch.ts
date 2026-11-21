@@ -25,6 +25,7 @@ export const MAX_GEOMETRIES = SHADOW_BASE;
 let pending: Int32Array | null = null;
 const FR = new THREE.Frustum(), PV = new THREE.Matrix4();
 let patched = false;
+let info: THREE.WebGLInfo | null = null;
 /** The next multi-draw is ours: draw it instanced with these counts (set right before three issues it). */
 function patchExt(gl: WebGL2RenderingContext) {
   if (patched) return;
@@ -33,19 +34,27 @@ function patchExt(gl: WebGL2RenderingContext) {
   patched = true;
   const el = ext.multiDrawElementsWEBGL.bind(ext), ar = ext.multiDrawArraysWEBGL.bind(ext);
   const eli = ext.multiDrawElementsInstancedWEBGL.bind(ext), ari = ext.multiDrawArraysInstancedWEBGL.bind(ext);
+  // three counts a multi-draw's triangles once per sub-draw: add the other instances (and take out what drew none)
+  const count = (counts: unknown, ic: Int32Array, n: unknown) => {
+    if (!info) return;
+    const c = counts as Int32Array; let extra = 0;
+    for (let i = 0; i < (n as number); i++) extra += c[i] * (ic[i] - 1);
+    info.render.triangles += extra / 3;
+  };
   ext.multiDrawElementsWEBGL = (mode, counts, co, type, offsets, oo, n) => {
     const ic = pending; pending = null;
-    if (ic) eli(mode, counts, co, type, offsets, oo, ic, 0, n); else el(mode, counts, co, type, offsets, oo, n);
+    if (ic) { eli(mode, counts, co, type, offsets, oo, ic, 0, n); count(counts, ic, n); } else el(mode, counts, co, type, offsets, oo, n);
   };
   ext.multiDrawArraysWEBGL = (mode, firsts, fo, counts, co, n) => {
     const ic = pending; pending = null;
-    if (ic) ari(mode, firsts, fo, counts, co, ic, 0, n); else ar(mode, firsts, fo, counts, co, n);
+    if (ic) { ari(mode, firsts, fo, counts, co, ic, 0, n); count(counts, ic, n); } else ar(mode, firsts, fo, counts, co, n);
   };
 }
 
 /** Can this renderer draw InstancedBatches? (Patches the extension on the first call.) */
 export function batchSupported(r: THREE.WebGLRenderer): boolean {
   const gl = r.getContext() as WebGL2RenderingContext;
+  info = r.info;
   const ext = gl.getExtension('WEBGL_multi_draw') as Record<string, unknown> | null;
   if (!ext || typeof ext.multiDrawElementsInstancedWEBGL !== 'function' || typeof ext.multiDrawArraysInstancedWEBGL !== 'function') return false;
   patchExt(gl);
