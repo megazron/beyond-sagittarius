@@ -214,9 +214,11 @@ export class EncounterRun {
   // ---- the night at the fire ----
   private night(dt: number) {
     const s = this.sim, fire = s.fires.find((f) => !f.torch && !f.burnsOut)!, straight = !!this.story.cubKilled;
+    // they come out of the dark to the edge of the light, where the food can be smelt (a home far out had them
+    // wander beyond their noses all night in the real world's terrain, and nothing ever came)
     const fromDark = (kind: SpeciesId, n: number, pack: number, spread = 1.2) => {
       const a0 = s.rand() * 6.283;
-      for (let i = 0; i < n; i++) { const a = a0 + (i - n / 2) * 0.22 * spread, r = 30 + s.rand() * 6; s.spawn(kind, fire.x + Math.cos(a) * r, fire.z + Math.sin(a) * r, { pack, homeX: fire.x + Math.cos(a) * 44, homeZ: fire.z + Math.sin(a) * 44 }); }
+      for (let i = 0; i < n; i++) { const a = a0 + (i - n / 2) * 0.22 * spread, r = 30 + s.rand() * 6; s.spawn(kind, fire.x + Math.cos(a) * r, fire.z + Math.sin(a) * r, { pack, homeX: fire.x + Math.cos(a) * 21, homeZ: fire.z + Math.sin(a) * 21 }); }
     };
     const food = s.scents.reduce((n, sc) => n + Math.max(0, sc.food), 0);
     this.objN = { food, fuel: Math.round((fire.fuel / fire.max) * 100), wave: this.wave };
