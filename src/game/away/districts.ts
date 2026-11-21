@@ -707,7 +707,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   interface Car { r: Road; u: number; dir: number; lane: number; v: number; vmax: number; col: THREE.Color; turn: { p0: THREE.Vector3; p1: THREE.Vector3; c: THREE.Vector3; t: number; len: number; next: Road; nu: number; ndir: number } | null; x: number; z: number; yaw: number }
   const carRoads = ROADS.filter((r) => r.cars);
   const cars: Car[] = [];
-  const NCAR = [20, 40, 70][tier];
+  const NCAR = [20, 55, 100][tier]; // moving cars; with the recall they keep to the streets round the camera
   /** Past this a moving car or walker is brought back round the camera (cars beyond 420 m are not drawn anyway). */
   const RECALL = [240, 300, 340][tier], PED_RECALL = [170, 210, 240][tier];
   const carCols = [0xf4f4f6, 0x1b1b1f, 0x8a8f96, 0xc0392b, 0x2c3e94, 0x16a085, 0xf2d64b, 0xe8e2d4, 0x5a3a7a, 0xff8c42].map((c) => new THREE.Color(c));
@@ -717,13 +717,16 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   }
   /** Lane centre offset from the road's centre line: left-hand traffic, inner lane 1.6 m, outer 4.4 m. */
   const laneOff = (dir: number, lane: number, along: 'x' | 'z') => (along === 'z' ? dir : -dir) * (lane ? 4.4 : 1.6);
+  /** Streets with cars parked at the kerb have one lane each way (the outer one is the parking). */
+  const parkRoads = new Set<Road>();
+  const laneOn = (r: Road, lane: number) => (parkRoads.has(r) ? 0 : lane);
   const pos = (r: Road, u: number, dir: number, lane: number, out: THREE.Vector3) => {
-    const off = laneOff(dir, lane, r.along);
+    const off = laneOff(dir, laneOn(r, lane), r.along);
     return r.along === 'z' ? out.set(r.c + off, 0, u) : out.set(u, 0, r.c + off);
   };
   // ---- the cars (cars.ts): three draws for every car in the districts ----
   const { bodyG, glassG, lightG, carBodyM, carGlassM, carLightM } = carKit();
-  const PARKED = [8, 22, 40][tier];
+  const PARKED = [20, 50, 80][tier];
   const carMesh = [new THREE.InstancedMesh(bodyG, carBodyM, NCAR + PARKED), new THREE.InstancedMesh(glassG, carGlassM, NCAR + PARKED), new THREE.InstancedMesh(lightG, carLightM, NCAR + PARKED)];
   for (const m of carMesh) { m.frustumCulled = false; m.castShadow = tier > 0 && m !== carMesh[2]; add(m); }
   cars.forEach((c, i) => carMesh[0].setColorAt(i, c.col));
@@ -733,6 +736,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     const r = pick(carRoads.filter((x) => x.along === 'x')), u = r.a + 14 + rnd() * (r.b - r.a - 28);
     if (nodes.some((n) => Math.abs((r.along === 'x' ? n.x : n.z) - u) < 14)) { i--; continue; }
     const side = rnd() < 0.5 ? 1 : -1;
+    parkRoads.add(r);
     parked.push({ x: u, z: r.c + side * 5.2, yaw: side > 0 ? -Math.PI / 2 : Math.PI / 2 });
     carMesh[0].setColorAt(NCAR + i, pick(carCols));
     solid(u - 2.4, r.c + side * 5.2 - 1, u + 2.4, r.c + side * 5.2 + 1, 1.5);
@@ -806,7 +810,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
         const stopD = gap - 9.2; // the stop line, before the zebra
         if (sig && !go(c.r.along) && stopD > -0.5) want = Math.min(want, Math.max(0, stopD) * 0.9);
         // the car ahead in the same lane
-        for (const o of cars) if (o !== c && !o.turn && o.r === c.r && o.dir === c.dir && o.lane === c.lane) { const g = (o.u - c.u) * c.dir; if (g > 0 && g < 30) want = Math.min(want, Math.max(0, g - 6.5) * 0.8); }
+        for (const o of cars) if (o !== c && !o.turn && o.r === c.r && o.dir === c.dir && laneOn(o.r, o.lane) === laneOn(c.r, c.lane)) { const g = (o.u - c.u) * c.dir; if (g > 0 && g < 30) want = Math.min(want, Math.max(0, g - 6.5) * 0.8); }
         // anyone on the road in front: a walker on a zebra, or you
         pos(c.r, c.u, c.dir, c.lane, T1);
         for (let ci = 0; ci < crossN; ci++) { const p = crossers[ci]; const fx = (c.r.along === 'z' ? p.z - T1.z : p.x - T1.x) * c.dir, sx = c.r.along === 'z' ? p.x - T1.x : p.z - T1.z; if (fx > 0 && fx < 14 && Math.abs(sx) < 1.8) want = Math.min(want, Math.max(0, fx - 4) * 0.7); }
