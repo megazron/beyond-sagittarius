@@ -12,6 +12,10 @@ import type { World } from '../world/world';
 import { LAKE } from '../world/heightfield';
 
 const BEAT = 60 / beat.bpm;
+/** Where each one's eyes go in their sky (I5): the giant, the black hole, the old stars, the hole overhead, the cloud. */
+const SKYDIR: Record<string, THREE.Vector3> = { strong: new THREE.Vector3(-0.28, 0.12, -0.95).normalize(), medic: new THREE.Vector3(0.2, 0.15, -1).normalize(), explorer: new THREE.Vector3(0.1, 0.9, -0.4).normalize(), builder: new THREE.Vector3(-0.2, 0.3, -1).normalize(), social: new THREE.Vector3(0.3, 0.2, -1).normalize() };
+/** How each one checks themself first (I4): Draxum his fist, Lyrra her pulse, Skyvra her trapped leg, Bolzar the plate, Nuvexa her phone. */
+const CHECK: Record<string, 'use' | 'phone' | 'gesture'> = { strong: 'use', medic: 'use', explorer: 'use', builder: 'use', social: 'phone' };
 const S = beat.sections;
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -694,7 +698,7 @@ export class Montage {
     return this.stageG.children.find((c) => c.name === id)!.position;
   }
 
-  /** One of the five comes down on their own world: the light in, the hit, them, the card, the line. */
+  /** One of the five comes down on their own world, in the shot list's landing grammar (I1 to I6). */
   private arrive(id: CrewId, i: number, b: number, imp: number) {
     const o = this.worldStage(id), col = TRAIL[id], tt = (b - imp) * BEAT, hit = b >= imp;
     const u = this.set.dome.uniforms;
@@ -714,19 +718,32 @@ export class Montage {
     // haze round the black hole, dull and warm. Methryx: orange through methane haze. Aerolis: gold through cloud.
     const SUN: Record<string, [THREE.Vector3, number, number]> = { medic: [V(0.9, 0.25, 0.3), 0xffffff, 3.2], explorer: [V(-0.4, 0.5, 0.6), 0xb8c4e0, 0.9], builder: [V(-0.3, 0.4, -1), 0xd8a888, 1.4], strong: [V(0.5, 0.35, -1), 0xff9a50, 1.6], social: [V(0.2, 0.6, -0.8), 0xffe0a0, 2.4] };
     const [sd, sc, si] = SUN[id]; this.sun(sd, sc, si);
-    const k = clamp((b - (imp - 2)) / 8, 0, 1), drift = easeInOut(k);
-    const cam = this.lens(this.tmp.copy(o).add(V(1.6 - drift * 0.5, 1.35, 4.6 - drift * 0.6)).add(hit ? shakeAt(b, 0.5 * after(b, imp, 1.0), this.tmp2) : V(0, 0, 0)).clone(), this.tmp3.copy(o).add(V(0, 1.05, 0)).clone(), 34, 4.6, 0.004);
+    // the landing grammar (shot list I1 to I6), in beats from the hit: the world first (-5), the hit (0), the body still,
+    // then a breath (+4), eyes open and the body checks itself (+9), their sky (+14), and only then the line (+19)
+    const ph = b - imp, sky0 = SKYDIR[id];
+    const head = o.clone().add(V(0, id === 'explorer' || id === 'builder' ? 0.95 : 1.55, 0));
+    let cam: THREE.Camera;
+    if (ph < 0) cam = this.lens(o.clone().add(V(9, 1.4, 16)), o.clone().add(V(-6, 5 + 2 * clamp((ph + 5) / 5, 0, 1), -40)), 53, 30, 0.001); // I1 extreme wide, low: the world
+    else if (ph < 4) cam = this.lens(o.clone().add(V(3.6, 0.7, 6.2)).add(shakeAt(b, 0.5 * after(b, imp, 1.0), this.tmp2)), o.clone().add(V(0, 0.8, 0)), 38, 7, 0.003); // I2 wide, low: the hit
+    else if (ph < 9) cam = this.lens(o.clone().add(V(1.5, 1.05, 2.7)), o.clone().add(V(0, 0.7, 0)), 27, 3.1, 0.006); // I3 medium, held: still, then a breath
+    else if (ph < 14) cam = this.lens(head.clone().add(V(0.45, 0.02, 1.15)), head.clone().add(V(0, -0.04, 0)), 16, 1.2, 0.01); // I4 close-up: the check
+    else if (ph < 19) { const u = easeInOut(clamp((ph - 14) / 5, 0, 1)); cam = this.lens(head.clone(), head.clone().add(V(sky0.x * 10, lerp(0.5, sky0.y * 10, u), sky0.z * 10)), 53, 40, 0.001); } // I5 their eyeline up to the sky
+    else cam = this.lens(head.clone().add(V(0.8, -0.08, 1.55)), head.clone().add(V(0, -0.1, 0)), 27, 1.8, 0.006); // I6 medium close: the look, then the line
     // the light comes down the sky to where they will be
     const tr = this.trails[i]; tr.color = col;
-    if (!hit) { const h = clamp((b - (imp - 2)) / 2, 0, 1); const from = o.clone().add(V(-40, 60, -70)), to = o.clone().add(V(0, 0.4, 0)); tr.draw((s, out) => out.lerpVectors(from, to, Math.max(0, h - s * 0.35)), cam, 0.9, b, 2); }
+    if (!hit && ph > -2.5) { const h = clamp((b - (imp - 2)) / 2, 0, 1); const from = o.clone().add(V(-40, 60, -70)), to = o.clone().add(V(0, 0.4, 0)); tr.draw((s, out) => out.lerpVectors(from, to, Math.max(0, h - s * 0.35)), cam, 0.9, b, 2); }
     else tr.mesh.visible = false;
     if (hit) {
       const q = (x: number, y: number) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, 0, 'YXZ'));
       // one held pose each, for who they are: no stock gesture on a loop
       const POSE: Record<string, [CrewPose, number, Face]> = { strong: ['injured', 0.25, { frown: 0.5, squint: 0.3 }], medic: ['stand', -0.2, { squint: 0.2 }], explorer: ['sit', 0.3, { frown: 0.6 }], builder: ['sit', -0.25, { smile: 0.2 }], social: ['selfie', 0.15, { smile: 0.3 }] };
       const [pose, yaw, face] = POSE[id];
-      const c = this.act(id, o.clone().add(V(0, 0.02, 0)), q(0, yaw), pose, null, face);
-      c.look2(-yaw * 0.6, 0);
+      const breath = ph >= 4 ? 0 : 1, eyes = ph < 9 ? 1 : 0;
+      const c = this.act(id, o.clone().add(V(0, 0.02, 0)), q(0, yaw), pose, null, ph < 9 ? { blink: eyes, frown: 0.3 * (1 - breath) } : face);
+      if (ph < 9) c.look2(0, 0.35); // still, head down
+      else if (ph < 14) c.look2(-yaw * 0.6, 0.45); // looking at themself: the check
+      else c.setLookTarget(head.clone().add(V(sky0.x * 10, sky0.y * 10, sky0.z * 10))); // their sky
+      if (ph >= 9 && ph < 9.2 && !c.task) c.doTask(CHECK[id], { seconds: 5 * BEAT * 0.9, hands: 'R', prop: id === 'social' ? 'phone' : null });
       this.embers.set({ at: o.clone().add(V(0, 0.3, 0)), c0: col, c1: 0x202020, life: 1.6, speed: 5, drag: 1.4, grav: id === 'explorer' ? 0 : -2, size: 0.06, grow: 0.4, stagger: 0.1 }).play(tt);
     }
     // key light per world, and the colour of their own trail from behind
@@ -734,8 +751,8 @@ export class Montage {
     this.setRig([{ p: o.clone().add(V(3, 4, 4)), color: KEY[id], i: ({ medic: 48, builder: 60, social: 22, strong: 26 } as Record<string, number>)[id] ?? 34, d: 18 }, { p: o.clone().add(V(-2.5, 1.5, -2.5)), color: col, i: 14, d: 9 }, { p: o.clone().add(V(0, 9, -14)), color: KEY[id], i: id === 'builder' ? 40 : 10, d: 70 }]);
     const f = after(b, imp, 0.45) * 0.8, c2 = new THREE.Color(col).lerp(new THREE.Color(1, 1, 1), 0.7);
     this.fx = { flash: [c2.r * f, c2.g * f, c2.b * f], zoom: 0.05 * after(b, imp, 0.6), exposure };
-    this.card(id, (b - (imp + 1.1)) / 0.5);
-    if (b >= imp + 5.6) this.el.card.style.opacity = '0';
+    this.card(id, (b - (imp + 19.3)) / 0.5);
+    if (b >= imp + 26.6 || b < imp + 19) this.el.card.style.opacity = '0';
     // Skyvra has no air round her: the world goes silent but for what she hears inside her own head
     this.vacuum = id === 'explorer' && hit;
   }
@@ -820,8 +837,8 @@ export class Montage {
       // said over the six fates, which hold long enough to be read
       { b: 57.5, fn: () => this.ui.subtitle('mz.science', 'mz.name') },
       { b: 31, fn: () => this.ui.subtitle(null) },
-      ...ORDER.slice(0, 5).map((id, i) => ({ b: beat.impacts[i] + 1.3, fn: () => { this.ui.subtitle(`film.${id}`, `crew.${id}.name`); this.cast[id].say(voice.duration(`film.${id}`) ?? 1.4); } })),
-      ...ORDER.slice(0, 5).map((_, i) => ({ b: beat.impacts[i] + 5.95, fn: () => this.ui.subtitle(null) })),
+      ...ORDER.slice(0, 5).map((id, i) => ({ b: beat.impacts[i] + 20.4, fn: () => { this.ui.subtitle(`film.${id}`, `crew.${id}.name`); this.cast[id].say(voice.duration(`film.${id}`) ?? 1.4); } })),
+      ...ORDER.slice(0, 5).map((_, i) => ({ b: beat.impacts[i] + 26.9, fn: () => this.ui.subtitle(null) })),
       // early enough to be said whole before the title leaves (it was cut off after one word at 129.2)
       { b: Math.min(S.hit + 3, S.end - ((voice.duration('film.scientist') ?? 2.5) + 0.8) / BEAT), fn: () => this.ui.subtitle('film.scientist', 'crew.scientist.name') },
     );
@@ -1096,16 +1113,16 @@ export class Montage {
     ORDER.slice(0, 5).forEach((id, i) => {
       const imp = beat.impacts[i];
       // MegaZroN's line has been said whole by now (the fates shot holds for it): its subtitle goes with the cut
-      this.shots.push({ from: imp - 2, to: imp + 6, where: 'deep', at: (k, b) => this.arrive(id, i, b, imp), enter: () => { set.show('deep'); if (i === 0) this.ui.subtitle(null); }, holdVoice: true });
+      this.shots.push({ from: imp - 5, to: imp + 27, where: 'deep', at: (k, b) => this.arrive(id, i, b, imp), enter: () => { set.show('deep'); if (i === 0) this.ui.subtitle(null); }, holdVoice: true });
     });
 
     // ---- Act IV: The player comes down ----
-    P(118, 124, 'world', (k, b) => this.lookUp(k, b), () => this.setLand('scientist'));
-    P(124, 128, 'world', (k, b) => this.falling(k, b, 0));
-    P(128, 132, 'world', (k, b) => this.falling(k, b, 1));
-    P(132, 134, 'world', (k, b) => this.falling(k, b, 2));
-    P(134, 135, 'world', (k, b) => this.falling(k, b, 3));
-    P(135, 136, 'world', (k, b) => this.falling(k, b, 4));
+    P(S.rise - 10, S.rise - 4, 'world', (k, b) => this.lookUp(k, b), () => this.setLand('scientist'));
+    P(S.rise - 4, S.rise, 'world', (k, b) => this.falling(k, b, 0));
+    P(S.rise, S.rise + 4, 'world', (k, b) => this.falling(k, b, 1));
+    P(S.rise + 4, S.rise + 6, 'world', (k, b) => this.falling(k, b, 2));
+    P(S.rise + 6, S.rise + 7, 'world', (k, b) => this.falling(k, b, 3));
+    P(S.rise + 7, S.hit, 'world', (k, b) => this.falling(k, b, 4));
     P(S.hit, S.end + 1, 'world', (k, b) => this.titleShot(k, b));
   }
 
