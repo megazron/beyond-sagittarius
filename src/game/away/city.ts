@@ -1526,7 +1526,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           if (d >= CROWD_FAR) { if (q.fig.root.visible) q.fig.root.visible = false; stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: i, v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk }); continue; }
           // the six of the story (and Mir) are never a card within speaking distance, whatever the cap
           const dy = you ? Math.hypot(q.pos.x - you.position.x, q.pos.z - you.position.z) : 99;
-          if (!crowd.has(q.fig) && (d < 9 || dy < 7)) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
+          // the six of the story and Mir have no card of their own look, so they are never a card: a body out to the card range
+          if (!crowd.has(q.fig)) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
           // whoever is drawn now holds on a little, the six of the story come first, and then anyone at your elbow (a
           // card reads as cardboard at arm's length), all within the cap
           const key = d - (q.fig.root.visible ? 1.5 : 0) - (crowd.has(q.fig) ? 0 : 5) - (tier > 0 && dy < 4 ? 30 : 0);
