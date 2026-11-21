@@ -606,8 +606,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
               const leaf = box(0.05, 2.15, 0.95, frameM, face + ldx * 0.475, 1.08 + FLOOR, hz + ldz * 0.475); leaf.rotation.y = Math.atan2(ldx, ldz);
               { const ex = face + ldx * 0.95, ez = hz + ldz * 0.95; blocks.push(new THREE.Box3(new THREE.Vector3(Math.min(face, ex) - 0.05, 0, Math.min(hz, ez) - 0.05), new THREE.Vector3(Math.max(face, ex) + 0.05, 2.2, Math.max(hz, ez) + 0.05))); }
               box(0.55, 0.07, 1.9, ledgeM, face + out * 0.42, 0.82 + FLOOR, wz - dzs * 0.6);
-              const goods = [['wicker_basket_01', 0.9], ['brass_pot_01', 0.8], ['food_pomegranate_01', 1], ['plastic_crate_01', 0.55], ['tea_set_01', 0.9], ['wicker_basket_02', 0.8]] as [string, number][];
-              for (let g = 0; g < 2; g++) { const [gn, gs] = goods[Math.floor(hsh * 6 + g * 3) % goods.length]; place(gn, face + out * 0.42, FLOOR + 0.86, wz - dzs * (0.15 + g * 0.85), hsh * 6.28, gs); }
+              // light scans only (a few thousand triangles each): the heavy baskets and crates put the gate over budget
+              const goods = [['brass_pot_01', 0.8], ['food_pomegranate_01', 1], ['wooden_crate_01', 0.5], ['pot_enamel_01', 0.8], ['wicker_basket_02', 0.8], ['food_apple_01', 1]] as [string, number][];
+              for (let g = 0; g < (tier === 2 ? 2 : 1); g++) { const [gn, gs] = goods[Math.floor(hsh * 6 + g * 3) % goods.length]; place(gn, face + out * 0.42, FLOOR + 0.86, wz - dzs * (0.15 + g * 0.85), hsh * 6.28, gs); }
             }
           } else place(rnd() < 0.6 ? 'rollershutter_door' : 'rollershutter_window_01', face + out * 0.02, FLOOR, wz, out > 0 ? Math.PI / 2 : -Math.PI / 2);
         }
