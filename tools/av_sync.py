@@ -30,14 +30,15 @@ p = align(f, c, near=0.45, ordered=False)
 print(f'flashes {len(f)} beeps {len(c)} paired {len(p)}')
 if len(p) >= 3:
     o = np.array([x[1] for x in p]) * 1000
-    # the median is the offset; the drift is the slope through the pairs near it (a stray beep from the game, or a
-    # flash caught a frame late, does not move either)
-    t = np.array([x[0] for x in p]); med = np.median(o); keep = np.abs(o - med) < 80
-    k = np.polyfit(t[keep], o[keep], 1) if keep.sum() >= 3 else np.array([0.0, med])
-    drift = k[0] * (t[keep][-1] - t[keep][0]) if keep.sum() >= 3 else 0.0
+    # a flash can only be caught late (a dropped frame shows it on the next one; the beep is never late), so the truth
+    # is the upper edge: the offset is the mean of the most prompt third of the pairs, and the drift the slope through
+    # the pairs within 80 ms of that edge
+    t = np.array([x[0] for x in p]); srt = np.sort(o); med = srt[-max(1, len(o) // 3):].mean(); keep = np.abs(o - med) < 80
+    k = np.polyfit(t[keep], o[keep], 1) if keep.sum() >= 5 else np.array([0.0, med])
+    drift = k[0] * (t[keep][-1] - t[keep][0]) if keep.sum() >= 5 else 0.0  # fewer: too few to tell a drift from a late frame
     print('sound minus picture (ms): ' + ' '.join(f'{x:.0f}' for x in o))
-    print('offset %.0f ms (median of %d), drift %.0f ms over %.0f s' % (med, keep.sum(), drift, t[-1] - t[0]))
-    bad = abs(med) > 60 or abs(drift) > 40 or keep.sum() < 3
+    print('offset %.0f ms (prompt edge; %d pairs near it), drift %.0f ms over %.0f s' % (med, keep.sum(), drift, t[-1] - t[0]))
+    bad = abs(med) > 60 or abs(drift) > 40 or len(o) < 4
     print('av_sync:', 'FAIL' if bad else 'ok')
     sys.exit(1 if bad else 0)
 print('av_sync: FAIL (too few flash/beep pairs)')

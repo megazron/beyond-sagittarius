@@ -349,7 +349,7 @@ function model(name: string) {
   return p;
 }
 
-export function buildCity(label: (k: string) => string, detail = 1): AwayStage & { bind(b: StageBody): void; people: CityPerson[]; mapLayer: import('../../ui/minimap').MapLayer; drawnAs(id: string): string; readonly perfState: Record<string, unknown>; crowdState(): { near: number; bodies: number; lost: number; room?: number }; trafficState(): unknown; takeoffClearance(): { worst: number; at: number; what: string; camera: string } | null; takeoffFindPad(step?: number, span?: number): { x: number; z: number; d: number; top: number; flat: number } | null; takeoffMap(span?: number, G?: number): unknown } {
+export function buildCity(label: (k: string) => string, detail = 1): AwayStage & { bind(b: StageBody): void; people: CityPerson[]; mapLayer: import('../../ui/minimap').MapLayer; drawnAs(id: string): string; readonly perfState: Record<string, unknown>; crowdState(): { near: number; bodies: number; lost: number; room?: number }; trafficState(): unknown; takeoffClearance(): { worst: number; at: number; what: string; camera: string } | null; takeoffFrame(fov?: number, aspect?: number): string[] | null; takeoffFindPad(step?: number, span?: number): { x: number; z: number; d: number; top: number; flat: number } | null; takeoffMap(span?: number, G?: number): unknown } {
   seed = 1234567; // the same city every time
   const rich = detail >= 1; // phones get fewer props, people and lights
   const scene = new THREE.Scene();
@@ -1372,6 +1372,40 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     g.position.copy(keepP); g.rotation.copy(keepR); linerHome.copy(home);
     return { worst: Math.round(worst * 10) / 10, at: Math.round(at * 10) / 10, what, camera: camBad || 'clear' };
   }
+  /** Test: what else shares the frame with the liner in the take-off's open-sky shots (5 to 14 s): every solid thing
+   *  whose screen box overlaps the liner's, with when, where and how big. A liner overlapping another ship on screen
+   *  reads as one passing through the other even when they never touch. */
+  function takeoffFrame(fov = 55, aspect = 16 / 9) {
+    if (!linerG) return null;
+    const g = linerG, keepP = g.position.clone(), keepR = g.rotation.clone(), home = linerHome.lengthSq() ? linerHome.clone() : g.position.clone();
+    if (!linerHome.lengthSq()) linerHome.copy(g.position);
+    const cam = new THREE.PerspectiveCamera(fov, aspect, 0.5, 6000);
+    const targets: THREE.Object3D[] = []; scene.traverse((o) => {
+      const m = o as THREE.Mesh; if (!m.isMesh || !o.visible || o === skyMesh || ghost(m)) return;
+      let p: THREE.Object3D | null = o; while (p && p !== g) p = p.parent; if (p) return;
+      if ((m as THREE.InstancedMesh).isInstancedMesh) return;
+      m.geometry.computeBoundingSphere(); const r = m.geometry.boundingSphere!.radius * o.getWorldScale(new THREE.Vector3()).x; if (r > 300 || r < 2) return;
+      targets.push(o);
+    });
+    const sbox = (b: THREE.Box3) => { const r = new THREE.Box2(); let front = false; for (let i = 0; i < 8; i++) { const v = new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).project(cam); if (v.z < 1) front = true; r.expandByPoint(new THREE.Vector2(v.x, v.y)); } return front ? r : null; };
+    const view = new THREE.Box2(new THREE.Vector2(-1, -1), new THREE.Vector2(1, 1));
+    const e = new THREE.Vector3(), a = new THREE.Vector3(), hits = new Map<THREE.Object3D, string>();
+    for (let T = 4.5; T <= OUTRO; T += 0.25) {
+      linerPose(T, g); g.updateMatrixWorld(true); outroCam(T, g.position, e, a);
+      cam.position.copy(e); cam.lookAt(a); cam.updateMatrixWorld(true);
+      const lb = sbox(new THREE.Box3().setFromObject(g)); if (!lb || !lb.intersectsBox(view)) continue;
+      for (const o of targets) {
+        if (hits.has(o)) continue;
+        const wb = new THREE.Box3().setFromObject(o), ob = sbox(wb); if (!ob || !ob.intersectsBox(lb)) continue;
+        const c = wb.getCenter(new THREE.Vector3()), sz = wb.getSize(new THREE.Vector3()), chain: string[] = [];
+        for (let q: THREE.Object3D | null = o; q && chain.length < 4; q = q.parent) chain.push(q.name || q.type);
+        const mat = (o as THREE.Mesh).material as THREE.Material & { color?: THREE.Color };
+        hits.set(o, `T ${T.toFixed(2)} ${chain.join(' < ')} ${mat?.type} ${mat?.color?.getHexString?.() ?? ''} at ${c.x.toFixed(0)},${c.y.toFixed(0)},${c.z.toFixed(0)} size ${sz.x.toFixed(0)}x${sz.y.toFixed(0)}x${sz.z.toFixed(0)} cam ${e.distanceTo(c).toFixed(0)} m vs liner ${e.distanceTo(g.position).toFixed(0)} m`);
+      }
+    }
+    g.position.copy(keepP); g.rotation.copy(keepR); linerHome.copy(home);
+    return [...hits.values()];
+  }
   /** Test: the nearest place to the pad where the column above the liner's whole footprint is empty up to the sky, so
    *  it can lift straight up through nothing. Returns the centre and the highest thing under the footprint there. */
   function takeoffFindPad(step = 12, span = 180) {
@@ -1472,6 +1506,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
 
   return {
     takeoffClearance,
+    takeoffFrame,
     takeoffFindPad,
     takeoffMap,
     outro: { start: startOutro, skip: endOutro, get active() { return outroT >= 0; }, get remaining() { return outroT >= 0 ? OUTRO - outroT : 0; } },

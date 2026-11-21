@@ -228,7 +228,8 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   }));
 
   // ---- the hero: an orbital liner holding station above the spaceport, framed by the street from its first step ----
-  const hero = new THREE.Group(); add(hero); hero.position.set(-6, 70, S - 120); hero.rotation.set(0.08, 0.5, 0.12);
+  // (200 m out, not 120: at 120 its hull lay right over the take-off pad and the boarded liner lifted through it)
+  const hero = new THREE.Group(); add(hero); hero.position.set(-6, 70, S - 200); hero.rotation.set(0.08, 0.5, 0.12);
   const heroHull = new THREE.MeshStandardMaterial({ color: 0xe9eef4, roughness: 0.3, metalness: 0.5, emissive: 0x22313f, emissiveIntensity: 0.3, fog: false });
   const hb = new THREE.Mesh(new THREE.CapsuleGeometry(12, 110, 8, 32), heroHull); hb.rotation.x = Math.PI / 2; hero.add(hb);
   const ringH = new THREE.Mesh(new THREE.TorusGeometry(26, 2.2, 12, 64), heroHull); ringH.position.z = 10; hero.add(ringH);
@@ -248,7 +249,10 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     for (const a of [0, 2.1, 4.2]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4, 3), shipM); fin.position.set(Math.cos(a) * 2.4, -4, Math.sin(a) * 2.4); fin.rotation.y = -a; g.add(fin); }
     const flame = new THREE.Mesh(new THREE.ConeGeometry(1.4, 6, 16, 1, true), flameM); flame.position.y = -9.5; flame.rotation.x = Math.PI; g.add(flame);
     g.traverse((x) => { x.userData.ground = false; });
-    add(g); ships.push({ g, x: (i - 1) * 42 + 8, z: S - 110 - i * 30, p: i * 0.37 });
+    // on the two lit pads east of the liner's pad, then further east (the first one used to climb out of the middle of
+    // the boarded liner's footprint at the end of the prologue)
+    const [px, pz] = ([[44, -182], [16, -144], [86, -230]] as const)[i];
+    add(g); ships.push({ g, x: px, z: pz, p: i * 0.37 });
   }
   updates.push((_, t) => ships.forEach((s) => {
     const k = (t * 0.03 + s.p) % 1; // a slow climb, then gone, then the next one on the pad
