@@ -76,6 +76,11 @@ export function createPod(terrain: Terrain, forest: Forest, x = 4.5, z = -3.5, y
     d.castShadow = true; d.receiveShadow = true;
     debris.add(d);
   }
+  // the hull's pieces and the debris: one draw per material (they were 28 draws in each pass, and the pod is in view
+  // when you wake); the beacon keeps its own, it blinks
+  beacon.userData.keep = true;
+  mergeChildren(group, { shared: () => true });
+  mergeChildren(debris, { shared: () => true });
   // furrow of churned earth
   const furrow = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 20), new THREE.MeshStandardMaterial({ color: 0x1e1a1c, roughness: 1, transparent: true, opacity: 0.75 }));
   furrow.rotation.x = -Math.PI / 2; furrow.rotation.z = Math.PI / 2 - 0.1;
