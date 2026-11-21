@@ -1458,7 +1458,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         const d = !pc.old && deep ? 999 : pc.c.distanceTo(cam.position) - pc.r;
         const want = pc.near.length && d < (tier === 2 ? PROP_NEAR : 7) * (pc.lod === 0 ? 1.15 : 1) ? 0 : 1;
         if (want !== pc.lod) { pc.lod = want; for (const im of pc.near) im.visible = want === 0; }
-        if (pc.far) pc.far.visible = want === 1 && d < (tier === 0 ? 110 : 230);
+        // in the old town's narrow streets a stretch of props further than a block or so is behind the walls anyway
+        if (pc.far) pc.far.visible = want === 1 && d < (tier === 0 ? 110 : pc.old && tier === 1 ? 120 : 230);
         if (pc.farSmall) pc.farSmall.visible = d < SMALL_FAR;
         const sh = d < 34 && tier > 0;
         if (want === 0) for (const im of pc.near) im.castShadow = sh;
@@ -1470,7 +1471,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (cam) {
         stand.length = 0;
         // a hard cap on real bodies (BODY_CAP): the friends and whoever is nearest are bodies, everyone else a card
-        const cp = cam.position; let used = 0, nc = 0, elbow = 0;
+        const cp = cam.position; let used = 0, nc = 0;
         lens.on = !!you && outroT < 0; lens.cx = cp.x; lens.cz = cp.z; if (you) { lens.px = you.position.x; lens.pz = you.position.z; }
         if (oldOn) for (let i = 0; i < people.length; i++) {
           const q = people[i];
@@ -1481,10 +1482,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // the six of the story (and Mir) are never a card within speaking distance, whatever the cap
           const dy = you ? Math.hypot(q.pos.x - you.position.x, q.pos.z - you.position.z) : 99;
           if (!crowd.has(q.fig) && (d < 9 || dy < 7)) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
-          // and nobody at your elbow is a card (it reads as cardboard at arm's length): the two nearest go first in the queue
-          if (tier > 0 && dy < 4 && elbow < 2) { elbow++; if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
-          // whoever is drawn now holds on a little, and the six of the story come first
-          const key = d - (q.fig.root.visible ? 1.5 : 0) - (crowd.has(q.fig) ? 0 : 5);
+          // whoever is drawn now holds on a little, the six of the story come first, and then anyone at your elbow (a
+          // card reads as cardboard at arm's length), all within the cap
+          const key = d - (q.fig.root.visible ? 1.5 : 0) - (crowd.has(q.fig) ? 0 : 5) - (tier > 0 && dy < 4 ? 30 : 0);
           let j = nc++; while (j > 0 && candK[j - 1] > key) { candK[j] = candK[j - 1]; candI[j] = candI[j - 1]; j--; }
           candK[j] = key; candI[j] = i;
         }
@@ -1493,7 +1493,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         // kept for it while it is within reach
         const cap = outroT >= 0 ? 99 : BODY_CAP - Math.min(Math.floor(BODY_CAP / 2), cardsNear);
         for (let j = 0; j < nc; j++) {
-          const q = people[candI[j]], show = used < cap;
+          // the one person at your elbow is a body even when the cap is spent (one over it at most)
+          const q = people[candI[j]], show = used < cap || (j === 0 && candK[0] < -20);
           if (show) used++; else stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: candI[j], yaw: q.yaw, walk: !!q.walk });
           if (show !== q.fig.root.visible) q.fig.root.visible = show;
         }
