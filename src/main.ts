@@ -830,6 +830,8 @@ async function warmAll() {
   }
   await cine.warm(async (sc, cam) => { await pre(sc, cam); renderer.warm(sc, cam, false); });
   await breathe();
+  film.warmStages((sc, cam) => renderer.warm(sc, cam, false));
+  await breathe();
   vault.prepare();
   await pre(vault.scene, vault.camera);
   renderer.warm(vault.scene, vault.camera, false);
