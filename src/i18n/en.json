@@ -1151,5 +1151,22 @@
   "film.fate.strong": "a bridge",
   "film.fate.social": "a new universe",
   "film.fate.medic": "whirled at the edge",
-  "film.fate.builder": "caught in orbit"
+  "film.fate.builder": "caught in orbit",
+  "e1.w.1": "Water first. Everything else is a luxury.",
+  "e1.w.2": "Downhill. Water's lazy. It always goes down.",
+  "e1.w.fail": "That tasted like a swamp's armpit.",
+  "e1.w.failHint": "Still water with a green skin grows what makes you sick. Moving water is safer.",
+  "e1.w.ok": "Moving water. Cold. Okay. Okay. I'm alive.",
+  "e1.w.ammi": "Paani. Slowly, Ammi says. Slowly.",
+  "e1.w.leaf": "Leaf cup. Two sips' capacity. Engineering.",
+  "e1.fr.see": "Something small has been eating these. So it's food. For something.",
+  "e1.fruit.title": "The red fruit",
+  "e1.fruit.ask": "Eat it?",
+  "e1.fruit.o.eat": "Eat it now",
+  "e1.fruit.o.test": "Test it first",
+  "e1.fruit.o.hungry": "Go hungry",
+  "e1.fr.eat": "Sweet. Really sweet. Why can't I feel my tongue?",
+  "e1.fr.lyrra": "“Skin, lip, tongue, then a tiny bite, then wait. If anything burns or numbs, spit and wait a day.”",
+  "e1.fr.test": "{f:medic}, you nerd. You just saved my life.",
+  "e1.fr.no": "Not today, mysterious berry."
 }
