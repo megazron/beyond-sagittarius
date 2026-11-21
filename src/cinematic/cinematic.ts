@@ -493,6 +493,9 @@ export class Cinematic {
     const head = (c: Character, dy = 0) => new THREE.Vector3().setFromMatrixPosition(c.head.matrixWorld).add(V(0, 0.1 + dy, 0));
     const hand = (c: Character, r = true) => (r ? c.handR : c.handL).getWorldPosition(new THREE.Vector3());
     const WIN = at(1.0, -0.6, -3.6); // a point out of the window, for eyelines
+    // A4's eyeline: further along the window, so from the close-up's camera his look passes well left of the lens (WIN
+    // itself lies almost on the lens axis there, and he looked straight into it)
+    const WIN_A4 = WIN.clone().add(V(1.6, 0, 0.8));
     const group = () => { put(drx, 2.3, -1.9, Math.PI * 1.15); put(nuv, 1.4, -1.6, Math.PI * 0.82); put(lyr, 3.2, -1.5, Math.PI * 1.1); put(sky, 2.7, -2.55, Math.PI); put(bol, 4.0, -2.2, Math.PI * 1.2); };
     const atConsole = () => put(sci, -0.85, -0.62, Math.PI);
     const exterior = (local: number, k: number, strain = 0) => {
@@ -554,7 +557,7 @@ export class Cinematic {
         sci.setFace({ frown: smoothstep(0, 0.8, local) * 0.55, squint: 0.25, smile: 0, blink: local > 1.1 && local < 1.35 ? 1 : 0 });
         // the dart: the eyes jump to the window and the head follows them fast, then both come back to the gauge
         sci.setGazeRate(local < 0.1 ? 80 : local > 1.3 ? 9 : 2.2); // the first frames settle his head on the gauge under the cut
-        sci.setLookTarget(local < 1.4 ? ins.gaugeAt.getWorldPosition(new THREE.Vector3()) : local < 2.1 ? WIN : ins.gaugeAt.getWorldPosition(new THREE.Vector3()));
+        sci.setLookTarget(local < 1.4 ? ins.gaugeAt.getWorldPosition(new THREE.Vector3()) : local < 2.1 ? WIN_A4 : ins.gaugeAt.getWorldPosition(new THREE.Vector3()));
       },
     });
     // A5 his eyeline through the window: near the core the stars are short arcs, all bent the same way
