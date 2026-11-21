@@ -732,6 +732,9 @@ export class Renderer {
   }
 
   async precompile(scene: THREE.Scene, camera: THREE.Camera) {
+    // its maps first (a material compiled without its map is compiled again when the map arrives), six seconds at most
+    const loads = (scene.userData.loads as Promise<unknown>[] | undefined) ?? [];
+    await Promise.race([Promise.allSettled(loads), new Promise((r) => setTimeout(r, 6000))]);
     this.ensureEnv(scene); // the shaders differ with and without the image-based light: compile the ones that will be used
     try { await this.renderer.compileAsync(scene, camera); } catch { /* compiled on first draw instead */ }
     const texs = new Set<THREE.Texture>();

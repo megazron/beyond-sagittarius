@@ -416,8 +416,10 @@ function titleCard(then: () => void, key = 'city.title') {
 function playPrologue(then: () => void) {
   ui.fade('black', 1, 0.4);
   // the city is built and its shaders compiled while the title card is up, not in the first frame after it
-  setTimeout(() => { if (!game?.away) return; const st = game.away.prepare('city'); void renderer.precompile(st.scene, camera); }, 300);
-  titleCard(() => whenWorldReady(() => {
+  let ready: Promise<unknown> = Promise.resolve();
+  setTimeout(() => { if (!game?.away) return; const st = game.away.prepare('city'); ready = renderer.precompile(st.scene, camera); }, 300);
+  // after the card, black until the city's shaders are compiled (at most a few seconds more), not a frozen first frame
+  titleCard(() => void Promise.race([ready, new Promise((r) => setTimeout(r, 8000))]).then(() => whenWorldReady(() => {
     ui.show('loading', false);
     state = 'game';
     const save = newSave(); save.names = { ...pendingNames }; save.player = { ...pendingLook }; save.skins = settings.skins ?? {};
@@ -426,7 +428,7 @@ function playPrologue(then: () => void) {
     ui.show('hud', true);
     input.enabled = true;
     ui.fade('black', 0, 1.2);
-  }));
+  })));
 }
 
 /** The title sequence, then the wake-up (or, replaying the opening, back to the title screen). */

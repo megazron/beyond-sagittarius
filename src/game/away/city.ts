@@ -435,14 +435,16 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   if (tier === 0) CHAR_BUDGET.shadowFar = 0; // phones: no body casts a shadow in the city (contact shadows instead)
 
   // ---- textures: Poly Haven sets, one tile in metres ----
+  // what is still loading: the renderer waits for it before it compiles the city's shaders (Renderer.precompile)
+  const loads: Promise<unknown>[] = []; scene.userData.loads = loads;
   const tex = (set: string, mats: THREE.MeshStandardMaterial[], rep: [number, number] = [1, 1], size: '1k' | '512' = rich ? '1k' : '512') => {
     for (const m of mats) m.userData.late = `${set}|${rep}|${size}`; // its maps arrive later: shared only with the same set (mergeStatic)
-    void Promise.all([loadTexture(`city/${set}`, 'diff', size), loadTexture(`city/${set}`, 'nor', size)]).then(([a, n]) => {
+    loads.push(Promise.all([loadTexture(`city/${set}`, 'diff', size), loadTexture(`city/${set}`, 'nor', size)]).then(([a, n]) => {
       for (const m of mats) {
         const a2 = a.clone(), n2 = n.clone(); a2.repeat.set(...rep); n2.repeat.set(...rep); a2.needsUpdate = n2.needsUpdate = true;
         m.map = a2; m.normalMap = n2; m.needsUpdate = true; passMaps(m);
       }
-    }).catch(() => undefined);
+    }).catch(() => undefined));
   };
 
   // ---- ground: columns at the profile's breakpoints, rows every 2 m ----

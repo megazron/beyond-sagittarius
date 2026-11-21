@@ -128,10 +128,10 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
 
   // ---- materials ----
   const tex = (set: string, m: THREE.MeshStandardMaterial, size: '512' | '1k' = rich ? '1k' : '512') => {
-    void Promise.all([loadTexture(`city/${set}`, 'diff', size), loadTexture(`city/${set}`, 'nor', size)]).then(([a, n]) => {
+    ((scene.userData.loads ??= []) as Promise<unknown>[]).push(Promise.all([loadTexture(`city/${set}`, 'diff', size), loadTexture(`city/${set}`, 'nor', size)]).then(([a, n]) => {
       const a2 = a.clone(), n2 = n.clone(); a2.wrapS = a2.wrapT = n2.wrapS = n2.wrapT = THREE.RepeatWrapping; a2.needsUpdate = n2.needsUpdate = true;
       m.map = a2; m.normalMap = n2; m.needsUpdate = true;
-    }).catch(() => undefined);
+    }).catch(() => undefined));
   };
   const wallMats = { plaster: facadeMaterial({ tile: 3, simple: tier === 0 }), brick: facadeMaterial({ tile: 2.5 }), glass: facadeMaterial({ tile: 4, roughness: 0.55, shops: 0.9 }) };
   if (tier > 0) { tex('plaster', wallMats.plaster); tex('brick', wallMats.brick); tex('parapet', wallMats.glass, '512'); }
