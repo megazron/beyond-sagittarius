@@ -731,6 +731,16 @@ export class Renderer {
     }
   }
 
+  /**
+   * Every material of a scene compiled for the target it will draw into, without blocking: the browser compiles in the
+   * background (in parallel where it can) while the page keeps drawing. A first visit on a cold shader cache spent
+   * 70 s of the main thread linking programs one by one on the A500 (ANGLE on D3D11), the title frozen meanwhile.
+   */
+  async compileFor(scene: THREE.Scene, camera: THREE.Camera) {
+    const prev = this.renderer.getRenderTarget(), into = this.quality.post && this.renderPass instanceof ScenePass ? this.renderPass.rt : null;
+    try { this.renderer.setRenderTarget(into); await this.renderer.compileAsync(scene, camera); } catch { /* compiled on first draw instead */ } finally { this.renderer.setRenderTarget(prev); }
+  }
+
   async precompile(scene: THREE.Scene, camera: THREE.Camera) {
     // its maps first (a material compiled without its map is compiled again when the map arrives), six seconds at most
     const loads = (scene.userData.loads as Promise<unknown>[] | undefined) ?? [];

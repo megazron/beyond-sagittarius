@@ -103,3 +103,16 @@ See the end of this file for the running log.
   on the move. levels_smoke is flaky in CI (passed on rerun twice). Clips 15 to 17 in Downloads.
 - Asked of the story agent (via coordinator): a grip control in character.ts so fingers close on string and cords;
   a sling row in INVENTION_TREE.md.
+
+## 2026-11-21 15:15 takeover by the next perf agent (branch perf14 from origin/main 6c76c55)
+- Chrome on 9444 is now the ttr-creative-chrome profile (another agent relaunched it). My cold-cache Chrome: port 9446,
+  profile %TEMP%\bs-perf-cold, --disable-gpu-shader-disk-cache: ~/bs-assets/gpu/coldchrome.sh restarts it (kills only
+  that instance by PID). A cold first load is what a new player gets.
+- FINDING: the title load on a cold shader cache is ~100 s on the A500 (Web): 149 programs, ~73 s of ANGLE/D3D11 shader
+  compile, the main thread blocked in getUniforms during warmAll's sync warm renders (frames of 10-21 s). Warm cache: 30 s.
+  Earlier "load 4-5 s" numbers were on a warm cache. Tools: ~/bs-assets/gpu/shader_time.py URL OUT [PORT] (per-program
+  link timing), tools/hitch_tour.py --profile SEG,SEG --stop-after SEG --port N (CPU profile per segment).
+- Arrival in Zenvora (main, warm 9444): 9.9 s JS build under the narrator end, then 6.9 s compile/upload, then a 4.8 s
+  freeze in play (mode away) at t+5 s: 92f319e does not remove all of it.
+- Planet free play on Web: 31 fps walk, 1252 draws, 6.3 M tris (main, 15:20).
+- perf14: Renderer.compileFor (compileAsync into the post target) for world/cine/vault/stage before warmAll's draws.

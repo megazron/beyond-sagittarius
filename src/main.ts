@@ -807,10 +807,16 @@ function draw(dt: number) {
 /** Every scene once through the real pipeline during loading, yielding between them. */
 async function warmAll() {
   const breathe = () => new Promise((r) => requestAnimationFrame(r));
-  renderer.warmBegin();
   // the world from the spawn point, in every direction: the wake-up turns the camera around
   const wide = new THREE.PerspectiveCamera(100, 16 / 9, 0.1, 2400);
   wide.position.copy(player.pos).add(new THREE.Vector3(0, 1.7, 0));
+  wide.updateMatrixWorld();
+  // every scene's shaders compile in the background first (the title keeps drawing); the warm draws below then only
+  // add the passes' own variants (shadow, depth, normals) and upload the buffers
+  vault.prepare();
+  stage.update(0.016);
+  for (const [sc, cam] of [[world.scene, wide], [cine.scene, cine.camera], [vault.scene, vault.camera], [stage.scene, stage.camera]] as [THREE.Scene, THREE.Camera][]) await renderer.compileFor(sc, cam);
+  renderer.warmBegin();
   for (let i = 0; i < 4; i++) {
     wide.rotation.set(0, (i / 4) * Math.PI * 2, 0);
     wide.updateMatrixWorld();
@@ -819,7 +825,6 @@ async function warmAll() {
   }
   await cine.warm((sc, cam) => renderer.warm(sc, cam, false));
   await breathe();
-  vault.prepare();
   renderer.warm(vault.scene, vault.camera, false);
   await breathe();
   stage.update(0.016);

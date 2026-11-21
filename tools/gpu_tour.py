@@ -129,11 +129,18 @@ for i in range(300):
     if ev("__bs.mode === 'away' && !!(__bs.away && __bs.away.who)"): break
     if ev('__bs.state') == 'narrator': ev('__bs.skip()')
     time.sleep(1)
+if PLAN.get('start') == 'planet':
+    # plan "start": "planet": leave Zenvora and skip the films to the planet's free play ("pat" steps teleport there)
+    ev('__bs.awayLeave()')
+    for i in range(300):
+        if ev("__bs.state === 'game' && __bs.mode === 'play'"): break
+        ev('__bs.skip()'); time.sleep(1)
 time.sleep(PLAN.get('settle', 8))
 report = {'quality': q, 'size': [W, H], 'steps': []}
 for st in PLAN['steps']:
     if 'eval' in st: ev(st['eval'])
     if 'at' in st: x, z, yaw = st['at']; ev(f"__bs.awayTeleport({x}, {z}, {yaw})")
+    if 'pat' in st: x, z, yaw = st['pat']; ev(f"__bs.teleport({x}, {z}, {yaw})")
     for k in st.get('press', []): key(k, True); time.sleep(0.08); key(k, False)
     time.sleep(st.get('wait', 3))
     if 'shot' in st:

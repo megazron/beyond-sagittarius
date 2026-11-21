@@ -15,6 +15,7 @@ def opt(name, default):
     if name in args: i = args.index(name); v = args[i + 1]; del args[i:i + 2]; return v
     return default
 Q = opt('--quality', 'web'); SIZE = opt('--size', '1280x720'); THR = float(opt('--throttle', '0')); PORT = int(opt('--port', '9444'))
+PROF = [x for x in opt('--profile', '').split(',') if x]; STOP = opt('--stop-after', '')
 URL, OUT = args[0], args[1]
 W, H = map(int, SIZE.split('x'))
 
@@ -99,7 +100,33 @@ def wait(x, sec):
         except RuntimeError: pass
         time.sleep(0.25)
     print('TIMEOUT', x, flush=True); return False
-def seg(n): ev(f"__hitch.seg = {json.dumps(n)}"); print('segment', n, flush=True)
+PROFS = {}; cur = ['load']
+def prof_stop():
+    # the main thread's time by function (inclusive, top 40) over the segment that just ended
+    if cur[0] not in PROF: return
+    prof = w.call('Profiler.stop')['profile']; w.call('Profiler.disable')
+    open(OUT.replace('.json', f'_{cur[0]}.cpuprofile'), 'w').write(json.dumps(prof))
+    nodes = {n['id']: n for n in prof['nodes']}; parent = {}
+    for n in prof['nodes']:
+        for c in n.get('children', []): parent[c] = n['id']
+    inc, tot = {}, max(1, len(prof.get('samples', [])))
+    dt = (prof['endTime'] - prof['startTime']) / 1e3 / tot
+    for sid in prof.get('samples', []):
+        seen = set(); n = sid
+        while n is not None:
+            cf = nodes[n]['callFrame']; k = f"{cf['functionName'] or '(anon)'} {cf['url'].rsplit('/', 1)[-1]}:{cf['lineNumber']}"
+            if k not in seen: seen.add(k); inc[k] = inc.get(k, 0) + 1
+            n = parent.get(n)
+    PROFS[cur[0]] = [(k, round(v * dt)) for k, v in sorted(inc.items(), key=lambda x: -x[1])[:60]]
+    print('profile', cur[0], PROFS[cur[0]][:25], flush=True)
+def prof_start(n):
+    if n in PROF: w.call('Profiler.enable'); w.call('Profiler.setSamplingInterval', interval=500); w.call('Profiler.start')
+class Stop(Exception): pass
+def seg(n):
+    prof_stop()
+    if cur[0] == STOP: raise Stop()
+    cur[0] = n; prof_start(n)
+    ev(f"__hitch.seg = {json.dumps(n)}"); print('segment', n, flush=True)
 def key(code, down):
     k = code[3:].lower() if code.startswith('Key') else {'ShiftLeft': 'Shift', 'Space': ' '}.get(code, code)
     w.call('Input.dispatchKeyEvent', type='keyDown' if down else 'keyUp', code=code, key=k, windowsVirtualKeyCode=ord(k.upper()) if len(k) == 1 else 16)
@@ -113,37 +140,40 @@ def hold(keys, secs, steer=None):
 
 sep = '&' if '?' in URL else '?'
 T0 = time.time()
-w.call('Page.navigate', url=f'{URL}{sep}quality={Q}')
+w.call('Page.navigate', url=f'{URL}{sep}quality={Q}'); time.sleep(0.3)
+prof_start('load')
 wait("window.__bs && __bs.state==='title' && __bs.ready", 300)
 print('loaded in', round(time.time() - T0, 1), 's', flush=True)
-seg('title'); time.sleep(5)
-ev("document.getElementById('btn-new').click()"); wait("document.getElementById('nm-ok')", 30)
-seg('vault'); ev("document.getElementById('nm-ok').click()")
-wait("__bs.state === 'narrator'", 60); time.sleep(12); ev("__bs.state === 'narrator' && __bs.skip()")
-seg('zenvora_arrive'); wait("__bs.mode === 'away' && !!(__bs.away && __bs.away.who)", 300); time.sleep(8)
-seg('zenvora_walk'); hold(['KeyW'], 25, "__bs.debug && (__bs.debug.yaw = (__bs.debug.yaw || 0))")
-seg('zenvora_run'); hold(['KeyW', 'ShiftLeft'], 15)
-seg('zenvora_tasks')
-for _ in range(30):
-    s = ev('__bs.away')
-    if not s or not s.get('next'): break
-    for _try in range(5):
-        ev('__bs.awayGoNext()'); time.sleep(1.2); key('KeyE', True); time.sleep(0.1); key('KeyE', False); time.sleep(1.5)
-        n = ev('__bs.away')
-        if not n or n.get('next') != s.get('next'): break
-seg('takeoff'); wait('__bs.awayOutroOn', 60); time.sleep(10); ev("__bs.skip && document.getElementById('btn-skip') && document.getElementById('btn-skip').click()")
-seg('films'); wait("__bs.state === 'cinematic' || __bs.state === 'film'", 120); time.sleep(45)
-for _ in range(12):
-    if ev("__bs.state === 'game'"): break
-    ev('__bs.skip()'); time.sleep(4)
-seg('planet_wake'); wait("__bs.state === 'game'", 120); time.sleep(15)
-seg('planet_walk'); wait("__bs.mode === 'play'", 120); hold(['KeyW'], 30)
-seg('planet_run'); hold(['KeyW', 'ShiftLeft'], 20)
-seg('end')
+try:
+  seg('title'); time.sleep(5)
+  ev("document.getElementById('btn-new').click()"); wait("document.getElementById('nm-ok')", 30)
+  seg('vault'); ev("document.getElementById('nm-ok').click()")
+  wait("__bs.state === 'narrator'", 60); time.sleep(12); ev("__bs.state === 'narrator' && __bs.skip()")
+  seg('zenvora_arrive'); wait("__bs.mode === 'away' && !!(__bs.away && __bs.away.who)", 300); time.sleep(8)
+  seg('zenvora_walk'); hold(['KeyW'], 25, "__bs.debug && (__bs.debug.yaw = (__bs.debug.yaw || 0))")
+  seg('zenvora_run'); hold(['KeyW', 'ShiftLeft'], 15)
+  seg('zenvora_tasks')
+  for _ in range(30):
+      s = ev('__bs.away')
+      if not s or not s.get('next'): break
+      for _try in range(5):
+          ev('__bs.awayGoNext()'); time.sleep(1.2); key('KeyE', True); time.sleep(0.1); key('KeyE', False); time.sleep(1.5)
+          n = ev('__bs.away')
+          if not n or n.get('next') != s.get('next'): break
+  seg('takeoff'); wait('__bs.awayOutroOn', 60); time.sleep(10); ev("__bs.skip && document.getElementById('btn-skip') && document.getElementById('btn-skip').click()")
+  seg('films'); wait("__bs.state === 'cinematic' || __bs.state === 'film'", 120); time.sleep(45)
+  for _ in range(12):
+      if ev("__bs.state === 'game'"): break
+      ev('__bs.skip()'); time.sleep(4)
+  seg('planet_wake'); wait("__bs.state === 'game'", 120); time.sleep(15)
+  seg('planet_walk'); wait("__bs.mode === 'play'", 120); hold(['KeyW'], 30)
+  seg('planet_run'); hold(['KeyW', 'ShiftLeft'], 20)
+  seg('end')
+except Stop: pass
 h = ev("JSON.stringify(__hitch)")
 h = json.loads(h)
 rep = {'quality': Q, 'size': [W, H], 'throttle': THR, 'gpu': ev("(()=>{const g=document.createElement('canvas').getContext('webgl2'),e=g.getExtension('WEBGL_debug_renderer_info');return g.getParameter(e.UNMASKED_RENDERER_WEBGL)})()"),
-       'segments': {}, 'long': h['long'], 'longtasks': h['tasks'], 'longtask_ms': round(h['taskMs'])}
+       'segments': {}, 'long': h['long'], 'longtasks': h['tasks'], 'longtask_ms': round(h['taskMs']), 'profiles': PROFS}
 for n, g in h['segs'].items():
     d = sorted(g['dts'])
     rep['segments'][n] = {'frames': g['n'], 'fps': round(1000 * g['n'] / max(1, g['sum']), 1), 'p95_ms': round(d[int(len(d) * 0.95)] if d else 0, 1),
