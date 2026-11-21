@@ -144,7 +144,7 @@ const PRESETS: Record<QualityName, Quality> = {
     shadowMapSize: 2048,
     shadowExtent: 60,
     terrainSegments: 32,
-    terrainChunk: 100,
+    terrainChunk: 200, // a quarter of the draws of 100 m chunks at the same detail (the planet was 70 terrain draws a frame)
     treeCount: 3200,
     plantCount: 5000,
     rockCount: 900,
@@ -193,7 +193,7 @@ const PRESETS: Record<QualityName, Quality> = {
     shadowMapSize: 3072,
     shadowExtent: 80,
     terrainSegments: 64,
-    terrainChunk: 100,
+    terrainChunk: 200,
     treeCount: 5000,
     plantCount: 9000,
     rockCount: 2400,
