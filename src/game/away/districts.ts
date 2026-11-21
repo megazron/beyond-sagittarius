@@ -741,18 +741,20 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   for (const m of carMesh) { m.frustumCulled = false; m.castShadow = tier > 0 && m !== carMesh[2]; add(m); }
   cars.forEach((c, i) => carMesh[0].setColorAt(i, c.col));
   // parked along the outer lane of the quieter streets
-  const parked: { x: number; z: number; yaw: number }[] = [];
+  const parked: { x: number; z: number; yaw: number; col: THREE.Color }[] = [];
+  /** A car is drawn only within reach and not behind the camera (every car was drawn before, at any distance, in both passes). */
+  const CAR_VIS = [170, 240, 300][tier];
+  const seen = (x: number, z: number, cam: THREE.Vector3, fx: number, fz: number) => { const dx = x - cam.x, dz = z - cam.z, d = Math.hypot(dx, dz); return d < 35 || (d < CAR_VIS && (dx * fx + dz * fz) / d > -0.35); };
   for (let i = 0; i < PARKED; i++) {
     const r = pick(carRoads.filter((x) => x.along === 'x')), u = r.a + 14 + rnd() * (r.b - r.a - 28);
     if (nodes.some((n) => Math.abs((r.along === 'x' ? n.x : n.z) - u) < 14)) { i--; continue; }
     const side = rnd() < 0.5 ? 1 : -1;
     parkRoads.add(r);
-    parked.push({ x: u, z: r.c + side * 5.2, yaw: side > 0 ? -Math.PI / 2 : Math.PI / 2 });
-    carMesh[0].setColorAt(NCAR + i, pick(carCols));
+    parked.push({ x: u, z: r.c + side * 5.2, yaw: side > 0 ? -Math.PI / 2 : Math.PI / 2, col: pick(carCols) });
     solid(u - 2.4, r.c + side * 5.2 - 1, u + 2.4, r.c + side * 5.2 + 1, 1.5);
   }
-  const CM = new THREE.Matrix4(), CQ = new THREE.Quaternion(), CP = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1), ZERO = new THREE.Vector3(0, 0, 0), YAX = new THREE.Vector3(0, 1, 0), T1 = new THREE.Vector3();
-  parked.forEach((p, i) => { CM.compose(CP.set(p.x, 0.02, p.z), CQ.setFromAxisAngle(YAX, p.yaw), ONE); for (const m of carMesh) m.setMatrixAt(NCAR + i, CM); });
+  const CM = new THREE.Matrix4(), CQ = new THREE.Quaternion(), CP = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1), YAX = new THREE.Vector3(0, 1, 0), T1 = new THREE.Vector3();
+  for (const m of carMesh) m.count = 0; // filled each frame with the cars in view (driveCars)
   for (const m of carMesh) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   /** Pick where a car goes at the junction at u on its road: straight on if it can, else a turn. */
   const nextAt = (c: Car, nu: number) => {
@@ -798,9 +800,10 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     const k = Math.min(dt, 0.1);
     // two cars a frame are looked at: one far out of sight comes back round the camera
     for (let j = 0; j < 2 && cars.length; j++) { const c = cars[carRR = (carRR + 1) % cars.length]; if (Math.hypot(c.x - cam.x, c.z - cam.z) > RECALL) recallCar(c, cam, fx, fz); }
+    let slot = 0;
     for (let i = 0; i < cars.length; i++) {
       const c = cars[i];
-      const far = Math.hypot(c.x - cam.x, c.z - cam.z) > 420;
+      const far = !seen(c.x, c.z, cam, fx, fz);
       if (c.turn) {
         const tr = c.turn; tr.t += (c.v * k) / tr.len;
         if (tr.t >= 1) { c.r = tr.next; c.u = tr.nu; c.dir = tr.ndir; c.turn = null; }
@@ -841,11 +844,21 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
         }
         if (!c.turn) { pos(c.r, c.u, c.dir, c.lane, T1); c.x = T1.x; c.z = T1.z; c.yaw = c.r.along === 'z' ? (c.dir > 0 ? 0 : Math.PI) : (c.dir > 0 ? Math.PI / 2 : -Math.PI / 2); }
       }
+      if (far) continue;
       CQ.setFromAxisAngle(YAX, c.yaw);
-      CM.compose(CP.set(c.x, 0.02, c.z), CQ, far ? ZERO : ONE);
-      for (const m of carMesh) m.setMatrixAt(i, CM);
+      CM.compose(CP.set(c.x, 0.02, c.z), CQ, ONE);
+      for (const m of carMesh) m.setMatrixAt(slot, CM);
+      carMesh[0].setColorAt(slot++, c.col);
     }
-    for (const m of carMesh) m.instanceMatrix.needsUpdate = true;
+    // the parked ones too: only those near enough and not behind the camera take a slot
+    for (const p of parked) {
+      if (!seen(p.x, p.z, cam, fx, fz)) continue;
+      CM.compose(CP.set(p.x, 0.02, p.z), CQ.setFromAxisAngle(YAX, p.yaw), ONE);
+      for (const m of carMesh) m.setMatrixAt(slot, CM);
+      carMesh[0].setColorAt(slot++, p.col);
+    }
+    for (const m of carMesh) { m.count = slot; m.instanceMatrix.needsUpdate = true; }
+    if (carMesh[0].instanceColor) carMesh[0].instanceColor.needsUpdate = true;
   };
 
   // ---- people: walkers round the blocks, crossing at the zebras; others sit, shop, chat, film, wait for a bus ----

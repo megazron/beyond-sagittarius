@@ -174,3 +174,26 @@ are under 30 at several spots. Runs differ by a quarter or more between themselv
 - Buildings are still boxes above the street floor: shader windows, with real depth only in the shopfronts, cornices,
   balconies and roof clutter.
 - Textures are WebP, not KTX2. The planet is 1.4 km across as it was; I did not enlarge it.
+
+## Zenvora, streets that make sense (1.3, in progress)
+
+The owner asked for the city to come as close to the big open-world games as it can (original world only), for
+everything to be realistic and to make sense, and for phones to hold 30 fps.
+
+| # | Where | What I found | Severity | Status |
+| --- | --- | --- | --- | --- |
+| 35 | Shops | A sign and its shop did not match (a salon with shelves of goods and cafe tables outside). Every shop now sells what its sign says: the brand list carries a kind (clothes, food, goods, counter, pharmacy), the building's seed carries it to the facade shader, which draws that interior (rails, a kitchen with a chalk menu, shelves, a counter under lit panels, a bright pharmacy); tables go out only in front of places that serve food; food places are never shuttered. | major | fixed |
+| 36 | Buildings | Flat boxes. The glass sits back in the wall (the jamb shows at an angle, so windows read as openings); sills, pilasters and a cornice on brackets on street walls; pitched roofs, set-back top floors and water tanks; condensers, masts and dishes on the roofs; a lit crown and an aircraft beacon on every tower; signs that project square from the wall, readable down the street. Far windows blend to a tone instead of shimmering. | major | improved |
+| 37 | Streets | Empty. Food carts with a cook and customers at the kerbs and on the promenade, people at the sea rail, cafe tables with customers, bollards at the corners, more moving cars (20, 55, 100 by preset) and parked cars (20, 50, 80) on streets that keep one lane each way for them. | major | improved |
+| 38 | People | Cars and walkers that wander far off are brought back near the camera, but only where it is not looking; far people thin out at the edge of their range instead of blinking out; a townsperson at your elbow is never a card; far people are baked from eight sides instead of four. | major | improved |
+| 39 | Reflections | Ultra now has screen-space reflections on wet ground: the lit shop windows, signs and car lamps show in the street, strongest in the puddles. Wet nights no longer glow beige under the lamps. | major | improved |
+
+### Still below the bar (1.3)
+
+- The street walls above the shopfronts are still shaded boxes with windows: real modelled facades (bay windows,
+  balconies on every type, varied rooflines along a block) are not there.
+- Phones keep their simple walls (no room behind the glass); their shop panes now show shelves of goods.
+- Cafe customers stand by the chairs; there is no sitting-on-a-chair clip.
+- Courtyards inside the blocks are empty paving.
+- Textures are still WebP, not KTX2 (no encoder on the build machine yet); the web build is 160 MB.
+- Frame rate: see the numbers; the laptop was shared with other agents' jobs for most of this round.
