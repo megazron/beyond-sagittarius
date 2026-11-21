@@ -21,6 +21,7 @@ import type { Player } from './player';
 import type { Input } from './input';
 import { UI, PLAYABLE_LEVELS } from '../ui/ui';
 import { Tutorial } from './tutorial';
+import { Waking } from './waking';
 import { Cutscene, Beat, SceneBranch } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
 import type { Combat } from '../combat/combat';
@@ -101,7 +102,7 @@ export class Game {
   private saveClock = 0;
   private payoffClock = 0;
   private hudClock = 0;
-  private interactTarget: { kind: 'water' } | { kind: 'item'; item: Item } | { kind: 'action'; action: Action } | { kind: 'strike' } | null = null;
+  private interactTarget: { kind: 'water'; src?: 'stream' | 'pool' } | { kind: 'item'; item: Item } | { kind: 'action'; action: Action } | { kind: 'strike' } | null = null;
   story: Story;
   private cues: { at: number; fn: () => void }[] = [];
   private clock = 0;
@@ -130,6 +131,7 @@ export class Game {
     };
     onLangChange(() => this.tutorial.refresh());
     this.story = new Story(world, player, ui, () => this.save, (sec, fn) => this.after(sec, fn), (amount) => this.hurt(amount), (beats, then) => this.playScene(beats, then));
+    this.waking = new Waking(world, player, ui, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn));
     this.dialogue.onLine = (who, sec) => this.story.npcs.speak(who, sec);
     this.story.hooks = { away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
     this.craft.onFail = () => {
@@ -384,11 +386,15 @@ export class Game {
     this.ui.device(null);
     this.ui.setInventory(this.save.inventory, this.story.tools());
     this.refreshObjective();
+    this.waking.startSound();
     if (announce) {
-      if (!this.save.flags.tutorialDone) {
-        this.pendingIntro = true;
-        this.tutorial.start();
-      } else this.announceLevel1();
+      // 1.1: he checks his body, then thirst, before anything is asked of the player
+      this.waking.thirst(() => {
+        if (!this.save.flags.tutorialDone) {
+          this.pendingIntro = true;
+          this.tutorial.start();
+        } else this.announceLevel1();
+      });
     }
   }
 
@@ -408,6 +414,9 @@ export class Game {
   /** main.ts tells us when a panel was opened (the tutorial waits for it). */
   notePanel(kind: string) { this.tutorial.notePanel(kind); }
 
+  /** Episode One 1.1: the stream, the pool, thirst and the red fruit. */
+  waking: Waking;
+  private streamHeard = true;
   private wakeRate = 1;
   private buildWake() {
     const ui = this.ui;
@@ -515,6 +524,8 @@ export class Game {
     if (this.mode === 'wake') { this.updateWake(dt * this.wakeRate); return; }
     if (this.mode === 'dead') return;
     this.runCues(dt);
+    // the stream is on Verdaxis: quiet while the game is on someone else's world
+    if ((this.mode !== 'away') !== this.streamHeard) { this.streamHeard = this.mode !== 'away'; this.waking.setAudible(this.streamHeard); }
     if (this.mode === 'away') { this.away?.update(dt, time, !this.ui.modalOpen()); return; }
     this.ui.choice.update(dt);
     if (this.mode === 'scene') this.dialogue.update(dt);
@@ -555,7 +566,8 @@ export class Game {
     }
 
     // stats
-    st.thirst = clamp(st.thirst - dt * 0.16, 0, 100);
+    // the pool's water: a slow day, thirst comes back faster
+    st.thirst = clamp(st.thirst - dt * 0.16 * (s.flags['sick.water'] && s.day === 1 ? 1.35 : 1), 0, 100);
     st.hunger = clamp(st.hunger - dt * 0.07, 0, 100);
     if (!p.swimming) this.swimWarned = false;
     if (p.swimming) {
@@ -576,9 +588,19 @@ export class Game {
     this.story.update(dt, time);
     if (this.mode !== 'play') return; // the story can kill the player (predator)
     this.tutorial.update(dt);
+    if (this.mode === 'play') this.waking.update();
+    if (this.mode !== 'play') return;
     this.findInteraction();
     if (this.interactTarget && this.input.act('interact')) this.interact();
 
+    // 1.1 step 6: the first red fruit he walks up to is a decision
+    if (s.level === 2 && !s.flags['e1.fruitSeen']) {
+      for (const it of this.world.items.items) {
+        if (it.type !== 'redFruit' || !it.active || it.pos.distanceTo(p.pos) > 3.2) continue;
+        s.flags.medicHint = true;
+        if (this.waking.fruit(it.pos, () => this.collect(it, 0.35))) return;
+      }
+    }
     // Medic memory when first approaching fruit
     if (!s.flags.medicHint) {
       for (const it of this.world.items.items) {
@@ -663,6 +685,12 @@ export class Game {
       this.ui.setPrompt(fruit ? (best.examined ? t('prompt.eat', { item: name }) : t('prompt.examine', { item: name })) : t('prompt.pick', { item: name }), this.anchor(best.pos, 0.35));
       return;
     }
+    const src = this.waking.source(p.pos);
+    if (src) {
+      this.interactTarget = { kind: 'water', src };
+      this.ui.setPrompt(t('prompt.drink'), this.anchor(p.pos, 0.2));
+      return;
+    }
     const f = p.forward(this.tmpV);
     const T = this.world.terrain;
     const ahead = T.height(p.pos.x + f.x * 1.6, p.pos.z + f.z * 1.6);
@@ -691,6 +719,13 @@ export class Game {
     }
     if (target.kind === 'water') {
       if (st.thirst > 97) { this.ui.toast(t('msg.drinkFull')); return; }
+      if (target.src) {
+        { const p = this.player, f = this.tmpV.set(-Math.sin(p.facing), 0, -Math.cos(p.facing)); this.player.act('drink', new THREE.Vector3(p.pos.x + f.x * 0.7, p.pos.y - 0.2, p.pos.z + f.z * 0.7), undefined, null); }
+        if (!audio.sample('drink', 0.6, { delay: 0.5 })) audio.tone(300, 0.25, 'sine', 0.15, 0, 200);
+        audio.sample('splash', 0.25, { rate: 1.4, delay: 0.2 });
+        this.waking.drink(target.src);
+        return;
+      }
       st.thirst = clamp(st.thirst + 35, 0, 100);
       { const p = this.player, f = this.tmpV.set(-Math.sin(p.facing), 0, -Math.cos(p.facing)); this.player.act('drink', new THREE.Vector3(p.pos.x + f.x * 0.7, p.pos.y - 0.2, p.pos.z + f.z * 0.7), undefined, null); }
       if (!audio.sample('drink', 0.6, { delay: 0.5 })) audio.tone(300, 0.25, 'sine', 0.15, 0, 200);
@@ -814,6 +849,10 @@ export class Game {
     const s = this.save;
     if (this.tutorial.target) return this.tutorial.target.clone();
     if (s.level === 1) {
+      // 1.1: the marker leads to the stream (moving water), not the lake
+      const at = new THREE.Vector3();
+      this.waking.stream.nearest(p, at);
+      if (at.lengthSq() > 0) return at;
       const dx = p.x - LAKE.x, dz = p.z - LAKE.z;
       const d = Math.hypot(dx, dz) || 1;
       const r = LAKE.r - 8; // shallow water at the near shore
@@ -846,9 +885,7 @@ export class Game {
     const p = this.player.pos;
     const m = this.objectivePoint();
     if (!m) return null;
-    const dist = this.save.level === 1 && !this.tutorial.target
-      ? Math.max(0, Math.hypot(LAKE.x - p.x, LAKE.z - p.z) - LAKE.r + 4)
-      : Math.hypot(m.x - p.x, m.z - p.z);
+    const dist = Math.hypot(m.x - p.x, m.z - p.z);
     const bearing = Math.atan2(m.x - p.x, -(m.z - p.z));
     return { bearing, dist };
   }

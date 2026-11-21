@@ -356,7 +356,18 @@
     "pull.pods": "scientist",
     "pull.sci3": "scientist",
     "mz.science": "megazron",
-    "cine.line4": "scientist"
+    "cine.line4": "scientist",
+    "e1.w.1": "scientist",
+    "e1.w.2": "scientist",
+    "e1.w.fail": "scientist",
+    "e1.w.ok": "scientist",
+    "e1.w.ammi": "scientist",
+    "e1.w.leaf": "scientist",
+    "e1.fr.see": "scientist",
+    "e1.fr.eat": "scientist",
+    "e1.fr.lyrra": "medic",
+    "e1.fr.test": "scientist",
+    "e1.fr.no": "scientist"
   },
   "scenes": {
     "_comment": "Lines several people speak: 'Name: words' starts that person's part; text before any name is the player's.",

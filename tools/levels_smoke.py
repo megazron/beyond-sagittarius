@@ -659,7 +659,9 @@ def main():
         for k, v in {"c1.splint": "pass", "c1.fire": "big", "c1.accuse": "truth", "c1.rescue.early": "done", "c1.pello.share": "done", "c1.tovik.return": "done"}.items():
             if picks.get(k) != v:
                 failures.append(f"branch log: {k} = {picks.get(k)}")
-        if answered != [2, 4]:
+        # Episode One 1.1 adds a three-way choice when the walk passes a red fruit in level 2 (e1.fruit); it may or may not
+        # come up on this route
+        if [n for n in answered if n != 3] != [2, 4] or answered.count(3) > 1:
             failures.append(f"expected a two-way then a four-way choice (trust unlocks the fourth): {answered}")
         if b["pending"] or b["open"] or b["dead"]:
             failures.append(f"branch state not settled: {b['pending']} {b['open']} {b['dead']}")

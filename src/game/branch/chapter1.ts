@@ -17,6 +17,15 @@ export const SAID_NOTHING: Cond = chose('c1.accuse', 'silent');
 export const HARD_TO_BELIEVE: Cond = { trust: 'explorer', lte: 2 };
 
 export const DECISIONS: Decision[] = [
+  // Episode One 1.1: the red fruit by the path (waits; no timer)
+  {
+    id: 'e1.fruit', title: 'e1.fruit.title', prompt: 'e1.fruit.ask', who: 'scientist', fallback: 'hungry',
+    options: [
+      { id: 'eat', label: 'e1.fruit.o.eat', effects: [{ trait: 'nerve', by: 1 }, { flag: 'poisoned' }] },
+      { id: 'test', label: 'e1.fruit.o.test', effects: [{ trait: 'honesty', by: 1 }, { trust: 'medic', by: 1 }] },
+      { id: 'hungry', label: 'e1.fruit.o.hungry', effects: [] },
+    ],
+  },
   {
     id: 'c1.fire', title: 'br.fire.title', prompt: 'br.fire.ask', who: 'explorer', fallback: 'small',
     options: [
