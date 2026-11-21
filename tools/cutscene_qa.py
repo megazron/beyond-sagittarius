@@ -152,7 +152,7 @@ def main():
                     r.advance(0.1)
             page.wait_for_function("__bs.state === 'film'", timeout=30000)
             if 'film' in want:
-                r.play('film', "__bs.state === 'film' && __bs.film.playing", a.film_step, 80)
+                r.play("film", "__bs.state === 'film' && __bs.film.playing", a.film_step, 130)  # the film runs about 95 s since the landings got their 12 s each
             else:
                 page.evaluate('__bs.skip()')
                 r.advance(0.1)
