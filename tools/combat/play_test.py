@@ -161,7 +161,7 @@ with sync_playwright() as pw:
     for i in range(60):
         step(page, 0.2); time.sleep(0.05)
         if page.evaluate("!!window.__t"): break
-    ok(page.evaluate("window.__t && window.__t.passed === false"), 'API: a tension moment resolves (failed, nobody pressed)')
+    ok(page.evaluate("window.__t && window.__t.passed === false"), 'API: a tension moment resolves (failed, nobody pressed)', page.evaluate("JSON.stringify({ t: window.__t, open: __bs.combat.tensionUi.open, ring: __bs.combat.tensionUi.cur && __bs.combat.tensionUi.cur.T.ring, endT: __bs.combat.tensionUi.cur && __bs.combat.tensionUi.cur.endT, vis: document.visibilityState })"))
     # the Action menu from pause
     page.keyboard.press('Escape'); page.wait_for_selector('#p-action', timeout=10000); page.click('#p-action')
     ok(page.evaluate("document.querySelectorAll('[data-enc]').length") == 5, 'menu: Action lists the five set pieces')
