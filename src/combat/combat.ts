@@ -770,6 +770,13 @@ export class Combat {
       const a = Math.atan2(e.x - p.x, e.z - p.z), rel = Math.atan2(Math.sin(a - yawC), Math.cos(a - yawC));
       if (Math.abs(rel) > 0.75 && arrows.length < 4) arrows.push({ a: -rel, hot: true });
     }
+    // in the run, the hunter behind you is always on the edge of the screen: pale while it is far, red once it is close
+    if (run?.id === 'chase.escape') for (const e of sim.enemies) {
+      if (e.kind !== 'hound' || e.dead || e.gone || e.routed || arrows.length >= 4) continue;
+      const dd = Math.hypot(e.x - p.x, e.z - p.z); if (dd > 40) continue;
+      const a = Math.atan2(e.x - p.x, e.z - p.z), rel = Math.atan2(Math.sin(a - yawC), Math.cos(a - yawC));
+      if (Math.abs(rel) > 0.6 && !arrows.length) arrows.push({ a: -rel, hot: dd < 9 });
+    }
     this.hud.arrows(arrows);
     // the suit tags what it has already learned, small, over the animal: in the hunt and the sneak, prey in long grass
     // would otherwise be invisible to anyone but the bot

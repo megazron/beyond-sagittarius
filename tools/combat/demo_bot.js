@@ -6,6 +6,8 @@ window.__cbBot = (mode) => {
   window.__cbStop = false;
   const hold = (k, on) => { if (!!held[k] !== !!on) { held[k] = !!on; C.testHold(k, !!on); } };
   const tap = (k) => C.testTap(k);
+  // E goes through the game's own interact, which reads real key presses
+  const tapE = () => { key('KeyE'); setTimeout(() => keyUp('KeyE'), 70); };
   const key = (code) => window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
   const keyUp = (code) => window.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
   const SENS = 0.0024 * (__bs.sens || 1);
@@ -104,11 +106,11 @@ window.__cbBot = (mode) => {
           if (flag.setting) { if (!C.setting && since() > 0.6) { flag.setting = 0; next(); } return; }
           const d = go(spot[st].x - (dx / l) * 1.3, spot[st].z - (dz / l) * 1.3);
           if (d < 0.9) { stop(); if (look(spot[st].x + dx, spot[st].z + dz) < 0.3 && since() > 1) { tap('KeyT'); setTimeout(() => key(order[st]), 250); flag.setting = 1; stT = performance.now(); } }
-        } else if (st === 3) { const d = go(food.x - 0.6, food.z - 0.5); if (d < 0.8) { stop(); tap('KeyE'); next(); } }
+        } else if (st === 3) { const d = go(food.x - 0.6, food.z - 0.5); if (d < 0.8) { stop(); tapE(); next(); } }
         return;
       }
       const h = living('hound').find((e) => !e.routed), thieves = living('skritch').filter((e) => !e.routed && dist(e, food) < 8);
-      if (fire.fuel < fire.max * 0.55 && (sim.inv.branch || 0) > 0 && !(h && (h.state === 'windup' || h.state === 'strike'))) { const d = go(fire.x, fire.z); if (d < 2.4) { stop(); if (since() > 0.8) { tap('KeyE'); stT = performance.now(); } } return; }
+      if (fire.fuel < fire.max * 0.55 && (sim.inv.branch || 0) > 0 && !(h && (h.state === 'windup' || h.state === 'strike'))) { const d = go(fire.x, fire.z); if (d < 2.4) { stop(); if (since() > 0.8) { tapE(); stT = performance.now(); } } return; }
       if (h && (h.state === 'windup' || h.state === 'strike') && h.target === -1) { stop(); look(h.x, h.z, h.y + 0.6); hold('KeyQ', h.stateT > 0.3 || h.state === 'strike'); return; }
       hold('KeyQ', 0);
       if (h && h.weakT > 0 && dist(h, p) < 5) { fight([h]); return; }

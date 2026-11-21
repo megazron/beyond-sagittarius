@@ -271,7 +271,7 @@ export class CombatSim {
     this.stepTraps(dt);
     for (const f of this.fires) {
       if (f.torch) { f.x = this.player.x; f.z = this.player.z; continue; }
-      if (f.fuel > 0) { f.fuel = Math.max(0, f.fuel - dt * (f.burnsOut ? 1 : 0.55)); f.r = this.fireRadius(f); if (f.fuel <= 0) this.emit({ t: 'fire', what: 'out', x: f.x, z: f.z }); }
+      if (f.fuel > 0) { f.fuel = Math.max(0, f.fuel - dt * (f.burnsOut ? 1 : 0.55) * (f.slow ?? 1)); f.r = this.fireRadius(f); if (f.fuel <= 0) this.emit({ t: 'fire', what: 'out', x: f.x, z: f.z }); }
     }
     for (const c of this.clouds) c.left -= dt;
     if (this.clouds.length && this.clouds[0].left <= 0) this.clouds = this.clouds.filter((c) => c.left > 0);

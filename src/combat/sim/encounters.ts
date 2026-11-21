@@ -121,7 +121,7 @@ export class EncounterRun {
       const food = this.at(0.5, 2.2); s.addScent(food.x, food.z, 4, 60); this.markers.push({ x: food.x, z: food.z, kind: 'food', r: 1 });
       this.objective = 'cb.obj.prep'; this.go('prep');
     } else if (id === 'chase.escape') {
-      this.hour = 22; s.night = true;
+      this.hour = 21.2; s.night = true;
       give({ stone: 3, fruit: 1 }); arm('rock');
       const f = this.at(125, 0); s.addFire(f.x, f.z, 100); this.markers.push({ x: f.x, z: f.z, kind: 'goal', r: 7 });
       for (const u of [32, 66, 98]) this.mark('log', u, 0, 3.2);
@@ -223,7 +223,9 @@ export class EncounterRun {
     const packLeft = (pack: number) => s.enemies.filter((e) => e.pack === pack && !e.dead && !e.routed && !e.gone).length;
     if (this.phase === 'prep') {
       // time to think: what you set now is what the night meets
-      if (this.phaseT > 70 || this.mem.ready) { this.wave = 1; fromDark('skritch', 4, 1); this.objective = 'cb.obj.night'; this.go('wave1'); }
+      // a dusk fire is built up and left to settle; it is the night that eats wood
+      fire.slow = 0.3;
+      if (this.phaseT > 70 || this.mem.ready) { fire.slow = 1; this.wave = 1; fromDark('skritch', 4, 1); this.objective = 'cb.obj.night'; this.go('wave1'); }
     } else if (this.phase === 'wave1') {
       if (packLeft(1) === 0 || this.phaseT > 75) { for (const e of s.enemies) if (e.pack === 1) s.rout(e); this.go('lull'); }
     } else if (this.phase === 'lull') {
