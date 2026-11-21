@@ -57,6 +57,8 @@ export function mergeable(o: THREE.Object3D, anyBlend = false): o is THREE.Mesh 
 }
 
 const TMP = new THREE.Vector3();
+/** Per-vertex look materials made by merges, by signature (shared across merges and stages). */
+const LOOSE = new Map<string, THREE.Material>();
 export interface MergeOpts {
   /** Split by place, so what is off screen is still culled: a key from the child's centre in the parent's space. */
   cell?: (c: THREE.Vector3) => string;
@@ -150,11 +152,21 @@ export function mergeChildren(parent: THREE.Object3D, opts: MergeOpts = {}) {
     if (!merged) continue;
     const a = list[0];
     let mat = a.material as THREE.Material;
-    if (pbr) mat = pbrMaterial(a.material as THREE.MeshStandardMaterial);
-    else if (tinted) {
-      mat = mat.clone(); (mat as THREE.MeshStandardMaterial).vertexColors = true; (mat as THREE.MeshStandardMaterial).color.set(0xffffff);
-      mat.userData = { ...mat.userData }; delete mat.userData.followers;
-      for (const src of mats) ((src.userData.followers ??= []) as THREE.Material[]).push(mat);
+    // the per-vertex materials are shared by every merge with the same look (one per merge was a material a stretch of
+    // street: a program switch and a full uniform upload each, and nothing a batch could draw together)
+    if (pbr) {
+      const k = `pbr|${materialSignature(a.material as THREE.Material, 'pbr')}`;
+      mat = LOOSE.get(k) ?? LOOSE.set(k, pbrMaterial(a.material as THREE.MeshStandardMaterial)).get(k)!;
+    } else if (tinted) {
+      const k = `tint|${materialSignature(mat, 'tint')}`;
+      let t = LOOSE.get(k);
+      if (!t) {
+        t = mat.clone(); (t as THREE.MeshStandardMaterial).vertexColors = true; (t as THREE.MeshStandardMaterial).color.set(0xffffff);
+        t.userData = { ...t.userData }; delete t.userData.followers;
+        LOOSE.set(k, t);
+      }
+      mat = t;
+      for (const src of mats) { const f = ((src.userData.followers ??= []) as THREE.Material[]); if (!f.includes(t)) f.push(t); }
     }
     const out = new THREE.Mesh(merged, mat);
     out.castShadow = a.castShadow; out.receiveShadow = a.receiveShadow; out.userData = { ...a.userData };
