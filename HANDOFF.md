@@ -103,3 +103,8 @@ See the end of this file for the running log.
   on the move. levels_smoke is flaky in CI (passed on rerun twice). Clips 15 to 17 in Downloads.
 - Asked of the story agent (via coordinator): a grip control in character.ts so fingers close on string and cords;
   a sling row in INVENTION_TREE.md.
+- 14:20 combat-land: sling is tree row 22; grips via the story agent's `setGrip` (life-wip d3acdfe, not on main; my
+  call is a no-op until it lands; tested in ~/bs-combat-grip = life-wip + combat, clips *_v3_grip); spear-thrower
+  cast in the ranged rig; hunt bot patient (kill in ~20 s); night fill light (planetshine) made once at start and
+  kept at 0 by day. LESSON: adding a light mid-game (torch PointLight, late DirectionalLight) recompiled every
+  material and stalled the CI browser for minutes (play test timed out on the pause menu); never add lights later.
