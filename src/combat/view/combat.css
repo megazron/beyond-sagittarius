@@ -50,6 +50,9 @@ body.device-touch #cb-hud .chip { bottom: auto; top: 92px; right: max(10px, env(
 .cb-numbers div { position: absolute; left: 0; top: 0; font: 600 17px 'Barlow', sans-serif; color: #fff; text-shadow: 0 1px 3px #000; margin: -10px 0 0 -8px; }
 .cb-numbers div.weak { color: #ffd24a; font-size: 21px; }
 
+/* a set piece has its own objective line: the story's waits */
+body.cb-encounter #objective { visibility: hidden; }
+
 /* touch: the fight's buttons, in an arc round the game's own action button */
 #cb-touch { position: absolute; inset: 0; pointer-events: none; }
 #cb-touch.off { display: none; }
@@ -106,3 +109,4 @@ body:not(.device-touch) #cb-tension button.tap { display: none; }
 .cb-end { text-align: center; }
 .cb-end p { margin: 4px 0; }
 .cb-end .facts { color: #e8a33d; }
+body.cb-encounter #tutorial { display: none !important; }

@@ -47,7 +47,9 @@ D = "__bs.combat.debug()"
 def step(page, sec): page.evaluate(f"__bs.step({sec})")
 def shot(page, name):
     if out:
-        time.sleep(0.6); page.screenshot(path=str(out / f'{name}.png'))
+        time.sleep(0.6)
+        try: page.screenshot(path=str(out / f'{name}.png'), timeout=60000)
+        except Exception as e: print('no picture', name, str(e)[:80], flush=True)
 
 with sync_playwright() as pw:
     b = pw.chromium.launch(headless=True, args=['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-background-timer-throttling', '--disable-renderer-backgrounding'])
@@ -76,7 +78,7 @@ with sync_playwright() as pw:
             ok(page.evaluate("document.querySelector('#cb-hud .ret').classList.contains('on')"), 'arena: the reticle shows while aiming')
             shot(page, 'arena_aim')
             page.evaluate("__bs.combat.testHold('Mouse0', false)"); step(page, 0.3)
-            ok(page.evaluate(D)['stats']['shots'] == 1, 'arena: letting go looses the arrow')
+            ok(page.evaluate(D)['stats']['shots'] == 1, 'arena: letting go looses the arrow', page.evaluate(D)['stats']['shots'])
             page.evaluate("__bs.combat.testHold('Mouse2', false)"); step(page, 0.5)
             # the kit brings creatures out
             page.evaluate("__bs.combat.testTap('KeyT')"); step(page, 0.1)
@@ -141,7 +143,7 @@ with sync_playwright() as pw:
             step(page, 0.2); time.sleep(0.1)
             if not page.evaluate(D)['encounter']: break
         ok(page.evaluate(D)['encounter'] is None, f'{enc}: ends')
-        if page.evaluate("!!document.getElementById('cb-back')"): page.click('#cb-back')
+        page.evaluate("document.getElementById('cb-back') && document.getElementById('cb-back').click()")
         now = page.evaluate("JSON.stringify({ inv: __bs.save.inventory, pos: __bs.debug.player, hour: __bs.save.timeOfDay })")
         A, B = json.loads(base), json.loads(now)
         ok(A['inv'] == B['inv'], f'{enc}: a trial leaves the bag as it was', B['inv'])
