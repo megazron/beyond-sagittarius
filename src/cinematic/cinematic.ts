@@ -146,6 +146,8 @@ export class Cinematic {
       document.body.appendChild(el); this.filmEl = el;
     }
     const small = window.matchMedia?.('(max-width: 900px)').matches ?? false;
+    // every take made so far has the player in it (A4 is Zenvik): only the default look gets them
+    if (!this.playerDefault) return;
     for (const name of new Set(this.shots.map((s) => s.film).filter(Boolean) as string[])) {
       if (this.films.has(name)) continue;
       const v = await FilmVideo.open(name, this.filmEl, small);
@@ -207,7 +209,12 @@ export class Cinematic {
   }
 
   /** The player's figure and any crew skins on the deck. */
+  /** A rendered take shows the default Zenvik: with any other look for the player it would show the wrong person, so
+   *  those shots stay in the engine (the look is compared field by field, the name aside). */
+  private playerDefault = true;
   setCast(look: PlayerLook, skins: CrewSkins) {
+    const dl = defaultLook() as unknown as Record<string, unknown>, lk = look as unknown as Record<string, unknown>;
+    this.playerDefault = Object.keys(dl).every((k) => k === 'name' || JSON.stringify(dl[k]) === JSON.stringify(lk[k]));
     const g = this.interior.group, crew = this.interior.crew, d = matchMedia('(pointer: coarse)').matches ? 0.6 : 1;
     const swap = (i: number, c: Character) => { const o = crew[i]; c.root.position.copy(o.root.position); c.root.rotation.copy(o.root.rotation); g.remove(o.root); g.add(c.root); crew[i] = c; };
     swap(0, createCharacter('scientist', d, look));
