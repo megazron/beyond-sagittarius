@@ -88,3 +88,12 @@ See the end of this file for the running log.
   free-play traps need their invention; set pieces keep their Episode One kits. Not done yet: the craft steps' text
   (cb.inv.*), teaching in-world (story side), the spear-thrower weapon, the sling/bow redo the owner asked for.
 - Waiting for the story agent's ~/bs-story/INVENTION_TREE.md (did not exist at 09:00) to match ids.
+- 11:40 LANDED: main fast-forwarded to 48b1ead (CI fully green on that exact commit; Pages deployed green). Force-push
+  of `combat` is refused by the permission layer: I push rebased work to branch `combat-land` and land from there.
+- Bow and sling redone: `src/combat/view/ranged.ts` (RangedRig: two-bone reach for both arms, bow/string/arrow and
+  sling cords/pouch drawn in world space at the real hands, quiver, pouch physics). Sim: bow hold tremor
+  (`holdT`), sling stone leaves 0.14 s after release (`pendingT`), nock 1.05 s, sling reload 1.0 s, launch points
+  per weapon. Aim comes from player yaw/pitch (not the camera). Slow-mo hook `__bs.combat.testSlow`, photo camera
+  `__bs.photo`. Plans: `~/bs-cap/combat/mkplan_v2.py`; clips 10 to 14 *_v2 in Downloads with notes.
+- Next: bow aim camera (body hides the bow in play), hands closing on string and cords, spear-thrower weapon,
+  match ~/bs-story/INVENTION_TREE.md when it exists.
