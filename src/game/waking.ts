@@ -138,20 +138,34 @@ export class Waking {
     st.thirst = Math.min(100, st.thirst + 40);
     if (s.flags.drankStream) return;
     s.flags.drankStream = true;
-    s.flags.drank = true;
-    this.ui.say('e1.w.ok', 'crew.scientist.name', 4.4);
     this.ui.toast(t('msg.drink'));
-    let at = 5.2;
-    if (s.flags['ammi.called']) { this.after(at, () => this.ui.say('e1.w.ammi', 'crew.scientist.name', 3)); at += 3.6; }
-    // the leaf: folded into a cone, it runs out through his fingers
-    this.after(at, () => {
-      const p = this.player, f = new THREE.Vector3(-Math.sin(p.facing), 0, -Math.cos(p.facing));
-      p.act('use', new THREE.Vector3(p.pos.x + f.x * 0.45, p.pos.y + 1.1, p.pos.z + f.z * 0.45), 2.2);
-      audio.sample('leather', 0.25);
-      this.after(1.2, () => audio.sample('splash', 0.12, { rate: 2.2 }));
-      this.ui.say('e1.w.leaf', 'crew.scientist.name', 3.6);
-      s.flags['e1.leaf'] = true;
-    });
+    // the first real drink is acted, close enough to see it: on his knees, cupped hands, then the leaf that leaks
+    const z = this.z, water = new THREE.Vector3();
+    this.stream.nearest(this.player.pos, water);
+    s.flags['e1.leaf'] = true;
+    this.after(0.9, () => this.playScene([
+      { hold: 2.6, shot: () => cover.mid(z, 0.75, 1.7), run: () => {
+        z.setLookTarget(water.clone());
+        z.doTask('drink', { at: water.clone().add(new THREE.Vector3(0, 0.15, 0)), seconds: 2.4, hands: 'both' });
+        this.after(0.6, () => audio.sample('splash', 0.2, { rate: 1.3 }));
+        this.after(1.6, () => audio.sample('drink', 0.5));
+      } },
+      // a laugh that is half a sob
+      { key: 'e1.w.ok', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95), run: () => { z.stopTask(); z.setLookTarget(null); z.setFace({ smile: 0.45, frown: 0.25 }); audio.human('laugh', 0.35); }, after: 0.5 },
+      { key: 'e1.w.ammi', who: 'scientist', if: { flag: 'ammi.called' }, shot: () => cover.close(z, -0.35, 1.0), run: () => z.setFace({ smile: 0.25 }), after: 0.4 },
+      // the leaf: folded into a cone in his cupped hands, and it runs out through his fingers
+      { hold: 2.2, shot: () => cover.mid(z, -0.6, 1.4), run: () => {
+        z.setFace(null);
+        const m = z, f = new THREE.Vector3(Math.sin(m.root.rotation.y), 0, Math.cos(m.root.rotation.y));
+        const fingers = f.clone().multiplyScalar(0.8).add(new THREE.Vector3(0, 0.4, 0)).normalize();
+        m.setHold({ L: { at: this.chest(0.32, 0.035, 0.5), fingers, palm: new THREE.Vector3(0, 1, 0), radius: 0.03 }, R: { at: this.chest(0.32, -0.035, 0.5), fingers, palm: new THREE.Vector3(0, 1, 0), radius: 0.03 } });
+        m.setLookTarget(this.chest(0.32, 0, 0.52));
+        audio.sample('leather', 0.25);
+        this.after(0.8, () => audio.sample('splash', 0.12, { rate: 2.2 }));
+        this.after(1.4, () => audio.sample('splash', 0.08, { rate: 2.6 }));
+      } },
+      { key: 'e1.w.leaf', who: 'scientist', shot: () => cover.close(z, 0.35, 0.95), run: () => { z.setHold(null); z.setFace({ squint: 0.3 }); }, after: 0.5 },
+    ], () => { this.release(); s.flags.drank = true; }));
   }
 
   /** Step 6: the red fruit, the first time he comes up to one. Returns true if it took the moment. */
