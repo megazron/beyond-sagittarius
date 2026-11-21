@@ -799,6 +799,36 @@ export class Renderer {
     this.composer.setPixelRatio(1);
     this.composer.setSize(96, 54);
   }
+  /**
+   * The programs a draw of `scene` would build, compiled without blocking: every visible material (hidden ones are left
+   * for when they are shown; three's own compile takes them all, a third more programs) for the target it draws into,
+   * then the browser links them in the background (KHR_parallel_shader_compile; ANGLE spreads them over threads) while
+   * the page keeps running. Resolves when all are linked, or after `maxMs`. `progress` gets the share linked so far.
+   * Linking them one at a time in the first draw froze the title for 70 s on a cold shader cache (A500, ANGLE D3D11).
+   */
+  async prewarm(scene: THREE.Scene, cam: THREE.Camera, progress?: (k: number) => void, maxMs = 90000) {
+    const r = this.renderer, prev = r.getRenderTarget(), into = this.quality.post && this.renderPass instanceof ScenePass ? this.renderPass.rt : null;
+    this.ensureEnv(scene);
+    let mats: Set<THREE.Material> | undefined;
+    const own = Object.prototype.hasOwnProperty.call(scene, 'traverse'), was = scene.traverse;
+    scene.traverse = scene.traverseVisible;
+    try { r.setRenderTarget(into); mats = r.compile(scene, cam) as unknown as Set<THREE.Material>; } catch { /* compiled on first draw instead */ } finally {
+      if (own) scene.traverse = was; else delete (scene as Partial<THREE.Scene>).traverse;
+      r.setRenderTarget(prev);
+    }
+    if (!mats?.size) return;
+    const list = [...mats], t0 = performance.now();
+    type Prog = { isReady(): boolean } | undefined;
+    await new Promise<void>((done) => {
+      const tick = () => {
+        let left = 0;
+        for (const m of list) { const p = (r.properties.get(m) as { currentProgram?: Prog }).currentProgram; if (p && !p.isReady()) left++; }
+        progress?.(1 - left / list.length);
+        if (!left || performance.now() - t0 > maxMs) done(); else setTimeout(tick, 30);
+      };
+      tick();
+    });
+  }
   warm(scene: THREE.Scene, cam: THREE.PerspectiveCamera, ao: boolean) {
     this.setScene(scene, cam, ao);
     if (this.volumetric) this.volumetric.source = (scene.userData.post as PostSource | undefined) ?? null;

@@ -807,22 +807,32 @@ function draw(dt: number) {
 /** Every scene once through the real pipeline during loading, yielding between them. */
 async function warmAll() {
   const breathe = () => new Promise((r) => requestAnimationFrame(r));
+  // each scene's programs are first compiled in the background (renderer.prewarm: the page and the title's buttons keep
+  // working, the loading bar shows how far it is), then drawn once through the real pipeline for what only a draw
+  // builds (the shadow and AO passes' variants, the uploads)
+  const STEPS = 5; let step = 0;
+  const pre = async (sc: THREE.Scene, cam: THREE.Camera) => { await renderer.prewarm(sc, cam, (k) => ui.setLoading(0.9 + 0.1 * Math.min(1, (step + k) / STEPS))); step++; };
   renderer.warmBegin();
   // the world from the spawn point, in every direction: the wake-up turns the camera around
   const wide = new THREE.PerspectiveCamera(100, 16 / 9, 0.1, 2400);
   wide.position.copy(player.pos).add(new THREE.Vector3(0, 1.7, 0));
+  wide.updateMatrixWorld();
+  renderer.setScene(world.scene, wide, true);
+  await pre(world.scene, wide);
   for (let i = 0; i < 4; i++) {
     wide.rotation.set(0, (i / 4) * Math.PI * 2, 0);
     wide.updateMatrixWorld();
     renderer.warm(world.scene, wide, true);
     await breathe();
   }
-  await cine.warm((sc, cam) => renderer.warm(sc, cam, false));
+  await cine.warm(async (sc, cam) => { await pre(sc, cam); renderer.warm(sc, cam, false); });
   await breathe();
   vault.prepare();
+  await pre(vault.scene, vault.camera);
   renderer.warm(vault.scene, vault.camera, false);
   await breathe();
   stage.update(0.016);
+  await pre(stage.scene, stage.camera);
   renderer.warm(stage.scene, stage.camera, false);
   renderer.warmEnd();
   renderer.setScene(cine.scene, cine.camera, false);

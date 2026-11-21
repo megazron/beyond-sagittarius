@@ -181,7 +181,7 @@ export class Cinematic {
   debugNext() { this.stage?.debugNext(); }
 
   /** Compile everything, including what is hidden at the title, so no shot stalls later. */
-  async warm(draw: (scene: THREE.Scene, cam: THREE.PerspectiveCamera) => void) {
+  async warm(draw: (scene: THREE.Scene, cam: THREE.PerspectiveCamera) => void | Promise<void>) {
     const shown = [this.earth.group, this.ring, this.mars, this.giant, this.giantRing, this.home, this.interior.group, this.ship.group];
     const was = shown.map((o) => o.visible);
     shown.forEach((o) => (o.visible = true));
@@ -193,11 +193,11 @@ export class Cinematic {
     cam.position.copy(this.interior.group.position).add(V(0, -0.6, 5));
     cam.lookAt(this.interior.group.position.clone().add(V(0, -1.2, 0)));
     cam.updateMatrixWorld();
-    draw(this.scene, cam);
+    await draw(this.scene, cam);
     shown.forEach((o, i) => (o.visible = was[i]));
     // and the exterior shots
     this.setVisible('earth');
-    draw(this.scene, this.camera);
+    await draw(this.scene, this.camera);
   }
 
   /** Back to the title backdrop. */

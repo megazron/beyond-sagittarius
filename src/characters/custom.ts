@@ -70,15 +70,19 @@ export function randomLook(keep: Pick<PlayerLook, 'name' | 'gender'>, rnd: () =>
   };
 }
 
+const TOWN_HAIR = [4, 2, 0, 4, 3, 0, 1, 5, 2, 1, 5, 3];
 /**
  * Townsfolk look `v` of `n`: the same every time (seeded), every one different from the others in outfit, hair or
- * lineage, and none in the white lab coat (the scientist's outfit: that is the player's own).
+ * lineage, and none in the white lab coat (the scientist's outfit: that is the player's own). The hair of the twelve
+ * comes from TOWN_HAIR: every style twice, once a gender, never the same hair with the same coat or the same lineage, and
+ * never on the next look. (The old index followed the coat: looks 0, 5 and 10 wore the same coat and the same hair side
+ * by side, and the sixth style was never worn.)
  */
 export function townLook(v: number, rnd: () => number): PlayerLook {
   const L = randomLook({ name: '', gender: v % 2 ? 'f' : 'm' }, rnd);
   const coats = OUTFITS.filter((o) => o !== 'scientist');
   const lineage = LINEAGE_IDS[(v * 5 + 1) % LINEAGE_IDS.length];
-  return { ...L, ...LINEAGES[lineage], lineage, outfit: coats[v % coats.length], hair: HAIRS[(v * 7 + Math.floor(v / coats.length)) % HAIRS.length],
+  return { ...L, ...LINEAGES[lineage], lineage, outfit: coats[v % coats.length], hair: HAIRS[(TOWN_HAIR[v] ?? v) % HAIRS.length],
     skin: SKINS[(v * 7 + 3) % SKINS.length], accent: ACCENTS[(v * 3 + 1) % ACCENTS.length], hairRoot: HAIR_COLOURS[(v * 3 + 2) % HAIR_COLOURS.length] };
 }
 

@@ -4,10 +4,12 @@ import { mulberry32, smoothstep } from '../core/noise';
 import type { Quality } from '../core/quality';
 import { Terrain, HALF, LAKE } from './terrain';
 import { applyBark, chainCompile } from './pbr';
+import { loadSet, meanColor, capSize } from '../core/assets';
 import { foliageAtlas, coniferCrown, broadCrown, CROWN_LODS } from './foliage';
 import { modelMaterial, modelMats, type ModelPack, type ModelInfo } from './models';
 import { nearFade } from '../core/nearfade';
 
+const LUM = 'vec3(0.2126, 0.7152, 0.0722)';
 export const windUniforms = { uTime: { value: 0 }, uWind: { value: 1 } };
 
 function colorize(g: THREE.BufferGeometry, hex: number, jitter = 0): THREE.BufferGeometry {
@@ -133,7 +135,7 @@ function buildVariants(): Variant[] {
   return out;
 }
 
-function windify(mat: THREE.Material, amp: number, flutter = 0) {
+function windify(mat: THREE.Material, amp: number, flutter = 0, flutterMask = '') {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = windUniforms.uTime;
     sh.uniforms.uWind = windUniforms.uWind;
@@ -148,14 +150,14 @@ function windify(mat: THREE.Material, amp: number, flutter = 0) {
       float sw = pow(max(position.y, 0.0) * 0.1, 2.0) * uWind * ${amp.toFixed(3)};
       transformed.x += sin(uTime * 1.1 + ip.x * 0.07 + ip.z * 0.05) * sw;
       transformed.z += cos(uTime * 0.9 + ip.z * 0.07) * sw * 0.7;
-      ${flutter > 0 ? `transformed.y += sin(uTime * 2.3 + position.x * 1.7 + position.z * 1.3 + ip.x) * ${flutter.toFixed(3)} * uWind;` : ''}`,
+      ${flutter > 0 ? `transformed.y += sin(uTime * 2.3 + position.x * 1.7 + position.z * 1.3 + ip.x) * ${flutter.toFixed(3)} * uWind${flutterMask};` : ''}`,
     );
     nearFade(mat, sh); // a branch right at the lens dissolves instead of filling the screen
   };
 }
 
 /** A geometry with up to three LODs and the material to draw it. */
-interface Part { lods: THREE.BufferGeometry[]; mat: THREE.Material; shadow: [boolean, boolean, boolean] }
+interface Part { lods: THREE.BufferGeometry[]; mat: THREE.Material; shadow: [boolean, boolean, boolean]; depth?: THREE.Material }
 
 /**
  * All instances of one model or tree species in the world. Instead of one draw
@@ -172,7 +174,7 @@ class Field {
 
   /** `shadowReach`: metres the sun's shadow cascades cover; a LOD that only starts beyond them casts no shadow (it was
    * drawn into the shadow maps for every far tree and rock on the planet, none of it inside them). */
-  constructor(cap: number, parts: Part[], group: THREE.Group, private near: [number, number], private far: number, shadowReach = Infinity) {
+  constructor(cap: number, parts: Part[], group: THREE.Group, private near: [number, number], private far: number, shadowReach = Infinity, name = 'forest') {
     const starts = [0, near[0], near[1]];
     this.x = new Float32Array(cap); this.z = new Float32Array(cap);
     this.m = new Float32Array(cap * 16); this.c = new Float32Array(cap * 3);
@@ -186,7 +188,9 @@ class Field {
         im.frustumCulled = false; // lists are small and spread out; the LOD does the saving
         im.castShadow = p.shadow[k] && starts[k] < shadowReach * 0.9;
         im.receiveShadow = true;
+        if (p.depth) im.customDepthMaterial = p.depth;
         im.count = 0;
+        im.name = `${name}:l${k}`;
         row.push(im);
         group.add(im);
       });
@@ -372,23 +376,62 @@ export class Forest {
     return best;
   }
 
-  private leafMaterial(tex: THREE.Texture | null, fallback: { map: THREE.Texture; alpha: THREE.Texture } | null) {
+  private leafMaterial(tex: THREE.Texture | null, fallback: { map: THREE.Texture; alpha: THREE.Texture } | null, tree = false) {
     const m = new THREE.MeshStandardMaterial({
       map: tex ?? fallback!.map, alphaMap: tex ? null : fallback!.alpha,
       vertexColors: true, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.82,
     });
-    windify(m, 0.12, 0.05);
+    windify(m, 0.12, 0.05, tree ? ' * (1.0 - aBark)' : '');
     // sunlight through the needles when you look towards it
     chainCompile(m, 'leaf', (sh) => {
       sh.uniforms.uLeafSun = this.leafSun;
       sh.uniforms.uLeafCol = this.leafCol;
+      if (tree) sh.vertexShader = 'attribute float aBark; varying float vBark;\n' + sh.vertexShader;
       sh.fragmentShader = 'uniform vec3 uLeafSun, uLeafCol;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         vec3 lfL = normalize((viewMatrix * vec4(uLeafSun, 0.0)).xyz);
         float lfT = pow(clamp(dot(-normalize(vViewPosition), lfL), 0.0, 1.0), 3.0);
-        totalEmissiveRadiance += diffuseColor.rgb * uLeafCol * (0.05 + 0.5 * lfT);`);
+        totalEmissiveRadiance += diffuseColor.rgb * uLeafCol * (0.05 + 0.5 * lfT)${tree ? ' * (1.0 - vBark)' : ''};`);
     });
     return m;
   }
+
+  /**
+   * A whole tree in one draw: the leaf cards' material also draws the bark where the geometry says aBark = 1 (the bark
+   * photo instead of the card, no alpha cut, its relief from the bark normal map, no flutter, no light through it).
+   * Trunk and crown were two instanced draws per species and LOD, in every pass. `depth` is its shadow material: the
+   * card's alpha cut for the needles only, so a trunk does not cast the card's holes.
+   */
+  private treeMaterial(tex: THREE.Texture | null, fallback: { map: THREE.Texture; alpha: THREE.Texture } | null) {
+    const m = this.leafMaterial(tex, fallback, true);
+    const u = this.barkU;
+    chainCompile(m, 'treebark', (sh) => {
+      Object.assign(sh.uniforms, u);
+      sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vBark = aBark;');
+      sh.fragmentShader = 'varying float vBark; uniform sampler2D tBark; uniform vec3 uBarkMean; uniform float uBarkOn;\n' + sh.fragmentShader
+        .replace('#include <alphamap_fragment>', '')
+        .replace('#include <map_fragment>', /* glsl */ `
+        if (vBark > 0.5) {
+          vec3 tx = uBarkOn > 0.5 ? texture2D(tBark, vMapUv).rgb : uBarkMean;
+          diffuseColor.rgb *= mix(vec3(dot(tx, ${LUM}) / max(dot(uBarkMean, ${LUM}), 1e-3)), tx / max(uBarkMean, vec3(1e-3)), 0.9) * 0.95;
+        } else {
+          #include <map_fragment>
+          #include <alphamap_fragment>
+        }`)
+        .replace('mapN.xy *= normalScale;', 'mapN.xy *= normalScale * vBark;');
+    });
+    // a flat normal map from the start, so the bark's arriving later swaps a texture instead of building a new program
+    m.normalMap = FLAT_NORMAL; m.normalScale.setScalar(1.4);
+    this.barkReady.then((n) => { if (n) m.normalMap = n; });
+    const depth = new THREE.MeshDepthMaterial();
+    depth.onBeforeCompile = (sh) => {
+      sh.vertexShader = 'attribute float aBark; varying float vBark;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vBark = aBark;');
+      sh.fragmentShader = 'varying float vBark;\n' + sh.fragmentShader.replace('#include <alphatest_fragment>', 'if (vBark < 0.5) {\n#include <alphatest_fragment>\n}');
+    };
+    depth.customProgramCacheKey = () => 'tree-depth';
+    return { mat: m, depth };
+  }
+  private barkU = { tBark: { value: null as THREE.Texture | null }, uBarkMean: { value: new THREE.Vector3(0.5, 0.5, 0.5) }, uBarkOn: { value: 0 } };
+  private barkReady: Promise<THREE.Texture | null> = Promise.resolve(null);
 
   private leafSun = { value: new THREE.Vector3(0, 1, 0) };
   private leafCol = { value: new THREE.Color(1, 1, 1) };
@@ -415,20 +458,25 @@ export class Forest {
   build() {
     const T = this.terrain, Q = this.q;
     const atlas = this.cards.fir && this.cards.leaf ? null : foliageAtlas();
-    const barkMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0.0 });
-    windify(barkMat, 0.12);
-    applyBark(barkMat, Q);
-    const firLeaf = this.leafMaterial(this.cards.fir, atlas);
-    const pineLeaf = this.leafMaterial(this.cards.pine ?? this.cards.fir, atlas);
-    const broadLeaf = this.leafMaterial(this.cards.leaf, atlas);
+    // the bark photo for the trees' trunks (drawn by the tree material, see treeMaterial)
+    this.barkReady = loadSet('bark_fir', ['diff', 'nor'], Q.texSize === '4k' ? '4k' : capSize(Q.texSize, '1k')).then((st) => {
+      if (!st.diff) return null;
+      const c = meanColor(st.diff);
+      this.barkU.uBarkMean.value.set(c.r, c.g, c.b); this.barkU.tBark.value = st.diff; this.barkU.uBarkOn.value = 1;
+      return st.nor ?? null;
+    }).catch(() => null);
+    const firTree = this.treeMaterial(this.cards.fir, atlas);
+    const pineTree = this.treeMaterial(this.cards.pine ?? this.cards.fir, atlas);
+    const broadTree = this.treeMaterial(this.cards.leaf, atlas);
 
     // trunk and crown LODs of the ordinary forest
     const treeNear: [number, number] = [Q.lodDistances[0] * 1.3, Q.lodDistances[1] * 1.3];
     const treeFar = Q.name === 'mobile' ? Q.viewDistance : 2000;
     const fd = Q.foliageDetail;
-    const conifer = (h: number, r: number, bend: number, crownStart: number, spread: number, leaf: THREE.Material, seed: number): Part[] => [
-      { lods: [0, 1, 2].map((l) => this.trunk(h, r, bend, l)), mat: barkMat, shadow: [true, true, false] },
-      { lods: CROWN_LODS.map((l) => coniferCrown(h, h * crownStart, l, fd, seed, spread)), mat: leaf, shadow: [true, true, true] },
+    // trunk and crown in one geometry per LOD, drawn by one material (one draw per species and LOD, not two)
+    const one = (a: THREE.BufferGeometry, b: THREE.BufferGeometry) => mergeGeometries([a.index ? a.toNonIndexed() : a, withBark(b.index ? b.toNonIndexed() : b)])!;
+    const conifer = (h: number, r: number, bend: number, crownStart: number, spread: number, t: { mat: THREE.Material; depth: THREE.Material }, seed: number): Part[] => [
+      { lods: [0, 1, 2].map((l) => one(this.trunk(h, r, bend, l), coniferCrown(h, h * crownStart, CROWN_LODS[l], fd, seed, spread))), mat: t.mat, depth: t.depth, shadow: [true, true, true] },
     ];
     const lobes: [number, number, number, number][] = [[0, 12.5, 0, 4.4]];
     for (let i = 0; i < 5; i++) { const a = i * 1.26 + 0.4; lobes.push([Math.cos(-a) * 4.6, 10 + (i % 3) * 1.3, Math.sin(-a) * 4.6, 3.3]); }
@@ -442,17 +490,14 @@ export class Forest {
       return mergeGeometries(parts.map((g) => g.toNonIndexed()))!;
     };
     const species = [
-      conifer(23, 0.42, 0.015, 0.16, 0.24, firLeaf, 11),
-      conifer(31, 0.55, -0.012, 0.22, 0.2, firLeaf, 12),
-      conifer(21, 0.4, 0.03, 0.58, 0.3, pineLeaf, 13),
-      [
-        { lods: [0, 1, 2].map(broadTrunk), mat: barkMat, shadow: [true, true, false] as [boolean, boolean, boolean] },
-        { lods: CROWN_LODS.map((l) => broadCrown(lobes, l, fd, 14)), mat: broadLeaf, shadow: [true, true, true] as [boolean, boolean, boolean] },
-      ],
-      conifer(4.5, 0.07, 0.01, 0.1, 0.34, firLeaf, 15), // saplings in the undergrowth
+      conifer(23, 0.42, 0.015, 0.16, 0.24, firTree, 11),
+      conifer(31, 0.55, -0.012, 0.22, 0.2, firTree, 12),
+      conifer(21, 0.4, 0.03, 0.58, 0.3, pineTree, 13),
+      [{ lods: [0, 1, 2].map((l) => one(broadTrunk(l), broadCrown(lobes, CROWN_LODS[l], fd, 14))), mat: broadTree.mat, depth: broadTree.depth, shadow: [true, true, true] as [boolean, boolean, boolean] }],
+      conifer(4.5, 0.07, 0.01, 0.1, 0.34, firTree, 15), // saplings in the undergrowth
     ];
     const capTrees = Math.ceil(Q.treeCount * 1.3);
-    const fields = species.map((p) => new Field(capTrees, p, this.group, treeNear, treeFar, Q.shadowRange));
+    const fields = species.map((p) => new Field(capTrees, p, this.group, treeNear, treeFar, Q.shadowRange, 'tree'));
     this.fields.push(...fields);
 
     // the alien groves
@@ -466,7 +511,7 @@ export class Forest {
     const alien = variants.map((v) => {
       const parts: Part[] = [{ lods: [v.solid], mat: alienSolid, shadow: [true, true, true] }];
       if (v.glow) parts.push({ lods: [v.glow], mat: glowMat, shadow: [false, false, false] });
-      const f = new Field(Math.ceil(Q.treeCount * 0.04) + 1, parts.map((p) => ({ ...p, lods: [p.lods[0], p.lods[0], p.lods[0]] })), this.group, [1e5, 1e6], Math.min(Q.viewDistance, 420));
+      const f = new Field(Math.ceil(Q.treeCount * 0.04) + 1, parts.map((p) => ({ ...p, lods: [p.lods[0], p.lods[0], p.lods[0]] })), this.group, [1e5, 1e6], Math.min(Q.viewDistance, 420), Infinity, 'alien');
       this.fields.push(f);
       return f;
     });
@@ -558,7 +603,7 @@ export class Forest {
       const cap = Math.ceil(counts[info.kind] / 1.5) + 4;
       const big = info.kind === 'outcrop' || info.kind === 'rock';
       const shadow: [boolean, boolean, boolean] = big ? [true, true, true] : info.kind === 'plant' ? [false, false, false] : [true, true, false];
-      const f = new Field(cap, [{ lods, mat, shadow }], this.group, big ? [near[0] * 1.2, near[1] * 1.6] : near, reach[info.kind], Q.shadowRange);
+      const f = new Field(cap, [{ lods, mat, shadow }], this.group, big ? [near[0] * 1.2, near[1] * 1.6] : near, reach[info.kind], Q.shadowRange, `scan:${info.kind}`);
       this.fields.push(f);
       if (info.kind !== 'outcrop') this.small.push(...f.objects());
       list.push({ name, info, field: f });
@@ -652,5 +697,11 @@ export class Forest {
   }
 }
 const tmpC = new THREE.Color();
+/** A crown's geometry with aBark = 0 (leaves), ready to merge with a trunk's. */
+function withBark(g: THREE.BufferGeometry) {
+  if (!g.attributes.aBark) g.setAttribute('aBark', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count), 1));
+  return g;
+}
+const FLAT_NORMAL = (() => { const t = new THREE.DataTexture(new Uint8Array([128, 128, 255, 255]), 1, 1); t.needsUpdate = true; return t; })();
 const tmpV = new THREE.Vector2();
 const tmpD = new THREE.Vector3();
