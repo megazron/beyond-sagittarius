@@ -104,7 +104,7 @@ with sync_playwright() as pw:
             ok(g2['state'] != 'dormant', 'arena: come close and the guardian wakes', g2['state'])
             ok(page.evaluate("document.querySelector('#cb-hud .boss').classList.contains('on')"), 'arena: its bar is on the screen')
             shot(page, 'arena_guardian')
-            calls = page.evaluate("new Promise((r) => { let m = 0, n = 0; const f = () => { m = Math.max(m, __bs.perf.calls); if (++n < 40) requestAnimationFrame(f); else r(m); }; f(); })")
+            calls = page.evaluate("new Promise((r) => { let m = 0, n = 0; const f = () => { m = Math.max(m, __bs.perf.calls); if (++n < 40) requestAnimationFrame(f); else r(m); }; f(); setTimeout(() => r(Math.max(m, __bs.perf.calls)), 20000); })")
             ok(calls - calls0 < BUDGET[a.quality], f'arena: a full fight adds {calls - calls0} draw calls (budget {BUDGET[a.quality]})', calls)
         elif enc == 'hunt.first':
             shot(page, 'hunt')
