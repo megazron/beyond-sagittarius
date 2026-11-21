@@ -63,6 +63,9 @@ jobs:
         run: |
           pip install -q -r tools/requirements-test.txt
           python -m playwright install --with-deps chromium chromium-headless-shell
+          # the tests ask Chromium for ANGLE on Vulkan (tools/smoke.py launch); a bare runner has no Vulkan loader,
+          # so WebGL never starts. Lavapipe is the software Vulkan the laptop's WSL uses too.
+          sudo apt-get install -y -q --no-install-recommends libvulkan1 mesa-vulkan-drivers > /dev/null
 
       - name: Copy the build into the Android app
         if: matrix.cap
