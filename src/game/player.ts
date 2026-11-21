@@ -283,7 +283,7 @@ export class Player {
     const aimWant = this.combat?.aim ?? 0;
     this.aimS += (aimWant - this.aimS) * e(aimWant > this.aimS ? 12 : 8);
     const aim = this.aimS;
-    this.orbit(this.camPos, this.focus, this.yawS, this.pitchS, this.distS * (1 - aim) + Math.min(this.distS, 2.8) * aim);
+    this.orbit(this.camPos, this.focus, this.yawS, this.pitchS, this.distS * (1 - aim) + Math.min(this.distS, 3.1) * aim);
 
     // stride: vertical twice per cycle, sideways once, growing with speed
     const run = clamp(this.speedNow / 7.2, 0, 1);
@@ -302,7 +302,7 @@ export class Player {
       const cp = Math.cos(this.pitchS), fx = -Math.sin(this.yawS) * cp, fy = Math.sin(this.pitchS), fz = -Math.cos(this.yawS) * cp;
       const rx = Math.cos(this.yawS), rz = -Math.sin(this.yawS);
       tmpA.copy(this.camera.position);
-      tmpA.x += rx * 0.72 * aim; tmpA.z += rz * 0.72 * aim; tmpA.y += 0.12 * aim;
+      tmpA.x += rx * 0.85 * aim; tmpA.z += rz * 0.85 * aim; tmpA.y += 0.12 * aim;
       tmpC.copy(this.camera.quaternion);
       this.camera.position.copy(tmpA);
       this.camera.lookAt(tmpA.x + fx * 30, tmpA.y + fy * 30, tmpA.z + fz * 30);

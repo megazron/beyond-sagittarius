@@ -125,6 +125,15 @@ window.__cbBot = (mode) => {
       const way = [run.at(14, 3.5), run.at(30, -5), run.at(46, 2), run.at(60, 3), run.at(72, 0)], a = run.at(0, 0);
       const w = way.find((q) => Math.hypot(q.x - a.x, q.z - a.z) > Math.hypot(p.x - a.x, p.z - a.z) + 0.5) || way[4];
       go(w.x, w.z);
+    } else if (mode === 'bowref' || mode === 'slingref') {
+      // a reference: the same shot again and again at a point ahead, standing still, for a side camera
+      const wpn = mode === 'bowref' ? 'bow' : 'sling';
+      if (st === 0) { if (equip(wpn)) { flag.yaw = C.cam.yaw; next(); } return; }
+      const f = { x: C.cam.x - Math.sin(flag.yaw) * 30, z: C.cam.z - Math.cos(flag.yaw) * 30 };
+      look(f.x, f.z, C.cam.y + 1.4);
+      const cyc = since() % 5.2;
+      hold('Mouse2', cyc > 0.4);
+      hold('Mouse0', cyc > 1.0 && cyc < (mode === 'bowref' ? 3.4 : 3.0));
     } else if (mode === 'tour') {
       // free play: walk up to the animals of Verdaxis and look at them
       const t = nearest(living().filter((e) => e.kind === (flag.kind || 'mossback')));

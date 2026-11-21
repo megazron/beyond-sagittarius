@@ -75,7 +75,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   sling: { id: 'sling', mass: 0.1, dur: 140, age: 1, craft: { fibre: 3, hide: 1 }, block: 0.2, ranged: true,
     proj: { ammo: 'stone', speed: 30, gravity: 9.81, dmg: 15, kind: 'blunt', charge: 0.8, weak: 0.45, radius: 0.08, knock: 2.6, poise: 26, recover: 1, noise: 10, spread: [4.5, 1.6] } },
   bow: { id: 'bow', mass: 0.7, dur: 90, age: 1, craft: { branch: 1, sinew: 2, fibre: 1 }, block: 0.25, ranged: true,
-    proj: { ammo: 'arrow', speed: 40, gravity: 9.81, dmg: 20, kind: 'pierce', charge: 0.7, weak: 0.4, radius: 0.06, knock: 1.6, poise: 20, recover: 0.6, noise: 5, spread: [3.2, 0.8] } },
+    proj: { ammo: 'arrow', speed: 40, gravity: 9.81, dmg: 20, kind: 'pierce', charge: 0.95, weak: 0.4, radius: 0.06, knock: 1.6, poise: 20, recover: 0.6, noise: 5, spread: [3.2, 0.8] } },
   crossbow: { id: 'crossbow', mass: 3.2, dur: 220, age: 4, craft: { branch: 3, vine: 2, bronze: 1 }, block: 0.3, ranged: true,
     proj: { ammo: 'bolt', speed: 58, gravity: 9.81, dmg: 34, kind: 'pierce', charge: 0, weak: 1, radius: 0.06, knock: 2.4, poise: 36, recover: 0.5, noise: 6, spread: [0.7, 0.7], reload: 2.6 } },
   // the Scientist's salvage shooter: a coil that throws a charged slug. It stops machines; it runs on a cell that refills.

@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import type { Character, Limbs, Dir } from '../../characters/character';
 import type { SimPlayer } from '../sim/sim';
 import { WEAPONS } from '../sim/weapons';
+import { RangedRig } from './ranged';
 import type { WeaponId } from '../sim/weapons';
 
 type Pose = Limbs;
@@ -125,8 +126,18 @@ export class FightBody {
    * Called before the walk is posed each frame. `armed` is true when the weapon should be up (a threat near, or
    * aiming); otherwise it is carried and the body is left to the walk.
    */
-  update(model: Character, p: SimPlayer, dt: number, t: number, armed: boolean, aiming: boolean, visible: WeaponId | null) {
-    this.hold(model, visible);
+  /** The bow and the sling have their own rig (view/ranged.ts): both hands on them, drawn where the hands are. */
+  ranged = new RangedRig();
+  update(model: Character, p: SimPlayer, dt: number, t: number, armed: boolean, aiming: boolean, visible: WeaponId | null, aimW?: THREE.Vector3, ammo = 0) {
+    const rw = p.weapon === 'bow' || p.weapon === 'sling';
+    this.hold(model, rw ? null : visible);
+    if (rw && !p.down && p.act !== 'roll' && p.staggerT <= 0 && aimW) {
+      this.since += dt; this.rollAngle = 0; this.crouch = 0;
+      const pose = this.ranged.pose(model, p, dt, t, aiming || armed, aimW, ammo, this.since);
+      if (p.act === 'charge') this.wasCharging = 'shot'; else if (this.since > 0.45) this.wasCharging = 'none';
+      if (pose) { if (p.sneaking) { pose.bend = (pose.bend ?? 0) + 0.3; this.crouch = 0.2; } model.setLimbs(pose); return; }
+    } else if (!rw) this.ranged.hide();
+    else this.ranged.faceOffset = 0;
     if (this.held) {
       const G = GRIP, gun = this.heldId === 'coil' || this.heldId === 'crossbow';
       // a stock is held like a grip: the barrel runs on along the forearm, not out of the thumb
@@ -197,5 +208,7 @@ export class FightBody {
   }
 
   /** Give the body back to the walk and empty the hands. */
-  release(model: Character) { model.setLimbs(null); this.hold(model, null); this.rollAngle = 0; this.crouch = 0; this.ready = 0; }
+  /** After the body is posed this frame. */
+  late(model: Character, dt: number, t: number) { this.ranged.late(model, dt, t); }
+  release(model: Character) { this.ranged.hide(); model.setLimbs(null); this.hold(model, null); this.rollAngle = 0; this.crouch = 0; this.ready = 0; }
 }

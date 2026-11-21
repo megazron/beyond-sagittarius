@@ -58,6 +58,10 @@ export interface SimPlayer {
   sneaking: boolean; speed: number; air: boolean;
   injuries: Injury[];
   down: boolean;
+  /** Seconds a bow has been held at full draw (a short hold steadies, a long one shakes). */
+  holdT: number;
+  /** A sling's stone in the air of the throw: it leaves when the pouch comes over (seconds left, and the draw). */
+  pendingT: number; pendingK: number;
   stepT: number; regenLock: number;
   /** Blows or shots left in each made thing (see WeaponDef.dur). */
   dur: Partial<Record<WeaponId, number>>;
@@ -120,7 +124,7 @@ export class CombatSim {
       x: 0, y: 0, z: 0, fx: 0, fz: 1, hp: 100, stamina: 100, weapon: 'fists', has: { fists: true },
       act: 'idle', actT: 0, combo: 0, charge: 0, charging: 'none', blocking: false, blockT: 0, iframe: false, rollX: 0, rollZ: 0,
       forceVX: 0, forceVZ: 0, forceT: 0, moveScale: 1, snareT: 0, staggerT: 0, refire: 0, cell: WEAPONS.coil.proj!.cell!, cellT: 0,
-      sneaking: false, speed: 0, air: false, injuries: [], down: false, stepT: 0, regenLock: 0, lastHitT: -9, dur: {}, reloadT: 0,
+      sneaking: false, speed: 0, air: false, injuries: [], down: false, stepT: 0, regenLock: 0, lastHitT: -9, dur: {}, reloadT: 0, holdT: 0, pendingT: 0, pendingK: 0,
     };
     for (let i = 0; i < MAX_PROJ; i++) this.proj.push({ alive: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, weapon: 'rock', dmg: 0, life: 0, g: 0 });
   }
@@ -334,7 +338,7 @@ export class CombatSim {
       if (I.dodge && (p.act === 'idle' || p.act === 'charge' || (p.act === 'recover' && p.actT > 0.1)) && !I.air) {
         if (p.stamina >= rollCost * 0.6) {
           p.stamina = Math.max(0, p.stamina - rollCost); p.regenLock = 0.9;
-          p.act = 'roll'; p.actT = 0; p.iframe = true; p.charge = 0; p.charging = 'none'; p.blocking = false;
+          p.act = 'roll'; p.actT = 0; p.iframe = true; p.charge = 0; p.charging = 'none'; p.pendingT = 0; p.blocking = false;
           // a snare lets go if you throw yourself out of it
           p.snareT = Math.min(p.snareT, 0.15);
           if (mlen > 0.2) { p.rollX = I.mx / mlen; p.rollZ = I.mz / mlen; } else { p.rollX = -p.fx; p.rollZ = -p.fz; }
@@ -425,6 +429,7 @@ export class CombatSim {
     p.actT += dt;
     if (p.act === 'charge' && pr) {
       p.charge = clamp(p.actT / Math.max(0.05, pr.charge / Math.max(0.5, this.hurtMul().steady)), 0, 1);
+      p.holdT = p.charge >= 1 ? p.holdT + dt : 0;
       // a drawn bow is held on the arms: it cannot be held for ever
       if (p.charge >= 1 && w.id === 'bow') { p.stamina = Math.max(0, p.stamina - dt * 7); p.regenLock = 0.5; if (p.stamina <= 0) { p.act = 'idle'; p.charge = 0; p.charging = 'none'; this.emit({ t: 'player', what: 'tired' }); return; } }
       this.face(I.ax - p.x, I.az - p.z, dt, 16);
@@ -433,8 +438,9 @@ export class CombatSim {
       const release = this.assist.hold ? p.charge >= 1 : !held;
       if (release) {
         if (p.charge < 0.12 && !this.assist.hold) { p.act = 'idle'; p.charge = 0; p.charging = 'none'; return; }
-        this.fire(w, p.charge, I);
-        p.act = 'recover'; p.actT = 0; p.charge = 0; p.charging = 'none'; p.combo = 9;
+        // a sling throws through the last turn: the stone leaves when the pouch comes over, not when the cord is let go
+        if (w.id === 'sling') { p.pendingT = 0.14; p.pendingK = p.charge; } else this.fire(w, p.charge, I);
+        p.act = 'recover'; p.actT = 0; p.charge = 0; p.charging = 'none'; p.combo = 9; p.holdT = 0;
       }
       return;
     }
@@ -444,7 +450,9 @@ export class CombatSim {
     } else if (p.act === 'active' && m) {
       if (p.actT >= m.active) { p.act = 'recover'; p.actT = 0; }
     } else if (p.act === 'recover') {
-      const rec = p.combo === 9 ? 0.32 : (m?.recover ?? 0.3);
+      if (p.pendingT > 0) { p.pendingT -= dt; if (p.pendingT <= 0 && w.id === 'sling' && this.hasShot(w)) this.fire(w, p.pendingK, I); }
+      // after a shot: a bow is nocked from the quiver, a sling's pouch is loaded from the bag
+      const rec = p.combo === 9 ? (w.id === 'bow' ? 1.05 : w.id === 'sling' ? 1.0 : 0.32) : (m?.recover ?? 0.3);
       // the next press is taken a little early, so a rhythm of presses is a rhythm of blows
       if (I.attack && m && p.combo !== 9 && p.actT > rec * 0.45 && p.stamina >= m.stamina * T.staminaCost * 0.5) { this.startMelee(w, I); return; }
       if (p.actT >= rec) { p.act = 'idle'; p.actT = 0; if (p.combo === 9) p.combo = 0; }
@@ -527,14 +535,18 @@ export class CombatSim {
     const to = this.aimPoint(I, speed);
     {
       // the hands are not a machine: the shot strays by a little, less at full draw, more when cold or hurt
-      const sp = (lerp(pr.spread[0], pr.spread[1], charge) / Math.max(0.4, this.hurtMul().steady)) * (Math.PI / 180);
+      // a drawn bow held past a breath or so starts to shake
+      const shake = w.id === 'bow' ? 1 + clamp((p.holdT - 1.4) * 0.6, 0, 2) : 1;
+      const sp = (lerp(pr.spread[0], pr.spread[1], charge) * shake / Math.max(0.4, this.hurtMul().steady)) * (Math.PI / 180);
       const dd = Math.hypot(to.x - p.x, to.z - p.z), off = Math.tan(sp) * dd, a = this.rand() * 6.283, r = Math.sqrt(this.rand()) * off;
       to.x += Math.cos(a) * r; to.z += Math.sin(a) * r * 0.5; to.y += Math.sin(a) * r * 0.6;
     }
     if (pr.ammo || pr.cell) this.wear(w.id);
     this.face(to.x - p.x, to.z - p.z, 1, 99);
     // out of the right hand, a little ahead
-    const from = v3(p.x + p.fx * 0.45 + p.fz * -0.22, p.y + 1.5, p.z + p.fz * 0.45 + p.fx * 0.22);
+    // a bow's arrow leaves from the bow hand, a sling's stone from over the shoulder, the rest out of the right hand
+    const side = w.id === 'bow' ? 0 : -0.22, ahead = w.id === 'bow' ? 0.6 : 0.45, up = w.id === 'sling' ? 1.75 : w.id === 'bow' ? 1.42 : 1.5;
+    const from = v3(p.x + p.fx * ahead + p.fz * side, p.y + up, p.z + p.fz * ahead - p.fx * side);
     const v = solveLaunch(from, to, speed, pr.gravity);
     slot.alive = true; slot.x = from.x; slot.y = from.y; slot.z = from.z; slot.vx = v.x; slot.vy = v.y; slot.vz = v.z;
     slot.weapon = w.id; slot.dmg = pr.dmg * k; slot.life = 6; slot.g = pr.gravity;

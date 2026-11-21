@@ -112,3 +112,36 @@ summary or a secondary write-up only, so the number may be off. The numbers in t
 
 Hades dash frames, Monster Hunter roll frames, God of War hit-stop frames, touch aiming in mobile shooters, Vlambeer's
 actual shake values. Where I had no number I tuned by the tests and by playing, and say so.
+
+## 9. The bow and the sling, done the way people do them (owner note: "the animation is not good")
+
+- Shot sequence in archery coaching material: stance side-on with feet across the shooting line, nock the arrow
+  under the nock locator, set the grip, raise the bow arm to shoulder height, draw with the back to a fixed anchor on
+  the face (string at the nose tip and mouth corner, or under the jaw), aim, release by relaxing the fingers while
+  the back keeps pulling, follow through: the draw hand goes back beside the neck and the bow arm stays up until the
+  arrow lands. (Seen: Mississippi State Extension P3249/P1564 archery guides; University of Arizona extension
+  "Archery First Shot Fundamentals" checklist; NASP "11 Steps to Archery Success"; Human Kinetics "Establish perfect
+  archery form".) Here: side-on stance, two-bone arm reach to a nock point that slides from the brace height to an
+  anchor under the jaw, string and limbs bend with the draw, a short steady hold then a growing tremor (and a wider
+  spread in the simulation), a release that snaps the string straight and sends the hand back past the ear while
+  the bow arm stays up and the bow tips forward, and a nock from the quiver at the hip before the next shot.
+- Slinging (hobbyist sources, so timings vary): the retention loop goes on the middle finger and the release cord is
+  pinched between thumb and index finger; a loaded sling is dropped and set going with one or more turns; the throw
+  is an overhand "baseball" motion with the hips turning as the pouch passes overhead, the speed comes at the end,
+  and the release cord is let go so the stone leaves on the tangent toward the target; underhand throws go further
+  and land less true. (Seen: slinging.org technique pages; Mother Earth News "hand sling"; Art of Manliness
+  paracord sling.) Here: stone into the pouch, overhead whirl while the button is held, a step with the off foot and
+  an overhand throw on release (the stone leaves about 0.14 s after the press is let go, when the pouch comes over),
+  follow-through across the body, and the empty pouch swings on its cords and settles.
+
+## 10. What came first: the Stone Age order (owner note: "all the inventions from scratch of stone age")
+
+- Wooden spears: Schoeningen, Germany, long dated to about 300 to 400 thousand years ago (some newer work dates
+  them younger); points hardened and shaped, no stone tip. Hafted stone points: Kathu Pan, about 500 thousand years
+  ago (proposed). Bow and stone-tipped arrows: Sibudu Cave, South Africa, about 64 thousand years ago (Lombard and
+  Phillipson, Antiquity 2010) and a bone point about 61.7 thousand (Backwell et al., Antiquity 2018). The sling
+  leaves almost nothing behind (cord and leather rot); I found no early date I trust, so it sits late with the bow.
+  (Seen: Cambridge Antiquity abstracts; The Past; History News Network.)
+- Here: `src/combat/sim/inventions.ts` holds the order. Episode One: thrown stones, fire, club, torch, a struck
+  flake, the fire-hardened spear, traps. Then hafted points, the spear-thrower, the sling and the bow. Metal, the
+  crossbow and the ship's salvage are ages later and live only in the dev arena.

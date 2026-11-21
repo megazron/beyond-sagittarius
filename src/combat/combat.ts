@@ -237,6 +237,7 @@ export class Combat {
   }
   /** When the encounter frame last advanced the open tension moment (performance.now()). */
   private tensionFed = -1e9;
+  private aimW = new THREE.Vector3();
   /** The story (or the menu) calls the encounter off. */
   leaveEncounter() { this.encounter?.leave(); }
 
@@ -350,8 +351,8 @@ export class Combat {
   // ---------------- time ----------------
   /** Called with real frame time before the game steps: hit-stop and slow motion happen here. */
   scaleTime(dt: number): number {
-    if (this.stopT > 0) { this.stopT -= dt; return dt * 0.04; }
-    return dt * this.slow;
+    if (this.stopT > 0) { this.stopT -= dt; return dt * 0.04 * this.testSlow; }
+    return dt * this.slow * this.testSlow;
   }
   private hitStop(sec: number) { if (this.d.settings().shake) this.stopT = Math.max(this.stopT, sec); }
   private kickCam(k: number) { if (this.d.settings().shake) this.shake = Math.max(this.shake, k); }
@@ -586,8 +587,10 @@ export class Combat {
       cb.aim = I.aim ? 1 : 0; cb.sneak = p.sneaking; cb.jump = p.act === 'idle' && !p.blocking;
       cb.sprint = D.input.device === 'pad' && eng ? this.padSprint : null;
     } else P.combat = null;
-    this.body.update(P.model, p, dt, this.clock, eng && (threat || !!run || I.aim), I.aim, armed ? p.weapon : null);
-    if (P.combat) P.combat.crouch = this.body.crouch;
+    // where the player looks (not the camera: a story or a recording may hold the camera elsewhere)
+    { const cp = Math.cos(P.pitch); this.aimW.set(-Math.sin(P.yaw) * cp, Math.sin(P.pitch), -Math.cos(P.yaw) * cp); }
+    this.body.update(P.model, p, dt, this.clock, eng && (threat || !!run || I.aim), I.aim, armed ? p.weapon : null, this.aimW, sim.ammo() ?? 0);
+    if (P.combat) { P.combat.crouch = this.body.crouch; if (P.combat.face !== null) P.combat.face += this.body.ranged.faceOffset; }
     P.pose = p.down ? 'lie' : P.pose === 'lie' ? 'idle' : P.pose;
     this.slow = 1;
     if (D.settings().slowMo && (p.act === 'charge' || sim.enemies.some((e) => e.state === 'strike' && e.target === -1 && Math.hypot(e.x - p.x, e.z - p.z) < 5))) this.slow = 0.55;
@@ -769,6 +772,7 @@ export class Combat {
       cam.position.x += (Math.random() - 0.5) * this.shake; cam.position.y += (Math.random() - 0.5) * this.shake;
       this.shake = Math.max(0, this.shake - dt * 0.7);
     }
+    this.body.late(P.model, dt, this.clock);
     this.fx.sync(sim, dt, this.clock, cam);
     void time;
     // HUD
@@ -842,6 +846,8 @@ export class Combat {
   // ---------------- test hooks ----------------
   /** Tests press the fight's keys by code (a headless browser has no pointer lock). */
   testKeys = false;
+  /** Recordings: the whole game in slow motion (1 is normal). */
+  testSlow = 1;
   testHold(code: string, on: boolean) { this.testKeys = true; this.d.input.hold(code, on); }
   testTap(code: string) { this.testKeys = true; this.d.input.hold(code, true); this.tapUp.push(code); }
   /** Turn the view as a mouse would (pixels). */
