@@ -23,6 +23,7 @@ import { UI, PLAYABLE_LEVELS } from '../ui/ui';
 import { Tutorial } from './tutorial';
 import { Cutscene, Beat, SceneBranch } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
+import type { Combat } from '../combat/combat';
 import { apply, collectPayoffs, DECISIONS, LINE_RULES, QTES, record, resolveLine, test } from './branch';
 
 /** Line of sight for cutscene cameras. */
@@ -43,7 +44,7 @@ export class Game {
       const p = this.player.pos;
       f.pins = this.world.items.items.filter((it) => it.active && (it.gate ?? 0) <= s.level).sort((a, b) => a.pos.distanceToSquared(p) - b.pos.distanceToSquared(p)).slice(0, 5).map((it) => [it.pos.x, it.pos.z]);
     } else if (id === 'builder') f.sure = true;
-    else if (id === 'medic') { s.stats.health = 100; s.stats.stamina = 100; }
+    else if (id === 'medic') { s.stats.health = 100; s.stats.stamina = 100; this.combat?.treat(); }
     else if (id === 'strong') f.tirelessDay = s.day;
     this.ui.toast(t(`away.fav.${id}`));
   }
@@ -93,6 +94,8 @@ export class Game {
 
   mode: Mode = 'wake';
   save!: SaveData;
+  /** Fights, the animals of Verdaxis and the set pieces (main.ts makes it; src/combat). */
+  combat: Combat | null = null;
   private wakeT = 0;
   private wakeCues: { t: number; fn: () => void; done?: boolean }[] = [];
   private saveClock = 0;
@@ -345,6 +348,7 @@ export class Game {
     this.lastObjKey = '';
     this.syncItems();
     this.story.sync();
+    this.combat?.attach(save);
     if (fresh) {
       this.player.spawn(0, 2, 0.35);
       this.mode = 'wake';
@@ -522,6 +526,8 @@ export class Game {
     }
 
     const p = this.player;
+    // a set piece has the whole frame: the survival clock and the story wait for it
+    if (this.combat?.encounter) { this.combat.frame(dt, time); return; }
     if (this.away && this.away.quiet > 0) { this.away.quiet -= dt; this.input.endFrame(); }
     // whoever this level reveals: their own story, on their own ground, as soon as the moment is free
     // a level's own ending lands first: the Vault, the Ledger, then the next person's story
@@ -531,7 +537,9 @@ export class Game {
     // the crash isn't forgotten by the next cutscene: hurt on day one, better by the time there's food
     const hurt = s.level <= 1 ? 0.45 : s.level === 2 ? 0.72 : 1;
     p.model.setLimp(s.level <= 1);
+    this.combat?.before(dt, time);
     p.update(dt, this.input, true, st.stamina, (st.health < 25 ? 0.75 : 1) * hurt);
+    this.combat?.after(dt, time);
     if (this.camShake > 0) {
       p.camera.position.x += (Math.random() - 0.5) * this.camShake;
       p.camera.position.y += (Math.random() - 0.5) * this.camShake;
@@ -549,7 +557,7 @@ export class Game {
       if (st.stamina <= 0) { st.health -= dt * 3; if (!this.swimWarned) { this.swimWarned = true; this.ui.toast(t('msg.swimTired')); } }
       if (!s.flags.swamOnce) { s.flags.swamOnce = true; this.ui.toast(t('msg.swim')); }
     } else if (p.sprinting && s.favours?.tirelessDay !== s.day) st.stamina = clamp(st.stamina - dt * 16, 0, 100);
-    else st.stamina = clamp(st.stamina + dt * (p.speedNow > 0.5 ? 8 : 14), 0, 100);
+    else st.stamina = clamp(st.stamina + dt * (p.speedNow > 0.5 ? 8 : 14) * (this.combat?.regenMul() ?? 1), 0, 100);
     if (st.thirst <= 0 || st.hunger <= 0) st.health -= dt * 0.6;
     else if (st.thirst > 40 && st.hunger > 40) st.health = Math.min(100, st.health + dt * 0.12);
     if (st.thirst < 15 && time - this.lastThirstWarn > 40) { this.lastThirstWarn = time; this.ui.toast(t('msg.thirsty')); }
@@ -618,7 +626,7 @@ export class Game {
 
   findInteraction() {
     const p = this.player;
-    if (this.story.houndEngaged()) {
+    if (this.story.houndEngaged() && !this.combat?.encounter) {
       this.interactTarget = { kind: 'strike' };
       this.ui.setPrompt(this.story.strikePrompt());
       return;

@@ -110,6 +110,8 @@ export class Input {
       }
       if (!this.enabled) return;
       this.dragging = true;
+      // mouse buttons read like keys (Mouse0 left, Mouse1 middle, Mouse2 right): the fight asks for them by name
+      { const c = `Mouse${e.button}`; if (!this.keys.has(c)) this.pressed.add(c); this.keys.add(c); }
       if (e.button === 0 && document.pointerLockElement !== canvas) {
         try { const r = canvas.requestPointerLock() as unknown as Promise<void> | undefined; r?.catch?.(() => {}); } catch { /* ignore */ }
       }
@@ -154,7 +156,7 @@ export class Input {
   }
 
   private endPointer(e: PointerEvent) {
-    if (e.pointerType === 'mouse') { this.dragging = false; return; }
+    if (e.pointerType === 'mouse') { this.keys.delete(`Mouse${e.button}`); if (!e.buttons) this.dragging = false; return; }
     this.pinch.delete(e.pointerId);
     if (this.pinch.size < 2) this.pinchDist = 0;
     if (e.pointerId === this.lookPointer) {
@@ -223,6 +225,11 @@ export class Input {
     this.menu.scroll = ry;
   }
 
+  /** A pad button by its standard index: held, and pressed this frame. */
+  padBtn(i: number) { return this.padDown.has(i); }
+  padBtnHit(i: number) { return this.padHit.has(i); }
+  /** The fight has taken these pad buttons: the menus and the bound actions do not see them. */
+  padMask: Set<number> | null = null;
   /** Any button that should skip a cutscene. */
   padSkip() { return this.padHit.has(0) || this.padHit.has(1) || this.padHit.has(9); }
 
@@ -237,16 +244,16 @@ export class Input {
   held(a: Action) {
     if (this.actHolds.has(a)) return true;
     const p = this.binds.pad[a];
-    return (p !== undefined && this.padDown.has(p)) || this.binds.kb[a].some((c) => this.down(c));
+    return (p !== undefined && !this.padMask?.has(p) && this.padDown.has(p)) || this.binds.kb[a].some((c) => this.down(c));
   }
   /** Was the action pressed this frame? */
   act(a: Action) {
     if (this.actTaps.has(a)) return true;
     const p = this.binds.pad[a];
-    return (p !== undefined && this.padHit.has(p)) || this.binds.kb[a].some((c) => this.hit(c));
+    return (p !== undefined && !this.padMask?.has(p) && this.padHit.has(p)) || this.binds.kb[a].some((c) => this.hit(c));
   }
   /** Was the action pressed on the pad this frame? Key presses go through keydown in main.ts. */
-  padAct(a: Action) { const p = this.binds.pad[a]; return p !== undefined && this.padHit.has(p); }
+  padAct(a: Action) { const p = this.binds.pad[a]; return p !== undefined && !this.padMask?.has(p) && this.padHit.has(p); }
   padHeld(a: Action) { const p = this.binds.pad[a]; return p !== undefined && this.padDown.has(p); }
   /** Which action, if any, a keyboard code triggers. */
   actionFor(code: string): Action | null {
