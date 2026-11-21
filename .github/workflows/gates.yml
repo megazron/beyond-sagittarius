@@ -31,6 +31,7 @@ jobs:
           - { name: prologue_smoke, run: 'python tools/prologue_smoke.py --quality web' }
           - { name: mobile_smoke, run: 'python tools/mobile_smoke.py --shots "$RUNNER_TEMP/shots"' }
           - { name: crowd_smoke, run: 'python tools/crowd_smoke.py' }
+          - { name: traffic_smoke, run: 'python tools/traffic_smoke.py' }
           - { name: perf_gate, run: 'python tools/perf_gate.py --out "$RUNNER_TEMP/perf.json"' }
           - { name: text_fit, run: 'python tools/text_fit.py --before --out "$RUNNER_TEMP/textfit.json"' }
           - { name: cutscene_qa, run: 'python tools/cutscene_qa.py --out "$RUNNER_TEMP/cutscene"' }
