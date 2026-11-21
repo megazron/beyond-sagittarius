@@ -128,6 +128,19 @@ def weld_map(P):
     return inv.ravel(), first
 
 
+def vcol_material(info):
+    """A merged kit (the mouth, teeth, props, the stock): colour, roughness/metalness and glow are per vertex. Without
+    this every piece rendered white, the dark inside of the mouth too, and it read as a grin."""
+    m = bpy.data.materials.new('kit_vcol'); m.use_nodes = True; nt = m.node_tree; N, L = nt.nodes, nt.links; I = nt.nodes['Principled BSDF'].inputs
+    c = N.new('ShaderNodeAttribute'); c.attribute_name = 'vcolor'; L.new(c.outputs['Vector'], I['Base Color'])
+    if info['geo'].get('aPbr'):
+        p = N.new('ShaderNodeAttribute'); p.attribute_name = 'vaPbr'; sp = N.new('ShaderNodeSeparateXYZ'); L.new(p.outputs['Vector'], sp.inputs[0])
+        L.new(sp.outputs['X'], I['Roughness']); L.new(sp.outputs['Y'], I['Metallic'])
+    if info['geo'].get('aGlow'):
+        gl = N.new('ShaderNodeAttribute'); gl.attribute_name = 'vaGlow'; L.new(gl.outputs['Vector'], I['Emission Color']); I['Emission Strength'].default_value = 3
+    return m
+
+
 def mesh_of(info, weld=False):
     g = info['geo']; P = b64f(g['pos']).reshape(-1, 3)
     idx = b64f(g['idx'], '<u4') if g.get('idx') else np.arange(len(P), dtype=np.uint32)
@@ -143,6 +156,10 @@ def mesh_of(info, weld=False):
     if g.get('uv'):
         uv = b64f(g['uv']).reshape(-1, 2).copy(); uv[:, 1] = 1 - uv[:, 1]
         l = me.uv_layers.new(name='UVMap'); l.data.foreach_set('uv', uv[tri[keep].ravel()].ravel())
+    for k in ('color', 'aPbr', 'aGlow'):
+        if g.get(k):
+            v = b64f(g[k]).reshape(-1, 3); v = v[rep] if rep is not None else v
+            at = me.attributes.new('v' + k, 'FLOAT_VECTOR', 'POINT'); at.data.foreach_set('vector', v.ravel())
     for k in ('aT', 'aLayer', 'aDens'):
         if g.get(k):
             v = b64f(g[k]); v = v[rep] if rep is not None else v
@@ -254,7 +271,7 @@ for k, fs in ids.items():
     if info['geo']['n'] < 3 or (mat['type'] == 'ShaderMaterial' and mat.get('uColor') is None): continue
     if info['instanced']: pass
     WELD = info.get('name') == 'cloth' and not os.environ.get('NO_CLOTH_SUB')
-    me = mesh_of(info, weld=WELD); me.materials.append(material(mat)); REP = np.array(me['rep'], np.int64) if WELD else None
+    me = mesh_of(info, weld=WELD); me.materials.append(vcol_material(info) if info['geo'].get('color') else material(mat)); REP = np.array(me['rep'], np.int64) if WELD else None
     o = bpy.data.objects.new(info.get('name') or k[:8], me); sc.collection.objects.link(o); objs[k] = o
     o.cycles.use_camera_cull = True
     recs = {f: next(r for r in data[f]['meshes'] if r['id'] == k) for f in fs}

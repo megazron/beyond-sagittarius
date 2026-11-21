@@ -539,6 +539,7 @@ export class Cinematic {
       update: (k, local) => {
         const g = ins.gaugeAt; g.updateMatrixWorld(); const c0 = g.getWorldPosition(new THREE.Vector3()), n = V(0, 0, 1).applyQuaternion(g.getWorldQuaternion(new THREE.Quaternion()));
         lens(85); this.camera.position.copy(c0).addScaledVector(n, 0.55).add(V(-0.3, 0.1, 0)); this.lookTarget.copy(c0); // from his left; he stands to its right
+        sci.setLookTarget(c0); // his eyes are on the gauge already, so A4 does not open on his head swinging down to it
         ins.gauge(-0.02 - 0.05 * smoothstep(0.9, 1.3, local) - 0.05 * smoothstep(2.0, 2.4, local));
       },
     });

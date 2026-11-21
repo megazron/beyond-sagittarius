@@ -20,6 +20,8 @@ window.__filmDump = (() => {
     if (g.index) o.idx = b64(new Uint32Array(g.index.array));
     const uv = g.attributes.uv;
     if (uv) { const f = new Float32Array(uv.count * 2); for (let i = 0; i < uv.count; i++) { f[i * 2] = uv.getX(i); f[i * 2 + 1] = uv.getY(i); } o.uv = b64(f); }
+    // merged kits (characters/rigid.ts) carry colour, roughness/metalness and glow per vertex
+    for (const a of ['color', 'aPbr', 'aGlow']) { const v = g.attributes[a]; if (v && v.itemSize === 3) { const f = new Float32Array(v.count * 3); for (let i = 0; i < v.count; i++) { f[i * 3] = v.getX(i); f[i * 3 + 1] = v.getY(i); f[i * 3 + 2] = v.getZ(i); } o[a] = b64(f); } }
     for (const a of ['aT', 'aLayer', 'aDens']) { const v = g.attributes[a]; if (v) { const f = new Float32Array(v.count); for (let i = 0; i < v.count; i++) f[i] = v.getX(i); o[a] = b64(f); } }
     return o;
   };
