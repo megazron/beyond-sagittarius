@@ -55,3 +55,28 @@ still while one is open: `game.combat.tensionOpen` says so.
 
 It does not speak, show cutscenes, write story flags or decide what a loss means. It plays sounds and shows its own
 HUD. A death of a companion is only ever a field in the outcome.
+
+## Inventions: what may be in the hand
+
+`src/combat/sim/inventions.ts` lists what the people of the crash can make, matched to the rows of the story's
+invention tree (Age 1 table). When the story teaches one, set `save.flags['inv.<id>'] = true` (or push the id to
+`save.inventions`). Free play only puts known weapons in the hand and only offers known traps; the set pieces carry
+their own Episode One kit; the dev arena ignores it all.
+
+| id | tree row | gives |
+| --- | --- | --- |
+| `throwStone` | (always) | thrown stone |
+| `goodStone` | 2 | (picking flint) |
+| `flake` | 3 | stone flake |
+| `woodBone` | 4 | club |
+| `fireDrill` | 5 | fire (and with it `torch`, `fireline`) |
+| `fireSpear` | 9 | fire-hardened spear (and `stakes`) |
+| `cordage` | 10 | (cord) |
+| `hafting` | 12 | stone-tipped spear |
+| `atlatl` | 13 | spear-thrower and darts |
+| `traps` | 14 | snare, rattle line |
+| `sling` | not in the tree yet | sling |
+| `bow` | 19 | bow and arrows |
+
+Known without teaching: `throwStone`, `woodBone`, `bait`. The older flags still count: `flags.spear` gives
+`fireSpear` and `flake`; `flags.fire` gives `fireDrill`, `torch`, `fireline`.

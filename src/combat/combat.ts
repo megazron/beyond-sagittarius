@@ -445,6 +445,7 @@ export class Combat {
       const known = this.known();
       for (const k of Object.keys(TRAPS) as TrapId[]) if (this.encounter || trapKnown(k, known)) items.push({ id: `trap:${k}`, label: t(`cb.t.${k}`), sub: cost(TRAPS[k].cost), ok: sim.canAfford(TRAPS[k].cost) });
       for (const w of ['club', 'torch', 'sling', 'bow'] as WeaponId[]) if (!p.has[w] && sim.canAfford(WEAPONS[w].craft!)) items.push({ id: `make:${w}`, label: `${t('cb.make')}: ${t(`cb.w.${w}`)}`, sub: cost(WEAPONS[w].craft!), ok: true });
+      if (p.has.atlatl && sim.canAfford(AMMO_CRAFT.dart.cost)) items.push({ id: 'make:dart', label: `${t('cb.make')}: ${t('cb.item.dart')}`, sub: cost(AMMO_CRAFT.dart.cost), ok: true });
       if (p.has.bow && sim.canAfford(AMMO_CRAFT.arrow.cost)) items.push({ id: 'make:arrow', label: `${t('cb.make')}: ${t('cb.item.arrow')}`, sub: cost(AMMO_CRAFT.arrow.cost), ok: true });
       if (sim.traps.some((q) => q.kind === 'rattle' && q.uses > 0)) items.push({ id: 'pull', label: t('cb.p.pull'), sub: t('cb.t.rattle'), ok: true });
       if (p.injuries.some((i) => i.id === 'bite')) items.push({ id: 'treat:bite', label: t('cb.p.treat'), sub: t('prompt.drink') === 'prompt.drink' ? '' : t('prompt.drink'), ok: this.d.player.inWater });
@@ -457,7 +458,7 @@ export class Combat {
       const [what, arg] = id.split(':');
       if (what === 'summon') this.encounter?.summon(arg as SpeciesId, arg === 'skritch' ? 4 : arg === 'nibbet' ? 3 : 1);
       else if (what === 'trap') { this.setting = { kind: arg as TrapId, t: 0 }; this.d.player.act('fix', null, TRAPS[arg as TrapId].setTime); audio.sample('wood', 0.5, { delay: 0.3 }); }
-      else if (what === 'make') { if (sim.craft(arg as WeaponId)) { audio.sample('wood', 0.5); if (arg !== 'arrow') sim.equip(arg as WeaponId); this.d.player.act('fix', null, 1.2); } }
+      else if (what === 'make') { if (sim.craft(arg as WeaponId)) { audio.sample('wood', 0.5); if (arg !== 'arrow' && arg !== 'dart') sim.equip(arg as WeaponId); this.d.player.act('fix', null, 1.2); } }
       else if (what === 'pull') sim.pullRattle();
       else if (what === 'treat') {
         if (arg === 'sprain') { sim.inv.branch--; sim.inv.vine--; }
@@ -584,7 +585,9 @@ export class Combat {
     if (eng || I.sneak || forced || p.moveScale < 1) {
       const cb = (P.combat ??= { scale: 1, force: null, face: null, aim: 0, crouch: 0, sprint: null, sneak: false, jump: true });
       cb.scale = p.down ? 0 : p.moveScale; cb.force = forced ? { x: p.forceVX, z: p.forceVZ } : null; cb.face = face;
-      cb.aim = I.aim ? 1 : 0; cb.sneak = p.sneaking; cb.jump = p.act === 'idle' && !p.blocking;
+      cb.aim = I.aim ? 1 : 0; cb.sneak = p.sneaking;
+      // a side-on archer hides the bow from straight behind: over the shoulder, wider and higher, looking down the arrow
+      cb.shoulder = p.weapon === 'bow' ? 1.05 : 0.85; cb.lift = p.weapon === 'bow' ? 0.32 : 0.12; cb.jump = p.act === 'idle' && !p.blocking;
       cb.sprint = D.input.device === 'pad' && eng ? this.padSprint : null;
     } else P.combat = null;
     // where the player looks (not the camera: a story or a recording may hold the camera elsewhere)

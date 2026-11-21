@@ -52,8 +52,8 @@ export class RangedRig {
     const stoneM = new THREE.MeshStandardMaterial({ color: 0x8a8580, roughness: 0.9, flatShading: true });
     const cyl = (r: number, m: THREE.Material) => { const g = new THREE.CylinderGeometry(r, r, 1, 6); g.translate(0, 0.5, 0); const o = new THREE.Mesh(g, m); o.castShadow = true; o.frustumCulled = false; this.group.add(o); return o; };
     for (let i = 0; i < 9; i++) this.bowSeg.push(cyl(i === 4 ? 0.02 : 0.013, wood));
-    for (let i = 0; i < 2; i++) this.str.push(cyl(0.0042, gut));
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.72, 5).rotateX(Math.PI / 2).translate(0, 0, 0.36), wood);
+    for (let i = 0; i < 2; i++) this.str.push(cyl(0.006, gut));
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0075, 0.0075, 0.72, 5).rotateX(Math.PI / 2).translate(0, 0, 0.36), wood);
     const head = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.05, 4).rotateX(Math.PI / 2).translate(0, 0, 0.74), stoneM);
     const fl = new THREE.Mesh(new THREE.BoxGeometry(0.002, 0.03, 0.1).translate(0, 0, 0.07), new THREE.MeshStandardMaterial({ color: 0x6b6f5a, roughness: 1 }));
     this.arrow.add(shaft, head, fl); this.group.add(this.arrow);
@@ -61,7 +61,7 @@ export class RangedRig {
     const qv = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.035, 0.5, 7).translate(0, 0.25, 0), new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 1 }));
     this.quiver.add(qv);
     for (let i = 0; i < 3; i++) { const a = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.22, 4).translate(0, 0.6, 0), wood); a.position.set((i - 1) * 0.015, 0, (i % 2) * 0.012); this.quiver.add(a); }
-    for (let i = 0; i < 2; i++) this.cords.push(cyl(0.006, fibre));
+    for (let i = 0; i < 2; i++) this.cords.push(cyl(0.009, fibre));
     this.pouch = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.6).scale(1, 0.55, 1.3), new THREE.MeshStandardMaterial({ color: 0x6e5a44, roughness: 1, side: THREE.DoubleSide }));
     this.pouch.castShadow = true; this.group.add(this.pouch);
     this.stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.032, 0), stoneM); this.stone.castShadow = true; this.group.add(this.stone);
@@ -176,7 +176,7 @@ export class RangedRig {
       const wind = whirl ? -0.45 * smooth(p.actT / 0.4) : S.throwT >= 0 && S.throwT < 0.5 ? -0.45 + 1.0 * out3(S.throwT / 0.2) : 0;
       limbs = { armR: dirOf(eR, sR), foreR: dirOf(wR, eR), armL: dirOf(eL, sL), foreL: dirOf(wL, eL), twist: wind };
       // stepping into it: the off foot forward, only while standing
-      if ((whirl || (S.throwT >= 0 && S.throwT < 0.5)) && p.speed < 0.6) { limbs.legL = [0.06, -0.93, 0.36]; limbs.shinL = [0, -1, 0.05]; limbs.legR = [-0.06, -0.96, -0.24]; limbs.shinR = [0, -0.98, -0.2]; }
+      if ((whirl && p.speed < 0.6) || (S.throwT >= 0 && S.throwT < 0.45)) { limbs.legL = [0.06, -0.93, 0.36]; limbs.shinL = [0, -1, 0.05]; limbs.legR = [-0.06, -0.96, -0.24]; limbs.shinR = [0, -0.98, -0.2]; }
     }
     return limbs;
   }

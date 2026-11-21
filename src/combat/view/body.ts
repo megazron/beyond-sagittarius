@@ -70,6 +70,8 @@ function gearMesh(id: WeaponId): THREE.Object3D {
   // fire-hardened: one piece of wood, the point blackened by the coals
   else if (id === 'spear') { add(rod(0.016, 2), wood, 0.35); const tip = new THREE.ConeGeometry(0.016, 0.22, 6); tip.rotateX(Math.PI / 2); add(tip, new THREE.MeshStandardMaterial({ color: 0x2a211a, roughness: 0.9 }), 1.46); }
   else if (id === 'hafted') { add(rod(0.016, 2), wood, 0.35); const tip = new THREE.ConeGeometry(0.035, 0.2, 4); tip.rotateX(Math.PI / 2); add(tip, stone, 1.43); add(rod(0.022, 0.08), vine, 1.3); }
+  // the spear-thrower: a forearm-long stick, the hook at the far end, a dart lying along it with its butt in the hook
+  else if (id === 'atlatl') { add(rod(0.012, 0.6), wood, 0.25); const hook = add(new THREE.BoxGeometry(0.02, 0.05, 0.03), wood, 0.55, 0.025); hook.name = 'hook'; const dart = add(rod(0.007, 1.7), wood, -0.25, 0.04); dart.name = 'dart'; const tip = new THREE.ConeGeometry(0.014, 0.06, 4); tip.rotateX(-Math.PI / 2); add(tip, stone, -1.12, 0.04); }
   else if (id === 'torch') {
     add(rod(0.02, 0.7), wood, 0.2);
     const f = new THREE.ConeGeometry(0.07, 0.26, 5); f.rotateX(Math.PI / 2);
@@ -170,7 +172,7 @@ export class FightBody {
       if (w === 'spear' || w === 'hafted') this.crouch = 0.16 * out(p.blockT / 0.2);
     } else if (p.act === 'charge') {
       const c = p.charge;
-      if (p.charging === 'throw' || w === 'rock') pose = mix(base, P.throwBack, out(c), this.scratch);
+      if (p.charging === 'throw' || w === 'rock' || w === 'atlatl') pose = mix(base, P.throwBack, out(c), this.scratch);
       else if (w === 'sling') {
         // the sling goes round overhead, faster as it comes up to speed
         const a = t * (9 + c * 12);
@@ -190,7 +192,7 @@ export class FightBody {
     } else if (this.since < 0.4 && this.wasCharging !== 'none') {
       // the follow-through of what was just thrown or loosed
       const k = this.since / 0.4;
-      const from = this.wasCharging === 'throw' || this.last.weapon === 'rock' || this.last.weapon === 'sling' ? P.throwHit : P.bowHold;
+      const from = this.wasCharging === 'throw' || this.last.weapon === 'rock' || this.last.weapon === 'sling' || this.last.weapon === 'atlatl' ? P.throwHit : P.bowHold;
       pose = k < 0.3 ? mix(this.wasCharging === 'shot' && this.last.weapon === 'bow' ? P.bowDrawn : P.throwBack, from, out(k / 0.3), this.scratch) : mix(from, base, smooth((k - 0.3) / 0.7), this.scratch);
     } else if (p.reloadT > 0) {
       pose = mix(base, P.reload, smooth(Math.min(1, Math.min(p.reloadT, 2.6 - p.reloadT) / 0.3)), this.scratch);

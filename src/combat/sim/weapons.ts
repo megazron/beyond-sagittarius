@@ -1,6 +1,6 @@
 // Every weapon and trap is a row of data. A later age adds rows (and a model in view/gear.ts); nothing else changes.
 
-export type WeaponId = 'fists' | 'rock' | 'flake' | 'club' | 'spear' | 'hafted' | 'torch' | 'sling' | 'bow' | 'crossbow' | 'coil';
+export type WeaponId = 'fists' | 'rock' | 'flake' | 'club' | 'spear' | 'hafted' | 'atlatl' | 'torch' | 'sling' | 'bow' | 'crossbow' | 'coil';
 export type DamageKind = 'blunt' | 'pierce' | 'fire' | 'energy';
 
 export interface ProjDef {
@@ -70,6 +70,10 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   hafted: { id: 'hafted', mass: 1.4, dur: 40, age: 1, craft: { branch: 1, stone: 1, fibre: 1, resin: 1 }, block: 0.6,
     melee: { dmg: 21, reach: 2.6, arc: 0.5, windup: 0.3, active: 0.12, recover: 0.46, stamina: 12, knock: 2.5, poise: 24, kind: 'pierce', noise: 5 },
     proj: { ammo: null, speed: 21, gravity: 9.81, dmg: 33, kind: 'pierce', charge: 0.6, weak: 0.55, radius: 0.1, knock: 3, poise: 36, recover: 0.9, noise: 7, spread: [5, 2.2] } },
+  // the spear-thrower: a stick with a hook at the far end that the dart's butt sits in. The longer lever throws a
+  // light dart much faster than an arm alone (darts of 1.5 to 2 m; launch speeds measured around 25 to 40 m/s)
+  atlatl: { id: 'atlatl', mass: 0.3, dur: 120, age: 1, craft: { branch: 2, fibre: 1 }, block: 0.2, ranged: true,
+    proj: { ammo: 'dart', speed: 30, gravity: 9.81, dmg: 24, kind: 'pierce', charge: 0.75, weak: 0.5, radius: 0.08, knock: 2.6, poise: 30, recover: 0.85, noise: 6, spread: [5.5, 2] } },
   torch: { id: 'torch', mass: 0.9, dur: 240, age: 0, craft: { branch: 1, tinder: 1 }, block: 0.4, fire: true,
     melee: { dmg: 8, reach: 1.8, arc: 1.9, windup: 0.26, active: 0.2, recover: 0.4, stamina: 9, knock: 1.5, poise: 14, kind: 'fire', noise: 5 } },
   sling: { id: 'sling', mass: 0.1, dur: 140, age: 1, craft: { fibre: 3, hide: 1 }, block: 0.2, ranged: true,
@@ -89,6 +93,8 @@ export const AMMO_CRAFT: Record<string, { cost: Record<string, number>; makes: n
   // a shaft, a knapped head bound and glued on, and fletching: four from a good branch
   arrow: { cost: { branch: 1, stone: 1, fibre: 1 }, makes: 4 },
   bolt: { cost: { branch: 1, bronze: 1 }, makes: 4 },
+  // a long light shaft with a knapped head: two from a good branch
+  dart: { cost: { branch: 1, stone: 1, fibre: 1 }, makes: 2 },
 };
 
 export type TrapId = 'snare' | 'stakes' | 'fireline' | 'rattle' | 'bait';

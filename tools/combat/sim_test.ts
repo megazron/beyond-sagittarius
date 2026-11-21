@@ -61,7 +61,7 @@ for (const id of Object.keys(WEAPONS) as WeaponId[]) {
     const pr = w.proj;
     for (const range of [8, 18]) {
       const sim = new CombatSim({ seed: 9, assist: { aim: 0, hold: false, slowMo: false, noTimers: false, damageNumbers: false } });
-      sim.player.has[id] = true; sim.inv.stone = 10; sim.inv.arrow = 10; sim.inv.bolt = 10; sim.equip(id);
+      sim.player.has[id] = true; sim.inv.stone = 10; sim.inv.arrow = 10; sim.inv.bolt = 10; sim.inv.dart = 10; sim.equip(id);
       const t = dummy(sim, 0, range);
       const before = sim.ammo(id)!;
       let phase = 0;

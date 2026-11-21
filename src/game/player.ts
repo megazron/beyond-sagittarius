@@ -64,7 +64,7 @@ export class Player {
    * turn (radians, or null), `aim` 0 to 1 pulls the camera in over the right shoulder, `crouch` lowers the hips (metres),
    * `sprint` overrides the sprint button, `sneak` caps the speed to a creep.
    */
-  combat: { scale: number; force: { x: number; z: number } | null; face: number | null; aim: number; crouch: number; sprint: boolean | null; sneak: boolean; jump: boolean } | null = null;
+  combat: { scale: number; force: { x: number; z: number } | null; face: number | null; aim: number; crouch: number; sprint: boolean | null; sneak: boolean; jump: boolean; shoulder?: number; lift?: number } | null = null;
   private aimS = 0;
   /** Stages other than Verdaxis set their own gravity, and let you jump across open gaps. */
   physics = { gravity: 14, jump: 5.2, gaps: false };
@@ -302,7 +302,8 @@ export class Player {
       const cp = Math.cos(this.pitchS), fx = -Math.sin(this.yawS) * cp, fy = Math.sin(this.pitchS), fz = -Math.cos(this.yawS) * cp;
       const rx = Math.cos(this.yawS), rz = -Math.sin(this.yawS);
       tmpA.copy(this.camera.position);
-      tmpA.x += rx * 0.85 * aim; tmpA.z += rz * 0.85 * aim; tmpA.y += 0.12 * aim;
+      const sh = this.combat?.shoulder ?? 0.85, lift = this.combat?.lift ?? 0.12;
+      tmpA.x += rx * sh * aim; tmpA.z += rz * sh * aim; tmpA.y += lift * aim;
       tmpC.copy(this.camera.quaternion);
       this.camera.position.copy(tmpA);
       this.camera.lookAt(tmpA.x + fx * 30, tmpA.y + fy * 30, tmpA.z + fz * 30);

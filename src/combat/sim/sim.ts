@@ -182,7 +182,7 @@ export class CombatSim {
   canAfford(cost: Record<string, number>) { for (const k in cost) if ((this.inv[k] ?? 0) < cost[k]) return false; return true; }
   private pay(cost: Record<string, number>) { for (const k in cost) this.inv[k] = (this.inv[k] ?? 0) - cost[k]; }
   /** Crafting hook: make a weapon or a bundle of ammunition from the bag. */
-  craft(id: WeaponId | 'arrow' | 'bolt'): boolean {
+  craft(id: WeaponId | 'arrow' | 'bolt' | 'dart'): boolean {
     const am = AMMO_CRAFT[id];
     if (am) { if (!this.canAfford(am.cost)) return false; this.pay(am.cost); this.inv[id] = (this.inv[id] ?? 0) + am.makes; this.emit({ t: 'player', what: 'crafted:' + id }); return true; }
     const w = WEAPONS[id as WeaponId];
