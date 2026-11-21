@@ -722,6 +722,8 @@ export class Combat {
       const vw = q ?? this.viewFor(e);
       if (e.state === 'windup') vw.tele += dt; else vw.tele = 0;
       vw.v.update(e, this.clock, dt, vw.teleDur > 0 ? Math.min(1, vw.tele / vw.teleDur) : 0);
+      // never draw a body the camera is standing inside (a big creature pressed against the lens hides the fight)
+      vw.v.root.visible = !(Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < e.def.radius + 0.35 && cam.position.y < e.y + e.def.height + 0.2);
       if (e.state === 'windup' && e.atk?.id === 'beam') this.fx.moveTelegraph(e.id, e.x, e.z, Math.sin(e.yaw), Math.cos(e.yaw), e.atk.reach, 0.85);
     }
     if (sim.enemies.length > 24) sim.enemies = sim.enemies.filter((e) => !e.gone);
@@ -769,7 +771,7 @@ export class Combat {
       if (Math.abs(rel) > 0.75 && arrows.length < 4) arrows.push({ a: -rel, hot: true });
     }
     this.hud.arrows(arrows);
-    const boss = sim.enemies.find((e) => e.def.boss && !e.gone && e.state !== 'dormant' && Math.hypot(e.x - p.x, e.z - p.z) < 60);
+    const boss = sim.enemies.find((e) => e.def.boss && !e.gone && e.state !== 'dormant' && Math.hypot(e.x - p.x, e.z - p.z) < 40);
     this.hud.boss(boss && !boss.dead ? t(`cb.c.${boss.kind}`) : null, boss ? boss.hp / boss.maxHp : 0, !!boss && boss.phase > 0);
     // Field Analysis: keep a creature in the middle of the view for a few seconds and you learn what it is
     let look: Enemy | null = null, best = 0.12;
@@ -783,8 +785,8 @@ export class Combat {
       if (this.study.id !== look.id) { this.study.id = look.id; this.study.t = 0; }
       this.study.t += dt;
       this.hud.study(this.study.t / 2.6);
-      if (this.study.t >= 2.6) { c.studied.push(look.kind); this.hud.analysis(`${t('cb.fa.title')} · ${t(`cb.c.${look.kind}`)}`, t(`cb.fa.${look.kind}`)); this.faT = 8; audio.tone(880, 0.1, 'sine', 0.08); audio.tone(1320, 0.16, 'sine', 0.06, 0.09); }
-    } else { this.study.t = Math.max(0, this.study.t - dt * 2); this.hud.study(0); if (look && look.id !== this.study.id && c.studied.includes(look.kind) && this.faT <= 0 && I.aim) { this.study.id = look.id; this.hud.analysis(`${t('cb.fa.title')} · ${t(`cb.c.${look.kind}`)}`, t(`cb.fa.${look.kind}`)); this.faT = 5; } }
+      if (this.study.t >= 2.6) { c.studied.push(look.kind); this.hud.analysis(`${t('cb.fa.title')} · ${t(`cb.c.${look.kind}`)}`, t(`cb.fa.${look.kind}`)); this.faT = 6; audio.tone(880, 0.1, 'sine', 0.08); audio.tone(1320, 0.16, 'sine', 0.06, 0.09); }
+    } else { this.study.t = Math.max(0, this.study.t - dt * 2); this.hud.study(0); }
     if (this.faT > 0) { this.faT -= dt; if (this.faT <= 0) this.hud.analysis(null); }
     if (sim.enemies.some((e) => !e.dead && !e.gone && Math.hypot(e.x - p.x, e.z - p.z) < 26 && !c.studied.includes(e.kind))) this.hint('study');
   }
