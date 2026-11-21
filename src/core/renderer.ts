@@ -753,7 +753,7 @@ export class Renderer {
   render(dt: number, time: number) {
     this.final.uniforms.uTime.value = time;
     if (this.volumetric) this.volumetric.source = (this.renderPass.scene.userData.post as PostSource | undefined) ?? null;
-    if (this.ssr) { const k = (this.renderPass.scene.userData.ssr as number | undefined) ?? 0; this.ssr.strength = k; this.ssr.enabled = k > 0.01 && this.shed < 1; }
+    if (this.ssr) { const k = (this.renderPass.scene.userData.ssr as number | undefined) ?? 0; this.ssr.strength = k; this.ssr.enabled = k > 0.01 && this.shed < 2; }
     const cam = this.renderPass.camera as THREE.PerspectiveCamera;
     const jittered = !!this.temporal && this.quality.taa && cam.isPerspectiveCamera;
     if (jittered) {

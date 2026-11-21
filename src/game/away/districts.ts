@@ -593,7 +593,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   // under every lamp, and spilling out of every shop window on to its pavement
   const spills = shopfronts.map((sf) => new THREE.Vector3(sf.x + sf.nx * 2.2, FLOOR + 0.02, sf.z + sf.nz * 2.2));
   const pools = new THREE.InstancedMesh(poolGeo, poolMat, Math.max(1, lamps.length + spills.length));
-  lamps.forEach((l, i) => pools.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(l.x, FLOOR + 0.02, l.z), new THREE.Quaternion(), new THREE.Vector3(19, 1, 19))));
+  lamps.forEach((l, i) => pools.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(l.x, FLOOR + 0.02, l.z), new THREE.Quaternion(), new THREE.Vector3(14, 1, 14))));
   spills.forEach((l, i) => pools.setMatrixAt(lamps.length + i, new THREE.Matrix4().compose(l, new THREE.Quaternion(), new THREE.Vector3(8, 1, 8))));
   pools.frustumCulled = false; add(pools);
 
@@ -983,7 +983,8 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       if (phase !== lastPhase) { lastPhase = phase; setBulbs(); }
       if (waterTex) waterTex.offset.set(t * 0.004, t * 0.0025);
       lampM.emissiveIntensity = 0.2 + FACADE.night.value * 5;
-      poolMat.opacity = Math.min(0.75, 0.12 + FACADE.night.value * 0.9);
+      // a wet road does not glow under a lamp, it mirrors it: the pools thin out as the street gets wetter
+      poolMat.opacity = Math.min(0.75, 0.12 + FACADE.night.value * 0.9) * (1.15 - 0.75 * FACADE.wet.value);
       if (!cam) return;
       acc += dt;
       if (acc > 0.25) {
