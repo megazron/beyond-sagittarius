@@ -540,7 +540,8 @@ export class Cinematic {
       film: 'pull_a4',
       enter: () => atConsole(),
       update: (k, local) => {
-        lens(85); const h = head(sci, -0.12); this.camera.position.copy(h).add(V(lerp(0.75, 0.62, k), -0.06, -1.55)); this.lookTarget.copy(h);
+        // slightly low (the shot list): under his eyeline as he looks down at the gauge, so his eyes read, not his lids
+        lens(85); const h = head(sci, -0.12); this.camera.position.copy(h).add(V(lerp(0.75, 0.62, k), -0.24, -1.55)); this.lookTarget.copy(h).add(V(0, -0.03, 0));
         sci.setFace({ frown: smoothstep(0, 0.8, local) * 0.55, squint: 0.25, blink: local > 1.1 && local < 1.35 ? 1 : 0 });
         sci.setLookTarget(local < 1.4 ? ins.gaugeAt.getWorldPosition(new THREE.Vector3()) : local < 2.1 ? WIN : ins.gaugeAt.getWorldPosition(new THREE.Vector3()));
       },

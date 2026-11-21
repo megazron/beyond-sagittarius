@@ -12,11 +12,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import face as FACE
 
 ap = argparse.ArgumentParser()
-for n, d in (('--dump', None), ('--out', None), ('--plate', ''), ('--tex', '~/bs-film/tex'), ('--perf', ''), ('--facedir', '~/bs-film/face'), ('--hole', ''), ('--closeup', '')):
+for n, d in (('--dump', None), ('--out', None), ('--plate', ''), ('--tex', '~/bs-film/tex'), ('--perf', ''), ('--facedir', '~/bs-film/face'), ('--hole', ''), ('--closeup', ''), ('--focus-id', ''), ('--key', '')):
     ap.add_argument(n, default=d)
 for n, d in (('--first', 0), ('--last', 0), ('--samples', 48), ('--w', 1280), ('--step', 1), ('--exposure', 0)):
     ap.add_argument(n, type=float if n == '--exposure' else int, default=d)
-ap.add_argument('--cpu', action='store_true')
+ap.add_argument('--cpu', action='store_true'); ap.add_argument('--fstop', type=float, default=0)
 a = ap.parse_args(sys.argv[sys.argv.index('--') + 1:])
 DUMP, OUT, TEXD = (os.path.expanduser(x) for x in (a.dump, a.out, a.tex))
 os.makedirs(OUT, exist_ok=True); CACHE = f'{OUT}/.pc2'; os.makedirs(CACHE, exist_ok=True)
@@ -86,9 +86,13 @@ def material(d):
         ramp = N.new('ShaderNodeValToRGB'); e = ramp.color_ramp.elements; e[0].color = hexc(f['root']); e[1].color = hexc(f['tip']); e.new(.3).color = hexc(f['mid'])
         L.new(at.outputs['Fac'], ramp.inputs[0]); L.new(ramp.outputs[0], I['Base Color']); I['Roughness'].default_value = .3; I['Coat Weight'].default_value = .35; I['Coat Roughness'].default_value = .2; I['Sheen Weight'].default_value = .5; I['Sheen Roughness'].default_value = .35
     elif kind == 'eye':
-        I['Base Color'].default_value = hexc(f['iris']); I['Roughness'].default_value = .08; I['Coat Weight'].default_value = 1
+        # as the game's eye (assets.ts eyeMaterial): a pale iris reads as a blank, dead eye, so each is deepened and
+        # saturated towards its own hue, and the white is a warm, slightly darker white
+        ir = hexc(f['iris'])[:3]; lum = .3 * ir[0] + .6 * ir[1] + .1 * ir[2]
+        deep = tuple(max(0.0, lum + (c - lum) * 1.7) * (.5 / max(lum, .25)) * .75 for c in ir) + (1,)
+        I['Base Color'].default_value = deep; I['Roughness'].default_value = .08; I['Coat Weight'].default_value = 1
         t = tex(f'{PUB}/eye.webp', True); sp = N.new('ShaderNodeSeparateColor'); L.new(t.outputs[0], sp.inputs[0])
-        mx = N.new('ShaderNodeMix'); mx.data_type = 'RGBA'; mx.inputs['A'].default_value = (.82, .82, .84, 1); mx.inputs['B'].default_value = hexc(f['iris'])
+        mx = N.new('ShaderNodeMix'); mx.data_type = 'RGBA'; mx.inputs['A'].default_value = (.62, .58, .55, 1); mx.inputs['B'].default_value = deep
         L.new(sp.outputs[1], mx.inputs['Factor']); dk = N.new('ShaderNodeMix'); dk.data_type = 'RGBA'; dk.inputs['B'].default_value = (.002, .002, .002, 1)
         L.new(mx.outputs['Result'], dk.inputs['A']); L.new(sp.outputs[2], dk.inputs['Factor']); L.new(dk.outputs['Result'], I['Base Color'])
     elif kind in ('lash', 'fur'):
@@ -207,13 +211,20 @@ for k, fs in ids.items():
 
 # camera and lens
 cd = bpy.data.cameras.new('c'); cd.sensor_fit = 'VERTICAL'; cd.sensor_height = 24; cam = bpy.data.objects.new('c', cd); sc.collection.objects.link(cam); sc.camera = cam
-cd.dof.use_dof = True; cam.rotation_mode = 'QUATERNION'
+cd.dof.use_dof = True; cam.rotation_mode = 'QUATERNION'; FOC = {}
 for f, d in data.items():
     c = d['camera']; cam.matrix_world = C @ Matrix(np.array(c['m']).reshape(4, 4).T.tolist())
     cam.keyframe_insert('location', frame=f); cam.keyframe_insert('rotation_quaternion', frame=f)
     cd.lens = 12 / math.tan(math.radians(c['fov']) / 2); cd.keyframe_insert('lens', frame=f)
     cd.dof.focus_distance = max(c['focus'], .3) if c['focus'] else 40; cd.dof.keyframe_insert('focus_distance', frame=f)
     cd.dof.aperture_fstop = max(.8, min(16, .012 / max(c['aperture'], 1e-4) * 1.4)) if c['aperture'] else 22; cd.dof.keyframe_insert('aperture_fstop', frame=f)
+    if a.focus_id:  # a close-up: focus on the face (the mean of the eye-height band of that head), a real lens's depth of field
+        r = next((x for x in d['meshes'] if x['id'] == a.focus_id and 'baked' in x), None)
+        if r:
+            q = b64f(r['baked']).reshape(-1, 3); band = q[q[:, 1] > np.percentile(q[:, 1], 55)]; band = band[band[:, 1] < np.percentile(q[:, 1], 80)]
+            cpos = np.array(c['m'][12:15]); cd.dof.focus_distance = float(np.linalg.norm(band.mean(0) - cpos)) - .06; cd.dof.keyframe_insert('focus_distance', frame=f)
+        if a.fstop: cd.dof.aperture_fstop = a.fstop; cd.dof.keyframe_insert('aperture_fstop', frame=f)
+    FOC[f] = cd.dof.focus_distance
     if a.closeup:  # QA: the same view direction, pulled in to 0.55 m from a point (three.js coords), sharp
         q = [float(x) for x in a.closeup.split(',')]; P = C @ Vector(q[:3]); fw = cam.matrix_world.to_quaternion() @ Vector((0, 0, -1))
         if len(q) == 6:  # an explicit view direction, three.js coords
@@ -232,6 +243,17 @@ for i in range(8):
         else:
             ld.energy = 0
         lo.keyframe_insert('location', frame=f); ld.keyframe_insert('energy', frame=f); ld.keyframe_insert('color', frame=f)
+if a.key:  # a soft portrait key 'side,up,watts' in camera space (side +1 = camera right), plus a dim cool rim behind the subject
+    sd, up, wt, *kc = (float(x) for x in a.key.split(','))
+    kd = bpy.data.lights.new('key', 'AREA'); kd.shape = 'DISK'; kd.size = .6; kd.energy = wt; kd.color = tuple(kc) if len(kc) == 3 else (1, 1, 1); ko = bpy.data.objects.new('key', kd); sc.collection.objects.link(ko)
+    rd = bpy.data.lights.new('rim', 'AREA'); rd.size = .4; rd.energy = wt * .5; rd.color = (.75, .85, 1); ro = bpy.data.objects.new('rim', rd); sc.collection.objects.link(ro)
+    for f, d in data.items():
+        M = C @ Matrix(np.array(d['camera']['m']).reshape(4, 4).T.tolist()); fw = M.to_quaternion() @ Vector((0, 0, -1)); rt = M.to_quaternion() @ Vector((1, 0, 0)); upv = M.to_quaternion() @ Vector((0, 1, 0))
+        dist = FOC.get(f, 1.5) if a.focus_id else 1.5
+        tgt = M.translation + fw * dist
+        ko.location = M.translation + rt * sd + upv * up + fw * (dist * .25); ko.rotation_mode = 'QUATERNION'; ko.rotation_quaternion = (tgt - ko.location).to_track_quat('-Z', 'Y')
+        ro.location = tgt + fw * .9 - rt * sd * .6 + upv * .5; ro.rotation_mode = 'QUATERNION'; ro.rotation_quaternion = (tgt - ro.location).to_track_quat('-Z', 'Y')
+        for o in (ko, ro): o.keyframe_insert('location', frame=f); o.keyframe_insert('rotation_quaternion', frame=f)
 w = bpy.data.worlds.new('w'); sc.world = w; w.use_nodes = True; nt = w.node_tree
 # the rotation is keyed, so Cycles rebuilds this map every frame: at 8K that was most of a frame's time
 w.cycles.sampling_method = 'MANUAL'; w.cycles.sample_map_resolution = 512

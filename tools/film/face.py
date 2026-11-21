@@ -40,7 +40,7 @@ def track(names, cues, t, seed=0.0, env=None, lip=None, blinks=None):
         for u, v in (c.get('units') or EMO[c['emotion']]).items():  # a cue can name its own units: authored acting
             # no face is symmetrical: each side drifts on its own
             w[u] = max(w[u], a * v * (1 + .14 * noise(t * .9, seed + sum(map(ord, u)) % 17)))
-        tr = max(tr, a * TREMBLE.get(c['emotion'], 0))
+        tr = max(tr, a * TREMBLE.get(c.get('emotion'), 0))
     if tr:
         q = tr * (.6 + .4 * noise(t * 2.1, seed + 3))
         w['mouth-compression'] += q * (.5 + .5 * math.sin(t * 47 + seed)); w['mouth-depression'] += q * (.5 + .5 * math.sin(t * 39 + seed + 1))
