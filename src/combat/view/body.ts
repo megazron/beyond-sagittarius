@@ -124,7 +124,12 @@ export class FightBody {
    */
   update(model: Character, p: SimPlayer, dt: number, t: number, armed: boolean, aiming: boolean, visible: WeaponId | null) {
     this.hold(model, visible);
-    if (this.held) { const G = GRIP; this.held.position.set(G.x * (this.heldId === 'bow' ? -1 : 1), G.y, G.z); this.held.rotation.set(G.rx, G.ry, G.rz); }
+    if (this.held) {
+      const G = GRIP, gun = this.heldId === 'coil' || this.heldId === 'crossbow';
+      // a stock is held like a grip: the barrel runs on along the forearm, not out of the thumb
+      this.held.position.set(G.x * (this.heldId === 'bow' ? -1 : 1), G.y + (gun ? 0.03 : 0), G.z);
+      this.held.rotation.set(G.rx + (gun ? Math.PI / 2 : 0), G.ry, G.rz);
+    }
     this.since += dt; this.kick = Math.max(0, this.kick - dt * 5);
     const w = p.weapon, def = WEAPONS[w], m = def.melee;
     this.ready += ((armed || p.act !== 'idle' || p.blocking ? 1 : 0) - this.ready) * (1 - Math.exp(-dt * 9));
