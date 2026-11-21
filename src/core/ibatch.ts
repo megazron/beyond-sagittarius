@@ -166,7 +166,8 @@ export class InstancedBatch extends THREE.BatchedMesh {
 }
 
 const HIDE = new THREE.MeshBasicMaterial({ visible: false });
-const plainBefore = THREE.Object3D.prototype.onBeforeRender;
+const plainBefore = THREE.Object3D.prototype.onBeforeRender, ID = new THREE.Matrix4();
+const BUILTIN = ['isMeshStandardMaterial', 'isMeshPhysicalMaterial', 'isMeshBasicMaterial', 'isMeshLambertMaterial', 'isMeshPhongMaterial', 'isMeshToonMaterial'];
 
 /**
  * Static meshes under `root` that share a material (and shadow flags and attributes) drawn by one InstancedBatch each:
@@ -179,19 +180,22 @@ const plainBefore = THREE.Object3D.prototype.onBeforeRender;
 export function batchStatic(root: THREE.Object3D, accept: (m: THREE.Mesh) => boolean = () => true, min = 3): number {
   root.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
-  const groups = new Map<string, THREE.Mesh[]>();
+  const groups = new Map<string, THREE.Mesh[]>(), M = new THREE.Matrix4();
   root.traverse((o) => {
     const m = o as THREE.Mesh, mat = m.material as THREE.Material;
     if (!m.isMesh || (m as THREE.SkinnedMesh).isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh || (m as unknown as { isBatchedMesh?: boolean }).isBatchedMesh) return;
     if (!mat || Array.isArray(mat) || mat.transparent || !mat.visible || m.matrixAutoUpdate || !m.visible || m.onBeforeRender !== plainBefore || m.renderOrder !== 0) return;
     if (m.customDepthMaterial || Object.keys(m.geometry.morphAttributes).length || m.geometry.drawRange.count !== Infinity || !accept(m)) return;
     for (let p = m.parent; p && p !== root; p = p.parent) if (!p.visible || p.matrixAutoUpdate) return;
+    // the built-in mesh materials only (their shaders read the batch); one with its own shader hook only where the
+    // piece sits at the batch's origin (a hook may place things by modelMatrix alone, the facades do)
+    if (!BUILTIN.some((k) => (mat as unknown as Record<string, boolean>)[k])) return;
+    if (mat.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile && !M.multiplyMatrices(inv, m.matrixWorld).equals(ID)) return;
     const g = m.geometry, attrs = Object.keys(g.attributes).sort().map((k) => `${k}${g.attributes[k].itemSize}`).join(',');
     const key = `${mat.uuid}|${m.castShadow}|${m.receiveShadow}|${attrs}|${!!g.index}`;
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(m);
   });
   let saved = 0;
-  const M = new THREE.Matrix4();
   for (const list of groups.values()) {
     if (list.length < min || list.length > MAX_GEOMETRIES) continue;
     let verts = 0, idx = 0;
