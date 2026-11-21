@@ -155,9 +155,18 @@ See the end of this file for the running log.
 
 ## 2026-11-21 19:50 takeover by perf agent 15 (branch perf15 from perf14 582d54b)
 - Measurements: ~/bs-assets/gpu/p15 (plans, census.js = draws/ms per named object + distinct materials/programs per
-  pass, rayflat.js = ray probe of the flat, cmp.py = side-by-side reports). run.sh now takes sub-paths (p15/x).
-- WIP on perf15 (not yet measured on the GPU): one draw per tree (trunk merged into the crown, bark drawn by the leaf
-  material where aBark = 1, custom shadow depth so trunks do not cast card holes); warmAll compiles each scene's visible
-  materials in the background first (Renderer.prewarm: KHR_parallel_shader_compile, polled, loading bar moves) and
-  only then draws it once; townsfolk hair from a table (looks 0, 5, 10 wore the same coat and hair); district trim
-  merged with kit per zone.
+  pass, progcount.js = program look-ups per material, rayflat.js = ray probe, cmp.py = side-by-side reports,
+  ab_load.sh = cold title load with Chrome restarted). run.sh takes sub-paths (p15/x). New builds go to dist-new and are
+  served on :4182 (vite preview --outDir dist-new); main's on :4180.
+- core/ibatch.ts InstancedBatch: a BatchedMesh whose sub-draws are per geometry and INSTANCED (WEBGL_multi_draw's
+  instanced calls, armed right before three issues the multi-draw); the instance index comes from a two-level list in
+  the indirect texture. One draw per material per pass. Used by: the forest (Forest.batch: every field's parts that
+  share a material), the planet ground (Terrain.batch, with per-chunk LOD: the LODs sat at the origin, so every chunk
+  took the level for the camera's distance to the origin), the city's statics (batchStatic after mergeStatic). `?batch=0`
+  is the old path. Trees are one geometry per species/LOD now (bark drawn by the leaf material where aBark = 1).
+- Load: Renderer.prewarm compiles each warm scene's visible materials in the background first (polls isReady).
+- The flat's striped wall was a cityfuture tower (x = FRONT + 15 + rnd*8, up to 15 m wide) reaching 2.5 m into the
+  bedroom and bathroom: towers now stand behind the 12 m block.
+- Findings: the city is CPU-bound in both render (setProgram per draw, 110 to 230 distinct materials a frame at the
+  gate) and update (city.update 5 ms, player 3 ms, character animate, drawPeds); a 240-draw planet frame still costs
+  ~28 ms on the A500. Draw calls fell 15 to 50 percent; frame rate moved less than that.
