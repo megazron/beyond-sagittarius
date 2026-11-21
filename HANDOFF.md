@@ -67,3 +67,12 @@ See the end of this file for the running log.
 - Not landed on main: pushing `ci` to main was refused by the permission layer (main would not be green). Needs the
   owner or coordinator to decide: land the workflow as is (it reports main red until the city agent fixes the two
   gates), or have the city agent fix them first.
+- 08:20 CI on `combat` (run 44881041794): combat job green (sim 186 checks + play test 0 failed), build, smoke,
+  levels, prologue, mobile, text_fit, cutscene_qa, app_smoke green. Fixed on the way: the play test awaited the
+  encounter's own promise (deadlock, not a game bug); a story-opened tension moment never ended outside a set piece
+  (real API bug, fixed: it runs on the game clock or its own); the free-play animals of Verdaxis were drawn in the
+  city when the player was away (perf gate: mobile flat 75 -> 326 draws; now 69); small animals cast one shadow.
+  Still red: crowd_smoke (same as main), perf_gate ultra bazaar triangles (main passed it once at 3.2 M; streaming
+  variance suspected, rerun pending).
+- Night defence re-recorded (r5): scavengers now come to the light, food is stolen, the hound lunges. Still dark;
+  bot never sets traps in prep (recording bot only).
