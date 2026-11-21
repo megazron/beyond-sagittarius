@@ -5,6 +5,7 @@
  */
 const BASE = `${import.meta.env.BASE_URL}film/`;
 const DRIFT = 0.1;
+const SEEK = 0.25; // further off than this, jump
 
 export class FilmVideo {
   private constructor(private el: HTMLVideoElement) {}
@@ -32,7 +33,12 @@ export class FilmVideo {
   sync(t: number) {
     const el = this.el;
     if (el.paused) void el.play().catch(() => undefined);
-    if (Math.abs(el.currentTime - t) > DRIFT) el.currentTime = t;
+    // a seek in flight is left to land: seeking again every frame kept a short take decoding from its first frame and
+    // it froze on screen (A4 held one frame for two seconds). Small drift is taken up by the playback rate instead
+    if (el.seeking) return;
+    const d = t - el.currentTime;
+    if (Math.abs(d) > SEEK) { el.currentTime = t; el.playbackRate = 1; return; }
+    el.playbackRate = Math.abs(d) > DRIFT * 0.3 ? Math.min(1.5, Math.max(0.6, 1 + d * 2)) : 1;
   }
 
   get time() { return this.el.currentTime; }
