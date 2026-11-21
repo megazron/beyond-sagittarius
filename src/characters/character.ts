@@ -166,6 +166,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const sway = swayUniforms();
   const root = new THREE.Group();
   root.userData.isCharacter = true; // stage mergers leave bodies alone
+  root.userData.id = custom ? 'player' : id; // who it is, for tests (clipProbe)
   // shown again: back in three.js's matrix pass at once, whoever shows it (animate() takes it out while it is hidden)
   { let shown = true; Object.defineProperty(root, 'visible', { get: () => shown, set: (v: boolean) => { shown = v; if (v) root.matrixWorldAutoUpdate = true; } });
     // while hidden, three.js's matrix pass does not walk its sixty bones and its meshes at all
