@@ -318,8 +318,10 @@ function flatPortals(scene: THREE.Scene, room: THREE.Box3, x: number, openings: 
   const inside = (b: THREE.Box3) => planes.every((p) => p.distanceToPoint(new THREE.Vector3(p.normal.x > 0 ? b.max.x : b.min.x, p.normal.y > 0 ? b.max.y : b.min.y, p.normal.z > 0 ? b.max.z : b.min.z)) >= 0);
   return (cam: THREE.Camera) => {
     const c = cam.position;
-    if (!room.containsPoint(c)) { if (hidden) { for (const k of cands) k.o.layers.set(0); hidden = false; } return; }
-    if (seenN !== count()) { if (hidden) for (const k of cands) k.o.layers.set(0); collect(); }
+    // a piece a batch draws (core/ibatch.ts) is left out of the batch's camera pass instead of moved to layer 1
+    const put = (o: THREE.Object3D, on: boolean) => { const bh = o.userData.batchHide as ((h: boolean) => void) | undefined; if (bh) bh(!on); else o.layers.set(on ? 0 : 1); };
+    if (!room.containsPoint(c)) { if (hidden) { for (const k of cands) put(k.o, true); hidden = false; } return; }
+    if (seenN !== count()) { if (hidden) for (const k of cands) put(k.o, true); collect(); }
     const show = new Set<THREE.Object3D>();
     for (const [z0, z1, y0, y1] of openings) {
       P[0].set(x, y0, z0); P[1].set(x, y1, z0); P[2].set(x, y1, z1); P[3].set(x, y0, z1);
@@ -330,7 +332,7 @@ function flatPortals(scene: THREE.Scene, room: THREE.Box3, x: number, openings: 
       for (const p of planes) if (p.distanceToPoint(Q) < 0) p.negate();
       for (const k of cands) if (!show.has(k.o) && inside(k.box)) show.add(k.o);
     }
-    for (const k of cands) k.o.layers.set(show.has(k.o) ? 0 : 1);
+    for (const k of cands) put(k.o, show.has(k.o));
     hidden = true;
   };
 }
@@ -1312,7 +1314,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // inside the flat: only what the door and the window show (the moving things, the people and the sky always)
   const portals = flatPortals(scene, new THREE.Box3(new THREE.Vector3(FRONT + 0.15, -1, FLAT_Z0), new THREE.Vector3(FRONT + FLAT_D, 3.4, FLAT_Z1)), FRONT - 0.15,
     [[64.6, 66.2, FLOOR - 0.1, 2.2 + FLOOR], [68.0, 70.4, 1.14, 2.44], [73.2, 75.6, 1.14, 2.44]],
-    (o) => moved.has(o) || !!o.userData.isCharacter || !!(o as unknown as { isBatchedMesh?: boolean }).isBatchedMesh || ((o as THREE.Mesh).material as THREE.Material | undefined)?.visible === false || o === skyMesh || o === planet || ((o as THREE.InstancedMesh).isInstancedMesh && !o.userData.prop) || (o as THREE.Sprite).isSprite, () => scene.children.length + oldTown.children.length);
+    (o) => moved.has(o) || !!o.userData.isCharacter || !!(o as unknown as { isBatchedMesh?: boolean }).isBatchedMesh || (((o as THREE.Mesh).material as THREE.Material | undefined)?.visible === false && !o.userData.batchHide) || o === skyMesh || o === planet || ((o as THREE.InstancedMesh).isInstancedMesh && !o.userData.prop) || (o as THREE.Sprite).isSprite, () => scene.children.length + oldTown.children.length);
   // three.js walks every object of a scene each frame to refresh its matrix, moving or not (a fifth of a phone's frame
   // here): the scene and the old town walk only what can move
   skipStatic(oldTown); skipStatic(scene);

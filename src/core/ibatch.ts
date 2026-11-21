@@ -119,6 +119,9 @@ export class InstancedBatch extends THREE.BatchedMesh {
   /** Leave a geometry out of every pass (e.g. what is only shown close by). */
   setHidden(geometryId: number, on: boolean) { this.hidden[geometryId] = on; this.culls = true; }
   isHidden(geometryId: number) { return !!this.hidden[geometryId]; }
+  /** Leave a geometry out of the camera's passes only (it still casts its shadow). */
+  setMainHidden(geometryId: number, on: boolean) { this.mainHidden[geometryId] = on; this.culls = true; }
+  private mainHidden: boolean[] = [];
 
   /** Whether a geometry's list is drawn into the shadow maps too. */
   setShadow(geometryId: number, on: boolean) { this.lists[geometryId].shadow = on; this.dirty = true; }
@@ -167,7 +170,7 @@ export class InstancedBatch extends THREE.BatchedMesh {
       inst = p.cur;
       for (let k = 0; k < p.n; k++) {
         const g = p.geo[k], sp = this.spheres[g];
-        inst[k] = this.hidden[g] || (sp && !FR.intersectsSphere(sp)) ? 0 : p.inst[k];
+        inst[k] = this.hidden[g] || (p === this.main && this.mainHidden[g]) || (sp && !FR.intersectsSphere(sp)) ? 0 : p.inst[k];
       }
     }
     pending = p.n ? inst : null;
@@ -223,6 +226,7 @@ export function batchStatic(root: THREE.Object3D, accept: (m: THREE.Mesh) => boo
       b.setList(geo, [id], 1);
       // drawn by the batch: three skips it at the layer test (no frustum test, no draw) in every pass
       m.material = HIDE; m.frustumCulled = false; m.layers.mask = 0;
+      m.userData.batchHide = (on: boolean) => b.setMainHidden(geo, on); // for the flat's portals (city.ts)
       Object.defineProperty(m, 'visible', { get: () => !b.isHidden(geo), set: (v: boolean) => b.setHidden(geo, !v), configurable: true });
     }
     root.add(b);
