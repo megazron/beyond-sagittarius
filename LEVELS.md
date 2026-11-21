@@ -187,7 +187,28 @@ Branching story system. All of it is data in `src/game/branch/`: write a level a
 | Any crew death | | supported by data, nobody dies yet | | planned |
 | Endings: stay or go home (four stubs in `endings.ts`) | level 99 | | | planned |
 
-## Combat and boss direction (planned, not built)
+## Fights and action (first slice built)
+
+What Episode One needs, built so later ages add rows of data. Rules and their sources: `MECHANICS_NOTES.md`. How the
+story calls it: `docs/COMBAT_API.md`. Code: `src/combat/`.
+
+| Part | What is there | Status |
+| --- | --- | --- |
+| Weapons | Hands, a stone (in the fist or thrown), club, spear (thrust, brace, throw), torch, sling, bow. Draw time, real arcs under gravity, spread, durability, ammunition from the bag | built |
+| Later weapons | Crossbow (Bronze) and the coil thrower (salvage): rows of data and models, usable in the proving ground only | prototype |
+| The body | Stamina for every action, roll with invincible frames, guard and a just-in-time guard, a braced spear, hit reactions, knock-back, injuries that stay until treated | built |
+| Creatures | Skritch (pack scavenger), Duskhound (night hunter), Mossback (charging grazer), Lashbloom (trap plant), Nibbet (prey), with sight, hearing and smell, and a pose and a sound for every state | built |
+| Machines and bosses | Phases, armour, weak points and a boss bar in the framework; one guardian in the proving ground | prototype |
+| Traps | Snare, stakes, fire line, rattle, bait, each from what the first days give you | built |
+| Set pieces | The first hunt, the night at the fire (three waves), the run to the fire, past the sleeper | built, playable from Pause, Action; not yet called by the story |
+| Tension moments | Quick press, hold steady, breath, aim | built |
+| Difficulty and access | Story, Normal, Hard; aim assist, hold instead of timing, slow motion, damage numbers, shake off | built |
+| Level 7 | Still the older scripted night. The night at the fire replaces it when Episode One's scenes call it | open |
+
+Original designs only: no characters, techniques, names or lines from any series. Violence stays teen-safe: no blood,
+nothing comes apart, animals fall and fade or run, machines shut down.
+
+## Combat and boss direction (later ages: planned, not built)
 
 Original designs only: no characters, techniques, names or lines from any series. Violence stays teen-safe, no gore.
 

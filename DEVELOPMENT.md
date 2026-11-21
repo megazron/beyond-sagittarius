@@ -54,6 +54,22 @@ objective and pressing E via `window.__bs`, and advances game time with
 `__bs.step()`. The scripts take `--out` or `--shots DIR` for screenshots and fall
 back to any installed Playwright Chromium if the pinned build is missing.
 
+## Fights
+
+`src/combat/sim/` is the fight itself with no browser in it (weapons, creatures and their senses, traps, fire, the set
+pieces, the tension moments); `src/combat/view/` draws it; `src/combat/combat.ts` joins it to the game. The rules and
+where they come from are in `MECHANICS_NOTES.md`, the calls the story makes in `docs/COMBAT_API.md`.
+
+```bash
+node --experimental-strip-types tools/combat/sim_test.ts   # every weapon, creature, trap and outcome on a fixed seed, about 2 s
+python3 tools/combat/play_test.py --out DIR                # the same in the built game: set pieces, keys, touch buttons, draw calls
+python3 tools/combat/make_sounds.py                        # the fight's sounds, synthesised (public/audio/sfx/cb_*)
+```
+
+`?combat=<id>` starts a set piece as soon as play begins (`arena`, `hunt.first`, `night.defence`, `chase.escape`,
+`stealth.pass`); Pause, Action lists them. `tools/combat/demo_bot.js` plays them through the real controls for
+recordings with `tools/gpu_capture.py`.
+
 ## Quality presets
 
 Presets are defined in `src/core/quality.ts`: Mobile (picked automatically on
