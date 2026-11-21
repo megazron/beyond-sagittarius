@@ -213,8 +213,22 @@ export class Combat {
   /** A tension moment on its own, for the story's scenes: quick press, hold steady, breath, aim. */
   tension(spec: TensionSpec): Promise<TensionResult> {
     const S = this.d.settings();
-    return new Promise((res) => this.tensionUi.run({ difficulty: S.difficulty, assist: { aim: S.aim, hold: S.hold, slowMo: S.slowMo, noTimers: false, damageNumbers: false }, ...spec }, res));
+    return new Promise((res) => {
+      this.tensionUi.run({ difficulty: S.difficulty, assist: { aim: S.aim, hold: S.hold, slowMo: S.slowMo, noTimers: false, damageNumbers: false }, ...spec }, res);
+      // inside a set piece the fight's frame drives the moment; called on its own (the story's choices) nothing else
+      // would, so it keeps its own clock until it closes
+      let last = performance.now();
+      const loop = (now: number) => {
+        if (!this.tensionUi.open) return;
+        const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
+        if (now - this.tensionFed > 150) this.tensionUi.update(dt);
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    });
   }
+  /** When the encounter frame last advanced the open tension moment (performance.now()). */
+  private tensionFed = -1e9;
   /** The story (or the menu) calls the encounter off. */
   leaveEncounter() { this.encounter?.leave(); }
 
@@ -465,7 +479,7 @@ export class Combat {
   /** An encounter runs the whole frame itself: the survival rules and the story wait. */
   frame(dt: number, time: number) {
     const D = this.d, run = this.encounter!, s = D.save(), st = s.stats, P = D.player, e = this.enc!;
-    if (this.tensionUi.open) { this.tensionUi.update(dt / Math.max(0.05, this.slow)); P.update(dt * 0.15, D.input, false, st.stamina, 1); this.present(dt * 0.15, time); return; }
+    if (this.tensionUi.open) { this.tensionFed = performance.now(); this.tensionUi.update(dt / Math.max(0.05, this.slow)); P.update(dt * 0.15, D.input, false, st.stamina, 1); this.present(dt * 0.15, time); return; }
     if (run.ask && !run.outcome) {
       const ask = run.ask;
       this.tensionUi.run(ask, (r) => { run.answer(r.passed); });
