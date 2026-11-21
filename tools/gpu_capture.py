@@ -21,21 +21,38 @@ if len(sys.argv) > 2 and sys.argv[1] == '--join':
         frames = meta['frames']
         if len(frames) < 2:
             continue
-        with open(os.path.join(d, 'list.txt'), 'w') as f:
-            for i, (n, t) in enumerate(frames):
-                dur = (frames[i + 1][1] - t) if i + 1 < len(frames) else 1 / 30
-                f.write(f"file '{n}'\nduration {max(dur, 0.001):.4f}\n")
+        # Constant frame rate from the frames' own timestamps: output frame k (at k/30 s after the first) shows the
+        # newest captured frame at or before that time, piped as images at exactly 30 fps. (The concat demuxer with
+        # per-frame durations rounded them to its time base and the picture drifted ~1% behind the sound.)
+        FPS = 30
+        t0 = frames[0][1]; n_out = int((frames[-1][1] - t0) * FPS) + 1
         name = os.path.basename(d)[4:]
         dst = os.path.join(out, f'{name}.mp4')
-        cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', os.path.join(d, 'list.txt')]
+        cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', str(FPS), '-c:v', 'mjpeg', '-i', '-']
         a = os.path.join(d, 'audio.webm')
         if os.path.exists(a) and os.path.getsize(a) > 0 and meta.get('audio_t0'):
             # the sound starts this many seconds after the first picture (negative: before it)
-            off = meta['audio_t0'] - frames[0][1]
+            off = meta['audio_t0'] - t0
             cmd += ['-itsoffset', f'{off:.3f}', '-i', a, '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '128k', '-af', 'apad', '-shortest']
-        cmd += ['-vf', 'fps=30,scale=1280:-2', '-c:v', 'libx264', '-crf', '24', '-preset', 'medium', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', dst]
-        subprocess.run(cmd, check=True)
+        cmd += ['-vf', 'scale=1280:-2', '-c:v', 'libx264', '-crf', '24', '-preset', 'medium', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', dst]
+        p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+        j = 0; cache = (None, b'')
+        for k in range(n_out):
+            t = t0 + k / FPS
+            while j + 1 < len(frames) and frames[j + 1][1] <= t:
+                j += 1
+            if cache[0] != j:
+                cache = (j, open(os.path.join(d, frames[j][0]), 'rb').read())
+            p.stdin.write(cache[1])
+        p.stdin.close()
+        if p.wait() != 0:
+            raise SystemExit(f'ffmpeg failed on {name}')
         print('joined', name, len(frames), 'frames', f"{frames[-1][1] - frames[0][1]:.1f}s", 'sound' if '-itsoffset' in cmd else 'silent')
+    # a capture that recorded the sync test (`{"rec": "sync", "eval": "__bs.syncTest(8)"}`) is checked: no clip goes out
+    # with picture and sound apart
+    if os.path.exists(os.path.join(out, 'sync.mp4')):
+        r = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'av_sync.py'), '--mp4', os.path.join(out, 'sync.mp4')])
+        sys.exit(r.returncode)
     sys.exit(0)
 
 URL, OUT, PLAN = sys.argv[1], sys.argv[2], json.load(open(sys.argv[3]))
