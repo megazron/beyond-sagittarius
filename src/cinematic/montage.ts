@@ -464,17 +464,36 @@ export class Montage {
     this.worldTrails[0].mesh.visible = false;
   }
 
-  /** The five landing sets: built and drawn once while the game loads, so the first landing does not stall while
-   *  their materials (and the extra sky light each brings) compile. */
+  /** Draw the crew once under every lighting the title sequence puts them in, while the game loads. Lights decide
+   *  which shader each material needs: the crew were only ever compiled for the lit deck, so the first frame with them
+   *  in open space (after the ship breaks) compiled every garment at once and froze for seconds on the GPU, and the
+   *  first landing (each set adds a sky light) did it again. Also builds and draws the five landing sets. */
   warmStages(draw: (scene: THREE.Scene, cam: THREE.PerspectiveCamera) => void) {
-    const cam = new THREE.PerspectiveCamera(34, 16 / 9, 0.1, 40000);
+    const cast = this.crew;
+    const saved = ORDER.map((id) => { const c = cast[id]; return { c, parent: c.root.parent, p: c.root.position.clone(), q: c.root.quaternion.clone(), v: c.root.visible }; });
+    const wasInterior = this.set.interior.group.visible;
+    const cam = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 40000);
+    const line = (at: THREE.Vector3) => ORDER.forEach((id, i) => {
+      const c = cast[id];
+      this.group.add(c.root); c.root.visible = true; c.root.quaternion.identity();
+      c.root.position.copy(at).add(V(-2.5 + i, 0, 0)); c.root.updateMatrixWorld(); c.animate('float', 0, 0, 0, 0.016);
+    });
+    // open space, as from the ship breaking to the fates
+    this.set.show('deep');
+    line(V(0, 0, 0));
+    cam.position.set(0, 1.2, 7); cam.lookAt(0, 1, 0); cam.updateMatrixWorld();
+    draw(this.set.scene, cam);
+    // each landing set, with the crew standing in it
     for (const id of ORDER.slice(0, 5)) {
       const o = this.worldStage(id);
-      cam.position.copy(o).add(V(1.6, 1.35, 4.6)); cam.lookAt(o.clone().add(V(0, 1.05, 0))); cam.updateMatrixWorld();
+      line(o);
+      cam.position.copy(o).add(V(0, 1.4, 7)); cam.lookAt(o.clone().add(V(0, 1, 0))); cam.updateMatrixWorld();
       draw(this.set.scene, cam);
     }
     if (this.stageG) this.stageG.visible = false;
     this.stageOn = false;
+    for (const x of saved) { x.parent?.add(x.c.root); x.c.root.position.copy(x.p); x.c.root.quaternion.copy(x.q); x.c.root.visible = x.v; x.c.root.updateMatrixWorld(); }
+    this.set.interior.group.visible = wasInterior;
   }
 
   private get crew() { const ids: CrewId[] = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social']; return Object.fromEntries(ids.map((id, i) => [id, this.set.interior.crew[i]])) as Record<CrewId, Character>; }
