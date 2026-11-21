@@ -678,7 +678,7 @@ export class Montage {
       const rock = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number) => { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true })); m.position.set(x, y, z); m.rotation.set(x, y, z); g.add(m); return m; };
       const sky = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number, emissive = 0) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 24), new THREE.MeshStandardMaterial({ color, roughness: 1, emissive, emissiveIntensity: 0.5 })); m.position.set(x, y, z); g.add(m); return m; };
       // Methryx: black slush, orange haze, the ringed giant huge on the horizon
-      mk('strong', 0x2a2018, 0.5, (g) => { sky(g, 110, -170, 45, -560, 0xcdb48a, 0x3a2a10); const r = new THREE.Mesh(new THREE.RingGeometry(140, 225, 64), new THREE.MeshBasicMaterial({ color: 0xd8c9a8, transparent: true, opacity: 0.5, side: THREE.DoubleSide })); r.position.set(-170, 45, -560); r.rotation.set(-1.3, 0.3, 0); g.add(r); rock(g, 1.2, 3, 0.2, -4, 0x2a211a); rock(g, 0.7, -4, 0.1, -2, 0x2a211a); rock(g, 2.2, -7, 0.5, -9, 0x2a211a); rock(g, 3.5, 11, 1, -18, 0x241c16);
+      mk('strong', 0x2a2018, 0.5, (g) => { { const gi = sky(g, 110, -170, 45, -560, 0xffffff, 0x3a2a10); const cv = document.createElement('canvas'); cv.width = 64; cv.height = 256; const x = cv.getContext('2d')!; for (let y = 0; y < 256; y++) { const v = 0.5 + 0.5 * Math.sin(y * 0.21) * Math.cos(y * 0.057 + 1) + 0.15 * Math.sin(y * 0.9); x.fillStyle = `rgb(${Math.round(190 + 50 * v)},${Math.round(120 + 60 * v)},${Math.round(60 + 50 * v)})`; x.fillRect(0, y, 64, 1); } const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; (gi.material as THREE.MeshStandardMaterial).map = tx; gi.rotation.z = 0.35; } const r = new THREE.Mesh(new THREE.RingGeometry(140, 225, 64), new THREE.MeshBasicMaterial({ color: 0xd8c9a8, transparent: true, opacity: 0.5, side: THREE.DoubleSide })); r.position.set(-170, 45, -560); r.rotation.set(-1.3, 0.3, 0); g.add(r); rock(g, 1.2, 3, 0.2, -4, 0x2a211a); rock(g, 0.7, -4, 0.1, -2, 0x2a211a); rock(g, 2.2, -7, 0.5, -9, 0x2a211a); rock(g, 3.5, 11, 1, -18, 0x241c16);
         // a black methane lake behind him, flat and glossy
         const lake = new THREE.Mesh(new THREE.CircleGeometry(26, 48), new THREE.MeshStandardMaterial({ color: 0x050403, roughness: 0.08, metalness: 0.6 })); lake.rotation.x = -Math.PI / 2; lake.position.set(4, 0.14, -34); lake.scale.set(1.6, 1, 0.7); g.add(lake); }, 0.6, [0xc8803a, 0x2a1a0c, 0.95]);
       // the grey moon: dust, hard light, a torn piece of hull
@@ -689,7 +689,7 @@ export class Montage {
         const old = new THREE.Mesh(new THREE.SphereGeometry(24, 32, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 0.42, 0.16) })); old.position.set(30, 270, -120); g.add(old);
         const glow = new THREE.Mesh(new THREE.SphereGeometry(40, 32, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.1, 0.03), transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending })); glow.position.copy(old.position); g.add(glow); }, 0.25, [0x6a7890, 0x101014, 0.4]);
       // Shardrift: split cliffs, old metal
-      mk('builder', 0x5a4636, 1, (g) => { rock(g, 9, -9, 5, -12, 0x4a392c); rock(g, 12, 13, 7, -16, 0x4a392c); rock(g, 6, 0, 2, -20, 0x3a2c22); rock(g, 1.1, 3.5, 0.3, -2.5, 0x4a392c);
+      mk('builder', 0x5a4636, 1, (g) => { rock(g, 9, -15, 5, -12, 0x4a392c); rock(g, 12, 19, 7, -16, 0x4a392c); rock(g, 6, 0, 2, -20, 0x3a2c22); rock(g, 1.1, 3.5, 0.3, -2.5, 0x4a392c);
         // old metal in the split: ribs of something that was built here long ago
         for (let i = 0; i < 4; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.3, 7, 0.3), new THREE.MeshStandardMaterial({ color: 0x8a8f96, roughness: 0.45, metalness: 0.8 })); b.position.set(-3 + i * 2.1, 3, -10 - i * 0.6); b.rotation.set(0.1 * i, 0, 0.18 - i * 0.12); g.add(b); } }, 1.6, [0xb09a84, 0x1c140e, 0.7]);
       // Aerolis: a raft of hull on gold cloud to every horizon
@@ -724,7 +724,7 @@ export class Montage {
     // the landing grammar (shot list I1 to I6), in beats from the hit: the world first (-5), the hit (0), the body still,
     // then a breath (+4), eyes open and the body checks itself (+9), their sky (+14), and only then the line (+19)
     const ph = b - imp, sky0 = SKYDIR[id];
-    const head = o.clone().add(V(0, id === 'explorer' || id === 'builder' ? 0.95 : 1.55, 0));
+    const head = o.clone().add(V(0, id === 'explorer' || id === 'builder' ? 0.95 : id === 'strong' ? 1.0 : 1.55, 0));
     let cam: THREE.Camera;
     if (ph < 0) cam = this.lens(o.clone().add(V(9, 1.4, 16)), o.clone().add(V(-6, 5 + 2 * clamp((ph + 5) / 5, 0, 1), -40)), 53, 30, 0.001); // I1 extreme wide, low: the world
     else if (ph < 4) cam = this.lens(o.clone().add(V(3.6, 0.7, 6.2)).add(shakeAt(b, 0.5 * after(b, imp, 1.0), this.tmp2)), o.clone().add(V(0, 0.8, 0)), 38, 7, 0.003); // I2 wide, low: the hit

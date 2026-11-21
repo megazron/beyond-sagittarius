@@ -131,15 +131,16 @@ export function createInserts(deck: THREE.Group) {
     writeScreen(mfdR, ['NAV', 'ON COURSE'], '#7fe9ff', '#04080c', 0.2);
   }
   // the yoke: a column out of the panel, a bar and two horns; it rolls about the column and slides in and out
-  const stick = new THREE.Group(); stick.position.set(0, -1.5, -0.62); cockpit.add(stick);
-  const grips = { L: new THREE.Vector3(-0.17, 0.02, 0), R: new THREE.Vector3(0.17, 0.02, 0) };
+  // out of the panel face, at the seated pilot's reach
+  const stick = new THREE.Group(); stick.position.set(0, -1.3, -0.56); cockpit.add(stick);
+  const grips = { L: new THREE.Vector3(0.17, 0.02, 0), R: new THREE.Vector3(-0.17, 0.02, 0) };
   { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.55, 14), bezel); col.rotation.x = Math.PI / 2; col.position.z = -0.27; stick.add(col);
     const bar = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.035, 0.035), metal); stick.add(bar);
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.04, 20), metal); hub.rotation.x = Math.PI / 2; stick.add(hub);
     for (const sx of [-1, 1]) { const horn = new THREE.Mesh(new THREE.CapsuleGeometry(0.019, 0.1, 4, 12), new THREE.MeshStandardMaterial({ color: 0x101215, roughness: 0.75 })); horn.position.set(sx * 0.17, 0.035, 0); stick.add(horn); } }
   const cockLight = new THREE.PointLight(0xffb070, 2.2, 3, 2); cockLight.position.set(0, -1.0, -1.0); cockpit.add(cockLight);
   const cockKey = new THREE.PointLight(0xcfe6ff, 3, 6, 1.8); cockKey.position.set(0.5, 0.1, 0.6); cockpit.add(cockKey);
-  const cockFill = new THREE.PointLight(0x7fd0ff, 1.2, 3, 2); cockFill.position.set(0, -1.25, -0.95); cockpit.add(cockFill);
+  const cockFill = new THREE.PointLight(0x7fd0ff, 0.8, 3, 2); cockFill.position.set(0.55, -0.85, -0.7); // off the yoke's axis: it blew a highlight on the hub in front of the display cockpit.add(cockFill);
   cockpit.visible = false;
 
   return {
@@ -149,7 +150,7 @@ export function createInserts(deck: THREE.Group) {
       stick.updateWorldMatrix(true, false);
       const q = stick.getWorldQuaternion(new THREE.Quaternion());
       for (const sd of ['L', 'R'] as const) {
-        const sx = sd === 'R' ? 1 : -1, o = out[sd];
+        const sx = sd === 'R' ? -1 : 1, o = out[sd]; // facing -z, the rig's right hand is on -x (measured)
         // the wrist sits just outside and behind the horn; the fingers go forward round it; the palm faces in
         o.at.copy(grips[sd]).add(new THREE.Vector3(sx * 0.045, -0.02, 0.07)).applyMatrix4(stick.matrixWorld);
         o.fingers.set(-sx * 0.35, -0.15, -1).applyQuaternion(q);
