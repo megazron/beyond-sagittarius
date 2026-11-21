@@ -724,7 +724,6 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     wall(0.3, hgt, zB - zA, x1, hgt / 2 + FLOOR, (zA + zB) / 2, inM); wall(x1 - x0, hgt, 0.3, (x0 + x1) / 2, hgt / 2 + FLOOR, zA, inM); wall(x1 - x0, hgt, 0.3, (x0 + x1) / 2, hgt / 2 + FLOOR, zB, inM);
     const ceil = add(new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, zB - zA), inM)); ceil.rotation.x = Math.PI / 2; ceil.position.set((x0 + x1) / 2, hgt + FLOOR, (zA + zB) / 2);
     const lamp = top(new THREE.PointLight(0xffd9a0, rich ? 8 : 6, 9, 1.5)); lamp.position.set(x0 + 3.5, 2.7, 69.5);
-    if (rich) { const bed = top(new THREE.PointLight(0xffc890, 4, 7, 1.5)); bed.position.set(x0 + 9.2, 2.6, 72.5); }
     const fairy = add(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, zB - zA - 0.6), ledMats[2])); fairy.position.set(x1 - 0.2, 2.8, (zA + zB) / 2);
     plane(1.6, 0.4, lit(canvasTex(512, 128, (g) => { g.fillStyle = '#20324a'; g.fillRect(0, 0, 512, 128); g.fillStyle = '#f2ead8'; g.font = '600 64px Rajdhani, sans-serif'; g.textAlign = 'center'; g.fillText('FLAT 4B', 256, 86); }), 0.3), x0 - 0.17, 2.55 + FLOOR, 65.4, -Math.PI / 2);
     // the morning's clutter: a small table, a sofa under the window, a bed in the corner, shelves, a kettle
@@ -1523,7 +1522,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           const d = Math.hypot(q.pos.x - cp.x, q.pos.z - cp.z);
           if (d < 9 && inLens(q.pos.x, q.pos.z)) { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           // the six of the story and Mir have no card of their own look: they stay themselves (a body) out to 90 m
-          if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = d < 90; if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; }
+          if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = tier > 0 && d < 90; // phones: within the body cap, so not past the card range if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; }
           if (d >= CROWD_FAR) { if (q.fig.root.visible) q.fig.root.visible = false; stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: lookOf.get(q.fig) ?? i, yaw: q.yaw, walk: !!q.walk }); continue; }
           // the six of the story (and Mir) are never a card within speaking distance, whatever the cap
           const dy = you ? Math.hypot(q.pos.x - you.position.x, q.pos.z - you.position.z) : 99;

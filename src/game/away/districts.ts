@@ -805,7 +805,12 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       const c = cars[i];
       const far = !seen(c.x, c.z, cam, fx, fz);
       if (c.turn) {
-        const tr = c.turn; tr.t += (c.v * k) / tr.len;
+        const tr = c.turn;
+        // a turning car gives way to anyone on the crossing it is turning over
+        let clear = true;
+        for (let ci = 0; ci < crossN; ci++) { const p = crossers[ci], dx = p.x - c.x, dz = p.z - c.z; if (dx * dx + dz * dz < 36 && dx * Math.sin(c.yaw) + dz * Math.cos(c.yaw) > -0.5) { clear = false; break; } }
+        c.v = clear ? Math.max(c.v, 3) : 0;
+        tr.t += (c.v * k) / tr.len;
         if (tr.t >= 1) { c.r = tr.next; c.u = tr.nu; c.dir = tr.ndir; c.turn = null; }
         else {
           const t = tr.t, a = (1 - t) * (1 - t), b = 2 * t * (1 - t), d = t * t;
@@ -820,13 +825,13 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
         const endU = c.dir > 0 ? c.r.b - 8 : c.r.a + 8;
         const nu = ahead ?? endU, gap = (nu - c.u) * c.dir;
         const sig = ahead !== undefined ? nodeAt(c.r.along === 'z' ? c.r.c : ahead, c.r.along === 'z' ? ahead : c.r.c) : undefined;
-        const stopD = gap - 9.2; // the stop line, before the zebra
+        const stopD = gap - 12.4; // the front bumper at the stop line, short of the zebra (6.6 to 9.8 m out)
         if (sig && !go(c.r.along) && stopD > -0.5) want = Math.min(want, Math.max(0, stopD) * 0.9);
         // the car ahead in the same lane
         for (const o of cars) if (o !== c && !o.turn && o.r === c.r && o.dir === c.dir && laneOn(o.r, o.lane) === laneOn(c.r, c.lane)) { const g = (o.u - c.u) * c.dir; if (g > 0 && g < 30) want = Math.min(want, Math.max(0, g - 6.5) * 0.8); }
         // anyone on the road in front: a walker on a zebra, or you
         pos(c.r, c.u, c.dir, c.lane, T1);
-        for (let ci = 0; ci < crossN; ci++) { const p = crossers[ci]; const fx = (c.r.along === 'z' ? p.z - T1.z : p.x - T1.x) * c.dir, sx = c.r.along === 'z' ? p.x - T1.x : p.z - T1.z; if (fx > 0 && fx < 14 && Math.abs(sx) < 1.8) want = Math.min(want, Math.max(0, fx - 4) * 0.7); }
+        for (let ci = 0; ci < crossN; ci++) { const p = crossers[ci]; const fx = (c.r.along === 'z' ? p.z - T1.z : p.x - T1.x) * c.dir, sx = c.r.along === 'z' ? p.x - T1.x : p.z - T1.z; if (fx > -1 && fx < 18 && Math.abs(sx) < 1.9) want = Math.min(want, Math.max(0, fx - 4.6) * 0.8); }
         if (you) { const fx = (c.r.along === 'z' ? you.z - T1.z : you.x - T1.x) * c.dir, sx = c.r.along === 'z' ? you.x - T1.x : you.z - T1.z; if (fx > 0 && fx < 16 && Math.abs(sx) < 1.9) want = Math.min(want, Math.max(0, fx - 4) * 0.7); }
         c.v += (want - c.v) * (1 - Math.exp(-k * (want < c.v ? 4 : 1.2)));
         c.u += c.dir * c.v * k;
@@ -972,7 +977,9 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
         p.t += dt;
         // walk when traffic along the road being crossed has a red, and not into the amber
         const cr = p.cross!;
-        const ok = cr.axis === 'z' ? phase === 0 : phase === 2;
+        // and only when no car is on or at the crossing (one already over the line drives on)
+        let ok = cr.axis === 'z' ? phase === 0 : phase === 2;
+        if (ok) for (const c of cars) { const ex = cr.x1 - cr.x0, ez = cr.z1 - cr.z0, L2 = ex * ex + ez * ez || 1, tt = Math.max(0, Math.min(1, ((c.x - cr.x0) * ex + (c.z - cr.z0) * ez) / L2)), dx = c.x - (cr.x0 + ex * tt), dz = c.z - (cr.z0 + ez * tt); if (dx * dx + dz * dz < 20) { ok = false; break; } }
         p.yaw = Math.atan2(cr.x1 - cr.x0, cr.z1 - cr.z0);
         if (ok && p.t > 0.4) { p.mode = 'cross'; p.t = 0; }
       } else {
