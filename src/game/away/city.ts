@@ -1365,8 +1365,6 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const ghost = (m: THREE.Mesh) => { const mt = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.Material | undefined; return !!mt && mt.transparent && (!mt.depthWrite || mt.blending === THREE.AdditiveBlending); };
   // where the second shot's camera stands, from the pad (checked clear by takeoffClearance)
   const CAM2 = new THREE.Vector3(-55, 6, -95);
-  // and the third: east of the pad, low, looking up as it climbs away (both spots checked: open sky, a clear view)
-  const CAM3 = new THREE.Vector3(110, 4, 0);
   const lerpN = (a: number, b: number, t: number) => a + (b - a) * t;
   let outroT = -1, outroDone: (() => void) | null = null;
   const boarding = new Map<CityPerson, THREE.Vector3>();
@@ -1541,9 +1539,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         const k = smooth(4.4, 9.4, T);
         eyeP.copy(linerHome).add(CAM2).setY(linerHome.y - 4 + CAM2.y + k * 4); aimP.set(L.x, L.y + 4, L.z);
       } else {
-        // from the apron's east edge, looking up: the liner climbing away high above the towers
         const k = smooth(9.4, OUTRO, T);
-        eyeP.copy(linerHome).add(CAM3).setY(linerHome.y - 4 + CAM3.y + k * 6); aimP.copy(L);
+        // by now it is above every tower: the camera flies with it, behind and below, the city far beneath
+        eyeP.set(L.x + 40 - k * 10, L.y - 25 + k * 5, L.z + 90 - k * 20); aimP.set(L.x, L.y + 4, L.z - 20);
       }
     }
   }
