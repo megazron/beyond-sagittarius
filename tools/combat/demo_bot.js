@@ -62,14 +62,14 @@ window.__cbBot = (mode) => {
     if (tension()) { stop(); return; } flag.tOpen = 0;
     const p = sim.player, T = (performance.now() - t0) / 1000;
     if (mode === 'melee') {
-      // a pack of Skritch, then the spear against them; the roll and the guard are both shown
+      // the spear against a pack of Skritch, then the club against a Duskhound; the roll and the guard are both shown
       if (st === 0) { if (equip('spear')) { run.summon('skritch', 4); next(); } }
-      else if (st === 1) { fight(living('skritch'), { roll: Math.floor(T / 6) % 2 === 1 }); if (!living('skritch').length && since() > 2) next(); }
-      else if (st === 2) { if (equip('club')) { run.summon('skritch', 4); next(); } }
-      else if (st === 3) fight(living('skritch'), {});
+      else if (st === 1) { fight(living('skritch'), { roll: Math.floor(T / 6) % 2 === 1 }); if ((!living('skritch').length && since() > 2) || since() > 24) next(); }
+      else if (st === 2) { if (equip('club')) { run.summon('hound', 1); next(); } }
+      else if (st === 3) fight(living('hound').length ? living('hound') : living('skritch'), { roll: true });
     } else if (mode === 'ranged') {
       if (st === 0) { if (equip('sling')) { run.summon('skritch', 3); next(); } }
-      else if (st === 1) { const t = nearest(living('skritch')); if (t) shoot(t, { loft: 0.02 }); else if (since() > 2) { hold('Mouse2', 0); next(); } }
+      else if (st === 1) { const t = nearest(living('skritch')); if (t && since() < 22) shoot(t, { loft: 0.02 }); else { hold('Mouse2', 0); hold('Mouse0', 0); next(); } }
       else if (st === 2) { if (equip('bow')) { run.summon('nibbet', 3); next(); } }
       else if (st === 3) { const t = nearest(living('nibbet')); if (t) shoot(t); else { hold('Mouse2', 0); hold('Mouse0', 0); } }
     } else if (mode === 'guardian') {
