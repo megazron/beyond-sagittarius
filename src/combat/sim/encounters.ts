@@ -80,7 +80,7 @@ export class EncounterRun {
     if (this.story.hurt) s.player.injuries.push({ id: 'sprain', left: 0 });
     if (o.companion) { const a = this.at(-1.2, -2.2); s.ally = { who: o.companion, x: a.x, z: a.z, hp: 60, down: false }; }
     this.setup(id, give, arm);
-    const first = (['spear', 'club', 'torch', 'rock'] as WeaponId[]).find((w) => s.player.has[w] && (w !== 'rock' || (s.inv.stone ?? 0) > 0));
+    const first = (['hafted', 'spear', 'club', 'torch', 'rock'] as WeaponId[]).find((w) => s.player.has[w] && (w !== 'rock' || (s.inv.stone ?? 0) > 0));
     if (first && s.player.weapon === 'fists') s.equip(first);
     s.drain();
   }
@@ -142,7 +142,7 @@ export class EncounterRun {
     } else {
       // the proving ground: everything in the hand, nothing at stake
       this.hour = 11; s.night = false;
-      for (const w of ['rock', 'club', 'spear', 'torch', 'sling', 'bow', 'crossbow', 'coil'] as WeaponId[]) { s.player.has[w] = true; }
+      for (const w of ['rock', 'flake', 'club', 'spear', 'hafted', 'torch', 'sling', 'bow', 'crossbow', 'coil'] as WeaponId[]) { s.player.has[w] = true; }
       for (const [k, n] of Object.entries({ stone: 30, arrow: 30, bolt: 20, branch: 20, vine: 10, tinder: 6, fruit: 6 })) s.inv[k] = Math.max(s.inv[k] ?? 0, n);
       // the machine stands well off, so the bench fights near the start never wake it by accident
       this.put('guardian', 70, 0, { yaw: this.site.yaw + Math.PI });

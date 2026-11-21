@@ -6,8 +6,10 @@ import { addStrings } from '../i18n';
 const S: [string, string, string, string][] = [
   ['cb.w.fists', 'Hands', 'हाथ', 'ہاتھ'],
   ['cb.w.rock', 'Stone', 'पत्थर', 'پتھر'],
+  ['cb.w.flake', 'Stone flake', 'पत्थर की धार', 'پتھر کی دھار'],
   ['cb.w.club', 'Club', 'डंडा', 'ڈنڈا'],
-  ['cb.w.spear', 'Spear', 'भाला', 'نیزہ'],
+  ['cb.w.spear', 'Fire-hardened spear', 'आग में पका भाला', 'آگ میں پکا نیزہ'],
+  ['cb.w.hafted', 'Stone-tipped spear', 'पत्थर की नोक वाला भाला', 'پتھر کی نوک والا نیزہ'],
   ['cb.w.torch', 'Torch', 'मशाल', 'مشعل'],
   ['cb.w.sling', 'Sling', 'गोफन', 'گوپھن'],
   ['cb.w.bow', 'Bow', 'धनुष', 'کمان'],

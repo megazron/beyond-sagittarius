@@ -14,6 +14,7 @@ import { CombatSim, noIntent } from './sim/sim';
 import type { Injury, InjuryId, Intent } from './sim/sim';
 import type { Difficulty, SimEvent, Env } from './sim/core';
 import { WEAPONS, TRAPS, AMMO_CRAFT } from './sim/weapons';
+import { knownFrom, weaponKnown, trapKnown } from './sim/inventions';
 import type { WeaponId, TrapId } from './sim/weapons';
 import type { Enemy, SpeciesId } from './sim/species';
 import { EncounterRun, ENCOUNTERS } from './sim/encounters';
@@ -129,8 +130,13 @@ export class Combat {
     p.has = { fists: true, ...c.has }; p.dur = { ...c.dur }; p.injuries = c.injuries.map((i) => ({ ...i }));
     if (s.flags.spear) p.has.spear = true;
     p.has.rock = true;
+    // only what has been invented can be in the hand (the proving ground is the one exception)
+    const known = this.known();
+    for (const w of Object.keys(p.has) as WeaponId[]) if (!weaponKnown(w, known)) delete p.has[w];
     p.weapon = 'fists';
   }
+  /** What the people of the crash know how to make (src/combat/sim/inventions.ts). */
+  known() { return knownFrom(this.d.save() as unknown as { flags?: Record<string, unknown>; inventions?: string[] }); }
   private storePlayer() {
     if (!this.sim || this.enc?.opts.trial) return;
     const c = this.cs, p = this.sim.player;
@@ -435,7 +441,8 @@ export class Combat {
     const items: { id: string; label: string; sub: string; ok: boolean }[] = [];
     if (this.encounter?.id === 'arena') for (const k of ['skritch', 'hound', 'mossback', 'lashbloom', 'nibbet'] as SpeciesId[]) items.push({ id: `summon:${k}`, label: t(`cb.c.${k}`), sub: t('cb.summon'), ok: true });
     else {
-      for (const k of Object.keys(TRAPS) as TrapId[]) items.push({ id: `trap:${k}`, label: t(`cb.t.${k}`), sub: cost(TRAPS[k].cost), ok: sim.canAfford(TRAPS[k].cost) });
+      const known = this.known();
+      for (const k of Object.keys(TRAPS) as TrapId[]) if (this.encounter || trapKnown(k, known)) items.push({ id: `trap:${k}`, label: t(`cb.t.${k}`), sub: cost(TRAPS[k].cost), ok: sim.canAfford(TRAPS[k].cost) });
       for (const w of ['club', 'torch', 'sling', 'bow'] as WeaponId[]) if (!p.has[w] && sim.canAfford(WEAPONS[w].craft!)) items.push({ id: `make:${w}`, label: `${t('cb.make')}: ${t(`cb.w.${w}`)}`, sub: cost(WEAPONS[w].craft!), ok: true });
       if (p.has.bow && sim.canAfford(AMMO_CRAFT.arrow.cost)) items.push({ id: 'make:arrow', label: `${t('cb.make')}: ${t('cb.item.arrow')}`, sub: cost(AMMO_CRAFT.arrow.cost), ok: true });
       if (sim.traps.some((q) => q.kind === 'rattle' && q.uses > 0)) items.push({ id: 'pull', label: t('cb.p.pull'), sub: t('cb.t.rattle'), ok: true });
