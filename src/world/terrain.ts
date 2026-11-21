@@ -5,6 +5,9 @@ import { loadSet, meanColor } from '../core/assets';
 import type { Quality } from '../core/quality';
 
 import { baseHeight, ridged, WORLD_SIZE, HALF, LAKE } from './heightfield';
+import { InstancedBatch, BATCH, batchDepth, MAX_GEOMETRIES } from '../core/ibatch';
+
+const HIDDEN = new THREE.MeshBasicMaterial({ visible: false });
 
 export { WORLD_SIZE, HALF, LAKE };
 export const WATER_LEVEL = 0;
@@ -218,15 +221,21 @@ export class Terrain {
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
         const cx = -HALF + i * CH, cz = -HALF + j * CH;
+        // the LOD sits at the chunk's middle (its levels are in world space, so they are moved back by as much): at the
+        // world's origin, as it was, every chunk took the level for the camera's distance to the origin, the whole
+        // world in full detail round the crash site and the ground under your feet in the far level 240 m out
         const lod = new THREE.LOD();
         const dists = CH > 100 ? [0, 240, 450] : [0, 170, 380];
+        lod.position.set(cx + CH / 2, 0, cz + CH / 2);
         segs.forEach((s, k) => {
           const m = new THREE.Mesh(this.chunkGeometry(cx, cz, CH, s), this.material);
+          m.position.set(-cx - CH / 2, 0, -cz - CH / 2);
           m.receiveShadow = true;
           m.castShadow = k === 0;
           lod.addLevel(m, dists[k]);
         });
         this.group.add(lod);
+        this.chunks.push({ lod, dists, c: new THREE.Vector3(cx + CH / 2, 0, cz + CH / 2) });
         if (performance.now() - t0 > 14) {
           onProgress(0.6 + ((j * n + i) / (n * n)) * 0.3);
           await new Promise((r) => setTimeout(r, 0));
@@ -235,6 +244,52 @@ export class Terrain {
       }
     }
     this.group.add(this.backdrop());
+    if (BATCH.on) this.batch();
+  }
+
+  private chunks: { lod: THREE.LOD; dists: number[]; c: THREE.Vector3 }[] = [];
+  private bat: { b: InstancedBatch; geo: number[][]; at: number[] } | null = null;
+
+  /**
+   * Every chunk's levels in one InstancedBatch (core/ibatch.ts): one draw call for the whole ground in each pass instead
+   * of one per chunk (31 a frame on Web, 13 more in the shadow pass). `update` picks each chunk's level as the LODs did,
+   * and each piece is culled by its own sphere per pass. The LODs stay (hidden) for the ground probe.
+   */
+  private batch() {
+    const geos = this.chunks.flatMap((c) => c.lod.levels.map((l) => (l.object as THREE.Mesh).geometry));
+    if (geos.length > MAX_GEOMETRIES) return;
+    let verts = 0, idx = 0;
+    for (const g of geos) { verts += g.attributes.position.count; idx += g.index ? g.index.count : 0; }
+    const b = new InstancedBatch(geos.length, verts, Math.max(1, idx), this.material);
+    b.name = 'batch:terrain'; b.receiveShadow = true; b.castShadow = true; b.customDepthMaterial = batchDepth();
+    const geo: number[][] = [], M = new THREE.Matrix4();
+    for (const c of this.chunks) {
+      const row: number[] = [];
+      c.lod.levels.forEach((l, k) => {
+        const m = l.object as THREE.Mesh, g = b.addGeometry(m.geometry), id = b.addInstance(g);
+        b.setMatrixAt(id, M.identity()); b.setList(g, [id], 1);
+        if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+        b.setCullSphere(g, m.geometry.boundingSphere!.clone());
+        b.setShadow(g, k === 0); b.setHidden(g, k > 0);
+        m.material = HIDDEN; row.push(g);
+      });
+      geo.push(row);
+    }
+    this.group.add(b);
+    this.bat = { b, geo, at: this.chunks.map(() => 0) };
+  }
+
+  /** The chunks' levels for a camera at `p` (batched ground only; the LODs pick their own). */
+  update(p: THREE.Vector3) {
+    const bt = this.bat;
+    if (!bt) return;
+    this.chunks.forEach((c, i) => {
+      const d = Math.hypot(p.x - c.c.x, p.y - c.c.y, p.z - c.c.z);
+      let k = 0;
+      for (let j = 1; j < c.dists.length; j++) if (d >= c.dists[j]) k = j;
+      if (k === bt.at[i]) return;
+      bt.b.setHidden(bt.geo[i][bt.at[i]], true); bt.b.setHidden(bt.geo[i][k], false); bt.at[i] = k;
+    });
   }
 
   /** Far ranges beyond the playable world: they give the valley its scale, and the air does the rest. */

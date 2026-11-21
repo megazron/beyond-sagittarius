@@ -205,6 +205,7 @@ export class World {
     if (drawn) {
       this.grass.update(focus);
       this.forest.update(cam.position, cam);
+      this.terrain.update(cam.position);
       // the lake mirrors the land, the sky and the trees; the stones, sticks, plants and bodies on the shore are a pixel
       // or two in it and were half its draw calls (the mirrored render was a seventh of the planet's frame on Web)
       this.reflHidden ??= [this.water.mesh, this.grass.mesh, this.items.group, this.creature.root, this.hound.root, this.explorer.root, this.camp.root, ...this.forest.small];
