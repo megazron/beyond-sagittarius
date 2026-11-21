@@ -53,6 +53,12 @@ with sync_playwright() as pw:
             if n and n['next'] == s['next']: fails.append(f"task {s['next']} did not complete"); break
             done += 1
         print('prologue tasks done', done, flush=True)
+        # the take-off path: the liner must keep clear of everything in the city, and the camera must have open sky
+        # and a clear view of it (the owner saw the ship going through things)
+        tc = page.evaluate('__bs.takeoffClearance()')
+        print('take-off clearance', tc, flush=True)
+        if not tc or tc['worst'] < 1 or tc['camera'] != 'clear':
+            fails.append(f'take-off goes through the city or the camera is blocked: {tc}')
         try:
             # the take-off: letterboxed, with its Skip
             page.wait_for_function('__bs.awayOutroOn', timeout=60000)

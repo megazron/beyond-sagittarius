@@ -1007,6 +1007,10 @@ window.addEventListener('resize', () => {
   awayLeave() { game?.away?.leave(); },
   /** Test hook: every Zenvora task done at once, so the take-off plays now. */
   awayOutro() { game?.away?.debugOutro(); },
+  /** Test hook: the take-off path's least clearance over the city (m; negative = the liner passes through something). */
+  takeoffMap() { return JSON.stringify((game?.away?.stage as { takeoffMap?: () => unknown } | null)?.takeoffMap?.() ?? null); },
+  takeoffFindPad() { return (game?.away?.stage as { takeoffFindPad?: () => unknown } | null)?.takeoffFindPad?.() ?? null; },
+  takeoffClearance() { return (game?.away?.stage as { takeoffClearance?: () => unknown } | null)?.takeoffClearance?.() ?? null; },
   get awayOutroOn() { return !!game?.away?.outroOn; },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
