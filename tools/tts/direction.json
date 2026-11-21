@@ -2609,6 +2609,60 @@
 "post": 0.15,
 "tags": [],
 "fx": ""
+},
+"pull.pilot": {
+"emotion": "anxious",
+"intensity": 0.7,
+"pace": 1.1,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"pull.sci2": {
+"emotion": "awe",
+"intensity": 0.75,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.15,
+"tags": [],
+"fx": ""
+},
+"pull.pods": {
+"emotion": "panic",
+"intensity": 1.0,
+"pace": 1.1,
+"pre": 0.0,
+"post": 0.0,
+"tags": [],
+"fx": ""
+},
+"pull.sci3": {
+"emotion": "awe",
+"intensity": 0.6,
+"pace": 0.93,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"mz.science": {
+"emotion": "dry",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
+},
+"cine.line4": {
+"emotion": "anxious",
+"intensity": 0.4,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": ""
 }
 }
 }
