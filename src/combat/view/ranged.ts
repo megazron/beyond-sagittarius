@@ -220,7 +220,7 @@ export class RangedRig {
     if (this.mode === 'none' || !this.rig) return;
     const R = this.rig, S = this.st;
     model.root.updateWorldMatrix(true, true);
-    const hL = model.handL.localToWorld(V().set(0, -0.075, 0)), hR = model.handR.localToWorld(V().set(0, -0.07, 0));
+    const hL = model.handL.localToWorld(V().set(0, -0.05, 0)), hR = model.handR.localToWorld(V().set(0, -0.06, 0));
     const rq = model.root.getWorldQuaternion(new THREE.Quaternion());
     const aim = V().copy(this.aimL).applyQuaternion(rq).normalize();
     const vis = (o: THREE.Object3D, v: boolean) => { o.visible = v; };
