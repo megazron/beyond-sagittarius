@@ -86,7 +86,9 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
     updates.push((dt) => {
       lane.forEach((l, i) => {
         l.p = (l.p + l.v * dt + 1) % 1;
-        if (l.along) { P.set(l.c, l.y, S - 260 + l.p * (N - S + 360)); Q.setFromAxisAngle(UP, l.v > 0 ? 0 : Math.PI); }
+        // along the street they start at the spaceport's near edge: further out they crossed the column the boarded liner
+        // lifts through at the end of the prologue (pad at x -44, z -208)
+        if (l.along) { P.set(l.c, l.y, S - 90 + l.p * (N - S + 190)); Q.setFromAxisAngle(UP, l.v > 0 ? 0 : Math.PI); }
         else { P.set(-260 + l.p * 520, l.y, l.c); Q.setFromAxisAngle(UP, l.v > 0 ? Math.PI / 2 : -Math.PI / 2); }
         (l.v > 0 ? head : tail).setMatrixAt(i, M.compose(P, Q, SC)); (l.v > 0 ? tail : head).setMatrixAt(i, M.compose(P.set(0, -9999, 0), Q, SC));
       });

@@ -138,6 +138,7 @@ export class Cinematic {
     this.time = t;
     this.cues.forEach((c) => { if (c.t < t) c.done = true; });
     this.shots.forEach((s) => { if (s.end <= t) { s.enter?.(); s.done = true; } });
+    if (t > 0) this.ui.chapter(null); // its hide cue was skipped with the rest: the card would stay over every shot
     this.ui.fade('black', 0, 0.2);
   }
 

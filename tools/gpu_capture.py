@@ -58,7 +58,7 @@ if len(sys.argv) > 2 and sys.argv[1] == '--join':
                     de = float(np.median([x[1] for x in me])) - ds  # sound minus picture at the end, after the start fix
                     p0 = ms[0][0]; a0_ = p0 - off  # the first start mark's sound, in file time, sits at picture time p0
                     span = me[0][0] - p0
-                    if abs(de) > 0.015 and span > 5:
+                    if abs(de) > 0.05 and span > 5:  # marks scatter by about a frame: only a real drift is corrected
                         rate = span / (span + de)  # sound ran long (de > 0) or short: stretch it onto the picture
                         off = p0 - a0_ * rate
                     hi = pe[0] - 0.15
