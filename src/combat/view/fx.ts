@@ -11,13 +11,13 @@ const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpV = new THRE
 export type Puff = 'dust' | 'spark' | 'chip' | 'ember' | 'spore' | 'flash' | 'leaf' | 'arc';
 const PUFF: Record<Puff, { n: number; c: [number, number, number]; size: number; life: number; speed: number; up: number; g: number; add?: boolean }> = {
   dust: { n: 9, c: [0.62, 0.56, 0.46], size: 0.5, life: 0.7, speed: 1.6, up: 1.2, g: 1.5 },
-  chip: { n: 7, c: [0.86, 0.8, 0.66], size: 0.14, life: 0.55, speed: 3.6, up: 2.6, g: 9 },
+  chip: { n: 7, c: [0.86, 0.8, 0.66], size: 0.08, life: 0.55, speed: 3.6, up: 2.6, g: 9 },
   leaf: { n: 6, c: [0.3, 0.55, 0.32], size: 0.2, life: 0.9, speed: 2.2, up: 2.4, g: 5 },
-  spark: { n: 10, c: [3, 2.1, 0.8], size: 0.1, life: 0.35, speed: 5.5, up: 2.5, g: 9, add: true },
-  ember: { n: 3, c: [3, 1.2, 0.3], size: 0.12, life: 1.1, speed: 0.5, up: 1.8, g: -0.6, add: true },
+  spark: { n: 10, c: [3, 2.1, 0.8], size: 0.05, life: 0.35, speed: 5.5, up: 2.5, g: 9, add: true },
+  ember: { n: 3, c: [3, 1.2, 0.3], size: 0.035, life: 1.1, speed: 0.5, up: 1.8, g: -0.6, add: true },
   spore: { n: 14, c: [0.55, 0.8, 0.3], size: 0.7, life: 4.5, speed: 1.1, up: 0.4, g: -0.05 },
   flash: { n: 1, c: [2.5, 2.3, 2], size: 1.3, life: 0.09, speed: 0, up: 0, g: 0, add: true },
-  arc: { n: 8, c: [0.8, 2.2, 3], size: 0.12, life: 0.3, speed: 4, up: 1, g: 0, add: true },
+  arc: { n: 8, c: [0.8, 2.2, 3], size: 0.06, life: 0.3, speed: 4, up: 1, g: 0, add: true },
 };
 
 export class CombatFx {
@@ -88,7 +88,7 @@ export class CombatFx {
         fragmentShader: `varying vec2 vUv; uniform float uK, uRing, uW; uniform vec3 uCol;
           void main() { float a;
             if (uRing > 0.5) { float d = length(vUv - 0.5) * 2.0; if (d > 1.0) discard; a = smoothstep(1.0 - uW * 1.6, 1.0 - uW * 0.4, d) * 0.9 + step(d, uK) * 0.16; }
-            else { float e = min(vUv.x, 1.0 - vUv.x); a = (smoothstep(0.0, 0.12, e) < 0.6 ? 0.8 : 0.0) + step(vUv.y, uK) * 0.25; a *= smoothstep(1.0, 0.85, vUv.y) ; }
+            else { float e = min(vUv.x, 1.0 - vUv.x); a = (smoothstep(0.0, 0.08, e) < 0.6 ? 0.55 : 0.0) + step(vUv.y, uK) * 0.2; a *= smoothstep(1.0, 0.85, vUv.y) ; }
             gl_FragColor = vec4(uCol, a * (0.55 + 0.45 * uK)); }`,
       });
       const g = new THREE.PlaneGeometry(1, 1); g.rotateX(-Math.PI / 2);
@@ -142,7 +142,7 @@ export class CombatFx {
   }
   private makeFlame(id: number, big: boolean): { o: THREE.Object3D; id: number; light: THREE.PointLight | null } {
     const g = new THREE.Group();
-    const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 1.5, 0.35), transparent: true, opacity: 0.85, depthWrite: false });
+    const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.0, 0.75, 0.18), transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending });
     for (let i = 0; i < (big ? 5 : 3); i++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.16 + (i % 2) * 0.06, 0.6 + (i % 3) * 0.2, 5), m); c.position.set(Math.cos(i * 2.4) * 0.16 * (big ? 1.6 : 1), 0.3, Math.sin(i * 2.4) * 0.16 * (big ? 1.6 : 1)); g.add(c); }
     if (big) { const logs = new THREE.MeshStandardMaterial({ color: 0x2b211b, roughness: 1 }); for (let i = 0; i < 4; i++) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 1, 5), logs); l.rotation.set(Math.PI / 2, i * 0.8, 0.35); l.position.y = 0.12; g.add(l); } }
     let light: THREE.PointLight | null = null;

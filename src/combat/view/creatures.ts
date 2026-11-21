@@ -117,6 +117,11 @@ function quadruped(q: QuadSpec): CreatureView {
   const eyes: THREE.BufferGeometry[] = [];
   for (let i = 0; i < 3; i++) for (const sx of [-1, 1]) eyes.push(place(new THREE.SphereGeometry(H * (0.075 - i * 0.015), 6, 4), sx * H * (0.3 + i * 0.03), H * (0.12 - i * 0.03), H * (0.32 - i * 0.16)));
   part(head, eyes, eyeM, false);
+  // eyeshine: at night the eyes catch the firelight and are what you see of it first, a few pixels whatever the
+  // distance (the eyes themselves are far smaller than a pixel past a few metres)
+  const shine = new THREE.Sprite(new THREE.SpriteMaterial({ map: shineTex(), color: new THREE.Color(...q.eye), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, sizeAttenuation: false }));
+  shine.scale.set(0.026, 0.013, 1); shine.position.set(0, H * 0.1, H * 0.34); shine.renderOrder = 5; shine.visible = false;
+  head.add(shine);
   const jaw = new THREE.Group(); jaw.position.set(0, -H * 0.16, H * 0.05); head.add(jaw);
   part(jaw, [place(loft([{ y: 0, rx: H * 0.26, rz: H * 0.1 }, { y: H * 0.7, rx: H * 0.1, rz: H * 0.06 }], 8), 0, 0, 0, Math.PI / 2)], belly);
   // tail
@@ -162,8 +167,23 @@ function quadruped(q: QuadSpec): CreatureView {
       const hot = wind ? 1 + tele * 2.5 : strike ? 3 : s === 'call' || s === 'warn' ? 2 : asleep ? 0.15 : e.aware ? 1 : 0.6;
       ridgeM.color.setRGB(q.ridge[0] * hot, q.ridge[1] * hot, q.ridge[2] * hot);
       eyeM.color.setRGB(q.eye[0] * (0.4 + hot * 0.6), q.eye[1] * (0.4 + hot * 0.6), q.eye[2] * (0.4 + hot * 0.6));
+      shine.visible = NIGHT.on && !e.dead && !asleep;
+      if (shine.visible) shine.material.opacity = Math.min(1, 0.45 + hot * 0.3);
     },
   };
+}
+
+/** Whether it is dark enough for eyeshine (the controller sets it from the fight). */
+export const NIGHT = { on: false };
+let shineT: THREE.Texture | null = null;
+/** Two soft dots side by side: a pair of eyes at a distance. */
+function shineTex() {
+  if (shineT) return shineT;
+  const c = document.createElement('canvas'); c.width = 32; c.height = 16;
+  const g = c.getContext('2d')!;
+  for (const x of [8, 24]) { const r = g.createRadialGradient(x, 8, 0, x, 8, 7); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.4, 'rgba(255,255,255,.6)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(x - 8, 0, 16, 16); }
+  shineT = new THREE.CanvasTexture(c);
+  return shineT;
 }
 
 function hound(): CreatureView {

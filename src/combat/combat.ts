@@ -19,7 +19,7 @@ import type { Enemy, SpeciesId } from './sim/species';
 import { EncounterRun, ENCOUNTERS } from './sim/encounters';
 import type { EncounterId, EncounterOpts, Outcome } from './sim/encounters';
 import type { TensionSpec, TensionResult } from './sim/tension';
-import { createCreature } from './view/creatures';
+import { createCreature, NIGHT } from './view/creatures';
 import type { CreatureView } from './view/creatures';
 import { CombatFx } from './view/fx';
 import { FightBody } from './view/body';
@@ -716,6 +716,7 @@ export class Combat {
   private present(dt: number, time: number) {
     const D = this.d, sim = this.sim!, P = D.player, p = sim.player, run = this.encounter, cam = P.camera;
     // creatures: a body for each within sight, none for those far off or gone
+    NIGHT.on = sim.night;
     for (const e of sim.enemies) {
       const d = Math.hypot(e.x - P.pos.x, e.z - P.pos.z), q = this.views.get(e.id);
       if (e.gone || d > 130) { if (q) { q.v.root.removeFromParent(); (this.pool[q.kind] ??= []).push(q.v); this.views.delete(e.id); } continue; }
