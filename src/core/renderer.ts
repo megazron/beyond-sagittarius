@@ -741,6 +741,8 @@ export class Renderer {
     try { this.renderer.setRenderTarget(into); await this.renderer.compileAsync(scene, camera); } catch { /* compiled on first draw instead */ } finally { this.renderer.setRenderTarget(prev); }
     // one draw of everything, culling off, into a tiny target: every geometry and texture goes to the GPU now, under the
     // black, instead of in the first frames of play
+    // once the scene is on screen the rest would be done in play, all at once: then it is left to the first frames
+    if (this.renderPass.scene === scene) return;
     {
       const tiny = new THREE.WebGLRenderTarget(8, 8, { type: THREE.HalfFloatType }), culled: THREE.Object3D[] = [];
       scene.traverse((o) => { if (o.frustumCulled && o.visible) { o.frustumCulled = false; culled.push(o); } });
@@ -750,6 +752,7 @@ export class Renderer {
       await new Promise((r) => requestAnimationFrame(r));
     }
     // a stage's own work that belongs under the black too (Zenvora bakes its far people here)
+    if (this.renderPass.scene === scene) return;
     try { await (scene.userData.prebake as (() => Promise<void>) | undefined)?.(); } catch { /* done in play instead */ }
     const texs = new Set<THREE.Texture>();
     scene.traverse((o) => {
