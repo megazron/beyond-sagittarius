@@ -53,6 +53,8 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   /** Baked impostors (impostor.ts) take over from the painted figures when they are ready. */
   let imp: { cols: number; rows: number; variants: number } | null = null;
   const grid = { value: new THREE.Vector2(1 / 8, 1) };
+  /** Where far cards stop being drawn: they thin out (dithered) over the last sixth instead of blinking out. */
+  const cardFar = { value: 1e5 };
   let setAtlas: (t: THREE.Texture, cols: number, rows: number, variants: number) => void = () => undefined, setLight: (c: THREE.Color) => void = () => undefined;
   const add = <T extends THREE.Object3D>(x: T) => { x.userData.ground = false; scene.add(x); return x; };
 
@@ -155,10 +157,11 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     const tileA = new THREE.InstancedBufferAttribute(tiles, 2); tileA.setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute('aTile', tileA);
     mat.onBeforeCompile = (sh) => {
-      sh.uniforms.uGrid = grid;
-      sh.vertexShader = 'attribute vec2 aTile;\nuniform vec2 uGrid;\nvarying float vH;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = aTile + uv * uGrid; vH = uv.y;');
-      // darker towards the feet, as a lit street shades people from below
-      sh.fragmentShader = 'varying float vH;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= 0.55 + 0.45 * smoothstep(0.0, 0.6, vH);');
+      sh.uniforms.uGrid = grid; sh.uniforms.uFar = cardFar;
+      sh.vertexShader = 'attribute vec2 aTile;\nuniform vec2 uGrid;\nvarying float vH;\nvarying float vD;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = aTile + uv * uGrid; vH = uv.y;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\n  { vec3 wc = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz; vD = length(wc.xz - cameraPosition.xz); }');
+      // darker towards the feet, as a lit street shades people from below; thinning out towards the far limit
+      sh.fragmentShader = 'uniform float uFar;\nvarying float vH;\nvarying float vD;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= 0.55 + 0.45 * smoothstep(0.0, 0.6, vH);\n  if (fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453) > smoothstep(uFar, uFar * 0.83, vD)) discard;');
     };
     const im = new THREE.InstancedMesh(geo, mat, n + gateN);
     taken = new Uint8Array(n + gateN);
@@ -230,6 +233,6 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   }
 
   return { update: (dt: number, t: number, cam: THREE.Camera | null, on = true) => { if (on) for (const u of updates) u(dt, t, cam); }, get cards() { return cards; }, get taken() { return taken; },
-    standIns: (list: StandIn[], cam: THREE.Camera | null) => standIns(list, cam),
+    standIns: (list: StandIn[], cam: THREE.Camera | null) => standIns(list, cam), setFar: (m: number) => { cardFar.value = m; },
     setAtlas: (t: THREE.Texture, cols: number, rows: number, variants: number) => setAtlas(t, cols, rows, variants), setLight: (c: THREE.Color) => setLight(c) };
 }

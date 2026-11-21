@@ -1151,6 +1151,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const nav = navGrid([DIST_BOUNDS[0], DIST_BOUNDS[1], DIST_BOUNDS[2], DIST_BOUNDS[3]], blocks, (x, z) => (H(x, z) < 0.07 ? 0.6 : 0));
   // the district's walkers drawn as real bodies near the camera (a pool), as cards further off
   const DPOOL = [2, 7, 14][tier], DNEAR = 30, CARD_FAR = [110, 170, 200][tier];
+  dense.setFar(CARD_FAR);
   const dpool: { fig: Character; ped: number; phase: number }[] = [];
   for (let i = 0; i < DPOOL; i++) {
     const fig = someone(lineages[(i + 4) % lineages.length], i + 140);
