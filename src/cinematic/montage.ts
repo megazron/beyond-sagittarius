@@ -13,7 +13,7 @@ import { LAKE } from '../world/heightfield';
 
 const BEAT = 60 / beat.bpm;
 /** Where each one's eyes go in their sky (I5): the giant, the black hole, the old stars, the hole overhead, the cloud. */
-const SKYDIR: Record<string, THREE.Vector3> = { strong: new THREE.Vector3(-0.28, 0.12, -0.95).normalize(), medic: new THREE.Vector3(0.2, 0.15, -1).normalize(), explorer: new THREE.Vector3(0.1, 0.9, -0.4).normalize(), builder: new THREE.Vector3(-0.2, 0.3, -1).normalize(), social: new THREE.Vector3(0.3, 0.2, -1).normalize() };
+const SKYDIR: Record<string, THREE.Vector3> = { strong: new THREE.Vector3(-0.28, 0.12, -0.95).normalize(), medic: new THREE.Vector3(0.2, 0.15, -1).normalize(), explorer: new THREE.Vector3(0.1, 0.9, -0.4).normalize(), builder: new THREE.Vector3(-1, 16, -24).normalize(), social: new THREE.Vector3(0.3, 0.2, -1).normalize() };
 /** How each one checks themself first (I4): Draxum his fist, Lyrra her pulse, Skyvra her trapped leg, Bolzar the plate, Nuvexa her phone. */
 const CHECK: Record<string, 'use' | 'phone' | 'gesture'> = { strong: 'use', medic: 'use', explorer: 'use', builder: 'use', social: 'phone' };
 const S = beat.sections;
@@ -678,13 +678,16 @@ export class Montage {
       const rock = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number) => { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true })); m.position.set(x, y, z); m.rotation.set(x, y, z); g.add(m); return m; };
       const sky = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number, emissive = 0) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 24), new THREE.MeshStandardMaterial({ color, roughness: 1, emissive, emissiveIntensity: 0.5 })); m.position.set(x, y, z); g.add(m); return m; };
       // Methryx: black slush, orange haze, the ringed giant huge on the horizon
-      mk('strong', 0x1a1410, 0.5, (g) => { sky(g, 240, -160, 70, -520, 0xcdb48a, 0x3a2a10); const r = new THREE.Mesh(new THREE.RingGeometry(300, 480, 64), new THREE.MeshBasicMaterial({ color: 0xd8c9a8, transparent: true, opacity: 0.5, side: THREE.DoubleSide })); r.position.set(-160, 70, -520); r.rotation.set(-1.3, 0.3, 0); g.add(r); rock(g, 1.2, 3, 0.2, -4, 0x2a211a); rock(g, 0.7, -4, 0.1, -2, 0x2a211a); rock(g, 2.2, -7, 0.5, -9, 0x2a211a); rock(g, 3.5, 11, 1, -18, 0x241c16);
+      mk('strong', 0x2a2018, 0.5, (g) => { sky(g, 110, -170, 45, -560, 0xcdb48a, 0x3a2a10); const r = new THREE.Mesh(new THREE.RingGeometry(140, 225, 64), new THREE.MeshBasicMaterial({ color: 0xd8c9a8, transparent: true, opacity: 0.5, side: THREE.DoubleSide })); r.position.set(-170, 45, -560); r.rotation.set(-1.3, 0.3, 0); g.add(r); rock(g, 1.2, 3, 0.2, -4, 0x2a211a); rock(g, 0.7, -4, 0.1, -2, 0x2a211a); rock(g, 2.2, -7, 0.5, -9, 0x2a211a); rock(g, 3.5, 11, 1, -18, 0x241c16);
         // a black methane lake behind him, flat and glossy
-        const lake = new THREE.Mesh(new THREE.CircleGeometry(26, 48), new THREE.MeshStandardMaterial({ color: 0x050403, roughness: 0.08, metalness: 0.6 })); lake.rotation.x = -Math.PI / 2; lake.position.set(4, 0.14, -34); lake.scale.set(1.6, 1, 0.7); g.add(lake); }, 0.6, [0xc8803a, 0x1a0e06, 0.55]);
+        const lake = new THREE.Mesh(new THREE.CircleGeometry(26, 48), new THREE.MeshStandardMaterial({ color: 0x050403, roughness: 0.08, metalness: 0.6 })); lake.rotation.x = -Math.PI / 2; lake.position.set(4, 0.14, -34); lake.scale.set(1.6, 1, 0.7); g.add(lake); }, 0.6, [0xc8803a, 0x2a1a0c, 0.95]);
       // the grey moon: dust, hard light, a torn piece of hull
       mk('medic', 0x8a8a90, 1, (g) => { const h = new THREE.Mesh(new THREE.BoxGeometry(5, 3.2, 0.25), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); h.position.set(-3.5, 1.2, -4); h.rotation.set(0.2, 0.5, 0.35); g.add(h); rock(g, 0.9, 4, 0.2, -5, 0x77777c); rock(g, 0.5, 2, 0.1, -2.5, 0x77777c); rock(g, 2.6, -11, 0.7, -14, 0x6c6c72); rock(g, 6, 22, 2, -44, 0x64646a); rock(g, 0.35, -1.5, 0.08, 1.2, 0x808086); }, 1, [0x8088a0, 0x18181c, 0.35]);
       // the asteroid: bare tumbling rock, nothing else but stars
-      mk('explorer', 0x4a4640, 1, (g) => { rock(g, 2.4, -5, 0.6, -6, 0x55504a); rock(g, 1.1, 4, 0.3, -3, 0x55504a); rock(g, 5, 14, 9, -40, 0x3c3a36); rock(g, 3, -22, 14, -60, 0x3c3a36); rock(g, 0.6, 2, 0.15, 1, 0x55504a); rock(g, 1.6, 9, 4, -22, 0x3c3a36); rock(g, 0.9, -12, 7, -30, 0x3c3a36); rock(g, 2.2, 30, 18, -80, 0x33312e); }, 0.25, [0x6a7890, 0x101014, 0.4]);
+      mk('explorer', 0x4a4640, 1, (g) => { rock(g, 2.4, -5, 0.6, -6, 0x55504a); rock(g, 1.1, 4, 0.3, -3, 0x55504a); rock(g, 5, 14, 9, -40, 0x3c3a36); rock(g, 3, -22, 14, -60, 0x3c3a36); rock(g, 0.6, 2, 0.15, 1, 0x55504a); rock(g, 1.6, 9, 4, -22, 0x3c3a36); rock(g, 0.9, -12, 7, -30, 0x3c3a36); rock(g, 2.2, 30, 18, -80, 0x33312e);
+        // billions of years on: the sun she sees is an old red one, big and dim, with a faint glow round it
+        const old = new THREE.Mesh(new THREE.SphereGeometry(24, 32, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 0.42, 0.16) })); old.position.set(30, 270, -120); g.add(old);
+        const glow = new THREE.Mesh(new THREE.SphereGeometry(40, 32, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.1, 0.03), transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending })); glow.position.copy(old.position); g.add(glow); }, 0.25, [0x6a7890, 0x101014, 0.4]);
       // Shardrift: split cliffs, old metal
       mk('builder', 0x5a4636, 1, (g) => { rock(g, 9, -9, 5, -12, 0x4a392c); rock(g, 12, 13, 7, -16, 0x4a392c); rock(g, 6, 0, 2, -20, 0x3a2c22); rock(g, 1.1, 3.5, 0.3, -2.5, 0x4a392c);
         // old metal in the split: ribs of something that was built here long ago
@@ -704,19 +707,19 @@ export class Montage {
     const u = this.set.dome.uniforms;
     u.uBH.value = 0; u.uWarp.value = 0;
     // each sky its own: orange haze, hard black, deep stars, dusty brown, gold
-    const SKY: Record<string, [number, number, number]> = { strong: [0.5, 1, 0.85], medic: [0.05, 0, 0.9], explorer: [0.35, 0, 1], builder: [0.6, 1, 1.05], social: [0.9, 1, 0.8] };
+    const SKY: Record<string, [number, number, number]> = { strong: [0.5, 1, 1.05], medic: [0.05, 0, 0.9], explorer: [0.35, 0, 1], builder: [0.6, 1, 1.05], social: [0.9, 1, 0.8] };
     const [neb, other, exposure] = SKY[id];
     u.uNebula.value = neb; u.uOther.value = other;
     // whose sky is it: Lyrra's moon is in the crowded cluster round the black hole, which hangs in Bolzar's sky;
     // Skyvra came out billions of years on, under an old, dim sky; Nuvexa's universe is young and nearly starless
-    if (id === 'builder') { this.hole(-5, 7, -24, 0, 0); u.uNebula.value = neb; }
+    if (id === 'builder') { this.hole(-1, 16, -24, 0, 0); u.uNebula.value = neb; }
     else if (id === 'medic') { this.hole(14, 9, -70, 0, 0); u.uNebula.value = neb; u.uStar.value = 2.6; }
-    else if (id === 'explorer') u.uStar.value = 0.22;
+    else if (id === 'explorer') { u.uStar.value = 0.45; u.uNebula.value = 0.15; }
     else if (id === 'social') { u.uStar.value = 0.35; u.uOther.value = 0.7; }
     // each world's own sun: the light left over from the ship's last shot was painting every ground orange.
     // Thalwen: a hard white sun low over the rim. The asteroid: an old, dim sky, a faint cold light. Shardrift: the
     // haze round the black hole, dull and warm. Methryx: orange through methane haze. Aerolis: gold through cloud.
-    const SUN: Record<string, [THREE.Vector3, number, number]> = { medic: [V(0.9, 0.25, 0.3), 0xffffff, 3.2], explorer: [V(-0.4, 0.5, 0.6), 0xb8c4e0, 0.9], builder: [V(-0.3, 0.4, -1), 0xd8a888, 1.4], strong: [V(0.5, 0.35, -1), 0xff9a50, 1.6], social: [V(0.2, 0.6, -0.8), 0xffe0a0, 2.4] };
+    const SUN: Record<string, [THREE.Vector3, number, number]> = { medic: [V(0.9, 0.25, 0.3), 0xffffff, 3.2], explorer: [V(-0.4, 0.5, 0.6), 0xb8c4e0, 0.9], builder: [V(-0.3, 0.4, -1), 0xd8a888, 1.4], strong: [V(0.7, 0.4, 0.6), 0xff9a50, 2.4], social: [V(0.2, 0.6, -0.8), 0xffe0a0, 2.4] };
     const [sd, sc, si] = SUN[id]; this.sun(sd, sc, si);
     // the landing grammar (shot list I1 to I6), in beats from the hit: the world first (-5), the hit (0), the body still,
     // then a breath (+4), eyes open and the body checks itself (+9), their sky (+14), and only then the line (+19)
@@ -833,10 +836,11 @@ export class Montage {
     const down = V(0, 0, -1);
     this.cues.push(
       // "Hold on to something!" is said in the pull, as the deck tips (cinematic.ts); not twice
-      { b: 27.4, fn: () => this.ui.subtitle('op.21', 'crew.explorer.name') },
+      // over the hands (H2): she calls it as the fingers touch; it runs on over the black (an L cut)
+      { b: 26.8, fn: () => this.ui.subtitle('op.21', 'crew.explorer.name') },
       // said over the six fates, which hold long enough to be read
       { b: 57.5, fn: () => this.ui.subtitle('mz.science', 'mz.name') },
-      { b: 31, fn: () => this.ui.subtitle(null) },
+      { b: 32.7, fn: () => this.ui.subtitle(null) },
       ...ORDER.slice(0, 5).map((id, i) => ({ b: beat.impacts[i] + 20.4, fn: () => { this.ui.subtitle(`film.${id}`, `crew.${id}.name`); this.cast[id].say(voice.duration(`film.${id}`) ?? 1.4); } })),
       ...ORDER.slice(0, 5).map((_, i) => ({ b: beat.impacts[i] + 26.9, fn: () => this.ui.subtitle(null) })),
       // early enough to be said whole before the title leaves (it was cut off after one word at 129.2)
@@ -940,7 +944,7 @@ export class Montage {
     }, () => set.show('interior'));
 
     // Six in a ring above the hole, hand reaching for hand. The ring is breaking.
-    P(24, 28, 'deep', (k, b) => {
+    P(24, 27, 'deep', (k, b) => {
       const e = easeInOut(k), R = lerp(1.0, 1.9, e * e);
       ship.group.visible = false;
       const spin = b * 0.03;
@@ -964,10 +968,10 @@ export class Montage {
       this.lens(V(0.3, 8.5 + e * 3.5, 0.4), V(0, 0, 0), 44, 10, 0, 0.3 + b * 0.008, down);
     }, () => set.show('deep'));
 
-    // Two hands, a few centimetres short.
-    P(28, 31, 'deep', (k, b) => {
+    // H2 two hands: they reach, the fingertips touch, hold for a breath, and slide apart. One action, no flourish
+    P(27, 31, 'deep', (k, b) => {
       ship.group.visible = false;
-      const gap = 0.1 + k * k * 0.16;
+      const gap = lerp(0.14, 0.074, smoothstep(0, 0.32, k)) + 0.26 * smoothstep(0.55, 1, k) * smoothstep(0.55, 1, k); // fingertips meet near 0.074
       const fit = (c: Character, side: 'L' | 'R', want: number, id: CrewId, o: THREE.Vector3, tilt: number) => {
         // the arm's length differs per body: steer the body so the wrist lands on its mark
         const w = this.handOf(c, side);
@@ -981,8 +985,8 @@ export class Montage {
       this.hole(0.5, 0.3, -30);
       this.sun(V(0, 0.2, -1), 0xffa060, 3);
       this.setRig([{ p: V(0.1, 0.5, 0.9), color: 0xbfd6ff, i: 3, d: 4 }, { p: V(-0.6, -0.3, -0.6), color: 0xff9a50, i: 2.5, d: 4 }]);
-      const dist = lerp(0.95, 0.82, k);
-      this.lens(V(lerp(-0.08, 0.08, k), 0.05, dist), V(0, 0, 0), 26, dist, 0.012, -0.06);
+      const dist = lerp(0.9, 0.8, k);
+      this.lens(V(lerp(-0.06, 0.06, k), 0.05, dist), V(0, 0, 0), 26, dist, 0.012, -0.06);
       this.fx = { exposure: 0.5 };
     }, () => set.show('deep'));
 

@@ -271,9 +271,11 @@ export class Cinematic {
   private cue(t: number, fn: () => void) { this.cues.push({ t, fn }); }
   /** A spoken cue: the timeline waits for the previous line to finish before firing it. */
   private vcue(t: number, key: string, fn: () => void) {
-    this.cues.push({ t, voiced: true, key, fn: () => { this.speechEnd = this.clockT + (voice.duration(key) ?? 2) + 0.15; fn(); } });
+    this.cues.push({ t, voiced: true, key, fn: () => { this.speechEnd = this.clockT + (voice.duration(key) ?? 2) + 0.15; this.subClearAt = t >= 39 ? this.speechEnd + 0.3 : 0; fn(); } });
   }
   private speechEnd = 0;
+  /** From the pull on, a line's subtitle goes when the line ends (it stayed up into the next shots before). */
+  private subClearAt = 0;
   private inserts: { at: number; by: number }[] = [];
 
   /**
@@ -546,7 +548,7 @@ export class Cinematic {
     shotAt(S + 20.4, S + 23.0, {
       update: (k, local) => {
         ins.cup(CUP, 0.42 * smoothstep(0.2, 2.0, local), smoothstep(0.8, 2.4, local), smoothstep(1.6, 2.6, local));
-        lens(100); this.camera.position.copy(CUP).add(V(-0.04, 0.15, 0.32)); this.lookTarget.copy(CUP).add(V(0, 0.005, 0));
+        lens(85); this.camera.position.copy(CUP).add(V(-0.05, 0.25, 0.24)); this.lookTarget.copy(CUP).add(V(0, 0.012, 0)); // high enough to see into it
       },
     });
     // B3 close-up: Draxum looks down at the cup, blinks, looks up at the others; the joke shape stays a beat too long
@@ -602,33 +604,45 @@ export class Cinematic {
 
     // ---- D. Loss of control: the cockpit, established wide before its close shots ----
     this.cue(S + 42.6, () => { audio.whoosh(); audio.tone(44, 13, 'sawtooth', 0.12, 0, 14); ins.warn(null); });
-    // D1 wide from behind and above the pilot: she is already fighting it
+    // D1 wide from behind and above the pilot, over her right shoulder: the seat, her hands on the yoke, the panel and
+    // the canopy with the core beyond. She is already fighting it
+    const YH = { L: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(1, 0, 0) }, R: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(-1, 0, 0) } };
+    const yoke = (local: number, haul: number) => { // she hauls back and fights the roll; the hands go with the yoke
+      ins.stick.position.z = -0.62 + 0.07 * haul + Math.sin(local * 7.3) * 0.006;
+      ins.stick.rotation.z = Math.sin(local * 1.9) * 0.12 * haul + Math.sin(local * 11) * 0.015;
+      ins.yokeHold(YH);
+    };
     shotAt(S + 42.6, S + 44.8, {
-      enter: () => { this.setVisible('cockpit'); d.uBHPos.value.set(-6, 4, -160); ins.attitude(0, 0); this.pilot.doTask('use', { seconds: 12, at: ins.stick.getWorldPosition(new THREE.Vector3()).add(V(0, 0.36, 0)), hands: 'both', prop: null }); },
+      enter: () => { this.setVisible('cockpit'); d.uBHPos.value.set(-6, 4, -160); ins.attitude(0, 0); ins.mfd(['THRUST', '112%'], ['NAV', 'DEVIATION +2.1°'], '#ffb347'); ins.yokeHold(YH); this.pilot.setHold(YH); },
       update: (k, local) => {
-        lens(24); const c = ins.cockpit.position; this.camera.position.copy(c).add(V(0.55, -0.35, 0.95)); this.lookTarget.copy(c).add(V(-0.05, -1.25, -1.5));
-        
-        this.pilot.setLookTarget(c.clone().add(V(0, -0.9, -2.4))); this.pilot.setFace({ frown: 0.6, squint: 0.4 });
-        ins.stick.rotation.x = -0.25 - Math.sin(local * 6) * 0.03; ins.attitude(0.08 + local * 0.03, -0.1);
+        lens(24); const c = ins.cockpit.position; this.camera.position.copy(c).add(V(0.62, -0.62, 0.95)); this.lookTarget.copy(c).add(V(-0.12, -1.18, -1.6));
+        yoke(local, 0.6 + 0.2 * k);
+        this.pilot.setLookTarget(c.clone().add(V(0, -0.7, -3))); this.pilot.setFace({ frown: 0.6, squint: 0.4 });
+        ins.attitude(0.08 + local * 0.03, -0.1);
         this.shake = 0.01;
       },
     });
-    // D2 insert: her hands on the stick, pushing. Between the "come on"s a held breath
+    // D2 insert: her hands on the yoke, from in front, low by the panel: knuckles tight, hauling back. Between the
+    // "come on"s a held breath
     this.vcue(S + 45.0, 'pull.pilot', () => { ui.subtitle('pull.pilot', 'crew.pilot.name'); this.pilot.say(voice.duration('pull.pilot') ?? 3.9); });
     shotAt(S + 44.8, S + 49.0, {
       update: (k, local) => {
-        lens(50); const g = ins.stick.getWorldPosition(new THREE.Vector3()).add(V(0, 0.3, 0)); this.camera.position.copy(g).add(V(0.7, 0.55, 0.95)); this.lookTarget.copy(g);
-        ins.stick.rotation.x = -0.3 - Math.sin(local * 5) * 0.04; this.shake = 0.008;
+        yoke(local, 0.8 + 0.2 * smoothstep(0.5, 3.5, local));
+        lens(50); const g = ins.stick.getWorldPosition(new THREE.Vector3()); this.camera.position.copy(ins.cockpit.position).add(V(0.42, -1.34, -1.0)); this.lookTarget.copy(g).add(V(0.02, 0.06, 0.12));
+        this.pilot.setFace({ frown: 0.75, squint: 0.5, open: Math.max(0, Math.sin(local * 2.4)) * 0.25 }); this.pilot.setLookTarget(ins.cockpit.position.clone().add(V(0, -0.7, -3)));
+        this.shake = 0.008;
       },
     });
-    // D3 insert: the attitude display; the horizon rolls the wrong way
+    // D3 insert: the attitude display straight on, the side displays at its edges; the horizon rolls the wrong way
     this.vcue(S + 49.3, 'pull.ai1', () => { ui.subtitle('pull.ai1'); audio.thud(); });
-    this.cue(S + 56.2, () => ui.subtitle(null));
+    this.cue(S + 56.2, () => { ui.subtitle(null); this.pilot.setHold(null); });
     shotAt(S + 49.0, S + 56.2, {
       update: (k, local) => {
+        yoke(local, 1);
         lens(50); const a = ins.attAt, c0 = a.getWorldPosition(new THREE.Vector3()), n = V(0, 0, 1).applyQuaternion(a.getWorldQuaternion(new THREE.Quaternion()));
-        this.camera.position.copy(c0).addScaledVector(n, 0.75); this.lookTarget.copy(c0);
+        this.camera.position.copy(c0).addScaledVector(n, 0.8); this.lookTarget.copy(c0);
         ins.attitude(0.2 + easeInOut(k) * 0.9, -0.1 - 0.5 * k, local > 0.4);
+        if (local > 0.4) ins.mfd(['THRUST', local > 3 ? 'OVERSTRESS' : '118%'], ['NAV', `DEVIATION +${(2.1 + local * 1.3).toFixed(1)}°`], local > 3 ? '#ff5a3a' : '#ffb347');
       },
     });
     // D4 extreme wide, as A1: engines flaring, the liner still drifting towards screen right
@@ -722,21 +736,30 @@ export class Cinematic {
 
     // ---- G. The ship breaks ----
     this.vcue(S + 85.0, 'cine.ai2', () => { ui.aiAlert('cine.ai2'); audio.alarm(true); audio.thud(); });
-    // G1 wide from the far end: lights fail section by section towards us; red strips; faces turn to each light
+    // G1 wide from the hatch end: they have turned from the window to the room; the lights fail section by section from
+    // the far end towards us and their faces follow each one; the red strips by the hatch come on and light them
+    const SECT = [-3.6, -1.2, 1.3, 3.6], FAIL = [0.8, 1.7, 2.6, 3.5];
     shotAt(S + 84.5, S + 93.6, {
-      enter: () => { this.pullPose = {}; group(); atConsole(); },
+      enter: () => { this.pullPose = {}; group(); for (const c of [drx, nuv, lyr, sky, bol]) c.root.rotation.y = 0.35 + (c.root.position.x - 2.6) * 0.12; put(sci, -0.6, -0.4, 0.9); },
       update: (k, local) => {
-        lens(24); this.camera.position.copy(at(-3.4, -0.6, 0.9)); this.lookTarget.copy(at(2.0, -1.0, -1.2)); this.shake = 0.02;
-        const stepDown = local < 0.8 ? 1 : local < 1.7 ? 0.55 : local < 2.6 ? 0.3 : 0.18;
-        intr.mainLight.color.copy(GOLD); intr.mainLight.intensity = 16 * stepDown; intr.consoleLight.intensity = 0.5;
-        intr.alarmLight.color.copy(RED); intr.alarmLight.intensity = local > 2.6 ? 10 + (Math.sin(local * 9) * 0.5 + 0.5) * 26 : 0;
-        const light = local < 0.8 ? at(4, 1.5, 0) : local < 1.7 ? at(1.5, 1.6, 0) : at(-1.5, 1.6, 0);
-        intr.crew.forEach((c) => { c.setFace({ fear: 0.7, open: 0.2 }); c.setLookTarget(light); });
+        lens(24); this.camera.position.copy(at(4.7, -0.7, 1.3)); this.lookTarget.copy(at(0.9, -1.15, -1.5)); this.shake = 0.015;
+        const gone = FAIL.filter((f) => local >= f).length; // sections dark so far, from the far end
+        const lit = SECT.slice(gone);
+        intr.mainLight.color.copy(GOLD).lerp(COOL, 0.5);
+        if (lit.length) { intr.mainLight.position.set(lit.reduce((a, b) => a + b, 0) / lit.length, 1.2, 0.6); intr.mainLight.intensity = 3 + 3.2 * lit.length; }
+        else intr.mainLight.intensity = 0.8; // only the strips
+        intr.consoleLight.intensity = 0.6;
+        // the red strips at the hatch end: low, in front of them, so the faces stay readable in the dark
+        intr.alarmLight.color.copy(RED); intr.alarmLight.position.set(4.2, -0.6, 1.0);
+        intr.alarmLight.intensity = local > 2.6 ? 14 + (Math.sin(local * 9) * 0.5 + 0.5) * 18 : 0;
+        const failing = at(SECT[Math.min(gone, SECT.length - 1)], 1.4, 0);
+        intr.crew.forEach((c, i) => { c.setFace({ fear: 0.55 + 0.1 * gone, open: 0.15 + 0.05 * (i % 3) }); c.setLookTarget(local > FAIL[0] - 0.4 + i * 0.06 ? failing : null); });
       },
     });
     // G2 insert: the comms panel. NO SIGNAL; the alarm stops mid-tone; a heartbeat comes in
     this.cue(S + 94.4, () => { ui.aiAlert(null); audio.alarm(false); audio.vacuum(true); ins.comms(['COMMS', 'NO SIGNAL'], '#ff5a3a'); });
     shotAt(S + 93.6, S + 96.2, {
+      enter: () => { intr.alarmLight.position.set(0, 2.0, 1.0); intr.mainLight.position.set(0, 2.5, 0.5); },
       update: (k) => {
         lens(50); const m = ins.commsAt, c0 = m.getWorldPosition(new THREE.Vector3()); this.camera.position.copy(c0).add(V(-0.75, 0, 0)); this.lookTarget.copy(c0);
         intr.alarmLight.intensity = 5;
@@ -835,6 +858,7 @@ export class Cinematic {
     if (!blocked) this.time = next;
     const t = this.time;
     for (const c of this.cues) if (!c.done && t >= c.t) { c.done = true; c.fn(); if (!this.playing) return; }
+    if (this.subClearAt && this.clockT > this.subClearAt) { this.subClearAt = 0; this.ui.subtitle(null); }
     this.animateCrew(dt);
     for (const s of this.shots) {
       if (t >= s.start && t < s.end) {
