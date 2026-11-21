@@ -726,8 +726,8 @@ export class Montage {
     if (ph < 0) cam = this.lens(o.clone().add(V(9, 1.4, 16)), o.clone().add(V(-6, 5 + 2 * clamp((ph + 5) / 5, 0, 1), -40)), 53, 30, 0.001); // I1 extreme wide, low: the world
     else if (ph < 4) cam = this.lens(o.clone().add(V(3.6, 0.7, 6.2)).add(shakeAt(b, 0.5 * after(b, imp, 1.0), this.tmp2)), o.clone().add(V(0, 0.8, 0)), 38, 7, 0.003); // I2 wide, low: the hit
     else if (ph < 9) cam = this.lens(o.clone().add(V(1.5, 1.05, 2.7)), o.clone().add(V(0, 0.7, 0)), 27, 3.1, 0.006); // I3 medium, held: still, then a breath
-    else if (ph < 14) cam = this.lens(head.clone().add(V(0.45, 0.02, 1.15)), head.clone().add(V(0, -0.04, 0)), 16, 1.2, 0.01); // I4 close-up: the check
-    else if (ph < 19) { const u = easeInOut(clamp((ph - 14) / 5, 0, 1)); cam = this.lens(head.clone(), head.clone().add(V(sky0.x * 10, lerp(0.5, sky0.y * 10, u), sky0.z * 10)), 53, 40, 0.001); } // I5 their eyeline up to the sky
+    else if (ph < 14) cam = this.lens(head.clone().add(V(0.4, -0.38, 1.05)), head.clone().add(V(0, -0.1, 0)), 20, 1.2, 0.01); // I4 close-up from a little below: they look down at themselves, and we still see the face
+    else if (ph < 19) { const u = easeInOut(clamp((ph - 14) / 5, 0, 1)); cam = this.lens(head.clone().add(V(sky0.x * 0.35, 0.12, sky0.z * 0.35 + 0.2)), head.clone().add(V(sky0.x * 10, lerp(0.5, sky0.y * 10, u), sky0.z * 10)), 53, 40, 0.001); } // I5 their eyeline up to the sky, from just in front of their eyes
     else cam = this.lens(head.clone().add(V(0.8, -0.08, 1.55)), head.clone().add(V(0, -0.1, 0)), 27, 1.8, 0.006); // I6 medium close: the look, then the line
     // the light comes down the sky to where they will be
     const tr = this.trails[i]; tr.color = col;
@@ -748,7 +748,7 @@ export class Montage {
     }
     // key light per world, and the colour of their own trail from behind
     const KEY: Record<string, number> = { strong: 0xffb070, medic: 0xffffff, explorer: 0xdfe8ff, builder: 0xffd0a0, social: 0xffe6a0 };
-    this.setRig([{ p: o.clone().add(V(3, 4, 4)), color: KEY[id], i: ({ medic: 48, builder: 60, social: 22, strong: 26 } as Record<string, number>)[id] ?? 34, d: 18 }, { p: o.clone().add(V(-2.5, 1.5, -2.5)), color: col, i: 14, d: 9 }, { p: o.clone().add(V(0, 9, -14)), color: KEY[id], i: id === 'builder' ? 40 : 10, d: 70 }]);
+    this.setRig([{ p: o.clone().add(V(3, 4, 4)), color: KEY[id], i: ({ medic: 48, builder: 60, social: 22, strong: 44 } as Record<string, number>)[id] ?? 34, d: 18 }, { p: o.clone().add(V(-2.5, 1.5, -2.5)), color: col, i: 14, d: 9 }, { p: o.clone().add(V(0, 9, -14)), color: KEY[id], i: id === 'builder' ? 40 : 10, d: 70 }]);
     const f = after(b, imp, 0.45) * 0.8, c2 = new THREE.Color(col).lerp(new THREE.Color(1, 1, 1), 0.7);
     this.fx = { flash: [c2.r * f, c2.g * f, c2.b * f], zoom: 0.05 * after(b, imp, 0.6), exposure };
     this.card(id, (b - (imp + 19.3)) / 0.5);
