@@ -203,7 +203,7 @@ export class World {
     this.water.update(time, day, envTex);
     if (drawn) {
       this.grass.update(focus);
-      this.forest.update(cam.position);
+      this.forest.update(cam.position, cam);
       this.water.reflect(renderer, this.scene, cam as THREE.PerspectiveCamera, [this.water.mesh, this.grass.mesh]);
     }
     this.pod.update(time);

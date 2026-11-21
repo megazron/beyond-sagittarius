@@ -3,7 +3,7 @@ import { fitCanvasText } from '../../core/canvastext';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { createCharacter, Character, CrewId, CrewPose, CHAR_BUDGET } from '../../characters/character';
-import { LINEAGES, randomLook, PlayerLook, defaultLook } from '../../characters/custom';
+import { LINEAGES, townLook, PlayerLook, defaultLook } from '../../characters/custom';
 import { loadTexture } from '../../core/assets';
 import type { AwayStage, AwayTask } from './stage';
 import type { StageBody } from './kit';
@@ -970,8 +970,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // Eight townsfolk looks, each kept by everyone who wears it: a far card is baked from a body of that look (impostor.ts)
   // and the body that takes over a card near the camera wears the same look, so nobody turns into someone else when
   // they come close or walk away.
-  const NLOOK = 8, LOOKS: PlayerLook[] = [], lookOf = new Map<Character, number>();
-  for (let v = 0; v < NLOOK; v++) { const L = randomLook({ name: '', gender: v % 2 ? 'f' : 'm' }); LOOKS.push(L); }
+  // Twelve on desktops (eight on phones), each its own outfit, hair and lineage, the same every visit; none in the white
+  // lab coat, which is yours.
+  const NLOOK = tier === 0 ? 8 : 12, LOOKS: PlayerLook[] = [], lookOf = new Map<Character, number>();
+  { let ls = 777; const lr = () => { ls = (ls * 16807) % 2147483647; return (ls - 1) / 2147483646; }; // their own seed: the city's own sequence is untouched
+    for (let v = 0; v < NLOOK; v++) LOOKS.push(townLook(v, lr)); }
   const someone = (_lineage: PlayerLook['lineage'], i: number) => {
     const v = ((i % NLOOK) + NLOOK) % NLOOK;
     const c = createCharacter('scientist', detail * 0.8, LOOKS[v]);

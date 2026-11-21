@@ -170,7 +170,10 @@ class Field {
   private c: Float32Array;
   private meshes: THREE.InstancedMesh[][] = [];
 
-  constructor(cap: number, parts: Part[], group: THREE.Group, private near: [number, number], private far: number) {
+  /** `shadowReach`: metres the sun's shadow cascades cover; a LOD that only starts beyond them casts no shadow (it was
+   * drawn into the shadow maps for every far tree and rock on the planet, none of it inside them). */
+  constructor(cap: number, parts: Part[], group: THREE.Group, private near: [number, number], private far: number, shadowReach = Infinity) {
+    const starts = [0, near[0], near[1]];
     this.x = new Float32Array(cap); this.z = new Float32Array(cap);
     this.m = new Float32Array(cap * 16); this.c = new Float32Array(cap * 3);
     for (const p of parts) {
@@ -181,7 +184,7 @@ class Field {
         im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         im.instanceColor.setUsage(THREE.DynamicDrawUsage);
         im.frustumCulled = false; // lists are small and spread out; the LOD does the saving
-        im.castShadow = p.shadow[k];
+        im.castShadow = p.shadow[k] && starts[k] < shadowReach * 0.9;
         im.receiveShadow = true;
         im.count = 0;
         row.push(im);
@@ -198,14 +201,31 @@ class Field {
     this.c[i * 3] = col.r; this.c[i * 3 + 1] = col.g; this.c[i * 3 + 2] = col.b;
   }
 
+  /** LOD 1 and 2 (from `CULL_FROM` on) are kept in bearing order round the point of the last refresh: `view` puts only
+   * the sectors in front of the camera into their instance lists. Every far tree and rock behind the camera was drawn
+   * before (the lists were rings round you, culling off). */
+  private order: Int32Array[] = [];
+  private secStart: Int32Array[] = [];
+  private seen = '';
+
   refresh(cx: number, cz: number) {
     const d0 = this.near[0] ** 2, d1 = this.near[1] ** 2, d2 = this.far ** 2;
     const count = [0, 0, 0];
+    const cull = CULL.on;
+    if (cull && !this.order.length) for (let k = 0; k < 3; k++) { this.order.push(new Int32Array(this.x.length)); this.secStart.push(new Int32Array(SECTORS + 1)); }
+    const per = cull ? this.secStart.map((a) => a.fill(0)) : null;
+    const sec = cull ? (this.secOf ??= new Uint8Array(this.x.length)) : null, lod = cull ? (this.lodOf ??= new Uint8Array(this.x.length)) : null;
     for (const row of this.meshes) for (const im of row) im.count = 0;
     for (let i = 0; i < this.n; i++) {
       const dx = this.x[i] - cx, dz = this.z[i] - cz, d = dx * dx + dz * dz;
-      if (d > d2) continue;
+      if (d > d2) { if (lod) lod[i] = 255; continue; }
       const k = d < d0 ? 0 : d < d1 ? 1 : 2;
+      if (cull && k >= CULL_FROM) {
+        const s = Math.floor(((Math.atan2(dx, dz) / (Math.PI * 2)) + 1) * SECTORS) % SECTORS;
+        sec![i] = s; lod![i] = k; per![k][s + 1]++;
+        continue;
+      }
+      if (lod) lod[i] = 255;
       const at = count[k]++;
       for (const row of this.meshes) {
         const im = row[k];
@@ -213,7 +233,15 @@ class Field {
         (im.instanceColor!.array as Float32Array).set(this.c.subarray(i * 3, i * 3 + 3), at * 3);
       }
     }
+    if (cull) {
+      // counting sort by sector: order[k] lists LOD k's instances sector by sector, secStart[k][s] where sector s begins
+      for (let k = CULL_FROM; k < 3; k++) { const st = per![k]; for (let s = 0; s < SECTORS; s++) st[s + 1] += st[s]; }
+      const fill = this.secStart.map((a) => a.slice());
+      for (let i = 0; i < this.n; i++) { const k = lod![i]; if (k !== 255) this.order[k][fill[k][sec![i]]++] = i; }
+      this.seen = '';
+    }
     for (const row of this.meshes) row.forEach((im, k) => {
+      if (cull && k >= CULL_FROM) return;
       im.count = count[k];
       im.visible = count[k] > 0;
       im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, count[k] * 16); im.instanceMatrix.needsUpdate = true;
@@ -221,7 +249,45 @@ class Field {
       ic.clearUpdateRanges(); ic.addUpdateRange(0, count[k] * 3); ic.needsUpdate = true;
     });
   }
+  private secOf: Uint8Array | null = null;
+  private lodOf: Uint8Array | null = null;
+
+  /** Fills the far LODs' lists with the sectors from `lo` to `hi` (inclusive, may wrap); nothing if they are already. */
+  view(lo: number, hi: number) {
+    if (!this.order.length) return;
+    const key = `${lo}:${hi}`;
+    if (key === this.seen) return;
+    this.seen = key;
+    for (let k = CULL_FROM; k < 3; k++) {
+      const ord = this.order[k], st = this.secStart[k];
+      let at = 0;
+      const n = hi >= lo ? hi - lo + 1 : SECTORS - lo + hi + 1;
+      for (let j = 0; j < n && j < SECTORS; j++) {
+        const s = (lo + j) % SECTORS;
+        for (let q = st[s]; q < st[s + 1]; q++) {
+          const i = ord[q];
+          for (const row of this.meshes) {
+            const im = row[k];
+            (im.instanceMatrix.array as Float32Array).set(this.m.subarray(i * 16, i * 16 + 16), at * 16);
+            (im.instanceColor!.array as Float32Array).set(this.c.subarray(i * 3, i * 3 + 3), at * 3);
+          }
+          at++;
+        }
+      }
+      for (const row of this.meshes) {
+        const im = row[k];
+        im.count = at; im.visible = at > 0;
+        im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, at * 16); im.instanceMatrix.needsUpdate = true;
+        const ic = im.instanceColor!; ic.clearUpdateRanges(); ic.addUpdateRange(0, at * 3); ic.needsUpdate = true;
+      }
+    }
+  }
 }
+
+/** Bearing sectors round the camera for the far LODs, and the first LOD culled that way (the near one stays a full
+ * ring: its trees cast the shadows that fall into view from behind you). `?cull=0` turns it off. */
+const SECTORS = 32, CULL_FROM = 1;
+const CULL = { on: typeof location === 'undefined' || new URLSearchParams(location.search).get('cull') !== '0' };
 
 export interface Obstacle { x: number; z: number; r: number }
 
@@ -381,7 +447,7 @@ export class Forest {
       conifer(4.5, 0.07, 0.01, 0.1, 0.34, firLeaf, 15), // saplings in the undergrowth
     ];
     const capTrees = Math.ceil(Q.treeCount * 1.3);
-    const fields = species.map((p) => new Field(capTrees, p, this.group, treeNear, treeFar));
+    const fields = species.map((p) => new Field(capTrees, p, this.group, treeNear, treeFar, Q.shadowRange));
     this.fields.push(...fields);
 
     // the alien groves
@@ -487,7 +553,7 @@ export class Forest {
       const cap = Math.ceil(counts[info.kind] / 1.5) + 4;
       const big = info.kind === 'outcrop' || info.kind === 'rock';
       const shadow: [boolean, boolean, boolean] = big ? [true, true, true] : info.kind === 'plant' ? [false, false, false] : [true, true, false];
-      const f = new Field(cap, [{ lods, mat, shadow }], this.group, big ? [near[0] * 1.2, near[1] * 1.6] : near, reach[info.kind]);
+      const f = new Field(cap, [{ lods, mat, shadow }], this.group, big ? [near[0] * 1.2, near[1] * 1.6] : near, reach[info.kind], Q.shadowRange);
       this.fields.push(f);
       list.push({ name, info, field: f });
     }
@@ -544,20 +610,35 @@ export class Forest {
     put('plant', (x, z, h, ny) => (h > 0.8 && h < 110 && ny > 0.82 && clear(x, z, 1) && rnd() < forestAt(x, z) * 1.3 ? 0.8 + rnd() * 1.1 : 0));
   }
 
-  /** Rebuilds the instance lists a few at a time; all of them after a long move. */
-  update(cam: THREE.Vector3) {
-    const moved = this.last.distanceToSquared(tmpV.set(cam.x, cam.z));
+  /** Rebuilds the instance lists a few at a time; all of them after a long move. With a camera, the far LODs keep only
+   * what is in front of it (plus a margin for turning and for the few metres since the last rebuild). */
+  update(pos: THREE.Vector3, cam?: THREE.Camera) {
+    const moved = this.last.distanceToSquared(tmpV.set(pos.x, pos.z));
     if (moved > 16) { this.last.copy(tmpV); this.dirty = this.fields.length; }
     if (moved > 40 * 40) {
-      for (const f of this.fields) f.refresh(cam.x, cam.z);
+      for (const f of this.fields) f.refresh(pos.x, pos.z);
       this.dirty = 0;
-      return;
     }
     for (let i = 0; i < 4 && this.dirty > 0; i++) {
-      this.fields[this.refreshAt % this.fields.length].refresh(cam.x, cam.z);
+      this.fields[this.refreshAt % this.fields.length].refresh(this.last.x, this.last.y);
       this.refreshAt++;
       this.dirty--;
     }
+    if (!CULL.on) return;
+    let lo = 0, hi = SECTORS - 1;
+    const pc = cam as THREE.PerspectiveCamera | undefined;
+    if (pc?.isPerspectiveCamera) {
+      pc.getWorldDirection(tmpD);
+      const flat = Math.hypot(tmpD.x, tmpD.z);
+      const hfov = 2 * Math.atan(Math.tan((pc.fov * Math.PI) / 360) * pc.aspect);
+      const half = hfov / 2 + 0.42; // 24 degrees of margin
+      if (flat > 0.35 && half < Math.PI * 0.95) {
+        const yaw = Math.atan2(tmpD.x, tmpD.z), w = (Math.PI * 2) / SECTORS;
+        lo = ((Math.floor((yaw - half) / w) % SECTORS) + SECTORS) % SECTORS;
+        hi = ((Math.floor((yaw + half) / w) % SECTORS) + SECTORS) % SECTORS;
+      }
+    }
+    for (const f of this.fields) f.view(lo, hi);
   }
 
   setGlow(k: number) {
@@ -566,3 +647,4 @@ export class Forest {
 }
 const tmpC = new THREE.Color();
 const tmpV = new THREE.Vector2();
+const tmpD = new THREE.Vector3();

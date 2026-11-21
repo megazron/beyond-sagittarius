@@ -116,3 +116,8 @@ See the end of this file for the running log.
   freeze in play (mode away) at t+5 s: 92f319e does not remove all of it.
 - Planet free play on Web: 31 fps walk, 1252 draws, 6.3 M tris (main, 15:20).
 - perf14: Renderer.compileFor (compileAsync into the post target) for world/cine/vault/stage before warmAll's draws.
+- 16:30 perf14 WIP (not yet measured on the GPU; Blender jobs held the heavy slots): precompile warms through the real
+  post chain (shadow/AO variants) instead of a tiny plain render; hair geometry cached per style+head (4.6 s of the
+  city build was forty heads of hair); forest LODs that start beyond the shadow range cast no shadow; far forest LODs
+  (1, 2) culled by 32 bearing sectors round the camera (?cull=0 turns it off); townsfolk: 12 seeded looks on desktops
+  (8 on phones), none in the white coat (custom.ts townLook), impostor atlas in bands (impostor.ts/citydense.ts).

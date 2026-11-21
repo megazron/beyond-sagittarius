@@ -181,8 +181,10 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     /** The atlas tile for a card: which body, seen from which side (rel: the camera's bearing from the way they face), which walk frame (phase < 0: standing). */
     const tileOf = (arr: Float32Array, i: number, who: number, rel: number, phase: number) => {
       const A = imp!, NV = A.views, view = ((Math.round(rel / (Math.PI * 2 / NV)) % NV) + NV) % NV, v = ((who % A.variants) + A.variants) % A.variants;
-      const frame = phase < 0 ? A.rows - 1 : Math.floor(phase % 1 * (A.rows - 1) + (A.rows - 1)) % (A.rows - 1);
-      arr[i * 2] = (v * NV + view) / A.cols; arr[i * 2 + 1] = frame / A.rows;
+      // the atlas may hold the looks in bands (impostor.ts): VPR looks a band, F frames a band
+      const VPR = A.cols / NV, F = A.rows / Math.ceil(A.variants / VPR);
+      const frame = phase < 0 ? F - 1 : Math.floor(phase % 1 * (F - 1) + (F - 1)) % (F - 1);
+      arr[i * 2] = ((v % VPR) * NV + view) / A.cols; arr[i * 2 + 1] = (Math.floor(v / VPR) * F + frame) / A.rows;
     };
     const baseCol = new THREE.Color(0.55, 0.52, 0.6);
     setAtlas = (t, cols, rows, variants, views) => { imp = { cols, rows, variants, views }; mat.map = t; mat.alphaTest = 0.5; mat.needsUpdate = true; grid.value.set(1 / cols, 1 / rows); baseCol.setRGB(1, 1, 1); };

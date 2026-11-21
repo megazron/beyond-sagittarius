@@ -9,11 +9,14 @@ export const SKULL = new THREE.Vector3(0, 0.122, -0.004);
 export const SKULL_R = 0.112;
 
 /** The real head: centre and measured radius by direction (head-bone space), from the character build. */
-export interface Skull { c: THREE.Vector3; radius: (d: THREE.Vector3) => number; }
-export const roundSkull: Skull = { c: SKULL, radius: () => SKULL_R };
+export interface Skull { c: THREE.Vector3; radius: (d: THREE.Vector3) => number; key?: string }
+export const roundSkull: Skull = { c: SKULL, radius: () => SKULL_R, key: 'round' };
+const gridIds = new WeakMap<number[][], number>(); let gridN = 0;
 export function skullFrom(c: number[], grid: number[][]): Skull {
   const NE = grid.length, NA = grid[0].length;
+  if (!gridIds.has(grid)) gridIds.set(grid, ++gridN);
   return {
+    key: `${gridIds.get(grid)}|${c.join(',')}`,
     c: new THREE.Vector3(c[0], c[1], c[2]),
     radius(d) {
       const az = Math.atan2(d.x, d.z), el = Math.asin(Math.max(-1, Math.min(1, d.y / (d.length() || 1))));
@@ -223,6 +226,16 @@ function curls(): THREE.Texture {
 /** Sculpted anime hair: every lock is a tapered ribbon with its own phase. */
 export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms, detail = 1, capLow = -20, capFront = 50, skull: Skull = roundSkull, volume = 0, rough = 0.46, cards: boolean | 'curly' = false): THREE.Mesh {
   const rnd = mulberry32(locks.length * 37 + 5);
+  // the same style on the same head is the same geometry: built once (a Zenvora crowd built forty heads of hair, 4.6 s)
+  const key = skull.key ? `${skull.key}|${detail}|${capLow}|${capFront}|${volume}|${cards}|${JSON.stringify(locks)}` : '';
+  const known = key ? HAIR_GEO.get(key) : undefined;
+  const geo = known ? known.clone() : hairGeometry(locks, rnd, detail, capLow, capFront, skull, volume, cards);
+  if (key && !known) { HAIR_GEO.set(key, geo.clone()); if (HAIR_GEO.size > 48) HAIR_GEO.delete(HAIR_GEO.keys().next().value!); }
+  return hairMesh(geo, colors, sway, rough, cards);
+}
+const HAIR_GEO = new Map<string, THREE.BufferGeometry>();
+
+function hairGeometry(locks: Lock[], rnd: () => number, detail: number, capLow: number, capFront: number, skull: Skull, volume: number, cards: boolean | 'curly') {
   const steps = detail < 0.8 ? 5 : 7;
   // on a real head one anime lock is a bundle of finer strands around the same path
   const fine: Lock[] = locks.flatMap((l) => {
@@ -250,7 +263,10 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
     return swayByStrand(g, 0.12, l.sway ?? 1, rnd());
   });
   parts.push(capShell(capLow, capFront, skull, volume, !!cards));
-  const geo = mergeGeometries(parts)!;
+  return mergeGeometries(parts)!;
+}
+
+function hairMesh(geo: THREE.BufferGeometry, colors: HairColors, sway: SwayUniforms, rough: number, cards: boolean | 'curly') {
   // cards: no broad surface sheen at all (a flat card would shine as one grey sheet); the only highlight is the strand one below,
   // alpha-to-coverage softens the card edges wherever the scene is multisampled (a plain alpha test elsewhere)
   const mat = cards

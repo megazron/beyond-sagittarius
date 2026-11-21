@@ -59,15 +59,27 @@ export function defaultLook(): PlayerLook {
   };
 }
 
-export function randomLook(keep: Pick<PlayerLook, 'name' | 'gender'>): PlayerLook {
-  const pick = <T,>(a: readonly T[]) => a[Math.floor(Math.random() * a.length)];
+export function randomLook(keep: Pick<PlayerLook, 'name' | 'gender'>, rnd: () => number = Math.random): PlayerLook {
+  const pick = <T,>(a: readonly T[]) => a[Math.floor(rnd() * a.length)];
   const lineage = pick(LINEAGE_IDS);
   return {
     ...defaultLook(), ...keep, lineage, ...LINEAGES[lineage],
-    height: 0.93 + Math.random() * 0.14, build: Math.random(),
-    eye: pick(EYES), eyeGlow: Math.random() > 0.3, hair: pick(HAIRS), hairRoot: pick(HAIR_COLOURS), hairTip: pick(HAIR_TIPS),
+    height: 0.93 + rnd() * 0.14, build: rnd(),
+    eye: pick(EYES), eyeGlow: rnd() > 0.3, hair: pick(HAIRS), hairRoot: pick(HAIR_COLOURS), hairTip: pick(HAIR_TIPS),
     outfit: pick(OUTFITS), accent: pick(ACCENTS),
   };
+}
+
+/**
+ * Townsfolk look `v` of `n`: the same every time (seeded), every one different from the others in outfit, hair or
+ * lineage, and none in the white lab coat (the scientist's outfit: that is the player's own).
+ */
+export function townLook(v: number, rnd: () => number): PlayerLook {
+  const L = randomLook({ name: '', gender: v % 2 ? 'f' : 'm' }, rnd);
+  const coats = OUTFITS.filter((o) => o !== 'scientist');
+  const lineage = LINEAGE_IDS[(v * 5 + 1) % LINEAGE_IDS.length];
+  return { ...L, ...LINEAGES[lineage], lineage, outfit: coats[v % coats.length], hair: HAIRS[(v * 7 + Math.floor(v / coats.length)) % HAIRS.length],
+    skin: SKINS[(v * 7 + 3) % SKINS.length], accent: ACCENTS[(v * 3 + 1) % ACCENTS.length], hairRoot: HAIR_COLOURS[(v * 3 + 2) % HAIR_COLOURS.length] };
 }
 
 /** Skins other crew can wear (cosmetic, chosen in the skins menu). */

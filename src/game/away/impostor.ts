@@ -14,7 +14,9 @@ export const IMP = { walk: 6, frames: 7 }; // frame 6 is standing
 
 /** `NV`: sides baked round each body (8 on desktops, so a card turns in 45-degree steps; 4 on phones); `per`: renders a call; `split`: frames a body is spread over. */
 export function impostorBaker(renderer: THREE.WebGLRenderer, bodies: Character[], tile: [number, number], env: () => THREE.Texture | null, NV = 8, per = 8, split = 1) {
-  const V = bodies.length, cols = V * NV, rows = IMP.frames, [TW, TH] = tile;
+  // the looks side by side, in bands of rows when one band would be wider than the GPU allows (twelve looks on desktops)
+  const V = bodies.length, [TW, TH] = tile, maxW = Math.min(8192, renderer.capabilities.maxTextureSize);
+  const bands = Math.ceil((V * NV * TW) / maxW), VPR = Math.ceil(V / bands), cols = VPR * NV, rows = IMP.frames * bands;
   const rt = new THREE.WebGLRenderTarget(cols * TW, rows * TH, { depthBuffer: true, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false });
   rt.texture.colorSpace = THREE.SRGBColorSpace;
   const stage = new THREE.Scene();
@@ -53,7 +55,7 @@ export function impostorBaker(renderer: THREE.WebGLRenderer, bodies: Character[]
     for (let w = w0; w < w1; w++) {
       const a = (w * Math.PI * 2) / NV;
       cam.position.set(Math.sin(a) * 6, 0, Math.cos(a) * 6); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
-      rt.viewport.set((i * NV + w) * TW, row * TH, TW, TH); rt.scissor.copy(rt.viewport); rt.scissorTest = true;
+      rt.viewport.set(((i % VPR) * NV + w) * TW, (Math.floor(i / VPR) * IMP.frames + row) * TH, TW, TH); rt.scissor.copy(rt.viewport); rt.scissorTest = true;
       renderer.setRenderTarget(rt); renderer.clearDepth(); renderer.render(stage, cam);
     }
     rt.scissorTest = false;

@@ -747,18 +747,23 @@ export class Renderer {
     await Promise.race([Promise.allSettled(loads), new Promise((r) => setTimeout(r, 6000))]);
     this.ensureEnv(scene); // the shaders differ with and without the image-based light: compile the ones that will be used
     // and with the target they will draw into: the post chain's scene buffer (linear, no tone mapping) or the screen
-    const prev = this.renderer.getRenderTarget(), into = this.quality.post && this.renderPass instanceof ScenePass ? this.renderPass.rt : null;
-    try { this.renderer.setRenderTarget(into); await this.renderer.compileAsync(scene, camera); } catch { /* compiled on first draw instead */ } finally { this.renderer.setRenderTarget(prev); }
-    // one draw of everything, culling off, into a tiny target: every geometry and texture goes to the GPU now, under the
-    // black, instead of in the first frames of play
+    await this.compileFor(scene, camera);
+    // one frame of everything through the real post chain, culling off, at a tiny size: the passes' own variants
+    // (shadow depth, the AO pass's normals) compile and every geometry and texture goes to the GPU now, under the black,
+    // instead of in the first frames of play (a cold shader cache froze the first second of play for 4-6 s)
     // once the scene is on screen the rest would be done in play, all at once: then it is left to the first frames
     if (this.renderPass.scene === scene) return;
-    {
-      const tiny = new THREE.WebGLRenderTarget(8, 8, { type: THREE.HalfFloatType }), culled: THREE.Object3D[] = [];
+    if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+      const culled: THREE.Object3D[] = [];
       scene.traverse((o) => { if (o.frustumCulled && o.visible) { o.frustumCulled = false; culled.push(o); } });
-      const prev2 = this.renderer.getRenderTarget(), shadows = this.renderer.shadowMap.autoUpdate;
-      try { this.renderer.setRenderTarget(tiny); this.renderer.render(scene, camera); } catch { /* best effort */ }
-      finally { this.renderer.setRenderTarget(prev2); this.renderer.shadowMap.autoUpdate = shadows; for (const o of culled) o.frustumCulled = true; tiny.dispose(); }
+      const was = { scene: this.renderPass.scene, camera: this.renderPass.camera as THREE.PerspectiveCamera, ao: this.aoWanted };
+      const shadows = this.renderer.shadowMap.autoUpdate, prevT = this.renderer.getRenderTarget();
+      this.warmBegin();
+      try { this.renderer.shadowMap.needsUpdate = true; this.warm(scene, camera as THREE.PerspectiveCamera, true); } catch { /* best effort */ }
+      finally {
+        this.warmEnd(); this.setScene(was.scene, was.camera, was.ao); this.renderer.setRenderTarget(prevT);
+        this.renderer.shadowMap.autoUpdate = shadows; for (const o of culled) o.frustumCulled = true;
+      }
       await new Promise((r) => requestAnimationFrame(r));
     }
     // a stage's own work that belongs under the black too (Zenvora bakes its far people here)
