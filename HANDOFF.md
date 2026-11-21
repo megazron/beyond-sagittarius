@@ -145,3 +145,10 @@ See the end of this file for the running log.
   40%, character animate 7%. NEXT for a steady 60 on Web: fewer draws. The forest's ~40 fields x 3 LODs x parts are
   one InstancedMesh each; three's BatchedMesh (multi-draw, per-instance culling) would put each material's geometries
   in one draw (bark: 15 meshes -> 1). Check windify/leaf shader chunks against BatchedMesh's batching texture first.
+- 19:55 LANDED perf14 on main as 694bbae (CI 44941146776 all green). Clips + README (with caveats) in
+  Downloads/BS_Game_v1.1/city_v1.4_GPU (recorded under another agent's Blender load: 21-23 fps in the overlay).
+  OPEN: (1) quiet-machine A500 hitch tour of the landed build (Web and Ultra) and the Mobile proxy (plan_p_mobile_a500)
+  never ran: Blender jobs held the heavy slots; (2) a striped glass wall cuts through the flat's bedroom/bathroom (on
+  main before today too; not found yet: merged statics hide which building; try hiding scene children >= 45);
+  (3) forest BatchedMesh; (4) arrival stalls in play 1-3 s; (5) hair styles repeat every 6 looks; (6) KTX2 pipeline
+  (encoder at ~/tools/ktx/KTX-Software-4.4.2-Linux-x86_64, LD_LIBRARY_PATH=.../lib).
