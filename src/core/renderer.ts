@@ -796,6 +796,10 @@ export class Renderer {
   }
 
   render(dt: number, time: number) {
+    // resolution changes first: a new pixel ratio resizes (and so clears) the canvas, and done after the frame was drawn
+    // it put a black frame on screen every time it stepped (each 0.8 s or so while it settles: the black frames in the
+    // pull's GPU captures)
+    if (this.quality.dynamicResolution) this.adaptResolution(dt, time);
     this.final.uniforms.uTime.value = time;
     if (this.volumetric) this.volumetric.source = (this.renderPass.scene.userData.post as PostSource | undefined) ?? null;
     if (this.ssr) { const k = (this.renderPass.scene.userData.ssr as number | undefined) ?? 0; this.ssr.strength = k; this.ssr.enabled = k > 0.01 && this.shed < 2; }
@@ -812,7 +816,6 @@ export class Renderer {
       this.renderer.setRenderTarget(null); this.renderer.render(this.renderPass.scene, cam);
     } else this.composer.render(dt);
     if (jittered) cam.clearViewOffset();
-    if (this.quality.dynamicResolution) this.adaptResolution(dt, time);
   }
 
   private softwareCached: boolean | null = null;

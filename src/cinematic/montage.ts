@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import beat from './beatmap.json';
-import { clamp, easeInOut, lerp, smoothstep } from '../core/noise';
+import { clamp, easeInOut, lerp, mulberry32, Simplex, smoothstep } from '../core/noise';
 import { audio } from '../core/audio';
 import { voice } from '../core/voice';
 import { t } from '../i18n';
@@ -13,6 +13,48 @@ import { LAKE } from '../world/heightfield';
 
 const BEAT = 60 / beat.bpm;
 /** Where each one's eyes go in their sky (I5): the giant, the black hole, the old stars, the hole overhead, the cloud. */
+/** Skyvra's old red sun as a star, not a disc: limb darkening (the edge is cooler and much dimmer than the middle, as
+ * on any real star, stronger for a cool giant), slow granulation cells across the face, and a corona that falls off from
+ * the limb with a few faint streamers. */
+function oldSun(at: THREE.Vector3, r: number) {
+  const g = new THREE.Group(); g.position.copy(at);
+  const disc = new THREE.Mesh(new THREE.SphereGeometry(r, 64, 32), new THREE.ShaderMaterial({
+    vertexShader: 'varying vec3 vN; varying vec3 vV; varying vec3 vO; void main(){ vO = position; vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = -mv.xyz; gl_Position = projectionMatrix * mv; }',
+    fragmentShader: `varying vec3 vN; varying vec3 vV; varying vec3 vO;
+      float h(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+      float n3(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(h(i), h(i + vec3(1,0,0)), f.x), mix(h(i + vec3(0,1,0)), h(i + vec3(1,1,0)), f.x), f.y),
+                   mix(mix(h(i + vec3(0,0,1)), h(i + vec3(1,0,1)), f.x), mix(h(i + vec3(0,1,1)), h(i + vec3(1,1,1)), f.x), f.y), f.z); }
+      void main(){
+        float mu = clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0);
+        float limb = 1.0 - 0.78 * (1.0 - mu) - 0.17 * (1.0 - mu) * (1.0 - mu); // quadratic limb-darkening law
+        vec3 p = normalize(vO) * 5.0;
+        float cells = 0.6 * n3(p) + 0.3 * n3(p * 2.3 + 4.1) + 0.1 * n3(p * 5.7);
+        vec3 core = vec3(1.05, 0.34, 0.1), edge = vec3(0.42, 0.06, 0.015); // kept under the tone curve's shoulder, or the middle washes out pink
+        vec3 c = mix(edge, core, pow(mu, 0.6)) * limb * (0.82 + 0.36 * cells);
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+  }));
+  g.add(disc);
+  // the corona: a camera-facing glow from the limb outwards, brightest at the edge, with a few long faint streamers
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256; const x = cv.getContext('2d')!;
+  const R = 128, edgeAt = 0.3;
+  const img = x.createImageData(256, 256);
+  for (let j = 0; j < 256; j++) for (let i = 0; i < 256; i++) {
+    const dx = (i - R + 0.5) / R, dy = (j - R + 0.5) / R, d = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
+    const out = Math.max(0, d - edgeAt) / (1 - edgeAt);
+    const streak = 1 + 0.22 * Math.pow(Math.max(0, Math.cos(a * 3 + 0.7)), 4) + 0.15 * Math.pow(Math.max(0, Math.cos(a * 7 - 1.1)), 6);
+    let v = d < edgeAt ? 0.35 * Math.pow(d / edgeAt, 8) : Math.exp(-out * 7 / streak) * (1 - out) * 0.9 + 0.12 * Math.exp(-out * 2.2) * (1 - out);
+    v = Math.min(1, v); const k = (j * 256 + i) * 4;
+    img.data[k] = 255; img.data[k + 1] = Math.round(110 + 60 * Math.exp(-out * 4)); img.data[k + 2] = Math.round(55 + 30 * Math.exp(-out * 5)); img.data[k + 3] = Math.round(v * 255);
+  }
+  x.putImageData(img, 0, 0);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(0.9, 0.55, 0.45) }));
+  glow.scale.setScalar((r / edgeAt) * 2); g.add(glow);
+  return g;
+}
+
 const SKYDIR: Record<string, THREE.Vector3> = { strong: new THREE.Vector3(-0.28, 0.12, -0.95).normalize(), medic: new THREE.Vector3(0.2, 0.15, -1).normalize(), explorer: new THREE.Vector3(0.1, 0.9, -0.4).normalize(), builder: new THREE.Vector3(-1, 16, -24).normalize(), social: new THREE.Vector3(0.3, 0.2, -1).normalize() };
 /** How each one checks themself first (I4): Draxum his fist, Lyrra her pulse, Skyvra her trapped leg, Bolzar the plate, Nuvexa her phone. */
 const CHECK: Record<string, 'use' | 'phone' | 'gesture'> = { strong: 'use', medic: 'use', explorer: 'use', builder: 'use', social: 'phone' };
@@ -659,35 +701,120 @@ export class Montage {
     return (this.sys = { group: g, at });
   }
 
+  /** How each one falls (shot list H3): Draxum fights it, Lyrra goes still, Bolzar curls up, Nuvexa reaches for the
+   * others, Skyvra laughs, Zenvik stares at the hole. Each starts in the same shock (the first fifth of the single) and
+   * turns into their own. Returns the body, the face and the head (a look2 pair, or 'hole' for a fixed stare). */
+  private fallReact(id: CrewId, k: number, t: number, n: number, thrash: number): [Limbs, Face, [number, number] | 'hole'] {
+    const own = smoothstep(0.12, 0.45, k), shock: Face = { fear: 0.8, open: 0.45 };
+    const wander: [number, number] = [nz(t * 2.7, n + 1) * 0.8, nz(t * 2.1, n + 2) * 0.3];
+    const mixF = (f: Face): Face => { const o: Face = {}; for (const key of ['smile', 'frown', 'fear', 'squint', 'open', 'blink'] as const) o[key] = lerp(shock[key] ?? 0, f[key] ?? 0, own); return o; };
+    switch (id) {
+      case 'strong': { // fights it: big swimming strokes, teeth set, shouting in bursts
+        const shout = Math.max(0, Math.sin(t * 5.5)) ** 2;
+        return [flail(FALL.strong, t * 1.4, n * 4.3, lerp(thrash, 1.25, own)), mixF({ frown: 0.95, squint: 0.45, open: 0.15 + 0.6 * shout }), wander];
+      }
+      case 'medic': { // goes still: the thrash runs out, arms come in to the body, the eyes close and stay closed
+        const still: Limbs = { armL: [0.25, -0.95, 0.2], foreL: [-0.6, 0.2, 0.75], armR: [-0.25, -0.95, 0.2], foreR: [0.6, 0.2, 0.75], legL: [0.06, -1, 0.04], shinL: [0.02, -1, -0.12], legR: [-0.03, -1, 0.1], shinR: [0.05, -1, -0.1], hair: [0, 1, 0] };
+        return [mixLimbs(flail(FALL.medic, t, n * 4.3, 0.6), flail(still, t * 0.4, n, 0.05), own), mixF({ blink: smoothstep(0.35, 0.6, k), smile: 0.05, fear: 0.1 }), [wander[0] * (1 - own), 0.25 * own]];
+      }
+      case 'builder': { // curls: knees to the chest, arms round them, head down
+        const curl: Limbs = { armL: [0.35, -0.5, 0.8], foreL: [-0.7, -0.1, 0.7], armR: [-0.35, -0.5, 0.8], foreR: [0.7, -0.1, 0.7], legL: [0.15, -0.15, 1], shinL: [0.05, -1, 0.1], legR: [-0.15, -0.15, 1], shinR: [-0.05, -1, 0.1], bend: 0.85, hair: [0, 1, 0] };
+        return [mixLimbs(flail(FALL.builder, t, n * 4.3, thrash), flail(curl, t * 0.5, n, 0.06), own), mixF({ fear: 0.75, frown: 0.6, squint: 0.7 }), [wander[0] * (1 - own), lerp(wander[1], 0.5, own)]];
+      }
+      case 'social': { // reaches: one arm out towards the others (the lens), fingers wide, the other arm for balance
+        const reach: Limbs = { ...FALL.social, armR: [-0.15, 0.25, 1], foreR: [-0.05, 0.2, 1], armL: [0.95, -0.1, -0.2], foreL: [0.9, 0.2, -0.1], openHands: true };
+        return [mixLimbs(flail(FALL.social, t, n * 4.3, thrash), flail(reach, t * 0.6, n, 0.12), own), mixF({ fear: 0.7, open: 0.35, frown: 0.2 }), [lerp(wander[0], 0, own), lerp(wander[1], -0.1, own)]];
+      }
+      case 'explorer': { // laughs: the fear breaks into a laugh, head back, the body lets go into the spin
+        const laugh = 0.5 + 0.5 * Math.max(0, Math.sin(t * 9));
+        return [flail({ ...FALL.explorer, openHands: true }, t, n * 4.3, lerp(thrash, 0.45, own)), mixF({ smile: 0.85, open: 0.25 + 0.4 * laugh, squint: 0.35 }), [wander[0] * (1 - own), lerp(wander[1], -0.35, own)]];
+      }
+      default: // the player stares: the body slows, the eyes do not leave the hole and do not blink
+        return [flail(FALL.scientist, t, n * 4.3, lerp(thrash, 0.2, own)), mixF({ fear: 0.85, open: 0.3, blink: 0 }), own > 0.3 ? 'hole' : wander];
+    }
+  }
+
   private stageG: THREE.Group | null = null;
   private stageOn = false;
   /** A piece of each world to stand on, with its sky: built once, shown one at a time, far from everything else. */
   private worldStage(id: CrewId) {
     if (!this.stageG) {
       this.stageG = new THREE.Group(); this.set.scene.add(this.stageG);
-      const mk = (name: string, ground: number, rough: number, extra: (g: THREE.Group) => void, relief = 1, amb: [number, number, number] = [0x8090a0, 0x202020, 0.5]) => {
+      // Ground per world, built so it reads at human scale: a dense grid near them (cells of centimetres under the body,
+      // tens of metres at the horizon), small undulation, mid-ground swells, ridges on the horizon, craters on the airless
+      // ones, the asteroid's ground curving away (a small body: the horizon is close), mottled colour, and stones from
+      // pebbles to boulders so the eye has sizes to measure them by.
+      const TER: Record<string, { curve: number; craters: number; pebbles: number; ridge: number; mott: number }> = {
+        strong: { curve: 0, craters: 0, pebbles: 260, ridge: 30, mott: 0.25 }, medic: { curve: 0, craters: 26, pebbles: 520, ridge: 55, mott: 0.3 },
+        explorer: { curve: 260, craters: 14, pebbles: 420, ridge: 0, mott: 0.35 }, builder: { curve: 0, craters: 0, pebbles: 460, ridge: 70, mott: 0.4 },
+        social: { curve: 0, craters: 0, pebbles: 0, ridge: 0, mott: 0.15 } };
+      const sx = new Simplex(7);
+      const heightAt = (name: string, relief: number, craters: [number, number, number][]) => (x: number, z: number) => {
+        const T = TER[name], d = Math.hypot(x, z);
+        if (name === 'social') return sx.fbm(x * 0.02, z * 0.02, 3) * 3.2 * smoothstep(9, 40, d) - 0.4 * smoothstep(5, 9, d); // cloud billows below the raft
+        let y = sx.fbm(x * 0.35, z * 0.35, 3) * 0.16 * smoothstep(1.8, 8, d);
+        y += sx.fbm(x * 0.03 + 3, z * 0.03, 3) * 3.5 * smoothstep(8, 70, d) * relief;
+        if (T.ridge) { const n = 1 - Math.abs(sx.fbm(x * 0.004 + 9, z * 0.004, 4)); y += n * n * T.ridge * smoothstep(160, 700, d) * relief; }
+        for (const [cx, cz, r] of craters) { const q = Math.hypot(x - cx, z - cz) / r; if (q < 1.6) y += r * (q < 1 ? 0.18 * (q * q - 1) + 0.06 * q ** 6 : 0.06 * Math.exp(-(((q - 1) * 5) ** 2))); }
+        if (T.curve) y -= (d * d) / (2 * T.curve);
+        return y;
+      };
+      const lumpy = (r: number, seed: number, detail = 3, squash = 0.72) => {
+        const geo = new THREE.IcosahedronGeometry(1, detail), q = geo.getAttribute('position'), n = new Simplex(seed);
+        for (let i = 0; i < q.count; i++) {
+          const x = q.getX(i), y = q.getY(i), z = q.getZ(i);
+          const k = 1 + 0.32 * n.fbm(x * 1.3 + seed, y * 1.3 - z, 4) + 0.18 * n.noise2(y * 3.1 + z, x * 2.7) + 0.08 * n.noise2(z * 6, x * 6 + y);
+          q.setXYZ(i, x * r * k, y * r * k * squash, z * r * k);
+        }
+        geo.computeVertexNormals(); return geo;
+      };
+      let ground: (x: number, z: number) => number = () => 0;
+      const mk = (name: string, ground0: number, rough: number, extra: (g: THREE.Group) => void, relief = 1, amb: [number, number, number] = [0x8090a0, 0x202020, 0.5]) => {
         const g = new THREE.Group(); g.name = name;
-        const geo = new THREE.PlaneGeometry(2400, 2400, 160, 160); geo.rotateX(-Math.PI / 2);
-        // a little relief, so it is ground and not a plate
-        const p = geo.getAttribute('position'); for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i), far = Math.min(1, Math.hypot(x, z) / 300); p.setY(i, Math.sin(x * 0.9) * Math.cos(z * 0.7) * 0.12 * (1 - far) + (Math.sin(x * 0.021) + Math.cos(z * 0.017)) * 6 * far * relief); }
-        geo.computeVertexNormals();
-        g.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: ground, roughness: rough })));
+        const T = TER[name], rnd = mulberry32(name.length * 131 + 17);
+        const craters: [number, number, number][] = [];
+        for (let i = 0; i < T.craters; i++) { const a = rnd() * Math.PI * 2, d = 7 + rnd() ** 1.5 * 260, r = 1.2 + rnd() ** 2.5 * (d < 40 ? 6 : 40); craters.push([Math.cos(a) * d, Math.sin(a) * d, r]); }
+        ground = heightAt(name, relief, craters);
+        const N = 190, geo = new THREE.PlaneGeometry(2, 2, N, N); geo.rotateX(-Math.PI / 2);
+        const p = geo.getAttribute('position'), col = new Float32Array(p.count * 3), base = new THREE.Color(ground0);
+        for (let i = 0; i < p.count; i++) {
+          const ux = p.getX(i), uz = p.getZ(i), x = Math.sign(ux) * 1200 * Math.abs(ux) ** 2.6, z = Math.sign(uz) * 1200 * Math.abs(uz) ** 2.6;
+          const y = ground(x, z); p.setXYZ(i, x, y, z);
+          const m = 1 + T.mott * sx.fbm(x * 0.12 + 5, z * 0.12, 3) + 0.12 * sx.noise2(x * 1.7, z * 1.7) * smoothstep(30, 3, Math.hypot(x, z));
+          col[i * 3] = m; col[i * 3 + 1] = m; col[i * 3 + 2] = m;
+        }
+        geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.computeVertexNormals();
+        g.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: base, roughness: rough, vertexColors: true })));
+        // stones: many small ones near, fewer and bigger further out; each sunk a third into the ground
+        if (T.pebbles) {
+          const pg = lumpy(1, 11, 1, 0.6), pm = new THREE.MeshStandardMaterial({ color: base.clone().multiplyScalar(0.8), roughness: 1 });
+          const inst = new THREE.InstancedMesh(pg, pm, T.pebbles), o = new THREE.Object3D();
+          for (let i = 0; i < T.pebbles; i++) {
+            const a = rnd() * Math.PI * 2, d = 1.3 + rnd() ** 1.8 * 45, sz = (0.025 + rnd() ** 3 * 0.3) * (1 + d * 0.015);
+            const x = Math.cos(a) * d, z = Math.sin(a) * d;
+            o.position.set(x, ground(x, z) - sz * 0.25, z); o.rotation.set(rnd() * 6, rnd() * 6, rnd() * 6); o.scale.set(sz * (0.7 + rnd() * 0.6), sz, sz * (0.7 + rnd() * 0.6)); o.updateMatrix(); inst.setMatrixAt(i, o.matrix);
+            const c = 0.75 + rnd() * 0.45; inst.setColorAt(i, new THREE.Color(c, c, c));
+          }
+          g.add(inst);
+        }
         g.add(new THREE.HemisphereLight(amb[0], amb[1], amb[2]));
         extra(g); this.stageG!.add(g); return g;
       };
-      const rock = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number) => { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true })); m.position.set(x, y, z); m.rotation.set(x, y, z); g.add(m); return m; };
+      // a boulder: a lumpy, squashed stone sitting in the ground at (x, z); y is how far its middle stands above it (a y
+      // well above its size is a stone floating in the sky, as on the asteroid)
+      let rockSeed = 1;
+      const rock = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number) => { const m = new THREE.Mesh(lumpy(r, rockSeed++), new THREE.MeshStandardMaterial({ color, roughness: 0.95 })); m.position.set(x, y > r * 1.5 ? y : ground(x, z) + Math.min(y, r * 0.45), z); m.rotation.set(x * 0.1, y + z, z * 0.07); g.add(m); return m; };
       const sky = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number, emissive = 0) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 24), new THREE.MeshStandardMaterial({ color, roughness: 1, emissive, emissiveIntensity: 0.5 })); m.position.set(x, y, z); g.add(m); return m; };
       // Methryx: black slush, orange haze, the ringed giant huge on the horizon
       mk('strong', 0x2a2018, 0.5, (g) => { { const gi = sky(g, 110, -170, 45, -560, 0xffffff, 0x3a2a10); const cv = document.createElement('canvas'); cv.width = 64; cv.height = 256; const x = cv.getContext('2d')!; for (let y = 0; y < 256; y++) { const v = 0.5 + 0.5 * Math.sin(y * 0.21) * Math.cos(y * 0.057 + 1) + 0.15 * Math.sin(y * 0.9); x.fillStyle = `rgb(${Math.round(190 + 50 * v)},${Math.round(120 + 60 * v)},${Math.round(60 + 50 * v)})`; x.fillRect(0, y, 64, 1); } const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; (gi.material as THREE.MeshStandardMaterial).map = tx; gi.rotation.z = 0.35; } const r = new THREE.Mesh(new THREE.RingGeometry(140, 225, 64), new THREE.MeshBasicMaterial({ color: 0xd8c9a8, transparent: true, opacity: 0.5, side: THREE.DoubleSide })); r.position.set(-170, 45, -560); r.rotation.set(-1.3, 0.3, 0); g.add(r); rock(g, 1.2, 3, 0.2, -4, 0x2a211a); rock(g, 0.7, -4, 0.1, -2, 0x2a211a); rock(g, 2.2, -7, 0.5, -9, 0x2a211a); rock(g, 3.5, 11, 1, -18, 0x241c16);
         // a black methane lake behind him, flat and glossy
-        const lake = new THREE.Mesh(new THREE.CircleGeometry(26, 48), new THREE.MeshStandardMaterial({ color: 0x050403, roughness: 0.08, metalness: 0.6 })); lake.rotation.x = -Math.PI / 2; lake.position.set(4, 0.14, -34); lake.scale.set(1.6, 1, 0.7); g.add(lake); }, 0.6, [0xc8803a, 0x2a1a0c, 0.95]);
+        const lake = new THREE.Mesh(new THREE.CircleGeometry(26, 48), new THREE.MeshStandardMaterial({ color: 0x050403, roughness: 0.08, metalness: 0.6 })); lake.rotation.x = -Math.PI / 2; lake.position.set(4, ground(4, -34) + 0.25, -34); lake.scale.set(1.6, 1, 0.7); g.add(lake); }, 0.6, [0xc8803a, 0x2a1a0c, 0.95]);
       // the grey moon: dust, hard light, a torn piece of hull
       mk('medic', 0x8a8a90, 1, (g) => { const h = new THREE.Mesh(new THREE.BoxGeometry(5, 3.2, 0.25), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); h.position.set(-3.5, 1.2, -4); h.rotation.set(0.2, 0.5, 0.35); g.add(h); rock(g, 0.9, 4, 0.2, -5, 0x77777c); rock(g, 0.5, 2, 0.1, -2.5, 0x77777c); rock(g, 2.6, -11, 0.7, -14, 0x6c6c72); rock(g, 6, 22, 2, -44, 0x64646a); rock(g, 0.35, -1.5, 0.08, 1.2, 0x808086); }, 1, [0x8088a0, 0x18181c, 0.35]);
       // the asteroid: bare tumbling rock, nothing else but stars
       mk('explorer', 0x4a4640, 1, (g) => { rock(g, 2.4, -5, 0.6, -6, 0x55504a); rock(g, 1.1, 4, 0.3, -3, 0x55504a); rock(g, 5, 14, 9, -40, 0x3c3a36); rock(g, 3, -22, 14, -60, 0x3c3a36); rock(g, 0.6, 2, 0.15, 1, 0x55504a); rock(g, 1.6, 9, 4, -22, 0x3c3a36); rock(g, 0.9, -12, 7, -30, 0x3c3a36); rock(g, 2.2, 30, 18, -80, 0x33312e);
         // billions of years on: the sun she sees is an old red one, big and dim, with a faint glow round it
-        const old = new THREE.Mesh(new THREE.SphereGeometry(24, 32, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 0.42, 0.16) })); old.position.set(30, 270, -120); g.add(old);
-        const glow = new THREE.Mesh(new THREE.SphereGeometry(40, 32, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.1, 0.03), transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending })); glow.position.copy(old.position); g.add(glow); }, 0.25, [0x6a7890, 0x101014, 0.4]);
+        g.add(oldSun(V(30, 270, -120), 24)); }, 0.25, [0x6a7890, 0x101014, 0.4]);
       // Shardrift: split cliffs, old metal
       mk('builder', 0x5a4636, 1, (g) => { rock(g, 9, -15, 5, -12, 0x4a392c); rock(g, 12, 19, 7, -16, 0x4a392c); rock(g, 6, 0, 2, -20, 0x3a2c22); rock(g, 1.1, 3.5, 0.3, -2.5, 0x4a392c);
         // old metal in the split: ribs of something that was built here long ago
@@ -745,7 +872,10 @@ export class Montage {
       const c = this.act(id, o.clone().add(V(0, 0.02, 0)), q(0, yaw), pose, null, ph < 9 ? { blink: eyes, frown: 0.3 * (1 - breath) } : face);
       if (ph < 9) c.look2(0, 0.35); // still, head down
       else if (ph < 14) c.look2(-yaw * 0.6, 0.45); // looking at themself: the check
-      else c.setLookTarget(head.clone().add(V(sky0.x * 10, sky0.y * 10, sky0.z * 10))); // their sky
+      // their sky: it is behind them as we see them (the camera is in front), out of the neck's reach for a look-at, so
+      // the head tips up by the sky's own height; the check's head-down (look2 0.45) used to stay on and Bolzar looked
+      // at his feet in I6
+      else { c.setLookTarget(null); c.look2(0, -clamp(Math.asin(sky0.y) + 0.12, 0.15, 0.5)); }
       if (ph >= 9 && ph < 9.2 && !c.task) c.doTask(CHECK[id], { seconds: 5 * BEAT * 0.9, hands: 'R', prop: id === 'social' ? 'phone' : null });
       this.embers.set({ at: o.clone().add(V(0, 0.3, 0)), c0: col, c1: 0x202020, life: 1.6, speed: 5, drag: 1.4, grav: id === 'explorer' ? 0 : -2, size: 0.06, grow: 0.4, stagger: 0.1 }).play(tt);
     }
@@ -1014,8 +1144,11 @@ export class Montage {
         ship.group.visible = false;
         const eu = o.spin ? o.spin(b) : new THREE.Euler(-1.1, 0, 0);
         const t = b * BEAT;
-        const c = this.act(id, V(nz(t * 2.6, n) * 0.3, -0.9 + nz(t * 2.2, n + 3) * 0.3, nz(t * 2, n + 6) * 0.25), new THREE.Quaternion().setFromEuler(eu), 'float', flail(FALL[id], t, n * 4.3, o.thrash ?? 0.8), FACE[id]);
-        c.look2(nz(t * 2.7, n + 1) * 0.8, nz(t * 2.1, n + 2) * 0.3);
+        // H3: each one's own reaction to falling, played across the single (k 0 to 1), a beat of shock first
+        const [body, face, look] = this.fallReact(id, k, t, n, o.thrash ?? 0.8);
+        const c = this.act(id, V(nz(t * 2.6, n) * 0.3, -0.9 + nz(t * 2.2, n + 3) * 0.3, nz(t * 2, n + 6) * 0.25), new THREE.Quaternion().setFromEuler(eu), 'float', body, face);
+        if (look === 'hole') { c.setLookTarget(V(30 * o.dir.x, 30 * o.dir.y, -70)); c.look2(0, 0); }
+        else { c.setLookTarget(null); c.look2(look[0], look[1]); }
         const col = id === 'scientist' ? this.playerGlow() : TRAIL[id];
         const h = c.chest.getWorldPosition(tmp).clone();
         const cam = this.lens(o.cam(k).add(shakeAt(b, 0.012, this.tmp2)), o.aim ?? h, o.fov ?? 32, 3.2, 0.006, o.roll ? o.roll(k) : 0);

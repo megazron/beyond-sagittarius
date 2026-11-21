@@ -633,7 +633,10 @@ export class Cinematic {
     shotAt(S + 44.8, S + 49.0, {
       update: (k, local) => {
         yoke(local, 0.8 + 0.2 * smoothstep(0.5, 3.5, local));
-        lens(35); const g = ins.stick.getWorldPosition(new THREE.Vector3()); this.camera.position.copy(ins.cockpit.position).add(V(0.5, -0.98, -1.08)); this.lookTarget.copy(g).add(V(0, 0.02, 0.14)); // both hands, her chest and jaw above them
+        // from just over the glare shield, a little right of the column: both horns and both hands clear of the hub, her
+        // face above them in the same frame (the camera sits between the shield's back edge, z -1.15, and the yoke)
+        lens(26); const g = ins.stick.getWorldPosition(new THREE.Vector3()), hp = head(this.pilot, -0.1);
+        this.camera.position.copy(ins.cockpit.position).add(V(0.17, -0.9, -1.07)); this.lookTarget.copy(g).lerp(hp, 0.4);
         this.pilot.setFace({ frown: 0.75, squint: 0.5, open: Math.max(0, Math.sin(local * 2.4)) * 0.25 }); this.pilot.setLookTarget(ins.cockpit.position.clone().add(V(0, -0.7, -3)));
         this.shake = 0.008;
       },
@@ -731,12 +734,14 @@ export class Cinematic {
     // (by crew index, resolved per frame: the figures are swapped after this is built)
     const F4: [number, Face][] = [[1, { frown: 0.7, open: 0.1 }], [2, { fear: 0.5, open: 0.35 }], [3, { smile: 0.4, fear: 0.5 }], [4, { fear: 0.6, squint: 0.3 }], [5, { fear: 0.7, open: 0.2 }]];
     F4.forEach(([ci, face], i) => shotAt(S + 79.0 + i * 1.1, S + 80.1 + i * 1.1, {
-      enter: () => { group(); only(intr.crew[ci]); intr.crew[ci].root.rotation.y = Math.PI - 0.5; }, // facing the glass, turned a little to the lens
+      // facing the glass, turned a little to the lens; Lyrra (i 1) turned further and shot more from the front, or her
+      // hair (it hangs on the lens side) hides her face
+      enter: () => { group(); only(intr.crew[ci]); intr.crew[ci].root.rotation.y = Math.PI - (i === 1 ? 0.85 : 0.5); },
       update: (k, local) => {
         const c = intr.crew[ci];
-        lens(85); const h = head(c, -0.12); this.camera.position.copy(h).add(V(1.05, -0.05, -0.55)); this.lookTarget.copy(h);
+        lens(85); const h = head(c, -0.12); this.camera.position.copy(h).add(i === 1 ? V(0.72, -0.05, -0.92) : V(1.05, -0.05, -0.55)); this.lookTarget.copy(h);
         // each looks straight out through the glass, a little towards the lens side: screen right
-        const out = h.clone().add(V(0.6, 0.2, -4));
+        const out = h.clone().add(i === 1 ? V(-1.2, 0.2, -4) : V(0.6, 0.2, -4)); // Lyrra's lens is more frontal: her look goes further screen right to match
         c.setLookTarget(out); c.setFace(i === 2 ? { smile: 0.4 * (1 - smoothstep(0.3, 0.7, local)), fear: 0.6 * smoothstep(0.4, 0.9, local) } : face);
         if (i === 3) c.setLookTarget(local > 0.5 ? h.clone().add(V(-2, -1.2, 1)) : out); // Bolzar looks away
         if (i === 4) this.pullPose.social = local < 0.5 ? 'selfie' : undefined as unknown as CrewPose; // Nuvexa lowers the phone
