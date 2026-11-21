@@ -306,6 +306,13 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       }
       kitBox('kit', cx, top, cz, ww * 0.4, 4, dd * 0.4, 0x8a8f96, cx, cz);
       kitBox('kit', cx, top + 4, cz, 0.4, 14, 0.4, 0xd0d4d8, cx, cz); // a mast
+      // a crown: a lit band under the roof line (how a skyline is read at dusk) and a red beacon on the mast for aircraft
+      if (tier > 0) {
+        for (const [bx, bz, bw2, bd2] of [[cx, cz - dd / 2 - 0.05, ww, 0.1], [cx, cz + dd / 2 + 0.05, ww, 0.1], [cx - ww / 2 - 0.05, cz, 0.1, dd], [cx + ww / 2 + 0.05, cz, 0.1, dd]]) {
+          const g = new THREE.BoxGeometry(bw2, 0.35, bd2).toNonIndexed(); g.translate(bx, top - 1.6, bz); put('lamp', cx, cz, g);
+        }
+        kitBox('kit', cx, top + 18, cz, 0.5, 0.5, 0.5, 0x9a1a10, cx, cz);
+      }
     } else {
       // a parapet round the roof, and what lives up there: plant rooms, water tanks, AC units
       const pc = finish === 'glass' ? 0x9aa0a8 : 0xd8d0c4;
