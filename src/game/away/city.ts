@@ -1106,7 +1106,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     lastCam = cam.position;
     const cards = dense.cards, taken = dense.taken, c = cam.position;
     near.length = 0;
-    for (let i = 0; i < cards.length; i++) { const d = Math.hypot(cards[i].x - c.x, cards[i].z - c.z); if (d < TAKE * (taken[i] ? 1.15 : 1)) near.push([d, i]); }
+    // a card in the lens (on the line from the camera to you) would be hidden as a body too: the body goes to the next one
+    for (let i = 0; i < cards.length; i++) { const d = Math.hypot(cards[i].x - c.x, cards[i].z - c.z); if (d < TAKE * (taken[i] ? 1.15 : 1) && !inLens(cards[i].x, cards[i].z)) near.push([d, i]); }
     near.sort((a, b) => a[0] - b[0]);
     cardsNear = 0; for (const [d] of near) if (d < 10) cardsNear++;
     const want = new Set(near.slice(0, Math.min(POOL, budget)).map(([, i]) => i));
