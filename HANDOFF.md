@@ -37,3 +37,12 @@ See the end of this file for the running log.
   contact sheet, `round.sh NAME` = build + all clips + play test. Gates: `~/bs-cap/combat/gates.sh OUTDIR`.
 - Not landed yet. Next: look at every clip, fix what feels wrong, gates, fast-forward main, Pages, clips to
   `Downloads/BS_Game_v1.1/combat/`.
+- 03:40 (new agent) Round r2 watched (clips in `~/bs-cap/combat/r2`). Fixed: the arena guardian woke in the melee bench
+  and the camera ended up inside it (now 70 m off, boss bar only within 40 m, bodies round the camera hidden); attack
+  strips stood up like signs on slopes (tilt clamped, minimum length); stomp/warn rings drew a thick band near the
+  lens (fixed-width edge); coil and crossbow pointed up out of the thumb (now along the forearm); the sling pose was a
+  straight arm over the head; analysis card kept popping up while aiming (now once); the dusk fire burned to a third
+  before the night started (burns slowly in prep); the chase hunter was never on screen (pale/red edge arrow); hunt
+  prey invisible in long grass (small suit tags over known animals in hunt and stealth). Recording bot: E presses
+  now real key events (the night clip never fed the fire), melee clip fights a Duskhound with the club, ranged clip
+  gets to the bow, tour starts on land.
