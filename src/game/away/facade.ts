@@ -183,6 +183,11 @@ export function facadeMaterial(o: FacadeOpts = {}) {
           float fx2 = smoothstep(lo.x - 0.05 - aa, lo.x - 0.05 + aa, fx) * smoothstep(hi.x + 0.05 + aa, hi.x + 0.05 - aa, fx);
           float fy2 = smoothstep(lo.y - 0.04 - aa, lo.y - 0.04 + aa, fy) * smoothstep(hi.y + 0.04 + aa, hi.y + 0.04 - aa, fy);
           fFrame = clamp(fx2 * fy2 - fWin - fReveal, 0.0, 1.0) * (style > 0.5 ? 0.6 : 1.0);
+          // far off, a window is smaller than a pixel: its hard edge would shimmer as the camera moves, so the pane
+          // becomes its share of the bay (the wall reads as a tone of glass and lit rooms, not as noise)
+          { float px = fwidth(u / bw) + fwidth(v / fh), far = smoothstep(0.22, 0.55, px);
+            float cov = clamp((hi.x - lo.x) * (hi.y - lo.y), 0.0, 1.0);
+            fWin = mix(fWin, cov, far); fReveal *= 1.0 - far; fFrame *= 1.0 - far; }
           // a mullion down the middle of the punched windows
           float mull = (style < 0.5 && !street) ? (1.0 - smoothstep(0.012, 0.012 + aa, abs(fx - 0.5))) * fWin : 0.0;
           // ---- the room behind the glass (interior mapping): a box as deep as the bay is wide, seen through the pane ----

@@ -258,6 +258,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
         const [tx, tz] = at(1.9, side + k * 1.6);
         kitGeo('kit', new THREE.CylinderGeometry(0.36, 0.36, 0.04, 12).translate(tx, FLOOR + 0.74, tz), 0xe8e2d6, fx, fz);
         kitGeo('kit', new THREE.CylinderGeometry(0.04, 0.05, 0.72, 6).translate(tx, FLOOR + 0.37, tz), 0x2a2a2a, fx, fz);
+        solid(tx - 1.15, tz - 1.15, tx + 1.15, tz + 1.15, 0.8); // the table and its chairs: you walk round them
         for (const c of [-1, 1]) {
           const [cxx, czz] = at(1.9, side + k * 1.6 + c * 0.72);
           kitBox('kit', cxx, FLOOR + 0.42, czz, 0.4, 0.05, 0.4, 0x5a3a24, fx, fz);
