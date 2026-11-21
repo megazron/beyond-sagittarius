@@ -1523,7 +1523,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           if (d < 9 && inLens(q.pos.x, q.pos.z)) { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           // the six of the story and Mir have no card of their own look: they stay themselves (a body) out to 90 m
           if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = tier > 0 && d < 90; /* phones: within the body cap, so not past the card range */ if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; }
-          if (d >= CROWD_FAR) { if (q.fig.root.visible) q.fig.root.visible = false; stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: lookOf.get(q.fig) ?? i, yaw: q.yaw, walk: !!q.walk }); continue; }
+          if (d >= CROWD_FAR) { if (q.fig.root.visible) q.fig.root.visible = false; stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: i, v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk }); continue; }
           // the six of the story (and Mir) are never a card within speaking distance, whatever the cap
           const dy = you ? Math.hypot(q.pos.x - you.position.x, q.pos.z - you.position.z) : 99;
           if (!crowd.has(q.fig) && (d < 9 || dy < 7)) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
@@ -1540,7 +1540,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         for (let j = 0; j < nc; j++) {
           // the one person at your elbow is a body even when the cap is spent (one over it at most)
           const q = people[candI[j]], show = used < cap || (j === 0 && candK[0] < -20);
-          if (show) used++; else stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: lookOf.get(q.fig) ?? candI[j], yaw: q.yaw, walk: !!q.walk });
+          if (show) used++; else stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: candI[j], v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
           if (show !== q.fig.root.visible) q.fig.root.visible = show;
         }
         bodiesLeft = Math.max(0, (outroT >= 0 ? 99 : BODY_CAP) - used);

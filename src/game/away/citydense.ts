@@ -10,7 +10,8 @@ import { nearFade } from '../../core/nearfade';
  */
 
 export interface Facade { side: number; z0: number; z1: number; h: number }
-export interface StandIn { x: number; y: number; z: number; h: number; k: number; yaw?: number; walk?: boolean }
+/** k: who it is (an index of the caller's); v: which baked look it wears (k if not given). */
+export interface StandIn { x: number; y: number; z: number; h: number; k: number; v?: number; yaw?: number; walk?: boolean }
 export interface DenseOpts { /** Where what is seen from the whole city goes (the stand-in cards). */ top?: THREE.Object3D; rich: boolean; FRONT: number; S: number; N: number; facades: Facade[] }
 
 let seed = 4242;
@@ -206,7 +207,7 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
           E2.set(0, a, 0); Q2.setFromEuler(E2);
           const k = q.h / 1.72;
           P2.set(q.x, q.y, q.z); if (imp) S2.set(1.1 * k, 2.0 * k, 1); else S2.set(q.h * 0.42, q.h, 1);
-          if (imp) tileOf(o2, n, q.k, a - (q.yaw ?? 0), q.walk ? time * 1.7 + q.k : -1);
+          if (imp) tileOf(o2, n, q.v ?? q.k, a - (q.yaw ?? 0), q.walk ? time * 1.7 + q.k : -1);
           si.setMatrixAt(n++, M2.compose(P2, Q2, S2));
         }
         si.count = n; si.instanceMatrix.needsUpdate = true; if (imp) t2.needsUpdate = true;
