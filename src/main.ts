@@ -953,6 +953,8 @@ window.addEventListener('resize', () => {
   stageInfo() { return renderer.stageInfo(); },
   /** Test hook: the WebGLRenderer, for tools that count what each draw call is (tools/frame_time.py --census). */
   get gl() { return renderer.renderer; },
+  /** The renderer wrapper (post chain, resolution), for GPU experiments in tools/gpu_tour.py plans. */
+  get rnd() { return renderer; },
   goAway(id: CrewId, loc: string) { game?.goAway(id, loc); },
   get away() { const a = game?.away; return a?.active ? { who: a.who, next: a.next?.id ?? null, done: [...a.done], pos: a.position?.toArray() } : null; },
   get revealDue() { return !!game?.revealDue; },

@@ -97,7 +97,9 @@ export class Environment {
   update(renderer: THREE.WebGLRenderer, time: number, ground: THREE.Color): THREE.Texture | null {
     const s = this.sky;
     const moved = this.lastSun.distanceToSquared(s.sunDir) > 0.0004;
-    const interval = this.q.name === 'mobile' ? 4 : this.q.name === 'web' ? 1 : 0.5;
+    // a capture is six sky renders and a GGX filter of 256 samples a texel per mip: a spike in the frame each time, so
+    // only every few seconds (the sky moves by a fraction of a degree in that time)
+    const interval = this.q.name === 'mobile' ? 6 : this.q.name === 'web' ? 3 : 1.5;
     if (!this.dirty && !(moved && time - this.lastCapture > interval)) return this.texture;
     const u = this.uniforms;
     u.uZenith.value.copy(s.zenith);
