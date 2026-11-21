@@ -604,7 +604,8 @@ export class Game {
       }
     }
     // Medic memory when first approaching fruit
-    if (!s.flags.medicHint) {
+    // (in level 2 the red fruit's own scene teaches this, so the general hint waits for it)
+    if (!s.flags.medicHint && (s.level !== 2 || s.flags['e1.fruitSeen'])) {
       for (const it of this.world.items.items) {
         if ((it.type === 'fruit' || it.type === 'redFruit') && it.active && it.pos.distanceTo(p.pos) < 9) {
           s.flags.medicHint = true;

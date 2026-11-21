@@ -100,8 +100,10 @@ export class Waking {
   update() {
     const s = this.s;
     if (s.level !== 1 || s.flags['e1.listen'] || s.flags.drank) return;
+    // once he has left the wake spot and the water is near enough to hear, not yet in sight at his feet
+    if (Math.hypot(this.player.pos.x, this.player.pos.z) < 9) return;
     const d = this.stream.nearest(this.player.pos, this.v);
-    if (d > 42 || d < 14) return;
+    if (d > 30 || d < 8) return;
     s.flags['e1.listen'] = true;
     const z = this.z, at = this.v.clone();
     const lakeward = this.player.pos.clone().lerp(at, 0.6).add(new THREE.Vector3(0, -1.5, 0));
