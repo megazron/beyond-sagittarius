@@ -1288,6 +1288,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // under the title card, before you arrive (prebake, called by Renderer.precompile)
   const makeBaker = () => impostorBaker(Renderer.current!.renderer, bakeBodies, tier === 0 ? [72, 128] : [124, 224], () => scene.environment, tier === 0 ? 4 : 8, tier === 0 ? 2 : 8, tier === 0 ? 14 : 7);
   scene.userData.prebake = async () => {
+    refreshEnv(); // its blur's program compiles here, under the title card, not 30 s into play (a 0.2 s freeze)
     const all = Promise.all(bakeBodies.map((b) => b.whenReady)).then(() => true);
     if (!(await Promise.race([all, new Promise<boolean>((r) => setTimeout(() => r(false), 6000))])) || !Renderer.current || bakeBodies.length < 4) return;
     baker ??= makeBaker();
