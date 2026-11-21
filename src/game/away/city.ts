@@ -1220,6 +1220,16 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
 
   // far people are pictures of real bodies (impostor.ts): eight townsfolk baked into one atlas while you are in the flat
   const bakeBodies = dpool.slice(0, NLOOK).map((b) => b.fig); // variant v of the atlas is look v
+  // a row a frame in play (half a row on phones), so the bake never shows in the frame time; but normally it is all done
+  // under the title card, before you arrive (prebake, called by Renderer.precompile)
+  const makeBaker = () => impostorBaker(Renderer.current!.renderer, bakeBodies, tier === 0 ? [72, 128] : [124, 224], () => scene.environment, tier === 0 ? 4 : 8, tier === 0 ? 2 : 8, tier === 0 ? 14 : 7);
+  scene.userData.prebake = async () => {
+    const all = Promise.all(bakeBodies.map((b) => b.whenReady)).then(() => true);
+    if (!(await Promise.race([all, new Promise<boolean>((r) => setTimeout(() => r(false), 6000))])) || !Renderer.current || bakeBodies.length < 4) return;
+    baker ??= makeBaker();
+    await Promise.all(bakeBodies.map((b) => b.whenReady)); // the baker counts them ready in its own callbacks, which run first
+    for (let i = 0; i < 2000 && !baker.done; i++) if (baker.step()) dense.setAtlas(baker.texture, baker.cols, baker.rows, baker.variants, baker.views);
+  };
   let baker: ReturnType<typeof impostorBaker> | null = null;
   // experimental (?probe=1), Web and Ultra: wet ground and glass reflect the street, not just the sky (probe.ts)
   let probe: ReturnType<typeof cityProbe> | null = null;
@@ -1482,7 +1492,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       // the cards take the light of the hour: the sky's fill and what is left of the sun
       cardLight.copy(hemi.color).multiplyScalar(hemi.intensity * 0.42).add(TMP_C.copy(sun.color).multiplyScalar(sun.intensity * 0.16)).addScalar(0.1 * day.state.night);
       dense.setLight(cardLight);
-      if (!baker && Renderer.current && bakeBodies.length >= 4) baker = impostorBaker(Renderer.current.renderer, bakeBodies, tier === 0 ? [72, 128] : [124, 224], () => scene.environment, tier === 0 ? 4 : 8, tier === 0 ? 2 : 8, tier === 0 ? 14 : 7); // a row a frame (half a row on phones): the bake never shows in the frame time
+      if (!baker && Renderer.current && bakeBodies.length >= 4) baker = makeBaker();
       if (baker && !baker.done && baker.step()) dense.setAtlas(baker.texture, baker.cols, baker.rows, baker.variants, baker.views);
       poolM.opacity = 0.08 + 0.72 * day.state.night;
       if (cam) {

@@ -749,6 +749,8 @@ export class Renderer {
       finally { this.renderer.setRenderTarget(prev2); this.renderer.shadowMap.autoUpdate = shadows; for (const o of culled) o.frustumCulled = true; tiny.dispose(); }
       await new Promise((r) => requestAnimationFrame(r));
     }
+    // a stage's own work that belongs under the black too (Zenvora bakes its far people here)
+    try { await (scene.userData.prebake as (() => Promise<void>) | undefined)?.(); } catch { /* done in play instead */ }
     const texs = new Set<THREE.Texture>();
     scene.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
