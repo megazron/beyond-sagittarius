@@ -352,6 +352,83 @@ class DofPass extends Pass {
 }
 
 /**
+ * Screen-space reflections on wet ground (a stage turns it on with scene.userData.ssr = strength 0..1). For a pixel of
+ * ground (its normal, from the depth of its neighbours, points up) the reflected ray is marched through the depth
+ * buffer; where it meets something on screen, that pixel's colour is laid over the ground by a Fresnel term, strongest
+ * in the puddles (the same world-space noise as the wet material, so the mirror sits where the puddle is). Lit signs,
+ * shop windows and car lamps then show in the street; what is off screen falls back to the material's own sky mirror.
+ */
+class SsrPass extends Pass {
+  private mat: THREE.ShaderMaterial;
+  private quad: FullScreenQuad;
+  camera: THREE.Camera | null = null;
+  strength = 0;
+
+  constructor(depth: THREE.Texture, steps: number) {
+    super();
+    this.mat = fullscreen({
+      tDiffuse: { value: null }, tDepth: { value: depth }, uTexel: { value: new THREE.Vector2() },
+      uProj: { value: new THREE.Matrix4() }, uInvProj: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, uStrength: { value: 0 },
+    }, /* glsl */ `
+      uniform sampler2D tDiffuse; uniform vec2 uTexel; uniform mat4 uProj; uniform float uStrength;
+      ${RECONSTRUCT}
+      varying vec2 vUv;
+      float wH(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+      float wN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(wH(i), wH(i + vec2(1, 0)), f.x), mix(wH(i + vec2(0, 1)), wH(i + vec2(1, 1)), f.x), f.y); }
+      void main(){
+        vec3 col = texture2D(tDiffuse, vUv).rgb;
+        float z = texture2D(tDepth, vUv).r;
+        gl_FragColor = vec4(col, 1.0);
+        if (z >= 1.0) return;
+        vec3 P = viewAt(vUv, z);
+        if (-P.z > 90.0) return;
+        // the normal from the nearer neighbour on each axis (no smearing across an edge)
+        vec3 Px1 = viewAt(vUv + vec2(uTexel.x, 0.0), texture2D(tDepth, vUv + vec2(uTexel.x, 0.0)).r) - P;
+        vec3 Px2 = P - viewAt(vUv - vec2(uTexel.x, 0.0), texture2D(tDepth, vUv - vec2(uTexel.x, 0.0)).r);
+        vec3 Py1 = viewAt(vUv + vec2(0.0, uTexel.y), texture2D(tDepth, vUv + vec2(0.0, uTexel.y)).r) - P;
+        vec3 Py2 = P - viewAt(vUv - vec2(0.0, uTexel.y), texture2D(tDepth, vUv - vec2(0.0, uTexel.y)).r);
+        vec3 N = normalize(cross(abs(Px1.z) < abs(Px2.z) ? Px1 : Px2, abs(Py1.z) < abs(Py2.z) ? Py1 : Py2));
+        vec3 Nw = (uCamWorld * vec4(N, 0.0)).xyz;
+        if (Nw.y < 0.0) { N = -N; Nw = -Nw; }
+        if (Nw.y < 0.94) return;
+        vec3 W = (uCamWorld * vec4(P, 1.0)).xyz;
+        float pud = smoothstep(0.52, 0.62, wN(W.xz * 0.16) * 0.7 + wN(W.xz * 0.7) * 0.3);
+        vec3 V = normalize(P), R = reflect(V, N);
+        float cosT = clamp(dot(-V, N), 0.0, 1.0), fres = 0.04 + 0.96 * pow(1.0 - cosT, 5.0);
+        float k = uStrength * mix(0.25, 1.0, pud) * mix(0.3, 1.0, fres);
+        if (k < 0.01 || R.z > 0.6) return;
+        // march: steps that grow with distance, jittered per pixel, then one refinement
+        float stp = 0.35 + 0.02 * -P.z, jit = wH(vUv * 913.0 + 0.37);
+        vec3 Q = P + R * stp * jit; vec2 hit = vec2(-1.0); float travelled = 0.0;
+        for (int i = 0; i < STEPS; i++) {
+          Q += R * stp; travelled += stp; stp *= 1.18;
+          vec4 c = uProj * vec4(Q, 1.0); vec2 uv = c.xy / c.w * 0.5 + 0.5;
+          if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) break;
+          float sz = viewAt(uv, texture2D(tDepth, uv).r).z;
+          float dz = sz - Q.z; // > 0: the ray is behind the surface seen there
+          if (dz > 0.0 && dz < stp * 2.0 + 0.4) { hit = uv; break; }
+        }
+        if (hit.x < 0.0) return;
+        vec2 edge = smoothstep(0.0, 0.08, hit) * smoothstep(1.0, 0.92, hit);
+        float fade = edge.x * edge.y * (1.0 - smoothstep(30.0, 60.0, travelled));
+        vec3 refl = min(texture2D(tDiffuse, hit).rgb, vec3(8.0));
+        gl_FragColor = vec4(col + (refl - col * 0.6) * k * fade * 0.6, 1.0);
+      }`, { STEPS: steps });
+    this.quad = new FullScreenQuad(this.mat);
+  }
+
+  setSize(w: number, h: number) { this.mat.uniforms.uTexel.value.set(1 / w, 1 / h); }
+
+  render(r: THREE.WebGLRenderer, write: THREE.WebGLRenderTarget, read: THREE.WebGLRenderTarget) {
+    const cam = this.camera as THREE.PerspectiveCamera, u = this.mat.uniforms;
+    u.tDiffuse.value = read.texture; u.uStrength.value = this.strength;
+    u.uProj.value.copy(cam.projectionMatrix); u.uInvProj.value.copy(cam.projectionMatrixInverse); u.uCamWorld.value.copy(cam.matrixWorld);
+    r.setRenderTarget(this.renderToScreen ? null : write);
+    this.quad.render(r);
+  }
+}
+
+/**
  * Temporal anti-aliasing and camera motion blur (Cinematic preset). Both
  * reproject pixels through depth and last frame's view-projection.
  */
@@ -482,6 +559,7 @@ export class Renderer {
   aoHidden: THREE.Object3D[] = [];
   private volumetric: VolumetricPass | null = null;
   private dof: DofPass | null = null;
+  private ssr: SsrPass | null = null;
   private temporal: TemporalPass | null = null;
   private frameTimes: number[] = [];
   private lastAdjust = 0;
@@ -549,6 +627,11 @@ export class Renderer {
       }
       this.composer.addPass(this.ao);
     }
+    if (depth && (quality.name === 'ultra' || quality.name === 'cinematic')) {
+      this.ssr = new SsrPass(depth, quality.name === 'cinematic' ? 32 : 20);
+      this.ssr.enabled = false;
+      this.composer.addPass(this.ssr);
+    }
     if (depth && quality.volumetricScale > 0) {
       this.volumetric = new VolumetricPass(depth, quality.volumetricScale, quality.volumetricSteps, quality.pcss);
       this.composer.addPass(this.volumetric);
@@ -598,6 +681,7 @@ export class Renderer {
     if (this.volumetric) this.volumetric.camera = camera;
     if (this.dof) this.dof.camera = camera;
     if (this.temporal) this.temporal.camera = camera;
+    if (this.ssr) this.ssr.camera = camera;
   }
 
   /** What is on stage and through which lens: the offline film renderer reads this. */
@@ -669,6 +753,7 @@ export class Renderer {
   render(dt: number, time: number) {
     this.final.uniforms.uTime.value = time;
     if (this.volumetric) this.volumetric.source = (this.renderPass.scene.userData.post as PostSource | undefined) ?? null;
+    if (this.ssr) { const k = (this.renderPass.scene.userData.ssr as number | undefined) ?? 0; this.ssr.strength = k; this.ssr.enabled = k > 0.01 && this.shed < 1; }
     const cam = this.renderPass.camera as THREE.PerspectiveCamera;
     const jittered = !!this.temporal && this.quality.taa && cam.isPerspectiveCamera;
     if (jittered) {

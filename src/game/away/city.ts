@@ -15,6 +15,7 @@ import { mergeChildren, passMaps, watchChanges, atlasCanvases } from '../../core
 import { buildDistricts, inOld, BOUNDS as DIST_BOUNDS } from './districts';
 import { navGrid } from './navgrid';
 import { impostorBaker } from './impostor';
+import { FACADE } from './facade';
 import { cityProbe } from './probe';
 import { carKit } from './cars';
 import { dayCycle, skyMaterial, wetify } from './daycycle';
@@ -1429,6 +1430,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (oldOn) drive(dt, time);
       dist.update(dt, time, cam ?? null, you ? you.position : null, deep);
       if (day.update(dt, time, cam ?? null) && !probe?.ready) refreshEnv();
+      // wet streets mirror the signs and the windows (Ultra's screen-space reflections, renderer.ts): damp after the evening's wash, soaked in rain
+      scene.userData.ssr = tier === 2 ? Math.min(1, 0.25 + FACADE.wet.value * 0.9 + 0.15 * day.state.night) : 0;
       if (tier > 0 && cam && Renderer.current && !NOPROBE) {
         probe ??= cityProbe(Renderer.current.renderer, scene, { size: tier === 2 ? 128 : 64, every: tier === 2 ? 5 : 14, hide: () => scene.children.filter((o) => o.userData.isCharacter) });
         const e = probe.step(cam.position);
