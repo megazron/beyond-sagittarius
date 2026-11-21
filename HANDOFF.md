@@ -46,3 +46,11 @@ See the end of this file for the running log.
   prey invisible in long grass (small suit tags over known animals in hunt and stealth). Recording bot: E presses
   now real key events (the night clip never fed the fire), melee clip fights a Duskhound with the club, ranged clip
   gets to the bow, tour starts on land.
+- 04:55 Rounds r3, r4 watched. Melee now shows a real duel (club vs Duskhound: leap, roll, guard). A headless probe
+  (`~/bs-cap/combat/probe/night_probe.py`) showed the night's scavengers idling 37 to 50 m out all night: their home
+  was 44 m from the fire and their nose is 26 m, so in the real world nothing ever came. Home is now 21 m out. Not yet
+  seen on the GPU after that fix. Still below the bar: chase and night too dark to read (world lighting, not mine),
+  first-hunt bot keeps missing, guardian is plain boxes. Clips and an honest list in
+  `Downloads/BS_Game_v1.1/combat/` (README_review.txt). Gates run: `~/bs-cap/combat/g1/summary.log`.
+- The recording plans: `python3 mkplan.py` in `~/bs-cap/combat`; `round3.sh NAME PLAN` = build + record + join.
+  Heavy queue can stall for 30 min behind other agents' exclusive jobs; do not kill other agents' jobs.
