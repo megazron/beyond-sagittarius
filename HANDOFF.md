@@ -121,3 +121,12 @@ See the end of this file for the running log.
   city build was forty heads of hair); forest LODs that start beyond the shadow range cast no shadow; far forest LODs
   (1, 2) culled by 32 bearing sectors round the camera (?cull=0 turns it off); townsfolk: 12 seeded looks on desktops
   (8 on phones), none in the white coat (custom.ts townLook), impostor atlas in bands (impostor.ts/citydense.ts).
+- 16:45 FINDING: Chrome on 9444 (ttr-creative-chrome) and the story agent's 9334 render on the INTEL iGPU (ANGLE Intel
+  D3D11), not the A500: the game's powerPreference 'high-performance' is not honoured by Chrome on this laptop without
+  --force-high-performance-gpu. My 9446 instance has that flag: ANGLE NVIDIA RTX A500 (check with
+  ~/bs-assets/gpu/gpuname.py PORT). All my plans now use port 9446. The owner's own Chrome may well be on the iGPU too
+  (Windows Settings > System > Display > Graphics > Chrome > High performance fixes it); the desktop build already
+  forces the dGPU (electron/main.js).
+- Planet census on the A500 (Web, wake spot): items.group (stones, sticks, fruit, story items) was 217-516 draws a frame
+  plus 179-263 in the shadow pass; the creature 84+84+56. Now: items past 55 m (Web; 32 phones, 75 Ultra) not drawn,
+  shadows only within 28 m, creature body merged: forest spot 1206 -> 594 draws, wake 1233 -> 876.
