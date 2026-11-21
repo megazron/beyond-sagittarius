@@ -300,6 +300,51 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       kitBox('metal', px + nx * 0.58, y + 0.04, pz + nz * 0.58, along ? w : 0.05, 1.0, along ? 0.05 : d, 0x30343a, x0, z0);
     }
   };
+  /**
+   * The street wall in relief: a sill course under every row of windows, pilasters between the bays, a deeper cornice
+   * and, now and then, a set-back top floor or a pitched roof, so a street of buildings has edges, shadows and a
+   * skyline instead of flat boxes. Only the face to the street (the courtyard sides are never seen).
+   */
+  const relief = (x0: number, z0: number, x1: number, z1: number, nx: number, nz: number, floors: number, finish: string, fh = 3.2) => {
+    if (finish === 'glass') return;
+    const along = nx === 0, L = along ? x1 - x0 : z1 - z0, c = along ? (x0 + x1) / 2 : (z0 + z1) / 2;
+    const fx = nx > 0 ? x1 : nx < 0 ? x0 : c, fz = nz > 0 ? z1 : nz < 0 ? z0 : c, top = FLOOR + floors * fh;
+    const stone = pick([0xe2d8c8, 0xd0c4b0, 0xbfb6a8, 0xf0e8da, 0x9c8f80]);
+    const k = 'trim';
+    if (tier > 0) {
+      // sills: a thin ledge under each floor's windows, the length of the wall
+      for (let f = 1; f < floors; f++) wallBox(k, fx, fz, nx, nz, FLOOR + f * fh + fh * 0.22, L, 0.1, 0.14, 0.07, stone);
+      // pilasters every other bay, and at both corners
+      const bays = Math.max(1, Math.round(L / 2.7)), bw = L / bays;
+      for (let b = 0; b <= bays; b += 2) wallBox(k, fx, fz, nx, nz, FLOOR + fh, 0.36, top - FLOOR - fh - 0.3, 0.16, 0.08, stone, -L / 2 + Math.min(L - 0.18, Math.max(0.18, b * bw)));
+      // a deeper cornice on brackets at the top
+      wallBox(k, fx, fz, nx, nz, top - 0.55, L + 0.4, 0.25, 0.5, 0.25, stone);
+      wallBox(k, fx, fz, nx, nz, top - 0.8, L, 0.25, 0.24, 0.12, stone);
+    }
+    // the skyline: a pitched roof on the low streets, a set-back top floor on taller ones
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, w = x1 - x0, d = z1 - z0, r = rnd();
+    if (floors <= 7 && r < 0.45) {
+      const ridgeAlongX = along, span = ridgeAlongX ? d : w, len = ridgeAlongX ? w : d, rise = Math.min(4.5, span * 0.32);
+      const g = new THREE.BufferGeometry(), h = span / 2;
+      // a prism: two slopes and two gable ends, ridge along x (rotated for z)
+      const P = [-len / 2, 0, -h, len / 2, 0, -h, len / 2, rise, 0, -len / 2, 0, -h, len / 2, rise, 0, -len / 2, rise, 0,
+        -len / 2, 0, h, len / 2, rise, 0, -len / 2, rise, 0, -len / 2, 0, h, len / 2, 0, h, len / 2, rise, 0,
+        -len / 2, 0, -h, -len / 2, 0, h, -len / 2, rise, 0, len / 2, 0, -h, len / 2, rise, 0, len / 2, 0, h];
+      g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+      if (!ridgeAlongX) g.rotateY(Math.PI / 2);
+      g.translate(cx, top + 0.9, cz); g.computeVertexNormals();
+      kitGeo(k, g, pick([0x8a3b2a, 0x6b4a3a, 0x4a4e58, 0x9a5a3a, 0x3e4248]), cx, cz);
+    } else if (floors > 5 && r < 0.4) {
+      const sw = w * 0.7, sd = d * 0.6;
+      put(`wall_${finish}`, cx, cz, facadeBox(cx - nx * w * 0.1, cz - nz * d * 0.15, sw, sd, top, fh, fh, 2.7, rnd() * 97, 0, pick(tints[finish as 'plaster' | 'brick']), FLOOR));
+    } else if (r < 0.75) {
+      // a water tank on legs
+      const tx = x0 + 2.5 + rnd() * Math.max(0.1, w - 5), tz = z0 + 2.5 + rnd() * Math.max(0.1, d - 5);
+      kitGeo(k, new THREE.CylinderGeometry(1.3, 1.3, 2.4, 10).translate(tx, top + 2.6, tz), 0x6f6a62, cx, cz);
+      kitGeo(k, new THREE.ConeGeometry(1.4, 0.8, 10).translate(tx, top + 4.2, tz), 0x4a4640, cx, cz);
+      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) kitBox(k, tx + a * 0.9, top, tz + b * 0.9, 0.14, 1.4, 0.14, 0x30343a, cx, cz);
+    }
+  };
   const lotsAlong = (a: number, b: number, min: number, max: number) => { const out: [number, number][] = []; for (let u = a; u < b - 1; ) { let w = min + rnd() * (max - min); if (b - (u + w) < min) w = b - u; out.push([u, u + w]); u += w; } return out; };
   const inset = (b: Block) => ({ x0: b.x0 + 6 + PAVE, x1: b.x1 - 6 - PAVE, z0: b.z0 + 6 + PAVE, z1: b.z1 - 6 - PAVE });
   const shopfronts: { x: number; z: number; nx: number; nz: number; w: number; fh: number }[] = [];
@@ -315,12 +360,12 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     const I = inset(b), D = depth[0] + rnd() * (depth[1] - depth[0]);
     for (const [u0, u1] of lotsAlong(I.x0, I.x1, lot[0], lot[1])) for (const [zz0, zz1, nz] of [[I.z0, I.z0 + D, -1], [I.z1 - D, I.z1, 1]] as [number, number, number][]) {
       const fl = floors[0] + Math.floor(rnd() * (floors[1] - floors[0] + 1));
-      building(u0, zz0, u1, zz1, fl, pick(finishes), style); front(u0, zz0, u1, zz1, 0, nz);
+      const fin = pick(finishes); building(u0, zz0, u1, zz1, fl, fin, style); front(u0, zz0, u1, zz1, 0, nz); relief(u0, zz0, u1, zz1, 0, nz, fl, fin);
       if (balc) balconies(u0, zz0, u1, zz1, fl, 0, nz);
     }
     for (const [u0, u1] of lotsAlong(I.z0 + D, I.z1 - D, lot[0], lot[1])) for (const [xx0, xx1, nx] of [[I.x0, I.x0 + D, -1], [I.x1 - D, I.x1, 1]] as [number, number, number][]) {
       const fl = floors[0] + Math.floor(rnd() * (floors[1] - floors[0] + 1));
-      building(xx0, u0, xx1, u1, fl, pick(finishes), style); front(xx0, u0, xx1, u1, nx, 0);
+      const fin = pick(finishes); building(xx0, u0, xx1, u1, fl, fin, style); front(xx0, u0, xx1, u1, nx, 0); relief(xx0, u0, xx1, u1, nx, 0, fl, fin);
       if (balc) balconies(xx0, u0, xx1, u1, fl, nx, 0);
     }
   };
@@ -477,7 +522,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   // under every lamp, and spilling out of every shop window on to its pavement
   const spills = shopfronts.map((sf) => new THREE.Vector3(sf.x + sf.nx * 2.2, FLOOR + 0.02, sf.z + sf.nz * 2.2));
   const pools = new THREE.InstancedMesh(poolGeo, poolMat, Math.max(1, lamps.length + spills.length));
-  lamps.forEach((l, i) => pools.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(l.x, FLOOR + 0.02, l.z), new THREE.Quaternion(), new THREE.Vector3(13, 1, 13))));
+  lamps.forEach((l, i) => pools.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(l.x, FLOOR + 0.02, l.z), new THREE.Quaternion(), new THREE.Vector3(19, 1, 19))));
   spills.forEach((l, i) => pools.setMatrixAt(lamps.length + i, new THREE.Matrix4().compose(l, new THREE.Quaternion(), new THREE.Vector3(8, 1, 8))));
   pools.frustumCulled = false; add(pools);
 
@@ -556,7 +601,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   };
 
   // ---- merge every zone's pieces: one mesh per kind per zone ----
-  const kindMat: Record<string, THREE.Material> = { road: o.road, pave: o.paving, mark: markM, kit: kitM, metal: metalM, lamp: lampM, leaf: leafM, grass: grassM, wall_plaster: wallMats.plaster, wall_brick: wallMats.brick, wall_glass: wallMats.glass };
+  const kindMat: Record<string, THREE.Material> = { road: o.road, pave: o.paving, mark: markM, kit: kitM, trim: kitM, metal: metalM, lamp: lampM, leaf: leafM, grass: grassM, wall_plaster: wallMats.plaster, wall_brick: wallMats.brick, wall_glass: wallMats.glass };
   const NEAR_KINDS = new Set(['kit', 'metal', 'lamp', 'leaf', 'mark']);
   for (const zn of zones.values()) {
     for (const [kind, gs] of Object.entries(zn.geo)) {
@@ -567,7 +612,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       const merged = mergeGeometries(ok, false);
       if (!merged) continue;
       const m = new THREE.Mesh(merged, kindMat[kind]);
-      m.castShadow = kind.startsWith('wall') || kind === 'kit' || kind === 'metal' || kind === 'leaf';
+      m.castShadow = kind.startsWith('wall') || kind === 'kit' || kind === 'trim' || kind === 'metal' || kind === 'leaf';
       m.receiveShadow = true;
       m.userData.district = kind;
       m.frustumCulled = true;
@@ -589,6 +634,8 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   const carRoads = ROADS.filter((r) => r.cars);
   const cars: Car[] = [];
   const NCAR = [20, 40, 70][tier];
+  /** Past this a moving car or walker is brought back round the camera (cars beyond 420 m are not drawn anyway). */
+  const RECALL = [240, 300, 340][tier], PED_RECALL = [170, 210, 240][tier];
   const carCols = [0xf4f4f6, 0x1b1b1f, 0x8a8f96, 0xc0392b, 0x2c3e94, 0x16a085, 0xf2d64b, 0xe8e2d4, 0x5a3a7a, 0xff8c42].map((c) => new THREE.Color(c));
   for (let i = 0; i < NCAR; i++) {
     const r = pick(carRoads), dir = rnd() < 0.5 ? 1 : -1;
@@ -637,9 +684,32 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     const straight = opts.find((q) => q.r === c.r);
     return straight && rnd() < 0.55 ? straight : pick(opts);
   };
+  /**
+   * Life follows the camera: a car far out of sight is moved to a road near the camera, out of view (70 to 170 m off
+   * along its road, behind the camera or far enough not to pop), so the streets you are in have their traffic.
+   */
+  let carRR = 0;
+  const recallCar = (c: Car, cam: THREE.Vector3, fx: number, fz: number) => {
+    for (let tries = 0; tries < 4; tries++) {
+      const r = pick(carRoads), perp = r.along === 'z' ? Math.abs(cam.x - r.c) : Math.abs(cam.z - r.c);
+      if (perp > 120) continue;
+      const u0 = r.along === 'z' ? cam.z : cam.x, u = u0 + (rnd() < 0.5 ? -1 : 1) * (70 + rnd() * 100);
+      if (u < r.a + 12 || u > r.b - 12) continue;
+      const st = stopsOf.get(r)!; if (st.up.some((n) => Math.abs(n - u) < 12)) continue;
+      const x = r.along === 'z' ? r.c : u, z = r.along === 'z' ? u : r.c, dx = x - cam.x, dz = z - cam.z, d = Math.hypot(dx, dz);
+      if ((dx * fx + dz * fz) / d > 0.35 && d < 150) continue; // in front and near: it would pop in
+      const dir = rnd() < 0.5 ? 1 : -1, lane = rnd() < 0.5 ? 0 : 1;
+      if (cars.some((o) => o !== c && o.r === r && o.dir === dir && o.lane === lane && Math.abs(o.u - u) < 20)) continue;
+      c.r = r; c.u = u; c.dir = dir; c.lane = lane; c.turn = null; c.v = c.vmax * 0.8;
+      pos(r, u, dir, lane, T1); c.x = T1.x; c.z = T1.z;
+      return;
+    }
+  };
   const crossers: THREE.Vector3[] = []; let crossN = 0; // people on the zebras now, set each frame (the first crossN)
-  const driveCars = (dt: number, you: THREE.Vector3 | null, cam: THREE.Vector3) => {
+  const driveCars = (dt: number, you: THREE.Vector3 | null, cam: THREE.Vector3, fx: number, fz: number) => {
     const k = Math.min(dt, 0.1);
+    // two cars a frame are looked at: one far out of sight comes back round the camera
+    for (let j = 0; j < 2 && cars.length; j++) { const c = cars[carRR = (carRR + 1) % cars.length]; if (Math.hypot(c.x - cam.x, c.z - cam.z) > RECALL) recallCar(c, cam, fx, fz); }
     for (let i = 0; i < cars.length; i++) {
       const c = cars[i];
       const far = Math.hypot(c.x - cam.x, c.z - cam.z) > 420;
@@ -748,8 +818,22 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     if (Math.abs(z1 - R2.z0) < 0.6) ns = Math.abs(x1 - R2.x0) < 0.6 ? 0 : W2; else ns = Math.abs(x1 - R2.x1) < 0.6 ? W2 + H2 : 2 * W2 + H2;
     return { x0: p.x, z0: p.z, x1, z1, axis: (dx ? 'z' : 'x') as 'x' | 'z', nb, ns };
   };
-  const walkPeds = (dt: number, you: THREE.Vector3 | null) => {
+  /** Walkers too: one far away is put on a pavement near the camera where it is not looking (55 to 140 m off). */
+  let pedRR = 0;
+  const recallPed = (p: Ped, cam: THREE.Vector3, fx: number, fz: number) => {
+    for (let tries = 0; tries < 5; tries++) {
+      const b = pick(walkBlocks), cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
+      if (Math.hypot(cx - cam.x, cz - cam.z) > 170) continue;
+      const s2 = rnd() * perim(b, p.off); onRing(b, p.off, s2, P0);
+      const dx = P0.x - cam.x, dz = P0.z - cam.z, d = Math.hypot(dx, dz);
+      if (d < 55 || d > 140 || ((dx * fx + dz * fz) / d > 0.3 && d < 110)) continue;
+      p.b = b; p.s = s2; p.mode = 'walk'; p.cross = undefined; p.x = P0.x; p.z = P0.z; p.yaw = p.dir > 0 ? P0.yaw : P0.yaw + Math.PI;
+      return;
+    }
+  };
+  const walkPeds = (dt: number, you: THREE.Vector3 | null, cam: THREE.Vector3, fx: number, fz: number) => {
     crossN = 0;
+    for (let j = 0; j < 4 && peds.length; j++) { const p = peds[pedRR = (pedRR + 1) % peds.length]; if (p.mode === 'walk' && Math.hypot(p.x - cam.x, p.z - cam.z) > PED_RECALL) recallPed(p, cam, fx, fz); }
     for (const p of peds) {
       if (p.mode === 'stay') continue;
       if (p.mode === 'walk') {
@@ -787,6 +871,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   scene.traverse((x) => { const k = x.userData.district as string | undefined; if (k === 'road' || k === 'pave' || k === 'grass') ground.push(x); });
   extras.push(signs.mesh, ads.mesh, pools, bulbMesh, ...carMesh); if (manholes) extras.push(manholes);
   let wasDeep = false;
+  const FWD = new THREE.Vector3();
   let lastPhase = -2, acc = 0;
   return {
     solids,
@@ -812,8 +897,9 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
         if (deep !== wasDeep) { wasDeep = deep; for (const m of ground) m.visible = !deep; for (const m of extras) m.visible = !deep; }
       }
       if (deep) return;
-      walkPeds(dt, you);
-      driveCars(dt, you, cam.position);
+      cam.getWorldDirection(FWD); const fl = Math.hypot(FWD.x, FWD.z) || 1;
+      walkPeds(dt, you, cam.position, FWD.x / fl, FWD.z / fl);
+      driveCars(dt, you, cam.position, FWD.x / fl, FWD.z / fl);
     },
     /** Collision with the cars for the player (they are solid, and stop for you). */
     carCollide(p: THREE.Vector3, r: number) {

@@ -56,23 +56,29 @@ export function facadeMaterial(o: FacadeOpts = {}) {
           vec3 tone = mix(vec3(1.0, 0.74, 0.46), vec3(0.78, 0.9, 1.0), step(0.7, fHash(vec3(bay, fl, seed + 9.0))));
           vec3 wallC = mix(vec3(0.62, 0.56, 0.5), 0.45 + 0.4 * cos(6.2831 * (h + vec3(0.0, 0.3, 0.6))), 0.15);
           vec3 room;
-          if (t == tz) {
-            // the back wall: a picture, a shelf or the shop's racks
-            // a shop's back wall: shelves a hand apart, their boards, goods of every size with gaps, under a strip of light
-            float row = floor(q.y / 0.42), ry = fract(q.y / 0.42), cx = floor(q.x * 7.0);
-            float gh = fHash(vec3(cx, row, seed)), gw = fract(q.x * 7.0);
+          if (t == tz || (street && t == tx)) {
+            // the back wall: a picture, a shelf or the shop's racks; a shop has racks down its side walls too
+            // a shop's wall: shelves a hand apart, their boards, goods of every size with gaps, under a strip of light
+            float sx = t == tz ? q.x : q.z + (dir.x > 0.0 ? 11.0 : 23.0);
+            float row = floor(q.y / 0.42), ry = fract(q.y / 0.42), cx = floor(sx * 7.0);
+            float gh = fHash(vec3(cx, row, seed)), gw = fract(sx * 7.0);
             vec3 goods = (0.28 + 0.34 * cos(6.2831 * (fHash(vec3(cx, row, seed + 2.0)) + vec3(0.0, 0.33, 0.67)))) * (0.6 + 0.6 * gh);
             float item = step(0.12, ry) * step(ry, 0.3 + 0.55 * gh) * step(0.08, gw) * step(gw, 0.92) * step(0.14, gh);
             vec3 shopWall = mix(wallC * 0.34, goods, item) * (1.0 - 0.75 * step(ry, 0.1)) * (0.75 + 0.5 * smoothstep(0.0, 1.0, ry));
-            room = street ? shopWall : wallC * (0.85 + 0.3 * step(0.8, fHash(vec3(floor(q.x * 2.0), fl, seed))));
-          } else if (t == ty) room = dir.y > 0.0 ? vec3(0.95, 0.92, 0.86) * (1.2 - 0.6 * q.z / Dp) : vec3(0.32, 0.22, 0.16) * (0.6 + 0.4 * fract(q.x * 1.3));
+            room = street ? shopWall * step(0.7, q.y) + wallC * 0.12 * step(q.y, 0.7) : wallC * (0.85 + 0.3 * step(0.8, fHash(vec3(floor(q.x * 2.0), fl, seed))));
+          } else if (t == ty) {
+            // a shop's ceiling is dark with strips of light across it; a flat's is pale
+            float strip = step(0.86, fract(q.z / 1.4));
+            room = dir.y > 0.0 ? (street ? vec3(0.08) + vec3(1.6, 1.5, 1.35) * strip : vec3(0.95, 0.92, 0.86) * (1.2 - 0.6 * q.z / Dp))
+                               : (street ? vec3(0.2, 0.19, 0.18) * (0.7 + 0.3 * step(0.5, fract(q.x * 1.6) + fract(q.z * 1.6) - 0.5)) : vec3(0.32, 0.22, 0.16) * (0.6 + 0.4 * fract(q.x * 1.3)));
+          }
           else room = wallC * 0.8;
           float depthK = 1.0 - 0.5 * clamp(q.z / Dp, 0.0, 1.0);
           float curtain = step(0.65, fHash(vec3(bay, fl, seed + 3.0))) * smoothstep(0.3, 0.42, abs(fx - 0.5)) * (street ? 0.0 : 1.0);
           room = mix(room, vec3(0.75, 0.6, 0.45), curtain);
           // daylight inside the room is dim; a lit room glows
           inside = room * depthK * (0.05 + 0.04 * (1.0 - uNight));
-          glow = room * depthK * tone * lit * (street ? (0.5 + 1.1 * uNight) : (0.3 + 1.0 * uNight)) * (0.75 + 0.5 * fHash(vec3(bay, fl, seed + 5.0)));
+          glow = room * depthK * tone * lit * (street ? (0.3 + 0.75 * uNight) : (0.3 + 1.0 * uNight)) * (0.75 + 0.5 * fHash(vec3(bay, fl, seed + 5.0)));
           }
 `;
   m.onBeforeCompile = (sh) => {

@@ -458,7 +458,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const ground = add(new THREE.Mesh(strip(xs, 2.5), paving)); ground.receiveShadow = true; ground.userData.ground = true;
   // the road and the kerbs: the same vertices, drawn over in depth instead of lifted, never something to stand on
   const over = (m: THREE.MeshStandardMaterial, k = 2) => Object.assign(m, { polygonOffset: true, polygonOffsetFactor: -k, polygonOffsetUnits: -k });
-  const roadM = wetify(over(new THREE.MeshStandardMaterial({ color: 0x6a6668, roughness: 0.8, metalness: 0 }))); tex('road', [roadM], [1, 1]);
+  const roadM = wetify(over(new THREE.MeshStandardMaterial({ color: 0x7c7779, roughness: 0.74, metalness: 0 }))); tex('road', [roadM], [1, 1]);
   const road = add(new THREE.Mesh(strip([-4, 4], 4), roadM)); road.receiveShadow = true; road.userData.ground = false;
   const kerbM = over(new THREE.MeshStandardMaterial({ color: 0xc8c0b2, roughness: 0.8 }));
   for (const sd of [-1, 1]) { const kb = add(new THREE.Mesh(strip(sd < 0 ? [-4.35, -4] : [4, 4.35], 1), kerbM)); kb.receiveShadow = true; kb.userData.ground = false; }
