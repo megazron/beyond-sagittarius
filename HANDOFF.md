@@ -54,3 +54,16 @@ See the end of this file for the running log.
   `Downloads/BS_Game_v1.1/combat/` (README_review.txt). Gates run: `~/bs-cap/combat/g1/summary.log`.
 - The recording plans: `python3 mkplan.py` in `~/bs-cap/combat`; `round3.sh NAME PLAN` = build + record + join.
   Heavy queue can stall for 30 min behind other agents' exclusive jobs; do not kill other agents' jobs.
+
+## CI (from 06:30)
+- `.github/workflows/gates.yml` (branch `ci`, and on `combat` with an extra `combat` job): every push to any branch runs
+  build+typecheck, smoke, levels_smoke, prologue_smoke, mobile_smoke, crowd_smoke, perf_gate, text_fit, cutscene_qa,
+  app_smoke as parallel jobs, about 12 minutes. No artifacts. Read failures with `gh run view <id> --log-failed`.
+  Usage note for all agents: `~/CI_GATES.md`. Locally: only quick checks and GPU captures.
+- First green-ish run on `ci` (= main 63a3686 + the workflow): everything passes except `perf_gate` (web bazaar 644
+  draws / 2.6 M triangles, web crowd 1.38 M triangles, over budget; the city agent's own local log shows the same) and
+  `crowd_smoke` (mobile: no real body near the camera; web walker1 a card at 2.5 m). Both fail twice, so they are real
+  failures of main's code, not of CI. `levels_smoke` failed once ("inventory did not open") and passed on rerun: flaky.
+- Not landed on main: pushing `ci` to main was refused by the permission layer (main would not be green). Needs the
+  owner or coordinator to decide: land the workflow as is (it reports main red until the city agent fixes the two
+  gates), or have the city agent fix them first.
