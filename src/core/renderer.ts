@@ -736,7 +736,9 @@ export class Renderer {
     const loads = (scene.userData.loads as Promise<unknown>[] | undefined) ?? [];
     await Promise.race([Promise.allSettled(loads), new Promise((r) => setTimeout(r, 6000))]);
     this.ensureEnv(scene); // the shaders differ with and without the image-based light: compile the ones that will be used
-    try { await this.renderer.compileAsync(scene, camera); } catch { /* compiled on first draw instead */ }
+    // and with the target they will draw into: the post chain's scene buffer (linear, no tone mapping) or the screen
+    const prev = this.renderer.getRenderTarget(), into = this.quality.post && this.renderPass instanceof ScenePass ? this.renderPass.rt : null;
+    try { this.renderer.setRenderTarget(into); await this.renderer.compileAsync(scene, camera); } catch { /* compiled on first draw instead */ } finally { this.renderer.setRenderTarget(prev); }
     const texs = new Set<THREE.Texture>();
     scene.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
