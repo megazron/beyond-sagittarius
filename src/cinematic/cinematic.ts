@@ -67,7 +67,7 @@ export class Cinematic {
     s.add(this.interior.group);
     this.ins = createInserts(this.interior.group);
     this.pilot = createCharacter('scientist', matchMedia('(pointer: coarse)').matches ? 0.6 : 1, { ...defaultLook(), name: 'Pilot', gender: 'f', hair: 'medic', outfit: 'explorer', hairRoot: 0x2a1a14, hairTip: 0x6a4a34, accent: 0x6fe3ff, skin: 0xb98463, horns: false, tail: false });
-    this.pilot.root.position.set(0, -2.2, -0.1); this.pilot.root.rotation.set(0, Math.PI, 0); this.ins.cockpit.add(this.pilot.root);
+    this.pilot.root.position.set(0, -2.2, -0.05); this.pilot.root.rotation.set(0, Math.PI, 0); this.ins.cockpit.add(this.pilot.root);
     this.mars.position.set(20000, 0, 0);
     s.add(this.mars);
     this.giant.position.set(40000, 0, 0);
@@ -229,7 +229,7 @@ export class Cinematic {
   get inFlashback() { return this.flashback; }
 
   private animateCrew(dt: number) {
-    if (this.ins.cockpit.visible) { this.pilot.root.updateMatrixWorld(); this.pilot.animate('sit', 0, 0, this.clockT, dt); }
+    if (this.ins.cockpit.visible) { this.pilot.root.updateMatrixWorld(); this.pilot.animate('stand', 0, 0, this.clockT, dt); } // seated by setLimbs: the sit clip sits on the ground, far forward of its root
     if (!this.interior.group.visible) return;
     const poses = this.stage?.poses;
     this.interior.crew.forEach((c) => {
@@ -608,12 +608,17 @@ export class Cinematic {
     // the canopy with the core beyond. She is already fighting it
     const YH = { L: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(1, 0, 0) }, R: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(-1, 0, 0) } };
     const yoke = (local: number, haul: number) => { // she hauls back and fights the roll; the hands go with the yoke
-      ins.stick.position.z = -0.62 + 0.07 * haul + Math.sin(local * 7.3) * 0.006;
+      ins.stick.position.z = -0.56 + 0.07 * haul + Math.sin(local * 7.3) * 0.006;
       ins.stick.rotation.z = Math.sin(local * 1.9) * 0.12 * haul + Math.sin(local * 11) * 0.015;
       ins.yokeHold(YH);
     };
     shotAt(S + 42.6, S + 44.8, {
-      enter: () => { this.setVisible('cockpit'); d.uBHPos.value.set(-6, 4, -160); ins.attitude(0, 0); ins.mfd(['THRUST', '112%'], ['NAV', 'DEVIATION +2.1°'], '#ffb347'); ins.yokeHold(YH); this.pilot.setHold(YH); },
+      enter: () => { this.setVisible('cockpit'); d.uBHPos.value.set(-6, 4, -160); ins.attitude(0, 0); ins.mfd(['THRUST', '112%'], ['NAV', 'DEVIATION +2.1°'], '#ffb347'); ins.yokeHold(YH); this.pilot.setHold(YH);
+        // in a chair: thighs forward, shins down; the hip joints just above the cushion (top at y -1.69)
+        this.pilot.setLimbs({ legL: [0.06, -0.12, 1], legR: [-0.06, -0.12, 1], shinL: [0.04, -1, 0.12], shinR: [-0.04, -1, 0.12] });
+        const r = this.pilot.root; r.position.y = -2.2; r.updateMatrixWorld(true);
+        const hipH = this.pilot.legL.getWorldPosition(new THREE.Vector3()).y - r.getWorldPosition(new THREE.Vector3()).y;
+        r.position.y = -1.69 + 0.09 - hipH; },
       update: (k, local) => {
         lens(24); const c = ins.cockpit.position; this.camera.position.copy(c).add(V(0.62, -0.62, 0.95)); this.lookTarget.copy(c).add(V(-0.12, -1.18, -1.6));
         yoke(local, 0.6 + 0.2 * k);
@@ -628,14 +633,14 @@ export class Cinematic {
     shotAt(S + 44.8, S + 49.0, {
       update: (k, local) => {
         yoke(local, 0.8 + 0.2 * smoothstep(0.5, 3.5, local));
-        lens(50); const g = ins.stick.getWorldPosition(new THREE.Vector3()); this.camera.position.copy(ins.cockpit.position).add(V(0.42, -1.34, -1.0)); this.lookTarget.copy(g).add(V(0.02, 0.06, 0.12));
+        lens(35); const g = ins.stick.getWorldPosition(new THREE.Vector3()); this.camera.position.copy(ins.cockpit.position).add(V(0.5, -0.98, -1.08)); this.lookTarget.copy(g).add(V(0, 0.02, 0.14)); // both hands, her chest and jaw above them
         this.pilot.setFace({ frown: 0.75, squint: 0.5, open: Math.max(0, Math.sin(local * 2.4)) * 0.25 }); this.pilot.setLookTarget(ins.cockpit.position.clone().add(V(0, -0.7, -3)));
         this.shake = 0.008;
       },
     });
     // D3 insert: the attitude display straight on, the side displays at its edges; the horizon rolls the wrong way
     this.vcue(S + 49.3, 'pull.ai1', () => { ui.subtitle('pull.ai1'); audio.thud(); });
-    this.cue(S + 56.2, () => { ui.subtitle(null); this.pilot.setHold(null); });
+    this.cue(S + 56.2, () => { ui.subtitle(null); this.pilot.setHold(null); this.pilot.setLimbs(null); });
     shotAt(S + 49.0, S + 56.2, {
       update: (k, local) => {
         yoke(local, 1);
@@ -723,13 +728,17 @@ export class Cinematic {
       },
     });
     // F4 five quick close-ups, each on its own eyeline to the window (screen right), lit by the glow
-    const F4: [Character, Face][] = [[drx, { frown: 0.7, open: 0.1 }], [lyr, { fear: 0.5, open: 0.35 }], [sky, { smile: 0.4, fear: 0.5 }], [bol, { fear: 0.6, squint: 0.3 }], [nuv, { fear: 0.7, open: 0.2 }]];
-    F4.forEach(([c, face], i) => shotAt(S + 79.0 + i * 1.1, S + 80.1 + i * 1.1, {
-      enter: () => { group(); only(c); },
+    // (by crew index, resolved per frame: the figures are swapped after this is built)
+    const F4: [number, Face][] = [[1, { frown: 0.7, open: 0.1 }], [2, { fear: 0.5, open: 0.35 }], [3, { smile: 0.4, fear: 0.5 }], [4, { fear: 0.6, squint: 0.3 }], [5, { fear: 0.7, open: 0.2 }]];
+    F4.forEach(([ci, face], i) => shotAt(S + 79.0 + i * 1.1, S + 80.1 + i * 1.1, {
+      enter: () => { group(); only(intr.crew[ci]); intr.crew[ci].root.rotation.y = Math.PI - 0.5; }, // facing the glass, turned a little to the lens
       update: (k, local) => {
-        lens(85); const h = head(c, -0.12); this.camera.position.copy(h).add(V(-1.0, -0.05, 0.9)); this.lookTarget.copy(h);
-        c.setLookTarget(WIN); c.setFace(i === 2 ? { smile: 0.4 * (1 - smoothstep(0.3, 0.7, local)), fear: 0.6 * smoothstep(0.4, 0.9, local) } : face);
-        if (i === 3) c.setLookTarget(local > 0.5 ? at(5, -1.4, -1) : WIN); // Bolzar looks away
+        const c = intr.crew[ci];
+        lens(85); const h = head(c, -0.12); this.camera.position.copy(h).add(V(1.05, -0.05, -0.55)); this.lookTarget.copy(h);
+        // each looks straight out through the glass, a little towards the lens side: screen right
+        const out = h.clone().add(V(0.6, 0.2, -4));
+        c.setLookTarget(out); c.setFace(i === 2 ? { smile: 0.4 * (1 - smoothstep(0.3, 0.7, local)), fear: 0.6 * smoothstep(0.4, 0.9, local) } : face);
+        if (i === 3) c.setLookTarget(local > 0.5 ? h.clone().add(V(-2, -1.2, 1)) : out); // Bolzar looks away
         if (i === 4) this.pullPose.social = local < 0.5 ? 'selfie' : undefined as unknown as CrewPose; // Nuvexa lowers the phone
       },
     }));

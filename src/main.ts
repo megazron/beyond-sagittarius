@@ -953,6 +953,8 @@ window.addEventListener('resize', () => {
   get level() { return game?.save?.level; },
   setTime(h: number) { if (game?.save) game.save.timeOfDay = h; },
   cineSeek(t: number) { cine.seek(t); },
+  /** Where the cinematic camera is and what it looks at, and the cockpit's yoke and pilot (debugging shots). */
+  cineCam() { const c = cine as unknown as { camera: THREE.Camera; ins: { stick: THREE.Object3D; cockpit: THREE.Object3D }; pilot: { root: THREE.Object3D; handR: THREE.Object3D } }; const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map((v) => +v.toFixed(2)); return { cam: w(c.camera), dir: c.camera.getWorldDirection(new THREE.Vector3()).toArray().map((v) => +v.toFixed(2)), stick: w(c.ins.stick), cockpit: w(c.ins.cockpit), pilot: w(c.pilot.root), handR: w(c.pilot.handR), t: (cine as unknown as { time: number }).time }; },
   /** Freeze the clock (true) and step it by hand; `frames` counts finished steps. */
   hold(on: boolean) { hold.on = on; film.manual = on; voice.manual = on ? () => elapsed : null; audio.manual = on ? () => elapsed : null; },
   /** What was played on the held clock: lines, sounds, music, beds (laid under recorded frames). */
