@@ -150,14 +150,14 @@ with sync_playwright() as pw:
         ok(abs(A['pos'][0] - B['pos'][0]) < 1 and abs(A['pos'][2] - B['pos'][2]) < 1 and abs(A['hour'] - B['hour']) < 0.2, f'{enc}: and puts you back where and when you were')
         ok(page.evaluate("__bs.mode") == 'play' and not page.evaluate(D)['engaged'], f'{enc}: free play goes on')
     # an outcome reaches whoever asked (the story's side of the API)
-    page.evaluate("window.__out = null; __bs.combat.startEncounter('hunt.first', { story: { poisoned: true } }).then((o) => { window.__out = o; })"); step(page, 1)
+    page.evaluate("window.__out = null; __bs.combat.startEncounter('hunt.first', { story: { poisoned: true } }).then((o) => { window.__out = o; }); 0"); step(page, 1)
     page.evaluate("__bs.combat.leaveEncounter()")
     for i in range(60):
         step(page, 0.2); time.sleep(0.1)
         if page.evaluate("!!window.__out"): break
     o = page.evaluate("window.__out")
     ok(o and o['id'] == 'hunt.first' and o['result'] == 'spared' and o['flags'].get('hunt.spared') is True, 'API: startEncounter resolves with the outcome and its flags', o)
-    page.evaluate("window.__t = null; __bs.combat.tension({ kind: 'quick' }).then((r) => { window.__t = r; })")
+    page.evaluate("window.__t = null; __bs.combat.tension({ kind: 'quick' }).then((r) => { window.__t = r; }); 0")
     for i in range(60):
         step(page, 0.2); time.sleep(0.05)
         if page.evaluate("!!window.__t"): break
