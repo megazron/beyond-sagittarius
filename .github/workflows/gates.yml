@@ -1,0 +1,74 @@
+# The gates that do not need a real GPU, on every push to any branch and on pull requests. Each slow gate is its own
+# job so they run side by side; each job builds the game itself (no artifacts: the account is at its storage limit,
+# so a failure prints its log and nothing is uploaded). Browsers are headless Chromium with SwiftShader, as on the
+# laptop, with Playwright pinned to 1.63 (tools/pw_pin.py says why).
+name: Gates
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: gates-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: build and typecheck, browser: false, run: 'npx tsc --noEmit -p . && python3 tools/voice_check.py' }
+          - { name: smoke, run: 'python tools/smoke.py --quality web --out "$RUNNER_TEMP/shots"' }
+          - { name: levels_smoke, run: 'python tools/levels_smoke.py --quality web --shots "$RUNNER_TEMP/shots"' }
+          - { name: prologue_smoke, run: 'python tools/prologue_smoke.py --quality web' }
+          - { name: mobile_smoke, run: 'python tools/mobile_smoke.py --shots "$RUNNER_TEMP/shots"' }
+          - { name: crowd_smoke, run: 'python tools/crowd_smoke.py' }
+          - { name: perf_gate, run: 'python tools/perf_gate.py --out "$RUNNER_TEMP/perf.json"' }
+          - { name: text_fit, run: 'python tools/text_fit.py --before --out "$RUNNER_TEMP/textfit.json"' }
+          - { name: cutscene_qa, run: 'python tools/cutscene_qa.py --out "$RUNNER_TEMP/cutscene"' }
+          - { name: app_smoke, cap: true, run: 'python tools/android/app_smoke.py --shots "$RUNNER_TEMP/shots"' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/requirements-test.txt
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Playwright browsers (cached)
+        if: matrix.browser != false
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-1.63-${{ runner.os }}
+
+      - name: Playwright
+        if: matrix.browser != false
+        run: |
+          pip install -q -r tools/requirements-test.txt
+          python -m playwright install --with-deps chromium chromium-headless-shell
+
+      - name: Copy the build into the Android app
+        if: matrix.cap
+        run: npx cap sync android
+
+      - name: ${{ matrix.name }}
+        run: ${{ matrix.run }}
