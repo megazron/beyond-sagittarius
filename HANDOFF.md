@@ -130,3 +130,8 @@ See the end of this file for the running log.
 - Planet census on the A500 (Web, wake spot): items.group (stones, sticks, fruit, story items) was 217-516 draws a frame
   plus 179-263 in the shadow pass; the creature 84+84+56. Now: items past 55 m (Web; 32 phones, 75 Ultra) not drawn,
   shadows only within 28 m, creature body merged: forest spot 1206 -> 594 draws, wake 1233 -> 876.
+- 17:20 A/B Zenvora Web, nine spots, quiet machine, same build: A500 44-51 fps, Intel iGPU 42-60 fps, both at the
+  pixel-ratio floor 0.6. The A500 is not faster than this laptop's Intel Arc iGPU for this game. GPU experiments at the
+  gate (plan_exp14_city.json: fixed pr 0.6 vs 1.0, shadows off, each post pass off): no change beyond noise, so the
+  frame is CPU-bound: update 4-14 ms + draw 13-34 ms (~35 us a draw call through ANGLE). Draw calls and per-frame JS are
+  the lever, not resolution or post. The dynamic-resolution controller drops to 0.6 for nothing when CPU-bound.

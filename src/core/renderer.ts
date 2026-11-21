@@ -830,6 +830,9 @@ export class Renderer {
     if (this.quality.dynamicResolution) this.adaptResolution(dt, time);
   }
 
+  private lastDrop: { pr: number; avg: number } | null = null;
+  private noDropUntil = 0;
+  private dropFails = 0;
   private softwareCached: boolean | null = null;
   private get softwareGL() {
     if (this.softwareCached === null) {
@@ -857,11 +860,23 @@ export class Renderer {
     const budget = 1 / q.fpsTarget;
     const maxPr = Math.min(window.devicePixelRatio || 1, q.maxPixelRatio);
     let pr = this.pixelRatio;
-    if (avg > budget * 1.04) {
+    // a drop that bought nothing: the frame is bound by the main thread (draw calls, the game's own work), not by
+    // pixels. Put the sharpness back and stop dropping for a while (Zenvora and the planet on a laptop sat at the
+    // floor, 0.6, blurred, at the same frame rate as at full sharpness)
+    const drop = this.lastDrop;
+    this.lastDrop = null;
+    if (drop && avg > drop.avg * 0.96 && avg > budget * 1.04) {
+      // each drop that fails waits longer before the next try (a resize reallocates every buffer of the post chain)
+      pr = drop.pr; this.dropFails = Math.min(this.dropFails + 1, 6); this.noDropUntil = time + 20 * this.dropFails;
+    } else if (avg > budget * 1.04 && time > this.noDropUntil) {
       const over = avg / budget;
       const floor = q.minPixelRatio + (maxPr - q.minPixelRatio) * 0.45;
       if (pr <= floor && this.shed < 2) this.setShed(this.shed + 1);
-      else pr = Math.max(q.minPixelRatio, pr - (over > 1.3 ? 0.12 : 0.06));
+      else { const was = pr; pr = Math.max(q.minPixelRatio, pr - (over > 1.3 ? 0.12 : 0.06)); if (pr < was) this.lastDrop = { pr: was, avg }; }
+    } else if (drop) {
+      this.dropFails = 0; // it helped
+    } else if (avg > budget * 1.04) {
+      // waiting out a drop that did not help
     } else if (avg < budget * 0.85 || (avg < budget * 1.02 && time > this.holdUntil)) {
       // headroom, or holding the target (a display that caps the frame rate never shows headroom): try a step sharper.
       // If that step then misses the target, the drop above takes it back and it is not tried again for a while.

@@ -154,6 +154,7 @@ for st in PLAN['steps']:
             # the main thread's self time by function over a few seconds (top 25)
             w.call('Profiler.enable'); w.call('Profiler.setSamplingInterval', interval=200); w.call('Profiler.start'); time.sleep(st['profile'])
             prof = w.call('Profiler.stop')['profile']; w.call('Profiler.disable')
+            open(os.path.join(OUT, f"{st['shot']}.cpuprofile"), 'w').write(json.dumps(prof))
             nodes = {n['id']: n for n in prof['nodes']}; selfc = {}
             for sid in prof.get('samples', []):
                 cf = nodes[sid]['callFrame']; k = f"{cf['functionName'] or '(anon)'} {cf['url'].rsplit('/', 1)[-1]}:{cf['lineNumber']}"
