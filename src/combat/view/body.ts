@@ -77,8 +77,6 @@ function gearMesh(id: WeaponId): THREE.Object3D {
     const f = new THREE.ConeGeometry(0.07, 0.26, 5); f.rotateX(Math.PI / 2);
     const fm = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 1.5, 0.35), transparent: true, opacity: 0.9, depthWrite: false });
     const flame = add(f, fm, 0.66); flame.name = 'flame'; flame.castShadow = false;
-    // a burning branch lights a few metres round the hand: the reason to carry one at night
-    const l = new THREE.PointLight(0xff9a45, 9, 9, 1.6); l.position.z = 0.7; l.name = 'torchLight'; g.add(l);
   }
   else if (id === 'sling') { add(rod(0.006, 0.5), vine, 0.25); add(new THREE.SphereGeometry(0.04, 6, 4), vine, 0.5).scale.set(1.2, 0.5, 1.4); }
   else if (id === 'bow') {
