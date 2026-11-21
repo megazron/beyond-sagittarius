@@ -1068,6 +1068,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
         g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeBoundingSphere(); g.computeBoundingBox();
         const mesh = new THREE.Mesh(g, atlasM); mesh.castShadow = tier === 2; mesh.receiveShadow = true; mesh.userData.ground = false; mesh.userData.prop = true; mesh.matrixAutoUpdate = false;
+        mesh.userData.bakeOf = [...new Set(entries.map((e) => e.name))].join(',');
         host.add(mesh); return mesh;
       };
       for (const entries of byCell.values()) {
@@ -1459,11 +1460,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         const want = pc.near.length && d < (tier === 2 ? PROP_NEAR : 7) * (pc.lod === 0 ? 1.15 : 1) ? 0 : 1;
         if (want !== pc.lod) { pc.lod = want; for (const im of pc.near) im.visible = want === 0; }
         // in the old town's narrow streets a stretch of props further than a block or so is behind the walls anyway
-        if (pc.far) pc.far.visible = want === 1 && d < (tier === 0 ? 110 : pc.old && tier === 1 ? 120 : 230);
+        // the districts' bins, hydrants and service boxes are knee-high: past 90 m they are a pixel or two (a stretch of
+        // them was tens of thousands of triangles drawn from across the city)
+        if (pc.far) pc.far.visible = want === 1 && d < (!pc.old ? (tier === 0 ? 60 : 90) : tier === 0 ? 110 : tier === 1 ? 120 : 230);
         if (pc.farSmall) pc.farSmall.visible = d < SMALL_FAR;
         const sh = d < 34 && tier > 0;
         if (want === 0) for (const im of pc.near) im.castShadow = sh;
-        for (const im of pc.always) { im.castShadow = sh; im.visible = d < (tier === 0 ? 110 : 230); }
+        for (const im of pc.always) { im.castShadow = sh; im.visible = d < (!pc.old ? (tier === 0 ? 60 : 90) : tier === 0 ? 110 : 230); }
       }
       // townsfolk further off than CROWD_FAR are not drawn as bodies: a card of their height stands where they are, so
       // the street stays as full as it was and nobody blinks out. A body is a dozen draw calls and tens of thousands of
