@@ -859,7 +859,7 @@ async function boot() {
     document.getElementById('btn-skip')!.classList.toggle('hidden', !on);
   };
   combat = new Combat({ world, player, input, ui, save: () => game.save, settings: () => (settings.combat ??= defaultCombatSettings()), saveSettings: persistSettings,
-    free: () => state === 'game' && game.mode === 'play' && !paused && !ui.modalOpen(), persist: () => game.persist() });
+    free: () => state === 'game' && game.mode === 'play' && !paused && !ui.modalOpen(), persist: () => game.persist(), home: () => game.mode !== 'away' });
   game.combat = combat;
   game.onLevelComplete = onLevelDone;
   game.timersOff = !!settings.noTimers;

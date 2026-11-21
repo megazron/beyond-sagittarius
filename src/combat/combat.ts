@@ -46,6 +46,8 @@ interface Deps {
   /** The game is in a state where the fight may read the controls. */
   free: () => boolean;
   persist: () => void;
+  /** The player is on Verdaxis (not away on another world, where its animals do not live). */
+  home: () => boolean;
 }
 
 const KEYS = { attack: ['Mouse0'], aim: ['Mouse2'], alt: ['KeyG'], block: ['KeyQ'], dodge: ['KeyV'], sneak: ['KeyX'], weapon: ['KeyR'], kit: ['KeyT'] };
@@ -468,6 +470,9 @@ export class Combat {
 
   /** Free play: before the player controller runs. */
   before(dt: number, time: number) {
+    // on another world the animals of Verdaxis are neither stepped nor drawn
+    if (!this.d.home()) { if (this.views.size) this.dropViews(); this.fx.group.visible = false; this.hud.show(false); this.engagedT = 0; this.d.player.combat = null; return; }
+    this.fx.group.visible = true;
     // a moment the story opened on its own runs on the game's clock while the game runs (its own clock otherwise)
     if (this.tensionUi.open && !this.encounter) { this.tensionFed = performance.now(); this.tensionUi.update(dt); return; }
     const sim = this.sim;
@@ -476,7 +481,7 @@ export class Combat {
     // the first hours belong to the tutorial: the animals keep to themselves until the player can look after themselves
     this.stepSim(dt, time, s.level < 2 || !!this.d.save().replay);
   }
-  after(dt: number, time: number) { if (this.sim && !this.encounter) this.present(dt, time); }
+  after(dt: number, time: number) { if (this.sim && !this.encounter && this.d.home()) this.present(dt, time); }
 
   /** An encounter runs the whole frame itself: the survival rules and the story wait. */
   frame(dt: number, time: number) {
