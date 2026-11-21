@@ -208,8 +208,10 @@ export function batchStatic(root: THREE.Object3D, accept: (m: THREE.Mesh) => boo
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(m);
   });
   let saved = 0;
-  for (const list of groups.values()) {
-    if (list.length < min || list.length > MAX_GEOMETRIES) continue;
+  // a material on more pieces than one batch holds is drawn by several (in the order they were found: neighbours)
+  const lists = [...groups.values()].flatMap((l) => { const out: THREE.Mesh[][] = []; for (let i = 0; i < l.length; i += MAX_GEOMETRIES) out.push(l.slice(i, i + MAX_GEOMETRIES)); return out; });
+  for (const list of lists) {
+    if (list.length < min) continue;
     let verts = 0, idx = 0;
     for (const m of list) { verts += m.geometry.attributes.position.count; idx += m.geometry.index ? m.geometry.index.count : 0; }
     const mat = list[0].material as THREE.Material;
