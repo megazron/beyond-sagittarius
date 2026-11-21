@@ -29,7 +29,7 @@ export interface Injury { id: InjuryId; left: number; age?: number; infected?: b
 /** How the body is doing, 0 fine to 1 at the end of it: the survival rules set these, the fight pays for them. */
 export interface Condition { hunger: number; thirst: number; cold: number }
 /** Seconds before an untreated bite turns bad (game time; the game's hour is 50 s, so this is most of a day). */
-export const INFECT_AFTER = 900;
+export const INFECT_AFTER = 1200;
 /** What each injury costs until it is treated or wears off (the Medic's side of a fight). */
 export const INJURY: Record<InjuryId, { melee: number; regen: number; speed: number; wears: number }> = {
   bite: { melee: 0.8, regen: 1, speed: 1, wears: 0 },
@@ -172,7 +172,8 @@ export class CombatSim {
     return best;
   }
   addScent(x: number, z: number, food: number, r = 22): Scent { const s = { x, z, r, food, id: this.nextId++ }; this.scents.push(s); return s; }
-  noise(x: number, z: number, r: number, from = -1) { this.noises.push({ x, z, r, t: this.t, from }); }
+  // stamped a hair after now, so a sound made between two steps is still new to every ear on the next one
+  noise(x: number, z: number, r: number, from = -1) { this.noises.push({ x, z, r, t: this.t + 1e-6, from }); }
 
   canAfford(cost: Record<string, number>) { for (const k in cost) if ((this.inv[k] ?? 0) < cost[k]) return false; return true; }
   private pay(cost: Record<string, number>) { for (const k in cost) this.inv[k] = (this.inv[k] ?? 0) - cost[k]; }
@@ -322,7 +323,7 @@ export class CombatSim {
       if (p.act !== 'roll') { p.act = 'idle'; p.charge = 0; p.charging = 'none'; }
     } else if (p.act === 'roll') {
       p.actT += dt;
-      p.iframe = p.actT > 0.05 && p.actT < 0.42;
+      p.iframe = p.actT < 0.42;
       const k = p.actT / 0.62, sp = lerp(8.2, 2.6, k * k);
       p.forceVX = p.rollX * sp; p.forceVZ = p.rollZ * sp; p.forceT = 0.05;
       if (p.actT >= 0.62) { p.act = 'idle'; p.actT = 0; p.iframe = false; }
@@ -333,7 +334,7 @@ export class CombatSim {
       if (I.dodge && (p.act === 'idle' || p.act === 'charge' || (p.act === 'recover' && p.actT > 0.1)) && !I.air) {
         if (p.stamina >= rollCost * 0.6) {
           p.stamina = Math.max(0, p.stamina - rollCost); p.regenLock = 0.9;
-          p.act = 'roll'; p.actT = 0; p.charge = 0; p.charging = 'none'; p.blocking = false;
+          p.act = 'roll'; p.actT = 0; p.iframe = true; p.charge = 0; p.charging = 'none'; p.blocking = false;
           // a snare lets go if you throw yourself out of it
           p.snareT = Math.min(p.snareT, 0.15);
           if (mlen > 0.2) { p.rollX = I.mx / mlen; p.rollZ = I.mz / mlen; } else { p.rollX = -p.fx; p.rollZ = -p.fz; }

@@ -207,10 +207,10 @@ const watch = (sim: CombatSim, e: Enemy, seconds: number, bot: (I: Intent, s: Co
   ok(r.states.has('flee') && Math.hypot(n2.x - sim2.player.x, n2.z - sim2.player.z) > dRun + 8, 'nibbet: once it knows, it runs');
   // one good spear throw takes it
   const sim3 = new CombatSim({ seed: 8 }); sim3.player.has.spear = true; sim3.equip('spear');
-  const n3 = sim3.spawn('nibbet', 0, 12, { wander: 99, wx: 0, wz: 12 });
+  const n3 = sim3.spawn('nibbet', 0, 7, { wander: 99, wx: 0, wz: 7, yaw: 0 });
   let ph = 0;
   const ev = run(sim3, 5, (I, s) => { aimAt(I, s, n3); I.aim = false; I.sneak = true; if (ph === 0) { I.alt = true; I.altHeld = true; ph = 1; } else if (s.player.charge >= 1) I.altHeld = false; }, () => n3.dead);
-  ok(n3.dead && has(ev, 'death', 'nibbet'), 'nibbet: a thrown spear at twelve metres is a kill');
+  ok(n3.dead && has(ev, 'death', 'nibbet'), 'nibbet: a thrown spear from seven metres is a kill');
   ok(sim3.pickups.some((k) => k.weapon === 'spear'), 'spear: lies where it fell, to be picked up');
 }
 {

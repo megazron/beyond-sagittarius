@@ -121,6 +121,12 @@ function wander(sim: CombatSim, e: Enemy, dt: number, range: number, speed: numb
 }
 
 function beginAttack(sim: CombatSim, e: Enemy, atk: AttackDef, tx: number, tz: number) {
+  // only so many come at you at once: the others wait for an opening (machines and plants do not queue)
+  if (e.target === -1 && e.def.walk > 0 && e.def.temperament !== 'machine') {
+    let busy = 0;
+    for (const o of sim.enemies) if (o !== e && !o.dead && o.target === -1 && (o.state === 'windup' || o.state === 'strike') && o.def.walk > 0) busy++;
+    if (busy >= sim.tune.tokens) { e.cd = Math.max(e.cd, 0.5); return; }
+  }
   e.atk = atk; e.atkHit = false; e.atkGone = 0;
   const d = Math.hypot(tx - e.x, tz - e.z) || 1;
   e.atkDx = (tx - e.x) / d; e.atkDz = (tz - e.z) / d;

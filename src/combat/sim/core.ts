@@ -37,11 +37,13 @@ export interface Tuning {
   assistCone: number;
   /** Tension minigame windows. */
   tension: number;
+  /** How many creatures may be attacking you at the same moment; the rest hang back and wait their turn. */
+  tokens: number;
 }
 export const TUNING: Record<Difficulty, Tuning> = {
-  story: { enemyDmg: 0.5, enemyHp: 0.7, telegraph: 1.4, aggression: 0.7, staminaCost: 0.7, assistCone: 16, tension: 1.5 },
-  normal: { enemyDmg: 1, enemyHp: 1, telegraph: 1, aggression: 1, staminaCost: 1, assistCone: 10, tension: 1 },
-  hard: { enemyDmg: 1.4, enemyHp: 1.25, telegraph: 0.82, aggression: 1.3, staminaCost: 1.1, assistCone: 6, tension: 0.8 },
+  story: { enemyDmg: 0.5, enemyHp: 0.7, telegraph: 1.4, aggression: 0.7, staminaCost: 0.7, assistCone: 16, tension: 1.5, tokens: 1 },
+  normal: { enemyDmg: 1, enemyHp: 1, telegraph: 1, aggression: 1, staminaCost: 1, assistCone: 10, tension: 1, tokens: 2 },
+  hard: { enemyDmg: 1.4, enemyHp: 1.25, telegraph: 0.82, aggression: 1.3, staminaCost: 1.1, assistCone: 6, tension: 0.8, tokens: 3 },
 };
 
 /** Accessibility, set by the player. */
