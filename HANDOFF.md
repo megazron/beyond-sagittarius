@@ -97,3 +97,9 @@ See the end of this file for the running log.
   `__bs.photo`. Plans: `~/bs-cap/combat/mkplan_v2.py`; clips 10 to 14 *_v2 in Downloads with notes.
 - Next: bow aim camera (body hides the bow in play), hands closing on string and cords, spear-thrower weapon,
   match ~/bs-story/INVENTION_TREE.md when it exists.
+- 13:40 LANDED c911aa8 on main (bow/sling v2, invention texts). On combat-land after it: inventions matched to the
+  story tree rows (docs/COMBAT_API.md table), the spear-thrower (`atlatl`) and darts, bow aim camera over the bow
+  shoulder (`combat.shoulder/lift` hold fields in player.ts), thicker string/arrow/cords, step into the sling throw
+  on the move. levels_smoke is flaky in CI (passed on rerun twice). Clips 15 to 17 in Downloads.
+- Asked of the story agent (via coordinator): a grip control in character.ts so fingers close on string and cords;
+  a sling row in INVENTION_TREE.md.
