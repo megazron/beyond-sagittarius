@@ -553,7 +553,7 @@ export class Cinematic {
         // no smile at all (his look's resting smile showed teeth and read as a smirk)
         sci.setFace({ frown: smoothstep(0, 0.8, local) * 0.55, squint: 0.25, smile: 0, blink: local > 1.1 && local < 1.35 ? 1 : 0 });
         // the dart: the eyes jump to the window and the head follows them fast, then both come back to the gauge
-        sci.setGazeRate(local > 1.3 ? 9 : 2.2);
+        sci.setGazeRate(local < 0.1 ? 80 : local > 1.3 ? 9 : 2.2); // the first frames settle his head on the gauge under the cut
         sci.setLookTarget(local < 1.4 ? ins.gaugeAt.getWorldPosition(new THREE.Vector3()) : local < 2.1 ? WIN : ins.gaugeAt.getWorldPosition(new THREE.Vector3()));
       },
     });
