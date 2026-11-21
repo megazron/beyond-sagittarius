@@ -468,7 +468,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         dress(s1);
         const host = lodSets[0][0].parent!;
         const ms: THREE.SkinnedMesh[] = [];
-        s1.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && (m.material as THREE.Material) !== mouth) ms.push(m); });
+        // a crowd body's light build leaves out its lashes and the cornea's gloss: a pixel or two from that far, and two
+        // draw calls each (Ultra's bazaar drew 83 skinned meshes a frame)
+        s1.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && (m.material as THREE.Material) !== mouth && !(crowd && (m.name === 'lash' || m.name === 'cornea'))) ms.push(m); });
         for (const m of ms) { m.bind(skel, m.bindMatrix); host.add(m); m.visible = false; }
         lodSets[1] = ms;
       }).catch(() => { /* no light build: the full body everywhere */ });
