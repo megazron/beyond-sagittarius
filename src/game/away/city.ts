@@ -11,7 +11,7 @@ import { buildFuture } from './cityfuture';
 import { buildMega } from './citymega';
 import { buildDense, Facade } from './citydense';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { mergeChildren, passMaps, watchChanges, atlasCanvases } from '../../core/merge';
+import { mergeChildren, passMaps, watchChanges, atlasCanvases, unifyLooks } from '../../core/merge';
 import { BATCH, batchStatic } from '../../core/ibatch';
 import { buildDistricts, inOld, BOUNDS as DIST_BOUNDS } from './districts';
 import { navGrid } from './navgrid';
@@ -275,7 +275,7 @@ function mergeStatic(scene: THREE.Scene, keep: Set<THREE.Object3D>, cellM: numbe
     for (const c of o.children) freeze(c);
   };
   for (const c of scene.children) freeze(c);
-  return moved;
+  return { moved, recoloured };
 }
 
 /**
@@ -1223,7 +1223,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     }
   };
 
-  const moved = mergeStatic(scene, new Set<THREE.Object3D>([ground, skyMesh, ringLight, sun, sun.target, ...(linerG ? [linerG] : [])]), tier === 2 ? 39 : tier === 1 ? 117 : 400, (t) => { future.update(0.05, t); mega.update(0.05, t); dense.update(0.05, t, null); }, tier === 0);
+  const { moved, recoloured } = mergeStatic(scene, new Set<THREE.Object3D>([ground, skyMesh, ringLight, sun, sun.target, ...(linerG ? [linerG] : [])]), tier === 2 ? 39 : tier === 1 ? 117 : 400, (t) => { future.update(0.05, t); mega.update(0.05, t); dense.update(0.05, t, null); }, tier === 0);
   // ---- the rest of Zenvora: districts, traffic and people round the old town (districts.ts) ----
   const placedD = new Map<string, { name: string; at: THREE.Matrix4[] }>(), DCELL = tier === 0 ? 104 : 52;
   const placeD = (name: string, x: number, y: number, z: number, yaw: number, scale = 1) => {
@@ -1305,6 +1305,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // town (it is hidden as a whole out in the districts), the districts' zones in the scene.
   if (BATCH.on) {
     const under = (o: THREE.Object3D, r: THREE.Object3D) => { for (let p = o.parent; p; p = p.parent) if (p === r) return true; return false; };
+    unifyLooks(scene, recoloured);
     batchStatic(oldTown, (m) => m.userData.ground !== true);
     batchStatic(scene, (m) => m.userData.ground !== true && !under(m, oldTown));
   }

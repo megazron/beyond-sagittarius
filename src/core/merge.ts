@@ -290,3 +290,46 @@ export function atlasCanvases(root: THREE.Object3D, take: (o: THREE.Mesh, m: THR
   }
   return saved;
 }
+
+/**
+ * Plain looks into shared per-vertex ones, so a batch can draw them together: every frozen mesh under `root` with an
+ * untextured, unhooked, opaque standard material gets the shared per-vertex PBR material of its kind (its colour,
+ * roughness, metalness and glow in the vertices), and every plain opaque basic one a shared vertex-coloured basic
+ * material. They were singletons the merges left (one in a stretch of street), each its own material: at the spaceport
+ * gate forty materials a frame, a program switch and a full uniform upload each. `skip`: materials that change later.
+ */
+export function unifyLooks(root: THREE.Object3D, skip: Set<THREE.Material>) {
+  let n = 0;
+  root.traverse((o) => {
+    const m = o as THREE.Mesh, mat = m.material as THREE.Material;
+    if (!m.isMesh || (m as THREE.SkinnedMesh).isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh || (m as unknown as { isBatchedMesh?: boolean }).isBatchedMesh) return;
+    if (!mat || Array.isArray(mat) || skip.has(mat) || mat.transparent || !mat.visible || m.matrixAutoUpdate || m.name || m.userData.keep || m.userData.ground === true) return;
+    if (m.onBeforeRender !== plainHook || m.customDepthMaterial || m.renderOrder !== 0 || Object.keys(m.geometry.morphAttributes).length || m.geometry.drawRange.count !== Infinity) return;
+    if (mat.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile || m.layers.mask !== 1) return;
+    const g0 = m.geometry;
+    if (mat.type === 'MeshStandardMaterial' && pbrable(mat, g0) && g0.attributes.normal) {
+      const k = `pbr|${materialSignature(mat, 'pbr')}`;
+      const shared = LOOSE.get(k) ?? LOOSE.set(k, pbrMaterial(mat as THREE.MeshStandardMaterial)).get(k)!;
+      const s = mat as THREE.MeshStandardMaterial, e = s.emissive.clone().multiplyScalar(s.emissiveIntensity);
+      m.geometry = bake(g0, { color: [s.color.r, s.color.g, s.color.b], aPbr: [s.roughness, s.metalness], aGlow: [e.r, e.g, e.b] });
+      m.material = shared; n++;
+    } else if (mat.type === 'MeshBasicMaterial' && tintable(mat, g0) && !(mat as THREE.MeshBasicMaterial).map && !(mat as THREE.MeshBasicMaterial).alphaMap && g0.attributes.normal) {
+      const k = `basic|${materialSignature(mat, 'tint')}`;
+      let shared = LOOSE.get(k);
+      if (!shared) { shared = mat.clone(); (shared as THREE.MeshBasicMaterial).vertexColors = true; (shared as THREE.MeshBasicMaterial).color.set(0xffffff); shared.userData = {}; LOOSE.set(k, shared); }
+      const c = (mat as THREE.MeshBasicMaterial).color;
+      m.geometry = bake(g0, { color: [c.r, c.g, c.b] });
+      m.material = shared; n++;
+    }
+  });
+  return n;
+}
+/** Positions and normals of `g` (unindexed) with constant per-vertex attributes. */
+function bake(g: THREE.BufferGeometry, attrs: Record<string, number[]>) {
+  const h = g.index ? g.toNonIndexed() : g.clone();
+  for (const k of Object.keys(h.attributes)) if (k !== 'position' && k !== 'normal') h.deleteAttribute(k);
+  const n = h.attributes.position.count;
+  for (const [name, v] of Object.entries(attrs)) { const a = new Float32Array(n * v.length); for (let i = 0; i < n; i++) a.set(v, i * v.length); h.setAttribute(name, new THREE.BufferAttribute(a, v.length)); }
+  h.computeBoundingSphere();
+  return h;
+}
