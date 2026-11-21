@@ -412,7 +412,8 @@ class SsrPass extends Pass {
         vec2 edge = smoothstep(0.0, 0.08, hit) * smoothstep(1.0, 0.92, hit);
         float fade = edge.x * edge.y * (1.0 - smoothstep(30.0, 60.0, travelled));
         vec3 refl = min(texture2D(tDiffuse, hit).rgb, vec3(8.0));
-        gl_FragColor = vec4(col + (refl - col * 0.6) * k * fade * 0.6, 1.0);
+        // mostly added: what the ground shows of its own light (the lamp pools, the wet sheen) stays, the mirror comes on top
+        gl_FragColor = vec4(col * (1.0 - 0.15 * k * fade) + refl * k * fade * 0.5, 1.0);
       }`, { STEPS: steps });
     this.quad = new FullScreenQuad(this.mat);
   }

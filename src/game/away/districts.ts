@@ -596,7 +596,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   // under every lamp, and spilling out of every shop window on to its pavement
   const spills = shopfronts.map((sf) => new THREE.Vector3(sf.x + sf.nx * 2.2, FLOOR + 0.02, sf.z + sf.nz * 2.2));
   const pools = new THREE.InstancedMesh(poolGeo, poolMat, Math.max(1, lamps.length + spills.length));
-  lamps.forEach((l, i) => pools.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(l.x, FLOOR + 0.02, l.z), new THREE.Quaternion(), new THREE.Vector3(14, 1, 14))));
+  lamps.forEach((l, i) => pools.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(l.x, FLOOR + 0.02, l.z), new THREE.Quaternion(), new THREE.Vector3(18, 1, 18))));
   spills.forEach((l, i) => pools.setMatrixAt(lamps.length + i, new THREE.Matrix4().compose(l, new THREE.Quaternion(), new THREE.Vector3(8, 1, 8))));
   pools.frustumCulled = false; add(pools);
 

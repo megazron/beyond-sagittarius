@@ -94,9 +94,9 @@ export function dayCycle(o: { sky: THREE.ShaderMaterial; sun: THREE.DirectionalL
         o.sun.userData.dir = new THREE.Vector3(-st.sunDir.x, 0.55, -st.sunDir.z).normalize();
       }
       hemiSky.copy(C(0x9ab6e8)).lerp(C(0x8a86c8), gold).lerp(C(0x283252), st.night); // a city night: the sky glows with its own light
-      hemiGnd.copy(C(0xb09070)).lerp(C(0x7a5a48), gold).lerp(C(0x3a2a20), st.night); // the street's own light bouncing off the paving
+      hemiGnd.copy(C(0xb09070)).lerp(C(0x7a5a48), gold).lerp(C(0x4a3828), st.night); // the street's own light bouncing off the paving
       o.hemi.color.copy(hemiSky); o.hemi.groundColor.copy(hemiGnd);
-      o.hemi.intensity = (0.9 + 0.92 * (1 - st.night)) * (1 - st.rain * 0.25);
+      o.hemi.intensity = (1.1 + 0.72 * (1 - st.night)) * (1 - st.rain * 0.25);
       o.scene.environmentIntensity = 0.5 + 0.85 * (1 - st.night);
       // the lens: by day the light is strong and the exposure low, so lit signs and shop windows sit under the sunlit
       // walls and nothing whites out; as night comes the exposure opens and the neon becomes the light, with its bloom
