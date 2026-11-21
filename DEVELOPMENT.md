@@ -241,7 +241,7 @@ Frame budget in Zenvora. `?perf=1` shows frames a second, update and draw millis
 bodies drawn (`src/core/perfhud.ts`; the same numbers are `__bs.perf`). The city builds itself for one of three tiers
 (phones, Web, Ultra and up) and what each may spend is fixed in code:
 
-- Real bodies: at most 2, 7 or 14 at once besides the player (`BODY_CAP`); the six of the story and whoever is nearest
+- Real bodies: at most 2, 5 or 12 at once besides the player (`BODY_CAP`); the six of the story and whoever is nearest
   get them. Everyone else is an impostor card: eight townsfolk are drawn once at load into an atlas, six walk frames and
   one standing from four sides (`impostor.ts`), and a card shows the frame and side that fit, tinted by the hour.
   Whoever stands between the camera and you, or within arm's reach of the lens, is not drawn until they move on.

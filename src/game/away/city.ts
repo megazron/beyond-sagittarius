@@ -430,7 +430,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   sun.shadow.autoUpdate = tier === 2;
   let shadowFrame = 0, shadowStale = true, bodiesLeft = 0, cardsNear = 0;
   /** Real bodies drawn at once, the player aside. */
-  const BODY_CAP = [2, 7, 14][tier], OLD_FAR = [50, 80, 130][tier];
+  const BODY_CAP = [2, 5, 12][tier], OLD_FAR = [50, 80, 130][tier];
   const candK = new Float64Array(256), candI = new Int32Array(256);
   if (tier === 0) CHAR_BUDGET.shadowFar = 0; // phones: no body casts a shadow in the city (contact shadows instead)
 
@@ -1122,7 +1122,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // ---- the crowd crowdPool: real bodies that take over the painted crowd near the camera. A card closer than TAKE metres
   // is walked by a body from the crowd pool (the nearest first) and hidden; the body goes back when the card is far again.
   // Before this, the cards simply vanished within 9 m and the street emptied as you walked into it.
-  const POOL = [2, 7, 14][tier], TAKE = 14;
+  const POOL = [2, 5, 12][tier], TAKE = 14;
   // a body of every look (two of each on Ultra): card i is only ever walked by a body of look i mod NLOOK
   const crowdPool: { fig: Character; card: number; phase: number; dx: number; look: number }[] = [];
   for (let i = 0; i < (tier === 2 ? 2 : 1) * NLOOK; i++) {
@@ -1182,7 +1182,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const H = (x: number, z: number) => (inOld(x, z) ? hx(x) : dist.height(x, z));
   const nav = navGrid([DIST_BOUNDS[0], DIST_BOUNDS[1], DIST_BOUNDS[2], DIST_BOUNDS[3]], blocks, (x, z) => (H(x, z) < 0.07 ? 0.6 : 0));
   // the district's walkers drawn as real bodies near the camera (a pool), as cards further off
-  const DPOOL = [2, 7, 14][tier], DNEAR = 30, CARD_FAR = [110, 170, 200][tier];
+  const DPOOL = [2, 5, 12][tier], DNEAR = 30, CARD_FAR = [110, 170, 200][tier];
   dense.setFar(CARD_FAR);
   const dpool: { fig: Character; ped: number; phase: number; look: number }[] = [];
   for (let i = 0; i < (tier === 2 ? 2 : 1) * NLOOK; i++) {
@@ -1500,7 +1500,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         // in the old town's narrow streets a stretch of props further than a block or so is behind the walls anyway
         // the districts' bins, hydrants and service boxes are knee-high: past 90 m they are a pixel or two (a stretch of
         // them was tens of thousands of triangles drawn from across the city)
-        if (pc.far) pc.far.visible = want === 1 && d < (!pc.old ? (tier === 0 ? 60 : 90) : tier === 0 ? 110 : tier === 1 ? 120 : 230);
+        if (pc.far) pc.far.visible = want === 1 && d < (!pc.old ? (tier === 0 ? 60 : 90) : tier === 0 ? 110 : tier === 1 ? 80 : 230);
         if (pc.farSmall) pc.farSmall.visible = d < SMALL_FAR;
         // props cast shadows on Ultra; on Web the scans' shadow pass was most of a frame's triangles in the bazaar (the
         // shadow is redrawn every other frame, so every other frame cost half as much again)
