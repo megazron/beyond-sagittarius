@@ -638,7 +638,7 @@ export class Cinematic {
     this.cue(S + 42.6, () => { audio.whoosh(); audio.tone(44, 13, 'sawtooth', 0.12, 0, 14); ins.warn(null); });
     // D1 wide from behind and above the pilot, over her right shoulder: the seat, her hands on the yoke, the panel and
     // the canopy with the core beyond. She is already fighting it
-    const YH = { L: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(1, 0, 0) }, R: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(-1, 0, 0) } };
+    const YH = { L: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(1, 0, 0), radius: 0.019 }, R: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(-1, 0, 0), radius: 0.019 } }; // the horns are 19 mm round
     const yoke = (local: number, haul: number) => { // she hauls back and fights the roll; the hands go with the yoke
       ins.stick.position.z = -0.56 + 0.07 * haul + Math.sin(local * 7.3) * 0.006;
       ins.stick.rotation.z = Math.sin(local * 1.9) * 0.12 * haul + Math.sin(local * 11) * 0.015;

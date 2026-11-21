@@ -25,6 +25,8 @@ export type Dir = [number, number, number];
  */
 export interface Limbs { armL?: Dir; armR?: Dir; foreL?: Dir; foreR?: Dir; legL?: Dir; legR?: Dir; shinL?: Dir; shinR?: Dir; bend?: number; twist?: number; openHands?: boolean; hair?: Dir }
 export type Face = Partial<Record<'smile' | 'frown' | 'fear' | 'squint' | 'open' | 'blink', number>>;
+/** A hand's finger shape for Character.setGrip. */
+export interface Grip { shape: 'open' | 'relaxed' | 'grip' | 'pinch' | 'point'; radius?: number; amount?: number }
 /** Something the hands do (Character.doTask): reach and pick up, use a thing in front of you, eat, drink, type, open,
  * carry, fix, give, plant, or talk with the hands. */
 export type TaskKind = 'pickup' | 'use' | 'eat' | 'drink' | 'type' | 'open' | 'carry' | 'fix' | 'give' | 'plant' | 'gesture' | 'phone';
@@ -261,12 +263,30 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     grip: [[48, 74, 46], [50, 76, 48], [52, 76, 48], [54, 76, 46], [16, 22, 24]],
     point: [[2, 6, 4], [58, 90, 60], [62, 90, 60], [64, 90, 58], [20, 28, 28]],
   };
-  const fingers: { b: THREE.Bone; side: 'L' | 'R'; q: Record<HandShape, THREE.Quaternion>; cur: THREE.Quaternion }[] = [];
+  const fingers: { b: THREE.Bone; side: 'L' | 'R'; q: Record<HandShape, THREE.Quaternion>; cur: THREE.Quaternion; rest: THREE.Quaternion; hinge: THREE.Vector3; fi: number; j: number }[] = [];
+  // Grip control (setGrip): per hand, a shape and, for 'grip', the radius of what is held. A thin thing (a bow string, a
+  // sling cord) closes the fingers further than a thick one (a spear shaft, a yoke horn). Every joint is clamped to
+  // what a finger can do, and the hand eases to its target (no per-frame noise is added, so it cannot jitter).
+  const JOINT_MAX = [[95, 110, 85], [95, 110, 85], [95, 110, 85], [95, 110, 85], [55, 60, 75]]; // index, middle, ring, little, thumb (degrees)
+  const PINCH = [[38, 52, 30], [46, 66, 40], [50, 70, 42], [54, 72, 42], [30, 28, 36]];
+  const gripDeg = (g: Grip, fi: number, j: number) => {
+    let d: number;
+    if (g.shape === 'pinch') d = PINCH[fi][j];
+    else if (g.shape === 'grip') {
+      // curl for a round thing of radius r (metres): 'grip' as authored fits about 2 cm; thinner closes further
+      const r = clamp(g.radius ?? 0.02, 0.002, 0.05), k = r < 0.02 ? 1 + (0.02 - r) / 0.018 * 0.3 : 1 - (r - 0.02) / 0.03 * 0.42;
+      d = SHAPES.grip[fi][j] * k;
+    } else d = SHAPES[g.shape][fi][j];
+    d *= g.amount ?? 1;
+    return clamp(d, 0, JOINT_MAX[fi][j]);
+  };
+  const gripSet: { L?: Grip; R?: Grip } = {};
+  const gripQ = new THREE.Quaternion();
   let handOpen = false, handsSet = false;
   let selfieT = 0, selfieHeld = false; const V4s = new THREE.Vector3();
   /** A hand held on something in the scene (a control yoke, a rail): the wrist at a live world point, the fingers and
    *  the palm turned to given world directions, the fingers closed. Eased in and out. */
-  type HoldSide = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3 };
+  type HoldSide = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius?: number };
   let hold: { L?: HoldSide; R?: HoldSide } | null = null; const holdW = { L: 0, R: 0 };
   const selfM = { a: new THREE.Vector3(), b: new THREE.Vector3(), l: new THREE.Matrix4(), q0: new THREE.Quaternion(), qi: new THREE.Quaternion(), x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), m: new THREE.Matrix4(), q: new THREE.Quaternion() };
   let gaitPhase = 0, inited = false, hipDrop = 0, sacAt = 1, sacX = 0, sacY = 0, firstFrame = true, eyeAimX = 0, eyeAimY = 0;
@@ -428,7 +448,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
             const rest = fingerRest.get(b)!;
             const q = {} as Record<HandShape, THREE.Quaternion>;
             for (const k of Object.keys(SHAPES) as HandShape[]) q[k] = rest.clone().multiply(new THREE.Quaternion().setFromAxisAngle(hinge, SHAPES[k][col[f - 1]][j - 1] * Math.PI / 180));
-            fingers.push({ b, side: sd, q, cur: q.relaxed.clone() });
+            fingers.push({ b, side: sd, q, cur: q.relaxed.clone(), rest, hinge, fi: col[f - 1], j: j - 1 });
           }
         }
       }
@@ -1028,7 +1048,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const a = handsSet ? 1 - Math.exp(-dt * 6) : 1;
       let worst = 0, step = 0;
       for (const f of fingers) {
-        const to = f.q[f.side === 'R' ? shapeR : shapeL];
+        // an explicit grip wins; a hold without one closes round its own radius (or the authored grip)
+        const g = gripSet[f.side] ?? (holdW[f.side] > 0.5 && hold?.[f.side]?.radius !== undefined ? { shape: 'grip' as const, radius: hold[f.side]!.radius } : undefined);
+        const to = g ? gripQ.copy(f.rest).multiply(Q.setFromAxisAngle(f.hinge, gripDeg(g, f.fi, f.j) * Math.PI / 180)) : f.q[f.side === 'R' ? shapeR : shapeL];
         if (dt > 0 && handsSet) step = Math.max(step, f.cur.angleTo(to) * a / dt);
         f.cur.slerp(to, a); f.b.quaternion.copy(f.cur);
         worst = Math.max(worst, f.cur.angleTo(fingerRest.get(f.b)!));
@@ -1202,6 +1224,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** Hold on to something with one or both hands: live world points and directions (mutate them to move the hands
      *  with what they hold); null lets go. */
     setHold(h: { L?: HoldSide; R?: HoldSide } | null) { hold = h; },
+    /** Per-hand finger control. side 'L', 'R' or 'both'; g null gives the hand back to the automatic shape (relaxed,
+     *  or what the task or prop asks). Shapes: 'open', 'relaxed', 'grip' (radius: the held thing's radius in metres,
+     *  0.002 a bow string or sling cord, 0.015 a spear shaft, 0.02 a yoke horn, 0.04 a club), 'pinch' (thumb to index:
+     *  an arrow nock, a stone to place), 'point'. amount 0..1 scales the curl (a loosening grip). Joints are clamped
+     *  to a finger's range and the hand eases to the target, so calling it every frame with the same values is still. */
+    setGrip(side: 'L' | 'R' | 'both', g: Grip | null) { for (const sd of side === 'both' ? ['L', 'R'] as const : [side]) { if (g) gripSet[sd] = { ...g }; else delete gripSet[sd]; } },
     /** Let go of the task now (it eases out over a moment). */
     stopTask() { if (task) { const out = Math.min(0.35, task.dur * 0.3); task.dur = Math.min(task.dur, task.t + out); task.t = Math.max(task.t, task.dur - out); } },
     /** What the hands are busy with, or null. */
