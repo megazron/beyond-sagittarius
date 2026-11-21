@@ -415,6 +415,8 @@ function titleCard(then: () => void, key = 'city.title') {
 /** Zenvora: the player's list on the last normal afternoon, then the opening films. */
 function playPrologue(then: () => void) {
   ui.fade('black', 1, 0.4);
+  // the city is built and its shaders compiled while the title card is up, not in the first frame after it
+  setTimeout(() => { if (!game?.away) return; const st = game.away.prepare('city'); void renderer.precompile(st.scene, camera); }, 300);
   titleCard(() => whenWorldReady(() => {
     ui.show('loading', false);
     state = 'game';

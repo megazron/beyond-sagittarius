@@ -663,13 +663,7 @@ export class Renderer {
 
   setScene(scene: THREE.Scene, camera: THREE.PerspectiveCamera, aoEnabled: boolean) {
     // a stage can ask for image-based light from its own sky: shade then reads as sky-lit, not black
-    const sky = scene.userData.skyForEnv as THREE.Object3D | undefined;
-    if (sky && !scene.environment) {
-      const env = new THREE.Scene(); env.add(sky.clone());
-      const pm = new THREE.PMREMGenerator(this.renderer);
-      scene.environment = pm.fromScene(env, 0.02).texture; pm.dispose();
-      scene.environmentIntensity = (scene.userData.envIntensity as number | undefined) ?? 1;
-    }
+    this.ensureEnv(scene);
     if (scene.userData.ao) aoEnabled = true;
     this.renderPass.scene = scene;
     this.renderPass.camera = camera;
@@ -720,6 +714,36 @@ export class Renderer {
     this.renderer.toneMappingExposure = exposure;
     this.bloom.strength = this.quality.bloomStrength * 0.32 * bloomK;
     this.bloom.threshold = threshold;
+  }
+
+  /**
+   * Gets a scene ready before it is shown: its shaders compile in the background (the browser's parallel compile where
+   * it has one), then its textures go to the GPU a few a frame. Arriving in it is then not seconds of compiling and
+   * uploading in its first frame.
+   */
+  private ensureEnv(scene: THREE.Scene) {
+    const sky = scene.userData.skyForEnv as THREE.Object3D | undefined;
+    if (sky && !scene.environment) {
+      const env = new THREE.Scene(); env.add(sky.clone());
+      const pm = new THREE.PMREMGenerator(this.renderer);
+      scene.environment = pm.fromScene(env, 0.02).texture; pm.dispose();
+      scene.environmentIntensity = (scene.userData.envIntensity as number | undefined) ?? 1;
+    }
+  }
+
+  async precompile(scene: THREE.Scene, camera: THREE.Camera) {
+    this.ensureEnv(scene); // the shaders differ with and without the image-based light: compile the ones that will be used
+    try { await this.renderer.compileAsync(scene, camera); } catch { /* compiled on first draw instead */ }
+    const texs = new Set<THREE.Texture>();
+    scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+      for (const mm of Array.isArray(m) ? m : m ? [m] : []) for (const v of Object.values(mm)) if ((v as THREE.Texture)?.isTexture) texs.add(v as THREE.Texture);
+    });
+    const list = [...texs];
+    for (let i = 0; i < list.length; i += 4) {
+      for (const tx of list.slice(i, i + 4)) { try { this.renderer.initTexture(tx); } catch { /* uploaded on first draw */ } }
+      await new Promise((r) => requestAnimationFrame(r));
+    }
   }
 
   resize() {

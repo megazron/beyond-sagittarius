@@ -298,10 +298,31 @@ export function detectQuality(): Quality {
   if (isQuality(url)) return PRESETS[url];
   const saved = localStorage.getItem(KEY);
   if (isQuality(saved)) return PRESETS[saved];
-  if (desktop) return PRESETS[isQuality(desktop.quality) ? desktop.quality : 'cinematic'];
+  if (desktop && isQuality(desktop.quality)) return PRESETS[desktop.quality]; // the desktop build passes 'auto' unless told otherwise
   if (isPhone()) return PRESETS.mobile;
-  const local = import.meta.env.DEV || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
-  return PRESETS[local ? 'ultra' : 'web'];
+  // first run: a safe default for the graphics chip in this machine (Settings can always raise it)
+  const tier = gpuTier();
+  if (tier === 'low') return PRESETS.mobile;
+  if (tier === 'high') return PRESETS[desktop ? 'cinematic' : 'ultra'];
+  return PRESETS.web;
+}
+
+/**
+ * How strong the graphics chip is, from the name WebGL reports. High: recent desktop-class discrete chips (an RTX x060
+ * and up, a Radeon RX 6700 and up, Apple's Pro and Max chips). Low: software rendering and older integrated graphics.
+ * Everything else, laptop discrete chips such as the RTX A500 and current integrated graphics included, is mid.
+ */
+export function gpuTier(): 'low' | 'mid' | 'high' {
+  let name = '';
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2') ?? document.createElement('canvas').getContext('webgl');
+    const ext = gl?.getExtension('WEBGL_debug_renderer_info');
+    name = String(gl && ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl?.getParameter(gl.RENDERER) ?? '');
+  } catch { return 'mid'; }
+  if (/swiftshader|llvmpipe|software|microsoft basic/i.test(name)) return 'low';
+  if (/RTX\s*(20|30|40|50)[6-9]0|RTX\s*A[2-6]000|Radeon\s*RX\s*(6[7-9]|7[7-9]|9[0-9])\d\d|Apple M\d (Pro|Max|Ultra)/i.test(name)) return 'high';
+  if (/HD Graphics [2-5]\d\d|HD Graphics$|Mali-[GT][0-7]\d\b|Adreno \(TM\) [1-5]\d\d|PowerVR/i.test(name)) return 'low';
+  return 'mid';
 }
 
 export function saveQualityChoice(q: QualityName) {

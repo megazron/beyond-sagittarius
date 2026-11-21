@@ -15,7 +15,7 @@ const { pathToFileURL } = require('node:url');
 const SCHEME = 'app';
 const ENTRY = `${SCHEME}://game/index.html`;
 const ASSET_BASE = `${SCHEME}://assets/`;
-const DEFAULT_QUALITY = 'cinematic';
+const DEFAULT_QUALITY = process.env.BS_QUALITY || 'auto'; // auto: the game picks a preset for the graphics chip (src/core/quality.ts)
 
 const base = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..');
 const ROOTS = {

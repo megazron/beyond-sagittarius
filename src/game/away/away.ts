@@ -35,8 +35,17 @@ export class Away {
   constructor(private camera: THREE.PerspectiveCamera, private input: Input, private ui: UI, private detail: number, private show: (s: THREE.Scene | null) => void) {}
 
   /** `job`: 0 for their story, a level number for that level's work. */
+  /** A stage built ahead (under a title card), so arriving is not a long freeze. */
+  private prepared: { loc: string; stage: ReturnType<typeof make> } | null = null;
+  prepare(location: string) {
+    if (this.prepared?.loc !== location) this.prepared = { loc: location, stage: make(location, t, 0, this.detail) };
+    return this.prepared.stage;
+  }
+
   enter(id: CrewId, location: string, done: () => void, job = 0) {
-    const stage = make(location, t, job, this.detail);
+    const pre = this.prepared;
+    this.prepared = null;
+    const stage = pre && pre.loc === location && !job ? pre.stage : make(location, t, job, this.detail);
     this.pace = 1;
     this.stage = stage; this.who = id; this.onDone = done; this.location = location; this.done.clear(); this.busy = false; this.seen.clear(); this.vista = null;
     // the body you play is drawn with its full build, phones too (see PLAYER_DETAIL in main.ts)
