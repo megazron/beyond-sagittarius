@@ -30,8 +30,9 @@ export function createInserts(deck: THREE.Group) {
   const metal = new THREE.MeshStandardMaterial({ color: 0x1b1f26, metalness: 0.8, roughness: 0.3 });
   const bezel = new THREE.MeshStandardMaterial({ color: 0x8a929c, metalness: 0.9, roughness: 0.25 });
 
-  // ---- A3: the nav gauge, set into the console top at its left end; the needle creeps a hair left ----
-  const gauge = new THREE.Group(); gauge.position.set(-0.85, -1.285, -1.2); gauge.rotation.x = -Math.PI / 3 + Math.PI / 2; deck.add(gauge);
+  // ---- A3: the nav gauge, at the console's left end; the needle creeps a hair left ----
+  // on the console's front face (the top is the tilted screen), facing the room, below Zenvik's eyes
+  const gauge = new THREE.Group(); gauge.position.set(-0.85, -1.52, -0.945); deck.add(gauge);
   {
     const face = canvasScreen(0.16, 0.16, 512), { g, c } = face;
     g.fillStyle = '#0b1016'; g.fillRect(0, 0, c.width, c.height);
