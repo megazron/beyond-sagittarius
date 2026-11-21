@@ -101,7 +101,8 @@ export class Waking {
     const s = this.s;
     if (s.level !== 1 || s.flags['e1.listen'] || s.flags.drank) return;
     // once he has left the wake spot and the water is near enough to hear, not yet in sight at his feet
-    if (Math.hypot(this.player.pos.x, this.player.pos.z) < 9) return;
+    // (he stops while walking: a player standing still is busy with something else)
+    if (Math.hypot(this.player.pos.x, this.player.pos.z) < 9 || this.player.speedNow < 0.8) return;
     const d = this.stream.nearest(this.player.pos, this.v);
     if (d > 30 || d < 8) return;
     s.flags['e1.listen'] = true;
