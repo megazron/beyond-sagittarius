@@ -718,7 +718,7 @@ export class CombatSim {
     if (p.blocking && facing > 0.25 && what !== 'beam' && what !== 'stomp') {
       const window = this.assist.hold ? 0.36 : 0.22;
       // set against a charge or a leap, a spear does the work itself
-      const braced = p.weapon === 'spear' && e && (what === 'lunge' || what === 'charge' || what === 'nip');
+      const braced = (p.weapon === 'spear' || p.weapon === 'hafted') && e && (what === 'lunge' || what === 'charge' || what === 'nip');
       if (p.blockT <= window || braced) {
         this.stats.parried++;
         this.emit({ t: 'player', what: braced ? 'brace' : 'parry', x: p.x, z: p.z, id: e?.id });

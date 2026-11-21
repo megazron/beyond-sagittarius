@@ -1,6 +1,6 @@
 // Every weapon and trap is a row of data. A later age adds rows (and a model in view/gear.ts); nothing else changes.
 
-export type WeaponId = 'fists' | 'rock' | 'club' | 'spear' | 'torch' | 'sling' | 'bow' | 'crossbow' | 'coil';
+export type WeaponId = 'fists' | 'rock' | 'flake' | 'club' | 'spear' | 'hafted' | 'torch' | 'sling' | 'bow' | 'crossbow' | 'coil';
 export type DamageKind = 'blunt' | 'pierce' | 'fire' | 'energy';
 
 export interface ProjDef {
@@ -54,18 +54,29 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   rock: { id: 'rock', mass: 0.6, dur: 0, age: 0, craft: { stone: 1 }, block: 0.35,
     melee: { dmg: 9, reach: 1.3, arc: 1.1, windup: 0.22, active: 0.1, recover: 0.36, stamina: 9, knock: 2, poise: 16, kind: 'blunt', noise: 6 },
     proj: { ammo: 'stone', speed: 17, gravity: 9.81, dmg: 10, kind: 'blunt', charge: 0.45, weak: 0.6, radius: 0.09, knock: 2.2, poise: 18, recover: 1, noise: 9, spread: [5, 2.4] } },
-  club: { id: 'club', mass: 1.6, dur: 70, age: 0, craft: { branch: 2 }, block: 0.55,
+  // a sharp flake knocked off a core with a hammerstone: a knife first, a weapon only at arm's length of nothing
+  flake: { id: 'flake', mass: 0.15, dur: 25, age: 0, craft: { stone: 2 }, block: 0.2,
+    melee: { dmg: 8, reach: 1.15, arc: 0.9, windup: 0.16, active: 0.08, recover: 0.3, stamina: 6, knock: 0.8, poise: 8, kind: 'pierce', noise: 3 } },
+  // a heavy branch, trimmed: the first thing anyone picks up
+  club: { id: 'club', mass: 1.6, dur: 70, age: 0, craft: { branch: 1 }, block: 0.55,
     melee: { dmg: 14, reach: 1.7, arc: 1.5, windup: 0.34, active: 0.14, recover: 0.5, stamina: 14, knock: 4, poise: 30, kind: 'blunt', noise: 7 } },
-  spear: { id: 'spear', mass: 1.3, dur: 45, age: 0, craft: { branch: 1, stone: 1, vine: 1 }, block: 0.6,
+  // a straight sapling, its point shaped with a flake and hardened in the coals (Schoeningen, Clacton): the point
+  // dulls and splits with use, so it wears quicker than a club
+  spear: { id: 'spear', mass: 1.3, dur: 35, age: 0, craft: { branch: 1 }, block: 0.6,
     melee: { dmg: 16, reach: 2.6, arc: 0.5, windup: 0.3, active: 0.12, recover: 0.46, stamina: 12, knock: 2.5, poise: 22, kind: 'pierce', noise: 5 },
     proj: { ammo: null, speed: 21, gravity: 9.81, dmg: 26, kind: 'pierce', charge: 0.6, weak: 0.55, radius: 0.1, knock: 3, poise: 34, recover: 1, noise: 7, spread: [5, 2.2] } },
+  // a knapped point set in a split shaft, bound with cordage and glued with resin or birch tar: deeper wounds, and
+  // the binding is what gives first
+  hafted: { id: 'hafted', mass: 1.4, dur: 40, age: 1, craft: { branch: 1, stone: 1, fibre: 1, resin: 1 }, block: 0.6,
+    melee: { dmg: 21, reach: 2.6, arc: 0.5, windup: 0.3, active: 0.12, recover: 0.46, stamina: 12, knock: 2.5, poise: 24, kind: 'pierce', noise: 5 },
+    proj: { ammo: null, speed: 21, gravity: 9.81, dmg: 33, kind: 'pierce', charge: 0.6, weak: 0.55, radius: 0.1, knock: 3, poise: 36, recover: 0.9, noise: 7, spread: [5, 2.2] } },
   torch: { id: 'torch', mass: 0.9, dur: 240, age: 0, craft: { branch: 1, tinder: 1 }, block: 0.4, fire: true,
     melee: { dmg: 8, reach: 1.8, arc: 1.9, windup: 0.26, active: 0.2, recover: 0.4, stamina: 9, knock: 1.5, poise: 14, kind: 'fire', noise: 5 } },
-  sling: { id: 'sling', mass: 0.1, dur: 140, age: 1, craft: { vine: 2, fibre: 1 }, block: 0.2, ranged: true,
+  sling: { id: 'sling', mass: 0.1, dur: 140, age: 1, craft: { fibre: 3, hide: 1 }, block: 0.2, ranged: true,
     proj: { ammo: 'stone', speed: 30, gravity: 9.81, dmg: 15, kind: 'blunt', charge: 0.8, weak: 0.45, radius: 0.08, knock: 2.6, poise: 26, recover: 1, noise: 10, spread: [4.5, 1.6] } },
-  bow: { id: 'bow', mass: 0.7, dur: 90, age: 1, craft: { branch: 2, vine: 2 }, block: 0.25, ranged: true,
+  bow: { id: 'bow', mass: 0.7, dur: 90, age: 1, craft: { branch: 1, sinew: 2, fibre: 1 }, block: 0.25, ranged: true,
     proj: { ammo: 'arrow', speed: 40, gravity: 9.81, dmg: 20, kind: 'pierce', charge: 0.7, weak: 0.4, radius: 0.06, knock: 1.6, poise: 20, recover: 0.6, noise: 5, spread: [3.2, 0.8] } },
-  crossbow: { id: 'crossbow', mass: 3.2, dur: 220, age: 3, craft: { branch: 3, vine: 2, bronze: 1 }, block: 0.3, ranged: true,
+  crossbow: { id: 'crossbow', mass: 3.2, dur: 220, age: 4, craft: { branch: 3, vine: 2, bronze: 1 }, block: 0.3, ranged: true,
     proj: { ammo: 'bolt', speed: 58, gravity: 9.81, dmg: 34, kind: 'pierce', charge: 0, weak: 1, radius: 0.06, knock: 2.4, poise: 36, recover: 0.5, noise: 6, spread: [0.7, 0.7], reload: 2.6 } },
   // the Scientist's salvage shooter: a coil that throws a charged slug. It stops machines; it runs on a cell that refills.
   coil: { id: 'coil', mass: 2.4, dur: 0, age: 7, craft: { scrap: 4, cell: 1 }, block: 0.3, ranged: true,
@@ -75,7 +86,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 export const REFIRE: Partial<Record<WeaponId, number>> = { crossbow: 0.3, coil: 0.28 };
 /** Arrows and bolts are made, not found. */
 export const AMMO_CRAFT: Record<string, { cost: Record<string, number>; makes: number }> = {
-  arrow: { cost: { branch: 1, stone: 1 }, makes: 4 },
+  // a shaft, a knapped head bound and glued on, and fletching: four from a good branch
+  arrow: { cost: { branch: 1, stone: 1, fibre: 1 }, makes: 4 },
   bolt: { cost: { branch: 1, bronze: 1 }, makes: 4 },
 };
 

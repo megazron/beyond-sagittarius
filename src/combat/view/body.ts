@@ -65,7 +65,10 @@ function gearMesh(id: WeaponId): THREE.Object3D {
   const rod = (r: number, len: number) => { const c = new THREE.CylinderGeometry(r, r, len, 6); c.rotateX(Math.PI / 2); return c; };
   if (id === 'rock') add(new THREE.DodecahedronGeometry(0.065, 0), stone);
   else if (id === 'club') { add(rod(0.022, 0.75), wood, 0.25); add(new THREE.SphereGeometry(0.06, 7, 5), wood, 0.6).scale.set(1, 1, 1.5); }
-  else if (id === 'spear') { add(rod(0.016, 2), wood, 0.35); const tip = new THREE.ConeGeometry(0.035, 0.2, 4); tip.rotateX(Math.PI / 2); add(tip, stone, 1.43); add(rod(0.022, 0.08), vine, 1.3); }
+  else if (id === 'flake') { const f = new THREE.TetrahedronGeometry(0.05, 0); f.scale(0.5, 1, 1.6); add(f, stone, 0.04); }
+  // fire-hardened: one piece of wood, the point blackened by the coals
+  else if (id === 'spear') { add(rod(0.016, 2), wood, 0.35); const tip = new THREE.ConeGeometry(0.016, 0.22, 6); tip.rotateX(Math.PI / 2); add(tip, new THREE.MeshStandardMaterial({ color: 0x2a211a, roughness: 0.9 }), 1.46); }
+  else if (id === 'hafted') { add(rod(0.016, 2), wood, 0.35); const tip = new THREE.ConeGeometry(0.035, 0.2, 4); tip.rotateX(Math.PI / 2); add(tip, stone, 1.43); add(rod(0.022, 0.08), vine, 1.3); }
   else if (id === 'torch') {
     add(rod(0.02, 0.7), wood, 0.2);
     const f = new THREE.ConeGeometry(0.07, 0.26, 5); f.rotateX(Math.PI / 2);
@@ -138,7 +141,7 @@ export class FightBody {
     const str = this.held?.getObjectByName('string');
     let pose: Pose | null = null, base: Pose | null;
     // the stance the weapon is held in when it is up
-    if (w === 'bow') base = P.bowHold; else if (w === 'crossbow' || w === 'coil') base = P.gunAim; else if (w === 'spear') base = P.spearReady; else base = P.guard;
+    if (w === 'bow') base = P.bowHold; else if (w === 'crossbow' || w === 'coil') base = P.gunAim; else if (w === 'spear' || w === 'hafted') base = P.spearReady; else base = P.guard;
     this.rollAngle = 0; this.crouch = 0;
     if (p.down) { model.setLimbs(null); return; }
     if (p.act === 'roll') {
@@ -152,8 +155,8 @@ export class FightBody {
     } else if (p.snareT > 0.15) {
       pose = mix(base, P.snared, 0.8 + Math.sin(t * 11) * 0.2, this.scratch);
     } else if (p.blocking) {
-      pose = mix(base, w === 'spear' ? P.brace : P.block, out(p.blockT / 0.12), this.scratch);
-      if (w === 'spear') this.crouch = 0.16 * out(p.blockT / 0.2);
+      pose = mix(base, w === 'spear' || w === 'hafted' ? P.brace : P.block, out(p.blockT / 0.12), this.scratch);
+      if (w === 'spear' || w === 'hafted') this.crouch = 0.16 * out(p.blockT / 0.2);
     } else if (p.act === 'charge') {
       const c = p.charge;
       if (p.charging === 'throw' || w === 'rock') pose = mix(base, P.throwBack, out(c), this.scratch);
@@ -167,9 +170,9 @@ export class FightBody {
       if (str) str.position.x = w === 'bow' ? -c * 0.0 : 0;
     } else if (p.act === 'windup' || p.act === 'active' || (p.act === 'recover' && p.combo !== 9 && m)) {
       // wind-up, the blow, and the way back
-      const fists = w === 'fists' || w === 'rock';
-      const back = w === 'spear' ? P.spearBack : fists ? (p.combo % 2 ? P.crossBack : P.jabBack) : p.combo === 1 || w === 'torch' ? P.sweepBack : P.clubBack;
-      const hit = w === 'spear' ? P.spearThrust : fists ? (p.combo % 2 ? P.crossHit : P.jabHit) : p.combo === 1 || w === 'torch' ? P.sweepHit : P.clubHit;
+      const fists = w === 'fists' || w === 'rock' || w === 'flake';
+      const back = w === 'spear' || w === 'hafted' ? P.spearBack : fists ? (p.combo % 2 ? P.crossBack : P.jabBack) : p.combo === 1 || w === 'torch' ? P.sweepBack : P.clubBack;
+      const hit = w === 'spear' || w === 'hafted' ? P.spearThrust : fists ? (p.combo % 2 ? P.crossHit : P.jabHit) : p.combo === 1 || w === 'torch' ? P.sweepHit : P.clubHit;
       if (p.act === 'windup') pose = mix(base, back, out(p.actT / (m!.windup * 0.8)), this.scratch);
       else if (p.act === 'active') pose = mix(back, hit, out(p.actT / (m!.active * 0.6)), this.scratch);
       else pose = mix(hit, base, smooth(p.actT / m!.recover), this.scratch);
