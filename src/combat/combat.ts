@@ -238,6 +238,7 @@ export class Combat {
   /** When the encounter frame last advanced the open tension moment (performance.now()). */
   private tensionFed = -1e9;
   private aimW = new THREE.Vector3();
+  private shine: THREE.DirectionalLight | null = null;
   /** The story (or the menu) calls the encounter off. */
   leaveEncounter() { this.encounter?.leave(); }
 
@@ -748,6 +749,13 @@ export class Combat {
   }
 
   private present(dt: number, time: number) {
+    // a night set piece: the giant planet overhead throws a cold planetshine, enough to see shapes move at the
+    // edge of the firelight (Earth's full moon is about 0.1 to 0.3 lux; a ringed giant filling a wide part of the
+    // sky would give several times that)
+    const nightRun = !!this.encounter && this.sim!.night;
+    if (nightRun && !this.shine) { this.shine = new THREE.DirectionalLight(0x9fb4e0, 0); this.shine.position.set(-40, 80, 30); this.d.world.scene.add(this.shine, this.shine.target); }
+    // the light stays in the scene once made (switching lights on and off recompiles every material)
+    if (this.shine) { const want = nightRun ? 0.55 : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 40, P0.y + 80, P0.z + 30); this.shine.target.position.copy(P0); } }
     const D = this.d, sim = this.sim!, P = D.player, p = sim.player, run = this.encounter, cam = P.camera;
     // creatures: a body for each within sight, none for those far off or gone
     NIGHT.on = sim.night;

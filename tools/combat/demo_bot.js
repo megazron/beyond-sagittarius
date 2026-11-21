@@ -92,9 +92,11 @@ window.__cbBot = (mode) => {
       else if (!p.has.spear) { const k = sim.pickups.find((q) => q.weapon === 'spear'); if (k) go(k.x, k.z); }
       else if (prey) {
         const d = dist(prey, p);
-        if (p.act === 'charge') { stop(); look(prey.x, prey.z, prey.y + 0.3); if (p.charge >= 1) hold('KeyG', 0); }
-        else if (d > 8.5) go(prey.x, prey.z);
-        else { stop(); const off = look(prey.x, prey.z, prey.y + 0.3); if (off < 0.06 && p.act === 'idle' && prey.state !== 'flee') hold('KeyG', 1); }
+        // a patient hunter: creep in to about ten metres, wait for it to settle, lead it a little, one full throw
+        const lead = 0.35, lx = prey.x + prey.vx * lead, lz = prey.z + prey.vz * lead, loft = prey.y + 0.25 + d * 0.035;
+        if (p.act === 'charge') { stop(); look(lx, lz, loft); if (p.charge >= 1 && prey.state !== 'flee') hold('KeyG', 0); }
+        else if (d > 10.5) { if (prey.state === 'flee' || prey.alert > 0.5) stop(); else go(prey.x, prey.z); }
+        else { stop(); const off = look(lx, lz, loft); if (off < 0.05 && p.act === 'idle' && prey.state !== 'flee' && Math.hypot(prey.vx, prey.vz) < 0.8) hold('KeyG', 1); }
       }
     } else if (mode === 'night') {
       const fire = sim.fires.find((f) => !f.torch && !f.burnsOut), food = run.markers.find((m) => m.kind === 'food');
