@@ -27,7 +27,9 @@ if sys.argv[1] == '--join':
         print('joined', name, len(meta), 'frames')
     sys.exit(0)
 
-PORT = 9333; URL = sys.argv[1]; OUT = sys.argv[2]; PLAN = json.load(open(sys.argv[3])); os.makedirs(OUT, exist_ok=True)
+URL = sys.argv[1]; OUT = sys.argv[2]; PLAN = json.load(open(sys.argv[3])); os.makedirs(OUT, exist_ok=True)
+# the DevTools port: the plan's "port", else BS_CDP_PORT, else 9333 (agents sharing the laptop each start their own Chrome)
+PORT = int(PLAN.get('port') or os.environ.get('BS_CDP_PORT') or 9333)
 errs = []; events = []
 
 class WS:

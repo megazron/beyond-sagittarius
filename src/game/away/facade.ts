@@ -56,7 +56,7 @@ export function facadeMaterial(o: FacadeOpts = {}) {
           vec3 tone = mix(vec3(1.0, 0.74, 0.46), vec3(0.78, 0.9, 1.0), step(0.7, fHash(vec3(bay, fl, seed + 9.0))));
           vec3 wallC = mix(vec3(0.62, 0.56, 0.5), 0.45 + 0.4 * cos(6.2831 * (h + vec3(0.0, 0.3, 0.6))), 0.15);
           vec3 room;
-          float shopKind = floor(fHash(vec3(bay, 11.0, seed)) * 5.0);
+          float shopKind = mod(floor(seed + 0.5), 5.0); // set per building by what its sign says it sells (districts.ts)
           if (t == tz || (street && t == tx)) {
             // the back wall: a picture, a shelf or the shop's racks; a shop has racks down its side walls too
             // a shop's wall: shelves a hand apart, their boards, goods of every size with gaps, under a strip of light
@@ -80,6 +80,14 @@ export function facadeMaterial(o: FacadeOpts = {}) {
               shopWall = mix(wood, vec3(0.06) + chalk, board) + vec3(0.25, 0.16, 0.08) * step(q.y, 1.0) * step(0.9, q.y);
             } else if (shopKind > 3.5) {
               shopWall = mix(vec3(0.7, 0.74, 0.72), goods * 1.3, item * 0.6) * (1.0 - 0.5 * step(ry, 0.1));
+            } else if (shopKind > 2.5) {
+              // a counter shop (a bank, a salon, an optician, a travel desk): pale walls, a counter, lit panels over it
+              float pc = floor(sx * 0.6), pf = fract(sx * 0.6), ph = fHash(vec3(pc, 8.0, seed));
+              float panel = step(0.2, pf) * step(pf, 0.8) * step(1.45, q.y) * step(q.y, 2.2) * step(0.3, ph);
+              vec3 screen = (0.5 + 0.4 * cos(6.2831 * (ph + vec3(0.0, 0.3, 0.6)))) * (0.8 + 0.4 * step(0.5, fract(q.y * 3.0 + ph)));
+              float counter = step(0.0, q.y) * step(q.y, 1.05) * step(Dp * 0.5, q.z) * step(q.z, Dp * 0.9);
+              shopWall = mix(vec3(0.78, 0.77, 0.74) * (0.9 + 0.1 * step(0.5, fract(sx))), screen * 1.4, panel);
+              shopWall = mix(shopWall, vec3(0.3, 0.2, 0.14), counter);
             }
             room = street ? shopWall * step(0.7, q.y) + wallC * 0.12 * step(q.y, 0.7) : wallC * (0.85 + 0.3 * step(0.8, fHash(vec3(floor(q.x * 2.0), fl, seed))));
           } else if (t == ty) {
@@ -91,7 +99,7 @@ export function facadeMaterial(o: FacadeOpts = {}) {
           else room = wallC * 0.8;
           float depthK = 1.0 - 0.5 * clamp(q.z / Dp, 0.0, 1.0);
           // a shop that is shut: its roller shutter is down behind the glass, ribbed and dull
-          float shut = street ? step(0.82, fHash(vec3(bay, 13.0, seed))) : 0.0;
+          float shut = (street && abs(shopKind - 1.0) > 0.5) ? step(0.84, fHash(vec3(floor(bay / 3.0), 13.0, seed))) : 0.0; // food places stay open
           if (shut > 0.5) { room = vec3(0.3, 0.31, 0.32) * (0.8 + 0.2 * step(0.5, fract(fy * Hh * 9.0))); depthK = 1.0; lit = 0.0; }
           float curtain = step(0.65, fHash(vec3(bay, fl, seed + 3.0))) * smoothstep(0.3, 0.42, abs(fx - 0.5)) * (street ? 0.0 : 1.0);
           room = mix(room, vec3(0.75, 0.6, 0.45), curtain);
@@ -154,9 +162,22 @@ export function facadeMaterial(o: FacadeOpts = {}) {
           float inX = smoothstep(lo.x - aa, lo.x + aa, fx) * smoothstep(hi.x + aa, hi.x - aa, fx);
           float inY = smoothstep(lo.y - aa, lo.y + aa, fy) * smoothstep(hi.y + aa, hi.y - aa, fy);
           fWin = inX * inY;
+          // the glass sits back in the wall: seen at an angle, the near side of the opening shows its reveal (the jamb,
+          // the head) in shade instead of glass, so windows read as holes, not paint
+          float fReveal = 0.0;
+          {
+            vec3 Vr = normalize(vWp - cameraPosition);
+            vec3 Tr = alongX ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
+            float into = max(-dot(Vr, vWn), 0.08), rec = street ? 0.12 : (style > 0.5 ? 0.06 : 0.22);
+            vec2 g = vec2(fx + dot(Vr, Tr) / into * rec / bw, fy + Vr.y / into * rec / fh);
+            float gX = smoothstep(lo.x - aa, lo.x + aa, g.x) * smoothstep(hi.x + aa, hi.x - aa, g.x);
+            float gY = smoothstep(lo.y - aa, lo.y + aa, g.y) * smoothstep(hi.y + aa, hi.y - aa, g.y);
+            float glass = fWin * gX * gY;
+            fReveal = fWin - glass; fWin = glass;
+          }
           float fx2 = smoothstep(lo.x - 0.05 - aa, lo.x - 0.05 + aa, fx) * smoothstep(hi.x + 0.05 + aa, hi.x + 0.05 - aa, fx);
           float fy2 = smoothstep(lo.y - 0.04 - aa, lo.y - 0.04 + aa, fy) * smoothstep(hi.y + 0.04 + aa, hi.y + 0.04 - aa, fy);
-          fFrame = clamp(fx2 * fy2 - fWin, 0.0, 1.0) * (style > 0.5 ? 0.6 : 1.0);
+          fFrame = clamp(fx2 * fy2 - fWin - fReveal, 0.0, 1.0) * (style > 0.5 ? 0.6 : 1.0);
           // a mullion down the middle of the punched windows
           float mull = (style < 0.5 && !street) ? (1.0 - smoothstep(0.012, 0.012 + aa, abs(fx - 0.5))) * fWin : 0.0;
           // ---- the room behind the glass (interior mapping): a box as deep as the bay is wide, seen through the pane ----
@@ -164,6 +185,7 @@ ${ROOM}
           float reveal = fWin * smoothstep(hi.y - 0.1, hi.y, fy);
           diffuseColor.rgb = mix(diffuseColor.rgb, inside + vec3(0.02, 0.025, 0.03), fWin);
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.5 + vec3(0.07), max(fFrame, mull));
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.42, fReveal);
           diffuseColor.rgb *= 1.0 - 0.22 * fLedge;
           diffuseColor.rgb *= 1.0 - 0.45 * reveal;
           fGlow += fWin * (1.0 - mull) * glow;

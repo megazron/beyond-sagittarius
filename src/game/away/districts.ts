@@ -83,14 +83,20 @@ function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => 
 }
 
 /** Original names only: shops, banks, hotels and screens of Zenvora. */
-const BRANDS: [string, string, string][] = [
-  ['NOVA NOODLES', '#ffcf5a', '#1a1206'], ['KESARI KITCHEN', '#ff9a3c', '#1e0a02'], ['ORBITAL OPTICS', '#9fe2ff', '#06121e'], ['PULSAR PHARMACY', '#6effc0', '#041a10'],
-  ['COMET COFFEE', '#f2d3a0', '#2a1406'], ['TARAVEL TELECOM', '#ff5d8f', '#1e0612'], ['ZENVORA BANK', '#f4f4f6', '#14233d'], ['HALO HOTEL', '#ffe8b0', '#2a1c08'],
-  ['MERIDIAN MART', '#b6ff6e', '#0e1a04'], ['DRIFT DENIM', '#7fb6ff', '#060e1e'], ['SAFFRON SKY', '#ffb347', '#1e0e04'], ['NEON NAAN', '#ff6ec7', '#1e0616'],
-  ['STARDUST SALON', '#e3b6ff', '#14061e'], ['QUASAR GAMES', '#6ef7ff', '#041618'], ['LOTUS LAUNDRY', '#ffc0d8', '#1e0a12'], ['VEGA VISION', '#ffffff', '#101418'],
-  ['ATLAS BOOKS', '#f2e6c8', '#2a2014'], ['MANGO MOON', '#ffd36e', '#1a1204'], ['ROCKET RICKSHAW', '#ff7b54', '#1a0804'], ['SKYLINE GYM', '#9fd8ff', '#06101a'],
-  ['नोवा नूडल्स', '#ffcf5a', '#1a1206'], ['केसरी किचन', '#ff9a3c', '#1e0a02'], ['सितारा स्वीट्स', '#ff8fd0', '#1e0616'], ['चाँद कैफ़े', '#bfe9ff', '#0b1420'],
-  ['ستارہ بیکری', '#ffd36e', '#1a1204'], ['چاند کیفے', '#9fd8ff', '#06101a'], ['زعفران ہوٹل', '#ffb347', '#1e0e04'], ['لوٹس لانڈری', '#ffc0d8', '#1e0a12'],
+/**
+ * What each shop sells decides what is behind its glass (the facade shader draws one of five interiors: 0 clothes rails,
+ * 1 a cafe or kitchen, 2 shelves of goods, 3 a bright counter, 4 a bright shop with shelves) and whether it puts tables
+ * out on the pavement (only places that serve food).
+ */
+const BRANDS: [string, string, string, number][] = [
+  ['NOVA NOODLES', '#ffcf5a', '#1a1206', 1], ['KESARI KITCHEN', '#ff9a3c', '#1e0a02', 1], ['ORBITAL OPTICS', '#9fe2ff', '#06121e', 3], ['PULSAR PHARMACY', '#6effc0', '#041a10', 4],
+  ['COMET COFFEE', '#f2d3a0', '#2a1406', 1], ['TARAVEL TELECOM', '#ff5d8f', '#1e0612', 3], ['ZENVORA BANK', '#f4f4f6', '#14233d', 3], ['HALO HOTEL', '#ffe8b0', '#2a1c08', 3],
+  ['MERIDIAN MART', '#b6ff6e', '#0e1a04', 2], ['DRIFT DENIM', '#7fb6ff', '#060e1e', 0], ['SAFFRON SKY', '#ffb347', '#1e0e04', 3], ['NEON NAAN', '#ff6ec7', '#1e0616', 1],
+  ['STARDUST SALON', '#e3b6ff', '#14061e', 3], ['QUASAR GAMES', '#6ef7ff', '#041618', 2], ['LOTUS LAUNDRY', '#ffc0d8', '#1e0a12', 3], ['VEGA VISION', '#ffffff', '#101418', 3],
+  ['ATLAS BOOKS', '#f2e6c8', '#2a2014', 2], ['MANGO MOON', '#ffd36e', '#1a1204', 1], ['ROCKET RICKSHAW', '#ff7b54', '#1a0804', 3], ['SKYLINE GYM', '#9fd8ff', '#06101a', 3],
+  ['नोवा नूडल्स', '#ffcf5a', '#1a1206', 1], ['केसरी किचन', '#ff9a3c', '#1e0a02', 1], ['सितारा स्वीट्स', '#ff8fd0', '#1e0616', 4], ['चाँद कैफ़े', '#bfe9ff', '#0b1420', 1],
+  ['ستارہ بیکری', '#ffd36e', '#1a1204', 4], ['چاند کیفے', '#9fd8ff', '#06101a', 1], ['زعفران ہوٹل', '#ffb347', '#1e0e04', 1], ['لوٹس لانڈری', '#ffc0d8', '#1e0a12', 3],
+  ['ORBIT THREADS', '#ffd0a8', '#1e1008', 0], ['RINGWEAR', '#c8f0ff', '#081420', 0], ['सितारा फ़ैशन', '#ffb6e0', '#1e0816', 0], ['ستارہ ملبوسات', '#f2e6c8', '#1a1408', 0],
 ];
 const ADS: [string, string, string, string][] = [
   ['ZENVORA BANK', 'Your savings, now in orbit', '#f4f4f6', '#14233d'], ['HALO HOTEL', 'Sleep above the rings', '#ffe8b0', '#2a1c08'],
@@ -233,7 +239,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     kitBox(kind, fx + nx * off + (nx ? 0 : shift), y, fz + nz * off + (nx ? shift : 0), nx ? out : len, h, nx ? len : out, col, fx, fz);
   const AWN = [0xb03a2e, 0x1f6f5c, 0xc98a1b, 0x2c3e7a, 0x6d3b7a, 0xd8d2c0, 0x3a3a3e];
   /** What a street floor is made of besides the wall: piers, a plinth, a fascia for the sign, a door, an awning. */
-  const shopKit = (fx: number, fz: number, nx: number, nz: number, w: number, fh: number) => {
+  const shopKit = (fx: number, fz: number, nx: number, nz: number, w: number, fh: number, kind: number) => {
     const trim = pick([0x2a2c30, 0x3a2e26, 0x1e2a36, 0x4a4640, 0x202020]);
     for (const sgn of [-1, 1]) wallBox('kit', fx, fz, nx, nz, FLOOR, 0.34, fh * 0.98, 0.2, 0.1, trim, sgn * (w / 2 - 0.17));
     wallBox('kit', fx, fz, nx, nz, FLOOR, w - 0.7, 0.32, 0.12, 0.06, trim);
@@ -244,10 +250,10 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     wallBox('kit', fx, fz, nx, nz, FLOOR + 0.04, 1.06, 2.16, 0.1, 0.1, dc, dsh);
     wallBox('metal', fx, fz, nx, nz, FLOOR + 1.0, 0.05, 0.22, 0.05, 0.17, 0xc8c4b8, dsh + 0.38);
     wallBox('kit', fx, fz, nx, nz, FLOOR, 1.5, 0.06, 0.5, 0.25, 0x8a857c, dsh); // the step
-    // what stands out on the pavement in front: a cafe's tables, a sandwich board, planters by the door
+    // what stands out on the pavement in front: tables where food is served, a sandwich board, planters by the door
     const at = (out: number, along: number) => [fx + nx * out + (nx ? 0 : along), fz + nz * out + (nx ? along : 0)];
     const r = rnd(), side = (rnd() - 0.5) * (w - 5);
-    if (r < 0.22 && w > 5) {
+    if (kind === 1 && w > 5 && r < 0.7) {
       for (const k of [-1, 1]) {
         const [tx, tz] = at(1.9, side + k * 1.6);
         kitGeo('kit', new THREE.CylinderGeometry(0.36, 0.36, 0.04, 12).translate(tx, FLOOR + 0.74, tz), 0xe8e2d6, fx, fz);
@@ -260,7 +266,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
           cafes.push({ x: cxx, z: czz, yaw: Math.atan2((nx ? 0 : -c), (nx ? -c : 0)) });
         }
       }
-    } else if (r < 0.42) {
+    } else if (r < 0.4 || (kind === 1 && r < 0.85)) {
       const [bx, bz] = at(1.1, side), g = new THREE.BoxGeometry(nx ? 0.06 : 0.6, 0.9, nx ? 0.6 : 0.06);
       kitGeo('kit', g.clone().rotateX(nx ? 0 : 0.2).rotateZ(nx ? 0.2 : 0).translate(bx - nz * 0, FLOOR + 0.45, bz), 0x1c1d20, fx, fz);
       kitGeo('kit', g.rotateX(nx ? 0 : -0.2).rotateZ(nx ? -0.2 : 0).translate(bx + nx * 0.18, FLOOR + 0.45, bz + nz * 0.18), 0x1c1d20, fx, fz);
@@ -285,8 +291,9 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   const cafes: { x: number; z: number; yaw: number }[] = [];
   const footprints: { x0: number; z0: number; x1: number; z1: number; h: number; kind: BlockKind }[] = [];
   /** One building: a box (or a podium and setbacks), its roof kit, its collision. */
-  const building = (x0: number, z0: number, x1: number, z1: number, floors: number, finish: 'plaster' | 'brick' | 'glass', style: number, fh = 3.2) => {
-    const w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, h = floors * fh, sd = rnd() * 97, tint = pick(tints[finish]);
+  const building = (x0: number, z0: number, x1: number, z1: number, floors: number, finish: 'plaster' | 'brick' | 'glass', style: number, fh = 3.2, kind = -1) => {
+    // the seed's whole part, mod 5, is the kind of shop on the street floor (facade.ts draws its interior from it)
+    const w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, h = floors * fh, sd = kind >= 0 ? kind + 5 * Math.floor(rnd() * 19) : rnd() * 97, tint = pick(tints[finish]);
     put(`wall_${finish}`, cx, cz, facadeBox(cx, cz, w, d, FLOOR, h, fh, style === 1 ? 1.6 : 2.7, sd, style, tint, FLOOR));
     let top = FLOOR + h;
     // towers step back as they rise
@@ -375,25 +382,27 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   };
   const lotsAlong = (a: number, b: number, min: number, max: number) => { const out: [number, number][] = []; for (let u = a; u < b - 1; ) { let w = min + rnd() * (max - min); if (b - (u + w) < min) w = b - u; out.push([u, u + w]); u += w; } return out; };
   const inset = (b: Block) => ({ x0: b.x0 + 6 + PAVE, x1: b.x1 - 6 - PAVE, z0: b.z0 + 6 + PAVE, z1: b.z1 - 6 - PAVE });
-  const shopfronts: { x: number; z: number; nx: number; nz: number; w: number; fh: number }[] = [];
-  const front = (x0: number, z0: number, x1: number, z1: number, nx: number, nz: number, fh = 3.2) => {
+  const shopfronts: { x: number; z: number; nx: number; nz: number; w: number; fh: number; brand: number }[] = [];
+  /** A brand for a shop, of one of the given kinds (any if none given). */
+  const brandOf = (kinds?: number[]) => { const k = kinds ? pick(kinds) : -1; return pick(BRANDS.map((b, i) => (k < 0 || b[3] === k ? i : -1)).filter((i) => i >= 0)); };
+  const front = (x0: number, z0: number, x1: number, z1: number, nx: number, nz: number, fh = 3.2, brand = brandOf()) => {
     // the ground floor's sign over the shop, on the wall facing the street
     const along = nx === 0, c = along ? (x0 + x1) / 2 : (z0 + z1) / 2;
     const fx = nx > 0 ? x1 : nx < 0 ? x0 : c, fz = nz > 0 ? z1 : nz < 0 ? z0 : c, wd = along ? x1 - x0 : z1 - z0;
-    shopfronts.push({ x: fx, z: fz, nx, nz, w: Math.min(9, wd - 1.5), fh });
-    if (tier > 0 || rnd() < 0.5) shopKit(fx, fz, nx, nz, wd, fh);
+    shopfronts.push({ x: fx, z: fz, nx, nz, w: Math.min(9, wd - 1.5), fh, brand });
+    if (tier > 0 || rnd() < 0.5) shopKit(fx, fz, nx, nz, wd, fh, BRANDS[brand][3]);
   };
   /** A block ringed by buildings on its four sides (a closed courtyard behind). */
-  const perimeter = (b: Block, depth: [number, number], floors: [number, number], finishes: ('plaster' | 'brick' | 'glass')[], style: number, lot: [number, number], balc: boolean) => {
+  const perimeter = (b: Block, depth: [number, number], floors: [number, number], finishes: ('plaster' | 'brick' | 'glass')[], style: number, lot: [number, number], balc: boolean, kinds?: number[]) => {
     const I = inset(b), D = depth[0] + rnd() * (depth[1] - depth[0]);
     for (const [u0, u1] of lotsAlong(I.x0, I.x1, lot[0], lot[1])) for (const [zz0, zz1, nz] of [[I.z0, I.z0 + D, -1], [I.z1 - D, I.z1, 1]] as [number, number, number][]) {
       const fl = floors[0] + Math.floor(rnd() * (floors[1] - floors[0] + 1));
-      const fin = pick(finishes); building(u0, zz0, u1, zz1, fl, fin, style); front(u0, zz0, u1, zz1, 0, nz); relief(u0, zz0, u1, zz1, 0, nz, fl, fin);
+      const fin = pick(finishes), br = brandOf(kinds); building(u0, zz0, u1, zz1, fl, fin, style, 3.2, BRANDS[br][3]); front(u0, zz0, u1, zz1, 0, nz, 3.2, br); relief(u0, zz0, u1, zz1, 0, nz, fl, fin);
       if (balc) balconies(u0, zz0, u1, zz1, fl, 0, nz);
     }
     for (const [u0, u1] of lotsAlong(I.z0 + D, I.z1 - D, lot[0], lot[1])) for (const [xx0, xx1, nx] of [[I.x0, I.x0 + D, -1], [I.x1 - D, I.x1, 1]] as [number, number, number][]) {
       const fl = floors[0] + Math.floor(rnd() * (floors[1] - floors[0] + 1));
-      const fin = pick(finishes); building(xx0, u0, xx1, u1, fl, fin, style); front(xx0, u0, xx1, u1, nx, 0); relief(xx0, u0, xx1, u1, nx, 0, fl, fin);
+      const fin = pick(finishes), br = brandOf(kinds); building(xx0, u0, xx1, u1, fl, fin, style, 3.2, BRANDS[br][3]); front(xx0, u0, xx1, u1, nx, 0, 3.2, br); relief(xx0, u0, xx1, u1, nx, 0, fl, fin);
       if (balc) balconies(xx0, u0, xx1, u1, fl, nx, 0);
     }
   };
@@ -402,18 +411,18 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     if (b.kind === 'tower') {
       const I = inset(b), two = rnd() < 0.5;
       // a podium of shops filling the block, one or two towers on it
-      building(I.x0, I.z0, I.x1, I.z1, 3, 'glass', 2, 4.2);
-      for (const [x0, x1, z0, z1, dz] of [[I.x0, I.x1, I.z0, I.z1, 0]] as number[][]) { for (const [nx, nz] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) for (let k = 0; k < 3; k++) { const a = k / 3, b = (k + 1) / 3; if (nx) front(x0, z0 + (z1 - z0) * a, x1, z0 + (z1 - z0) * b, nx, nz, 4.2); else front(x0 + (x1 - x0) * a, z0, x0 + (x1 - x0) * b, z1, nx, nz, 4.2); } void dz; }
+      building(I.x0, I.z0, I.x1, I.z1, 3, 'glass', 2, 4.2, 3); // the podium: banks, opticians, travel desks, a salon
+      for (const [x0, x1, z0, z1, dz] of [[I.x0, I.x1, I.z0, I.z1, 0]] as number[][]) { for (const [nx, nz] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) for (let k = 0; k < 3; k++) { const a = k / 3, b = (k + 1) / 3; if (nx) front(x0, z0 + (z1 - z0) * a, x1, z0 + (z1 - z0) * b, nx, nz, 4.2, brandOf([3])); else front(x0 + (x1 - x0) * a, z0, x0 + (x1 - x0) * b, z1, nx, nz, 4.2, brandOf([3])); } void dz; }
       const tw = two ? 22 : 32, cs = two ? [[-0.25, -0.2], [0.25, 0.22]] : [[0, 0]];
       for (const [fx, fz] of cs) {
         const cx = (I.x0 + I.x1) / 2 + fx * (I.x1 - I.x0), cz = (I.z0 + I.z1) / 2 + fz * (I.z1 - I.z0), fl = 22 + Math.floor(Math.pow(rnd(), 1.4) * 34);
         const top = building(cx - tw / 2, cz - tw / 2, cx + tw / 2, cz + tw / 2, fl, 'glass', 1);
         void top;
       }
-    } else if (b.kind === 'mid') perimeter(b, [14, 18], [6, 12], ['brick', 'plaster', 'glass'], 2, [16, 26], false);
-    else if (b.kind === 'market') perimeter(b, [12, 16], [3, 5], ['plaster', 'plaster', 'brick'], 0, [8, 13], true);
-    else if (b.kind === 'water') perimeter(b, [14, 18], [7, 13], ['plaster', 'glass', 'brick'], 0, [14, 22], true);
-    else if (b.kind === 'res') perimeter(b, [12, 15], [4, 7], ['plaster', 'brick'], 0, [12, 18], true);
+    } else if (b.kind === 'mid') perimeter(b, [14, 18], [6, 12], ['brick', 'plaster', 'glass'], 2, [16, 26], false, [0, 1, 2, 3, 3]);
+    else if (b.kind === 'market') perimeter(b, [12, 16], [3, 5], ['plaster', 'plaster', 'brick'], 0, [8, 13], true, [0, 1, 1, 2, 4]);
+    else if (b.kind === 'water') perimeter(b, [14, 18], [7, 13], ['plaster', 'glass', 'brick'], 0, [14, 22], true, [1, 1, 3]);
+    else if (b.kind === 'res') perimeter(b, [12, 15], [4, 7], ['plaster', 'brick'], 0, [12, 18], true, [1, 2, 3, 4]);
     else if (b.kind === 'park') parks.push(b);
   }
   // the old town's back streets: dense flats over the bazaar's roofs (the bazaar used to end at its own walls)
@@ -426,8 +435,9 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       const mid = (x0 + x1) / 2, split = x1 - x0 > 30;
       for (const [a, b] of split ? [[x0, mid], [mid, x1]] : [[x0, x1]]) {
         const fl = f0 + Math.floor(rnd() * (f1 - f0 + 1));
-        building(a, u0, b, u1, fl, pick(['plaster', 'plaster', 'brick'] as const), 0);
-        if (z0 >= 80) front(a, u0, b, u1, a > 0 ? -1 : 1, 0);
+        const br = brandOf();
+        building(a, u0, b, u1, fl, pick(['plaster', 'plaster', 'brick'] as const), 0, 3.2, BRANDS[br][3]);
+        if (z0 >= 80) front(a, u0, b, u1, a > 0 ? -1 : 1, 0, 3.2, br);
       }
     }
   }
@@ -580,7 +590,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   const signRows = Math.ceil(BRANDS.length / COLS);
   const signs = atlasPlanes(signAtlas, COLS, signRows, shopfronts.filter(() => rnd() < 0.85).map((s) => {
     const y = FLOOR + s.fh * 0.855, w = Math.min(s.w, 6.5), h = Math.min(s.fh * 0.17, w * shh / sw * 1.15);
-    return { x: s.x + s.nx * 0.24, y, z: s.z + s.nz * 0.24, w: Math.min(w, h * sw / shh * 0.95), h, yaw: Math.atan2(s.nx, s.nz), tile: Math.floor(rnd() * BRANDS.length) };
+    return { x: s.x + s.nx * 0.24, y, z: s.z + s.nz * 0.24, w: Math.min(w, h * sw / shh * 0.95), h, yaw: Math.atan2(s.nx, s.nz), tile: s.brand };
   }));
   add(signs.mesh);
   const adAtlas = canvasTex(1024, 512 * ADS.length, (g) => ADS.forEach(([a, b, fg, bg], i) => {
