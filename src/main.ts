@@ -1035,6 +1035,20 @@ window.addEventListener('resize', () => {
   /** Finger joints since load: largest bend from rest (rad) and fastest turn (rad/s), over every character drawn. */
   get hands() { return { ...HANDS }; },
   audioTap() { audio.start(); return audio.tap(); },
+  /** Sync test for captures: every second, on the audio clock, a click on the master bus and a white frame in the same
+   *  animation frame. A recording of this shows any offset or drift between picture and sound as a number. */
+  syncTest(secs = 30) {
+    audio.start(); const ctx = audio.ctx; if (!ctx) return 0;
+    const el = document.createElement('div'); el.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:99999;pointer-events:none;opacity:0';
+    document.body.appendChild(el);
+    const t0 = Math.ceil(ctx.currentTime) + 1; let k = 0;
+    const tick = () => {
+      if (k >= secs) { el.remove(); return; }
+      if (ctx.currentTime >= t0 + k) { audio.tone(1500, 0.03, 'square', 0.5); el.style.opacity = '1'; k++; } else el.style.opacity = '0';
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick); return t0;
+  },
   openMenu(which: 'settings' | 'legal' | 'chapters') { if (which === 'settings') document.getElementById('btn-settings')?.click(); else if (which === 'legal') document.getElementById('btn-legal')?.click(); else document.getElementById('btn-chapters')?.click(); },
   quality: quality.name,
   get world() { return world; },
