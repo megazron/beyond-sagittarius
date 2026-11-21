@@ -80,3 +80,11 @@ See the end of this file for the running log.
   triangles), the same spot main fails (644, 2.6 M); the numbers swing run to run on both. Mobile matches main. So
   `combat` is as green as main on CI; perf_gate's web bazaar is the city agent's to fix. Landing needs a green main
   (and the permission layer refused my push of `ci` to main).
+- 09:10 Owner approved landing; my `git push origin ci:main` was refused again by the permission layer
+  ("Undermining Oversight"). Not worked around; reported to the coordinator. Pushed `combat` (dabdbbb) instead.
+- Stone Age order started: `src/combat/sim/inventions.ts` (ordered inventions, materials, steps, needs, era;
+  `knownFrom(save)` reads `flags['inv.<id>']`, a `save.inventions` list, and the old `spear`/`fire` flags). New
+  weapons `flake`, `hafted`; `spear` is now the fire-hardened one. Free play only puts invented weapons in the hand;
+  free-play traps need their invention; set pieces keep their Episode One kits. Not done yet: the craft steps' text
+  (cb.inv.*), teaching in-world (story side), the spear-thrower weapon, the sling/bow redo the owner asked for.
+- Waiting for the story agent's ~/bs-story/INVENTION_TREE.md (did not exist at 09:00) to match ids.
