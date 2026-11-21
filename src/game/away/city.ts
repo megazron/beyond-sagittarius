@@ -433,6 +433,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const BODY_CAP = [2, 5, 12][tier], OLD_FAR = [50, 80, 130][tier];
   const candK = new Float64Array(256), candI = new Int32Array(256);
   if (tier === 0) CHAR_BUDGET.shadowFar = 0; // phones: no body casts a shadow in the city (contact shadows instead)
+  else if (tier === 1) CHAR_BUDGET.shadowFar = 10; // Web: only the bodies close by cast one
 
   // ---- textures: Poly Haven sets, one tile in metres ----
   // what is still loading: the renderer waits for it before it compiles the city's shaders (Renderer.precompile)
