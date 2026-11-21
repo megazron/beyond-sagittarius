@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeChildren } from '../core/merge';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { modelMaterial, modelMats, type ModelPack } from './models';
+import { modelMaterial, modelMats, plainCopy, type ModelPack } from './models';
 import type { Quality } from '../core/quality';
 import { mulberry32, smoothstep } from '../core/noise';
 import { Terrain, LAKE } from './terrain';
@@ -173,7 +173,7 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
   const group = new THREE.Group();
   const items: Item[] = [];
   const rnd = mulberry32(42);
-  const scan = (name: string) => (pack && q && pack.lods[name] ? { geo: pack.lods[name][1], mat: modelMaterial(pack.info[name], q, modelMats) } : null);
+  const scan = (name: string) => (pack && q && pack.lods[name] ? { geo: pack.lods[name][1], mat: plainCopy(modelMaterial(pack.info[name], q, modelMats)) } : null);
   const stoneScan = scan('moss_d'), branchScan = scan('branch_a'), shrubScan = scan('shrub_b');
   const stoneMat = stoneScan?.mat ?? new THREE.MeshStandardMaterial({ color: 0x8a8494, roughness: 0.85 });
   const branchMat = branchScan?.mat ?? new THREE.MeshStandardMaterial({ color: 0x5a4334, roughness: 0.9 });

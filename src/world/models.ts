@@ -98,8 +98,25 @@ export function modelMaterial(info: ModelInfo, q: Quality, cache: Map<string, TH
     if (s.diff) { mat.map = s.diff; mat.color.set(0xffffff); mat.visible = true; }
     if (s.nor) { mat.normalMap = s.nor; mat.normalScale.setScalar(1); }
     mat.needsUpdate = true;
+    for (const f of followersOf(mat)) copyLook(mat, f);
   });
   return m;
+}
+
+const followersOf = (m: THREE.Material) => (m.userData.followers ??= []) as THREE.MeshStandardMaterial[];
+function copyLook(src: THREE.MeshStandardMaterial, f: THREE.MeshStandardMaterial) {
+  f.map = src.map; f.normalMap = src.normalMap; f.normalScale.copy(src.normalScale); f.color.copy(src.color); f.visible = src.visible; f.needsUpdate = true;
+}
+/**
+ * A copy of a scan's material for plain meshes (the items on the ground), that takes its maps when they arrive. The
+ * forest draws the same scans through batches: one material used by both was looked up again (three's getProgram)
+ * every time the draws switched between them, twice a pass.
+ */
+export function plainCopy(m: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
+  const f = m.clone(); f.userData = {};
+  followersOf(m).push(f);
+  if (m.map) copyLook(m, f);
+  return f;
 }
 
 /** Foliage card sheet: left half a bough, right half a spray. */
