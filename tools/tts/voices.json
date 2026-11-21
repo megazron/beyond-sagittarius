@@ -205,6 +205,14 @@
     "pace": 1.02,
     "fx": "highpass=f=320,lowpass=f=5200,aecho=0.8:0.6:4:0.3,acrusher=bits=10:mix=0.25,equalizer=f=1800:t=q:w=1:g=4"
    }
+  },
+  "pilot": {
+   "role": "the liner's pilot, heard over the intercom: steady, working hard, not shouting. Reference: the pharmacist's LibriTTS-R voice (CC BY 4.0), faster and through the intercom",
+   "all": {
+    "ref": "pharma",
+    "pace": 1.1,
+    "fx": "highpass=f=340,lowpass=f=3600,acompressor=threshold=0.1:ratio=5:attack=3:release=50"
+   }
   }
  }
 }
