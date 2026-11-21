@@ -824,7 +824,7 @@ export class Montage {
         // old metal in the split: ribs of something that was built here long ago
         for (let i = 0; i < 4; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.3, 7, 0.3), new THREE.MeshStandardMaterial({ color: 0x8a8f96, roughness: 0.45, metalness: 0.8 })); b.position.set(-3 + i * 2.1, 3, -10 - i * 0.6); b.rotation.set(0.1 * i, 0, 0.18 - i * 0.12); g.add(b); } }, 1.6, [0xb09a84, 0x1c140e, 0.7]);
       // Aerolis: a raft of hull on gold cloud to every horizon
-      mk('social', 0xe2c46a, 1, (g) => { const d = new THREE.Mesh(new THREE.BoxGeometry(6, 0.3, 4), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); d.position.set(0, 0.16, 0); d.rotation.set(0.03, 0.4, -0.04); g.add(d); for (let i = 0; i < 9; i++) sky(g, 14 + (i % 3) * 8, Math.cos(i * 0.7) * (60 + i * 6), -6 + (i % 2) * 5, -70 + Math.sin(i * 0.7) * 50, 0xf0d890, 0x2a2008); } // cloud tops (heaps of lumpy puffs were tried: they read as rock and one filled the sky shot), 0, [0xffe9b0, 0x8a6a30, 0.6]);
+      mk('social', 0xe2c46a, 1, (g) => { const d = new THREE.Mesh(new THREE.BoxGeometry(6, 0.3, 4), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); d.position.set(0, 0.16, 0); d.rotation.set(0.03, 0.4, -0.04); g.add(d); for (let i = 0; i < 9; i++) sky(g, 14 + (i % 3) * 8, Math.cos(i * 0.7) * (60 + i * 6), -6 + (i % 2) * 5, -70 + Math.sin(i * 0.7) * 50, 0xf0d890, 0x2a2008); }, 0, [0xffe9b0, 0x8a6a30, 0.6]); // smooth cloud tops (heaps of lumpy puffs were tried: they read as rock and one filled the sky shot)
       this.stageG.children.forEach((c, i) => c.position.set(i * 4000, -20000, 0));
     }
     for (const c of this.stageG.children) c.visible = c.name === id;
