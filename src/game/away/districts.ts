@@ -246,14 +246,14 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     wallBox('kit', fx, fz, nx, nz, FLOOR, 1.5, 0.06, 0.5, 0.25, 0x8a857c, dsh); // the step
     // what stands out on the pavement in front: a cafe's tables, a sandwich board, planters by the door
     const at = (out: number, along: number) => [fx + nx * out + (nx ? 0 : along), fz + nz * out + (nx ? along : 0)];
-    const r = rnd(), side = (rnd() - 0.5) * (w - 2);
+    const r = rnd(), side = (rnd() - 0.5) * (w - 5);
     if (r < 0.22 && w > 5) {
       for (const k of [-1, 1]) {
-        const [tx, tz] = at(1.9, side + k * 1.3);
+        const [tx, tz] = at(1.9, side + k * 1.6);
         kitGeo('kit', new THREE.CylinderGeometry(0.36, 0.36, 0.04, 12).translate(tx, FLOOR + 0.74, tz), 0xe8e2d6, fx, fz);
         kitGeo('kit', new THREE.CylinderGeometry(0.04, 0.05, 0.72, 6).translate(tx, FLOOR + 0.37, tz), 0x2a2a2a, fx, fz);
         for (const c of [-1, 1]) {
-          const [cxx, czz] = at(1.9 + (nx || nz ? 0 : 0), side + k * 1.3 + c * 0.62);
+          const [cxx, czz] = at(1.9, side + k * 1.6 + c * 0.72);
           kitBox('kit', cxx, FLOOR + 0.42, czz, 0.4, 0.05, 0.4, 0x5a3a24, fx, fz);
           kitBox('kit', cxx + (nx ? 0 : c * 0.18), FLOOR + 0.45, czz + (nx ? c * 0.18 : 0), nx ? 0.4 : 0.05, 0.45, nx ? 0.05 : 0.4, 0x5a3a24, fx, fz);
           for (const l of [-1, 1]) kitBox('kit', cxx + (nx ? l * 0.16 : 0), FLOOR, czz + (nx ? 0 : l * 0.16), 0.04, 0.42, 0.04, 0x2a2a2a, fx, fz);
@@ -822,7 +822,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     }
   }
   // a cafe's chairs: most have someone in them of an evening
-  for (const c of cafes) if (rnd() < (rich ? 0.6 : 0.3)) peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: 'sit', x: c.x, z: c.z, yaw: c.yaw, t: 0 });
+  for (const c of cafes) if (rnd() < (rich ? 0.45 : 0.2)) peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: pick(['idle', 'selfie', 'idle', 'write']), x: c.x - Math.sin(c.yaw) * 0.35, z: c.z - Math.cos(c.yaw) * 0.35, yaw: c.yaw, t: 0 }); // standing by the table: the sit clip is for the ground
   // the park: strollers on its paths, people on the lawns
   for (let i = 0; i < (rich ? 40 : 14); i++) {
     const x = (rnd() - 0.5) * 150, z = 205 + rnd() * 90;
