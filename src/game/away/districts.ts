@@ -500,6 +500,10 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     // kerbstones: a pale stone edge to every pavement
     kitBox('kit', (I.x0 + I.x1) / 2, 0, I.z0 + 0.25, I.x1 - I.x0, 0.15, 0.2, 0xb6b2a8, (I.x0 + I.x1) / 2, I.z0 + 4); kitBox('kit', (I.x0 + I.x1) / 2, 0, I.z1 - 0.25, I.x1 - I.x0, 0.15, 0.2, 0xb6b2a8, (I.x0 + I.x1) / 2, I.z1 - 4);
     kitBox('kit', I.x0 + 0.25, 0, (I.z0 + I.z1) / 2, 0.2, 0.15, I.z1 - I.z0, 0xb6b2a8, I.x0 + 4, (I.z0 + I.z1) / 2); kitBox('kit', I.x1 - 0.25, 0, (I.z0 + I.z1) / 2, 0.2, 0.15, I.z1 - I.z0, 0xb6b2a8, I.x1 - 4, (I.z0 + I.z1) / 2);
+    // bollards round each corner, where the zebras land: people cross there, cars must not cut it
+    if (tier > 0) for (const [cx, cz, sx, sz] of [[I.x0, I.z0, 1, 1], [I.x1, I.z0, -1, 1], [I.x0, I.z1, 1, -1], [I.x1, I.z1, -1, -1]]) {
+      for (const k of [2.2, 3.4]) { kitGeo('metal', new THREE.CylinderGeometry(0.09, 0.11, 0.9, 8).translate(cx + sx * k, FLOOR + 0.45, cz + sz * 0.45), 0x2e3236, cx, cz); kitGeo('metal', new THREE.CylinderGeometry(0.09, 0.11, 0.9, 8).translate(cx + sx * 0.45, FLOOR + 0.45, cz + sz * k), 0x2e3236, cx, cz); }
+    }
     for (const [a, c, f, ax, nx, nz] of sides) {
       let i = 0;
       for (let u = a; u <= c; u += 12, i++) {
