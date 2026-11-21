@@ -170,3 +170,14 @@ See the end of this file for the running log.
 - Findings: the city is CPU-bound in both render (setProgram per draw, 110 to 230 distinct materials a frame at the
   gate) and update (city.update 5 ms, player 3 ms, character animate, drawPeds); a 240-draw planet frame still costs
   ~28 ms on the A500. Draw calls fell 15 to 50 percent; frame rate moved less than that.
+- 23:05 LANDED perf15 on main as 34fddfc (CI 44957147335 all green). A500, quiet machine, Web, this build vs main
+  694bbae: Zenvora draw calls 258/277/409/462/256/186/269/200/195 -> 214/209/375/350/187/182/184/149/164 (flat, bazaar,
+  crowd, gate, square, downtown, market, waterfront, park); fps 42/35/27/24/29/32/33/32/40 -> 35/36/27/26/48/41/39/47/42
+  (single runs, swing about 5 fps run to run). Planet Web draws 631/580/612/520/469/688 -> 570/390/346/289/270/332;
+  fps moved little (26-35 -> 29-44). Cold title load (Chrome restarted, no shader cache) 127.6 s -> 86.1 s, main-thread
+  long tasks 122 s -> 68 s, title p95 frame 1345 ms -> 50 ms. Still a 19.7 s freeze on the title's first frame (its own
+  26 programs, before warmAll) and 5-10 s ones while the GPU process links.
+- OPEN: the gate and crowd spots have 190-230 distinct materials a frame (signs, lights, holograms kept apart because
+  they animate); bodies are ~14 draws each (Ultra bazaar 83 skinned draws, 11.6 fps); city.update ~5 ms and player
+  ~3 ms a frame; program look-ups (getProgram) ~25 a frame from materials shared by batched and plain meshes and by
+  bodies with different morph counts.
