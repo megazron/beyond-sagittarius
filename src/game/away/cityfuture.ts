@@ -54,7 +54,10 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   const tops: THREE.Vector3[] = [];
   for (const side of [-1, 1]) for (let z = N - 6; z > S + 10; z -= 14 + rnd() * 8) {
     if (side > 0 ? z > 8 && z < 52 : z > -66 && z < -22) continue; // the side streets and their squares run through here
-    const x = side * (FRONT + 15 + rnd() * 8), h = 50 + rnd() * 90, w = 9 + rnd() * 6, d = 9 + rnd() * 6;
+    // its street-side face behind the block (the street buildings and the flat run 12 m deep): a wide tower centred
+    // only 15 m back reached 2.5 m into the flat's bedroom and bathroom, a striped wall of lit windows through the rooms
+    const ox = rnd(), h = 50 + rnd() * 90, w = 9 + rnd() * 6, d = 9 + rnd() * 6;
+    const x = side * Math.max(FRONT + 15 + ox * 8, FRONT + 12.6 + w / 2);
     // a podium, the shaft, a setback, and a crown
     const shaft = new THREE.BoxGeometry(w, h, d); const uv = shaft.attributes.uv as THREE.BufferAttribute;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / 8, uv.getY(i) * h / 16);
