@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { IMP } from './impostor';
 import { fitCanvasText } from '../../core/canvastext';
 import { nearFade } from '../../core/nearfade';
 
@@ -51,11 +50,11 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   /** Stand-ins: a card where a far body is not drawn (city.ts fills it each frame). */
   let standIns: (list: StandIn[], cam: THREE.Camera | null) => void = () => undefined;
   /** Baked impostors (impostor.ts) take over from the painted figures when they are ready. */
-  let imp: { cols: number; rows: number; variants: number } | null = null;
+  let imp: { cols: number; rows: number; variants: number; views: number } | null = null;
   const grid = { value: new THREE.Vector2(1 / 8, 1) };
   /** Where far cards stop being drawn: they thin out (dithered) over the last sixth instead of blinking out. */
   const cardFar = { value: 1e5 };
-  let setAtlas: (t: THREE.Texture, cols: number, rows: number, variants: number) => void = () => undefined, setLight: (c: THREE.Color) => void = () => undefined;
+  let setAtlas: (t: THREE.Texture, cols: number, rows: number, variants: number, views: number) => void = () => undefined, setLight: (c: THREE.Color) => void = () => undefined;
   const add = <T extends THREE.Object3D>(x: T) => { x.userData.ground = false; scene.add(x); return x; };
 
   // ---- vertical neon blades on every facade, stacked from the pavement to the roofline ----
@@ -180,12 +179,12 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     let time = 0;
     /** The atlas tile for a card: which body, seen from which side (rel: the camera's bearing from the way they face), which walk frame (phase < 0: standing). */
     const tileOf = (arr: Float32Array, i: number, who: number, rel: number, phase: number) => {
-      const A = imp!, NV = IMP.views, view = ((Math.round(rel / (Math.PI * 2 / NV)) % NV) + NV) % NV, v = ((who % A.variants) + A.variants) % A.variants;
+      const A = imp!, NV = A.views, view = ((Math.round(rel / (Math.PI * 2 / NV)) % NV) + NV) % NV, v = ((who % A.variants) + A.variants) % A.variants;
       const frame = phase < 0 ? A.rows - 1 : Math.floor(phase % 1 * (A.rows - 1) + (A.rows - 1)) % (A.rows - 1);
       arr[i * 2] = (v * NV + view) / A.cols; arr[i * 2 + 1] = frame / A.rows;
     };
     const baseCol = new THREE.Color(0.55, 0.52, 0.6);
-    setAtlas = (t, cols, rows, variants) => { imp = { cols, rows, variants }; mat.map = t; mat.alphaTest = 0.5; mat.needsUpdate = true; grid.value.set(1 / cols, 1 / rows); baseCol.setRGB(1, 1, 1); };
+    setAtlas = (t, cols, rows, variants, views) => { imp = { cols, rows, variants, views }; mat.map = t; mat.alphaTest = 0.5; mat.needsUpdate = true; grid.value.set(1 / cols, 1 / rows); baseCol.setRGB(1, 1, 1); };
     setLight = (c) => { mat.color.copy(baseCol).multiply(c); };
     // far townsfolk: past a few dozen metres a body (a dozen draw calls, tens of thousands of triangles) is swapped for
     // a card of the same height, so the street stays full and nobody blinks out
@@ -234,5 +233,5 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
 
   return { update: (dt: number, t: number, cam: THREE.Camera | null, on = true) => { if (on) for (const u of updates) u(dt, t, cam); }, get cards() { return cards; }, get taken() { return taken; },
     standIns: (list: StandIn[], cam: THREE.Camera | null) => standIns(list, cam), setFar: (m: number) => { cardFar.value = m; },
-    setAtlas: (t: THREE.Texture, cols: number, rows: number, variants: number) => setAtlas(t, cols, rows, variants), setLight: (c: THREE.Color) => setLight(c) };
+    setAtlas: (t: THREE.Texture, cols: number, rows: number, variants: number, views = 4) => setAtlas(t, cols, rows, variants, views), setLight: (c: THREE.Color) => setLight(c) };
 }

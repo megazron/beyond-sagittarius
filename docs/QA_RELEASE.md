@@ -188,6 +188,22 @@ everything to be realistic and to make sense, and for phones to hold 30 fps.
 | 38 | People | Cars and walkers that wander far off are brought back near the camera, but only where it is not looking; far people thin out at the edge of their range instead of blinking out; a townsperson at your elbow is never a card; far people are baked from eight sides instead of four. | major | improved |
 | 39 | Reflections | Ultra now has screen-space reflections on wet ground: the lit shop windows, signs and car lamps show in the street, strongest in the puddles. Wet nights no longer glow beige under the lamps. | major | improved |
 
+### Numbers (1.3, Windows Chrome on the RTX A500, `tools/gpu_tour.py`, main and this tree back to back)
+
+Measured in one exclusive slot, main (63a3686) and this tree alternating preset by preset at 1280 x 720 (the phone
+proxy at 844 x 390 with Chrome's 4x CPU slowdown). The laptop was in a slow state all day (the CPU reported 1.4 GHz,
+and another agent's game tab was running in its own Chrome), so the phone proxy is far below the 38 to 60 that main
+measured on a quiet evening; what the table shows is that this round costs nothing measurable against main.
+
+| Preset | main | 1.3 |
+| --- | --- | --- |
+| Mobile proxy | 9.4 to 15.7 | 9.2 to 13.4 |
+| Web | 52 to 60 | 52 to 60 |
+| Ultra | 34 to 59 | 33 to 53 |
+
+I also found and closed a browser tab left running the game by an earlier capture session (on another debugging
+port); it had been drawing the city in the background for hours and explains part of the low numbers in earlier runs.
+
 ### Still below the bar (1.3)
 
 - The street walls above the shopfronts are still shaded boxes with windows: real modelled facades (bay windows,

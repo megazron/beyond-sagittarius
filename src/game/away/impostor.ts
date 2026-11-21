@@ -10,10 +10,11 @@ import { Character, CHAR_BUDGET } from '../../characters/character';
  *
  * The bake is spread over frames (one row of eight sides of one body a frame) while the player is still in the flat.
  */
-export const IMP = { views: 8, walk: 6, frames: 7 }; // frame 6 is standing; eight sides, so a card turning with its walker steps 45 degrees, not 90
+export const IMP = { walk: 6, frames: 7 }; // frame 6 is standing
 
-export function impostorBaker(renderer: THREE.WebGLRenderer, bodies: Character[], tile: [number, number], env: () => THREE.Texture | null) {
-  const V = bodies.length, cols = V * IMP.views, rows = IMP.frames, [TW, TH] = tile;
+/** `views`: sides baked round each body (8 on desktops, so a card turns in 45-degree steps; 4 on phones); `per`: renders a frame. */
+export function impostorBaker(renderer: THREE.WebGLRenderer, bodies: Character[], tile: [number, number], env: () => THREE.Texture | null, NV = 8, per = 8) {
+  const V = bodies.length, cols = V * NV, rows = IMP.frames, [TW, TH] = tile;
   const rt = new THREE.WebGLRenderTarget(cols * TW, rows * TH, { depthBuffer: true, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false });
   rt.texture.colorSpace = THREE.SRGBColorSpace;
   const stage = new THREE.Scene();
@@ -27,7 +28,7 @@ export function impostorBaker(renderer: THREE.WebGLRenderer, bodies: Character[]
   const old = new THREE.Color(), vp = new THREE.Vector4();
   // one row of one body a frame (its eight sides): a whole body at once was fifty renders of a skinned body in one frame,
   // a spike of several hundred draw calls while you are in the flat. The body stays on the bake stage until its rows are done.
-  let row = 0, t = 100, ph = 0;
+  let row = 0, w0 = 0, t = 100, ph = 0;
   let held: { root: THREE.Object3D; parent: THREE.Object3D | null; pos: THREE.Vector3; ry: number; vis: boolean } | null = null;
   const shootRow = (i: number) => {
     const fig = bodies[i], root = fig.root;
@@ -45,30 +46,36 @@ export function impostorBaker(renderer: THREE.WebGLRenderer, bodies: Character[]
     renderer.shadowMap.enabled = false; renderer.autoClear = false; renderer.setRenderTarget(rt);
     if (!cleared) { renderer.setClearColor(0x4a3e3a, 0); renderer.clear(); cleared = true; }
     // six frames of one walk cycle, then standing
-    if (row < IMP.walk) { t += 0.18; ph += 0.55; fig.animate('walk', ph, 0.35, t, 0.18); }
-    else for (let k = 0; k < 12; k++) { t += 0.1; fig.animate('idle', ph, 0, t, 0.1); }
-    for (let w = 0; w < IMP.views; w++) {
-      const a = (w * Math.PI * 2) / IMP.views;
+    if (w0 === 0) {
+      if (row < IMP.walk) { t += 0.18; ph += 0.55; fig.animate('walk', ph, 0.35, t, 0.18); }
+      else for (let k = 0; k < 12; k++) { t += 0.1; fig.animate('idle', ph, 0, t, 0.1); }
+    }
+    const w1 = Math.min(NV, w0 + per);
+    for (let w = w0; w < w1; w++) {
+      const a = (w * Math.PI * 2) / NV;
       cam.position.set(Math.sin(a) * 6, 0, Math.cos(a) * 6); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
-      rt.viewport.set((i * IMP.views + w) * TW, row * TH, TW, TH); rt.scissor.copy(rt.viewport); rt.scissorTest = true;
+      rt.viewport.set((i * NV + w) * TW, row * TH, TW, TH); rt.scissor.copy(rt.viewport); rt.scissorTest = true;
       renderer.setRenderTarget(rt); renderer.clearDepth(); renderer.render(stage, cam);
     }
     rt.scissorTest = false;
     renderer.setRenderTarget(oldRt); renderer.setClearColor(old, oldAlpha); renderer.autoClear = auto; renderer.shadowMap.enabled = shadows; renderer.setViewport(vp);
     CHAR_BUDGET.throttle = throttle;
-    if (++row >= IMP.frames) {
+    w0 = w1 < NV ? w1 : 0;
+    if (w0 === 0 && ++row >= IMP.frames) {
       const h = held!; stage.remove(h.root); h.parent?.add(h.root); h.root.position.copy(h.pos); h.root.rotation.y = h.ry; h.root.visible = h.vis;
       held = null; row = 0; return true;
     }
     return false;
   };
   return {
-    texture: rt.texture, cols, rows, variants: V,
+    texture: rt.texture, cols, rows, variants: V, views: NV,
     get done() { return next >= V; },
     /** Call once a frame, outside the game's own render: bakes one body when they are all loaded. Returns true when it just finished. */
     step() {
       if (next >= V || ready < V) return false;
-      if (shootRow(next)) next++;
+      // a whole body a frame (as many renders as `per` allows in each call of shootRow): done in a few frames while you
+      // are still in the flat, before anything is measured or seen
+      for (let k = 0; k < 64; k++) if (shootRow(next)) { next++; break; }
       return next >= V;
     },
     dispose() { rt.dispose(); },
