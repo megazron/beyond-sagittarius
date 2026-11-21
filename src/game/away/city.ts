@@ -1482,7 +1482,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           const dy = you ? Math.hypot(q.pos.x - you.position.x, q.pos.z - you.position.z) : 99;
           if (!crowd.has(q.fig) && (d < 9 || dy < 7)) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
           // and nobody at your elbow is a card (it reads as cardboard at arm's length): the two nearest go first in the queue
-          if (dy < 4 && elbow < 2) { elbow++; if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
+          if (tier > 0 && dy < 4 && elbow < 2) { elbow++; if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
           // whoever is drawn now holds on a little, and the six of the story come first
           const key = d - (q.fig.root.visible ? 1.5 : 0) - (crowd.has(q.fig) ? 0 : 5);
           let j = nc++; while (j > 0 && candK[j - 1] > key) { candK[j] = candK[j - 1]; candI[j] = candI[j - 1]; j--; }
