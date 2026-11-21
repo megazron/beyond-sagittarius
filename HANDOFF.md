@@ -135,3 +135,10 @@ See the end of this file for the running log.
   gate (plan_exp14_city.json: fixed pr 0.6 vs 1.0, shadows off, each post pass off): no change beyond noise, so the
   frame is CPU-bound: update 4-14 ms + draw 13-34 ms (~35 us a draw call through ANGLE). Draw calls and per-frame JS are
   the lever, not resolution or post. The dynamic-resolution controller drops to 0.6 for nothing when CPU-bound.
+- 18:00 CPU profiles with source maps (npx vite build --sourcemap; ~/bs-assets/gpu/tools/mapprof.cjs PROFILE dist/assets
+  [ROOTFN]; gpu_tour plans with "profile": N save OUT/shot.cpuprofile). Planet forest spot (Web, A500): render 85% of the
+  frame, setProgram (per-draw uniform upload) about a third of it, the lake mirror 14% (now trimmed: stones, plants,
+  items and bodies left out of it, half as often when far), updateMatrixWorld 12%. City gate: render 79%, setProgram
+  40%, character animate 7%. NEXT for a steady 60 on Web: fewer draws. The forest's ~40 fields x 3 LODs x parts are
+  one InstancedMesh each; three's BatchedMesh (multi-draw, per-instance culling) would put each material's geometries
+  in one draw (bark: 15 meshes -> 1). Check windify/leaf shader chunks against BatchedMesh's batching texture first.
