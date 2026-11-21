@@ -40,7 +40,12 @@ export function facadeMaterial(o: FacadeOpts = {}) {
   m.userData.noMerge = true; // its look comes from the attributes: never merged into another material
   const ROOM = o.simple ? `vec3 inside = vec3(0.03), glow = vec3(0.0);
           { float lit = street ? shop : step(h, mix(0.08, 0.38, uNight)) * step(0.5, fl);
-            glow = mix(vec3(1.0, 0.74, 0.46), vec3(0.78, 0.9, 1.0), step(0.7, fHash(vec3(bay, fl, seed + 9.0)))) * lit * (0.25 + 0.8 * uNight); }` : `          vec3 inside = vec3(0.0), glow = vec3(0.0);
+            glow = mix(vec3(1.0, 0.74, 0.46), vec3(0.78, 0.9, 1.0), step(0.7, fHash(vec3(bay, fl, seed + 9.0)))) * lit * (0.25 + 0.8 * uNight);
+            // no room behind the glass on phones, but not a flat pane either: a lit room is brighter under its ceiling
+            // and a shop shows rows of goods on its shelves
+            float sy = fy * fh;
+            glow *= street ? (0.45 + 0.75 * step(0.12, fract(sy / 0.42)) * step(0.3, fHash(vec3(floor(fx * bw * 7.0), floor(sy / 0.42), seed)))) : (0.55 + 0.6 * smoothstep(0.3, 0.85, fy));
+            inside += vec3(0.02, 0.025, 0.03) * smoothstep(0.2, 0.9, fy); }` : `          vec3 inside = vec3(0.0), glow = vec3(0.0);
           if (fWin > 0.001) {
           vec3 V = normalize(vWp - cameraPosition);
           vec3 T = alongX ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
