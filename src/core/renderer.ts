@@ -739,6 +739,16 @@ export class Renderer {
     // and with the target they will draw into: the post chain's scene buffer (linear, no tone mapping) or the screen
     const prev = this.renderer.getRenderTarget(), into = this.quality.post && this.renderPass instanceof ScenePass ? this.renderPass.rt : null;
     try { this.renderer.setRenderTarget(into); await this.renderer.compileAsync(scene, camera); } catch { /* compiled on first draw instead */ } finally { this.renderer.setRenderTarget(prev); }
+    // one draw of everything, culling off, into a tiny target: every geometry and texture goes to the GPU now, under the
+    // black, instead of in the first frames of play
+    {
+      const tiny = new THREE.WebGLRenderTarget(8, 8, { type: THREE.HalfFloatType }), culled: THREE.Object3D[] = [];
+      scene.traverse((o) => { if (o.frustumCulled && o.visible) { o.frustumCulled = false; culled.push(o); } });
+      const prev2 = this.renderer.getRenderTarget(), shadows = this.renderer.shadowMap.autoUpdate;
+      try { this.renderer.setRenderTarget(tiny); this.renderer.render(scene, camera); } catch { /* best effort */ }
+      finally { this.renderer.setRenderTarget(prev2); this.renderer.shadowMap.autoUpdate = shadows; for (const o of culled) o.frustumCulled = true; tiny.dispose(); }
+      await new Promise((r) => requestAnimationFrame(r));
+    }
     const texs = new Set<THREE.Texture>();
     scene.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
