@@ -125,9 +125,13 @@ window.__cbBot = (mode) => {
       const way = [run.at(14, 3.5), run.at(30, -5), run.at(46, 2), run.at(60, 3), run.at(72, 0)], a = run.at(0, 0);
       const w = way.find((q) => Math.hypot(q.x - a.x, q.z - a.z) > Math.hypot(p.x - a.x, p.z - a.z) + 0.5) || way[4];
       go(w.x, w.z);
-    } else if (mode === 'bowref' || mode === 'slingref') {
+    } else if (mode === 'atlatlplay' || mode === 'bowplay') {
+      const wpn = mode === 'bowplay' ? 'bow' : 'atlatl';
+      if (st === 0) { if (equip(wpn)) { run.summon('nibbet', 3); next(); } }
+      else { const t = nearest(living('nibbet')); if (t) shoot(t, { loft: wpn === 'atlatl' ? 0.02 : 0.012 }); else if (since() > 3) { run.summon('skritch', 3); stT = performance.now(); } }
+    } else if (mode === 'bowref' || mode === 'slingref' || mode === 'atlatlref') {
       // a reference: the same shot again and again at a point ahead, standing still, for a side camera
-      const wpn = mode === 'bowref' ? 'bow' : 'sling';
+      const wpn = mode === 'bowref' ? 'bow' : mode === 'atlatlref' ? 'atlatl' : 'sling';
       if (st === 0) { if (equip(wpn)) { flag.yaw = C.cam.yaw; next(); } return; }
       const f = { x: C.cam.x - Math.sin(flag.yaw) * 30, z: C.cam.z - Math.cos(flag.yaw) * 30 };
       look(f.x, f.z, C.cam.y + 1.4);

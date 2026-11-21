@@ -586,8 +586,8 @@ export class Combat {
       const cb = (P.combat ??= { scale: 1, force: null, face: null, aim: 0, crouch: 0, sprint: null, sneak: false, jump: true });
       cb.scale = p.down ? 0 : p.moveScale; cb.force = forced ? { x: p.forceVX, z: p.forceVZ } : null; cb.face = face;
       cb.aim = I.aim ? 1 : 0; cb.sneak = p.sneaking;
-      // a side-on archer hides the bow from straight behind: over the shoulder, wider and higher, looking down the arrow
-      cb.shoulder = p.weapon === 'bow' ? 1.05 : 0.85; cb.lift = p.weapon === 'bow' ? 0.32 : 0.12; cb.jump = p.act === 'idle' && !p.blocking;
+      // a side-on archer hides the bow from behind the right shoulder: over the bow shoulder, looking down the arrow
+      cb.shoulder = p.weapon === 'bow' ? -0.95 : 0.85; cb.lift = p.weapon === 'bow' ? 0.22 : 0.12; cb.jump = p.act === 'idle' && !p.blocking;
       cb.sprint = D.input.device === 'pad' && eng ? this.padSprint : null;
     } else P.combat = null;
     // where the player looks (not the camera: a story or a recording may hold the camera elsewhere)
