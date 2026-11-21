@@ -56,7 +56,7 @@ const SMALL_PROP = 0.45, SMALL_FAR = 24;
 const PROP_NEAR = 14;
 const SHADOW_FAR0 = CHAR_BUDGET.shadowFar;
 
-export interface CityPerson { id: string; fig: Character; pos: THREE.Vector3; yaw: number; pose: CrewPose; phase: number; walk?: { z0: number; z1: number; dir: number; speed: number; home?: number }; met?: boolean; greet?: number }
+export interface CityPerson { id: string; fig: Character; pos: THREE.Vector3; yaw: number; pose: CrewPose; phase: number; walk?: { z0: number; z1: number; dir: number; speed: number; home?: number; shop?: { x: number; z: number; t: number; stage: 'in' | 'inside' | 'out' }; nextShop?: number }; met?: boolean; greet?: number }
 
 // ---------- small makers ----------
 let seed = 1234567;
@@ -505,6 +505,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const shopAt = (side: number, z0b: number, z1b: number) => SHOPS.find((s) => s.side === side && s.z > z1b + 3.5 && s.z < z0b - 3.5);
   const FLAT = { side: 1, z0: 61, z1: 77 }; // the friends' flat: its own interior, built below
   // an open shop door shows the warm inside past it; the display ledges are painted wood
+  const shopDoors: { side: number; x: number; z: number }[] = []; // open shop doors the walkers go in and out of
   const doorDarkM = new THREE.MeshStandardMaterial({ color: 0x2a1a10, emissive: 0xffb877, emissiveIntensity: 0.55, roughness: 0.9 });
   const ledgeM = new THREE.MeshStandardMaterial({ color: 0x6b4a32, roughness: 0.75 });
   const facadesOut: Facade[] = [];
@@ -599,6 +600,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
             if (rich) {
               const hsh = Math.abs(Math.sin(wz * 12.9898 + side * 78.233) * 43758.5453) % 1, dzs = hsh < 0.5 ? -1 : 1;
               box(0.14, 2.25, 1.05, doorDarkM, face + out * 0.05, 1.12 + FLOOR, wz + dzs * 1.25).castShadow = false;
+              shopDoors.push({ side, x: face + out * 0.15, z: wz + dzs * 1.05 });
               // the leaf swung out on its hinge at the far edge of the opening, 66 degrees open
               const hz = wz + dzs * 1.75, ldx = out * Math.sin(1.15), ldz = -dzs * Math.cos(1.15);
               const leaf = box(0.05, 2.15, 0.95, frameM, face + ldx * 0.475, 1.08 + FLOOR, hz + ldz * 0.475); leaf.rotation.y = Math.atan2(ldx, ldz);
@@ -1591,6 +1593,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         if (oldOn) for (let i = 0; i < people.length; i++) {
           const q = people[i];
           if (boarding.has(q) || talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
+          if (q.walk?.shop?.stage === 'inside') { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           const d = Math.hypot(q.pos.x - cp.x, q.pos.z - cp.z);
           if (d < 9 && inLens(q.pos.x, q.pos.z)) { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           // the six of the story and Mir have no card of their own look: they stay themselves (a body) out to 48 m
@@ -1646,7 +1649,30 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (oldOn) for (const q of people) {
         if (boarding.has(q)) continue;
         const w = q.walk;
-        if (w) {
+        if (w && (w.shop || (shopDoors.length && time > (w.nextShop ?? (w.nextShop = time + 8 + (q.phase * 7.3) % 20))))) {
+          // a walker going shopping: across the pavement to the nearest open door on their side, inside for a while,
+          // then back out to where they were walking
+          if (!w.shop) {
+            const home = w.home ?? (w.home = q.pos.x), sd = Math.sign(home);
+            const door = shopDoors.find((d) => d.side === sd && (d.z - q.pos.z) * w.dir > 0.5 && (d.z - q.pos.z) * w.dir < 2.5);
+            if (door) w.shop = { x: door.x, z: door.z, t: 0, stage: 'in' };
+            else w.nextShop = time + 1.5; // none just ahead: look again in a moment
+          }
+          const sh = w.shop;
+          if (!sh) { q.pos.z += w.dir * w.speed * dt; if (q.pos.z > w.z1) w.dir = -1; else if (q.pos.z < w.z0) w.dir = 1; }
+          else if (sh.stage === 'inside') { sh.t -= dt; if (sh.t <= 0) { sh.stage = 'out'; q.fig.root.visible = true; } }
+          else {
+            const tx = sh.stage === 'in' ? sh.x : w.home!, tz = sh.stage === 'in' ? sh.z : q.pos.z;
+            const dx = tx - q.pos.x, dz = tz - q.pos.z, dd = Math.hypot(dx, dz), stp = Math.min(dd, w.speed * 0.8 * dt);
+            if (dd > 0.02) { q.pos.x += (dx / dd) * stp; q.pos.z += (dz / dd) * stp; const want = Math.atan2(dx, dz); q.yaw += Math.atan2(Math.sin(want - q.yaw), Math.cos(want - q.yaw)) * (1 - Math.exp(-dt * 6)); }
+            if (dd < 0.08) {
+              if (sh.stage === 'in') { sh.stage = 'inside'; sh.t = 6 + (q.phase * 3.7) % 10; q.fig.root.visible = false; }
+              else { w.shop = undefined; w.nextShop = time + 25 + (q.phase * 5.1) % 30; }
+            }
+          }
+          q.pos.y = hx(q.pos.x); q.fig.root.rotation.y = q.yaw; q.phase += dt * w.speed * 2.2;
+          if (sh?.stage !== 'inside') q.fig.animate(sh ? 'walk' : 'walk', q.phase, Math.min(1.1, (sh ? 0.8 : 1) * w.speed / 3), time, dt);
+        } else if (w) {
           q.pos.z += w.dir * w.speed * dt;
           if (q.pos.z > w.z1) w.dir = -1; else if (q.pos.z < w.z0) w.dir = 1;
           // someone in the way: step aside (towards the wall or the kerb, away from you), and back once past
