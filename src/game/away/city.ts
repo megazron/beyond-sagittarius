@@ -504,6 +504,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const signSet = stack(shopSignsC), signM = lit(signSet.t, 1.2);
   const shopAt = (side: number, z0b: number, z1b: number) => SHOPS.find((s) => s.side === side && s.z > z1b + 3.5 && s.z < z0b - 3.5);
   const FLAT = { side: 1, z0: 61, z1: 77 }; // the friends' flat: its own interior, built below
+  // an open shop door shows the warm inside past it; the display ledges are painted wood
+  const doorDarkM = new THREE.MeshStandardMaterial({ color: 0x2a1a10, emissive: 0xffb877, emissiveIntensity: 0.55, roughness: 0.9 });
+  const ledgeM = new THREE.MeshStandardMaterial({ color: 0x6b4a32, roughness: 0.75 });
   const facadesOut: Facade[] = [];
   const greebles: Record<'ledge' | 'pipe' | 'panel', THREE.BufferGeometry[]> = { ledge: [], pipe: [], panel: [] };
   // junctions: the canyon opens to side streets, and the skyline shows down them
@@ -591,6 +594,19 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
             fronts.tile(plane(3.6, 2.6, frontM, face + out * 0.03, 1.45 + FLOOR, wz, yaw).geometry, Math.floor(rnd() * 6));
             signSet.tile(plane(3.4, 0.6, signM, face + out * 0.06, 3.15 + FLOOR, wz, yaw).geometry, Math.floor(rnd() * shopSignsC.length));
             pool(face + out * 1.4, wz, 2.2);
+            // open for business: the door at one end of the front stands open into the lit inside, and goods are set
+            // out on a display ledge in front of the window (no rnd() here: the street's own sequence stays as it was)
+            if (rich) {
+              const hsh = Math.abs(Math.sin(wz * 12.9898 + side * 78.233) * 43758.5453) % 1, dzs = hsh < 0.5 ? -1 : 1;
+              box(0.14, 2.25, 1.05, doorDarkM, face + out * 0.05, 1.12 + FLOOR, wz + dzs * 1.25).castShadow = false;
+              // the leaf swung out on its hinge at the far edge of the opening, 66 degrees open
+              const hz = wz + dzs * 1.75, ldx = out * Math.sin(1.15), ldz = -dzs * Math.cos(1.15);
+              const leaf = box(0.05, 2.15, 0.95, frameM, face + ldx * 0.475, 1.08 + FLOOR, hz + ldz * 0.475); leaf.rotation.y = Math.atan2(ldx, ldz);
+              { const ex = face + ldx * 0.95, ez = hz + ldz * 0.95; blocks.push(new THREE.Box3(new THREE.Vector3(Math.min(face, ex) - 0.05, 0, Math.min(hz, ez) - 0.05), new THREE.Vector3(Math.max(face, ex) + 0.05, 2.2, Math.max(hz, ez) + 0.05))); }
+              box(0.55, 0.07, 1.9, ledgeM, face + out * 0.42, 0.82 + FLOOR, wz - dzs * 0.6);
+              const goods = [['wicker_basket_01', 0.9], ['brass_pot_01', 0.8], ['food_pomegranate_01', 1], ['plastic_crate_01', 0.55], ['tea_set_01', 0.9], ['wicker_basket_02', 0.8]] as [string, number][];
+              for (let g = 0; g < 2; g++) { const [gn, gs] = goods[Math.floor(hsh * 6 + g * 3) % goods.length]; place(gn, face + out * 0.42, FLOOR + 0.86, wz - dzs * (0.15 + g * 0.85), hsh * 6.28, gs); }
+            }
           } else place(rnd() < 0.6 ? 'rollershutter_door' : 'rollershutter_window_01', face + out * 0.02, FLOOR, wz, out > 0 ? Math.PI / 2 : -Math.PI / 2);
         }
         // an awning over the pavement: striped cloth, tilted down to the street
@@ -749,6 +765,47 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       for (let i = 0; i < 6; i++) { g.beginPath(); g.arc(40 + i * 35, 260, 14, 0, Math.PI * 2); g.fill(); g.fillRect(28 + i * 35, 276, 24, 40); }
     }) }), x, 1.9 + FLOOR, z, yaw);
     poster('TARAVEL|TITANS|CUP FINAL', '#0d3b66', '#f4d35e', 12.0, zB - 0.17, Math.PI); poster('SIX|LINEAGES|ONE BRAIN CELL', '#ff5d8f', '#ffffff', x0 + 6.9, 74.0, -Math.PI / 2);
+    // lived in: the bed made (badly), a wardrobe, the telly on a low bench facing the sofa, cushions, shoes by the door,
+    // pans and a jug in the kitchen, and a bathroom with a toilet, a basin under a mirror, a shower and a towel
+    const white = new THREE.MeshStandardMaterial({ color: 0xf2f0ea, roughness: 0.25 }), chrome = new THREE.MeshStandardMaterial({ color: 0xc8ccd0, roughness: 0.15, metalness: 0.9 });
+    const woodM = new THREE.MeshStandardMaterial({ color: 0x5a3e2b, roughness: 0.7 });
+    // the bed (its frame is 0.9 by 2 m, along the back wall): mattress, a rumpled duvet, a pillow
+    box(1.75, 0.18, 0.8, new THREE.MeshStandardMaterial({ color: 0xe9e4da, roughness: 0.9 }), 19.65, FLOOR + 0.36, 73.6);
+    const duvet = box(1.25, 0.1, 0.86, new THREE.MeshStandardMaterial({ color: 0x3f6f8f, roughness: 0.95 }), 19.35, FLOOR + 0.48, 73.62); duvet.rotation.z = 0.03; duvet.rotation.y = 0.04;
+    box(0.36, 0.12, 0.62, white, 20.35, FLOOR + 0.5, 73.6);
+    // the wardrobe against the bedroom's street-end wall, a rug by the bed
+    place('painted_wooden_cabinet', 17.6, FLOOR, zB - 0.62, Math.PI, 1.35);
+    blocks.push(new THREE.Box3(new THREE.Vector3(16.8, 0, zB - 1.1), new THREE.Vector3(18.4, 2, zB)));
+    const mat2 = add(new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.8), over(new THREE.MeshStandardMaterial({ color: 0x9a8f7a, roughness: 1 }), 3))); mat2.rotation.x = -Math.PI / 2; mat2.position.set(19.5, FLOOR, 72.6); mat2.userData.ground = false;
+    // the living room: a low bench with the telly, facing the sofa; cushions on the sofa
+    solid(box(0.42, 0.42, 1.2, woodM, 16.15, FLOOR + 0.21, 71.85));
+    place('television_02', 16.1, FLOOR + 0.42, 71.85, -Math.PI / 2, 1.3);
+    if (rich) place('throw_pillows_01', 9.95, FLOOR + 0.36, 71.8, Math.PI / 2, 0.75);
+    // shoes by the door, a coat hook with a scarf
+    for (const [sx, sz, c] of [[9.85, 63.6, 0x2a2a2e], [9.85, 63.95, 0x2a2a2e], [10.25, 63.7, 0xc94f3a], [10.25, 64.02, 0xc94f3a]] as [number, number, number][]) box(0.26, 0.09, 0.11, new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 }), sx, FLOOR + 0.045, sz);
+    box(0.05, 0.75, 0.32, new THREE.MeshStandardMaterial({ color: 0xd9b44a, roughness: 0.95 }), x0 + 0.2, FLOOR + 1.3, 63.0);
+    // the kitchen counter: a jug, a bowl, the pan on the hob; a vase on the shelf; a notebook and a mug on the table
+    if (rich) {
+      place('jug_01', 10.7, FLOOR + 0.92, zA + 0.42, 0.6, 0.9); place('wooden_bowl_01', 12.7, FLOOR + 0.92, zA + 0.45, 0, 0.8);
+      place('brass_pan_01', 13.9, FLOOR + 0.94, zA + 0.47, 1.4, 1); place('ceramic_vase_01', 11.2, FLOOR + 1.57, zA + 0.2, 0, 0.6);
+      place('binder_notebook', 12.95, FLOOR + 0.63, 67.0, 0.3, 0.9); place('desk_lamp_arm_01', 20.6, FLOOR + 1.6, 68.85, -Math.PI / 2, 0.6);
+      place('book_encyclopedia_set_01', 20.55, FLOOR + 1.6, 69.15, -Math.PI / 2, 1);
+    }
+    const mug = add(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.04, 0.1, 16), new THREE.MeshStandardMaterial({ color: 0xc23b2e, roughness: 0.5 }))); mug.position.set(13.45, FLOOR + 0.68, 65.9);
+    // the bathroom (x 16.5 to 21, z 61.4 to 66.4): toilet in the far corner, basin and mirror on the back wall, a shower
+    // tray with a glass screen by the bedroom wall, a towel on a rail, a bath mat, a cleaner by the toilet
+    const bowl = add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.4, 20), white)); bowl.position.set(20.45, FLOOR + 0.2, 62.3); bowl.castShadow = true;
+    box(0.2, 0.42, 0.44, white, 20.78, FLOOR + 0.55, 62.3); box(0.42, 0.03, 0.4, white, 20.42, FLOOR + 0.415, 62.3);
+    const ped = add(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.78, 16), white)); ped.position.set(18.4, FLOOR + 0.39, zA + 0.32);
+    box(0.56, 0.14, 0.42, white, 18.4, FLOOR + 0.84, zA + 0.36); box(0.03, 0.12, 0.03, chrome, 18.4, FLOOR + 0.96, zA + 0.2);
+    place('ornate_mirror_01', 18.4, FLOOR + 1.55, zA + 0.16, 0, 1);
+    box(0.9, 0.06, 0.9, white, 20.5, FLOOR + 0.03, 65.85);
+    box(0.02, 1.9, 0.9, new THREE.MeshStandardMaterial({ color: 0xcfe4ec, transparent: true, opacity: 0.18, roughness: 0.05 }), 20.03, FLOOR + 1.0, 65.85);
+    box(0.04, 0.04, 0.3, chrome, 20.9, FLOOR + 2.05, 65.85); box(0.14, 0.03, 0.14, chrome, 20.8, FLOOR + 2.0, 65.85);
+    box(0.6, 0.02, 0.02, chrome, 17.3, FLOOR + 1.2, zA + 0.18); box(0.5, 0.55, 0.03, new THREE.MeshStandardMaterial({ color: 0xd2694a, roughness: 1 }), 17.3, FLOOR + 0.95, zA + 0.2);
+    const bm = add(new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.45), over(new THREE.MeshStandardMaterial({ color: 0x6f9a8f, roughness: 1 }), 3))); bm.rotation.x = -Math.PI / 2; bm.position.set(18.4, FLOOR, zA + 1.0); bm.userData.ground = false;
+    if (rich) place('multi_cleaner_bottle', 20.0, FLOOR, 61.8, 0.5, 1);
+    for (const b of [[20.5, 62.3, 0.4, 0.3], [18.4, zA + 0.35, 0.3, 0.25], [16.15, 71.85, 0.25, 0.65]]) blocks.push(new THREE.Box3(new THREE.Vector3(b[0] - b[2], 0, b[1] - b[3]), new THREE.Vector3(b[0] + b[2], 1, b[1] + b[3])));
   }
 
   for (const sh of SHOPS) pool(sh.side * (FRONT - 1.6), sh.z, 3.6);

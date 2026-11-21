@@ -48,6 +48,9 @@ MODELS = [
     # the flat
     "ceiling_fan", "sofa_02", "old_bed_frame", "drawer_cabinet", "dining_table", "dining_chair_02", "wall_clock",
     "vintage_electric_kettle", "wooden_bookshelf_worn",
+    # the flat, lived in: a wardrobe, the bathroom's mirror, cushions, the telly, books, a lamp, pans and bowls, cleaning things
+    "painted_wooden_cabinet", "ornate_mirror_01", "throw_pillows_01", "television_02", "book_encyclopedia_set_01", "desk_lamp_arm_01",
+    "jug_01", "brass_pan_01", "wooden_bowl_01", "multi_cleaner_bottle", "binder_notebook", "ceramic_vase_01",
 ]
 
 
@@ -67,9 +70,11 @@ def fetch_textures(cache: pathlib.Path, report: dict):
         print(f"texture {name}: {asset}")
 
 
-def fetch_models(cache: pathlib.Path, report: dict):
+def fetch_models(cache: pathlib.Path, report: dict, names: list[str] | None = None):
     OUT.mkdir(parents=True, exist_ok=True)
     for asset in MODELS:
+        if names and asset not in names:
+            continue
         src = fa.model_source(cache, asset)
         with tempfile.TemporaryDirectory() as t:
             work = pathlib.Path(t) / asset
@@ -90,6 +95,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache", default=str(pathlib.Path.home() / ".cache" / "bs-assets"))
     ap.add_argument("--only", default="textures,models")
+    ap.add_argument("--names", default="", help="comma list: fetch only these models")
     a = ap.parse_args()
     cache = pathlib.Path(a.cache)
     cache.mkdir(parents=True, exist_ok=True)
@@ -97,7 +103,7 @@ def main():
     if "textures" in a.only:
         fetch_textures(cache, report)
     if "models" in a.only:
-        fetch_models(cache, report)
+        fetch_models(cache, report, [n for n in a.names.split(",") if n] or None)
     total = sum(report.values())
     print(f"{len(report)} files, {total / 1e6:.1f} MB")
 
