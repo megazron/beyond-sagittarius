@@ -317,6 +317,13 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       kitBox('kit', cx, top, z0 + 0.15, w, 0.9, 0.3, pc, cx, cz); kitBox('kit', cx, top, z1 - 0.15, w, 0.9, 0.3, pc, cx, cz);
       kitBox('kit', x0 + 0.15, top, cz, 0.3, 0.9, d - 0.6, pc, cx, cz); kitBox('kit', x1 - 0.15, top, cz, 0.3, 0.9, d - 0.6, pc, cx, cz);
       for (let i = 0, n = 1 + Math.floor(rnd() * 3); i < n; i++) kitBox('kit', x0 + 2 + rnd() * (w - 5), top, z0 + 2 + rnd() * (d - 5), 1.5 + rnd() * 2.5, 1.2 + rnd() * 2, 1.5 + rnd() * 2.5, pick([0x9a9a9a, 0xbfbfbf, 0x6f7377, 0x2a2a2a]), cx, cz);
+      // the clutter a skyline is made of: condenser units in a row, a mast or two, a dish turned to the sky
+      if (tier > 0) {
+        const ax = x0 + 1.5 + rnd() * (w - 3), az = z0 + 1.5 + rnd() * (d - 3), n = 2 + Math.floor(rnd() * 3);
+        for (let i = 0; i < n; i++) { kitBox('kit', ax + (w > d ? i * 1.1 : 0), top, az + (w > d ? 0 : i * 1.1), 0.9, 0.8, 0.7, 0xc8c6c0, cx, cz); kitGeo('metal', new THREE.CylinderGeometry(0.3, 0.3, 0.04, 10).rotateX(Math.PI / 2).translate(ax + (w > d ? i * 1.1 : 0), top + 0.42, az + (w > d ? 0 : i * 1.1) + 0.36), 0x2a2c30, cx, cz); }
+        if (rnd() < 0.6) { const mx = x0 + 1 + rnd() * (w - 2), mz = z0 + 1 + rnd() * (d - 2), mh = 3 + rnd() * 4; kitBox('metal', mx, top, mz, 0.08, mh, 0.08, 0x3a3d42, cx, cz); kitBox('metal', mx, top + mh * 0.7, mz, 1.2, 0.04, 0.04, 0x3a3d42, cx, cz); kitBox('metal', mx, top + mh * 0.85, mz, 0.8, 0.04, 0.04, 0x3a3d42, cx, cz); }
+        if (rnd() < 0.5) { const dx = x0 + 1.5 + rnd() * (w - 3), dz = z0 + 1.5 + rnd() * (d - 3); kitGeo('kit', new THREE.SphereGeometry(0.6, 10, 5, 0, Math.PI * 2, 0, 1.0).rotateX(-0.9).translate(dx, top + 1.2, dz), 0xe4e2dc, cx, cz); kitBox('metal', dx, top, dz, 0.07, 1.0, 0.07, 0x3a3d42, cx, cz); }
+      }
     }
     solid(x0, z0, x1, z1, top);
     footprints.push({ x0, z0, x1, z1, h: top, kind: 'mid' });
@@ -508,6 +515,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
         else if (i % 11 === 6) { o.place('utility_box_01', px, FLOOR, pz, yaw); solid(px - 0.4, pz - 0.4, px + 0.4, pz + 0.4, 1.2); }
         else if (i % 6 === 1 && (b.kind === 'market' || b.kind === 'res' || b.kind === 'water')) { o.place('planter_box_01', kx - nx * 2.9, FLOOR, kz - nz * 2.9, yaw); }
         if (i === 4 && rnd() < 0.5) shelterAt(kx - nx * 1.4, kz - nz * 1.4, nx, nz);
+        else if ((i === 2 || i === 7) && b.kind !== 'tower' && rnd() < (b.kind === 'market' ? 0.6 : 0.3)) cartAt(kx - nx * 1.3, kz - nz * 1.3, nx, nz);
       }
     }
   };
@@ -533,6 +541,20 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     kitBox('metal', x - nx * 0.75, FLOOR, z - nz * 0.75, nx ? 0.06 : 4.4, 2.5, nx ? 4.4 : 0.06, 0x9fb8c8, x, z);
     for (const s of [-2.1, 2.1]) kitBox('metal', x + (nx ? 0 : s) - nx * 0.75, FLOOR, z + (nx ? s : 0) - nz * 0.75, 0.08, 2.5, 0.08, 0x30343a, x, z);
     solid(x - nx * 0.75 - (nx ? 0.1 : 2.2), z - nz * 0.75 - (nz ? 0.1 : 2.2), x - nx * 0.75 + (nx ? 0.1 : 2.2), z - nz * 0.75 + (nz ? 0.1 : 2.2), 2.6);
+  };
+  /** A street food cart at the kerb: a box on wheels, a counter, a canopy and a bulb; its cook and a customer or two. */
+  const carts: { x: number; z: number; nx: number; nz: number }[] = [];
+  const CART = [0xb8432e, 0x1f6f5c, 0xd8a02a, 0x2c4e8a, 0xe8e0d0];
+  const cartAt = (x: number, z: number, nx: number, nz: number) => {
+    const col = pick(CART), lx = nx ? 0.9 : 1.8, lz = nx ? 1.8 : 0.9;
+    kitBox('kit', x, FLOOR + 0.3, z, lx, 0.62, lz, col, x, z);
+    kitBox('kit', x - nx * 0.05, FLOOR + 0.92, z - nz * 0.05, lx + 0.1, 0.05, lz + 0.1, 0xb0aaa0, x, z);
+    for (const s2 of [-0.7, 0.7]) kitGeo('kit', new THREE.CylinderGeometry(0.2, 0.2, 0.08, 10).rotateZ(nx ? 0 : Math.PI / 2).rotateX(nx ? Math.PI / 2 : 0).translate(x + (nx ? 0 : s2) + nx * 0.2, FLOOR + 0.2, z + (nx ? s2 : 0) + nz * 0.2), 0x1a1a1a, x, z);
+    for (const s2 of [-0.85, 0.85]) kitBox('metal', x + (nx ? 0 : s2) + nx * 0.4, FLOOR + 0.95, z + (nx ? s2 : 0) + nz * 0.4, 0.04, 1.3, 0.04, 0x2a2c30, x, z);
+    kitBox('kit', x, FLOOR + 2.25, z, lx + 0.5, 0.06, lz + 0.5, pick(AWN), x, z);
+    const bulb = new THREE.BoxGeometry(0.16, 0.16, 0.16).toNonIndexed(); bulb.translate(x, FLOOR + 2.1, z); put(tier === 0 ? 'kit' : 'lamp', x, z, bulb);
+    solid(x - lx / 2, z - lz / 2, x + lx / 2, z + lz / 2, 1);
+    carts.push({ x, z, nx, nz });
   };
   const benches: { x: number; z: number; yaw: number }[] = [];
   let manholes: THREE.Object3D | null = null;
@@ -588,10 +610,20 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     g.font = '700 50px Rajdhani, "Noto Sans Devanagari", "Noto Nastaliq Urdu", sans-serif'; g.fillText(n, x + sw / 2, y + shh / 2 + 3, sw - 30); g.shadowBlur = 0;
   }));
   const signRows = Math.ceil(BRANDS.length / COLS);
-  const signs = atlasPlanes(signAtlas, COLS, signRows, shopfronts.filter(() => rnd() < 0.85).map((s) => {
+  const signList = shopfronts.filter(() => rnd() < 0.85).map((s) => {
     const y = FLOOR + s.fh * 0.855, w = Math.min(s.w, 6.5), h = Math.min(s.fh * 0.17, w * shh / sw * 1.15);
     return { x: s.x + s.nx * 0.24, y, z: s.z + s.nz * 0.24, w: Math.min(w, h * sw / shh * 0.95), h, yaw: Math.atan2(s.nx, s.nz), tile: s.brand };
-  }));
+  });
+  // a projecting sign on a bracket at the shop's edge, square to the wall: the one you read from down the street
+  for (const s of shopfronts) {
+    if (s.fh > 4 || rnd() > 0.55) continue;
+    const tx = Math.abs(s.nz), tz = Math.abs(s.nx), along = (rnd() < 0.5 ? -1 : 1) * (s.w / 2 - 0.2), out = 0.95, y = FLOOR + s.fh + 0.75;
+    const x = s.x + s.nx * out + tx * along, z = s.z + s.nz * out + tz * along, yaw = Math.atan2(tx, tz);
+    for (const k of [0, 1]) signList.push({ x: x + tx * (k ? -0.03 : 0.03), y, z: z + tz * (k ? -0.03 : 0.03), w: 1.7, h: 0.32, yaw: yaw + k * Math.PI, tile: s.brand });
+    kitBox('metal', s.x + s.nx * 0.55 + tx * along, y + 0.17, s.z + s.nz * 0.55 + tz * along, s.nx ? 1.1 : 0.05, 0.05, s.nx ? 0.05 : 1.1, 0x26292d, s.x, s.z);
+    kitBox('kit', x, y - 0.19, z, s.nx ? 1.8 : 0.1, 0.4, s.nx ? 0.1 : 1.8, 0x14151a, s.x, s.z);
+  }
+  const signs = atlasPlanes(signAtlas, COLS, signRows, signList);
   add(signs.mesh);
   const adAtlas = canvasTex(1024, 512 * ADS.length, (g) => ADS.forEach(([a, b, fg, bg], i) => {
     const y = i * 512, gr = g.createLinearGradient(0, y, 1024, y + 512); gr.addColorStop(0, bg); gr.addColorStop(1, '#05060a');
@@ -735,7 +767,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       if (u < r.a + 12 || u > r.b - 12) continue;
       const st = stopsOf.get(r)!; if (st.up.some((n) => Math.abs(n - u) < 12)) continue;
       const x = r.along === 'z' ? r.c : u, z = r.along === 'z' ? u : r.c, dx = x - cam.x, dz = z - cam.z, d = Math.hypot(dx, dz);
-      if ((dx * fx + dz * fz) / d > 0.35 && d < 150) continue; // in front and near: it would pop in
+      if ((dx * fx + dz * fz) / d > 0.2) continue; // anywhere ahead: it would be seen to appear
       const dir = rnd() < 0.5 ? 1 : -1, lane = rnd() < 0.5 ? 0 : 1;
       if (cars.some((o) => o !== c && o.r === r && o.dir === dir && o.lane === lane && Math.abs(o.u - u) < 20)) continue;
       c.r = r; c.u = u; c.dir = dir; c.lane = lane; c.turn = null; c.v = c.vmax * 0.8;
@@ -831,6 +863,14 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: n > 1 ? 'idle' : pick(stayPoses), x, z, yaw: n > 1 ? Math.atan2(bx - x, bz - z) : Math.atan2(-sf.nx, -sf.nz), t: 0 });
     }
   }
+  // the cooks at their carts (on the road side, facing the pavement) and whoever is buying
+  for (const c of carts) {
+    peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: 'idle', x: c.x + c.nx * 0.85, z: c.z + c.nz * 0.85, yaw: Math.atan2(-c.nx, -c.nz), t: 0 });
+    for (let j = 0, n = Math.floor(rnd() * (rich ? 3 : 2)); j < n; j++) {
+      const sh = (j - (n - 1) / 2) * 0.8;
+      peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: pick(['idle', 'idle', 'selfie']), x: c.x - c.nx * 1.05 + (c.nx ? 0 : sh), z: c.z - c.nz * 1.05 + (c.nx ? sh : 0), yaw: Math.atan2(c.nx, c.nz), t: 0 });
+    }
+  }
   // a cafe's chairs: most have someone in them of an evening
   for (const c of cafes) if (rnd() < (rich ? 0.45 : 0.2)) peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: pick(['idle', 'selfie', 'idle', 'write']), x: c.x - Math.sin(c.yaw) * 0.35, z: c.z - Math.cos(c.yaw) * 0.35, yaw: c.yaw, t: 0 }); // standing by the table: the sit clip is for the ground
   // the park: strollers on its paths, people on the lawns
@@ -867,7 +907,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       if (Math.hypot(cx - cam.x, cz - cam.z) > 170) continue;
       const s2 = rnd() * perim(b, p.off); onRing(b, p.off, s2, P0);
       const dx = P0.x - cam.x, dz = P0.z - cam.z, d = Math.hypot(dx, dz);
-      if (d < 55 || d > 140 || ((dx * fx + dz * fz) / d > 0.3 && d < 110)) continue;
+      if (d < 55 || d > 140 || (dx * fx + dz * fz) / d > 0.2) continue; // never in view: nobody pops in
       p.b = b; p.s = s2; p.mode = 'walk'; p.cross = undefined; p.x = P0.x; p.z = P0.z; p.yaw = p.dir > 0 ? P0.yaw : P0.yaw + Math.PI;
       return;
     }

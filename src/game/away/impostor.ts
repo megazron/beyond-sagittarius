@@ -4,13 +4,13 @@ import { Character, CHAR_BUDGET } from '../../characters/character';
 /**
  * Far people as baked impostors. The painted crowd cards read as cardboard; these are pictures of the game's own
  * bodies: a handful of townsfolk are each drawn once, at load, into an atlas: six frames of their walk and one standing,
- * from the front, the back and both sides. A card then shows the frame and the side that fit how its person is walking
+ * from eight sides round them. A card then shows the frame and the side that fit how its person is walking
  * and where the camera is, and is tinted by the light of the hour, so at twenty metres a card and a body are hard to
  * tell apart. One atlas, one draw for every far person in the city.
  *
  * The bake is spread over frames (one body a frame) while the player is still in the flat.
  */
-export const IMP = { views: 4, walk: 6, frames: 7 }; // frame 6 is standing
+export const IMP = { views: 8, walk: 6, frames: 7 }; // frame 6 is standing; eight sides, so a card turning with its walker steps 45 degrees, not 90
 
 export function impostorBaker(renderer: THREE.WebGLRenderer, bodies: Character[], tile: [number, number], env: () => THREE.Texture | null) {
   const V = bodies.length, cols = V * IMP.views, rows = IMP.frames, [TW, TH] = tile;
@@ -37,7 +37,7 @@ export function impostorBaker(renderer: THREE.WebGLRenderer, bodies: Character[]
     let t = 100, ph = 0;
     const shoot = (frame: number) => {
       for (let w = 0; w < IMP.views; w++) {
-        const a = (w * Math.PI) / 2;
+        const a = (w * Math.PI * 2) / IMP.views;
         cam.position.set(Math.sin(a) * 6, 0, Math.cos(a) * 6); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
         rt.viewport.set((i * IMP.views + w) * TW, frame * TH, TW, TH); rt.scissor.copy(rt.viewport); rt.scissorTest = true;
         renderer.setRenderTarget(rt); renderer.clearDepth(); renderer.render(stage, cam);

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { IMP } from './impostor';
 import { fitCanvasText } from '../../core/canvastext';
 import { nearFade } from '../../core/nearfade';
 
@@ -176,9 +177,9 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     let time = 0;
     /** The atlas tile for a card: which body, seen from which side (rel: the camera's bearing from the way they face), which walk frame (phase < 0: standing). */
     const tileOf = (arr: Float32Array, i: number, who: number, rel: number, phase: number) => {
-      const A = imp!, view = ((Math.round(rel / (Math.PI / 2)) % 4) + 4) % 4, v = ((who % A.variants) + A.variants) % A.variants;
+      const A = imp!, NV = IMP.views, view = ((Math.round(rel / (Math.PI * 2 / NV)) % NV) + NV) % NV, v = ((who % A.variants) + A.variants) % A.variants;
       const frame = phase < 0 ? A.rows - 1 : Math.floor(phase % 1 * (A.rows - 1) + (A.rows - 1)) % (A.rows - 1);
-      arr[i * 2] = (v * 4 + view) / A.cols; arr[i * 2 + 1] = frame / A.rows;
+      arr[i * 2] = (v * NV + view) / A.cols; arr[i * 2 + 1] = frame / A.rows;
     };
     const baseCol = new THREE.Color(0.55, 0.52, 0.6);
     setAtlas = (t, cols, rows, variants) => { imp = { cols, rows, variants }; mat.map = t; mat.alphaTest = 0.5; mat.needsUpdate = true; grid.value.set(1 / cols, 1 / rows); baseCol.setRGB(1, 1, 1); };
