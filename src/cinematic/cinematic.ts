@@ -463,7 +463,10 @@ export class Cinematic {
       ship.engineGlow.color.setRGB(0.4 + strain, 1.2 + strain, 3 * (1 + strain));
       return { p, k };
     };
-    const shotAt = (start: number, end: number, sh: Omit<Shot, 'start' | 'end'>) => this.shots.push({ start, end, enter: () => { fresh(); sh.enter?.(); }, update: (k, l) => { fresh(); sh.update(k, l); } });
+    // a close shot may cheat the others out of the frame (they would stand between the lens and the face): every
+    // shot starts with all six shown, and `only` hides the rest for that shot
+    const only = (...cs: Character[]) => intr.crew.forEach((c) => { c.root.visible = cs.length === 0 || cs.includes(c); });
+    const shotAt = (start: number, end: number, sh: Omit<Shot, 'start' | 'end'>) => this.shots.push({ start, end, enter: () => { fresh(); only(); sh.enter?.(); }, update: (k, l) => { fresh(); sh.update(k, l); } });
 
     // ---- A. Something is wrong ----
     this.cue(S + 0.2, () => { calm(); audio.tone(58, 7, 'sine', 0.22, 0, -9); });
@@ -489,15 +492,19 @@ export class Cinematic {
     // A3 insert: the nav gauge. The needle creeps a hair left; a tick; it creeps again
     this.cue(S + 7.3, () => audio.tone(2400, 0.02, 'square', 0.05));
     this.cue(S + 8.4, () => audio.tone(2400, 0.02, 'square', 0.05));
+    this.cue(S + 6.9, () => sci.doTask('use', { seconds: 0.7, at: ins.gaugeAt.getWorldPosition(new THREE.Vector3()).add(V(0, 0, 0.02)), hands: 'L', prop: null }));
+    this.cue(S + 8.0, () => sci.doTask('use', { seconds: 0.6, at: ins.gaugeAt.getWorldPosition(new THREE.Vector3()).add(V(0, 0, 0.02)), hands: 'L', prop: null }));
     shotAt(S + 6.2, S + 9.0, {
+      enter: () => put(sci, -0.55, -0.6, Math.PI),
       update: (k, local) => {
         const g = ins.gaugeAt; g.updateMatrixWorld(); const c0 = g.getWorldPosition(new THREE.Vector3()), n = V(0, 0, 1).applyQuaternion(g.getWorldQuaternion(new THREE.Quaternion()));
-        lens(85); this.camera.position.copy(c0).addScaledVector(n, 0.5).add(V(-0.36, 0.12, 0)); this.lookTarget.copy(c0); // past his left hip, not through him
+        lens(85); this.camera.position.copy(c0).addScaledVector(n, 0.55).add(V(-0.3, 0.1, 0)); this.lookTarget.copy(c0); // from his left; he stands to its right
         ins.gauge(-0.02 - 0.05 * smoothstep(0.9, 1.3, local) - 0.05 * smoothstep(2.0, 2.4, local));
       },
     });
-    // A4 close-up: Zenvik. He wants it to be a sensor fault. Brows draw together; a slow blink; eyes to the window and back
+    // A4 close-up: Zenvik (back at the gauge's end of the console). He wants it to be a sensor fault. Brows draw together; a slow blink; eyes to the window and back
     shotAt(S + 9.0, S + 11.6, {
+      enter: () => atConsole(),
       update: (k, local) => {
         lens(85); const h = head(sci, -0.12); this.camera.position.copy(h).add(V(lerp(0.75, 0.62, k), -0.06, -1.55)); this.lookTarget.copy(h);
         sci.setFace({ frown: smoothstep(0, 0.8, local) * 0.55, squint: 0.25, blink: local > 1.1 && local < 1.35 ? 1 : 0 });
@@ -506,7 +513,7 @@ export class Cinematic {
     });
     // A5 his eyeline through the window: near the core the stars are short arcs, all bent the same way
     shotAt(S + 11.6, S + 14.4, {
-      update: (k) => { lens(50); this.camera.position.copy(at(-0.7, -0.5, -0.4)); this.lookTarget.copy(at(1.6, -0.2, -6)); d.uWarp.value = smoothstep(0, 1, k) * 0.55; d.uWarpDir.value.set(-0.6, 0.3, -1).normalize(); d.uBHPos.value.set(-40, 18, -lerp(420, 330, k)); },
+      update: (k) => { lens(50); this.camera.position.copy(at(0.2, -0.45, -0.55)); this.lookTarget.copy(at(1.6, -0.2, -6)); d.uWarp.value = smoothstep(0, 1, k) * 0.55; d.uWarpDir.value.set(-0.6, 0.3, -1).normalize(); d.uBHPos.value.set(-40, 18, -lerp(420, 330, k)); },
     });
     // A6 Skyvra at the window, her back to us; she turns, head first, then her body; a half smile that does not hold
     this.vcue(S + 15.0, 'op.17', () => { ui.subtitle('op.17', 'crew.explorer.name'); talk(sky, 'op.17'); });
@@ -539,7 +546,7 @@ export class Cinematic {
     shotAt(S + 20.4, S + 23.0, {
       update: (k, local) => {
         ins.cup(CUP, 0.42 * smoothstep(0.2, 2.0, local), smoothstep(0.8, 2.4, local), smoothstep(1.6, 2.6, local));
-        lens(100); this.camera.position.copy(CUP).add(V(-0.05, 0.11, 0.34)); this.lookTarget.copy(CUP).add(V(0, 0.005, 0));
+        lens(100); this.camera.position.copy(CUP).add(V(-0.04, 0.15, 0.32)); this.lookTarget.copy(CUP).add(V(0, 0.005, 0));
       },
     });
     // B3 close-up: Draxum looks down at the cup, blinks, looks up at the others; the joke shape stays a beat too long
@@ -582,8 +589,8 @@ export class Cinematic {
       },
     });
     // C3 insert: the console screen says it; amber washes over the room
-    this.vcue(S + 34.0, 'cine.ai1', () => { ui.subtitle(null); ui.aiAlert('cine.ai1'); audio.alarm(true); });
-    this.cue(S + 42.6, () => { ui.aiAlert(null); audio.alarm(false); });
+    this.vcue(S + 34.0, 'cine.ai1', () => { ui.subtitle('cine.ai1'); audio.alarm(true); }); // the screen insert carries it: no alert box over it
+    this.cue(S + 42.6, () => { ui.subtitle(null); audio.alarm(false); });
     shotAt(S + 33.8, S + 42.6, {
       enter: () => { this.pullPose = {}; ins.warn(['WARNING', 'UNIDENTIFIED GRAVITATIONAL DISTURBANCE', 'NAVIGATION: ANOMALOUS DEVIATION']); holoOn(false); },
       update: (k, local) => {
@@ -597,10 +604,10 @@ export class Cinematic {
     this.cue(S + 42.6, () => { audio.whoosh(); audio.tone(44, 13, 'sawtooth', 0.12, 0, 14); ins.warn(null); });
     // D1 wide from behind and above the pilot: she is already fighting it
     shotAt(S + 42.6, S + 44.8, {
-      enter: () => { this.setVisible('cockpit'); d.uBHPos.value.set(-6, 4, -160); ins.attitude(0, 0); },
+      enter: () => { this.setVisible('cockpit'); d.uBHPos.value.set(-6, 4, -160); ins.attitude(0, 0); this.pilot.doTask('use', { seconds: 12, at: ins.stick.getWorldPosition(new THREE.Vector3()).add(V(0, 0.36, 0)), hands: 'both', prop: null }); },
       update: (k, local) => {
-        lens(24); const c = ins.cockpit.position; this.camera.position.copy(c).add(V(0.5, 0.0, 1.6)); this.lookTarget.copy(c).add(V(-0.1, -1.2, -1.6));
-        this.pilot.setLimbs({ ...STANDING, armR: [-0.15, -0.55, 0.8], foreR: [-0.05, -0.2, 1], armL: [0.25, -0.6, 0.75], foreL: [0.1, -0.3, 1] });
+        lens(24); const c = ins.cockpit.position; this.camera.position.copy(c).add(V(0.55, -0.35, 0.95)); this.lookTarget.copy(c).add(V(-0.05, -1.25, -1.5));
+        
         this.pilot.setLookTarget(c.clone().add(V(0, -0.9, -2.4))); this.pilot.setFace({ frown: 0.6, squint: 0.4 });
         ins.stick.rotation.x = -0.25 - Math.sin(local * 6) * 0.03; ins.attitude(0.08 + local * 0.03, -0.1);
         this.shake = 0.01;
@@ -615,8 +622,8 @@ export class Cinematic {
       },
     });
     // D3 insert: the attitude display; the horizon rolls the wrong way
-    this.vcue(S + 49.3, 'pull.ai1', () => { ui.subtitle(null); ui.aiAlert('pull.ai1'); audio.thud(); });
-    this.cue(S + 56.2, () => ui.aiAlert(null));
+    this.vcue(S + 49.3, 'pull.ai1', () => { ui.subtitle('pull.ai1'); audio.thud(); });
+    this.cue(S + 56.2, () => ui.subtitle(null));
     shotAt(S + 49.0, S + 56.2, {
       update: (k, local) => {
         lens(50); const a = ins.attAt, c0 = a.getWorldPosition(new THREE.Vector3()), n = V(0, 0, 1).applyQuaternion(a.getWorldQuaternion(new THREE.Quaternion()));
@@ -649,21 +656,21 @@ export class Cinematic {
     // E2 insert: Lyrra's hand closes on Nuvexa's wrist as she slides past
     this.cue(S + 62.2, () => audio.tone(320, 0.18, 'sine', 0.05, 0, -120));
     shotAt(S + 61.4, S + 62.9, {
-      enter: () => { put(nuv, 2.6, -1.6, Math.PI * 0.6); put(lyr, 3.2, -1.3, -Math.PI * 0.45); },
+      enter: () => { put(nuv, 2.6, -1.6, Math.PI * 0.6); put(lyr, 3.2, -1.3, -Math.PI * 0.45); only(nuv, lyr); },
       update: (k, local) => {
         const g = smoothstep(0.1, 0.9, local);
         nuv.setLimbs(mixLimbs(STANDING, { ...FALL.spread, armL: [0.9, 0.35, 0.3], foreL: [1, 0.25, 0.3] }, 0.9)); nuv.setFace({ fear: 0.8, open: 0.4 });
         lyr.setLimbs(mixLimbs(STANDING, { ...STANDING, armR: [-0.9, 0.15, 0.45], foreR: [-1, 0.1, 0.3] }, g));
         const m = hand(lyr).add(hand(nuv, false)).multiplyScalar(0.5);
-        lens(85); this.camera.position.copy(m).add(V(-0.1, -0.25, 0.85)); this.lookTarget.copy(m);
+        lens(50); this.camera.position.copy(m).add(V(0.15, 0.35, 1.05)); this.lookTarget.copy(m);
       },
     });
     // E3 Draxum plants his feet and takes Bolzar's weight on one arm; eyes on Bolzar, not on us
     this.vcue(S + 63.2, 'cine.line8', () => { ui.subtitle('cine.line8', 'crew.strong.name'); talk(drx, 'cine.line8'); });
     shotAt(S + 62.9, S + 65.8, {
-      enter: () => { put(drx, 2.2, -1.2, Math.PI * 0.75); put(bol, 2.9, -1.5, Math.PI * 0.4); },
+      enter: () => { put(drx, 2.2, -1.2, -0.35); put(bol, 2.85, -1.45, -0.9); },
       update: (k, local) => {
-        lens(35); const h = head(drx, -0.3); this.camera.position.copy(h).add(V(-1.6, -0.35, 1.3)); this.lookTarget.copy(h).add(V(0.4, 0, 0)); this.shake = 0.02;
+        lens(35); const h = head(drx, -0.3); this.camera.position.copy(h).add(V(-0.7, -0.3, 2.1)); this.lookTarget.copy(h).add(V(0.3, 0, 0)); this.shake = 0.02;
         drx.setLimbs(mixLimbs(STANDING, { ...STANDING, legL: [0.45, -1, 0.1], shinL: [0.2, -1, 0], legR: [-0.4, -1, -0.15], shinR: [-0.2, -1, 0], armL: [1, -0.1, 0.35], foreL: [0.9, 0.2, 0.5] }, smoothstep(0, 0.8, local)));
         drx.setFace({ frown: 0.7, open: 0.2 }); drx.setLookTarget(head(bol));
         bol.setLimbs(mixLimbs(STANDING, FALL.spread, 0.5)); bol.setFace({ fear: 0.6 }); bol.setLookTarget(head(drx));
@@ -685,7 +692,7 @@ export class Cinematic {
     shotAt(S + 67.8, S + 74.4, {
       update: (k, local) => {
         lens(85); const h = head(sci, -0.12); this.camera.position.copy(h).add(V(0.75, -0.05, -1.45)); this.lookTarget.copy(h);
-        sci.setLimbs(null); sci.setLookTarget(local < 0.6 ? at(0, -0.55, -1.45) : WIN);
+        holoOn(false); sci.setLimbs(null); sci.setLookTarget(local < 0.6 ? at(0, -0.55, -1.45) : WIN);
         sci.root.rotation.y = Math.PI - 0.5 * smoothstep(0.5, 1.4, local);
         sci.setFace({ fear: 0.35, open: 0.08, frown: 0.2, blink: local > 5.7 && local < 5.9 ? 1 : 0 });
         intr.mainLight.color.copy(COOL).lerp(GOLD, 0.3);
@@ -696,7 +703,7 @@ export class Cinematic {
     shotAt(S + 74.4, S + 79.0, {
       update: (k) => {
         const e = easeInOut(k); lens(35);
-        this.camera.position.copy(at(lerp(0.7, 0.4, e), -0.55, lerp(0.2, -0.4, e))); this.lookTarget.copy(at(0.4, -0.2, -6));
+        this.camera.position.copy(at(lerp(1.5, 1.2, e), -0.5, lerp(0.2, -0.4, e))); this.lookTarget.copy(at(0.4, -0.2, -6));
         d.uBHPos.value.set(lerp(-6, -2.5, e), lerp(9, 3.5, e), -lerp(70, 15, e)); d.uWarp.value = 0.4 + 0.4 * e;
         intr.mainLight.intensity = 9 - 3 * e + 4 * Math.max(0, Math.sin(this.clockT * 2.7)) * e; this.shake = 0.01 * e;
       },
@@ -704,9 +711,9 @@ export class Cinematic {
     // F4 five quick close-ups, each on its own eyeline to the window (screen right), lit by the glow
     const F4: [Character, Face][] = [[drx, { frown: 0.7, open: 0.1 }], [lyr, { fear: 0.5, open: 0.35 }], [sky, { smile: 0.4, fear: 0.5 }], [bol, { fear: 0.6, squint: 0.3 }], [nuv, { fear: 0.7, open: 0.2 }]];
     F4.forEach(([c, face], i) => shotAt(S + 79.0 + i * 1.1, S + 80.1 + i * 1.1, {
-      enter: () => { group(); },
+      enter: () => { group(); only(c); },
       update: (k, local) => {
-        lens(85); const h = head(c, -0.12); this.camera.position.copy(h).add(V(-0.55, -0.05, -1.4)); this.lookTarget.copy(h);
+        lens(85); const h = head(c, -0.12); this.camera.position.copy(h).add(V(-1.0, -0.05, 0.9)); this.lookTarget.copy(h);
         c.setLookTarget(WIN); c.setFace(i === 2 ? { smile: 0.4 * (1 - smoothstep(0.3, 0.7, local)), fear: 0.6 * smoothstep(0.4, 0.9, local) } : face);
         if (i === 3) c.setLookTarget(local > 0.5 ? at(5, -1.4, -1) : WIN); // Bolzar looks away
         if (i === 4) this.pullPose.social = local < 0.5 ? 'selfie' : undefined as unknown as CrewPose; // Nuvexa lowers the phone
@@ -719,10 +726,10 @@ export class Cinematic {
     shotAt(S + 84.5, S + 93.6, {
       enter: () => { this.pullPose = {}; group(); atConsole(); },
       update: (k, local) => {
-        lens(24); this.camera.position.copy(at(-5.2, -0.7, 0.6)); this.lookTarget.copy(at(2.0, -1.0, -0.9)); this.shake = 0.02;
-        const stepDown = local < 0.8 ? 1 : local < 1.7 ? 0.55 : local < 2.6 ? 0.2 : 0.04;
+        lens(24); this.camera.position.copy(at(-3.4, -0.6, 0.9)); this.lookTarget.copy(at(2.0, -1.0, -1.2)); this.shake = 0.02;
+        const stepDown = local < 0.8 ? 1 : local < 1.7 ? 0.55 : local < 2.6 ? 0.3 : 0.18;
         intr.mainLight.color.copy(GOLD); intr.mainLight.intensity = 16 * stepDown; intr.consoleLight.intensity = 0.5;
-        intr.alarmLight.color.copy(RED); intr.alarmLight.intensity = local > 2.6 ? (Math.sin(local * 9) * 0.5 + 0.5) * 22 : 0;
+        intr.alarmLight.color.copy(RED); intr.alarmLight.intensity = local > 2.6 ? 10 + (Math.sin(local * 9) * 0.5 + 0.5) * 26 : 0;
         const light = local < 0.8 ? at(4, 1.5, 0) : local < 1.7 ? at(1.5, 1.6, 0) : at(-1.5, 1.6, 0);
         intr.crew.forEach((c) => { c.setFace({ fear: 0.7, open: 0.2 }); c.setLookTarget(light); });
       },
@@ -761,6 +768,7 @@ export class Cinematic {
     // G4 insert: the readout. How long, and that the danger is the ship, not the hole
     this.cue(S + 102.6, () => { audio.beep(); ins.readout(['EVENT HORIZON: 40 SECONDS', 'ENGINES OVERSTRESSED · HULL FAILING', 'TIDAL STRESS: NEGLIGIBLE'], '#ffb347'); });
     shotAt(S + 102.4, S + 106.0, {
+      enter: () => ins.readout(['EVENT HORIZON: 40 SECONDS', 'ENGINES OVERSTRESSED · HULL FAILING', 'TIDAL STRESS: NEGLIGIBLE'], '#ffb347'),
       update: (k, local) => {
         lens(50); const m = ins.readoutAt, c0 = m.getWorldPosition(new THREE.Vector3()); this.camera.position.copy(c0).add(V(-1.15, 0, 0)); this.lookTarget.copy(c0);
         floatUp(1, 6 + local, 2.4);
@@ -769,7 +777,7 @@ export class Cinematic {
     // G5 two-shot, close: Zenvik and Nuvexa floating, her phone still streaming. He tells her the truth gently
     this.vcue(S + 106.4, 'pull.sci3', () => { ui.subtitle('pull.sci3', 'crew.scientist.name'); talk(sci, 'pull.sci3'); });
     shotAt(S + 106.0, S + 114.4, {
-      enter: () => { holoOn(false); put(sci, 0.2, -0.95, 0.35, FLOOR + 0.3); put(nuv, 0.95, -0.75, -0.55, FLOOR + 0.35); this.pullPose.social = 'selfie'; },
+      enter: () => { holoOn(false); put(sci, 0.2, -0.95, 0.35, FLOOR + 0.3); put(nuv, 0.95, -0.75, -0.55, FLOOR + 0.35); this.pullPose.social = 'selfie'; put(drx, -3.2, 0.6, Math.PI, FLOOR + 1.4); put(lyr, 3.6, 0.4, Math.PI, FLOOR + 0.5); put(sky, 4.2, -0.6, Math.PI, FLOOR + 0.7); put(bol, -3.8, -0.4, Math.PI, FLOOR + 0.4); },
       update: (k, local) => {
         lens(50); const m = head(sci).add(head(nuv)).multiplyScalar(0.5); this.camera.position.copy(m).add(V(-0.3, -0.12, 1.55)); this.lookTarget.copy(m).add(V(0, -0.12, 0));
         sci.setLimbs(mixLimbs(STANDING, FALL.spread, 0.25)); sci.setFace({ fear: 0.4, squint: 0.15 }); sci.setLookTarget(local < 2.0 ? hand(nuv) : head(nuv));
@@ -805,7 +813,7 @@ export class Cinematic {
       },
     });
     // the breaking apart, the white and the six fates are the title sequence: montage.ts
-    this.cue(S + 121.2, () => { holoOn(true); ui.subtitle(null); audio.alarm(false); calm(); intr.crew.forEach((c) => { c.root.rotation.set(0, Math.PI, 0); c.setLookTarget(null); }); intr.group.scale.set(1, 1, 1); this.roll = 0; this.pullPose = {}; audio.vacuum(false); ins.cup(null); ins.warn(null); ins.comms(['COMMS', 'LINK OK']); ins.readout(['NAV', 'COURSE NOMINAL']); this.finish(); });
+    this.cue(S + 121.2, () => { holoOn(true); intr.crew.forEach((c) => { c.root.visible = true; }); ui.subtitle(null); audio.alarm(false); calm(); intr.crew.forEach((c) => { c.root.rotation.set(0, Math.PI, 0); c.setLookTarget(null); }); intr.group.scale.set(1, 1, 1); this.roll = 0; this.pullPose = {}; audio.vacuum(false); ins.cup(null); ins.warn(null); ins.comms(['COMMS', 'LINK OK']); ins.readout(['NAV', 'COURSE NOMINAL']); this.finish(); });
   }
 
   /** Camera roll for the shot in hand (the deck tilting), and poses the pull gives the crew outside a staged scene. */

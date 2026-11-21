@@ -59,7 +59,7 @@ export function createInserts(deck: THREE.Group) {
     const lip = new THREE.Mesh(new THREE.TorusGeometry(0.034, 0.0018, 8, 40), cupMat); lip.rotation.x = Math.PI / 2; lip.position.y = 0.0375; cup.add(lip); }
   // the liquid: a disc clipped to the cup's inside by drawing it only within the cup's radius at each height (a
   // stencil-free trick: the disc is an ellipse fitted to the tilted plane's cut through a cylinder)
-  const liquidMat = new THREE.MeshStandardMaterial({ color: 0x5a2a12, roughness: 0.08, metalness: 0.1, emissive: 0x1a0904, side: THREE.DoubleSide });
+  const liquidMat = new THREE.MeshStandardMaterial({ color: 0xa8641e, roughness: 0.05, metalness: 0.1, emissive: 0x3a1a06, side: THREE.DoubleSide });
   const liquid = new THREE.Mesh(new THREE.CircleGeometry(0.0315, 40), liquidMat); liquid.rotation.x = -Math.PI / 2; cup.add(liquid);
   const drop = new THREE.Mesh(new THREE.SphereGeometry(0.0035, 10, 8), liquidMat); drop.visible = false; cup.add(drop);
 
@@ -83,7 +83,7 @@ export function createInserts(deck: THREE.Group) {
     const dash = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.5, 0.7), metal); dash.position.set(0, -1.35, -1.55); dash.rotation.x = -0.35; cockpit.add(dash);
     att.mesh.position.set(0, -1.06, -1.34); att.mesh.rotation.x = -0.35 - 0.2; cockpit.add(att.mesh);
     const seat = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, 0.6), metal); seat.position.set(0, -1.72, -0.2); cockpit.add(seat);
-    const back = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.12), metal); back.position.set(0, -1.25, 0.12); back.rotation.x = 0.15; cockpit.add(back);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.45, 0.1), metal); back.position.set(0, -1.45, 0.14); back.rotation.x = 0.15; cockpit.add(back);
     // the window: an opening in the shell's front; the space dome shows through it
     const frame = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.05, 8, 48, Math.PI), metal); frame.position.set(0, -0.95, -2.2); cockpit.add(frame);
     const strip = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.02, 0.03), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 1.4, 2.0) })); strip.position.set(0, -1.08, -1.2); cockpit.add(strip);
@@ -106,9 +106,9 @@ export function createInserts(deck: THREE.Group) {
       cup.visible = !!pos; if (!pos) return;
       cup.position.copy(pos);
       const a = Math.min(0.7, lean + climb * 0.25);
-      liquid.rotation.set(-Math.PI / 2 + a, 0, 0); liquid.position.set(0, 0.012 - climb * 0.004, 0);
+      liquid.rotation.set(-Math.PI / 2 - a, 0, 0); // the high side towards the lens, where the drop climbs liquid.position.set(0, 0.012 - climb * 0.004, 0);
       liquid.scale.set(1, 1 / Math.cos(a) * 0.98, 1);
-      drop.visible = dropK > 0.02; drop.position.set(0, 0.03 + dropK * 0.012, -0.031 - dropK * 0.004);
+      drop.visible = dropK > 0.02; drop.position.set(0, 0.03 + dropK * 0.012, 0.031 + dropK * 0.004); // on the rim facing the lens
     },
     /** C3: the console screen readable, or back to the holo-only look. */
     warn(lines: string[] | null, color = '#ffb347') { warn.mesh.visible = !!lines; if (lines) writeScreen(warn, lines, color, '#0d0703', 0.16); },

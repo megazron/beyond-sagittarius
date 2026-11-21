@@ -400,12 +400,16 @@ def make_music():
         put(drums, snare(g), S['landing'] + off, 0.8)
 
     # ---- Landing: three turns of a four-bar groove, a stab on every impact ----
-    land = ['Dm', 'Bb', 'F', 'C'] * 3
+    # each landing is 32 beats (the shot list's grammar: the world, the hit, a breath, a look, the sky, the line): the
+    # groove plays only round each hit; the rest is held pads under the quiet
+    land = ['Dm', 'Bb', 'F', 'C'] * int((S['rise'] - S['landing']) // 16)
+    hits = MAP['impacts']
     for i, c in enumerate(land):
         b = S['landing'] + i * 4
-        beat_bar(b, c, fill=i % 2 == 1)
+        if any(h - 4 <= b < h + 4 for h in hits):
+            beat_bar(b, c, fill=False)
         put(keys, pad(c, 4.2, 4, 2200), b, 0.75)
-        if i % 2 == 0:
+        if any(h - 1 <= b < h + 3 for h in hits):
             for n in chord_notes(c, 4) + chord_notes(c, 3):
                 y = supersaw(hz(n), 0.45, 5, 0.008)
                 y = lp(y, 3800) * env(len(y), 0.002, 0.12, 0.3, 0.1)[:, None]
@@ -413,9 +417,8 @@ def make_music():
             put(drums, crash(0.5, 2), b, 1.0, 0.25 if i % 4 else -0.25)
     # a small answer in the gap after each joke
     answer = [('D6', .5), ('C6', .5), ('A5', 1), ('C6', .5), ('D6', 1.5)]
-    for i in range(1, 12, 2):
-        if i < 11:
-            put(ld, lead(answer, 0), S['landing'] + i * 4 + 0, 0.42)
+    for c in MAP['cards']:
+        put(ld, lead(answer, 0), c + 6, 0.36)
 
     # ---- Rise ----
     for i, c in enumerate(['Bb', 'C']):
@@ -464,7 +467,7 @@ def make_music():
 
     # the pad ducks under the kick in the drop: that's the pump
     pump = np.ones(N)
-    ks = [S['drop'] + i * 4 + o for i in range(6) for o in (0, 1.5, 2.5)] + [S['landing'] + i * 4 + o for i in range(12) for o in (0, 1.5, 2.5)]
+    ks = [S['drop'] + i * 4 + o for i in range(6) for o in (0, 1.5, 2.5)] + [h - 4 + i * 4 + o for h in MAP['impacts'] for i in range(2) for o in (0, 1.5, 2.5)]
     t = np.arange(int(0.26 * SR)) / SR
     dip = 1 - 0.5 * np.exp(-t * 14)
     for b in ks:
