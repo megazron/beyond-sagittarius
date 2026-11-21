@@ -572,6 +572,8 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   let manholes: THREE.Object3D | null = null;
   for (const b of BLOCKS) furnish(b);
   for (let z = -86; z < 306; z += 14) { lampAt(-279.5, z, 1, 0); if (z % 28 === 0) benchAt(-276, z + 7, 1, 0); else trees.push([-262, z + 7, 0.9]); }
+  // the promenade's own trade: a food cart every so often, facing the walkers
+  for (let z = -60; z < 300; z += 52 + Math.floor(rnd() * 20)) cartAt(-266, z + 3, -1, 0);
 
   // trees: a trunk and a broad crown, merged per zone
   {
@@ -889,6 +891,11 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   }
   // a cafe's chairs: most have someone in them of an evening
   for (const c of cafes) if (rnd() < (rich ? 0.45 : 0.2)) peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: pick(['idle', 'selfie', 'idle', 'write']), x: c.x - Math.sin(c.yaw) * 0.35, z: c.z - Math.cos(c.yaw) * 0.35, yaw: c.yaw, t: 0 }); // standing by the table: the sit clip is for the ground
+  // along the sea rail: people looking out over the bay, alone or in twos, filming the sunset
+  for (let z = -80; z < 300; z += 9 + rnd() * 14) {
+    const n = rnd() < 0.6 ? 1 : 2;
+    for (let j = 0; j < n; j++) peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: pick(['idle', 'selfie', 'idle']), x: -279.4 + rnd() * 0.3, z: z + j * 0.7, yaw: -Math.PI / 2 + (rnd() - 0.5) * 0.6, t: 0 });
+  }
   // the park: strollers on its paths, people on the lawns
   for (let i = 0; i < (rich ? 40 : 14); i++) {
     const x = (rnd() - 0.5) * 150, z = 205 + rnd() * 90;
