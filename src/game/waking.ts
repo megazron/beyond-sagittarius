@@ -34,6 +34,7 @@ export class Waking {
     const mat = world.water.mesh.material as THREE.ShaderMaterial;
     this.stream = createStream(world.terrain, mat.uniforms);
     world.scene.add(this.stream.group);
+    world.grass.setRibbon(this.stream.mask);
   }
 
   private get s() { return this.getSave(); }
@@ -73,11 +74,14 @@ export class Waking {
     this.z.setLimbs(null);
   }
 
-  /** Step 1-2: the first thing he checks is himself, then thirst. Played as play begins on a fresh game. */
-  thirst(then: () => void) {
+  /** Step 1-2: the first thing he checks is himself, then thirst. Played as play begins on a fresh game when the
+   * wake ran to its end; after a skip only his line plays. */
+  thirst(acted: boolean, then: () => void) {
     const s = this.s;
     if (s.flags['e1.thirst']) { then(); return; }
     s.flags['e1.thirst'] = true;
+    // the player skipped the wake: no more film, the beat is a line in play
+    if (!acted) { then(); this.after(1.6, () => this.ui.say('e1.w.1', 'crew.scientist.name', 3)); return; }
     const z = this.z;
     this.playScene([
       { hold: 1.5, shot: () => cover.mid(z, 0.55, 1.5), poses: { scientist: 'stand' }, run: () => { this.hands(true); z.setFace({ squint: 0.35 }); audio.human('breath', 0.5); } },
