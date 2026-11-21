@@ -56,6 +56,7 @@ export class World {
   private envGround = new THREE.Color();
   private fogPatchAt = 0;
   private shadowFrame = 0;
+  private reflHidden: THREE.Object3D[] | null = null;
   /** Sunlit air for the renderer's volumetric pass. */
   post!: PostSource;
 
@@ -204,7 +205,10 @@ export class World {
     if (drawn) {
       this.grass.update(focus);
       this.forest.update(cam.position, cam);
-      this.water.reflect(renderer, this.scene, cam as THREE.PerspectiveCamera, [this.water.mesh, this.grass.mesh]);
+      // the lake mirrors the land, the sky and the trees; the stones, sticks, plants and bodies on the shore are a pixel
+      // or two in it and were half its draw calls (the mirrored render was a seventh of the planet's frame on Web)
+      this.reflHidden ??= [this.water.mesh, this.grass.mesh, this.items.group, this.creature.root, this.hound.root, this.explorer.root, this.camp.root, ...this.forest.small];
+      this.water.reflect(renderer, this.scene, cam as THREE.PerspectiveCamera, this.reflHidden);
     }
     this.pod.update(time);
     this.pod2.update(time + 7.3);

@@ -194,6 +194,9 @@ class Field {
     }
   }
 
+  /** Every instanced mesh of this field (all parts and LODs). */
+  objects(): THREE.Object3D[] { return this.meshes.flat(); }
+
   add(mat: THREE.Matrix4, col: THREE.Color) {
     const i = this.n++;
     this.x[i] = mat.elements[12]; this.z[i] = mat.elements[14];
@@ -299,6 +302,8 @@ export class Forest {
   private dirty = 0;
   obstacles = new Map<string, Obstacle[]>();
   glowMats: THREE.MeshBasicMaterial[] = [];
+  /** The scanned rocks, wood and undergrowth: left out of the lake's mirrored render (a pixel or two in it each). */
+  small: THREE.Object3D[] = [];
 
   constructor(private terrain: Terrain, private q: Quality, private pack: ModelPack | null = null, private cards: Record<'fir' | 'pine' | 'leaf', THREE.Texture | null> = { fir: null, pine: null, leaf: null }) {}
 
@@ -555,6 +560,7 @@ export class Forest {
       const shadow: [boolean, boolean, boolean] = big ? [true, true, true] : info.kind === 'plant' ? [false, false, false] : [true, true, false];
       const f = new Field(cap, [{ lods, mat, shadow }], this.group, big ? [near[0] * 1.2, near[1] * 1.6] : near, reach[info.kind], Q.shadowRange);
       this.fields.push(f);
+      if (info.kind !== 'outcrop') this.small.push(...f.objects());
       list.push({ name, info, field: f });
     }
     const nrm = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);

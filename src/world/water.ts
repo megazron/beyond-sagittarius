@@ -161,7 +161,8 @@ export function createWater(terrain: Terrain, sky: Sky, q: Quality) {
     look.copy(lake).sub(cam.position).normalize();
     const visible = cam.position.y > 0.05 && toLake < 340 && (toLake < LAKE.r * 1.8 || fwd.dot(look) > 0.25);
     uniforms.uHasRefl.value = visible ? 1 : 0;
-    if (!visible || frame++ % every) return;
+    // further off the lake is a sliver of the frame: its mirror is redrawn half as often
+    if (!visible || frame++ % (toLake > LAKE.r * 2.5 ? every * 2 : every)) return;
     r.getDrawingBufferSize(size);
     const w = Math.max(16, Math.round(size.x * q.reflectionScale)), h = Math.max(16, Math.round(size.y * q.reflectionScale));
     if (rt.width !== w || rt.height !== h) rt.setSize(w, h);
