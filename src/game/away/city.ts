@@ -1551,8 +1551,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         // kept for it while it is within reach
         const cap = outroT >= 0 ? 99 : BODY_CAP - Math.min(Math.floor(BODY_CAP / 2), cardsNear);
         for (let j = 0; j < nc; j++) {
-          // the one person at your elbow is a body even when the cap is spent (one over it at most)
-          const q = people[candI[j]], show = used < cap || (j === 0 && candK[0] < -20);
+          // whoever is at your elbow is a body even when the cap is spent (two over it at most)
+          const q = people[candI[j]], show = used < cap || (j < 2 && candK[j] < -20);
           if (show) used++; else stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: candI[j], v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
           if (show !== q.fig.root.visible) q.fig.root.visible = show;
         }
