@@ -264,6 +264,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const fingers: { b: THREE.Bone; side: 'L' | 'R'; q: Record<HandShape, THREE.Quaternion>; cur: THREE.Quaternion }[] = [];
   let handOpen = false, handsSet = false;
   let selfieT = 0, selfieHeld = false; const V4s = new THREE.Vector3();
+  /** A hand held on something in the scene (a control yoke, a rail): the wrist at a live world point, the fingers and
+   *  the palm turned to given world directions, the fingers closed. Eased in and out. */
+  type HoldSide = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3 };
+  let hold: { L?: HoldSide; R?: HoldSide } | null = null; const holdW = { L: 0, R: 0 };
   const selfM = { a: new THREE.Vector3(), b: new THREE.Vector3(), l: new THREE.Matrix4(), q0: new THREE.Quaternion(), qi: new THREE.Quaternion(), x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), m: new THREE.Matrix4(), q: new THREE.Quaternion() };
   let gaitPhase = 0, inited = false, hipDrop = 0, sacAt = 1, sacX = 0, sacY = 0, firstFrame = true, eyeAimX = 0, eyeAimY = 0;
   const footOff = [0, 0];
@@ -947,6 +951,31 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (id !== 'social') showProp(bs, 'phone', sw); // Nuvexa's own phone is part of her
     } else if (selfieHeld && !task) showProp(bs, null, 0);
     selfieHeld = sw > 0.004;
+    // ---- hands held on something: two-bone IK to the wrist point, then the hand turned so the fingers and the palm
+    // face where they are told (the same frame the selfie reads from the skeleton) ----
+    for (const sd of ['L', 'R'] as const) {
+      const h = hold?.[sd];
+      holdW[sd] += ((h ? 1 : 0) - holdW[sd]) * (1 - Math.exp(-dt * 5));
+      const hw = holdW[sd] * holdW[sd] * (3 - 2 * holdW[sd]);
+      if (!h || hw < 0.004 || task) continue;
+      root.updateWorldMatrix(true, true);
+      const up = bs.get(`upperarm${sd}`), lo = bs.get(`lowerarm${sd}`), hd = bs.get(`hand${sd}`), f3 = bs.get(`finger3_1${sd}`);
+      if (!up || !lo || !hd || !f3) continue;
+      const qu = (taskQ.get(`hold${sd}U`) ?? taskQ.set(`hold${sd}U`, new THREE.Quaternion()).get(`hold${sd}U`)!).copy(up.quaternion);
+      const ql = (taskQ.get(`hold${sd}L`) ?? taskQ.set(`hold${sd}L`, new THREE.Quaternion()).get(`hold${sd}L`)!).copy(lo.quaternion);
+      solveLeg(up, lo, hd, h.at.clone());
+      up.quaternion.copy(qu.slerp(up.quaternion, hw)); lo.quaternion.copy(ql.slerp(lo.quaternion, hw));
+      up.updateWorldMatrix(false, true);
+      hd.getWorldPosition(V4s); hd.getWorldQuaternion(selfM.q0);
+      const fl = selfM.a.copy(f3.getWorldPosition(V1)).sub(V4s).normalize().applyQuaternion(selfM.qi.copy(selfM.q0).invert());
+      const nl = selfM.b.set(0, -1, 0); nl.addScaledVector(fl, -nl.dot(fl)).normalize();
+      selfM.y.crossVectors(nl, fl); selfM.l.makeBasis(fl, selfM.y, nl);
+      const fw = selfM.x.copy(h.fingers).normalize(), pw = selfM.z.copy(h.palm); pw.addScaledVector(fw, -pw.dot(fw)).normalize();
+      selfM.y.crossVectors(pw, fw);
+      selfM.m.makeBasis(fw, selfM.y, pw).multiply(selfM.l.transpose()); selfM.q.setFromRotationMatrix(selfM.m);
+      hd.parent!.getWorldQuaternion(Q).invert(); selfM.q.premultiply(Q);
+      hd.quaternion.slerp(selfM.q, hw);
+    }
     // head look-at, clamped and shared with the neck; the eyes lead
     // someone to look at: only within what a neck can do, otherwise ease back to the front
     let wantY = 0, wantX = 0;
@@ -996,8 +1025,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
 
     // ---- hands: one authored shape each, reached smoothly; nothing from the clips ----
     {
-      const shapeR: HandShape = handOpen ? 'open' : (propOn && propOn.parent === bs.get('handR')) || kind === 'selfie' || kind === 'write' ? 'grip' : kind === 'point' ? 'point' : 'relaxed';
-      const shapeL: HandShape = handOpen ? 'open' : 'relaxed';
+      const shapeR: HandShape = holdW.R > 0.5 ? 'grip' : handOpen ? 'open' : (propOn && propOn.parent === bs.get('handR')) || kind === 'selfie' || kind === 'write' ? 'grip' : kind === 'point' ? 'point' : 'relaxed';
+      const shapeL: HandShape = holdW.L > 0.5 ? 'grip' : handOpen ? 'open' : 'relaxed';
       const a = handsSet ? 1 - Math.exp(-dt * 6) : 1;
       let worst = 0, step = 0;
       for (const f of fingers) {
@@ -1172,6 +1201,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const hands = o.hands ?? (kind === 'type' || kind === 'carry' || kind === 'drink' || kind === 'gesture' || kind === 'fix' ? 'both' : 'R');
       task = { kind, t: 0, dur, at: o.at ? o.at.clone() : null, hands, prop: o.prop === undefined ? TASK_PROP[kind] ?? null : o.prop };
     },
+    /** Hold on to something with one or both hands: live world points and directions (mutate them to move the hands
+     *  with what they hold); null lets go. */
+    setHold(h: { L?: HoldSide; R?: HoldSide } | null) { hold = h; },
     /** Let go of the task now (it eases out over a moment). */
     stopTask() { if (task) { const out = Math.min(0.35, task.dur * 0.3); task.dur = Math.min(task.dur, task.t + out); task.t = Math.max(task.t, task.dur - out); } },
     /** What the hands are busy with, or null. */
