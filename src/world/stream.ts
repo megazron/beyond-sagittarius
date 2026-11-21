@@ -23,7 +23,7 @@ export interface StreamWater {
   mask: [number, number, number][];
 }
 
-const WIDTH = 1.5;
+const WIDTH = 2.2;
 const rnd = (s: number) => { const x = Math.sin(s * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 
 export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUniform>): StreamWater {
@@ -49,8 +49,8 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
       const gl = Math.hypot(gx, gz) || 1;
       // downhill, with a pull to the shore so a hollow cannot hold it, and a slow meander
       const lx = shore.x - x, lz = shore.y - z, ll = Math.hypot(lx, lz) || 1;
-      const m = Math.sin(i * 0.13) * 0.35 * sgn;
-      let nx = -gx / gl * 0.9 + lx / ll * 0.6 + side.x * m, nz = -gz / gl * 0.9 + lz / ll * 0.6 + side.y * m;
+      const m = (Math.sin(i * 0.11) * 0.3 + Math.sin(i * 0.37 + 1) * 0.15) * sgn;
+      let nx = -gx / gl * 0.9 + lx / ll * 0.85 + side.x * m, nz = -gz / gl * 0.9 + lz / ll * 0.85 + side.y * m;
       const nl = Math.hypot(nx, nz) || 1; nx /= nl; nz /= nl;
       // water does not turn on a coin: keep most of the old heading
       dx = dx * 0.7 + nx * 0.3; dz = dz * 0.7 + nz * 0.3;
@@ -62,15 +62,17 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
   // try sources up the slope on both sides of the walk; keep a stream that reaches the water, is a good length,
   // stays off the spawn and climbs least on the way
   let line: THREE.Vector3[] = [], best = -Infinity;
-  for (const sgn of [1, -1]) for (const off of [26, 34, 44]) for (const k of [0.3, 0.45, 0.6]) {
+  for (const sgn of [1, -1]) for (const off of [24, 34, 46, 60]) for (const k of [0.2, 0.45, 0.7, 0.95]) {
     const sx = toLake.x * ds * k + side.x * off * sgn, sz = toLake.y * ds * k + side.y * off * sgn;
     if (T.height(sx, sz) < 1.5) continue;
     const L = trace(sx, sz, sgn);
     if (L[L.length - 1].y > -0.05) continue;
     let climb = 0, near = Infinity;
     for (let i = 1; i < L.length; i++) { climb += Math.max(0, L[i].y - L[i - 1].y); near = Math.min(near, Math.hypot(L[i].x, L[i].z)); }
-    if (near < 10) continue;
-    const score = -Math.abs(L.length - 70) * 0.4 - climb * 6;
+    if (near < 10 || L.length < 25) continue;
+    // a stream that winds back on itself was caught in a hollow: it reads as a channel, not water finding its way
+    const straight = Math.hypot(L[L.length - 1].x - L[0].x, L[L.length - 1].z - L[0].z) || 1;
+    const score = -Math.abs(L.length - 42) * 0.4 - climb * 6 - Math.max(0, L.length / straight - 1.35) * 60;
     if (score > best) { best = score; line = L; }
   }
   if (line.length < 2) line = trace(shore.x * 0.5 + side.x * 30, shore.y * 0.5 + side.y * 30, 1);
@@ -88,7 +90,7 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
     if (i > 0) along += line[i].distanceTo(line[i - 1]);
     const drop = i > 0 ? Math.max(0, line[i - 1].y - line[i].y) : 0;
     // wider near the mouth, narrow at the source
-    const w = WIDTH * (0.45 + 0.55 * Math.min(1, i / 30)) * (1 + 0.18 * Math.sin(i * 0.31));
+    const w = WIDTH * (0.6 + 0.4 * Math.min(1, i / 20)) * (1 + 0.22 * Math.sin(i * 0.31) + 0.12 * Math.sin(i * 0.83 + 2));
     for (let j = 0; j < across; j++) {
       const u = j / (across - 1), o = (u - 0.5) * w;
       const px = line[i].x + rx * o, pz = line[i].z + rz * o;
@@ -97,7 +99,7 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
       const k = (i * across + j) * 3;
       pos[k] = px; pos[k + 1] = y + 0.03; pos[k + 2] = pz;
       uv[(i * across + j) * 2] = (u - 0.5) * 2; uv[(i * across + j) * 2 + 1] = along;
-      fast[i * across + j] = Math.min(1, drop * 6);
+      fast[i * across + j] = Math.min(1, Math.max(0, drop - 0.12) * 5);
     }
   }
   const idx: number[] = [];
@@ -138,7 +140,7 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
     }`;
   const mat = new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]),
-    transparent: true, fog: true, depthWrite: false,
+    transparent: true, fog: true, depthWrite: false, side: THREE.DoubleSide,
     vertexShader: vert,
     fragmentShader: /* glsl */ `
       #include <fog_pars_fragment>
@@ -161,15 +163,15 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
         float fres = 0.02 + 0.98 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
         vec3 refl = envCol(reflect(-V, N));
         // clear, shallow: the bed shows through, darker in the middle where it is deeper
-        vec3 body = mix(vec3(0.16, 0.13, 0.09), vec3(0.05, 0.08, 0.07), smoothstep(0.1, 0.9, edge)) * (0.2 + 0.8 * uDay);
+        vec3 body = mix(vec3(0.07, 0.065, 0.045), vec3(0.015, 0.035, 0.04), smoothstep(0.05, 0.7, edge)) * (0.2 + 0.8 * uDay);
         vec3 col = mix(body, refl, fres);
         vec3 H = normalize(uSunDir + V);
         col += uSunColor * pow(max(dot(N, H), 0.0), 300.0) * 6.0 * smoothstep(-0.05, 0.1, uSunDir.y);
         // white water where it drops and along the stones at the edges
         float fn = vnoise2(vec2(vUv.x * 4.0, vUv.y * 2.0 - uTime * sp * 1.6));
-        float foam = smoothstep(0.62, 0.8, fn) * (vFast * 0.9 + smoothstep(0.35, 0.0, edge) * 0.5);
-        col = mix(col, vec3(0.82, 0.86, 0.88) * (0.25 + 0.75 * uDay), clamp(foam, 0.0, 0.7));
-        float alpha = clamp(0.55 + fres * 0.4 + foam * 0.4, 0.0, 0.95) * smoothstep(0.0, 0.25, edge);
+        float foam = smoothstep(0.7, 0.86, fn) * vFast * 0.8;
+        col = mix(col, vec3(0.78, 0.82, 0.84) * (0.25 + 0.75 * uDay), clamp(foam, 0.0, 0.5));
+        float alpha = clamp(0.78 + fres * 0.2 + foam * 0.2, 0.0, 0.96) * smoothstep(0.0, 0.3, edge);
         gl_FragColor = vec4(col, alpha);
         #include <fog_fragment>
       }`,
@@ -178,6 +180,39 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
   const ribbon = new THREE.Mesh(geo, mat);
   ribbon.name = 'stream'; ribbon.renderOrder = 2; ribbon.receiveShadow = false;
   group.add(ribbon);
+  {
+    const bank = geo.clone();
+    const bp = bank.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < n; i++) {
+      const c = line[i];
+      for (let j = 0; j < across; j++) {
+        const k = i * across + j, ox = bp.getX(k) - c.x, oz = bp.getZ(k) - c.z;
+        const x = c.x + ox * 2.3, z = c.z + oz * 2.3;
+        bp.setXYZ(k, x, T.height(x, z) + 0.03, z);
+      }
+    }
+    bank.computeBoundingSphere();
+    const bm = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]),
+      transparent: true, fog: true, depthWrite: false, side: THREE.DoubleSide,
+      vertexShader: vert,
+      fragmentShader: /* glsl */ `
+        #include <fog_pars_fragment>
+        ${NOISE_GLSL}
+        varying vec3 vWP; varying vec2 vUv; varying float vFast;
+        void main(){
+          // wet mud and pebbles along the water, drying out away from it
+          float e = abs(vUv.x), n = vnoise2(vWP.xz * 2.5) * 0.6 + vnoise2(vWP.xz * 9.0) * 0.4;
+          vec3 col = mix(vec3(0.05, 0.045, 0.035), vec3(0.11, 0.1, 0.08), smoothstep(0.3, 0.7, n));
+          float a = (1.0 - smoothstep(0.35, 1.0, e + (n - 0.5) * 0.35)) * 0.85;
+          gl_FragColor = vec4(col, a);
+          #include <fog_fragment>
+        }`,
+    });
+    const bk = new THREE.Mesh(bank, bm);
+    bk.name = 'stream-bank'; bk.renderOrder = 1;
+    group.add(bk);
+  }
 
   // ---- the pool: still water with a green skin, beside the path before the stream ----
   // on dry, flat ground beside the walk, short of the stream and away from it
@@ -218,12 +253,12 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
         float d = length(vUv) / ${R.toFixed(2)};
         // duckweed and scum: big green rafts with a few dark open patches between them
         float s = vnoise2(vWP.xz * 1.3) * 0.6 + vnoise2(vWP.xz * 4.0) * 0.3 + vnoise2(vWP.xz * 13.0) * 0.1;
-        float skin = smoothstep(0.32, 0.48, s + smoothstep(0.55, 1.05, d) * 0.4);
+        float skin = smoothstep(0.42, 0.56, s + smoothstep(0.6, 1.05, d) * 0.35);
         vec3 V = normalize(cameraPosition - vWP);
         float fres = 0.02 + 0.98 * pow(1.0 - max(V.y, 0.0), 5.0);
         vec3 water = mix(vec3(0.03, 0.04, 0.025), envCol(reflect(-V, vec3(0.0, 1.0, 0.0))), fres);
         float sun = max(dot(vec3(0.0, 1.0, 0.0), uSunDir), 0.0);
-        vec3 green = mix(vec3(0.16, 0.22, 0.05), vec3(0.3, 0.36, 0.08), vnoise2(vWP.xz * 7.0)) * (0.25 + 0.75 * sun) * (0.3 + 0.7 * uDay);
+        vec3 green = mix(vec3(0.07, 0.1, 0.025), vec3(0.15, 0.18, 0.045), vnoise2(vWP.xz * 7.0)) * (0.25 + 0.75 * sun) * (0.3 + 0.7 * uDay);
         vec3 col = mix(water, green, skin);
         // bubbles of rot
         col += vec3(0.25) * pow(vnoise2(vWP.xz * 30.0 + 3.0), 18.0) * skin;
@@ -277,8 +312,8 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
 
   const mask: [number, number, number][] = [];
   const step = Math.max(1, Math.ceil(n / 34));
-  for (let i = 0; i < n; i += step) mask.push([line[i].x, line[i].z, WIDTH * 0.6 + 0.5]);
-  mask.push([line[n - 1].x, line[n - 1].z, WIDTH * 0.6 + 0.5], [0, 0, -1], [pool.x, pool.z, R * 1.25], [pool.x + 0.01, pool.z, R * 1.25]);
+  for (let i = 0; i < n; i += step) mask.push([line[i].x, line[i].z, WIDTH * 1.05]);
+  mask.push([line[n - 1].x, line[n - 1].z, WIDTH * 1.05], [0, 0, -1], [pool.x, pool.z, R * 1.25], [pool.x + 0.01, pool.z, R * 1.25]);
   const soundAt = [0.15, 0.5, 0.85].map((f) => line[Math.floor(f * (n - 1))].clone());
   const tmp = new THREE.Vector3();
   return {
