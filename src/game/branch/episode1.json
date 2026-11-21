@@ -254,7 +254,7 @@
        "tone": "truth",
        "effects": [
         {
-         "flag": "kits"
+         "flag": "drilled"
         }
        ]
       },
@@ -392,6 +392,9 @@
       }
      ]
     }
+   ],
+   "reads": [
+    "drilled"
    ]
   },
   {
@@ -400,9 +403,7 @@
    "as": "scientist",
    "where": "verdaxis",
    "lines": 20,
-   "reads": [
-    "kits"
-   ],
+   "reads": [],
    "decisions": [
     {
      "id": "e1.fruit",
@@ -693,16 +694,11 @@
    "as": "medic",
    "where": "thalwen",
    "lines": 18,
-   "reads": [
-    "kits"
-   ],
+   "reads": [],
    "decisions": [
     {
      "id": "e1.dose",
      "kind": "dilemma",
-     "if": {
-      "flag": "kits"
-     },
      "options": [
       {
        "id": "use",
