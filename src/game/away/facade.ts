@@ -91,7 +91,7 @@ export function facadeMaterial(o: FacadeOpts = {}) {
               float panel = step(0.2, pf) * step(pf, 0.8) * step(1.45, q.y) * step(q.y, 2.2) * step(0.3, ph);
               vec3 screen = (0.5 + 0.4 * cos(6.2831 * (ph + vec3(0.0, 0.3, 0.6)))) * (0.8 + 0.4 * step(0.5, fract(q.y * 3.0 + ph)));
               float counter = step(0.0, q.y) * step(q.y, 1.05) * step(Dp * 0.5, q.z) * step(q.z, Dp * 0.9);
-              shopWall = mix(vec3(0.78, 0.77, 0.74) * (0.9 + 0.1 * step(0.5, fract(sx))), screen * 1.4, panel);
+              shopWall = mix(vec3(0.34, 0.32, 0.3) * (0.85 + 0.15 * step(0.5, fract(sx))), screen * 1.1, panel);
               shopWall = mix(shopWall, vec3(0.3, 0.2, 0.14), counter);
             }
             room = street ? shopWall * step(0.7, q.y) + wallC * 0.12 * step(q.y, 0.7) : wallC * (0.85 + 0.3 * step(0.8, fHash(vec3(floor(q.x * 2.0), fl, seed))));
