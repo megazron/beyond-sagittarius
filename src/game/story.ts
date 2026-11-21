@@ -644,7 +644,8 @@ export class Story {
     const beaconShot = () => ({ from: b.clone().add(new THREE.Vector3(5.5, 1.5, 6)), to: b.clone().add(new THREE.Vector3(0, 2.4, 0)), push: 0.1 });
     const skyShot = () => ({ from: z.root.position.clone().add(new THREE.Vector3(-1.5, 0.5, 2.6)), to: b.clone().add(new THREE.Vector3(0, 7, 0)), push: 0.08 });
     this.crew.pos.set(b.x - 1.6, this.world.terrain.height(b.x - 1.6, b.z + 1.8), b.z + 1.8);
-    this.player.spawn(b.x + 1.2, b.z + 2.0, 0);
+    // clear of the tripod's legs (they splay 0.9 m and lean in; where he stood, one leg crossed him in the shot)
+    this.player.spawn(b.x + 2.6, b.z + 0.9, 0); // and off the line from the beacon shot's camera to the beacon
     this.playScene([
       { run: push('beacon.1'), hold: 1.8, shot: beaconShot, poses: { scientist: 'stand', explorer: 'stand' } },
       { run: push('beacon.2'), hold: 1.7 },
