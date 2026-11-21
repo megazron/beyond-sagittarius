@@ -1,0 +1,108 @@
+/* The fight's own HUD. Everything is created by src/combat/view/hud.ts; nothing here touches the game's other screens. */
+#cb-hud { position: fixed; inset: 0; pointer-events: none; z-index: 6; font-family: 'Barlow', 'Rajdhani', 'Noto Sans Devanagari', 'Noto Naskh Arabic', sans-serif; color: #f2ebdd; }
+#cb-hud.off { display: none; }
+#cb-hud .ret { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; opacity: 0; transition: opacity .12s; }
+#cb-hud .ret.on { opacity: 1; }
+#cb-hud .ret i { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #fff; box-shadow: 0 0 3px #000; }
+#cb-hud .ret svg { width: 100%; height: 100%; overflow: visible; }
+#cb-hud .ret circle { fill: none; stroke: rgba(255,255,255,.85); stroke-width: 1.6; filter: drop-shadow(0 0 1.5px #000); }
+#cb-hud .ret .chg { stroke: #e8a33d; stroke-width: 2.6; transform: rotate(-90deg); transform-origin: 50% 50%; }
+#cb-hud .ret.hot circle.ring { stroke: #ff7a4d; }
+#cb-hud .chip { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: 132px; min-width: 104px; padding: 6px 10px 7px; background: rgba(12,14,18,.62); border: 1px solid rgba(255,255,255,.14); border-radius: 8px; font-size: 14px; line-height: 1.2; text-align: start; backdrop-filter: blur(4px); }
+#cb-hud .chip b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+#cb-hud .chip span { color: #e8a33d; font-variant-numeric: tabular-nums; }
+#cb-hud .chip .dur { height: 3px; margin-top: 4px; background: rgba(255,255,255,.16); border-radius: 2px; overflow: hidden; }
+#cb-hud .chip .dur i { display: block; height: 100%; background: #9fd0a8; }
+#cb-hud .chip .dur.low i { background: #e2684a; }
+body.device-touch #cb-hud .chip { bottom: auto; top: 92px; right: max(10px, env(safe-area-inset-right)); }
+#cb-hud .obj { position: absolute; left: 50%; top: max(64px, env(safe-area-inset-top)); transform: translateX(-50%); max-width: min(74vw, 560px); padding: 5px 14px; background: rgba(12,14,18,.5); border-radius: 16px; font-size: 15px; text-align: center; text-shadow: 0 1px 2px #000; opacity: 0; transition: opacity .3s; }
+#cb-hud .obj.on { opacity: 1; }
+#cb-hud .obj small { display: block; color: #e8a33d; font-size: 13px; font-variant-numeric: tabular-nums; }
+#cb-hud .eye { position: absolute; left: 50%; top: 22%; width: 54px; height: 30px; margin-left: -27px; opacity: 0; transition: opacity .2s; }
+#cb-hud .eye.on { opacity: .95; }
+#cb-hud .eye svg { width: 100%; height: 100%; }
+#cb-hud .eye path.o { fill: none; stroke: #f2ebdd; stroke-width: 2; filter: drop-shadow(0 0 2px #000); }
+#cb-hud .eye path.f { fill: #e8a33d; }
+#cb-hud .eye.seen path.f { fill: #e2452f; }
+#cb-hud .eye.seen path.o { stroke: #e2452f; }
+#cb-hud .arrow { position: absolute; left: 50%; top: 50%; width: 0; height: 0; opacity: 0; }
+#cb-hud .arrow.on { opacity: 1; }
+#cb-hud .arrow i { position: absolute; left: -11px; top: -150px; border: 11px solid transparent; border-bottom: 20px solid #e2452f; filter: drop-shadow(0 0 3px #000); animation: cb-pulse .35s ease-in-out infinite alternate; }
+#cb-hud .arrow.calm i { border-bottom-color: rgba(242,235,221,.75); animation: none; }
+@keyframes cb-pulse { to { transform: scale(1.25); } }
+#cb-hud .boss { position: absolute; left: 50%; bottom: 14%; width: min(56vw, 520px); transform: translateX(-50%); opacity: 0; transition: opacity .4s; text-align: center; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; text-shadow: 0 1px 2px #000; }
+#cb-hud .boss.on { opacity: 1; }
+#cb-hud .boss .bar { height: 7px; margin-top: 4px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.25); border-radius: 4px; overflow: hidden; }
+#cb-hud .boss .bar i { display: block; height: 100%; background: linear-gradient(90deg, #5fd0e6, #b9f1ff); transition: width .15s; }
+#cb-hud .boss.p2 .bar i { background: linear-gradient(90deg, #e2684a, #ffb18f); }
+#cb-hud .inj { position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: 104px; display: flex; gap: 6px; }
+#cb-hud .inj i { width: 26px; height: 26px; border-radius: 50%; background: rgba(120,20,16,.75); border: 1.5px solid #e2684a; font-style: normal; font-size: 13px; line-height: 23px; text-align: center; }
+#cb-hud .inj i.bad { background: #7c2a12; border-color: #ffd24a; animation: cb-pulse .7s ease-in-out infinite alternate; }
+#cb-hud .fa { position: absolute; left: 50%; bottom: 23%; width: min(80vw, 520px); transform: translateX(-50%); padding: 8px 14px 9px; background: rgba(10,16,20,.78); border-inline-start: 3px solid #5fd0e6; border-radius: 4px; font-size: 14.5px; line-height: 1.35; opacity: 0; transition: opacity .35s; }
+#cb-hud .fa.on { opacity: 1; }
+#cb-hud .fa b { display: block; color: #5fd0e6; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+#cb-hud .study { position: absolute; left: 50%; top: 50%; width: 70px; height: 70px; margin: -35px 0 0 -35px; opacity: 0; }
+#cb-hud .study.on { opacity: 1; }
+#cb-hud .study circle { fill: none; stroke: #5fd0e6; stroke-width: 2; transform: rotate(-90deg); transform-origin: 50% 50%; }
+#cb-hud .vig { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55)); opacity: 0; transition: opacity .5s; }
+#cb-hud .vig.on { opacity: 1; }
+.cb-numbers { position: fixed; inset: 0; pointer-events: none; z-index: 6; }
+.cb-numbers div { position: absolute; left: 0; top: 0; font: 600 17px 'Barlow', sans-serif; color: #fff; text-shadow: 0 1px 3px #000; margin: -10px 0 0 -8px; }
+.cb-numbers div.weak { color: #ffd24a; font-size: 21px; }
+
+/* touch: the fight's buttons, in an arc round the game's own action button */
+#cb-touch { position: absolute; inset: 0; pointer-events: none; }
+#cb-touch.off { display: none; }
+#cb-touch button { position: absolute; pointer-events: auto; width: 58px; height: 58px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.4); background: rgba(14,16,20,.5); color: #f2ebdd; font: 600 12px 'Barlow', sans-serif; touch-action: none; -webkit-user-select: none; user-select: none; backdrop-filter: blur(3px); padding: 0; }
+#cb-touch button.down, #cb-touch button.onn { background: rgba(232,163,61,.55); border-color: #e8a33d; }
+#cb-touch button svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+#cb-touch .atk { width: 86px; height: 86px; right: max(22px, env(safe-area-inset-right)); bottom: 108px; }
+#cb-touch .atk svg { width: 38px; height: 38px; }
+#cb-touch .aim { right: max(118px, calc(env(safe-area-inset-right) + 96px)); bottom: 150px; }
+#cb-touch .dge { right: max(124px, calc(env(safe-area-inset-right) + 102px)); bottom: 78px; }
+#cb-touch .blk { right: max(96px, calc(env(safe-area-inset-right) + 74px)); bottom: 12px; }
+#cb-touch .alt { right: max(60px, calc(env(safe-area-inset-right) + 38px)); bottom: 206px; }
+#cb-touch .wpn { right: max(4px, env(safe-area-inset-right)); bottom: 204px; width: 52px; height: 52px; }
+#cb-touch .snk { left: max(14px, env(safe-area-inset-left)); bottom: 196px; width: 52px; height: 52px; }
+#cb-touch .trp { left: max(74px, calc(env(safe-area-inset-left) + 60px)); bottom: 196px; width: 52px; height: 52px; }
+body.cb-engaged #tb-act { transform: scale(.78); transform-origin: 100% 100%; }
+
+/* trap picker and the arena bench */
+#cb-pick { position: fixed; left: 50%; bottom: 26%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 7; padding: 8px; background: rgba(10,12,16,.8); border-radius: 12px; border: 1px solid rgba(255,255,255,.15); }
+#cb-pick.off { display: none; }
+#cb-pick button { min-width: 84px; min-height: 56px; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.06); color: #f2ebdd; font: 600 13px 'Barlow', 'Noto Sans Devanagari', 'Noto Naskh Arabic', sans-serif; }
+#cb-pick button small { display: block; font-weight: 400; font-size: 11px; color: #c9c2b2; }
+#cb-pick button:disabled { opacity: .4; }
+#cb-pick button.sel, #cb-pick button:focus-visible { border-color: #e8a33d; background: rgba(232,163,61,.25); outline: none; }
+
+/* tension moments */
+#cb-tension { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: radial-gradient(ellipse at center, rgba(0,0,0,.05) 30%, rgba(0,0,0,.6)); touch-action: none; }
+#cb-tension.off { display: none; }
+#cb-tension .lbl { font: 600 20px 'Barlow', 'Noto Sans Devanagari', 'Noto Naskh Arabic', sans-serif; color: #f2ebdd; text-shadow: 0 2px 4px #000; letter-spacing: .04em; }
+#cb-tension svg { width: min(46vmin, 260px); height: min(46vmin, 260px); overflow: visible; }
+#cb-tension .bar { position: relative; width: min(78vw, 520px); height: 30px; background: rgba(0,0,0,.6); border: 1.5px solid rgba(255,255,255,.5); border-radius: 15px; }
+#cb-tension .bar .band { position: absolute; top: 0; bottom: 0; background: rgba(159,208,168,.55); border-radius: 15px; }
+#cb-tension .bar .mk { position: absolute; top: -7px; width: 6px; height: 44px; margin-left: -3px; background: #fff; border-radius: 3px; box-shadow: 0 0 6px #000; }
+#cb-tension .bar.out .mk { background: #e2452f; }
+#cb-tension .prog { width: min(78vw, 520px); height: 4px; background: rgba(255,255,255,.2); border-radius: 2px; overflow: hidden; }
+#cb-tension .prog i { display: block; height: 100%; background: #e8a33d; }
+#cb-tension .box { position: relative; width: min(80vw, 560px); height: min(48vh, 320px); border: 1px solid rgba(255,255,255,.18); border-radius: 10px; }
+#cb-tension .box .tg { position: absolute; border: 2px solid #e8a33d; border-radius: 50%; transform: translate(-50%, -50%); }
+#cb-tension .box .tg i { position: absolute; inset: 0; border: 2px solid #fff; border-radius: 50%; }
+#cb-tension .box .cur { position: absolute; width: 10px; height: 10px; margin: -5px; background: #fff; border-radius: 50%; box-shadow: 0 0 4px #000; }
+#cb-tension .dots { display: flex; gap: 8px; }
+#cb-tension .dots i { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid #f2ebdd; }
+#cb-tension .dots i.ok { background: #9fd0a8; border-color: #9fd0a8; }
+#cb-tension .dots i.no { background: #e2452f; border-color: #e2452f; }
+#cb-tension button.tap { position: absolute; right: max(28px, env(safe-area-inset-right)); bottom: 15%; width: 96px; height: 96px; border-radius: 50%; border: 2px solid #e8a33d; background: rgba(232,163,61,.3); color: #fff; font: 600 15px 'Barlow', sans-serif; touch-action: none; }
+body:not(.device-touch) #cb-tension button.tap { display: none; }
+
+/* the Action menu and the end card */
+.cb-menu .cb-list { display: grid; gap: 8px; margin: 10px 0 14px; }
+.cb-menu .cb-list button { text-align: start; }
+.cb-menu .cb-list small { display: block; opacity: .75; font-weight: 400; }
+.cb-menu .cb-rows { display: grid; gap: 8px; }
+.cb-menu .cb-rows .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cb-end { text-align: center; }
+.cb-end p { margin: 4px 0; }
+.cb-end .facts { color: #e8a33d; }

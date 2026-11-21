@@ -1,3 +1,4 @@
+import { Combat, defaultCombatSettings } from './combat/combat';
 import './style.css';
 import * as THREE from 'three';
 import { NEAR_FADE } from './core/nearfade';
@@ -460,6 +461,8 @@ function enterWorld(fresh: boolean) {
   if (replay) { save.flags.tutorialDone = false; settings.replayTutorial = false; persistSettings(); }
   game.start(save, fresh);
   if (!fresh && replay) game.startTutorial();
+  // ?combat=<encounter>: straight into a set piece once play begins (recordings, tests)
+  { const want = new URLSearchParams(location.search).get('combat'); if (want) { const go = () => { if (game.mode === 'play' && combat && !combat.encounter) combat.trial(want as Parameters<Combat['trial']>[0]); else setTimeout(go, 500); }; setTimeout(go, 800); } }
   if (!fresh) ui.fade('black', 0, 1.2);
 }
 
@@ -591,6 +594,9 @@ function showTab(tab: MenuTab) {
   if (tab === 'pause') {
     ui.openPause({
       resume,
+      // fights on their own (or, in the middle of one, the way out of it)
+      action: game.mode === 'play' && combat ? () => { if (combat!.encounter) { ui.closeModal(); combat!.leaveEncounter(); resume(); } else combat!.openMenu(() => showTab('pause'), () => resume()); } : undefined,
+      actionLabel: combat?.encounter ? 'cb.p.leave' : 'cb.menu',
       settings: () => ui.openSettings(settings, quality.name, persistSettings, changeQuality, () => showTab('pause'), () => { resume(); game.startTutorial(); }, undefined, () => ui.openLegal(() => showTab('pause'))),
       look: () => openCreator(ui, game.save.player ?? defaultLook(), 'edit', stage, showStage, (look) => {
         game.save.player = look;
@@ -702,6 +708,7 @@ void initAndroid({
 });
 
 // ---------------- boot ----------------
+let combat: Combat | null = null;
 const clock = new THREE.Timer(); // THREE.Clock is deprecated (a console warning every load)
 clock.connect(document);
 let elapsed = 0;
@@ -726,6 +733,8 @@ function frame() {
 
 function tick(step: number) {
   let dt = step;
+  // a blow that lands holds the frame for a moment; slow-motion assist stretches the dangerous ones
+  if (state === 'game' && combat && !paused) dt = combat.scaleTime(dt);
   elapsed += dt;
   input.poll(dt);
   nav.update();
@@ -759,7 +768,7 @@ function tick(step: number) {
   if (stage.active) stage.update(dt);
   soundscape({
     state, mode: game?.mode, away: game?.away?.where ?? null, indoors: game?.away?.indoors, hours: state === 'game' ? game?.save?.timeOfDay : undefined,
-    pos: state === 'game' && game?.mode !== 'away' ? player?.pos : undefined, danger: state === 'game' && !!game?.story?.houndEngaged(),
+    pos: state === 'game' && game?.mode !== 'away' ? player?.pos : undefined, danger: state === 'game' && (!!game?.story?.houndEngaged() || !!combat?.threat),
     fire: state === 'game' && game?.save?.flags.fire ? world.layout?.camp ?? null : null,
     // weather, when the world has it (an optional `weather.rain` 0..1 on the world or the away stage)
     rain: (game?.away?.active ? (game.away as unknown as { stage?: { weather?: { rain?: number } } }).stage?.weather?.rain : (world as unknown as { weather?: { rain?: number } }).weather?.rain) ?? 0,
@@ -849,6 +858,9 @@ async function boot() {
     ui.show('cine', on); ui.show('hud', !on);
     document.getElementById('btn-skip')!.classList.toggle('hidden', !on);
   };
+  combat = new Combat({ world, player, input, ui, save: () => game.save, settings: () => (settings.combat ??= defaultCombatSettings()), saveSettings: persistSettings,
+    free: () => state === 'game' && game.mode === 'play' && !paused && !ui.modalOpen(), persist: () => game.persist() });
+  game.combat = combat;
   game.onLevelComplete = onLevelDone;
   game.timersOff = !!settings.noTimers;
   // warm up shaders so the first in-game frame doesn't hitch
@@ -1000,6 +1012,8 @@ window.addEventListener('resize', () => {
   get binds() { return input.binds; },
   get prompt() { const el = document.getElementById('prompt')!; return el.classList.contains('hidden') ? null : el.textContent; },
   get hound() { return game?.story.debugHound(); },
+  /** Fights: state for the tests, and the way to start a set piece (tools/combat/play_test.py). */
+  get combat() { return combat; },
   groundAt(x: number, z: number) { return world.terrain.height(x, z); },
   get crew() { return game?.story.debugCrew(); },
   get layout() { const L = world.layout; return L ? Object.fromEntries(Object.entries(L).map(([k, v]) => [k, (v as THREE.Vector3).toArray()])) : null; },

@@ -359,7 +359,8 @@ export class UI implements CineUI {
 
   // ---------- modals ----------
   private leaveTimer = 0;
-  private openModal(html: string) {
+  /** Any module with its own screen (the Action menu) opens it through here. */
+  openModal(html: string) {
     const m = $('modal');
     clearTimeout(this.leaveTimer);
     if (m.classList.contains('hidden') || m.classList.contains('leaving')) audio.uiOpen();
@@ -487,16 +488,17 @@ export class UI implements CineUI {
     $('m-close').addEventListener('click', () => { this.closeModal(); onClose(); });
   }
 
-  openPause(h: { resume: () => void; settings: () => void; look: () => void; skins: () => void; quit: () => void }) {
+  openPause(h: { resume: () => void; settings: () => void; look: () => void; skins: () => void; quit: () => void; action?: () => void; actionLabel?: string }) {
     const row = (id: string, ic: string, label: string, cls = '') => `<button class="btn ${cls}" id="${id}">${icon(ic)}<span>${escapeHtml(t(label))}</span></button>`;
     const { level, progress } = this.objectiveState;
     this.menuPage('pause', `<div class="pause">
-      <div class="menu">${row('p-resume', 'play', 'menu.resume', 'primary')}${row('p-set', 'settings', 'menu.settings')}${row('p-look', 'look', 'menu.changeLook')}${row('p-skins', 'skins', 'menu.skins')}${row('p-quit', 'quit', 'menu.quitTitle')}</div>
+      <div class="menu">${row('p-resume', 'play', 'menu.resume', 'primary')}${row('p-set', 'settings', 'menu.settings')}${h.action ? row('p-action', 'play', h.actionLabel ?? 'cb.menu') : ''}${row('p-look', 'look', 'menu.changeLook')}${row('p-skins', 'skins', 'menu.skins')}${row('p-quit', 'quit', 'menu.quitTitle')}</div>
       <aside class="pause-side"><div class="eyebrow">${escapeHtml(t('hud.objective'))}</div>
         <div class="side-title">${escapeHtml($('obj-title').textContent ?? '')}</div>
         <p>${escapeHtml($('obj-desc').textContent ?? '')}</p>${progress ? `<p class="accent">${escapeHtml(progress)}</p>` : ''}${level > LEVEL_COUNT ? '' : `<div class="eyebrow dim">${escapeHtml(t('hud.level', { n: level }))}</div>`}</aside></div>`, 'menu.resume');
     const bind = (id: string, f: () => void) => $(id).addEventListener('click', f);
     bind('p-look', h.look); bind('p-skins', h.skins); bind('p-resume', h.resume); bind('p-set', h.settings); bind('p-quit', h.quit);
+    if (h.action) bind('p-action', h.action);
     bind('m-close', h.resume);
   }
 

@@ -9,6 +9,9 @@ const DICTS: Record<Lang, Dict> = { en, hi, ur };
 export const LANGS: Lang[] = ['en', 'hi', 'ur'];
 export const RTL: Record<Lang, boolean> = { en: false, hi: false, ur: true };
 
+/** More strings from a module that keeps its own (src/combat/strings.ts). */
+export function addStrings(d: Partial<Record<Lang, Dict>>) { for (const l of LANGS) Object.assign(DICTS[l], d[l] ?? {}); }
+
 let current: Lang = 'en';
 const listeners = new Set<() => void>();
 /** Player-chosen strings that win over every dictionary (custom crew names). */

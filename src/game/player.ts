@@ -58,6 +58,14 @@ export class Player {
   /** What a footstep sounds like here (the planet is grass and moss). */
   surface: (x: number, z: number) => Surface = () => 'grass';
   private stepAcc = 0;
+  /**
+   * The fight's hold on the body (src/combat sets it every frame it needs it; null gives the body back). `scale` is how
+   * much of walking speed is left, `force` a velocity that replaces the stick (a roll, a knock-back), `face` the way to
+   * turn (radians, or null), `aim` 0 to 1 pulls the camera in over the right shoulder, `crouch` lowers the hips (metres),
+   * `sprint` overrides the sprint button, `sneak` caps the speed to a creep.
+   */
+  combat: { scale: number; force: { x: number; z: number } | null; face: number | null; aim: number; crouch: number; sprint: boolean | null; sneak: boolean; jump: boolean } | null = null;
+  private aimS = 0;
   /** Stages other than Verdaxis set their own gravity, and let you jump across open gaps. */
   physics = { gravity: 14, jump: 5.2, gaps: false };
 
@@ -128,8 +136,10 @@ export class Player {
     const len = Math.hypot(mx, mz);
     if (len > 1) { mx /= len; mz /= len; }
     const moving = len > 0.05;
-    this.sprinting = moving && canMove && input.held('sprint') && stamina > 2 && mz > 0;
-    let speed = (this.sprinting ? 7.2 : 4.0) * slow;
+    const cb = this.combat;
+    this.sprinting = moving && canMove && (cb?.sprint ?? input.held('sprint')) && stamina > 2 && mz > 0 && !(cb && (cb.scale < 0.9 || cb.sneak));
+    let speed = (this.sprinting ? 7.2 : 4.0) * slow * (cb ? cb.scale : 1);
+    if (cb?.sneak) speed = Math.min(speed, 1.9);
     if (this.swimming) speed = (this.sprinting ? 2.6 : 1.7) * slow;
     else if (this.inWater) speed *= 0.55;
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
@@ -141,8 +151,9 @@ export class Player {
     const k = 1 - Math.exp(-dt * rate);
     this.vel.x += (wx - this.vel.x) * k;
     this.vel.z += (wz - this.vel.z) * k;
+    if (cb?.force) { this.vel.x = cb.force.x; this.vel.z = cb.force.z; }
 
-    if (canMove && this.onGround && !this.swimming && input.act('jump')) { this.vel.y = this.physics.jump; this.onGround = false; }
+    if (canMove && this.onGround && !this.swimming && input.act('jump') && (!cb || cb.jump)) { this.vel.y = this.physics.jump; this.onGround = false; }
     this.vel.y -= this.physics.gravity * dt;
 
     const next = this.pos.clone();
@@ -188,7 +199,10 @@ export class Player {
     // animate model
     const hs = Math.hypot(this.vel.x, this.vel.z);
     this.speedNow = hs;
-    if (hs > 0.3) {
+    if (cb && cb.face !== null) {
+      const d = angleTo(this.facing, cb.face);
+      this.facing += d * (1 - Math.exp(-dt * 16));
+    } else if (hs > 0.3) {
       const target = Math.atan2(-this.vel.x, -this.vel.z);
       let d = target - this.facing;
       d = Math.atan2(Math.sin(d), Math.cos(d));
@@ -206,6 +220,7 @@ export class Player {
       }
     } else this.stepAcc = Math.min(this.stepAcc, 0.3);
     this.model.root.position.copy(this.pos);
+    if (cb?.crouch) this.model.root.position.y -= cb.crouch;
     if (this.inWater && !this.swimming) this.model.root.position.y = Math.max(this.pos.y, -0.55);
     // treading water keeps the head up; swimming lies the body flat along the surface
     if (this.swimming) { this.swimLift += (clamp(hs / 1.4, 0, 1) - this.swimLift) * (1 - Math.exp(-dt * 3)); this.model.root.position.y = WATER_Y - FLOAT + this.swimLift * 0.85; }
@@ -264,7 +279,11 @@ export class Player {
     const clear = this.forest.clearance(this.focus.x, this.focus.z, want.x, want.z, 0.4);
     const target = Math.max(1.3, this.camDist * clear);
     this.distS += (target - this.distS) * e(target < this.distS ? 16 : 2.5);
-    this.orbit(this.camPos, this.focus, this.yawS, this.pitchS, this.distS);
+    // aiming: in close, over the right shoulder, looking where the shot will go instead of at the body
+    const aimWant = this.combat?.aim ?? 0;
+    this.aimS += (aimWant - this.aimS) * e(aimWant > this.aimS ? 12 : 8);
+    const aim = this.aimS;
+    this.orbit(this.camPos, this.focus, this.yawS, this.pitchS, this.distS * (1 - aim) + Math.min(this.distS, 2.5) * aim);
 
     // stride: vertical twice per cycle, sideways once, growing with speed
     const run = clamp(this.speedNow / 7.2, 0, 1);
@@ -279,13 +298,23 @@ export class Player {
     this.camera.position.y += bobY + this.dip * 0.12;
     this.camera.up.set(0, 1, 0);
     this.camera.lookAt(this.focus.x, this.focus.y + 1.45 + bobY * 0.4 + this.dip * 0.05, this.focus.z);
+    if (aim > 0.002) {
+      const cp = Math.cos(this.pitchS), fx = -Math.sin(this.yawS) * cp, fy = Math.sin(this.pitchS), fz = -Math.cos(this.yawS) * cp;
+      const rx = Math.cos(this.yawS), rz = -Math.sin(this.yawS);
+      tmpA.copy(this.camera.position);
+      tmpA.x += rx * 0.62 * aim; tmpA.z += rz * 0.62 * aim; tmpA.y += 0.12 * aim;
+      tmpC.copy(this.camera.quaternion);
+      this.camera.position.copy(tmpA);
+      this.camera.lookAt(tmpA.x + fx * 30, tmpA.y + fy * 30, tmpA.z + fz * 30);
+      this.camera.quaternion.slerpQuaternions(tmpC, this.camera.quaternion, aim);
+    }
     // a touch of bank into fast turns
     this.lean += (clamp(dyaw * 1.4, -0.03, 0.03) - this.lean) * e(6);
     if (Math.abs(this.lean) > 1e-4) this.camera.rotateZ(this.lean);
 
     // FOV kick while sprinting
     this.fovKick += ((this.sprinting ? 6.5 : 0) - this.fovKick) * e(this.sprinting ? 3.5 : 6);
-    const fov = this.baseFov + this.fovKick;
+    const fov = this.baseFov + this.fovKick - 9 * aim;
     if (Math.abs(fov - this.camera.fov) > 0.01) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
   }
 
@@ -296,3 +325,4 @@ export class Player {
 }
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
+const tmpC = new THREE.Quaternion();
