@@ -1310,7 +1310,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // inside the flat: only what the door and the window show (the moving things, the people and the sky always)
   const portals = flatPortals(scene, new THREE.Box3(new THREE.Vector3(FRONT + 0.15, -1, FLAT_Z0), new THREE.Vector3(FRONT + FLAT_D, 3.4, FLAT_Z1)), FRONT - 0.15,
     [[64.6, 66.2, FLOOR - 0.1, 2.2 + FLOOR], [68.0, 70.4, 1.14, 2.44], [73.2, 75.6, 1.14, 2.44]],
-    (o) => moved.has(o) || !!o.userData.isCharacter || !!(o as unknown as { isBatchedMesh?: boolean }).isBatchedMesh || o === skyMesh || o === planet || ((o as THREE.InstancedMesh).isInstancedMesh && !o.userData.prop) || (o as THREE.Sprite).isSprite, () => scene.children.length + oldTown.children.length);
+    (o) => moved.has(o) || !!o.userData.isCharacter || !!(o as unknown as { isBatchedMesh?: boolean }).isBatchedMesh || ((o as THREE.Mesh).material as THREE.Material | undefined)?.visible === false || o === skyMesh || o === planet || ((o as THREE.InstancedMesh).isInstancedMesh && !o.userData.prop) || (o as THREE.Sprite).isSprite, () => scene.children.length + oldTown.children.length);
   // three.js walks every object of a scene each frame to refresh its matrix, moving or not (a fifth of a phone's frame
   // here): the scene and the old town walk only what can move
   skipStatic(oldTown); skipStatic(scene);
