@@ -19,6 +19,8 @@ export interface StreamWater {
   inPool(x: number, z: number, pad?: number): boolean;
   /** Points along the stream for looping water sound. */
   soundAt: THREE.Vector3[];
+  /** Where the grass must not grow (grass.setRibbon): the stream's line, then the pool. */
+  mask: [number, number, number][];
 }
 
 const WIDTH = 1.5;
@@ -26,30 +28,52 @@ const rnd = (s: number) => { const x = Math.sin(s * 127.1 + 311.7) * 43758.5453;
 
 export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUniform>): StreamWater {
   const group = new THREE.Group(); group.name = 'e1-stream';
-  // spawn at the origin; the walk down to the lake runs along this bearing
+  // spawn at the origin. The lake's shore is ragged (bays reach far in), so everything is placed from the ground
+  // itself: walk from the spawn towards the lake until the ground goes under the water (y 0): that is the shore
   const toLake = new THREE.Vector2(LAKE.x, LAKE.z).normalize();
   const side = new THREE.Vector2(-toLake.y, toLake.x);
-  // the source: up the slope to the side of the path, halfway down
-  const src = toLake.clone().multiplyScalar(48).addScaledVector(side, 38);
-  const line: THREE.Vector3[] = [];
-  let x = src.x, z = src.y, dx = toLake.x, dz = toLake.y;
-  for (let i = 0; i < 260; i++) {
-    const h = T.height(x, z);
-    line.push(new THREE.Vector3(x, h, z));
-    if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r - 9 || h < -0.6) break;
-    // downhill, with a pull to the lake so a hollow cannot hold it, and a slow meander
-    const e = 1.2;
-    const gx = T.height(x + e, z) - T.height(x - e, z), gz = T.height(x, z + e) - T.height(x, z - e);
-    const gl = Math.hypot(gx, gz) || 1;
-    const lx = LAKE.x - x, lz = LAKE.z - z, ll = Math.hypot(lx, lz) || 1;
-    const m = Math.sin(i * 0.13) * 0.35;
-    let nx = -gx / gl * 0.9 + lx / ll * 0.75 + side.x * m, nz = -gz / gl * 0.9 + lz / ll * 0.75 + side.y * m;
-    const nl = Math.hypot(nx, nz) || 1; nx /= nl; nz /= nl;
-    // water does not turn on a coin: keep most of the old heading
-    dx = dx * 0.7 + nx * 0.3; dz = dz * 0.7 + nz * 0.3;
-    const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
-    x += dx; z += dz;
+  let ds = 8;
+  while (ds < 200 && T.height(toLake.x * ds, toLake.y * ds) > 0.05) ds += 1;
+  const shore = toLake.clone().multiplyScalar(ds);
+  const trace = (sx: number, sz: number, sgn: number) => {
+    const out: THREE.Vector3[] = [];
+    let x = sx, z = sz, dx = shore.x - sx, dz = shore.y - sz, wet = 0;
+    { const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l; }
+    for (let i = 0; i < 220; i++) {
+      const h = T.height(x, z);
+      out.push(new THREE.Vector3(x, h, z));
+      // into the water and a few metres on, so it meets the lake under its surface
+      if (h < -0.05 && ++wet > 3) break;
+      const e = 1.2;
+      const gx = T.height(x + e, z) - T.height(x - e, z), gz = T.height(x, z + e) - T.height(x, z - e);
+      const gl = Math.hypot(gx, gz) || 1;
+      // downhill, with a pull to the shore so a hollow cannot hold it, and a slow meander
+      const lx = shore.x - x, lz = shore.y - z, ll = Math.hypot(lx, lz) || 1;
+      const m = Math.sin(i * 0.13) * 0.35 * sgn;
+      let nx = -gx / gl * 0.9 + lx / ll * 0.6 + side.x * m, nz = -gz / gl * 0.9 + lz / ll * 0.6 + side.y * m;
+      const nl = Math.hypot(nx, nz) || 1; nx /= nl; nz /= nl;
+      // water does not turn on a coin: keep most of the old heading
+      dx = dx * 0.7 + nx * 0.3; dz = dz * 0.7 + nz * 0.3;
+      const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+      x += dx; z += dz;
+    }
+    return out;
+  };
+  // try sources up the slope on both sides of the walk; keep a stream that reaches the water, is a good length,
+  // stays off the spawn and climbs least on the way
+  let line: THREE.Vector3[] = [], best = -Infinity;
+  for (const sgn of [1, -1]) for (const off of [26, 34, 44]) for (const k of [0.3, 0.45, 0.6]) {
+    const sx = toLake.x * ds * k + side.x * off * sgn, sz = toLake.y * ds * k + side.y * off * sgn;
+    if (T.height(sx, sz) < 1.5) continue;
+    const L = trace(sx, sz, sgn);
+    if (L[L.length - 1].y > -0.05) continue;
+    let climb = 0, near = Infinity;
+    for (let i = 1; i < L.length; i++) { climb += Math.max(0, L[i].y - L[i - 1].y); near = Math.min(near, Math.hypot(L[i].x, L[i].z)); }
+    if (near < 10) continue;
+    const score = -Math.abs(L.length - 70) * 0.4 - climb * 6;
+    if (score > best) { best = score; line = L; }
   }
+  if (line.length < 2) line = trace(shore.x * 0.5 + side.x * 30, shore.y * 0.5 + side.y * 30, 1);
   // a stream bed does not climb: each point is no higher than the one above it
   for (let i = 1; i < line.length; i++) line[i].y = Math.min(line[i].y, line[i - 1].y - 0.004);
 
@@ -156,10 +180,19 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
   group.add(ribbon);
 
   // ---- the pool: still water with a green skin, beside the path before the stream ----
-  const pc = toLake.clone().multiplyScalar(58).addScaledVector(side, -7);
+  // on dry, flat ground beside the walk, short of the stream and away from it
   const R = 2.6;
-  let rim = Infinity;
-  for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2; rim = Math.min(rim, T.height(pc.x + Math.cos(a) * R, pc.y + Math.sin(a) * R)); }
+  let pc = toLake.clone().multiplyScalar(ds * 0.55).addScaledVector(side, -7), pbest = Infinity, rim = 0;
+  const lineD = (x: number, z: number) => line.reduce((m, p) => Math.min(m, Math.hypot(p.x - x, p.z - z)), Infinity);
+  for (const k of [0.4, 0.5, 0.6, 0.7]) for (const off of [-9, -6, 6, 9]) {
+    const cx = toLake.x * ds * k + side.x * off, cz = toLake.y * ds * k + side.y * off;
+    let lo = Infinity, hi = -Infinity;
+    for (let j = 0; j < 16; j++) { const a = j / 16 * Math.PI * 2, h = T.height(cx + Math.cos(a) * R, cz + Math.sin(a) * R); lo = Math.min(lo, h); hi = Math.max(hi, h); }
+    if (lo < 0.9 || lineD(cx, cz) < 12) continue;
+    const cost = (hi - lo) * 4 + Math.abs(k - 0.55) * 3;
+    if (cost < pbest) { pbest = cost; pc = new THREE.Vector2(cx, cz); rim = lo; }
+  }
+  if (pbest === Infinity) for (let j = 0; j < 16; j++) { const a = j / 16 * Math.PI * 2; rim = Math.min(rim || Infinity, T.height(pc.x + Math.cos(a) * R, pc.y + Math.sin(a) * R)); }
   const pool = { x: pc.x, z: pc.y, r: R, y: rim - 0.04 };
   const pg = new THREE.CircleGeometry(R * 1.12, 40, 0, Math.PI * 2);
   pg.rotateX(-Math.PI / 2);
@@ -242,10 +275,14 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
   reeds.name = 'reeds';
   group.add(reeds);
 
+  const mask: [number, number, number][] = [];
+  const step = Math.max(1, Math.ceil(n / 34));
+  for (let i = 0; i < n; i += step) mask.push([line[i].x, line[i].z, WIDTH * 0.6 + 0.5]);
+  mask.push([line[n - 1].x, line[n - 1].z, WIDTH * 0.6 + 0.5], [0, 0, -1], [pool.x, pool.z, R * 1.25], [pool.x + 0.01, pool.z, R * 1.25]);
   const soundAt = [0.15, 0.5, 0.85].map((f) => line[Math.floor(f * (n - 1))].clone());
   const tmp = new THREE.Vector3();
   return {
-    group, line, pool, soundAt,
+    group, line, pool, soundAt, mask,
     nearest(p, out = tmp) {
       let best = Infinity;
       for (let i = 0; i < n - 1; i++) {

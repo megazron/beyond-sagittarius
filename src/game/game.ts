@@ -378,7 +378,7 @@ export class Game {
     }
   }
 
-  private enterPlay(announce: boolean) {
+  private enterPlay(announce: boolean, acted = false) {
     this.mode = 'play';
     this.finishWakeVisuals();
     this.input.enabled = true;
@@ -389,7 +389,7 @@ export class Game {
     this.waking.startSound();
     if (announce) {
       // 1.1: he checks his body, then thirst, before anything is asked of the player
-      this.waking.thirst(() => {
+      this.waking.thirst(acted, () => {
         if (!this.save.flags.tutorialDone) {
           this.pendingIntro = true;
           this.tutorial.start();
@@ -438,7 +438,8 @@ export class Game {
       { t: 18.0, fn: () => ui.say('wake.line5', 'crew.scientist.name', 3.6) },
       { t: 18.4, fn: () => ui.chapter(['wake.chapter']) },
       { t: 22.0, fn: () => ui.chapter(null) },
-      { t: 22.2, fn: () => this.skipWake() }, // through black, like the skip: entering play is never seen
+      // through black, like the skip: entering play is never seen
+      { t: 22.2, fn: () => this.skipWake(true) },
     ];
     this.ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden'); // tap to skip on phones
@@ -454,7 +455,8 @@ export class Game {
   skipScene() { if (this.ui.choice.open) this.ui.choice.press(); else this.scene?.skip(); }
 
   private wakeSkipped = false;
-  skipWake() {
+  /** natural: the wake played to its end (then 1.1's acted thirst scene follows; a skip goes straight to play). */
+  skipWake(natural = false) {
     if (this.mode !== 'wake' || this.wakeSkipped) return;
     this.wakeSkipped = true;
     for (const c of this.wakeCues) if (!c.done) { c.done = true; }
@@ -463,7 +465,7 @@ export class Game {
     this.ui.fade('black', 1, 0.2);
     setTimeout(() => {
       this.finishWakeVisuals();
-      this.enterPlay(true);
+      this.enterPlay(true, natural);
       this.wakeSkipped = false;
       requestAnimationFrame(() => requestAnimationFrame(() => this.ui.fade('black', 0, 0.6)));
     }, 240);
