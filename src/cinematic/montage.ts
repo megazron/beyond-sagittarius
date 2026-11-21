@@ -464,6 +464,19 @@ export class Montage {
     this.worldTrails[0].mesh.visible = false;
   }
 
+  /** The five landing sets: built and drawn once while the game loads, so the first landing does not stall while
+   *  their materials (and the extra sky light each brings) compile. */
+  warmStages(draw: (scene: THREE.Scene, cam: THREE.PerspectiveCamera) => void) {
+    const cam = new THREE.PerspectiveCamera(34, 16 / 9, 0.1, 40000);
+    for (const id of ORDER.slice(0, 5)) {
+      const o = this.worldStage(id);
+      cam.position.copy(o).add(V(1.6, 1.35, 4.6)); cam.lookAt(o.clone().add(V(0, 1.05, 0))); cam.updateMatrixWorld();
+      draw(this.set.scene, cam);
+    }
+    if (this.stageG) this.stageG.visible = false;
+    this.stageOn = false;
+  }
+
   private get crew() { const ids: CrewId[] = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social']; return Object.fromEntries(ids.map((id, i) => [id, this.set.interior.crew[i]])) as Record<CrewId, Character>; }
 
   /** Rolls the sequence; `done` fires at the end or on a skip. */
@@ -498,6 +511,7 @@ export class Montage {
 
   private finish() {
     for (const el of this.tags) el.style.opacity = '0';
+    if (this.fateEl) this.fateEl.style.opacity = '0';
     if (this.sys) this.sys.group.visible = false;
     if (this.stageG) this.stageG.visible = false;
     if (this.vacuum) { this.vacuum = false; audio.vacuum(false); }
@@ -670,6 +684,17 @@ export class Montage {
     const SKY: Record<string, [number, number, number]> = { strong: [0.5, 1, 0.85], medic: [0.05, 0, 0.9], explorer: [0.35, 0, 1], builder: [0.6, 1, 1.05], social: [0.9, 1, 0.8] };
     const [neb, other, exposure] = SKY[id];
     u.uNebula.value = neb; u.uOther.value = other;
+    // whose sky is it: Lyrra's moon is in the crowded cluster round the black hole, which hangs in Bolzar's sky;
+    // Skyvra came out billions of years on, under an old, dim sky; Nuvexa's universe is young and nearly starless
+    if (id === 'builder') { this.hole(-5, 7, -24, 0, 0); u.uNebula.value = neb; }
+    else if (id === 'medic') { this.hole(14, 9, -70, 0, 0); u.uNebula.value = neb; u.uStar.value = 2.6; }
+    else if (id === 'explorer') u.uStar.value = 0.22;
+    else if (id === 'social') { u.uStar.value = 0.35; u.uOther.value = 0.7; }
+    // each world's own sun: the light left over from the ship's last shot was painting every ground orange.
+    // Thalwen: a hard white sun low over the rim. The asteroid: an old, dim sky, a faint cold light. Shardrift: the
+    // haze round the black hole, dull and warm. Methryx: orange through methane haze. Aerolis: gold through cloud.
+    const SUN: Record<string, [THREE.Vector3, number, number]> = { medic: [V(0.9, 0.25, 0.3), 0xffffff, 3.2], explorer: [V(-0.4, 0.5, 0.6), 0xb8c4e0, 0.9], builder: [V(-0.3, 0.4, -1), 0xd8a888, 1.4], strong: [V(0.5, 0.35, -1), 0xff9a50, 1.6], social: [V(0.2, 0.6, -0.8), 0xffe0a0, 2.4] };
+    const [sd, sc, si] = SUN[id]; this.sun(sd, sc, si);
     const k = clamp((b - (imp - 2)) / 8, 0, 1), drift = easeInOut(k);
     const cam = this.lens(this.tmp.copy(o).add(V(1.6 - drift * 0.5, 1.35, 4.6 - drift * 0.6)).add(hit ? shakeAt(b, 0.5 * after(b, imp, 1.0), this.tmp2) : V(0, 0, 0)).clone(), this.tmp3.copy(o).add(V(0, 1.05, 0)).clone(), 34, 4.6, 0.004);
     // the light comes down the sky to where they will be
@@ -707,14 +732,45 @@ export class Montage {
       el.style.cssText = 'position:absolute;left:0;top:0;font:600 clamp(11px,1.5vw,18px) var(--font-ui);letter-spacing:.16em;text-transform:uppercase;white-space:nowrap;pointer-events:none;text-shadow:0 0 8px #000,0 0 2px #000;will-change:transform;opacity:0;transition:opacity .25s';
       this.el.root.appendChild(el); this.tags[i] = el;
     }
-    if (!at) { el.style.opacity = '0'; return; }
+    if (!at) { el.style.opacity = '0'; this.tagPos[i] = null; return; }
     const id = ORDER[i], c = new THREE.Color(id === 'scientist' ? this.playerGlow() : TRAIL[id]).lerp(new THREE.Color(1, 1, 1), 0.45);
+    // only the name rides the light: the fate is written in the list once it is settled (see fateList)
     const name = t(`crew.${id}.name`);
     if (el.textContent !== name) el.textContent = name;
     el.style.color = `#${c.getHexString()}`;
     const p = at.clone().project(cam), w = this.el.root.clientWidth || window.innerWidth, h = this.el.root.clientHeight || window.innerHeight;
-    el.style.transform = `translate(${((p.x * 0.5 + 0.5) * w + 14).toFixed(1)}px, ${((-p.y * 0.5 + 0.5) * h - 22).toFixed(1)}px)`;
+    this.tagPos[i] = [(p.x * 0.5 + 0.5) * w + 14, (-p.y * 0.5 + 0.5) * h - 22];
     el.style.opacity = '1';
+  }
+  private tagPos: ([number, number] | null)[] = [];
+  /** Push overlapping names apart (top to bottom), then place them. */
+  private layoutTags() {
+    const live = this.tagPos.map((p, i) => (p ? { i, x: p[0], y: p[1] } : null)).filter(Boolean) as { i: number; x: number; y: number }[];
+    live.sort((a, b) => a.y - b.y);
+    for (let a = 0; a < live.length; a++) for (let b = 0; b < a; b++) {
+      const A = live[a], B = live[b];
+      if (Math.abs(A.x - B.x) < 120 && A.y - B.y < 24) A.y = B.y + 24;
+    }
+    for (const L of live) this.tags[L.i].style.transform = `translate(${L.x.toFixed(1)}px, ${L.y.toFixed(1)}px)`;
+  }
+  private fateEl: HTMLElement | null = null;
+  /** The list of fates, bottom left, a line written as each one is settled. */
+  private fateList(shown: boolean[]) {
+    if (!this.fateEl) {
+      const el = document.createElement('div');
+      el.style.cssText = 'position:absolute;left:4%;bottom:27%;font:600 clamp(11px,1.35vw,16px) var(--font-ui);letter-spacing:.14em;text-transform:uppercase;line-height:1.7;pointer-events:none;text-shadow:0 0 8px #000,0 0 2px #000;transition:opacity .4s';
+      this.el.root.appendChild(el); this.fateEl = el;
+      ORDER.forEach((id) => { const d = document.createElement('div'); d.style.cssText = 'opacity:0;transition:opacity .6s'; el.appendChild(d); });
+    }
+    const el = this.fateEl;
+    el.style.opacity = shown.some(Boolean) ? '1' : '0';
+    ORDER.forEach((id, i) => {
+      const d = el.children[i] as HTMLElement, c = new THREE.Color(id === 'scientist' ? this.playerGlow() : TRAIL[id]).lerp(new THREE.Color(1, 1, 1), 0.45);
+      const txt = `${t(`crew.${id}.name`)} · ${t(`film.fate.${id}`)}`;
+      if (d.textContent !== txt) d.textContent = txt;
+      d.style.color = `#${c.getHexString()}`;
+      d.style.opacity = shown[i] ? '1' : '0';
+    });
   }
 
   private card(id: CrewId | null, show: number) {
@@ -740,13 +796,15 @@ export class Montage {
     const set = this.set, ship = set.ship, tmp = this.tmp;
     const down = V(0, 0, -1);
     this.cues.push(
-      { b: 20.4, fn: () => { this.ui.subtitle('cine.line8', 'crew.strong.name'); this.cast.strong.say(voice.duration('cine.line8') ?? 2); } },
+      // "Hold on to something!" is said in the pull, as the deck tips (cinematic.ts); not twice
       { b: 27.4, fn: () => this.ui.subtitle('op.21', 'crew.explorer.name') },
+      // said over the six fates, which hold long enough to be read
+      { b: 57.5, fn: () => this.ui.subtitle('mz.science', 'mz.name') },
       { b: 31, fn: () => this.ui.subtitle(null) },
       ...ORDER.slice(0, 5).map((id, i) => ({ b: beat.impacts[i] + 1.3, fn: () => { this.ui.subtitle(`film.${id}`, `crew.${id}.name`); this.cast[id].say(voice.duration(`film.${id}`) ?? 1.4); } })),
       ...ORDER.slice(0, 5).map((_, i) => ({ b: beat.impacts[i] + 5.95, fn: () => this.ui.subtitle(null) })),
       // early enough to be said whole before the title leaves (it was cut off after one word at 129.2)
-      { b: Math.min(123, S.end - ((voice.duration('film.scientist') ?? 2.5) + 0.8) / BEAT), fn: () => this.ui.subtitle('film.scientist', 'crew.scientist.name') },
+      { b: Math.min(S.hit + 3, S.end - ((voice.duration('film.scientist') ?? 2.5) + 0.8) / BEAT), fn: () => this.ui.subtitle('film.scientist', 'crew.scientist.name') },
     );
 
     // ---- Act I: The Horizon ----
@@ -971,54 +1029,65 @@ export class Montage {
     const fh = beat.faceHits;
     ORDER.forEach((id, i) => face(fh[i], fh[i + 1] ?? S.planet, id));
 
-    P(56, 62, 'home', (k, b) => {
-      const e = easeInOut(k);
-      // one system, six worlds: the green world near us, the ringed giant and its orange moon beyond, a grey moon, a
-      // broken moonlet, a band of rock, and the cloud planet sunward. Six lights break from one point and each goes to a
-      // different one, its name on it until it gets there.
-      const sys = this.system();
-      sys.group.visible = true;
-      const cam = this.lens(V(-260 + e * 120, 420 - e * 60, 2500 - e * 160), V(520, 40, -300), 40, 0, 0, -0.03 + e * 0.03);
-      const origin = this.tmp.set(-520, 1250, -300);
+    // Six fates. Thrown clear of the breaking ship above the edge, each on their own line. Seen from here nobody is
+    // ever seen to cross: four lights fall to the black and redden and fade at its edge (real: an outside observer
+    // never sees anything go in). Lyrra's is whirled round just outside the edge and flung away; Bolzar's is caught
+    // going round and round. MegaZroN says what is theory.
+    P(56, S.landing - 2, 'deep', (k, b) => {
+      const C = this.tmp.set(0, 30000, 0).clone(), hc = C.clone().add(V(0, -1.5, -14));
+      this.hole(0, -1.5, -14, 0.25, 0);
+      const cam = this.lens(C.clone().add(V(Math.sin(k * 0.6) * 0.3, 0.2, 0)), hc.clone().add(V(0, 0.6, 0)), 52, 0, 0);
+      const origin = C.clone().add(V(-0.4, 2.0, -7));
+      const rim = (a: number, r: number, z = 0) => hc.clone().add(V(Math.cos(a) * r, Math.sin(a) * r * 0.9, z));
+      const FALL_TO: Record<string, THREE.Vector3> = { scientist: rim(-1.2, 1.9), explorer: rim(2.5, 1.9), strong: rim(0.4, 1.9), social: rim(3.6, 1.9) };
+      const settled: boolean[] = [];
       this.trails.forEach((tr, i) => {
         const id = ORDER[i];
         tr.color = i === 5 ? this.playerGlow() : TRAIL[id];
-        const end = sys.at[id];
-        const head = smoothstep(0.08 + i * 0.03, 0.82 + i * 0.03, k);
-        // a bowed path, so six lines from one point do not read as one
-        const mid = this.tmp2.copy(origin).lerp(end, 0.5).add(this.tmp3.set(Math.sin(i * 2.4) * 260, 160 + Math.cos(i * 1.7) * 120, Math.cos(i * 2.4) * 200));
-        const at = (t: number, o: THREE.Vector3) => { const a = 1 - t; return o.set(a * a * origin.x + 2 * a * t * mid.x + t * t * end.x, a * a * origin.y + 2 * a * t * mid.y + t * t * end.y, a * a * origin.z + 2 * a * t * mid.z + t * t * end.z); };
-        tr.draw((s, o) => at(Math.max(0, head - s * 0.28), o), cam, 2.4 + head * 2, b, head > 0 ? 1.7 : 0);
-        this.tag(i, head > 0.1 && head < 0.985 ? at(head, new THREE.Vector3()) : null, cam);
+        // set off one after another so the six lights (and their names) are apart from the first moment
+        const head = smoothstep(0.03 + i * 0.07, 0.62 + i * 0.06, k);
+        settled[i] = FALL_TO[id] ? head > 0.86 : head > 0.8;
+        let at: (t: number, o: THREE.Vector3) => THREE.Vector3;
+        if (FALL_TO[id]) {
+          const end = FALL_TO[id], mid = origin.clone().lerp(end, 0.5).add(V(Math.sin(i * 2.4) * 1.6, 1.2 + Math.cos(i * 1.7) * 0.6, 0.5));
+          at = (t, o) => { const a = 1 - t; return o.set(a * a * origin.x + 2 * a * t * mid.x + t * t * end.x, a * a * origin.y + 2 * a * t * mid.y + t * t * end.y, a * a * origin.z + 2 * a * t * mid.z + t * t * end.z); };
+        } else if (id === 'medic') {
+          // whirled round just outside the edge, then flung clear
+          at = (t, o) => { const th = 1.9 + t * 4.6, r = t < 0.75 ? lerp(5.5, 2.5, smoothstep(0, 0.45, t)) : lerp(2.5, 12, smoothstep(0.75, 1, t)); return o.copy(rim(th, r, 0.4)).lerp(origin, 1 - smoothstep(0, 0.22, t)); };
+        } else {
+          // caught going round: an orbit that does not close
+          at = (t, o) => { const th = -1.4 - t * 5.2, r = lerp(6.5, 3.6, smoothstep(0, 0.5, t)); return o.copy(rim(th, r, -0.6)).lerp(origin, 1 - smoothstep(0, 0.22, t)); };
+        }
+        // the fallers redden and fade at the edge: from out here nothing is ever seen to go in
+        const fade = FALL_TO[id] ? 1 - smoothstep(0.82, 1, head) : 1;
+        tr.draw((s, o) => at(Math.max(0, head - s * 0.3), o), cam, (0.03 + head * 0.03) * fade, b, head > 0 && fade > 0.02 ? 1.7 * fade : 0);
+        this.tag(i, head > 0.06 && fade > 0.4 ? at(head, new THREE.Vector3()) : null, cam);
       });
-      this.tagsOn = true; this.sysOn = true;
-      const hs = (set.home.material as THREE.ShaderMaterial).uniforms.uSun.value as THREE.Vector3;
-      if (!this.homeSun) this.homeSun = hs.clone();
-      hs.set(-0.42, 0.45, 0.79).normalize();
-      const u = set.dome.uniforms;
-      u.uBH.value = 0; u.uWarp.value = 0; u.uOther.value = 0; u.uNebula.value = 0.6;
-      const pf = after(b, 56, 0.6) * 0.15;
-      // the break itself: a flash where the one light becomes six
-      const br = after(b, 56.4, 0.9) * 0.35;
-      this.fx = { flash: [pf + br, pf + br, pf + br * 0.9], exposure: 1.15 };
-    }, () => set.show('home'));
+      this.layoutTags();
+      this.fateList(settled);
+      this.tagsOn = true;
+      const br = after(b, 56.2, 0.9) * 0.25;
+      this.fx = { flash: [br, br, br * 0.9], exposure: 1.1 };
+    }, () => set.show('deep'));
 
+    { const f = this.shots[this.shots.length - 1]; if (f && f.from === 56) f.holdVoice = true; }
     // ---- Act III: The Landing ----
     // Each of the other five comes down on a world of its own: its own sky, its own ground. The light comes in, the
     // hit lands on the downbeat, then them, a name and a world, and one line said to its end before the next one falls.
     ORDER.slice(0, 5).forEach((id, i) => {
       const imp = beat.impacts[i];
-      this.shots.push({ from: imp - 2, to: imp + 6, where: 'deep', at: (k, b) => this.arrive(id, i, b, imp), enter: () => set.show('deep'), holdVoice: true });
+      // MegaZroN's line has been said whole by now (the fates shot holds for it): its subtitle goes with the cut
+      this.shots.push({ from: imp - 2, to: imp + 6, where: 'deep', at: (k, b) => this.arrive(id, i, b, imp), enter: () => { set.show('deep'); if (i === 0) this.ui.subtitle(null); }, holdVoice: true });
     });
 
     // ---- Act IV: The player comes down ----
-    P(102, 108, 'world', (k, b) => this.lookUp(k, b), () => this.setLand('scientist'));
-    P(108, 112, 'world', (k, b) => this.falling(k, b, 0));
-    P(112, 116, 'world', (k, b) => this.falling(k, b, 1));
-    P(116, 118, 'world', (k, b) => this.falling(k, b, 2));
-    P(118, 119, 'world', (k, b) => this.falling(k, b, 3));
-    P(119, 120, 'world', (k, b) => this.falling(k, b, 4));
-    P(120, S.end + 1, 'world', (k, b) => this.titleShot(k, b));
+    P(118, 124, 'world', (k, b) => this.lookUp(k, b), () => this.setLand('scientist'));
+    P(124, 128, 'world', (k, b) => this.falling(k, b, 0));
+    P(128, 132, 'world', (k, b) => this.falling(k, b, 1));
+    P(132, 134, 'world', (k, b) => this.falling(k, b, 2));
+    P(134, 135, 'world', (k, b) => this.falling(k, b, 3));
+    P(135, 136, 'world', (k, b) => this.falling(k, b, 4));
+    P(S.hit, S.end + 1, 'world', (k, b) => this.titleShot(k, b));
   }
 
   private handOf(c: Character, side: 'L' | 'R') { return (side === 'L' ? c.handL : c.handR).getWorldPosition(new THREE.Vector3()); }
@@ -1137,7 +1206,7 @@ export class Montage {
   /** The player, in pieces of a fall that gets shorter and closer every cut. */
   private falling(k: number, b: number, n: number) {
     const l = this.land('scientist'), col = this.playerGlow();
-    const u = (b - 108) / 12; // 0 at the first cut, 1 at the ground
+    const u = (b - (S.hit - 12)) / 12; // 0 at the first cut, 1 at the ground
     const alt = 480 * Math.pow(1 - u, 1.6) + 8;
     const p = l.at.clone().addScaledVector(l.from, alt);
     const c = this.act('scientist', p, new THREE.Quaternion().setFromEuler(new THREE.Euler(1.3, 0.25, Math.sin(b * 0.4) * 0.2)), 'float', { ...FALL.scientist, armL: wob(FALL.scientist.armL!, b, 1, 0.08), armR: wob(FALL.scientist.armR!, b, 3, 0.08), hair: [0, 0, -1] }, { fear: 0.95, open: 0.65 });
@@ -1155,7 +1224,7 @@ export class Montage {
     tr.draw((s, o) => o.copy(chest).addScaledVector(dir, 0.6 + s * 60), cam, 0.42, b, 0.7);
     this.fire.set({ at: chest, c0: 0xffffff, c1: col, life: 0.7, speed: 3, drag: 0.5, grav: -40, size: 0.05, grow: 0.5, stagger: 0.6 }).play(0.6 + (b % 1) * 0.3);
     this.setRig([{ p: chest.clone().add(V(0, -2, 0.5)), color: col, i: 5, d: 8 }, { p: chest.clone().add(V(1.5, 1.5, 2)), color: 0xfff0e0, i: 4, d: 7 }]);
-    this.card('scientist', n === 0 ? (b - 109) / 0.5 : 0);
+    this.card('scientist', n === 0 ? (b - (S.hit - 11)) / 0.5 : 0);
     if (n > 0) this.el.card.style.opacity = '0';
     const hit = after(b % 1, 0, 0.5) * (0.05 + u * 0.15) + (n === 4 ? k * k * 1.4 : 0);
     this.fx = { zoom: 0.015 + u * 0.07, lines: u * 0.5, flash: [hit, hit, hit] };
@@ -1195,7 +1264,7 @@ export class Montage {
     // little behind the music, and catches up while the player's light is still far off)
     const cur = this.cur;
     if (cur?.holdVoice && this.time / BEAT >= cur.to && voice.remaining() > 0.05) { this.lag += this.time - Math.min(was, cur.to * BEAT - 0.001); this.time = Math.min(was, cur.to * BEAT - 0.001); }
-    else if (this.lag > 0 && this.time / BEAT >= 102 && this.time / BEAT < 107.5) { const d = Math.min(this.lag, dt * 0.8); this.lag -= d; this.time += d; }
+    else if (this.lag > 0 && this.time / BEAT >= S.hit - 18 && this.time / BEAT < S.hit - 12.5) { const d = Math.min(this.lag, dt * 0.8); this.lag -= d; this.time += d; }
     const b = this.time / BEAT;
     // never leave on a line still being said
     if (b >= S.end) { if (voice.remaining() > 0) { this.time = (S.end - 0.02) * BEAT; return; } this.finish(); return; }
@@ -1226,9 +1295,9 @@ export class Montage {
       shot.enter?.();
     }
     for (const c of this.cues) if (!c.done && b >= c.b) { c.done = true; c.fn(); }
-    this.tagsOn = false; this.sysOn = false; this.stageOn = false; const wasVac = this.vacuum; this.vacuum = false;
+    this.tagsOn = false; this.sysOn = false; this.stageOn = false; this.set.dome.uniforms.uStar.value = 1; const wasVac = this.vacuum; this.vacuum = false;
     if (shot) shot.at(clamp((b - shot.from) / (shot.to - shot.from), 0, 1), b);
-    if (!this.tagsOn) for (const el of this.tags) el.style.opacity = '0';
+    if (!this.tagsOn) { for (const el of this.tags) el.style.opacity = '0'; if (this.fateEl) this.fateEl.style.opacity = '0'; }
     if (!this.sysOn && this.sys) this.sys.group.visible = false;
     if (!this.sysOn && this.homeSun) { ((this.set.home.material as THREE.ShaderMaterial).uniforms.uSun.value as THREE.Vector3).copy(this.homeSun); this.homeSun = null; }
     if (!this.stageOn && this.stageG) this.stageG.visible = false;
