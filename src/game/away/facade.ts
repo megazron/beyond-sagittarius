@@ -137,9 +137,9 @@ export function facadeMaterial(o: FacadeOpts = {}) {
         uniform float uNight; uniform float uWet;
         varying vec3 vWp; varying vec3 vWn; varying vec4 vFac; varying vec4 vOrg;
         ${GLSL_HASH}
-        float fWin; float fFrame; vec3 fGlow; float fLedge;`)
+        float fWin; float fFrame; vec3 fGlow; float fLedge; float fFar;`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-        fWin = 0.0; fFrame = 0.0; fGlow = vec3(0.0); fLedge = 0.0;
+        fWin = 0.0; fFrame = 0.0; fGlow = vec3(0.0); fLedge = 0.0; fFar = 0.0;
         if (abs(vWn.y) < 0.5) {
           // along the wall from the building's corner, in bays that fit its width exactly
           bool alongX = abs(vWn.z) > abs(vWn.x);
@@ -185,7 +185,7 @@ export function facadeMaterial(o: FacadeOpts = {}) {
           fFrame = clamp(fx2 * fy2 - fWin - fReveal, 0.0, 1.0) * (style > 0.5 ? 0.6 : 1.0);
           // far off, a window is smaller than a pixel: its hard edge would shimmer as the camera moves, so the pane
           // becomes its share of the bay (the wall reads as a tone of glass and lit rooms, not as noise)
-          { float px = fwidth(u / bw) + fwidth(v / fh), far = smoothstep(0.22, 0.55, px);
+          { float px = fwidth(u / bw) + fwidth(v / fh), far = smoothstep(0.12, 0.4, px); fFar = far;
             float cov = clamp((hi.x - lo.x) * (hi.y - lo.y), 0.0, 1.0);
             fWin = mix(fWin, cov, far); fReveal *= 1.0 - far; fFrame *= 1.0 - far; }
           // a mullion down the middle of the punched windows
@@ -198,7 +198,9 @@ ${ROOM}
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.42, fReveal);
           diffuseColor.rgb *= 1.0 - 0.22 * fLedge;
           diffuseColor.rgb *= 1.0 - 0.45 * reveal;
-          fGlow += fWin * (1.0 - mull) * glow;
+          // far off, each window's own light averages out to the facade's share of lit rooms (no sparkle on the towers)
+          vec3 avgGlow = vec3(1.0, 0.82, 0.62) * mix(0.08, 0.38, uNight) * 0.45 * (0.3 + uNight);
+          fGlow += fWin * (1.0 - mull) * (street ? glow : mix(glow, avgGlow, fFar));
         } else {
           diffuseColor.rgb *= 0.55; // roofs: tar and gravel
         }
