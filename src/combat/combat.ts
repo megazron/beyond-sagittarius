@@ -468,6 +468,8 @@ export class Combat {
 
   /** Free play: before the player controller runs. */
   before(dt: number, time: number) {
+    // a moment the story opened on its own runs on the game's clock while the game runs (its own clock otherwise)
+    if (this.tensionUi.open && !this.encounter) { this.tensionFed = performance.now(); this.tensionUi.update(dt); return; }
     const sim = this.sim;
     if (!sim || this.encounter) return;
     const s = this.d.save();

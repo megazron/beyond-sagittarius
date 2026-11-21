@@ -43,7 +43,7 @@ function fader(root: THREE.Object3D) {
   return (k: number) => {
     if (k === last) return; last = k;
     for (const m of mats) { m.transparent = k < 1; m.opacity = k; m.depthWrite = k > 0.5; }
-    root.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = k > 0.6; });
+    root.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.userData.shadow ??= o.castShadow; o.castShadow = k > 0.6 && o.userData.shadow; } });
   };
 }
 
@@ -302,13 +302,20 @@ function guardian(): CreatureView {
   };
 }
 
+/** A small animal's shadow is its body's alone: the head, tail and legs would each be drawn again for a few pixels. */
+function small(v: CreatureView): CreatureView {
+  let first = true;
+  v.root.traverse((o) => { if ((o as THREE.Mesh).isMesh) { if (!first) o.castShadow = false; first = false; } });
+  return v;
+}
+
 export function createCreature(kind: SpeciesId): CreatureView {
   switch (kind) {
     case 'hound': return hound();
     case 'lashbloom': return lashbloom();
     case 'guardian': return guardian();
-    case 'skritch': return quadruped({ len: 0.75, girth: 0.17, legLen: 0.3, legR: 0.035, headLen: 0.3, neck: 0.1, tail: 0.5, ears: 0.9, hide: 0x4a3f33, belly: 0x8a7a62, ridge: [0.5, 1.5, 0.9], eye: [2.2, 1.6, 0.4], gait: 1.1 });
-    case 'nibbet': return quadruped({ len: 0.5, girth: 0.15, legLen: 0.26, legR: 0.03, headLen: 0.22, neck: 0.08, tail: 0.12, ears: 1.9, hide: 0x7d745a, belly: 0xc9c2a4, ridge: [0.4, 1.1, 1.3], eye: [1.2, 1.4, 1.5], gait: 1.3 });
+    case 'skritch': return small(quadruped({ len: 0.75, girth: 0.17, legLen: 0.3, legR: 0.035, headLen: 0.3, neck: 0.1, tail: 0.5, ears: 0.9, hide: 0x4a3f33, belly: 0x8a7a62, ridge: [0.5, 1.5, 0.9], eye: [2.2, 1.6, 0.4], gait: 1.1 }));
+    case 'nibbet': return small(quadruped({ len: 0.5, girth: 0.15, legLen: 0.26, legR: 0.03, headLen: 0.22, neck: 0.08, tail: 0.12, ears: 1.9, hide: 0x7d745a, belly: 0xc9c2a4, ridge: [0.4, 1.1, 1.3], eye: [1.2, 1.4, 1.5], gait: 1.3 }));
     default: return quadruped({ len: 2.5, girth: 0.72, legLen: 0.95, legR: 0.16, headLen: 0.8, neck: 0.3, tail: 0.5, ears: 0.35, hide: 0x4b4f45, belly: 0x6f6a58, ridge: [0.4, 1.2, 0.5], eye: [1.6, 1.3, 0.5], plates: 1, moss: 0x3f7a4c, gait: 0.42 });
   }
 }
