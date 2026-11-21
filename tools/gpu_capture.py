@@ -244,7 +244,10 @@ for st in PLAN['steps']:
         print('rec', st['rec'], len(rec['frames']), 'frames', f'{fps:.1f} fps', 'sound' if b64 else 'no sound', flush=True)
     elif 'eval' in st:
         try:
-            print('eval', str(ev(st['eval'], st.get('await', False)))[:200], flush=True)
+            r = ev(st['eval'], st.get('await', False))
+            if st.get('save'):
+                open(os.path.join(OUT, st['save']), 'w').write(str(r))  # the whole result, for results too long to print
+            print('eval', str(r)[:200], flush=True)
         except RuntimeError as x:
             print('eval error', x, flush=True)
     elif 'wait' in st:
