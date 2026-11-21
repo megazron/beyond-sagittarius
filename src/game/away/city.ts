@@ -603,7 +603,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
               shopDoors.push({ side, x: face + out * 0.15, z: wz + dzs * 1.05 });
               // the leaf swung out on its hinge at the far edge of the opening, 66 degrees open
               const hz = wz + dzs * 1.75, ldx = out * Math.sin(1.15), ldz = -dzs * Math.cos(1.15);
-              const leaf = box(0.05, 2.15, 0.95, frameM, face + ldx * 0.475, 1.08 + FLOOR, hz + ldz * 0.475); leaf.rotation.y = Math.atan2(ldx, ldz);
+              const leaf = box(0.05, 2.15, 0.95, ledgeM, face + ldx * 0.475, 1.08 + FLOOR, hz + ldz * 0.475); leaf.rotation.y = Math.atan2(ldx, ldz);
               { const ex = face + ldx * 0.95, ez = hz + ldz * 0.95; blocks.push(new THREE.Box3(new THREE.Vector3(Math.min(face, ex) - 0.05, 0, Math.min(hz, ez) - 0.05), new THREE.Vector3(Math.max(face, ex) + 0.05, 2.2, Math.max(hz, ez) + 0.05))); }
               box(0.55, 0.07, 1.9, ledgeM, face + out * 0.42, 0.82 + FLOOR, wz - dzs * 0.6);
               // light scans only (a few thousand triangles each): the heavy baskets and crates put the gate over budget
