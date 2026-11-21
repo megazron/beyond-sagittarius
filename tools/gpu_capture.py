@@ -6,7 +6,8 @@
 #   chrome.exe --remote-debugging-port=9334 --user-data-dir=%TEMP%\bs-life-gpu --autoplay-policy=no-user-gesture-required
 #              --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --window-size=1300,820
 #   python.exe tools\gpu_capture.py URL OUTDIR PLAN.json     (Windows side; OUTDIR may be a \\wsl.localhost\ path)
-#   python3 tools/gpu_capture.py --join OUTDIR                (WSL side: frames + sound -> NAME.mp4)
+#   python3 tools/gpu_capture.py --join OUTDIR                (WSL side: frames + sound -> NAME.mp4, lined up by the
+#                                                             sync marks every recording starts and ends with)
 #
 # PLAN.json: {"port": 9334, "size": [1280, 720], "steps": [
 #   {"eval": "js"}, {"wait": "js condition", "secs": 60}, {"sleep": 2},
@@ -15,45 +16,104 @@
 import base64, json, os, queue, socket, struct, subprocess, sys, threading, time, urllib.request, glob
 
 if len(sys.argv) > 2 and sys.argv[1] == '--join':
-    out = sys.argv[2]
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import wave
+    import numpy as np
+    from PIL import Image
+    from av_marks import tone_onsets, corner_patch, corner_onsets, align_marks, FM
+    out = sys.argv[2]; FPS = 30; SR = 48000; bad = []
     for d in sorted(glob.glob(os.path.join(out, 'rec_*'))):
         meta = json.load(open(os.path.join(d, 'meta.json')))
         frames = meta['frames']
         if len(frames) < 2:
             continue
-        # Constant frame rate from the frames' own timestamps: output frame k (at k/30 s after the first) shows the
-        # newest captured frame at or before that time, piped as images at exactly 30 fps. (The concat demuxer with
-        # per-frame durations rounded them to its time base and the picture drifted ~1% behind the sound.)
-        FPS = 30
-        t0 = frames[0][1]; n_out = int((frames[-1][1] - t0) * FPS) + 1
         name = os.path.basename(d)[4:]
         dst = os.path.join(out, f'{name}.mp4')
-        cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', str(FPS), '-c:v', 'mjpeg', '-i', '-']
+        t0 = frames[0][1]; T = [f[1] - t0 for f in frames]
         a = os.path.join(d, 'audio.webm')
+        pcm = None
         if os.path.exists(a) and os.path.getsize(a) > 0 and meta.get('audio_t0'):
-            # the sound starts this many seconds after the first picture (negative: before it)
-            off = meta['audio_t0'] - t0
-            cmd += ['-itsoffset', f'{off:.3f}', '-i', a, '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '128k', '-af', 'apad', '-shortest']
+            raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', a, '-ac', '2', '-ar', str(SR), '-f', 's16le', '-'], capture_output=True, check=True).stdout
+            pcm = np.frombuffer(raw, dtype=np.int16).reshape(-1, 2).astype(np.float32) / 32768
+        # sound file time -> picture time: p = off + a * rate. First guess from the recorder's start stamp (late when the
+        # page is busy: it is stamped by an event on the main thread); then from the sync marks, if there are any.
+        off, rate, note = (meta['audio_t0'] - t0) if pcm is not None else 0.0, 1.0, 'stamp'
+        lo, hi = 0.0, T[-1]
+        if pcm is not None and meta.get('marks'):
+            tones = tone_onsets(pcm.mean(1), SR, freq=FM)
+            def pic(t_a, t_b):
+                sel = [i for i, t in enumerate(T) if t_a <= t <= t_b]
+                return corner_onsets([T[i] for i in sel], [corner_patch(Image.open(os.path.join(d, frames[i][0]))) for i in sel])
+            ps, pe = pic(0, 3.2), pic(T[-1] - 3.2, T[-1])
+            ts, te = tones[tones + off < 3.6], tones[tones + off > T[-1] - 3.6]
+            ms, me = align_marks(ps, ts + off), align_marks(pe, te + off)
+            if len(ms) >= 2:
+                off0 = off
+                # the median mark: single marks scatter by about a frame either way (the square shows on the next
+                # composited frame; the beep starts on the next audio quantum)
+                ds = float(np.median([x[1] for x in ms])); off = off0 - ds; note = f'marks (recorder stamp was {ds * 1000:+.0f} ms off)'
+                lo = ps[-1] + 0.3
+                pairs = [(pt, pt + dd - off0) for pt, dd in ms]  # (picture time, sound file time) per mark
+                if len(me) >= 2:
+                    de = float(np.median([x[1] for x in me])) - ds  # sound minus picture at the end, after the start fix
+                    p0 = ms[0][0]; a0_ = p0 - off  # the first start mark's sound, in file time, sits at picture time p0
+                    span = me[0][0] - p0
+                    if abs(de) > 0.015 and span > 5:
+                        rate = span / (span + de)  # sound ran long (de > 0) or short: stretch it onto the picture
+                        off = p0 - a0_ * rate
+                    hi = pe[0] - 0.15
+                    pairs += [(pt, pt + dd - off0) for pt, dd in me]
+                    note += f', end {de * 1000:+.0f} ms over {span:.0f} s'
+                resid = [(off + af * rate) - pt for pt, af in pairs]
+                worst = max(resid, key=abs)
+                note += f', marks after the fix {min(resid) * 1000:+.0f}..{max(resid) * 1000:+.0f} ms'
+                if abs(worst) > 0.1:
+                    bad.append(name)
+            else:
+                note = f'NO MARKS FOUND (picture {len(ps)}, sound {len(ts)}): sound placed by the recorder stamp'
+                bad.append(name)
+        n_out = int((hi - lo) * FPS) + 1
+        cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', str(FPS), '-c:v', 'mjpeg', '-i', '-']
+        if pcm is not None:
+            # output sample k is at picture time lo + k / SR; it comes from sound file time (p - off) / rate
+            k = np.arange(int((hi - lo) * SR) + SR // 10)
+            src = ((lo + k / SR) - off) / rate * SR
+            ok = (src >= 0) & (src < len(pcm) - 1)
+            o = np.zeros((len(k), 2), dtype=np.float32)
+            if rate == 1.0:
+                i = np.round(src).astype(int); o[ok] = pcm[i[ok]]
+            else:
+                for c in range(2):
+                    o[ok, c] = np.interp(src[ok], np.arange(len(pcm)), pcm[:, c])
+            wav = os.path.join(d, 'aligned.wav')
+            with wave.open(wav, 'wb') as wf:
+                wf.setnchannels(2); wf.setsampwidth(2); wf.setframerate(SR)
+                wf.writeframes((np.clip(o, -1, 1) * 32767).astype(np.int16).tobytes())
+            cmd += ['-i', wav, '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '160k', '-shortest']
         cmd += ['-vf', 'scale=1280:-2', '-c:v', 'libx264', '-crf', '24', '-preset', 'medium', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', dst]
-        p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+        pr = subprocess.Popen(cmd, stdin=subprocess.PIPE)
         j = 0; cache = (None, b'')
-        for k in range(n_out):
-            t = t0 + k / FPS
-            while j + 1 < len(frames) and frames[j + 1][1] <= t:
+        for kk in range(n_out):
+            # constant 30 fps from the frames' own timestamps: each output frame shows the newest frame at or before it
+            t = lo + kk / FPS
+            while j + 1 < len(frames) and T[j + 1] <= t:
                 j += 1
             if cache[0] != j:
                 cache = (j, open(os.path.join(d, frames[j][0]), 'rb').read())
-            p.stdin.write(cache[1])
-        p.stdin.close()
-        if p.wait() != 0:
+            pr.stdin.write(cache[1])
+        pr.stdin.close()
+        if pr.wait() != 0:
             raise SystemExit(f'ffmpeg failed on {name}')
-        print('joined', name, len(frames), 'frames', f"{frames[-1][1] - frames[0][1]:.1f}s", 'sound' if '-itsoffset' in cmd else 'silent')
+        print('joined', name, len(frames), 'frames', f'{hi - lo:.1f}s', ('sound by ' + note + (f', stretched x{rate:.4f}' if rate != 1 else '')) if pcm is not None else 'silent', flush=True)
     # a capture that recorded the sync test (`{"rec": "sync", "eval": "__bs.syncTest(8)"}`) is checked: no clip goes out
     # with picture and sound apart
+    rc = 1 if bad else 0
+    if bad:
+        print('NO SYNC MARKS in', bad)
     if os.path.exists(os.path.join(out, 'sync.mp4')):
         r = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'av_sync.py'), '--mp4', os.path.join(out, 'sync.mp4')])
-        sys.exit(r.returncode)
-    sys.exit(0)
+        rc = rc or r.returncode
+    sys.exit(rc)
 
 URL, OUT, PLAN = sys.argv[1], sys.argv[2], json.load(open(sys.argv[3]))
 PORT = PLAN.get('port', 9334)
@@ -190,7 +250,7 @@ TAP = """(async () => {
   const s = window.__bs && window.__bs.audioTap ? window.__bs.audioTap() : null; if (!s) return 0;  // a dev page has no game: pictures only
   const mr = new MediaRecorder(s, { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 160000 });
   const chunks = []; mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-  window.__rec = { mr, chunks, t0: 0 };
+  window.__rec = { mr, chunks, t0: 0, tc: Date.now() / 1000 };
   await new Promise((r) => { mr.onstart = () => { window.__rec.t0 = Date.now() / 1000; r(); }; mr.start(500); });
   return window.__rec.t0; })()"""
 STOP = """(async () => {
@@ -209,8 +269,13 @@ for st in PLAN['steps']:
         for f in glob.glob(os.path.join(d, '*.jpg')):
             os.remove(f)
         rec.update(dir=d, frames=[], n=0)
-        a0 = ev(TAP, True)
+        a0 = ev(TAP, True); tc = ev('window.__rec ? window.__rec.tc : null')
         w.call('Page.startScreencast', format='jpeg', quality=82, maxWidth=W, maxHeight=H, everyNthFrame=1)
+        # sync marks before the recording's own start and after its end (beep + corner square, `__bs.syncMark`): the join
+        # lines sound up to picture by them, so a late recorder start under load cannot shift the sound
+        marks = st.get('marks', True) and ev('!!(window.__bs && window.__bs.syncMark)')
+        if marks:
+            time.sleep(0.4); ev('__bs.syncMark(3)'); time.sleep(2.0)
         if st.get('eval'):
             ev(st['eval'])
         t0 = time.time(); pend = sorted([[s0, 'down', c] for c, s0, _ in st.get('keys', [])] + [[s0 + n, 'up', c] for c, s0, n in st.get('keys', [])])
@@ -233,12 +298,14 @@ for st in PLAN['steps']:
         for _, kind, c in pend:
             if kind == 'up':
                 key(c, False)
+        if marks:
+            ev('__bs.syncMark(3)'); time.sleep(1.9)
         w.call('Page.stopScreencast')
         time.sleep(0.3)
         b64 = ev(STOP, True)
         if b64:
             open(os.path.join(d, 'audio.webm'), 'wb').write(base64.b64decode(b64))
-        json.dump({'frames': rec['frames'], 'audio_t0': a0}, open(os.path.join(d, 'meta.json'), 'w'))
+        json.dump({'frames': rec['frames'], 'audio_t0': a0, 'audio_call': tc, 'marks': bool(marks)}, open(os.path.join(d, 'meta.json'), 'w'))
         rec['dir'] = None
         fps = len(rec['frames']) / max(0.1, (rec['frames'][-1][1] - rec['frames'][0][1])) if len(rec['frames']) > 1 else 0
         print('rec', st['rec'], len(rec['frames']), 'frames', f'{fps:.1f} fps', 'sound' if b64 else 'no sound', flush=True)

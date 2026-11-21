@@ -2,6 +2,7 @@ import { Combat, defaultCombatSettings } from './combat/combat';
 import './style.css';
 import * as THREE from 'three';
 import { BATCH, batchSupported } from './core/ibatch';
+import { clipProbe, type ClipHit } from './core/clipprobe';
 import { NEAR_FADE } from './core/nearfade';
 import { setLang, setPlayer, t, Lang } from './i18n';
 import { detectQuality, isPhone, saveQualityChoice, QualityName } from './core/quality';
@@ -1054,20 +1055,29 @@ window.addEventListener('resize', () => {
   /** Finger joints since load: largest bend from rest (rad) and fastest turn (rad/s), over every character drawn. */
   get hands() { return { ...HANDS }; },
   audioTap() { audio.start(); return audio.tap(); },
-  /** Sync test for captures: every second, on the audio clock, a click on the master bus and a white frame in the same
-   *  animation frame. A recording of this shows any offset or drift between picture and sound as a number. */
-  syncTest(secs = 30) {
-    audio.start(); const ctx = audio.ctx; if (!ctx) return 0;
-    const el = document.createElement('div'); el.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:99999;pointer-events:none;opacity:0';
-    document.body.appendChild(el);
-    const t0 = Math.ceil(ctx.currentTime) + 1; let k = 0;
-    const tick = () => {
-      if (k >= secs) { el.remove(); return; }
-      if (ctx.currentTime >= t0 + k) { audio.tone(1500, 0.03, 'square', 0.5); el.style.opacity = '1'; k++; } else el.style.opacity = '0';
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick); return t0;
+  /** Test: parts of bodies through the set or each other in the scene drawn now (src/core/clipprobe.ts). */
+  clipProbe() { return clipProbe(renderer.renderPass.scene as THREE.Scene); },
+  /** Test: seek the opening ('cine', seconds) or the title sequence ('film', beats) from a to b in steps, probe each
+   *  frame after it is drawn; returns the hits with their time, worst first per (who, part, what). */
+  async clipScan(which: 'cine' | 'film', a: number, b: number, step = 0.5) {
+    const raf = () => new Promise((r) => requestAnimationFrame(r));
+    const all: (ClipHit & { t: number })[] = [];
+    for (let t = a; t <= b + 1e-6; t += step) {
+      if (which === 'cine') cine.seek(t); else film.seek(t);
+      await raf(); await raf(); await raf();
+      for (const h of clipProbe(renderer.renderPass.scene as THREE.Scene)) all.push({ ...h, t: Math.round(t * 100) / 100 });
+    }
+    const best = new Map<string, ClipHit & { t: number; n: number }>();
+    for (const h of all) { const k = `${h.who}|${h.part}|${h.what}|${h.kind}`; const o = best.get(k); if (!o || h.depth > o.depth) best.set(k, { ...h, n: (o?.n ?? 0) + 1 }); else o.n++; }
+    return [...best.values()].sort((x, y) => y.depth - x.depth);
   },
+  /** Sync test for captures: every second, on the audio clock, a 1.5 kHz beep on the last audio node and a white screen in the
+   *  same animation frame, held 0.15 s so a recording at a low frame rate still catches it. A recording of this shows
+   *  any offset or drift between picture and sound as a number (tools/av_sync.py). */
+  syncTest(secs = 30) { return syncFlash(secs, 1, 'position:fixed;inset:0;background:#fff', 1500); },
+  /** Sync marks for every capture (tools/gpu_capture.py puts them at the start and end of each recording and aligns
+   *  sound to picture by them): n 2 kHz beeps 0.6 s apart, each with a small white square in the top-left corner. */
+  syncMark(n = 3) { return syncFlash(n, 0.6, 'position:fixed;left:0;top:0;width:48px;height:48px;background:#fff;outline:6px solid #000', 2000); },
   openMenu(which: 'settings' | 'legal' | 'chapters') { if (which === 'settings') document.getElementById('btn-settings')?.click(); else if (which === 'legal') document.getElementById('btn-legal')?.click(); else document.getElementById('btn-chapters')?.click(); },
   quality: quality.name,
   get world() { return world; },
@@ -1075,5 +1085,20 @@ window.addEventListener('resize', () => {
     return { frames: frameCount, t: elapsed, mode: game?.mode, player: player?.pos.toArray(), cam: camera.position.toArray(), yaw: player?.yaw, creature: world.creature?.position.toArray() };
   },
 };
+
+function syncFlash(n: number, gap: number, css: string, freq: number): number {
+  audio.start(); const ctx = audio.ctx; if (!ctx) return 0;
+  const el = document.createElement('div'); el.style.cssText = css + ';z-index:99999;pointer-events:none;opacity:0';
+  document.body.appendChild(el);
+  const t0 = ctx.currentTime + 0.25; let k = 0, on = -1;
+  const tick = () => {
+    const t = ctx.currentTime;
+    if (on >= 0 && t - on >= 0.15) { el.style.opacity = '0'; on = -1; }
+    if (on < 0 && k < n && t >= t0 + k * gap) { audio.mark(0.06, freq); el.style.opacity = '1'; on = t; k++; }
+    if (k >= n && on < 0) { el.remove(); return; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick); return t0;
+}
 
 boot();
