@@ -1464,7 +1464,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         // them was tens of thousands of triangles drawn from across the city)
         if (pc.far) pc.far.visible = want === 1 && d < (!pc.old ? (tier === 0 ? 60 : 90) : tier === 0 ? 110 : tier === 1 ? 120 : 230);
         if (pc.farSmall) pc.farSmall.visible = d < SMALL_FAR;
-        const sh = d < 34 && tier > 0;
+        // props cast shadows on Ultra; on Web the scans' shadow pass was most of a frame's triangles in the bazaar (the
+        // shadow is redrawn every other frame, so every other frame cost half as much again)
+        const sh = d < 34 && tier === 2;
         if (want === 0) for (const im of pc.near) im.castShadow = sh;
         for (const im of pc.always) { im.castShadow = sh; im.visible = d < (!pc.old ? (tier === 0 ? 60 : 90) : tier === 0 ? 110 : 230); }
       }
