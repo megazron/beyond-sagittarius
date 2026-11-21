@@ -156,8 +156,11 @@ export function createPod(terrain: Terrain, forest: Forest, x = 4.5, z = -3.5, y
 }
 
 /** Collectable stones and branches + glowpod (safe) and thornix (toxic) bushes. */
-/** Phones: items further than this from you are not drawn (they come back as you walk up). */
-const ITEM_FAR = 32;
+/** Items further than this from you are not drawn (they come back as you walk up): a stone or a stick is a pixel or two
+ * past it, and every one was a draw call in each pass (hundreds a frame on the planet). */
+const ITEM_FAR_BY: Record<string, number> = { mobile: 32, web: 55, ultra: 75, cinematic: 1e9 };
+/** ...and they cast a shadow only this close (the shadow of a stone further off is nothing). */
+const ITEM_SHADOW = 28;
 /** Items are built from a few plain materials nothing changes later: merged into one mesh, colours per vertex. */
 const ITEM_MERGE = { shared: () => true, pbr: true, tint: true };
 
@@ -300,7 +303,7 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
 
   addStoryItems(terrain, forest, sites, group, items, ringGeo, ringMat, branchGeo, twig, branchMat);
 
-  const farOff = new Set<Item>();
+  const farOff = new Set<Item>(), shaded = new Set<Item>(items), ITEM_FAR = ITEM_FAR_BY[q?.name ?? 'web'] ?? 55;
   return {
     group,
     items,
@@ -308,13 +311,15 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
       for (const it of items) {
         if (!it.active) continue;
         const d = it.pos.distanceTo(player);
-        // phones: a stone, a stick or a fruit further off than ITEM_FAR is a pixel or two, and a draw call or three
-        if (q?.name === 'mobile') {
-          const near = d < ITEM_FAR * (farOff.has(it) ? 0.92 : 1);
-          if (near === farOff.has(it)) {
-            if (near) farOff.delete(it); else farOff.add(it);
-            for (const c of it.obj.children) if (c.name !== 'ring') c.visible = near;
-          }
+        const near = d < ITEM_FAR * (farOff.has(it) ? 0.92 : 1);
+        if (near === farOff.has(it)) {
+          if (near) farOff.delete(it); else farOff.add(it);
+          for (const c of it.obj.children) if (c.name !== 'ring') c.visible = near;
+        }
+        const cast = d < ITEM_SHADOW * (shaded.has(it) ? 1.08 : 1);
+        if (cast !== shaded.has(it)) {
+          if (cast) shaded.add(it); else shaded.delete(it);
+          it.obj.traverse((c) => { if ((c as THREE.Mesh).isMesh && c.name !== 'ring') c.castShadow = cast; });
         }
         const ring = it.obj.getObjectByName('ring') as THREE.Mesh | undefined;
         if (ring) {

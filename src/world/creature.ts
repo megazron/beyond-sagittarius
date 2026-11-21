@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Terrain } from './terrain';
 import { grainNormal } from '../characters/shapes';
+import { mergeChildren } from '../core/merge';
 
 /**
  * "The Walker": an enormous, slow, four-legged silhouette glimpsed between
@@ -37,6 +38,8 @@ export function createCreature(terrain: Terrain, onStep: (pos: THREE.Vector3) =>
     plate.scale.z = 0.35; plate.position.set(0, 3.05 + Math.sin((i / 15) * Math.PI) * 1.5, -8 + i * 1.05); plate.rotation.x = -0.35;
     body.add(plate);
   }
+  // the body never bends: its hide, plates, spots and eyes are two draws (skin, glow), not fifty a pass
+  mergeChildren(body, { shared: () => true });
   root.add(body);
 
   const legMeshes: { upper: THREE.Mesh; lower: THREE.Mesh; foot: THREE.Vector3; target: THREE.Vector3; from: THREE.Vector3; t: number; hip: THREE.Vector3; phase: number }[] = [];
