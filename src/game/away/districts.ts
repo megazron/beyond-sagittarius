@@ -244,6 +244,33 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     wallBox('kit', fx, fz, nx, nz, FLOOR + 0.04, 1.06, 2.16, 0.1, 0.1, dc, dsh);
     wallBox('metal', fx, fz, nx, nz, FLOOR + 1.0, 0.05, 0.22, 0.05, 0.17, 0xc8c4b8, dsh + 0.38);
     wallBox('kit', fx, fz, nx, nz, FLOOR, 1.5, 0.06, 0.5, 0.25, 0x8a857c, dsh); // the step
+    // what stands out on the pavement in front: a cafe's tables, a sandwich board, planters by the door
+    const at = (out: number, along: number) => [fx + nx * out + (nx ? 0 : along), fz + nz * out + (nx ? along : 0)];
+    const r = rnd(), side = (rnd() - 0.5) * (w - 2);
+    if (r < 0.22 && w > 5) {
+      for (const k of [-1, 1]) {
+        const [tx, tz] = at(1.9, side + k * 1.3);
+        kitGeo('kit', new THREE.CylinderGeometry(0.36, 0.36, 0.04, 12).translate(tx, FLOOR + 0.74, tz), 0xe8e2d6, fx, fz);
+        kitGeo('kit', new THREE.CylinderGeometry(0.04, 0.05, 0.72, 6).translate(tx, FLOOR + 0.37, tz), 0x2a2a2a, fx, fz);
+        for (const c of [-1, 1]) {
+          const [cxx, czz] = at(1.9 + (nx || nz ? 0 : 0), side + k * 1.3 + c * 0.62);
+          kitBox('kit', cxx, FLOOR + 0.42, czz, 0.4, 0.05, 0.4, 0x5a3a24, fx, fz);
+          kitBox('kit', cxx + (nx ? 0 : c * 0.18), FLOOR + 0.45, czz + (nx ? c * 0.18 : 0), nx ? 0.4 : 0.05, 0.45, nx ? 0.05 : 0.4, 0x5a3a24, fx, fz);
+          for (const l of [-1, 1]) kitBox('kit', cxx + (nx ? l * 0.16 : 0), FLOOR, czz + (nx ? 0 : l * 0.16), 0.04, 0.42, 0.04, 0x2a2a2a, fx, fz);
+          cafes.push({ x: cxx, z: czz, yaw: Math.atan2((nx ? 0 : -c), (nx ? -c : 0)) });
+        }
+      }
+    } else if (r < 0.42) {
+      const [bx, bz] = at(1.1, side), g = new THREE.BoxGeometry(nx ? 0.06 : 0.6, 0.9, nx ? 0.6 : 0.06);
+      kitGeo('kit', g.clone().rotateX(nx ? 0 : 0.2).rotateZ(nx ? 0.2 : 0).translate(bx - nz * 0, FLOOR + 0.45, bz), 0x1c1d20, fx, fz);
+      kitGeo('kit', g.rotateX(nx ? 0 : -0.2).rotateZ(nx ? -0.2 : 0).translate(bx + nx * 0.18, FLOOR + 0.45, bz + nz * 0.18), 0x1c1d20, fx, fz);
+    } else if (r < 0.68) {
+      for (const k of [-1, 1]) {
+        const [px, pz] = at(0.45, dsh + k * 1.0);
+        kitBox('kit', px, FLOOR, pz, 0.5, 0.55, 0.5, pick([0x8a8478, 0x3a3d42, 0xa0603a]), fx, fz);
+        kitGeo('kit', new THREE.IcosahedronGeometry(0.42, 0).translate(px, FLOOR + 0.9, pz), pick([0x3f6a32, 0x2f5a2a, 0x557a3a]), fx, fz);
+      }
+    }
     if (rnd() < 0.6 && fh < 4) {
       // an awning: cloth sloping out over the pavement, on two arms
       const aw = Math.min(w - 1, 3 + rnd() * 3), sh = (rnd() - 0.5) * (w - aw - 0.8), col = pick(AWN), tilt = 0.32;
@@ -255,6 +282,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       kitGeo('kit', v, col, fx, fz);
     }
   };
+  const cafes: { x: number; z: number; yaw: number }[] = [];
   const footprints: { x0: number; z0: number; x1: number; z1: number; h: number; kind: BlockKind }[] = [];
   /** One building: a box (or a podium and setbacks), its roof kit, its collision. */
   const building = (x0: number, z0: number, x1: number, z1: number, floors: number, finish: 'plaster' | 'brick' | 'glass', style: number, fh = 3.2) => {
@@ -793,6 +821,8 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: n > 1 ? 'idle' : pick(stayPoses), x, z, yaw: n > 1 ? Math.atan2(bx - x, bz - z) : Math.atan2(-sf.nx, -sf.nz), t: 0 });
     }
   }
+  // a cafe's chairs: most have someone in them of an evening
+  for (const c of cafes) if (rnd() < (rich ? 0.6 : 0.3)) peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: 'sit', x: c.x, z: c.z, yaw: c.yaw, t: 0 });
   // the park: strollers on its paths, people on the lawns
   for (let i = 0; i < (rich ? 40 : 14); i++) {
     const x = (rnd() - 0.5) * 150, z = 205 + rnd() * 90;
@@ -819,7 +849,8 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     return { x0: p.x, z0: p.z, x1, z1, axis: (dx ? 'z' : 'x') as 'x' | 'z', nb, ns };
   };
   /** Walkers too: one far away is put on a pavement near the camera where it is not looking (55 to 140 m off). */
-  let pedRR = 0;
+  let pedRR = 0, nearPeds = 0;
+  const PED_NEAR = [28, 70, 110][tier];
   const recallPed = (p: Ped, cam: THREE.Vector3, fx: number, fz: number) => {
     for (let tries = 0; tries < 5; tries++) {
       const b = pick(walkBlocks), cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
@@ -833,7 +864,9 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   };
   const walkPeds = (dt: number, you: THREE.Vector3 | null, cam: THREE.Vector3, fx: number, fz: number) => {
     crossN = 0;
-    for (let j = 0; j < 4 && peds.length; j++) { const p = peds[pedRR = (pedRR + 1) % peds.length]; if (p.mode === 'walk' && Math.hypot(p.x - cam.x, p.z - cam.z) > PED_RECALL) recallPed(p, cam, fx, fz); }
+    // no more than so many walkers round the camera (phones draw them all as cards, but each costs a little)
+    if (nearPeds < PED_NEAR) for (let j = 0; j < 4 && peds.length; j++) { const p = peds[pedRR = (pedRR + 1) % peds.length]; if (p.mode === 'walk' && Math.hypot(p.x - cam.x, p.z - cam.z) > PED_RECALL) recallPed(p, cam, fx, fz); }
+    let n = 0; for (const p of peds) if (Math.abs(p.x - cam.x) < 140 && Math.abs(p.z - cam.z) < 140) n++; nearPeds = n;
     for (const p of peds) {
       if (p.mode === 'stay') continue;
       if (p.mode === 'walk') {
