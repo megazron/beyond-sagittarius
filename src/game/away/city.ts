@@ -170,7 +170,7 @@ const FRIENDS: { id: CrewId; x: number; z: number; yaw: number; pose: CrewPose }
   { id: 'medic', x: 7.4, z: -14, yaw: -Math.PI / 2, pose: 'idle' },
   { id: 'explorer', x: 6.2, z: 17.4, yaw: -Math.PI / 2, pose: 'write' },
   { id: 'builder', x: -5.0, z: -8.6, yaw: Math.PI / 2, pose: 'idle' },
-  { id: 'social', x: -1.5, z: -40.5, yaw: 0.3, pose: 'selfie' },
+  { id: 'social', x: -5.4, z: -40.5, yaw: 0.3, pose: 'selfie' }, // on the pavement: the road is for the cars
 ];
 
 /** Townsfolk standing: where, and the one line each gives you (`city.npc.*`). */
@@ -857,11 +857,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     traffic.forEach((c, i) => {
       // slow for you, or for the car ahead in the lane
       let gap = 99;
-      if (you && Math.abs(you.position.x - c.x) < 1.6) { const ahead = (you.position.z - c.z) * c.v; if (ahead > 0) gap = Math.min(gap, ahead - 2.6); }
+      if (you && Math.abs(you.position.x - c.x) < 1.6) { const ahead = (you.position.z - c.z) * c.v; if (ahead > 0) gap = Math.min(gap, ahead - 4.0); }
       for (const o of traffic) if (o !== c && o.v === c.v) { const ahead = (o.z - c.z) * c.v; if (ahead > 0) gap = Math.min(gap, ahead - 6.5); }
       // and for anyone in its lane: a card of the crowd, a body walking one, a townsperson (cars never pass through people)
-      for (const q of dense.cards) if (Math.abs(q.x - c.x) < 1.5) { const ahead = (q.z - c.z) * c.v; if (ahead > 0 && ahead < 14) gap = Math.min(gap, ahead - 3); }
-      for (const q of people) if (q.fig.root.visible && Math.abs(q.pos.x - c.x) < 1.5) { const ahead = (q.pos.z - c.z) * c.v; if (ahead > 0 && ahead < 14) gap = Math.min(gap, ahead - 3); }
+      for (const q of dense.cards) if (Math.abs(q.x - c.x) < 1.5) { const ahead = (q.z - c.z) * c.v; if (ahead > 0 && ahead < 16) gap = Math.min(gap, ahead - 4.2); }
+      for (const q of people) if (q.fig.root.visible && Math.abs(q.pos.x - c.x) < 1.5) { const ahead = (q.pos.z - c.z) * c.v; if (ahead > 0 && ahead < 16) gap = Math.min(gap, ahead - 4.2); }
       const want = gap < 1 ? 0 : Math.min(c.speed, gap * 0.9);
       c.z += c.v * want * dt;
       if (c.z > N - 2) c.z = S + 4; if (c.z < S + 4) c.z = N - 2;
