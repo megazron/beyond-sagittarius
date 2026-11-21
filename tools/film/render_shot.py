@@ -316,7 +316,21 @@ for k, fs in ids.items():
         mc = o.modifiers.new('film', 'MESH_CACHE'); mc.cache_format = 'PC2'; mc.filepath = path; mc.frame_start = frames[0]; mc.deform_mode = 'OVERWRITE'
         o.cycles.use_deform_motion = True
         if info.get('name') == 'skin_head' and not os.environ.get('NO_HEAD_SUB'):
-            sb = o.modifiers.new('sub', 'SUBSURF'); sb.levels = 0; sb.render_levels = 1  # the game head is thin for a close-up
+            # the game head is thin for a close-up: one smooth level
+            sb = o.modifiers.new('sub', 'SUBSURF'); sb.levels = 0; sb.render_levels = 1
+            # but its open edge at the neck must stay on the body's line: a smoothed boundary pulls in between the
+            # points and left a dotted row of gaps under the jaw. Creased boundary edges subdivide straight.
+            if not os.environ.get('NO_NECK_CREASE'):
+                cnt = {}
+                for p in me.polygons:
+                    for ek in p.edge_keys: cnt[ek] = cnt.get(ek, 0) + 1
+                ca = me.attributes.get('crease_edge') or me.attributes.new('crease_edge', 'FLOAT', 'EDGE')
+                # only the neck: eye and mouth openings keep their smooth rims
+                ys = [v.co.y for v in me.vertices]; ycut = min(ys) + 0.3 * (max(ys) - min(ys))
+                nb = 0
+                for e in me.edges:
+                    if cnt.get(tuple(sorted(e.vertices)), 0) == 1 and max(me.vertices[i].co.y for i in e.vertices) < ycut: ca.data[e.index].value = 1.0; nb += 1
+                print('neck crease: boundary edges', nb, flush=True)
         elif info.get('name') == 'cloth' and not os.environ.get('NO_CLOTH_SUB'):
             # game cloth is low poly and reads as facets under practicals: one smooth level (the seams are welded in mesh_of)
             sb = o.modifiers.new('sub', 'SUBSURF'); sb.levels = 0; sb.render_levels = 1; sb.uv_smooth = 'PRESERVE_BOUNDARIES'
