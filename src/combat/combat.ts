@@ -92,6 +92,7 @@ export class Combat {
     this.fx = new CombatFx((x, z) => W.terrain.height(x, z), W.q.name !== 'mobile');
     W.scene.add(this.fx.group);
     this.tensionUi = new TensionUi(deps.input);
+    audio.preloadSfx('cb_');
     this.hud.onTouch = () => deps.input.setDevice('touch');
     window.addEventListener('keydown', (e) => { if (this.hud.pickerOpen && /^Digit[1-9]$/.test(e.code)) this.hud.pickIndex(+e.code.slice(5) - 1); });
   }
@@ -542,25 +543,23 @@ export class Combat {
 
   // ---------------- what happened, made felt ----------------
   private vol(x?: number, z?: number, far = 45) { if (x === undefined || z === undefined) return 1; const P = this.d.player.pos; return Math.max(0, 1 - Math.hypot(x - P.x, z - P.z) / far); }
+  /** One of the fight's own sounds (public/audio/sfx/cb_*, made by tools/combat/make_sounds.py), placed in the world. */
+  private sfx(name: string, vol = 0.8, x?: number, z?: number, rate = 1, delay = 0) {
+    const at = x !== undefined && z !== undefined ? { x, y: this.env.height(x, z) + 0.8, z } : undefined;
+    audio.sample(`cb_${name}`, vol, { at, near: 4, far: 90, rate, delay });
+  }
   private voice(what: string, x?: number, z?: number) {
-    const k = this.vol(x, z, 60);
-    if (k <= 0.02) return;
-    switch (what.split(':')[0]) {
-      case 'growl': audio.tone(64, 1.1, 'sawtooth', 0.2 * k, 0, -18); audio.tone(97, 0.8, 'triangle', 0.08 * k, 0.05, -20); break;
-      case 'lunge': audio.tone(120, 0.5, 'sawtooth', 0.26 * k, 0, 160); break;
-      case 'howl': audio.tone(210, 1.6, 'sine', 0.16 * k, 0, 90); audio.tone(315, 1.4, 'sine', 0.06 * k, 0.1, 120); break;
-      case 'nip': audio.tone(700, 0.12, 'square', 0.07 * k, 0, 500); break;
-      case 'shriek': audio.tone(950, 0.28, 'square', 0.09 * k, 0, 700); audio.tone(1400, 0.2, 'sawtooth', 0.05 * k, 0.08, -500); break;
-      case 'snort': audio.tone(88, 0.35, 'sawtooth', 0.22 * k, 0, -30); audio.tone(60, 0.5, 'triangle', 0.2 * k, 0.3, -10); break;
-      case 'charge': audio.tone(52, 1.6, 'sawtooth', 0.26 * k, 0, 14); audio.sample('rumble', 0.5 * k); break;
-      case 'bluff': audio.tone(80, 0.5, 'sawtooth', 0.2 * k, 0, -30); break;
-      case 'spore': audio.sample('cloth', 0.6 * k, { rate: 0.5 }); audio.tone(240, 0.5, 'sine', 0.05 * k, 0, -120); break;
-      case 'beam': audio.tone(330, 0.55, 'sawtooth', 0.2 * k, 0, 1400); audio.tone(55, 0.6, 'sine', 0.3 * k); break;
-      case 'stomp': audio.sample('boom', 0.7 * k); audio.tone(42, 0.9, 'sine', 0.4 * k, 0, -12); break;
-      case 'wake': audio.tone(70, 1.2, 'triangle', 0.14 * k, 0, 30); break;
-      case 'stir': audio.tone(70, 0.8, 'sawtooth', 0.1 * k, 0, 10); break;
-      default: break;
-    }
+    const V: Record<string, [string, number, number]> = {
+      growl: ['growl', 0.9, 1], lunge: ['snarl', 1, 1], howl: ['howl', 0.8, 1], nip: ['chitter', 0.6, 1.2], shriek: ['shriek', 0.8, 1], snort: ['snort', 0.9, 1],
+      charge: ['bellow', 1, 1], bluff: ['snort', 0.9, 0.8], spore: ['hiss', 0.8, 1], beam: ['beam', 0.9, 1], stomp: ['stomp', 1, 1], stir: ['growl', 0.35, 0.8],
+    };
+    const k = what.split(':')[0];
+    if (what === 'wake:guardian' || k === 'wakeMachine') { this.sfx('hum', 0.9, x, z); return; }
+    if (k === 'wake') { this.sfx('growl', 0.6, x, z, 1.1); return; }
+    const q = V[k];
+    if (q) this.sfx(q[0], q[1], x, z, q[2]);
+    if (k === 'charge') audio.sample('rumble', 0.4 * this.vol(x, z));
+    if (k === 'spore') this.sfx('whip', 0.8, x, z);
   }
 
   private handle(ev: SimEvent[], sim: CombatSim) {
@@ -568,13 +567,13 @@ export class Combat {
     for (const e of ev) {
       const view = e.id !== undefined && e.id > 0 ? this.views.get(e.id) : undefined;
       switch (e.t) {
-        case 'swing': audio.whoosh(); break;
+        case 'swing': this.sfx('swing', 0.5); break;
         case 'miss': break;
         case 'shot': {
           this.body.shot();
-          if (e.what === 'bow' || e.what === 'crossbow') { audio.tone(190, 0.18, 'triangle', 0.16, 0, -90); audio.sample('leather', 0.4, { rate: 1.6 }); }
-          else if (e.what === 'coil') { audio.tone(1500, 0.14, 'sawtooth', 0.12, 0, -1100); audio.tone(90, 0.12, 'square', 0.12); this.kickCam(0.03); this.fx.puff('arc', e.x!, e.y!, e.z!, 0, 0, 0.5); }
-          else audio.whoosh();
+          if (e.what === 'bow' || e.what === 'crossbow') this.sfx('twang', 0.7, undefined, undefined, e.what === 'crossbow' ? 0.8 : 1);
+          else if (e.what === 'coil') { this.sfx('zap', 0.6); this.kickCam(0.03); this.fx.puff('arc', e.x!, e.y!, e.z!, 0, 0, 0.5); }
+          else this.sfx('swing', 0.6, undefined, undefined, 1.3);
           break;
         }
         case 'land': this.fx.puff('dust', e.x!, e.y! + 0.05, e.z!, 0, 0, 0.6); audio.sample(e.what === 'rock' || e.what === 'sling' ? 'stone' : 'wood', 0.5 * this.vol(e.x, e.z), { at: { x: e.x!, y: e.y!, z: e.z! } }); break;
@@ -582,18 +581,18 @@ export class Combat {
           if (e.id === -1) {
             // the player is hit
             ui.damage();
-            if (e.blocked) { audio.sample('wood', 0.7); this.kickCam(0.06); this.fx.puff('chip', e.x!, e.y!, e.z!, e.dx, e.dz, 0.6); }
-            else { audio.hurt(); audio.human((e.n ?? 0) >= 14 ? 'yelp' : 'grunt'); this.kickCam(0.1 + Math.min(0.12, (e.n ?? 0) * 0.005)); this.hitStop(0.06); D.input.rumble(180, 0.8); this.fx.puff('dust', e.x!, e.y! - 0.9, e.z!, e.dx, e.dz, 0.6); }
+            if (e.blocked) { this.sfx('crack', 0.7); this.kickCam(0.06); this.fx.puff('chip', e.x!, e.y!, e.z!, e.dx, e.dz, 0.6); }
+            else { this.sfx('hit', 0.9); audio.human((e.n ?? 0) >= 14 ? 'yelp' : 'grunt'); this.kickCam(0.1 + Math.min(0.12, (e.n ?? 0) * 0.005)); this.hitStop(0.06); D.input.rumble(180, 0.8); this.fx.puff('dust', e.x!, e.y! - 0.9, e.z!, e.dx, e.dz, 0.6); }
             break;
           }
-          if (e.what === 'crash') { audio.sample('wood', 0.9 * this.vol(e.x, e.z)); audio.sample('boom', 0.5 * this.vol(e.x, e.z)); this.fx.puff('leaf', e.x!, e.y! + 1.5, e.z!, 0, 0, 3); this.fx.puff('dust', e.x!, e.y!, e.z!, 0, 0, 2); this.kickCam(0.08 * this.vol(e.x, e.z, 25)); break; }
+          if (e.what === 'crash') { this.sfx('crack', 1, e.x, e.z, 0.6); this.sfx('thud', 1, e.x, e.z); this.fx.puff('leaf', e.x!, e.y! + 1.5, e.z!, 0, 0, 3); this.fx.puff('dust', e.x!, e.y!, e.z!, 0, 0, 2); this.kickCam(0.08 * this.vol(e.x, e.z, 25)); break; }
           view?.v.flinch(e.dx ?? 0, e.dz ?? 0);
           const energy = e.what?.endsWith('energy'), fire = e.what?.endsWith('fire');
           this.fx.puff(e.deflect ? 'spark' : energy ? 'arc' : fire ? 'ember' : 'chip', e.x!, e.y!, e.z!, e.dx, e.dz, e.weak ? 1.6 : 1);
           if (e.weak) this.fx.puff('flash', e.x!, e.y!, e.z!);
           this.fx.number(e.n ?? 0, e.x!, e.y! + 0.3, e.z!, !!e.weak);
           const k = this.vol(e.x, e.z);
-          if (e.deflect) audio.sample('metal', 0.6 * k, { rate: 1.3 }); else if (e.what?.includes('blunt')) audio.sample('soft', 0.9 * k, { rate: 0.8 }); else audio.sample('soft', 0.8 * k, { rate: 1.2 });
+          if (e.deflect) this.sfx('clang', 0.7, e.x, e.z); else this.sfx('hit', 0.9, e.x, e.z, e.what?.includes('blunt') ? 0.85 : 1.15);
           if (e.weak) audio.tone(880, 0.1, 'triangle', 0.1 * k, 0, 300);
           if (!e.what?.startsWith('trap')) { this.hitStop(Math.min(0.11, 0.04 + (e.n ?? 0) * 0.0022)); D.input.rumble(70, 0.4); }
           break;
@@ -602,33 +601,34 @@ export class Combat {
           const ring = e.what === 'stomp' || e.what === 'lash' || e.what === 'warn';
           this.fx.telegraph(e.id!, ring, e.dur!, e.x!, e.z!, e.dx ?? 0, e.dz ?? 1, e.len ?? 3, e.r ?? 1, e.what === 'warn');
           if (view) { view.tele = 0; view.teleDur = e.dur!; }
-          if (e.what === 'lunge') this.voice('growl', e.x, e.z); else if (e.what === 'beam') audio.tone(110, e.dur!, 'sine', 0.12 * this.vol(e.x, e.z), 0, 500);
-          else if (e.what === 'lash') audio.sample('cloth', 0.5 * this.vol(e.x, e.z), { rate: 1.8 });
-          else if (e.what === 'stomp') audio.tone(60, e.dur!, 'triangle', 0.16 * this.vol(e.x, e.z), 0, 40);
+          if (e.what === 'lunge') this.voice('growl', e.x, e.z); else if (e.what === 'beam') this.sfx('beamcharge', 0.8, e.x, e.z, 1.25 / Math.max(0.5, e.dur!));
+          else if (e.what === 'lash') this.sfx('hiss', 0.5, e.x, e.z, 1.6);
+          else if (e.what === 'stomp') this.sfx('hum', 0.7, e.x, e.z, 1.6);
+          else if (e.what === 'nip') this.sfx('chitter', 0.7, e.x, e.z);
           if (e.what === 'lunge' || e.what === 'charge') this.hint('dodge');
           break;
         }
         case 'state': {
-          if (e.what === 'alerted') { audio.tone(520, 0.12, 'triangle', 0.07 * this.vol(e.x, e.z), 0, 240); }
-          else if (e.what === 'stagger' || e.what === 'overload') { this.fx.endTelegraph(e.id!); this.fx.puff(e.what === 'overload' ? 'arc' : 'dust', e.x!, this.env.height(e.x!, e.z!) + 1, e.z!, 0, 0, 2); if (e.what === 'overload') audio.tone(200, 0.6, 'sawtooth', 0.14, 0, -150); }
-          else if (e.what === 'wake') { this.voice('wake', e.x, e.z); this.kickCam(0.04); }
+          if (e.what === 'alerted') { if (view?.kind === 'nibbet') this.sfx('squeak', 0.7, e.x, e.z); else if (view?.kind === 'skritch') this.sfx('chitter', 0.6, e.x, e.z); else audio.tone(520, 0.12, 'triangle', 0.05 * this.vol(e.x, e.z), 0, 240); }
+          else if (e.what === 'stagger' || e.what === 'overload') { this.fx.endTelegraph(e.id!); this.fx.puff(e.what === 'overload' ? 'arc' : 'dust', e.x!, this.env.height(e.x!, e.z!) + 1, e.z!, 0, 0, 2); if (e.what === 'overload') this.sfx('zap', 0.9, e.x, e.z, 0.5); }
+          else if (e.what === 'wake') { this.voice('wake:guardian', e.x, e.z); this.kickCam(0.04); }
           else if (e.what === 'recover' || e.what === 'flee') this.fx.endTelegraph(e.id!);
           break;
         }
         case 'sound': this.voice(e.what ?? '', e.x, e.z); break;
         case 'death': {
           this.fx.endTelegraph(e.id!);
-          audio.sample('soft', 0.6 * this.vol(e.x, e.z), { rate: 0.6 });
-          if (e.what === 'guardian') { audio.tone(160, 2.4, 'sawtooth', 0.14, 0, -150); this.kickCam(0.06); }
+          this.sfx('thud', e.what === 'nibbet' || e.what === 'skritch' ? 0.4 : 0.9, e.x, e.z, e.what === 'nibbet' || e.what === 'skritch' ? 1.5 : 1);
+          if (e.what === 'guardian') { this.sfx('hum', 1, e.x, e.z, 0.5); this.kickCam(0.06); }
           break;
         }
         case 'fled': audio.tone(300, 0.3, 'sine', 0.05 * this.vol(e.x, e.z), 0, -120); break;
         case 'phase': ui.banner(t('cb.c.guardian'), ''); audio.tone(80, 1.5, 'sawtooth', 0.2, 0, 60); this.kickCam(0.08); break;
         case 'trap': {
           if (e.what?.startsWith('set:')) { audio.sample('wood', 0.5); this.fx.puff('dust', e.x!, this.env.height(e.x!, e.z!) + 0.1, e.z!, 0, 0, 0.5); }
-          else if (e.what === 'snared') { audio.sample('wood', 0.7 * this.vol(e.x, e.z), { rate: 1.5 }); this.fx.puff('leaf', e.x!, this.env.height(e.x!, e.z!) + 0.3, e.z!); }
-          else if (e.what === 'staked') { audio.sample('wood', 0.9 * this.vol(e.x, e.z), { rate: 0.8 }); this.fx.puff('chip', e.x!, this.env.height(e.x!, e.z!) + 0.5, e.z!, 0, 0, 2); }
-          else if (e.what === 'rattle') for (let i = 0; i < 4; i++) audio.sample('stone', 0.5 * this.vol(e.x, e.z, 70), { delay: i * 0.09, rate: 1.4 });
+          else if (e.what === 'snared') { this.sfx('whip', 0.8, e.x, e.z); this.sfx('crack', 0.5, e.x, e.z, 1.5); this.fx.puff('leaf', e.x!, this.env.height(e.x!, e.z!) + 0.3, e.z!); }
+          else if (e.what === 'staked') { this.sfx('crack', 1, e.x, e.z, 0.8); this.fx.puff('chip', e.x!, this.env.height(e.x!, e.z!) + 0.5, e.z!, 0, 0, 2); }
+          else if (e.what === 'rattle') { this.sfx('rattle', 1, e.x, e.z); this.sfx('rattle', 0.8, e.x, e.z, 1.1, 0.45); }
           break;
         }
         case 'fire': if (e.what === 'out') this.toastOnce('fireout', t('cb.fire', { n: 0 })); break;
@@ -636,19 +636,19 @@ export class Combat {
         case 'ally': if (e.what === 'hurt') audio.human('yelp', 0.5 * this.vol(e.x, e.z)); break;
         case 'player': {
           const w = e.what ?? '';
-          if (w === 'roll') { audio.whoosh(); audio.sample('cloth', 0.5); this.fx.puff('dust', P.pos.x, P.pos.y + 0.1, P.pos.z, 0, 0, 0.7); }
+          if (w === 'roll') { this.sfx('swing', 0.4, undefined, undefined, 0.7); audio.sample('cloth', 0.5); this.fx.puff('dust', P.pos.x, P.pos.y + 0.1, P.pos.z, 0, 0, 0.7); }
           else if (w === 'tired') { this.toastOnce('tired', t('cb.tired')); audio.human('breath', 0.5); }
           else if (w === 'noammo') { this.toastOnce('noammo', t('cb.noammo')); audio.sample('ui_error', 0.4); }
-          else if (w.startsWith('broke:')) { ui.toast(t('cb.broke', { item: t(`cb.w.${w.slice(6)}`) })); audio.sample('wood', 0.9, { rate: 0.7 }); }
+          else if (w.startsWith('broke:')) { ui.toast(t('cb.broke', { item: t(`cb.w.${w.slice(6)}`) })); this.sfx('crack', 1, undefined, undefined, 0.7); }
           else if (w.startsWith('injury:')) ui.toast(t(`cb.inj.${w.slice(7)}`));
           else if (w === 'infected') ui.toast(t('cb.infected'));
-          else if (w === 'parry' || w === 'brace') { audio.sample('wood', 0.9, { rate: 1.3 }); audio.tone(660, 0.12, 'triangle', 0.12, 0, 200); this.hitStop(0.1); this.kickCam(0.07); this.fx.puff('flash', P.pos.x + sim.player.fx * 0.8, P.pos.y + 1.2, P.pos.z + sim.player.fz * 0.8); }
-          else if (w === 'guardbreak') { audio.sample('wood', 0.8, { rate: 0.6 }); this.kickCam(0.1); }
+          else if (w === 'parry' || w === 'brace') { this.sfx('crack', 1, undefined, undefined, 1.2); this.sfx('hit', 0.8); this.hitStop(0.1); this.kickCam(0.07); this.fx.puff('flash', P.pos.x + sim.player.fx * 0.8, P.pos.y + 1.2, P.pos.z + sim.player.fz * 0.8); }
+          else if (w === 'guardbreak') { this.sfx('crack', 0.9, undefined, undefined, 0.6); this.kickCam(0.1); }
           else if (w === 'snared') { audio.sample('cloth', 0.7, { rate: 0.7 }); this.toastOnce('snared', t('cb.hint.dodge', { k: GLYPH.dodge[this.d.input.device === 'pad' ? 1 : this.d.input.device === 'touch' ? 2 : 0] })); }
           else if (w === 'down') { audio.human('scream', 0.6); this.kickCam(0.16); }
-          else if (w === 'vault') { audio.whoosh(); P.vel.y = 4.6; P.onGround = false; }
+          else if (w === 'vault') { this.sfx('swing', 0.5, undefined, undefined, 0.8); P.vel.y = 4.6; P.onGround = false; }
           else if (w === 'stumble') { audio.human('grunt'); this.kickCam(0.1); }
-          else if (w.startsWith('draw:')) { if (w.endsWith('bow')) audio.sample('leather', 0.35, { rate: 0.8 }); }
+          else if (w.startsWith('draw:')) { if (w.endsWith('bow')) audio.sample('leather', 0.35, { rate: 0.8 }); else if (w.endsWith('sling')) this.sfx('whirr', 0.6); }
           else if (w.startsWith('reload:')) audio.sample('metal', 0.4, { rate: 0.7, delay: 0.5 });
           else if (w === 'dodged') audio.tone(1200, 0.06, 'sine', 0.04);
           else if (w === 'guard') audio.sample('leather', 0.25);
@@ -768,6 +768,9 @@ export class Combat {
   testKeys = false;
   testHold(code: string, on: boolean) { this.testKeys = true; this.d.input.hold(code, on); }
   testTap(code: string) { this.testKeys = true; this.d.input.tap(code); }
+  /** Turn the view as a mouse would (pixels). */
+  testLook(dx: number, dy: number) { this.d.input.lookDX += dx; this.d.input.lookDY += dy; }
+  get cam() { const P = this.d.player; return { yaw: P.yaw, pitch: P.pitch, x: P.pos.x, y: P.pos.y, z: P.pos.z }; }
   debug() {
     const sim = this.sim, run = this.encounter;
     return {

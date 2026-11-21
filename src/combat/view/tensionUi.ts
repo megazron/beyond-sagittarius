@@ -91,7 +91,7 @@ export class TensionUi {
       q('.rg')?.setAttribute('r', String(46 + Math.max(0, 1 - T.beat) * 54));
       q('.ht')?.setAttribute('r', String(26 + T.pulse * 12 + (T.beat > 0.9 ? 4 : 0)));
       // the heart is heard as well as seen
-      if (T.beat < this.lastPulse) { audio.tone(58, 0.16, 'sine', 0.5); audio.tone(46, 0.2, 'sine', 0.4, 0.14); inp.rumble(60, 0.4); }
+      if (T.beat < this.lastPulse) { if (!audio.sample('cb_heart', 0.9)) { audio.tone(58, 0.16, 'sine', 0.5); audio.tone(46, 0.2, 'sine', 0.4, 0.14); } inp.rumble(60, 0.4); }
       this.lastPulse = T.beat;
     } else {
       const tg = q('.tg') as HTMLElement, cur = q('.cur') as HTMLElement, box = q('.box') as HTMLElement, w = box.clientWidth;
