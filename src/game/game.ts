@@ -591,7 +591,8 @@ export class Game {
     if (this.mode !== 'play') return; // the story can kill the player (predator)
     this.tutorial.update(dt);
     // (not while the controls tutorial is running: the listen beat would take the controls mid-lesson)
-    if (this.mode === 'play' && !this.tutorial.active && !this.pendingIntro) this.waking.update();
+    // (nor during a fight or the arena)
+    if (this.mode === 'play' && !this.tutorial.active && !this.pendingIntro && !this.combat?.engaged && !this.combat?.encounter && !this.combat?.threat) this.waking.update();
     if (this.mode !== 'play') return;
     this.findInteraction();
     if (this.interactTarget && this.input.act('interact')) this.interact();
