@@ -31,13 +31,13 @@ def noise(t, s):
     return (math.sin(t + s) + .6 * math.sin(t * 1.73 + s * 2.3) + .3 * math.sin(t * 2.91 + s * 3.7)) / 1.9
 
 
-def track(names, cues, t, seed=0.0, env=None, lip=None):
+def track(names, cues, t, seed=0.0, env=None, lip=None, blinks=None):
     """Weights for one character at time t. cues: [{t0, t1, emotion, k, react}], env(t) -> 0..1 voice level."""
     w = dict.fromkeys(names, 0.0); tr = 0.0
     for c in cues:
         a = smooth(c['t0'] - c.get('react', .6), c['t0'] + .1, t) * (1 - smooth(c['t1'] + .2, c['t1'] + 1.4, t)) * c.get('k', 1)
         if a <= 0: continue
-        for u, v in EMO[c['emotion']].items():
+        for u, v in (c.get('units') or EMO[c['emotion']]).items():  # a cue can name its own units: authored acting
             # no face is symmetrical: each side drifts on its own
             w[u] = max(w[u], a * v * (1 + .14 * noise(t * .9, seed + sum(map(ord, u)) % 17)))
         tr = max(tr, a * TREMBLE.get(c['emotion'], 0))
@@ -59,8 +59,12 @@ def track(names, cues, t, seed=0.0, env=None, lip=None):
     for c in cues:
         d = t - c['t1'] - .08
         if 0 <= d < .22: b = math.sin(d / .22 * math.pi); w['eye-left-closure'] = max(w['eye-left-closure'], b); w['eye-right-closure'] = max(w['eye-right-closure'], b * .97)
+    # authored blinks (a slow one is a thought changing): [start, length]; a shot that authors its blinks has no timer
+    for b0, bl in blinks or ():
+        d = t - b0
+        if 0 <= d < bl: b = math.sin(d / bl * math.pi) ** .7; w['eye-left-closure'] = max(w['eye-left-closure'], b); w['eye-right-closure'] = max(w['eye-right-closure'], b * .97)
     k = (t + seed) % 3.7
-    if k < .2: b = math.sin(k / .2 * math.pi); w['eye-left-closure'] = max(w['eye-left-closure'], b); w['eye-right-closure'] = max(w['eye-right-closure'], b)
+    if blinks is None and k < .2: b = math.sin(k / .2 * math.pi); w['eye-left-closure'] = max(w['eye-left-closure'], b); w['eye-right-closure'] = max(w['eye-right-closure'], b)
     return w
 
 
