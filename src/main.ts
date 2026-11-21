@@ -1,6 +1,7 @@
 import { Combat, defaultCombatSettings } from './combat/combat';
 import './style.css';
 import * as THREE from 'three';
+import { BATCH, batchSupported } from './core/ibatch';
 import { NEAR_FADE } from './core/nearfade';
 import { setLang, setPlayer, t, Lang } from './i18n';
 import { detectQuality, isPhone, saveQualityChoice, QualityName } from './core/quality';
@@ -81,6 +82,8 @@ let renderer: Renderer;
 try {
   renderer = new Renderer(canvas, quality);
   renderer.renderer.info.autoReset = false; // counted per frame, over every pass (perfhud.ts)
+  // the forest draws one call per material where the browser has instanced multi-draw (core/ibatch.ts); ?batch=0 is the old way
+  BATCH.on = new URLSearchParams(location.search).get('batch') !== '0' && batchSupported(renderer.renderer);
 } catch (e) {
   document.getElementById('loading')!.innerHTML = '<div class="loader-text">WebGL2 is required to play BEYOND SAGITTARIUS.</div>';
   throw e;

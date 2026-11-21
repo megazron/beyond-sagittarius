@@ -152,3 +152,12 @@ See the end of this file for the running log.
   main before today too; not found yet: merged statics hide which building; try hiding scene children >= 45);
   (3) forest BatchedMesh; (4) arrival stalls in play 1-3 s; (5) hair styles repeat every 6 looks; (6) KTX2 pipeline
   (encoder at ~/tools/ktx/KTX-Software-4.4.2-Linux-x86_64, LD_LIBRARY_PATH=.../lib).
+
+## 2026-11-21 19:50 takeover by perf agent 15 (branch perf15 from perf14 582d54b)
+- Measurements: ~/bs-assets/gpu/p15 (plans, census.js = draws/ms per named object + distinct materials/programs per
+  pass, rayflat.js = ray probe of the flat, cmp.py = side-by-side reports). run.sh now takes sub-paths (p15/x).
+- WIP on perf15 (not yet measured on the GPU): one draw per tree (trunk merged into the crown, bark drawn by the leaf
+  material where aBark = 1, custom shadow depth so trunks do not cast card holes); warmAll compiles each scene's visible
+  materials in the background first (Renderer.prewarm: KHR_parallel_shader_compile, polled, loading bar moves) and
+  only then draws it once; townsfolk hair from a table (looks 0, 5, 10 wore the same coat and hair); district trim
+  merged with kit per zone.

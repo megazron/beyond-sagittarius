@@ -8,6 +8,7 @@ import { loadSet, meanColor, capSize } from '../core/assets';
 import { foliageAtlas, coniferCrown, broadCrown, CROWN_LODS } from './foliage';
 import { modelMaterial, modelMats, type ModelPack, type ModelInfo } from './models';
 import { nearFade } from '../core/nearfade';
+import { InstancedBatch, BATCH, batchDepth, MAX_GEOMETRIES } from '../core/ibatch';
 
 const LUM = 'vec3(0.2126, 0.7152, 0.0722)';
 export const windUniforms = { uTime: { value: 0 }, uWind: { value: 1 } };
@@ -142,8 +143,10 @@ function windify(mat: THREE.Material, amp: number, flutter = 0, flutterMask = ''
     sh.vertexShader = 'uniform float uTime; uniform float uWind;\n' + sh.vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
-      #ifdef USE_INSTANCING
+      #if defined( USE_INSTANCING )
         vec3 ip = instanceMatrix[3].xyz;
+      #elif defined( USE_BATCHING )
+        vec3 ip = batchingMatrix[3].xyz;
       #else
         vec3 ip = vec3(0.0);
       #endif
@@ -163,22 +166,42 @@ interface Part { lods: THREE.BufferGeometry[]; mat: THREE.Material; shadow: [boo
  * All instances of one model or tree species in the world. Instead of one draw
  * per area, each LOD is a single instanced draw whose instance list is rebuilt
  * as the camera moves: a tree costs a few dozen triangles until you are close.
+ *
+ * Where the browser has WEBGL_multi_draw (BATCH.on), the fields do not draw themselves: `Forest.batch` puts every
+ * field's parts that share a material into one InstancedBatch (core/ibatch.ts), the instances' matrices and colours
+ * are written once, and a refresh only hands the batch lists of instance ids. One draw per material per pass instead
+ * of one per model, part and LOD; and no matrices copied as you walk.
  */
 class Field {
-  private n = 0;
+  n = 0;
   private x: Float32Array;
   private z: Float32Array;
-  private m: Float32Array;
-  private c: Float32Array;
-  private meshes: THREE.InstancedMesh[][] = [];
+  m: Float32Array;
+  c: Float32Array;
+  private meshes: (THREE.InstancedMesh[] | null)[] = [];
+  /** Batch mode: per part, its batch, the batch's geometry id per LOD, and the batch's instance id per instance. */
+  bat: ({ b: InstancedBatch; geo: number[]; ids: Int32Array } | null)[] = [];
+  readonly shadowK: boolean[][];
+  private list: Int32Array[] = [];
 
   /** `shadowReach`: metres the sun's shadow cascades cover; a LOD that only starts beyond them casts no shadow (it was
    * drawn into the shadow maps for every far tree and rock on the planet, none of it inside them). */
-  constructor(cap: number, parts: Part[], group: THREE.Group, private near: [number, number], private far: number, shadowReach = Infinity, name = 'forest') {
+  constructor(cap: number, readonly parts: Part[], group: THREE.Group, private near: [number, number], private far: number, shadowReach = Infinity, readonly name = 'forest') {
     const starts = [0, near[0], near[1]];
     this.x = new Float32Array(cap); this.z = new Float32Array(cap);
     this.m = new Float32Array(cap * 16); this.c = new Float32Array(cap * 3);
-    for (const p of parts) {
+    this.shadowK = parts.map((p) => p.lods.map((_, k) => p.shadow[k] && starts[k] < shadowReach * 0.9));
+    for (let k = 0; k < 3; k++) this.list.push(new Int32Array(Math.max(1, cap)));
+    this.cap = cap; this.group = group;
+    if (!BATCH.on) parts.forEach((_, pi) => this.instanced(pi)); // else drawn by the forest's batches (Forest.batch)
+  }
+  private cap: number;
+  private group: THREE.Group;
+
+  /** Part `pi` drawn as an InstancedMesh per LOD (no batches, or its batch could not be made). */
+  instanced(pi: number) {
+    const p = this.parts[pi], cap = this.cap, name = this.name;
+    {
       const row: THREE.InstancedMesh[] = [];
       p.lods.forEach((g, k) => {
         const im = new THREE.InstancedMesh(g, p.mat, Math.max(1, cap));
@@ -186,26 +209,45 @@ class Field {
         im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         im.instanceColor.setUsage(THREE.DynamicDrawUsage);
         im.frustumCulled = false; // lists are small and spread out; the LOD does the saving
-        im.castShadow = p.shadow[k] && starts[k] < shadowReach * 0.9;
+        im.castShadow = this.shadowK[pi][k];
         im.receiveShadow = true;
         if (p.depth) im.customDepthMaterial = p.depth;
         im.count = 0;
         im.name = `${name}:l${k}`;
         row.push(im);
-        group.add(im);
+        this.group.add(im);
       });
-      this.meshes.push(row);
+      this.meshes[pi] = row;
+      // instances placed before now: their lists are rebuilt at the next refresh
     }
   }
 
-  /** Every instanced mesh of this field (all parts and LODs). */
-  objects(): THREE.Object3D[] { return this.meshes.flat(); }
+  /** What draws this field (its instanced meshes, or the batches it is in). */
+  objects(): THREE.Object3D[] { return [...new Set([...this.bat.flatMap((b) => (b ? [b.b] : [])), ...this.meshes.flatMap((r) => r ?? [])])]; }
 
   add(mat: THREE.Matrix4, col: THREE.Color) {
     const i = this.n++;
     this.x[i] = mat.elements[12]; this.z[i] = mat.elements[14];
     this.m.set(mat.elements, i * 16);
     this.c[i * 3] = col.r; this.c[i * 3 + 1] = col.g; this.c[i * 3 + 2] = col.b;
+  }
+
+  /** LOD k now draws the first `n` instances of `list` (indices into this field). */
+  private emit(k: number, list: Int32Array, n: number) {
+    for (const b of this.bat) {
+      if (!b) continue;
+      const ids = b.ids, out = tmpIds(n);
+      for (let q = 0; q < n; q++) out[q] = ids[list[q]];
+      b.b.setList(b.geo[k], out, n);
+    }
+    for (const row of this.meshes) {
+      if (!row) continue;
+      const im = row[k], ma = im.instanceMatrix.array as Float32Array, ca = im.instanceColor!.array as Float32Array;
+      for (let q = 0; q < n; q++) { const i = list[q]; ma.set(this.m.subarray(i * 16, i * 16 + 16), q * 16); ca.set(this.c.subarray(i * 3, i * 3 + 3), q * 3); }
+      im.count = n; im.visible = n > 0;
+      im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, n * 16); im.instanceMatrix.needsUpdate = true;
+      const ic = im.instanceColor!; ic.clearUpdateRanges(); ic.addUpdateRange(0, n * 3); ic.needsUpdate = true;
+    }
   }
 
   /** LOD 1 and 2 (from `CULL_FROM` on) are kept in bearing order round the point of the last refresh: `view` puts only
@@ -222,7 +264,6 @@ class Field {
     if (cull && !this.order.length) for (let k = 0; k < 3; k++) { this.order.push(new Int32Array(this.x.length)); this.secStart.push(new Int32Array(SECTORS + 1)); }
     const per = cull ? this.secStart.map((a) => a.fill(0)) : null;
     const sec = cull ? (this.secOf ??= new Uint8Array(this.x.length)) : null, lod = cull ? (this.lodOf ??= new Uint8Array(this.x.length)) : null;
-    for (const row of this.meshes) for (const im of row) im.count = 0;
     for (let i = 0; i < this.n; i++) {
       const dx = this.x[i] - cx, dz = this.z[i] - cz, d = dx * dx + dz * dz;
       if (d > d2) { if (lod) lod[i] = 255; continue; }
@@ -233,12 +274,7 @@ class Field {
         continue;
       }
       if (lod) lod[i] = 255;
-      const at = count[k]++;
-      for (const row of this.meshes) {
-        const im = row[k];
-        (im.instanceMatrix.array as Float32Array).set(this.m.subarray(i * 16, i * 16 + 16), at * 16);
-        (im.instanceColor!.array as Float32Array).set(this.c.subarray(i * 3, i * 3 + 3), at * 3);
-      }
+      this.list[k][count[k]++] = i;
     }
     if (cull) {
       // counting sort by sector: order[k] lists LOD k's instances sector by sector, secStart[k][s] where sector s begins
@@ -247,14 +283,7 @@ class Field {
       for (let i = 0; i < this.n; i++) { const k = lod![i]; if (k !== 255) this.order[k][fill[k][sec![i]]++] = i; }
       this.seen = '';
     }
-    for (const row of this.meshes) row.forEach((im, k) => {
-      if (cull && k >= CULL_FROM) return;
-      im.count = count[k];
-      im.visible = count[k] > 0;
-      im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, count[k] * 16); im.instanceMatrix.needsUpdate = true;
-      const ic = im.instanceColor!;
-      ic.clearUpdateRanges(); ic.addUpdateRange(0, count[k] * 3); ic.needsUpdate = true;
-    });
+    for (let k = 0; k < 3; k++) if (!(cull && k >= CULL_FROM)) this.emit(k, this.list[k], count[k]);
   }
   private secOf: Uint8Array | null = null;
   private lodOf: Uint8Array | null = null;
@@ -266,30 +295,19 @@ class Field {
     if (key === this.seen) return;
     this.seen = key;
     for (let k = CULL_FROM; k < 3; k++) {
-      const ord = this.order[k], st = this.secStart[k];
+      const ord = this.order[k], st = this.secStart[k], out = this.list[k];
       let at = 0;
       const n = hi >= lo ? hi - lo + 1 : SECTORS - lo + hi + 1;
       for (let j = 0; j < n && j < SECTORS; j++) {
         const s = (lo + j) % SECTORS;
-        for (let q = st[s]; q < st[s + 1]; q++) {
-          const i = ord[q];
-          for (const row of this.meshes) {
-            const im = row[k];
-            (im.instanceMatrix.array as Float32Array).set(this.m.subarray(i * 16, i * 16 + 16), at * 16);
-            (im.instanceColor!.array as Float32Array).set(this.c.subarray(i * 3, i * 3 + 3), at * 3);
-          }
-          at++;
-        }
+        for (let q = st[s]; q < st[s + 1]; q++) out[at++] = ord[q];
       }
-      for (const row of this.meshes) {
-        const im = row[k];
-        im.count = at; im.visible = at > 0;
-        im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, at * 16); im.instanceMatrix.needsUpdate = true;
-        const ic = im.instanceColor!; ic.clearUpdateRanges(); ic.addUpdateRange(0, at * 3); ic.needsUpdate = true;
-      }
+      this.emit(k, out, at);
     }
   }
 }
+let tmpBuf = new Int32Array(1024);
+const tmpIds = (n: number) => (tmpBuf.length >= n ? tmpBuf : (tmpBuf = new Int32Array(n * 2)));
 
 /** Bearing sectors round the camera for the far LODs, and the first LOD culled that way (the near one stays a full
  * ring: its trees cast the shadows that fall into view from behind you). `?cull=0` turns it off. */
@@ -308,6 +326,7 @@ export class Forest {
   glowMats: THREE.MeshBasicMaterial[] = [];
   /** The scanned rocks, wood and undergrowth: left out of the lake's mirrored render (a pixel or two in it each). */
   small: THREE.Object3D[] = [];
+  private smallFields: Field[] = [];
 
   constructor(private terrain: Terrain, private q: Quality, private pack: ModelPack | null = null, private cards: Record<'fir' | 'pine' | 'leaf', THREE.Texture | null> = { fir: null, pine: null, leaf: null }) {}
 
@@ -423,11 +442,9 @@ export class Forest {
     m.normalMap = FLAT_NORMAL; m.normalScale.setScalar(1.4);
     this.barkReady.then((n) => { if (n) m.normalMap = n; });
     const depth = new THREE.MeshDepthMaterial();
-    depth.onBeforeCompile = (sh) => {
-      sh.vertexShader = 'attribute float aBark; varying float vBark;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vBark = aBark;');
-      sh.fragmentShader = 'varying float vBark;\n' + sh.fragmentShader.replace('#include <alphatest_fragment>', 'if (vBark < 0.5) {\n#include <alphatest_fragment>\n}');
-    };
+    depth.onBeforeCompile = treeDepthPatch;
     depth.customProgramCacheKey = () => 'tree-depth';
+    depth.userData.tree = true;
     return { mat: m, depth };
   }
   private barkU = { tBark: { value: null as THREE.Texture | null }, uBarkMean: { value: new THREE.Vector3(0.5, 0.5, 0.5) }, uBarkOn: { value: 0 } };
@@ -577,7 +594,51 @@ export class Forest {
     }
 
     if (this.pack) this.scatter(rnd, forestAt);
+    if (BATCH.on) this.batch();
+    this.small = [...new Set(this.smallFields.flatMap((f) => f.objects()))];
     this.group.updateMatrixWorld();
+  }
+
+  /**
+   * Every field's parts that share a material go into one InstancedBatch: its geometries (all LODs), and one instance per
+   * placed model with its matrix and colour, written once. A batch casts a shadow if any of its LODs does; the lists
+   * say which (setShadow).
+   */
+  private batch() {
+    const byMat = new Map<THREE.Material, { f: Field; p: number }[]>();
+    for (const f of this.fields) f.parts.forEach((p, pi) => { if (f.n) (byMat.get(p.mat) ?? byMat.set(p.mat, []).get(p.mat)!).push({ f, p: pi }); });
+    const M = new THREE.Matrix4(), C = new THREE.Color();
+    for (const [mat, uses] of byMat) {
+      const lods = uses.flatMap((u) => u.f.parts[u.p].lods);
+      const names = (g: THREE.BufferGeometry) => Object.keys(g.attributes).sort().join(',');
+      const ok = lods.length <= MAX_GEOMETRIES && lods.every((g) => names(g) === names(lods[0]));
+      if (!ok) { for (const u of uses) u.f.instanced(u.p); continue; }
+      // one batch is all indexed or all not
+      const flat = lods.some((g) => !g.index), conv = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
+      const use = (g: THREE.BufferGeometry) => (flat && g.index ? conv.get(g) ?? conv.set(g, g.toNonIndexed()).get(g)! : g);
+      let inst = 0, verts = 0, idx = 0, tree = false;
+      for (const u of uses) { inst += u.f.n; tree ||= !!u.f.parts[u.p].depth?.userData.tree; }
+      for (const g of lods) { const h = use(g); verts += h.attributes.position.count; idx += h.index ? h.index.count : 0; }
+      const b = new InstancedBatch(inst, verts, Math.max(1, idx), mat);
+      b.name = `batch:${uses[0].f.name}`;
+      b.receiveShadow = true;
+      b.customDepthMaterial = batchDepth(tree ? treeDepthPatch : undefined, tree ? 'tree' : '');
+      let casts = false;
+      for (const u of uses) {
+        const part = u.f.parts[u.p], geo = part.lods.map((g) => b.addGeometry(use(g)));
+        part.lods.forEach((_, k) => { const on = u.f.shadowK[u.p][k]; b.setShadow(geo[k], on); casts ||= on; });
+        const ids = new Int32Array(u.f.n);
+        for (let i = 0; i < u.f.n; i++) {
+          const id = b.addInstance(geo[0]);
+          M.fromArray(u.f.m, i * 16); b.setMatrixAt(id, M);
+          C.fromArray(u.f.c, i * 3); b.setColorAt(id, C);
+          ids[i] = id;
+        }
+        u.f.bat[u.p] = { b, geo, ids };
+      }
+      b.castShadow = casts;
+      this.group.add(b);
+    }
   }
 
   /** Scanned rocks, dead wood and undergrowth. */
@@ -605,7 +666,7 @@ export class Forest {
       const shadow: [boolean, boolean, boolean] = big ? [true, true, true] : info.kind === 'plant' ? [false, false, false] : [true, true, false];
       const f = new Field(cap, [{ lods, mat, shadow }], this.group, big ? [near[0] * 1.2, near[1] * 1.6] : near, reach[info.kind], Q.shadowRange, `scan:${info.kind}`);
       this.fields.push(f);
-      if (info.kind !== 'outcrop') this.small.push(...f.objects());
+      if (info.kind !== 'outcrop') this.smallFields.push(f);
       list.push({ name, info, field: f });
     }
     const nrm = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
@@ -697,6 +758,11 @@ export class Forest {
   }
 }
 const tmpC = new THREE.Color();
+/** The trees' shadow: the card's alpha cut for the needles only. */
+function treeDepthPatch(sh: THREE.WebGLProgramParametersWithUniforms) {
+  sh.vertexShader = 'attribute float aBark; varying float vBark;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vBark = aBark;');
+  sh.fragmentShader = 'varying float vBark;\n' + sh.fragmentShader.replace('#include <alphatest_fragment>', 'if (vBark < 0.5) {\n#include <alphatest_fragment>\n}');
+}
 /** A crown's geometry with aBark = 0 (leaves), ready to merge with a trunk's. */
 function withBark(g: THREE.BufferGeometry) {
   if (!g.attributes.aBark) g.setAttribute('aBark', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count), 1));

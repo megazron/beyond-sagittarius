@@ -124,7 +124,8 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   };
   // phones: one wall finish, and the metalwork and lamp heads drawn with the rest of the kit (a draw per kind per zone)
   const PHONE_KIND: Record<string, string> = { metal: 'kit', lamp: 'kit', trim: 'kit', wall_brick: 'wall_plaster', wall_glass: 'wall_plaster' };
-  const put = (kind: string, x: number, z: number, g: THREE.BufferGeometry) => { const zn = zoneOf(x, z), k = tier === 0 ? PHONE_KIND[kind] ?? kind : kind; (zn.geo[k] ??= []).push(g); };
+  // the sills and cornices (trim) share the kit's material, its shadow and its reach: one draw with it, not two
+  const put = (kind: string, x: number, z: number, g: THREE.BufferGeometry) => { const zn = zoneOf(x, z), k = tier === 0 ? PHONE_KIND[kind] ?? kind : kind === 'trim' ? 'kit' : kind; (zn.geo[k] ??= []).push(g); };
 
   // ---- materials ----
   const tex = (set: string, m: THREE.MeshStandardMaterial, size: '512' | '1k' = rich ? '1k' : '512') => {
