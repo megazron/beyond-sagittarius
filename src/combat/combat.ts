@@ -188,6 +188,7 @@ export class Combat {
       if (trial) { s.stats.health = 100; s.stats.stamina = 100; }
       this.dropViews();
       this.encounter = run; this.sim = run.sim;
+      document.body.classList.add('cb-encounter');
       D.ui.fade('black', 1, 0.01);
       const p = run.sim.player;
       P.spawn(p.x, p.z, Math.atan2(-Math.sin(site.yaw), -Math.cos(site.yaw)));
@@ -201,6 +202,13 @@ export class Combat {
       this.sneakOn = false; this.hud.touch.sneak = false;
       this.hint(id === 'stealth.pass' ? 'sneak' : id === 'night.defence' ? 'trap' : id === 'hunt.first' ? 'sneak' : 'dodge');
     });
+  }
+  private goalV = new THREE.Vector3();
+  /** Where the set piece wants the player to go, for the compass and the line on the ground. */
+  goalPoint(): THREE.Vector3 | null {
+    const run = this.encounter, m = run?.markers.find((q) => q.kind === 'goal' || q.kind === 'prey');
+    if (!m || run!.id === 'hunt.first' && run!.phase === 'stalk') return null;
+    return this.goalV.set(m.x, this.env.height(m.x, m.z), m.z);
   }
   /** A tension moment on its own, for the story's scenes: quick press, hold steady, breath, aim. */
   tension(spec: TensionSpec): Promise<TensionResult> {
@@ -254,6 +262,7 @@ export class Combat {
     const D = this.d, s = D.save(), run = this.encounter;
     if (!e || !run) return;
     this.body.release(D.player.model);
+    document.body.classList.remove('cb-encounter');
     D.player.combat = null; D.input.padMask = null;
     this.dropViews(); this.fx.clear();
     if (e.opts.trial) {
@@ -326,10 +335,27 @@ export class Combat {
   private kickCam(k: number) { if (this.d.settings().shake) this.shake = Math.max(this.shake, k); }
 
   // ---------------- one frame ----------------
-  private key(list: string[], edge = false) { const I = this.d.input; return list.some((c) => (edge ? I.hit(c) : I.down(c))); }
+  // A press is taken once however many times the game steps before the next drawn frame (a slow frame steps twice,
+  // the tests step many times): held now and not before, or a tap the input caught between frames and not yet used.
+  private wasDown = new Map<string, boolean>(); private usedHit = new Set<string>(); private edges = new Set<string>();
+  private pollKeys() {
+    const I = this.d.input; this.edges.clear();
+    for (const list of Object.values(KEYS)) for (const c of list) {
+      const down = I.down(c), hit = I.hit(c);
+      if (!hit) this.usedHit.delete(c);
+      if ((down && !this.wasDown.get(c)) || (hit && !down && !this.usedHit.has(c))) this.edges.add(c);
+      if (hit) this.usedHit.add(c);
+      this.wasDown.set(c, down);
+    }
+    for (const c of this.tapUp) I.hold(c, false);
+    this.tapUp.length = 0;
+  }
+  private tapUp: string[] = [];
+  private key(list: string[], edge = false) { const I = this.d.input; return list.some((c) => (edge ? this.edges.has(c) : I.down(c))); }
 
   private readIntent(dt: number): Intent {
     const D = this.d, I = this.I, inp = D.input, P = D.player, T = this.hud.touch, eng = this.engaged;
+    this.pollKeys();
     const free = D.free() && !this.tensionUi.open && inp.enabled;
     const pad = (i: number, edge = false) => free && eng && (edge ? inp.padBtnHit(i) : inp.padBtn(i));
     const k = (list: string[], edge = false) => free && this.key(list, edge);
@@ -767,7 +793,7 @@ export class Combat {
   /** Tests press the fight's keys by code (a headless browser has no pointer lock). */
   testKeys = false;
   testHold(code: string, on: boolean) { this.testKeys = true; this.d.input.hold(code, on); }
-  testTap(code: string) { this.testKeys = true; this.d.input.tap(code); }
+  testTap(code: string) { this.testKeys = true; this.d.input.hold(code, true); this.tapUp.push(code); }
   /** Turn the view as a mouse would (pixels). */
   testLook(dx: number, dy: number) { this.d.input.lookDX += dx; this.d.input.lookDY += dy; }
   get cam() { const P = this.d.player; return { yaw: P.yaw, pitch: P.pitch, x: P.pos.x, y: P.pos.y, z: P.pos.z }; }

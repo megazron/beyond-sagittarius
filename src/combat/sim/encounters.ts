@@ -106,7 +106,7 @@ export class EncounterRun {
     const s = this.sim;
     if (id === 'hunt.first') {
       // a still afternoon, a meadow, three small grazers, and two very large ones you should leave alone
-      this.hour = 16; s.night = false;
+      this.hour = 14; s.night = false;
       arm('spear'); give({ stone: 4 });
       const wind = this.at(-1, 0.4), o = this.at(0, 0); const wl = Math.hypot(wind.x - o.x, wind.z - o.z);
       s.windX = (wind.x - o.x) / wl; s.windZ = (wind.z - o.z) / wl; // the wind is in your face: they cannot smell you coming

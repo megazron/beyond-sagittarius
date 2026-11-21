@@ -801,6 +801,7 @@ export class Game {
 
   /** World point the current objective points at (nearest needed item, station, lake). */
   objectivePoint(): THREE.Vector3 | null {
+    if (this.combat?.encounter) return this.combat.goalPoint();
     const p = this.player.pos;
     const s = this.save;
     if (this.tutorial.target) return this.tutorial.target.clone();
