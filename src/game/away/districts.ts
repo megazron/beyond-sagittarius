@@ -123,7 +123,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     return zones.get(k) ?? zones.set(k, { cx: (ix + 0.5) * ZONE, cz: (iz + 0.5) * ZONE, near: [], geo: {} }).get(k)!;
   };
   // phones: one wall finish, and the metalwork and lamp heads drawn with the rest of the kit (a draw per kind per zone)
-  const PHONE_KIND: Record<string, string> = { metal: 'kit', lamp: 'kit', wall_brick: 'wall_plaster', wall_glass: 'wall_plaster' };
+  const PHONE_KIND: Record<string, string> = { metal: 'kit', lamp: 'kit', trim: 'kit', wall_brick: 'wall_plaster', wall_glass: 'wall_plaster' };
   const put = (kind: string, x: number, z: number, g: THREE.BufferGeometry) => { const zn = zoneOf(x, z), k = tier === 0 ? PHONE_KIND[kind] ?? kind : kind; (zn.geo[k] ??= []).push(g); };
 
   // ---- materials ----
@@ -383,15 +383,15 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
       if (!ridgeAlongX) g.rotateY(Math.PI / 2);
       g.translate(cx, top + 0.9, cz); g.computeVertexNormals();
-      kitGeo(k, g, pick([0x8a3b2a, 0x6b4a3a, 0x4a4e58, 0x9a5a3a, 0x3e4248]), cx, cz);
+      kitGeo('roof', g, pick([0x8a3b2a, 0x6b4a3a, 0x4a4e58, 0x9a5a3a, 0x3e4248]), cx, cz); // the skyline: drawn at any distance
     } else if (floors > 5 && r < 0.4) {
       const sw = w * 0.7, sd = d * 0.6;
       put(`wall_${finish}`, cx, cz, facadeBox(cx - nx * w * 0.1, cz - nz * d * 0.15, sw, sd, top, fh, fh, 2.7, rnd() * 97, 0, pick(tints[finish as 'plaster' | 'brick']), FLOOR));
     } else if (r < 0.75) {
       // a water tank on legs
       const tx = x0 + 2.5 + rnd() * Math.max(0.1, w - 5), tz = z0 + 2.5 + rnd() * Math.max(0.1, d - 5);
-      kitGeo(k, new THREE.CylinderGeometry(1.3, 1.3, 2.4, 10).translate(tx, top + 2.6, tz), 0x6f6a62, cx, cz);
-      kitGeo(k, new THREE.ConeGeometry(1.4, 0.8, 10).translate(tx, top + 4.2, tz), 0x4a4640, cx, cz);
+      kitGeo('roof', new THREE.CylinderGeometry(1.3, 1.3, 2.4, 10).translate(tx, top + 2.6, tz), 0x6f6a62, cx, cz);
+      kitGeo('roof', new THREE.ConeGeometry(1.4, 0.8, 10).translate(tx, top + 4.2, tz), 0x4a4640, cx, cz);
       for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) kitBox(k, tx + a * 0.9, top, tz + b * 0.9, 0.14, 1.4, 0.14, 0x30343a, cx, cz);
     }
   };
@@ -685,8 +685,8 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   };
 
   // ---- merge every zone's pieces: one mesh per kind per zone ----
-  const kindMat: Record<string, THREE.Material> = { road: o.road, pave: o.paving, mark: markM, kit: kitM, trim: kitM, metal: metalM, lamp: lampM, leaf: leafM, grass: grassM, wall_plaster: wallMats.plaster, wall_brick: wallMats.brick, wall_glass: wallMats.glass };
-  const NEAR_KINDS = new Set(['kit', 'metal', 'lamp', 'leaf', 'mark']);
+  const kindMat: Record<string, THREE.Material> = { road: o.road, pave: o.paving, mark: markM, kit: kitM, trim: kitM, roof: kitM, metal: metalM, lamp: lampM, leaf: leafM, grass: grassM, wall_plaster: wallMats.plaster, wall_brick: wallMats.brick, wall_glass: wallMats.glass };
+  const NEAR_KINDS = new Set(['kit', 'metal', 'lamp', 'leaf', 'mark', 'trim']); // trim (sills, pilasters, cornices) only matters up close
   for (const zn of zones.values()) {
     for (const [kind, gs] of Object.entries(zn.geo)) {
       const gg = gs.map((g) => (g.index ? g.toNonIndexed() : g));
@@ -696,7 +696,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       const merged = mergeGeometries(ok, false);
       if (!merged) continue;
       const m = new THREE.Mesh(merged, kindMat[kind]);
-      m.castShadow = kind.startsWith('wall') || kind === 'kit' || kind === 'trim' || kind === 'metal' || kind === 'leaf';
+      m.castShadow = kind.startsWith('wall') || kind === 'kit' || kind === 'trim' || kind === 'roof' || kind === 'metal' || kind === 'leaf';
       m.receiveShadow = true;
       m.userData.district = kind;
       m.frustumCulled = true;
