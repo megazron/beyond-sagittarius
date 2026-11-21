@@ -76,3 +76,7 @@ See the end of this file for the running log.
   variance suspected, rerun pending).
 - Night defence re-recorded (r5): scavengers now come to the light, food is stolen, the hound lunges. Still dark;
   bot never sets traps in prep (recording bot only).
+- 08:45 Rerun: crowd_smoke passed (flaky on both main and combat), perf_gate fails at web bazaar (618 draws, 2.75 M
+  triangles), the same spot main fails (644, 2.6 M); the numbers swing run to run on both. Mobile matches main. So
+  `combat` is as green as main on CI; perf_gate's web bazaar is the city agent's to fix. Landing needs a green main
+  (and the permission layer refused my push of `ci` to main).
