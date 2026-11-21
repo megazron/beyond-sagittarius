@@ -283,7 +283,7 @@ export class Combat {
     this.sim = this.ambient;
     if (this.ambient) { this.ambient.inv = s.inventory; this.loadPlayer(this.ambient); }
     D.ui.setInventory(s.inventory, s.flags.spear ? ['spear'] : []);
-    this.hud.show(false); this.hud.showTouch(false); this.hud.objective(null); this.hud.boss(null); this.hud.awareness(null); this.hud.arrows([]); this.hud.analysis(null); this.hud.vignette(false);
+    this.hud.show(false); this.hud.showTouch(false); this.hud.objective(null); this.hud.boss(null); this.hud.awareness(null); this.hud.arrows([]); this.hud.tags([]); this.hud.analysis(null); this.hud.vignette(false);
     this.engagedT = 0; this.kitOpen = false; this.hud.picker(null);
   }
 
@@ -771,6 +771,18 @@ export class Combat {
       if (Math.abs(rel) > 0.75 && arrows.length < 4) arrows.push({ a: -rel, hot: true });
     }
     this.hud.arrows(arrows);
+    // the suit tags what it has already learned, small, over the animal: in the hunt and the sneak, prey in long grass
+    // would otherwise be invisible to anyone but the bot
+    const tags: { x: number; y: number; warm: boolean }[] = [];
+    if (run && (run.id === 'hunt.first' || run.id === 'stealth.pass')) {
+      for (const e of sim.enemies) {
+        if (tags.length >= 6 || e.dead || e.gone || !this.cs.studied.includes(e.kind) || Math.hypot(e.x - p.x, e.z - p.z) > 45) continue;
+        v2.set(e.x, e.y + e.def.height + 0.35, e.z).project(cam);
+        if (v2.z > 1 || Math.abs(v2.x) > 1 || Math.abs(v2.y) > 1) continue;
+        tags.push({ x: ((v2.x + 1) / 2) * window.innerWidth, y: ((1 - v2.y) / 2) * window.innerHeight, warm: !e.aware });
+      }
+    }
+    this.hud.tags(tags);
     const boss = sim.enemies.find((e) => e.def.boss && !e.gone && e.state !== 'dormant' && Math.hypot(e.x - p.x, e.z - p.z) < 40);
     this.hud.boss(boss && !boss.dead ? t(`cb.c.${boss.kind}`) : null, boss ? boss.hp / boss.maxHp : 0, !!boss && boss.phase > 0);
     // Field Analysis: keep a creature in the middle of the view for a few seconds and you learn what it is

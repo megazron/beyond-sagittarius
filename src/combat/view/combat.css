@@ -110,3 +110,6 @@ body:not(.device-touch) #cb-tension button.tap { display: none; }
 .cb-end p { margin: 4px 0; }
 .cb-end .facts { color: #e8a33d; }
 body.cb-encounter #tutorial { display: none !important; }
+#cb-hud .tag { position: absolute; left: -5px; top: -14px; width: 0; height: 0; border: 5px solid transparent; border-top: 8px solid rgba(242,235,221,.85); opacity: 0; transition: opacity .3s; filter: drop-shadow(0 0 2px #000); pointer-events: none; }
+#cb-hud .tag.on { opacity: .9; }
+#cb-hud .tag.warm { border-top-color: rgba(120,220,170,.9); }

@@ -83,11 +83,11 @@ export class CombatFx {
       if (this.tele.length >= 8) return;
       const mat = new THREE.ShaderMaterial({
         transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4,
-        uniforms: { uK: { value: 0 }, uRing: { value: 0 }, uCol: { value: new THREE.Color(1, 0.25, 0.1) } },
+        uniforms: { uK: { value: 0 }, uRing: { value: 0 }, uW: { value: 0.1 }, uCol: { value: new THREE.Color(1, 0.25, 0.1) } },
         vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-        fragmentShader: `varying vec2 vUv; uniform float uK, uRing; uniform vec3 uCol;
+        fragmentShader: `varying vec2 vUv; uniform float uK, uRing, uW; uniform vec3 uCol;
           void main() { float a;
-            if (uRing > 0.5) { float d = length(vUv - 0.5) * 2.0; if (d > 1.0) discard; a = smoothstep(0.86, 0.97, d) * 0.9 + step(d, uK) * 0.22; }
+            if (uRing > 0.5) { float d = length(vUv - 0.5) * 2.0; if (d > 1.0) discard; a = smoothstep(1.0 - uW * 1.6, 1.0 - uW * 0.4, d) * 0.9 + step(d, uK) * 0.16; }
             else { float e = min(vUv.x, 1.0 - vUv.x); a = (smoothstep(0.0, 0.12, e) < 0.6 ? 0.8 : 0.0) + step(vUv.y, uK) * 0.25; a *= smoothstep(1.0, 0.85, vUv.y) ; }
             gl_FragColor = vec4(uCol, a * (0.55 + 0.45 * uK)); }`,
       });
@@ -104,14 +104,17 @@ export class CombatFx {
   }
   private placeTele(t: CombatFx['tele'][number], x: number, z: number, dx: number, dz: number, len: number, r: number) {
     const m = t.mesh;
-    if (t.ring) { m.position.set(x, this.height(x, z) + 0.12, z); m.scale.set(r * 2, 1, r * 2); m.rotation.set(0, 0, 0); }
+    if (t.ring) { m.position.set(x, this.height(x, z) + 0.12, z); m.scale.set(r * 2, 1, r * 2); m.rotation.set(0, 0, 0); t.mat.uniforms.uW.value = Math.min(0.12, 0.3 / Math.max(0.5, r)); }
     else {
+      len = Math.max(1.2, len);
       const cx = x + dx * len * 0.5, cz = z + dz * len * 0.5;
       const y0 = this.height(x, z), y1 = this.height(x + dx * len, z + dz * len);
       m.position.set(cx, (y0 + y1) / 2 + 0.15, cz);
       m.scale.set(Math.max(0.8, r * 2), 1, len);
-      // the plane's v runs along -z: turn it to the line and tip it to the slope
-      m.rotation.set(Math.atan2(y1 - y0, len), Math.atan2(-dx, -dz), 0, 'YXZ');
+      // the plane's v runs along -z: turn it to the line and tip it to the slope (never more than a hillside; a short
+      // lunge over a bump once stood the strip on its end like a sign)
+      const tip = Math.max(-0.35, Math.min(0.35, Math.atan2(y1 - y0, len)));
+      m.rotation.set(tip, Math.atan2(-dx, -dz), 0, 'YXZ');
     }
   }
   /** A beam's line follows the machine as it turns. */

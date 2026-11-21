@@ -21,6 +21,7 @@ export class CombatHud {
   root = el('div', 'off'); private ret: HTMLElement; private chip: HTMLElement; private obj: HTMLElement; private eye: HTMLElement;
   private bossEl: HTMLElement; private inj: HTMLElement; private fa: HTMLElement; private studyEl: HTMLElement; private vig: HTMLElement;
   private arrowEls: HTMLElement[] = [];
+  private tagEls: HTMLElement[] = [];
   private touchRoot = el('div', 'off'); private pick = el('div', 'off');
   touch: TouchState = { attackHeld: false, attackHit: false, aim: false, dodgeHit: false, blockHeld: false, altHeld: false, altHit: false, weaponHit: false, sneak: false, trapHit: false };
   private btn: Record<string, HTMLButtonElement> = {};
@@ -40,6 +41,7 @@ export class CombatHud {
     this.fa = el('div', 'fa', '<b></b><span></span>');
     this.root.append(this.vig, this.ret, this.studyEl, this.eye, this.obj, this.bossEl, this.inj, this.fa, this.chip);
     for (let i = 0; i < 4; i++) { const a = el('div', 'arrow', '<i></i>'); this.arrowEls.push(a); this.root.append(a); }
+    for (let i = 0; i < 6; i++) { const a = el('div', 'tag'); this.tagEls.push(a); this.root.append(a); }
     this.touchRoot.id = 'cb-touch';
     const mk = (id: keyof typeof ICON, down: () => void, up: () => void = () => {}) => {
       const b = el('button', id, `<svg viewBox="0 0 24 24">${ICON[id]}</svg>`) as HTMLButtonElement;
@@ -108,6 +110,15 @@ export class CombatHud {
       const q = list[i];
       e.classList.toggle('on', !!q);
       if (q) { e.classList.toggle('calm', !q.hot); e.style.transform = `rotate(${q.a}rad)`; }
+    });
+  }
+  /** The suit's marks over creatures it already knows (screen pixels; `warm` while it has not noticed you). */
+  tags(list: { x: number; y: number; warm: boolean }[]) {
+    this.tagEls.forEach((e, i) => {
+      const q = list[i];
+      if (!q) { if (e.classList.contains('on')) e.classList.remove('on'); return; }
+      e.classList.add('on'); e.classList.toggle('warm', q.warm);
+      e.style.transform = `translate(${q.x.toFixed(0)}px, ${q.y.toFixed(0)}px)`;
     });
   }
   boss(name: string | null, k = 0, p2 = false) {

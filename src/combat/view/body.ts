@@ -160,7 +160,8 @@ export class FightBody {
       else if (w === 'sling') {
         // the sling goes round overhead, faster as it comes up to speed
         const a = t * (9 + c * 12);
-        this.scratch2 = { ...P.throwBack, armR: [-0.4, 0.8, 0.05], foreR: [Math.cos(a) * 0.75, 0.55, Math.sin(a) * 0.75] };
+        // upper arm out and up at the shoulder, the forearm drawing the circle above the head; the other hand points the way
+        this.scratch2 = { ...P.throwBack, armR: [-0.72, 0.62, -0.05], foreR: [Math.cos(a) * 0.8 - 0.2, 0.45, Math.sin(a) * 0.8], armL: [0.3, -0.25, 0.9], foreL: [0.05, -0.1, 1], twist: -0.5 };
         pose = mix(base, this.scratch2, out(c * 3), this.scratch);
       } else pose = mix(P.bowHold, P.bowDrawn, out(c), this.scratch);
       if (str) str.position.x = w === 'bow' ? -c * 0.0 : 0;
