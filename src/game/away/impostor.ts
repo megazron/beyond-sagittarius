@@ -12,8 +12,8 @@ import { Character, CHAR_BUDGET } from '../../characters/character';
  */
 export const IMP = { walk: 6, frames: 7 }; // frame 6 is standing
 
-/** `views`: sides baked round each body (8 on desktops, so a card turns in 45-degree steps; 4 on phones); `per`: renders a frame. */
-export function impostorBaker(renderer: THREE.WebGLRenderer, bodies: Character[], tile: [number, number], env: () => THREE.Texture | null, NV = 8, per = 8) {
+/** `NV`: sides baked round each body (8 on desktops, so a card turns in 45-degree steps; 4 on phones); `per`: renders a call; `split`: frames a body is spread over. */
+export function impostorBaker(renderer: THREE.WebGLRenderer, bodies: Character[], tile: [number, number], env: () => THREE.Texture | null, NV = 8, per = 8, split = 1) {
   const V = bodies.length, cols = V * NV, rows = IMP.frames, [TW, TH] = tile;
   const rt = new THREE.WebGLRenderTarget(cols * TW, rows * TH, { depthBuffer: true, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false });
   rt.texture.colorSpace = THREE.SRGBColorSpace;
@@ -72,9 +72,8 @@ export function impostorBaker(renderer: THREE.WebGLRenderer, bodies: Character[]
     /** Call once a frame, outside the game's own render: bakes one body when they are all loaded. Returns true when it just finished. */
     step() {
       if (next >= V || ready < V) return false;
-      // a whole body a frame (as many renders as `per` allows in each call of shootRow): done in a few frames while you
-      // are still in the flat, before anything is measured or seen
-      for (let k = 0; k < 64; k++) if (shootRow(next)) { next++; break; }
+      // a body over `split` frames: done in a few frames while you are still in the flat
+      for (let k = 0, n = Math.ceil((IMP.frames * Math.ceil(NV / per)) / split); k < n; k++) if (shootRow(next)) { next++; break; }
       return next >= V;
     },
     dispose() { rt.dispose(); },

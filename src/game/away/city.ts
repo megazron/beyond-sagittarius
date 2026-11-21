@@ -1443,7 +1443,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       // the cards take the light of the hour: the sky's fill and what is left of the sun
       cardLight.copy(hemi.color).multiplyScalar(hemi.intensity * 0.42).add(TMP_C.copy(sun.color).multiplyScalar(sun.intensity * 0.16)).addScalar(0.1 * day.state.night);
       dense.setLight(cardLight);
-      if (!baker && Renderer.current && bakeBodies.length >= 4) baker = impostorBaker(Renderer.current.renderer, bakeBodies, tier === 0 ? [72, 128] : [124, 224], () => scene.environment, tier === 0 ? 4 : 8);
+      if (!baker && Renderer.current && bakeBodies.length >= 4) baker = impostorBaker(Renderer.current.renderer, bakeBodies, tier === 0 ? [72, 128] : [124, 224], () => scene.environment, tier === 0 ? 4 : 8, 8, tier === 0 ? 1 : 2);
       if (baker && !baker.done && baker.step()) dense.setAtlas(baker.texture, baker.cols, baker.rows, baker.variants, baker.views);
       poolM.opacity = 0.08 + 0.72 * day.state.night;
       if (cam) {
