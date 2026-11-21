@@ -1159,7 +1159,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     }
   };
 
-  const moved = mergeStatic(scene, new Set<THREE.Object3D>([ground, skyMesh, ringLight, sun, sun.target, ...(linerG ? [linerG] : [])]), tier === 2 ? 39 : tier === 1 ? 78 : 400, (t) => { future.update(0.05, t); mega.update(0.05, t); dense.update(0.05, t, null); }, tier === 0);
+  const moved = mergeStatic(scene, new Set<THREE.Object3D>([ground, skyMesh, ringLight, sun, sun.target, ...(linerG ? [linerG] : [])]), tier === 2 ? 39 : tier === 1 ? 117 : 400, (t) => { future.update(0.05, t); mega.update(0.05, t); dense.update(0.05, t, null); }, tier === 0);
   // ---- the rest of Zenvora: districts, traffic and people round the old town (districts.ts) ----
   const placedD = new Map<string, { name: string; at: THREE.Matrix4[] }>(), DCELL = tier === 0 ? 104 : 52;
   const placeD = (name: string, x: number, y: number, z: number, yaw: number, scale = 1) => {
