@@ -149,7 +149,7 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
       g2.filter = 'blur(1.2px)'; g2.drawImage(g.canvas, 0, 0); g.clearRect(0, 0, 512, 128); g.drawImage(c2, 0, 0);
     });
     const mat = new THREE.MeshBasicMaterial({ map: sheet, transparent: true, alphaTest: 0.22, color: new THREE.Color(0.55, 0.52, 0.6) });
-    const n = rich ? 240 : 80, gateN = rich ? 70 : 30;
+    const n = rich ? 120 : 60, gateN = rich ? 34 : 18; // a busy street, not a packed one (the owner: "too many people, too crowded")
     const geo = new THREE.PlaneGeometry(1, 1); geo.translate(0, 0.5, 0);
     const offs = new Float32Array(n + gateN); for (let i = 0; i < n + gateN; i++) offs[i] = Math.floor(rnd() * 8) / 8; // every card its own figure, gate crowd included
     const tiles = new Float32Array((n + gateN) * 2); for (let i = 0; i < n + gateN; i++) tiles[i * 2] = offs[i];
@@ -170,7 +170,7 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     });
     // travellers thronging the gate plaza: across the whole width, milling slowly, life-size
     cards = ppl;
-    for (let i = 0; i < gateN; i++) ppl.push({ x: (rnd() - 0.5) * 17, z: S + 2 + rnd() * 18, v: (rnd() - 0.5) * 0.5, h: (offs[n + i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: true });
+    for (let i = 0; i < gateN; i++) ppl.push({ x: (rnd() < 0.5 ? -1 : 1) * (4.8 + rnd() * 3.6) /* on the pavements: the road through the gate is for the cars */, z: S + 2 + rnd() * 18, v: (rnd() - 0.5) * 0.5, h: (offs[n + i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: true });
     // each card its own shade: a little warmer or cooler, lighter or darker, so no two neighbours match
     const TC = new THREE.Color();
     for (let i = 0; i < n + gateN; i++) { const k = 0.78 + rnd() * 0.42; im.setColorAt(i, TC.setRGB(k * (0.94 + rnd() * 0.12), k * (0.94 + rnd() * 0.1), k * (0.94 + rnd() * 0.12))); }

@@ -95,6 +95,14 @@ export function facadeMaterial(o: FacadeOpts = {}) {
               shopWall = mix(shopWall, vec3(0.3, 0.2, 0.14), counter);
             }
             room = street ? shopWall * step(0.7, q.y) + wallC * 0.12 * step(q.y, 0.7) : wallC * (0.85 + 0.3 * step(0.8, fHash(vec3(floor(q.x * 2.0), fl, seed))));
+            // someone at work at the back of most shops: a shopkeeper behind the counter, a cook, a clerk
+            if (street && t == tz && fHash(vec3(bay, 21.0, seed)) > 0.35) {
+              float px = 0.3 * W + 0.4 * W * fHash(vec3(bay, 22.0, seed)), ux = q.x - px;
+              float head = step(length(vec2(ux, (q.y - 1.62) * 0.9)), 0.12);
+              float body = step(abs(ux), 0.23 - 0.05 * smoothstep(1.0, 1.45, q.y)) * step(0.95, q.y) * step(q.y, 1.5);
+              vec3 cloth = 0.25 + 0.35 * cos(6.2831 * (fHash(vec3(bay, 23.0, seed)) + vec3(0.0, 0.33, 0.67)));
+              room = mix(room, vec3(0.42, 0.3, 0.24), head); room = mix(room, cloth * 0.7, body);
+            }
           } else if (t == ty) {
             // a shop's ceiling is dark with strips of light across it; a flat's is pale
             float strip = step(0.86, fract(q.z / 1.4));

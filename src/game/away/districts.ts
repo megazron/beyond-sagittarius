@@ -875,7 +875,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     out.x = R.x0; out.z = R.z1 - u; out.yaw = Math.PI; return out;
   };
   const peds: Ped[] = [];
-  const NPED = [80, 200, 340][tier];
+  const NPED = [60, 130, 190][tier]; // walkers in the whole district grid; the recall keeps them round the camera
   const P0 = { x: 0, z: 0, yaw: 0 };
   for (let i = 0; i < NPED; i++) {
     const b = pick(walkBlocks), off = 0.9 + rnd() * 2.4, s = rnd() * perim(b, off);
@@ -886,7 +886,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   // people staying put: on the benches, at shop windows, chatting in twos and threes, filming, waiting at shelters
   const stayPoses = ['idle', 'selfie', 'write', 'idle', 'sit']; // no stock emotes on a loop: standing, on the phone, writing, sitting
   for (const bn of benches.filter(() => rnd() < 0.5)) peds.push({ b: walkBlocks[0], s: 0, dir: 1, off: 0, v: 0, mode: 'stay', pose: 'sit', x: bn.x, z: bn.z, yaw: bn.yaw + Math.PI, t: 0 });
-  for (const sf of shopfronts.filter(() => rnd() < (rich ? 0.22 : 0.1))) {
+  for (const sf of shopfronts.filter(() => rnd() < (rich ? 0.12 : 0.07))) {
     const n = rnd() < 0.5 ? 1 : 2 + Math.floor(rnd() * 2), bx = sf.x + sf.nx * 1.6, bz = sf.z + sf.nz * 1.6;
     for (let j = 0; j < n; j++) {
       const a = (j / n) * Math.PI * 2 + rnd(), r = n > 1 ? 0.7 : 0;
@@ -996,6 +996,8 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     solids,
     height: districtHeight,
     peds,
+    /** Test hook: where every moving car is (x, z, yaw) and every walker (x, z, crossing?). */
+    traffic: () => ({ cars: cars.map((c) => [c.x, c.z, c.yaw]), peds: peds.map((p) => [p.x, p.z, p.mode === 'cross' ? 1 : 0, p.mode !== 'cross' && !inOld(p.x, p.z) && districtHeight(p.x, p.z) < 0.07 ? 1 : 0]) }),
     nodes: sigNodes,
     bounds: BOUNDS,
     footprints,
