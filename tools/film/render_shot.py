@@ -177,8 +177,12 @@ for k, fs in ids.items():
                     wid = who_of(info)
                     fd = face_of(ID_OF.get(wid, wid)) if wid and PERF.get(wid) else None
                     if fd and len(fd[2]) == len(q):
-                        pf = PERF[wid]; g = min(f + 1, len(pf['open']) - 1); lip = (pf['open'][g], pf['round'][g], pf['wide'][g])
-                        q = FACE.apply(q.copy(), fd[2], fd[1], fd[0], FACE.track(fd[0], pf['cues'], f / 24, seed=len(wid), env=lambda _t: pf['open'][g], lip=lip))
+                        pf = PERF[wid]
+                        if pf.get('open'):
+                            g = min(f + 1, len(pf['open']) - 1); lip = (pf['open'][g], pf['round'][g], pf['wide'][g]); env = lambda _t: pf['open'][g]
+                        else:
+                            lip = env = None  # a silent shot: no mouth track
+                        q = FACE.apply(q.copy(), fd[2], fd[1], fd[0], FACE.track(fd[0], pf['cues'], f / 24, seed=len(wid), env=env, lip=lip, blinks=pf.get('blinks')))
                     last = np.stack([q[:, 0], -q[:, 2], q[:, 1]], 1).astype('<f4')
                 if last is None:
                     q = b64f(next(iter(x for x in recs.values() if 'baked' in x))['baked']).reshape(-1, 3); last = np.stack([q[:, 0], -q[:, 2], q[:, 1]], 1).astype('<f4')
