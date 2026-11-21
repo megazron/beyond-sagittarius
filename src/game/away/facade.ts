@@ -81,7 +81,7 @@ export function facadeMaterial(o: FacadeOpts = {}) {
               float plank = step(0.92, fract(sx * 3.0));
               vec3 wood = vec3(0.36, 0.22, 0.13) * (0.85 + 0.15 * fHash(vec3(floor(sx * 3.0), 6.0, seed))) * (1.0 - 0.4 * plank);
               float board = step(1.55, q.y) * step(q.y, 2.25) * step(0.2, fract(sx * 0.35)) * step(fract(sx * 0.35), 0.8);
-              float chalk = board * step(0.55, fHash(vec3(floor(sx * 14.0), floor(q.y * 12.0), seed))) * 0.5;
+              float chalk = board * step(0.8, fract(q.y * 11.0)) * step(0.35, fHash(vec3(floor(sx * 40.0), floor(q.y * 11.0), seed))) * step(0.15, fract(sx * 0.35 + 0.1)) * 0.28; // lines of a handwritten menu
               shopWall = mix(wood, vec3(0.06) + chalk, board) + vec3(0.25, 0.16, 0.08) * step(q.y, 1.0) * step(0.9, q.y);
             } else if (shopKind > 3.5) {
               shopWall = mix(vec3(0.7, 0.74, 0.72), goods * 1.3, item * 0.6) * (1.0 - 0.5 * step(ry, 0.1));

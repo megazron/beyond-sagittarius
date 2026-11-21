@@ -395,7 +395,7 @@ class SsrPass extends Pass {
         float pud = smoothstep(0.52, 0.62, wN(W.xz * 0.16) * 0.7 + wN(W.xz * 0.7) * 0.3);
         vec3 V = normalize(P), R = reflect(V, N);
         float cosT = clamp(dot(-V, N), 0.0, 1.0), fres = 0.04 + 0.96 * pow(1.0 - cosT, 5.0);
-        float k = uStrength * mix(0.25, 1.0, pud) * mix(0.3, 1.0, fres);
+        float k = uStrength * mix(0.15, 1.0, pud) * mix(0.3, 1.0, fres);
         if (k < 0.01 || R.z > 0.6) return;
         // march: steps that grow with distance, jittered per pixel, then one refinement
         float stp = 0.35 + 0.02 * -P.z, jit = wH(vUv * 913.0 + 0.37);
