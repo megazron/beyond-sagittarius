@@ -1011,6 +1011,7 @@ window.addEventListener('resize', () => {
   /** Test hook: the take-off path's least clearance over the city (m; negative = the liner passes through something). */
   takeoffMap() { return JSON.stringify((game?.away?.stage as { takeoffMap?: () => unknown } | null)?.takeoffMap?.() ?? null); },
   takeoffFindPad() { return (game?.away?.stage as { takeoffFindPad?: () => unknown } | null)?.takeoffFindPad?.() ?? null; },
+  takeoffFrame() { return (game?.away?.stage as { takeoffFrame?: (f?: number, a?: number) => unknown } | null)?.takeoffFrame?.(camera.fov, camera.aspect) ?? null; },
   takeoffClearance() { return (game?.away?.stage as { takeoffClearance?: () => unknown } | null)?.takeoffClearance?.() ?? null; },
   get awayOutroOn() { return !!game?.away?.outroOn; },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
