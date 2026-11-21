@@ -36,5 +36,7 @@ export class FilmVideo {
   }
 
   get time() { return this.el.currentTime; }
+  /** Several takes share one layer: only the playing one is shown, the rest wait paused. */
+  visible(on: boolean) { this.el.style.display = on ? 'block' : 'none'; if (!on) this.el.pause(); }
   close() { this.el.pause(); this.el.remove(); this.el.src = ''; }
 }

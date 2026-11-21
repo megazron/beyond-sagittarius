@@ -10,6 +10,7 @@ import { createCharacter, Character, CrewId, CrewPose, type Face } from '../char
 import { flail, mixLimbs, FALL, STANDING } from './montage';
 import { defaultLook, type PlayerLook, type CrewSkins } from '../characters/custom';
 import { createInserts, type Inserts } from './inserts';
+import { FilmVideo } from './filmvideo';
 
 export interface CineUI {
   subtitle(key: string | null, speakerKey?: string): void;
@@ -21,7 +22,8 @@ export interface CineUI {
 }
 
 interface Cue { t: number; fn: () => void; done?: boolean; voiced?: boolean; key?: string; t0?: number }
-interface Shot { start: number; end: number; enter?: () => void; update: (k: number, local: number) => void; done?: boolean }
+/** film: a rendered (Blender) take of this shot, played as video over the engine picture when its file is there. */
+interface Shot { start: number; end: number; enter?: () => void; update: (k: number, local: number) => void; done?: boolean; film?: string }
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -129,6 +131,34 @@ export class Cinematic {
     this.cues.forEach((c) => (c.done = false));
     this.shots.forEach((s) => (s.done = false));
     audio.startDrone();
+    void this.openFilms();
+  }
+
+  // ---- rendered takes (BLENDER shots): muted video over the engine picture, on the cinematic's own clock, under the
+  // game's sound and subtitles. A shot without its file plays in the engine as before.
+  private films = new Map<string, FilmVideo>();
+  private filmEl: HTMLElement | null = null;
+  private filmOn: string | null = null;
+  private async openFilms() {
+    if (!this.filmEl) {
+      const el = document.createElement('div'); el.id = 'cine-film';
+      el.style.cssText = 'position:fixed;inset:0;z-index:5;pointer-events:none;display:none;background:#000';
+      document.body.appendChild(el); this.filmEl = el;
+    }
+    const small = window.matchMedia?.('(max-width: 900px)').matches ?? false;
+    for (const name of new Set(this.shots.map((s) => s.film).filter(Boolean) as string[])) {
+      if (this.films.has(name)) continue;
+      const v = await FilmVideo.open(name, this.filmEl, small);
+      if (v) this.films.set(name, v);
+    }
+  }
+  /** Show the shot's rendered take at its local time, or hide the video. */
+  private filmAt(name: string | undefined, local: number) {
+    const v = name ? this.films.get(name) : undefined;
+    if (!this.filmEl) return;
+    if (!v) { if (this.filmOn) { this.filmEl.style.display = 'none'; this.filmOn = null; } return; }
+    if (this.filmOn !== name) { this.filmEl.style.display = 'block'; this.filmOn = name!; for (const [n, f] of this.films) f.visible(n === name); }
+    v.sync(local);
   }
 
   /** Jump to a time (debug / screenshots). Earlier cues are marked done without firing. */
@@ -242,6 +272,7 @@ export class Cinematic {
   private finish() {
     this.playing = false;
     this.stage = null;
+    this.filmAt(undefined, 0); for (const f of this.films.values()) f.close(); this.films.clear();
     audio.alarm(false); audio.vacuum(false);
     audio.stopDrone();
     this.ui.subtitle(null); this.ui.caption(null); this.ui.mission(null); this.ui.aiAlert(null); this.ui.chapter(null);
@@ -468,7 +499,7 @@ export class Cinematic {
     // a close shot may cheat the others out of the frame (they would stand between the lens and the face): every
     // shot starts with all six shown, and `only` hides the rest for that shot
     const only = (...cs: Character[]) => intr.crew.forEach((c) => { c.root.visible = cs.length === 0 || cs.includes(c); });
-    const shotAt = (start: number, end: number, sh: Omit<Shot, 'start' | 'end'>) => this.shots.push({ start, end, enter: () => { fresh(); only(); sh.enter?.(); }, update: (k, l) => { fresh(); sh.update(k, l); } });
+    const shotAt = (start: number, end: number, sh: Omit<Shot, 'start' | 'end'>) => this.shots.push({ start, end, film: sh.film, enter: () => { fresh(); only(); sh.enter?.(); }, update: (k, l) => { fresh(); sh.update(k, l); } });
 
     // ---- A. Something is wrong ----
     this.cue(S + 0.2, () => { calm(); audio.tone(58, 7, 'sine', 0.22, 0, -9); });
@@ -506,6 +537,7 @@ export class Cinematic {
     });
     // A4 close-up: Zenvik (back at the gauge's end of the console). He wants it to be a sensor fault. Brows draw together; a slow blink; eyes to the window and back
     shotAt(S + 9.0, S + 11.6, {
+      film: 'pull_a4',
       enter: () => atConsole(),
       update: (k, local) => {
         lens(85); const h = head(sci, -0.12); this.camera.position.copy(h).add(V(lerp(0.75, 0.62, k), -0.06, -1.55)); this.lookTarget.copy(h);
@@ -874,6 +906,7 @@ export class Cinematic {
     for (const c of this.cues) if (!c.done && t >= c.t) { c.done = true; c.fn(); if (!this.playing) return; }
     if (this.subClearAt && this.clockT > this.subClearAt) { this.subClearAt = 0; this.ui.subtitle(null); }
     this.animateCrew(dt);
+    let film = false;
     for (const s of this.shots) {
       if (t >= s.start && t < s.end) {
         if (!s.done) {
@@ -884,9 +917,11 @@ export class Cinematic {
         const local = t - s.start;
         this.roll = 0;
         s.update(clamp(local / (s.end - s.start), 0, 1), local);
+        this.filmAt(s.film, local); film = true;
         break;
       }
     }
+    if (!film) this.filmAt(undefined, 0);
     this.camera.lookAt(this.lookTarget);
     if (this.roll) this.camera.rotateZ(this.roll);
     this.commonUpdate(dt);

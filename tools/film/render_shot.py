@@ -26,7 +26,7 @@ C = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))  # three's
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc = bpy.context.scene; sc.render.engine = 'CYCLES'; cy = sc.cycles
 if not a.cpu:
-    pr = bpy.context.preferences.addons['cycles'].preferences; pr.compute_device_type = 'OPTIX'; pr.get_devices()
+    pr = bpy.context.preferences.addons['cycles'].preferences; pr.compute_device_type = os.environ.get('CYCLES_DEVICE', 'CUDA'); pr.get_devices()
     for d in pr.devices: d.use = d.type != 'CPU'
     cy.device = 'GPU'
 cy.samples = a.samples; cy.use_denoising = True; cy.use_adaptive_sampling = True; cy.adaptive_threshold = 0.03
