@@ -8,7 +8,7 @@ import { Character, CHAR_BUDGET } from '../../characters/character';
  * and where the camera is, and is tinted by the light of the hour, so at twenty metres a card and a body are hard to
  * tell apart. One atlas, one draw for every far person in the city.
  *
- * The bake is spread over frames (one row of eight sides of one body a frame) while the player is still in the flat.
+ * The bake is spread over frames (one body a frame) while the player is still in the flat.
  */
 export const IMP = { walk: 6, frames: 7 }; // frame 6 is standing
 
@@ -26,8 +26,7 @@ export function impostorBaker(renderer: THREE.WebGLRenderer, bodies: Character[]
   const waits = bodies.map((b) => b.whenReady.then(() => { ready++; }));
   void waits;
   const old = new THREE.Color(), vp = new THREE.Vector4();
-  // one row of one body a frame (its eight sides): a whole body at once was fifty renders of a skinned body in one frame,
-  // a spike of several hundred draw calls while you are in the flat. The body stays on the bake stage until its rows are done.
+  // a body is shot row by row (a walk frame from every side, `per` renders a call); step() runs its rows in one frame
   let row = 0, w0 = 0, t = 100, ph = 0;
   let held: { root: THREE.Object3D; parent: THREE.Object3D | null; pos: THREE.Vector3; ry: number; vis: boolean } | null = null;
   const shootRow = (i: number) => {
