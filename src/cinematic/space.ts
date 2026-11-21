@@ -17,6 +17,9 @@ export function createSpaceDome() {
     uBHRot: { value: new THREE.Matrix3() },
     uWarpDir: { value: new THREE.Vector3(0, 0, -1) },
     uStar: { value: 1 },
+    // Sagittarius A*'s gas is thin, hot and faint (well under 1% of what it captures falls in): no bright golden
+    // disk, a dim haze with a hot spot going round at about a third of light speed. 1 is the old bright disk.
+    uDisk: { value: 0.14 },
   };
   const mat = new THREE.ShaderMaterial({
     uniforms,
@@ -32,7 +35,7 @@ export function createSpaceDome() {
     `,
     fragmentShader: /* glsl */ `
       precision highp float;
-      uniform float uTime, uNebula, uWarp, uOther, uBH, uStar;
+      uniform float uTime, uNebula, uWarp, uOther, uBH, uStar, uDisk;
       uniform vec3 uBHPos, uWarpDir;
       uniform mat3 uBHRot;
       varying vec3 vDir;
@@ -128,21 +131,22 @@ export function createSpaceDome() {
               vec3 prev = p;
               v += -1.5 * h2 * p / pow(r, 5.0) * dt * uBH;
               p += v * dt;
-              if (prev.y * p.y < 0.0) {
-                vec3 q = mix(prev, p, prev.y / (prev.y - p.y));
-                float rq = length(q.xz);
-                if (rq > 2.6 && rq < 12.0) {
-                  float ang = atan(q.z, q.x);
-                  float swirl = ang + uTime * 2.2 / pow(rq, 1.5) * 3.0;
-                  float rings = vnoise(vec3(rq * 2.2, cos(swirl) * 2.5, sin(swirl) * 2.5));
-                  rings = 0.45 + 0.9 * rings * vnoise(vec3(rq * 7.0, cos(swirl) * 6.0, sin(swirl) * 6.0));
-                  vec3 tang = normalize(vec3(-q.z, 0.0, q.x));
-                  float dop = 1.0 + 0.75 * dot(tang, normalize(v));
-                  float dens = smoothstep(2.6, 3.3, rq) * smoothstep(12.0, 6.5, rq) * rings;
-                  vec3 dc = diskColor(rq) * dop * dop * 2.2;
-                  acc += (1.0 - alpha) * dc * dens;
-                  alpha += (1.0 - alpha) * clamp(dens * 0.85, 0.0, 1.0);
-                }
+              // Sagittarius A* has no thin bright disk: its gas is a thick, hot, faint, flickering cloud (a RIAF),
+              // as tall as it is wide, brightest just outside the shadow, with a flare going round. Emission is
+              // summed through the volume, so there is no crisp golden line across the black.
+              float rq = length(p.xz);
+              if (r > 1.6 && r < 13.0) {
+                float hgt = 0.55 * rq + 0.4;
+                float vol = exp(-(p.y * p.y) / (hgt * hgt)) * smoothstep(1.6, 2.6, r) * exp(-(r - 2.6) / 3.0);
+                float ang = atan(p.z, p.x);
+                float hot = pow(max(0.0, cos(ang - uTime * 0.9)), 24.0) * exp(-pow((rq - 3.6) / 0.9, 2.0)) * exp(-p.y * p.y);
+                float flick = 0.75 + 0.25 * sin(uTime * 0.7 + rq * 1.3 + ang * 2.0);
+                vec3 tang = normalize(vec3(-p.z, 0.0, p.x));
+                float dop = 1.0 + 0.5 * dot(tang, normalize(v));
+                float em = (vol * flick + 4.0 * hot) * uDisk * dt * 0.55;
+                vec3 dc = mix(vec3(0.9, 0.55, 0.38), vec3(1.0, 0.8, 0.7), hot) * dop * dop;
+                acc += (1.0 - alpha) * dc * em;
+                alpha += (1.0 - alpha) * clamp(em * 0.12, 0.0, 1.0);
               }
             }
             vec3 bg = captured ? vec3(0.0) : background(normalize(transpose(uBHRot) * v));
