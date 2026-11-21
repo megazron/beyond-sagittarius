@@ -75,7 +75,7 @@ their own Episode One kit; the dev arena ignores it all.
 | `hafting` | 12 | stone-tipped spear |
 | `atlatl` | 13 | spear-thrower and darts |
 | `traps` | 14 | snare, rattle line |
-| `sling` | not in the tree yet | sling |
+| `sling` | 22 | sling |
 | `bow` | 19 | bow and arrows |
 
 Known without teaching: `throwStone`, `woodBone`, `bait`. The older flags still count: `flags.spear` gives

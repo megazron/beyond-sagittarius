@@ -138,7 +138,7 @@ export class FightBody {
       const pose = this.ranged.pose(model, p, dt, t, aiming || armed, aimW, ammo, this.since);
       if (p.act === 'charge') this.wasCharging = 'shot'; else if (this.since > 0.45) this.wasCharging = 'none';
       if (pose) { if (p.sneaking) { pose.bend = (pose.bend ?? 0) + 0.3; this.crouch = 0.2; } model.setLimbs(pose); return; }
-    } else if (!rw) this.ranged.hide();
+    } else if (!rw) { if (this.ranged.mode !== 'none') this.ranged.hide(model); }
     else this.ranged.faceOffset = 0;
     if (this.held) {
       const G = GRIP, gun = this.heldId === 'coil' || this.heldId === 'crossbow';
@@ -212,5 +212,5 @@ export class FightBody {
   /** Give the body back to the walk and empty the hands. */
   /** After the body is posed this frame. */
   late(model: Character, dt: number, t: number) { this.ranged.late(model, dt, t); }
-  release(model: Character) { this.ranged.hide(); model.setLimbs(null); this.hold(model, null); this.rollAngle = 0; this.crouch = 0; this.ready = 0; }
+  release(model: Character) { this.ranged.hide(model); model.setLimbs(null); this.hold(model, null); this.rollAngle = 0; this.crouch = 0; this.ready = 0; }
 }

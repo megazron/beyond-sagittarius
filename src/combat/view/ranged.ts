@@ -135,7 +135,7 @@ export class RangedRig {
       } else target = S.up > 0.5 ? nock0 : V().set(-0.22, 1.0, 0.12);
       const pole = V().copy(aim).multiplyScalar(-1).add(V().set(0, 0.55, 0));
       reach(sR, V().copy(target).addScaledVector(aim, -0.06), R.a, R.b, pole, eR, wR);
-      limbs = { armL: dirOf(eL, sL), foreL: dirOf(wL, eL), armR: dirOf(eR, sR), foreR: dirOf(wR, eR), twist: 0.15 * smooth(S.up), openHands: S.rel < 0.35 };
+      limbs = { armL: dirOf(eL, sL), foreL: dirOf(wL, eL), armR: dirOf(eR, sR), foreR: dirOf(wR, eR), twist: 0.15 * smooth(S.up) };
     } else if (this.mode === 'atlatl') {
       // the spear-thrower: held at the shoulder, the dart lying along it pointing at the target; drawn back with the
       // body turned; on the cast the arm drives forward and the thrower flips over the hand, flinging the dart
@@ -200,6 +200,17 @@ export class RangedRig {
       limbs = { armR: dirOf(eR, sR), foreR: dirOf(wR, eR), armL: dirOf(eL, sL), foreL: dirOf(wL, eL), twist: wind };
       // stepping into it: the off foot forward, only while standing
       if ((whirl && p.speed < 0.6) || (S.throwT >= 0 && S.throwT < 0.45)) { limbs.legL = [0.06, -0.93, 0.36]; limbs.shinL = [0, -1, 0.05]; limbs.legR = [-0.06, -0.96, -0.24]; limbs.shinR = [0, -0.98, -0.2]; }
+    }
+    // the hands close on what they hold: the bow's grip and the string (fingers hooked), the sling's cords (a loop
+    // on the finger, the release cord pinched), the spear-thrower's handle
+    if (this.mode === 'bow') {
+      grip(model, 'L', { shape: 'grip', radius: 0.018, amount: smooth(S.up) });
+      grip(model, 'R', S.rel < 0.3 ? { shape: 'open' } : S.arrowIn === 'hand' ? { shape: 'pinch', radius: 0.004 } : { shape: 'grip', radius: 0.002, amount: S.up > 0.5 ? 0.75 : 0.4 });
+    } else if (this.mode === 'sling') {
+      grip(model, 'R', S.hold === 'free' && S.throwT >= 0 && S.throwT < 0.5 ? { shape: 'relaxed' } : { shape: 'pinch', radius: 0.002 });
+      grip(model, 'L', S.hold === 'left' || S.hold === 'whirl' ? { shape: 'grip', radius: 0.03, amount: S.hold === 'left' ? 0.8 : 0.2 } : { shape: 'relaxed' });
+    } else if (this.mode === 'atlatl') {
+      grip(model, 'R', { shape: 'grip', radius: 0.012 }); grip(model, 'L', { shape: 'point' });
     }
     return limbs;
   }
@@ -293,7 +304,14 @@ export class RangedRig {
     void R;
   }
   /** Taken off: nothing left in the world. */
-  hide() { this.group.visible = false; this.quiver.visible = false; this.mode = 'none'; this.faceOffset = 0; this.pouchInit = false; }
+  hide(model?: Character) { if (model) { grip(model, 'L', null); grip(model, 'R', null); } this.group.visible = false; this.quiver.visible = false; this.mode = 'none'; this.faceOffset = 0; this.pouchInit = false; }
+}
+
+type GripShape = 'open' | 'relaxed' | 'grip' | 'pinch' | 'point';
+/** Close a hand round what it holds (character.setGrip, from the story's rig; absent on older builds). */
+function grip(model: Character, side: 'L' | 'R', g: { shape: GripShape; radius?: number; amount?: number } | null) {
+  const m = model as unknown as { setGrip?: (s: 'L' | 'R' | 'both', g: { shape: GripShape; radius?: number; amount?: number } | null) => void };
+  m.setGrip?.(side, g);
 }
 
 function dirOf(a: THREE.Vector3, b: THREE.Vector3): Dir { const d = V().subVectors(a, b).normalize(); return [d.x, d.y, d.z]; }
