@@ -52,9 +52,9 @@ export class RangedRig {
     const stoneM = new THREE.MeshStandardMaterial({ color: 0x8a8580, roughness: 0.9, flatShading: true });
     const cyl = (r: number, m: THREE.Material) => { const g = new THREE.CylinderGeometry(r, r, 1, 6); g.translate(0, 0.5, 0); const o = new THREE.Mesh(g, m); o.castShadow = true; o.frustumCulled = false; this.group.add(o); return o; };
     for (let i = 0; i < 9; i++) this.bowSeg.push(cyl(i === 4 ? 0.02 : 0.013, wood));
-    for (let i = 0; i < 2; i++) this.str.push(cyl(0.0025, gut));
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.72, 5).rotateX(Math.PI / 2).translate(0, 0, 0.36), wood);
-    const head = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.045, 4).rotateX(Math.PI / 2).translate(0, 0, 0.74), stoneM);
+    for (let i = 0; i < 2; i++) this.str.push(cyl(0.0042, gut));
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.72, 5).rotateX(Math.PI / 2).translate(0, 0, 0.36), wood);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.05, 4).rotateX(Math.PI / 2).translate(0, 0, 0.74), stoneM);
     const fl = new THREE.Mesh(new THREE.BoxGeometry(0.002, 0.03, 0.1).translate(0, 0, 0.07), new THREE.MeshStandardMaterial({ color: 0x6b6f5a, roughness: 1 }));
     this.arrow.add(shaft, head, fl); this.group.add(this.arrow);
     // a bark quiver at the right hip with a few shafts showing
@@ -120,7 +120,7 @@ export class RangedRig {
       // the string hand: on the string at brace height, back to the anchor under the jaw as it draws, past the ear on
       // the loose, then down to the quiver for the next arrow and back
       const grip = V().copy(wL).addScaledVector(armDir, 0.07);
-      const anchor = V().copy(head).addScaledVector(aim, 0.09).add(V().set(0, -0.09, 0));
+      const anchor = V().copy(head).addScaledVector(aim, 0.13).add(V().set(0, -0.13, 0));
       const nock0 = V().copy(grip).addScaledVector(aim, -0.15).add(V().set(0, 0.012, 0));
       const quiver = V().set(-0.2, 0.92, -0.1);
       let target: THREE.Vector3; S.arrowIn = ammo > 0 ? 'string' : 'none'; S.nock = -1;
