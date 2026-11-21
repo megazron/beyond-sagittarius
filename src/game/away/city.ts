@@ -1523,8 +1523,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           if (boarding.has(q) || talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
           const d = Math.hypot(q.pos.x - cp.x, q.pos.z - cp.z);
           if (d < 9 && inLens(q.pos.x, q.pos.z)) { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
-          // the six of the story and Mir have no card of their own look: they stay themselves (a body) out to 90 m
-          if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = tier > 0 && d < 90; /* phones: within the body cap, so not past the card range */ if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; }
+          // the six of the story and Mir have no card of their own look: they stay themselves (a body) out to 48 m
+          if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = tier > 0 && d < 48; /* a body to 48 m (they have no card of their own look); phones: only within the card range */ if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; }
           if (d >= CROWD_FAR) { if (q.fig.root.visible) q.fig.root.visible = false; stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: i, v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk }); continue; }
           // the six of the story (and Mir) are never a card within speaking distance, whatever the cap
           const dy = you ? Math.hypot(q.pos.x - you.position.x, q.pos.z - you.position.z) : 99;
