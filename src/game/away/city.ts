@@ -1470,7 +1470,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (cam) {
         stand.length = 0;
         // a hard cap on real bodies (BODY_CAP): the friends and whoever is nearest are bodies, everyone else a card
-        const cp = cam.position; let used = 0, nc = 0;
+        const cp = cam.position; let used = 0, nc = 0, elbow = 0;
         lens.on = !!you && outroT < 0; lens.cx = cp.x; lens.cz = cp.z; if (you) { lens.px = you.position.x; lens.pz = you.position.z; }
         if (oldOn) for (let i = 0; i < people.length; i++) {
           const q = people[i];
@@ -1481,8 +1481,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // the six of the story (and Mir) are never a card within speaking distance, whatever the cap
           const dy = you ? Math.hypot(q.pos.x - you.position.x, q.pos.z - you.position.z) : 99;
           if (!crowd.has(q.fig) && (d < 9 || dy < 7)) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
-          // and nobody at your elbow is ever a card, whatever the cap: a card reads as cardboard at arm's length
-          if (dy < 4) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
+          // and nobody at your elbow is a card (it reads as cardboard at arm's length): the two nearest go first in the queue
+          if (dy < 4 && elbow < 2) { elbow++; if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
           // whoever is drawn now holds on a little, and the six of the story come first
           const key = d - (q.fig.root.visible ? 1.5 : 0) - (crowd.has(q.fig) ? 0 : 5);
           let j = nc++; while (j > 0 && candK[j - 1] > key) { candK[j] = candK[j - 1]; candI[j] = candI[j - 1]; j--; }
