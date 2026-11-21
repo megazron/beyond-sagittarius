@@ -1,7 +1,7 @@
 import { Combat, defaultCombatSettings } from './combat/combat';
 import './style.css';
 import * as THREE from 'three';
-import { clipProbe, type ClipHit } from './core/clipprobe';
+import { clipProbe, clipStats, type ClipHit } from './core/clipprobe';
 import { NEAR_FADE } from './core/nearfade';
 import { setLang, setPlayer, t, Lang } from './i18n';
 import { detectQuality, isPhone, saveQualityChoice, QualityName } from './core/quality';
@@ -1043,6 +1043,7 @@ window.addEventListener('resize', () => {
   audioTap() { audio.start(); return audio.tap(); },
   /** Test: parts of bodies through the set or each other in the scene drawn now (src/core/clipprobe.ts). */
   clipProbe() { return clipProbe(renderer.renderPass.scene as THREE.Scene); },
+  get clipStats() { return { ...clipStats }; },
   /** Test: seek the opening ('cine', seconds) or the title sequence ('film', beats) from a to b in steps, probe each
    *  frame after it is drawn; returns the hits with their time, worst first per (who, part, what). */
   async clipScan(which: 'cine' | 'film', a: number, b: number, step = 0.5) {

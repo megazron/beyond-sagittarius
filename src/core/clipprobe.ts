@@ -20,7 +20,13 @@ const ghost = (o: THREE.Object3D) => {
   return (mt.transparent && (!mt.depthWrite || mt.blending === THREE.AdditiveBlending || mt.opacity < 0.5)) || !mt.visible || mt.colorWrite === false;
 };
 const shown = (o: THREE.Object3D) => { for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false; return true; };
-const label = (o: THREE.Object3D) => { const c: string[] = []; for (let q: THREE.Object3D | null = o; q && c.length < 4; q = q.parent) c.push(q.name || q.type); return c.join(' < '); };
+const label = (o: THREE.Object3D) => {
+  const c: string[] = []; for (let q: THREE.Object3D | null = o; q && c.length < 4; q = q.parent) c.push(q.name || q.type);
+  const m = o as THREE.Mesh, mt = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.Material & { color?: THREE.Color };
+  const b = new THREE.Box3().setFromObject(o), z = b.getSize(new THREE.Vector3()), k = b.getCenter(new THREE.Vector3());
+  return `${c.join(' < ')} ${m.geometry?.type ?? ''} ${mt?.name || mt?.type || ''} #${mt?.color?.getHexString?.() ?? ''} ${z.x.toFixed(1)}x${z.y.toFixed(1)}x${z.z.toFixed(1)} at ${k.x.toFixed(1)},${k.y.toFixed(1)},${k.z.toFixed(1)}`;
+};
+export const clipStats = { chars: 0, points: 0, targets: 0 };
 const nameOf = (r: THREE.Object3D) => (r.userData.id as string | undefined) ?? (r.userData.crewId as string | undefined) ?? r.name ?? 'character';
 
 export function clipProbe(scene: THREE.Scene, names?: (root: THREE.Object3D) => string): ClipHit[] {
@@ -38,6 +44,7 @@ export function clipProbe(scene: THREE.Scene, names?: (root: THREE.Object3D) => 
     if (r > 400 && !(m as THREE.InstancedMesh).isInstancedMesh && !o.userData.ground) return;
     targets.push(o);
   });
+  clipStats.chars = chars.length; clipStats.targets = targets.length;
   const out: ClipHit[] = [];
   const rc = new THREE.Raycaster(), p = new THREE.Vector3(), n = new THREE.Vector3(), nm = new THREE.Matrix3();
   const pts: { who: string; part: string; r: number; p: THREE.Vector3; root: THREE.Object3D }[] = [];
@@ -50,6 +57,7 @@ export function clipProbe(scene: THREE.Scene, names?: (root: THREE.Object3D) => 
       seen.add(def[1]); pts.push({ who, part: def[1], r: def[2], p: o.getWorldPosition(new THREE.Vector3()), root });
     });
   }
+  clipStats.points = pts.length;
   for (const q of pts) {
     let worst: ClipHit | null = null;
     for (const d of DIRS) {
