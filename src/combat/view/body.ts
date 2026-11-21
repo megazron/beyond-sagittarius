@@ -131,7 +131,7 @@ export class FightBody {
   /** The bow and the sling have their own rig (view/ranged.ts): both hands on them, drawn where the hands are. */
   ranged = new RangedRig();
   update(model: Character, p: SimPlayer, dt: number, t: number, armed: boolean, aiming: boolean, visible: WeaponId | null, aimW?: THREE.Vector3, ammo = 0) {
-    const rw = p.weapon === 'bow' || p.weapon === 'sling';
+    const rw = p.weapon === 'bow' || p.weapon === 'sling' || p.weapon === 'atlatl';
     this.hold(model, rw ? null : visible);
     if (rw && !p.down && p.act !== 'roll' && p.staggerT <= 0 && aimW) {
       this.since += dt; this.rollAngle = 0; this.crouch = 0;

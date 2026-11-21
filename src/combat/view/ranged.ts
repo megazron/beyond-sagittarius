@@ -38,7 +38,7 @@ export class RangedRig {
   private cords: THREE.Mesh[] = []; private pouch: THREE.Mesh; private stone: THREE.Mesh;
   private pP = V(); private pPrev = V(); private tail = V(); private tailPrev = V(); private pouchInit = false;
   // where the hands are asked to be this frame (world), and what the gear does
-  mode: 'none' | 'bow' | 'sling' = 'none';
+  mode: 'none' | 'bow' | 'sling' | 'atlatl' = 'none';
   private st = { draw: 0, up: 0, rel: 9, relDraw: 0, nock: -1, arrowIn: 'string' as 'string' | 'hand' | 'none', tremor: 0, roll: 0, vib: 0, phase: 0, throwT: -1, reload: -1, hold: 'left' as 'left' | 'free' | 'whirl' | 'throw' };
   /** Which way to turn the body from the aim (radians): side-on for the bow. */
   faceOffset = 0;
@@ -88,7 +88,7 @@ export class RangedRig {
    */
   pose(model: Character, p: SimPlayer, dt: number, t: number, up: boolean, aimW: THREE.Vector3, ammo: number, since: number): Limbs | null {
     const w = p.weapon;
-    this.mode = w === 'bow' ? 'bow' : w === 'sling' ? 'sling' : 'none';
+    this.mode = w === 'bow' ? 'bow' : w === 'sling' ? 'sling' : w === 'atlatl' ? 'atlatl' : 'none';
     if (this.mode === 'none') { this.group.visible = false; this.faceOffset = 0; return null; }
     const R = this.bones(model);
     this.group.visible = true;
@@ -136,6 +136,29 @@ export class RangedRig {
       const pole = V().copy(aim).multiplyScalar(-1).add(V().set(0, 0.55, 0));
       reach(sR, V().copy(target).addScaledVector(aim, -0.06), R.a, R.b, pole, eR, wR);
       limbs = { armL: dirOf(eL, sL), foreL: dirOf(wL, eL), armR: dirOf(eR, sR), foreR: dirOf(wR, eR), twist: 0.15 * smooth(S.up), openHands: S.rel < 0.35 };
+    } else if (this.mode === 'atlatl') {
+      // the spear-thrower: held at the shoulder, the dart lying along it pointing at the target; drawn back with the
+      // body turned; on the cast the arm drives forward and the thrower flips over the hand, flinging the dart
+      this.faceOffset = -0.35 * smooth(S.up);
+      const wantUp = up || p.act === 'charge' || recovering ? 1 : 0;
+      S.up += (wantUp - S.up) * (1 - Math.exp(-dt * 7));
+      if (p.act === 'charge') S.draw = out3(p.charge); else if (S.draw > 0 && since < 0.05) { S.rel = 0; S.relDraw = S.draw; S.draw = 0; } else S.draw = Math.max(0, S.draw - dt * 4);
+      S.rel += dt;
+      const flat = V().set(aim.x, 0, aim.z).normalize();
+      const ready = V().copy(sR).addScaledVector(flat, -0.12).add(V().set(-0.05, 0.12, 0));
+      const back = V().copy(sR).addScaledVector(flat, -0.42).add(V().set(-0.08, 0.2, 0));
+      const front = V().copy(sR).addScaledVector(flat, 0.5).add(V().set(0.02, 0.05, 0));
+      let tR: THREE.Vector3;
+      if (p.act === 'charge') tR = V().copy(ready).lerp(back, S.draw);
+      else if (S.rel < 0.45) tR = S.rel < 0.12 ? V().copy(back).lerp(front, out3(S.rel / 0.12)) : V().copy(front).lerp(V().copy(sR).add(V().set(0.15, -0.45, 0.25)), smooth((S.rel - 0.12) / 0.33));
+      else tR = S.up > 0.5 ? ready : V().set(-0.22, 0.95, 0.12);
+      S.phase = p.act === 'charge' ? 0 : S.rel < 0.12 ? S.rel / 0.12 : S.rel < 0.45 ? 1 : 0;
+      S.arrowIn = ammo > 0 && !(S.rel < 0.6 && S.rel >= 0) ? 'string' : S.rel >= 0.6 && ammo > 0 ? 'string' : 'none';
+      reach(sR, tR, R.a, R.b, V().set(-0.4, -0.7, -0.4), eR, wR);
+      reach(sL, V().copy(sL).addScaledVector(V().copy(aim).lerp(V().set(aim.x * 0.4, -0.8, aim.z * 0.4), 1 - smooth(S.up)).normalize(), (R.a + R.b) * 0.92), R.a, R.b, V().set(0, -1, 0), eL, wL);
+      const wind = p.act === 'charge' ? -0.5 * S.draw : S.rel < 0.3 ? -0.5 + 1.0 * out3(S.rel / 0.15) : 0;
+      limbs = { armR: dirOf(eR, sR), foreR: dirOf(wR, eR), armL: dirOf(eL, sL), foreL: dirOf(wL, eL), twist: wind };
+      if (S.rel < 0.4 || p.act === 'charge') { limbs.legL = [0.06, -0.93, 0.36]; limbs.shinL = [0, -1, 0.05]; limbs.legR = [-0.06, -0.96, -0.24]; limbs.shinR = [0, -0.98, -0.2]; }
     } else {
       // the sling: the pouch rests in the left hand, whirls overhead while drawn, comes over on the throw
       this.faceOffset = 0;
@@ -192,7 +215,22 @@ export class RangedRig {
     const vis = (o: THREE.Object3D, v: boolean) => { o.visible = v; };
     this.bowSeg.forEach((o) => vis(o, this.mode === 'bow')); this.str.forEach((o) => vis(o, this.mode === 'bow'));
     vis(this.arrow, false); this.cords.forEach((o) => vis(o, this.mode === 'sling')); vis(this.pouch, this.mode === 'sling'); vis(this.stone, false);
-    if (this.mode === 'bow') {
+    if (this.mode === 'atlatl') {
+      this.quiver.visible = false;
+      this.bowSeg.forEach((o, i) => vis(o, i === 0)); this.str.forEach((o) => vis(o, false));
+      // the thrower runs back from the hand to the hook; on the cast it turns over the hand, hook forward
+      const flat = V().set(aim.x, 0, aim.z).normalize();
+      const flip = S.phase * Math.PI, dir = V().copy(flat).multiplyScalar(-Math.cos(flip)).add(V().set(0, Math.sin(flip), 0)).normalize();
+      if (S.up < 0.5 && S.draw <= 0 && !(S.rel < 0.45)) dir.set(0, -1, 0).addScaledVector(flat, 0.3).normalize();
+      const hook = V().copy(hR).addScaledVector(dir, 0.55);
+      seg(this.bowSeg[0], V().copy(hR).addScaledVector(dir, -0.05), hook);
+      if (S.arrowIn === 'string' && S.phase === 0 && (S.up > 0.5 || S.draw > 0)) {
+        // the dart's butt in the hook, its shaft over the hand, its point at the target
+        this.arrow.visible = true; this.arrow.position.copy(hook).add(V().set(0, 0.03, 0)); this.arrow.scale.set(1.4, 1.4, 2.3);
+        this.arrow.lookAt(V().copy(hook).addScaledVector(aim, 5).add(V().set(0, 0.1, 0)));
+      }
+    } else if (this.mode === 'bow') {
+      this.arrow.scale.set(1, 1, 1);
       if (!this.quiver.parent) model.body.add(this.quiver);
       this.quiver.position.set(-0.17, -0.1, -0.06); this.quiver.rotation.set(-0.25, 0, -0.35); this.quiver.visible = true;
       // the bow: upright in the left hand, its face along the shot; tips forward a little after the loose
