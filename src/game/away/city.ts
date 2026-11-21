@@ -1495,7 +1495,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (cam && propTick++ % 6 === 0) for (const pc of propCells) {
         if (pc.old && !oldOn) continue;
         const d = !pc.old && deep ? 999 : pc.c.distanceTo(cam.position) - pc.r;
-        const want = pc.near.length && d < (tier === 2 ? PROP_NEAR : 7) * (pc.lod === 0 ? 1.15 : 1) ? 0 : 1;
+        // the scans themselves only on Ultra: on Web their light builds (an eighth of the triangles) are near enough
+        const want = tier === 2 && pc.near.length && d < PROP_NEAR * (pc.lod === 0 ? 1.15 : 1) ? 0 : 1;
         if (want !== pc.lod) { pc.lod = want; for (const im of pc.near) im.visible = want === 0; }
         // in the old town's narrow streets a stretch of props further than a block or so is behind the walls anyway
         // the districts' bins, hydrants and service boxes are knee-high: past 90 m they are a pixel or two (a stretch of
