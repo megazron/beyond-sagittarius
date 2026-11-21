@@ -271,7 +271,7 @@ export class Terrain {
         if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
         b.setCullSphere(g, m.geometry.boundingSphere!.clone());
         b.setShadow(g, k === 0); b.setHidden(g, k > 0);
-        m.material = HIDDEN; row.push(g);
+        m.material = HIDDEN; m.frustumCulled = false; row.push(g);
       });
       geo.push(row);
     }

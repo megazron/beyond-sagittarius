@@ -212,7 +212,8 @@ export function batchStatic(root: THREE.Object3D, accept: (m: THREE.Mesh) => boo
       if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
       b.setCullSphere(geo, m.geometry.boundingSphere!.clone().applyMatrix4(m.matrixWorld));
       b.setList(geo, [id], 1);
-      m.material = HIDE;
+      // drawn by the batch: three skips it at the layer test (no frustum test, no draw) in every pass
+      m.material = HIDE; m.frustumCulled = false; m.layers.mask = 0;
       Object.defineProperty(m, 'visible', { get: () => !b.isHidden(geo), set: (v: boolean) => b.setHidden(geo, !v), configurable: true });
     }
     root.add(b);
