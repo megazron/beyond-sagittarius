@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { cycleAtlas, cycleMaterial, stamp } from '../../core/cycle';
 import { fitCanvasText } from '../../core/canvastext';
 import { nearFade } from '../../core/nearfade';
 
@@ -98,17 +99,16 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     g.fillStyle = col; g.shadowColor = col; g.shadowBlur = 26; g.textAlign = 'center'; g.font = '700 58px Rajdhani, "Noto Sans Devanagari", "Noto Nastaliq Urdu", sans-serif'; g.fillText(a, 256, 130);
     g.shadowBlur = 0; g.fillStyle = '#ffffff'; g.font = '500 32px Rajdhani, "Noto Sans Devanagari", "Noto Nastaliq Urdu", sans-serif'; g.fillText(b, 256, 196);
   };
-  const screens: { c: HTMLCanvasElement; t: THREE.CanvasTexture; k: number }[] = [];
+  // every ad painted once into one atlas, each screen stepping through it in the shader (core/cycle.ts): they were a
+  // canvas, a texture upload every 3.5 s and a material each, a dozen at the gate
+  const adAt = cycleAtlas(ADS.length, 512, 288, (g, k) => draw(g.canvas, k));
+  const adM = cycleMaterial(adAt, { color: new THREE.Color(1.7, 1.7, 1.7), toneMapped: false });
   const big = o.facades.filter((f) => f.h > 8 && f.z0 - f.z1 > 9);
   for (let i = 0; i < big.length; i += rich ? 2 : 5) {
-    const f = big[i], c = document.createElement('canvas'); c.width = 512; c.height = 288; draw(c, i);
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.userData.live = true; // redrawn: stays its own texture
-    const w = Math.min(8, f.z0 - f.z1 - 3), scr = add(new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.56), new THREE.MeshBasicMaterial({ map: t, color: new THREE.Color(1.7, 1.7, 1.7), toneMapped: false })));
+    const f = big[i], w = Math.min(8, f.z0 - f.z1 - 3);
+    const scr = add(new THREE.Mesh(stamp(new THREE.PlaneGeometry(w, w * 0.56), { aCycle: [i % ADS.length, 3.5] }), adM));
     scr.position.set(f.side * (FRONT - 0.12), f.h - w * 0.4, (f.z0 + f.z1) / 2); scr.rotation.y = f.side > 0 ? -Math.PI / 2 : Math.PI / 2;
-    screens.push({ c, t, k: i });
   }
-  let adT = 0;
-  updates.push((dt) => { adT += dt; if (adT > 3.5) { adT = 0; for (const s of screens) { s.k++; draw(s.c, s.k); s.t.needsUpdate = true; } } });
 
   // ---- the neon's reflection on the wet road and paving: long soft streaks under every sign ----
   {

@@ -13,6 +13,7 @@ import { buildDense, Facade } from './citydense';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mergeChildren, passMaps, watchChanges, atlasCanvases, unifyLooks } from '../../core/merge';
 import { BATCH, batchStatic } from '../../core/ibatch';
+import { tickCycles } from '../../core/cycle';
 import { buildDistricts, inOld, BOUNDS as DIST_BOUNDS } from './districts';
 import { navGrid } from './navgrid';
 import { impostorBaker } from './impostor';
@@ -880,22 +881,24 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
 
   // overhead: cables sagging across the street, and bunting on every other one
   if (rich) {
+    // every cable one line set, and all the bunting one instanced mesh (they were a draw and a material per cable)
     const cableM = new THREE.LineBasicMaterial({ color: 0x222222 });
+    const seg: THREE.Vector3[] = [], flagAt: THREE.Matrix4[] = [], flagCol: THREE.Color[] = [];
     let c = 0;
     for (let z = S + 12; z < N - 6; z += 7, c++) {
       const pts: THREE.Vector3[] = []; const y0 = 6.5 + rnd() * 1.5;
       for (let i = 0; i <= 16; i++) { const t = i / 16; pts.push(new THREE.Vector3(-FRONT + t * 2 * FRONT, y0 - Math.sin(t * Math.PI) * 0.9, z)); }
-      add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), cableM));
-      if (c % 2 === 0) {
-        const flags = new THREE.InstancedMesh(new THREE.ConeGeometry(0.22, 0.45, 3), new THREE.MeshStandardMaterial({ roughness: 0.9, side: THREE.DoubleSide }), 15);
-        for (let i = 1; i < 16; i++) {
-          const p = pts[i];
-          flags.setMatrixAt(i - 1, new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y - 0.28, p.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)), new THREE.Vector3(1, 1, 0.15)));
-          flags.setColorAt(i - 1, new THREE.Color(pick([0xe74c3c, 0xf1c40f, 0x2ecc71, 0x3498db, 0xe67e22, 0x9b59b6])));
-        }
-        add(flags);
+      for (let i = 0; i < 16; i++) seg.push(pts[i], pts[i + 1]);
+      if (c % 2 === 0) for (let i = 1; i < 16; i++) {
+        const p = pts[i];
+        flagAt.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y - 0.28, p.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)), new THREE.Vector3(1, 1, 0.15)));
+        flagCol.push(new THREE.Color(pick([0xe74c3c, 0xf1c40f, 0x2ecc71, 0x3498db, 0xe67e22, 0x9b59b6])));
       }
     }
+    add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(seg), cableM));
+    const flags = new THREE.InstancedMesh(new THREE.ConeGeometry(0.22, 0.45, 3), new THREE.MeshStandardMaterial({ roughness: 0.9, side: THREE.DoubleSide }), Math.max(1, flagAt.length));
+    flagAt.forEach((m, i) => { flags.setMatrixAt(i, m); flags.setColorAt(i, flagCol[i]); });
+    flags.count = flagAt.length; add(flags);
   }
 
   // ---- traffic: taxis and cars down both lanes of the bazaar; they wait for you if you are in the way. Three
@@ -1528,7 +1531,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       q.fig.say(seconds);
     },
     update(dt, time, cam) {
-      clock = time;
+      clock = time; tickCycles(time);
       shadowFrame++;
       if (talking) {
         // the one you spoke to turns to you (a little first, the head and eyes do the rest) and looks you in the eye

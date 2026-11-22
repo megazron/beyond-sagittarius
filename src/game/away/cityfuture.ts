@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { fitCanvasText } from '../../core/canvastext';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { cycleAtlas, cycleMaterial, holoMaterial, stamp, steamPuffs } from '../../core/cycle';
 
 /**
  * Zenvora's 2189 layer, over the bazaar street: towers stepping up behind it with solar sails and antenna
@@ -92,13 +93,14 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   }
 
   // ---- neon blade signs and holographic brand signs ----
-  const neon = (text: string, color: string, vertical: boolean) => canvasTex(vertical ? 128 : 512, vertical ? 512 : 128, (g) => {
+  const neon = (text: string, color: string, vertical: boolean) => canvasTex(vertical ? 128 : 512, vertical ? 512 : 128, (g) => paintNeon(g, text, color, vertical));
+  function paintNeon(g: CanvasRenderingContext2D, text: string, color: string, vertical: boolean) {
     g.clearRect(0, 0, g.canvas.width, g.canvas.height);
     g.strokeStyle = color; g.fillStyle = color; g.shadowColor = color; g.shadowBlur = 20; g.lineWidth = 6;
     g.font = '700 84px Rajdhani, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     if (vertical) text.split('').forEach((ch, i) => g.fillText(ch, 64, 60 + i * 80)); else g.fillText(text, 256, 68);
     g.strokeRect(6, 6, g.canvas.width - 12, g.canvas.height - 12);
-  });
+  }
   const additive = (map: THREE.Texture, k = 2.5) => new THREE.MeshBasicMaterial({ map, color: new THREE.Color(k, k, k), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
   const words: [string, string][] = [['CHAI', '#ffb347'], ['MEHNDI', '#ff6ec7'], ['BIRYANI', '#7cff9a'], ['RISHTA.AI', '#7fd8ff'], ['DAWAI', '#5fffd0'], ['SNAPGRAM', '#ff5d8f'],
     ['PAAN', '#b6ff6e'], ['CHAAT', '#ffd36e'], ['SIM CARDS', '#9fd8ff'], ['TAILOR', '#ff9f6e'], ['HOVER REPAIR', '#6ef7ff'], ['JALEBI', '#ffb36e'], ['GOLD', '#ffe36e'], ['NEURO SPA', '#c79fff']];
@@ -110,27 +112,35 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     const v = add(new THREE.Mesh(new THREE.PlaneGeometry(0.85, tall), additive(texCache.get(key)!, 2.2)));
     v.position.set(side * (FRONT - 0.7), 3.6 + tall / 2 + rnd() * 4, z); v.userData.ground = false;
   }
-  // holograms floating over the shops they belong to, slowly turning and flickering
-  const holos: THREE.Group[] = [];
-  for (const sh of o.shops) {
-    // two one-sided faces back to back: the name reads the right way from both ends of the street
-    const hm = additive(neon(sh.name, sh.fg === '#202024' ? '#bfe9ff' : sh.fg, false), 1.8); hm.side = THREE.FrontSide;
-    const h = add(new THREE.Group()); for (const ry of [0, Math.PI]) { const f = new THREE.Mesh(new THREE.PlaneGeometry(8, 2), hm); f.rotation.y = ry; f.userData.ground = false; h.add(f); }
-    h.position.set(sh.side * (FRONT - 3.8), 7.0 + FLOOR, sh.z); h.userData.ground = false; holos.push(h);
-    const beam = add(new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.4, 16, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fe9ff).multiplyScalar(0.6), transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false })));
-    beam.position.set(sh.side * (FRONT - 3.8), 5.6 + FLOOR, sh.z); beam.scale.set(1.6, 1.4, 1.6); beam.rotation.x = Math.PI;
+  // holograms floating over the shops they belong to, slowly turning and flickering: every name in one atlas, every
+  // face in one mesh, the turn and the flicker in the shader by each one's seed (core/cycle.ts); they were a material
+  // and two draws each, and the beams under them a material each
+  {
+    const names = o.shops.map((sh) => [sh.name, sh.fg === '#202024' ? '#bfe9ff' : sh.fg] as const);
+    const at = cycleAtlas(Math.max(1, names.length), 512, 128, (g, i) => { const [t, c] = names[i] ?? ['', '#000']; paintNeon(g, t, c, false); });
+    const geos: THREE.BufferGeometry[] = [], beams: THREE.BufferGeometry[] = [];
+    o.shops.forEach((sh, i) => {
+      const x = sh.side * (FRONT - 3.8), y = 7.0 + FLOOR, cx = i % at.cols, cy = at.rows - 1 - Math.floor(i / at.cols);
+      for (const ry of [0, Math.PI]) {
+        const f = new THREE.PlaneGeometry(8, 2).rotateY(ry).translate(x, y, sh.z), uv = f.attributes.uv as THREE.BufferAttribute;
+        for (let j = 0; j < uv.count; j++) uv.setXY(j, (uv.getX(j) + cx) / at.cols, (uv.getY(j) + cy) / at.rows);
+        geos.push(stamp(f, { aHolo: [x, sh.z, i] }));
+      }
+      beams.push(new THREE.ConeGeometry(0.9, 1.4, 16, 1, true).scale(1.6, 1.4, 1.6).rotateX(Math.PI).translate(x, 5.6 + FLOOR, sh.z).toNonIndexed());
+    });
+    if (geos.length) {
+      const h = add(new THREE.Mesh(mergeGeometries(geos, false)!, holoMaterial(at.texture, 1.8))); h.userData.ground = false; h.matrixAutoUpdate = false;
+      h.geometry.computeBoundingSphere(); h.geometry.boundingSphere!.radius += 5;
+      const bm = add(new THREE.Mesh(mergeGeometries(beams, false)!, new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fe9ff).multiplyScalar(0.6), transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false })));
+      bm.userData.ground = false;
+    }
   }
-  updates.push((_, t) => holos.forEach((h, i) => {
-    h.rotation.y = Math.sin(t * 0.4 + i) * 0.5;
-    ((h.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.75 + 0.25 * Math.sin(t * 23 + i * 7) * (Math.sin(t * 0.7 + i) > 0.9 ? 1 : 0.1);
-  }));
 
   // ---- ad screens on the towers: they change every few seconds ----
   const ADS: [string, string, string][] = [
     ['LAMAZON ORBIT', 'Same day to Saturn', '#ff9900'], ['CAPPLE VISION 9', 'See more. Blink less.', '#bfe9ff'], ['CHAI COSMOS', 'Now open on Europa', '#ffcf7a'],
     ['SNAPGRAM', 'Post it before it happens', '#ff5d8f'], ['RISHTA.AI', 'Your aunty, but faster', '#7fd8ff'], ['BIRYANI SUPERNOVA', 'Extra spicy. Extra stellar.', '#7cff9a'],
   ];
-  const screens: { c: HTMLCanvasElement; t: THREE.CanvasTexture; k: number }[] = [];
   const drawAd = (c: HTMLCanvasElement, k: number) => {
     const g = c.getContext('2d')!, [a, b, col] = ADS[k % ADS.length];
     const gr = g.createLinearGradient(0, 0, 512, 288); gr.addColorStop(0, '#0b1020'); gr.addColorStop(1, '#22123a');
@@ -139,16 +149,14 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     g.shadowBlur = 0; g.fillStyle = '#ffffff'; g.font = '500 32px Rajdhani, sans-serif'; g.fillText(b, 256, 190);
   };
   const adSpots: [number, number, number][] = [[-1, 30, 28], [1, -4, 34], [-1, -38, 24], [1, 52, 30]];
-  for (const [side, z, y] of (rich ? adSpots : adSpots.slice(0, 2))) {
-    const c = document.createElement('canvas'); c.width = 512; c.height = 288;
-    const k = screens.length; drawAd(c, k);
-    const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; tx.userData.live = true;
-    const scr = add(new THREE.Mesh(new THREE.PlaneGeometry(16, 9), new THREE.MeshBasicMaterial({ map: tx, color: new THREE.Color(1.6, 1.6, 1.6), toneMapped: false })));
+  // every ad painted once into one atlas; each screen steps through it in the shader (they were a canvas each, repainted
+  // and uploaded every 4.5 s, and a material each)
+  const adAt = cycleAtlas(ADS.length, 512, 288, (g, k) => drawAd(g.canvas, k));
+  const adM = cycleMaterial(adAt, { color: new THREE.Color(1.6, 1.6, 1.6), toneMapped: false });
+  (rich ? adSpots : adSpots.slice(0, 2)).forEach(([side, z, y], k) => {
+    const scr = add(new THREE.Mesh(stamp(new THREE.PlaneGeometry(16, 9), { aCycle: [k, 4.5] }), adM));
     scr.position.set(side * (FRONT + 17.5), y, z); scr.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; scr.userData.ground = false;
-    screens.push({ c, t: tx, k });
-  }
-  let adT = 0;
-  updates.push((dt) => { adT += dt; if (adT > 4.5) { adT = 0; for (const s of screens) { s.k++; drawAd(s.c, s.k); s.t.needsUpdate = true; } } });
+  });
 
   // ---- the maglev guideway down the middle of the street, and a second tram that glides past ----
   // the street tram's glowing track at road level, and the sky-rail above: a guideway on pylons, 9 m up
@@ -219,16 +227,9 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     b.g.rotation.y = b.dir > 0 ? 0 : Math.PI;
   }));
 
-  // ---- steam off the chai and the biryani: a few soft sprites rising ----
+  // ---- steam off the chai and the biryani: a few soft puffs rising, one draw (core/cycle.ts) ----
   const puff = canvasTex(64, 64, (g) => { const r = g.createRadialGradient(32, 32, 2, 32, 32, 30); r.addColorStop(0, 'rgba(255,255,255,.55)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); });
-  const steam: { s: THREE.Sprite; base: THREE.Vector3; p: number }[] = [];
-  for (const [x, y, z] of [[6.4, 1.2, 12.6], [-8.6, 1.6, 0], [-8.6, 1.6, 1.4]] as [number, number, number][]) for (let i = 0; i < (rich ? 6 : 0); i++) {
-    const s = add(new THREE.Sprite(new THREE.SpriteMaterial({ map: puff, transparent: true, depthWrite: false, opacity: 0.5 }))); steam.push({ s, base: new THREE.Vector3(x, y, z), p: i / 6 });
-  }
-  updates.push((dt, t) => steam.forEach((q) => {
-    const k = (t * 0.25 + q.p) % 1; q.s.position.set(q.base.x + Math.sin(t + q.p * 9) * 0.15 * k, q.base.y + k * 1.6, q.base.z);
-    q.s.scale.setScalar(0.3 + k * 0.9); q.s.material.opacity = 0.45 * (1 - k);
-  }));
+  if (rich) add(steamPuffs([[6.4, 1.2, 12.6], [-8.6, 1.6, 0], [-8.6, 1.6, 1.4]].map(([x, y, z]) => new THREE.Vector3(x, y, z)), 6, puff));
 
   // ---- the hero: an orbital liner holding station above the spaceport, framed by the street from its first step ----
   const hero = new THREE.Group(); add(hero); hero.position.set(-6, 70, S - 120); hero.rotation.set(0.08, 0.5, 0.12);
