@@ -291,7 +291,7 @@ export class Player {
     // in a thick crowd the camera does not sit low among the heads looking up: it rises and looks down (eased in and out)
     const cw = this.crowdNear ? this.crowdNear() : 0;
     this.crowdS += (cw - this.crowdS) * e(cw > this.crowdS ? 2.5 : 1.2);
-    const yawV = this.yawS + back * 2.75, pitchV = Math.min(this.pitchS, -0.18 - 0.2 * this.crowdS) - back * 0.12;
+    const yawV = this.yawS + back * 2.75, pitchV = this.pitchS + (Math.min(this.pitchS, -0.38) - this.pitchS) * this.crowdS - back * 0.12;
     // soft collision: pull in fast when a trunk blocks the view, ease back out slowly
     const want = this.orbit(tmpA, this.focus, yawV, pitchV, this.camDist);
     const clear = this.forest.clearance(this.focus.x, this.focus.z, want.x, want.z, 0.4);

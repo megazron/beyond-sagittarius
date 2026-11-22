@@ -124,7 +124,13 @@ def main():
         time.sleep(4)
         shot("03-wakeup-sky")
         page.keyboard.press("Enter")  # skip the rest of the wake-up sequence
-        page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
+        try:
+            page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
+        except Exception:
+            print("wake did not reach play:", page.evaluate("({state: __bs.state, mode: __bs.mode})"), flush=True)
+            for e in errors:
+                print(e, flush=True)
+            raise
         time.sleep(4)
         shot("04-planet-hud")
         page.keyboard.down("KeyW")
