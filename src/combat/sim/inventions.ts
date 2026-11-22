@@ -44,6 +44,8 @@ export const INVENTIONS: Invention[] = [
   { id: 'fireline', row: null, age: 1, episodeOne: true, materials: { tinder: 1, branch: 1 }, steps: 2, needs: ['fireDrill'], traps: ['fireline'] },
   { id: 'bait', row: null, age: 1, episodeOne: true, materials: { fruit: 1 }, steps: 1, needs: [], traps: ['bait'] },
   { id: 'cordage', row: 10, age: 1, episodeOne: false, materials: { fibre: 2 }, steps: 3, needs: [] },
+  // shaped on both faces with many removals, then thinned with a soft hammer of antler or hard wood
+  { id: 'handAxe', row: 11, age: 1, episodeOne: false, materials: { stone: 3 }, steps: 3, needs: ['flake'], weapon: 'handaxe' },
   { id: 'hafting', row: 12, age: 1, episodeOne: false, materials: { branch: 1, stone: 1, fibre: 1, resin: 1 }, steps: 5, needs: ['flake', 'cordage', 'fireDrill'], weapon: 'hafted' },
   { id: 'atlatl', row: 13, age: 1, episodeOne: false, materials: { branch: 2, fibre: 1 }, steps: 4, needs: ['hafting'], weapon: 'atlatl' },
   { id: 'traps', row: 14, age: 1, episodeOne: false, materials: { fibre: 1, branch: 1 }, steps: 3, needs: ['cordage'], traps: ['snare', 'rattle'] },
