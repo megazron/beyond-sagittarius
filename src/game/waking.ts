@@ -334,9 +334,9 @@ export class Waking {
         z.setProp(null);
         z.setHold(null);
         const f = this.fwd(), side = new THREE.Vector3(f.z, 0, -f.x);
-        z.setLookTarget(mouth().addScaledVector(f, 1.0).addScaledVector(side, -0.3).add(new THREE.Vector3(0, -0.45, 0)));
+        z.setLookTarget(mouth().addScaledVector(f, 1.0).addScaledVector(side, 0.35).add(new THREE.Vector3(0, -0.45, 0)));
         z.setFace({ frown: 0.7, squint: 0.6, open: 0.3 });
-        this.after(0.25, () => { audio.sample('splash', 0.07, { rate: 3.1 }); audio.human('breath', 0.5); this.spit(mouth(), f.clone().addScaledVector(side, -0.3).normalize()); });
+        this.after(0.25, () => { audio.sample('splash', 0.07, { rate: 3.1 }); audio.human('breath', 0.5); this.spit(mouth(), f.clone().addScaledVector(side, 0.35).normalize()); });
         // the back of his hand across his mouth
         this.after(0.85, () => z.setHold({ R: { at: mouth().addScaledVector(f, 0.05), fingers: side.clone().negate(), palm: f.clone() } }));
         this.after(1.45, () => z.setHold(null));
