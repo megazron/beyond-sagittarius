@@ -829,6 +829,43 @@ export class Renderer {
       tick();
     });
   }
+  /**
+   * The post chain's own programs (bloom's blurs, the grade, the sanitize, AO and the rest), compiled the same way as
+   * prewarm: started now, linked by the browser in the background. The title's first frame linked them one by one on
+   * the main thread with the title's own (a 20 s freeze on a cold shader cache on the A500).
+   */
+  async prewarmPost(maxMs = 60000) {
+    const r = this.renderer, found = new Set<THREE.Material>();
+    const look = (v: unknown, depth: number) => {
+      if (!v || typeof v !== 'object' || depth > 3) return;
+      if ((v as THREE.Material).isMaterial) { found.add(v as THREE.Material); return; }
+      if ((v as THREE.Object3D).isObject3D || (v as THREE.Texture).isTexture || (v as THREE.WebGLRenderTarget).isWebGLRenderTarget || ArrayBuffer.isView(v)) return;
+      for (const x of Array.isArray(v) ? v : Object.values(v as Record<string, unknown>)) look(x, depth + 1);
+    };
+    for (const pass of this.composer.passes) look(pass, 0);
+    if (!found.size) return;
+    const sc = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), g = new THREE.PlaneGeometry(2, 2);
+    for (const m of found) { const q = new THREE.Mesh(g, m); q.frustumCulled = false; sc.add(q); }
+    const prev = r.getRenderTarget(), rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType });
+    let mats: Set<THREE.Material> | undefined;
+    try { r.setRenderTarget(rt); mats = r.compile(sc, cam) as unknown as Set<THREE.Material>; } catch { /* compiled on first draw instead */ } finally { r.setRenderTarget(prev); }
+    if (mats?.size) await this.linked([...mats], maxMs);
+    rt.dispose(); g.dispose();
+  }
+  /** Resolves when every one of these materials' programs is linked (or after `maxMs`). */
+  private linked(list: THREE.Material[], maxMs: number, progress?: (k: number) => void) {
+    const r = this.renderer, t0 = performance.now();
+    type Prog = { isReady(): boolean } | undefined;
+    return new Promise<void>((done) => {
+      const tick = () => {
+        let left = 0;
+        for (const m of list) { const p = (r.properties.get(m) as { currentProgram?: Prog }).currentProgram; if (p && !p.isReady()) left++; }
+        progress?.(1 - left / list.length);
+        if (!left || performance.now() - t0 > maxMs) done(); else setTimeout(tick, 30);
+      };
+      tick();
+    });
+  }
   warm(scene: THREE.Scene, cam: THREE.PerspectiveCamera, ao: boolean) {
     this.setScene(scene, cam, ao);
     if (this.volumetric) this.volumetric.source = (scene.userData.post as PostSource | undefined) ?? null;
