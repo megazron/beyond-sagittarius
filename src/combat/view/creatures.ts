@@ -327,8 +327,8 @@ function guardian(): CreatureView {
       for (const L of legs) {
         hipT.copy(L.hip).applyMatrix4(body.matrix);
         // feet: wide and planted awake, tucked in asleep; a trot when it walks; the front pair up when it rears
-        const spread = 0.8 + 0.45 * wake * (1 - sink), ph = walk + L.ph, step = e.speed > 0.05 ? 1 : 0;
-        footT.set(L.sx * spread * 1.05, 0, L.sz * (0.55 + 0.5 * wake) + Math.sin(ph) * 0.4 * step);
+        const spread = 0.6 + 0.65 * wake * (1 - sink), ph = walk + L.ph, step = e.speed > 0.05 ? 1 : 0; // asleep: feet tucked in, knees high beside it
+        footT.set(L.sx * spread * 1.05, 0, L.sz * (0.42 + 0.63 * wake) + Math.sin(ph) * 0.4 * step);
         footT.y = Math.max(0, Math.cos(ph)) * 0.22 * step;
         if (L.sz > 0) { footT.y += rear * 1.1; footT.z += rear * 0.35; }
         pole.set(L.sx * 1, 1.3, L.sz * 0.4);
