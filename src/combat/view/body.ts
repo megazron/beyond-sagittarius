@@ -166,7 +166,10 @@ class HideWrap {
     const rad = (t: number, base: number) => Math.max(base * k, under(t) * 1.05 + 0.004 * k);
     const g = new THREE.Group(); g.name = 'hideWrap';
     g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.clone().normalize());
-    const ra = rad(a, r0), rb = rad(b, r1), rm = rad((a + b) / 2, (r0 + r1) / 2);
+    // a wrap is bound tight: never wider than a hand's breadth round (a flared cuff is squeezed in, the cloth spills out
+    // past the wrist instead of the hide flaring into a wide open tube round the hand)
+    const cap = (t: number, m: number) => Math.min(rad(t, m), (M ? 0.085 : 1) * k);
+    const ra = cap(a, r0), rb = Math.min(cap(b, r1), ra * 0.92), rm = cap((a + b) / 2, (r0 + r1) / 2);
     // a hide sleeve: seven sides, not quite round, the edges rolled a little proud, pulled in a little under the cords
     const rings = [
       { y: a * len, rx: ra * (1.06 + flare), rz: ra * (0.98 + flare) },
@@ -174,6 +177,8 @@ class HideWrap {
       { y: (a + b) * 0.5 * len, rx: rm, rz: rm * 0.92 },
       { y: (b - 0.04) * len, rx: rb * 1.02, rz: rb * 0.95 },
       { y: b * len, rx: rb * 1.08, rz: rb * 1.0 },
+      // the edge rolled in over the wrist, so from the front the end is closed hide, not a dark open ring
+      { y: (b + 0.015) * len, rx: rb * 0.8, rz: rb * 0.74 },
     ];
     const m = new THREE.Mesh(loft(rings, 7), this.hide); m.castShadow = true; g.add(m);
     const at = (t: number) => { const u = (t - a) / (b - a); return (u < 0.5 ? ra + (rm - ra) * u * 2 : rm + (rb - rm) * (u - 0.5) * 2) * 1.05; };
