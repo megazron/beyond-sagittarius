@@ -201,13 +201,14 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
         vec3 body = mix(vec3(0.21, 0.19, 0.13), vec3(0.07, 0.11, 0.105), smoothstep(0.1, 0.75, edge)) * (0.8 + 0.4 * bed) * (0.2 + 0.8 * uDay);
         vec3 col = mix(body, refl, fres);
         vec3 H = normalize(uSunDir + V);
-        col += uSunColor * pow(max(dot(N, H), 0.0), 300.0) * 6.0 * smoothstep(-0.05, 0.1, uSunDir.y);
-        // the current shows as long bright threads drawn downstream, and white water where it drops and at the edges
-        float th = smoothstep(0.62, 0.9, vnoise2(vec2(vUv.x * 7.0, vUv.y * 0.55 - uTime * sp * 0.9)));
-        col += (refl * 0.35 + vec3(0.05)) * th * (0.3 + 0.7 * uDay);
+        col += uSunColor * pow(max(dot(N, H), 0.0), 300.0) * 3.0 * smoothstep(-0.05, 0.1, uSunDir.y);
+        // the current shows as fine bright threads drawn downstream (strong ones smeared like motion blur close to a
+        // camera), and white water where it drops and at the edges
+        float th = smoothstep(0.7, 0.92, vnoise2(vec2(vUv.x * 7.0, vUv.y * 0.55 - uTime * sp * 0.9)));
+        col += (refl * 0.2 + vec3(0.03)) * th * (0.3 + 0.7 * uDay);
         float fn = vnoise2(vec2(vUv.x * 4.0, vUv.y * 2.0 - uTime * sp * 1.6));
         float foam = smoothstep(0.74, 0.95, fn) * (0.08 + vFast * 0.7) * (0.5 + 0.5 * smoothstep(0.75, 0.2, edge));
-        col = mix(col, vec3(0.78, 0.82, 0.84) * (0.25 + 0.75 * uDay), clamp(foam, 0.0, 0.5));
+        col = mix(col, vec3(0.78, 0.82, 0.84) * (0.25 + 0.75 * uDay), clamp(foam, 0.0, 0.3));
         float alpha = clamp(0.62 + fres * 0.3 + foam * 0.3 + th * 0.1, 0.0, 0.96) * smoothstep(0.0, 0.3, edge);
         gl_FragColor = vec4(col, alpha);
         #include <fog_fragment>
