@@ -4,6 +4,8 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { installGpuTimer } from './gputime';
+const GPU_TIMER_ON = new URLSearchParams(location.search).has('gputime');
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
@@ -566,6 +568,7 @@ export class Renderer {
   private lastAdjust = 0;
   private frame = 0;
   private shed = 0;
+  private gpuTimed = false;
   private aoWanted = false;
   private triedAt = -99;
   private holdUntil = 0;
@@ -585,6 +588,15 @@ export class Renderer {
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
+    // opaque draws grouped by shader program first (three sorts by material id, so materials that share a program
+    // interleave with others and every switch re-binds the program and uploads its uniforms); ?psort=0 is three's order
+    if (new URLSearchParams(location.search).get('psort') !== '0') {
+      const props = this.renderer.properties;
+      type Item = { groupOrder: number; renderOrder: number; material: THREE.Material; materialVariant: number; z: number; id: number };
+      const pid = (m: THREE.Material) => (props.get(m) as { currentProgram?: { id: number } }).currentProgram?.id ?? 1e9;
+      this.renderer.setOpaqueSort(((a: Item, b: Item) => a.groupOrder - b.groupOrder || a.renderOrder - b.renderOrder || pid(a.material) - pid(b.material)
+        || a.material.id - b.material.id || a.materialVariant - b.materialVariant || a.z - b.z || a.id - b.id) as unknown as Parameters<THREE.WebGLRenderer['setOpaqueSort']>[0]);
+    }
     // PCSS reads raw depth (Basic maps + a custom filter); otherwise hardware PCF with a Vogel disk
     this.renderer.shadowMap.type = quality.pcss ? THREE.BasicShadowMap : THREE.PCFShadowMap;
     if (quality.pcss) installSoftShadows();
@@ -878,6 +890,11 @@ export class Renderer {
   }
 
   render(dt: number, time: number) {
+    if (!this.gpuTimed && GPU_TIMER_ON) {
+      this.gpuTimed = true;
+      const named = new Map<object, string>([[this.renderPass, 'scene'], [this.bloom, 'bloom'], [this.final, 'final'], ...([['ao', this.ao], ['ssr', this.ssr], ['volumetric', this.volumetric], ['temporal', this.temporal], ['dof', this.dof]] as [string, object | null][]).filter(([, p]) => p).map(([n, p]) => [p!, n] as [object, string])]);
+      installGpuTimer(this.renderer, this.composer.passes.map((p, i) => ({ pass: p as unknown as { render: (...a: unknown[]) => void }, name: named.get(p) ?? `pass${i}` })));
+    }
     this.final.uniforms.uTime.value = time;
     if (this.volumetric) this.volumetric.source = (this.renderPass.scene.userData.post as PostSource | undefined) ?? null;
     if (this.ssr) { const k = (this.renderPass.scene.userData.ssr as number | undefined) ?? 0; this.ssr.strength = k; this.ssr.enabled = k > 0.01 && this.shed < 2; }

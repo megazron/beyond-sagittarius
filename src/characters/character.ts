@@ -12,6 +12,7 @@ import { voice } from '../core/voice';
 import { AnimSet, CrewAsset, CrewMeta, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, furMaterial, hasLod1, lashMaterial, sameSkeleton, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
 import { addKit, Kit } from './kit';
 import { mergeRigid } from './rigid';
+import { BODY_MERGE, BODY_PARTS, bodyMaterial, mergeBodyGeometry } from './bodymerge';
 import { perfBody } from '../core/perfhud';
 
 export type { CrewId } from './looks';
@@ -307,6 +308,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const lay = M.layers ?? [];
     const accent = { uAccent: { value: new THREE.Color(custom?.accent ?? 0xffffff) }, uAccentK: { value: custom ? 1 : 0 }, uDetail: { value: clothDetail() }, uHeightM: { value: heightM }, uSatin: { value: human ? 1 : 0 }, uDust: { value: human ? 0.12 : 1 },
       uTiles: { value: lay.length }, uTileLayer: { value: new THREE.Vector4(...[...lay, 1, 1, 1, 1].slice(0, 4)) }, uPull: { value: lay.length ? CLOTH_PULL : 0 }, uLift: { value: lay.length ? CLOTH_LIFT : 0 } };
+    cloth.userData.u = accent; cloth.userData.sway = sway; // the merged crowd body (bodymerge.ts) shares them
     applySway(cloth, sway, (sh) => {
       Object.assign(sh.uniforms, accent);
       sh.vertexShader = `attribute float aAccent; attribute vec3 aOver; varying vec3 vOver; varying float vAccent; varying float vBindY; uniform float uTiles, uPull, uLift; uniform vec4 uTileLayer;\n` + sh.vertexShader
@@ -480,6 +482,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         s1.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && (m.material as THREE.Material) !== mouth && !(crowd && (m.name === 'lash' || m.name === 'cornea'))) ms.push(m); });
         for (const m of ms) { m.bind(skel, m.bindMatrix); host.add(m); m.visible = false; }
         lodSets[1] = ms;
+        mergeCrowd();
       }).catch(() => { /* no light build: the full body everywhere */ });
     }
     kit = addKit({ id, custom, human, bones: bs, meta: M, look: L, sway, skinC, glowC, shadeC, detail, heightM });
@@ -497,6 +500,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     mixer = new THREE.AnimationMixer(scene);
     fig.scale.setScalar(custom ? custom.height : 1);
     // what a passer-by fades out with near the lens (its own materials; the kit's are shared, it just goes)
+    bodyMats = { skin, cloth, eyes, sphere };
     fadeSet = [skin, eyes, cloth, cornea, lash, ...(fur ? [fur] : []), ...hairs.filter((h): h is THREE.Mesh => !!h).map((h) => (h as THREE.Mesh).material as THREE.Material)].map((m) => ({ m, o: m.opacity, a: m.alphaTest }));
     prepFade();
     fig.visible = true;
@@ -505,7 +509,49 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
 
   // the fade near the lens (crowd bodies of the full build: Web, Ultra)
   let fadeSet: { m: THREE.Material; o: number; a: number }[] = [], fadeOn = false, fadeK = 1, fadeShown = 1, lensWant = 1;
+  // a crowd body's skin, clothes and eyes as one mesh and one draw (bodymerge.ts); the crew and the player keep theirs
+  let bodyMats: { skin: THREE.MeshStandardMaterial; cloth: THREE.MeshStandardMaterial; eyes: THREE.MeshStandardMaterial; sphere: THREE.Sphere } | null = null, bodyMat: THREE.MeshStandardMaterial | null = null;
+  // the shapes a crowd body keeps: the face and the build (not the correctives: a crowd body has none)
+  const crowdKeep = (n: string) => !/^(pit|nape|hip)[LR]?\d/.test(n);
+  function mergeCrowd() {
+    if (!crowd || !bodyMats || !BODY_MERGE.on) return;
+    const { skin, cloth, eyes, sphere } = bodyMats;
+    for (let s = 0; s < lodSets.length; s++) {
+      const set = lodSets[s];
+      if (!set.length || set.some((m) => m.material === bodyMat)) continue;
+      const pick = (mat: THREE.Material) => set.find((m) => m.material === mat);
+      const cl = pick(cloth), sk = pick(skin), ey = pick(eyes);
+      if (!cl || !sk) continue;
+      const parts = [{ mesh: cl, part: BODY_PARTS.cloth }, { mesh: sk, part: BODY_PARTS.skin }, ...(ey ? [{ mesh: ey, part: BODY_PARTS.eye }] : [])];
+      // one skeleton, one bind, one parent and the same place: otherwise leave this set as it is
+      if (parts.some((p) => p.mesh.parent !== sk.parent || !sameSkeleton(p.mesh.skeleton, sk.skeleton) || !p.mesh.bindMatrix.equals(sk.bindMatrix) || !p.mesh.matrix.equals(sk.matrix)
+        || (p.mesh.geometry.morphAttributes.position && p.mesh.geometry.morphTargetsRelative !== sk.geometry.morphTargetsRelative) || Object.keys(p.mesh.geometry.morphAttributes).some((k) => k !== 'position'))) continue;
+      const { g, names } = mergeBodyGeometry(parts, crowdKeep);
+      bodyMat ??= bodyMaterial(skin, cloth, eyes);
+      const mesh = new THREE.SkinnedMesh(g, bodyMat);
+      mesh.name = 'skin_body'; mesh.boundingSphere = sphere; g.boundingSphere = sphere;
+      mesh.position.copy(sk.position); mesh.quaternion.copy(sk.quaternion); mesh.scale.copy(sk.scale);
+      sk.parent!.add(mesh); mesh.bind(sk.skeleton, sk.bindMatrix);
+      mesh.visible = sk.visible; mesh.receiveShadow = true; mesh.onBeforeRender = seen; mesh.frustumCulled = sk.frustumCulled;
+      mesh.castShadow = parts.some((p) => p.mesh.castShadow);
+      if (parts.some((p) => castable.has(p.mesh))) castable.add(mesh);
+      if (names.length) { mesh.morphTargetDictionary = Object.fromEntries(names.map((n, i) => [n, i])); mesh.morphTargetInfluences = names.map((n) => { for (const p of parts) { const d = p.mesh.morphTargetDictionary; if (d && d[n] !== undefined) return p.mesh.morphTargetInfluences![d[n]]; } return morph[n] ?? 0; }); faces.push({ dict: mesh.morphTargetDictionary, infl: mesh.morphTargetInfluences }); }
+      for (const p of parts) {
+        castable.delete(p.mesh); p.mesh.removeFromParent();
+        const fi = faces.findIndex((f) => f.infl === p.mesh.morphTargetInfluences); if (fi >= 0) faces.splice(fi, 1);
+        const ti = torsoBody.indexOf(p.mesh); if (ti >= 0) torsoBody.splice(ti, 1);
+      }
+      if (s === 0 && torsoR === null) torsoBody.unshift(mesh);
+      lodSets[s] = [mesh, ...set.filter((m) => !parts.some((p) => p.mesh === m))];
+      BODY_MERGE.merged++;
+    }
+    if (bodyMat && !fadeSet.some((f) => f.m === bodyMat)) {
+      fadeSet = fadeSet.filter((f) => f.m !== skin && f.m !== cloth && f.m !== eyes);
+      fadeSet.unshift({ m: bodyMat, o: bodyMat.opacity, a: bodyMat.alphaTest });
+    }
+  }
   function prepFade() {
+    mergeCrowd();
     fadeOn = crowd && lod === 0 && fadeSet.length > 0;
     // solid materials fade by hashed alpha; see-through ones (cornea, lashes) by their opacity; cut-out ones (hair
     // cards) thin out by their alpha cut
@@ -593,10 +639,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const hip = seg[0][0], up = seg[2][1].clone().sub(hip), upL2 = up.lengthSq();
       for (const m of torsoBody) {
         m.updateWorldMatrix(true, false);
-        const cloth = m.name === 'cloth';
+        const clothN = m.geometry.userData.clothCount ?? (m.name === 'cloth' ? Infinity : 0); // a merged crowd body: its cloth comes first
         for (let i = 0, n = m.geometry.userData.torsoCount ?? m.geometry.attributes.position.count; i < n; i += 2) {
           m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld); let best = 9, k = -1;
-          if (cloth && SA.copy(v).sub(hip).dot(up) / upL2 < .05) continue;
+          if (i < clothN && SA.copy(v).sub(hip).dot(up) / upL2 < .05) continue;
           seg.forEach(([a, b], j) => { const d = segDist(v, a, b); if (d < best) { best = d; k = j; } });
           if (k >= 0 && best < .3) per[k].push(best);
         }

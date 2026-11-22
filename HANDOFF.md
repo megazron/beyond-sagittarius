@@ -420,3 +420,16 @@ unlanded except this handoff commit and any recording in progress.
   shared atlas means one merged shader; ~7 draws a body still); the gate to 60 on Web (31 fps here; render is
   setProgram-bound, 100+ distinct materials); planet to 60; Mobile to 30 (10-20 now); quiet-machine re-measure and the
   cold title load (p15/ab_load.sh) never ran: the heavy queue was busy with other agents' captures most of the time.
+
+## 2026-11-22 09:00 takeover by perf agent 18 (branch perf17 continued; landing branches perf17-land4..)
+- Landing: perf17-land2 and -land3 failed. land3 (crowd camera off) failed only `smoke` ("wait for mode play" after the
+  wake-up skip); the same timeout hit combat-land6 (not perf code), so it is not only mine; the smoke now prints
+  state and page errors when it happens (tools/smoke.py). perf_gate's phone bazaar is bimodal: 297k or exactly 836430
+  triangles; 836430 also hit combat-land7 (no perf17 code), so it is a state of main's city, not the props batching.
+  perf_gate now prints the worst frame's triangles by object when a spot is over budget (find it in the log).
+- Bug fixed: the crowd camera's pitch clamp applied with no crowd at all (every follow view capped at -0.18 pitch, the
+  planet too). Now it eases in with the crowd only.
+- three 0.187 finding: skinMaterial's subsurface-wrap replace (lights_physical_pars_fragment, "BRDF_Lambert(
+  material.diffuseColor)") matches nothing any more: skin has drawn with plain lighting since the three upgrade.
+- Machine: the heavy queue is shared with the combat agent's exclusive GPU captures; local SwiftShader runs of the gates
+  took 20+ min and timed out. Use CI for SwiftShader numbers.

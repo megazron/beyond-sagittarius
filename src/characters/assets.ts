@@ -251,6 +251,7 @@ export function eyeMaterial(iris: number, glow: number) {
   const m = new THREE.MeshStandardMaterial({ map: texPlain('eye'), roughness: DECREEP ? 0.1 : 0.18 });
   m.userData.film = { kind: 'eye', iris, glow };
   const u = { uIris: { value: col(iris) }, uEyeGlow: { value: glow } };
+  m.userData.u = u; // the merged crowd body (bodymerge.ts) shares them
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.fragmentShader = `uniform vec3 uIris; uniform float uEyeGlow;\n` + sh.fragmentShader
