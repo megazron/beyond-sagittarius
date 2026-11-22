@@ -859,6 +859,12 @@ export class Combat {
   // ---------------- test hooks ----------------
   /** Tests press the fight's keys by code (a headless browser has no pointer lock). */
   testKeys = false;
+  /** Tests: hide everything the fight draws (bodies, effects, the bow and sling) to count what it adds. */
+  testHideDraws(on: boolean) {
+    for (const [, q] of this.views) q.v.root.visible = !on;
+    this.fx.group.visible = !on; this.body.ranged.group.visible = !on;
+    this.hud.root.style.display = on ? 'none' : '';
+  }
   /** Recordings: the whole game in slow motion (1 is normal). */
   testSlow = 1;
   testHold(code: string, on: boolean) { this.testKeys = true; this.d.input.hold(code, on); }

@@ -181,3 +181,10 @@ See the end of this file for the running log.
   they animate); bodies are ~14 draws each (Ultra bazaar 83 skinned draws, 11.6 fps); city.update ~5 ms and player
   ~3 ms a frame; program look-ups (getProgram) ~25 a frame from materials shared by batched and plain meshes and by
   bodies with different morph counts.
+
+## combat (continued)
+- 14:20 combat-land: sling is tree row 22; grips via the story agent's `setGrip` (life-wip d3acdfe, not on main; my
+  call is a no-op until it lands; tested in ~/bs-combat-grip = life-wip + combat, clips *_v3_grip); spear-thrower
+  cast in the ranged rig; hunt bot patient (kill in ~20 s); night fill light (planetshine) made once at start and
+  kept at 0 by day. LESSON: adding a light mid-game (torch PointLight, late DirectionalLight) recompiled every
+  material and stalled the CI browser for minutes (play test timed out on the pause menu); never add lights later.

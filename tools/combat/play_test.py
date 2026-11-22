@@ -104,8 +104,12 @@ with sync_playwright() as pw:
             ok(g2['state'] != 'dormant', 'arena: come close and the guardian wakes', g2['state'])
             ok(page.evaluate("document.querySelector('#cb-hud .boss').classList.contains('on')"), 'arena: its bar is on the screen')
             shot(page, 'arena_guardian')
-            calls = page.evaluate("new Promise((r) => { let m = 0, n = 0; const f = () => { m = Math.max(m, __bs.perf.calls); if (++n < 40) requestAnimationFrame(f); else r(m); }; f(); setTimeout(() => r(Math.max(m, __bs.perf.calls)), 20000); })")
-            ok(calls - calls0 < BUDGET[a.quality], f'arena: a full fight adds {calls - calls0} draw calls (budget {BUDGET[a.quality]})', calls)
+            # what the fight itself adds: the same view, the same frame state, with and without its draws
+            WORST = "new Promise((r) => { let m = 0, n = 0; const f = () => { m = Math.max(m, __bs.perf.calls); if (++n < 20) requestAnimationFrame(f); else r(m); }; f(); setTimeout(() => r(Math.max(m, __bs.perf.calls)), 20000); })"
+            page.evaluate("__bs.combat.testHideDraws(true)"); time.sleep(0.5); base_calls = page.evaluate(WORST)
+            page.evaluate("__bs.combat.testHideDraws(false)"); time.sleep(0.5); calls = page.evaluate(WORST)
+            ok(calls - base_calls < BUDGET[a.quality], f'arena: a full fight adds {calls - base_calls} draw calls (budget {BUDGET[a.quality]})', f'{base_calls} -> {calls}')
+            print('arena draw calls without and with the fight', base_calls, calls, flush=True)
         elif enc == 'hunt.first':
             shot(page, 'hunt')
             ok(any(e['kind'] == 'nibbet' for e in d['enemies']) and any(e['kind'] == 'mossback' for e in d['enemies']), 'hunt: grazers small and large are in the meadow')
