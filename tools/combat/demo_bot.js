@@ -135,6 +135,8 @@ window.__cbBot = (mode) => {
       const h = living('hound').find((e) => !e.routed), thieves = living('skritch').filter((e) => !e.routed && dist(e, food) < 5);
       // a trap at work is what a player would turn to watch: one that has just caught, or one a scavenger is about to
       // walk into (unless something is coming at the player)
+      // a record of every catch (window.__cbTrapLog), so a take can be checked for one without watching it all
+      for (const q of sim.traps) if (q.sprungT >= 0 && !(window.__cbTrapLog ||= []).some((r) => r.id === q.id && r.t === q.sprungT)) window.__cbTrapLog.push({ id: q.id, kind: q.kind, t: q.sprungT, caught: q.caught, wave: run.wave, rec: +((performance.now() - t0) / 1000).toFixed(1) });
       const sprung = sim.traps.find((q) => (q.kind === 'snare' || q.kind === 'stakes') && q.sprungT >= 0 && sim.t - q.sprungT < 3.5);
       const near = sim.traps.find((q) => q.armed && q.uses > 0 && (q.kind === 'snare' || q.kind === 'stakes') && living('skritch').concat(h ? [h] : []).some((e) => dist(e, q) < 6 && dist(e, q) > 0.8));
       const watch = sprung || near;
