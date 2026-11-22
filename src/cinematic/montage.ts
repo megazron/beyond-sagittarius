@@ -832,7 +832,7 @@ export class Montage {
         // old metal in the split: ribs of something that was built here long ago
         for (let i = 0; i < 4; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.3, 7, 0.3), new THREE.MeshStandardMaterial({ color: 0x8a8f96, roughness: 0.45, metalness: 0.8 })); b.position.set(-3 + i * 2.1, 3, -10 - i * 0.6); b.rotation.set(0.1 * i, 0, 0.18 - i * 0.12); g.add(b); } }, 1.6, [0xb09a84, 0x1c140e, 0.7]);
       // Aerolis: a raft of hull on gold cloud to every horizon
-      mk('social', 0xe2c46a, 1, (g) => { const d = new THREE.Mesh(new THREE.BoxGeometry(6, 0.3, 4), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); d.position.set(0, 0.16, 0); d.rotation.set(0.03, 0.4, -0.04); g.add(d);
+      mk('social', 0xe2c46a, 1, (g) => { const d = hullRaft(); d.position.set(0, 0.16, 0); d.rotation.set(0.03, 0.4, -0.04); g.add(d);
         // the floor is cloud, not ground: cells of billowing cloud lit from the low sun's side, shaded in their seams,
         // fading into gold haze; heaps of cumulus standing up out of the deck (many rounded puffs each, the edges thin
         // and torn: hard-edged lumps read as rock); over it all a thick hot sky, gold at the horizon, thinning upwards
@@ -1619,6 +1619,38 @@ function cloudFloorMat(sun: THREE.Vector3) {
         #include <fog_fragment>
       }`,
   });
+}
+
+/** The piece of the liner Nuvexa rides: a torn section of hull plating, ragged at the edges, scorched, with the
+ * ribs of its frame under it (a box read as a table). About 6 by 4 m. */
+function hullRaft() {
+  const rnd = mulberry32(77), sh = new THREE.Shape(), N = 28;
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2, r = 1 + (rnd() - 0.5) * 0.28 + (i % 3 === 0 ? -0.12 * rnd() : 0);
+    const x = Math.cos(a) * 3 * r, y = Math.sin(a) * 2 * r;
+    if (i === 0) sh.moveTo(x, y); else sh.lineTo(x, y);
+  }
+  const plate = new THREE.ExtrudeGeometry(sh, { depth: 0.12, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.02, bevelSegments: 1 });
+  plate.rotateX(-Math.PI / 2);
+  // the hull's curve: the plate bows along its length
+  const p = plate.getAttribute('position');
+  const col = new Float32Array(p.count * 3), n = new Simplex(5);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    p.setY(i, p.getY(i) - (x * x) * 0.018);
+    // scorched towards the torn rim, panel seams every 1.5 m
+    const rim = Math.min(1, Math.max(0, (Math.hypot(x / 3, z / 2) - 0.7) / 0.3));
+    const seam = Math.abs(((x + 30) % 1.5) - 0.75) < 0.03 ? 0.75 : 1;
+    const k = (0.78 + 0.12 * n.noise2(x * 0.9, z * 0.9)) * (1 - rim * 0.65) * seam;
+    col[i * 3] = k; col[i * 3 + 1] = k * 0.99; col[i * 3 + 2] = k * 1.03;
+  }
+  plate.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  plate.computeVertexNormals();
+  const m = new THREE.MeshStandardMaterial({ color: 0xc9ccd4, roughness: 0.45, metalness: 0.65, vertexColors: true });
+  const g = new THREE.Group(); g.add(new THREE.Mesh(plate, m));
+  const rib = new THREE.MeshStandardMaterial({ color: 0x5a5d64, roughness: 0.6, metalness: 0.7 });
+  for (let i = -2; i <= 2; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.22, 3.4 - Math.abs(i) * 0.4), rib); b.position.set(i * 1.3, -0.14 - i * i * 0.03, 0); g.add(b); }
+  return g;
 }
 
 /** A heap of cumulus about r across: rounded puffs piled on a flat-ish base, smaller and fewer towards the top. */
