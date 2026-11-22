@@ -354,11 +354,13 @@ function guardian(): CreatureView {
       for (const L of legs) {
         hipT.copy(L.hip).applyMatrix4(body.matrix);
         // feet: wide and planted awake, tucked in asleep; a trot when it walks; the front pair up when it rears
-        const spread = 0.6 + 0.65 * wake * (1 - sink), ph = walk + L.ph, step = e.speed > 0.05 ? 1 : 0; // asleep: feet tucked in, knees high beside it
-        footT.set(L.sx * spread * 1.05, 0, L.sz * (0.42 + 0.63 * wake) + Math.sin(ph) * 0.4 * step);
+        // asleep the long legs lie folded flat out to the sides, knees low (a statue on its belly); tucked under it
+        // they had nowhere to go but up, and stood beside it like posts
+        const rest = 1 - wake * (1 - sink), spread = 1.25 + 0.4 * rest, ph = walk + L.ph, step = e.speed > 0.05 ? 1 : 0;
+        footT.set(L.sx * spread * 1.05, 0, L.sz * (0.42 + 0.63 * wake + 0.5 * rest) + Math.sin(ph) * 0.4 * step);
         footT.y = Math.max(0, Math.cos(ph)) * 0.22 * step;
         if (L.sz > 0) { footT.y += rear * 1.1; footT.z += rear * 0.35; }
-        pole.set(L.sx * 1, 1.3, L.sz * 0.4);
+        pole.set(L.sx * 1, 1.3 - rest * 1.0, L.sz * 0.4 + L.sz * rest * 0.4);
         reach(hipT, footT, 1.05, 1.3, pole, kneeT, wristT);
         strutTo(L.up, hipT, kneeT); strutTo(L.lo, kneeT, wristT);
         L.knee.position.copy(kneeT); L.foot.position.copy(wristT); L.foot.rotation.y = L.sx * 0.5;

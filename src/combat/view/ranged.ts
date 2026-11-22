@@ -339,7 +339,7 @@ export class RangedRig {
       this.trailMesh.frustumCulled = false; this.group.add(this.trailMesh);
     }
     for (const q of this.trail) q.age += dt;
-    if (on) this.trail.unshift({ a: hand.clone().lerp(hook, 0.35), b: hook.clone(), age: 0 });
+    if (on) this.trail.unshift({ a: hand.clone().lerp(hook, 0.7), b: hook.clone(), age: 0 });
     this.trail = this.trail.filter((q) => q.age < 0.18).slice(0, N);
     const m = this.trailMesh, n = this.trail.length;
     m.visible = n > 2;
@@ -348,7 +348,7 @@ export class RangedRig {
     for (let i = 0; i < N; i++) {
       const q = this.trail[Math.min(i, n - 1)], k = i < n ? (1 - q.age / 0.18) * (1 - i / N) : 0;
       P.setXYZ(i * 2, q.a.x, q.a.y, q.a.z); P.setXYZ(i * 2 + 1, q.b.x, q.b.y, q.b.z);
-      C.setXYZW(i * 2, 0.85, 0.8, 0.7, k * 0.12); C.setXYZW(i * 2 + 1, 0.9, 0.85, 0.75, k * 0.4);
+      C.setXYZW(i * 2, 0.45, 0.35, 0.24, k * 0.05); C.setXYZW(i * 2 + 1, 0.5, 0.4, 0.28, k * 0.22);
     }
     P.needsUpdate = true; C.needsUpdate = true;
   }

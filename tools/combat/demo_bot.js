@@ -151,10 +151,14 @@ window.__cbBot = (mode) => {
       const goal = run.markers.find((m) => m.kind === 'goal'), h = living('hound')[0];
       // a runner who has seen it gather: roll out of the lunge's line when it is about a third of a second from
       // landing (the roll's cover lasts 0.42 s), to the side away from the line; one roll per lunge
+      if (!(h && h.state === 'strike')) flag.lastT = performance.now();
       if (h && h.state !== flag.hState) { flag.hState = h.state; if (h.state === 'strike') flag.strikeN = (flag.strikeN || 0) + 1; }
       if (h && h.state === 'strike' && p.act !== 'roll' && p.stamina > 14 && flag.rollFor !== flag.strikeN) {
         const ox = p.x - h.x, oz = p.z - h.z, along = ox * h.atkDx + oz * h.atkDz, d = dist(h, p);
-        if (along > 0 && d < 6.5 && d > 0.5) {
+        // time to contact from the closing speed (the lunge is ~14 m/s, the runner ~6), plus one bot tick of lag
+        const now = performance.now(), tick = Math.min(0.15, (now - (flag.lastT || now)) / 1000); flag.lastT = now;
+        const closing = Math.max(4, Math.hypot(h.vx, h.vz) - p.speed * 0.8), ttc = (d - 1.2) / closing;
+        if (along > 0 && ttc < 0.3 + tick && d > 0.5) {
           const side = Math.sign(h.atkDx * oz - h.atkDz * ox) || 1, nx = -h.atkDz * side, nz = h.atkDx * side;
           const y = C.cam.yaw, rx = Math.cos(y), rz = -Math.sin(y), k = nx * rx + nz * rz > 0 ? 'KeyD' : 'KeyA';
           flag.rollFor = flag.strikeN; hold(k, 1); tap('KeyV'); setTimeout(() => hold(k, 0), 450); return;
@@ -176,9 +180,12 @@ window.__cbBot = (mode) => {
       if (st === 0) { if (equip(wpn)) { flag.yaw = C.cam.yaw; next(); } return; }
       const f = { x: C.cam.x - Math.sin(flag.yaw) * 30, z: C.cam.z - Math.cos(flag.yaw) * 30 };
       look(f.x, f.z, C.cam.y + 1.4);
-      const cyc = since() % 5.2;
+      // game time, so a slow-motion take keeps the same draw and cast
+      const now = performance.now(); flag.gt = (flag.gt || 0) + Math.min(0.1, (now - (flag.rt || now)) / 1000) * (C.testSlow || 1); flag.rt = now;
+      const cyc = flag.gt % 5.2;
       hold('Mouse2', cyc > 0.4);
-      hold('Mouse0', cyc > 1.0 && cyc < (mode === 'bowref' ? 3.4 : 3.0));
+      // the spear-thrower is cast as soon as it is drawn (nobody holds a full draw); the bow is held to aim
+      hold('Mouse0', cyc > 1.0 && cyc < (mode === 'bowref' ? 3.4 : mode === 'atlatlref' ? 2.0 : 3.0));
     } else if (mode === 'tour') {
       // free play: walk up to the animals of Verdaxis and look at them
       const t = nearest(living().filter((e) => e.kind === (flag.kind || 'mossback')));
