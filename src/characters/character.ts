@@ -81,6 +81,8 @@ const CROWD_FACE_FAR: Record<string, number> = { cornea: 5, lash: 7, eyes: 12 };
 // casts one (the stage lays a soft contact shadow under it instead), others only near the camera
 /** Crowd light builds with only their shape morphs, one per source geometry. */
 const STRIPPED = new WeakMap<THREE.BufferGeometry, { g: THREE.BufferGeometry; dict: Record<string, number> | undefined }>();
+/** Where the game camera was when it last drew a body (for passers-by at the lens). */
+const LENS = new THREE.Vector3(0, -1e6, 0);
 export const CHAR_BUDGET = { throttle: true, correctiveNear: 9, lodFar: 11, shadowFar: 16, crowdLodFar: 6, crowdShadowFar: 0 };
 
 /** Mocap style per character: how they stand and how they walk. */
@@ -530,6 +532,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (!(c as THREE.PerspectiveCamera).isPerspectiveCamera) return; // the sun's shadow camera does not count
     sinceDrawn = 0; perfStamp = perfBody(perfStamp);
     const a = c.matrixWorld.elements, b = this.matrixWorld.elements;
+    LENS.set(a[12], a[13], a[14]);
     camD = Math.hypot(a[12] - b[12], a[13] - b[13], a[14] - b[14]);
   }
   let torsoR: number[] | null = null, torsoLen: number[] = [], torsoBody: THREE.SkinnedMesh[] = []; // read by keepArmsOut
@@ -790,6 +793,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // its sixty bones are not even carried along by three.js's matrix pass while it is hidden
       if (!root.visible) { skipDt = Math.min(skipDt + dt, 0.2); skipN = 99; root.matrixWorldAutoUpdate = false; return; }
       root.matrixWorldAutoUpdate = true;
+      // a passer-by whose body reaches the lens (their hair filled a corner of the screen) is left out until they pass
+      if (crowd) {
+        const e = root.matrixWorld.elements, dy = LENS.y - e[13], d = Math.hypot(LENS.x - e[12], LENS.z - e[14]);
+        const near = dy > -0.3 && dy < 2.3 && d < (fig.visible ? 0.7 : 0.9);
+        if (fig.visible === near) fig.visible = !near;
+      }
       pickLod();
       sinceDrawn++;
       // phones: a crowd body more than a few metres off is posed every other frame
