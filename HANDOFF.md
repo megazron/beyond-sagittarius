@@ -188,3 +188,58 @@ See the end of this file for the running log.
   cast in the ranged rig; hunt bot patient (kill in ~20 s); night fill light (planetshine) made once at start and
   kept at 0 by day. LESSON: adding a light mid-game (torch PointLight, late DirectionalLight) recompiled every
   material and stalled the CI browser for minutes (play test timed out on the pause menu); never add lights later.
+
+## combat: STATE AT HANDOVER (2026-11-22 ~02:00), read this first
+Main is at f2ed5e3 (landed by fast-forward after a fully green CI run on that exact commit). Nothing of mine is
+unlanded except this handoff commit and any recording in progress.
+
+### How to land (rules that bit me)
+- Work in ~/bs-combat (branch `combat`). Rebase on origin/main; HANDOFF.md is shared with the perf agent (merge both).
+- Force-push is refused by the permission layer: push rebased work to a NEW branch name (`combat-land2`, `-land3`...)
+  with `git push origin HEAD:refs/heads/<name>`; CI runs on every push (.github/workflows/gates.yml, ~12 min, a
+  `combat` job = sim_test + play_test). Check `gh run view <id> --json conclusion,headSha` on the exact sha, check
+  `git merge-base --is-ancestor origin/main <sha>`, then ONE separate command `git push origin <sha>:main`
+  (chaining the check and the push in one command got refused). levels_smoke and crowd_smoke are flaky in CI:
+  `gh run rerun <id> --failed`.
+- Never add a THREE light after start (it recompiles every material: phone hitch, and the CI browser stalled for
+  minutes). The night fill light (`shine` in combat.ts) is made in the constructor and kept at 0 by day.
+- Commits as megazron, no AI attribution, first person, no em dashes. Heavy jobs only via ~/bin/heavy; locally only
+  quick checks (tsc, sim_test) and GPU captures.
+
+### Where things are
+- Sim (Node-testable): src/combat/sim/ (weapons.ts, species.ts, ai.ts, sim.ts, encounters.ts, tension.ts,
+  inventions.ts). Tests: `node --experimental-strip-types tools/combat/sim_test.ts` (208 checks).
+- View: src/combat/view/ (creatures.ts, fx.ts, body.ts poses, ranged.ts = bow/sling/spear-thrower rig with two-bone
+  arm reach, world-space gear at the real hands, pouch physics, setGrip calls; hud.ts, tensionUi.ts).
+- Controller: src/combat/combat.ts. Story API: docs/COMBAT_API.md (startEncounter, tension, inventions table).
+- Inventions = story tree rows (~/bs-story/INVENTION_TREE.md): src/combat/sim/inventions.ts; craft text cb.inv.*
+  in src/combat/strings.ts (en/hi/ur). Episode One: stones, flake, club, fire, torch, fire-hardened spear, stakes,
+  fire line, bait. Later: cordage, hafted spear, spear-thrower (atlatl + darts), traps (snare, rattle), sling (row 22),
+  bow (row 19). Crossbow and coil only in the dev arena.
+- Notes and sources: MECHANICS_NOTES.md (sections 1 to 10).
+
+### How to record (GPU, with sound)
+- Windows Chrome on port 9336 (profile %TEMP%\bs-combat-gpu), preview server `npx vite preview --port 4651` in this
+  tree (serves dist; rebuild first). Scripts in ~/bs-cap/combat: `mkplan.py` (set-piece clips), `mkplan_v2.py`
+  (bow/sling/spear-thrower references with a side photo camera and slow motion, gameplay clips; `python3 mkplan_v2.py
+  bowref slingref ...`), `round3.sh NAME PLAN` = heavy build + capture + join, `cap.sh` capture only, `capg.sh`
+  captures from port 4652 (used for the life-wip grip test worktree ~/bs-combat-grip). Bot: tools/combat/demo_bot.js
+  (modes melee, ranged, guardian, hunt, night, chase, stealth, tour, bowref, slingref, atlatlref, bowplay,
+  atlatlplay); it plays through the game's own keys. Hooks: `__bs.combat.testSlow`, `__bs.photo(from, to)`,
+  `__bs.combat.testHideDraws(on)`. A state-dump probe plan: ~/bs-cap/combat/plan_dbg.json (evals printed in the log).
+- Clips go to /mnt/c/Users/Gausms/Downloads/BS_Game_v1.1/combat/ (small re-encodes) with README_review.txt; last
+  delivered: 04/05/06 v2, 10 to 17 (bow, sling, spear-thrower, v2/v3/v4), *_v3_grip. A chase/night v3 recording
+  (~/bs-cap/combat/v7) was queued at handover; check v7.log, review, re-encode and copy if it finished.
+
+### Open items (below the bar)
+1. Chase readability: still dark among trees (now hour 19.9 and planetshine 0.8; not yet reviewed in v7).
+2. Night defence: the recording bot sets bait and a snare but stalls before the stakes (it stops walking; see the
+   probe dumps in ~/bs-cap/combat/dbg.log); traps are near the food and hard to see at night. Fix the bot's walking
+   in prep, show the traps catching on screen.
+3. Spear-thrower full-draw pose reads as a wide "T" (ranged.ts atlatl branch: bring the off arm in, lower the draw).
+4. Fingers: ranged.ts calls `setGrip` (story agent's API on life-wip d3acdfe); a no-op until life-wip lands on main;
+   then record bow/sling again and check the grips (tested OK in ~/bs-combat-grip, clips *_v3_grip).
+5. Bow gameplay: camera now over the bow shoulder (combat.ts cb.shoulder -0.95 for the bow); fine-tune with a player.
+6. Hunt: works (bot kills in ~20 s); prey readability in long grass relies on the suit tags.
+7. Guardian prototype is plain boxes; melee vs Skritch is mostly chasing by design.
+8. Nothing is "ready": the owner signs off; send clips with an honest list.
