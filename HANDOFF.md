@@ -643,3 +643,24 @@ unlanded except this handoff commit and any recording in progress.
   12 -> 20) or start at 2.6 m. (4) planet 60 on Web (quiet); Mobile proxy 15-22, needs a CPU profile and work.
   (5) cold title load (p15/ab_load.sh) not run.
 - Previews :4182 and :4183 stopped at the end. dist-base, dist-new, dist-new3 are local build folders (excluded).
+
+### 2026-11-22 ~14:00 (combat agent, session after land17)
+- FOUND: the trap warning cue (rustle, voice, twig) could never play: trapBeat looked for an animal walking at the
+  trap by `e.vx/vz`, which is only a knock's slide (zero while walking). Now speed + heading. Scavengers also come to
+  a bait warily (ai.ts feed: walk the last 5.2 m, one 0.8-1.3 s stop to test the air, creep the last 3.5 m at 0.65 of
+  a walk): ~1.6 s of cue before the snap (night_watch_probe prints it; sim_test checks it). Bot logs each cue in
+  window.__cbTrapLog ({cue, t, rec}).
+- ALSO FOUND (not fixed): sim.aimPoint's lead uses best.vx/vz (knock velocity), so aim assist never leads a moving
+  target. Use speed*heading like the cue fix if it matters.
+- Guardian face: one almond eye socket (lathe mask drawn sideways, pinched corners, hooded upper lid), frowning brow,
+  one wide eye with a slit pupil that closes before the beam, two small corner lenses; phase two: white-hot eye, seams
+  stutter, cold rim (no orange body). player.ts orbit: the lens keeps 0.5 m off any trunk (bisection along the line;
+  skipped when the player stands against the trunk).
+- Throwing stick: a blurred spin disc (fx.blurs, fades in slow motion); bot side camera follows the fetch and back.
+- SPEAR FISHING built (fish.spear, species `darter`, temperament 'fish', Env.water, core.seenDepthY refraction,
+  sim.thrustFish along the reticle line, splashes/fishLog, strings en/hi/ur, bot mode `fish`, sim_test 247).
+  Story hook PROPOSED to the story agent in ~/bs-story/INVENTION_TREE.md (last section): after 1.9, the morning at
+  the stream; flags fish.caught / fish.lesson / inv.spearFish. Waiting for the answer there. Water on main = the lake
+  (terrain < WATER_LEVEL); life-wip's stream needs its own query when it lands. Known gap: the world's water does not
+  refract the lake bottom, so a fish drawn at its seen depth can look like it hovers over the bottom; thrown spears
+  follow their own arc (no reticle-line correction), so fishing is by thrust in practice.
