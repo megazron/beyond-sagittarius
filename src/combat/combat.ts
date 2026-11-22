@@ -650,8 +650,9 @@ export class Combat {
         if (dp > 16 || dp < 1.5) continue;
         // just sprung with no warning (it came in fast): look now
         const fresh = tr.sprungT >= 0 && sim.t - tr.sprungT < 0.35;
+        // walking at it: speed and heading (vx/vz is only a knock's slide, zero while it walks: with it the cue never played)
         const comer = tr.armed && tr.uses > 0 ? sim.enemies.find((e) => !e.dead && !e.gone && e.heldT <= 0 && e.def.temperament !== 'machine'
-          && (tr.kind !== 'stakes' || e.speed > 4) && Math.hypot(e.x - tr.x, e.z - tr.z) < 3.4 && (e.vx * (tr.x - e.x) + e.vz * (tr.z - e.z)) > 0) : undefined;
+          && (tr.kind !== 'stakes' || e.speed > 4) && Math.hypot(e.x - tr.x, e.z - tr.z) < 3.4 && e.speed > 0.3 && (Math.sin(e.yaw) * (tr.x - e.x) + Math.cos(e.yaw) * (tr.z - e.z)) > 0) : undefined;
         if (!fresh && !comer) continue;
         this.beat = b = { id: tr.id, t: 0, snapT: fresh ? 0 : -1, yaw0: P.yaw, t0: fresh ? tr.sprungT : sim.t };
         if (comer) {

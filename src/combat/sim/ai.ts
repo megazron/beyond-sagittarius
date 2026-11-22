@@ -313,7 +313,13 @@ function skittish(sim: CombatSim, e: Enemy, dt: number, awake: boolean) {
     if (!food) { setState(sim, e, e.aware ? 'stalk' : 'idle'); return; }
     // someone big walks at it: it backs off, and comes again
     if (d < 4.2 && facing && e.courage < 0.9) { setState(sim, e, 'flee'); e.wander = 1.6; return; }
-    const df = move(sim, e, food.x, food.z, def.run * 0.8, dt);
+    // the last few metres to food left out are a creep, with one stop to test the air first (foxes and jackals come
+    // to a bait warily, not at a run): that is the moment a set snare is heard, rustle, voice and twig, before it goes
+    // off. wander: -1 not stopped yet, > 0 stopped (seconds left), 0 stopped once already
+    const df0 = dist2(e.x, e.z, food.x, food.z);
+    if (e.wander < 0 && df0 < 5.2 && df0 > 1.5) e.wander = 0.8 + sim.rand() * 0.5;
+    if (e.wander > 0) { e.speed = 0; faceTo(e, food.x, food.z, dt); e.wander = Math.max(0, e.wander - dt); return; }
+    const df = move(sim, e, food.x, food.z, df0 < 3.5 ? def.walk * 0.65 : df0 < 5.2 ? def.walk : def.run * 0.8, dt);
     if (df < 0.9) {
       e.speed = 0; e.atkGone += dt;
       if (e.atkGone > 2.4) {
@@ -325,7 +331,7 @@ function skittish(sim: CombatSim, e: Enemy, dt: number, awake: boolean) {
     } else e.atkGone = 0;
     return;
   }
-  if (food && e.cd < 2) { e.atkGone = 0; setState(sim, e, 'feed'); return; }
+  if (food && e.cd < 2) { e.atkGone = 0; e.wander = -1; setState(sim, e, 'feed'); return; }
   if (e.state === 'idle' || e.state === 'investigate') {
     if (e.aware) setState(sim, e, 'stalk');
     else if (e.alert > 0.4) { setState(sim, e, 'investigate'); move(sim, e, e.lkx, e.lkz, def.walk * 1.5, dt); }
