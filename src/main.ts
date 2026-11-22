@@ -1049,6 +1049,8 @@ window.addEventListener('resize', () => {
   get hound() { return game?.story.debugHound(); },
   /** Fights: state for the tests, and the way to start a set piece (tools/combat/play_test.py). */
   get combat() { return combat; },
+  /** The player's body: kneeling (0..1), the game mode, where the hips are (checks of the kneel in Episode One). */
+  get body() { const m = (game as unknown as { player?: { model: import('./characters/character').Character } } | null)?.player?.model; if (!m) return null; const h = new THREE.Vector3(); (m.root.getObjectByName('hips') ?? m.root).getWorldPosition(h); return { kneel: m.kneeling, mode: game!.mode, rootY: m.root.position.y, hipsY: h.y }; },
   groundAt(x: number, z: number) { return world.terrain.height(x, z); },
   /** Episode One for captures: the pool, the stream's centre line (every 10th point), the red fruit (1.1) and where he
    * kneels at the cobbles (1.3). */

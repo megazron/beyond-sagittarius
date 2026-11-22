@@ -686,6 +686,8 @@ export class Game {
 
   findInteraction() {
     const p = this.player;
+    // a held work shot (the drill, the knapping, the spear, the lean-to): nothing to press but the moment itself
+    if (p.workShot) { this.interactTarget = null; this.ui.setPrompt(null); return; }
     if (this.story.houndEngaged() && !this.combat?.encounter) {
       this.interactTarget = { kind: 'strike' };
       this.ui.setPrompt(this.story.strikePrompt());

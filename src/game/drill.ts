@@ -67,8 +67,9 @@ export class FireDrill {
    */
   private drillShot(b: { kneel: THREE.Vector3; at: THREE.Vector3 }, dist = 0.85, side = 1): Shot {
     const f = this.dir(b), r = new THREE.Vector3(f.z, 0, -f.x).multiplyScalar(side);
-    const to = b.at.clone().addScaledVector(f, -0.12).add(new THREE.Vector3(0, 0.34, 0));
-    return { from: b.at.clone().addScaledVector(r, dist).addScaledVector(f, 0.3 * dist).add(new THREE.Vector3(0, 0.42 + dist * 0.12, 0)), to, push: 0.02 };
+    // far enough out that the board, the spindle, both palms and his face all fit (at 1 m it framed his coat)
+    const to = b.at.clone().addScaledVector(f, -0.2).add(new THREE.Vector3(0, 0.42, 0));
+    return { from: b.at.clone().addScaledVector(r, dist * 1.5).addScaledVector(f, 0.35 * dist).add(new THREE.Vector3(0, 0.7 + dist * 0.15, 0)), to, push: 0.02 };
   }
   /** The same framing held by the follow camera while a tension moment is open. */
   private hold(b: { kneel: THREE.Vector3; at: THREE.Vector3 } | null, dist = 0.95) {

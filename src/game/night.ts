@@ -86,11 +86,12 @@ export class FirstNight {
   }
   /** From the fire's side, low: his hands, the stick and his face bent over it. */
   private scrapeShot(camp: THREE.Vector3, dist = 1.15) {
+    // in front of him and off to his left, away from the flames (from the fire's side the flames filled the lens)
     const { f, r } = this.axes(camp), L = this.lap(camp), mid = this.along(L.butt, L.dir, 0.85);
-    return { from: mid.clone().addScaledVector(f, dist).addScaledVector(r, 0.35 * dist).add(new THREE.Vector3(0, 0.28, 0)), to: mid.clone().addScaledVector(f, -0.1).add(new THREE.Vector3(0, 0.18, 0)), push: 0.02 };
+    return { from: this.kneel.clone().addScaledVector(f, 0.85 * dist).addScaledVector(r, -0.95 * dist).add(new THREE.Vector3(0, 0.75, 0)), to: mid.clone().add(new THREE.Vector3(0, 0.28, 0)), push: 0.02 };
   }
   /** From the side, the stick running from his hands into the coals. */
-  private cookShot(camp: THREE.Vector3, dist = 1.5) {
+  private cookShot(camp: THREE.Vector3, dist = 2.0) {
     const { f, r } = this.axes(camp), m = this.kneel.clone().lerp(camp, 0.55);
     return { from: m.clone().addScaledVector(r, dist).addScaledVector(f, -0.25).add(new THREE.Vector3(0, 0.55, 0)), to: m.clone().add(new THREE.Vector3(0, 0.3, 0)), push: 0.02 };
   }
