@@ -16,7 +16,7 @@ function seg(o: THREE.Object3D, a: THREE.Vector3, b: THREE.Vector3) {
   o.position.copy(a); o.quaternion.setFromUnitVectors(Y1, l > 1e-6 ? d.divideScalar(l) : Y1); o.scale.set(1, Math.max(1e-4, l), 1);
 }
 
-export type Puff = 'dust' | 'spark' | 'chip' | 'ember' | 'spore' | 'flash' | 'leaf' | 'arc' | 'smoke';
+export type Puff = 'dust' | 'spark' | 'chip' | 'ember' | 'spore' | 'flash' | 'leaf' | 'arc' | 'smoke' | 'splash';
 const PUFF: Record<Puff, { n: number; c: [number, number, number]; size: number; life: number; speed: number; up: number; g: number; add?: boolean; a?: number }> = {
   dust: { n: 9, c: [0.62, 0.56, 0.46], size: 0.5, life: 0.7, speed: 1.6, up: 1.2, g: 1.5 },
   chip: { n: 7, c: [0.86, 0.8, 0.66], size: 0.08, life: 0.55, speed: 3.6, up: 2.6, g: 9 },
@@ -28,6 +28,8 @@ const PUFF: Record<Puff, { n: number; c: [number, number, number]; size: number;
   arc: { n: 8, c: [0.8, 2.2, 3], size: 0.06, life: 0.3, speed: 4, up: 1, g: 0, add: true },
   // wood smoke: rises slowly and leans with the wind, so the camp shows which way the breeze carries the food's smell
   smoke: { n: 1, c: [0.3, 0.29, 0.28], size: 0.5, life: 4.5, speed: 0.2, up: 0.5, g: -0.04, a: 0.16 },
+  // water thrown up where a spear goes in: a crown of drops falling back
+  splash: { n: 14, c: [0.78, 0.84, 0.86], size: 0.09, life: 0.6, speed: 1.4, up: 2.6, g: 9.8, a: 0.7 },
 };
 
 export class CombatFx {

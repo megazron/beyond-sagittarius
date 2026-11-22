@@ -550,6 +550,56 @@ function guardian(): CreatureView {
   };
 }
 
+/**
+ * A darter: a slim fish about 35 cm long, olive-brown back over a pale belly (dark from above, so it is a shadow on
+ * the bottom more than a shape, which is how a fish is actually spotted), a silver line down the flank, a forked tail
+ * and a small back fin. The body bends from the middle back as it swims; held still, only the tail and fins stir.
+ * The controller puts the root where the fish is SEEN (raised by refraction); the sim keeps where it is.
+ * Killed it rolls belly up and floats to the surface.
+ */
+function darter(): CreatureView {
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  const L = 0.34;
+  const g = new THREE.SphereGeometry(1, 16, 10);
+  const p = g.attributes.position, c = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    // a spindle, blunt at the nose and drawn out to the tail, deeper than wide
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), taper = z < 0 ? 1 - 0.55 * z * z : 1 - 0.2 * z * z;
+    p.setXYZ(i, x * 0.04 * taper, y * 0.045 * taper, z * L * 0.5);
+    const back = THREE.MathUtils.smoothstep(y, -0.25, 0.45), line = Math.exp(-Math.pow((y - 0.05) / 0.12, 2)) * 0.35;
+    c[i * 3] = 0.72 - back * 0.52 + line; c[i * 3 + 1] = 0.7 - back * 0.46 + line; c[i * 3 + 2] = 0.6 - back * 0.46 + line;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.computeVertexNormals();
+  const skin = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.25 });
+  const fins = new THREE.MeshStandardMaterial({ color: 0x4d4a38, roughness: 0.7, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+  body.add(new THREE.Mesh(g, skin));
+  // the tail: a forked fin on a hinge at the wrist of the tail
+  const tail = new THREE.Group(); tail.position.z = -L * 0.48; body.add(tail);
+  const tg = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.055, -0.09), new THREE.Vector3(0, 0.0, -0.06), new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.0, -0.06), new THREE.Vector3(0, -0.05, -0.09)]);
+  tg.computeVertexNormals(); tail.add(new THREE.Mesh(tg, fins));
+  // a small back fin and two belly fins
+  const df = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.04, 0.04), new THREE.Vector3(0, 0.085, -0.02), new THREE.Vector3(0, 0.035, -0.06)]);
+  df.computeVertexNormals(); body.add(new THREE.Mesh(df, fins));
+  const pf = [-1, 1].map((s) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.025), fins); m.position.set(s * 0.035, -0.025, 0.07); m.rotation.set(0.3, s * 0.6, s * 0.5); body.add(m); return m; });
+  for (const o of [root]) o.traverse((q) => { q.castShadow = false; });
+  let sw = 0, roll = 0;
+  return {
+    root,
+    flinch() { /* a fish hit is a fish taken */ },
+    update(e, t, dt) {
+      root.position.set(e.x, e.y + 0.04, e.z); root.rotation.y = e.yaw;
+      const sp = e.dead ? 0 : e.speed;
+      // the body swings faster and wider the faster it goes; at rest a slow fan of the tail keeps it in place
+      sw += dt * (2.2 + sp * 9);
+      const amp = e.dead ? 0 : 0.12 + Math.min(0.45, sp * 0.12);
+      tail.rotation.y = Math.sin(sw) * amp * 2.2; body.rotation.y = Math.sin(sw - 1.2) * amp * 0.35;
+      pf.forEach((m, i) => { m.rotation.z = (i ? 1 : -1) * (0.5 + Math.sin(t * 5 + i) * 0.2); });
+      roll += ((e.dead ? Math.PI : 0) - roll) * (1 - Math.exp(-dt * 2));
+      body.rotation.z = roll;
+    },
+  };
+}
+
 /** A small animal's shadow is its body's alone: the head, tail and legs would each be drawn again for a few pixels. */
 function small(v: CreatureView): CreatureView {
   let first = true;
@@ -562,6 +612,7 @@ export function createCreature(kind: SpeciesId): CreatureView {
     case 'hound': return hound();
     case 'lashbloom': return lashbloom();
     case 'guardian': return guardian();
+    case 'darter': return darter();
     case 'skritch': return small(quadruped({ len: 0.75, girth: 0.17, legLen: 0.3, legR: 0.035, headLen: 0.3, neck: 0.1, tail: 0.5, ears: 0.9, hide: 0x4a3f33, belly: 0x8a7a62, ridge: [0.5, 1.5, 0.9], eye: [2.2, 1.6, 0.4], gait: 1.1 }));
     case 'nibbet': return small(quadruped({ len: 0.5, girth: 0.15, legLen: 0.26, legR: 0.03, headLen: 0.22, neck: 0.08, tail: 0.12, ears: 1.9, hide: 0x7d745a, belly: 0xc9c2a4, ridge: [0.4, 1.1, 1.3], eye: [1.2, 1.4, 1.5], gait: 1.3, flag: 0xf1eee4, perk: 0.85 }));
     default: return quadruped({ len: 2.5, girth: 0.72, legLen: 0.95, legR: 0.16, headLen: 0.8, neck: 0.3, tail: 0.5, ears: 0.35, hide: 0x4b4f45, belly: 0x6f6a58, ridge: [0.4, 1.2, 0.5], eye: [1.6, 1.3, 0.5], plates: 1, moss: 0x3f7a4c, gait: 0.42 });
