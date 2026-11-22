@@ -582,3 +582,23 @@ unlanded except this handoff commit and any recording in progress.
   each). Clips of Ultra and the planet: not recorded (p18/plan_clips18_city_ultra.json, planet_web.json are ready;
   p18/clips.sh NAME records one).
 - Preview: I ran dist-new on :4182 (stopped at the end). Main's dist on :4180 is someone's long-running server, left alone.
+
+## 2026-11-22 14:20 takeover by perf agent 19 (branch perf17 continued, rebased on main 983d105; landing branches perf18-land1..)
+- Ultra CPU profile (p18/up1, plan_uprof.json, dist-base = main with --sourcemap, tools/mapprof.cjs): in the bazaar
+  three's renderTransmissionPass was 31% of the render (1.7 of 5.6 s sampled): the wall clock scan's glass
+  (KHR_materials_transmission, only Ultra draws the scans close) made three draw the whole opaque scene a second time
+  into its transmission buffer every frame it was in view. The sun's shadow pass (WebGLShadowMap.render) was 19-21%:
+  Ultra redrew the city's shadow every frame, Web every other. Lights are NOT the cost (5 point lights on Ultra);
+  WebGLBindingStates.setup is VAO binding, normal per-draw cost.
+- Fixed (97d58b2): city glass with transmission becomes plain see-through glass at load (city.ts model()); the city's sun
+  shadow every other frame on Ultra too (Ultra's preset already says shadowInterval 2).
+- WARNING about older numbers: the handoff's Ultra "12.6 / 13.7 fps, 61.8 ms submission" came from the ?gputime=1 run.
+  Without the timer the same base build measured 23.1 / 58.9 (bazaar / gate) in one run and 20.2 / 23.3 in the next:
+  the timer's queries inflate CPU time, and this machine swings 2x between runs. Compare only pairs run back to back.
+- A/B p18/s1 (ab3.sh: base :4182 vs new :4183, one exclusive heavy call each, A500 1280x720, back to back):
+  Ultra crowd 29.3 -> 38.6, bazaar 20.2 -> 32.6 (draw 40.8 -> 19.5 ms, 509 -> 319 draws), gate 23.3 -> 33.9,
+  market 30.7 -> 35.4, square 30.4 -> 31.8. Worst frames are still 100-230 ms on Ultra (hitches: not yet found).
+- Lens (4c59702): a passer-by fades from 2.2 m to gone at 1.1 m (was 1.3 -> 0.4: half-faded bodies filled ~40% of a low
+  camera's view as a dark dithered shape). The crowd camera is on by default (?crowdcam=0 off); CI perf_gate passed with
+  it on (perf18-land1). mobile_smoke failed twice there on a pixel7 screenshot timeout (SwiftShader, the job ran ~50%
+  slower than main's; mobile_smoke never enters the city and both changes are city or Web/Ultra only).
