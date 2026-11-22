@@ -63,7 +63,7 @@ export class Story {
   npcs: Npcs;
   ch2: Chapter2;
   /** Set by the game: open the crafting and dialogue panels. */
-  hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean; away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void; quick: (id: string, done: () => void) => void } = { away: () => {}, quick: () => {}, craft: () => {}, talk: () => {}, free: () => true };
+  hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean; away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void; quick: (id: string, done: () => void) => void; drill?: (lit: () => void) => boolean } = { away: () => {}, quick: () => {}, craft: () => {}, talk: () => {}, free: () => true };
   private strikes = 0;
   private thrustT = 0;
   private spear: THREE.Group;
@@ -219,6 +219,8 @@ export class Story {
       } });
     } else if (n === 4 && !this.flag('fire')) {
       out.push({ id: 'strike', pos: L.camp, radius: 2.6, label: t('action.strike'), missing: this.missing(R.strike), run: () => {
+        // 1.6: a player's own press makes fire by hand drill (game.ts FireDrill); the level tests keep the strikes
+        if (this.hooks.drill?.(() => { this.consume(R.strike); s.flags.fire = true; this.world.camp.setFire(2); this.ui.toast(t('msg.fireLit')); })) return;
         this.strikes++;
         this.world.camp.strikeSparks();
         this.thrustT = 0.35;

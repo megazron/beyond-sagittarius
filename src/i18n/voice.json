@@ -373,7 +373,10 @@
     "e1.fl.mid": "scientist",
     "e1.fl.steep": "scientist",
     "e1.fl.snap": "scientist",
-    "e1.fl.ok": "scientist"
+    "e1.fl.ok": "scientist",
+    "e1.fi.sci": "scientist",
+    "e1.fi.slow": "scientist",
+    "e1.fi.die": "scientist"
   },
   "scenes": {
     "_comment": "Lines several people speak: 'Name: words' starts that person's part; text before any name is the player's.",

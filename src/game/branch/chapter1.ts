@@ -35,6 +35,14 @@ export const DECISIONS: Decision[] = [
       { id: 'sand', label: 'e1.stone.o.sand', effects: [] },
     ],
   },
+  // Episode One 1.6: the first fire, how big (waits). A high fire is seen far off (CONTINUITY E2).
+  {
+    id: 'e1.fire', title: 'e1.fire.title', prompt: 'e1.fire.ask', who: 'scientist', fallback: 'low',
+    options: [
+      { id: 'high', label: 'e1.fire.o.high', effects: [{ trait: 'nerve', by: 1 }, { flag: 'fire.high' }] },
+      { id: 'low', label: 'e1.fire.o.low', effects: [{ trait: 'honesty', by: 1 }, { flag: 'fire.low' }] },
+    ],
+  },
   {
     id: 'c1.fire', title: 'br.fire.title', prompt: 'br.fire.ask', who: 'explorer', fallback: 'small',
     options: [

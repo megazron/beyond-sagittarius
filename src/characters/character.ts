@@ -32,7 +32,7 @@ export interface Grip { shape: 'open' | 'relaxed' | 'grip' | 'pinch' | 'point'; 
 export type TaskKind = 'pickup' | 'use' | 'eat' | 'drink' | 'type' | 'open' | 'carry' | 'fix' | 'give' | 'plant' | 'gesture' | 'phone';
 /** Things a task puts in the hands: food, a cup, a phone, a parcel, a tool, a sheet of paper, a broad leaf folded into a
  * cone, a berry held between finger and thumb. */
-export type PropKind = 'food' | 'cup' | 'phone' | 'box' | 'tool' | 'paper' | 'leaf' | 'berry' | 'stone' | 'flake';
+export type PropKind = 'food' | 'cup' | 'phone' | 'box' | 'tool' | 'paper' | 'leaf' | 'berry' | 'stone' | 'flake' | 'spindle';
 const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
   food: () => new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.012, 18), new THREE.MeshStandardMaterial({ color: 0xc8893f, roughness: 0.85 })),
   cup: () => new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.028, 0.075, 16), new THREE.MeshStandardMaterial({ color: 0xb5563a, roughness: 0.7 })),
@@ -63,6 +63,8 @@ const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
   berry: () => new THREE.Mesh(new THREE.SphereGeometry(0.036, 16, 12), new THREE.MeshStandardMaterial({ color: 0xc3172a, roughness: 0.28 })),
   // a fist-sized hammerstone (1.3) and the flint flake it knocks off
   stone: () => { const g = new THREE.IcosahedronGeometry(0.042, 2); g.scale(1.2, 0.85, 1); return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x8d8c88, roughness: 0.8 })); },
+  // the hand drill's spindle: a straight stem, finger thick, about half a metre (1.6)
+  spindle: () => { const g = new THREE.CylinderGeometry(0.0055, 0.0065, 0.5, 8); g.translate(0, -0.18, 0); return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x9a7a52, roughness: 0.8 })); },
   flake: () => { const g = new THREE.CylinderGeometry(0.0, 0.022, 0.07, 5, 1); g.scale(1, 1, 0.22); return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x2a2c33, roughness: 0.15, metalness: 0.1 })); },
 };
 /** What each task holds unless told otherwise. */
@@ -275,6 +277,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       else if (want === 'leaf') { m.position.set(-0.085, -0.075, 0.02); m.rotation.set(0, 0, Math.PI / 2); }
       else if (want === 'berry') { m.position.set(-0.11, -0.04, 0.03); m.rotation.set(0, 0, 0); }
       else if (want === 'stone') { m.position.set(-0.08, -0.05, 0.01); m.rotation.set(0, 0, 0); }
+      else if (want === 'spindle') { m.position.set(-0.08, -0.03, 0.02); m.rotation.set(0, 0, 0); }
       else if (want === 'flake') { m.position.set(-0.1, -0.02, 0.02); m.rotation.set(0, 0, Math.PI / 2); }
       else { m.position.set(-0.08, -0.03, 0); m.rotation.set(0, 0, 0.3); }
     }

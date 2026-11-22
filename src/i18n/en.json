@@ -1184,5 +1184,14 @@
   "e1.fl.ok": "Two point six million years of progress. In my hand. Bleeding.",
   "e1.learn.flake": "Learned: a stone flake. A blade.",
   "e1.learn.stick": "Learned: a digging stick.",
+  "e1.fi.sci": "Friction turns work into heat. Enough heat in a pinch of wood dust and it burns by itself. That's an ember. That's all fire is: a reaction I start and then feed.",
+  "e1.fi.hint": "Keep the spin in the band, then breathe the ember into the tinder.",
+  "e1.fi.slow": "Smoke is not fire. Smoke is fire's trailer.",
+  "e1.fi.die": "It died. Faster into the nest. Don't let it cool.",
+  "e1.learn.fire": "Learned: fire by hand drill.",
+  "e1.fire.title": "The first fire",
+  "e1.fire.ask": "How big?",
+  "e1.fire.o.high": "Build it high",
+  "e1.fire.o.low": "Keep it low",
   "vo.anon.e1.fr.test": "You nerd. You just saved my life."
 }

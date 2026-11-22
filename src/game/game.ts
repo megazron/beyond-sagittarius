@@ -23,6 +23,7 @@ import { UI, PLAYABLE_LEVELS } from '../ui/ui';
 import { Tutorial } from './tutorial';
 import { Waking } from './waking';
 import { Stones } from './knap';
+import { FireDrill } from './drill';
 import { Cutscene, Beat, SceneBranch } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
 import type { Combat } from '../combat/combat';
@@ -134,8 +135,9 @@ export class Game {
     this.story = new Story(world, player, ui, () => this.save, (sec, fn) => this.after(sec, fn), (amount) => this.hurt(amount), (beats, then) => this.playScene(beats, then));
     this.waking = new Waking(world, player, ui, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn));
     this.stones = new Stones(world, player, ui, this.waking.stream, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn), (spec) => this.combat?.tension(spec) ?? null);
+    this.drill = new FireDrill(world, player, ui, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn), (spec) => this.combat?.tension(spec) ?? null);
     this.dialogue.onLine = (who, sec) => this.story.npcs.speak(who, sec);
-    this.story.hooks = { away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
+    this.story.hooks = { drill: (lit) => { if (this.debugActing) return false; this.drill.start(lit); return true; }, away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
     this.craft.onFail = () => {
       const c = (this.save.crafts ??= { failed: 0 });
       c.failed++;
@@ -420,6 +422,10 @@ export class Game {
   waking: Waking;
   /** Episode One 1.3: the cobbles on the stream bank, the good stone and the first flake. */
   stones: Stones;
+  /** Episode One 1.6: fire by hand drill at the pit (level 4). */
+  drill: FireDrill;
+  /** True while a test presses the interact key through debugAct: the hand drill keeps the old strikes for it. */
+  private debugActing = false;
   private streamHeard = true;
   private wakeRate = 1;
   private buildWake() {
@@ -955,7 +961,8 @@ export class Game {
     const tg = this.interactTarget;
     if (!tg) return null;
     const label = tg.kind === 'action' ? tg.action.id : tg.kind === 'item' ? tg.item.type : tg.kind;
-    this.interact();
+    this.debugActing = true;
+    try { this.interact(); } finally { this.debugActing = false; }
     return label;
   }
 
