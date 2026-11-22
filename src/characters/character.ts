@@ -32,7 +32,7 @@ export interface Grip { shape: 'open' | 'relaxed' | 'grip' | 'pinch' | 'point'; 
 export type TaskKind = 'pickup' | 'use' | 'eat' | 'drink' | 'type' | 'open' | 'carry' | 'fix' | 'give' | 'plant' | 'gesture' | 'phone';
 /** Things a task puts in the hands: food, a cup, a phone, a parcel, a tool, a sheet of paper, a broad leaf folded into a
  * cone, a berry held between finger and thumb. */
-export type PropKind = 'food' | 'cup' | 'phone' | 'box' | 'tool' | 'paper' | 'leaf' | 'berry';
+export type PropKind = 'food' | 'cup' | 'phone' | 'box' | 'tool' | 'paper' | 'leaf' | 'berry' | 'stone' | 'flake';
 const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
   food: () => new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.012, 18), new THREE.MeshStandardMaterial({ color: 0xc8893f, roughness: 0.85 })),
   cup: () => new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.028, 0.075, 16), new THREE.MeshStandardMaterial({ color: 0xb5563a, roughness: 0.7 })),
@@ -41,17 +41,29 @@ const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
   tool: () => new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.028, 0.028), new THREE.MeshStandardMaterial({ color: 0x6d7076, roughness: 0.4, metalness: 0.8 })),
   paper: () => new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.003, 0.22), new THREE.MeshStandardMaterial({ color: 0xece6d6, roughness: 0.95 })),
   leaf: () => {
-    // a broad leaf rolled into a cone, open at the top, its point down; a midrib and an uneven rim
-    const g = new THREE.ConeGeometry(0.04, 0.115, 14, 3, true);
+    // a broad leaf rolled into a cone, open at the top, its point down, about a palm across (the cone's base is its
+    // rim: flipped below); the leaf's own tip
+    // stands up past the rim on one side, the midrib and veins lighter, the inside paler than the outside
+    const R = 0.062, H = 0.17;
+    const g = new THREE.ConeGeometry(R, H, 18, 4, true);
     const p = g.attributes.position as THREE.BufferAttribute;
+    const col = new Float32Array(p.count * 3);
     for (let i = 0; i < p.count; i++) {
       const y = p.getY(i), a = Math.atan2(p.getZ(i), p.getX(i));
-      if (y > 0.05) p.setY(i, y + 0.015 * Math.sin(a * 2 + 0.6) + 0.009 * Math.sin(a * 5));
+      // the rim: uneven, and drawn up into the leaf's tip on the side away from the seam
+      if (y < -H * 0.45) p.setY(i, y - 0.012 * Math.sin(a * 3 + 0.6) - 0.07 * Math.pow(Math.max(0, Math.cos(a - 2.2)), 6));
+      const vein = Math.max(Math.pow(Math.max(0, Math.cos(a - 2.2)), 40), 0.5 * Math.pow(Math.abs(Math.sin((a - 2.2) * 3)), 30));
+      const k = 0.55 + 0.45 * vein;
+      col[i * 3] = 0.25 * k + 0.25 * vein; col[i * 3 + 1] = 0.55 * k + 0.25 * vein; col[i * 3 + 2] = 0.16 * k + 0.1 * vein;
     }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.rotateX(Math.PI); g.computeVertexNormals();
-    return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x3f7a2a, roughness: 0.55, side: THREE.DoubleSide }));
+    return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.42, side: THREE.DoubleSide }));
   },
   berry: () => new THREE.Mesh(new THREE.SphereGeometry(0.036, 16, 12), new THREE.MeshStandardMaterial({ color: 0xc3172a, roughness: 0.28 })),
+  // a fist-sized hammerstone (1.3) and the flint flake it knocks off
+  stone: () => { const g = new THREE.IcosahedronGeometry(0.042, 2); g.scale(1.2, 0.85, 1); return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x8d8c88, roughness: 0.8 })); },
+  flake: () => { const g = new THREE.CylinderGeometry(0.0, 0.022, 0.07, 5, 1); g.scale(1, 1, 0.22); return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x2a2c33, roughness: 0.15, metalness: 0.1 })); },
 };
 /** What each task holds unless told otherwise. */
 const TASK_PROP: Partial<Record<TaskKind, PropKind>> = { eat: 'food', drink: 'cup', phone: 'phone', carry: 'box', fix: 'tool', type: 'phone' };
@@ -260,8 +272,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (want === 'phone' || want === 'paper') { m.position.set(-0.08, -0.03, 0.01); m.rotation.set(0, Math.PI / 2, 0.25); }
       else if (want === 'tool') { m.position.set(-0.07, -0.03, 0); m.rotation.set(0, Math.PI / 2, 0); }
       else if (want === 'cup') { m.position.set(-0.07, -0.05, 0.02); m.rotation.set(0, 0, Math.PI / 2); }
-      else if (want === 'leaf') { m.position.set(-0.075, -0.06, 0.02); m.rotation.set(0, 0, Math.PI / 2); }
+      else if (want === 'leaf') { m.position.set(-0.085, -0.075, 0.02); m.rotation.set(0, 0, Math.PI / 2); }
       else if (want === 'berry') { m.position.set(-0.11, -0.04, 0.03); m.rotation.set(0, 0, 0); }
+      else if (want === 'stone') { m.position.set(-0.08, -0.05, 0.01); m.rotation.set(0, 0, 0); }
+      else if (want === 'flake') { m.position.set(-0.1, -0.02, 0.02); m.rotation.set(0, 0, Math.PI / 2); }
       else { m.position.set(-0.08, -0.03, 0); m.rotation.set(0, 0, 0.3); }
     }
     propOn = m;

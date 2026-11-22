@@ -1046,11 +1046,13 @@ window.addEventListener('resize', () => {
   /** Fights: state for the tests, and the way to start a set piece (tools/combat/play_test.py). */
   get combat() { return combat; },
   groundAt(x: number, z: number) { return world.terrain.height(x, z); },
-  /** Episode One 1.1 for captures: the pool, the stream's centre line (every 10th point) and the red fruit. */
+  /** Episode One for captures: the pool, the stream's centre line (every 10th point), the red fruit (1.1) and where he
+   * kneels at the cobbles (1.3). */
   get e1() {
     if (!game) return null;
     const st = game.waking.stream;
-    return { pool: st.pool, line: st.line.filter((_, i) => i % 10 === 0).map((p) => [p.x, p.y, p.z]), red: world.items.items.filter((i) => i.active && i.type === 'redFruit').map((i) => [i.pos.x, i.pos.z]) };
+    const k = game.stones.place().kneel;
+    return { pool: st.pool, line: st.line.filter((_, i) => i % 10 === 0).map((p) => [p.x, p.y, p.z]), red: world.items.items.filter((i) => i.active && i.type === 'redFruit').map((i) => [i.pos.x, i.pos.z]), stones: [k.x, k.z] };
   },
   get crew() { return game?.story.debugCrew(); },
   get layout() { const L = world.layout; return L ? Object.fromEntries(Object.entries(L).map(([k, v]) => [k, (v as THREE.Vector3).toArray()])) : null; },

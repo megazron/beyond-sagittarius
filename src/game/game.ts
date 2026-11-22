@@ -22,6 +22,7 @@ import type { Input } from './input';
 import { UI, PLAYABLE_LEVELS } from '../ui/ui';
 import { Tutorial } from './tutorial';
 import { Waking } from './waking';
+import { Stones } from './knap';
 import { Cutscene, Beat, SceneBranch } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
 import type { Combat } from '../combat/combat';
@@ -132,6 +133,7 @@ export class Game {
     onLangChange(() => this.tutorial.refresh());
     this.story = new Story(world, player, ui, () => this.save, (sec, fn) => this.after(sec, fn), (amount) => this.hurt(amount), (beats, then) => this.playScene(beats, then));
     this.waking = new Waking(world, player, ui, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn));
+    this.stones = new Stones(world, player, ui, this.waking.stream, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn), (spec) => this.combat?.tension(spec) ?? null);
     this.dialogue.onLine = (who, sec) => this.story.npcs.speak(who, sec);
     this.story.hooks = { away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
     this.craft.onFail = () => {
@@ -416,6 +418,8 @@ export class Game {
 
   /** Episode One 1.1: the stream, the pool, thirst and the red fruit. */
   waking: Waking;
+  /** Episode One 1.3: the cobbles on the stream bank, the good stone and the first flake. */
+  stones: Stones;
   private streamHeard = true;
   private wakeRate = 1;
   private buildWake() {
@@ -605,6 +609,8 @@ export class Game {
         if (this.waking.fruit(it.pos, () => this.collect(it, 0.35))) return;
       }
     }
+    // 1.3: at the cobbles on the stream bank (level 3) he finds a good stone and knaps a flake
+    if (this.stones.near(p.pos)) { this.stones.start(); return; }
     // Medic memory when first approaching fruit
     // (in level 2 the red fruit's own scene teaches this, so the general hint waits for it)
     if (!s.flags.medicHint && (s.level !== 2 || s.flags['e1.fruitSeen'])) {
@@ -808,7 +814,12 @@ export class Game {
     const s = this.save;
     if (n === 1) return !!s.flags.drank;
     if (n === 2) return !!s.flags.ateSafe;
-    if (n === 3) return (s.inventory.stone ?? 0) >= 5 && (s.inventory.branch ?? 0) >= 5;
+    if (n === 3) {
+      const done = (s.inventory.stone ?? 0) >= 5 && (s.inventory.branch ?? 0) >= 5;
+      // 1.3: a straight branch, its end scraped to a point and hardened: the digging stick (combat: woodBone)
+      if (done && !s.flags['inv.woodBone']) { s.flags['inv.woodBone'] = true; this.after(5.5, () => this.ui.toast(t('e1.learn.stick'))); }
+      return done;
+    }
     return this.story.done(n);
   }
 

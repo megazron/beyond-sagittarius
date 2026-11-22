@@ -26,6 +26,15 @@ export const DECISIONS: Decision[] = [
       { id: 'hungry', label: 'e1.fruit.o.hungry', effects: [] },
     ],
   },
+  // Episode One 1.3: which stone to make a tool of (waits; no timer). Only the flint holds an edge.
+  {
+    id: 'e1.stone', title: 'e1.stone.title', prompt: 'e1.stone.ask', who: 'scientist', fallback: 'flint',
+    options: [
+      { id: 'granite', label: 'e1.stone.o.granite', effects: [] },
+      { id: 'flint', label: 'e1.stone.o.flint', effects: [{ trait: 'honesty', by: 1 }, { trust: 'strong', by: 1 }] },
+      { id: 'sand', label: 'e1.stone.o.sand', effects: [] },
+    ],
+  },
   {
     id: 'c1.fire', title: 'br.fire.title', prompt: 'br.fire.ask', who: 'explorer', fallback: 'small',
     options: [

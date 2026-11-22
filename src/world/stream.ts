@@ -19,6 +19,8 @@ export interface StreamWater {
   inPool(x: number, z: number, pad?: number): boolean;
   /** A place to kneel on the dry bank nearest p, on p's side, and the heading (Player.facing) that looks at the water. */
   bankSpot(p: THREE.Vector3): { at: THREE.Vector3; facing: number; water: THREE.Vector3 };
+  /** Lay the reeds within r of p flat (he kneels there; a camera stands there). Stays so. */
+  clearReeds(p: THREE.Vector3, r: number): void;
   /** Points along the stream for looping water sound. */
   soundAt: THREE.Vector3[];
   /** Where the grass must not grow (grass.setRibbon): the stream's line, then the pool. */
@@ -388,6 +390,15 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
       return best;
     },
     inPool(x, z, pad = 0) { return Math.hypot(x - pool.x, z - pool.z) < pool.r + pad; },
+    clearReeds(p, r) {
+      const at = new THREE.Vector3(), hidden = new THREE.Matrix4().makeScale(0, 0, 0);
+      let n0 = 0;
+      for (let i = 0; i < reeds.count; i++) {
+        reeds.getMatrixAt(i, m4); at.setFromMatrixPosition(m4);
+        if (Math.hypot(at.x - p.x, at.z - p.z) < r && m4.elements[5] !== 0) { reeds.setMatrixAt(i, hidden); n0++; }
+      }
+      if (n0) reeds.instanceMatrix.needsUpdate = true;
+    },
     bankSpot(p) {
       let bi = 0, bt = 0, best = Infinity;
       for (let i = 0; i < n - 1; i++) {

@@ -10,7 +10,7 @@ import type { Cinematic } from './cinematic';
 import { FilmVideo } from './filmvideo';
 import type { World } from '../world/world';
 import { LAKE } from '../world/heightfield';
-import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { NOISE_GLSL } from '../core/glsl';
 
 const BEAT = 60 / beat.bpm;
@@ -57,7 +57,7 @@ function oldSun(at: THREE.Vector3, r: number) {
   return g;
 }
 
-const SKYDIR: Record<string, THREE.Vector3> = { strong: new THREE.Vector3(-0.28, 0.12, -0.95).normalize(), medic: new THREE.Vector3(0.2, 0.15, -1).normalize(), explorer: new THREE.Vector3(0.1, 0.9, -0.4).normalize(), builder: new THREE.Vector3(-1, 16, -24).normalize(), social: new THREE.Vector3(0.3, 0.2, -1).normalize() };
+const SKYDIR: Record<string, THREE.Vector3> = { strong: new THREE.Vector3(-0.28, 0.12, -0.95).normalize(), medic: new THREE.Vector3(0.2, 0.15, -1).normalize(), explorer: new THREE.Vector3(0.1, 0.9, -0.4).normalize(), builder: new THREE.Vector3(-1, 16, -24).normalize(), social: new THREE.Vector3(-0.35, 0.75, -0.6).normalize() };
 /** How each one checks themself first (I4): Draxum his fist, Lyrra her pulse, Skyvra her trapped leg, Bolzar the plate, Nuvexa her phone. */
 const CHECK: Record<string, 'use' | 'phone' | 'gesture'> = { strong: 'use', medic: 'use', explorer: 'use', builder: 'use', social: 'phone' };
 const S = beat.sections;
@@ -753,7 +753,14 @@ export class Montage {
       const sx = new Simplex(7);
       const heightAt = (name: string, relief: number, craters: [number, number, number][]) => (x: number, z: number) => {
         const T = TER[name], d = Math.hypot(x, z);
-        if (name === 'social') return sx.fbm(x * 0.02, z * 0.02, 3) * 3.2 * smoothstep(9, 40, d) - 0.4 * smoothstep(5, 9, d); // cloud billows below the raft
+        if (name === 'social') {
+          // a cloud deck seen from just above it: rounded cells of rising cloud with creases between them (billow
+          // noise: round tops, sharp seams), small near the raft, big further out, and the deck curving away with the
+          // planet; the raft rides in a hollow of it
+          const bil = (f: number, o: number, n = 3) => Math.abs(sx.fbm(x * f + o, z * f - o * 0.7, n));
+          const cells = bil(0.06, 3) ** 0.75 * 3.2 + bil(0.17, 11, 2) ** 0.8 * 0.9 + bil(0.016, 23) ** 0.7 * 14 * smoothstep(50, 240, d);
+          return (cells - 1.4) * smoothstep(6, 22, d) - 0.7 * smoothstep(3.5, 7, d) - (d * d) / (2 * 7000);
+        }
         let y = sx.fbm(x * 0.35, z * 0.35, 3) * 0.16 * smoothstep(1.8, 8, d);
         y += sx.fbm(x * 0.03 + 3, z * 0.03, 3) * 3.5 * smoothstep(8, 70, d) * relief;
         if (T.ridge) { const n = 1 - Math.abs(sx.fbm(x * 0.004 + 9, z * 0.004, 4)); y += n * n * T.ridge * smoothstep(160, 700, d) * relief; }
@@ -826,12 +833,16 @@ export class Montage {
         for (let i = 0; i < 4; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.3, 7, 0.3), new THREE.MeshStandardMaterial({ color: 0x8a8f96, roughness: 0.45, metalness: 0.8 })); b.position.set(-3 + i * 2.1, 3, -10 - i * 0.6); b.rotation.set(0.1 * i, 0, 0.18 - i * 0.12); g.add(b); } }, 1.6, [0xb09a84, 0x1c140e, 0.7]);
       // Aerolis: a raft of hull on gold cloud to every horizon
       mk('social', 0xe2c46a, 1, (g) => { const d = new THREE.Mesh(new THREE.BoxGeometry(6, 0.3, 4), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); d.position.set(0, 0.16, 0); d.rotation.set(0.03, 0.4, -0.04); g.add(d);
-        // the floor is cloud, not ground: soft billows shaded by the sun's side, fading gold into the distance; and
-        // towers of cloud that have soft, torn edges (hard-edged lumps read as rock)
-        const sunD = V(0.2, 0.6, -0.8).normalize();
+        // the floor is cloud, not ground: cells of billowing cloud lit from the low sun's side, shaded in their seams,
+        // fading into gold haze; heaps of cumulus standing up out of the deck (many rounded puffs each, the edges thin
+        // and torn: hard-edged lumps read as rock); over it all a thick hot sky, gold at the horizon, thinning upwards
+        // to a young universe's dark, with a few small blue galaxies and hardly any stars
+        const sunD = V(0.3, 0.26, -0.92).normalize();
         (g.children[0] as THREE.Mesh).material = cloudFloorMat(sunD);
-        const cm = cloudTowerMat(sunD);
-        for (let i = 0; i < 9; i++) { const c = sky(g, 14 + (i % 3) * 8, Math.cos(i * 0.7) * (60 + i * 6), -6 + (i % 2) * 5, -70 + Math.sin(i * 0.7) * 50, 0xf0d890, 0x2a2008); (c as THREE.Mesh).material = cm; c.scale.set(1.25, 0.8 + (i % 4) * 0.12, 1.1); c.renderOrder = 3; } }, 0, [0xffe9b0, 0x8a6a30, 0.6]);
+        const cm = cloudTowerMat(sunD), rr = mulberry32(913);
+        const heaps: [number, number, number][] = [[-70, -150, 26], [55, -120, 18], [140, -260, 44], [-190, -320, 52], [10, -420, 70], [260, -180, 30], [-300, -90, 34], [90, -40, 9], [-40, -60, 11], [-120, 40, 22], [180, 90, 28], [380, -420, 80]];
+        for (const [x, z, r] of heaps) { const c = new THREE.Mesh(cumulus(r, Math.floor(rr() * 1e6)), cm); c.position.set(x, ground(x, z) - r * 0.35, z); c.rotation.y = rr() * 6.28; c.renderOrder = 3; g.add(c); }
+        g.add(aerolisSky(sunD)); }, 0, [0xffe9b0, 0x6a4a20, 0.55]);
       this.stageG.children.forEach((c, i) => c.position.set(i * 4000, -20000, 0));
     }
     for (const c of this.stageG.children) c.visible = c.name === id;
@@ -853,11 +864,13 @@ export class Montage {
     if (id === 'builder') { this.hole(-1, 16, -24, 0, 0); u.uNebula.value = neb; }
     else if (id === 'medic') { this.hole(14, 9, -70, 0, 0); u.uNebula.value = neb; u.uStar.value = 2.6; }
     else if (id === 'explorer') { u.uStar.value = 0.45; u.uNebula.value = 0.15; }
-    else if (id === 'social') { u.uStar.value = 0.35; u.uOther.value = 0.7; }
+    // Aerolis is in a universe born inside the black hole, still young: hardly any stars and a few small blue galaxies
+    // (drawn by its own sky, aerolisSky); the dome's nebulae and the other-universe filaments are off
+    else if (id === 'social') { u.uStar.value = 0.12; u.uOther.value = 0; u.uNebula.value = 0; }
     // each world's own sun: the light left over from the ship's last shot was painting every ground orange.
     // Thalwen: a hard white sun low over the rim. The asteroid: an old, dim sky, a faint cold light. Shardrift: the
     // haze round the black hole, dull and warm. Methryx: orange through methane haze. Aerolis: gold through cloud.
-    const SUN: Record<string, [THREE.Vector3, number, number]> = { medic: [V(0.9, 0.25, 0.3), 0xffffff, 3.2], explorer: [V(-0.4, 0.5, 0.6), 0xb8c4e0, 0.9], builder: [V(-0.3, 0.4, -1), 0xd8a888, 1.4], strong: [V(0.7, 0.4, 0.6), 0xff9a50, 2.4], social: [V(0.2, 0.6, -0.8), 0xffe0a0, 2.4] };
+    const SUN: Record<string, [THREE.Vector3, number, number]> = { medic: [V(0.9, 0.25, 0.3), 0xffffff, 3.2], explorer: [V(-0.4, 0.5, 0.6), 0xb8c4e0, 0.9], builder: [V(-0.3, 0.4, -1), 0xd8a888, 1.4], strong: [V(0.7, 0.4, 0.6), 0xff9a50, 2.4], social: [V(0.3, 0.26, -0.92), 0xffd890, 2.6] };
     const [sd, sc, si] = SUN[id]; this.sun(sd, sc, si);
     // the landing grammar (shot list I1 to I6), in beats from the hit: the world first (-5), the hit (0), the body still,
     // then a breath (+4), eyes open and the body checks itself (+9), their sky (+14), and only then the line (+19)
@@ -1571,29 +1584,102 @@ function ringedGiant(g: THREE.Group, at: THREE.Vector3, r: number, sunDir: THREE
   ring.position.copy(at); ring.rotation.set(-1.3, 0.3, 0); g.add(ring);
 }
 
-/** Aerolis's cloud floor: billows of cloud lit from the sun's side, no facets, gold haze to the horizon. */
+/** Aerolis's cloud floor: the deck's own cells (its geometry) lit from the low sun, the seams between them in shade,
+ * fine billows on every cell, the far deck going into the gold haze of the sky above it. */
 function cloudFloorMat(sun: THREE.Vector3) {
   return new THREE.ShaderMaterial({
     fog: true,
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSun: { value: sun } }]),
-    vertexShader: '#include <fog_pars_vertex>\nvarying vec3 vW; varying vec2 vR; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vR = w.xz - (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
+    vertexShader: '#include <fog_pars_vertex>\nvarying vec3 vW; varying vec2 vR; varying vec3 vN; varying float vH; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vH = position.y; vN = normalize(mat3(modelMatrix) * normal); vR = w.xz - (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
     fragmentShader: `
       #include <fog_pars_fragment>
       ${NOISE_GLSL}
-      uniform vec3 uSun; varying vec3 vW; varying vec2 vR;
+      uniform vec3 uSun; varying vec3 vW; varying vec2 vR; varying vec3 vN; varying float vH;
       float bil(vec2 p){ float a = 0.0, w = 0.55; for (int i = 0; i < 5; i++) { a += w * (1.0 - abs(vnoise2(p) * 2.0 - 1.0)); p = p * 2.03 + 7.1; w *= 0.5; } return a; }
       void main(){
-        vec2 p = vR * 0.06;
-        float h = bil(p), hs = bil(p + normalize(uSun.xz + 1e-4) * 0.12);
-        // lit where the billow rises towards the sun, in its own shade on the far side
-        float lit = clamp(0.62 + (hs - h) * 2.4 + h * 0.25, 0.0, 1.0);
-        vec3 col = mix(vec3(0.55, 0.42, 0.24), vec3(1.0, 0.92, 0.72), lit);
-        float far = smoothstep(40.0, 600.0, length(vR));
-        col = mix(col, vec3(1.0, 0.86, 0.58), far * 0.7);
+        float r = length(vR);
+        // fine billows on the cells, fading out with distance (they would shimmer)
+        vec2 p = vR * 0.35;
+        float h = bil(p), hs = bil(p + normalize(uSun.xz + 1e-4) * 0.08), near = 1.0 - smoothstep(25.0, 140.0, r);
+        vec3 N = normalize(vN);
+        // soft light that wraps round each cell, as light does through cloud; the seams (low) in shade
+        float wrap = clamp(dot(N, uSun) * 0.6 + 0.45, 0.0, 1.0);
+        float seam = smoothstep(-2.5, 3.0, vH - (-(r * r) / 14000.0));
+        float lit = wrap * mix(0.55, 1.0, seam) + (hs - h) * 1.8 * near + (h - 0.6) * 0.25 * near;
+        vec3 shade = vec3(0.42, 0.33, 0.24), sunny = vec3(1.0, 0.9, 0.68);
+        vec3 col = mix(shade, sunny, clamp(lit, 0.0, 1.0));
+        // a little cooler down in the seams, warmer on the sunlit tops
+        col = mix(col, col * vec3(0.86, 0.9, 1.05), (1.0 - seam) * 0.5);
+        // the far deck into the haze of the sky (aerolisSky's horizon colour)
+        vec3 dir = normalize(vW - cameraPosition);
+        float sd = max(dot(dir, uSun), 0.0);
+        vec3 hz = mix(vec3(0.86, 0.62, 0.32), vec3(1.0, 0.86, 0.58), pow(sd, 3.0)) * (0.55 + 0.6 * pow(sd, 8.0));
+        col = mix(col, hz, smoothstep(60.0, 850.0, r) * 0.92);
         gl_FragColor = vec4(col, 1.0);
         #include <fog_fragment>
       }`,
   });
+}
+
+/** A heap of cumulus about r across: rounded puffs piled on a flat-ish base, smaller and fewer towards the top. */
+function cumulus(r: number, seed: number) {
+  const rnd = mulberry32(seed), n = new Simplex(seed), parts: THREE.BufferGeometry[] = [];
+  const count = 16 + Math.floor(rnd() * 8);
+  for (let i = 0; i < count; i++) {
+    const lift = rnd() ** 1.3, spread = r * (1 - lift * 0.65), a = rnd() * Math.PI * 2, q = Math.sqrt(rnd()) * spread * 0.7;
+    const pr = r * (0.28 + rnd() * 0.22) * (1 - lift * 0.45);
+    const raw = new THREE.IcosahedronGeometry(1, 3); raw.deleteAttribute('normal'); raw.deleteAttribute('uv');
+    const geo = mergeVertices(raw), p = geo.getAttribute('position');
+    for (let k = 0; k < p.count; k++) {
+      const x = p.getX(k), y = p.getY(k), z = p.getZ(k);
+      // a lumpy puff with a flatter underside
+      const m = 1 + 0.22 * n.noise2(x * 2.1 + i, y * 2.1 - z) + 0.1 * n.noise2(z * 4.3 + i, x * 4.3);
+      p.setXYZ(k, Math.cos(a) * q + x * pr * m, lift * r * 1.1 + (y < 0 ? y * 0.45 : y) * pr * m, Math.sin(a) * q + z * pr * m);
+    }
+    parts.push(geo);
+  }
+  const g = mergeGeometries(parts); parts.forEach((x) => x.dispose());
+  g.computeVertexNormals();
+  return g;
+}
+
+/** Aerolis's sky: thick, hot air, gold to the horizon round the sun, thinning to the dark of a young universe
+ * overhead, where a few small blue galaxies show (no old stars to speak of). Drawn over the far deck, so its edge
+ * melts into the haze. */
+function aerolisSky(sun: THREE.Vector3) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(900, 48, 24), new THREE.ShaderMaterial({
+    side: THREE.BackSide, transparent: true, depthWrite: false, fog: false,
+    uniforms: { uSun: { value: sun.clone().normalize() } },
+    vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `
+      ${NOISE_GLSL}
+      uniform vec3 uSun; varying vec3 vD;
+      void main(){
+        vec3 d = normalize(vD);
+        float up = clamp(d.y, -1.0, 1.0), s = max(dot(d, uSun), 0.0);
+        // haze: thick at the horizon, thin overhead; brighter towards the sun
+        float thick = exp(-max(up, 0.0) * 5.0);
+        vec3 hz = mix(vec3(0.86, 0.62, 0.32), vec3(1.0, 0.86, 0.58), pow(s, 3.0));
+        vec3 col = hz * (0.55 + 0.6 * pow(s, 8.0)) + vec3(1.0, 0.9, 0.7) * pow(s, 300.0) * 3.0;
+        float a = clamp(thick * 1.05 + pow(s, 6.0) * 0.6, 0.0, 1.0);
+        // the dark above: a deep violet-brown, not black, the air still in it
+        col = mix(vec3(0.06, 0.04, 0.07), col, a);
+        a = max(a, 0.55 + 0.45 * thick);
+        // a few small blue galaxies, only where the air is thin
+        vec3 p = d * 18.0, id = floor(p), f = fract(p) - 0.5;
+        float h = hash13(id);
+        if (h > 0.86) {
+          vec3 q = f - (hash33(id) - 0.5) * 0.5; q -= d * dot(q, d);
+          vec3 ax = hash33(id + 3.0) - 0.5; ax -= d * dot(ax, d); ax = normalize(ax);
+          float u = dot(q, ax), v = length(q - ax * u), sz = 0.6 + h * 3.0;
+          float gx = exp(-(u * u * 220.0 + v * v * 1400.0) / sz) + 0.8 * exp(-(u * u + v * v) * 9000.0 / sz);
+          col += vec3(0.45, 0.62, 1.0) * gx * 0.55 * (1.0 - thick);
+        }
+        gl_FragColor = vec4(col, a);
+      }`,
+  }));
+  m.renderOrder = -1; m.frustumCulled = false; m.name = 'aerolis-sky';
+  return m;
 }
 
 /** A tower of cloud: bright on the sun's side and on top, grey-gold underneath, the edge thin and torn. */

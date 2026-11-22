@@ -150,6 +150,8 @@ export class Waking {
     // the water just off the bank, where his hands go in
     const dip = spot.at.clone().addScaledVector(fwd, 0.62).setY(Math.max(spot.water.y - 0.02, spot.at.y - 0.45));
     s.flags['e1.leaf'] = true;
+    // he kneels in the reeds and flattens them; the camera stands beside him on the bank, clear of them
+    this.stream.clearReeds(spot.at, 1.1);
     this.after(0.9, () => this.playScene([
       // he kneels at the edge, looking at the water (a cut hides the step onto the bank)
       { hold: 1.7, shot: () => cover.mid(z, 0.9, 2.3), run: () => {
@@ -158,7 +160,7 @@ export class Waking {
         audio.sample('leather', 0.18, { rate: 0.7 });
       } },
       // cupped hands in, up to his mouth; it runs down his chin
-      { hold: 3.0, shot: () => this.handsShot(dip, 1.3), run: () => {
+      { hold: 3.0, shot: () => this.bankShot(dip, 1.75, 0.95), run: () => {
         z.setLimbs({ bend: 0.5 });
         z.doTask('drink', { at: dip.clone(), seconds: 2.8, hands: 'both', prop: null });
         this.after(0.7, () => audio.sample('splash', 0.22, { rate: 1.3 }));
@@ -169,21 +171,21 @@ export class Waking {
       { key: 'e1.w.ok', who: 'scientist', shot: () => cover.close(z, 0.45, 0.95), run: () => { z.stopTask(); z.setLimbs({ bend: 0.12 }); z.setLookTarget(null); z.setFace({ smile: 0.45, frown: 0.3 }); audio.human('laugh', 0.35); }, after: 0.5 },
       { key: 'e1.w.ammi', who: 'scientist', if: { flag: 'ammi.called' }, shot: () => cover.close(z, -0.35, 1.0), run: () => z.setFace({ smile: 0.25 }), after: 0.4 },
       // a broad leaf, rolled into a cone in his hands
-      { hold: 1.6, shot: () => this.handsShot(this.chest(0.3, 0, 0.5), 0.75), run: () => {
+      { hold: 1.6, shot: () => this.handsShot(this.chest(0.3, 0, 0.5), 0.85), run: () => {
         z.setFace(null); z.setLimbs({ bend: 0.15 });
         z.setProp('leaf'); this.cupHands(0.3);
         audio.sample('leather', 0.25);
       } },
-      // dipped full
-      { hold: 1.5, run: () => {
+      // dipped full: framed on its own, the leaf going into the water
+      { hold: 1.9, shot: () => this.bankShot(dip, 1.05, 0.62, 0.15), run: () => {
         z.setHold(null);
         z.doTask('pickup', { at: dip.clone(), seconds: 1.4, hands: 'R', prop: 'leaf' });
         this.after(0.6, () => audio.sample('splash', 0.14, { rate: 1.8 }));
       } },
       // and it runs out through his fingers while he watches
-      { hold: 2.4, shot: () => this.handsShot(this.chest(0.3, 0, 0.5), 0.7), run: () => {
+      { hold: 2.8, shot: () => this.handsShot(this.chest(0.3, 0, 0.62), 0.78), run: () => {
         z.setProp('leaf'); this.cupHands(0.3);
-        this.leak(2.2);
+        this.leak(2.6);
         this.after(0.5, () => audio.sample('splash', 0.08, { rate: 2.6 }));
         this.after(1.2, () => audio.sample('splash', 0.06, { rate: 2.9 }));
       } },
@@ -196,6 +198,17 @@ export class Waking {
     const p = this.player;
     p.pos.copy(at); p.vel.set(0, 0, 0); p.facing = facing;
     p.model.root.position.copy(at); p.model.root.rotation.y = facing + Math.PI; p.model.root.updateMatrixWorld(true);
+  }
+
+  /** From the bank beside him, above, looking down past his hands at the water: the surface, the stones under it.
+   * `side` metres out along the bank, `up` above the water, `lead` towards the water from his line. */
+  private bankShot(at: THREE.Vector3, side: number, up: number, lead = -0.15): Shot {
+    const f = this.fwd(), r = new THREE.Vector3(f.z, 0, -f.x);
+    const head = new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld);
+    const to = at.clone().lerp(head, 0.3);
+    const from = at.clone().addScaledVector(r, side).addScaledVector(f, lead).setY(at.y + up);
+    this.stream.clearReeds(from, 0.9);
+    return { from, to, push: 0.03 };
   }
 
   /** Close on his hands and what they do, from his side, his face in the top of frame. */
@@ -217,8 +230,9 @@ export class Waking {
 
   /** Water dripping and trickling out from under his hands for `sec` seconds, then gone. */
   private leak(sec: number) {
-    const N = 14, g = new THREE.SphereGeometry(0.006, 6, 4);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xbfd6dd, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.85 });
+    // big enough to read at a game frame rate: drops about a centimetre, lit a little from inside so they catch light
+    const N = 22, g = new THREE.SphereGeometry(0.0085, 8, 6);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xd6eef4, emissive: 0x6d8f99, emissiveIntensity: 0.55, roughness: 0.04, metalness: 0.15, transparent: true, opacity: 0.92 });
     const drops = new THREE.InstancedMesh(g, mat, N);
     drops.frustumCulled = false; drops.castShadow = false; drops.name = 'e1-leak';
     const born = performance.now() / 1000, m4 = new THREE.Matrix4(), hand = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
@@ -228,15 +242,15 @@ export class Waking {
       this.z.handR.getWorldPosition(hand);
       for (let i = 0; i < N; i++) {
         // each drop leaves the hand on its own beat and falls; a trickle at first, slower drips at the end
-        const per = 0.18 + (i % 5) * 0.07 + age * 0.08, ph = ((age + i * 0.137) % per) / per;
+        const per = 0.22 + (i % 5) * 0.08 + age * 0.1, ph = ((age + i * 0.137) % per) / per;
         const fall = 0.5 * 9.8 * (ph * per) * (ph * per);
         const y = Math.max(ground + 0.01, hand.y - 0.05 - fall);
-        sc.set(1, 1 + Math.min(3, fall * 6), 1);
-        m4.compose(new THREE.Vector3(hand.x + Math.sin(i * 2.4) * 0.025, y, hand.z + Math.cos(i * 1.7) * 0.025), q, sc);
+        sc.set(1, 1 + Math.min(4, fall * 9), 1);
+        m4.compose(new THREE.Vector3(hand.x + Math.sin(i * 2.4) * 0.03, y, hand.z + Math.cos(i * 1.7) * 0.03), q, sc);
         drops.setMatrixAt(i, m4);
       }
       drops.instanceMatrix.needsUpdate = true;
-      mat.opacity = 0.85 * Math.max(0, Math.min(1, (sec - age) / 0.4));
+      mat.opacity = 0.92 * Math.max(0, Math.min(1, (sec - age) / 0.4));
     };
     this.world.scene.add(drops);
     this.after(sec + 0.1, () => { drops.removeFromParent(); g.dispose(); mat.dispose(); drops.dispose(); });
@@ -306,13 +320,13 @@ export class Waking {
         this.after(1.6, () => z.setFace({ squint: 0.55, frown: 0.5, open: 0.15 }));
       } },
       // he spits, wipes his mouth with the back of his hand, and throws the berry away
-      { hold: 1.8, if: TESTED, shot: () => cover.mid(z, 0.6, 1.7), run: () => {
+      { hold: 1.9, if: TESTED, shot: () => this.profile(0.95), run: () => {
         z.setProp(null);
         z.setHold(null);
         const f = this.fwd(), side = new THREE.Vector3(f.z, 0, -f.x);
-        z.setLookTarget(mouth().addScaledVector(f, 0.8).addScaledVector(side, 0.6).add(new THREE.Vector3(0, -1.2, 0)));
+        z.setLookTarget(mouth().addScaledVector(f, 0.8).addScaledVector(side, -0.3).add(new THREE.Vector3(0, -1.0, 0)));
         z.setFace({ frown: 0.7, squint: 0.6, open: 0.3 });
-        this.after(0.25, () => { audio.sample('splash', 0.07, { rate: 3.1 }); audio.human('breath', 0.5); this.spit(mouth(), f.clone().addScaledVector(side, 0.6).normalize()); });
+        this.after(0.25, () => { audio.sample('splash', 0.07, { rate: 3.1 }); audio.human('breath', 0.5); this.spit(mouth(), f.clone().addScaledVector(side, -0.3).normalize()); });
         // the back of his hand across his mouth
         this.after(0.85, () => z.setHold({ R: { at: mouth().addScaledVector(f, 0.05), fingers: side.clone().negate(), palm: f.clone() } }));
         this.after(1.45, () => z.setHold(null));
@@ -321,6 +335,14 @@ export class Waking {
       { key: 'e1.fr.no', who: 'scientist', if: HUNGRY, shot: () => cover.close(z, 0.3, 0.95), run: () => this.release(), after: 0.5 },
     ], () => { rub = null; z.setProp(null); this.release(); });
     return true;
+  }
+
+  /** His face in profile from his right, with room in front of it (for what leaves his mouth). */
+  private profile(dist: number): Shot {
+    const f = this.fwd(), r = new THREE.Vector3(f.z, 0, -f.x);
+    const head = new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld);
+    const to = head.clone().addScaledVector(f, 0.32).add(new THREE.Vector3(0, -0.14, 0));
+    return { from: to.clone().addScaledVector(r, dist).addScaledVector(f, 0.12).add(new THREE.Vector3(0, 0.04, 0)), to, push: 0.02 };
   }
 
   private fwd() { const r = this.z.root.rotation.y; return new THREE.Vector3(Math.sin(r), 0, Math.cos(r)); }
@@ -342,23 +364,26 @@ export class Waking {
 
   /** A little spray from his mouth that arcs to the ground. */
   private spit(from: THREE.Vector3, dir: THREE.Vector3) {
-    const N = 9, g = new THREE.SphereGeometry(0.005, 6, 4);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xd8c7c4, roughness: 0.1, transparent: true, opacity: 0.8 });
+    // spittle and bits of the red skin: a fan of drops, the bits bigger, slow enough to see at a game frame rate
+    const N = 18, g = new THREE.SphereGeometry(0.0075, 8, 6);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.12, transparent: true, opacity: 0.9 });
     const drops = new THREE.InstancedMesh(g, mat, N);
+    const c = new THREE.Color();
+    for (let i = 0; i < N; i++) drops.setColorAt(i, i % 3 === 0 ? c.set(0xb01a28) : c.set(0xe9dcd8));
     drops.frustumCulled = false; drops.name = 'e1-spit';
     const t0 = performance.now() / 1000, m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
     const ground = this.world.terrain.height(from.x, from.z);
     drops.onBeforeRender = () => {
       const k = performance.now() / 1000 - t0;
       for (let i = 0; i < N; i++) {
-        const sp = 1.6 + (i % 3) * 0.5, tt = Math.max(0, k - i * 0.012);
-        p.copy(from).addScaledVector(dir, sp * tt).add(new THREE.Vector3(Math.sin(i * 3.1) * 0.12 * tt, 0.6 * tt - 4.9 * tt * tt, Math.cos(i * 2.3) * 0.12 * tt));
+        const sp = 1.1 + (i % 4) * 0.3, tt = Math.max(0, k - i * 0.02);
+        p.copy(from).addScaledVector(dir, sp * tt).add(new THREE.Vector3(Math.sin(i * 3.1) * 0.35 * tt, 0.9 * tt - 4.9 * tt * tt, Math.cos(i * 2.3) * 0.35 * tt));
         p.y = Math.max(p.y, ground + 0.005);
-        drops.setMatrixAt(i, m4.compose(p, q, one));
+        drops.setMatrixAt(i, m4.compose(p, q, one.setScalar(i % 3 === 0 ? 1.5 : 1)));
       }
       drops.instanceMatrix.needsUpdate = true;
     };
     this.world.scene.add(drops);
-    this.after(1.2, () => { drops.removeFromParent(); g.dispose(); mat.dispose(); drops.dispose(); });
+    this.after(1.6, () => { drops.removeFromParent(); g.dispose(); mat.dispose(); drops.dispose(); });
   }
 }

@@ -225,6 +225,50 @@ def follow(inner_P, inner_W, outers, keep=None, reach=0.035, near=0.012, far=0.0
         best[under] = d[under]
     return W / np.maximum(W.sum(1, keepdims=True), 1e-9)
 
+def drape(p, V, Nb, Wb, rig, k_=1.0, it=36, margin=0.009):
+    """A knit top over a full bust: the source garment, fitted vertex by vertex to the morphed body, came out pointed at
+    each bust with a crease under it (Nuvexa's sweater). Real cloth bridges a hollow and rounds a peak: the top's front,
+    from the waist to the collarbone, is smoothed (Taubin: no shrinking overall) while it is held at least `margin`
+    off the body under it, so it lies over the bust as one round surface and falls straight below it."""
+    T = p.T
+    nb = [[] for _ in range(len(p.P))]
+    for t in T:
+        for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+            nb[a_].append(b_); nb[b_].append(a_)
+    nb = [np.unique(n) for n in nb]
+    has = np.array([len(n) > 0 for n in nb])
+    # the region: front of the torso, weighted to the chest and the spine above the waist, away from the garment's rim
+    tw = sum(p.W[:, rig.index[n]] for n in ('spine1', 'spine2', 'chest', 'spine') if n in rig.index)
+    front = np.clip((p.N[:, 2] + 0.15) / 0.45, 0, 1)
+    e = {}
+    for t in T:
+        for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+            kk = (min(a_, b_), max(a_, b_)); e[kk] = e.get(kk, 0) + 1
+    rim = np.unique([kk[0] for kk, n in e.items() if n == 1])
+    rd = cKDTree(p.P[rim]).query(p.P, workers=1)[0] if len(rim) else np.full(len(p.P), 9.)
+    k = np.clip(tw / 0.5, 0, 1) * front * np.clip((rd - 0.03) / 0.05, 0, 1) * has * k_
+    if os.environ.get('DRAPE_DEBUG'): print(f'    drape {p.asset}: {int((k > .5).sum())} vertices held to it of {len(p.P)}', flush=True)
+    body = cKDTree(V)
+    P = p.P.copy()
+    def lap(P_):
+        L = np.zeros_like(P_)
+        for i in np.nonzero(k > 0)[0]:
+            L[i] = P_[nb[i]].mean(0) - P_[i]
+        return L
+    for _ in range(it):
+        P = P + (0.55 * k)[:, None] * lap(P)
+        P = P + (-0.58 * k)[:, None] * lap(P)
+        # never inside the body (and never closer than margin to it)
+        d, j = body.query(P, workers=1)
+        sd = np.einsum('ij,ij->i', P - V[j], Nb[j])
+        m = (k > 0) & (d < 0.08) & (sd < margin)
+        P[m] += Nb[j[m]] * (margin - sd[m])[:, None]
+    mv = np.linalg.norm(P - p.P, axis=1)
+    print(f'    drape {p.asset}: moved {int((mv > 0.002).sum())} vertices, most {mv.max() * 100:.1f} cm', flush=True)
+    p.P = P
+    p.N = vnormals(P, T)
+
+
 def covered(P, N, garments, reach=0.035):
     """Vertices hidden under a garment: one lies just outside them, facing the same way."""
     hid = np.zeros(len(P), bool)
@@ -685,6 +729,9 @@ def build(c, cid, force=False):
         _, j = tree.query(g.P, workers=1)
         flip = np.einsum('ij,ij->i', g.N, Nb0[bodyidx[j]]) < -0.15
         g.N[flip] *= -1
+    for g in garments:
+        if g.opt.get('drape'):
+            drape(g, V[bodyidx], Nb0[bodyidx], None, rig, g.opt['drape'])
     # layers: inner garments never show through outer ones, and hidden cloth is not shipped
     for i in range(len(garments)):
         # footwear goes on under the trouser hem: a boot never pushes cloth aside or eats it

@@ -367,7 +367,13 @@
     "e1.fr.eat": "scientist",
     "e1.fr.lyrra": "medic",
     "e1.fr.test": "scientist",
-    "e1.fr.no": "scientist"
+    "e1.fr.no": "scientist",
+    "e1.st.drax": "strong",
+    "e1.st.fail": "scientist",
+    "e1.fl.mid": "scientist",
+    "e1.fl.steep": "scientist",
+    "e1.fl.snap": "scientist",
+    "e1.fl.ok": "scientist"
   },
   "scenes": {
     "_comment": "Lines several people speak: 'Name: words' starts that person's part; text before any name is the player's.",
