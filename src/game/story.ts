@@ -763,14 +763,16 @@ export class Story {
       this.ui.say('dlg.7.1', 'crew.scientist.name', 5); this.quietUntil = performance.now() + 7000;
     });
     if (n === 8) {
-      // the morning: he blew the night's coals back up (off screen)
-      if (this.flag('e1.fireOut')) { this.s.flags['e1.fireOut'] = false; if (this.flag('fire')) this.world.camp.setFire(2); }
       this.signalClock = 12.5; // the meter takes over after the first readout
       this.after(5.0, () => { this.ui.deviceLines([t('signal.detect1'), t('signal.detect2')], true); audio.beep(); });
       this.after(6.5, () => this.ui.say('dlg.8.1', 'crew.scientist.name', 5));
       this.after(12, () => this.ui.deviceLines(null));
     }
-    if (n === 9) this.after(5.0, () => this.ui.memory('memory.explorer', 10));
+    if (n === 9) {
+      // by now he has blown the night's coals back up (off screen; the fire went out in the first night)
+      if (this.flag('e1.fireOut')) { this.s.flags['e1.fireOut'] = false; if (this.flag('fire')) this.world.camp.setFire(2); }
+      this.after(5.0, () => this.ui.memory('memory.explorer', 10));
+    }
     if (n === 10) {
       if (this.campPending) this.nextTalk = true;
       else this.beaconPlan();
