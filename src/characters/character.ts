@@ -496,10 +496,29 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     clips = clipsFor(`${key}`, legScale, a);
     mixer = new THREE.AnimationMixer(scene);
     fig.scale.setScalar(custom ? custom.height : 1);
+    // what a passer-by fades out with near the lens (its own materials; the kit's are shared, it just goes)
+    fadeSet = [skin, eyes, cloth, cornea, lash, ...(fur ? [fur] : []), ...hairs.filter((h): h is THREE.Mesh => !!h).map((h) => (h as THREE.Mesh).material as THREE.Material)].map((m) => ({ m, o: m.opacity, a: m.alphaTest }));
+    prepFade();
     fig.visible = true;
     void texturesReady().then(ready);
   };
 
+  // the fade near the lens (crowd bodies of the full build: Web, Ultra)
+  let fadeSet: { m: THREE.Material; o: number; a: number }[] = [], fadeOn = false, fadeK = 1, fadeShown = 1, lensWant = 1;
+  function prepFade() {
+    fadeOn = crowd && lod === 0 && fadeSet.length > 0;
+    // solid materials fade by hashed alpha; see-through ones (cornea, lashes) by their opacity; cut-out ones (hair
+    // cards) thin out by their alpha cut
+    if (fadeOn) for (const f of fadeSet) if (!f.m.alphaHash && !f.m.transparent && f.m.alphaTest === 0) { f.m.alphaHash = true; f.m.needsUpdate = true; }
+  }
+  function setFade(k: number) {
+    const vis = k > 0.03;
+    if (fig.visible !== vis) fig.visible = vis;
+    if (!vis || Math.abs(k - fadeShown) < 0.004) return;
+    fadeShown = k;
+    for (const f of fadeSet) { if (f.a > 0) f.m.alphaTest = 1 - (1 - f.a) * k; else f.m.opacity = f.o * k; }
+    for (const m of rigid) m.visible = k > 0.6;
+  }
   let pitK: CrewMeta['pit'] | null = null;
   // per region: its shapes' morph names and the bones from just below its reference down to its driving bone
   let corrRegions: { k: NonNullable<CrewMeta['pit']>[string]; keys: string[]; chain: THREE.Object3D[]; phi: Float64Array }[] = [];
@@ -796,8 +815,18 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // a passer-by whose body reaches the lens (their hair filled a corner of the screen) is left out until they pass
       if (crowd) {
         const e = root.matrixWorld.elements, dy = LENS.y - e[13], d = Math.hypot(LENS.x - e[12], LENS.z - e[14]);
-        const near = dy > -0.3 && dy < 2.3 && d < (fig.visible ? 0.7 : 0.9);
-        if (fig.visible === near) fig.visible = !near;
+        if (fadeOn) {
+          // Web and Ultra: they fade (hashed alpha) from 1.3 m in to gone at 0.4 m, and when the stage asks (in the
+          // line from the camera to you), over a fifth of a second either way
+          const band = dy > -0.3 && dy < 2.3, x = band ? THREE.MathUtils.clamp((d - 0.4) / 0.9, 0, 1) : 1;
+          const want = Math.min(x * x * (3 - 2 * x), lensWant);
+          fadeK += (want - fadeK) * (1 - Math.exp(-dt * 12));
+          if (Math.abs(fadeK - want) < 0.01) fadeK = want;
+          setFade(fadeK);
+        } else {
+          const near = dy > -0.3 && dy < 2.3 && d < (fig.visible ? 0.7 : 0.9);
+          if (fig.visible === near) fig.visible = !near;
+        }
       }
       pickLod();
       sinceDrawn++;
@@ -1093,7 +1122,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** Hand-set pose over the clip (null gives the body back to the clip). */
     setLimbs(l: Limbs | null) { limbs = l; },
     /** One of a crowd (CHAR_BUDGET): no corrective shapes, the light build and no shadow from closer in. */
-    setCrowd(on: boolean) { crowd = on; },
+    setCrowd(on: boolean) { crowd = on; prepFade(); },
+    /** A crowd body that can fade (Web, Ultra) fades out towards 0 and back in towards 1; false: the stage hides it. */
+    setLensFade(target: number) { lensWant = target; return fadeOn; },
+    get canFade() { return fadeOn; },
+    /** Faded out at the lens (not drawn). */
+    get faded() { return fadeOn && !fig.visible; },
     /** Held expression (null goes back to what the pose asks for). */
     setFace(f: Face | null) { faceSet = f; },
     say(seconds: number) { speak = Math.max(speak, seconds); },
