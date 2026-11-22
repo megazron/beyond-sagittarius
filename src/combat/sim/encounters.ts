@@ -107,7 +107,8 @@ export class EncounterRun {
     if (id === 'hunt.first') {
       // a still afternoon, a meadow, three small grazers, and two very large ones you should leave alone
       this.hour = 14; s.night = false;
-      arm('spear'); give({ stone: 4 });
+      // Episode One teaches the throwing stick (at a stump, after the lean-to) before the first hunt: a trial carries it
+      arm('spear', 'throwstick'); give({ stone: 4 });
       const wind = this.at(-1, 0.4), o = this.at(0, 0); const wl = Math.hypot(wind.x - o.x, wind.z - o.z);
       s.windX = (wind.x - o.x) / wl; s.windZ = (wind.z - o.z) / wl; // the wind is in your face: they cannot smell you coming
       this.put('nibbet', 40, -3); this.put('nibbet', 44, 4); this.put('nibbet', 47, -8);

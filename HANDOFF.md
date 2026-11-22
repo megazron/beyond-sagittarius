@@ -453,6 +453,27 @@ unlanded except this handoff commit and any recording in progress.
 - NEXT: guardian legs darker in sun / face less boxy; wrap hide over loose sleeves (or a forearm fit from kit.ts);
   bigger/brighter snared animal (night rim on it while held?); bow/sling grips when setGrip lands (still only
   life-wip at 10:00); then the next invention-tree content.
+### 2026-11-22 ~11:30 (combat agent, session after land14)
+- eb7f6ba (local): guardian face is a lathe-turned carved hollow (mound + near-black hollow, roughened lip, rounded
+  brow/cheek/chin stones, eye a glint idle, bright in the wind-up); the square socket and the straight face seams are
+  gone. Legs: own material `legStone` (cold basalt, vertex-colour weathering: joint grime, rain streaks, lichen) with
+  NO core glow (the core's warm emissive on every stone was what turned the legs tan in sun and orange after a beam);
+  core glow on the body cut to about a third.
+- Hide wrap: HideWrap.measure() reads the skinned vertices that follow lowerarm/forearmtw (getVertexPosition, in the
+  bone frame, 8 sections) and lays the forearm hide 5% over the sleeve; coat-coloured puffs beyond each end where
+  there is cloth (the sleeve bunched by the wrap); crossed lashing (two opposite helices) between end bands.
+- Trap cue, listened to by analysis (night v11 audio): the chitter peaked ~-38 dB (2-5 kHz band), the twig crack
+  ~-49 dB, under the WORLD's giant-creature footfalls (game.ts onCreatureStep, a 42 Hz tone at about -17 dB every
+  1.35 s, not mine). New sounds cb_twig/cb_rustle/cb_struggle (make_sounds.py takes names: `... make_sounds.py twig`);
+  cue = rustle + voice + twig at full level out to 9 m (sfx() has a `near` arg); a held animal struggles out loud and
+  kicks dirt every 0.55-0.9 s; held animals get their own light (`uHeldLit` per creature in rimmed()); the view draws
+  in (player.ts `combat.zoom`, -15 deg FOV) once the trap has sprung.
+- Nibbets sit up on their haunches to look (alert, and vigilance bouts while feeding) and have a pale tail flag.
+  Throwing-stick side camera square to the throw's middle, 8.5 m out. Hunt trial kit gets the throwing stick (the
+  story teaches it before the hunt: lean.ts, `inv.throwStick`).
+- combat-land15 (381873f, handoff only) failed levels_smoke (flaky), rerun requested.
+- Recording: ~/bs-cap/combat/mkplan_v17.py -> plan_v17_guardian_wrap_throwstick.json, plan_v17_night.json.
+
 ## 2026-11-22 04:10 takeover by perf agent 17 (branch perf17 from main bfdde7b; landing branch perf17-land2)
 - Measurements in ~/bs-assets/gpu/p17: inter.sh TAG PLAN.. (base on :4183 = ~/bs-perf-base at main, built to
   ~/bs-perf/dist-base; new on :4182 dist-new; one exclusive heavy call per run, then p15/cmp.py), plan_mcensus.json
