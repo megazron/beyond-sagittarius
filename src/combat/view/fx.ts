@@ -42,6 +42,7 @@ export class CombatFx {
   private next = 0;
   private points: THREE.Points;
   private stones: THREE.InstancedMesh; private shafts: THREE.InstancedMesh; private bolts: THREE.InstancedMesh;
+  private blurs: THREE.InstancedMesh; private blurU = { uA: { value: 0 }, uCol: { value: new THREE.Color(0x9a7a55) } }; private lastSimT = 0;
   private tele: { mesh: THREE.Mesh; id: number; t: number; dur: number; ring: boolean; mat: THREE.ShaderMaterial }[] = [];
   private props = new Map<number, THREE.Object3D>();
   private flames: { o: THREE.Object3D; id: number; light: THREE.PointLight | null }[] = [];
@@ -73,6 +74,16 @@ export class CombatFx {
     this.shafts = inst(shaft, new THREE.MeshStandardMaterial({ color: 0x6b5238, roughness: 0.8 }), 20);
     const bolt = new THREE.CylinderGeometry(0.03, 0.03, 1, 5); bolt.rotateX(Math.PI / 2);
     this.bolts = inst(bolt, new THREE.MeshBasicMaterial({ color: new THREE.Color(1.2, 3, 4) }), 12);
+    // a spinning throwing stick seen at a game's frame rate turns a third of a turn between frames: by eye (and on a
+    // camera) it is a blurred disc swept by the stick, densest at the hub (every angle passes there). The stick is
+    // drawn as well; the disc is the stick's sweep over the frame, so it fades out in slow motion
+    const disc = new THREE.CircleGeometry(0.375, 20); disc.rotateX(-Math.PI / 2);
+    this.blurs = inst(disc, new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: this.blurU,
+      vertexShader: 'varying vec2 vP; void main() { vP = position.xz / 0.375; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform float uA; uniform vec3 uCol; varying vec2 vP; void main() { float r = length(vP); float a = uA * clamp(0.09 / (r + 0.06), 0.0, 1.0) * smoothstep(1.0, 0.82, r); if (a < 0.004) discard; gl_FragColor = vec4(uCol, a); }',
+    }), 6);
+    this.blurs.renderOrder = 3;
     this.numRoot = document.createElement('div'); this.numRoot.className = 'cb-numbers'; document.body.append(this.numRoot);
   }
 
@@ -200,7 +211,10 @@ export class CombatFx {
     pg.attributes.position.needsUpdate = true; pg.attributes.aCol.needsUpdate = true; pg.attributes.aSize.needsUpdate = true;
     (this.points.material as THREE.ShaderMaterial).uniforms.uScale.value = window.innerHeight * 0.9;
     // projectiles
-    let ns = 0, nh = 0, nb = 0;
+    let ns = 0, nh = 0, nb = 0, nd = 0;
+    // how far the stick turns between two frames (50 rad/s of fight time): a full disc at a quarter turn a frame or more
+    const simDt = Math.max(0, sim.t - this.lastSimT); this.lastSimT = sim.t;
+    this.blurU.uA.value = Math.min(1, (simDt * 50) / 1.6) * 0.55 * (0.35 + 0.65 * this.smokeK);
     for (const q of sim.proj) {
       if (!q.alive) continue;
       tmpV.set(q.vx, q.vy, q.vz).normalize();
@@ -211,6 +225,7 @@ export class CombatFx {
       else if (w === 'throwstick') {
         // end over end: it turns about the axis across its flight, about eight turns a second of the fight's own time
         // (wall time strobed it in slow motion: 125 degrees a frame at 23 frames a second)
+        tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(1, 1, 1)); if (nd < 6) this.blurs.setMatrixAt(nd++, tmpM);
         tmpQ.multiply(tmpQ2.setFromAxisAngle(tmpS.set(0, 1, 0), (sim.t * 50) % 6.283));
         tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(2.6, 2.6, 0.75)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM);
       }
@@ -223,7 +238,7 @@ export class CombatFx {
       else if (k.weapon === 'spear' || k.weapon === 'hafted' || k.item === 'arrow' || k.item === 'bolt' || k.item === 'dart') { tmpQ.setFromAxisAngle(tmpS.set(1, 0, 0), 0.9 + (k.id % 5) * 0.1); tmpM.compose(tmpV.set(k.x, y + (k.weapon ? 0.7 : 0.25), k.z), tmpQ, tmpS.set(k.weapon ? 1.9 : 1, k.weapon ? 1.9 : 1, k.weapon ? 2 : 0.75)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM); }
       else if (k.item === 'stone') { tmpM.compose(tmpV.set(k.x, y + 0.06, k.z), tmpQ.identity(), tmpS.set(1.2, 1.2, 1.2)); if (ns < 20) this.stones.setMatrixAt(ns++, tmpM); }
     }
-    this.stones.count = ns; this.shafts.count = nh; this.bolts.count = nb;
+    this.stones.count = ns; this.shafts.count = nh; this.bolts.count = nb; this.blurs.count = nd; this.blurs.instanceMatrix.needsUpdate = true;
     this.stones.instanceMatrix.needsUpdate = true; this.shafts.instanceMatrix.needsUpdate = true; this.bolts.instanceMatrix.needsUpdate = true;
     // telegraphs
     for (const q of this.tele) { if (q.t >= q.dur) continue; q.t += dt; q.mat.uniforms.uK.value = Math.min(1, q.t / q.dur); if (q.t >= q.dur) q.mesh.visible = false; }
