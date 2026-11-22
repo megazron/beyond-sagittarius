@@ -477,5 +477,23 @@ unlanded except this handoff commit and any recording in progress.
   planet too). Now it eases in with the crowd only.
 - three 0.187 finding: skinMaterial's subsurface-wrap replace (lights_physical_pars_fragment, "BRDF_Lambert(
   material.diffuseColor)") matches nothing any more: skin has drawn with plain lighting since the three upgrade.
+- 10:15 LANDED e368b61 on main (perf17 props batching, lens fade, crowd camera behind ?crowdcam=1, the pitch fix and
+  the two diagnostics; CI 45007925771 all green on that exact commit, first try).
 - Machine: the heavy queue is shared with the combat agent's exclusive GPU captures; local SwiftShader runs of the gates
   took 20+ min and timed out. Use CI for SwiftShader numbers.
+- Bodies (owner goal 2), src/characters/bodymerge.ts: skin (body+head), clothes and eyes of a body are ONE skinned mesh
+  with one material (aPart per vertex: 0 skin, 1 cloth, 2 eye; the fragment shader runs that part's code, copied from
+  skinMaterial/eyeMaterial/the cloth patch; cloth's polygon offset became a 2 mm pull to the camera; DoubleSide). The
+  merged geometry is cached per source set (bodies of one look share it). Crowd bodies always; the crew and the player on
+  the away stages through `fig.mergeParts()` (city FRIENDS, Mir, away.ts player); films keep the separate meshes.
+  `?bodymerge=0` turns it off. GPU census (p18/bodies1): a merged crowd body draws 1 body + 1-2 kit (+ hair; + lashes and
+  cornea within 5-7 m); the crew/player drew 6-7 each (skin, eyes, cloth, kit 1-2, cornea, lash): these dominated the
+  crowd and gate spots, hence mergeParts. Look A/B shots (p18/look1_A_look vs look1_B_look: Strong at 1.3 m and 3 m, a
+  crowd street): no visible difference found. The kit (rigid.ts) is per-body geometry, so it stays separate (folding it
+  in would copy the morph data per body).
+- Program sort (core/renderer.ts): opaque draws sorted by shader program, then material (three sorts by material id
+  only). `?psort=0` is three's order. Costs some front-to-back order (overdraw); watch phones.
+- `?gputime=1` (core/gputime.ts): GPU ms per post pass in window.__gpuTime (scene includes shadows); plans
+  p18/plan_ugpu.json / plan_wgpu.json print it per spot.
+- Tools: p18/ab.sh (same build, ?bodymerge=0 vs on), p18/ab2.sh (A = ?bodymerge=0&psort=0 = main's behaviour, B = new;
+  Q=... appends to both URLs), plan_bodies.json (skinned draws per body), plan_look.json (photo-camera close-ups).
