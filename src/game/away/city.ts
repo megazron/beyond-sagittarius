@@ -1344,11 +1344,28 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // townsfolk and friends answer whenever you like; they never count towards leaving
   for (const p of people) if (!p.walk && !p.id.startsWith('group')) tasks.push({ id: `talk.${p.id}`, pos: p.pos, radius: 1.6, label: label('city.talk'), optional: true, repeat: true });
 
+  // the walls in a grid of 8 m cells: the camera's clearance and the player's collision looked at every one of the
+  // city's thousands of boxes every frame. Rebuilt when boxes are added. `wallsNear` lists the candidates in their own order
+  const GC = 8, grid = new Map<number, number[]>(), stampOf: number[] = [], cand: number[] = [];
+  let gridN = -1, stampN = 0;
+  const gkey = (i: number, j: number) => (i + 4096) * 8192 + (j + 4096);
+  const wallsNear = (x0: number, z0: number, x1: number, z1: number) => {
+    if (gridN !== blocks.length) {
+      grid.clear(); gridN = blocks.length;
+      blocks.forEach((b, k) => { for (let i = Math.floor(b.min.x / GC); i <= Math.floor(b.max.x / GC); i++) for (let j = Math.floor(b.min.z / GC); j <= Math.floor(b.max.z / GC); j++) { const c = gkey(i, j); (grid.get(c) ?? grid.set(c, []).get(c)!).push(k); } });
+    }
+    cand.length = 0; stampN++;
+    for (let i = Math.floor(x0 / GC); i <= Math.floor(x1 / GC); i++) for (let j = Math.floor(z0 / GC); j <= Math.floor(z1 / GC); j++) {
+      const l = grid.get(gkey(i, j)); if (l) for (const k of l) if (stampOf[k] !== stampN) { stampOf[k] = stampN; cand.push(k); }
+    }
+    return cand.sort((a, b) => a - b);
+  };
   /** How far the camera may go from the player before a wall: 1 is all the way. */
   const clearance = (fx: number, fz: number, cx: number, cz: number) => {
     let best = 1;
     const dx = cx - fx, dz = cz - fz;
-    for (const b of blocks) {
+    for (const k of wallsNear(Math.min(fx, cx) - 0.3, Math.min(fz, cz) - 0.3, Math.max(fx, cx) + 0.3, Math.max(fz, cz) + 0.3)) {
+      const b = blocks[k];
       if (b.max.y < 1.5) continue;
       let t0 = 0, t1 = 1;
       for (const [o, d, lo, hi] of [[fx, dx, b.min.x - 0.25, b.max.x + 0.25], [fz, dz, b.min.z - 0.25, b.max.z + 0.25]] as [number, number, number, number][]) {
@@ -1506,7 +1523,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     vistas: [{ x0: 4, x1: FRONT - 0.4, z0: 63, z1: 69, yaw: 0, pitch: 0.42, secs: 4 }, { x0: -8, x1: 8, z0: -40, z1: -30, yaw: 0, pitch: 0.3, secs: 3.5 }, { x0: -9, x1: 9, z0: -76, z1: -66, yaw: 0, pitch: 0.34, secs: 5 }],
     height: (x, z) => H(x, z),
     collide(p, r) {
-      for (const b of blocks) {
+      for (const k of wallsNear(p.x - r - 0.1, p.z - r - 0.1, p.x + r + 0.1, p.z + r + 0.1)) {
+        const b = blocks[k];
         if (p.y > b.max.y || p.y + 1.8 < b.min.y) continue;
         const cx = Math.max(b.min.x, Math.min(p.x, b.max.x)), cz = Math.max(b.min.z, Math.min(p.z, b.max.z));
         const dx = p.x - cx, dz = p.z - cz, dd = Math.hypot(dx, dz);
