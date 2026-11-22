@@ -290,3 +290,9 @@ unlanded except this handoff commit and any recording in progress.
   stretch (wooden_crate 12 draws, drawer_cabinet 10, painted_wooden_cabinet 10...): next for Ultra is one InstancedBatch
   per prop kind with per-stretch lists (like the forest). Bodies are still ~7 draws each (skin, cloth, eyes, kit 1-2,
   hair, lash/cornea near); a shared skin+cloth atlas would be the next step for item 2.
+- 04:30 Clips of main 3a740a3 (Web city 01-05, planet 11-13, Ultra u03-u04) and README_review.txt in
+  Downloads/BS_Game_v1.1/city_v1.6_GPU (recorded under other agents' load). Interleaved base/new (p16/i1_*, i2_*): new
+  ahead in 11 of 12 spots; the a2 "regression" was load. Preview on :4182 (dist-new = the landed build) left running;
+  ~/bs-perf-base (worktree at a787854, dist-base) kept for A/B. Still open: quiet-machine numbers, cold title load
+  re-measure (p15/ab_load.sh), Ultra prop batching, body draws (shared skin/cloth atlas), the crowd at the lens
+  (passers-by ~1 m from the camera still fill an edge; the follow camera sits low in a thick crowd).
