@@ -393,7 +393,8 @@ function stalker(sim: CombatSim, e: Enemy, dt: number, awake: boolean) {
   const tx = p.x + Math.cos(e.angle) * R, tz = p.z + Math.sin(e.angle) * R;
   // prey that runs is chased: straight after it, flat out
   if (d > 14) { move(sim, e, p.x, p.z, def.run, dt); e.angle = Math.atan2(e.z - p.z, e.x - p.x); }
-  else move(sim, e, tx, tz, watched ? def.walk * 0.5 : def.run * 0.62, dt);
+  // close in: at a stalk while you stand, flat out while you run (it chases what runs)
+  else move(sim, e, tx, tz, watched ? def.walk * 0.5 : p.speed > 4 ? def.run : def.run * 0.62, dt);
   if (!watched || d > 12) faceTo(e, p.x, p.z, dt, 0.3);
   // the clock to the leap runs slower while you stare it down
   e.atkGone += dt * (watched ? 0.45 : 1);
