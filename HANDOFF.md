@@ -578,3 +578,27 @@ unlanded except this handoff commit and any recording in progress.
   (terrain < WATER_LEVEL); life-wip's stream needs its own query when it lands. Known gap: the world's water does not
   refract the lake bottom, so a fish drawn at its seen depth can look like it hovers over the bottom; thrown spears
   follow their own arc (no reticle-line correction), so fishing is by thrust in practice.
+- ~14:20 PAUSED by the coordinator (urgent Text to Robot work). EXACT STATE:
+  - main = 983d105 (I landed the handoff-only commit: combat-land17 CI 45026751296 green on that sha).
+  - All my work is committed on `combat` and pushed as `combat-land18` (CI runs on push). NOT landed. Unlanded:
+    9388778 trap cue fix + wary bait approach, fa3ff5e guardian eye socket + phase-two colours + trunk-clear lens,
+    d3b9f5b stick spin blur + bot fetch camera, d8cab85 bot cue log, ac325d5 spear fishing, 5afad6c play test (six
+    set pieces, fish check), and the handoff commits. Land only once CI is green on the exact sha (its own push).
+  - NOTHING of this session is recorded or seen on the GPU yet. The v17c capture was queued and I cancelled it before it
+    started (no game tab left open). dist/ (built 13:38) has everything except spear fishing.
+  - Plans ready in ~/bs-cap/combat (they embed demo_bot.js: regenerate after any bot edit):
+    plan_v17c_night_wrap.json (night v13 + wrap v6), plan_v17c_guardian_throwstick.json (guardian v12 + stick v7),
+    plan_v18_fish.json (20_spear_fishing_v1, needs a rebuild first).
+  - Level measuring script for the cue: copy of my scratch tool is NOT in the repo; it is 25 lines (ffmpeg to s16le,
+    50 ms RMS full band, 2-5 kHz, < 80 Hz). The cue time in a take comes from window.__cbTrapLog entries with `cue`
+    (the night plan prints __cbTrapLog after the take into v17c.log).
+- NEXT on resume, in order: (1) `HEAVY_EXCLUSIVE=1 ~/bs-cap/combat/cap2.sh v17c plan_v17c_night_wrap.json`, review
+  (caught-animal light, wrist, puff colour: with bodymerge the puff takes the merged material's base colour, white;
+  the planet player is not merged unless it has been to the city), find the cue in the log and measure rustle, voice,
+  twig, snap levels against the world's 42 Hz thump. (2) `cap2.sh v17d plan_v17c_guardian_throwstick.json`: check the
+  eye socket reads as an eye, phase two not orange, no trunk in the lens, the stick's disc and the fetch camera.
+  (3) heavy build, `cap2.sh v18 plan_v18_fish.json`: first check the fishing site was found (log prints site + fish;
+  combat.ts site('fish.spear') scans round the camp for a bank over 0.3-0.72 m water; if none, the fish list is empty)
+  and that fish show through the lake's water. (4) clips < 30 MB to Downloads/.../combat with honest README notes.
+  (5) setGrip still not on origin/main (checked 14:00): bow/sling grips wait. (6) story agent's answer on spear
+  fishing: last section of ~/bs-story/INVENTION_TREE.md. Giant-creature thump: left as is (no owner decision yet).
