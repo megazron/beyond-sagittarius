@@ -65,7 +65,11 @@ export class TouchControls {
     document.documentElement.style.setProperty('--joy-r', `${this.radius}px`);
   }
 
+  /** Called every frame: only a change touches the page (hidden, it reset the stick's styles every frame). */
+  private on: boolean | null = null;
   show(on: boolean) {
+    if (on === this.on) return;
+    this.on = on;
     this.root.classList.toggle('hidden', !on);
     if (!on) this.reset();
   }

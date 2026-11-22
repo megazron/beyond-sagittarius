@@ -179,7 +179,9 @@ export class World {
     this.hemi.groundColor.set(0x141c1a).lerp(new THREE.Color(0x2a3a33), day);
     // image-based light carries most of the ambient now; the hemisphere fills in
     this.envGround.set(0x101814).lerp(tmpG.set(0x3a4a40), day).multiply(tmpG2.copy(this.sun.color).lerp(WHITE, 0.6));
-    const envTex = this.env.update(renderer, time, this.envGround);
+    // the planet's image light is captured again only while the planet is on screen (a capture is six sky renders and
+    // a filter pass: a spike every few seconds in the city, for a scene nobody sees)
+    const envTex = drawn || !this.env.texture ? this.env.update(renderer, time, this.envGround) : this.env.texture;
     if (envTex) {
       this.scene.environment = envTex;
       this.scene.environmentIntensity = 0.42 + day * 0.68;
@@ -211,6 +213,10 @@ export class World {
       this.reflHidden ??= [this.water.mesh, this.grass.mesh, this.items.group, this.creature.root, this.hound.root, this.explorer.root, this.camp.root, ...this.forest.small];
       this.water.reflect(renderer, this.scene, cam as THREE.PerspectiveCamera, this.reflHidden);
     }
+    // the pods' smoke, the camp's fire, the pickups' rings and the giant on the horizon are only looks: while another
+    // stage is on screen (Zenvora) they wait. In the city they were a tenth of a phone's update, and the giant's
+    // footsteps still rumbled and shook the camera there, measured from wherever you stood in the street
+    if (!drawn) return;
     this.pod.update(time);
     this.pod2.update(time + 7.3);
     this.camp.update(time, dt, focus);
