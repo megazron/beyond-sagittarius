@@ -70,10 +70,10 @@ export class Stones {
     const group = new THREE.Group(); group.name = 'e1-cobbles';
     const at = {} as Record<Kind, THREE.Vector3>;
     KINDS.forEach((k, i) => {
-      const p = kneel.clone().addScaledVector(f, 0.5).addScaledVector(r, (i - 1) * 0.24);
+      const p = kneel.clone().addScaledVector(f, 0.5).addScaledVector(r, (i - 1) * 0.3);
       p.y = this.world.terrain.height(p.x, p.z);
-      const m = cobble(k, 31 + i * 7);
-      m.position.copy(p).add(new THREE.Vector3(0, 0.035, 0));
+      const m = cobble(k, 31 + i * 7, 1.35);
+      m.position.copy(p).add(new THREE.Vector3(0, 0.045, 0));
       m.rotation.y = i * 1.9;
       group.add(m); this.meshes.set(k, m); at[k] = m.position.clone();
     });
@@ -111,10 +111,12 @@ export class Stones {
 
   /** Low and close on the stones and his hands, from his right, his face at the top of frame. */
   private stoneShot(at: THREE.Vector3, dist = 0.95): Shot {
-    const f = this.fwd(), r = new THREE.Vector3(f.z, 0, -f.x);
+    // from the water's side of the stones, looking back up the bank at them and at his face (built from the site, not
+    // from the model's heading: the first cut of this framed his back)
+    const site = this.site!, w = at.clone().sub(site.kneel).setY(0).normalize(), r = new THREE.Vector3(w.z, 0, -w.x);
     const head = new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld);
-    const to = at.clone().lerp(head, 0.32);
-    return { from: at.clone().addScaledVector(r, dist).addScaledVector(f, 0.35).add(new THREE.Vector3(0, 0.55 + dist * 0.2, 0)), to, push: 0.03 };
+    const to = at.clone().lerp(head, 0.3);
+    return { from: at.clone().addScaledVector(w, dist * 0.75).addScaledVector(r, dist * 0.5).add(new THREE.Vector3(0, 0.32 + dist * 0.18, 0)), to, push: 0.03 };
   }
 
   /** The hammerstone in his right hand comes down on `at` twice (a tap) with the sound of what it hits. */
@@ -287,14 +289,14 @@ function cobble(kind: Kind, seed: number, k = 1): THREE.Mesh {
   const raw = new THREE.IcosahedronGeometry(1, 3); raw.deleteAttribute('normal'); raw.deleteAttribute('uv');
   const g = mergeVertices(raw), p = g.getAttribute('position'), n = new Simplex(seed);
   const col = new Float32Array(p.count * 3), c = new THREE.Color();
-  const base = kind === 'flint' ? 0x24262c : kind === 'granite' ? 0x8b8c8f : 0x9c6e45;
+  const base = kind === 'flint' ? 0x24262c : kind === 'granite' ? 0x6f7073 : 0x7a5f45;
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
     const m = 1 + 0.12 * n.noise2(x * 1.6 + y, z * 1.6) + (kind === 'flint' ? 0.06 * Math.abs(n.noise2(x * 4, y * 4 + z)) : 0);
     p.setXYZ(i, x * 0.065 * m * k, y * 0.04 * m * k, z * 0.05 * m * k);
     c.set(base);
     // granite: black and white specks; sandstone: bands; flint: a pale chalky skin on part of it
-    if (kind === 'granite') { const h = n.noise2(x * 18, z * 18 + y * 9); c.multiplyScalar(h > 0.55 ? 0.35 : h < -0.6 ? 1.45 : 1); }
+    if (kind === 'granite') { const h = n.noise2(x * 18, z * 18 + y * 9); c.multiplyScalar(h > 0.55 ? 0.35 : h < -0.6 ? 1.3 : 1); }
     else if (kind === 'sand') c.multiplyScalar(0.85 + 0.2 * Math.sin(y * 14 + n.noise2(x * 3, z * 3) * 2));
     else if (x + 0.3 * n.noise2(y * 2, z * 2) > 0.55) c.set(0xc9c2b0);
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
