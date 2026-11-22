@@ -633,3 +633,13 @@ unlanded except this handoff commit and any recording in progress.
   NOT at 30. Next: a CPU profile of Mobile (plan_mob.json + "profile": 6 at the square and crowd) and cut the update
   (characters' animate, city update) and per-draw cost there.
 - Under contention the same builds read 20-35 (Ultra) and 47-55 (Web): the owner's "laggy" on a busy laptop is CPU.
+- Clips: Downloads/BS_Game_v1.1/city_v1.9_GPU (Web, ?perf=1, no sound, README with notes; p18/clips19_web). Seen: overlay
+  ~43 fps while recording; bazaar ~8 s a passer-by at ~2.5 m is solid and covers ~1/4 of the screen, beside him a
+  half-faded body reads as a see-through ghost (no big dark dithered shape any more); gate crowd: low camera, bodies
+  fill the frame. Ultra and planet clips not recorded.
+- NOT DONE (owner's order): (1) Ultra: city at the vsync cap on a quiet machine; instanced crowds with GPU skinning,
+  kit+hair into the body draw and static shadow caching NOT done (not needed for 30+ any more; would help a busy
+  machine). (2) Web gate: 60 quiet, ~52 busy. (3) lens: mid-fade ghost still visible briefly; maybe fade faster (rate
+  12 -> 20) or start at 2.6 m. (4) planet 60 on Web (quiet); Mobile proxy 15-22, needs a CPU profile and work.
+  (5) cold title load (p15/ab_load.sh) not run.
+- Previews :4182 and :4183 stopped at the end. dist-base, dist-new, dist-new3 are local build folders (excluded).
