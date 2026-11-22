@@ -666,7 +666,8 @@ export class Combat {
     // the trap a little to one side of the body, so the player does not stand in front of it
     const bearing = Math.atan2(-(tr.x - pos.x), -(tr.z - pos.z));
     const d = Math.atan2(Math.sin(bearing - P.yaw), Math.cos(bearing - P.yaw));
-    return d - Math.sign(d || 1) * 0.28;
+    // a turn of the head and shoulders, not an about-face (a trap right behind is heard, and turned to as far as that)
+    return THREE.MathUtils.clamp(d - Math.sign(d || 1) * 0.28, -1.9, 1.9);
   }
 
   // ---------------- what happened, made felt ----------------

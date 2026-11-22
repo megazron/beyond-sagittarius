@@ -119,7 +119,7 @@ class HideWrap {
     if (len < 1e-4) return;
     const wl = bone.getWorldPosition(new THREE.Vector3()).distanceTo(child.getWorldPosition(new THREE.Vector3()));
     const k = wl > 1e-4 ? len / wl : 1; // metres to the bone's units
-    const g = new THREE.Group();
+    const g = new THREE.Group(); g.name = 'hideWrap';
     g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.normalize());
     // a hide sleeve: seven sides, not quite round, the edges rolled a little proud
     const rings = [
@@ -142,8 +142,9 @@ class HideWrap {
     for (const s of ['L', 'R']) {
       const up = g(`upperarm${s}`), lo = g(`lowerarm${s}`), hd = g(`hand${s}`);
       if (!up || !lo || !hd) continue;
-      this.sleeve(lo, hd, 0.12, 0.86, 0.05, 0.039, [0.22, 0.5, 0.78]);
-      this.sleeve(up, lo, -0.06, 0.36, 0.066, 0.058, [0.3], 0.12);
+      // sized to go over a coat sleeve (the crew's coats are cut loose; a bare arm is about 4.5 cm at the forearm)
+      this.sleeve(lo, hd, 0.12, 0.84, 0.072, 0.06, [0.22, 0.5, 0.76]);
+      this.sleeve(up, lo, -0.06, 0.36, 0.092, 0.08, [0.3], 0.12);
     }
     this.model = model;
   }

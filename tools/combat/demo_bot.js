@@ -116,7 +116,9 @@ window.__cbBot = (mode) => {
           const pre = { x: s.x - wx * 3, z: s.z - wz * 3 }, at = { x: s.x - wx * 1.3, z: s.z - wz * 1.3 };
           const goal = flag.leg ? at : pre, d = dist(p, goal);
           // a walk that makes no headway for 1.5 s: step aside once, then give up on the spot and set it here
-          if (!flag.wpT || now - flag.wpT > 1500) { if (flag.wp && dist(flag.wp, p) < 0.25 && d > 0.8) flag.stuck = (flag.stuck || 0) + 1; flag.wp = { x: p.x, z: p.z }; flag.wpT = now; }
+          // (only while it is walking: turning on the spot to face the way is not being stuck)
+          if (!flag.wpT || now - flag.wpT > 1500) { if (flag.wp && flag.walked && dist(flag.wp, p) < 0.25 && d > 0.8) flag.stuck = (flag.stuck || 0) + 1; flag.wp = { x: p.x, z: p.z }; flag.wpT = now; flag.walked = false; }
+          if (held.KeyW) flag.walked = true;
           if (!flag.leg && (d < 0.8 || flag.stuck >= 2 || dist(p, at) < 1.2)) { flag.leg = 1; flag.stuck = 0; return; }
           if (flag.leg && !(d < 0.6 || flag.stuck >= 2 || since() > 18)) { go(goal.x, goal.z); hold('KeyA', flag.stuck === 1); return; }
           if (!flag.leg && since() < 18) { go(goal.x, goal.z); hold('KeyA', flag.stuck === 1); return; }
@@ -193,10 +195,10 @@ window.__cbBot = (mode) => {
       // it throws from, switched on only when it is standing there
       const W = window.__cbSide, Tm = (performance.now() - t0) / 1000;
       if (W && Tm > W[0] && Tm < W[1] && !flag.side && dist(p, flag.home) < 1.2 && p.has.throwstick) {
-        flag.side = 1; const y = flag.yaw, fx = -Math.sin(y), fz = -Math.cos(y), px = -Math.cos(y), pz = Math.sin(y), h = flag.home, cy = C.cam.y;
+        flag.side = 1; const y = C.cam.yaw, fx = -Math.sin(y), fz = -Math.cos(y), px = -Math.cos(y), pz = Math.sin(y), h = flag.home, cy = C.cam.y;
         // the stick spins flat (side-arm), so the camera looks down on the throw from the side and above: the turning
         // stick shows as a turning bar, not as a stick growing and shrinking edge-on
-        __bs.photo([h.x + px * 4.2 + fx * 2.2, cy + 3.6, h.z + pz * 4.2 + fz * 2.2], [h.x + fx * 3.0, cy + 0.5, h.z + fz * 3.0]); C.testSlow = 0.3;
+        __bs.photo([h.x + px * 6.5 + fx * 3.5, cy + 3.4, h.z + pz * 6.5 + fz * 3.5], [h.x + fx * 5.0, cy + 1.2, h.z + fz * 5.0]); C.testSlow = 0.3;
       }
       if (W && Tm >= W[1] && flag.side === 1) { flag.side = 2; __bs.photo(null); C.testSlow = 1; }
       if (!p.has.throwstick) { const k = sim.pickups.find((q) => q.weapon === 'throwstick'); if (k) go(k.x, k.z); return; }

@@ -312,7 +312,7 @@ function guardian(): CreatureView {
   };
   // the body pale; the legs and the face's carving a darker, older stone, so the legs read as weight under it and
   // not as pale planks
-  const stone = stoneOf(0x8a857b), dark = stoneOf(0x5f5b53);
+  const stone = stoneOf(0x8a857b), dark = stoneOf(0x46423b);
   const bronze = mat(0x9a7f52, { metalness: 0.75, roughness: 0.45, flatShading: true });
   const moss = mat(0x6f7d5c, { roughness: 1, flatShading: true });
   const strut = mat(0x1d1f23, { metalness: 0.5, roughness: 0.7, flatShading: true });
