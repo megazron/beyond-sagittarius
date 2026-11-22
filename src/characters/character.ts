@@ -275,7 +275,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (want === 'phone' || want === 'paper') { m.position.set(-0.08, -0.03, 0.01); m.rotation.set(0, Math.PI / 2, 0.25); }
       else if (want === 'tool') { m.position.set(-0.07, -0.03, 0); m.rotation.set(0, Math.PI / 2, 0); }
       else if (want === 'cup') { m.position.set(-0.07, -0.05, 0.02); m.rotation.set(0, 0, Math.PI / 2); }
-      else if (want === 'leaf') { m.position.set(-0.085, -0.075, 0.02); m.rotation.set(0, 0, Math.PI / 2); }
+      else if (want === 'leaf') { m.position.set(-0.07, -0.07, 0.0); m.rotation.set(Math.PI, 0, 0); } // upright on a palm turned up (the hand's -y is then up): the rim on top, the point in the palm
       else if (want === 'berry') { m.position.set(-0.11, -0.04, 0.03); m.rotation.set(0, 0, 0); }
       else if (want === 'stone') { m.position.set(-0.08, -0.05, 0.01); m.rotation.set(0, 0, 0); }
       else if (want === 'spindle') { m.position.set(-0.08, -0.03, 0.02); m.rotation.set(0, 0, 0); }

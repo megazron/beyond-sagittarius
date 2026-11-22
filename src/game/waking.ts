@@ -240,7 +240,7 @@ export class Waking {
   /** Water dripping and trickling out from under his hands for `sec` seconds, then gone. */
   private leak(sec: number) {
     // big enough to read at a game frame rate: drops about a centimetre, lit a little from inside so they catch light
-    const N = 22, g = new THREE.SphereGeometry(0.0085, 8, 6);
+    const N = 22, g = new THREE.SphereGeometry(0.012, 8, 6);
     const mat = new THREE.MeshStandardMaterial({ color: 0xd6eef4, emissive: 0x6d8f99, emissiveIntensity: 0.55, roughness: 0.04, metalness: 0.15, transparent: true, opacity: 0.92 });
     const drops = new THREE.InstancedMesh(g, mat, N);
     drops.frustumCulled = false; drops.castShadow = false; drops.name = 'e1-leak';
