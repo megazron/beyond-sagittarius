@@ -101,13 +101,13 @@ window.__cbBot = (mode) => {
     } else if (mode === 'night') {
       const fire = sim.fires.find((f) => !f.torch && !f.burnsOut), food = run.markers.find((m) => m.kind === 'food');
       if (!fire || !food || run.id !== 'night.defence') return; // the night has not started yet
-      const wx = sim.windX, wz = sim.windZ, bait = { x: food.x + wx * 8, z: food.z + wz * 8 };
+      const wx = sim.windX, wz = sim.windZ, bait = { x: food.x + wx * 5.5, z: food.z + wz * 5.5 };
       if (run.phase === 'prep') {
         // read the smoke: they will come up the wind. Stakes on the line in, bait out downwind, a snare on the bait.
         // Each one is set facing downwind: the last two metres are walked along the wind, so the body faces that way.
         // the snare goes on the bait where it really lies (a walk that ends short sets the bait where it stands)
         const laid = sim.traps.find((q) => q.kind === 'bait'), sn = laid ? { x: laid.x, z: laid.z } : bait;
-        const plan = [{ k: 'Digit2', x: food.x + wx * 3.5, z: food.z + wz * 3.5 }, { k: 'Digit5', x: bait.x, z: bait.z }, { k: 'Digit1', x: sn.x, z: sn.z }];
+        const plan = [{ k: 'Digit2', x: food.x + wx * 2.6, z: food.z + wz * 2.6 }, { k: 'Digit5', x: bait.x, z: bait.z }, { k: 'Digit1', x: sn.x, z: sn.z }];
         const now = performance.now();
         window.__cbDbg = { st, since: +since().toFixed(1), stuck: flag.stuck || 0, leg: flag.leg || 0, setting: !!C.setting, p: [+(p.x - food.x).toFixed(1), +(p.z - food.z).toFixed(1)], traps: sim.traps.map((q) => q.kind) };
         if (st < plan.length) {
@@ -125,13 +125,16 @@ window.__cbBot = (mode) => {
         } else if (st === plan.length) {
           // ready, said out here (by the fire the same key feeds it)
           stop(); if (since() > 0.8) { tapE(); next(); }
-        } else if (since() > 3) { const d = go(food.x - wz * 1.8, food.z + wx * 1.8); if (d < 0.8) stop(); }
+        } else if (since() > 3) { const d = go(food.x + wx * 2.8 - wz * 4, food.z + wz * 2.8 + wx * 4); if (d < 0.8) stop(); }
         return;
       }
-      const guard = { x: food.x - wz * 1.8, z: food.z + wx * 1.8 };
+      // to the side of the line in, out of the smoke, about four and a half metres from the snare: near enough to see
+      // it spring in the firelight, far enough that the scavengers still come to the bait
+      const guard = { x: food.x + wx * 2.8 - wz * 4, z: food.z + wz * 2.8 + wx * 4 };
+      const sq = sim.traps.find((q) => q.kind === 'snare') || bait;
       if (run.phase === 'hush') {
         // the quiet before: stand at the guard spot and look out over what was set
-        stop(); const d = go(guard.x, guard.z); if (d < 0.7) { stop(); look(bait.x, bait.z); }
+        stop(); const d = go(guard.x, guard.z); if (d < 0.7) { stop(); look(sq.x, sq.z); }
         return;
       }
       const h = living('hound').find((e) => !e.routed), thieves = living('skritch').filter((e) => !e.routed && dist(e, food) < 5);
@@ -150,7 +153,7 @@ window.__cbBot = (mode) => {
       if (thieves.length) { fight(thieves); return; }
       // otherwise guard the food from its upwind side, looking out over the traps to the dark they come from
       // to the side of the food, out of the smoke that drifts over it
-      const d = go(guard.x, guard.z); if (d < 0.7) { stop(); if (h && dist(h, p) < 14) look(h.x, h.z, h.y + 0.6); else look(bait.x, bait.z); }
+      const d = go(guard.x, guard.z); if (d < 0.7) { stop(); if (h && dist(h, p) < 14) look(h.x, h.z, h.y + 0.6); else look(sq.x, sq.z); }
     } else if (mode === 'chase') {
       const goal = run.markers.find((m) => m.kind === 'goal'), h = living('hound')[0];
       // a runner who has seen it gather: roll out of the lunge's line when it is about a third of a second from
@@ -185,17 +188,19 @@ window.__cbBot = (mode) => {
       const w = way.find((q) => Math.hypot(q.x - a.x, q.z - a.z) > Math.hypot(p.x - a.x, p.z - a.z) + 0.5) || way[4];
       go(w.x, w.z);
     } else if (mode === 'throwplay') {
-      // the throwing stick against Nibbets: walk in to about nine metres, wait for one to stand, a full side-arm throw,
-      // fetch the stick where it fell, again
-      if (st === 0) { if (equip('throwstick')) { run.summon('nibbet', 3); next(); } return; }
-      if (!p.has.throwstick) { const k = sim.pickups.find((q) => q.weapon === 'throwstick'); if (k) { go(k.x, k.z); } return; }
+      // the throwing stick: stand in the open, throw side-arm at a Nibbet within twelve metres (or at the grass ahead
+      // when none is), walk out and fetch the stick, come back to the spot; never chase (they outrun anyone)
+      if (st === 0) { if (equip('throwstick')) { flag.home = { x: p.x, z: p.z }; flag.yaw = C.cam.yaw; run.summon('nibbet', 3); flag.sumT = performance.now(); next(); } return; }
+      if (!p.has.throwstick) { const k = sim.pickups.find((q) => q.weapon === 'throwstick'); if (k) go(k.x, k.z); return; }
       if (p.weapon !== 'throwstick') { equip('throwstick'); return; }
-      const prey = nearest(living('nibbet'));
-      if (!prey) { stop(); if (since() > 3) { run.summon('nibbet', 3); next(1); } return; }
-      const d = dist(prey, p), lead = 0.3, lx = prey.x + prey.vx * lead, lz = prey.z + prey.vz * lead, loft = prey.y + 0.2 + d * 0.03;
-      if (p.act === 'charge') { stop(); look(lx, lz, loft); if (p.charge >= 1) hold('KeyG', 0); }
-      else if (d > 9.5) go(prey.x, prey.z);
-      else { stop(); const off = look(lx, lz, loft); if (off < 0.06 && p.act === 'idle') hold('KeyG', 1); }
+      if (dist(p, flag.home) > 1.2 && p.act !== 'charge') { go(flag.home.x, flag.home.z); return; }
+      const prey = nearest(living('nibbet').filter((e) => dist(e, p) < 12));
+      if (!prey && performance.now() - flag.sumT > 6000) { living('nibbet').length < 6 && run.summon('nibbet', 2); flag.sumT = performance.now(); }
+      const ahead = { x: flag.home.x - Math.sin(flag.yaw) * 10, z: flag.home.z - Math.cos(flag.yaw) * 10, vx: 0, vz: 0, y: C.cam.y };
+      const t = prey || ahead, d = dist(t, p), lx = t.x + t.vx * 0.3, lz = t.z + t.vz * 0.3, loft = t.y + 0.2 + d * 0.03;
+      stop();
+      if (p.act === 'charge') { look(lx, lz, loft); if (p.charge >= 1) hold('KeyG', 0); }
+      else { const off = look(lx, lz, loft); if (off < 0.06 && p.act === 'idle' && since() > 1.2) { hold('KeyG', 1); stT = performance.now(); } }
     } else if (mode === 'atlatlplay' || mode === 'bowplay') {
       const wpn = mode === 'bowplay' ? 'bow' : 'atlatl';
       if (st === 0) { if (equip(wpn)) { run.summon('nibbet', 3); next(); } }
