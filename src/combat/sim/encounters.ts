@@ -155,10 +155,11 @@ export class EncounterRun {
   }
 
   /** The arena's bench: put a creature in front of the player. */
-  summon(kind: SpeciesId, n = 1) {
+  /** The dev arena's summon: n of a kind ahead of the player, at `at` metres (or the kind's own distance). */
+  summon(kind: SpeciesId, n = 1, at?: number) {
     const p = this.sim.player, pack = kind === 'skritch' ? 20 + this.wave++ : 0;
     for (let i = 0; i < n; i++) {
-      const a = Math.atan2(p.fx, p.fz) + (i - (n - 1) / 2) * 0.35, d = kind === 'mossback' ? 20 : kind === 'lashbloom' ? 8 : 15;
+      const a = Math.atan2(p.fx, p.fz) + (i - (n - 1) / 2) * 0.35, d = at ?? (kind === 'mossback' ? 20 : kind === 'lashbloom' ? 8 : 15);
       this.sim.spawn(kind, p.x + Math.sin(a) * d, p.z + Math.cos(a) * d, { pack, alert: kind === 'hound' ? 1.2 : 0, aware: kind === 'hound' });
     }
   }

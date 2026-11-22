@@ -6,6 +6,7 @@ import type { Character, Limbs, Dir } from '../../characters/character';
 import type { SimPlayer } from '../sim/sim';
 import { WEAPONS } from '../sim/weapons';
 import { RangedRig } from './ranged';
+import { loft } from '../../characters/shapes';
 import type { WeaponId } from '../sim/weapons';
 
 type Pose = Limbs;
@@ -97,6 +98,57 @@ function gearMesh(id: WeaponId): THREE.Object3D {
   return g;
 }
 
+/**
+ * The hide wrap (tree row 15), worn: smoked hide round each forearm from below the elbow to above the wrist and a cap
+ * over each shoulder, lashed on with cord. Hung on the arm bones themselves, so it goes wherever the arm goes (a
+ * story scene, a roll, the walk) with no work a frame. Sizes are in metres, turned into each bone's own units.
+ */
+class HideWrap {
+  private parts: THREE.Object3D[] = [];
+  private model: Character | null = null;
+  private hide = new THREE.MeshStandardMaterial({ color: 0x7d5b3a, roughness: 0.96, flatShading: true });
+  private cord = new THREE.MeshStandardMaterial({ color: 0x2e2116, roughness: 0.9 });
+  set(model: Character, on: boolean) {
+    if (on && this.model !== model) { this.clear(); this.build(model); }
+    else if (!on && this.model) this.clear();
+  }
+  private clear() { for (const o of this.parts) o.removeFromParent(); this.parts = []; this.model = null; }
+  /** A sleeve on `bone` along the way to `child`, from `a` to `b` of the bone's length, radius r0 -> r1 (metres). */
+  private sleeve(bone: THREE.Object3D, child: THREE.Object3D, a: number, b: number, r0: number, r1: number, laces: number[], flare = 0) {
+    const axis = child.position.clone(), len = axis.length();
+    if (len < 1e-4) return;
+    const wl = bone.getWorldPosition(new THREE.Vector3()).distanceTo(child.getWorldPosition(new THREE.Vector3()));
+    const k = wl > 1e-4 ? len / wl : 1; // metres to the bone's units
+    const g = new THREE.Group();
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.normalize());
+    // a hide sleeve: seven sides, not quite round, the edges rolled a little proud
+    const rings = [
+      { y: a * len, rx: r0 * k * (1.06 + flare), rz: r0 * k * (0.98 + flare) },
+      { y: (a + 0.04) * len, rx: r0 * k * 1.02, rz: r0 * k * 0.95 },
+      { y: (a + b) * 0.5 * len, rx: (r0 + r1) * 0.5 * k, rz: (r0 + r1) * 0.5 * k * 0.92 },
+      { y: (b - 0.04) * len, rx: r1 * k * 1.02, rz: r1 * k * 0.95 },
+      { y: b * len, rx: r1 * k * 1.08, rz: r1 * k * 1.0 },
+    ];
+    const m = new THREE.Mesh(loft(rings, 7), this.hide); m.castShadow = true; g.add(m);
+    for (const t of laces) {
+      const r = (r0 + (r1 - r0) * ((t - a) / (b - a))) * k * 1.04;
+      const c = new THREE.Mesh(new THREE.TorusGeometry(r, 0.0045 * k, 4, 12).rotateX(Math.PI / 2), this.cord);
+      c.position.y = t * len; c.rotation.y = t * 7; c.rotation.z = 0.12; g.add(c);
+    }
+    bone.add(g); this.parts.push(g);
+  }
+  private build(model: Character) {
+    const g = (n: string) => model.root.getObjectByName(n);
+    for (const s of ['L', 'R']) {
+      const up = g(`upperarm${s}`), lo = g(`lowerarm${s}`), hd = g(`hand${s}`);
+      if (!up || !lo || !hd) continue;
+      this.sleeve(lo, hd, 0.12, 0.86, 0.05, 0.039, [0.22, 0.5, 0.78]);
+      this.sleeve(up, lo, -0.06, 0.36, 0.066, 0.058, [0.3], 0.12);
+    }
+    this.model = model;
+  }
+}
+
 /** Where each thing sits in a closed hand (hand space: -y along the fingers, +z out of the thumb side). */
 export const GRIP = { x: 0.035, y: -0.085, z: 0.0, rx: 0, ry: 0, rz: 0 };
 
@@ -134,7 +186,9 @@ export class FightBody {
    */
   /** The bow and the sling have their own rig (view/ranged.ts): both hands on them, drawn where the hands are. */
   ranged = new RangedRig();
+  private wrap = new HideWrap();
   update(model: Character, p: SimPlayer, dt: number, t: number, armed: boolean, aiming: boolean, visible: WeaponId | null, aimW?: THREE.Vector3, ammo = 0) {
+    this.wrap.set(model, p.wrap);
     const rw = p.weapon === 'bow' || p.weapon === 'sling' || p.weapon === 'atlatl';
     this.hold(model, rw ? null : visible);
     if (rw && !p.down && p.act !== 'roll' && p.staggerT <= 0 && aimW) {

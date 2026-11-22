@@ -83,6 +83,9 @@ export class Combat {
   private study = { id: 0, t: 0 }; private faT = 0;
   private toastT: Record<string, number> = {};
   private quietT = 0; private leaveT = 0;
+  /** A look at a trap at work: heard first (the animal at it), then the snap and the struggle held in view. */
+  private beat: { id: number; t: number; snapT: number; yaw0: number; t0: number } | null = null;
+  private beatCool = 0;
   private kitOpen = false; private setting: { kind: TrapId; t: number } | null = null;
   private clock = 0;
   private sites: Partial<Record<EncounterId, { x: number; z: number; yaw: number }>> = {};
@@ -606,7 +609,8 @@ export class Combat {
         for (const e of sim.enemies) if (e.kind === 'hound' && !e.dead && !e.gone && !e.routed && (e.state === 'windup' || (e.state === 'strike' && e.stateT < 0.3)) && Math.hypot(e.x - p.x, e.z - p.z) < 16) back = 1;
       }
       cb.back = back;
-    } else P.combat = null;
+      cb.turn = run && run.id !== 'chase.escape' ? this.trapBeat(dt, sim, I.aim) : 0;
+    } else { P.combat = null; this.beat = null; }
     // where the player looks (not the camera: a story or a recording may hold the camera elsewhere)
     { const cp = Math.cos(P.pitch); this.aimW.set(-Math.sin(P.yaw) * cp, Math.sin(P.pitch), -Math.cos(P.yaw) * cp); }
     this.body.update(P.model, p, dt, this.clock, eng && (threat || !!run || I.aim), I.aim, armed ? p.weapon : null, this.aimW, sim.ammo() ?? 0);
@@ -616,6 +620,53 @@ export class Combat {
     if (D.settings().slowMo && (p.act === 'charge' || sim.enemies.some((e) => e.state === 'strike' && e.target === -1 && Math.hypot(e.x - p.x, e.z - p.z) < 5))) this.slow = 0.55;
     this.handle(sim.drain(), sim);
     this.hud.endFrame();
+  }
+
+  /**
+   * A trap at work is a moment: an animal heard at a set snare or stakes nearby turns the view to it (the head, not the
+   * body), so the snap and the animal fighting the cord happen in frame; the view eases back after. Never while
+   * something is on the player, while they swing or aim, or once they turn the view themselves. Returns the view's
+   * turn (radians) for the player controller.
+   */
+  private trapBeat(dt: number, sim: CombatSim, aim: boolean) {
+    const P = this.d.player, p = sim.player, pos = P.pos;
+    this.beatCool = Math.max(0, this.beatCool - dt);
+    const busy = p.act !== 'idle' || p.blocking || p.down || aim
+      || sim.enemies.some((e) => !e.dead && !e.gone && !e.routed && e.heldT <= 0 && e.target === -1 && (e.state === 'windup' || e.state === 'strike') && Math.hypot(e.x - p.x, e.z - p.z) < 6);
+    let b = this.beat;
+    if (b) {
+      b.t += dt;
+      const tr = sim.traps.find((q) => q.id === b!.id);
+      if (tr && b.snapT < 0 && tr.sprungT >= b.t0) b.snapT = b.t;
+      const turned = Math.abs(Math.atan2(Math.sin(P.yaw - b.yaw0), Math.cos(P.yaw - b.yaw0))) > 0.35;
+      if (!tr || busy || turned || (b.snapT >= 0 ? b.t - b.snapT > 2.6 : b.t > 2.8)) { this.beat = b = null; this.beatCool = 6; }
+    }
+    if (!b && !busy && this.beatCool <= 0) {
+      for (const tr of sim.traps) {
+        if (tr.kind !== 'snare' && tr.kind !== 'stakes' && tr.kind !== 'deadfall') continue;
+        const dp = Math.hypot(tr.x - pos.x, tr.z - pos.z);
+        if (dp > 16 || dp < 1.5) continue;
+        // just sprung with no warning (it came in fast): look now
+        const fresh = tr.sprungT >= 0 && sim.t - tr.sprungT < 0.35;
+        const comer = tr.armed && tr.uses > 0 ? sim.enemies.find((e) => !e.dead && !e.gone && e.heldT <= 0 && e.def.temperament !== 'machine'
+          && Math.hypot(e.x - tr.x, e.z - tr.z) < 3.4 && (e.vx * (tr.x - e.x) + e.vz * (tr.z - e.z)) > 0) : undefined;
+        if (!fresh && !comer) continue;
+        this.beat = b = { id: tr.id, t: 0, snapT: fresh ? 0 : -1, yaw0: P.yaw, t0: fresh ? tr.sprungT : sim.t };
+        if (comer) {
+          // the cue: the animal itself at the trap, and a twig under its feet
+          const k = comer.kind, cue = k === 'nibbet' ? 'squeak' : k === 'hound' ? 'growl' : 'chitter';
+          this.sfx(cue, k === 'hound' ? 0.55 : 0.75, tr.x, tr.z, k === 'hound' ? 0.9 : 1.1);
+          this.sfx('crack', 0.3, tr.x, tr.z, 2.3, 0.12);
+        }
+        break;
+      }
+    }
+    if (!b) return 0;
+    const tr = sim.traps.find((q) => q.id === b!.id)!;
+    // the trap a little to one side of the body, so the player does not stand in front of it
+    const bearing = Math.atan2(-(tr.x - pos.x), -(tr.z - pos.z));
+    const d = Math.atan2(Math.sin(bearing - P.yaw), Math.cos(bearing - P.yaw));
+    return d - Math.sign(d || 1) * 0.28;
   }
 
   // ---------------- what happened, made felt ----------------

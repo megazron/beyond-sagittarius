@@ -316,6 +316,9 @@ const CULL = { on: typeof location === 'undefined' || new URLSearchParams(locati
 
 export interface Obstacle { x: number; z: number; r: number }
 
+/** The conifer species' (height, crown start, spread) by field index, as built in Forest.build: for the camera screens. */
+const CONIFER_SHAPE: Record<number, [number, number, number]> = { 0: [23, 0.16, 0.24], 1: [31, 0.22, 0.2], 2: [21, 0.58, 0.3] };
+
 export class Forest {
   group = new THREE.Group();
   private fields: Field[] = [];
@@ -355,6 +358,36 @@ export class Forest {
       if (a) for (const o of a) if (Math.hypot(x - o.x, z - o.z) < o.r + r) return true;
     }
     return false;
+  }
+
+  /**
+   * Foliage the camera must not sit in (fir and sapling crowns whose lowest boughs droop to head height, shrubs): a
+   * cone per plant, camera only (nothing walks into it). A camera inside a crown saw a black screen of needles.
+   */
+  private screens = new Map<string, { x: number; z: number; r: number; y0: number; y1: number; cone: boolean }[]>();
+  private addScreen(x: number, z: number, r: number, y0: number, y1: number, cone = true) {
+    const k = this.key(x, z);
+    let a = this.screens.get(k);
+    if (!a) { a = []; this.screens.set(k, a); }
+    a.push({ x, z, r, y0, y1, cone });
+  }
+  /** Is the point inside a crown or a shrub? (camera collision; crowns reach up to 6 m out, so the next cells count) */
+  inFoliage(x: number, y: number, z: number): boolean {
+    const cx = Math.floor(x / 10), cz = Math.floor(z / 10);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const a = this.screens.get(`${cx + dx},${cz + dz}`);
+      if (a) for (const o of a) {
+        if (y < o.y0 || y > o.y1) continue;
+        const r = o.cone ? o.r * (1 - (y - o.y0) / (o.y1 - o.y0)) : o.r;
+        if (Math.abs(x - o.x) < r && Math.abs(z - o.z) < r && Math.hypot(x - o.x, z - o.z) < r) return true;
+      }
+    }
+    return false;
+  }
+  /** A conifer's crown as a cone: base boughs (height * spread + 0.45 long) droop about a third of their length. */
+  private screenConifer(x: number, z: number, ground: number, sc: number, sy: number, h: number, start: number, spread: number) {
+    const L = h * spread + 0.45;
+    this.addScreen(x, z, L * sc * 0.8, ground + (h * start - L * 0.3) * sy, ground + h * sy);
   }
 
   /** Push a circle of radius pr at (x,z) out of nearby obstacles. */
@@ -506,6 +539,7 @@ export class Forest {
       }
       return mergeGeometries(parts.map((g) => g.toNonIndexed()))!;
     };
+    // keep CONIFER_SHAPE (camera screens) in step with these numbers
     const species = [
       conifer(23, 0.42, 0.015, 0.16, 0.24, firTree, 11),
       conifer(31, 0.55, -0.012, 0.22, 0.2, firTree, 12),
@@ -578,6 +612,8 @@ export class Forest {
         s.set(sc * giant, sc * giant * (0.88 + rnd() * 0.28), sc * giant);
         fields[v].add(M.compose(pos, q, s), c);
         this.addObstacle(x, z, (v === 3 ? 0.62 : v === 1 ? 0.6 : 0.46) * sc * giant);
+        const cn = CONIFER_SHAPE[v];
+        if (cn) this.screenConifer(x, z, h - 0.15, sc * giant, s.y, cn[0], cn[1], cn[2]);
       }
       placed++;
     }
@@ -590,6 +626,7 @@ export class Forest {
       const sc = 0.35 + rnd() * 0.9;
       e.set(0, rnd() * 6.28, 0); q.setFromEuler(e); pos.set(x, h - 0.05, z); s.setScalar(sc);
       fields[4].add(M.compose(pos, q, s), new THREE.Color().setHSL(0, 0, 0.8 + rnd() * 0.3));
+      this.screenConifer(x, z, h - 0.05, sc, sc, 4.5, 0.1, 0.34);
       k++;
     }
 
@@ -704,6 +741,7 @@ export class Forest {
         it.field.add(M.compose(pos, q, s), col);
         const r = it.info.radius * scale;
         if ((kind === 'rock' || kind === 'outcrop' || kind === 'stump') && r > 0.55) this.addObstacle(x, z, r * 0.72);
+        if (kind === 'shrub') this.addScreen(x, z, r * 0.85, h - 0.1, h + it.info.height * scale * 0.9, false);
         k++;
       }
     };
