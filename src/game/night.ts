@@ -197,13 +197,25 @@ export class FirstNight {
   private vines(camp: THREE.Vector3) {
     const z = this.z, { f, r } = this.axes(camp);
     const work = this.kneel.clone().addScaledVector(f, -0.1).addScaledVector(r, 0.25).add(new THREE.Vector3(0, 0.45, 0));
+    // the vine: a green line from fist to fist that sags as they come together and pulls straight as they spread, its
+    // loose ends hanging out of each fist
+    const green = new THREE.MeshStandardMaterial({ color: 0x3f6b2a, roughness: 0.8 });
+    const segs = [0, 1, 2, 3].map(() => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 1, 6), green); m.castShadow = true; return m; });
+    const lay = (m: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3) => { m.position.copy(a).lerp(b, 0.5); m.scale.set(1, a.distanceTo(b), 1); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); };
     const pull = (sec: number) => {
       const t0 = performance.now();
+      for (const m of segs) this.world.scene.add(m);
       const step = () => {
-        const k = (performance.now() - t0) / 1000; if (k > sec) return;
+        const k = (performance.now() - t0) / 1000;
+        if (k > sec) { for (const m of segs) m.removeFromParent(); return; }
         // the vine between his fists, bent and pulled: the hands come together and spread again
         const w = 0.16 + 0.1 * Math.sin(k * 3.2);
-        z.setHold({ L: { at: work.clone().addScaledVector(r, -w), fingers: f.clone(), palm: r.clone(), radius: 0.02 }, R: { at: work.clone().addScaledVector(r, w), fingers: f.clone(), palm: r.clone().negate(), radius: 0.02 } });
+        const a = work.clone().addScaledVector(r, -w), b = work.clone().addScaledVector(r, w);
+        const sag = a.clone().lerp(b, 0.5).add(new THREE.Vector3(0, -Math.max(0, 0.3 - w) * 0.9 - 0.01, 0));
+        lay(segs[0], a, sag); lay(segs[1], sag, b);
+        lay(segs[2], a, a.clone().addScaledVector(r, -0.05).add(new THREE.Vector3(0, -0.3, 0)));
+        lay(segs[3], b, b.clone().addScaledVector(r, 0.05).add(new THREE.Vector3(0, -0.3, 0)));
+        z.setHold({ L: { at: a, fingers: f.clone(), palm: r.clone(), radius: 0.02 }, R: { at: b, fingers: f.clone(), palm: r.clone().negate(), radius: 0.02 } });
         requestAnimationFrame(step);
       };
       requestAnimationFrame(step);

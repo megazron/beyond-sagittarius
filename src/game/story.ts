@@ -802,7 +802,9 @@ export class Story {
         this.ui.deviceLines([t('signal.meter', { p: Math.round(k * 100) }), '▮'.repeat(bars) + '▯'.repeat(10 - bars), k > 0.8 ? t('signal.strong') : t('signal.climb')], true);
       }
     }
-    this.world.camp.setSites({
+    // no ghost rings in a scene or a held work shot (the fire's ring lay across the front of every drill shot)
+    const busy = !!this.scenePose || !!this.player.workShot;
+    this.world.camp.setSites(busy ? { fire: false, shelter: false, beacon: false } : {
       fire: s.level === 4 || (s.level === 6 && !this.flag('spear')) || (s.level >= CH2_FIRST && !!this.ch2.node(s.level) && this.ch2.progress(s.level) === t('progress.ch2Ready')),
       shelter: s.level === 5 && !this.flag('shelter'),
       beacon: s.level === 10 && !this.flag('beaconBuilt'),
