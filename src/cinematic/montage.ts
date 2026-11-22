@@ -1707,8 +1707,12 @@ function aerolisSky(sun: THREE.Vector3) {
           vec3 q = f - (hash33(id) - 0.5) * 0.4; q -= d * dot(q, d);
           vec3 ax = hash33(id + 3.0) - 0.5; ax -= d * dot(ax, d); ax = normalize(ax);
           float u = dot(q, ax), v = length(q - ax * u), sz = 0.7 + (h - 0.8) * 6.0;
-          float gx = exp(-(u * u * 70.0 + v * v * 420.0) / sz) + 1.4 * exp(-(u * u + v * v) * 2600.0 / sz);
-          col += vec3(0.5, 0.68, 1.0) * gx * 0.9 * smoothstep(0.75, 0.2, thick);
+          // young galaxies, still making stars: a deep blue disc, knots of blue star-forming clumps along it, a
+          // small blue-white core (owner: bluer; they read white against the violet-brown)
+          float disc = exp(-(u * u * 70.0 + v * v * 420.0) / sz), core = exp(-(u * u + v * v) * 2600.0 / sz);
+          float knots = smoothstep(0.62, 0.9, vnoise(vec3(u, v, h) * 38.0)) * disc;
+          vec3 gc = vec3(0.16, 0.36, 1.1) * disc * 1.1 + vec3(0.35, 0.6, 1.25) * knots * 1.2 + vec3(0.62, 0.78, 1.15) * core * 1.2;
+          col += gc * smoothstep(0.75, 0.2, thick);
         }
         gl_FragColor = vec4(col, a);
       }`,

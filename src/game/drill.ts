@@ -117,7 +117,25 @@ export class FireDrill {
     this.after(sec, () => { pts.removeFromParent(); g.dispose(); m.dispose(); if (this.smoke === pts) this.smoke = null; });
   }
 
+  /**
+   * The light he works by at dusk: the sky's last glow from where the sun went down (swung a little towards the camera
+   * so it reaches his hands and face, not only his back), warm like the horizon, fading as the glow goes out of the
+   * sky; nothing by day. The ember adds its own (emberAt).
+   */
+  private dusk(b: { kneel: THREE.Vector3; at: THREE.Vector3 } | null) {
+    const camp = this.world.camp;
+    if (!b) { camp.workLight(null); return; }
+    const sky = this.world.sky, e = sky.sunDir.y;
+    const k = Math.max(0, Math.min(1, (e + 0.35) / 0.3)) * (1 - sky.day);
+    const sun = new THREE.Vector3(sky.sunDir.x, 0, sky.sunDir.z).normalize();
+    const sh = this.drillShot(b), cam = sh.from.clone().sub(b.at).setY(0).normalize();
+    const d = sun.addScaledVector(cam, 0.9).normalize();
+    const col = sky.horizon.clone().lerp(new THREE.Color(0xffc09a), 0.4);
+    camp.workLight({ sky: k, skyAt: b.at.clone().addScaledVector(d, 2.6).add(new THREE.Vector3(0, 1.7, 0)), color: col });
+  }
+
   private emberAt(at: THREE.Vector3 | null) {
+    this.world.camp.workLight({ ember: at ? 1 : 0, at: at ?? undefined });
     if (!at) { this.ember?.removeFromParent(); this.ember = null; return; }
     if (!this.ember) this.ember = new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff7a24 }));
     this.ember.position.copy(at);
@@ -129,7 +147,7 @@ export class FireDrill {
     const z = this.z, b = this.board();
     const first = !this.told; this.told = true;
     this.playScene([
-      { hold: 1.8, shot: () => cover.mid(z, 0.85, 2.2), run: () => { this.settle(b.kneel, b.facing); z.setLookTarget(b.at); z.setLimbs({ bend: 0.4 }); audio.sample('wood', 0.3); } },
+      { hold: 1.8, shot: () => cover.mid(z, 0.85, 2.2), run: () => { this.settle(b.kneel, b.facing); this.dusk(b); z.setLookTarget(b.at); z.setLimbs({ bend: 0.4 }); audio.sample('wood', 0.3); } },
       { key: 'e1.fi.sci', who: 'scientist', if: { not: { flag: 'inv.fireDrill' } }, shot: () => this.drillShot(b, 1.05), run: () => { if (first) this.rub(b, 4, 0.6); }, after: 0.3 },
     ], () => this.attempt(b, lit));
   }
@@ -179,6 +197,7 @@ export class FireDrill {
       } },
       { choice: 'e1.fire', shot: () => cover.mid(z, 0.7, 2.4) },
     ], () => {
+      this.dusk(null);
       this.s.flags['inv.fireDrill'] = true;
       this.ui.toast(t('e1.learn.fire'));
       z.setFace(null); z.setLookTarget(null); z.setLimbs(null); z.setKneel(false);
