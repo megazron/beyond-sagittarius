@@ -136,7 +136,7 @@ function quadruped(q: QuadSpec): CreatureView {
     legs.push({ g, ph });
   }
   const C = common(root, tilt);
-  let gait = 0, crouch = 0, headUp = 0, open = 0, lie = 0;
+  let gait = 0, crouch = 0, headUp = 0, open = 0, lie = 0, held = 0;
   const ease = (cur: number, to: number, dt: number, r: number) => cur + (to - cur) * (1 - Math.exp(-dt * r));
   return {
     root, flinch: C.flinch,
@@ -150,18 +150,25 @@ function quadruped(q: QuadSpec): CreatureView {
       lie = ease(lie, asleep ? 1 : 0, dt, 3);
       headUp = ease(headUp, s === 'investigate' || s === 'call' || s === 'warn' ? 1 : s === 'idle' && sp < 0.2 && !e.aware ? -0.8 : wind || strike ? -0.35 : 0, dt, 5);
       open = ease(open, s === 'call' || strike || s === 'warn' ? 1 : wind ? 0.4 : 0, dt, 12);
+      // caught in a snare: one hind leg is pulled out behind it by the cord and the rest of it fights the pull,
+      // front legs scrabbling, body twisting and jerking, mouth open
+      held = ease(held, e.heldT > 0 && !asleep ? 1 : 0, dt, 14);
       for (const l of legs) {
         const p = (gait + l.ph) * Math.PI * 2;
         // pawing the ground: the telegraph of a charge is one front leg scraping
         const paw = wind && q.plates && l === legs[0] ? Math.sin(t * 14) * 0.6 : 0;
-        l.g.rotation.x = Math.sin(p) * (0.5 + run * 0.4) * amt + paw + lie * (l.ph ? 1.1 : -1.1) * 0.6 + (strike ? (l === legs[0] || l === legs[1] ? -0.9 : 0.8) : 0);
+        const fight = l === legs[3] ? 1.25 + Math.sin(t * 23) * 0.12 : l === legs[0] || l === legs[1] ? Math.sin(t * 17 + l.ph * 3) * 0.8 - 0.3 : Math.sin(t * 13) * 0.3;
+        l.g.rotation.x = (Math.sin(p) * (0.5 + run * 0.4) * amt + paw + lie * (l.ph ? 1.1 : -1.1) * 0.6 + (strike ? (l === legs[0] || l === legs[1] ? -0.9 : 0.8) : 0)) * (1 - held) + fight * held;
       }
       body.position.y = hip * (1 - crouch * 0.32 - lie * 0.55) + Math.abs(Math.sin(gait * Math.PI * 2)) * hip * 0.07 * amt;
       body.rotation.x = wind ? 0.12 + tele * 0.1 : strike ? -0.18 : s === 'flee' ? -0.06 : 0;
-      body.rotation.z = (e.stunT > 0 || s === 'stagger' ? Math.sin(t * 9) * 0.07 : 0) + lie * 0.5;
+      body.rotation.z = (e.stunT > 0 || s === 'stagger' ? Math.sin(t * 9) * 0.07 : 0) + lie * 0.5 + held * Math.sin(t * 11) * 0.22;
+      body.rotation.x += held * (-0.22 + Math.sin(t * 15) * 0.08);
+      body.rotation.y = held * (Math.sin(t * 6.5) * 0.45 + Math.sin(t * 21) * 0.08);
       head.rotation.x = -headUp * 0.55 + (s === 'stagger' ? Math.sin(t * 16) * 0.2 : 0) + (wind && q.plates ? 0.5 : 0) + Math.sin(t * 1.1 + e.id) * 0.04;
       head.rotation.y = s === 'investigate' ? Math.sin(t * 1.6) * 0.5 : s === 'warn' ? Math.sin(t * 7) * 0.25 : 0;
-      jaw.rotation.x = open * 0.6;
+      head.rotation.x += held * Math.sin(t * 19) * 0.3; head.rotation.y += held * Math.sin(t * 9) * 0.5;
+      jaw.rotation.x = Math.max(open, held * (0.6 + Math.sin(t * 25) * 0.4)) * 0.6;
       tail.rotation.y = Math.sin(t * (2 + run * 6) + e.id) * (0.3 + run * 0.2);
       tail.rotation.x = s === 'warn' || wind ? -0.9 : s === 'flee' ? 0.5 : 0;
       // the ridge and the eyes say how it feels: dim asleep, bright when it means it
@@ -192,7 +199,7 @@ function hound(): CreatureView {
   const root = new THREE.Group(), tilt = new THREE.Group();
   h.root.visible = true; root.add(tilt); tilt.add(h.root);
   const C = common(root, tilt);
-  let snarl = 0, crouch = 0, lie = 0;
+  let snarl = 0, crouch = 0, lie = 0, held = 0;
   return {
     root, flinch: C.flinch,
     update(e, t, dt, tele) {
@@ -207,6 +214,11 @@ function hound(): CreatureView {
       h.root.position.y = -crouch * 0.2 - lie * 0.42;
       h.root.rotation.x = strike ? -0.22 : wind ? 0.16 * tele : 0;
       h.root.rotation.z = lie * 1.1 + (s === 'stagger' ? Math.sin(t * 14) * 0.1 : 0);
+      // a snare on a hind leg: it twists and throws itself against the cord
+      held = k(e.heldT > 0 ? 1 : 0, held, 14);
+      h.root.rotation.y = held * Math.sin(t * 6) * 0.4;
+      h.root.rotation.z += held * Math.sin(t * 12) * 0.14;
+      h.root.rotation.x += held * -0.15;
     },
   };
 }
@@ -265,8 +277,9 @@ function lashbloom(): CreatureView {
 function guardian(): CreatureView {
   const root = new THREE.Group(), tilt = new THREE.Group(), body = new THREE.Group();
   root.add(tilt); tilt.add(body);
-  const stone = mat(0x3b3d42, { metalness: 0.3, roughness: 0.78, flatShading: true });
-  const bronze = mat(0x6e604a, { metalness: 0.7, roughness: 0.55, flatShading: true });
+  // weathered pale stone, not dark ceramic: at fight distance a dark metal block read as a hole in the picture
+  const stone = mat(0x77736b, { metalness: 0.05, roughness: 0.86, flatShading: true });
+  const bronze = mat(0x9a7f52, { metalness: 0.75, roughness: 0.45, flatShading: true });
   const moss = mat(0x6f7d5c, { roughness: 1, flatShading: true });
   const strut = mat(0x2a2c31, { metalness: 0.6, roughness: 0.6, flatShading: true });
   const seamM = glow(0.1, 0.5, 0.6), lensM = glow(0.2, 1.2, 1.6), coreM = glow(2.4, 0.9, 0.2);
@@ -283,7 +296,21 @@ function guardian(): CreatureView {
   // the lens groove and three lenses; glowing seams down the front edges
   part(body, [place(new THREE.BoxGeometry(0.2, 0.62, 0.1), 0, 1.3, 0.5, -0.1)], strut, false);
   const lenses = [0.18, 0, -0.18].map((dy) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.06, 10).rotateX(Math.PI / 2), lensM); m.position.set(0, 1.3 + dy, 0.56); body.add(m); return { m, dy }; });
-  part(body, [-1, 1].map((sx) => place(new THREE.BoxGeometry(0.025, 1.1, 0.025), sx * 0.36, 0.75, 0.6, -0.06)), seamM, false);
+  // a glowing seam down every edge of the six-sided stone: awake, its outline is drawn in light against the dark
+  const edge = (ax: number, ay: number, az: number, bx: number, by: number, bz: number) => {
+    const a = new THREE.Vector3(ax, ay, az), b = new THREE.Vector3(bx, by, bz), d = b.clone().sub(a), l = d.length();
+    const g = new THREE.CylinderGeometry(0.022, 0.022, l, 4).translate(0, l / 2, 0);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())); g.translate(a.x, a.y, a.z);
+    return place(g);
+  };
+  const seams: THREE.BufferGeometry[] = [];
+  for (let j = 0; j < 6; j++) {
+    const a = (j / 6) * Math.PI * 2, sx = Math.sin(a), cz = Math.cos(a), o = 1.03;
+    seams.push(edge(sx * 0.74 * o, 0.25, cz * 0.58 * o, sx * 0.6 * o, 1.15, 0.03 + cz * 0.48 * o), edge(sx * 0.6 * o, 1.15, 0.03 + cz * 0.48 * o, sx * 0.38 * o, 1.7, 0.06 + cz * 0.3 * o));
+  }
+  part(body, seams, seamM, false);
+  // a crest of three bronze spines on the crown, swept back: the shape that says it is not a rock
+  part(body, [-0.13, 0, 0.13].map((x, i) => place(new THREE.ConeGeometry(0.06, i === 1 ? 0.75 : 0.5, 5), x, 1.98 + (i === 1 ? 0.25 : 0.15), -0.08, -0.55, 0, -x * 1.6)), bronze);
   // the back: the core under two banks of fins hinged at the spine
   const core = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 8), coreM); core.position.set(0, 0.85, -0.5); body.add(core);
   const fins = [-1, 1].map((sx) => {
@@ -294,8 +321,8 @@ function guardian(): CreatureView {
   // four legs, each a two-bone strut with a bronze knee and a splayed foot, solved to the ground every frame
   const unit = (r0: number, r1: number) => new THREE.CylinderGeometry(r1, r0, 1, 6).translate(0, 0.5, 0);
   const legs = [[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([sx, sz], i) => {
-    const up = new THREE.Mesh(unit(0.17, 0.12), stone), lo = new THREE.Mesh(unit(0.13, 0.07), strut);
-    const knee = new THREE.Mesh(new THREE.DodecahedronGeometry(0.17, 0), bronze);
+    const up = new THREE.Mesh(unit(0.21, 0.15), stone), lo = new THREE.Mesh(unit(0.16, 0.1), strut);
+    const knee = new THREE.Mesh(new THREE.DodecahedronGeometry(0.21, 0), bronze);
     const foot = new THREE.Mesh(mergeGeometries([0, 2.09, 4.19].map((a) => place(new THREE.BoxGeometry(0.1, 0.07, 0.34), Math.sin(a) * 0.12, 0.035, Math.cos(a) * 0.12, 0, a, 0))), strut);
     for (const o of [up, lo, knee, foot]) { o.castShadow = true; o.frustumCulled = false; tilt.add(o); }
     return { sx, sz, up, lo, knee, foot, hip: new THREE.Vector3(sx * 0.5, -0.2, sz * 0.38), ph: i === 0 || i === 3 ? 0 : Math.PI };
@@ -341,12 +368,14 @@ function guardian(): CreatureView {
       const over = e.phase ? 1 : 0;
       lensM.color.setRGB(0.2 * hot + over * 0.9 * wake, 1.2 * hot * (over ? 0.45 : 1), 1.6 * hot * (over ? 0.35 : 1));
       lenses.forEach((l) => { l.m.position.y = 1.3 + l.dy * (1 - 0.9 * conv); l.m.scale.setScalar(0.4 + 0.6 * wake + conv * 0.3); });
-      seamM.color.setRGB(over ? 1.4 : 0.12, over ? 0.35 : 0.55, over ? 0.1 : 0.65).multiplyScalar(0.15 + wake * (0.85 + Math.sin(t * 2.2) * 0.15));
+      seamM.color.setRGB(over ? 1.4 : 0.25, over ? 0.35 : 1.0, over ? 0.1 : 1.2).multiplyScalar(0.08 + wake * (0.9 + Math.sin(t * 2.2) * 0.15));
       // fins fan open off the spine to shed heat; they glow while hot and the core shows between them
       fins.forEach((f) => { f.g.rotation.z = f.sx * vent * 1.1; f.g.rotation.y = -f.sx * vent * 0.35; });
       finM.emissive.setRGB(1.6, 0.45, 0.1).multiplyScalar(vent * (0.7 + Math.sin(t * 18) * 0.15));
-      core.scale.setScalar(0.45 + vent * 0.75);
-      coreM.color.setRGB(2.4, 0.9, 0.2).multiplyScalar(e.dead ? 0 : 0.15 + vent * (1.3 + Math.sin(t * 20) * 0.3));
+      // the core is always lit while it is awake (a slow pulse through the gaps of the closed fins); bared and
+      // blazing while it vents
+      core.scale.setScalar(0.75 + vent * 0.6);
+      coreM.color.setRGB(2.4, 0.9, 0.2).multiplyScalar(e.dead ? 0 : 0.12 + wake * (0.55 + Math.sin(t * 2.4) * 0.2) + vent * (1.3 + Math.sin(t * 20) * 0.3));
       fade(e.dead ? 1 - THREE.MathUtils.smoothstep(e.deadT, 5, 7) : 1);
     },
   };

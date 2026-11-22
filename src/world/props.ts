@@ -312,6 +312,9 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
   return {
     group,
     items,
+    /** How strongly the pickup rings show (1 normal, 0 hidden). A night fight sets it to 0: the rings are HDR cyan and
+     *  bloomed into bright glowing hoops on the dark ground that read as part of the fight. */
+    ringK: 1,
     update(t: number, player: THREE.Vector3) {
       for (const it of items) {
         if (!it.active) continue;
@@ -328,7 +331,7 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
         }
         const ring = it.obj.getObjectByName('ring') as THREE.Mesh | undefined;
         if (ring) {
-          const near = smoothstep(9, 3, d);
+          const near = smoothstep(9, 3, d) * this.ringK;
           ring.visible = near > 0; // a ring further off than 9 m is invisible: not drawn at all
           (ring.material as THREE.MeshBasicMaterial).opacity = near * (0.5 + 0.3 * Math.sin(t * 4));
           ring.scale.setScalar(1 + 0.1 * Math.sin(t * 4));

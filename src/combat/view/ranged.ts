@@ -147,7 +147,7 @@ export class RangedRig {
       S.up += (wantUp - S.up) * (1 - Math.exp(-dt * 7));
       if (p.act === 'charge') S.draw = out3(p.charge); else if (S.draw > 0 && since < 0.05) { S.rel = 0; S.relDraw = S.draw; S.draw = 0; } else S.draw = Math.max(0, S.draw - dt * 4);
       S.rel += dt;
-      const casting = p.act !== 'charge' && S.rel < 0.45;
+      const casting = p.act !== 'charge' && S.rel < 0.45, CAST = 0.16;
       // side-on while drawn, square again through the cast (the hips lead it)
       const side = p.act === 'charge' ? 0.35 + 0.4 * S.draw : casting ? 0.75 * (1 - out3(S.rel / 0.14)) : 0.35;
       this.faceOffset = -side * smooth(S.up);
@@ -159,12 +159,16 @@ export class RangedRig {
       const front = V().copy(sR).addScaledVector(flat, 0.48).addScaledVector(out, -0.06).add(V().set(0, 0.1, 0));
       let tR: THREE.Vector3;
       if (p.act === 'charge') tR = V().copy(ready).lerp(back, S.draw);
-      else if (casting) tR = S.rel < 0.12 ? V().copy(back).lerp(front, out3(S.rel / 0.12)) : V().copy(front).lerp(V().copy(sR).add(V().set(0.22, -0.5, 0.25)), smooth((S.rel - 0.12) / 0.33));
-      else tR = S.up > 0.5 ? ready : V().set(-0.22, 0.95, 0.12);
-      S.phase = p.act === 'charge' ? 0 : S.rel < 0.12 ? S.rel / 0.12 : S.rel < 0.45 ? 1 : 0;
+      else if (casting) {
+        // the hand does not go straight: it comes up and over the shoulder in an arc and drives down to the front
+        // (the overarm path of the guides), so the cast reads as a throw and not as an arm sliding forward
+        if (S.rel < CAST) { const k = out3(S.rel / CAST), over = V().copy(sR).addScaledVector(flat, 0.12).addScaledVector(out, 0.04).add(V().set(0, 0.36, 0)); tR = V().copy(back).multiplyScalar((1 - k) * (1 - k)).addScaledVector(over, 2 * k * (1 - k)).addScaledVector(front, k * k); }
+        else tR = V().copy(front).lerp(V().copy(sR).add(V().set(0.22, -0.5, 0.25)), smooth((S.rel - CAST) / (0.45 - CAST)));
+      } else tR = S.up > 0.5 ? ready : V().set(-0.22, 0.95, 0.12);
+      S.phase = p.act === 'charge' ? 0 : S.rel < CAST ? S.rel / CAST : S.rel < 0.45 ? 1 : 0;
       S.arrowIn = ammo > 0 && !(S.rel < 0.6 && S.rel >= 0) ? 'string' : S.rel >= 0.6 && ammo > 0 ? 'string' : 'none';
       // the elbow hangs down and a little out while the hand is by the head; forward on the cast
-      reach(sR, tR, R.a, R.b, casting && S.rel < 0.12 ? V().set(-0.3, -0.8, 0.2) : V().set(-0.35, -0.9, -0.15), eR, wR);
+      reach(sR, tR, R.a, R.b, casting && S.rel < CAST ? V().set(-0.3, -0.8, 0.2) : V().set(-0.35, -0.9, -0.15), eR, wR);
       // the off hand: in front of the chest, forearm along the aim, upper arm down; it pulls in to the chest on the cast
       const pointAt = V().copy(sL).addScaledVector(aim, 0.36).add(V().set(-0.09, -0.13, 0));
       const tucked = V().copy(sL).add(V().set(-0.08, -0.3, 0.16));
@@ -240,6 +244,7 @@ export class RangedRig {
     const aim = V().copy(this.aimL).applyQuaternion(rq).normalize();
     const vis = (o: THREE.Object3D, v: boolean) => { o.visible = v; };
     this.bowSeg.forEach((o) => vis(o, this.mode === 'bow')); this.str.forEach((o) => vis(o, this.mode === 'bow'));
+    if (this.trailMesh && this.mode !== 'atlatl') this.trailMesh.visible = false;
     vis(this.arrow, false); this.cords.forEach((o) => vis(o, this.mode === 'sling')); vis(this.pouch, this.mode === 'sling'); vis(this.stone, false);
     if (this.mode === 'atlatl') {
       this.quiver.visible = false;
@@ -250,6 +255,7 @@ export class RangedRig {
       if (S.up < 0.5 && S.draw <= 0 && !(S.rel < 0.45)) dir.set(0, -1, 0).addScaledVector(flat, 0.3).normalize();
       const hook = V().copy(hR).addScaledVector(dir, 0.55);
       seg(this.bowSeg[0], V().copy(hR).addScaledVector(dir, -0.05), hook);
+      this.smear(S.rel < 0.3 && S.relDraw > 0, hR, hook, dt);
       if (S.arrowIn === 'string' && S.phase === 0 && (S.up > 0.5 || S.draw > 0)) {
         // the dart's butt in the hook, its shaft over the hand, its point at the target
         this.arrow.visible = true; this.arrow.position.copy(hook).add(V().set(0, 0.03, 0)); this.arrow.scale.set(1.4, 1.4, 2.3);
@@ -317,6 +323,34 @@ export class RangedRig {
       this.stone.position.copy(this.pP);
     }
     void R;
+  }
+  // the swept arc of the thrower through the cast: what the eye keeps of a fast arm (motion blur), a pale band from
+  // the hand to the hook over the last fifth of a second, fading with age
+  private trail: { a: THREE.Vector3; b: THREE.Vector3; age: number }[] = [];
+  private trailMesh: THREE.Mesh | null = null;
+  private smear(on: boolean, hand: THREE.Vector3, hook: THREE.Vector3, dt: number) {
+    const N = 14;
+    if (!this.trailMesh) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 2 * 3), 3));
+      g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(N * 2 * 4), 4));
+      const idx: number[] = []; for (let i = 0; i < N - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } g.setIndex(idx);
+      this.trailMesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+      this.trailMesh.frustumCulled = false; this.group.add(this.trailMesh);
+    }
+    for (const q of this.trail) q.age += dt;
+    if (on) this.trail.unshift({ a: hand.clone().lerp(hook, 0.35), b: hook.clone(), age: 0 });
+    this.trail = this.trail.filter((q) => q.age < 0.18).slice(0, N);
+    const m = this.trailMesh, n = this.trail.length;
+    m.visible = n > 2;
+    if (!m.visible) return;
+    const P = m.geometry.attributes.position as THREE.BufferAttribute, C = m.geometry.attributes.color as THREE.BufferAttribute;
+    for (let i = 0; i < N; i++) {
+      const q = this.trail[Math.min(i, n - 1)], k = i < n ? (1 - q.age / 0.18) * (1 - i / N) : 0;
+      P.setXYZ(i * 2, q.a.x, q.a.y, q.a.z); P.setXYZ(i * 2 + 1, q.b.x, q.b.y, q.b.z);
+      C.setXYZW(i * 2, 0.85, 0.8, 0.7, k * 0.12); C.setXYZW(i * 2 + 1, 0.9, 0.85, 0.75, k * 0.4);
+    }
+    P.needsUpdate = true; C.needsUpdate = true;
   }
   /** Taken off: nothing left in the world. */
   hide(model?: Character) { if (model) { grip(model, 'L', null); grip(model, 'R', null); } this.group.visible = false; this.quiver.visible = false; this.mode = 'none'; this.faceOffset = 0; this.pouchInit = false; }

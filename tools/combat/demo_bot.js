@@ -126,7 +126,19 @@ window.__cbBot = (mode) => {
         } else if (since() > 3) { const d = go(food.x - wz * 1.8, food.z + wx * 1.8); if (d < 0.8) stop(); }
         return;
       }
+      const guard = { x: food.x - wz * 1.8, z: food.z + wx * 1.8 };
+      if (run.phase === 'hush') {
+        // the quiet before: stand at the guard spot and look out over what was set
+        stop(); const d = go(guard.x, guard.z); if (d < 0.7) { stop(); look(bait.x, bait.z, food.y); }
+        return;
+      }
       const h = living('hound').find((e) => !e.routed), thieves = living('skritch').filter((e) => !e.routed && dist(e, food) < 5);
+      // a trap at work is what a player would turn to watch: one that has just caught, or one a scavenger is about to
+      // walk into (unless something is coming at the player)
+      const sprung = sim.traps.find((q) => (q.kind === 'snare' || q.kind === 'stakes') && q.sprungT >= 0 && sim.t - q.sprungT < 3.5);
+      const near = sim.traps.find((q) => q.armed && q.uses > 0 && (q.kind === 'snare' || q.kind === 'stakes') && living('skritch').concat(h ? [h] : []).some((e) => dist(e, q) < 6 && dist(e, q) > 0.8));
+      const watch = sprung || near;
+      if (watch && !danger() && !thieves.some((e) => dist(e, p) < 2.5)) { stop(); hold('KeyQ', 0); look(watch.x, watch.z, food.y + 0.3); return; }
       if (fire.fuel < fire.max * 0.55 && (sim.inv.branch || 0) > 0 && !(h && (h.state === 'windup' || h.state === 'strike'))) { const d = go(fire.x, fire.z); if (d < 2.4) { stop(); if (since() > 0.8) { tapE(); stT = performance.now(); } } return; }
       if (h && (h.state === 'windup' || h.state === 'strike') && h.target === -1) { stop(); look(h.x, h.z, h.y + 0.6); hold('KeyQ', h.stateT > 0.3 || h.state === 'strike'); return; }
       hold('KeyQ', 0);
@@ -134,10 +146,20 @@ window.__cbBot = (mode) => {
       if (thieves.length) { fight(thieves); return; }
       // otherwise guard the food from its upwind side, looking out over the traps to the dark they come from
       // to the side of the food, out of the smoke that drifts over it
-      const d = go(food.x - wz * 1.8, food.z + wx * 1.8); if (d < 0.7) { stop(); if (h && dist(h, p) < 14) look(h.x, h.z, h.y + 0.6); else look(bait.x, bait.z, food.y); }
+      const d = go(guard.x, guard.z); if (d < 0.7) { stop(); if (h && dist(h, p) < 14) look(h.x, h.z, h.y + 0.6); else look(bait.x, bait.z, food.y); }
     } else if (mode === 'chase') {
       const goal = run.markers.find((m) => m.kind === 'goal'), h = living('hound')[0];
-      if (h && h.state === 'strike' && dist(h, p) < 3.6 && p.act !== 'roll' && p.stamina > 14) { hold('KeyD', 1); tap('KeyV'); setTimeout(() => hold('KeyD', 0), 450); return; }
+      // a runner who has seen it gather: roll out of the lunge's line when it is about a third of a second from
+      // landing (the roll's cover lasts 0.42 s), to the side away from the line; one roll per lunge
+      if (h && h.state !== flag.hState) { flag.hState = h.state; if (h.state === 'strike') flag.strikeN = (flag.strikeN || 0) + 1; }
+      if (h && h.state === 'strike' && p.act !== 'roll' && p.stamina > 14 && flag.rollFor !== flag.strikeN) {
+        const ox = p.x - h.x, oz = p.z - h.z, along = ox * h.atkDx + oz * h.atkDz, d = dist(h, p);
+        if (along > 0 && d < 6.5 && d > 0.5) {
+          const side = Math.sign(h.atkDx * oz - h.atkDz * ox) || 1, nx = -h.atkDz * side, nz = h.atkDx * side;
+          const y = C.cam.yaw, rx = Math.cos(y), rz = -Math.sin(y), k = nx * rx + nz * rz > 0 ? 'KeyD' : 'KeyA';
+          flag.rollFor = flag.strikeN; hold(k, 1); tap('KeyV'); setTimeout(() => hold(k, 0), 450); return;
+        }
+      }
       go(goal.x, goal.z, { sprint: p.stamina > 24 });
     } else if (mode === 'stealth') {
       if (st === 0) { tap('KeyX'); next(); return; }

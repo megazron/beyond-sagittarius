@@ -123,7 +123,9 @@ export class EncounterRun {
       const wa = Math.atan2(food.z - f.z, food.x - f.x) + (s.rand() - 0.5) * 0.6; s.windX = Math.cos(wa); s.windZ = Math.sin(wa);
       this.objective = 'cb.obj.prep'; this.go('prep');
     } else if (id === 'chase.escape') {
-      this.hour = 19.9; s.night = true; // the last of the dusk: enough sky light to see the ground you run on
+      // the last of the dusk (this sky's sun sets at 18:00; by 19:30 the glow is gone): the trees stand black against
+      // a lit horizon, the ground is read by the sky and the moon, and the hunter's eyes already shine
+      this.hour = 18.5; s.night = true;
       give({ stone: 3, fruit: 1 }); arm('rock');
       const f = this.at(125, 0); s.addFire(f.x, f.z, 100); this.markers.push({ x: f.x, z: f.z, kind: 'goal', r: 7 });
       for (const u of [32, 66, 98]) this.mark('log', u, 0, 3.2);
@@ -230,7 +232,11 @@ export class EncounterRun {
       // time to think: what you set now is what the night meets
       // a dusk fire is built up and left to settle; it is the night that eats wood
       fire.slow = 0.3;
-      if (this.phaseT > 70 || this.mem.ready) { fire.slow = 1; this.wave = 1; fromDark('skritch', 4, 1); this.objective = 'cb.obj.night'; this.go('wave1'); }
+      if (this.phaseT > 70 || this.mem.ready) { this.objective = 'cb.obj.hush'; this.go('hush'); }
+    } else if (this.phase === 'hush') {
+      // the work is done and the camp goes quiet: a few seconds to stand and look at what is set before anything comes
+      fire.slow = 0.6;
+      if (this.phaseT > 10) { fire.slow = 1; this.wave = 1; fromDark('skritch', 4, 1); this.objective = 'cb.obj.night'; this.go('wave1'); }
     } else if (this.phase === 'wave1') {
       if (packLeft(1) === 0 || this.phaseT > 75) { for (const e of s.enemies) if (e.pack === 1) s.rout(e); this.go('lull'); }
     } else if (this.phase === 'lull') {

@@ -279,7 +279,8 @@ export class CombatFx {
     noose.visible = since < 0;
     const tip = tmpV.set(0, 1.7, 0).applyEuler(pole.rotation).add(pole.position);
     if (since < 0) seg(cord, tmpS.set(0, 0.04, 0), tip);
-    else if (held) seg(cord, tip, o.worldToLocal(tmpS.set(e!.x, this.height(e!.x, e!.z) + 0.2, e!.z)));
+    // to the caught hind leg, not the middle of the body
+    else if (held) { const bx = e!.x - Math.sin(e!.yaw) * e!.def.radius * 0.8, bz = e!.z - Math.cos(e!.yaw) * e!.def.radius * 0.8; seg(cord, tip, o.worldToLocal(tmpS.set(bx, this.height(bx, bz) + 0.25, bz))); }
     else seg(cord, tip, tmpS.copy(tip).add(tmpV2.set(0.05, -0.5, 0)));
     cord.visible = true;
   }

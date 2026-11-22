@@ -292,7 +292,7 @@ export class Combat {
     this.body.release(D.player.model);
     document.body.classList.remove('cb-encounter');
     D.player.combat = null; D.input.padMask = null;
-    this.dropViews(); this.fx.clear();
+    this.dropViews(); this.fx.clear(); D.world.items.ringK = 1;
     if (e.opts.trial) {
       const b = JSON.parse(e.snap) as { stats: SaveData['stats']; inventory: Record<string, number>; combat?: CombatSave };
       Object.assign(s.stats, b.stats);
@@ -517,7 +517,7 @@ export class Combat {
       return;
     }
     // the hour the encounter is in: the night runs from dusk to first light
-    s.timeOfDay = run.id === 'night.defence' ? (run.phase === 'prep' ? 20.6 + Math.min(1, run.phaseT / 70) * 0.9 : 21.5 + Math.min(1, (run.wave - 1 + Math.min(1, run.phaseT / 80)) / 3) * 7.6) % 24 : run.hour;
+    s.timeOfDay = run.id === 'night.defence' ? (run.phase === 'prep' ? 20.6 + Math.min(1, run.phaseT / 70) * 0.9 : run.phase === 'hush' ? 21.5 : 21.5 + Math.min(1, (run.wave - 1 + Math.min(1, run.phaseT / 80)) / 3) * 7.6) % 24 : run.hour;
     this.stepSim(dt, time, false);
     // stamina in a fight: running spends it, standing gives it back, and the body's state decides how fast
     const p = run.sim.player;
@@ -769,6 +769,8 @@ export class Combat {
     // edge of the firelight (Earth's full moon is about 0.1 to 0.3 lux; a ringed giant filling a wide part of the
     // sky would give several times that)
     const nightRun = !!this.encounter && this.sim!.night;
+    // the world's pickup rings are HDR cyan: on a night ground they bloom into bright hoops that read as part of the fight
+    this.d.world.items.ringK = nightRun ? 0 : 1;
     // the light stays in the scene once made (switching lights on and off recompiles every material)
     if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? 0.8 : 0.55) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 40, P0.y + 80, P0.z + 30); this.shine.target.position.copy(P0); } }
     const D = this.d, sim = this.sim!, P = D.player, p = sim.player, run = this.encounter, cam = P.camera;
@@ -813,7 +815,7 @@ export class Combat {
     this.hud.injuries(p.injuries.map((i) => ({ id: i.id, bad: !!i.infected })));
     if (run) {
       const N = run.objN;
-      this.hud.objective(t(run.objective), run.id === 'night.defence' && run.phase !== 'prep' ? `${t('cb.wave', { n: Math.max(1, N.wave ?? 1) })} · ${t('cb.fire', { n: N.fuel ?? 0 })} · ${t('cb.food', { n: N.food ?? 0 })}` : run.phase === 'prep' ? `${Math.max(0, Math.ceil(70 - run.phaseT))}` : null);
+      this.hud.objective(t(run.objective), run.id === 'night.defence' && run.phase !== 'prep' && run.phase !== 'hush' ? `${t('cb.wave', { n: Math.max(1, N.wave ?? 1) })} · ${t('cb.fire', { n: N.fuel ?? 0 })} · ${t('cb.food', { n: N.food ?? 0 })}` : run.phase === 'prep' ? `${Math.max(0, Math.ceil(70 - run.phaseT))}` : null);
     } else this.hud.objective(null);
     // the eye: how near the most suspicious thing is to knowing
     let top = 0, seen = false;

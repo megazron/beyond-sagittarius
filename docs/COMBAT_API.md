@@ -71,11 +71,12 @@ their own Episode One kit; the dev arena ignores it all.
 | `woodBone` | 4 | club |
 | `fireDrill` | 5 | fire (and with it `torch`, `fireline`) |
 | `fireSpear` | 9 | fire-hardened spear (and `stakes`) |
+| `vineTraps` | (Episode One) | vine snare and vine rattle: a raw green vine as the cord (also known once `flags.spear` is set: its head is lashed with a vine) |
 | `cordage` | 10 | (cord) |
 | `handAxe` | 11 | hand axe (a heavy short chop, three stones) |
 | `hafting` | 12 | stone-tipped spear |
 | `atlatl` | 13 | spear-thrower and darts |
-| `traps` | 14 | snare, rattle line, figure-four deadfall (free play; small animals come to its bait) |
+| `traps` | 14 | figure-four deadfall (free play; small animals come to its bait) |
 | `sling` | 22 | sling |
 | `bow` | 19 | bow and arrows |
 
