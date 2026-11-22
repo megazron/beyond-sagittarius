@@ -192,8 +192,9 @@ export class LeanTo {
       } },
     ], () => {
       z.setKneel(false); z.setFace(null); z.setLookTarget(null);
-      built();
-      this.stick();
+      this.camp.shelterStage(5);
+      // the level completes after the throw (its card came up mid-throw)
+      this.stick(built);
     });
   }
 
@@ -225,25 +226,33 @@ export class LeanTo {
     return g;
   }
 
-  private stick() {
+  private stick(built: () => void) {
     const z = this.z, S = this.site(), stumpP = this.stumpAt();
     this.makeStump(stumpP);
-    const p = this.player, d = stumpP.clone().sub(p.pos).setY(0).normalize();
+    // out in front of the lean-to (inside it the roof hid him from every camera)
+    const p = this.player, stand = S.work.clone().addScaledVector(S.open, 0.6);
+    stand.y = this.world.terrain.height(stand.x, stand.z);
+    const d = stumpP.clone().sub(stand).setY(0).normalize();
     const side = (dist: number): Shot => {
-      // from behind his right shoulder and wide: him, the line of the throw and the stump in one frame
-      const r = new THREE.Vector3(-d.z, 0, d.x), mid = p.pos.clone().lerp(stumpP, 0.45);
-      return { from: mid.clone().addScaledVector(r, dist).addScaledVector(d, -0.35 * dist).add(new THREE.Vector3(0, 1.4, 0)), to: mid.clone().add(new THREE.Vector3(0, 0.6, 0)), push: 0.02 };
+      // over his shoulder from behind, high: him, the line of the throw and the stump in one frame
+      const r = new THREE.Vector3(-d.z, 0, d.x);
+      return { from: stand.clone().addScaledVector(d, -0.75 * dist).addScaledVector(r, 0.25 * dist).add(new THREE.Vector3(0, 1.75, 0)), to: stand.clone().lerp(stumpP, 0.55).add(new THREE.Vector3(0, 0.45, 0)), push: 0.02 };
     };
     this.playScene([
-      { key: 'e1.ts.sci', who: 'scientist', shot: () => cover.mid(z, 0.6, 1.9), run: () => {
+      { key: 'e1.ts.sci', who: 'scientist', shot: () => {
+        // from the stump's side, so he looks out towards the lens with the stick in his hand
+        const r = new THREE.Vector3(-d.z, 0, d.x), head = new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld);
+        return { from: head.clone().addScaledVector(d, 2.0).addScaledVector(r, 0.7).add(new THREE.Vector3(0, -0.15, 0)), to: head.clone().add(new THREE.Vector3(0, -0.3, 0)), push: 0.04 };
+      }, run: () => {
+        p.pos.copy(stand); p.vel.set(0, 0, 0); p.model.root.position.copy(stand);
         const facing = Math.atan2(-d.x, -d.z); p.facing = facing; p.model.root.rotation.y = facing + Math.PI; p.model.root.updateMatrixWorld(true);
         z.setLookTarget(stumpP.clone().add(new THREE.Vector3(0, 0.5, 0)));
         z.setHold({ R: { at: new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld).addScaledVector(d, 0.35).add(new THREE.Vector3(0, -0.45, 0)), fingers: d.clone(), palm: new THREE.Vector3(0, 1, 0) } });
       }, after: 0.2 },
-    ], () => this.throwIt(d, stumpP, side));
+    ], () => this.throwIt(d, stumpP, side, built));
   }
 
-  private async throwIt(d: THREE.Vector3, stumpP: THREE.Vector3, side: (dist: number) => Shot) {
+  private async throwIt(d: THREE.Vector3, stumpP: THREE.Vector3, side: (dist: number) => Shot, built: () => void) {
     const z = this.z, q = (window as unknown as { __e1throw?: boolean[] }).__e1throw;
     this.ui.toast(t('e1.ts.hint'));
     this.holdShot(side(4.2));
@@ -281,6 +290,7 @@ export class LeanTo {
       z.setFace(null); z.setLookTarget(null);
       this.s.flags['inv.throwStick'] = true;
       this.ui.toast(t('e1.learn.throwStick'));
+      built();
       // the stick stays where it fell for a while, then is his (in the bag)
       this.after(20, () => { for (const o of this.fx) o.removeFromParent(); this.fx = []; });
     });
