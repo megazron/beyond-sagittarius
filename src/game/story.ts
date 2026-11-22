@@ -810,6 +810,8 @@ export class Story {
     }
     // no ghost rings in a scene or a held work shot (the fire's ring lay across the front of every drill shot)
     const busy = !!this.scenePose || !!this.player.workShot;
+    // nor the cyan pickup rings (a stone's ring glowed across the thatching shots, e13v3)
+    this.world.items.ringK = busy ? 0 : 1;
     this.world.camp.setSites(busy ? { fire: false, shelter: false, beacon: false } : {
       fire: s.level === 4 || (s.level === 6 && !this.flag('spear')) || (s.level >= CH2_FIRST && !!this.ch2.node(s.level) && this.ch2.progress(s.level) === t('progress.ch2Ready')),
       shelter: s.level === 5 && !this.flag('shelter'),
