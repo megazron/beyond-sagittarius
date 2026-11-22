@@ -153,8 +153,9 @@ export class RangedRig {
       this.faceOffset = -side * smooth(S.up);
       const flat = V().set(aim.x, 0, aim.z).normalize();
       const out = V().set(-1, 0, 0); // the right side, root-local
-      const ready = V().copy(sR).addScaledVector(flat, -0.04).addScaledVector(out, -0.02).add(V().set(0, 0.2, 0));
-      const back = V().copy(sR).addScaledVector(flat, -0.26).addScaledVector(out, 0.02).add(V().set(0, 0.17, 0));
+      // a hand's width out from the ear, so the dart lies over the shoulder and clears the head
+      const ready = V().copy(sR).addScaledVector(flat, -0.04).addScaledVector(out, 0.1).add(V().set(0, 0.15, 0));
+      const back = V().copy(sR).addScaledVector(flat, -0.26).addScaledVector(out, 0.13).add(V().set(0, 0.11, 0));
       const front = V().copy(sR).addScaledVector(flat, 0.48).addScaledVector(out, -0.06).add(V().set(0, 0.1, 0));
       let tR: THREE.Vector3;
       if (p.act === 'charge') tR = V().copy(ready).lerp(back, S.draw);
