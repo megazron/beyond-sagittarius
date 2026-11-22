@@ -730,7 +730,8 @@ export class Story {
   /** Rebuild world state (camp stages, spear, crewmate) from the save. */
   sync() {
     const s = this.s, camp = this.world.camp;
-    camp.setFire(this.flag('fire') ? 2 : this.flag('pitBuilt') ? 1 : 0);
+    // the fire burnt out in the first night (1.9 dawn) until the next level
+    camp.setFire(this.flag('fire') && !this.flag('e1.fireOut') ? 2 : this.flag('pitBuilt') || this.flag('fire') ? 1 : 0);
     camp.setShelter(this.flag('shelter'));
     camp.setBeacon(this.flag('beaconBuilt'), this.flag('beacon'));
     this.world.setCampWork(s.discoveries ?? []);
@@ -762,6 +763,8 @@ export class Story {
       this.ui.say('dlg.7.1', 'crew.scientist.name', 5); this.quietUntil = performance.now() + 7000;
     });
     if (n === 8) {
+      // the morning: he blew the night's coals back up (off screen)
+      if (this.flag('e1.fireOut')) { this.s.flags['e1.fireOut'] = false; if (this.flag('fire')) this.world.camp.setFire(2); }
       this.signalClock = 12.5; // the meter takes over after the first readout
       this.after(5.0, () => { this.ui.deviceLines([t('signal.detect1'), t('signal.detect2')], true); audio.beep(); });
       this.after(6.5, () => this.ui.say('dlg.8.1', 'crew.scientist.name', 5));

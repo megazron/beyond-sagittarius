@@ -255,7 +255,59 @@ export class FirstNight {
       if (scarred) s.flags.scarred = true;
       this.after(1.2, () => this.playScene([
         { key: scarred ? 'e1.ni.scar' : 'e1.ni.held', who: 'scientist', shot: () => cover.close(z, 0.35, 0.95), run: () => z.setFace(scarred ? { frown: 0.5, squint: 0.4 } : { smile: 0.2 }), after: 0.6 },
-      ], () => { z.setFace(null); done(!scarred); }));
+      ], () => { z.setFace(null); done(!scarred); this.dawn(); }));
     });
+  }
+
+  /**
+   * 1.9 step 4, dawn: he has not slept. A long shot of the fire, out, a thread of smoke, and him sitting at it with
+   * the spear across his knees; closer, his eyes open on the ashes; the blackened point; a breath out, and he looks up
+   * at the light. No line: the night has said enough. Sets `slept` (the level's end; he did not) and `e1.dawn`; the
+   * fire stays out (`e1.fireOut`) until the next level, when he has blown the coals back up off screen.
+   */
+  dawn() {
+    const z = this.z, s = this.s, camp = this.world.camp;
+    this.ui.fade('black', 1, 1.2);
+    this.after(1.4, () => {
+      s.timeOfDay = 5.75; s.flags['e1.fireOut'] = true; camp.setFire(1);
+      const c = this.sitAtFire(), { f, r } = this.axes(c);
+      z.setProp(null); z.setLimbs({ bend: 0.35 });
+      // the spear across his knees, the point out to his right, blackened
+      const L = this.lap(c); this.layStick(L.butt.clone().add(new THREE.Vector3(0, -0.04, 0)), L.dir.clone().setY(0.03).normalize());
+      this.tipMat?.color.setHex(0x2a1d14);
+      const smoke = this.smokeAt(c.clone().add(new THREE.Vector3(0, 0.12, 0)));
+      const east = this.kneel.clone().add(new THREE.Vector3(8, 2.5, 0));
+      this.ui.fade('black', 0, 2.2);
+      this.playScene([
+        // wide and low across the dead fire: the ring, the smoke, him beyond it
+        { hold: 5.2, shot: () => ({ from: c.clone().addScaledVector(f, 5.5).addScaledVector(r, 1.4).add(new THREE.Vector3(0, 1.05, 0)), to: c.clone().addScaledVector(f, -0.6).add(new THREE.Vector3(0, 0.45, 0)), push: 0.03 }),
+          run: () => { z.setLookTarget(c.clone().add(new THREE.Vector3(0, 0.1, 0))); z.setFace({ squint: 0.35 }); } },
+        { hold: 3.6, shot: () => cover.close(z, 0.4, 0.95), run: () => { z.setFace({ squint: 0.45, frown: 0.15 }); this.after(1.6, () => z.setFace({ blink: 1 })); this.after(1.85, () => z.setFace({ squint: 0.45 })); } },
+        { hold: 2.6, shot: () => { const m = this.along(L.butt, L.dir, 1.25); return { from: m.clone().addScaledVector(f, -0.55).addScaledVector(r, 0.35).add(new THREE.Vector3(0, 0.35, 0)), to: m.clone(), push: 0.01 }; } },
+        { hold: 3.4, shot: () => cover.mid(z, -0.6, 2.3), run: () => { audio.human('breath', 0.6); this.after(0.9, () => z.setLookTarget(east)); z.setFace({ squint: 0.25 }); } },
+      ], () => {
+        smoke(); this.dropStick(); z.setFace(null); z.setLookTarget(null); z.setLimbs(null); z.setKneel(false);
+        s.flags['e1.dawn'] = true; s.flags.slept = true;
+      });
+    });
+  }
+
+  /** A thin grey thread off the ashes; returns how to put it away. */
+  private smokeAt(at: THREE.Vector3) {
+    const N = 40, g = new THREE.BufferGeometry(), pos = new Float32Array(N * 3);
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const m = new THREE.PointsMaterial({ color: 0xa8a49c, size: 0.05, transparent: true, opacity: 0.22, depthWrite: false });
+    const pts = new THREE.Points(g, m); pts.frustumCulled = false;
+    const t0 = performance.now();
+    pts.onBeforeRender = () => {
+      const k = (performance.now() - t0) / 1000;
+      for (let i = 0; i < N; i++) {
+        const a = (k * 0.18 + i / N) % 1, sw = Math.sin(i * 5.3 + k * 0.7) * 0.12 * a + a * a * 0.5;
+        pos[i * 3] = at.x + sw; pos[i * 3 + 1] = at.y + a * 1.8; pos[i * 3 + 2] = at.z + Math.cos(i * 2.1 + k * 0.5) * 0.08 * a;
+      }
+      g.attributes.position.needsUpdate = true;
+    };
+    this.world.scene.add(pts);
+    return () => { pts.removeFromParent(); g.dispose(); m.dispose(); };
   }
 }
