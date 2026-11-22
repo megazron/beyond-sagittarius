@@ -225,7 +225,7 @@ def follow(inner_P, inner_W, outers, keep=None, reach=0.035, near=0.012, far=0.0
         best[under] = d[under]
     return W / np.maximum(W.sum(1, keepdims=True), 1e-9)
 
-def drape(p, V, Nb, Wb, rig, k_=1.0, it=36, margin=0.009):
+def drape(p, V, Nb, Wb, rig, k_=1.0, it=36, margin=0.013):
     """A knit top over a full bust: the source garment, fitted vertex by vertex to the morphed body, came out pointed at
     each bust with a crease under it (Nuvexa's sweater). Real cloth bridges a hollow and rounds a peak: the top's front,
     from the waist to the collarbone, is smoothed (Taubin: no shrinking overall) while it is held at least `margin`
@@ -263,6 +263,21 @@ def drape(p, V, Nb, Wb, rig, k_=1.0, it=36, margin=0.009):
         sd = np.einsum('ij,ij->i', P - V[j], Nb[j])
         m = (k > 0) & (d < 0.08) & (sd < margin)
         P[m] += Nb[j[m]] * (margin - sd[m])[:, None]
+    # below the bust the knit falls from the fullest point towards the hem instead of following the body in under it
+    # (it read as painted on): per 2 cm column across the chest, the front may not fall back faster than `slope`
+    fr = (k > 0.2) & (p.N[:, 2] > 0.2)
+    if fr.any():
+        cols = np.floor(P[:, 0] / 0.02).astype(int)
+        for cidx in np.unique(cols[fr]):
+            m = fr & (cols == cidx)
+            if m.sum() < 3: continue
+            top = np.argmax(np.where(m, P[:, 2], -9))
+            za, ya = P[top, 2], P[top, 1]
+            lo = m & (P[:, 1] < ya)
+            want = za - (ya - P[lo, 1]) * 0.45
+            P[lo, 2] = np.maximum(P[lo, 2], P[lo, 2] + (want - P[lo, 2]).clip(0) * k[lo])
+        for _ in range(4):
+            P = P + (0.5 * k)[:, None] * lap(P)
     mv = np.linalg.norm(P - p.P, axis=1)
     print(f'    drape {p.asset}: moved {int((mv > 0.002).sum())} vertices, most {mv.max() * 100:.1f} cm', flush=True)
     p.P = P
