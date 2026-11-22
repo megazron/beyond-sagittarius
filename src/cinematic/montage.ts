@@ -875,7 +875,9 @@ export class Montage {
     // the landing grammar (shot list I1 to I6), in beats from the hit: the world first (-5), the hit (0), the body still,
     // then a breath (+4), eyes open and the body checks itself (+9), their sky (+14), and only then the line (+19)
     const ph = b - imp, sky0 = SKYDIR[id];
-    const head = o.clone().add(V(0, id === 'explorer' || id === 'builder' ? 0.95 : id === 'strong' ? 1.0 : 1.55, 0));
+    // Nuvexa stands on her raft of hull, whose deck is 0.3 m up
+    const lift = id === 'social' ? 0.3 : 0;
+    const head = o.clone().add(V(0, (id === 'explorer' || id === 'builder' ? 0.95 : id === 'strong' ? 1.0 : 1.55) + lift, 0));
     let cam: THREE.Camera;
     if (ph < 0) cam = this.lens(o.clone().add(V(9, 1.4, 16)), o.clone().add(V(-6, 5 + 2 * clamp((ph + 5) / 5, 0, 1), -40)), 53, 30, 0.001); // I1 extreme wide, low: the world
     else if (ph < 4) cam = this.lens(o.clone().add(V(3.6, 0.7, 6.2)).add(shakeAt(b, 0.5 * after(b, imp, 1.0), this.tmp2)), o.clone().add(V(0, 0.8, 0)), 38, 7, 0.003); // I2 wide, low: the hit
@@ -893,7 +895,7 @@ export class Montage {
       const POSE: Record<string, [CrewPose, number, Face]> = { strong: ['injured', 0.25, { frown: 0.5, squint: 0.3 }], medic: ['stand', -0.2, { squint: 0.2 }], explorer: ['sit', 0.3, { frown: 0.6 }], builder: ['sit', -0.25, { smile: 0.2 }], social: ['selfie', 0.15, { smile: 0.3 }] };
       const [pose, yaw, face] = POSE[id];
       const breath = ph >= 4 ? 0 : 1, eyes = ph < 9 ? 1 : 0;
-      const c = this.act(id, o.clone().add(V(0, 0.02, 0)), q(0, yaw), pose, null, ph < 9 ? { blink: eyes, frown: 0.3 * (1 - breath) } : face);
+      const c = this.act(id, o.clone().add(V(0, 0.02 + lift, 0)), q(0, yaw), pose, null, ph < 9 ? { blink: eyes, frown: 0.3 * (1 - breath) } : face);
       if (ph < 9) c.look2(0, 0.35); // still, head down
       else if (ph < 14) c.look2(-yaw * 0.6, 0.45); // looking at themself: the check
       // their sky: it is behind them as we see them (the camera is in front), out of the neck's reach for a look-at, so
