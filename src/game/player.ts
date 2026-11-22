@@ -259,6 +259,16 @@ export class Player {
     // pull in at once, ease back out, so the view never pops
     this.camClip = free < this.camClip ? free : this.camClip + (free - this.camClip) * 0.05;
     out.x = hx + (out.x - hx) * this.camClip; out.y = hy + (out.y - hy) * this.camClip; out.z = hz + (out.z - hz) * this.camClip;
+    // the lens itself keeps half a metre off any trunk: the line test passes a trunk the camera ends up grazing from
+    // the side (a dark wall over a third of the picture, or the inside of the bark for a frame as the view swings)
+    // (a search along the line, not fixed steps, so the pull is smooth as the view swings)
+    // (not when the player stands against the trunk: then every spot near the head is 'too close')
+    if (this.forest.blocks(out.x, out.z, 0.5) && !this.forest.blocks(hx, hz, 0.5)) {
+      let lo = 0, hi = 1;
+      for (let s = 0; s < 7; s++) { const m = (lo + hi) / 2; if (this.forest.blocks(hx + (out.x - hx) * m, hz + (out.z - hz) * m, 0.5)) hi = m; else lo = m; }
+      const f = Math.max(0.16, lo);
+      out.x = hx + (out.x - hx) * f; out.y = hy + (out.y - hy) * f; out.z = hz + (out.z - hz) * f;
+    }
     // pulled in hard (a slope, a log or the camp's stones behind the player) the camera would sit inside the head:
     // keep it a metre off by rising over the head instead, looking down past it
     const near = Math.min(dist, 1.05), ox = out.x - hx, oz = out.z - hz, oh = Math.hypot(ox, oz);
