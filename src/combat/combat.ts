@@ -52,7 +52,7 @@ interface Deps {
   home: () => boolean;
 }
 
-const KEYS = { attack: ['Mouse0'], aim: ['Mouse2'], alt: ['KeyG'], block: ['KeyQ'], dodge: ['KeyV'], sneak: ['KeyX'], weapon: ['KeyR'], kit: ['KeyT'] };
+const KEYS = { attack: ['Mouse0'], aim: ['Mouse2'], alt: ['KeyG'], block: ['KeyQ'], dodge: ['KeyV'], sneak: ['KeyX'], weapon: ['KeyR'], kit: ['KeyT'], back: ['KeyB'] };
 // pad, while a fight has the buttons: RT attack, LT aim, B roll, LB guard, RB throw, Y next weapon, d-pad up kit, R3 creep, L3 run
 const PAD = { attack: 7, aim: 6, dodge: 1, block: 4, alt: 5, weapon: 3, kit: 12, sneak: 11, sprint: 10 };
 const PAD_TAKEN = new Set(Object.values(PAD));
@@ -595,6 +595,14 @@ export class Combat {
       // a side-on archer hides the bow from behind the right shoulder: over the bow shoulder, looking down the arrow
       cb.shoulder = p.weapon === 'bow' ? -0.95 : 0.85; cb.lift = p.weapon === 'bow' ? 0.22 : 0.12; cb.jump = p.act === 'idle' && !p.blocking;
       cb.sprint = D.input.device === 'pad' && eng ? this.padSprint : null;
+      // the run: a glance back while the hunter gathers itself for a leap close behind you (or while B is held), so
+      // what chases you is seen, not only heard; the legs keep running where they were going
+      let back = 0;
+      if (run?.id === 'chase.escape' && D.free()) {
+        if (this.key(KEYS.back)) back = 1;
+        for (const e of sim.enemies) if (e.kind === 'hound' && !e.dead && !e.gone && !e.routed && (e.state === 'windup' || (e.state === 'strike' && e.stateT < 0.3)) && Math.hypot(e.x - p.x, e.z - p.z) < 16) back = 1;
+      }
+      cb.back = back;
     } else P.combat = null;
     // where the player looks (not the camera: a story or a recording may hold the camera elsewhere)
     { const cp = Math.cos(P.pitch); this.aimW.set(-Math.sin(P.yaw) * cp, Math.sin(P.pitch), -Math.cos(P.yaw) * cp); }

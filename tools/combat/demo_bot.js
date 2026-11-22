@@ -100,25 +100,39 @@ window.__cbBot = (mode) => {
       }
     } else if (mode === 'night') {
       const fire = sim.fires.find((f) => !f.torch && !f.burnsOut), food = run.markers.find((m) => m.kind === 'food');
+      const wx = sim.windX, wz = sim.windZ, bait = { x: food.x + wx * 8, z: food.z + wz * 8 };
       if (run.phase === 'prep') {
-        // bait and a snare out in the dark, stakes on the way in, then say ready
-        const dx = food.x - fire.x, dz = food.z - fire.z, l = Math.hypot(dx, dz), spot = [{ x: food.x + (dx / l) * 8, z: food.z + (dz / l) * 8 }, { x: food.x + (dx / l) * 7.6, z: food.z + (dz / l) * 7.6 }, { x: food.x + (dx / l) * 3.5, z: food.z + (dz / l) * 3.5 }];
-        const order = ['Digit5', 'Digit1', 'Digit2'];
-        if (st < 3) {
-          if (flag.setting) { if (!C.setting && since() > 0.6) { flag.setting = 0; next(); } return; }
-          if (since() > 14) { next(); return; } // a spot it cannot reach: go on to the next trap
-          const d = go(spot[st].x - (dx / l) * 1.3, spot[st].z - (dz / l) * 1.3);
-          if (d < 0.9 || (since() > 9 && d < 3)) { stop(); if (look(spot[st].x + dx, spot[st].z + dz) < 0.3 && since() > 1) { tap('KeyT'); setTimeout(() => key(order[st]), 250); flag.setting = 1; stT = performance.now(); } }
-        } else if (st === 3) { const d = go(food.x - 0.6, food.z - 0.5); if (d < 0.8 || since() > 10) { stop(); tapE(); next(); } }
+        // read the smoke: they will come up the wind. Stakes on the line in, bait out downwind, a snare on the bait.
+        // Each one is set facing downwind: the last two metres are walked along the wind, so the body faces that way.
+        const plan = [{ k: 'Digit2', x: food.x + wx * 3.5, z: food.z + wz * 3.5 }, { k: 'Digit5', x: bait.x, z: bait.z }, { k: 'Digit1', x: bait.x, z: bait.z }];
+        const now = performance.now();
+        window.__cbDbg = { st, since: +since().toFixed(1), stuck: flag.stuck || 0, leg: flag.leg || 0, setting: !!C.setting, p: [+(p.x - food.x).toFixed(1), +(p.z - food.z).toFixed(1)], traps: sim.traps.map((q) => q.kind) };
+        if (st < plan.length) {
+          const s = plan[st];
+          if (flag.setting) { if ((!C.setting && since() > 0.9) || since() > 6) { flag.setting = 0; flag.leg = 0; flag.stuck = 0; next(); } return; }
+          const pre = { x: s.x - wx * 3, z: s.z - wz * 3 }, at = { x: s.x - wx * 1.3, z: s.z - wz * 1.3 };
+          const goal = flag.leg ? at : pre, d = dist(p, goal);
+          // a walk that makes no headway for 1.5 s: step aside once, then give up on the spot and set it here
+          if (!flag.wpT || now - flag.wpT > 1500) { if (flag.wp && dist(flag.wp, p) < 0.25 && d > 0.8) flag.stuck = (flag.stuck || 0) + 1; flag.wp = { x: p.x, z: p.z }; flag.wpT = now; }
+          if (!flag.leg && (d < 0.8 || flag.stuck >= 2 || dist(p, at) < 1.2)) { flag.leg = 1; flag.stuck = 0; return; }
+          if (flag.leg && !(d < 0.6 || flag.stuck >= 2 || since() > 18)) { go(goal.x, goal.z); hold('KeyA', flag.stuck === 1); return; }
+          if (!flag.leg && since() < 18) { go(goal.x, goal.z); hold('KeyA', flag.stuck === 1); return; }
+          stop();
+          if (look(p.x + wx * 10, p.z + wz * 10) < 0.2 && since() > 0.3) { tap('KeyT'); setTimeout(() => key(s.k), 260); setTimeout(() => keyUp(s.k), 340); flag.setting = 1; stT = now; }
+        } else if (st === plan.length) {
+          // ready, said out here (by the fire the same key feeds it)
+          stop(); if (since() > 0.8) { tapE(); next(); }
+        } else if (since() > 3) { const d = go(food.x - wx * 1.2, food.z - wz * 1.2); if (d < 0.8) stop(); }
         return;
       }
-      const h = living('hound').find((e) => !e.routed), thieves = living('skritch').filter((e) => !e.routed && dist(e, food) < 8);
+      const h = living('hound').find((e) => !e.routed), thieves = living('skritch').filter((e) => !e.routed && dist(e, food) < 5);
       if (fire.fuel < fire.max * 0.55 && (sim.inv.branch || 0) > 0 && !(h && (h.state === 'windup' || h.state === 'strike'))) { const d = go(fire.x, fire.z); if (d < 2.4) { stop(); if (since() > 0.8) { tapE(); stT = performance.now(); } } return; }
       if (h && (h.state === 'windup' || h.state === 'strike') && h.target === -1) { stop(); look(h.x, h.z, h.y + 0.6); hold('KeyQ', h.stateT > 0.3 || h.state === 'strike'); return; }
       hold('KeyQ', 0);
       if (h && h.weakT > 0 && dist(h, p) < 5) { fight([h]); return; }
       if (thieves.length) { fight(thieves); return; }
-      const d = go(food.x - 0.8, food.z - 0.6); if (d < 0.7) { stop(); if (h) look(h.x, h.z, h.y + 0.6); }
+      // otherwise guard the food from its upwind side, looking out over the traps to the dark they come from
+      const d = go(food.x - wx * 1.2, food.z - wz * 1.2); if (d < 0.7) { stop(); if (h && dist(h, p) < 14) look(h.x, h.z, h.y + 0.6); else look(bait.x, bait.z, food.y); }
     } else if (mode === 'chase') {
       const goal = run.markers.find((m) => m.kind === 'goal'), h = living('hound')[0];
       if (h && h.state === 'strike' && dist(h, p) < 3.6 && p.act !== 'roll' && p.stamina > 14) { hold('KeyD', 1); tap('KeyV'); setTimeout(() => hold('KeyD', 0), 450); return; }

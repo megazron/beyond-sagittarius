@@ -64,8 +64,11 @@ export class Player {
    * turn (radians, or null), `aim` 0 to 1 pulls the camera in over the right shoulder, `crouch` lowers the hips (metres),
    * `sprint` overrides the sprint button, `sneak` caps the speed to a creep.
    */
-  combat: { scale: number; force: { x: number; z: number } | null; face: number | null; aim: number; crouch: number; sprint: boolean | null; sneak: boolean; jump: boolean; shoulder?: number; lift?: number } | null = null;
+  combat: { scale: number; force: { x: number; z: number } | null; face: number | null; aim: number; crouch: number; sprint: boolean | null; sneak: boolean; jump: boolean; shoulder?: number; lift?: number;
+    /** 0..1: the view swings round to look behind (a glance back in a chase); the walk keeps its own heading. */
+    back?: number } | null = null;
   private aimS = 0;
+  private backS = 0;
   /** Stages other than Verdaxis set their own gravity, and let you jump across open gaps. */
   physics = { gravity: 14, jump: 5.2, gaps: false };
 
@@ -255,7 +258,7 @@ export class Player {
   snapCamera() {
     this.focus.copy(this.pos);
     this.yawS = this.yaw; this.pitchS = this.pitch; this.distS = this.camDist;
-    this.fovKick = 0; this.bobK = 0; this.lean = 0; this.dip = 0; this.dipV = 0;
+    this.fovKick = 0; this.bobK = 0; this.lean = 0; this.dip = 0; this.dipV = 0; this.backS = 0;
     if (this.camera.fov !== this.baseFov) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
     this.camClip = 1;
     this.orbit(this.camPos, this.focus, this.yaw, this.pitch, this.camDist);
@@ -274,8 +277,13 @@ export class Player {
     this.yawS += dyaw * e(32);
     this.pitchS += (this.pitch - this.pitchS) * e(32);
 
+    // a glance back: the view only, eased so it reads as a turn of the head, not a cut
+    const backWant = this.combat?.back ?? 0;
+    this.backS += (backWant - this.backS) * e(backWant > this.backS ? 7 : 5);
+    const back = this.backS * this.backS * (3 - 2 * this.backS);
+    const yawV = this.yawS + back * 2.75, pitchV = this.pitchS - back * 0.12;
     // soft collision: pull in fast when a trunk blocks the view, ease back out slowly
-    const want = this.orbit(tmpA, this.focus, this.yawS, this.pitchS, this.camDist);
+    const want = this.orbit(tmpA, this.focus, yawV, pitchV, this.camDist);
     const clear = this.forest.clearance(this.focus.x, this.focus.z, want.x, want.z, 0.4);
     const target = Math.max(1.3, this.camDist * clear);
     this.distS += (target - this.distS) * e(target < this.distS ? 16 : 2.5);
@@ -283,7 +291,7 @@ export class Player {
     const aimWant = this.combat?.aim ?? 0;
     this.aimS += (aimWant - this.aimS) * e(aimWant > this.aimS ? 12 : 8);
     const aim = this.aimS;
-    this.orbit(this.camPos, this.focus, this.yawS, this.pitchS, this.distS * (1 - aim) + Math.min(this.distS, 3.1) * aim);
+    this.orbit(this.camPos, this.focus, yawV, pitchV, this.distS * (1 - aim) + Math.min(this.distS, 3.1) * aim);
 
     // stride: vertical twice per cycle, sideways once, growing with speed
     const run = clamp(this.speedNow / 7.2, 0, 1);
