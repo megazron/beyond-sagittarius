@@ -1261,12 +1261,21 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     dpool.push({ fig, ped: -1, phase: rnd() * 10, look: i % NLOOK });
   }
   const dnear: [number, number][] = [];
+  // a walker's ground height, looked up again only once they have gone half a metre (it was a height lookup per card a frame)
+  const pedAt = new Float32Array(4096 * 3).fill(1e9);
+  const pedH = (i: number, x: number, z: number) => {
+    if (i >= 4096) return H(x, z);
+    const k = i * 3, dx = x - pedAt[k], dz = z - pedAt[k + 1];
+    if (dx * dx + dz * dz > 0.25) { pedAt[k] = x; pedAt[k + 1] = z; pedAt[k + 2] = H(x, z); }
+    return pedAt[k + 2];
+  };
   const pedsAt = new THREE.Vector3(1e9, 0, 0); // where the camera was when the walkers were last drawn (crowdState)
   const drawPeds = (dt: number, time: number, cam: THREE.Camera, budget: number) => {
     const c = cam.position, ps = dist.peds;
     pedsAt.copy(c);
     dnear.length = 0;
-    for (let i = 0; i < ps.length; i++) { const d = Math.hypot(ps[i].x - c.x, ps[i].z - c.z); if (d < CARD_FAR) dnear.push([d, i]); }
+    const F2 = CARD_FAR * CARD_FAR;
+    for (let i = 0; i < ps.length; i++) { const dx = ps[i].x - c.x, dz = ps[i].z - c.z, d2 = dx * dx + dz * dz; if (d2 < F2) dnear.push([Math.sqrt(d2), i]); }
     dnear.sort((a, b) => a[0] - b[0]);
     const want = new Set<number>();
     const dcap = Math.min(DPOOL, budget);
@@ -1284,7 +1293,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       b.phase += dt * (walking ? q.v * 2.2 : 1);
       b.fig.animate(walking ? 'walk' : q.mode === 'wait' ? 'idle' : (q.pose as CrewPose), b.phase, walking ? Math.min(1.1, q.v / 3) : 0, time, dt);
     }
-    for (const [d, i] of dnear) { if (held.has(i) && d <= DNEAR * 1.2) continue; const q = ps[i]; if (d < 9 && inLens(q.x, q.z)) continue; stand.push({ x: q.x, y: H(q.x, q.z) + (q.pose === 'sit' ? -0.45 : 0), z: q.z, h: q.pose === 'sit' ? 1.3 : 1.72, k: 1e6 + i, yaw: q.yaw, walk: q.mode === 'walk' || q.mode === 'cross' }); }
+    for (const [d, i] of dnear) { if (held.has(i) && d <= DNEAR * 1.2) continue; const q = ps[i]; if (d < 9 && inLens(q.x, q.z)) continue; stand.push({ x: q.x, y: pedH(i, q.x, q.z) + (q.pose === 'sit' ? -0.45 : 0), z: q.z, h: q.pose === 'sit' ? 1.3 : 1.72, k: 1e6 + i, yaw: q.yaw, walk: q.mode === 'walk' || q.mode === 'cross' }); }
   };
 
   // far people are pictures of real bodies (impostor.ts): eight townsfolk baked into one atlas while you are in the flat
@@ -1311,8 +1320,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   if (BATCH.on) {
     const under = (o: THREE.Object3D, r: THREE.Object3D) => { for (let p = o.parent; p; p = p.parent) if (p === r) return true; return false; };
     unifyLooks(scene, recoloured);
-    batchStatic(oldTown, (m) => m.userData.ground !== true);
-    batchStatic(scene, (m) => m.userData.ground !== true && !under(m, oldTown));
+    batchStatic(oldTown, (m) => m.userData.ground !== true, 3, recoloured);
+    batchStatic(scene, (m) => m.userData.ground !== true && !under(m, oldTown), 3, recoloured);
   }
   // inside the flat: only what the door and the window show (the moving things, the people and the sky always)
   const portals = flatPortals(scene, new THREE.Box3(new THREE.Vector3(FRONT + 0.15, -1, FLAT_Z0), new THREE.Vector3(FRONT + FLAT_D, 3.4, FLAT_Z1)), FRONT - 0.15,

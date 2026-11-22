@@ -178,6 +178,7 @@ export class InstancedBatch extends THREE.BatchedMesh {
 }
 
 const HIDE = new THREE.MeshBasicMaterial({ visible: false });
+const FOLLOW = ['map', 'normalMap', 'emissiveMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'alphaMap', 'envMap', 'lightMap'];
 const plainBefore = THREE.Object3D.prototype.onBeforeRender, ID = new THREE.Matrix4();
 const BUILTIN = ['isMeshStandardMaterial', 'isMeshPhysicalMaterial', 'isMeshBasicMaterial', 'isMeshLambertMaterial', 'isMeshPhongMaterial', 'isMeshToonMaterial'];
 
@@ -189,7 +190,7 @@ const BUILTIN = ['isMeshStandardMaterial', 'isMeshPhysicalMaterial', 'isMeshBasi
  * draws nothing itself; setting its `visible` shows or hides its part of the batch. Returns the draw calls saved per
  * pass (meshes batched minus batches made).
  */
-export function batchStatic(root: THREE.Object3D, accept: (m: THREE.Mesh) => boolean = () => true, min = 3): number {
+export function batchStatic(root: THREE.Object3D, accept: (m: THREE.Mesh) => boolean = () => true, min = 3, keep?: Set<THREE.Material>): number {
   root.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
   const groups = new Map<string, THREE.Mesh[]>(), M = new THREE.Matrix4();
@@ -208,6 +209,10 @@ export function batchStatic(root: THREE.Object3D, accept: (m: THREE.Mesh) => boo
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(m);
   });
   let saved = 0;
+  // the batched pieces themselves move into one hidden group: three.js then no longer walks them, one by one, in every
+  // pass of every frame (thousands of nodes that draw nothing). Names, `visible` and the portals' hooks still find them
+  const held = new THREE.Group(); held.name = 'batched'; held.visible = false; held.matrixAutoUpdate = false;
+  root.add(held); held.updateMatrixWorld(true);
   // a material on more pieces than one batch holds is drawn by several (in the order they were found: neighbours)
   const lists = [...groups.values()].flatMap((l) => { const out: THREE.Mesh[][] = []; for (let i = 0; i < l.length; i += MAX_GEOMETRIES) out.push(l.slice(i, i + MAX_GEOMETRIES)); return out; });
   for (const list of lists) {
@@ -229,10 +234,39 @@ export function batchStatic(root: THREE.Object3D, accept: (m: THREE.Mesh) => boo
       // drawn by the batch: three skips it at the layer test (no frustum test, no draw) in every pass
       m.material = HIDE; m.frustumCulled = false; m.layers.mask = 0;
       m.userData.batchHide = (on: boolean) => b.setMainHidden(geo, on); // for the flat's portals (city.ts)
+      const mw = m.matrixWorld.clone(); m.removeFromParent(); held.add(m);
+      m.matrixAutoUpdate = false; m.matrix.multiplyMatrices(inv, mw); m.matrixWorld.copy(mw);
       Object.defineProperty(m, 'visible', { get: () => !b.isHidden(geo), set: (v: boolean) => b.setHidden(geo, !v), configurable: true });
     }
     root.add(b);
     saved += list.length - 1;
   }
+  if (!held.children.length) root.remove(held);
+  // whatever still draws one of the batches' materials on its own (a piece left out, an instanced prop) gets its own copy:
+  // a material drawn both batched and plain switched its program on every such draw (three.js rebuilt its parameters
+  // and looked the program up again, a few per cent of a frame). `keep`: materials changed later, which stay shared
+  const batchedMats = new Set<THREE.Material>();
+  root.traverse((o) => { if ((o as unknown as { isBatchedMesh?: boolean }).isBatchedMesh) batchedMats.add((o as THREE.Mesh).material as THREE.Material); });
+  const copies = new Map<THREE.Material, THREE.Material>();
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || (m as unknown as { isBatchedMesh?: boolean }).isBatchedMesh || Array.isArray(m.material)) return;
+    const mat = m.material as THREE.Material;
+    if (!batchedMats.has(mat) || keep?.has(mat) || !mat.visible) return;
+    let c = copies.get(mat);
+    if (!c) {
+      c = mat.clone(); c.userData = { ...mat.userData }; delete c.userData.followers;
+      // maps that arrive later (set on the original by whoever loads them) are picked up at its next draw
+      const src = mat as unknown as Record<string, unknown>, dst = c as unknown as Record<string, unknown>, cc = c;
+      c.onBeforeRender = () => {
+        let changed = false;
+        for (const k of FOLLOW) if (dst[k] !== src[k]) { dst[k] = src[k]; changed = true; }
+        if (cc.visible !== mat.visible) cc.visible = mat.visible;
+        if (changed) cc.needsUpdate = true;
+      };
+      copies.set(mat, c);
+    }
+    m.material = c;
+  });
   return saved;
 }
