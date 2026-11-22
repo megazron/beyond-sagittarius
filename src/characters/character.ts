@@ -882,7 +882,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       }
     }
     if (limbs) applyLimbs(limbs, bs);
-    keepArmsOut(bs);
+    // a hand in the torso is a pixel or two further off; the check walks the whole body's matrices (a crowd's worth was
+    // a few per cent of the frame)
+    if (!CHAR_BUDGET.throttle || camD < (crowd ? 8 : 16)) keepArmsOut(bs);
     if (task) taskArms(bs, kind, t, dt);
     else if (kind === 'idle' && !gaze && speak <= 0 && !moving) idleLife(bs, t, dt);
     else { idleLook *= Math.exp(-dt * 3); }

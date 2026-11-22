@@ -81,19 +81,27 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
       const along = i % 2 === 0;
       lane.push({ y: y + (rnd() - 0.5) * 3, along, c: along ? (rnd() - 0.5) * 70 : S - 40 + rnd() * (N - S + 80), p: rnd(), v: (i % 4 < 2 ? 1 : -1) * (0.035 + rnd() * 0.02) });
     }
-    const head = new THREE.InstancedMesh(new THREE.BoxGeometry(0.8, 0.5, 3.2), glowMat(0xfff0d8, 3), lane.length);
-    const tail = new THREE.InstancedMesh(new THREE.BoxGeometry(0.8, 0.5, 3.2), glowMat(0xff4060, 3), lane.length);
-    add(head); add(tail);
-    const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(1, 1, 1), UP = new THREE.Vector3(0, 1, 0);
-    updates.push((dt) => {
-      lane.forEach((l, i) => {
-        l.p = (l.p + l.v * dt + 1) % 1;
-        if (l.along) { P.set(l.c, l.y, S - 260 + l.p * (N - S + 360)); Q.setFromAxisAngle(UP, l.v > 0 ? 0 : Math.PI); }
-        else { P.set(-260 + l.p * 520, l.y, l.c); Q.setFromAxisAngle(UP, l.v > 0 ? Math.PI / 2 : -Math.PI / 2); }
-        (l.v > 0 ? head : tail).setMatrixAt(i, M.compose(P, Q, SC)); (l.v > 0 ? tail : head).setMatrixAt(i, M.compose(P.set(0, -9999, 0), Q, SC));
-      });
-      head.instanceMatrix.needsUpdate = tail.instanceMatrix.needsUpdate = true;
-    });
+    // one instanced mesh, every light's lane in its instance and its flight in the shader (two meshes and 520 matrices
+    // composed by script every frame before); headlights white where a lane runs one way, tail lights red the other
+    const lg = new THREE.InstancedBufferGeometry().copy(new THREE.BoxGeometry(0.8, 0.5, 3.2) as unknown as THREE.InstancedBufferGeometry);
+    const la = new Float32Array(lane.length * 4), lb = new Float32Array(lane.length);
+    lane.forEach((l, i) => { la.set([l.y, l.c, l.p, l.v], i * 4); lb[i] = l.along ? 1 : 0; });
+    lg.setAttribute('aLane', new THREE.InstancedBufferAttribute(la, 4)); lg.setAttribute('aAlong', new THREE.InstancedBufferAttribute(lb, 1));
+    const lm = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, fog: false });
+    lm.onBeforeCompile = (sh) => {
+      sh.uniforms.uClock = CLOCK;
+      sh.vertexShader = 'attribute vec4 aLane; attribute float aAlong; uniform float uClock;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+        { float p = fract(aLane.z + aLane.w * uClock), yaw = aAlong > 0.5 ? (aLane.w > 0.0 ? 0.0 : 3.14159265) : (aLane.w > 0.0 ? 1.57079633 : -1.57079633);
+          float c = cos(yaw), s = sin(yaw);
+          transformed = vec3(c * transformed.x + s * transformed.z, transformed.y, -s * transformed.x + c * transformed.z);
+          transformed += aAlong > 0.5 ? vec3(aLane.y, aLane.x, ${(S - 260).toFixed(1)} + p * ${(N - S + 360).toFixed(1)}) : vec3(-260.0 + p * 520.0, aLane.x, aLane.y); }`);
+      nearFade(lm, sh);
+    };
+    lm.customProgramCacheKey = () => 'mega-lanes|nearfade';
+    const lights = new THREE.InstancedMesh(lg, lm, lane.length); lights.frustumCulled = false;
+    const HEAD = new THREE.Color(0xfff0d8).multiplyScalar(3), TAIL = new THREE.Color(0xff4060).multiplyScalar(3);
+    lane.forEach((l, i) => lights.setColorAt(i, l.v > 0 ? HEAD : TAIL));
+    add(lights);
   }
 
   // ---- levitating platforms: plazas hanging in the air, lit underneath, little towers on top ----

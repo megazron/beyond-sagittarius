@@ -197,3 +197,23 @@ See the end of this file for the running log.
   Downloads/BS_Game_v1.1/city_v1.5_GPU. The Ultra planet clip was not recorded (queue stopped).
 - Not started: KTX2 (encoder works: ETC1S ~ the webp's size, UASTC 8x; normal maps need a decision), far-tree
   impostors (the batches made far trees cheap in draw calls already), title first-frame freeze (26 programs).
+
+## 2026-11-22 00:10 takeover by perf agent 16 (branch perf16 from perf15 d621084 = main a787854 + handoff)
+- Measurements in ~/bs-assets/gpu/p16 (mdetail.js = one frame's main-pass draws per material with object paths and
+  positions; ab.sh TAG PLAN.. = base (main a787854, ~/bs-perf-base worktree, dist-base on :4183) vs new (dist-new on
+  :4182), exclusive heavy, one run per call; join.py = screencast frames to mp4). Profiles with source maps: build
+  `--sourcemap --outDir dist-prof`, serve :4185, plan with "profile", then tools/mapprof.cjs.
+- core/cycle.ts: one shared clock (CLOCK, set by the city's update via tickCycles) drives things animated in the
+  shader: ad screens step through a painted atlas (cycleMaterial, aCycle per vertex), holograms turn and flicker
+  (holoMaterial, aHolo), steam is one billboard mesh, the koi, searchlights, message tower and sky lanes (citymega) move
+  in their vertex shaders. Nothing of these changes on the CPU any more, so they merge and batch. Cables are one line
+  set, bunting one instanced mesh. Gate: 153 -> 106 distinct materials, non-body main-pass draws ~208 -> ~127.
+- Bodies: every skinned part shares one skeleton (cloning gave each its own: one bone texture upload per part); the full
+  builds' head and body skin are joined too (assets.ts joinSkin, now for every build, sameSkeleton check); lashes in one
+  pass (forceSinglePass); passers-by within 0.7 m of the camera are hidden (the hair at the lens); crowd bodies past
+  8 m skip keepArmsOut (it walked the whole body's matrices).
+- Title: the first frame waits for prewarm(cine) + prewarmPost (post chain programs) to link in the background.
+- city.ts: walls in an 8 m grid for collide/clearance (they scanned every box twice a frame).
+- Coordinator notes: the Mobile crowd perf_gate (budget 120) needs real headroom (CI saw 122 on perf16 42f25f2);
+  life-wip added setRibbon in src/world/grass.ts and src/world/stream.ts: keep those when they land; the combat CI's
+  "full fight adds 381 draw calls" is being looked at by the combat agent (my batching is not known to be involved).
