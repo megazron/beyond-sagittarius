@@ -1323,10 +1323,36 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     batchStatic(oldTown, (m) => m.userData.ground !== true, 3, recoloured);
     batchStatic(scene, (m) => m.userData.ground !== true && !under(m, oldTown), 3, recoloured);
   }
+  // phones: the sun's shadow is static (redrawn now and then), but each redraw drew every caster on its own, thirty
+  // draws and more in that frame. The still casters give their shape to a few shadow-only meshes, one per 48 m of
+  // street (layer 1: the sun's shadow camera sees it, the game camera does not), and stop casting themselves
+  if (tier === 0) {
+    scene.updateMatrixWorld(true);
+    const frozen = (o: THREE.Object3D) => { for (let p: THREE.Object3D | null = o; p && p !== scene; p = p.parent) if (p.matrixAutoUpdate || !p.visible || p.userData.isCharacter || moved.has(p)) return false; return true; };
+    const cells = new Map<string, THREE.BufferGeometry[]>(), C = new THREE.Vector3();
+    scene.traverse((o) => {
+      const m = o as THREE.Mesh, mat = m.material as THREE.Material;
+      if (!m.isMesh || !m.castShadow || m.name || m.userData.keep || (m as THREE.SkinnedMesh).isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh || (m as unknown as { isBatchedMesh?: boolean }).isBatchedMesh) return;
+      if (!mat || Array.isArray(mat) || mat.transparent || mat.alphaTest > 0 || (mat as THREE.MeshStandardMaterial).alphaMap || m.customDepthMaterial || Object.keys(m.geometry.morphAttributes).length || !frozen(m)) return;
+      if (mat.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile && mat.customProgramCacheKey() !== THREE.Material.prototype.customProgramCacheKey.call(mat)) return; // a shader that moves its vertices
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', m.geometry.attributes.position); if (m.geometry.index) g.setIndex(m.geometry.index);
+      const w = (g.index ? g.toNonIndexed() : g.clone()).applyMatrix4(m.matrixWorld);
+      w.computeBoundingBox(); w.boundingBox!.getCenter(C);
+      const k = `${Math.floor(C.x / 48)}:${Math.floor(C.z / 48)}`;
+      (cells.get(k) ?? cells.set(k, []).get(k)!).push(w);
+      m.castShadow = false;
+    });
+    const casterM = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+    for (const list of cells.values()) {
+      const g = mergeGeometries(list, false); if (!g) continue;
+      const c = new THREE.Mesh(g, casterM); c.castShadow = true; c.receiveShadow = false; c.layers.set(1);
+      c.userData = { ground: false, shadowOnly: true }; c.matrixAutoUpdate = false; scene.add(c);
+    }
+  }
   // inside the flat: only what the door and the window show (the moving things, the people and the sky always)
   const portals = flatPortals(scene, new THREE.Box3(new THREE.Vector3(FRONT + 0.15, -1, FLAT_Z0), new THREE.Vector3(FRONT + FLAT_D, 3.4, FLAT_Z1)), FRONT - 0.15,
     [[64.6, 66.2, FLOOR - 0.1, 2.2 + FLOOR], [68.0, 70.4, 1.14, 2.44], [73.2, 75.6, 1.14, 2.44]],
-    (o) => moved.has(o) || !!o.userData.isCharacter || !!(o as unknown as { isBatchedMesh?: boolean }).isBatchedMesh || (((o as THREE.Mesh).material as THREE.Material | undefined)?.visible === false && !o.userData.batchHide) || o === skyMesh || o === planet || ((o as THREE.InstancedMesh).isInstancedMesh && !o.userData.prop) || (o as THREE.Sprite).isSprite, () => scene.children.length + oldTown.children.length);
+    (o) => moved.has(o) || !!o.userData.isCharacter || !!o.userData.shadowOnly || !!(o as unknown as { isBatchedMesh?: boolean }).isBatchedMesh || (((o as THREE.Mesh).material as THREE.Material | undefined)?.visible === false && !o.userData.batchHide) || o === skyMesh || o === planet || ((o as THREE.InstancedMesh).isInstancedMesh && !o.userData.prop) || (o as THREE.Sprite).isSprite, () => scene.children.length + oldTown.children.length);
   // three.js walks every object of a scene each frame to refresh its matrix, moving or not (a fifth of a phone's frame
   // here): the scene and the old town walk only what can move
   skipStatic(oldTown); skipStatic(scene);
