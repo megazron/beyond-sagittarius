@@ -9,7 +9,7 @@ import { buildHair, HAIRSTYLES, HAIR_CAP, HAIR_VOLUME, HAIR_ROUGH, HAIR_CARDS, s
 import { LOOKS, CrewId, Look } from './looks';
 import type { PlayerLook } from './custom';
 import { voice } from '../core/voice';
-import { AnimSet, CrewAsset, CrewMeta, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, furMaterial, hasLod1, lashMaterial, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
+import { AnimSet, CrewAsset, CrewMeta, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, furMaterial, hasLod1, lashMaterial, sameSkeleton, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
 import { addKit, Kit } from './kit';
 import { mergeRigid } from './rigid';
 import { perfBody } from '../core/perfhud';
@@ -283,6 +283,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       scene.updateMatrixWorld(true);
       scene.traverse((o) => { const s = o as THREE.SkinnedMesh; if (s.isSkinnedMesh) s.skeleton.calculateInverses(); });
     }
+    // every skinned part on one skeleton (cloning gave each its own): three.js then poses the bones and uploads their
+    // texture once a frame for the body instead of once per part
+    { let main: THREE.Skeleton | null = null;
+      scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && (!main || m.name === 'skin_body')) main = m.skeleton; });
+      if (main) scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && m.skeleton !== main && sameSkeleton(m.skeleton, main!)) m.skeleton = main!; }); }
     // materials
     const skinC = custom ? custom.skin : human ? 0xb5835f : L.face.skin; // a warm wheatish brown
     const shadeC = custom ? new THREE.Color(custom.skin).multiplyScalar(0.5).getHex() : human ? 0x6a4430 : L.face.shade;

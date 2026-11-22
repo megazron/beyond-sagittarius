@@ -61,7 +61,7 @@ export function loadAsset(key: string, lod: number) {
   if (!p) {
     p = (async () => {
       const [g, meta] = await Promise.all([gltf.loadAsync(`${BASE}${file}.glb`), fetch(`${BASE}${key}.json`).then((r) => r.json())]);
-      if (file !== key) try { joinSkin(g.scene); } catch (e) { console.warn("[crew] skin join", e); }
+      try { joinSkin(g.scene); } catch (e) { console.warn("[crew] skin join", e); }
       const a: CrewAsset = { scene: g.scene, meta };
       loaded.set(id, a);
       return a;
@@ -77,6 +77,12 @@ export function loadAsset(key: string, lod: number) {
  * keepArmsOut, which measures the torso from the body alone); the full builds stay as they are (faces, films, play
  * capture).
  */
+/** Two skeletons that pose a mesh the same way: the same bones in the same order, bound at the same rest pose. */
+export function sameSkeleton(a: THREE.Skeleton, b: THREE.Skeleton) {
+  if (a === b) return true;
+  if (a.bones.length !== b.bones.length || a.bones.some((x, i) => x !== b.bones[i])) return false;
+  return a.boneInverses.every((m, i) => m.elements.every((v, k) => Math.abs(v - b.boneInverses[i].elements[k]) < 1e-5));
+}
 function joinSkin(scene: THREE.Group) {
   let head: THREE.SkinnedMesh | null = null, body: THREE.SkinnedMesh | null = null;
   scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh) { if (m.name === 'skin_head') head = m; else if (m.name === 'skin_body') body = m; } });
@@ -87,7 +93,7 @@ function joinSkin(scene: THREE.Group) {
   const same = Object.keys(b.attributes).length === Object.keys(h.attributes).length && Object.entries(b.attributes).every(([k, a]) => {
     const o = h.attributes[k]; return !!o && o.itemSize === a.itemSize && o.normalized === a.normalized && (o as THREE.BufferAttribute).array.constructor === (a as THREE.BufferAttribute).array.constructor;
   });
-  if (!same || !b.index || !h.index || hn.some((n, i) => bn[i] !== n) || (head as THREE.SkinnedMesh).skeleton !== (body as THREE.SkinnedMesh).skeleton
+  if (!same || !b.index || !h.index || hn.some((n, i) => bn[i] !== n) || !sameSkeleton((head as THREE.SkinnedMesh).skeleton, (body as THREE.SkinnedMesh).skeleton)
     || !(head as THREE.SkinnedMesh).bindMatrix.equals((body as THREE.SkinnedMesh).bindMatrix) || Object.keys(b.morphAttributes).some((k) => k !== 'position')) return;
   const nb = b.attributes.position.count, nh = h.attributes.position.count;
   const g = new THREE.BufferGeometry();
@@ -281,6 +287,7 @@ export function eyeMaterial(iris: number, glow: number) {
 
 export function lashMaterial(brow: number, map = 'lash') {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7, alphaMap: texPlain(map), transparent: true, depthWrite: false, side: THREE.DoubleSide, alphaTest: 0.02 });
+  m.forceSinglePass = true; // both faces in one draw (a double-sided see-through material is otherwise drawn twice)
   m.userData.film = { kind: 'lash', brow, map };
   const u = { uBrow: { value: col(brow) } };
   m.onBeforeCompile = (sh) => {
