@@ -749,6 +749,9 @@ export class Story {
 
   private syncSpear() {
     this.spear.visible = this.flag('spear');
+    // the fire-hardened point of 1.9 until a stone head is hafted on
+    const hard = this.flag('inv.fireSpear') && !this.flag('inv.hafting');
+    for (const [n, on] of [['flintTip', !hard], ['lashing', !hard], ['burntPoint', hard]] as const) { const o = this.spear.getObjectByName(n); if (o) o.visible = on; }
   }
 
   /** Called when a level starts (after the previous one completes). */
@@ -838,9 +841,11 @@ function buildSpear() {
   const flint = new THREE.MeshStandardMaterial({ color: 0x1a1f2e, roughness: 0.2, metalness: 0.35, flatShading: true });
   const vine = new THREE.MeshStandardMaterial({ color: 0x2c4a2a, roughness: 0.9, flatShading: true });
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.028, 1.9, 5), wood);
-  const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), flint);
+  const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), flint); tip.name = 'flintTip';
   tip.scale.set(0.6, 2.0, 0.35); tip.position.y = 1.02;
-  const wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.1, 5), vine);
+  const wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.1, 5), vine); wrap.name = 'lashing';
+  // Episode One's spear has no stone head: a scraped point, fire-blackened (shown instead of the flint until hafting)
+  const burnt = new THREE.Mesh(new THREE.ConeGeometry(0.024, 0.16, 6), new THREE.MeshStandardMaterial({ color: 0x241a14, roughness: 0.9 })); burnt.name = 'burntPoint'; burnt.position.y = 1.03; burnt.visible = false; g.add(burnt);
   wrap.position.y = 0.9;
   g.add(shaft, tip, wrap);
   g.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });

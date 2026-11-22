@@ -183,8 +183,9 @@ export class FirstNight {
         z.setLookTarget(this.along(L.butt, L.dir.clone().add(new THREE.Vector3(0, 0.5, 0)).normalize(), 1.6)); audio.chime();
       } },
     ], () => {
-      z.setHold(null); this.dropStick(); made(); z.setLookTarget(null);
-      this.s.flags['inv.fireSpear'] = true;
+      z.setHold(null); this.dropStick();
+      this.s.flags['inv.fireSpear'] = true; // before made(): the spear it shows is the fire-hardened one
+      made(); z.setLookTarget(null);
       this.ui.toast(t('e1.learn.spear'));
       this.vines(camp);
     });
