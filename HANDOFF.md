@@ -510,3 +510,15 @@ unlanded except this handoff commit and any recording in progress.
   (Web ~50). NEXT: a CPU profile of Ultra at the bazaar and gate (build --sourcemap, plan with "profile", tools/mapprof.cjs)
   to find what costs per draw there (suspects: the 3072 shadow map's caster pass, the scans' many materials, per-draw
   uniform uploads with the extra Ultra lights).
+- Clips: Downloads/BS_Game_v1.1/city_v1.8_GPU (Web, ?perf=1, no sound, README with notes). Seen in them: the overlay
+  reads 21-23 fps while the screencast records (48-60 without); in 03_bazaar the camera sits low looking up into the
+  crowd and a passer-by mid-fade fills ~40% of the screen as a dark dithered shape (the lens fade from 1.3 m is too
+  late when the camera is low; the crowd camera is still off by default).
+- NOT DONE (owner's order): (2) bodies: hair and the kit are still their own draws (a merged crowd body is body + 1-2
+  kit + hair, + lashes/cornea within 5-7 m); no GPU skinning/instancing for crowds yet. (3) gate to 60 on Web: ~48.
+  (4) planet to 60: not measured this session. (5) Mobile proxy to 30: not measured this session. (6) Ultra 30+: it
+  is CPU-bound (see the GPU profile above); profile the CPU next. (7) quiet-machine re-measure and the cold title load:
+  not run (the heavy queue was held by TTS and character builds for most of the afternoon; my runs waited 30-70 min
+  each). Clips of Ultra and the planet: not recorded (p18/plan_clips18_city_ultra.json, planet_web.json are ready;
+  p18/clips.sh NAME records one).
+- Preview: I ran dist-new on :4182 (stopped at the end). Main's dist on :4180 is someone's long-running server, left alone.
