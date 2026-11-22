@@ -63,7 +63,7 @@ export class Story {
   npcs: Npcs;
   ch2: Chapter2;
   /** Set by the game: open the crafting and dialogue panels. */
-  hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean; away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void; quick: (id: string, done: () => void) => void; drill?: (lit: () => void) => boolean; spear?: (made: () => void) => boolean; night?: (done: (held: boolean) => void) => boolean } = { away: () => {}, quick: () => {}, craft: () => {}, talk: () => {}, free: () => true };
+  hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean; away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void; quick: (id: string, done: () => void) => void; drill?: (lit: () => void) => boolean; spear?: (made: () => void) => boolean; lean?: (built: () => void) => boolean; night?: (done: (held: boolean) => void) => boolean } = { away: () => {}, quick: () => {}, craft: () => {}, talk: () => {}, free: () => true };
   private strikes = 0;
   private thrustT = 0;
   private spear: THREE.Group;
@@ -239,6 +239,8 @@ export class Story {
     }
     if (n === 5 && !this.flag('shelter')) {
       out.push({ id: 'shelter', pos: L.shelter, radius: 3, label: t('action.buildShelter'), missing: this.missing(R.shelter), run: () => {
+        // 1.3: a player's own press builds the lean-to by hand and learns the throwing stick (game.ts LeanTo)
+        if (this.hooks.lean?.(() => { this.consume(R.shelter); s.flags.shelter = true; this.world.camp.setShelter(true); this.ui.toast(t('msg.shelterBuilt')); })) return;
         this.consume(R.shelter);
         s.flags.shelter = true;
         this.world.camp.setShelter(true);

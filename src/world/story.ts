@@ -301,7 +301,7 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
   beacon.add(beaconSite);
 
   forest.addObstacle(L.camp.x, L.camp.z, 0.75);
-  let shelterObstacles = false, beaconObstacle = false;
+  let shelterObstacles = false, beaconObstacle = false, baseQ: THREE.Quaternion | null = null;
 
   const state = { fireStage: 0, lit: false, shelter: false, beaconBuilt: false, beaconOn: false, sites: { fire: false, shelter: false, beacon: false } };
 
@@ -319,7 +319,9 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
     },
     setShelter(on: boolean) {
       state.shelter = on;
+      if (baseQ) shelter.quaternion.copy(baseQ);
       frame.visible = on; roof.visible = on;
+      for (const c of [...frame.children, ...roof.children]) c.visible = true;
       if (on && !shelterObstacles) {
         shelterObstacles = true;
         // the back wall blocks, the open front lets the player crawl in
@@ -327,6 +329,26 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
         forest.addObstacle(back.x, back.z, 0.9);
       }
     },
+    /**
+     * The lean-to going up, for Episode One's build (lean.ts): 0 nothing, 1 the uprights and the ridge pole, 2 the
+     * leaning poles, 3 to 5 the thatch rows from the bottom up (5 adds the bed). `thin`: every other frond of the
+     * newest row left out (light through the roof). `turn`: the whole frame turned about its upright (the wrong way
+     * to the wind), in radians. setShelter(true) is stage 5, untouched.
+     */
+    shelterStage(k: number, thin = false, turn = 0) {
+      if (!baseQ) baseQ = shelter.quaternion.clone();
+      shelter.quaternion.copy(baseQ); if (turn) shelter.rotateY(turn);
+      frame.visible = k >= 1; roof.visible = k >= 3;
+      frame.children.forEach((c, i) => { c.visible = i < 5 ? k >= 1 : k >= 2; });
+      const fronds = roof.children.slice(0, 12);
+      fronds.forEach((c, i) => {
+        const row = Math.floor(i / 4), need = 5 - row; // row 2 is the bottom: it goes on first (stage 3)
+        c.visible = k >= need && !(thin && k === need && i % 2 === 1);
+      });
+      roof.children.slice(12).forEach((c) => { c.visible = k >= 5; });
+    },
+    /** Where the lean-to stands and which way its open side faces (towards the fire). */
+    shelterAt() { const f = new THREE.Vector3(0, 0, 1).applyQuaternion(baseQ ?? shelter.quaternion); return { at: L.shelter.clone(), open: f.setY(0).normalize() }; },
     setBeacon(built: boolean, on: boolean) {
       state.beaconBuilt = built; state.beaconOn = on;
       tripod.visible = built; device.visible = built;

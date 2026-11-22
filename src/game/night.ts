@@ -185,7 +185,35 @@ export class FirstNight {
       z.setHold(null); this.dropStick(); made(); z.setLookTarget(null);
       this.s.flags['inv.fireSpear'] = true;
       this.ui.toast(t('e1.learn.spear'));
-      z.setLimbs(null); z.setKneel(false);
+      this.vines(camp);
+    });
+  }
+
+  /**
+   * The vine he brought in (docs/COMBAT_API.md `vineTraps`): green, it bends and does not snap, so it is its own cord.
+   * A running loop on a bent sapling and a line of stones across the path: what the night's set piece lets him set.
+   */
+  private vines(camp: THREE.Vector3) {
+    const z = this.z, { f, r } = this.axes(camp);
+    const work = this.kneel.clone().addScaledVector(f, -0.1).addScaledVector(r, 0.25).add(new THREE.Vector3(0, 0.45, 0));
+    const pull = (sec: number) => {
+      const t0 = performance.now();
+      const step = () => {
+        const k = (performance.now() - t0) / 1000; if (k > sec) return;
+        // the vine between his fists, bent and pulled: the hands come together and spread again
+        const w = 0.16 + 0.1 * Math.sin(k * 3.2);
+        z.setHold({ L: { at: work.clone().addScaledVector(r, -w), fingers: f.clone(), palm: r.clone(), radius: 0.02 }, R: { at: work.clone().addScaledVector(r, w), fingers: f.clone(), palm: r.clone().negate(), radius: 0.02 } });
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    };
+    this.playScene([
+      { key: 'e1.vn.1', who: 'scientist', shot: () => this.scrapeShot(camp, 1.25), run: () => { pull(5); z.setLookTarget(work); audio.sample('leather', 0.3, { rate: 0.6 }); } },
+      { key: 'e1.vn.2', who: 'scientist', shot: () => cover.mid(z, -0.7, 2.2), run: () => { z.setHold(null); z.setLookTarget(this.kneel.clone().addScaledVector(f, -4).add(new THREE.Vector3(0, 0.3, 0))); this.after(0.8, () => audio.sample('cb_rattle', 0.3)); }, after: 0.4 },
+    ], () => {
+      this.s.flags['inv.vineTraps'] = true;
+      this.ui.toast(t('e1.learn.vines'));
+      z.setHold(null); z.setLookTarget(null); z.setLimbs(null); z.setKneel(false);
     });
   }
 

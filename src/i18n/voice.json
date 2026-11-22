@@ -380,7 +380,15 @@
     "e1.sp.drax": "strong",
     "e1.sp.burn": "scientist",
     "e1.ni.held": "scientist",
-    "e1.ni.scar": "scientist"
+    "e1.ni.scar": "scientist",
+    "e1.sh.bol": "builder",
+    "e1.sh.wind": "scientist",
+    "e1.sh.thin": "scientist",
+    "e1.ts.sci": "scientist",
+    "e1.ts.hit": "scientist",
+    "e1.ts.miss": "scientist",
+    "e1.vn.1": "scientist",
+    "e1.vn.2": "scientist"
   },
   "scenes": {
     "_comment": "Lines several people speak: 'Name: words' starts that person's part; text before any name is the player's.",
