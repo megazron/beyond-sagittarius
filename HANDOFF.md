@@ -435,6 +435,21 @@ unlanded except this handoff commit and any recording in progress.
   /init powershell.exe Start-Process chrome with --remote-debugging-port=9338 --user-data-dir=%TEMP%\bs-combat-a500
   --force-high-performance-gpu (see coldchrome.sh for the full flag list).
 - Plan ~/bs-cap/combat/mkplan_v14.py (night trap beat, guardian v8, throwing stick v3, hide wrap first look).
+- 10:30 v14/v15/v16 reviewed. v14 night: the bot's prep "stuck" check counted turning on the spot, so it set every
+  trap by the fire; nothing came in wave 1 (fixed: stuck only counts while W is held). v15 night: snare at the bait
+  (5.3 m downwind), caught in wave 1, the beat turned the view and held on the struggling Skritch: works, small and
+  dark. A full black frame in v14 at 115 s while the view swept ~180 deg (turn now clamped to 1.9 rad; not seen in
+  v15). tools/combat/night_watch_probe.ts: in the flat sim wave 1 is caught ~4 s in from any watch spot.
+- Wrap: hand is not a direct child of lowerarm (forearmtw bones between); sleeve axis now measured in the bone's frame.
+  On the scientist's loose coat only the lashings show on the forearms. Shoulder caps fine.
+- Delivered (Downloads/.../combat, README notes): 05_night_defence_v11_trapbeat, 03_guardian_v9,
+  18_throwing_stick_v4, 19_hide_wrap_v3_first_look.
+- Landing: rebased on main e368b61 (perf's crowd camera merged with my view turn in player.ts updateCamera: both
+  terms in pitchV). Pushed 8f0222e as combat-land14; land it when CI is green on that sha (its own command).
+  combat-land13 (9fa22b8) went green on rerun but main had moved; it is inside land14.
+- NEXT: guardian legs darker in sun / face less boxy; wrap hide over loose sleeves (or a forearm fit from kit.ts);
+  bigger/brighter snared animal (night rim on it while held?); bow/sling grips when setGrip lands (still only
+  life-wip at 10:00); then the next invention-tree content.
 ## 2026-11-22 04:10 takeover by perf agent 17 (branch perf17 from main bfdde7b; landing branch perf17-land2)
 - Measurements in ~/bs-assets/gpu/p17: inter.sh TAG PLAN.. (base on :4183 = ~/bs-perf-base at main, built to
   ~/bs-perf/dist-base; new on :4182 dist-new; one exclusive heavy call per run, then p15/cmp.py), plan_mcensus.json
