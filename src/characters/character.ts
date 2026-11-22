@@ -512,9 +512,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   // a crowd body's skin, clothes and eyes as one mesh and one draw (bodymerge.ts); the crew and the player keep theirs
   let bodyMats: { skin: THREE.MeshStandardMaterial; cloth: THREE.MeshStandardMaterial; eyes: THREE.MeshStandardMaterial; sphere: THREE.Sphere } | null = null, bodyMat: THREE.MeshStandardMaterial | null = null;
   // the shapes a crowd body keeps: the face and the build (not the correctives: a crowd body has none)
-  const crowdKeep = (n: string) => !/^(pit|nape|hip)[LR]?\d/.test(n);
+  const crowdKeep = (n: string) => !/^(pit|nape|hip)[LR]?\d/.test(n), keepAll = (_n: string) => true;
+  let mergeWanted = false;
   function mergeCrowd() {
-    if (!crowd || !bodyMats || !BODY_MERGE.on) return;
+    if (!(crowd || mergeWanted) || !bodyMats || !BODY_MERGE.on) return;
     const { skin, cloth, eyes, sphere } = bodyMats;
     for (let s = 0; s < lodSets.length; s++) {
       const set = lodSets[s];
@@ -526,7 +527,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // one skeleton, one bind, one parent and the same place: otherwise leave this set as it is
       if (parts.some((p) => p.mesh.parent !== sk.parent || !sameSkeleton(p.mesh.skeleton, sk.skeleton) || !p.mesh.bindMatrix.equals(sk.bindMatrix) || !p.mesh.matrix.equals(sk.matrix)
         || (p.mesh.geometry.morphAttributes.position && p.mesh.geometry.morphTargetsRelative !== sk.geometry.morphTargetsRelative) || Object.keys(p.mesh.geometry.morphAttributes).some((k) => k !== 'position'))) continue;
-      const { g, names } = mergeBodyGeometry(parts, crowdKeep);
+      const { g, names } = mergeBodyGeometry(parts, crowd ? crowdKeep : keepAll);
       bodyMat ??= bodyMaterial(skin, cloth, eyes);
       const mesh = new THREE.SkinnedMesh(g, bodyMat);
       mesh.name = 'skin_body'; mesh.boundingSphere = sphere; g.boundingSphere = sphere;
@@ -1169,6 +1170,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     setLimbs(l: Limbs | null) { limbs = l; },
     /** One of a crowd (CHAR_BUDGET): no corrective shapes, the light build and no shadow from closer in. */
     setCrowd(on: boolean) { crowd = on; prepFade(); },
+    /** Draw skin, clothes and eyes as one mesh (bodymerge.ts; crowd bodies always do). For the stages, not the films. */
+    mergeParts() { mergeWanted = true; mergeCrowd(); },
     /** A crowd body that can fade (Web, Ultra) fades out towards 0 and back in towards 1; false: the stage hides it. */
     setLensFade(target: number) { lensWant = target; return fadeOn; },
     get canFade() { return fadeOn; },
