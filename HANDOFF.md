@@ -191,9 +191,9 @@ See the end of this file for the running log.
   spread is 5-15 fps: compare builds back to back in one session before believing a few fps.
 - Mobile proxy (4x slowdown) 10-19 fps; profile: render 65 % (setProgram most of it), tick 25 % (away.update/city
   1.1 s of 5.9 s, player 0.5 s, character animate 0.4 s).
-- Planet: with ~110-150 draws the overlay still shows 26-38 fps on Web and draw 15-24 ms: the next agent should first
-  run p15/plan_exp (plan_exp14_planet.json on the new build, queued as p15/exp_planet) to see if it is GPU-bound now.
-- Clips (34fddfc, ?perf=1) and README_review.txt in Downloads/BS_Game_v1.1/city_v1.5_GPU. Ultra clips were queued
-  (p15/qclips.sh) behind another agent's 30-minute job.
+- Planet forest spot, new build (p15/exp_planet): 53 fps at 242 draws standing still; pixel ratio 0.6 or post passes
+  off did not raise it (40-52, noise), so still main-thread bound. Walking (clips) 26-38 fps: update 6-11 ms, draw 15-24.
+- Clips (34fddfc, ?perf=1: Web city 01-05, Web planet 11-13, Ultra city u03-u04) and README_review.txt in
+  Downloads/BS_Game_v1.1/city_v1.5_GPU. The Ultra planet clip was not recorded (queue stopped).
 - Not started: KTX2 (encoder works: ETC1S ~ the webp's size, UASTC 8x; normal maps need a decision), far-tree
   impostors (the batches made far trees cheap in draw calls already), title first-frame freeze (26 programs).
