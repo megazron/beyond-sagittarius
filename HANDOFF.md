@@ -313,3 +313,15 @@ unlanded except this handoff commit and any recording in progress.
 - 49a6f23 was CI-green but NOT landed (the smoke). Next land: d620dff or later on combat-land3 once green, after the
   v9 recording (~/bs-cap/combat/mkplan_v9.py) looks right.
 
+- 03:25 LANDED de87e3a on main (CI 44977716877 green after one flaky-rerun). Earlier: 03:10 rebased on main 3a740a3 (perf landed; HANDOFF merged both sides). Head de87e3a pushed as combat-land4, CI
+  44977716877 running: land it when green (`git push origin de87e3a...:main` in its own command). d620dff was green
+  on combat-land3 but main moved, so it can no longer fast-forward.
+- v9 reviewed and delivered (Downloads/.../combat: 06_chase_v5, 16_spear_thrower_reference_side_v4, 03_guardian_v3,
+  05_night_defence_v5, README notes). Chase now shows the hunter. Night: smoke fixed; traps set; a catch on screen
+  NOT confirmed; an unidentified bright cyan ring on the ground (not the snare: check fx telegraph rings / pickup
+  marks); the night starts as soon as the bot says ready (give it a pause so the traps are seen). Guardian: legs
+  fold when asleep since de87e3a (not yet seen on the GPU). Atlatl: asked the owner whether the side view still
+  reads as a "T".
+- Next: a night take where a catch is framed (bot looks at the snare when a skritch nears it), identify the ring,
+  guardian silhouette at fight distance, bow camera by play, bow/sling grips once life-wip's setGrip is on main,
+  the deadfall in free play (food), Episode One 1.9 hooks are ready on the API side.
