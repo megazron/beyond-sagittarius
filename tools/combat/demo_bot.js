@@ -196,7 +196,7 @@ window.__cbBot = (mode) => {
       const W = window.__cbSide, Tm = (performance.now() - t0) / 1000;
       if (W && Tm > W[0] && Tm < W[1] && !flag.side && dist(p, flag.home) < 1.2 && p.has.throwstick) {
         flag.side = 1; const y = flag.yaw, fx = -Math.sin(y), fz = -Math.cos(y), px = -Math.cos(y), pz = Math.sin(y), h = flag.home, cy = C.cam.y;
-        __bs.photo([h.x + px * 2.6 + fx * 2.0, cy + 1.7, h.z + pz * 2.6 + fz * 2.0], [h.x + fx * 3, cy + 0.9, h.z + fz * 3]); C.testSlow = 0.35;
+        __bs.photo([h.x + px * 3.6 + fx * 1.6, cy + 1.6, h.z + pz * 3.6 + fz * 1.6], [h.x + fx * 1.6, cy + 1.0, h.z + fz * 1.6]); C.testSlow = 0.35;
       }
       if (W && Tm >= W[1] && flag.side === 1) { flag.side = 2; __bs.photo(null); C.testSlow = 1; }
       if (!p.has.throwstick) { const k = sim.pickups.find((q) => q.weapon === 'throwstick'); if (k) go(k.x, k.z); return; }
