@@ -649,7 +649,7 @@ export class Combat {
         // just sprung with no warning (it came in fast): look now
         const fresh = tr.sprungT >= 0 && sim.t - tr.sprungT < 0.35;
         const comer = tr.armed && tr.uses > 0 ? sim.enemies.find((e) => !e.dead && !e.gone && e.heldT <= 0 && e.def.temperament !== 'machine'
-          && Math.hypot(e.x - tr.x, e.z - tr.z) < 3.4 && (e.vx * (tr.x - e.x) + e.vz * (tr.z - e.z)) > 0) : undefined;
+          && (tr.kind !== 'stakes' || e.speed > 4) && Math.hypot(e.x - tr.x, e.z - tr.z) < 3.4 && (e.vx * (tr.x - e.x) + e.vz * (tr.z - e.z)) > 0) : undefined;
         if (!fresh && !comer) continue;
         this.beat = b = { id: tr.id, t: 0, snapT: fresh ? 0 : -1, yaw0: P.yaw, t0: fresh ? tr.sprungT : sim.t };
         if (comer) {

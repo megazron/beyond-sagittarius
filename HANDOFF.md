@@ -413,6 +413,28 @@ unlanded except this handoff commit and any recording in progress.
   summoned nearer so it hits. (4) setGrip still not on main (checked 09:00): bow/sling grips and bow camera wait.
   (5) hide wrap is sim-only: draw it once the rig has forearm attachments. (6) Owner to choose chase hour 18.5 or 18.7.
 
+### 2026-11-22 ~10:00 (combat agent, next session)
+- setGrip still not on main (checked 10:00: only on origin/life-wip 3178fcf); bow/sling grips wait.
+- Night trap beat (combat.ts trapBeat, player.ts `combat.turn`): an animal within 3.4 m of a set snare/stakes/deadfall,
+  walking towards it, within 16 m of the player: its own sound (chitter/squeak/growl) and a twig crack at the trap,
+  then the VIEW turns to the trap (head, not body; 0.28 rad to one side so the body does not stand in front of it).
+  Held 2.6 s past the snap, 2.8 s if nothing springs; cancelled by an attack on the player within 6 m, swinging,
+  aiming, blocking, or the player turning the view 0.35 rad; 6 s cooldown. Not in the chase.
+- Recording bot night: watch spot 4.6 m beside the snare (1.2 m downwind), looking out into the dark; stays through
+  wave 1 (only a fire under 20% calls it back); no bot-side turning to traps (the game's beat does it).
+- Camera: forest.ts `inFoliage(x, y, z)` (camera-only cones for fir/pine/sapling crowns, shrub cylinders); player.ts
+  pulls the camera in when the line to it enters foliage (the black frames in guardian v7 were fir boughs).
+- Guardian: stone courses (5 lofts turned against each other), dark-stone shoulders with sloping slabs and a bronze
+  edge, a carved face (brow, cheek stones in a V, jaw stone, dark socket, one big lens with three small that converge
+  before the beam), legs in stone drums with bronze-bound knees and broad stone feet; asleep folded (front feet forward,
+  hind feet under the flank, knees on the ground at y ~0.15; checked numerically), body settled 9 cm into the ground.
+- Throwing stick: spin on sim time (wall time strobed in slow motion); side camera above the throw (it spins flat).
+  `summon(kind, n, at?)` in encounters.ts; bot throws at a settled Nibbet summoned at 8 m.
+- Hide wrap drawn: body.ts HideWrap, hide sleeves + cord lashings parented to lowerarm/upperarm bones (no torso piece).
+- Chrome 9338 is reached only from Windows (tabs.py from WSL says refused; use powershell Invoke-WebRequest). Launch:
+  /init powershell.exe Start-Process chrome with --remote-debugging-port=9338 --user-data-dir=%TEMP%\bs-combat-a500
+  --force-high-performance-gpu (see coldchrome.sh for the full flag list).
+- Plan ~/bs-cap/combat/mkplan_v14.py (night trap beat, guardian v8, throwing stick v3, hide wrap first look).
 ## 2026-11-22 04:10 takeover by perf agent 17 (branch perf17 from main bfdde7b; landing branch perf17-land2)
 - Measurements in ~/bs-assets/gpu/p17: inter.sh TAG PLAN.. (base on :4183 = ~/bs-perf-base at main, built to
   ~/bs-perf/dist-base; new on :4182 dist-new; one exclusive heavy call per run, then p15/cmp.py), plan_mcensus.json
