@@ -48,7 +48,7 @@ export const INVENTIONS: Invention[] = [
   { id: 'handAxe', row: 11, age: 1, episodeOne: false, materials: { stone: 3 }, steps: 3, needs: ['flake'], weapon: 'handaxe' },
   { id: 'hafting', row: 12, age: 1, episodeOne: false, materials: { branch: 1, stone: 1, fibre: 1, resin: 1 }, steps: 5, needs: ['flake', 'cordage', 'fireDrill'], weapon: 'hafted' },
   { id: 'atlatl', row: 13, age: 1, episodeOne: false, materials: { branch: 2, fibre: 1 }, steps: 4, needs: ['hafting'], weapon: 'atlatl' },
-  { id: 'traps', row: 14, age: 1, episodeOne: false, materials: { fibre: 1, branch: 1 }, steps: 3, needs: ['cordage'], traps: ['snare', 'rattle'] },
+  { id: 'traps', row: 14, age: 1, episodeOne: false, materials: { fibre: 1, branch: 1 }, steps: 3, needs: ['cordage'], traps: ['snare', 'rattle', 'deadfall'] },
   // a pouch of hide (row 15) on two cords (row 10)
   { id: 'sling', row: 22, age: 1, episodeOne: false, materials: { fibre: 3, hide: 1 }, steps: 4, needs: ['cordage'], weapon: 'sling' },
   { id: 'bow', row: 19, age: 1, episodeOne: false, materials: { branch: 1, sinew: 2, fibre: 1 }, steps: 6, needs: ['cordage', 'hafting'], weapon: 'bow' },

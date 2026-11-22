@@ -448,7 +448,7 @@ export class Combat {
     if (this.encounter?.id === 'arena') for (const k of ['skritch', 'hound', 'mossback', 'lashbloom', 'nibbet'] as SpeciesId[]) items.push({ id: `summon:${k}`, label: t(`cb.c.${k}`), sub: t('cb.summon'), ok: true });
     else {
       const known = this.known();
-      for (const k of Object.keys(TRAPS) as TrapId[]) if (this.encounter || trapKnown(k, known)) items.push({ id: `trap:${k}`, label: t(`cb.t.${k}`), sub: cost(TRAPS[k].cost), ok: sim.canAfford(TRAPS[k].cost) });
+      for (const k of Object.keys(TRAPS) as TrapId[]) if (this.encounter ? k !== 'deadfall' : trapKnown(k, known)) items.push({ id: `trap:${k}`, label: t(`cb.t.${k}`), sub: cost(TRAPS[k].cost), ok: sim.canAfford(TRAPS[k].cost) });
       // only what has been invented can be made (a set piece's own kit stays inside Episode One)
       for (const w of ['club', 'handaxe', 'spear', 'torch', 'hafted', 'atlatl', 'sling', 'bow'] as WeaponId[]) if (!p.has[w] && (this.encounter ? EPISODE_WEAPONS.has(w) : weaponKnown(w, known)) && sim.canAfford(WEAPONS[w].craft!)) items.push({ id: `make:${w}`, label: `${t('cb.make')}: ${t(`cb.w.${w}`)}`, sub: cost(WEAPONS[w].craft!), ok: true });
       if (p.has.atlatl && sim.canAfford(AMMO_CRAFT.dart.cost)) items.push({ id: 'make:dart', label: `${t('cb.make')}: ${t('cb.item.dart')}`, sub: cost(AMMO_CRAFT.dart.cost), ok: true });
@@ -701,6 +701,7 @@ export class Combat {
         case 'trap': {
           if (e.what?.startsWith('set:')) { audio.sample('wood', 0.5); this.fx.puff('dust', e.x!, this.env.height(e.x!, e.z!) + 0.1, e.z!, 0, 0, 0.5); }
           else if (e.what === 'snared') { this.sfx('whip', 0.8, e.x, e.z); this.sfx('crack', 0.5, e.x, e.z, 1.5); this.fx.puff('leaf', e.x!, this.env.height(e.x!, e.z!) + 0.3, e.z!); }
+          else if (e.what === 'crushed' || e.what === 'knocked') { this.sfx('thud', e.what === 'crushed' ? 0.8 : 0.5, e.x, e.z, 1.3); this.fx.puff('dust', e.x!, this.env.height(e.x!, e.z!) + 0.1, e.z!, 0, 0, 0.8); }
           else if (e.what === 'staked') { this.sfx('crack', 1, e.x, e.z, 0.8); this.fx.puff('chip', e.x!, this.env.height(e.x!, e.z!) + 0.5, e.z!, 0, 0, 2); }
           else if (e.what === 'rattle') { this.sfx('rattle', 1, e.x, e.z); this.sfx('rattle', 0.8, e.x, e.z, 1.1, 0.45); }
           break;

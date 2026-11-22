@@ -21,6 +21,7 @@ const S: [string, string, string, string][] = [
   ['cb.t.fireline', 'Fire line', 'आग की रेखा', 'آگ کی لکیر'],
   ['cb.t.rattle', 'Rattle', 'खड़खड़ा', 'کھڑکھڑا'],
   ['cb.t.bait', 'Bait', 'चारा', 'چارہ'],
+  ['cb.t.deadfall', 'Deadfall', 'गिरने वाला पत्थर', 'گرنے والا پتھر'],
   ['cb.c.skritch', 'Skritch', 'स्क्रिच', 'سکرِچ'],
   ['cb.c.hound', 'Duskhound', 'डस्कहाउंड', 'ڈسک ہاؤنڈ'],
   ['cb.c.mossback', 'Mossback', 'मॉसबैक', 'ماس بیک'],

@@ -75,7 +75,7 @@ their own Episode One kit; the dev arena ignores it all.
 | `handAxe` | 11 | hand axe (a heavy short chop, three stones) |
 | `hafting` | 12 | stone-tipped spear |
 | `atlatl` | 13 | spear-thrower and darts |
-| `traps` | 14 | snare, rattle line |
+| `traps` | 14 | snare, rattle line, figure-four deadfall (free play; small animals come to its bait) |
 | `sling` | 22 | sling |
 | `bow` | 19 | bow and arrows |
 

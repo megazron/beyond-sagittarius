@@ -153,6 +153,16 @@ export class CombatFx {
     }
     else if (tr.kind === 'stakes') for (let i = 0; i < 6; i++) add(new THREE.ConeGeometry(0.05, 0.9, 5), wood, (i - 2.5) * 0.36, 0.36, (i % 2) * 0.2, -0.75);
     else if (tr.kind === 'rattle') { add(new THREE.CylinderGeometry(0.02, 0.025, 1.1, 5), wood, 0, 0.55, 0); for (let i = 0; i < 3; i++) add(new THREE.DodecahedronGeometry(0.06, 0), new THREE.MeshStandardMaterial({ color: 0x8a8580, flatShading: true }), 0.1 + i * 0.06, 0.95 - i * 0.14, 0); }
+    else if (tr.kind === 'deadfall') {
+      // children: 0 the slab (pivot at its back edge on the ground), 1 to 3 the figure-four sticks, 4 the bait
+      const slab = new THREE.Group(); slab.position.set(0, 0, -0.32); g.add(slab);
+      const sm = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.07, 0.62).translate(0, 0.035, 0.31), new THREE.MeshStandardMaterial({ color: 0x77726a, roughness: 0.95, flatShading: true }));
+      sm.castShadow = true; slab.add(sm); slab.rotation.x = -0.5;
+      add(new THREE.CylinderGeometry(0.012, 0.012, 0.34, 4), wood, 0, 0.17, 0.02);
+      add(new THREE.CylinderGeometry(0.01, 0.01, 0.42, 4), wood, 0, 0.3, -0.02, 0, 1.0);
+      add(new THREE.CylinderGeometry(0.01, 0.01, 0.4, 4), wood, 0.02, 0.1, 0.08, 1.45, 0);
+      add(new THREE.SphereGeometry(0.06, 7, 5), new THREE.MeshStandardMaterial({ color: 0x3f6fd0, roughness: 0.5 }), 0.02, 0.06, 0.25);
+    }
     else if (tr.kind === 'bait') add(new THREE.SphereGeometry(0.11, 8, 6), new THREE.MeshStandardMaterial({ color: 0x3f6fd0, roughness: 0.5 }), 0, 0.1, 0);
     else for (let i = 0; i < 5; i++) add(new THREE.CylinderGeometry(0.03, 0.03, 0.8, 4), wood, (i - 2) * 0.75, 0.04, Math.sin(i * 3) * 0.2, 0, Math.PI / 2);
     return g;
@@ -211,6 +221,13 @@ export class CombatFx {
       if (!o) { o = this.makeTrap(tr); o.position.set(tr.x, this.height(tr.x, tr.z), tr.z); this.group.add(o); this.props.set(tr.id, o); }
       o.visible = tr.kind === 'fireline' ? true : tr.armed || tr.kind === 'stakes' || tr.kind === 'snare';
       if (tr.kind === 'snare') this.snare(o, tr, sim, t);
+      else if (tr.kind === 'deadfall') {
+        // the stone comes down in a fifth of a second; the sticks and the bait are gone with it
+        const k = tr.sprungT >= 0 ? Math.min(1, (sim.t - tr.sprungT) / 0.2) : 0;
+        o.children[0].rotation.x = -0.5 * (1 - k * k) + (k >= 1 ? Math.sin((sim.t - tr.sprungT) * 30) * 0.02 * Math.max(0, 1 - (sim.t - tr.sprungT) * 3) : 0);
+        for (let i = 1; i < o.children.length; i++) o.children[i].visible = k < 0.3;
+        o.visible = true;
+      }
     }
     for (const [id, o] of this.props) if (!seen.has(id)) { this.group.remove(o); this.props.delete(id); }
     // fires

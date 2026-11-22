@@ -102,7 +102,7 @@ export const AMMO_CRAFT: Record<string, { cost: Record<string, number>; makes: n
   dart: { cost: { branch: 1, stone: 1, fibre: 1 }, makes: 2 },
 };
 
-export type TrapId = 'snare' | 'stakes' | 'fireline' | 'rattle' | 'bait';
+export type TrapId = 'snare' | 'stakes' | 'fireline' | 'rattle' | 'bait' | 'deadfall';
 export interface TrapDef {
   id: TrapId; cost: Record<string, number>;
   /** Trigger radius, and how many times it works. */
@@ -123,4 +123,7 @@ export const TRAPS: Record<TrapId, TrapDef> = {
   rattle: { id: 'rattle', cost: { vine: 1, stone: 2 }, r: 2.5, uses: 3, hold: 0, dmg: 0, poise: 0, setTime: 1.2 },
   // food left out: it brings them where you want them
   bait: { id: 'bait', cost: { fruit: 1 }, r: 0.8, uses: 1, hold: 0, dmg: 0, poise: 0, setTime: 0.6 },
+  // a figure-four deadfall: a flat stone propped on three notched sticks, the bait on the trigger stick. Something
+  // small that pulls at the bait brings the stone down on itself; something big only knocks it over
+  deadfall: { id: 'deadfall', cost: { stone: 1, branch: 1, fruit: 1 }, r: 0.85, uses: 1, hold: 0, dmg: 40, poise: 50, setTime: 2.6 },
 };

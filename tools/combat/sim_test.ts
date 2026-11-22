@@ -408,6 +408,17 @@ const watch = (sim: CombatSim, e: Enemy, seconds: number, bot: (I: Intent, s: Co
   const h3 = sim3.spawn('hound', 0, 16, { alert: 1.2, aware: true }); sim3.player.z = 0;
   let minD = 99; run(sim3, 15, (I) => { I.lz = 1; minD = Math.min(minD, Math.hypot(h3.x, h3.z - 5)); });
   ok(minD > 2, 'fire line: the hunter stays off it while it burns', `${minD.toFixed(1)}`);
+  // the figure-four deadfall: the bait on its trigger brings something small under the stone; a big animal only knocks it over
+  const sim5 = new CombatSim({ seed: 71 }); sim5.inv = { stone: 2, branch: 2, fruit: 2 }; sim5.player.z = -30;
+  const df = sim5.placeTrap('deadfall', 0, 5)!;
+  const n5 = sim5.spawn('nibbet', 0, 14);
+  const ev5 = run(sim5, 40, () => {}, () => df.sprungT >= 0);
+  ok(has(ev5, 'trap', 'crushed') && (n5.dead || n5.stunT > 0), 'deadfall: the bait brings a small grazer under the stone', `${df.sprungT.toFixed(1)} ${n5.hp.toFixed(0)}`);
+  ok(!sim5.scents.some((sc) => sc.id === df.scent), 'deadfall: once down, the bait is gone');
+  const df2 = sim5.placeTrap('deadfall', 30, 5)!;
+  const m5 = sim5.spawn('mossback', 30, 9, { wander: 99 });
+  run(sim5, 40, (I) => { void I; }, () => df2.sprungT >= 0 || m5.dead);
+  ok(m5.hp === m5.maxHp && df2.uses === 0 ? true : df2.sprungT < 0, 'deadfall: a big animal is not hurt by it', `${m5.hp}/${m5.maxHp} sprung ${df2.sprungT.toFixed(1)}`);
 }
 
 // ---------------------------------------------------------------- aim assist
