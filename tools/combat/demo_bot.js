@@ -208,6 +208,30 @@ window.__cbBot = (mode) => {
         // to the throwing-arm side of the line from thrower to prey
         const sx = -uz, sz = ux;
         __bs.photo([mx + sx * L, cy + 2.2, mz + sz * L], [mx, cy + 0.5, mz]); C.testSlow = 0.3;
+        flag.camP = [mx + sx * L, cy + 2.2, mz + sz * L]; flag.camT = [mx, cy + 0.5, mz]; flag.side1 = { sx, sz };
+      }
+      // once the stick is down, the camera goes with the fetch at full speed: the thrower walks out to the stick (and
+      // the animal it hit) and back, framed from the same side, the view eased (v6 held its spot and showed grass)
+      if (flag.side === 1 && !p.has.throwstick) {
+        const k = sim.pickups.find((q) => q.weapon === 'throwstick');
+        if (k) {
+          if (!flag.landT) flag.landT = performance.now();
+          if (performance.now() - flag.landT > 1500) {
+            C.testSlow = 1;
+            const mx = (p.x + k.x) / 2, mz = (p.z + k.z) / 2, D = Math.hypot(k.x - p.x, k.z - p.z), L = Math.max(4.5, D * 0.75 + 2.5), S = flag.side1;
+            const want = [mx + S.sx * L, C.cam.y + 2.0, mz + S.sz * L], tgt = [mx, C.cam.y + 0.6, mz];
+            for (let i = 0; i < 3; i++) { flag.camP[i] += (want[i] - flag.camP[i]) * 0.06; flag.camT[i] += (tgt[i] - flag.camT[i]) * 0.1; }
+            __bs.photo(flag.camP, flag.camT);
+          }
+        }
+      }
+      // picked up: follow the walk home for a few seconds, then hand the view back
+      if (flag.side === 1 && p.has.throwstick && flag.landT) { flag.landT = 0; flag.back = performance.now(); }
+      if (flag.side === 1 && flag.back) {
+        const S = flag.side1, L = 5, want = [p.x + S.sx * L, C.cam.y + 2.0, p.z + S.sz * L], tgt = [p.x, C.cam.y + 0.9, p.z];
+        for (let i = 0; i < 3; i++) { flag.camP[i] += (want[i] - flag.camP[i]) * 0.06; flag.camT[i] += (tgt[i] - flag.camT[i]) * 0.1; }
+        __bs.photo(flag.camP, flag.camT);
+        if (performance.now() - flag.back > 5000) { flag.side = 2; flag.back = 0; __bs.photo(null); C.testSlow = 1; }
       }
       if (W && Tm >= W[1] && flag.side === 1) { flag.side = 2; __bs.photo(null); C.testSlow = 1; }
       if (!p.has.throwstick) { const k = sim.pickups.find((q) => q.weapon === 'throwstick'); if (k) go(k.x, k.z); return; }
