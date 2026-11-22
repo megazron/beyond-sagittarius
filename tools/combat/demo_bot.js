@@ -100,6 +100,7 @@ window.__cbBot = (mode) => {
       }
     } else if (mode === 'night') {
       const fire = sim.fires.find((f) => !f.torch && !f.burnsOut), food = run.markers.find((m) => m.kind === 'food');
+      if (!fire || !food || run.id !== 'night.defence') return; // the night has not started yet
       const wx = sim.windX, wz = sim.windZ, bait = { x: food.x + wx * 8, z: food.z + wz * 8 };
       if (run.phase === 'prep') {
         // read the smoke: they will come up the wind. Stakes on the line in, bait out downwind, a snare on the bait.
