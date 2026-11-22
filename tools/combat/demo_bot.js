@@ -197,8 +197,10 @@ window.__cbBot = (mode) => {
       if (W && Tm > W[0] && Tm < W[1] && !flag.side && dist(p, flag.home) < 1.2 && p.has.throwstick) {
         flag.side = 1; const y = C.cam.yaw, fx = -Math.sin(y), fz = -Math.cos(y), px = -Math.cos(y), pz = Math.sin(y), h = flag.home, cy = C.cam.y;
         // the stick spins flat (side-arm), so the camera looks down on the throw from the side and above: the turning
-        // stick shows as a turning bar, not as a stick growing and shrinking edge-on
-        __bs.photo([h.x + px * 6.5 + fx * 3.5, cy + 3.4, h.z + pz * 6.5 + fz * 3.5], [h.x + fx * 5.0, cy + 1.2, h.z + fz * 5.0]); C.testSlow = 0.3;
+        // stick shows as a turning bar, not as a stick growing and shrinking edge-on. Square to the middle of the
+        // throw (the Nibbets sit about 8 m out) and far enough back that the thrower, head to feet, and the landing
+        // are both inside the frame (the thrower stood at the edge, half cut off, in v4)
+        __bs.photo([h.x + px * 8.5 + fx * 3.4, cy + 3.0, h.z + pz * 8.5 + fz * 3.4], [h.x + fx * 3.4, cy + 0.6, h.z + fz * 3.4]); C.testSlow = 0.3;
       }
       if (W && Tm >= W[1] && flag.side === 1) { flag.side = 2; __bs.photo(null); C.testSlow = 1; }
       if (!p.has.throwstick) { const k = sim.pickups.find((q) => q.weapon === 'throwstick'); if (k) go(k.x, k.z); return; }

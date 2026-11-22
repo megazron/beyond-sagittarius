@@ -102,40 +102,110 @@ function gearMesh(id: WeaponId): THREE.Object3D {
  * The hide wrap (tree row 15), worn: smoked hide round each forearm from below the elbow to above the wrist and a cap
  * over each shoulder, lashed on with cord. Hung on the arm bones themselves, so it goes wherever the arm goes (a
  * story scene, a roll, the walk) with no work a frame. Sizes are in metres, turned into each bone's own units.
+ *
+ * Over clothes: the crew's coats are cut loose, and a wrap sized to a bare arm sank into the sleeve (only the cords
+ * showed). So the wrap measures the sleeve it goes over (the skinned vertices that follow the forearm, in the bone's
+ * own frame) and is laid just over it; the cloth beyond each end is drawn puffed out, the way a sleeve bunches where
+ * a wrap squeezes it, and the cord runs crossed over the hide between bands at the ends.
  */
 class HideWrap {
   private parts: THREE.Object3D[] = [];
   private model: Character | null = null;
-  private hide = new THREE.MeshStandardMaterial({ color: 0x7d5b3a, roughness: 0.96, flatShading: true });
-  private cord = new THREE.MeshStandardMaterial({ color: 0x2e2116, roughness: 0.9 });
+  private hide = new THREE.MeshStandardMaterial({ color: 0x6e4c2e, roughness: 0.96, flatShading: true });
+  private cord = new THREE.MeshStandardMaterial({ color: 0x2a1d12, roughness: 0.9 });
+  private cloth: THREE.MeshStandardMaterial | null = null;
   set(model: Character, on: boolean) {
     if (on && this.model !== model) { this.clear(); this.build(model); }
     else if (!on && this.model) this.clear();
   }
   private clear() { for (const o of this.parts) o.removeFromParent(); this.parts = []; this.model = null; }
+  /**
+   * The cloth round `bone` (towards `child`), in the bone's own units: the largest distance from the bone's line of
+   * any skinned vertex that follows `bone` (or the twist bones `follow` names), in eight sections along it. Returns
+   * the radii (0 where nothing was found) and the material of the widest vertex (the sleeve's cloth).
+   */
+  private measure(model: Character, bone: THREE.Object3D, axis: THREE.Vector3, len: number, follow: (n: string) => boolean) {
+    const R = new Array(8).fill(0); let cloth: THREE.Material | null = null, best = 0;
+    const v = new THREE.Vector3(), ax = axis.clone().normalize();
+    model.root.traverse((o) => {
+      const m = o as THREE.SkinnedMesh;
+      if (!m.isSkinnedMesh || o.name === 'hideWrap' || !m.visible) return;
+      const sk = m.skeleton, si = m.geometry.attributes.skinIndex, sw = m.geometry.attributes.skinWeight, pos = m.geometry.attributes.position;
+      if (!sk || !si || !sw) return;
+      const mine = sk.bones.map((b) => follow(b.name));
+      if (!mine.some(Boolean)) return;
+      m.updateWorldMatrix(true, false);
+      for (let i = 0; i < pos.count; i++) {
+        let top = 0, ti = -1;
+        for (let c = 0; c < 4; c++) { const w = sw.getComponent(i, c); if (w > top) { top = w; ti = si.getComponent(i, c); } }
+        if (ti < 0 || !mine[ti] || top < 0.5) continue;
+        m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld); bone.worldToLocal(v);
+        const t = v.dot(ax) / len; if (t < 0 || t >= 1) continue;
+        const r = v.addScaledVector(ax, -v.dot(ax)).length(), k = Math.floor(t * 8);
+        if (r > R[k]) R[k] = r;
+        if (r > best) { best = r; cloth = Array.isArray(m.material) ? m.material[0] : m.material; }
+      }
+    });
+    return { R, cloth };
+  }
   /** A sleeve on `bone` along the way to `child`, from `a` to `b` of the bone's length, radius r0 -> r1 (metres). */
-  private sleeve(bone: THREE.Object3D, child: THREE.Object3D, a: number, b: number, r0: number, r1: number, laces: number[], flare = 0) {
+  private sleeve(model: Character, bone: THREE.Object3D, child: THREE.Object3D, a: number, b: number, r0: number, r1: number, laces: number[], flare = 0, follow?: (n: string) => boolean) {
     // the child's place in this bone's own frame (the hand is not a direct child of the forearm: twist bones sit between)
     bone.updateWorldMatrix(true, false); child.updateWorldMatrix(true, false);
     const cw = child.getWorldPosition(new THREE.Vector3()), axis = bone.worldToLocal(cw.clone()), len = axis.length();
     if (len < 1e-4) return;
     const wl = bone.getWorldPosition(new THREE.Vector3()).distanceTo(cw);
     const k = wl > 1e-4 ? len / wl : 1; // metres to the bone's units
+    // over the sleeve: never smaller than the cloth under it at that section (plus the hide's thickness)
+    const M = follow ? this.measure(model, bone, axis, len, follow) : null;
+    const under = (t: number) => {
+      if (!M) return 0;
+      const i = Math.max(0, Math.min(7, Math.floor(t * 8)));
+      return Math.max(M.R[i], M.R[Math.max(0, i - 1)] * 0.9, M.R[Math.min(7, i + 1)] * 0.9);
+    };
+    const rad = (t: number, base: number) => Math.max(base * k, under(t) * 1.05 + 0.004 * k);
     const g = new THREE.Group(); g.name = 'hideWrap';
-    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.normalize());
-    // a hide sleeve: seven sides, not quite round, the edges rolled a little proud
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.clone().normalize());
+    const ra = rad(a, r0), rb = rad(b, r1), rm = rad((a + b) / 2, (r0 + r1) / 2);
+    // a hide sleeve: seven sides, not quite round, the edges rolled a little proud, pulled in a little under the cords
     const rings = [
-      { y: a * len, rx: r0 * k * (1.06 + flare), rz: r0 * k * (0.98 + flare) },
-      { y: (a + 0.04) * len, rx: r0 * k * 1.02, rz: r0 * k * 0.95 },
-      { y: (a + b) * 0.5 * len, rx: (r0 + r1) * 0.5 * k, rz: (r0 + r1) * 0.5 * k * 0.92 },
-      { y: (b - 0.04) * len, rx: r1 * k * 1.02, rz: r1 * k * 0.95 },
-      { y: b * len, rx: r1 * k * 1.08, rz: r1 * k * 1.0 },
+      { y: a * len, rx: ra * (1.06 + flare), rz: ra * (0.98 + flare) },
+      { y: (a + 0.04) * len, rx: ra * 1.02, rz: ra * 0.95 },
+      { y: (a + b) * 0.5 * len, rx: rm, rz: rm * 0.92 },
+      { y: (b - 0.04) * len, rx: rb * 1.02, rz: rb * 0.95 },
+      { y: b * len, rx: rb * 1.08, rz: rb * 1.0 },
     ];
     const m = new THREE.Mesh(loft(rings, 7), this.hide); m.castShadow = true; g.add(m);
+    const at = (t: number) => { const u = (t - a) / (b - a); return (u < 0.5 ? ra + (rm - ra) * u * 2 : rm + (rb - rm) * (u - 0.5) * 2) * 1.05; };
     for (const t of laces) {
-      const r = (r0 + (r1 - r0) * ((t - a) / (b - a))) * k * 1.04;
-      const c = new THREE.Mesh(new THREE.TorusGeometry(r, 0.0045 * k, 4, 12).rotateX(Math.PI / 2), this.cord);
+      const c = new THREE.Mesh(new THREE.TorusGeometry(at(t), 0.0055 * k, 4, 12).rotateX(Math.PI / 2), this.cord);
       c.position.y = t * len; c.rotation.y = t * 7; c.rotation.z = 0.12; g.add(c);
+    }
+    // crossed lashing between the first and last band: two cords wound opposite ways
+    if (laces.length > 1) {
+      const t0 = laces[0], t1 = laces[laces.length - 1];
+      for (const dir of [1, -1]) {
+        const pts: THREE.Vector3[] = [];
+        for (let i = 0; i <= 24; i++) {
+          const t = t0 + (t1 - t0) * (i / 24), ang = dir * (i / 24) * Math.PI * 2 * (laces.length - 1) * 0.5 + (dir > 0 ? 0 : Math.PI), r = at(t) * 1.01;
+          pts.push(new THREE.Vector3(Math.sin(ang) * r, t * len, Math.cos(ang) * r * 0.94));
+        }
+        const c = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, 0.0045 * k, 4), this.cord); g.add(c);
+      }
+    }
+    // the sleeve bunched out beyond each end of the wrap, where there is cloth to bunch
+    if (M && M.cloth && this.cloth) {
+      for (const [t, dir] of [[a, -1], [b, 1]] as const) {
+        const ru = under(t + dir * 0.06);
+        if (ru < 0.055 * k) continue; // a bare arm there: nothing to bunch
+        const r = (t === a ? ra : rb), y = t * len, d = 0.06 * len * dir;
+        const puff = loft([
+          { y: y - d * 0.1, rx: r * 0.97, rz: r * 0.92 },
+          { y: y + d * 0.35, rx: Math.max(r, ru) * 1.12, rz: Math.max(r, ru) * 1.04 },
+          { y: y + d, rx: Math.max(ru * 1.02, r * 0.95), rz: Math.max(ru * 1.02, r * 0.95) * 0.95 },
+        ].sort((p, q) => p.y - q.y), 9);
+        const pm = new THREE.Mesh(puff, this.cloth); pm.castShadow = true; g.add(pm);
+      }
     }
     bone.add(g); this.parts.push(g);
   }
@@ -144,9 +214,14 @@ class HideWrap {
     for (const s of ['L', 'R']) {
       const up = g(`upperarm${s}`), lo = g(`lowerarm${s}`), hd = g(`hand${s}`);
       if (!up || !lo || !hd) continue;
-      // sized to go over a coat sleeve (the crew's coats are cut loose; a bare arm is about 4.5 cm at the forearm)
-      this.sleeve(lo, hd, 0.12, 0.84, 0.072, 0.06, [0.22, 0.5, 0.76]);
-      this.sleeve(up, lo, -0.06, 0.36, 0.092, 0.08, [0.3], 0.12);
+      if (!this.cloth) {
+        // the coat's own cloth colour for the bunched sleeve (measured below; white coat if none is found)
+        const probe = this.measure(model, lo, lo.worldToLocal(hd.getWorldPosition(new THREE.Vector3())), Math.max(1e-4, lo.worldToLocal(hd.getWorldPosition(new THREE.Vector3())).length()), (n) => n === `lowerarm${s}` || (n.startsWith('forearmtw') && n.endsWith(s)));
+        const src = probe.cloth as THREE.MeshStandardMaterial | null;
+        this.cloth = new THREE.MeshStandardMaterial({ color: src?.color ? src.color.clone() : new THREE.Color(0xe8e8e4), roughness: 0.92 });
+      }
+      this.sleeve(model, lo, hd, 0.12, 0.84, 0.05, 0.045, [0.18, 0.5, 0.8], 0, (n) => n === `lowerarm${s}` || (n.startsWith('forearmtw') && n.endsWith(s)));
+      this.sleeve(model, up, lo, -0.06, 0.36, 0.092, 0.08, [0.3], 0.12);
     }
     this.model = model;
   }

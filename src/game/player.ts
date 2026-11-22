@@ -68,13 +68,16 @@ export class Player {
     /** 0..1: the view swings round to look behind (a glance back in a chase); the walk keeps its own heading. */
     back?: number;
     /** radians: the view turns this far from the walk's heading (a look at a trap that springs nearby); view only. */
-    turn?: number } | null = null;
+    turn?: number;
+    /** 0..1: draw the view in a little (narrower field of view) on something the fight wants seen (a trap's catch). */
+    zoom?: number } | null = null;
   private aimS = 0;
   /** How crowded it is round you (the stage's, 0 to 1): the camera rises over the heads and looks down at you. */
   crowdNear: (() => number) | null = null;
   private crowdS = 0;
   private backS = 0;
   private turnS = 0;
+  private zoomS = 0;
   /** Stages other than Verdaxis set their own gravity, and let you jump across open gaps. */
   physics = { gravity: 14, jump: 5.2, gaps: false };
 
@@ -268,7 +271,7 @@ export class Player {
   snapCamera() {
     this.focus.copy(this.pos);
     this.yawS = this.yaw; this.pitchS = this.pitch; this.distS = this.camDist;
-    this.fovKick = 0; this.bobK = 0; this.lean = 0; this.dip = 0; this.dipV = 0; this.backS = 0; this.turnS = 0;
+    this.fovKick = 0; this.bobK = 0; this.lean = 0; this.dip = 0; this.dipV = 0; this.backS = 0; this.turnS = 0; this.zoomS = 0;
     if (this.camera.fov !== this.baseFov) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
     this.camClip = 1;
     this.orbit(this.camPos, this.focus, this.yaw, this.pitch, this.camDist);
@@ -340,7 +343,9 @@ export class Player {
 
     // FOV kick while sprinting
     this.fovKick += ((this.sprinting ? 6.5 : 0) - this.fovKick) * e(this.sprinting ? 3.5 : 6);
-    const fov = this.baseFov + this.fovKick - 9 * aim;
+    const zw = this.combat?.zoom ?? 0;
+    this.zoomS += (zw - this.zoomS) * e(zw > this.zoomS ? 2.2 : 1.6);
+    const fov = this.baseFov + this.fovKick - 9 * aim - 15 * this.zoomS;
     if (Math.abs(fov - this.camera.fov) > 0.01) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
   }
 

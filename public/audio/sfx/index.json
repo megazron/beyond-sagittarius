@@ -329,6 +329,27 @@
 "kind": "fx",
 "made": true
 },
+"cb_rustle_1": {
+"f": "cb_rustle_1.ogg",
+"d": 0.62,
+"loop": false,
+"kind": "fx",
+"made": true
+},
+"cb_rustle_2": {
+"f": "cb_rustle_2.ogg",
+"d": 0.62,
+"loop": false,
+"kind": "fx",
+"made": true
+},
+"cb_rustle_3": {
+"f": "cb_rustle_3.ogg",
+"d": 0.62,
+"loop": false,
+"kind": "fx",
+"made": true
+},
 "cb_shriek_1": {
 "f": "cb_shriek_1.ogg",
 "d": 0.42,
@@ -392,6 +413,27 @@
 "kind": "fx",
 "made": true
 },
+"cb_struggle_1": {
+"f": "cb_struggle_1.ogg",
+"d": 0.92,
+"loop": false,
+"kind": "fx",
+"made": true
+},
+"cb_struggle_2": {
+"f": "cb_struggle_2.ogg",
+"d": 0.92,
+"loop": false,
+"kind": "fx",
+"made": true
+},
+"cb_struggle_3": {
+"f": "cb_struggle_3.ogg",
+"d": 0.92,
+"loop": false,
+"kind": "fx",
+"made": true
+},
 "cb_swing_1": {
 "f": "cb_swing_1.ogg",
 "d": 0.3,
@@ -437,6 +479,27 @@
 "cb_twang_2": {
 "f": "cb_twang_2.ogg",
 "d": 0.52,
+"loop": false,
+"kind": "fx",
+"made": true
+},
+"cb_twig_1": {
+"f": "cb_twig_1.ogg",
+"d": 0.34,
+"loop": false,
+"kind": "fx",
+"made": true
+},
+"cb_twig_2": {
+"f": "cb_twig_2.ogg",
+"d": 0.34,
+"loop": false,
+"kind": "fx",
+"made": true
+},
+"cb_twig_3": {
+"f": "cb_twig_3.ogg",
+"d": 0.34,
 "loop": false,
 "kind": "fx",
 "made": true

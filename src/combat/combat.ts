@@ -67,7 +67,7 @@ export class Combat {
   private ambient: CombatSim | null = null;
   encounter: EncounterRun | null = null;
   private sim: CombatSim | null = null;
-  private views = new Map<number, { v: CreatureView; kind: SpeciesId; tele: number; teleDur: number }>();
+  private views = new Map<number, { v: CreatureView; kind: SpeciesId; tele: number; teleDur: number; fightT?: number }>();
   private pool: Partial<Record<SpeciesId, CreatureView[]>> = {};
   private fx: CombatFx;
   private body = new FightBody();
@@ -610,6 +610,8 @@ export class Combat {
       }
       cb.back = back;
       cb.turn = run && run.id !== 'chase.escape' ? this.trapBeat(dt, sim, I.aim) : 0;
+      // the view draws in on the trap once it has sprung and something is in it (a third of the way while it waits)
+      cb.zoom = this.beat ? (this.beat.snapT >= 0 ? 1 : 0.35) : 0;
     } else { P.combat = null; this.beat = null; }
     // where the player looks (not the camera: a story or a recording may hold the camera elsewhere)
     { const cp = Math.cos(P.pitch); this.aimW.set(-Math.sin(P.yaw) * cp, Math.sin(P.pitch), -Math.cos(P.yaw) * cp); }
@@ -653,10 +655,13 @@ export class Combat {
         if (!fresh && !comer) continue;
         this.beat = b = { id: tr.id, t: 0, snapT: fresh ? 0 : -1, yaw0: P.yaw, t0: fresh ? tr.sprungT : sim.t };
         if (comer) {
-          // the cue: the animal itself at the trap, and a twig under its feet
+          // the cue, heard on its own before anything is seen: leaves pushed aside at the trap, the animal's own voice,
+          // then a dry twig under its foot. Full loudness out to 9 m (it was a faint tick under the night's other
+          // sounds: the chitter some 20 dB under the world's footfalls, the twig pitched up into a click)
           const k = comer.kind, cue = k === 'nibbet' ? 'squeak' : k === 'hound' ? 'growl' : 'chitter';
-          this.sfx(cue, k === 'hound' ? 0.55 : 0.75, tr.x, tr.z, k === 'hound' ? 0.9 : 1.1);
-          this.sfx('crack', 0.3, tr.x, tr.z, 2.3, 0.12);
+          this.sfx('rustle', 0.9, tr.x, tr.z, 1, 0, 9);
+          this.sfx(cue, k === 'hound' ? 0.8 : 1, tr.x, tr.z, k === 'hound' ? 0.9 : 1, 0.18, 9);
+          this.sfx('twig', 1, tr.x, tr.z, 1, 0.55, 9);
         }
         break;
       }
@@ -673,9 +678,9 @@ export class Combat {
   // ---------------- what happened, made felt ----------------
   private vol(x?: number, z?: number, far = 45) { if (x === undefined || z === undefined) return 1; const P = this.d.player.pos; return Math.max(0, 1 - Math.hypot(x - P.x, z - P.z) / far); }
   /** One of the fight's own sounds (public/audio/sfx/cb_*, made by tools/combat/make_sounds.py), placed in the world. */
-  private sfx(name: string, vol = 0.8, x?: number, z?: number, rate = 1, delay = 0) {
+  private sfx(name: string, vol = 0.8, x?: number, z?: number, rate = 1, delay = 0, near = 4) {
     const at = x !== undefined && z !== undefined ? { x, y: this.env.height(x, z) + 0.8, z } : undefined;
-    audio.sample(`cb_${name}`, vol, { at, near: 4, far: 90, rate, delay });
+    audio.sample(`cb_${name}`, vol, { at, near, far: 90, rate, delay });
   }
   private voice(what: string, x?: number, z?: number) {
     const V: Record<string, [string, number, number]> = {
@@ -755,7 +760,7 @@ export class Combat {
         case 'phase': ui.banner(t('cb.c.guardian'), ''); audio.tone(80, 1.5, 'sawtooth', 0.2, 0, 60); this.kickCam(0.08); break;
         case 'trap': {
           if (e.what?.startsWith('set:')) { audio.sample('wood', 0.5); this.fx.puff('dust', e.x!, this.env.height(e.x!, e.z!) + 0.1, e.z!, 0, 0, 0.5); }
-          else if (e.what === 'snared') { this.sfx('whip', 0.8, e.x, e.z); this.sfx('crack', 0.5, e.x, e.z, 1.5); this.fx.puff('leaf', e.x!, this.env.height(e.x!, e.z!) + 0.3, e.z!); }
+          else if (e.what === 'snared') { this.sfx('whip', 1, e.x, e.z, 1, 0, 9); this.sfx('twig', 0.9, e.x, e.z, 0.8, 0, 9); this.sfx('struggle', 1, e.x, e.z, 1, 0.25, 9); this.fx.puff('leaf', e.x!, this.env.height(e.x!, e.z!) + 0.3, e.z!); }
           else if (e.what === 'crushed' || e.what === 'knocked') { this.sfx('thud', e.what === 'crushed' ? 0.8 : 0.5, e.x, e.z, 1.3); this.fx.puff('dust', e.x!, this.env.height(e.x!, e.z!) + 0.1, e.z!, 0, 0, 0.8); }
           else if (e.what === 'staked') { this.sfx('crack', 1, e.x, e.z, 0.8); this.fx.puff('chip', e.x!, this.env.height(e.x!, e.z!) + 0.5, e.z!, 0, 0, 2); }
           else if (e.what === 'rattle') { this.sfx('rattle', 1, e.x, e.z); this.sfx('rattle', 0.8, e.x, e.z, 1.1, 0.45); }
@@ -839,6 +844,18 @@ export class Combat {
       const vw = q ?? this.viewFor(e);
       if (e.state === 'windup') vw.tele += dt; else vw.tele = 0;
       vw.v.update(e, this.clock, dt, vw.teleDur > 0 ? Math.min(1, vw.tele / vw.teleDur) : 0);
+      // a caught animal fights the cord: heard (thrashing, a squeal) and seen (grass and dirt kicked up) until it
+      // breaks free or is dealt with, so the catch reads from a distance and in the dark
+      if (e.heldT > 0 && !e.dead && d < 30) {
+        vw.fightT = (vw.fightT ?? 0.5) - dt;
+        if (vw.fightT <= 0) {
+          vw.fightT = 0.55 + Math.random() * 0.35;
+          this.sfx('struggle', 0.85, e.x, e.z, 0.95 + Math.random() * 0.15, 0, 9);
+          const y = this.env.height(e.x, e.z) + 0.15;
+          this.fx.puff('dust', e.x - Math.sin(e.yaw) * e.def.radius, y, e.z - Math.cos(e.yaw) * e.def.radius, 0, 0, 0.8);
+          this.fx.puff('leaf', e.x, y + 0.1, e.z, 0, 0, 0.7);
+        }
+      } else vw.fightT = undefined;
       // never draw a body the camera is standing inside (a big creature pressed against the lens hides the fight)
       vw.v.root.visible = !(Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < e.def.radius + 0.35 && cam.position.y < e.y + e.def.height + 0.2);
       if (e.state === 'windup' && e.atk?.id === 'beam') this.fx.moveTelegraph(e.id, e.x, e.z, Math.sin(e.yaw), Math.cos(e.yaw), e.atk.reach, 0.85);
