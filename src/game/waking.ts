@@ -177,7 +177,7 @@ export class Waking {
         audio.sample('leather', 0.25);
       } },
       // dipped full: framed on its own, the leaf going into the water
-      { hold: 1.9, shot: () => this.dipShot(dip), run: () => {
+      { hold: 1.9, shot: () => this.dipShot(dip, spot.at), run: () => {
         z.setHold(null);
         z.doTask('pickup', { at: dip.clone(), seconds: 1.4, hands: 'R', prop: 'leaf' });
         this.after(0.6, () => audio.sample('splash', 0.14, { rate: 1.8 }));
@@ -213,9 +213,10 @@ export class Waking {
 
   /** The leaf going into the water: from the bank behind his shoulder, high enough to look down on the surface (low
    * over the stream the current threads smear across the lens). */
-  private dipShot(dip: THREE.Vector3): Shot {
-    const f = this.fwd(), r = new THREE.Vector3(f.z, 0, -f.x);
-    const from = dip.clone().addScaledVector(r, 0.75).addScaledVector(f, -0.85).setY(dip.y + 1.05);
+  private dipShot(dip: THREE.Vector3, bank: THREE.Vector3): Shot {
+    // built from the bank and the water, not the model's heading (the first cut of this sat low behind him)
+    const w = dip.clone().sub(bank).setY(0).normalize(), r = new THREE.Vector3(w.z, 0, -w.x);
+    const from = bank.clone().addScaledVector(w, -0.2).addScaledVector(r, 0.95).add(new THREE.Vector3(0, 1.3, 0));
     this.stream.clearReeds(from, 0.9);
     return { from, to: dip.clone().add(new THREE.Vector3(0, 0.08, 0)), push: 0.02 };
   }
