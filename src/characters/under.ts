@@ -41,10 +41,10 @@ export function underCloth(skin: THREE.SkinnedMesh, cloth: THREE.SkinnedMesh): n
   const seen = new Set<number>();
   let count = 0;
   /** Nearest hit of a ray with the garment within REACH: [distance, triangle, u, v] or null. */
-  const cast = (ox: number, oy: number, oz: number, dx: number, dy: number, dz: number) => {
-    let best = REACH, bt = -1, bu = 0, bv = 0;
+  const cast = (ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, reach = REACH) => {
+    let best = reach, bt = -1, bu = 0, bv = 0;
     seen.clear();
-    const ex = ox + dx * REACH, ey = oy + dy * REACH, ez = oz + dz * REACH;
+    const ex = ox + dx * reach, ey = oy + dy * reach, ez = oz + dz * reach;
     for (let x = cell(Math.min(ox, ex)); x <= cell(Math.max(ox, ex)); x++) for (let y = cell(Math.min(oy, ey)); y <= cell(Math.max(oy, ey)); y++) for (let z = cell(Math.min(oz, ez)); z <= cell(Math.max(oz, ez)); z++) {
       const l = grid.get(key(x, y, z));
       if (!l) continue;
@@ -94,6 +94,13 @@ export function underCloth(skin: THREE.SkinnedMesh, cloth: THREE.SkinnedMesh): n
         if (h) { ins++; if (!firstIn || h[0] < firstIn[0]) firstIn = h; }
       }
       if (ins >= NEED - 1 && firstIn) { hits = ins; first = firstIn; }
+    }
+    // A strip of body between two garments (Zenvik's waist between his shirt's hem and his trousers, under the open
+    // coat): rays up and down along the body, tipped a little outwards, both meet cloth within a hand's width. A real
+    // opening (the neck, a wrist) has cloth on one side only.
+    if (hits < NEED && Math.abs(n.y) < 0.6) {
+      const up = cast(ox, oy, oz, n.x * 0.35, 0.94, n.z * 0.35, 0.09), down = up && cast(ox, oy, oz, n.x * 0.35, -0.94, n.z * 0.35, 0.09);
+      if (up && down) { hits = NEED; first = up[0] < down[0] ? up : down; }
     }
     if (hits < NEED || !first) continue;
     const [, t, u, w] = first, a = idx[t * 3], b = idx[t * 3 + 1], c = idx[t * 3 + 2], k = 1 - u - w;

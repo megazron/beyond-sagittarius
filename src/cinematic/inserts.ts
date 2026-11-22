@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 /** The things the pull's lines name, built for their insert shots (SHOTLIST_pull_and_fates: A3 the nav gauge, B2 the
  *  drink, C3 the warning, D1-D3 the cockpit and its attitude display, G2 the comms panel, G4 the readout). Each sits
@@ -83,7 +84,9 @@ export function createInserts(deck: THREE.Group) {
   const trim = new THREE.MeshStandardMaterial({ color: 0x14171c, metalness: 0.5, roughness: 0.45 });
   const fabric = new THREE.MeshStandardMaterial({ color: 0x1c2330, metalness: 0, roughness: 0.92 });
   const box = (w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0) => {
-    const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); cockpit.add(o); return o; };
+    // rounded edges (a moulded flight deck, not plain boxes): the bevel catches the light along every edge
+    const rr = Math.min(0.035, Math.min(w, h, d) * 0.3);
+    const o = new THREE.Mesh(rr > 0.004 ? new RoundedBoxGeometry(w, h, d, 3, rr) : new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); cockpit.add(o); return o; };
   {
     // shell: floor, rear bulkhead, side walls with ribs, ceiling
     box(2.9, 0.06, 3.2, trim, 0, -2.23, -0.3);
@@ -138,9 +141,11 @@ export function createInserts(deck: THREE.Group) {
     const bar = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.035, 0.035), metal); stick.add(bar);
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.04, 20), metal); hub.rotation.x = Math.PI / 2; stick.add(hub);
     for (const sx of [-1, 1]) { const horn = new THREE.Mesh(new THREE.CapsuleGeometry(0.019, 0.1, 4, 12), new THREE.MeshStandardMaterial({ color: 0x101215, roughness: 0.75 })); horn.position.set(sx * 0.17, 0.035, 0); stick.add(horn); } }
-  const cockLight = new THREE.PointLight(0xffb070, 2.2, 3, 2); cockLight.position.set(0, -1.0, -1.0); cockpit.add(cockLight);
+  // the displays' own glow on her from below (cool, soft: the orange lamp here lit her harsh orange)
+  const cockLight = new THREE.PointLight(0x9cc4ff, 1.3, 3, 2); cockLight.position.set(0, -1.0, -1.0); cockpit.add(cockLight);
   const cockKey = new THREE.PointLight(0xcfe6ff, 3, 6, 1.8); cockKey.position.set(0.5, 0.1, 0.6); cockpit.add(cockKey);
-  const cockFill = new THREE.PointLight(0x7fd0ff, 0.8, 3, 2); cockFill.position.set(0.55, -0.85, -0.7); // off the yoke's axis: it blew a highlight on the hub in front of the display cockpit.add(cockFill);
+  // off the yoke's axis: it blew a highlight on the hub in front of the display
+  const cockFill = new THREE.PointLight(0x7fd0ff, 0.8, 3, 2); cockFill.position.set(0.55, -0.85, -0.7); cockpit.add(cockFill);
   cockpit.visible = false;
 
   return {

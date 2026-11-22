@@ -11,6 +11,7 @@ import { FilmVideo } from './filmvideo';
 import type { World } from '../world/world';
 import { LAKE } from '../world/heightfield';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { NOISE_GLSL } from '../core/glsl';
 
 const BEAT = 60 / beat.bpm;
 /** Where each one's eyes go in their sky (I5): the giant, the black hole, the old stars, the hole overhead, the cloud. */
@@ -810,7 +811,7 @@ export class Montage {
       const rock = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number) => { const m = new THREE.Mesh(lumpy(r, rockSeed++), new THREE.MeshStandardMaterial({ color, roughness: 0.95 })); m.position.set(x, y > r * 1.5 ? y : ground(x, z) + Math.min(y, r * 0.45), z); m.rotation.set(x * 0.1, y + z, z * 0.07); g.add(m); return m; };
       const sky = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number, emissive = 0) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 24), new THREE.MeshStandardMaterial({ color, roughness: 1, emissive, emissiveIntensity: 0.5 })); m.position.set(x, y, z); g.add(m); return m; };
       // Methryx: black slush, orange haze, the ringed giant huge on the horizon
-      mk('strong', 0x2a2018, 0.5, (g) => { { const gi = sky(g, 110, -170, 45, -560, 0xffffff, 0x3a2a10); const cv = document.createElement('canvas'); cv.width = 64; cv.height = 256; const x = cv.getContext('2d')!; for (let y = 0; y < 256; y++) { const v = 0.5 + 0.5 * Math.sin(y * 0.21) * Math.cos(y * 0.057 + 1) + 0.15 * Math.sin(y * 0.9); x.fillStyle = `rgb(${Math.round(190 + 50 * v)},${Math.round(120 + 60 * v)},${Math.round(60 + 50 * v)})`; x.fillRect(0, y, 64, 1); } const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; (gi.material as THREE.MeshStandardMaterial).map = tx; gi.rotation.z = 0.35; } const r = new THREE.Mesh(new THREE.RingGeometry(140, 225, 64), new THREE.MeshBasicMaterial({ color: 0xd8c9a8, transparent: true, opacity: 0.5, side: THREE.DoubleSide })); r.position.set(-170, 45, -560); r.rotation.set(-1.3, 0.3, 0); g.add(r); rock(g, 1.2, 3, 0.2, -4, 0x2a211a); rock(g, 0.7, -4, 0.1, -2, 0x2a211a); rock(g, 2.2, -7, 0.5, -9, 0x2a211a); rock(g, 3.5, 11, 1, -18, 0x241c16);
+      mk('strong', 0x2a2018, 0.5, (g) => { ringedGiant(g, V(-170, 45, -560), 110, V(0.7, 0.4, 0.6)); rock(g, 1.2, 3, 0.2, -4, 0x2a211a); rock(g, 0.7, -4, 0.1, -2, 0x2a211a); rock(g, 2.2, -7, 0.5, -9, 0x2a211a); rock(g, 3.5, 11, 1, -18, 0x241c16);
         // a black methane lake behind him, flat and glossy
         const lake = new THREE.Mesh(new THREE.CircleGeometry(26, 48), new THREE.MeshStandardMaterial({ color: 0x050403, roughness: 0.08, metalness: 0.6 })); lake.rotation.x = -Math.PI / 2; lake.position.set(4, ground(4, -34) + 0.25, -34); lake.scale.set(1.6, 1, 0.7); g.add(lake); }, 0.6, [0xc8803a, 0x2a1a0c, 0.95]);
       // the grey moon: dust, hard light, a torn piece of hull
@@ -824,7 +825,13 @@ export class Montage {
         // old metal in the split: ribs of something that was built here long ago
         for (let i = 0; i < 4; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.3, 7, 0.3), new THREE.MeshStandardMaterial({ color: 0x8a8f96, roughness: 0.45, metalness: 0.8 })); b.position.set(-3 + i * 2.1, 3, -10 - i * 0.6); b.rotation.set(0.1 * i, 0, 0.18 - i * 0.12); g.add(b); } }, 1.6, [0xb09a84, 0x1c140e, 0.7]);
       // Aerolis: a raft of hull on gold cloud to every horizon
-      mk('social', 0xe2c46a, 1, (g) => { const d = new THREE.Mesh(new THREE.BoxGeometry(6, 0.3, 4), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); d.position.set(0, 0.16, 0); d.rotation.set(0.03, 0.4, -0.04); g.add(d); for (let i = 0; i < 9; i++) sky(g, 14 + (i % 3) * 8, Math.cos(i * 0.7) * (60 + i * 6), -6 + (i % 2) * 5, -70 + Math.sin(i * 0.7) * 50, 0xf0d890, 0x2a2008); }, 0, [0xffe9b0, 0x8a6a30, 0.6]); // smooth cloud tops (heaps of lumpy puffs were tried: they read as rock and one filled the sky shot)
+      mk('social', 0xe2c46a, 1, (g) => { const d = new THREE.Mesh(new THREE.BoxGeometry(6, 0.3, 4), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); d.position.set(0, 0.16, 0); d.rotation.set(0.03, 0.4, -0.04); g.add(d);
+        // the floor is cloud, not ground: soft billows shaded by the sun's side, fading gold into the distance; and
+        // towers of cloud that have soft, torn edges (hard-edged lumps read as rock)
+        const sunD = V(0.2, 0.6, -0.8).normalize();
+        (g.children[0] as THREE.Mesh).material = cloudFloorMat(sunD);
+        const cm = cloudTowerMat(sunD);
+        for (let i = 0; i < 9; i++) { const c = sky(g, 14 + (i % 3) * 8, Math.cos(i * 0.7) * (60 + i * 6), -6 + (i % 2) * 5, -70 + Math.sin(i * 0.7) * 50, 0xf0d890, 0x2a2008); (c as THREE.Mesh).material = cm; c.scale.set(1.25, 0.8 + (i % 4) * 0.12, 1.1); c.renderOrder = 3; } }, 0, [0xffe9b0, 0x8a6a30, 0.6]);
       this.stageG.children.forEach((c, i) => c.position.set(i * 4000, -20000, 0));
     }
     for (const c of this.stageG.children) c.visible = c.name === id;
@@ -884,8 +891,9 @@ export class Montage {
       this.embers.set({ at: o.clone().add(V(0, 0.3, 0)), c0: col, c1: 0x202020, life: 1.6, speed: 5, drag: 1.4, grav: id === 'explorer' ? 0 : -2, size: 0.06, grow: 0.4, stagger: 0.1 }).play(tt);
     }
     // key light per world, and the colour of their own trail from behind
+    // (on the asteroid the trail's rim sits close in and short, or it lit the rocks behind her red)
     const KEY: Record<string, number> = { strong: 0xffb070, medic: 0xffffff, explorer: 0xdfe8ff, builder: 0xffd0a0, social: 0xffe6a0 };
-    this.setRig([{ p: o.clone().add(V(3, 4, 4)), color: KEY[id], i: ({ medic: 48, builder: 60, social: 22, strong: 44 } as Record<string, number>)[id] ?? 34, d: 18 }, { p: o.clone().add(V(-2.5, 1.5, -2.5)), color: col, i: 14, d: 9 }, { p: o.clone().add(V(0, 9, -14)), color: KEY[id], i: id === 'builder' ? 40 : 10, d: 70 }]);
+    this.setRig([{ p: o.clone().add(V(3, 4, 4)), color: KEY[id], i: ({ medic: 48, builder: 60, social: 22, strong: 44 } as Record<string, number>)[id] ?? 34, d: 18 }, id === 'explorer' ? { p: o.clone().add(V(-1.1, 1.3, -1.1)), color: new THREE.Color(col).lerp(new THREE.Color(0xdfe8ff), 0.45).getHex(), i: 6, d: 2.8 } : { p: o.clone().add(V(-2.5, 1.5, -2.5)), color: col, i: 14, d: 9 }, { p: o.clone().add(V(0, 9, -14)), color: KEY[id], i: id === 'builder' ? 40 : 10, d: 70 }]);
     const f = after(b, imp, 0.45) * 0.8, c2 = new THREE.Color(col).lerp(new THREE.Color(1, 1, 1), 0.7);
     this.fx = { flash: [c2.r * f, c2.g * f, c2.b * f], zoom: 0.05 * after(b, imp, 0.6), exposure };
     this.card(id, (b - (imp + 19.3)) / 0.5);
@@ -1499,3 +1507,116 @@ export class Montage {
 }
 
 const DECK: Record<string, [number, number]> = { social: [-1.5, 1.4], strong: [-0.25, 2.0], medic: [1.15, 1.75], explorer: [1.95, 0.75], builder: [-2.5, 0.5], scientist: [0.3, -0.45] };
+
+/**
+ * Methryx's ringed giant (the landing's horizon): turbulent belts and zones with a storm, and a ring of many thin
+ * bands with a dark gap, lit from the sun's side, with the planet's shadow lying across the ring behind it.
+ */
+function ringedGiant(g: THREE.Group, at: THREE.Vector3, r: number, sunDir: THREE.Vector3) {
+  const W = 512, H = 256, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const x2 = cv.getContext('2d')!, img = x2.createImageData(W, H), d = img.data;
+  const h1 = (n: number) => { const v = Math.sin(n * 127.1) * 43758.5453; return v - Math.floor(v); };
+  const vn = (x: number) => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return h1(i) * (1 - u) + h1(i + 1) * u; };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const lat = y / H, lon = x / W * Math.PI * 2;
+    // the belts are bent by eddies, more so near the edges of each band
+    const warp = (vn(x * 0.03 + y * 0.11) - 0.5) * 7 + Math.sin(lon * 3 + lat * 20) * 2.2;
+    const yy = y + warp;
+    const band = 0.5 + 0.5 * Math.sin(yy * 0.19) * Math.cos(yy * 0.051 + 1) + 0.18 * Math.sin(yy * 0.83);
+    const fine = vn(x * 0.09 + yy * 0.7) * 0.18;
+    // a storm, an oval with a pale rim, in the southern belts
+    const sx = (x - W * 0.62) / 34, sy = (y - H * 0.64) / 15, so = Math.hypot(sx, sy);
+    const storm = so < 1.25 ? (so < 1 ? 0.35 : 0.65) * (1 - Math.max(0, so - 1) * 4) : 0;
+    const v = Math.min(1, Math.max(0, band * 0.85 + fine));
+    let R = 150 + 95 * v, G = 100 + 75 * v, B = 55 + 55 * v;
+    if (storm) { R = R * (1 - storm) + 210 * storm; G = G * (1 - storm) + 120 * storm; B = B * (1 - storm) + 80 * storm; }
+    // the poles darker and greyer
+    const pole = Math.pow(Math.abs(lat - 0.5) * 2, 3) * 0.45;
+    const k = (y * W + x) * 4; d[k] = R * (1 - pole); d[k + 1] = G * (1 - pole * 0.9); d[k + 2] = B * (1 - pole * 0.6); d[k + 3] = 255;
+  }
+  x2.putImageData(img, 0, 0);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 4;
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 96, 48), new THREE.MeshStandardMaterial({ map: tx, roughness: 1, emissive: 0x3a2a10, emissiveIntensity: 0.5 }));
+  ball.position.copy(at); ball.rotation.z = 0.35; g.add(ball);
+  const ri = r * 1.27, ro = r * 2.05;
+  const geo = new THREE.RingGeometry(ri, ro, 160, 1);
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, side: THREE.DoubleSide, depthWrite: false,
+    fog: true,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uR: { value: r }, uIn: { value: ri }, uOut: { value: ro }, uSun: { value: sunDir.clone().normalize() } }]),
+    // the ring's centre is the planet's: the offset from it, in the world's axes, wherever the stage is moved
+    vertexShader: '#include <fog_pars_vertex>\nvarying vec3 vO; varying vec2 vL; void main(){ vL = position.xy; vec4 w = modelMatrix * vec4(position, 1.0); vO = w.xyz - (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
+    fragmentShader: `
+      #include <fog_pars_fragment>
+      uniform vec3 uSun; uniform float uR, uIn, uOut; varying vec3 vO; varying vec2 vL;
+      float h(float n){ return fract(sin(n * 91.7) * 43758.5); }
+      void main(){
+        float t = (length(vL) - uIn) / (uOut - uIn);
+        // many thin ringlets of differing density, a wide dark gap two thirds out, a faint inner ring
+        float q = t * 140.0, i = floor(q);
+        float d = mix(h(i), h(i + 1.0), smoothstep(0.0, 1.0, fract(q)));
+        d = 0.35 + 0.65 * d;
+        d *= 0.55 + 0.45 * sin(t * 37.0 + 1.3) * sin(t * 11.0);
+        d *= 1.0 - 0.95 * smoothstep(0.6, 0.62, t) * (1.0 - smoothstep(0.68, 0.7, t));
+        d *= mix(0.25, 1.0, smoothstep(0.0, 0.18, t)) * (1.0 - smoothstep(0.93, 1.0, t));
+        // the planet's shadow: is the sun blocked on the way from here?
+        vec3 o = vO; float b = dot(o, uSun), c = dot(o, o) - uR * uR;
+        float lit = (b < 0.0 && b * b - c > 0.0) ? 0.06 : 1.0;
+        vec3 col = mix(vec3(0.62, 0.55, 0.45), vec3(0.88, 0.8, 0.66), h(i * 1.7)) * lit;
+        gl_FragColor = vec4(col, clamp(d, 0.0, 1.0) * 0.85);
+        #include <fog_fragment>
+      }`,
+  });
+  const ring = new THREE.Mesh(geo, mat);
+  ring.position.copy(at); ring.rotation.set(-1.3, 0.3, 0); g.add(ring);
+}
+
+/** Aerolis's cloud floor: billows of cloud lit from the sun's side, no facets, gold haze to the horizon. */
+function cloudFloorMat(sun: THREE.Vector3) {
+  return new THREE.ShaderMaterial({
+    fog: true,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSun: { value: sun } }]),
+    vertexShader: '#include <fog_pars_vertex>\nvarying vec3 vW; varying vec2 vR; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vR = w.xz - (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
+    fragmentShader: `
+      #include <fog_pars_fragment>
+      ${NOISE_GLSL}
+      uniform vec3 uSun; varying vec3 vW; varying vec2 vR;
+      float bil(vec2 p){ float a = 0.0, w = 0.55; for (int i = 0; i < 5; i++) { a += w * (1.0 - abs(vnoise2(p) * 2.0 - 1.0)); p = p * 2.03 + 7.1; w *= 0.5; } return a; }
+      void main(){
+        vec2 p = vR * 0.06;
+        float h = bil(p), hs = bil(p + normalize(uSun.xz + 1e-4) * 0.12);
+        // lit where the billow rises towards the sun, in its own shade on the far side
+        float lit = clamp(0.62 + (hs - h) * 2.4 + h * 0.25, 0.0, 1.0);
+        vec3 col = mix(vec3(0.55, 0.42, 0.24), vec3(1.0, 0.92, 0.72), lit);
+        float far = smoothstep(40.0, 600.0, length(vR));
+        col = mix(col, vec3(1.0, 0.86, 0.58), far * 0.7);
+        gl_FragColor = vec4(col, 1.0);
+        #include <fog_fragment>
+      }`,
+  });
+}
+
+/** A tower of cloud: bright on the sun's side and on top, grey-gold underneath, the edge thin and torn. */
+function cloudTowerMat(sun: THREE.Vector3) {
+  return new THREE.ShaderMaterial({
+    fog: true, transparent: true, depthWrite: false,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSun: { value: sun } }]),
+    vertexShader: '#include <fog_pars_vertex>\nvarying vec3 vW; varying vec3 vN; varying vec3 vL; void main(){ vL = position; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
+    fragmentShader: `
+      #include <fog_pars_fragment>
+      ${NOISE_GLSL}
+      uniform vec3 uSun; varying vec3 vW; varying vec3 vN; varying vec3 vL;
+      void main(){
+        vec3 V = normalize(cameraPosition - vW), N = normalize(vN);
+        float n = vnoise(vL * 0.18) * 0.55 + vnoise(vL * 0.5) * 0.3 + vnoise(vL * 1.3) * 0.15;
+        float wrap = clamp(dot(N, uSun) * 0.5 + 0.5 + (n - 0.5) * 0.6, 0.0, 1.0);
+        float up = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
+        vec3 col = mix(vec3(0.6, 0.5, 0.36), vec3(1.0, 0.95, 0.82), wrap * 0.75 + up * 0.25);
+        // the silhouette thins out into wisps
+        float rim = clamp(dot(N, V), 0.0, 1.0);
+        float a = smoothstep(0.05, 0.45, rim + (n - 0.5) * 0.7) * smoothstep(-0.25, 0.2, N.y + (n - 0.5));
+        gl_FragColor = vec4(col, a);
+        #include <fog_fragment>
+      }`,
+  });
+}
