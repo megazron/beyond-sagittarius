@@ -408,8 +408,8 @@ export class Waking {
   /** A little spray from his mouth that arcs to the ground. */
   private spit(from: THREE.Vector3, dir: THREE.Vector3) {
     // spittle and bits of the red skin: a fan of drops, the bits bigger, slow enough to see at a game frame rate
-    const N = 18, g = new THREE.SphereGeometry(0.0075, 8, 6);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.12, transparent: true, opacity: 0.9 });
+    const N = 30, g = new THREE.SphereGeometry(0.013, 8, 6); // v5: at 7 mm and 1 to 2 m/s nothing read at 540p
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.12, emissive: 0x3a3a3a, transparent: true, opacity: 0.95 });
     const drops = new THREE.InstancedMesh(g, mat, N);
     const c = new THREE.Color();
     for (let i = 0; i < N; i++) drops.setColorAt(i, i % 3 === 0 ? c.set(0xb01a28) : c.set(0xe9dcd8));
@@ -419,8 +419,8 @@ export class Waking {
     drops.onBeforeRender = () => {
       const k = performance.now() / 1000 - t0;
       for (let i = 0; i < N; i++) {
-        const sp = 1.1 + (i % 4) * 0.3, tt = Math.max(0, k - i * 0.02);
-        p.copy(from).addScaledVector(dir, sp * tt).add(new THREE.Vector3(Math.sin(i * 3.1) * 0.35 * tt, 1.3 * tt - 4.9 * tt * tt, Math.cos(i * 2.3) * 0.35 * tt));
+        const sp = 0.55 + (i % 4) * 0.15, tt = Math.max(0, k - i * 0.025);
+        p.copy(from).addScaledVector(dir, sp * tt).add(new THREE.Vector3(Math.sin(i * 3.1) * 0.2 * tt, 0.6 * tt - 4.9 * tt * tt, Math.cos(i * 2.3) * 0.2 * tt));
         p.y = Math.max(p.y, ground + 0.005);
         drops.setMatrixAt(i, m4.compose(p, q, one.setScalar(i % 3 === 0 ? 1.5 : 1)));
       }
