@@ -265,7 +265,7 @@ export class Waking {
       } },
       { choice: 'e1.fruit', shot: () => this.twoShot(at, 1.25) },
       { key: 'e1.fr.eat', who: 'scientist', if: ATE, shot: () => cover.close(z, 0.35, 0.95), run: () => {
-        this.release(); this.player.act('eat'); take();
+        this.release(); this.player.act('eat', null, undefined, 'berry'); take();
         st.hunger = Math.min(100, st.hunger + 16); st.health = Math.max(1, st.health - 8);
       }, after: 0.6 },
       // TEST IT FIRST. He picks one berry and holds it up to look at it, and Lyrra's voice comes back to him
