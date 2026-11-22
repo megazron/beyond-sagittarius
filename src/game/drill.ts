@@ -89,7 +89,7 @@ export class FireDrill {
   private puff(at: THREE.Vector3, thick: number, sec: number) {
     const N = 60, g = new THREE.BufferGeometry(), pos = new Float32Array(N * 3);
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const m = new THREE.PointsMaterial({ color: 0xb8b4ac, size: 0.05, transparent: true, opacity: 0.5 * thick, depthWrite: false });
+    const m = new THREE.PointsMaterial({ color: 0x9c9890, size: 0.018, transparent: true, opacity: 0.35 * thick, depthWrite: false });
     const pts = new THREE.Points(g, m); pts.frustumCulled = false;
     const t0 = performance.now();
     pts.onBeforeRender = () => {
@@ -99,7 +99,7 @@ export class FireDrill {
         pos[i * 3] = at.x + sw; pos[i * 3 + 1] = at.y + a * 0.55; pos[i * 3 + 2] = at.z + Math.cos(i * 3.3 + k) * 0.06 * a;
       }
       g.attributes.position.needsUpdate = true;
-      m.opacity = 0.5 * thick * Math.min(1, k / 0.8) * Math.max(0, Math.min(1, (sec - k) / 0.6));
+      m.opacity = 0.35 * thick * Math.min(1, k / 0.8) * Math.max(0, Math.min(1, (sec - k) / 0.6));
     };
     this.world.scene.add(pts);
     this.smoke = pts;
