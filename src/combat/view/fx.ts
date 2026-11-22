@@ -27,7 +27,7 @@ const PUFF: Record<Puff, { n: number; c: [number, number, number]; size: number;
   flash: { n: 1, c: [2.5, 2.3, 2], size: 1.3, life: 0.09, speed: 0, up: 0, g: 0, add: true },
   arc: { n: 8, c: [0.8, 2.2, 3], size: 0.06, life: 0.3, speed: 4, up: 1, g: 0, add: true },
   // wood smoke: rises slowly and leans with the wind, so the camp shows which way the breeze carries the food's smell
-  smoke: { n: 1, c: [0.55, 0.52, 0.48], size: 1.2, life: 5.5, speed: 0.25, up: 0.6, g: -0.04, a: 0.32 },
+  smoke: { n: 1, c: [0.3, 0.29, 0.28], size: 0.5, life: 4.5, speed: 0.2, up: 0.5, g: -0.04, a: 0.16 },
 };
 
 export class CombatFx {
@@ -59,7 +59,9 @@ export class CombatFx {
       transparent: true, depthWrite: false, blending: THREE.NormalBlending,
       uniforms: { uScale: { value: 600 } },
       vertexShader: `attribute vec4 aCol; attribute float aSize; varying vec4 vCol; uniform float uScale;
-        void main() { vCol = aCol; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = aSize * uScale / max(0.1, -mv.z); }`,
+        void main() { vCol = aCol; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; float d = max(0.1, -mv.z);
+          // nothing swells over the lens: capped in size, and faded out right in front of the camera
+          gl_PointSize = min(aSize * uScale / d, 0.18 * uScale); vCol.a *= smoothstep(0.7, 2.8, d); }`,
       fragmentShader: `varying vec4 vCol; void main() { float d = length(gl_PointCoord - 0.5) * 2.0; float a = smoothstep(1.0, 0.2, d) * vCol.a; if (a < 0.01) discard; gl_FragColor = vec4(vCol.rgb, a); }`,
     });
     this.points = new THREE.Points(g, m);
