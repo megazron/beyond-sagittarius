@@ -352,3 +352,21 @@ unlanded except this handoff commit and any recording in progress.
   Reference camera in mkplan_v10.py: behind and above the throwing shoulder first, then side-on.
 - Windows interop from my shell gave "Invalid argument" for .exe; `/init /mnt/c/...exe` works. ~/bs-cap/combat/cap2.sh
   is cap.sh with that prefix.
+- 05:00 State: main = bfdde7b (landed, CI 44979957452 green after one flaky rerun). Unlanded on `combat`: 23a58d9..34460d7
+  (night hush, vine traps, rings off, snared struggle, chase dusk, guardian, atlatl arc, throwing stick, bot fixes),
+  pushed as combat-land8 (CI running). combat-land7 (64038f0) failed only perf_gate "mobile bazaar 836430 triangles
+  (budget 720000)" (city, not touched by these commits; known to swing): if land8 fails the same way, rerun once.
+  Land with `git push origin <sha>:main` in its own command once green on that exact sha.
+- Throwing stick (`throwstick`, invention `throwStick`, row null, Episode One, after woodBone + flake): thrown it spins
+  end over end (fx), proj radius 0.32 (wide sweep), the stick itself flies (ammo null), swung a light club. Not yet
+  in a clip; not yet taught by the story (set `flags['inv.throwStick']`).
+- v11 recordings (~/bs-cap/combat/v11, plan mkplan_v11.py, capture cap2.sh) delivered: 05_night_defence_v7,
+  06_chase_v7, 16_spear_thrower_reference_v6, 03_guardian_v5 (README notes). v10n night was useless: the bot passed a
+  marker's missing `.y` as look height, pitch went NaN, the camera froze all night (fixed; testLook ignores NaN).
+- NEXT: (1) night: a snare catch still NOT seen on screen. The bot now logs catches in window.__cbTrapLog: add an
+  eval step after the night rec that prints it, then check whether the snare at the bait ever springs in the real
+  world (scavengers in v7 stood near the food, 4-5 m from the guard spot, not at the bait 8 m out); maybe put the
+  snare on the line in (between bait and food) or close to the food. (2) chase: very orange at 18.5; try 18.7 if the
+  owner wants cooler; bot still bitten once and walks into the lashbloom. (3) guardian: body dark from the front at
+  fight distance; asleep knees still rise a little. (4) setGrip still not on main (checked 04:30): bow/sling grips wait.
+  (5) record the throwing stick (arena, a `throwref` bot mode does not exist yet).
