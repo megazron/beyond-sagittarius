@@ -279,3 +279,24 @@ unlanded except this handoff commit and any recording in progress.
 - Coordinator notes: the Mobile crowd perf_gate (budget 120) needs real headroom (CI saw 122 on perf16 42f25f2);
   life-wip added setRibbon in src/world/grass.ts and src/world/stream.ts: keep those when they land; the combat CI's
   "full fight adds 381 draw calls" is being looked at by the combat agent (my batching is not known to be involved).
+
+### 2026-11-22 ~01:50 (next combat agent)
+- LANDED 6160b3d on main (CI 44969621815 green on that sha). Local on top (not pushed yet): 81d6475, 7fd2d65.
+- Night: scavenger waves now come UP THE WIND (sim.windX/Z set in the night setup: from the fire across the food and
+  out into the dark, +-0.3 rad); the camp fire puffs wood smoke that leans with the wind (fx 'smoke'), so a player can
+  read where to set traps. Snare is a spring pole (fx.snare: bent sapling, snaps up on a catch with a damped
+  overshoot, cord to the caught leg while held). Trap has `caught`/`sprungT`. sim_test: 210 checks (arrivals downwind,
+  a downwind trap catches).
+- Recording bot night prep rewritten: reads the wind, sets stakes (3.5 m downwind of the food), bait and a snare
+  (8 m), each faced downwind by walking the last 1.7 m along the wind; stuck walker sidesteps, then sets where it
+  stands; says ready out at the bait (by the fire the E key feeds the fire instead: that is why "ready" never fired
+  before); guards the food from its upwind side looking out over the traps. `window.__cbDbg` shows its prep state.
+- Chase: the hunter was never on screen in v3 (the camera looks ahead, it is behind). Now the view glances back
+  (player.ts `combat.back`, view only, the legs keep their heading) while the hound winds up or starts a lunge within
+  16 m; B holds a look back.
+- Spear-thrower full draw: side-on, hand by the ear with the elbow down, off hand bent in front of the chest
+  (MECHANICS_NOTES section 11, sources).
+- Guardian redesigned (creatures.ts guardian()): monolith on four IK legs, three lenses converge before the beam,
+  rears before the stomp, back fins open on the core after a beam. Not yet seen on the GPU.
+- Recording plan ~/bs-cap/combat/mkplan_v8.py (chase v4, atlatl ref v3, guardian v2, night v4) -> plan_v8.json.
+- Delivered 06_chase_v3 with notes; night v3 not sent (no stakes, no catch visible).
