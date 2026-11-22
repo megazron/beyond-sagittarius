@@ -115,9 +115,11 @@ class HideWrap {
   private clear() { for (const o of this.parts) o.removeFromParent(); this.parts = []; this.model = null; }
   /** A sleeve on `bone` along the way to `child`, from `a` to `b` of the bone's length, radius r0 -> r1 (metres). */
   private sleeve(bone: THREE.Object3D, child: THREE.Object3D, a: number, b: number, r0: number, r1: number, laces: number[], flare = 0) {
-    const axis = child.position.clone(), len = axis.length();
+    // the child's place in this bone's own frame (the hand is not a direct child of the forearm: twist bones sit between)
+    bone.updateWorldMatrix(true, false); child.updateWorldMatrix(true, false);
+    const cw = child.getWorldPosition(new THREE.Vector3()), axis = bone.worldToLocal(cw.clone()), len = axis.length();
     if (len < 1e-4) return;
-    const wl = bone.getWorldPosition(new THREE.Vector3()).distanceTo(child.getWorldPosition(new THREE.Vector3()));
+    const wl = bone.getWorldPosition(new THREE.Vector3()).distanceTo(cw);
     const k = wl > 1e-4 ? len / wl : 1; // metres to the bone's units
     const g = new THREE.Group(); g.name = 'hideWrap';
     g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.normalize());
