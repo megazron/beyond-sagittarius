@@ -201,7 +201,7 @@ export class CombatSim {
     if (!this.canAfford(d.cost)) return null;
     this.pay(d.cost);
     const tr: Trap = { id: this.nextId++, kind, x, z, uses: d.uses, armed: true, scent: 0, fire: 0, caught: 0, sprungT: -1 };
-    if (kind === 'bait') tr.scent = this.addScent(x, z, 1, 26).id;
+    if (kind === 'bait' || kind === 'deadfall') tr.scent = this.addScent(x, z, 1, kind === 'bait' ? 26 : 20).id;
     if (kind === 'fireline') tr.fire = this.addFire(x, z, 26, { max: 26, burnsOut: true }).id;
     this.traps.push(tr);
     this.emit({ t: 'trap', what: 'set:' + kind, id: tr.id, x, z });
@@ -625,6 +625,17 @@ export class CombatSim {
           if (e.shockT > this.t) continue;
           e.shockT = this.t + 0.5;
           this.hurtEnemy(e, d.dmg, 'fire', tr.x, tr.z, d.poise, 1.5, 'trap');
+        } else if (tr.kind === 'deadfall') {
+          // it goes off once, either way; the bait goes with it
+          tr.uses = 0; tr.caught = e.id; tr.sprungT = this.t;
+          this.scents = this.scents.filter((sc) => sc.id !== tr.scent);
+          if (e.def.mass > 1.2 || e.def.temperament === 'machine') { this.emit({ t: 'trap', what: 'knocked', id: e.id, x: tr.x, z: tr.z }); }
+          else {
+            this.stats.trapHits++;
+            this.emit({ t: 'trap', what: 'crushed', id: e.id, x: tr.x, z: tr.z });
+            this.hurtEnemy(e, d.dmg, 'blunt', tr.x, tr.z + 0.01, d.poise, 0, 'trap');
+            if (!e.dead) { this.interrupt(e); e.stunT = Math.max(e.stunT, 2.5); e.heldT = Math.max(e.heldT, 2.5); }
+          }
         } else if (tr.kind === 'rattle') {
           if (e.speed < 0.5 || e.shockT > this.t) continue;
           e.shockT = this.t + 2; tr.uses--;

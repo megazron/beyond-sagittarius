@@ -163,3 +163,15 @@ actual shake values. Where I had no number I tuned by the tests and by playing, 
   shoulder, the off hand bent in front of the chest pointing the way (not flung out straight). On the cast the body
   squares, the off hand pulls in, the arm drives forward and the thrower flips over the hand, then follows through
   down across the body.
+
+## 12. Traps that read at night (owner note: the traps must be seen catching)
+
+- Animals find food by smell carried downwind and come up the scent trail into the wind (the same reason hunters
+  stalk from downwind; the hunt already uses it). Here the night's breeze blows from the fire across the food and out
+  into the dark; the camp smoke leans that way, and the scavengers come from that side. A player who reads the smoke
+  knows where to set the traps.
+- The snare is a spring-pole snare: a bent sapling held by a trigger over a noose; a foot in the loop trips it and the
+  pole whips up and holds the leg. It is drawn that way and snaps up on a catch, with the cord to the leg.
+- The figure-four deadfall (the story tree's row 14 names it): a flat stone propped on three notched sticks, the bait
+  on the trigger stick. For small game; a big animal knocks it over. Here: small creatures that come to its bait are
+  crushed or stunned, a heavy one only springs it. Grazers now walk to fruit left within their nose.

@@ -251,7 +251,12 @@ export function think(sim: CombatSim, e: Enemy, dt: number) {
 function prey(sim: CombatSim, e: Enemy, dt: number) {
   const p = sim.player, def = e.def;
   if (e.state === 'idle') {
-    wander(sim, e, dt, 7, def.walk);
+    // fruit left out within its nose: it walks over and nibbles (that is what a baited deadfall is for)
+    let bait = null as null | { x: number; z: number }, bd = def.smell;
+    for (const sc of sim.scents) { if (sc.food <= 0) continue; const ds = dist2(e.x, e.z, sc.x, sc.z); if (ds < bd) { bd = ds; bait = sc; } }
+    if (bait && bd > 0.45) move(sim, e, bait.x, bait.z, def.walk, dt);
+    else if (bait) e.speed = 0;
+    else wander(sim, e, dt, 7, def.walk);
     // head down, eating: it sees less
     if (e.aware) setState(sim, e, 'flee'); else if (e.alert > 0.4) setState(sim, e, 'investigate');
   } else if (e.state === 'investigate') {
