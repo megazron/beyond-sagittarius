@@ -35,7 +35,7 @@ import type { AwayStage } from './game/away/stage';
 import type { MenuTab } from './ui/ui';
 import { setPortraitCast, setPortraitRenderer, portraitFrame } from './ui/portraits';
 import { preloadCrew } from './characters/character';
-import { setTextureWarmer } from './core/assets';
+import { setKtx2Renderer, setTextureWarmer } from './core/assets';
 import { defaultLook, PlayerLook, CrewSkins } from './characters/custom';
 import { voice } from './core/voice';
 import { frameReport } from './cinematic/cutscene';
@@ -849,6 +849,7 @@ try {
 
 async function boot() {
   setTextureWarmer((t) => renderer.renderer.initTexture(t));
+  setKtx2Renderer(renderer.renderer);
   setPortraitRenderer(renderer.renderer);
   ui.show('loading', false);
   showTitle();

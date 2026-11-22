@@ -10,16 +10,21 @@ KTX = os.path.expanduser('~/tools/ktx/KTX-Software-4.4.2-Linux-x86_64')
 root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', 'public', 'textures')
 env = dict(os.environ, LD_LIBRARY_PATH=f'{KTX}/lib')
 n = before = after = 0
+listed = []
 for d, _, fs in os.walk(root):
     for f in sorted(fs):
         if not (f.startswith('diff_') and f.endswith('.webp')): continue
         src = os.path.join(d, f); dst = src[:-5] + '.ktx2'
         before += os.path.getsize(src)
+        listed.append(os.path.relpath(dst, root)[:-5])
         if os.path.exists(dst) and os.path.getmtime(dst) > os.path.getmtime(src): after += os.path.getsize(dst); continue
         with tempfile.TemporaryDirectory() as t:
             png = os.path.join(t, 'a.png')
             Image.open(src).convert('RGBA' if Image.open(src).mode in ('RGBA', 'LA', 'P') else 'RGB').transpose(Image.FLIP_TOP_BOTTOM).save(png)
             fmt = 'R8G8B8A8_SRGB' if Image.open(png).mode == 'RGBA' else 'R8G8B8_SRGB'
-            subprocess.run([f'{KTX}/bin/ktx', 'create', '--format', fmt, '--encode', 'basis-lz', '--clevel', '2', '--qlevel', '160', '--generate-mipmap', png, dst], check=True, env=env)
+            subprocess.run([f'{KTX}/bin/ktx', 'create', '--format', fmt, '--assign-tf', 'srgb', '--encode', 'basis-lz', '--clevel', '2', '--qlevel', '160', '--generate-mipmap', png, dst], check=True, env=env)
         n += 1; after += os.path.getsize(dst)
+
+import json
+json.dump(sorted(listed), open(os.path.join(root, 'ktx2.json'), 'w'))
 print(f'{n} encoded; colour maps webp {before / 1e6:.1f} MB, ktx2 {after / 1e6:.1f} MB')
