@@ -76,6 +76,9 @@ export class CombatFx {
     this.numRoot = document.createElement('div'); this.numRoot.className = 'cb-numbers'; document.body.append(this.numRoot);
   }
 
+  /** How lit the smoke is (the controller sets it low at night). */
+  smokeK = 1;
+
   puff(kind: Puff, x: number, y: number, z: number, dx = 0, dz = 0, scale = 1) {
     const d = PUFF[kind];
     for (let k = 0; k < Math.ceil(d.n * scale); k++) {
@@ -83,7 +86,9 @@ export class CombatFx {
       const a = Math.random() * 6.283, r = Math.random();
       this.pos[i * 3] = x; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = z;
       this.vel[i * 3] = Math.cos(a) * d.speed * r + dx * d.speed; this.vel[i * 3 + 1] = d.up * (0.4 + Math.random() * 0.6); this.vel[i * 3 + 2] = Math.sin(a) * d.speed * r + dz * d.speed;
-      this.col[i * 4] = d.c[0]; this.col[i * 4 + 1] = d.c[1]; this.col[i * 4 + 2] = d.c[2]; this.col[i * 4 + 3] = d.a ?? (d.add ? 1 : 0.55);
+      // smoke is lit by what is round it: at night only the fire's glow, so it is a dim grey, not white puffs
+      const lit = kind === 'smoke' ? this.smokeK : 1;
+      this.col[i * 4] = d.c[0] * lit; this.col[i * 4 + 1] = d.c[1] * lit; this.col[i * 4 + 2] = d.c[2] * lit; this.col[i * 4 + 3] = d.a ?? (d.add ? 1 : 0.55);
       this.size[i] = d.size * (0.6 + Math.random() * 0.7); this.life[i] = this.max[i] = d.life * (0.7 + Math.random() * 0.5); this.grav[i] = d.g;
     }
   }

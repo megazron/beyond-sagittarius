@@ -128,10 +128,10 @@ window.__cbBot = (mode) => {
         } else if (since() > 3) { const d = go(food.x + wx * 2.8 - wz * 4, food.z + wz * 2.8 + wx * 4); if (d < 0.8) stop(); }
         return;
       }
-      // to the side of the line in, out of the smoke, about four and a half metres from the snare: near enough to see
-      // it spring in the firelight, far enough that the scavengers still come to the bait
-      const guard = { x: food.x + wx * 2.8 - wz * 4, z: food.z + wz * 2.8 + wx * 4 };
+      // a hunter watches a snare from beyond it, still, in the dark, with the camp behind it: the snare and whatever
+      // walks into it stand against the firelight. Five metres out and to the side, so the scavengers still come
       const sq = sim.traps.find((q) => q.kind === 'snare') || bait;
+      const guard = { x: sq.x + wx * 4.4 - wz * 2.2, z: sq.z + wz * 4.4 + wx * 2.2 };
       if (run.phase === 'hush') {
         // the quiet before: stand at the guard spot and look out over what was set
         stop(); const d = go(guard.x, guard.z); if (d < 0.7) { stop(); look(sq.x, sq.z); }
@@ -191,6 +191,14 @@ window.__cbBot = (mode) => {
       // the throwing stick: stand in the open, throw side-arm at a Nibbet within twelve metres (or at the grass ahead
       // when none is), walk out and fetch the stick, come back to the spot; never chase (they outrun anyone)
       if (st === 0) { if (equip('throwstick')) { flag.home = { x: p.x, z: p.z }; flag.yaw = C.cam.yaw; run.summon('nibbet', 3); flag.sumT = performance.now(); next(); } return; }
+      // a recording may ask for a slow side view of a throw (window.__cbSide = [from, to] seconds): framed on the spot
+      // it throws from, switched on only when it is standing there
+      const W = window.__cbSide, Tm = (performance.now() - t0) / 1000;
+      if (W && Tm > W[0] && Tm < W[1] && !flag.side && dist(p, flag.home) < 1.2 && p.has.throwstick) {
+        flag.side = 1; const y = flag.yaw, fx = -Math.sin(y), fz = -Math.cos(y), px = -Math.cos(y), pz = Math.sin(y), h = flag.home, cy = C.cam.y;
+        __bs.photo([h.x + px * 2.6 + fx * 2.0, cy + 1.7, h.z + pz * 2.6 + fz * 2.0], [h.x + fx * 3, cy + 0.9, h.z + fz * 3]); C.testSlow = 0.35;
+      }
+      if (W && Tm >= W[1] && flag.side === 1) { flag.side = 2; __bs.photo(null); C.testSlow = 1; }
       if (!p.has.throwstick) { const k = sim.pickups.find((q) => q.weapon === 'throwstick'); if (k) go(k.x, k.z); return; }
       if (p.weapon !== 'throwstick') { equip('throwstick'); return; }
       if (dist(p, flag.home) > 1.2 && p.act !== 'charge') { go(flag.home.x, flag.home.z); return; }

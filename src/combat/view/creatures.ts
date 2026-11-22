@@ -347,7 +347,7 @@ function guardian(): CreatureView {
     return { g, m, sx };
   });
   // four legs, each a two-bone strut with a bronze knee and a splayed foot, solved to the ground every frame
-  const unit = (r0: number, r1: number) => new THREE.CylinderGeometry(r1, r0, 1, 6).translate(0, 0.5, 0);
+  const unit = (r0: number, r1: number) => new THREE.CylinderGeometry(r1, r0, 1, 9).translate(0, 0.5, 0);
   const legs = [[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([sx, sz], i) => {
     // stone legs as thick as the weight they carry (a block that size on strut-thin shins read as a plant stand):
     // a thigh a third of the body's width, the shin a stone column, a broad pad of a foot with three toes
