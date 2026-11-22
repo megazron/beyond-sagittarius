@@ -388,3 +388,35 @@ unlanded except this handoff commit and any recording in progress.
   animals (Nibbets) where a spear point misses; swung it is a light club. If Episode One has a beat where Zenvik
   needs food before the first hunt or after a missed spear throw, it fits there (Schoeningen, beside the spears,
   about 300,000 years ago). To teach it set `flags['inv.throwStick']`. Clip: 18_throwing_stick (when recorded).
+
+## 2026-11-22 04:10 takeover by perf agent 17 (branch perf17 from main bfdde7b; landing branch perf17-land2)
+- Measurements in ~/bs-assets/gpu/p17: inter.sh TAG PLAN.. (base on :4183 = ~/bs-perf-base at main, built to
+  ~/bs-perf/dist-base; new on :4182 dist-new; one exclusive heavy call per run, then p15/cmp.py), plan_mcensus.json
+  (Mobile per-object census), clips.sh (clips of dist-new2 on :4184 to Downloads/BS_Game_v1.1/city_v1.7_GPU).
+- core/ibatch.ts: InstancedBatch has RUNS now (several instance lists of one geometry, each with its own cull sphere,
+  hidden/mainHidden/shadow switches; run id = geometry id for the first run, addRun for more; add every geometry
+  first). BatchPool + RunHandle: pieces gathered per material (and attribute set) into one batch each; a RunHandle
+  stands in for an InstancedMesh (visible, castShadow). autoBounds: a pooled batch with no shown run is not drawn at
+  all and is frustum-culled by its shown runs (a batch whose runs all draw nothing still cost a draw in every pass).
+- city.ts props: with BATCH.on, the scans (Ultra near), the "always" models and the stretches' light-build bakes go
+  through BatchPools: one draw per prop kind's material for the whole zone (old town and districts each), each stretch
+  a run. The flat's portals reach the runs through invisible stand-ins (group `propRuns`, userData.batchHide).
+- Lens: crowd bodies of the full build (Web, Ultra) fade with hashed alpha (alphaHash set at build time, so no
+  recompile in play) from 1.3 m to gone at 0.4 m, and when the city asks (setLensFade: on the line from the camera to
+  you), eased over ~0.2 s; see-through materials fade by opacity, cut-out hair cards by raising alphaTest; the merged
+  kit just goes below 0.6. Phones keep the hard hide. `fig.faded` feeds drawnAs.
+- Camera: stage.crowdNear() (city: bodies within 3.2 m of you, (n-1)/3) eases the follow camera up 0.3 m and its pitch
+  down to at least -0.38 over a thick crowd. ?crowdcam=0 turns it off.
+- Numbers (A500, shared machine, single interleaved pairs, so a few fps is noise):
+  Ultra bazaar census: 752 -> 463 draws (prop draws 264 main + 223 shadow -> 101 + 76); fps 16.0/10.5 -> 14.2/20.7
+  (two shots, both noisy): Ultra is NOT mainly draw-bound at the bazaar any more (2.9-3 M triangles, SSR, AO).
+  Web city (w1): flat 31.0 -> 36.9, bazaar 27.7 -> 32.2, crowd 23.9 -> 27.1, gate 27.2 -> 31.3, square 27.8 -> 39.2,
+  downtown 30.6 -> 37.4, market 30.3 -> 42.9, waterfront 31.1 -> 48.1, park 34.8 -> 53.7 (Web draw counts barely move:
+  Web never drew the scans; the gains are larger than the draw change explains, part is load).
+  Mobile proxy (4x): mixed, 8-21 fps both builds, draws vary 40+ run to run with the crowd. CI perf_gate mobile bazaar
+  on perf17-land was 836k triangles (budget 720k; main's last green run 519k); locally (SwiftShader) base 621k, new
+  297k: the gate's mobile numbers swing with where the crowd is. Watch it.
+- NOT DONE (in order of the owner's list): bodies to 1-3 draws (skin and cloth are two very different shaders: a
+  shared atlas means one merged shader; ~7 draws a body still); the gate to 60 on Web (31 fps here; render is
+  setProgram-bound, 100+ distinct materials); planet to 60; Mobile to 30 (10-20 now); quiet-machine re-measure and the
+  cold title load (p15/ab_load.sh) never ran: the heavy queue was busy with other agents' captures most of the time.
