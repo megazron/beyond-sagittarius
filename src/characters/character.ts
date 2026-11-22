@@ -30,8 +30,9 @@ export interface Grip { shape: 'open' | 'relaxed' | 'grip' | 'pinch' | 'point'; 
 /** Something the hands do (Character.doTask): reach and pick up, use a thing in front of you, eat, drink, type, open,
  * carry, fix, give, plant, or talk with the hands. */
 export type TaskKind = 'pickup' | 'use' | 'eat' | 'drink' | 'type' | 'open' | 'carry' | 'fix' | 'give' | 'plant' | 'gesture' | 'phone';
-/** Things a task puts in the hands: food, a cup, a phone, a parcel, a tool, a sheet of paper. */
-export type PropKind = 'food' | 'cup' | 'phone' | 'box' | 'tool' | 'paper';
+/** Things a task puts in the hands: food, a cup, a phone, a parcel, a tool, a sheet of paper, a broad leaf folded into a
+ * cone, a berry held between finger and thumb. */
+export type PropKind = 'food' | 'cup' | 'phone' | 'box' | 'tool' | 'paper' | 'leaf' | 'berry';
 const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
   food: () => new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.012, 18), new THREE.MeshStandardMaterial({ color: 0xc8893f, roughness: 0.85 })),
   cup: () => new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.028, 0.075, 16), new THREE.MeshStandardMaterial({ color: 0xb5563a, roughness: 0.7 })),
@@ -39,6 +40,18 @@ const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
   box: () => new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.22), new THREE.MeshStandardMaterial({ color: 0xa47a4c, roughness: 0.9 })),
   tool: () => new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.028, 0.028), new THREE.MeshStandardMaterial({ color: 0x6d7076, roughness: 0.4, metalness: 0.8 })),
   paper: () => new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.003, 0.22), new THREE.MeshStandardMaterial({ color: 0xece6d6, roughness: 0.95 })),
+  leaf: () => {
+    // a broad leaf rolled into a cone, open at the top, its point down; a midrib and an uneven rim
+    const g = new THREE.ConeGeometry(0.055, 0.15, 14, 3, true);
+    const p = g.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) {
+      const y = p.getY(i), a = Math.atan2(p.getZ(i), p.getX(i));
+      if (y > 0.07) p.setY(i, y + 0.02 * Math.sin(a * 2 + 0.6) + 0.012 * Math.sin(a * 5));
+    }
+    g.rotateX(Math.PI); g.computeVertexNormals();
+    return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x3f7a2a, roughness: 0.55, side: THREE.DoubleSide }));
+  },
+  berry: () => new THREE.Mesh(new THREE.SphereGeometry(0.017, 14, 10), new THREE.MeshStandardMaterial({ color: 0xc3172a, roughness: 0.28 })),
 };
 /** What each task holds unless told otherwise. */
 const TASK_PROP: Partial<Record<TaskKind, PropKind>> = { eat: 'food', drink: 'cup', phone: 'phone', carry: 'box', fix: 'tool', type: 'phone' };
@@ -226,6 +239,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const morph: Record<string, number> = {};
   let blinkAt = 2 + Math.random() * 3, blinkT = 0, speak = 0;
   let limbs: Limbs | null = null, faceSet: Face | null = null;
+  // kneeling (0 standing, 1 on both knees) eases to its goal; a prop held outside any task
+  let kneel = 0, kneelGoal = 0, heldProp: PropKind | null = null, heldShown = false;
+  const kneelL: Limbs = {}, KD = new THREE.Vector3(), KQ = new THREE.Quaternion();
   // a task in the hands (doTask): time in, length, where the hand goes, which hands
   let task: { kind: TaskKind; t: number; dur: number; at: THREE.Vector3 | null; hands: 'L' | 'R' | 'both'; prop: PropKind | null } | null = null;
   // the thing in the hand: made once per kind, parented to the hand (or held in front of the hips for a parcel)
@@ -244,6 +260,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (want === 'phone' || want === 'paper') { m.position.set(-0.08, -0.03, 0.01); m.rotation.set(0, Math.PI / 2, 0.25); }
       else if (want === 'tool') { m.position.set(-0.07, -0.03, 0); m.rotation.set(0, Math.PI / 2, 0); }
       else if (want === 'cup') { m.position.set(-0.07, -0.05, 0.02); m.rotation.set(0, 0, Math.PI / 2); }
+      else if (want === 'leaf') { m.position.set(-0.075, -0.06, 0.02); m.rotation.set(0, 0, Math.PI / 2); }
+      else if (want === 'berry') { m.position.set(-0.105, -0.03, 0.025); m.rotation.set(0, 0, 0); }
       else { m.position.set(-0.08, -0.03, 0); m.rotation.set(0, 0, 0.3); }
     }
     propOn = m;
@@ -717,6 +735,29 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (l.openHands) handOpen = true;
   }
 
+  /** On his knees: the thighs come down nearly upright (a little forward), the shins lie back along the ground, and the
+   * hips drop until the knees touch it. Blended with whatever the clip does by how far down he is. */
+  function kneelLegs(bs: Map<string, THREE.Bone>, hipsB: THREE.Bone) {
+    root.updateWorldMatrix(true, true);
+    KQ.copy(root.getWorldQuaternion(KQ)).invert();
+    const dir = (a: string, b: string, want: Dir): Dir => {
+      KD.copy(bs.get(b)!.getWorldPosition(V1)).sub(bs.get(a)!.getWorldPosition(V2)).normalize().applyQuaternion(KQ);
+      KD.lerp(V3.set(want[0], want[1], want[2]).normalize(), kneel).normalize();
+      return [KD.x, KD.y, KD.z];
+    };
+    kneelL.legL = dir('upperlegL', 'lowerlegL', [0.13, -1, 0.3]); kneelL.legR = dir('upperlegR', 'lowerlegR', [-0.13, -1, 0.3]);
+    applyLimbs({ legL: kneelL.legL, legR: kneelL.legR }, bs);
+    kneelL.shinL = dir('lowerlegL', 'footL', [0.04, -0.12, -1]); kneelL.shinR = dir('lowerlegR', 'footR', [-0.04, -0.12, -1]);
+    applyLimbs({ shinL: kneelL.shinL, shinR: kneelL.shinR }, bs);
+    root.updateWorldMatrix(true, true);
+    const base = root.getWorldPosition(V1).y;
+    const knee = Math.min(bs.get('lowerlegL')!.getWorldPosition(V2).y, bs.get('lowerlegR')!.getWorldPosition(V3).y);
+    // the knee joint sits about 6 cm above the ground it rests on
+    const drop = Math.max(0, knee - base - 0.06) * kneel;
+    hipsB.position.y -= drop / fig.scale.y;
+    fig.updateWorldMatrix(true, true);
+  }
+
   /** 0..1: how far into its task the body is (eases in, holds, eases out). */
   function taskEnv() {
     if (!task) return 0;
@@ -932,6 +973,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       }
     }
     if (limbs) applyLimbs(limbs, bs);
+    kneel += (kneelGoal - kneel) * (1 - Math.exp(-dt * 3.2));
+    if (kneelGoal === 0 && kneel < 0.004) kneel = 0;
+    if (kneel > 0) kneelLegs(bs, hipsB);
     keepArmsOut(bs);
     if (task) taskArms(bs, kind, t, dt);
     else if (kind === 'idle' && !gaze && speak <= 0 && !moving) idleLife(bs, t, dt);
@@ -970,6 +1014,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (!gaze) headLook(bs, V4s, sw * 0.7);
       if (id !== 'social') showProp(bs, 'phone', sw); // Nuvexa's own phone is part of her
     } else if (selfieHeld && !task) showProp(bs, null, 0);
+    if (!task && kind !== 'selfie' && (heldProp || heldShown)) { showProp(bs, heldProp, 1); heldShown = !!heldProp; }
     selfieHeld = sw > 0.004;
     // ---- hands held on something: two-bone IK to the wrist point, then the hand turned so the fingers and the palm
     // face where they are told (the same frame the selfie reads from the skeleton) ----
@@ -1105,7 +1150,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     }
 
     // ---- feet: planted where they land, on the real ground ----
-    if (ground && standing && root.visible) {
+    if (ground && standing && root.visible && kneel === 0) {
       root.updateWorldMatrix(true, true);
       const baseY = root.getWorldPosition(tmp).y;
       const rest = (kit?.footH ?? 0.09) + soleLift;
@@ -1212,6 +1257,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** Mouth moves while > 0 (seconds of speech left). */
     /** Hand-set pose over the clip (null gives the body back to the clip). */
     setLimbs(l: Limbs | null) { limbs = l; },
+    /** Down on both knees (true) or back up (false); it takes about a second either way. */
+    setKneel(on: boolean) { kneelGoal = on ? 1 : 0; },
+    get kneeling() { return kneel; },
+    /** Something held in the right hand outside any task (a leaf cup, a berry); null puts it away. */
+    setProp(k: PropKind | null) { heldProp = k; },
     /** One of a crowd (CHAR_BUDGET): no corrective shapes, the light build and no shadow from closer in. */
     setCrowd(on: boolean) { crowd = on; },
     /** Held expression (null goes back to what the pose asks for). */

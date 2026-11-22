@@ -23,7 +23,7 @@ class Voice {
   private src: AudioBufferSourceNode | null = null;
   private token = 0;
   /** Test hook (recordings): every line started on a held clock, to lay the soundtrack under recorded frames. */
-  log: { path: string; at: number; vol: number }[] = [];
+  log: { path: string; at: number; vol: number; fx?: string }[] = [];
   /** Last line started (read by the tests). */
   lastKey: string | null = null;
   played = 0;
@@ -111,8 +111,9 @@ class Voice {
 
   preload(keys: string[]) { for (const k of keys) { const f = this.file(k); if (f && audio.ctx) void this.fetchBuffer(f); } }
 
-  /** Play a line (replacing the current one). Returns its length, or null. */
-  play(key: string): number | null {
+  /** Play a line (replacing the current one). Returns its length, or null. `memory`: a remembered voice in his head
+   * (a thin, far band with a short echo; audio.memoryIn). */
+  play(key: string, o: { memory?: boolean } = {}): number | null {
     const f = this.file(key);
     if (!f) return null;
     const dur = this.seconds(f);
@@ -121,7 +122,7 @@ class Voice {
     if (left > 0.25 && this.lastKey && this.lastKey !== key) { this.cuts.push({ cut: this.lastKey, by: key, left: Math.round(left * 100) / 100 }); if (this.cuts.length > 200) this.cuts.shift(); }
     this.lastKey = key; this.played++;
     this.endsAt = this.clock() + (dur ?? 0);
-    if (this.manual) { this.log.push({ path: `audio/vo/${this.langOf(f)}/${f}.${this.ext}`, at: this.manual(), vol: 1 }); if (this.log.length > 400) this.log.shift(); }
+    if (this.manual) { this.log.push({ path: `audio/vo/${this.langOf(f)}/${f}.${this.ext}`, at: this.manual(), vol: 1, ...(o.memory ? { fx: 'memory' } : {}) }); if (this.log.length > 400) this.log.shift(); }
     this.stop();
     const tk = ++this.token;
     // on a held clock (recordings) the mouth runs on the game's time, from the moment the line starts
@@ -131,7 +132,7 @@ class Voice {
       if (!b || tk !== this.token || !audio.ctx) return;
       const s = audio.ctx.createBufferSource();
       s.buffer = b;
-      s.connect(audio.voiceIn());
+      s.connect(o.memory ? audio.memoryIn() : audio.voiceIn());
       s.onended = () => { if (this.src === s) { this.src = null; audio.duck(false); } };
       s.start();
       if (!this.manual) { this.startedAt = audio.ctx.currentTime; this.lipFile = f; }

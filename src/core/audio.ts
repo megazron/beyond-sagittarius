@@ -127,6 +127,23 @@ export class Audio {
   }
 
   voiceIn(): AudioNode { return this.buses!.voice; }
+  private memBus: AudioNode | null = null;
+  /** A remembered voice: no low end and no air (a phone-thin band), a little quieter, with a short soft echo, so it
+   * reads as inside his head and not as someone standing there. Feeds the voice bus (ducking and volume as usual). */
+  memoryIn(): AudioNode {
+    if (this.memBus) return this.memBus;
+    const ctx = this.ctx!, out = this.buses!.voice;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 420; hp.Q.value = 0.8;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; lp.Q.value = 0.9;
+    const dry = ctx.createGain(); dry.gain.value = 0.8;
+    const dl = ctx.createDelay(1); dl.delayTime.value = 0.13;
+    const fb = ctx.createGain(); fb.gain.value = 0.32;
+    const wet = ctx.createGain(); wet.gain.value = 0.38;
+    hp.connect(lp); lp.connect(dry).connect(out);
+    lp.connect(dl); dl.connect(fb).connect(dl); dl.connect(wet).connect(out);
+    this.memBus = hp;
+    return hp;
+  }
 
   // ---------------------------------------------------------------- the space you are in
   // Everything in the world (effects, beds, voices a little) is sent to a reverb shaped like where you stand, and the

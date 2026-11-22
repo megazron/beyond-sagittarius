@@ -338,7 +338,7 @@ export class UI implements CineUI {
   memory(key: string | null, seconds = 9) {
     const el = $('memory');
     if (!key) { el.classList.add('hidden'); return; }
-    voice.play(key);
+    voice.play(key, { memory: true });
     seconds = Math.max(seconds, (voice.duration(key) ?? 0) + 0.5);
     el.textContent = t(key);
     el.classList.remove('hidden');

@@ -7,6 +7,7 @@ import { Sky } from './sky';
 import { Forest, windUniforms } from './forest';
 import { createGrass } from './grass';
 import { createWater } from './water';
+import { planStream, type StreamPlan } from './stream';
 import { createPod, createItems } from './props';
 import { addResources } from './resources';
 import { createCreature } from './creature';
@@ -36,6 +37,7 @@ export class World {
   items!: ReturnType<typeof createItems>;
   creature!: ReturnType<typeof createCreature>;
   layout!: StoryLayout;
+  streamPlan!: StreamPlan;
   clearings: [number, number, number][] = [];
   /** Show finished Chapter Two work around the fire. */
   setCampWork: (done: string[]) => void = () => {};
@@ -82,6 +84,9 @@ export class World {
     // the wake-up looks from the spawn up at the giant: open ground that way, or its line played over pine trees
     const g = this.sky.giantDir, n = Math.hypot(g.x, g.z);
     for (const d of [7, 13, 19, 26, 34, 42]) this.forest.reserve(WAKE_SPAWN.x + (g.x / n) * d, WAKE_SPAWN.z + (g.z / n) * d, 2.5 + d * 0.18);
+    // Episode One's stream: open sky over it (under the trees it read as a dark ditch), a sunny strip either side
+    this.streamPlan = planStream(this.terrain);
+    for (let i = 0; i < this.streamPlan.line.length; i += 3) { const p = this.streamPlan.line[i]; this.forest.reserve(p.x, p.z, 3.2); }
     this.forest.build();
     onProgress(0.94);
     await new Promise((r) => setTimeout(r, 0));
