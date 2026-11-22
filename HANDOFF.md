@@ -473,7 +473,7 @@ unlanded except this handoff commit and any recording in progress.
   story teaches it before the hunt: lean.ts, `inv.throwStick`).
 - combat-land15 (381873f, handoff only) failed levels_smoke (flaky), rerun requested.
 - Recording: ~/bs-cap/combat/mkplan_v17.py -> plan_v17_guardian_wrap_throwstick.json, plan_v17_night.json.
-- ~13:10 STATE. Rebased on main 0c68d8c; head pushed as combat-land16 (CI on push). Land it when CI is green on that
+- ~13:10 STATE. LANDED b5761bd on main (CI 45024647750 all green on that sha). Earlier note, kept: land when CI is green on that
   exact sha (`git push origin <sha>:main` in its own command; levels_smoke "inventory did not open" is flaky:
   `gh run rerun <id> --failed`). combat-land15 failed levels_smoke twice (handoff-only commit; it is inside land16).
 - Delivered (Downloads/.../combat, README notes): 05_night_defence_v12_catch_heard, 03_guardian_v11_carved_face,
