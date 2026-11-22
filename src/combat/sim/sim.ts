@@ -67,12 +67,16 @@ export interface SimPlayer {
   dur: Partial<Record<WeaponId, number>>;
   /** Seconds left of making the weapon ready again (a crossbow being spanned). */
   reloadT: number;
+  /** A wrap of smoked hide sewn round the forearms and shoulders (row 15): teeth meet leather first. */
+  wrap: boolean;
   /** Aim at the moment of the last shot, for the picture. */
   lastHitT: number;
 }
 
 export interface Projectile { alive: boolean; x: number; y: number; z: number; vx: number; vy: number; vz: number; weapon: WeaponId; dmg: number; life: number; g: number }
-export interface Trap { id: number; kind: TrapId; x: number; z: number; uses: number; armed: boolean; scent: number; fire: number }
+export interface Trap { id: number; kind: TrapId; x: number; z: number; uses: number; armed: boolean; scent: number; fire: number;
+  /** The last creature it caught (id, 0 none) and when (sim time): the view snaps the pole up and runs the cord to it. */
+  caught: number; sprungT: number }
 export interface Pickup { id: number; x: number; z: number; item: string; n: number; weapon: WeaponId | null }
 /** Someone with you who cannot fight: the story decides what losing them means. */
 export interface Ally { who: string; x: number; z: number; hp: number; down: boolean }
@@ -124,7 +128,7 @@ export class CombatSim {
       x: 0, y: 0, z: 0, fx: 0, fz: 1, hp: 100, stamina: 100, weapon: 'fists', has: { fists: true },
       act: 'idle', actT: 0, combo: 0, charge: 0, charging: 'none', blocking: false, blockT: 0, iframe: false, rollX: 0, rollZ: 0,
       forceVX: 0, forceVZ: 0, forceT: 0, moveScale: 1, snareT: 0, staggerT: 0, refire: 0, cell: WEAPONS.coil.proj!.cell!, cellT: 0,
-      sneaking: false, speed: 0, air: false, injuries: [], down: false, stepT: 0, regenLock: 0, lastHitT: -9, dur: {}, reloadT: 0, holdT: 0, pendingT: 0, pendingK: 0,
+      sneaking: false, speed: 0, air: false, injuries: [], down: false, stepT: 0, regenLock: 0, lastHitT: -9, dur: {}, reloadT: 0, wrap: false, holdT: 0, pendingT: 0, pendingK: 0,
     };
     for (let i = 0; i < MAX_PROJ; i++) this.proj.push({ alive: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, weapon: 'rock', dmg: 0, life: 0, g: 0 });
   }
@@ -198,8 +202,8 @@ export class CombatSim {
     const d = TRAPS[kind];
     if (!this.canAfford(d.cost)) return null;
     this.pay(d.cost);
-    const tr: Trap = { id: this.nextId++, kind, x, z, uses: d.uses, armed: true, scent: 0, fire: 0 };
-    if (kind === 'bait') tr.scent = this.addScent(x, z, 1, 26).id;
+    const tr: Trap = { id: this.nextId++, kind, x, z, uses: d.uses, armed: true, scent: 0, fire: 0, caught: 0, sprungT: -1 };
+    if (kind === 'bait' || kind === 'deadfall') tr.scent = this.addScent(x, z, 1, kind === 'bait' ? 26 : 20).id;
     if (kind === 'fireline') tr.fire = this.addFire(x, z, 26, { max: 26, burnsOut: true }).id;
     this.traps.push(tr);
     this.emit({ t: 'trap', what: 'set:' + kind, id: tr.id, x, z });
@@ -607,13 +611,13 @@ export class CombatSim {
         if (dist2(e.x, e.z, tr.x, tr.z) > d.r + e.def.radius * 0.5) continue;
         if (tr.kind === 'snare') {
           if (e.heldT > 0 || e.def.temperament === 'machine') continue;
-          e.heldT = d.hold / Math.max(1, Math.sqrt(e.def.mass)); tr.uses--;
+          e.heldT = d.hold / Math.max(1, Math.sqrt(e.def.mass)); tr.uses--; tr.caught = e.id; tr.sprungT = this.t;
           this.interrupt(e);
           this.stats.trapHits++;
           this.emit({ t: 'trap', what: 'snared', id: e.id, x: tr.x, z: tr.z });
         } else if (tr.kind === 'stakes') {
           if (e.speed < 4.5) continue;
-          tr.uses--;
+          tr.uses--; tr.caught = e.id; tr.sprungT = this.t;
           this.stats.trapHits++;
           this.emit({ t: 'trap', what: 'staked', id: e.id, x: tr.x, z: tr.z });
           this.hurtEnemy(e, d.dmg, 'pierce', tr.x, tr.z, d.poise, 0, 'trap');
@@ -623,6 +627,17 @@ export class CombatSim {
           if (e.shockT > this.t) continue;
           e.shockT = this.t + 0.5;
           this.hurtEnemy(e, d.dmg, 'fire', tr.x, tr.z, d.poise, 1.5, 'trap');
+        } else if (tr.kind === 'deadfall') {
+          // it goes off once, either way; the bait goes with it
+          tr.uses = 0; tr.caught = e.id; tr.sprungT = this.t;
+          this.scents = this.scents.filter((sc) => sc.id !== tr.scent);
+          if (e.def.mass > 1.2 || e.def.temperament === 'machine') { this.emit({ t: 'trap', what: 'knocked', id: e.id, x: tr.x, z: tr.z }); }
+          else {
+            this.stats.trapHits++;
+            this.emit({ t: 'trap', what: 'crushed', id: e.id, x: tr.x, z: tr.z });
+            this.hurtEnemy(e, d.dmg, 'blunt', tr.x, tr.z + 0.01, d.poise, 0, 'trap');
+            if (!e.dead) { this.interrupt(e); e.stunT = Math.max(e.stunT, 2.5); e.heldT = Math.max(e.heldT, 2.5); }
+          }
         } else if (tr.kind === 'rattle') {
           if (e.speed < 0.5 || e.shockT > this.t) continue;
           e.shockT = this.t + 2; tr.uses--;
@@ -750,7 +765,9 @@ export class CombatSim {
       if (p.stamina <= 0) { p.staggerT = 0.9; p.blocking = false; this.emit({ t: 'player', what: 'guardbreak' }); }
       return 'blocked';
     }
-    const dealt = dmg * T.enemyDmg;
+    // a bite or a nip closes on the hide wrap first: less goes through, and it tears skin less often
+    const teeth = what === 'lunge' || what === 'nip';
+    const dealt = dmg * T.enemyDmg * (p.wrap && teeth ? 0.75 : 1);
     p.hp -= dealt;
     this.stats.taken += dealt;
     p.staggerT = Math.max(p.staggerT, dealt >= 20 ? 0.6 : 0.34);
@@ -759,7 +776,7 @@ export class CombatSim {
     this.emit({ t: 'hit', id: -1, what: 'took:' + what, x: p.x, y: p.y + 1.2, z: p.z, n: dealt, dx: -dx / d, dz: -dz / d });
     // a heavy blow leaves something that stays until it is seen to
     const inj: InjuryId | null = what === 'lunge' && dmg >= 14 ? 'bite' : what === 'charge' ? 'ribs' : what === 'stomp' ? 'sprain' : what === 'lash' ? 'sting' : null;
-    if (inj && !p.injuries.some((i) => i.id === inj) && (inj === 'sting' || this.rand() < 0.6)) { p.injuries.push({ id: inj, left: INJURY[inj].wears || 0 }); this.emit({ t: 'player', what: 'injury:' + inj }); }
+    if (inj && !p.injuries.some((i) => i.id === inj) && (inj === 'sting' || this.rand() < (p.wrap && teeth ? 0.3 : 0.6))) { p.injuries.push({ id: inj, left: INJURY[inj].wears || 0 }); this.emit({ t: 'player', what: 'injury:' + inj }); }
     if (p.hp <= 0) { p.hp = 1; p.down = true; p.act = 'idle'; p.blocking = false; this.emit({ t: 'player', what: 'down', x: p.x, z: p.z }); }
     return 'hit';
   }

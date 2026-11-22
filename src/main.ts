@@ -36,7 +36,7 @@ import type { AwayStage } from './game/away/stage';
 import type { MenuTab } from './ui/ui';
 import { setPortraitCast, setPortraitRenderer, portraitFrame } from './ui/portraits';
 import { preloadCrew } from './characters/character';
-import { setTextureWarmer } from './core/assets';
+import { setKtx2Renderer, setTextureWarmer } from './core/assets';
 import { defaultLook, PlayerLook, CrewSkins } from './characters/custom';
 import { voice } from './core/voice';
 import { frameReport } from './cinematic/cutscene';
@@ -852,12 +852,16 @@ try {
 
 async function boot() {
   setTextureWarmer((t) => renderer.renderer.initTexture(t));
+  setKtx2Renderer(renderer.renderer);
   setPortraitRenderer(renderer.renderer);
   ui.show('loading', false);
   showTitle();
   const redrawSafety = showSafetyCard(ui);
   if (redrawSafety) onLangChange(() => { if (!consentGiven()) redrawSafety(); });
-  requestAnimationFrame(frame);
+  // the title's first frame waits until its programs (its scene's and the post chain's) are linked in the background:
+  // drawn at once it linked twenty-six of them on the main thread, a freeze of up to 20 s on a cold shader cache. The
+  // page (its buttons, the loading bar) keeps working meanwhile, and the world loads alongside
+  void Promise.all([renderer.prewarm(cine.scene, cine.camera, undefined, 30000), renderer.prewarmPost(30000)]).catch(() => {}).then(() => requestAnimationFrame(frame));
   const btns = ['btn-new', 'btn-continue'].map((id) => document.getElementById(id) as HTMLButtonElement);
   // the crew load alongside the world: only the people on screen first are awaited
   const crewReady = preloadCrew(['scientist', 'explorer', 'custom_m_scientist', 'custom_f_scientist'], detail());

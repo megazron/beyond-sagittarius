@@ -251,7 +251,12 @@ export function think(sim: CombatSim, e: Enemy, dt: number) {
 function prey(sim: CombatSim, e: Enemy, dt: number) {
   const p = sim.player, def = e.def;
   if (e.state === 'idle') {
-    wander(sim, e, dt, 7, def.walk);
+    // fruit left out within its nose: it walks over and nibbles (that is what a baited deadfall is for)
+    let bait = null as null | { x: number; z: number }, bd = def.smell;
+    for (const sc of sim.scents) { if (sc.food <= 0) continue; const ds = dist2(e.x, e.z, sc.x, sc.z); if (ds < bd) { bd = ds; bait = sc; } }
+    if (bait && bd > 0.45) move(sim, e, bait.x, bait.z, def.walk, dt);
+    else if (bait) e.speed = 0;
+    else wander(sim, e, dt, 7, def.walk);
     // head down, eating: it sees less
     if (e.aware) setState(sim, e, 'flee'); else if (e.alert > 0.4) setState(sim, e, 'investigate');
   } else if (e.state === 'investigate') {
@@ -388,7 +393,8 @@ function stalker(sim: CombatSim, e: Enemy, dt: number, awake: boolean) {
   const tx = p.x + Math.cos(e.angle) * R, tz = p.z + Math.sin(e.angle) * R;
   // prey that runs is chased: straight after it, flat out
   if (d > 14) { move(sim, e, p.x, p.z, def.run, dt); e.angle = Math.atan2(e.z - p.z, e.x - p.x); }
-  else move(sim, e, tx, tz, watched ? def.walk * 0.5 : def.run * 0.62, dt);
+  // close in: at a stalk while you stand, flat out while you run (it chases what runs)
+  else move(sim, e, tx, tz, watched ? def.walk * 0.5 : p.speed > 4 ? def.run : def.run * 0.62, dt);
   if (!watched || d > 12) faceTo(e, p.x, p.z, dt, 0.3);
   // the clock to the leap runs slower while you stare it down
   e.atkGone += dt * (watched ? 0.45 : 1);

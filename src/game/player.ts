@@ -64,8 +64,14 @@ export class Player {
    * turn (radians, or null), `aim` 0 to 1 pulls the camera in over the right shoulder, `crouch` lowers the hips (metres),
    * `sprint` overrides the sprint button, `sneak` caps the speed to a creep.
    */
-  combat: { scale: number; force: { x: number; z: number } | null; face: number | null; aim: number; crouch: number; sprint: boolean | null; sneak: boolean; jump: boolean; shoulder?: number; lift?: number } | null = null;
+  combat: { scale: number; force: { x: number; z: number } | null; face: number | null; aim: number; crouch: number; sprint: boolean | null; sneak: boolean; jump: boolean; shoulder?: number; lift?: number;
+    /** 0..1: the view swings round to look behind (a glance back in a chase); the walk keeps its own heading. */
+    back?: number } | null = null;
   private aimS = 0;
+  /** How crowded it is round you (the stage's, 0 to 1): the camera rises over the heads and looks down at you. */
+  crowdNear: (() => number) | null = null;
+  private crowdS = 0;
+  private backS = 0;
   /** Stages other than Verdaxis set their own gravity, and let you jump across open gaps. */
   physics = { gravity: 14, jump: 5.2, gaps: false };
 
@@ -244,7 +250,7 @@ export class Player {
     const cp = Math.cos(pitch);
     out.set(Math.sin(yaw) * cp, -Math.sin(pitch), Math.cos(yaw) * cp).multiplyScalar(dist);
     out.add(focus);
-    out.y += 1.65;
+    out.y += 1.65 + 0.3 * this.crowdS;
     // walk the line from the head to the camera: stop short of hills and trunks
     const hx = focus.x, hy = focus.y + 1.65, hz = focus.z;
     let free = 1;
@@ -255,7 +261,11 @@ export class Player {
     // pull in at once, ease back out, so the view never pops
     this.camClip = free < this.camClip ? free : this.camClip + (free - this.camClip) * 0.05;
     out.x = hx + (out.x - hx) * this.camClip; out.y = hy + (out.y - hy) * this.camClip; out.z = hz + (out.z - hz) * this.camClip;
-    const g = Math.max(this.terrain.height(out.x, out.z) + 0.3, 0.45);
+    // pulled in hard (a slope, a log or the camp's stones behind the player) the camera would sit inside the head:
+    // keep it a metre off by rising over the head instead, looking down past it
+    const near = Math.min(dist, 1.05), ox = out.x - hx, oz = out.z - hz, oh = Math.hypot(ox, oz);
+    if (Math.hypot(oh, out.y - hy) < near) out.y = hy + Math.sqrt(Math.max(0, near * near - oh * oh));
+    const g =Math.max(this.terrain.height(out.x, out.z) + 0.3, 0.45);
     if (out.y < g) out.y = g;
     return out;
   }
@@ -263,7 +273,7 @@ export class Player {
   snapCamera() {
     this.focus.copy(this.pos);
     this.yawS = this.yaw; this.pitchS = this.pitch; this.distS = this.camDist;
-    this.fovKick = 0; this.bobK = 0; this.lean = 0; this.dip = 0; this.dipV = 0;
+    this.fovKick = 0; this.bobK = 0; this.lean = 0; this.dip = 0; this.dipV = 0; this.backS = 0;
     if (this.camera.fov !== this.baseFov) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
     this.camClip = 1;
     this.orbit(this.camPos, this.focus, this.yaw, this.pitch, this.camDist);
@@ -282,8 +292,16 @@ export class Player {
     this.yawS += dyaw * e(32);
     this.pitchS += (this.pitch - this.pitchS) * e(32);
 
+    // a glance back: the view only, eased so it reads as a turn of the head, not a cut
+    const backWant = this.combat?.back ?? 0;
+    this.backS += (backWant - this.backS) * e(backWant > this.backS ? 7 : 5);
+    const back = this.backS * this.backS * (3 - 2 * this.backS);
+    // in a thick crowd the camera does not sit low among the heads looking up: it rises and looks down (eased in and out)
+    const cw = this.crowdNear ? this.crowdNear() : 0;
+    this.crowdS += (cw - this.crowdS) * e(cw > this.crowdS ? 2.5 : 1.2);
+    const yawV = this.yawS + back * 2.75, pitchV = this.pitchS + (Math.min(this.pitchS, -0.38) - this.pitchS) * this.crowdS - back * 0.12;
     // soft collision: pull in fast when a trunk blocks the view, ease back out slowly
-    const want = this.orbit(tmpA, this.focus, this.yawS, this.pitchS, this.camDist);
+    const want = this.orbit(tmpA, this.focus, yawV, pitchV, this.camDist);
     const clear = this.forest.clearance(this.focus.x, this.focus.z, want.x, want.z, 0.4);
     const target = Math.max(1.3, this.camDist * clear);
     this.distS += (target - this.distS) * e(target < this.distS ? 16 : 2.5);
@@ -291,7 +309,7 @@ export class Player {
     const aimWant = this.combat?.aim ?? 0;
     this.aimS += (aimWant - this.aimS) * e(aimWant > this.aimS ? 12 : 8);
     const aim = this.aimS;
-    this.orbit(this.camPos, this.focus, this.yawS, this.pitchS, this.distS * (1 - aim) + Math.min(this.distS, 3.1) * aim);
+    this.orbit(this.camPos, this.focus, yawV, pitchV, this.distS * (1 - aim) + Math.min(this.distS, 3.1) * aim);
 
     // stride: vertical twice per cycle, sideways once, growing with speed
     const run = clamp(this.speedNow / 7.2, 0, 1);

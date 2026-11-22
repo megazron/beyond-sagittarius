@@ -119,9 +119,13 @@ export class EncounterRun {
       arm('spear', 'club'); give({ branch: 9, vine: 3, tinder: 2, stone: 6, fruit: 1 });
       const f = this.at(2.5, 0); s.addFire(f.x, f.z, this.story.fireHigh ? 100 : 72); this.markers.push({ x: f.x, z: f.z, kind: 'fire', r: 2 });
       const food = this.at(0.5, 2.2); s.addScent(food.x, food.z, 4, 60); this.markers.push({ x: food.x, z: food.z, kind: 'food', r: 1 });
+      // a steady night breeze from the fire across the food and out into the dark: the smoke leans the way the smell goes
+      const wa = Math.atan2(food.z - f.z, food.x - f.x) + (s.rand() - 0.5) * 0.6; s.windX = Math.cos(wa); s.windZ = Math.sin(wa);
       this.objective = 'cb.obj.prep'; this.go('prep');
     } else if (id === 'chase.escape') {
-      this.hour = 19.9; s.night = true; // the last of the dusk: enough sky light to see the ground you run on
+      // the last of the dusk (this sky's sun sets at 18:00; by 19:30 the glow is gone): the trees stand black against
+      // a lit horizon, the ground is read by the sky and the moon, and the hunter's eyes already shine
+      this.hour = 18.7; s.night = true;
       give({ stone: 3, fruit: 1 }); arm('rock');
       const f = this.at(125, 0); s.addFire(f.x, f.z, 100); this.markers.push({ x: f.x, z: f.z, kind: 'goal', r: 7 });
       for (const u of [32, 66, 98]) this.mark('log', u, 0, 3.2);
@@ -142,7 +146,7 @@ export class EncounterRun {
     } else {
       // the proving ground: everything in the hand, nothing at stake
       this.hour = 11; s.night = false;
-      for (const w of ['rock', 'flake', 'club', 'spear', 'hafted', 'atlatl', 'torch', 'sling', 'bow', 'crossbow', 'coil'] as WeaponId[]) { s.player.has[w] = true; }
+      for (const w of ['rock', 'flake', 'handaxe', 'club', 'throwstick', 'spear', 'hafted', 'atlatl', 'torch', 'sling', 'bow', 'crossbow', 'coil'] as WeaponId[]) { s.player.has[w] = true; }
       for (const [k, n] of Object.entries({ stone: 30, arrow: 30, dart: 12, bolt: 20, branch: 20, vine: 10, tinder: 6, fruit: 6 })) s.inv[k] = Math.max(s.inv[k] ?? 0, n);
       // the machine stands well off, so the bench fights near the start never wake it by accident
       this.put('guardian', 70, 0, { yaw: this.site.yaw + Math.PI });
@@ -217,8 +221,9 @@ export class EncounterRun {
     // they come out of the dark to the edge of the light, where the food can be smelt (a home far out had them
     // wander beyond their noses all night in the real world's terrain, and nothing ever came)
     const fromDark = (kind: SpeciesId, n: number, pack: number, spread = 1.2) => {
-      const a0 = s.rand() * 6.283;
-      for (let i = 0; i < n; i++) { const a = a0 + (i - n / 2) * 0.22 * spread, r = 30 + s.rand() * 6; s.spawn(kind, fire.x + Math.cos(a) * r, fire.z + Math.sin(a) * r, { pack, homeX: fire.x + Math.cos(a) * 21, homeZ: fire.z + Math.sin(a) * 21 }); }
+      // up the wind: the food's smell drifts downwind and that is the side they come from (the smoke shows it)
+      const a0 = Math.atan2(s.windZ, s.windX) + (s.rand() - 0.5) * 0.5;
+      for (let i = 0; i < n; i++) { const a = a0 + (i - (n - 1) / 2) * 0.22 * spread, r = 30 + s.rand() * 6; s.spawn(kind, fire.x + Math.cos(a) * r, fire.z + Math.sin(a) * r, { pack, homeX: fire.x + Math.cos(a) * 21, homeZ: fire.z + Math.sin(a) * 21 }); }
     };
     const food = s.scents.reduce((n, sc) => n + Math.max(0, sc.food), 0);
     this.objN = { food, fuel: Math.round((fire.fuel / fire.max) * 100), wave: this.wave };
@@ -227,12 +232,16 @@ export class EncounterRun {
       // time to think: what you set now is what the night meets
       // a dusk fire is built up and left to settle; it is the night that eats wood
       fire.slow = 0.3;
-      if (this.phaseT > 70 || this.mem.ready) { fire.slow = 1; this.wave = 1; fromDark('skritch', 4, 1); this.objective = 'cb.obj.night'; this.go('wave1'); }
+      if (this.phaseT > 70 || this.mem.ready) { this.objective = 'cb.obj.hush'; this.go('hush'); }
+    } else if (this.phase === 'hush') {
+      // the work is done and the camp goes quiet: a few seconds to stand and look at what is set before anything comes
+      fire.slow = 0.6;
+      if (this.phaseT > 10) { fire.slow = 1; this.wave = 1; fromDark('skritch', 4, 1); this.objective = 'cb.obj.night'; this.go('wave1'); }
     } else if (this.phase === 'wave1') {
       if (packLeft(1) === 0 || this.phaseT > 75) { for (const e of s.enemies) if (e.pack === 1) s.rout(e); this.go('lull'); }
     } else if (this.phase === 'lull') {
       if (this.phaseT > 12) {
-        this.wave = 2; fromDark('skritch', 5, 2, 2.5);
+        this.wave = 2; fromDark('skritch', 5, 2, 1.7);
         const a = s.rand() * 6.283; this.hound = s.spawn('hound', fire.x + Math.cos(a) * 34, fire.z + Math.sin(a) * 34, { alert: 1.2, aware: true });
         if (straight) this.hound.cd = 0;
         this.go('wave2');

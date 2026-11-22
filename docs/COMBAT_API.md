@@ -69,12 +69,16 @@ their own Episode One kit; the dev arena ignores it all.
 | `goodStone` | 2 | (picking flint) |
 | `flake` | 3 | stone flake |
 | `woodBone` | 4 | club |
+| `throwStick` | (Episode One, after `woodBone` and `flake`) | throwing stick: thrown side-arm it spins and sweeps a wide path (small fast game), swung it is a light club |
 | `fireDrill` | 5 | fire (and with it `torch`, `fireline`) |
 | `fireSpear` | 9 | fire-hardened spear (and `stakes`) |
+| `vineTraps` | (Episode One) | vine snare and vine rattle: a raw green vine as the cord (also known once `flags.spear` is set: its head is lashed with a vine) |
 | `cordage` | 10 | (cord) |
+| `handAxe` | 11 | hand axe (a heavy short chop, three stones) |
 | `hafting` | 12 | stone-tipped spear |
 | `atlatl` | 13 | spear-thrower and darts |
-| `traps` | 14 | snare, rattle line |
+| `traps` | 14 | figure-four deadfall (free play; small animals come to its bait) |
+| `hideWrap` | 15 | hide wrap worn on forearms and shoulders (free play): a quarter less through from a bite, half as many bite wounds |
 | `sling` | 22 | sling |
 | `bow` | 19 | bow and arrows |
 

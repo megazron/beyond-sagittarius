@@ -37,16 +37,27 @@ export const INVENTIONS: Invention[] = [
   { id: 'goodStone', row: 2, age: 1, episodeOne: true, materials: { stone: 2 }, steps: 2, needs: [] },
   { id: 'flake', row: 3, age: 1, episodeOne: true, materials: { stone: 2 }, steps: 3, needs: ['goodStone'], weapon: 'flake' },
   { id: 'woodBone', row: 4, age: 1, episodeOne: true, materials: { branch: 1 }, steps: 2, needs: [], weapon: 'club' },
+  // a throwing stick of hard wood, shaved with a flake so it is heavier at one end and spins true
+  { id: 'throwStick', row: null, age: 1, episodeOne: true, materials: { branch: 1 }, steps: 3, needs: ['woodBone', 'flake'], weapon: 'throwstick' },
   { id: 'fireDrill', row: 5, age: 1, episodeOne: true, materials: { tinder: 1, branch: 2 }, steps: 3, needs: [] },
   { id: 'torch', row: null, age: 1, episodeOne: true, materials: { branch: 1, tinder: 1 }, steps: 2, needs: ['fireDrill'], weapon: 'torch' },
   { id: 'fireSpear', row: 9, age: 1, episodeOne: true, materials: { branch: 1 }, steps: 4, needs: ['flake', 'fireDrill'], weapon: 'spear' },
   { id: 'stakes', row: null, age: 1, episodeOne: true, materials: { branch: 3 }, steps: 2, needs: ['fireSpear'], traps: ['stakes'] },
   { id: 'fireline', row: null, age: 1, episodeOne: true, materials: { tinder: 1, branch: 1 }, steps: 2, needs: ['fireDrill'], traps: ['fireline'] },
   { id: 'bait', row: null, age: 1, episodeOne: true, materials: { fruit: 1 }, steps: 1, needs: [], traps: ['bait'] },
+  // a green vine is its own cord: tied as it is pulled from the tree (as the spear's head is lashed), it makes a noose
+  // on a bent sapling or a line of stones that rattles. Withy and vine snares were set this way long before spun
+  // cord; they are stiff, weak and rot in days, which is why cordage (row 10) is still worth learning
+  { id: 'vineTraps', row: null, age: 1, episodeOne: true, materials: { vine: 1, branch: 1 }, steps: 3, needs: [], traps: ['snare', 'rattle'] },
   { id: 'cordage', row: 10, age: 1, episodeOne: false, materials: { fibre: 2 }, steps: 3, needs: [] },
+  // shaped on both faces with many removals, then thinned with a soft hammer of antler or hard wood
+  { id: 'handAxe', row: 11, age: 1, episodeOne: false, materials: { stone: 3 }, steps: 3, needs: ['flake'], weapon: 'handaxe' },
   { id: 'hafting', row: 12, age: 1, episodeOne: false, materials: { branch: 1, stone: 1, fibre: 1, resin: 1 }, steps: 5, needs: ['flake', 'cordage', 'fireDrill'], weapon: 'hafted' },
   { id: 'atlatl', row: 13, age: 1, episodeOne: false, materials: { branch: 2, fibre: 1 }, steps: 4, needs: ['hafting'], weapon: 'atlatl' },
-  { id: 'traps', row: 14, age: 1, episodeOne: false, materials: { fibre: 1, branch: 1 }, steps: 3, needs: ['cordage'], traps: ['snare', 'rattle'] },
+  { id: 'traps', row: 14, age: 1, episodeOne: false, materials: { fibre: 1, branch: 1 }, steps: 3, needs: ['cordage'], traps: ['deadfall'] },
+  // a hide wrap (row 15): a hide scraped with a flake, stretched, dried and smoked so it stays soft, cut and sewn with
+  // sinew through holes made with a bone awl round the forearms and shoulders, where an animal's teeth go first
+  { id: 'hideWrap', row: 15, age: 1, episodeOne: false, materials: { hide: 2, sinew: 1 }, steps: 4, needs: ['flake', 'woodBone', 'fireDrill'] },
   // a pouch of hide (row 15) on two cords (row 10)
   { id: 'sling', row: 22, age: 1, episodeOne: false, materials: { fibre: 3, hide: 1 }, steps: 4, needs: ['cordage'], weapon: 'sling' },
   { id: 'bow', row: 19, age: 1, episodeOne: false, materials: { branch: 1, sinew: 2, fibre: 1 }, steps: 6, needs: ['cordage', 'hafting'], weapon: 'bow' },
@@ -64,7 +75,8 @@ export function knownFrom(save: { flags?: Record<string, unknown>; inventions?: 
   const k = new Set<string>(KNOWN_AT_START);
   for (const [f, v] of Object.entries(save.flags ?? {})) if (v && f.startsWith('inv.')) k.add(f.slice(4));
   for (const i of save.inventions ?? []) k.add(i);
-  if (save.flags?.spear) { k.add('fireSpear'); k.add('flake'); k.add('goodStone'); }
+  // the spear's head is lashed on with a vine: whoever made one knows a vine ties
+  if (save.flags?.spear) { k.add('fireSpear'); k.add('flake'); k.add('goodStone'); k.add('vineTraps'); }
   if (save.flags?.fire || save.flags?.pitBuilt) { k.add('fireDrill'); k.add('torch'); k.add('fireline'); }
   return k;
 }

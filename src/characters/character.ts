@@ -9,7 +9,7 @@ import { buildHair, HAIRSTYLES, HAIR_CAP, HAIR_VOLUME, HAIR_ROUGH, HAIR_CARDS, s
 import { LOOKS, CrewId, Look } from './looks';
 import type { PlayerLook } from './custom';
 import { voice } from '../core/voice';
-import { AnimSet, CrewAsset, CrewMeta, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, furMaterial, hasLod1, lashMaterial, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
+import { AnimSet, CrewAsset, CrewMeta, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, furMaterial, hasLod1, lashMaterial, sameSkeleton, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
 import { addKit, Kit } from './kit';
 import { mergeRigid } from './rigid';
 import { perfBody } from '../core/perfhud';
@@ -115,6 +115,8 @@ const CROWD_FACE_FAR: Record<string, number> = { cornea: 5, lash: 7, eyes: 12 };
 // casts one (the stage lays a soft contact shadow under it instead), others only near the camera
 /** Crowd light builds with only their shape morphs, one per source geometry. */
 const STRIPPED = new WeakMap<THREE.BufferGeometry, { g: THREE.BufferGeometry; dict: Record<string, number> | undefined }>();
+/** Where the game camera was when it last drew a body (for passers-by at the lens). */
+const LENS = new THREE.Vector3(0, -1e6, 0);
 export const CHAR_BUDGET = { throttle: true, correctiveNear: 9, lodFar: 11, shadowFar: 16, crowdLodFar: 6, crowdShadowFar: 0 };
 
 /** Mocap style per character: how they stand and how they walk. */
@@ -363,6 +365,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       scene.updateMatrixWorld(true);
       scene.traverse((o) => { const s = o as THREE.SkinnedMesh; if (s.isSkinnedMesh) s.skeleton.calculateInverses(); });
     }
+    // every skinned part on one skeleton (cloning gave each its own): three.js then poses the bones and uploads their
+    // texture once a frame for the body instead of once per part
+    { let main: THREE.Skeleton | null = null;
+      scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && (!main || m.name === 'skin_body')) main = m.skeleton; });
+      if (main) scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && m.skeleton !== main && sameSkeleton(m.skeleton, main!)) m.skeleton = main!; }); }
     // materials
     const skinC = custom ? custom.skin : human ? 0xb5835f : L.face.skin; // a warm wheatish brown
     const shadeC = custom ? new THREE.Color(custom.skin).multiplyScalar(0.5).getHex() : human ? 0x6a4430 : L.face.shade;
@@ -589,10 +596,29 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     clips = clipsFor(`${key}`, legScale, a);
     mixer = new THREE.AnimationMixer(scene);
     fig.scale.setScalar(custom ? custom.height : 1);
+    // what a passer-by fades out with near the lens (its own materials; the kit's are shared, it just goes)
+    fadeSet = [skin, eyes, cloth, cornea, lash, ...(fur ? [fur] : []), ...hairs.filter((h): h is THREE.Mesh => !!h).map((h) => (h as THREE.Mesh).material as THREE.Material)].map((m) => ({ m, o: m.opacity, a: m.alphaTest }));
+    prepFade();
     fig.visible = true;
     void texturesReady().then(ready);
   };
 
+  // the fade near the lens (crowd bodies of the full build: Web, Ultra)
+  let fadeSet: { m: THREE.Material; o: number; a: number }[] = [], fadeOn = false, fadeK = 1, fadeShown = 1, lensWant = 1;
+  function prepFade() {
+    fadeOn = crowd && lod === 0 && fadeSet.length > 0;
+    // solid materials fade by hashed alpha; see-through ones (cornea, lashes) by their opacity; cut-out ones (hair
+    // cards) thin out by their alpha cut
+    if (fadeOn) for (const f of fadeSet) if (!f.m.alphaHash && !f.m.transparent && f.m.alphaTest === 0) { f.m.alphaHash = true; f.m.needsUpdate = true; }
+  }
+  function setFade(k: number) {
+    const vis = k > 0.03;
+    if (fig.visible !== vis) fig.visible = vis;
+    if (!vis || Math.abs(k - fadeShown) < 0.004) return;
+    fadeShown = k;
+    for (const f of fadeSet) { if (f.a > 0) f.m.alphaTest = 1 - (1 - f.a) * k; else f.m.opacity = f.o * k; }
+    for (const m of rigid) m.visible = k > 0.6;
+  }
   let pitK: CrewMeta['pit'] | null = null;
   // per region: its shapes' morph names and the bones from just below its reference down to its driving bone
   let corrRegions: { k: NonNullable<CrewMeta['pit']>[string]; keys: string[]; chain: THREE.Object3D[]; phi: Float64Array }[] = [];
@@ -625,6 +651,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (!(c as THREE.PerspectiveCamera).isPerspectiveCamera) return; // the sun's shadow camera does not count
     sinceDrawn = 0; perfStamp = perfBody(perfStamp);
     const a = c.matrixWorld.elements, b = this.matrixWorld.elements;
+    LENS.set(a[12], a[13], a[14]);
     camD = Math.hypot(a[12] - b[12], a[13] - b[13], a[14] - b[14]);
   }
   let torsoR: number[] | null = null, torsoLen: number[] = [], torsoBody: THREE.SkinnedMesh[] = []; // read by keepArmsOut
@@ -908,6 +935,22 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // its sixty bones are not even carried along by three.js's matrix pass while it is hidden
       if (!root.visible) { skipDt = Math.min(skipDt + dt, 0.2); skipN = 99; root.matrixWorldAutoUpdate = false; return; }
       root.matrixWorldAutoUpdate = true;
+      // a passer-by whose body reaches the lens (their hair filled a corner of the screen) is left out until they pass
+      if (crowd) {
+        const e = root.matrixWorld.elements, dy = LENS.y - e[13], d = Math.hypot(LENS.x - e[12], LENS.z - e[14]);
+        if (fadeOn) {
+          // Web and Ultra: they fade (hashed alpha) from 1.3 m in to gone at 0.4 m, and when the stage asks (in the
+          // line from the camera to you), over a fifth of a second either way
+          const band = dy > -0.3 && dy < 2.3, x = band ? THREE.MathUtils.clamp((d - 0.4) / 0.9, 0, 1) : 1;
+          const want = Math.min(x * x * (3 - 2 * x), lensWant);
+          fadeK += (want - fadeK) * (1 - Math.exp(-dt * 12));
+          if (Math.abs(fadeK - want) < 0.01) fadeK = want;
+          setFade(fadeK);
+        } else {
+          const near = dy > -0.3 && dy < 2.3 && d < (fig.visible ? 0.7 : 0.9);
+          if (fig.visible === near) fig.visible = !near;
+        }
+      }
       pickLod();
       sinceDrawn++;
       // phones: a crowd body more than a few metres off is posed every other frame
@@ -994,7 +1037,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     kneel += (kneelGoal - kneel) * (1 - Math.exp(-dt * 3.2));
     if (kneelGoal === 0 && kneel < 0.004) kneel = 0;
     if (kneel > 0) kneelLegs(bs, hipsB);
-    keepArmsOut(bs);
+    // a hand in the torso is a pixel or two further off; the check walks the whole body's matrices (a crowd's worth was
+    // a few per cent of the frame)
+    if (!CHAR_BUDGET.throttle || camD < (crowd ? 8 : 16)) keepArmsOut(bs);
     if (task) taskArms(bs, kind, t, dt);
     else if (kind === 'idle' && !gaze && speak <= 0 && !moving) idleLife(bs, t, dt);
     else { idleLook *= Math.exp(-dt * 3); }
@@ -1281,7 +1326,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** Something held in the right hand outside any task (a leaf cup, a berry); null puts it away. */
     setProp(k: PropKind | null) { heldProp = k; },
     /** One of a crowd (CHAR_BUDGET): no corrective shapes, the light build and no shadow from closer in. */
-    setCrowd(on: boolean) { crowd = on; },
+    setCrowd(on: boolean) { crowd = on; prepFade(); },
+    /** A crowd body that can fade (Web, Ultra) fades out towards 0 and back in towards 1; false: the stage hides it. */
+    setLensFade(target: number) { lensWant = target; return fadeOn; },
+    get canFade() { return fadeOn; },
+    /** Faded out at the lens (not drawn). */
+    get faded() { return fadeOn && !fig.visible; },
     /** Held expression (null goes back to what the pose asks for). */
     setFace(f: Face | null) { faceSet = f; },
     say(seconds: number) { speak = Math.max(speak, seconds); },

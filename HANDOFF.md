@@ -243,3 +243,180 @@ unlanded except this handoff commit and any recording in progress.
 6. Hunt: works (bot kills in ~20 s); prey readability in long grass relies on the suit tags.
 7. Guardian prototype is plain boxes; melee vs Skritch is mostly chasing by design.
 8. Nothing is "ready": the owner signs off; send clips with an honest list.
+- 00:00 LANDED a787854 on main (CI 44963286821 all green): items keep their own copy of the scan materials;
+  unifyLooks (merge.ts) moves plain singleton looks onto shared per-vertex materials before batchStatic; crowd bodies
+  past 6 m skip lashes and cornea; flat portals hide batched pieces from the camera pass only (userData.batchHide);
+  batchStatic splits a material on more than 256 pieces into several batches (without that the mobile crowd went
+  99 -> 128 draws, over its budget).
+- Measured after (A500, Web, n3 = dist-new2 ~67b6638): Zenvora draws flat 199, bazaar 207, crowd 344, gate 365,
+  square 183, downtown 178, market 145, waterfront 123, park 158; fps 23-40 in that run (n2 run: 26-48). Run-to-run
+  spread is 5-15 fps: compare builds back to back in one session before believing a few fps.
+- Mobile proxy (4x slowdown) 10-19 fps; profile: render 65 % (setProgram most of it), tick 25 % (away.update/city
+  1.1 s of 5.9 s, player 0.5 s, character animate 0.4 s).
+- Planet forest spot, new build (p15/exp_planet): 53 fps at 242 draws standing still; pixel ratio 0.6 or post passes
+  off did not raise it (40-52, noise), so still main-thread bound. Walking (clips) 26-38 fps: update 6-11 ms, draw 15-24.
+- Clips (34fddfc, ?perf=1: Web city 01-05, Web planet 11-13, Ultra city u03-u04) and README_review.txt in
+  Downloads/BS_Game_v1.1/city_v1.5_GPU. The Ultra planet clip was not recorded (queue stopped).
+- Not started: KTX2 (encoder works: ETC1S ~ the webp's size, UASTC 8x; normal maps need a decision), far-tree
+  impostors (the batches made far trees cheap in draw calls already), title first-frame freeze (26 programs).
+
+## 2026-11-22 00:10 takeover by perf agent 16 (branch perf16 from perf15 d621084 = main a787854 + handoff)
+- Measurements in ~/bs-assets/gpu/p16 (mdetail.js = one frame's main-pass draws per material with object paths and
+  positions; ab.sh TAG PLAN.. = base (main a787854, ~/bs-perf-base worktree, dist-base on :4183) vs new (dist-new on
+  :4182), exclusive heavy, one run per call; join.py = screencast frames to mp4). Profiles with source maps: build
+  `--sourcemap --outDir dist-prof`, serve :4185, plan with "profile", then tools/mapprof.cjs.
+- core/cycle.ts: one shared clock (CLOCK, set by the city's update via tickCycles) drives things animated in the
+  shader: ad screens step through a painted atlas (cycleMaterial, aCycle per vertex), holograms turn and flicker
+  (holoMaterial, aHolo), steam is one billboard mesh, the koi, searchlights, message tower and sky lanes (citymega) move
+  in their vertex shaders. Nothing of these changes on the CPU any more, so they merge and batch. Cables are one line
+  set, bunting one instanced mesh. Gate: 153 -> 106 distinct materials, non-body main-pass draws ~208 -> ~127.
+- Bodies: every skinned part shares one skeleton (cloning gave each its own: one bone texture upload per part); the full
+  builds' head and body skin are joined too (assets.ts joinSkin, now for every build, sameSkeleton check); lashes in one
+  pass (forceSinglePass); passers-by within 0.7 m of the camera are hidden (the hair at the lens); crowd bodies past
+  8 m skip keepArmsOut (it walked the whole body's matrices).
+- Title: the first frame waits for prewarm(cine) + prewarmPost (post chain programs) to link in the background.
+- city.ts: walls in an 8 m grid for collide/clearance (they scanned every box twice a frame).
+- Coordinator notes: the Mobile crowd perf_gate (budget 120) needs real headroom (CI saw 122 on perf16 42f25f2);
+  life-wip added setRibbon in src/world/grass.ts and src/world/stream.ts: keep those when they land; the combat CI's
+  "full fight adds 381 draw calls" is being looked at by the combat agent (my batching is not known to be involved).
+
+### 2026-11-22 ~01:50 (next combat agent)
+- LANDED 6160b3d on main (CI 44969621815 green on that sha). Local on top (not pushed yet): 81d6475, 7fd2d65.
+- Night: scavenger waves now come UP THE WIND (sim.windX/Z set in the night setup: from the fire across the food and
+  out into the dark, +-0.3 rad); the camp fire puffs wood smoke that leans with the wind (fx 'smoke'), so a player can
+  read where to set traps. Snare is a spring pole (fx.snare: bent sapling, snaps up on a catch with a damped
+  overshoot, cord to the caught leg while held). Trap has `caught`/`sprungT`. sim_test: 210 checks (arrivals downwind,
+  a downwind trap catches).
+- Recording bot night prep rewritten: reads the wind, sets stakes (3.5 m downwind of the food), bait and a snare
+  (8 m), each faced downwind by walking the last 1.7 m along the wind; stuck walker sidesteps, then sets where it
+  stands; says ready out at the bait (by the fire the E key feeds the fire instead: that is why "ready" never fired
+  before); guards the food from its upwind side looking out over the traps. `window.__cbDbg` shows its prep state.
+- Chase: the hunter was never on screen in v3 (the camera looks ahead, it is behind). Now the view glances back
+  (player.ts `combat.back`, view only, the legs keep their heading) while the hound winds up or starts a lunge within
+  16 m; B holds a look back.
+- Spear-thrower full draw: side-on, hand by the ear with the elbow down, off hand bent in front of the chest
+  (MECHANICS_NOTES section 11, sources).
+- Guardian redesigned (creatures.ts guardian()): monolith on four IK legs, three lenses converge before the beam,
+  rears before the stomp, back fins open on the core after a beam. Not yet seen on the GPU.
+- Recording plan ~/bs-cap/combat/mkplan_v8.py (chase v4, atlatl ref v3, guardian v2, night v4) -> plan_v8.json.
+- Delivered 06_chase_v3 with notes; night v3 not sent (no stakes, no catch visible).
+- 02:40 v8 reviewed (~/bs-cap/combat/v8): chase v4 still never showed the hunter: it never got close (inside 14 m it
+  followed at 62% of its run, slower than a sprinting player, so it never leapt and the glance never fired). Fixed in
+  ai.ts (flat out while you run) + an opening look over the shoulder (run.t 0.6..2.6). Atlatl v3: side-on draw reads
+  right, dart went through the head: hand moved out from the ear. Guardian v2 read as a plant stand: heavier stone
+  legs. Night v4: MY smoke filled the screen (huge unlit point sprites near the camera): now thin wisps, point size
+  capped, particles fade within 2.8 m of the camera (all puffs). The world's camp has its own white plume already.
+- New content: hand axe (row 11, `handaxe`, craft 3 stones), figure-four deadfall (row 14, free play only; grazers
+  walk to fruit within their nose). sim_test 221.
+- QUESTION for the story agent: the night set piece offers snare and rattle (row 14 needs cordage, row 10), Episode
+  One has no cordage. I read them as vine traps for now (the kit gives vines). Say if Episode One should drop them.
+- 49a6f23 was CI-green but NOT landed (the smoke). Next land: d620dff or later on combat-land3 once green, after the
+  v9 recording (~/bs-cap/combat/mkplan_v9.py) looks right.
+
+- 03:25 LANDED de87e3a on main (CI 44977716877 green after one flaky-rerun). Earlier: 03:10 rebased on main 3a740a3 (perf landed; HANDOFF merged both sides). Head de87e3a pushed as combat-land4, CI
+  44977716877 running: land it when green (`git push origin de87e3a...:main` in its own command). d620dff was green
+  on combat-land3 but main moved, so it can no longer fast-forward.
+- v9 reviewed and delivered (Downloads/.../combat: 06_chase_v5, 16_spear_thrower_reference_side_v4, 03_guardian_v3,
+  05_night_defence_v5, README notes). Chase now shows the hunter. Night: smoke fixed; traps set; a catch on screen
+  NOT confirmed; an unidentified bright cyan ring on the ground (not the snare: check fx telegraph rings / pickup
+  marks); the night starts as soon as the bot says ready (give it a pause so the traps are seen). Guardian: legs
+  fold when asleep since de87e3a (not yet seen on the GPU). Atlatl: asked the owner whether the side view still
+  reads as a "T".
+- Next: a night take where a catch is framed (bot looks at the snare when a skritch nears it), identify the ring,
+  guardian silhouette at fight distance, bow camera by play, bow/sling grips once life-wip's setGrip is on main,
+  the deadfall in free play (food), Episode One 1.9 hooks are ready on the API side.
+
+### 2026-11-22 ~04:00 (combat agent, next session)
+- DECIDED (night traps vs cordage): Episode One keeps the snare and the rattle as VINE traps, not cordage. A green vine
+  is its own cord (the spear's head is already lashed with one: story.ts `spear: { branch, flint, vine }`; the world
+  scatters vines round the camp and pod 2). New invention `vineTraps` (row null, episodeOne, materials vine + branch,
+  traps snare + rattle, text cb.inv.vineTraps.1-3); known once `flags.spear` is set or `inv.vineTraps`. Row 14
+  (`traps`) now gives only the figure-four deadfall; spun cordage (row 10) stays Age 1 level 11. Labels: "Vine snare",
+  "Vine rattle". NOTE FOR THE STORY AGENT: nothing to add to Episode One; if a scene teaches traps, set
+  `flags['inv.vineTraps']`. Say in this file if you want it otherwise.
+- The bright cyan ring on the night ground was the WORLD's pickup marker (props.ts/resources.ts: stones, branches and
+  resources within 9 m get a pulsing HDR cyan ring that blooms hard on a dark ground). New `world.items.ringK`
+  (1 normal, 0 hidden); combat sets it to 0 while a night set piece runs, back to 1 when it ends.
+- Night: after "ready" (or the 70 s prep) a 10 s `hush` phase (objective "Quiet now. Watch the dark where the smoke
+  goes.") before wave 1, so the traps can be looked at. Snared animals now fight the cord in the view (hind leg pulled
+  out, body twisting, jaws open; the hound twists too); the cord runs to the hind leg. Bot: stands at the guard spot in
+  the hush looking over the traps; in the waves it turns to watch a snare/stakes a scavenger is within 6 m of, or one
+  that sprang in the last 3.5 s.
+- Chase hour 19.9 -> 18.5: this sky's sun sets at 18:00 (sky.ts: e = sin((h - 6) / 24 * 2pi)); at 19.9 the sun was
+  0.52 below the horizon (full night, no afterglow). At 18.5 the horizon is still dusk orange and the fog takes it, so
+  trees are silhouettes against it. Bot rolls sideways out of the lunge line when the hound is under 6.5 m into its
+  strike (once a lunge).
+- Guardian: pale weathered stone, glowing seams on all six edges, a crest of three bronze spines, heavier legs, core
+  glows through the closed fins whenever it is awake.
+- Spear-thrower: the cast's hand path arcs up over the shoulder (0.16 s), a pale swept smear of the thrower for 0.18 s.
+  Reference camera in mkplan_v10.py: behind and above the throwing shoulder first, then side-on.
+- Windows interop from my shell gave "Invalid argument" for .exe; `/init /mnt/c/...exe` works. ~/bs-cap/combat/cap2.sh
+  is cap.sh with that prefix.
+- 05:00 State: main = bfdde7b (landed, CI 44979957452 green after one flaky rerun). Unlanded on `combat`: 23a58d9..34460d7
+  (night hush, vine traps, rings off, snared struggle, chase dusk, guardian, atlatl arc, throwing stick, bot fixes),
+  pushed as combat-land8 (CI running). combat-land7 (64038f0) failed only perf_gate "mobile bazaar 836430 triangles
+  (budget 720000)" (city, not touched by these commits; known to swing): if land8 fails the same way, rerun once.
+  Land with `git push origin <sha>:main` in its own command once green on that exact sha.
+- Throwing stick (`throwstick`, invention `throwStick`, row null, Episode One, after woodBone + flake): thrown it spins
+  end over end (fx), proj radius 0.32 (wide sweep), the stick itself flies (ammo null), swung a light club. Not yet
+  in a clip; not yet taught by the story (set `flags['inv.throwStick']`).
+- v11 recordings (~/bs-cap/combat/v11, plan mkplan_v11.py, capture cap2.sh) delivered: 05_night_defence_v7,
+  06_chase_v7, 16_spear_thrower_reference_v6, 03_guardian_v5 (README notes). v10n night was useless: the bot passed a
+  marker's missing `.y` as look height, pitch went NaN, the camera froze all night (fixed; testLook ignores NaN).
+- NEXT: (1) night: a snare catch still NOT seen on screen. The bot now logs catches in window.__cbTrapLog: add an
+  eval step after the night rec that prints it, then check whether the snare at the bait ever springs in the real
+  world (scavengers in v7 stood near the food, 4-5 m from the guard spot, not at the bait 8 m out); maybe put the
+  snare on the line in (between bait and food) or close to the food. (2) chase: very orange at 18.5; try 18.7 if the
+  owner wants cooler; bot still bitten once and walks into the lashbloom. (3) guardian: body dark from the front at
+  fight distance; asleep knees still rise a little. (4) setGrip still not on main (checked 04:30): bow/sling grips wait.
+  (5) record the throwing stick (arena, a `throwref` bot mode does not exist yet).
+
+### 2026-11-22 ~06:00 (combat agent, session after v11)
+- Guardian: the stone takes the light of its own seams (a cold fresnel rim, `uRim`) and a warm glow from the core
+  (`uCoreGlow`) through an onBeforeCompile that chains `nearFade`; stone legs about twice as thick (shin in stone,
+  broad foot pad); asleep knees lower (pole 1.3 - rest * 1.3).
+- Night animals: `NIGHT_RIM` (creatures.ts) on the small-animal hide/belly materials, driven from the planetshine in
+  combat.ts present(): a cold edge so a shape beyond the firelight reads as an animal. The hound comes from
+  world/predator (not mine) and keeps its eyes and ridge only.
+- Camera (game/player.ts orbit): when a slope, log or the camp's stones pull the camera in to under 1.05 m of the head
+  it now rises over the head instead (the "camera inside the head while feeding the fire" in night v7).
+- Chase hour 18.7 (owner asked for a cooler sky to judge). Recording bot: `throwplay` mode (throwing stick vs Nibbets,
+  fetches the stick), chase goes 7 m round the spore plant. Plan ~/bs-cap/combat/mkplan_v12.py (night prints
+  __cbTrapLog into the capture log after the take).
+- NOTE FOR THE STORY AGENT (throwing stick): `throwstick`, invention `throwStick` (row null, Episode One, needs woodBone
+  + flake, made from 1 branch). Thrown side-arm it spins and sweeps a wide path: it is what brings down small fast
+  animals (Nibbets) where a spear point misses; swung it is a light club. If Episode One has a beat where Zenvik
+  needs food before the first hunt or after a missed spear throw, it fits there (Schoeningen, beside the spears,
+  about 300,000 years ago). To teach it set `flags['inv.throwStick']`. Clip: 18_throwing_stick (when recorded).
+
+## 2026-11-22 04:10 takeover by perf agent 17 (branch perf17 from main bfdde7b; landing branch perf17-land2)
+- Measurements in ~/bs-assets/gpu/p17: inter.sh TAG PLAN.. (base on :4183 = ~/bs-perf-base at main, built to
+  ~/bs-perf/dist-base; new on :4182 dist-new; one exclusive heavy call per run, then p15/cmp.py), plan_mcensus.json
+  (Mobile per-object census), clips.sh (clips of dist-new2 on :4184 to Downloads/BS_Game_v1.1/city_v1.7_GPU).
+- core/ibatch.ts: InstancedBatch has RUNS now (several instance lists of one geometry, each with its own cull sphere,
+  hidden/mainHidden/shadow switches; run id = geometry id for the first run, addRun for more; add every geometry
+  first). BatchPool + RunHandle: pieces gathered per material (and attribute set) into one batch each; a RunHandle
+  stands in for an InstancedMesh (visible, castShadow). autoBounds: a pooled batch with no shown run is not drawn at
+  all and is frustum-culled by its shown runs (a batch whose runs all draw nothing still cost a draw in every pass).
+- city.ts props: with BATCH.on, the scans (Ultra near), the "always" models and the stretches' light-build bakes go
+  through BatchPools: one draw per prop kind's material for the whole zone (old town and districts each), each stretch
+  a run. The flat's portals reach the runs through invisible stand-ins (group `propRuns`, userData.batchHide).
+- Lens: crowd bodies of the full build (Web, Ultra) fade with hashed alpha (alphaHash set at build time, so no
+  recompile in play) from 1.3 m to gone at 0.4 m, and when the city asks (setLensFade: on the line from the camera to
+  you), eased over ~0.2 s; see-through materials fade by opacity, cut-out hair cards by raising alphaTest; the merged
+  kit just goes below 0.6. Phones keep the hard hide. `fig.faded` feeds drawnAs.
+- Camera: stage.crowdNear() (city: bodies within 3.2 m of you, (n-1)/3) eases the follow camera up 0.3 m and its pitch
+  down to at least -0.38 over a thick crowd. ?crowdcam=0 turns it off.
+- Numbers (A500, shared machine, single interleaved pairs, so a few fps is noise):
+  Ultra bazaar census: 752 -> 463 draws (prop draws 264 main + 223 shadow -> 101 + 76); fps 16.0/10.5 -> 14.2/20.7
+  (two shots, both noisy): Ultra is NOT mainly draw-bound at the bazaar any more (2.9-3 M triangles, SSR, AO).
+  Web city (w1): flat 31.0 -> 36.9, bazaar 27.7 -> 32.2, crowd 23.9 -> 27.1, gate 27.2 -> 31.3, square 27.8 -> 39.2,
+  downtown 30.6 -> 37.4, market 30.3 -> 42.9, waterfront 31.1 -> 48.1, park 34.8 -> 53.7 (Web draw counts barely move:
+  Web never drew the scans; the gains are larger than the draw change explains, part is load).
+  Mobile proxy (4x): mixed, 8-21 fps both builds, draws vary 40+ run to run with the crowd. CI perf_gate mobile bazaar
+  on perf17-land was 836k triangles (budget 720k; main's last green run 519k); locally (SwiftShader) base 621k, new
+  297k: the gate's mobile numbers swing with where the crowd is. Watch it.
+- NOT DONE (in order of the owner's list): bodies to 1-3 draws (skin and cloth are two very different shaders: a
+  shared atlas means one merged shader; ~7 draws a body still); the gate to 60 on Web (31 fps here; render is
+  setProgram-bound, 100+ distinct materials); planet to 60; Mobile to 30 (10-20 now); quiet-machine re-measure and the
+  cold title load (p15/ab_load.sh) never ran: the heavy queue was busy with other agents' captures most of the time.
