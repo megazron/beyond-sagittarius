@@ -447,6 +447,9 @@ unlanded except this handoff commit and any recording in progress.
 - Landing: rebased on main e368b61 (perf's crowd camera merged with my view turn in player.ts updateCamera: both
   terms in pitchV). Pushed 8f0222e as combat-land14; land it when CI is green on that sha (its own command).
   combat-land13 (9fa22b8) went green on rerun but main had moved; it is inside land14.
+- 11:10 LANDED 8f0222e on main (CI 45009577101 green after one rerun: the first run timed out once in the play
+  test on the pause menu difficulty click and perf_gate mobile bazaar 781k; both passed on rerun). Unlanded: this
+  handoff commit only.
 - NEXT: guardian legs darker in sun / face less boxy; wrap hide over loose sleeves (or a forearm fit from kit.ts);
   bigger/brighter snared animal (night rim on it while held?); bow/sling grips when setGrip lands (still only
   life-wip at 10:00); then the next invention-tree content.
