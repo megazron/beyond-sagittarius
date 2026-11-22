@@ -51,6 +51,7 @@ export class Away {
     // the body you play is drawn with its full build, phones too (see PLAYER_DETAIL in main.ts)
     const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: (fx, fz, cx, cz) => stage.clearance?.(fx, fz, cx, cz) ?? 1 }, this.camera, Math.max(this.detail, 0.8), id, id === 'strong' && this.skins.strong === 'suit' ? 'suit' : undefined); // the crew's chosen skin, on their own stage too
     p.physics = { gravity: stage.gravity, jump: stage.jump, gaps: true };
+    p.model.mergeParts(); // skin, clothes and eyes in one draw (bodymerge.ts)
     // ?crowdcam=1: the camera rises over a thick crowd (off by default until its cost is understood: with it CI's
     // perf_gate saw the phone bazaar at 836k triangles against a 720k budget)
     if (stage.crowdNear && new URLSearchParams(window.location.search).get('crowdcam') === '1') p.crowdNear = () => stage.crowdNear!();
