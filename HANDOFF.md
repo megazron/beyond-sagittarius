@@ -388,3 +388,16 @@ unlanded except this handoff commit and any recording in progress.
   animals (Nibbets) where a spear point misses; swung it is a light club. If Episode One has a beat where Zenvik
   needs food before the first hunt or after a missed spear throw, it fits there (Schoeningen, beside the spears,
   about 300,000 years ago). To teach it set `flags['inv.throwStick']`. Clip: 18_throwing_stick (when recorded).
+- 07:40 FINDINGS. (1) A headless probe (~/bs-cap/combat/probe/bait_probe.py) proved the night sim works in the real
+  world: bait + snare set exactly downwind, the wave-1 Skritch run to the bait and the snare catches about 4 s after
+  they spawn. v7's missing catch was the bot: it set the snare 4 m off the bait (now it sets the snare where the bait
+  really lies) and watched from beside the food into black. (2) Chrome 9336 renders on the INTEL iGPU and under other
+  agents' load recorded at 2 fps. My own Chrome is now port 9338 (profile %TEMP%\bs-combat-a500,
+  --force-high-performance-gpu, NVIDIA A500); plans v12+ use it. Record with HEAVY_EXCLUSIVE=1 cap2.sh (8 fps under
+  load vs 23 fps alone). A killed capture leaves the game running in its tab: close it (~/bs-cap/combat/tabs.py PORT).
+- Night: planetshine 0.85 on the defence (0.55 was black on the A500), smoke dimmed at night (fx.smokeK), bot bait
+  5.5 m out at the edge of the firelight, watches from 4.4 m beyond the snare looking back at the camp.
+- Hide wrap (row 15, `hideWrap`, free play): sim only (p.wrap), not drawn on the body yet (needs forearm attachments
+  on the character rig).
+- Delivered 06_chase_v8_hour18_7 (taken 0 damage, went round the spore plant) and 16_spear_thrower_reference_v7.
+  v13 (night v9, guardian v7, throwing stick v2) recording at 07:40.
