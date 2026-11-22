@@ -503,3 +503,10 @@ unlanded except this handoff commit and any recording in progress.
   pf2_A): A = ?bodymerge=0&psort=0 (main before today), B = new. fps A/B/A2: bazaar 30.5/54.5/45.2, gate 35.5/47.7/40.2,
   market 37.9/60.3/52.7, square 34.1/57.8/42.6 (crowd: A runs had a first-spot load hitch, not comparable). Skinned draws
   B vs A2: bazaar 21/28, gate 14/26, market 4/6, square 11/19. The gate is still under 60 on Web (47.7).
+- Ultra GPU profile (owner goal 6; p18/ug1, ?gputime=1, A500, 1280x720, pr 0.94): GPU ms per pass at bazaar / crowd /
+  gate / square: scene incl. shadows 22.5 / 9.9 / 12.7 / 5.9; AO 0.8-1.5; SSR 0.2-0.7; bloom 0.5-3.2; the rest < 0.7.
+  The same frames took 12.6 / 22.6 / 13.7 / 20.2 fps with the CPU's draw 61.8 / 25.6 / 65.8 / 68.5 ms and update
+  11-18 ms. So Ultra is CPU-bound, not SSR/AO-bound: cheaper SSR/AO buys under 2 ms. Ultra's CPU per draw is ~140-250 us
+  (Web ~50). NEXT: a CPU profile of Ultra at the bazaar and gate (build --sourcemap, plan with "profile", tools/mapprof.cjs)
+  to find what costs per draw there (suspects: the 3072 shadow map's caster pass, the scans' many materials, per-draw
+  uniform uploads with the extra Ultra lights).
