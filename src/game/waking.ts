@@ -52,7 +52,10 @@ export class Waking {
   private chest(fwd: number, right: number, down: number) {
     const m = this.z, f = new THREE.Vector3(Math.sin(m.root.rotation.y), 0, Math.cos(m.root.rotation.y));
     const r = new THREE.Vector3(f.z, 0, -f.x);
-    return this.player.pos.clone().add(new THREE.Vector3(0, 1.62 - down, 0)).addScaledVector(f, fwd).addScaledVector(r, right);
+    // from where his head is (kneeling lowers it), down: standing, the head sits about 1.62 m up
+    const head = new THREE.Vector3().setFromMatrixPosition(m.head.matrixWorld);
+    const base = this.player.pos.clone(); base.y = Math.min(head.y, base.y + 1.62);
+    return base.add(new THREE.Vector3(0, -down, 0)).addScaledVector(f, fwd).addScaledVector(r, right);
   }
 
   /** Hands in front of him, palms up (or down): he looks at them. */
@@ -155,7 +158,7 @@ export class Waking {
         audio.sample('leather', 0.18, { rate: 0.7 });
       } },
       // cupped hands in, up to his mouth; it runs down his chin
-      { hold: 3.0, shot: () => this.handsShot(dip, 0.85), run: () => {
+      { hold: 3.0, shot: () => this.handsShot(dip, 1.3), run: () => {
         z.setLimbs({ bend: 0.5 });
         z.doTask('drink', { at: dip.clone(), seconds: 2.8, hands: 'both', prop: null });
         this.after(0.7, () => audio.sample('splash', 0.22, { rate: 1.3 }));
@@ -201,7 +204,7 @@ export class Waking {
     const r = new THREE.Vector3(f.z, 0, -f.x);
     const head = new THREE.Vector3().setFromMatrixPosition(m.head.matrixWorld);
     const to = at.clone().lerp(head, 0.35);
-    return { from: to.clone().addScaledVector(f, dist * 0.75).addScaledVector(r, dist * 0.7).add(new THREE.Vector3(0, 0.12, 0)), to, push: 0.04 };
+    return { from: to.clone().addScaledVector(f, dist * 0.75).addScaledVector(r, dist * 0.7).add(new THREE.Vector3(0, 0.12 + dist * 0.15, 0)), to, push: 0.04 };
   }
 
   /** Both hands together in front of his chest, palms up round what the right one holds. */
@@ -248,12 +251,16 @@ export class Waking {
     const st = s.stats;
     // he turns to the bush; the fruit and his face in one frame
     const face = Math.atan2(-(at.x - this.player.pos.x), -(at.z - this.player.pos.z));
+    // he steps up to the bush (the cut hides it): an arm's length from the fruit, so both are in one frame
+    const near = at.clone().setY(this.player.pos.y);
+    const stand = near.clone().add(this.player.pos.clone().sub(near).setY(0).setLength(0.8));
+    stand.y = this.world.terrain.height(stand.x, stand.z);
     const mouth = () => new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld).addScaledVector(this.fwd(), 0.1).add(new THREE.Vector3(0, -0.075, 0));
     const wrist = () => this.chest(0.3, 0.06, 0.52);
     let rub: (() => void) | null = null;
     this.playScene([
       { key: 'e1.fr.see', who: 'scientist', shot: () => this.twoShot(at), run: () => {
-        this.place(this.player.pos, face);
+        this.place(stand, face);
         z.setLookTarget(at); z.setLimbs({ bend: 0.3 });
       } },
       { choice: 'e1.fruit', shot: () => this.twoShot(at, 1.25) },
@@ -283,7 +290,7 @@ export class Waking {
         this.ticker(3.0, () => rub?.());
       } },
       // then the lip: he touches it to his lower lip and holds it there
-      { hold: 2.4, if: TESTED, shot: () => cover.close(z, 0.55, 0.8, 0.06), run: () => {
+      { hold: 2.4, if: TESTED, shot: () => cover.close(z, 0.25, 0.75, 0.0), run: () => {
         rub = null;
         const m = mouth(), f = this.fwd();
         z.setHold({ R: { at: m.clone().addScaledVector(f, 0.03).add(new THREE.Vector3(0, -0.02, 0)), fingers: f.clone().negate().add(new THREE.Vector3(0, 0.3, 0)).normalize(), palm: new THREE.Vector3(0, 0, 0).sub(f).normalize() } });

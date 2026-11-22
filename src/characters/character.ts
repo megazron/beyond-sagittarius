@@ -42,11 +42,11 @@ const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
   paper: () => new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.003, 0.22), new THREE.MeshStandardMaterial({ color: 0xece6d6, roughness: 0.95 })),
   leaf: () => {
     // a broad leaf rolled into a cone, open at the top, its point down; a midrib and an uneven rim
-    const g = new THREE.ConeGeometry(0.055, 0.15, 14, 3, true);
+    const g = new THREE.ConeGeometry(0.04, 0.115, 14, 3, true);
     const p = g.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < p.count; i++) {
       const y = p.getY(i), a = Math.atan2(p.getZ(i), p.getX(i));
-      if (y > 0.07) p.setY(i, y + 0.02 * Math.sin(a * 2 + 0.6) + 0.012 * Math.sin(a * 5));
+      if (y > 0.05) p.setY(i, y + 0.015 * Math.sin(a * 2 + 0.6) + 0.009 * Math.sin(a * 5));
     }
     g.rotateX(Math.PI); g.computeVertexNormals();
     return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x3f7a2a, roughness: 0.55, side: THREE.DoubleSide }));

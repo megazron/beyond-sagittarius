@@ -278,7 +278,7 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
       stones.setMatrixAt(c, m4);
       // grey granite and brown sandstone, darker where wet
       const g = rnd(k + 71);
-      c3.setHSL(g < 0.7 ? 0.1 : 0.07, g < 0.7 ? 0.05 : 0.28, (0.3 + rnd(k + 73) * 0.2) * (inBed ? 0.62 : 1));
+      c3.setHSL(g < 0.7 ? 0.1 : 0.07, g < 0.7 ? 0.05 : 0.28, (0.16 + rnd(k + 73) * 0.12) * (inBed ? 0.6 : 1));
       stones.setColorAt(c, c3);
       c++;
     }
