@@ -473,6 +473,27 @@ unlanded except this handoff commit and any recording in progress.
   story teaches it before the hunt: lean.ts, `inv.throwStick`).
 - combat-land15 (381873f, handoff only) failed levels_smoke (flaky), rerun requested.
 - Recording: ~/bs-cap/combat/mkplan_v17.py -> plan_v17_guardian_wrap_throwstick.json, plan_v17_night.json.
+- ~13:10 STATE. Rebased on main 0c68d8c; head pushed as combat-land16 (CI on push). Land it when CI is green on that
+  exact sha (`git push origin <sha>:main` in its own command; levels_smoke "inventory did not open" is flaky:
+  `gh run rerun <id> --failed`). combat-land15 failed levels_smoke twice (handoff-only commit; it is inside land16).
+- Delivered (Downloads/.../combat, README notes): 05_night_defence_v12_catch_heard, 03_guardian_v11_carved_face,
+  19_hide_wrap_v5_over_sleeve, 18_throwing_stick_v6.
+- Seen on the GPU: night v12: the beat turns and draws in on the caught Skritch at ~0:28, struggle heard and dirt
+  kicked up; the Skritch ran straight in so the pre-snap cue did not play in that take (cue still unheard in a clip);
+  the held light was too strong (ghost-like) -> cut to 0.2 and mostly fresnel (18f6034, NOT yet recorded). Guardian
+  v11: face carved from body stone around a hollow (reads a bit like a mouth/porthole), legs dark; phase two still
+  turns the body orange (rimU `over`). Wrap v5: over the sleeve from the side; from the front the wrist end was a
+  dark ring -> capped at 0.085 m, wrist narrower, edge rolled in (d5845d5, NOT yet recorded). Stick v6: thrower whole,
+  Nibbets sitting up visible, stick in flight; the side camera holds while the bot walks off.
+- NOTE: perf's ff74a53 merges the player's skin/clothes/eyes into one skinned mesh on stages; HideWrap.measure()
+  still works on skinned meshes, but its cloth colour comes from the merged material (check the puff colour).
+- NEXT: build, then `HEAVY_EXCLUSIVE=1 ~/bs-cap/combat/cap2.sh v17c plan_v17c_night_wrap.json` (night v13 + wrap v6)
+  and review; a night take where the pre-snap cue plays (bot or probe); guardian phase-two colour; setGrip still only
+  on origin/life-wip (checked 13:00); content proposal (row 21 / spear fishing) below.
+- PROPOSAL for the next content (tree row 21 area, Episode One compatible): spear fishing with the fire-hardened
+  spear in the stream/lake shallows: fish seen where they are not (refraction: aim below the fish, Zenvik's physics,
+  one line). Needs a water query on the fight Env (core.ts Env has only height/blocked), a `fish` species and view,
+  and a story hook (the story agent's 1.1 stream). Not started; ask the story agent where it fits.
 
 ## 2026-11-22 04:10 takeover by perf agent 17 (branch perf17 from main bfdde7b; landing branch perf17-land2)
 - Measurements in ~/bs-assets/gpu/p17: inter.sh TAG PLAN.. (base on :4183 = ~/bs-perf-base at main, built to
