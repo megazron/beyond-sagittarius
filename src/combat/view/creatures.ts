@@ -338,9 +338,10 @@ function guardian(): CreatureView {
   const stone = stoneOf(0x8a857b), dark = stoneOf(0x46423b);
   // the legs: a cold dark basalt, weathered (grime in the joints, rain streaks down each drum, pale lichen on what
   // faces up); vertex colours, so the sun on them reads as dark old stone, never tan
-  const legStone = stoneOf(0x6a6d70, { vertexColors: true, roughness: 0.95 }, legRimU, noGlow);
+  // (lying folded the legs face the sun square on, so they need a far darker stone than the upright body to read dark)
+  const legStone = stoneOf(0x3b3d40, { vertexColors: true, roughness: 0.96 }, legRimU, noGlow);
   // the face's hollow: near black stone that only takes the lenses' light
-  const hollowM = mat(0x111214, { roughness: 1, flatShading: true, side: THREE.DoubleSide, emissive: new THREE.Color(0, 0, 0) });
+  const hollowM = mat(0x2b2c2e, { roughness: 1, flatShading: true, side: THREE.DoubleSide, emissive: new THREE.Color(0, 0, 0) });
   const bronze = mat(0x9a7f52, { metalness: 0.75, roughness: 0.45, flatShading: true });
   const moss = mat(0x6f7d5c, { roughness: 1, flatShading: true });
   const seamM = glow(0.1, 0.5, 0.6), lensM = glow(0.2, 1.2, 1.6), coreM = glow(2.4, 0.9, 0.2);
@@ -389,7 +390,7 @@ function guardian(): CreatureView {
     return place(g, 0, FY, FZ);
   };
   // the mound: from inside the body, up over a thick uneven lip; the hollow: from the lip down to the eye
-  part(body, [mask([[0.36, -0.22], [0.34, -0.06], [0.3, 0.06], [0.24, 0.12], [0.19, 0.13]])], dark, false);
+  part(body, [mask([[0.36, -0.22], [0.34, -0.06], [0.3, 0.06], [0.24, 0.12], [0.19, 0.13]])], stone, false);
   part(body, [mask([[0.19, 0.13], [0.16, 0.1], [0.13, 0.05], [0.09, 0.01], [0.05, -0.01], [0.0, -0.02]])], hollowM, false);
   // a heavy brow of rough stones overhanging the hollow, cheek stones closing in below it, a chin stone: rounded
   // weathered lumps, not slabs
@@ -400,7 +401,7 @@ function guardian(): CreatureView {
     place(new THREE.DodecahedronGeometry(0.13, 0), -0.29, FY - 0.08, FZ - 0.01, 0.2, 0.6, 0.3, [0.7, 1.35, 0.8]),
     place(new THREE.DodecahedronGeometry(0.13, 0), 0.29, FY - 0.06, FZ - 0.01, -0.3, -0.5, -0.25, [0.7, 1.3, 0.8]),
     place(new THREE.DodecahedronGeometry(0.15, 0), 0.02, FY - 0.34, FZ - 0.02, -0.3, 0.4, 0.05, [1.3, 0.6, 0.9]),
-  ], dark);
+  ], stone);
   // the eye deep in the hollow, three small ones on its walls; before the beam they slide down into the big one
   const lens = (r: number) => new THREE.SphereGeometry(r, 12, 8).scale(1, 1, 0.45);
   const lenses = ([[0, -0.01, 0.07], [-0.085, 0.07, 0.034], [0.085, 0.07, 0.034], [0, -0.1, 0.036]] as const).map(([dx, dy, r]) => {
@@ -510,16 +511,17 @@ function guardian(): CreatureView {
       // the lenses slide together into one line before the beam; one bright lens while it fires
       const over = e.phase ? 1 : 0;
       // idle the eye is a glint in the hollow (bright enough to find, not a lit panel); the wind-up brings it up
-      const eye = e.dead ? 0 : s === 'strike' && beam ? 8 : wake * (0.45 + conv * 4.5);
+      const eye = e.dead ? 0 : s === 'strike' && beam ? 8 : wake * (1.1 + conv * 4);
       lensM.color.setRGB(0.2 * eye + over * 0.9 * wake, 1.2 * eye * (over ? 0.45 : 1), 1.6 * eye * (over ? 0.35 : 1));
       // the hollow's walls take the eye's light (a cold glow deepening in the wind-up)
-      hollowM.emissive.setRGB(0.02, 0.09, 0.12).multiplyScalar(eye * (over ? 0.5 : 1));
+      hollowM.emissive.setRGB(0.03, 0.12, 0.16).multiplyScalar(Math.min(2, eye) * (over ? 0.5 : 1));
       lenses.forEach((l) => { const k = 1 - 0.9 * conv; l.m.position.x = l.dx * k; l.m.position.y = 1.3 + l.dy * k; l.m.scale.setScalar(0.4 + 0.6 * wake + conv * 0.3); });
       seamM.color.setRGB(over ? 1.4 : 0.25, over ? 0.35 : 1.0, over ? 0.1 : 1.2).multiplyScalar(0.08 + wake * (0.9 + Math.sin(t * 2.2) * 0.15));
       // the seams' light on its own stone (a rim on the faces turning away) and the core's warmth
       const sk = e.dead ? 0 : wake * (1 - sink) * (0.85 + Math.sin(t * 2.2) * 0.15);
-      rimU.value.setRGB(over ? 0.5 : 0.09, over ? 0.14 : 0.34, over ? 0.05 : 0.42).multiplyScalar(sk);
-      legRimU.value.copy(rimU.value).multiplyScalar(0.6);
+      rimU.value.setRGB(over ? 0.3 : 0.09, over ? 0.09 : 0.34, over ? 0.03 : 0.42).multiplyScalar(sk);
+      // the legs keep a faint cold rim only (the overload's orange on them read as tan-orange stone)
+      legRimU.value.setRGB(0.09, 0.34, 0.42).multiplyScalar(sk * 0.45);
       // the core's warmth on the body's stone: faint, a little more while it vents (it was strong enough to turn the
       // whole body orange in the sun)
       coreU.value.setRGB(0.06, 0.026, 0.008).multiplyScalar(e.dead ? 0 : wake * (0.6 + vent * 0.9));

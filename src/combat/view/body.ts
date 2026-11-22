@@ -195,15 +195,17 @@ class HideWrap {
     }
     // the sleeve bunched out beyond each end of the wrap, where there is cloth to bunch
     if (M && M.cloth && this.cloth) {
-      for (const [t, dir] of [[a, -1], [b, 1]] as const) {
+      // only above the wrap (towards the elbow): past the wrist the measured "sleeve" is the cuff and the hand, and a
+      // puff there drew a wide white bell round the hand (v4)
+      for (const [t, dir] of [[a, -1]] as const) {
         const ru = under(t + dir * 0.06);
         if (ru < 0.055 * k) continue; // a bare arm there: nothing to bunch
-        const r = (t === a ? ra : rb), y = t * len, d = 0.06 * len * dir;
+        const r = ra, y = t * len, d = 0.07 * len * dir, rp = Math.min(Math.max(r, ru) * 1.06, r * 1.1);
         const puff = loft([
           { y: y - d * 0.1, rx: r * 0.97, rz: r * 0.92 },
-          { y: y + d * 0.35, rx: Math.max(r, ru) * 1.12, rz: Math.max(r, ru) * 1.04 },
-          { y: y + d, rx: Math.max(ru * 1.02, r * 0.95), rz: Math.max(ru * 1.02, r * 0.95) * 0.95 },
-        ].sort((p, q) => p.y - q.y), 9);
+          { y: y + d * 0.4, rx: rp, rz: rp * 0.95 },
+          { y: y + d, rx: Math.min(ru, r) * 1.0, rz: Math.min(ru, r) * 0.95 },
+        ].sort((p, q) => p.y - q.y), 12);
         const pm = new THREE.Mesh(puff, this.cloth); pm.castShadow = true; g.add(pm);
       }
     }

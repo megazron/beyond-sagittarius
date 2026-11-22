@@ -200,7 +200,14 @@ window.__cbBot = (mode) => {
         // stick shows as a turning bar, not as a stick growing and shrinking edge-on. Square to the middle of the
         // throw (the Nibbets sit about 8 m out) and far enough back that the thrower, head to feet, and the landing
         // are both inside the frame (the thrower stood at the edge, half cut off, in v4)
-        __bs.photo([h.x + px * 8.5 + fx * 3.4, cy + 3.0, h.z + pz * 8.5 + fz * 3.4], [h.x + fx * 3.4, cy + 0.6, h.z + fz * 3.4]); C.testSlow = 0.3;
+        // framed on the Nibbet it will throw at (v5 framed a fixed point 3.4 m out and the animals were specks at the
+        // edge): the middle of thrower and prey, as far off to the side as they are apart, so both fill the frame
+        const pr = nearest(living('nibbet').filter((e) => dist(e, p) < 14));
+        const tx = pr ? pr.x : h.x + fx * 8, tz = pr ? pr.z : h.z + fz * 8, mx = (h.x + tx) / 2, mz = (h.z + tz) / 2;
+        const D = Math.hypot(tx - h.x, tz - h.z) || 1, ux = (tx - h.x) / D, uz = (tz - h.z) / D, L = Math.max(4.5, D * 0.8);
+        // to the throwing-arm side of the line from thrower to prey
+        const sx = -uz, sz = ux;
+        __bs.photo([mx + sx * L, cy + 2.2, mz + sz * L], [mx, cy + 0.5, mz]); C.testSlow = 0.3;
       }
       if (W && Tm >= W[1] && flag.side === 1) { flag.side = 2; __bs.photo(null); C.testSlow = 1; }
       if (!p.has.throwstick) { const k = sim.pickups.find((q) => q.weapon === 'throwstick'); if (k) go(k.x, k.z); return; }
