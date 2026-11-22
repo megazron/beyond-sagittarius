@@ -28,11 +28,11 @@ function rimmed<T extends THREE.MeshStandardMaterial>(m: T, held: { value: THREE
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uNightRim = NIGHT_RIM; sh.uniforms.uHeldLit = held;
     sh.fragmentShader = 'uniform vec3 uNightRim;\nuniform vec3 uHeldLit;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
-      '#include <emissivemap_fragment>\n  { float fr = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0); totalEmissiveRadiance += uNightRim * pow(fr, 2.6) + uHeldLit * (0.3 + 0.7 * pow(fr, 1.4)); }');
+      '#include <emissivemap_fragment>\n  { float fr = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0); totalEmissiveRadiance += uNightRim * pow(fr, 2.6) + uHeldLit * (0.12 + 0.88 * pow(fr, 1.6)); }');
     nearFade(m, sh);
   };
   const key = m.customProgramCacheKey.bind(m);
-  m.customProgramCacheKey = () => key() + '|nightRim2';
+  m.customProgramCacheKey = () => key() + '|nightRim3';
   return m;
 }
 const glow = (r: number, g: number, b: number) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b) });
@@ -206,7 +206,8 @@ function quadruped(q: QuadSpec): CreatureView {
       // the ridge and the eyes say how it feels: dim asleep, bright when it means it
       // caught: its eyes and ridge flare (fear), and the body takes a light of its own, pale firelight at night, so
       // a small dark animal fighting the cord at the edge of the light reads as one (it was a dark lump)
-      heldU.value.setRGB(0.3, 0.26, 0.2).multiplyScalar(held * (NIGHT.on ? 1 : 0.2));
+      // (v12 at 0.3 made it a glowing pale ghost, blown out near the lens: now mostly an edge)
+      heldU.value.setRGB(0.2, 0.17, 0.13).multiplyScalar(held * (NIGHT.on ? 1 : 0.2));
       const hot = held > 0.5 ? 2.6 : wind ? 1 + tele * 2.5 : strike ? 3 : s === 'call' || s === 'warn' ? 2 : asleep ? 0.15 : e.aware ? 1 : 0.6;
       ridgeM.color.setRGB(q.ridge[0] * hot, q.ridge[1] * hot, q.ridge[2] * hot);
       eyeM.color.setRGB(q.eye[0] * (0.4 + hot * 0.6), q.eye[1] * (0.4 + hot * 0.6), q.eye[2] * (0.4 + hot * 0.6));
