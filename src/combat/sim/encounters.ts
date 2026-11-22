@@ -125,7 +125,7 @@ export class EncounterRun {
     } else if (id === 'chase.escape') {
       // the last of the dusk (this sky's sun sets at 18:00; by 19:30 the glow is gone): the trees stand black against
       // a lit horizon, the ground is read by the sky and the moon, and the hunter's eyes already shine
-      this.hour = 18.5; s.night = true;
+      this.hour = 18.7; s.night = true;
       give({ stone: 3, fruit: 1 }); arm('rock');
       const f = this.at(125, 0); s.addFire(f.x, f.z, 100); this.markers.push({ x: f.x, z: f.z, kind: 'goal', r: 7 });
       for (const u of [32, 66, 98]) this.mark('log', u, 0, 3.2);

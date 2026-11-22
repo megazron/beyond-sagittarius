@@ -8,6 +8,7 @@ import { loft, limb, grainNormal } from '../../characters/shapes';
 import { createHound } from '../../world/predator';
 import type { Enemy, SpeciesId } from '../sim/species';
 import { reach } from './ranged';
+import { nearFade } from '../../core/nearfade';
 
 export interface CreatureView {
   root: THREE.Group;
@@ -19,6 +20,20 @@ export interface CreatureView {
 
 const mat = (color: number, o: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
   new THREE.MeshStandardMaterial({ color, roughness: 0.7, normalMap: grainNormal(), normalScale: new THREE.Vector2(0.6, 0.6), ...o });
+/** The night's cold edge light on the animals (the controller sets it with the planetshine): a body beyond the
+ * firelight is otherwise a dark shape on a dark ground, and only its eyes show. */
+export const NIGHT_RIM = { value: new THREE.Color(0, 0, 0) };
+function rimmed<T extends THREE.MeshStandardMaterial>(m: T): T {
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uNightRim = NIGHT_RIM;
+    sh.fragmentShader = 'uniform vec3 uNightRim;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\n  { float fr = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0); totalEmissiveRadiance += uNightRim * pow(fr, 2.6); }');
+    nearFade(m, sh);
+  };
+  const key = m.customProgramCacheKey.bind(m);
+  m.customProgramCacheKey = () => key() + '|nightRim';
+  return m;
+}
 const glow = (r: number, g: number, b: number) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b) });
 
 /** Geometry moved, turned and scaled, ready to merge. */
@@ -88,7 +103,7 @@ function quadruped(q: QuadSpec): CreatureView {
   root.add(tilt); tilt.add(body);
   const hip = q.legLen * 0.96;
   body.position.y = hip;
-  const hide = mat(q.hide), belly = mat(q.belly), ridgeM = glow(...q.ridge), eyeM = glow(...q.eye);
+  const hide = rimmed(mat(q.hide)), belly = rimmed(mat(q.belly)), ridgeM = glow(...q.ridge), eyeM = glow(...q.eye);
   const L = q.len, G = q.girth;
   const torso = loft([
     { y: L * 0.5, rx: G * 0.55, rz: G * 0.6 }, { y: L * 0.32, rx: G * 0.95, rz: G * 1.05 }, { y: 0, rx: G, rz: G * 1.1, z: -G * 0.05 },
@@ -278,7 +293,20 @@ function guardian(): CreatureView {
   const root = new THREE.Group(), tilt = new THREE.Group(), body = new THREE.Group();
   root.add(tilt); tilt.add(body);
   // weathered pale stone, not dark ceramic: at fight distance a dark metal block read as a hole in the picture
-  const stone = mat(0x77736b, { metalness: 0.05, roughness: 0.86, flatShading: true });
+  const stone = mat(0x8a857b, { metalness: 0.05, roughness: 0.86, flatShading: true });
+  // the light of its own seams and core on the stone: a cold rim where the faces turn away from the eye (the seams
+  // run down every edge) and a faint warm glow from the core, so from the front at fight distance it reads as lit
+  // stone with an outline, not a dark block. No real light: a light added mid-game recompiles every material.
+  const rimU = { value: new THREE.Color(0, 0, 0) }, coreU = { value: new THREE.Color(0, 0, 0) };
+  stone.onBeforeCompile = (sh) => {
+    sh.uniforms.uRim = rimU; sh.uniforms.uCoreGlow = coreU;
+    sh.fragmentShader = 'uniform vec3 uRim;\nuniform vec3 uCoreGlow;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\n  { float fr = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);\n'
+      + '    totalEmissiveRadiance += uRim * (0.1 + pow(fr, 2.2) * 1.5) + uCoreGlow * (0.4 + 0.6 * fr); }');
+    nearFade(stone, sh);
+  };
+  const stoneKey = stone.customProgramCacheKey.bind(stone);
+  stone.customProgramCacheKey = () => stoneKey() + '|guardianStone';
   const bronze = mat(0x9a7f52, { metalness: 0.75, roughness: 0.45, flatShading: true });
   const moss = mat(0x6f7d5c, { roughness: 1, flatShading: true });
   const strut = mat(0x2a2c31, { metalness: 0.6, roughness: 0.6, flatShading: true });
@@ -321,9 +349,11 @@ function guardian(): CreatureView {
   // four legs, each a two-bone strut with a bronze knee and a splayed foot, solved to the ground every frame
   const unit = (r0: number, r1: number) => new THREE.CylinderGeometry(r1, r0, 1, 6).translate(0, 0.5, 0);
   const legs = [[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([sx, sz], i) => {
-    const up = new THREE.Mesh(unit(0.21, 0.15), stone), lo = new THREE.Mesh(unit(0.16, 0.1), strut);
-    const knee = new THREE.Mesh(new THREE.DodecahedronGeometry(0.21, 0), bronze);
-    const foot = new THREE.Mesh(mergeGeometries([0, 2.09, 4.19].map((a) => place(new THREE.BoxGeometry(0.1, 0.07, 0.34), Math.sin(a) * 0.12, 0.035, Math.cos(a) * 0.12, 0, a, 0))), strut);
+    // stone legs as thick as the weight they carry (a block that size on strut-thin shins read as a plant stand):
+    // a thigh a third of the body's width, the shin a stone column, a broad pad of a foot with three toes
+    const up = new THREE.Mesh(unit(0.3, 0.22), stone), lo = new THREE.Mesh(unit(0.24, 0.17), stone);
+    const knee = new THREE.Mesh(new THREE.DodecahedronGeometry(0.27, 0), bronze);
+    const foot = new THREE.Mesh(mergeGeometries([place(new THREE.CylinderGeometry(0.2, 0.27, 0.12, 6), 0, 0.06, 0)].concat([0, 2.09, 4.19].map((a) => place(new THREE.BoxGeometry(0.13, 0.08, 0.42), Math.sin(a) * 0.15, 0.04, Math.cos(a) * 0.15, 0, a, 0)))), strut);
     for (const o of [up, lo, knee, foot]) { o.castShadow = true; o.frustumCulled = false; tilt.add(o); }
     return { sx, sz, up, lo, knee, foot, hip: new THREE.Vector3(sx * 0.5, -0.2, sz * 0.38), ph: i === 0 || i === 3 ? 0 : Math.PI };
   });
@@ -360,7 +390,7 @@ function guardian(): CreatureView {
         footT.set(L.sx * spread * 1.05, 0, L.sz * (0.42 + 0.63 * wake + 0.5 * rest) + Math.sin(ph) * 0.4 * step);
         footT.y = Math.max(0, Math.cos(ph)) * 0.22 * step;
         if (L.sz > 0) { footT.y += rear * 1.1; footT.z += rear * 0.35; }
-        pole.set(L.sx * 1, 1.3 - rest * 1.0, L.sz * 0.4 + L.sz * rest * 0.4);
+        pole.set(L.sx * 1, 1.3 - rest * 1.3, L.sz * 0.4 + L.sz * rest * 0.4);
         reach(hipT, footT, 1.05, 1.3, pole, kneeT, wristT);
         strutTo(L.up, hipT, kneeT); strutTo(L.lo, kneeT, wristT);
         L.knee.position.copy(kneeT); L.foot.position.copy(wristT); L.foot.rotation.y = L.sx * 0.5;
@@ -371,6 +401,10 @@ function guardian(): CreatureView {
       lensM.color.setRGB(0.2 * hot + over * 0.9 * wake, 1.2 * hot * (over ? 0.45 : 1), 1.6 * hot * (over ? 0.35 : 1));
       lenses.forEach((l) => { l.m.position.y = 1.3 + l.dy * (1 - 0.9 * conv); l.m.scale.setScalar(0.4 + 0.6 * wake + conv * 0.3); });
       seamM.color.setRGB(over ? 1.4 : 0.25, over ? 0.35 : 1.0, over ? 0.1 : 1.2).multiplyScalar(0.08 + wake * (0.9 + Math.sin(t * 2.2) * 0.15));
+      // the seams' light on its own stone (a rim on the faces turning away) and the core's warmth
+      const sk = e.dead ? 0 : wake * (1 - sink) * (0.85 + Math.sin(t * 2.2) * 0.15);
+      rimU.value.setRGB(over ? 0.5 : 0.09, over ? 0.14 : 0.34, over ? 0.05 : 0.42).multiplyScalar(sk);
+      coreU.value.setRGB(0.16, 0.07, 0.02).multiplyScalar(e.dead ? 0 : wake * (0.6 + vent * 1.5));
       // fins fan open off the spine to shed heat; they glow while hot and the core shows between them
       fins.forEach((f) => { f.g.rotation.z = f.sx * vent * 1.1; f.g.rotation.y = -f.sx * vent * 0.35; });
       finM.emissive.setRGB(1.6, 0.45, 0.1).multiplyScalar(vent * (0.7 + Math.sin(t * 18) * 0.15));

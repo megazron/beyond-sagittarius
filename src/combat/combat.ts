@@ -21,7 +21,7 @@ import type { Enemy, SpeciesId } from './sim/species';
 import { EncounterRun, ENCOUNTERS } from './sim/encounters';
 import type { EncounterId, EncounterOpts, Outcome } from './sim/encounters';
 import type { TensionSpec, TensionResult } from './sim/tension';
-import { createCreature, NIGHT } from './view/creatures';
+import { createCreature, NIGHT, NIGHT_RIM } from './view/creatures';
 import type { CreatureView } from './view/creatures';
 import { CombatFx } from './view/fx';
 import { FightBody } from './view/body';
@@ -773,6 +773,8 @@ export class Combat {
     this.d.world.items.ringK = nightRun ? 0 : 1;
     // the light stays in the scene once made (switching lights on and off recompiles every material)
     if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? 0.8 : 0.55) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 40, P0.y + 80, P0.z + 30); this.shine.target.position.copy(P0); } }
+    // the same cold light catches the animals' edges, so a shape beyond the fire reads as an animal, not a shadow
+    NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine ? this.shine.intensity * 0.55 : 0);
     const D = this.d, sim = this.sim!, P = D.player, p = sim.player, run = this.encounter, cam = P.camera;
     // creatures: a body for each within sight, none for those far off or gone
     NIGHT.on = sim.night;

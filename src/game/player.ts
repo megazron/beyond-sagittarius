@@ -250,7 +250,11 @@ export class Player {
     // pull in at once, ease back out, so the view never pops
     this.camClip = free < this.camClip ? free : this.camClip + (free - this.camClip) * 0.05;
     out.x = hx + (out.x - hx) * this.camClip; out.y = hy + (out.y - hy) * this.camClip; out.z = hz + (out.z - hz) * this.camClip;
-    const g = Math.max(this.terrain.height(out.x, out.z) + 0.3, 0.45);
+    // pulled in hard (a slope, a log or the camp's stones behind the player) the camera would sit inside the head:
+    // keep it a metre off by rising over the head instead, looking down past it
+    const near = Math.min(dist, 1.05), ox = out.x - hx, oz = out.z - hz, oh = Math.hypot(ox, oz);
+    if (Math.hypot(oh, out.y - hy) < near) out.y = hy + Math.sqrt(Math.max(0, near * near - oh * oh));
+    const g =Math.max(this.terrain.height(out.x, out.z) + 0.3, 0.45);
     if (out.y < g) out.y = g;
     return out;
   }

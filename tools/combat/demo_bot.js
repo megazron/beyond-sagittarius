@@ -166,12 +166,34 @@ window.__cbBot = (mode) => {
           flag.rollFor = flag.strikeN; hold(k, 1); tap('KeyV'); setTimeout(() => hold(k, 0), 450); return;
         }
       }
+      // a runner who has seen the spore plant gives it a wide berth (its lash reaches 3.5 m; it stands just off the path)
+      const bl = living('lashbloom')[0];
+      if (bl) {
+        const gx = goal.x - p.x, gz = goal.z - p.z, gl = Math.hypot(gx, gz) || 1, ux = gx / gl, uz = gz / gl;
+        const bx = bl.x - p.x, bz = bl.z - p.z, along = bx * ux + bz * uz, off = bx * -uz + bz * ux;
+        if (along > -1.5 && along < 16) {
+          const s = Math.sign(off) || 1, w = { x: bl.x + uz * s * 7 + ux * 1.5, z: bl.z - ux * s * 7 + uz * 1.5 };
+          go(w.x, w.z, { sprint: p.stamina > 24 }); return;
+        }
+      }
       go(goal.x, goal.z, { sprint: p.stamina > 24 });
     } else if (mode === 'stealth') {
       if (st === 0) { tap('KeyX'); next(); return; }
       const way = [run.at(14, 3.5), run.at(30, -5), run.at(46, 2), run.at(60, 3), run.at(72, 0)], a = run.at(0, 0);
       const w = way.find((q) => Math.hypot(q.x - a.x, q.z - a.z) > Math.hypot(p.x - a.x, p.z - a.z) + 0.5) || way[4];
       go(w.x, w.z);
+    } else if (mode === 'throwplay') {
+      // the throwing stick against Nibbets: walk in to about nine metres, wait for one to stand, a full side-arm throw,
+      // fetch the stick where it fell, again
+      if (st === 0) { if (equip('throwstick')) { run.summon('nibbet', 3); next(); } return; }
+      if (!p.has.throwstick) { const k = sim.pickups.find((q) => q.weapon === 'throwstick'); if (k) { go(k.x, k.z); } return; }
+      if (p.weapon !== 'throwstick') { equip('throwstick'); return; }
+      const prey = nearest(living('nibbet'));
+      if (!prey) { stop(); if (since() > 3) { run.summon('nibbet', 3); next(1); } return; }
+      const d = dist(prey, p), lead = 0.3, lx = prey.x + prey.vx * lead, lz = prey.z + prey.vz * lead, loft = prey.y + 0.2 + d * 0.03;
+      if (p.act === 'charge') { stop(); look(lx, lz, loft); if (p.charge >= 1) hold('KeyG', 0); }
+      else if (d > 9.5) go(prey.x, prey.z);
+      else { stop(); const off = look(lx, lz, loft); if (off < 0.06 && p.act === 'idle') hold('KeyG', 1); }
     } else if (mode === 'atlatlplay' || mode === 'bowplay') {
       const wpn = mode === 'bowplay' ? 'bow' : 'atlatl';
       if (st === 0) { if (equip(wpn)) { run.summon('nibbet', 3); next(); } }
