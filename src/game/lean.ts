@@ -21,6 +21,9 @@ import type { TensionResult, TensionSpec } from '../combat/sim/tension';
 export class LeanTo {
   private stump: THREE.Group | null = null;
   private fx: THREE.Object3D[] = [];
+  /** Fails so far: the lesson is taught by the first; after two the next try holds (nobody is kept here). */
+  private thin = 0;
+  private windFail = false;
 
   constructor(
     private world: World,
@@ -121,6 +124,8 @@ export class LeanTo {
     let ok: boolean;
     if (q && q.length) { ok = q.shift() !== 'wind'; await new Promise((r) => setTimeout(r, 1800)); }
     else { const r = await this.tension({ kind: 'aim', seconds: 3.2 }); ok = !r || r.passed; }
+    if (this.windFail) ok = true;
+    this.windFail = !ok;
     this.holdShot(null);
     if (!ok) {
       // the frame goes up facing the wrong way; the wind comes straight in; he turns it
@@ -146,6 +151,8 @@ export class LeanTo {
     if (row > 3) ok = true;
     else if (q && q.length) { ok = q.shift() !== 'thin'; await new Promise((r) => setTimeout(r, 2200)); }
     else { const r = await this.tension({ kind: 'steady', seconds: 3.5 }); ok = !r || r.passed; }
+    if (this.thin >= 2) ok = true;
+    if (!ok) this.thin++;
     this.holdShot(null);
     if (!ok) {
       this.camp.shelterStage(row, true);
@@ -179,7 +186,7 @@ export class LeanTo {
         // in, sitting, the fire side ahead of him; nothing moves but his breath
         const p = this.player, facing = Math.atan2(S.open.x, S.open.z);
         p.pos.copy(seat); p.model.root.position.copy(seat); p.facing = facing; p.model.root.rotation.y = facing + Math.PI; p.model.root.updateMatrixWorld(true);
-        z.setKneel(true); z.setLookTarget(seat.clone().addScaledVector(S.open, 6).add(new THREE.Vector3(0, 0.9, 0)));
+        z.setKneel(true, true); z.setLookTarget(seat.clone().addScaledVector(S.open, 6).add(new THREE.Vector3(0, 0.9, 0)));
         z.setFace({ smile: 0.1 });
         this.after(2.5, () => audio.human('breath', 0.35));
       } },

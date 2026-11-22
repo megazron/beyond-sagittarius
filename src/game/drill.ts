@@ -55,7 +55,7 @@ export class FireDrill {
     const p = this.player;
     p.pos.copy(kneel); p.vel.set(0, 0, 0); p.facing = facing;
     p.model.root.position.copy(kneel); p.model.root.rotation.y = facing + Math.PI; p.model.root.updateMatrixWorld(true);
-    this.z.setKneel(true);
+    this.z.setKneel(true, true);
   }
 
   /** Towards the pit from where he kneels (from the board, not from the model's heading: that trap framed his back). */

@@ -46,7 +46,7 @@ export class FirstNight {
     const facing = Math.atan2(d.x, d.z);
     p.pos.copy(at); p.vel.set(0, 0, 0); p.facing = facing;
     p.model.root.position.copy(at); p.model.root.rotation.y = facing + Math.PI; p.model.root.updateMatrixWorld(true);
-    this.z.setKneel(true);
+    this.z.setKneel(true, true);
     this.kneel.copy(at);
     return camp;
   }

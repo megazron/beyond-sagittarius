@@ -257,7 +257,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let blinkAt = 2 + Math.random() * 3, blinkT = 0, speak = 0;
   let limbs: Limbs | null = null, faceSet: Face | null = null;
   // kneeling (0 standing, 1 on both knees) eases to its goal; a prop held outside any task
-  let kneel = 0, kneelGoal = 0, heldProp: PropKind | null = null, heldShown = false;
+  let kneel = 0, kneelGoal = 0, heels = 0, heelsGoal = 0, heldProp: PropKind | null = null, heldShown = false;
   const kneelL: Limbs = {}, KD = new THREE.Vector3(), KQ = new THREE.Quaternion();
   // a task in the hands (doTask): time in, length, where the hand goes, which hands
   let task: { kind: TaskKind; t: number; dur: number; at: THREE.Vector3 | null; hands: 'L' | 'R' | 'both'; prop: PropKind | null } | null = null;
@@ -790,7 +790,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       KD.lerp(V3.set(want[0], want[1], want[2]).normalize(), kneel).normalize();
       return [KD.x, KD.y, KD.z];
     };
-    kneelL.legL = dir('upperlegL', 'lowerlegL', [0.13, -1, 0.3]); kneelL.legR = dir('upperlegR', 'lowerlegR', [-0.13, -1, 0.3]);
+    // upright on the knees, or (heels) sat back on them: the thighs come forward towards level, the hips drop (upright
+    // under a long coat it read as standing)
+    const ty = -1 + heels * 0.55, tz = 0.3 + heels * 0.6;
+    kneelL.legL = dir('upperlegL', 'lowerlegL', [0.13, ty, tz]); kneelL.legR = dir('upperlegR', 'lowerlegR', [-0.13, ty, tz]);
     applyLimbs({ legL: kneelL.legL, legR: kneelL.legR }, bs);
     kneelL.shinL = dir('lowerlegL', 'footL', [0.04, -0.12, -1]); kneelL.shinR = dir('lowerlegR', 'footR', [-0.04, -0.12, -1]);
     applyLimbs({ shinL: kneelL.shinL, shinR: kneelL.shinR }, bs);
@@ -1035,6 +1038,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     }
     if (limbs) applyLimbs(limbs, bs);
     kneel += (kneelGoal - kneel) * (1 - Math.exp(-dt * 3.2));
+    heels += (heelsGoal - heels) * (1 - Math.exp(-dt * 2.4));
     if (kneelGoal === 0 && kneel < 0.004) kneel = 0;
     if (kneel > 0) kneelLegs(bs, hipsB);
     // a hand in the torso is a pixel or two further off; the check walks the whole body's matrices (a crowd's worth was
@@ -1321,7 +1325,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** Hand-set pose over the clip (null gives the body back to the clip). */
     setLimbs(l: Limbs | null) { limbs = l; },
     /** Down on both knees (true) or back up (false); it takes about a second either way. */
-    setKneel(on: boolean) { kneelGoal = on ? 1 : 0; },
+    setKneel(on: boolean, sit = false) { kneelGoal = on ? 1 : 0; heelsGoal = on && sit ? 1 : 0; },
     get kneeling() { return kneel; },
     /** Something held in the right hand outside any task (a leaf cup, a berry); null puts it away. */
     setProp(k: PropKind | null) { heldProp = k; },
