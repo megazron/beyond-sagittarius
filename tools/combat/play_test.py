@@ -61,7 +61,7 @@ with sync_playwright() as pw:
     ok(not amb['engaged'], 'free play: hands free and nothing near, the fight leaves the controls alone')
     time.sleep(1.5); calls0 = page.evaluate("__bs.perf.calls")
     # ---- each set piece
-    for enc in ['arena', 'hunt.first', 'night.defence', 'chase.escape', 'stealth.pass']:
+    for enc in ['arena', 'hunt.first', 'night.defence', 'chase.escape', 'stealth.pass', 'fish.spear']:
         page.evaluate(f"__bs.combat.trial('{enc}')"); time.sleep(0.3); step(page, 1.0)
         d = page.evaluate(D)
         ok(d['encounter'] == enc and len(d['enemies']) >= (0 if enc == 'night.defence' else 1), f'{enc}: starts', d['encounter'])
@@ -123,6 +123,9 @@ with sync_playwright() as pw:
             d = page.evaluate(D)
             ok(d['phase'] == 'wave1' and sum(1 for e in d['enemies'] if e['kind'] == 'skritch') == 4, 'night: the first wave comes out of the dark', d['phase'])
             ok(page.evaluate("__bs.save.timeOfDay") > 20 or page.evaluate("__bs.save.timeOfDay") < 6, 'night: it is night')
+        elif enc == 'fish.spear':
+            shot(page, 'fish')
+            ok(sum(1 for e in d['enemies'] if e['kind'] == 'darter') >= 3, 'fish: darters hold in the shallows in front of the bank')
         elif enc == 'chase.escape':
             step(page, 3); shot(page, 'chase')
             ok(any(e['kind'] == 'hound' and e['aware'] for e in page.evaluate(D)['enemies']), 'chase: the hunter is already after you')
@@ -168,7 +171,7 @@ with sync_playwright() as pw:
     ok(page.evaluate("window.__t && window.__t.passed === false"), 'API: a tension moment resolves (failed, nobody pressed)', page.evaluate("JSON.stringify({ t: window.__t, open: __bs.combat.tensionUi.open, ring: __bs.combat.tensionUi.cur && __bs.combat.tensionUi.cur.T.ring, endT: __bs.combat.tensionUi.cur && __bs.combat.tensionUi.cur.endT, vis: document.visibilityState })"))
     # the Action menu from pause
     page.keyboard.press('Escape'); page.wait_for_selector('#p-action', timeout=10000); page.click('#p-action')
-    ok(page.evaluate("document.querySelectorAll('[data-enc]').length") == 5, 'menu: Action lists the five set pieces')
+    ok(page.evaluate("document.querySelectorAll('[data-enc]').length") == 6, 'menu: Action lists the six set pieces')
     page.click('[data-cb="difficulty"] [data-v="story"]')
     ok(page.evaluate("JSON.parse(localStorage.getItem('bs-settings-v1')).combat.difficulty") == 'story', 'menu: difficulty is saved')
     for lang in ['hi', 'ur']:
