@@ -346,7 +346,18 @@ function model(name: string) {
   let p = modelCache.get(name);
   if (!p) {
     p = gl.loadAsync(`${import.meta.env.BASE_URL}models/city/${name}.glb`).then((g) => {
-      g.scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+      g.scene.traverse((o) => {
+        const m = o as THREE.Mesh; if (!m.isMesh) return;
+        m.castShadow = true; m.receiveShadow = true;
+        // glass with transmission (the wall clock's face) made three draw the whole opaque scene a second time, into its
+        // transmission buffer, every frame it was in view: a third of Ultra's render time in the bazaar. Plain see-through
+        // glass instead (it is a few centimetres across)
+        const pm = m.material as THREE.MeshPhysicalMaterial;
+        if (pm.isMeshPhysicalMaterial && pm.transmission > 0) {
+          pm.opacity = Math.min(pm.opacity, 0.25 + 0.5 * (1 - pm.transmission)); pm.transparent = true; pm.depthWrite = false; pm.transmission = 0;
+          m.castShadow = false;
+        }
+      });
       return g.scene;
     });
     modelCache.set(name, p);
@@ -433,7 +444,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }), BLOBS);
   blobs.count = 0; blobs.frustumCulled = false; blobs.userData.ground = false; blobs.renderOrder = 1; blobs.matrixAutoUpdate = false; top(blobs);
   // on phones the shadow map (the whole street) is redrawn every third frame: the sun never moves, only people do
-  sun.shadow.autoUpdate = tier === 2;
+  sun.shadow.autoUpdate = false; // redrawn when `due` below says (Ultra and Web every other frame)
   let shadowFrame = 0, shadowStale = true, bodiesLeft = 0, cardsNear = 0;
   /** Real bodies drawn at once, the player aside. */
   const BODY_CAP = [2, 5, 12][tier], OLD_FAR = [50, 80, 130][tier];
@@ -1031,7 +1042,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     add(fig.root);
     people.push({ id, fig, pos: fig.root.position, yaw, pose, phase: rnd() * 10, walk });
   };
-  for (const f of FRIENDS) person(f.id, createCharacter(f.id, detail), f.x, f.z, f.yaw, f.pose);
+  for (const f of FRIENDS) { const c = createCharacter(f.id, detail); c.mergeParts(); person(f.id, c, f.x, f.z, f.yaw, f.pose); }
   // the townsfolk, the walkers and the people stood in groups are a crowd (CHAR_BUDGET): no corrective shapes, the light
   // build and no shadow from closer in
   const crowd = new Set<Character>();
@@ -1050,7 +1061,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   };
   FOLK.forEach((f, i) => person(f.id, someone(f.lineage, i), f.x, f.z, f.yaw, f.pose));
   // Mir: a chai stall regular in a three-piece, the same man as the suit skin and the Drexon cameo
-  person('mir', createCharacter('strong', detail, undefined, 'suit'), 5.0, 15.4, Math.PI / 2 + 0.5, 'idle');
+  { const c = createCharacter('strong', detail, undefined, 'suit'); c.mergeParts(); person('mir', c, 5.0, 15.4, Math.PI / 2 + 0.5, 'idle'); }
   // walkers: up and down the pavements' outer edge, clear of the stalls
   const lineages = Object.keys(LINEAGES) as PlayerLook['lineage'][];
   for (let i = 0, n = rich ? 14 : 6; i < n; i++) {
@@ -1891,12 +1902,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         const sc = sun.shadow.camera, texel = (sc.right - sc.left) / sun.shadow.mapSize.x;
         cam.getWorldDirection(SHV); SHC.copy(cam.position).addScaledVector(SHV.setY(0).normalize(), SHADOW_R * (tier === 0 ? 0.3 : 0.55));
         SHC.x = Math.round(SHC.x / texel) * texel; SHC.z = Math.round(SHC.z / texel) * texel; SHC.y = 0;
-        // Ultra: every frame. Web: every other. Phones: the shadow is static (nothing that moves casts one there: bodies
-        // and cars get contact shadows), redrawn when the camera has gone 9 m, and now and then for the sun
-        const due = tier === 2 || (tier === 1 ? shadowFrame % 2 === 0 : shadowStale || SHC.distanceTo(sun.target.position) > 9 || shadowFrame % 300 === 0 || (shadowFrame < 900 && shadowFrame % 45 === 0));
+        // Ultra and Web: every other frame (Ultra's preset says so too; every frame was the whole shadow pass again, a
+        // fifth of Ultra's render time in the bazaar). Phones: the shadow is static (nothing that moves casts one there:
+        // bodies and cars get contact shadows), redrawn when the camera has gone 9 m, and now and then for the sun
+        const due = (tier > 0 ? shadowFrame % 2 === 0 : shadowStale || SHC.distanceTo(sun.target.position) > 9 || shadowFrame % 300 === 0 || (shadowFrame < 900 && shadowFrame % 45 === 0));
         if (due) {
           sun.target.position.copy(SHC); sun.position.copy(SHC).addScaledVector((sun.userData.dir as THREE.Vector3 | undefined) ?? SUN_OFF.clone().normalize(), 90);
-          if (tier < 2) sun.shadow.needsUpdate = true;
+          sun.shadow.needsUpdate = true;
           shadowStale = false;
         }
       }

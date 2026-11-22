@@ -107,7 +107,8 @@ export class EncounterRun {
     if (id === 'hunt.first') {
       // a still afternoon, a meadow, three small grazers, and two very large ones you should leave alone
       this.hour = 14; s.night = false;
-      arm('spear'); give({ stone: 4 });
+      // Episode One teaches the throwing stick (at a stump, after the lean-to) before the first hunt: a trial carries it
+      arm('spear', 'throwstick'); give({ stone: 4 });
       const wind = this.at(-1, 0.4), o = this.at(0, 0); const wl = Math.hypot(wind.x - o.x, wind.z - o.z);
       s.windX = (wind.x - o.x) / wl; s.windZ = (wind.z - o.z) / wl; // the wind is in your face: they cannot smell you coming
       this.put('nibbet', 40, -3); this.put('nibbet', 44, 4); this.put('nibbet', 47, -8);
@@ -155,10 +156,11 @@ export class EncounterRun {
   }
 
   /** The arena's bench: put a creature in front of the player. */
-  summon(kind: SpeciesId, n = 1) {
+  /** The dev arena's summon: n of a kind ahead of the player, at `at` metres (or the kind's own distance). */
+  summon(kind: SpeciesId, n = 1, at?: number) {
     const p = this.sim.player, pack = kind === 'skritch' ? 20 + this.wave++ : 0;
     for (let i = 0; i < n; i++) {
-      const a = Math.atan2(p.fx, p.fz) + (i - (n - 1) / 2) * 0.35, d = kind === 'mossback' ? 20 : kind === 'lashbloom' ? 8 : 15;
+      const a = Math.atan2(p.fx, p.fz) + (i - (n - 1) / 2) * 0.35, d = at ?? (kind === 'mossback' ? 20 : kind === 'lashbloom' ? 8 : 15);
       this.sim.spawn(kind, p.x + Math.sin(a) * d, p.z + Math.cos(a) * d, { pack, alert: kind === 'hound' ? 1.2 : 0, aware: kind === 'hound' });
     }
   }

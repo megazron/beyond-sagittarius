@@ -22,7 +22,7 @@ an encounter: at zero they go down, the result is `lost` and `flags.scarred` is 
 
 | id | What it is | `story` it reads | Flags it can set |
 | --- | --- | --- | --- |
-| `hunt.first` | A meadow, three Nibbets, two Mossbacks to leave alone. Ends when the player has knelt by the kill | `poisoned`, `hurt` | `hunt.kill`, `hunt.clean`, `hunt.failed`, `hunt.spared`, `scarred` |
+| `hunt.first` | A meadow, three Nibbets, two Mossbacks to leave alone (a trial carries the spear and the throwing stick). Ends when the player has knelt by the kill | `poisoned`, `hurt` | `hunt.kill`, `hunt.clean`, `hunt.failed`, `hunt.spared`, `scarred` |
 | `night.defence` | The camp fire, a food store, time to set traps, three waves, dawn | `cubKilled` (the hunter does not wait), `fireHigh` (a full fire), `poisoned`, `hurt` | `night.held`, `night.food` (0 to 4), `night.fireKept`, `night.houndDriven`, `scarred` |
 | `chase.escape` | 125 m to the fire with the hunter behind, three trunks to vault (quick press) | `poisoned` (shorter windows), `hurt` | `chase.escaped`, `chase.clean`, `chase.hit`, `scarred` |
 | `stealth.pass` | Past the sleeping hunter by day; a breath moment beside it | `hurt` | `stealth.through`, `stealth.clean`, `stealth.seen`, `stealth.breath`, `scarred` |

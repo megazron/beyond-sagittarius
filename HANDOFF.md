@@ -388,6 +388,112 @@ unlanded except this handoff commit and any recording in progress.
   animals (Nibbets) where a spear point misses; swung it is a light club. If Episode One has a beat where Zenvik
   needs food before the first hunt or after a missed spear throw, it fits there (Schoeningen, beside the spears,
   about 300,000 years ago). To teach it set `flags['inv.throwStick']`. Clip: 18_throwing_stick (when recorded).
+- 07:40 FINDINGS. (1) A headless probe (~/bs-cap/combat/probe/bait_probe.py) proved the night sim works in the real
+  world: bait + snare set exactly downwind, the wave-1 Skritch run to the bait and the snare catches about 4 s after
+  they spawn. v7's missing catch was the bot: it set the snare 4 m off the bait (now it sets the snare where the bait
+  really lies) and watched from beside the food into black. (2) Chrome 9336 renders on the INTEL iGPU and under other
+  agents' load recorded at 2 fps. My own Chrome is now port 9338 (profile %TEMP%\bs-combat-a500,
+  --force-high-performance-gpu, NVIDIA A500); plans v12+ use it. Record with HEAVY_EXCLUSIVE=1 cap2.sh (8 fps under
+  load vs 23 fps alone). A killed capture leaves the game running in its tab: close it (~/bs-cap/combat/tabs.py PORT).
+- Night: planetshine 0.85 on the defence (0.55 was black on the A500), smoke dimmed at night (fx.smokeK), bot bait
+  5.5 m out at the edge of the firelight, watches from 4.4 m beyond the snare looking back at the camp.
+- Hide wrap (row 15, `hideWrap`, free play): sim only (p.wrap), not drawn on the body yet (needs forearm attachments
+  on the character rig).
+- Delivered 06_chase_v8_hour18_7 (taken 0 damage, went round the spore plant) and 16_spear_thrower_reference_v7.
+  v13 (night v9, guardian v7, throwing stick v2) recording at 07:40.
+- 09:00 LANDED df69603 on main (CI 44999113475 all green on that sha). Unlanded on `combat` after it: handoff commits
+  and the throwing-stick side camera framing in demo_bot.js (pushed as combat-land13; land when green).
+- Delivered (Downloads/.../combat, README notes appended): 06_chase_v8_hour18_7, 16_spear_thrower_reference_v7,
+  05_night_defence_v9 (snare catch on screen at 0:40, logged; small and partly behind the player), 03_guardian_v7,
+  18_throwing_stick (first look).
+- NEXT: (1) night: make the catch land as a moment. Idea: a short view glance toward a trap that springs within ~15 m
+  (like the chase's `combat.back`, but toward a bearing), and keep the bot at its watch spot until wave 1 is caught
+  (it walked back to the fire). (2) guardian asleep legs read as planks; front is a plain cone: give the body a face
+  plane/brow and fold the legs under the fins. (3) throwing stick: re-take with the moved side camera, Nibbets
+  summoned nearer so it hits. (4) setGrip still not on main (checked 09:00): bow/sling grips and bow camera wait.
+  (5) hide wrap is sim-only: draw it once the rig has forearm attachments. (6) Owner to choose chase hour 18.5 or 18.7.
+
+### 2026-11-22 ~10:00 (combat agent, next session)
+- setGrip still not on main (checked 10:00: only on origin/life-wip 3178fcf); bow/sling grips wait.
+- Night trap beat (combat.ts trapBeat, player.ts `combat.turn`): an animal within 3.4 m of a set snare/stakes/deadfall,
+  walking towards it, within 16 m of the player: its own sound (chitter/squeak/growl) and a twig crack at the trap,
+  then the VIEW turns to the trap (head, not body; 0.28 rad to one side so the body does not stand in front of it).
+  Held 2.6 s past the snap, 2.8 s if nothing springs; cancelled by an attack on the player within 6 m, swinging,
+  aiming, blocking, or the player turning the view 0.35 rad; 6 s cooldown. Not in the chase.
+- Recording bot night: watch spot 4.6 m beside the snare (1.2 m downwind), looking out into the dark; stays through
+  wave 1 (only a fire under 20% calls it back); no bot-side turning to traps (the game's beat does it).
+- Camera: forest.ts `inFoliage(x, y, z)` (camera-only cones for fir/pine/sapling crowns, shrub cylinders); player.ts
+  pulls the camera in when the line to it enters foliage (the black frames in guardian v7 were fir boughs).
+- Guardian: stone courses (5 lofts turned against each other), dark-stone shoulders with sloping slabs and a bronze
+  edge, a carved face (brow, cheek stones in a V, jaw stone, dark socket, one big lens with three small that converge
+  before the beam), legs in stone drums with bronze-bound knees and broad stone feet; asleep folded (front feet forward,
+  hind feet under the flank, knees on the ground at y ~0.15; checked numerically), body settled 9 cm into the ground.
+- Throwing stick: spin on sim time (wall time strobed in slow motion); side camera above the throw (it spins flat).
+  `summon(kind, n, at?)` in encounters.ts; bot throws at a settled Nibbet summoned at 8 m.
+- Hide wrap drawn: body.ts HideWrap, hide sleeves + cord lashings parented to lowerarm/upperarm bones (no torso piece).
+- Chrome 9338 is reached only from Windows (tabs.py from WSL says refused; use powershell Invoke-WebRequest). Launch:
+  /init powershell.exe Start-Process chrome with --remote-debugging-port=9338 --user-data-dir=%TEMP%\bs-combat-a500
+  --force-high-performance-gpu (see coldchrome.sh for the full flag list).
+- Plan ~/bs-cap/combat/mkplan_v14.py (night trap beat, guardian v8, throwing stick v3, hide wrap first look).
+- 10:30 v14/v15/v16 reviewed. v14 night: the bot's prep "stuck" check counted turning on the spot, so it set every
+  trap by the fire; nothing came in wave 1 (fixed: stuck only counts while W is held). v15 night: snare at the bait
+  (5.3 m downwind), caught in wave 1, the beat turned the view and held on the struggling Skritch: works, small and
+  dark. A full black frame in v14 at 115 s while the view swept ~180 deg (turn now clamped to 1.9 rad; not seen in
+  v15). tools/combat/night_watch_probe.ts: in the flat sim wave 1 is caught ~4 s in from any watch spot.
+- Wrap: hand is not a direct child of lowerarm (forearmtw bones between); sleeve axis now measured in the bone's frame.
+  On the scientist's loose coat only the lashings show on the forearms. Shoulder caps fine.
+- Delivered (Downloads/.../combat, README notes): 05_night_defence_v11_trapbeat, 03_guardian_v9,
+  18_throwing_stick_v4, 19_hide_wrap_v3_first_look.
+- Landing: rebased on main e368b61 (perf's crowd camera merged with my view turn in player.ts updateCamera: both
+  terms in pitchV). Pushed 8f0222e as combat-land14; land it when CI is green on that sha (its own command).
+  combat-land13 (9fa22b8) went green on rerun but main had moved; it is inside land14.
+- 11:10 LANDED 8f0222e on main (CI 45009577101 green after one rerun: the first run timed out once in the play
+  test on the pause menu difficulty click and perf_gate mobile bazaar 781k; both passed on rerun). Unlanded: this
+  handoff commit only.
+- NEXT: guardian legs darker in sun / face less boxy; wrap hide over loose sleeves (or a forearm fit from kit.ts);
+  bigger/brighter snared animal (night rim on it while held?); bow/sling grips when setGrip lands (still only
+  life-wip at 10:00); then the next invention-tree content.
+### 2026-11-22 ~11:30 (combat agent, session after land14)
+- eb7f6ba (local): guardian face is a lathe-turned carved hollow (mound + near-black hollow, roughened lip, rounded
+  brow/cheek/chin stones, eye a glint idle, bright in the wind-up); the square socket and the straight face seams are
+  gone. Legs: own material `legStone` (cold basalt, vertex-colour weathering: joint grime, rain streaks, lichen) with
+  NO core glow (the core's warm emissive on every stone was what turned the legs tan in sun and orange after a beam);
+  core glow on the body cut to about a third.
+- Hide wrap: HideWrap.measure() reads the skinned vertices that follow lowerarm/forearmtw (getVertexPosition, in the
+  bone frame, 8 sections) and lays the forearm hide 5% over the sleeve; coat-coloured puffs beyond each end where
+  there is cloth (the sleeve bunched by the wrap); crossed lashing (two opposite helices) between end bands.
+- Trap cue, listened to by analysis (night v11 audio): the chitter peaked ~-38 dB (2-5 kHz band), the twig crack
+  ~-49 dB, under the WORLD's giant-creature footfalls (game.ts onCreatureStep, a 42 Hz tone at about -17 dB every
+  1.35 s, not mine). New sounds cb_twig/cb_rustle/cb_struggle (make_sounds.py takes names: `... make_sounds.py twig`);
+  cue = rustle + voice + twig at full level out to 9 m (sfx() has a `near` arg); a held animal struggles out loud and
+  kicks dirt every 0.55-0.9 s; held animals get their own light (`uHeldLit` per creature in rimmed()); the view draws
+  in (player.ts `combat.zoom`, -15 deg FOV) once the trap has sprung.
+- Nibbets sit up on their haunches to look (alert, and vigilance bouts while feeding) and have a pale tail flag.
+  Throwing-stick side camera square to the throw's middle, 8.5 m out. Hunt trial kit gets the throwing stick (the
+  story teaches it before the hunt: lean.ts, `inv.throwStick`).
+- combat-land15 (381873f, handoff only) failed levels_smoke (flaky), rerun requested.
+- Recording: ~/bs-cap/combat/mkplan_v17.py -> plan_v17_guardian_wrap_throwstick.json, plan_v17_night.json.
+- ~13:10 STATE. LANDED b5761bd on main (CI 45024647750 all green on that sha). Earlier note, kept: land when CI is green on that
+  exact sha (`git push origin <sha>:main` in its own command; levels_smoke "inventory did not open" is flaky:
+  `gh run rerun <id> --failed`). combat-land15 failed levels_smoke twice (handoff-only commit; it is inside land16).
+- Delivered (Downloads/.../combat, README notes): 05_night_defence_v12_catch_heard, 03_guardian_v11_carved_face,
+  19_hide_wrap_v5_over_sleeve, 18_throwing_stick_v6.
+- Seen on the GPU: night v12: the beat turns and draws in on the caught Skritch at ~0:28, struggle heard and dirt
+  kicked up; the Skritch ran straight in so the pre-snap cue did not play in that take (cue still unheard in a clip);
+  the held light was too strong (ghost-like) -> cut to 0.2 and mostly fresnel (18f6034, NOT yet recorded). Guardian
+  v11: face carved from body stone around a hollow (reads a bit like a mouth/porthole), legs dark; phase two still
+  turns the body orange (rimU `over`). Wrap v5: over the sleeve from the side; from the front the wrist end was a
+  dark ring -> capped at 0.085 m, wrist narrower, edge rolled in (d5845d5, NOT yet recorded). Stick v6: thrower whole,
+  Nibbets sitting up visible, stick in flight; the side camera holds while the bot walks off.
+- NOTE: perf's ff74a53 merges the player's skin/clothes/eyes into one skinned mesh on stages; HideWrap.measure()
+  still works on skinned meshes, but its cloth colour comes from the merged material (check the puff colour).
+- NEXT: build, then `HEAVY_EXCLUSIVE=1 ~/bs-cap/combat/cap2.sh v17c plan_v17c_night_wrap.json` (night v13 + wrap v6)
+  and review; a night take where the pre-snap cue plays (bot or probe); guardian phase-two colour; setGrip still only
+  on origin/life-wip (checked 13:00); content proposal (row 21 / spear fishing) below.
+- PROPOSAL for the next content (tree row 21 area, Episode One compatible): spear fishing with the fire-hardened
+  spear in the stream/lake shallows: fish seen where they are not (refraction: aim below the fish, Zenvik's physics,
+  one line). Needs a water query on the fight Env (core.ts Env has only height/blocked), a `fish` species and view,
+  and a story hook (the story agent's 1.1 stream). Not started; ask the story agent where it fits.
 
 ## 2026-11-22 04:10 takeover by perf agent 17 (branch perf17 from main bfdde7b; landing branch perf17-land2)
 - Measurements in ~/bs-assets/gpu/p17: inter.sh TAG PLAN.. (base on :4183 = ~/bs-perf-base at main, built to
@@ -420,3 +526,59 @@ unlanded except this handoff commit and any recording in progress.
   shared atlas means one merged shader; ~7 draws a body still); the gate to 60 on Web (31 fps here; render is
   setProgram-bound, 100+ distinct materials); planet to 60; Mobile to 30 (10-20 now); quiet-machine re-measure and the
   cold title load (p15/ab_load.sh) never ran: the heavy queue was busy with other agents' captures most of the time.
+
+## 2026-11-22 09:00 takeover by perf agent 18 (branch perf17 continued; landing branches perf17-land4..)
+- Landing: perf17-land2 and -land3 failed. land3 (crowd camera off) failed only `smoke` ("wait for mode play" after the
+  wake-up skip); the same timeout hit combat-land6 (not perf code), so it is not only mine; the smoke now prints
+  state and page errors when it happens (tools/smoke.py). perf_gate's phone bazaar is bimodal: 297k or exactly 836430
+  triangles; 836430 also hit combat-land7 (no perf17 code), so it is a state of main's city, not the props batching.
+  perf_gate now prints the worst frame's triangles by object when a spot is over budget (find it in the log).
+- Bug fixed: the crowd camera's pitch clamp applied with no crowd at all (every follow view capped at -0.18 pitch, the
+  planet too). Now it eases in with the crowd only.
+- three 0.187 finding: skinMaterial's subsurface-wrap replace (lights_physical_pars_fragment, "BRDF_Lambert(
+  material.diffuseColor)") matches nothing any more: skin has drawn with plain lighting since the three upgrade.
+- 10:15 LANDED e368b61 on main (perf17 props batching, lens fade, crowd camera behind ?crowdcam=1, the pitch fix and
+  the two diagnostics; CI 45007925771 all green on that exact commit, first try).
+- Machine: the heavy queue is shared with the combat agent's exclusive GPU captures; local SwiftShader runs of the gates
+  took 20+ min and timed out. Use CI for SwiftShader numbers.
+- 12:00 LANDED 0c68d8c on main (bodies merged, program sort, GPU pass timer; CI 45016975922 green after one rerun of
+  combat's known SwiftShader click timeout, the same `#p-action` timeout that hit main df69603 and life-wip).
+- Bodies (owner goal 2), src/characters/bodymerge.ts: skin (body+head), clothes and eyes of a body are ONE skinned mesh
+  with one material (aPart per vertex: 0 skin, 1 cloth, 2 eye; the fragment shader runs that part's code, copied from
+  skinMaterial/eyeMaterial/the cloth patch; cloth's polygon offset became a 2 mm pull to the camera; DoubleSide). The
+  merged geometry is cached per source set (bodies of one look share it). Crowd bodies always; the crew and the player on
+  the away stages through `fig.mergeParts()` (city FRIENDS, Mir, away.ts player); films keep the separate meshes.
+  `?bodymerge=0` turns it off. GPU census (p18/bodies1): a merged crowd body draws 1 body + 1-2 kit (+ hair; + lashes and
+  cornea within 5-7 m); the crew/player drew 6-7 each (skin, eyes, cloth, kit 1-2, cornea, lash): these dominated the
+  crowd and gate spots, hence mergeParts. Look A/B shots (p18/look1_A_look vs look1_B_look: Strong at 1.3 m and 3 m, a
+  crowd street): no visible difference found. The kit (rigid.ts) is per-body geometry, so it stays separate (folding it
+  in would copy the morph data per body).
+- Program sort (core/renderer.ts): opaque draws sorted by shader program, then material (three sorts by material id
+  only). `?psort=0` is three's order. Costs some front-to-back order (overdraw); watch phones.
+- `?gputime=1` (core/gputime.ts): GPU ms per post pass in window.__gpuTime (scene includes shadows); plans
+  p18/plan_ugpu.json / plan_wgpu.json print it per spot.
+- Tools: p18/ab.sh (same build, ?bodymerge=0 vs on), p18/ab2.sh (A = ?bodymerge=0&psort=0 = main's behaviour, B = new;
+  Q=... appends to both URLs), plan_bodies.json (skinned draws per body), plan_look.json (photo-camera close-ups).
+- A/B on the A500 (Web, 1280x720, same build dist-new, exclusive heavy, single runs, swing ~5 fps; p18/pf1_A, pf1_B,
+  pf2_A): A = ?bodymerge=0&psort=0 (main before today), B = new. fps A/B/A2: bazaar 30.5/54.5/45.2, gate 35.5/47.7/40.2,
+  market 37.9/60.3/52.7, square 34.1/57.8/42.6 (crowd: A runs had a first-spot load hitch, not comparable). Skinned draws
+  B vs A2: bazaar 21/28, gate 14/26, market 4/6, square 11/19. The gate is still under 60 on Web (47.7).
+- Ultra GPU profile (owner goal 6; p18/ug1, ?gputime=1, A500, 1280x720, pr 0.94): GPU ms per pass at bazaar / crowd /
+  gate / square: scene incl. shadows 22.5 / 9.9 / 12.7 / 5.9; AO 0.8-1.5; SSR 0.2-0.7; bloom 0.5-3.2; the rest < 0.7.
+  The same frames took 12.6 / 22.6 / 13.7 / 20.2 fps with the CPU's draw 61.8 / 25.6 / 65.8 / 68.5 ms and update
+  11-18 ms. So Ultra is CPU-bound, not SSR/AO-bound: cheaper SSR/AO buys under 2 ms. Ultra's CPU per draw is ~140-250 us
+  (Web ~50). NEXT: a CPU profile of Ultra at the bazaar and gate (build --sourcemap, plan with "profile", tools/mapprof.cjs)
+  to find what costs per draw there (suspects: the 3072 shadow map's caster pass, the scans' many materials, per-draw
+  uniform uploads with the extra Ultra lights).
+- Clips: Downloads/BS_Game_v1.1/city_v1.8_GPU (Web, ?perf=1, no sound, README with notes). Seen in them: the overlay
+  reads 21-23 fps while the screencast records (48-60 without); in 03_bazaar the camera sits low looking up into the
+  crowd and a passer-by mid-fade fills ~40% of the screen as a dark dithered shape (the lens fade from 1.3 m is too
+  late when the camera is low; the crowd camera is still off by default).
+- NOT DONE (owner's order): (2) bodies: hair and the kit are still their own draws (a merged crowd body is body + 1-2
+  kit + hair, + lashes/cornea within 5-7 m); no GPU skinning/instancing for crowds yet. (3) gate to 60 on Web: ~48.
+  (4) planet to 60: not measured this session. (5) Mobile proxy to 30: not measured this session. (6) Ultra 30+: it
+  is CPU-bound (see the GPU profile above); profile the CPU next. (7) quiet-machine re-measure and the cold title load:
+  not run (the heavy queue was held by TTS and character builds for most of the afternoon; my runs waited 30-70 min
+  each). Clips of Ultra and the planet: not recorded (p18/plan_clips18_city_ultra.json, planet_web.json are ready;
+  p18/clips.sh NAME records one).
+- Preview: I ran dist-new on :4182 (stopped at the end). Main's dist on :4180 is someone's long-running server, left alone.

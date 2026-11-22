@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The fight's sounds, made from nothing (no recordings, no licences): the voices of the creatures of Verdaxis, blows,
 bows and slings, the guardian. Writes public/audio/sfx/cb_*.ogg and adds them to the index.
-  ~/bs-voice/.venv-tts2/bin/python tools/combat/make_sounds.py    (numpy, scipy, soundfile, pyloudnorm, ffmpeg)"""
+  ~/bs-voice/.venv-tts2/bin/python tools/combat/make_sounds.py [name ...]   (only those names when given; numpy, scipy, soundfile, pyloudnorm, ffmpeg)"""
 import json, sys
 from pathlib import Path
 import numpy as np
@@ -115,14 +115,47 @@ def rattle(seed):
         i = int(t * SR); m = 900; y[i:i + m] += bp(r.standard_normal(m), 1200, 5000) * np.exp(-np.arange(m) / 90) * r.uniform(0.5, 1); t += r.uniform(0.05, 0.11)
     return y
 
+# the trap cue, made to be heard over a night bed (insects above 4 kHz) and the world's low footfalls: a dry twig
+# that snaps in two or three quick cracks (a sharp click with a woody knock under it, 0.5 to 3 kHz), leaves and
+# grass pushed aside, and the struggle of something caught (thrashing in the grass, a squeal, a thump on the ground)
+def twig(seed):
+    r = np.random.default_rng(seed + 40); s = 0.32; n = int(s * SR); y = np.zeros(n); t = 0.01
+    for k in range(2 + seed % 2):
+        i = int(t * SR); m = int(0.06 * SR); a = 1.0 if k == 0 else r.uniform(0.45, 0.7)
+        click = hp(noise(m), 900) * np.exp(-np.arange(m) / (0.0025 * SR))
+        knock = np.sin(2 * np.pi * r.uniform(520, 900) * np.arange(m) / SR) * np.exp(-np.arange(m) / (0.012 * SR))
+        ring = np.sin(2 * np.pi * r.uniform(1800, 2600) * np.arange(m) / SR) * np.exp(-np.arange(m) / (0.006 * SR))
+        y[i:i + m] += (click * 1.0 + knock * 0.8 + ring * 0.35) * a
+        t += r.uniform(0.03, 0.07)
+    return bp(y, 350, 7000)
+def rustle(seed):
+    r = np.random.default_rng(seed + 50); s = 0.6; n = int(s * SR); y = np.zeros(n); t = 0.0
+    while t < s - 0.05:
+        i = int(t * SR); m = int(r.uniform(0.008, 0.03) * SR)
+        y[i:i + m] += noise(m) * np.hanning(m) * r.uniform(0.3, 1)
+        t += r.uniform(0.004, 0.02)
+    k = np.linspace(0, 1, n); swell = np.sin(np.pi * np.clip(k * 1.15, 0, 1)) ** 0.7
+    return bp(y, 1200, 6500) * swell
+def struggle(seed):
+    r = np.random.default_rng(seed + 60); s = 0.9; n = int(s * SR)
+    y = np.concatenate([rustle(seed + 7), np.zeros(n)])[:n] * 0.8
+    y[int(0.3 * SR):] += np.concatenate([rustle(seed + 11), np.zeros(n)])[: n - int(0.3 * SR)] * 0.7
+    for _ in range(2):
+        i = int(r.uniform(0.05, 0.5) * SR); q = 0.16; m = int(q * SR)
+        y[i:i + m] += np.sin(glide(r.uniform(1700, 2100), r.uniform(2500, 3100), q, 0.5)) * env(m, 0.01, 0.08) * 0.55
+    i = int(r.uniform(0.1, 0.6) * SR); m = int(0.12 * SR)
+    y[i:i + m] += np.sin(2 * np.pi * 110 * np.arange(m) / SR) * np.exp(-np.arange(m) / (0.02 * SR)) * 0.6
+    return y
 SOUNDS = [('growl', growl, 3), ('snarl', snarl, 2), ('howl', howl, 1), ('chitter', chitter, 3), ('shriek', shriek, 2), ('snort', snort, 2), ('bellow', bellow, 1),
           ('squeak', squeak, 2), ('hiss', hiss, 2), ('whip', whip, 2), ('hum', hum, 1), ('beamcharge', beamcharge, 1), ('beam', beam, 1), ('stomp', stomp, 1),
           ('hit', hit, 4), ('clang', clang, 2), ('crack', crack, 3), ('twang', twang, 2), ('whirr', whirr, 1), ('swing', swing, 3), ('zap', zap, 2), ('thud', thud, 2),
-          ('heart', heart, 1), ('rattle', rattle, 2)]
+          ('heart', heart, 1), ('rattle', rattle, 2), ('twig', twig, 3), ('rustle', rustle, 3), ('struggle', struggle, 3)]
 def main():
     idx_p = SFX / 'index.json'; index = json.loads(idx_p.read_text())
-    for k in [k for k in index if k.startswith('cb_')]: del index[k]
+    only = set(sys.argv[1:])  # names to (re)make; all of them when none are given
+    for k in [k for k in index if k.startswith('cb_') and (not only or k.rsplit('_', 1)[0][3:] in only)]: del index[k]
     for name, fn, n in SOUNDS:
+        if only and name not in only: continue
         for i in range(1, n + 1):
             y = np.asarray(fn(i), np.float64); y = y / (np.abs(y).max() + 1e-9) * 0.8
             pad = np.zeros(int(0.02 * SR)); y = np.concatenate([y, pad])

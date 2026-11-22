@@ -116,7 +116,9 @@ window.__cbBot = (mode) => {
           const pre = { x: s.x - wx * 3, z: s.z - wz * 3 }, at = { x: s.x - wx * 1.3, z: s.z - wz * 1.3 };
           const goal = flag.leg ? at : pre, d = dist(p, goal);
           // a walk that makes no headway for 1.5 s: step aside once, then give up on the spot and set it here
-          if (!flag.wpT || now - flag.wpT > 1500) { if (flag.wp && dist(flag.wp, p) < 0.25 && d > 0.8) flag.stuck = (flag.stuck || 0) + 1; flag.wp = { x: p.x, z: p.z }; flag.wpT = now; }
+          // (only while it is walking: turning on the spot to face the way is not being stuck)
+          if (!flag.wpT || now - flag.wpT > 1500) { if (flag.wp && flag.walked && dist(flag.wp, p) < 0.25 && d > 0.8) flag.stuck = (flag.stuck || 0) + 1; flag.wp = { x: p.x, z: p.z }; flag.wpT = now; flag.walked = false; }
+          if (held.KeyW) flag.walked = true;
           if (!flag.leg && (d < 0.8 || flag.stuck >= 2 || dist(p, at) < 1.2)) { flag.leg = 1; flag.stuck = 0; return; }
           if (flag.leg && !(d < 0.6 || flag.stuck >= 2 || since() > 18)) { go(goal.x, goal.z); hold('KeyA', flag.stuck === 1); return; }
           if (!flag.leg && since() < 18) { go(goal.x, goal.z); hold('KeyA', flag.stuck === 1); return; }
@@ -128,32 +130,30 @@ window.__cbBot = (mode) => {
         } else if (since() > 3) { const d = go(food.x + wx * 2.8 - wz * 4, food.z + wz * 2.8 + wx * 4); if (d < 0.8) stop(); }
         return;
       }
-      // a hunter watches a snare from beyond it, still, in the dark, with the camp behind it: the snare and whatever
-      // walks into it stand against the firelight. Five metres out and to the side, so the scavengers still come
+      // a hunter waits beside the snare, still, looking out into the dark the smoke goes to (where they come from).
+      // The game's own look turns the view to the snare when something is heard at it; the bot does not turn for it
       const sq = sim.traps.find((q) => q.kind === 'snare') || bait;
-      const guard = { x: sq.x + wx * 4.4 - wz * 2.2, z: sq.z + wz * 4.4 + wx * 2.2 };
+      const guard = { x: sq.x + wx * 1.2 - wz * 4.6, z: sq.z + wz * 1.2 + wx * 4.6 }, out = { x: sq.x + wx * 16 - wz * 2, z: sq.z + wz * 16 + wx * 2 };
+      // a record of every catch (window.__cbTrapLog), so a take can be checked for one without watching it all
+      for (const q of sim.traps) if (q.sprungT >= 0 && !(window.__cbTrapLog ||= []).some((r) => r.id === q.id && r.t === q.sprungT)) window.__cbTrapLog.push({ id: q.id, kind: q.kind, t: q.sprungT, caught: q.caught, wave: run.wave, rec: +((performance.now() - t0) / 1000).toFixed(1) });
       if (run.phase === 'hush') {
-        // the quiet before: stand at the guard spot and look out over what was set
-        stop(); const d = go(guard.x, guard.z); if (d < 0.7) { stop(); look(sq.x, sq.z); }
+        // the quiet before: at the watch spot, a look over what was set, then out to the dark
+        const d = go(guard.x, guard.z); if (d < 0.7) { stop(); if (since() < 4) look(sq.x, sq.z); else look(out.x, out.z); }
         return;
       }
       const h = living('hound').find((e) => !e.routed), thieves = living('skritch').filter((e) => !e.routed && dist(e, food) < 5);
-      // a trap at work is what a player would turn to watch: one that has just caught, or one a scavenger is about to
-      // walk into (unless something is coming at the player)
-      // a record of every catch (window.__cbTrapLog), so a take can be checked for one without watching it all
-      for (const q of sim.traps) if (q.sprungT >= 0 && !(window.__cbTrapLog ||= []).some((r) => r.id === q.id && r.t === q.sprungT)) window.__cbTrapLog.push({ id: q.id, kind: q.kind, t: q.sprungT, caught: q.caught, wave: run.wave, rec: +((performance.now() - t0) / 1000).toFixed(1) });
-      const sprung = sim.traps.find((q) => (q.kind === 'snare' || q.kind === 'stakes') && q.sprungT >= 0 && sim.t - q.sprungT < 3.5);
-      const near = sim.traps.find((q) => q.armed && q.uses > 0 && (q.kind === 'snare' || q.kind === 'stakes') && living('skritch').concat(h ? [h] : []).some((e) => dist(e, q) < 6 && dist(e, q) > 0.8));
-      const watch = sprung || near;
-      if (watch && !danger() && !thieves.some((e) => dist(e, p) < 2.5)) { stop(); hold('KeyQ', 0); look(watch.x, watch.z); return; }
-      if (fire.fuel < fire.max * 0.55 && (sim.inv.branch || 0) > 0 && !(h && (h.state === 'windup' || h.state === 'strike'))) { const d = go(fire.x, fire.z); if (d < 2.4) { stop(); if (since() > 0.8) { tapE(); stT = performance.now(); } } return; }
+      // wave 1 is watched from the watch spot, whatever the food and the fire do (only a fire nearly out calls it back)
+      const hold1 = run.wave <= 1 && fire.fuel > fire.max * 0.2;
       if (h && (h.state === 'windup' || h.state === 'strike') && h.target === -1) { stop(); look(h.x, h.z, h.y + 0.6); hold('KeyQ', h.stateT > 0.3 || h.state === 'strike'); return; }
       hold('KeyQ', 0);
-      if (h && h.weakT > 0 && dist(h, p) < 5) { fight([h]); return; }
-      if (thieves.length) { fight(thieves); return; }
-      // otherwise guard the food from its upwind side, looking out over the traps to the dark they come from
-      // to the side of the food, out of the smoke that drifts over it
-      const d = go(guard.x, guard.z); if (d < 0.7) { stop(); if (h && dist(h, p) < 14) look(h.x, h.z, h.y + 0.6); else look(sq.x, sq.z); }
+      const close = living('skritch').filter((e) => !e.routed && e.heldT <= 0 && dist(e, p) < 2.2);
+      if (close.length) { fight(close); return; }
+      if (!hold1) {
+        if (fire.fuel < fire.max * 0.55 && (sim.inv.branch || 0) > 0) { const d = go(fire.x, fire.z); if (d < 2.4) { stop(); if (since() > 0.8) { tapE(); stT = performance.now(); } } return; }
+        if (h && h.weakT > 0 && dist(h, p) < 5) { fight([h]); return; }
+        if (thieves.length) { fight(thieves); return; }
+      }
+      const d = go(guard.x, guard.z); if (d < 0.7) { stop(); look(out.x, out.z); }
     } else if (mode === 'chase') {
       const goal = run.markers.find((m) => m.kind === 'goal'), h = living('hound')[0];
       // a runner who has seen it gather: roll out of the lunge's line when it is about a third of a second from
@@ -190,25 +190,37 @@ window.__cbBot = (mode) => {
     } else if (mode === 'throwplay') {
       // the throwing stick: stand in the open, throw side-arm at a Nibbet within twelve metres (or at the grass ahead
       // when none is), walk out and fetch the stick, come back to the spot; never chase (they outrun anyone)
-      if (st === 0) { if (equip('throwstick')) { flag.home = { x: p.x, z: p.z }; flag.yaw = C.cam.yaw; run.summon('nibbet', 3); flag.sumT = performance.now(); next(); } return; }
+      if (st === 0) { if (equip('throwstick')) { flag.home = { x: p.x, z: p.z }; flag.yaw = C.cam.yaw; run.summon('nibbet', 3, 8); flag.sumT = performance.now(); next(); } return; }
       // a recording may ask for a slow side view of a throw (window.__cbSide = [from, to] seconds): framed on the spot
       // it throws from, switched on only when it is standing there
       const W = window.__cbSide, Tm = (performance.now() - t0) / 1000;
       if (W && Tm > W[0] && Tm < W[1] && !flag.side && dist(p, flag.home) < 1.2 && p.has.throwstick) {
-        flag.side = 1; const y = flag.yaw, fx = -Math.sin(y), fz = -Math.cos(y), px = -Math.cos(y), pz = Math.sin(y), h = flag.home, cy = C.cam.y;
-        __bs.photo([h.x + px * 2.6 + fx * 2.0, cy + 1.7, h.z + pz * 2.6 + fz * 2.0], [h.x + fx * 3, cy + 0.9, h.z + fz * 3]); C.testSlow = 0.35;
+        flag.side = 1; const y = C.cam.yaw, fx = -Math.sin(y), fz = -Math.cos(y), px = -Math.cos(y), pz = Math.sin(y), h = flag.home, cy = C.cam.y;
+        // the stick spins flat (side-arm), so the camera looks down on the throw from the side and above: the turning
+        // stick shows as a turning bar, not as a stick growing and shrinking edge-on. Square to the middle of the
+        // throw (the Nibbets sit about 8 m out) and far enough back that the thrower, head to feet, and the landing
+        // are both inside the frame (the thrower stood at the edge, half cut off, in v4)
+        // framed on the Nibbet it will throw at (v5 framed a fixed point 3.4 m out and the animals were specks at the
+        // edge): the middle of thrower and prey, as far off to the side as they are apart, so both fill the frame
+        const pr = nearest(living('nibbet').filter((e) => dist(e, p) < 14));
+        const tx = pr ? pr.x : h.x + fx * 8, tz = pr ? pr.z : h.z + fz * 8, mx = (h.x + tx) / 2, mz = (h.z + tz) / 2;
+        const D = Math.hypot(tx - h.x, tz - h.z) || 1, ux = (tx - h.x) / D, uz = (tz - h.z) / D, L = Math.max(4.5, D * 0.8);
+        // to the throwing-arm side of the line from thrower to prey
+        const sx = -uz, sz = ux;
+        __bs.photo([mx + sx * L, cy + 2.2, mz + sz * L], [mx, cy + 0.5, mz]); C.testSlow = 0.3;
       }
       if (W && Tm >= W[1] && flag.side === 1) { flag.side = 2; __bs.photo(null); C.testSlow = 1; }
       if (!p.has.throwstick) { const k = sim.pickups.find((q) => q.weapon === 'throwstick'); if (k) go(k.x, k.z); return; }
       if (p.weapon !== 'throwstick') { equip('throwstick'); return; }
       if (dist(p, flag.home) > 1.2 && p.act !== 'charge') { go(flag.home.x, flag.home.z); return; }
       const prey = nearest(living('nibbet').filter((e) => dist(e, p) < 12));
-      if (!prey && performance.now() - flag.sumT > 6000) { living('nibbet').length < 6 && run.summon('nibbet', 2); flag.sumT = performance.now(); }
+      if (!prey && performance.now() - flag.sumT > 6000) { living('nibbet').length < 6 && run.summon('nibbet', 2, 8); flag.sumT = performance.now(); }
       const ahead = { x: flag.home.x - Math.sin(flag.yaw) * 10, z: flag.home.z - Math.cos(flag.yaw) * 10, vx: 0, vz: 0, y: C.cam.y };
       const t = prey || ahead, d = dist(t, p), lx = t.x + t.vx * 0.3, lz = t.z + t.vz * 0.3, loft = t.y + 0.2 + d * 0.03;
       stop();
       if (p.act === 'charge') { look(lx, lz, loft); if (p.charge >= 1) hold('KeyG', 0); }
-      else { const off = look(lx, lz, loft); if (off < 0.06 && p.act === 'idle' && since() > 1.2) { hold('KeyG', 1); stT = performance.now(); } }
+      // like a hunter: throw when the animal has settled (a running Nibbet is past the stick before it lands)
+      else { const off = look(lx, lz, loft); if (off < 0.06 && p.act === 'idle' && since() > 1.2 && (!prey || Math.hypot(prey.vx, prey.vz) < 1 || since() > 6)) { hold('KeyG', 1); stT = performance.now(); } }
     } else if (mode === 'atlatlplay' || mode === 'bowplay') {
       const wpn = mode === 'bowplay' ? 'bow' : 'atlatl';
       if (st === 0) { if (equip(wpn)) { run.summon('nibbet', 3); next(); } }
