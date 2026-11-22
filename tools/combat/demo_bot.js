@@ -106,6 +106,7 @@ window.__cbBot = (mode) => {
         const order = ['Digit5', 'Digit1', 'Digit2'];
         if (st < 3) {
           if (flag.setting) { if (!C.setting && since() > 0.6) { flag.setting = 0; next(); } return; }
+          if (since() > 14) { next(); return; } // a spot it cannot reach: go on to the next trap
           const d = go(spot[st].x - (dx / l) * 1.3, spot[st].z - (dz / l) * 1.3);
           if (d < 0.9 || (since() > 9 && d < 3)) { stop(); if (look(spot[st].x + dx, spot[st].z + dz) < 0.3 && since() > 1) { tap('KeyT'); setTimeout(() => key(order[st]), 250); flag.setting = 1; stT = performance.now(); } }
         } else if (st === 3) { const d = go(food.x - 0.6, food.z - 0.5); if (d < 0.8 || since() > 10) { stop(); tapE(); next(); } }

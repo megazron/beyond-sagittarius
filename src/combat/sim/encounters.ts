@@ -121,7 +121,7 @@ export class EncounterRun {
       const food = this.at(0.5, 2.2); s.addScent(food.x, food.z, 4, 60); this.markers.push({ x: food.x, z: food.z, kind: 'food', r: 1 });
       this.objective = 'cb.obj.prep'; this.go('prep');
     } else if (id === 'chase.escape') {
-      this.hour = 20.3; s.night = true;
+      this.hour = 19.9; s.night = true; // the last of the dusk: enough sky light to see the ground you run on
       give({ stone: 3, fruit: 1 }); arm('rock');
       const f = this.at(125, 0); s.addFire(f.x, f.z, 100); this.markers.push({ x: f.x, z: f.z, kind: 'goal', r: 7 });
       for (const u of [32, 66, 98]) this.mark('log', u, 0, 3.2);
