@@ -4,12 +4,13 @@ import { CombatSim } from './sim.ts';
 import type { Intent, InjuryId } from './sim.ts';
 import type { Assist, Difficulty, Env } from './core.ts';
 import { dist2 } from './core.ts';
+import { fishWater } from './ai.ts';
 import type { Enemy, SpeciesId } from './species.ts';
 import type { TensionSpec } from './tension.ts';
 import type { WeaponId } from './weapons.ts';
 
-export type EncounterId = 'hunt.first' | 'night.defence' | 'chase.escape' | 'stealth.pass' | 'arena';
-export const ENCOUNTERS: EncounterId[] = ['hunt.first', 'night.defence', 'chase.escape', 'stealth.pass', 'arena'];
+export type EncounterId = 'hunt.first' | 'night.defence' | 'chase.escape' | 'stealth.pass' | 'fish.spear' | 'arena';
+export const ENCOUNTERS: EncounterId[] = ['hunt.first', 'night.defence', 'chase.escape', 'stealth.pass', 'fish.spear', 'arena'];
 
 export interface EncounterOpts {
   /** Where it happens: a point, and the heading of "forward" (radians, 0 = +z). */
@@ -144,6 +145,17 @@ export class EncounterRun {
       for (const [u, v] of [[52, -9], [54, -11], [50, -12]]) this.put('skritch', u, v, { pack: 3 });
       this.mark('goal', 72, 0, 3);
       this.objective = 'cb.obj.stealth'; this.go('sneak');
+    } else if (id === 'fish.spear') {
+      // a still morning at the shallows: darters holding near the bottom within a spear's reach of the bank. The site
+      // stands on the bank facing the water (the game finds one; on dry ground there are no fish and nothing to do)
+      this.hour = 9; s.night = false;
+      arm('spear');
+      for (let i = 0, n = 0; i < 600 && n < 5; i++) {
+        const q = this.at(1.4 + s.rand() * 6.5, (s.rand() - 0.5) * 10);
+        if (!fishWater(s, q.x, q.z) || s.enemies.some((e) => Math.hypot(e.x - q.x, e.z - q.z) < 1.3)) continue;
+        s.spawn('darter', q.x, q.z, { yaw: this.site.yaw + Math.PI * 0.5 + (s.rand() - 0.5) * 0.7, wander: 1 + s.rand() * 4 }); n++;
+      }
+      this.objective = 'cb.obj.fish'; this.go('fish');
     } else {
       // the proving ground: everything in the hand, nothing at stake
       this.hour = 11; s.night = false;
@@ -190,6 +202,7 @@ export class EncounterRun {
       case 'night.defence': this.night(dt); break;
       case 'chase.escape': this.chase(); break;
       case 'stealth.pass': this.stealth(); break;
+      case 'fish.spear': this.fishing(); break;
       default: break;
     }
   }
@@ -215,6 +228,22 @@ export class EncounterRun {
         if (this.mem.kneel > 2.4) { s.inv.meat = (s.inv.meat ?? 0) + 2; this.finish('won'); }
       }
     }
+  }
+
+  // ---- spear fishing ----
+  /**
+   * Two fish and it is breakfast. A throw or thrust that goes over a fish ('fish:high' from the sim: it went where the
+   * fish was seen) changes the line to the lesson: lower, the water bends the light. `fish.lesson`: the player missed
+   * high and then hit (learned by doing). `fish.caught`: how many.
+   */
+  private fishing() {
+    const s = this.sim, caught = s.enemies.filter((e) => e.kind === 'darter' && e.dead).length;
+    if (s.fishLog.includes('high')) this.mem.high = 1;
+    this.flags['fish.caught'] = caught;
+    if (caught > 0 && this.mem.high) this.flags['fish.lesson'] = true;
+    if (caught >= 2) { s.inv.fish = (s.inv.fish ?? 0) + caught; this.finish('won'); return; }
+    const want = caught === 1 ? 'cb.obj.fish2' : this.mem.high ? 'cb.obj.fishLow' : 'cb.obj.fish';
+    if (this.objective !== want) this.objective = want;
   }
 
   // ---- the night at the fire ----

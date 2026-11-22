@@ -189,6 +189,39 @@ window.__cbBot = (mode) => {
       const way = [run.at(14, 3.5), run.at(30, -5), run.at(46, 2), run.at(60, 3), run.at(72, 0)], a = run.at(0, 0);
       const w = way.find((q) => Math.hypot(q.x - a.x, q.z - a.z) > Math.hypot(p.x - a.x, p.z - a.z) + 0.5) || way[4];
       go(w.x, w.z);
+    } else if (mode === 'fish') {
+      // spear fishing: creep up to a fish that is holding still, aim the reticle exactly (the camera's own line), the
+      // first thrust at where the fish is SEEN (it goes over: the lesson), then at where it really is (below)
+      const cam = C.d.player.camera, eye = cam.position;
+      const seenY = (px, py, pz, surf) => {
+        const hc = eye.y - surf, df = surf - py, D = Math.hypot(px - eye.x, pz - eye.z);
+        if (df <= 0 || hc <= 0) return py; if (D < 1e-3) return surf - df / 1.333;
+        let lo = 0, hi = D; for (let i = 0; i < 40; i++) { const x = (lo + hi) / 2; if (x / Math.hypot(x, hc) > 1.333 * (D - x) / Math.hypot(D - x, df)) hi = x; else lo = x; }
+        const x = Math.max(1e-4, (lo + hi) / 2); return surf - ((D - x) * hc) / x;
+      };
+      const aimAt = (x, y, z) => {
+        const e = cam.matrixWorld.elements, fx = -e[8], fy = -e[9], fz = -e[10];
+        const dx = x - eye.x, dy = y - eye.y, dz = z - eye.z, l = Math.hypot(dx, dy, dz);
+        const d = Math.atan2(Math.sin(Math.atan2(-dx, -dz) - Math.atan2(-fx, -fz)), Math.cos(Math.atan2(-dx, -dz) - Math.atan2(-fx, -fz)));
+        const dp = Math.asin(Math.max(-1, Math.min(1, fy))) - Math.asin(dy / l);
+        C.testLook(Math.max(-40, Math.min(40, (-d / SENS) * 0.35)), Math.max(-30, Math.min(30, (dp / SENS) * 0.35)));
+        return Math.hypot(d, dp);
+      };
+      if (st === 0) { if (equip('spear')) { flag.n = 0; next(); } return; }
+      const fish = living('darter').filter((e) => e.state !== 'flee');
+      const tgt = flag.tid ? fish.find((e) => e.id === flag.tid) : null;
+      const t = tgt || nearest(fish);
+      if (!t) { stop(); return; }
+      flag.tid = t.id;
+      const d = dist(t, p);
+      if (d > 2.0) { if (!p.sneaking && !flag.sn) { flag.sn = 1; tap('KeyX'); } go(t.x, t.z); flag.still = performance.now(); return; }
+      stop();
+      if (p.act !== 'idle') return;
+      const cy = t.y + t.def.height * 0.5, surf = 0;
+      // first throw: at the fish as it is seen; after that, below it (at where it is)
+      const y = flag.n === 0 ? seenY(t.x, cy, t.z, surf) : cy;
+      const err = aimAt(t.x, y, t.z);
+      if (err < 0.004 && performance.now() - flag.still > 1500) { tap('Mouse0'); flag.n++; flag.still = performance.now() + 1200; flag.tid = 0; window.__cbFishLog = (window.__cbFishLog || []).concat([{ n: flag.n, aim: flag.n === 1 ? 'seen' : 'true', d: +d.toFixed(2), rec: +((performance.now() - t0) / 1000).toFixed(1) }]); }
     } else if (mode === 'throwplay') {
       // the throwing stick: stand in the open, throw side-arm at a Nibbet within twelve metres (or at the grass ahead
       // when none is), walk out and fetch the stick, come back to the spot; never chase (they outrun anyone)

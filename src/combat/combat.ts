@@ -7,12 +7,14 @@ import { t } from '../i18n';
 import { audio } from '../core/audio';
 import type { SaveData } from '../core/save';
 import type { World } from '../world/world';
+import { WATER_LEVEL } from '../world/terrain';
 import type { Player } from '../game/player';
 import type { Input } from '../game/input';
 import type { UI } from '../ui/ui';
 import { CombatSim, noIntent } from './sim/sim';
 import type { Injury, InjuryId, Intent } from './sim/sim';
 import type { Difficulty, SimEvent, Env } from './sim/core';
+import { seenDepthY } from './sim/core';
 import { WEAPONS, TRAPS, AMMO_CRAFT } from './sim/weapons';
 import { knownFrom, weaponKnown, trapKnown, INVENTIONS } from './sim/inventions';
 const EPISODE_WEAPONS = new Set(INVENTIONS.filter((i) => i.episodeOne && i.weapon).map((i) => i.weapon!));
@@ -95,7 +97,8 @@ export class Combat {
   constructor(deps: Deps) {
     this.d = deps;
     const W = deps.world;
-    this.env = { height: (x, z) => W.terrain.height(x, z), blocked: (x, z, r) => W.terrain.height(x, z) < -0.7 || W.forest.blocks(x, z, r) };
+    // water: the lake (still, at WATER_LEVEL over every bit of ground below it)
+    this.env = { height: (x, z) => W.terrain.height(x, z), blocked: (x, z, r) => W.terrain.height(x, z) < -0.7 || W.forest.blocks(x, z, r), water: (x, z) => (W.terrain.height(x, z) < WATER_LEVEL ? WATER_LEVEL : null) };
     this.fx = new CombatFx((x, z) => W.terrain.height(x, z), W.q.name !== 'mobile');
     W.scene.add(this.fx.group);
     // the planetshine for night set pieces: made once at the start and left in the scene at zero, because adding or
@@ -267,6 +270,23 @@ export class Combat {
       return bad;
     };
     if (id === 'night.defence') best = { x: camp.x, z: camp.z - 2.5, yaw: 0 };
+    else if (id === 'fish.spear') {
+      // a bank over shallows: dry ground to stand on, and in front of it a few metres of water 0.3 to 0.75 m deep
+      // (a fish's water) before it gets deep; nearest to the camp of the good ones
+      let found = false;
+      for (let r = 20; r < 520 && !found; r += 6) for (let i = 0; i < 48 && !found; i++) {
+        const a = (i / 48) * 6.283, x = camp.x + Math.cos(a) * r, z = camp.z + Math.sin(a) * r;
+        if (Math.abs(x) > 520 || Math.abs(z) > 520) continue;
+        const h = W.terrain.height(x, z);
+        if (h < 0.05 || h > 0.6) continue;
+        for (let j = 0; j < 12 && !found; j++) {
+          const yaw = (j / 12) * 6.283, sx = Math.sin(yaw), cz = Math.cos(yaw);
+          let fishy = 0;
+          for (let u = 1.5; u <= 7; u += 0.5) for (const w of [-3, 0, 3]) { const d = WATER_LEVEL - W.terrain.height(x + sx * u + cz * w, z + cz * u - sx * w); if (d > 0.3 && d < 0.72) fishy++; }
+          if (fishy >= 14 && !W.forest.blocks(x, z, 0.8)) { best = { x, z, yaw }; found = true; }
+        }
+      }
+    }
     else if (id === 'chase.escape') {
       // the run ends at the camp fire: find the cleanest line into it
       for (let i = 0; i < 24; i++) { const yaw = (i / 24) * 6.283, x = camp.x - Math.sin(yaw) * 125, z = camp.z - Math.cos(yaw) * 125, sc = score(x, z, yaw); if (sc < bs) { bs = sc; best = { x, z, yaw }; } }
@@ -432,6 +452,7 @@ export class Combat {
       if (on) { hit = d; break; }
     }
     I.ax = cam.position.x + v.x * hit; I.ay = cam.position.y + v.y * hit; I.az = cam.position.z + v.z * hit;
+    I.eye = { x: cam.position.x, y: cam.position.y, z: cam.position.z };
     // next weapon, the field kit
     if (free && (k(KEYS.weapon, true) || pad(PAD.weapon, true) || T.weaponHit)) this.nextWeapon();
     if (free && (k(KEYS.kit, true) || pad(PAD.kit, true) || T.trapHit)) this.toggleKit();
@@ -691,6 +712,13 @@ export class Combat {
     const k = what.split(':')[0];
     if (what === 'wake:guardian' || k === 'wakeMachine') { this.sfx('hum', 0.9, x, z); return; }
     if (k === 'wake') { this.sfx('growl', 0.6, x, z, 1.1); return; }
+    // water: a spear going in, and a fish's flick away (a small, sharp slap of water)
+    if (k === 'splash' || k === 'dart') {
+      const at = x !== undefined && z !== undefined ? { x, y: WATER_LEVEL + 0.1, z } : undefined;
+      audio.sample('splash', k === 'dart' ? 0.35 : 0.9, { at, near: 4, far: 40, rate: k === 'dart' ? 1.7 : 1.05 });
+      if (k === 'splash' && x !== undefined && z !== undefined) this.fx.puff('splash', x, WATER_LEVEL + 0.05, z);
+      return;
+    }
     const q = V[k];
     if (q) this.sfx(q[0], q[1], x, z, q[2]);
     if (k === 'charge') audio.sample('rumble', 0.4 * this.vol(x, z));
@@ -845,6 +873,16 @@ export class Combat {
       const vw = q ?? this.viewFor(e);
       if (e.state === 'windup') vw.tele += dt; else vw.tele = 0;
       vw.v.update(e, this.clock, dt, vw.teleDur > 0 ? Math.min(1, vw.tele / vw.teleDur) : 0);
+      // a fish is drawn where it is SEEN from this camera: light from it bends at the surface, so it shows higher
+      // than it is (the sim keeps where it really is, and that is what a spear has to reach). Taken, it floats up.
+      if (e.def.temperament === 'fish') {
+        const surf = this.env.water?.(e.x, e.z);
+        if (surf !== null && surf !== undefined) {
+          const cy = e.y + e.def.height * 0.5, r = vw.v.root.position;
+          if (e.dead) r.y = Math.min(surf - 0.02, cy + Math.min(e.deadT, 3) * 0.15);
+          else r.y += seenDepthY(cam.position.x, cam.position.y, cam.position.z, e.x, cy, e.z, surf) - cy;
+        }
+      }
       // a caught animal fights the cord: heard (thrashing, a squeal) and seen (grass and dirt kicked up) until it
       // breaks free or is dealt with, so the catch reads from a distance and in the dark
       if (e.heldT > 0 && !e.dead && d < 30) {

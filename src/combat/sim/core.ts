@@ -25,6 +25,8 @@ export function rng(seed: number): () => number {
 export interface Env {
   height(x: number, z: number): number;
   blocked(x: number, z: number, r: number): boolean;
+  /** The water's surface height over (x, z), or null where there is no water (fish, spears entering water). */
+  water?(x: number, z: number): number | null;
 }
 export const FLAT: Env = { height: () => 0, blocked: () => false };
 
@@ -94,4 +96,28 @@ export function solveLaunch(a: V3, b: V3, speed: number, g: number): V3 {
   const ang = disc < 0 ? 0.7 : Math.atan2(s2 - Math.sqrt(disc), g * d);
   const c = Math.cos(ang) * speed;
   return v3((dx / d) * c, Math.sin(ang) * speed, (dz / d) * c);
+}
+
+/** Refractive index of water (fresh, visible light). */
+export const WATER_N = 1.333;
+/**
+ * Where a point under still water is SEEN from a point above it: light from it bends at the surface (Snell's law,
+ * n1 sin a = n2 sin b), so the eye sees it along the bent ray's last leg. The image is put on the vertical through the
+ * real point (the usual convention for a viewer in air): straight down it is at depth / 1.33, looking across the
+ * water it is raised far more. Returns the seen height (y) of the point; x and z are its own.
+ */
+export function seenDepthY(ex: number, ey: number, ez: number, px: number, py: number, pz: number, surface: number): number {
+  const hc = ey - surface, df = surface - py;
+  if (df <= 0 || hc <= 0) return py;
+  const D = Math.hypot(px - ex, pz - ez);
+  if (D < 1e-3) return surface - df / WATER_N;
+  // where the ray crosses the surface, x metres out from the eye: sin(in air) = n sin(in water)
+  let lo = 0, hi = D;
+  for (let i = 0; i < 40; i++) {
+    const x = (lo + hi) / 2, si = x / Math.hypot(x, hc), st = (D - x) / Math.hypot(D - x, df);
+    if (si > WATER_N * st) hi = x; else lo = x;
+  }
+  const x = Math.max(1e-4, (lo + hi) / 2);
+  // the straight line from the eye through that point, carried on to the real point's vertical
+  return surface - ((D - x) * hc) / x;
 }
