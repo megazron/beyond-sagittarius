@@ -863,9 +863,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (crowd) {
         const e = root.matrixWorld.elements, dy = LENS.y - e[13], d = Math.hypot(LENS.x - e[12], LENS.z - e[14]);
         if (fadeOn) {
-          // Web and Ultra: they fade (hashed alpha) from 1.3 m in to gone at 0.4 m, and when the stage asks (in the
-          // line from the camera to you), over a fifth of a second either way
-          const band = dy > -0.3 && dy < 2.3, x = band ? THREE.MathUtils.clamp((d - 0.4) / 0.9, 0, 1) : 1;
+          // Web and Ultra: they fade (hashed alpha) from 2.2 m in to gone at 1.1 m, and when the stage asks (in the
+          // line from the camera to you), over a fifth of a second either way. From 1.3 m to 0.4 m a low camera looking
+          // up saw a half-faded body fill ~40% of the screen as a dark dithered shape; gone by 1.1 m it is a quarter
+          // of the width at most, and mostly faded long before
+          const band = dy > -0.3 && dy < 2.3, x = band ? THREE.MathUtils.clamp((d - 1.1) / 1.1, 0, 1) : 1;
           const want = Math.min(x * x * (3 - 2 * x), lensWant);
           fadeK += (want - fadeK) * (1 - Math.exp(-dt * 12));
           if (Math.abs(fadeK - want) < 0.01) fadeK = want;
