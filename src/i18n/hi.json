@@ -199,6 +199,7 @@
   "prompt.need": "{action}: चाहिए {list}",
   "action.buildPit": "अलाव का घेरा बनाओ",
   "action.strike": "चिंगारी के लिए पत्थर रगड़ो",
+  "action.drill": "लकड़ी घुमाकर आग जलाओ",
   "action.buildShelter": "ढलवाँ छप्पर बनाओ",
   "action.craftSpear": "भाला बनाओ",
   "action.restDusk": "रात होने तक आराम करो",

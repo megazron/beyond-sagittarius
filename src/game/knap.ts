@@ -212,8 +212,10 @@ export class Stones {
     if (this.fails === 0) this.ui.toast(t('e1.fl.hint'));
     z.setLookTarget(core);
     const q = (window as unknown as { __e1knap?: Strike[] }).__e1knap;
+    // the follow camera would show his back while the moment is open: hold the stone shot instead
+    const sh = this.stoneShot(core, 0.85); this.player.workShot = { from: sh.from.clone(), to: sh.to.clone() };
     let res: Strike;
-    if (q && q.length) res = q.shift()!;
+    if (q && q.length) { res = q.shift()!; await new Promise((r) => setTimeout(r, 1600)); }
     else {
       const where = await this.tension({ kind: 'aim', seconds: 3.2 });
       if (!where) res = 'ok';
@@ -224,6 +226,7 @@ export class Stones {
       }
     }
     // after three misses the fourth strike lands: the lesson is taught, the player is not held here
+    this.player.workShot = null;
     if (res !== 'ok' && this.fails >= 3) res = 'ok';
     const line: Record<Strike, string> = { mid: 'e1.fl.mid', steep: 'e1.fl.steep', snap: 'e1.fl.snap', ok: 'e1.fl.ok' };
     if (res !== 'ok') {

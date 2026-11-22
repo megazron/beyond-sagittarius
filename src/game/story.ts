@@ -218,7 +218,7 @@ export class Story {
         this.ui.toast(t('msg.pitBuilt'));
       } });
     } else if (n === 4 && !this.flag('fire')) {
-      out.push({ id: 'strike', pos: L.camp, radius: 2.6, label: t('action.strike'), missing: this.missing(R.strike), run: () => {
+      out.push({ id: 'strike', pos: L.camp, radius: 2.6, label: t('action.drill'), missing: this.missing(R.strike), run: () => {
         // 1.6: a player's own press makes fire by hand drill (game.ts FireDrill); the level tests keep the strikes
         if (this.hooks.drill?.(() => { this.consume(R.strike); s.flags.fire = true; this.world.camp.setFire(2); this.ui.toast(t('msg.fireLit')); })) return;
         this.strikes++;
@@ -331,7 +331,7 @@ export class Story {
       if (h.state === 'hidden') { this.world.hound.root.visible = false; return; }
     }
     if (h.state === 'hidden') {
-      if (s.level === 7 && !this.flag('houndGone') && this.flag('spear') && isNight(s.timeOfDay) && !this.sequence) {
+      if (s.level === 7 && !this.flag('houndGone') && this.flag('spear') && isNight(s.timeOfDay) && !this.sequence && performance.now() > this.quietUntil) {
         // 1.9: on a player's own night the first night is the choice and the combat set piece (game.ts FirstNight)
         if (!this.flag('e1.night') && this.hooks.night?.((held) => {
           s.flags.houndGone = true;
@@ -742,13 +742,20 @@ export class Story {
     this.ui.deviceLines(null);
   }
 
+  /** A line is being said; the night does not start over it. */
+  private quietUntil = 0;
+
   private syncSpear() {
     this.spear.visible = this.flag('spear');
   }
 
   /** Called when a level starts (after the previous one completes). */
   onLevelStart(n: number) {
-    if (n === 7) this.after(5.5, () => this.ui.say('dlg.7.1', 'crew.scientist.name', 5));
+    // "Now I wait for the dark": only said before the dark, and the night's noises wait until it is over
+    if (n === 7) this.after(5.5, () => {
+      if (this.flag('e1.night') || this.sequence || isNight(this.s.timeOfDay)) return;
+      this.ui.say('dlg.7.1', 'crew.scientist.name', 5); this.quietUntil = performance.now() + 7000;
+    });
     if (n === 8) {
       this.signalClock = 12.5; // the meter takes over after the first readout
       this.after(5.0, () => { this.ui.deviceLines([t('signal.detect1'), t('signal.detect2')], true); audio.beep(); });

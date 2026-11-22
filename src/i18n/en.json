@@ -199,6 +199,7 @@
   "prompt.need": "{action}: need {list}",
   "action.buildPit": "Build a fire pit",
   "action.strike": "Strike stones for a spark",
+  "action.drill": "Make fire with the hand drill",
   "action.buildShelter": "Build a lean-to shelter",
   "action.craftSpear": "Craft a spear",
   "action.restDusk": "Rest until nightfall",

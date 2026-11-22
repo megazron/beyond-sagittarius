@@ -160,7 +160,7 @@ export class Waking {
         audio.sample('leather', 0.18, { rate: 0.7 });
       } },
       // cupped hands in, up to his mouth; it runs down his chin
-      { hold: 3.0, shot: () => this.bankShot(dip, 1.75, 0.95), run: () => {
+      { hold: 3.0, shot: () => this.bankShot(dip, 1.25, 0.8), run: () => {
         z.setLimbs({ bend: 0.5 });
         z.doTask('drink', { at: dip.clone(), seconds: 2.8, hands: 'both', prop: null });
         this.after(0.7, () => audio.sample('splash', 0.22, { rate: 1.3 }));
@@ -178,9 +178,8 @@ export class Waking {
       } },
       // dipped full: framed on its own, the leaf going into the water
       { hold: 1.9, shot: () => this.dipShot(dip, spot.at), run: () => {
-        z.setHold(null);
-        z.doTask('pickup', { at: dip.clone(), seconds: 1.4, hands: 'R', prop: 'leaf' });
-        this.after(0.6, () => audio.sample('splash', 0.14, { rate: 1.8 }));
+        z.setProp('leaf'); this.dipLeaf(dip, 1.8);
+        this.after(0.75, () => audio.sample('splash', 0.14, { rate: 1.8 }));
       } },
       // and it runs out through his fingers while he watches
       { hold: 2.8, shot: () => this.handsShot(this.chest(0.3, 0, 0.62), 0.78), run: () => {
@@ -238,11 +237,34 @@ export class Waking {
     m.setLookTarget(this.chest(fwd, 0, 0.52));
   }
 
+  /**
+   * The leaf goes down into the water in his right hand and comes up full, the left hand under it the whole way, palm
+   * up, cupping the leaf (doTask's free hand clawed the air beside it).
+   */
+  private dipLeaf(dip: THREE.Vector3, sec: number) {
+    const m = this.z, t0 = performance.now(), f = this.fwd(), r = new THREE.Vector3(f.z, 0, -f.x);
+    const top = this.chest(0.32, 0, 0.5), low = dip.clone().add(new THREE.Vector3(0, 0.02, 0));
+    const step = () => {
+      const k = (performance.now() - t0) / 1000 / sec; if (k > 1) return;
+      // down (0 to 0.4), held under (0.4 to 0.6), up full and slower (0.6 to 1)
+      const d = k < 0.4 ? Math.sin((k / 0.4) * Math.PI / 2) : k < 0.6 ? 1 : Math.cos(((k - 0.6) / 0.4) * Math.PI / 2);
+      const c = top.clone().lerp(low, d);
+      const fingers = f.clone().multiplyScalar(0.8).add(new THREE.Vector3(0, 0.4 - d * 0.6, 0)).normalize();
+      m.setHold({
+        R: { at: c.clone().addScaledVector(r, -0.03), fingers, palm: new THREE.Vector3(-0.3, 1, 0).normalize(), radius: 0.04 },
+        L: { at: c.clone().addScaledVector(r, 0.035).add(new THREE.Vector3(0, -0.035, 0)), fingers, palm: new THREE.Vector3(0.3, 1, 0).normalize(), radius: 0.045 },
+      });
+      m.setLookTarget(c);
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
   /** Water dripping and trickling out from under his hands for `sec` seconds, then gone. */
   private leak(sec: number) {
     // big enough to read at a game frame rate: drops about a centimetre, lit a little from inside so they catch light
-    const N = 22, g = new THREE.SphereGeometry(0.012, 8, 6);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xd6eef4, emissive: 0x6d8f99, emissiveIntensity: 0.55, roughness: 0.04, metalness: 0.15, transparent: true, opacity: 0.92 });
+    const N = 30, g = new THREE.SphereGeometry(0.017, 8, 6);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xd6eef4, emissive: 0x8fb8c4, emissiveIntensity: 0.9, roughness: 0.04, metalness: 0.15, transparent: true, opacity: 0.92 });
     const drops = new THREE.InstancedMesh(g, mat, N);
     drops.frustumCulled = false; drops.castShadow = false; drops.name = 'e1-leak';
     const born = performance.now() / 1000, m4 = new THREE.Matrix4(), hand = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();

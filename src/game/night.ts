@@ -38,6 +38,7 @@ export class FirstNight {
   private get z() { return this.player.model; }
   private fwd() { const r = this.z.root.rotation.y; return new THREE.Vector3(Math.sin(r), 0, Math.cos(r)); }
 
+  private kneel = new THREE.Vector3();
   private sitAtFire() {
     const camp = this.world.layout!.camp as THREE.Vector3, p = this.player;
     const d = new THREE.Vector3(p.pos.x - camp.x, 0, p.pos.z - camp.z); if (d.lengthSq() < 0.01) d.set(0, 0, 1);
@@ -46,7 +47,52 @@ export class FirstNight {
     p.pos.copy(at); p.vel.set(0, 0, 0); p.facing = facing;
     p.model.root.position.copy(at); p.model.root.rotation.y = facing + Math.PI; p.model.root.updateMatrixWorld(true);
     this.z.setKneel(true);
+    this.kneel.copy(at);
     return camp;
+  }
+
+  /** Towards the fire from where he kneels, and his right (from the site, not the model's heading). */
+  private axes(camp: THREE.Vector3) {
+    const f = camp.clone().sub(this.kneel).setY(0).normalize();
+    return { f, r: new THREE.Vector3(-f.z, 0, f.x) };
+  }
+
+  /** The sapling: a straight shaft with a point, a world object his hands are put on (the old spear rides his hand). */
+  private stick: THREE.Group | null = null;
+  private tipMat: THREE.MeshStandardMaterial | null = null;
+  private makeStick() {
+    if (this.stick) return this.stick;
+    const g = new THREE.Group(), wood = new THREE.MeshStandardMaterial({ color: 0x8a6a48, roughness: 0.85 });
+    this.tipMat = new THREE.MeshStandardMaterial({ color: 0xc9a77a, roughness: 0.8 });
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.02, 1.5, 8), wood); shaft.position.y = 0.75;
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.16, 8), this.tipMat); tip.position.y = 1.58;
+    g.add(shaft, tip); g.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+    this.stick = g; return g;
+  }
+  /** Lay the stick from `butt` along `dir` (its point at the far end). */
+  private layStick(butt: THREE.Vector3, dir: THREE.Vector3) {
+    const g = this.makeStick();
+    g.position.copy(butt); g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+    if (!g.parent) this.world.scene.add(g);
+  }
+  private along(butt: THREE.Vector3, dir: THREE.Vector3, m: number) { return butt.clone().addScaledVector(dir.clone().normalize(), m); }
+  private dropStick() { this.stick?.removeFromParent(); }
+
+  /** Across his lap, the point out to his right: the flake scrapes towards the point, both hands seen. */
+  private lap(camp: THREE.Vector3) {
+    const { f, r } = this.axes(camp);
+    const butt = this.kneel.clone().addScaledVector(f, 0.32).addScaledVector(r, -0.9).add(new THREE.Vector3(0, 0.42, 0));
+    return { butt, dir: r.clone().add(new THREE.Vector3(0, 0.12, 0)).addScaledVector(f, 0.15).normalize() };
+  }
+  /** From the fire's side, low: his hands, the stick and his face bent over it. */
+  private scrapeShot(camp: THREE.Vector3, dist = 1.15) {
+    const { f, r } = this.axes(camp), L = this.lap(camp), mid = this.along(L.butt, L.dir, 0.85);
+    return { from: mid.clone().addScaledVector(f, dist).addScaledVector(r, 0.35 * dist).add(new THREE.Vector3(0, 0.28, 0)), to: mid.clone().addScaledVector(f, -0.1).add(new THREE.Vector3(0, 0.18, 0)), push: 0.02 };
+  }
+  /** From the side, the stick running from his hands into the coals. */
+  private cookShot(camp: THREE.Vector3, dist = 1.5) {
+    const { f, r } = this.axes(camp), m = this.kneel.clone().lerp(camp, 0.55);
+    return { from: m.clone().addScaledVector(r, dist).addScaledVector(f, -0.25).add(new THREE.Vector3(0, 0.55, 0)), to: m.clone().add(new THREE.Vector3(0, 0.3, 0)), push: 0.02 };
   }
 
   /** The spear, at the fire (level 6). `made` runs the game's own spear (flags, the prop at the camp). */
@@ -54,42 +100,89 @@ export class FirstNight {
     const z = this.z;
     let camp = new THREE.Vector3();
     const scrape = (sec: number) => {
-      const f = this.fwd(), t0 = performance.now();
+      const t0 = performance.now(), L = this.lap(camp), { f } = this.axes(camp);
+      this.layStick(L.butt, L.dir);
       const step = () => {
         const k = (performance.now() - t0) / 1000; if (k > sec) return;
-        const c = new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld).addScaledVector(f, 0.35).add(new THREE.Vector3(0, -0.4, 0));
-        z.setHold({ L: { at: c.clone(), fingers: f.clone(), palm: new THREE.Vector3(0, 1, 0), radius: 0.015 }, R: { at: c.clone().addScaledVector(f, 0.12 + 0.05 * Math.sin(k * 9)).add(new THREE.Vector3(0, 0.03, 0)), fingers: f.clone().negate(), palm: new THREE.Vector3(0, -1, 0) } });
-        if (Math.random() < 0.06) audio.sample('wood', 0.15, { rate: 2.2 });
+        // the left hand holds the shaft, the right draws the flake along it towards the point, lifts, comes back
+        const stroke = (k * 1.6) % 1, at = 0.95 + Math.min(stroke, 0.75) / 0.75 * 0.4;
+        const lift = stroke > 0.75 ? 0.035 : 0;
+        z.setHold({
+          L: { at: this.along(L.butt, L.dir, 0.55), fingers: f.clone(), palm: L.dir.clone().negate(), radius: 0.02 },
+          R: { at: this.along(L.butt, L.dir, at).add(new THREE.Vector3(0, 0.03 + lift, 0)), fingers: L.dir.clone(), palm: new THREE.Vector3(0, -1, 0) },
+        });
+        if (stroke < 0.75 && Math.random() < 0.12) audio.sample('wood', 0.15, { rate: 2.2 });
         requestAnimationFrame(step);
       };
       requestAnimationFrame(step);
     };
-    const cook = () => z.setHold({ R: { at: camp.clone().add(new THREE.Vector3(0, 0.25, 0)), fingers: camp.clone().sub(this.player.pos).setY(0).normalize(), palm: new THREE.Vector3(0, -1, 0), radius: 0.015 } });
     this.playScene([
-      { hold: 2.2, shot: () => cover.mid(z, 0.8, 2.3), run: () => { camp = this.sitAtFire(); z.setProp('flake'); z.setLimbs({ bend: 0.35 }); this.ui.memory('e1.sp.drax', 9); scrape(2.2); } },
-      { hold: 2.0, shot: () => cover.close(z, 0.5, 1.0, 0.15), run: () => { scrape(2.0); z.setLookTarget(new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld).addScaledVector(this.fwd(), 0.5).add(new THREE.Vector3(0, -0.45, 0))); } },
-      { hold: 1.6, shot: () => cover.mid(z, -0.6, 2.0), run: () => { z.setProp(null); cook(); z.setLookTarget(camp.clone().add(new THREE.Vector3(0, 0.2, 0))); audio.sample('amb_fire', 0.2); } },
+      { hold: 2.4, shot: () => cover.mid(z, 0.8, 2.3), run: () => { camp = this.sitAtFire(); z.setProp('flake'); z.setLimbs({ bend: 0.35 }); this.ui.memory('e1.sp.drax', 9); scrape(2.4); z.setLookTarget(this.along(this.lap(camp).butt, this.lap(camp).dir, 1.2)); } },
+      { hold: 2.4, shot: () => this.scrapeShot(camp), run: () => scrape(2.4) },
+      { hold: 1.6, shot: () => this.cookShot(camp), run: () => { z.setProp(null); this.cook(camp, 1.6); z.setLookTarget(camp.clone().add(new THREE.Vector3(0, 0.2, 0))); audio.sample('amb_fire', 0.2); } },
     ], () => this.turn(made, camp));
+  }
+
+  /** The point in the coals, both hands on the shaft turning it. `deep`: in the flame itself. */
+  private cook(camp: THREE.Vector3, sec: number, deep = false) {
+    const z = this.z, { f } = this.axes(camp), t0 = performance.now();
+    const tip = camp.clone().add(new THREE.Vector3(0, deep ? 0.28 : 0.1, 0)).addScaledVector(f, deep ? 0.05 : -0.18);
+    const butt = tip.clone().addScaledVector(tip.clone().sub(this.kneel.clone().add(new THREE.Vector3(0, 0.45, 0))).normalize(), -1.66);
+    const dir = tip.clone().sub(butt).normalize();
+    this.layStick(butt, dir);
+    const step = () => {
+      const k = (performance.now() - t0) / 1000; if (k > sec) return;
+      this.stick!.rotateY(0.06);
+      if (this.tipMat) this.tipMat.color.lerp(new THREE.Color(deep ? 0x1a120c : 0x5a4030), 0.004);
+      z.setHold({
+        L: { at: this.along(butt, dir, 0.3), fingers: dir.clone(), palm: new THREE.Vector3(0, -1, 0), radius: 0.02 },
+        R: { at: this.along(butt, dir, 0.5), fingers: dir.clone(), palm: new THREE.Vector3(0, -1, 0), radius: 0.02 },
+      });
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
 
   private async turn(made: () => void, camp: THREE.Vector3) {
     const z = this.z, q = (window as unknown as { __e1spear?: boolean[] }).__e1spear;
     this.ui.toast(t('e1.sp.hint'));
+    const sh = this.cookShot(camp, 1.3); this.player.workShot = { from: sh.from, to: sh.to };
+    this.cook(camp, 4.2);
     let ok: boolean;
     if (q && q.length) { ok = q.shift()!; await new Promise((r) => setTimeout(r, 2000)); }
     else { const r = await this.tension({ kind: 'steady', seconds: 4 }); ok = !r || r.passed || this.burnt; }
+    this.player.workShot = null;
     if (!ok) {
       // held in the flame: the point chars; he tests it on the ground and it snaps
       this.burnt = true;
+      const { f } = this.axes(camp);
       this.playScene([
-        { hold: 1.5, shot: () => cover.mid(z, 0.6, 1.8), run: () => { z.setHold({ R: { at: this.player.pos.clone().addScaledVector(this.fwd(), 0.6).add(new THREE.Vector3(0, 0.05, 0)), fingers: new THREE.Vector3(0, -1, 0), palm: this.fwd() } }); this.after(0.6, () => audio.sample('wood', 0.5, { rate: 1.4 })); } },
-        { key: 'e1.sp.burn', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95), run: () => { z.setHold(null); z.setFace({ frown: 0.4 }); }, after: 0.3 },
-      ], () => { z.setFace(null); this.turn(made, camp); });
+        { hold: 1.4, shot: () => this.cookShot(camp, 1.2), run: () => { this.cook(camp, 1.4, true); audio.sample('amb_fire', 0.35); } },
+        { hold: 1.5, shot: () => this.scrapeShot(camp, 1.0), run: () => {
+          // the point pressed into the ground at his knee: it snaps off
+          const tip = this.kneel.clone().addScaledVector(f, 0.55); tip.y = this.world.terrain.height(tip.x, tip.z) + 0.02;
+          const butt = tip.clone().add(new THREE.Vector3(0, 1.45, 0)).addScaledVector(f, -0.5), dir = tip.clone().sub(butt).normalize();
+          this.layStick(butt, dir);
+          z.setHold({ R: { at: this.along(butt, dir, 0.9), fingers: f.clone(), palm: new THREE.Vector3(0, -1, 0), radius: 0.02 }, L: { at: this.along(butt, dir, 0.7), fingers: f.clone(), palm: new THREE.Vector3(0, -1, 0), radius: 0.02 } });
+          this.after(0.6, () => { audio.sample('wood', 0.5, { rate: 1.4 }); const tp = this.stick!.children[1] as THREE.Mesh; tp.scale.set(1, 0.35, 1); tp.position.y = 1.53; });
+        } },
+        { key: 'e1.sp.burn', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95), run: () => { z.setHold(null); this.dropStick(); z.setFace({ frown: 0.4 }); }, after: 0.3 },
+      ], () => {
+        // a new point scraped (the cut covers it)
+        z.setFace(null); const tp = this.stick!.children[1] as THREE.Mesh; tp.scale.set(1, 1, 1); tp.position.y = 1.58; this.tipMat?.color.set(0xc9a77a);
+        this.turn(made, camp);
+      });
       return;
     }
     this.playScene([
-      { hold: 1.8, shot: () => cover.mid(z, 0.7, 2.0), run: () => { z.setHold(null); made(); z.setLookTarget(null); audio.chime(); } },
+      { hold: 1.8, shot: () => this.scrapeShot(camp, 1.3), run: () => {
+        // out of the coals: the point dark and hard, held up to look at
+        const L = this.lap(camp); this.layStick(L.butt, L.dir.clone().add(new THREE.Vector3(0, 0.5, 0)).normalize());
+        z.setHold({ L: { at: this.along(L.butt, L.dir, 0.4), fingers: this.axes(camp).f, palm: new THREE.Vector3(0, -1, 0), radius: 0.02 } });
+        z.setLookTarget(this.along(L.butt, L.dir.clone().add(new THREE.Vector3(0, 0.5, 0)).normalize(), 1.6)); audio.chime();
+      } },
     ], () => {
+      z.setHold(null); this.dropStick(); made(); z.setLookTarget(null);
       this.s.flags['inv.fireSpear'] = true;
       this.ui.toast(t('e1.learn.spear'));
       z.setLimbs(null); z.setKneel(false);

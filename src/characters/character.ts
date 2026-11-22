@@ -66,7 +66,7 @@ const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
   stone: () => { const g = new THREE.IcosahedronGeometry(0.042, 2); g.scale(1.2, 0.85, 1); return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x8d8c88, roughness: 0.8 })); },
   // the hand drill's spindle: a straight stem, finger thick, about half a metre (1.6)
   spindle: () => { const g = new THREE.CylinderGeometry(0.0055, 0.0065, 0.5, 8); g.translate(0, -0.18, 0); return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x9a7a52, roughness: 0.8 })); },
-  flake: () => { const g = new THREE.CylinderGeometry(0.0, 0.022, 0.07, 5, 1); g.scale(1, 1, 0.22); return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x2a2c33, roughness: 0.15, metalness: 0.1 })); },
+  flake: () => { const g = new THREE.CylinderGeometry(0.0, 0.032, 0.1, 5, 1); g.scale(1, 1, 0.25); return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x4a4650, roughness: 0.12, metalness: 0.2 })); },
 };
 /** What each task holds unless told otherwise. */
 const TASK_PROP: Partial<Record<TaskKind, PropKind>> = { eat: 'food', drink: 'cup', phone: 'phone', carry: 'box', fix: 'tool', type: 'phone' };

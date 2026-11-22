@@ -58,17 +58,27 @@ export class FireDrill {
     this.z.setKneel(true);
   }
 
-  /** Low on the board and his hands from the side, his face above. */
-  private drillShot(at: THREE.Vector3, dist = 1.0): Shot {
-    const f = this.fwd(), r = new THREE.Vector3(f.z, 0, -f.x);
-    const head = new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld);
-    const to = at.clone().lerp(head, 0.45);
-    return { from: at.clone().addScaledVector(r, dist).addScaledVector(f, 0.25).add(new THREE.Vector3(0, 0.45 + dist * 0.15, 0)), to, push: 0.03 };
+  /** Towards the pit from where he kneels (from the board, not from the model's heading: that trap framed his back). */
+  private dir(b: { kneel: THREE.Vector3; at: THREE.Vector3 }) { return b.at.clone().sub(b.kneel).setY(0).normalize(); }
+
+  /**
+   * Low and beside the board: the spindle, both palms on it and the notch fill the lower two thirds, his face (bent
+   * over it) at the top. Built from the board and the kneel spot.
+   */
+  private drillShot(b: { kneel: THREE.Vector3; at: THREE.Vector3 }, dist = 0.85, side = 1): Shot {
+    const f = this.dir(b), r = new THREE.Vector3(f.z, 0, -f.x).multiplyScalar(side);
+    const to = b.at.clone().addScaledVector(f, -0.12).add(new THREE.Vector3(0, 0.34, 0));
+    return { from: b.at.clone().addScaledVector(r, dist).addScaledVector(f, 0.3 * dist).add(new THREE.Vector3(0, 0.42 + dist * 0.12, 0)), to, push: 0.02 };
+  }
+  /** The same framing held by the follow camera while a tension moment is open. */
+  private hold(b: { kneel: THREE.Vector3; at: THREE.Vector3 } | null, dist = 0.95) {
+    if (!b) { this.player.workShot = null; return; }
+    const sh = this.drillShot(b, dist); this.player.workShot = { from: sh.from.clone(), to: sh.to.clone() };
   }
 
   /** Palms flat either side of the spindle, rubbing in opposite directions, working down it and back to the top. */
-  private rub(at: THREE.Vector3, sec: number, speed = 1) {
-    const z = this.z, f = this.fwd(), r = new THREE.Vector3(f.z, 0, -f.x), t0 = performance.now();
+  private rub(b: { kneel: THREE.Vector3; at: THREE.Vector3 }, sec: number, speed = 1) {
+    const at = b.at, z = this.z, f = this.dir(b), r = new THREE.Vector3(f.z, 0, -f.x), t0 = performance.now();
     z.setProp('spindle');
     const step = () => {
       const k = (performance.now() - t0) / 1000;
@@ -119,14 +129,14 @@ export class FireDrill {
     const first = !this.told; this.told = true;
     this.playScene([
       { hold: 1.8, shot: () => cover.mid(z, 0.85, 2.2), run: () => { this.settle(b.kneel, b.facing); z.setLookTarget(b.at); z.setLimbs({ bend: 0.4 }); audio.sample('wood', 0.3); } },
-      { key: 'e1.fi.sci', who: 'scientist', if: { not: { flag: 'inv.fireDrill' } }, shot: () => this.drillShot(b.at, 1.2), run: () => { if (first) this.rub(b.at, 4, 0.6); }, after: 0.3 },
+      { key: 'e1.fi.sci', who: 'scientist', if: { not: { flag: 'inv.fireDrill' } }, shot: () => this.drillShot(b, 1.05), run: () => { if (first) this.rub(b, 4, 0.6); }, after: 0.3 },
     ], () => this.attempt(b, lit));
   }
 
   private async attempt(b: { kneel: THREE.Vector3; at: THREE.Vector3; facing: number }, lit: () => void) {
     const z = this.z, q = (window as unknown as { __e1drill?: Try[] }).__e1drill;
     if (this.fails === 0) this.ui.toast(t('e1.fi.hint'));
-    this.rub(b.at, 4.5, 1.3); this.puff(b.at, 0.4, 5);
+    this.rub(b, 4.5, 1.3); this.puff(b.at, 0.4, 5); this.hold(b);
     let res: Try;
     if (q && q.length) { res = q.shift()!; await new Promise((r) => setTimeout(r, 2500)); }
     else {
@@ -138,11 +148,12 @@ export class FireDrill {
         res = !blow || blow.passed ? 'ok' : 'die';
       }
     }
+    this.hold(null);
     if (res !== 'ok' && this.fails >= 3) res = 'ok';
     if (res !== 'ok') {
       this.fails++;
       this.playScene([
-        { hold: 1.4, shot: () => this.drillShot(b.at, 0.9), run: () => { z.setHold(null); z.setProp(null); this.emberAt(res === 'die' ? b.at.clone().add(new THREE.Vector3(0, 0.02, 0)) : null); this.after(0.9, () => this.emberAt(null)); } },
+        { hold: 1.4, shot: () => this.drillShot(b, 0.8), run: () => { z.setHold(null); z.setProp(null); this.emberAt(res === 'die' ? b.at.clone().add(new THREE.Vector3(0, 0.02, 0)) : null); this.after(0.9, () => this.emberAt(null)); } },
         { key: res === 'slow' ? 'e1.fi.slow' : 'e1.fi.die', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95), run: () => { z.setFace({ frown: 0.4, squint: 0.3 }); audio.human('breath', 0.5); }, after: 0.3 },
       ], () => { z.setFace(null); this.after(0.5, () => this.attempt(b, lit)); });
       return;

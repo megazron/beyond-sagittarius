@@ -110,7 +110,15 @@ export class Player {
   /** Stop what the hands are doing (a panel closed, the job is over). */
   endAct() { this.model.stopTask(); this.busyT = 0; this.busyFace = null; }
 
+  /**
+   * A fixed camera on the work in his hands while a tension moment runs outside a cutscene (the hand drill, the
+   * knapping, the spear in the coals): the follow camera would show his back. He does not walk while it is set.
+   */
+  workShot: { from: THREE.Vector3; to: THREE.Vector3 } | null = null;
+  private workK = 0;
+
   update(dt: number, input: Input, canMove: boolean, stamina: number, slow: number) {
+    if (this.workShot) canMove = false;
     if (this.busyT > 0) {
       this.busyT -= dt; canMove = false;
       if (this.busyFace !== null) { const d = angleTo(this.facing, this.busyFace); this.facing += d * (1 - Math.exp(-dt * 8)); }
@@ -317,7 +325,16 @@ export class Player {
     this.fovKick += ((this.sprinting ? 6.5 : 0) - this.fovKick) * e(this.sprinting ? 3.5 : 6);
     const fov = this.baseFov + this.fovKick - 9 * aim;
     if (Math.abs(fov - this.camera.fov) > 0.01) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
+    // the work shot: cut to it at once, ease back to the follow camera when it is let go
+    this.workK = this.workShot ? 1 : Math.max(0, this.workK - dt * 2.5);
+    if (this.workShot) { this.lastWork.from.copy(this.workShot.from); this.lastWork.to.copy(this.workShot.to); }
+    if (this.workK > 0) {
+      tmpC.copy(this.camera.quaternion); tmpA.copy(this.camera.position);
+      this.camera.position.copy(this.lastWork.from); this.camera.lookAt(this.lastWork.to);
+      if (this.workK < 1) { this.camera.position.lerp(tmpA, 1 - this.workK); this.camera.quaternion.slerpQuaternions(this.camera.quaternion, tmpC, 1 - this.workK); }
+    }
   }
+  private lastWork = { from: new THREE.Vector3(), to: new THREE.Vector3() };
 
   /** Unit vector the player is facing (horizontal). */
   forward(out = new THREE.Vector3()) {
