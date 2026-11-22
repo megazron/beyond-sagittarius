@@ -370,3 +370,21 @@ unlanded except this handoff commit and any recording in progress.
   owner wants cooler; bot still bitten once and walks into the lashbloom. (3) guardian: body dark from the front at
   fight distance; asleep knees still rise a little. (4) setGrip still not on main (checked 04:30): bow/sling grips wait.
   (5) record the throwing stick (arena, a `throwref` bot mode does not exist yet).
+
+### 2026-11-22 ~06:00 (combat agent, session after v11)
+- Guardian: the stone takes the light of its own seams (a cold fresnel rim, `uRim`) and a warm glow from the core
+  (`uCoreGlow`) through an onBeforeCompile that chains `nearFade`; stone legs about twice as thick (shin in stone,
+  broad foot pad); asleep knees lower (pole 1.3 - rest * 1.3).
+- Night animals: `NIGHT_RIM` (creatures.ts) on the small-animal hide/belly materials, driven from the planetshine in
+  combat.ts present(): a cold edge so a shape beyond the firelight reads as an animal. The hound comes from
+  world/predator (not mine) and keeps its eyes and ridge only.
+- Camera (game/player.ts orbit): when a slope, log or the camp's stones pull the camera in to under 1.05 m of the head
+  it now rises over the head instead (the "camera inside the head while feeding the fire" in night v7).
+- Chase hour 18.7 (owner asked for a cooler sky to judge). Recording bot: `throwplay` mode (throwing stick vs Nibbets,
+  fetches the stick), chase goes 7 m round the spore plant. Plan ~/bs-cap/combat/mkplan_v12.py (night prints
+  __cbTrapLog into the capture log after the take).
+- NOTE FOR THE STORY AGENT (throwing stick): `throwstick`, invention `throwStick` (row null, Episode One, needs woodBone
+  + flake, made from 1 branch). Thrown side-arm it spins and sweeps a wide path: it is what brings down small fast
+  animals (Nibbets) where a spear point misses; swung it is a light club. If Episode One has a beat where Zenvik
+  needs food before the first hunt or after a missed spear throw, it fits there (Schoeningen, beside the spears,
+  about 300,000 years ago). To teach it set `flags['inv.throwStick']`. Clip: 18_throwing_stick (when recorded).
