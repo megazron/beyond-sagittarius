@@ -279,7 +279,7 @@ function guardian(): CreatureView {
   // a row of six marks on the middle band, cut by someone; nobody can read them
   part(body, Array.from({ length: 6 }, (_, i) => place(new THREE.BoxGeometry(0.035, 0.12, 0.04), (i - 2.5) * 0.09, 0.8, 0.66)), bronze, false);
   // moss and mineral crust on whatever faces up
-  part(body, [[0.3, 1.62, 0.1, 0.32], [-0.35, 1.25, -0.2, 0.36], [0.15, 1.85, -0.05, 0.22], [-0.2, 0.32, 0.4, 0.28], [0.45, 0.3, -0.3, 0.3]].map(([x, y, z, r]) => place(new THREE.IcosahedronGeometry(r, 0), x, y, z, 0, x * 3, 0, [1, 0.28, 1])), moss);
+  part(body, [[0.3, 1.62, 0.1, 0.32], [-0.35, 1.25, -0.2, 0.36], [0.15, 1.85, -0.05, 0.22], [-0.2, 0.32, 0.4, 0.28], [0.45, 0.3, -0.3, 0.3]].map(([x, y, z, r]) => place(new THREE.IcosahedronGeometry(r * 0.8, 1), x * 0.8, y - r * 0.1, z * 0.8, 0, x * 3, 0, [1, 0.55, 1])), moss);
   // the lens groove and three lenses; glowing seams down the front edges
   part(body, [place(new THREE.BoxGeometry(0.2, 0.62, 0.1), 0, 1.3, 0.5, -0.1)], strut, false);
   const lenses = [0.18, 0, -0.18].map((dy) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.06, 10).rotateX(Math.PI / 2), lensM); m.position.set(0, 1.3 + dy, 0.56); body.add(m); return { m, dy }; });
@@ -294,8 +294,8 @@ function guardian(): CreatureView {
   // four legs, each a two-bone strut with a bronze knee and a splayed foot, solved to the ground every frame
   const unit = (r0: number, r1: number) => new THREE.CylinderGeometry(r1, r0, 1, 6).translate(0, 0.5, 0);
   const legs = [[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([sx, sz], i) => {
-    const up = new THREE.Mesh(unit(0.11, 0.08), strut), lo = new THREE.Mesh(unit(0.085, 0.05), strut);
-    const knee = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), bronze);
+    const up = new THREE.Mesh(unit(0.17, 0.12), stone), lo = new THREE.Mesh(unit(0.13, 0.07), strut);
+    const knee = new THREE.Mesh(new THREE.DodecahedronGeometry(0.17, 0), bronze);
     const foot = new THREE.Mesh(mergeGeometries([0, 2.09, 4.19].map((a) => place(new THREE.BoxGeometry(0.1, 0.07, 0.34), Math.sin(a) * 0.12, 0.035, Math.cos(a) * 0.12, 0, a, 0))), strut);
     for (const o of [up, lo, knee, foot]) { o.castShadow = true; o.frustumCulled = false; tilt.add(o); }
     return { sx, sz, up, lo, knee, foot, hip: new THREE.Vector3(sx * 0.5, -0.2, sz * 0.38), ph: i === 0 || i === 3 ? 0 : Math.PI };
