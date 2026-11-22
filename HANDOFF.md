@@ -401,6 +401,17 @@ unlanded except this handoff commit and any recording in progress.
   on the character rig).
 - Delivered 06_chase_v8_hour18_7 (taken 0 damage, went round the spore plant) and 16_spear_thrower_reference_v7.
   v13 (night v9, guardian v7, throwing stick v2) recording at 07:40.
+- 09:00 LANDED df69603 on main (CI 44999113475 all green on that sha). Unlanded on `combat` after it: handoff commits
+  and the throwing-stick side camera framing in demo_bot.js (pushed as combat-land13; land when green).
+- Delivered (Downloads/.../combat, README notes appended): 06_chase_v8_hour18_7, 16_spear_thrower_reference_v7,
+  05_night_defence_v9 (snare catch on screen at 0:40, logged; small and partly behind the player), 03_guardian_v7,
+  18_throwing_stick (first look).
+- NEXT: (1) night: make the catch land as a moment. Idea: a short view glance toward a trap that springs within ~15 m
+  (like the chase's `combat.back`, but toward a bearing), and keep the bot at its watch spot until wave 1 is caught
+  (it walked back to the fire). (2) guardian asleep legs read as planks; front is a plain cone: give the body a face
+  plane/brow and fold the legs under the fins. (3) throwing stick: re-take with the moved side camera, Nibbets
+  summoned nearer so it hits. (4) setGrip still not on main (checked 09:00): bow/sling grips and bow camera wait.
+  (5) hide wrap is sim-only: draw it once the rig has forearm attachments. (6) Owner to choose chase hour 18.5 or 18.7.
 
 ## 2026-11-22 04:10 takeover by perf agent 17 (branch perf17 from main bfdde7b; landing branch perf17-land2)
 - Measurements in ~/bs-assets/gpu/p17: inter.sh TAG PLAN.. (base on :4183 = ~/bs-perf-base at main, built to
