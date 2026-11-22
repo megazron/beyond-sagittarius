@@ -177,7 +177,7 @@ export class Waking {
         audio.sample('leather', 0.25);
       } },
       // dipped full: framed on its own, the leaf going into the water
-      { hold: 1.9, shot: () => this.bankShot(dip, 1.05, 0.62, 0.15), run: () => {
+      { hold: 1.9, shot: () => this.dipShot(dip), run: () => {
         z.setHold(null);
         z.doTask('pickup', { at: dip.clone(), seconds: 1.4, hands: 'R', prop: 'leaf' });
         this.after(0.6, () => audio.sample('splash', 0.14, { rate: 1.8 }));
@@ -209,6 +209,15 @@ export class Waking {
     const from = at.clone().addScaledVector(r, side).addScaledVector(f, lead).setY(at.y + up);
     this.stream.clearReeds(from, 0.9);
     return { from, to, push: 0.03 };
+  }
+
+  /** The leaf going into the water: from the bank behind his shoulder, high enough to look down on the surface (low
+   * over the stream the current threads smear across the lens). */
+  private dipShot(dip: THREE.Vector3): Shot {
+    const f = this.fwd(), r = new THREE.Vector3(f.z, 0, -f.x);
+    const from = dip.clone().addScaledVector(r, 0.75).addScaledVector(f, -0.85).setY(dip.y + 1.05);
+    this.stream.clearReeds(from, 0.9);
+    return { from, to: dip.clone().add(new THREE.Vector3(0, 0.08, 0)), push: 0.02 };
   }
 
   /** Close on his hands and what they do, from his side, his face in the top of frame. */
@@ -324,7 +333,7 @@ export class Waking {
         z.setProp(null);
         z.setHold(null);
         const f = this.fwd(), side = new THREE.Vector3(f.z, 0, -f.x);
-        z.setLookTarget(mouth().addScaledVector(f, 0.8).addScaledVector(side, -0.3).add(new THREE.Vector3(0, -1.0, 0)));
+        z.setLookTarget(mouth().addScaledVector(f, 1.0).addScaledVector(side, -0.3).add(new THREE.Vector3(0, -0.45, 0)));
         z.setFace({ frown: 0.7, squint: 0.6, open: 0.3 });
         this.after(0.25, () => { audio.sample('splash', 0.07, { rate: 3.1 }); audio.human('breath', 0.5); this.spit(mouth(), f.clone().addScaledVector(side, -0.3).normalize()); });
         // the back of his hand across his mouth
@@ -342,7 +351,7 @@ export class Waking {
     const f = this.fwd(), r = new THREE.Vector3(f.z, 0, -f.x);
     const head = new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld);
     const to = head.clone().addScaledVector(f, 0.32).add(new THREE.Vector3(0, -0.14, 0));
-    return { from: to.clone().addScaledVector(r, dist).addScaledVector(f, 0.12).add(new THREE.Vector3(0, 0.04, 0)), to, push: 0.02 };
+    return { from: to.clone().addScaledVector(r, dist).addScaledVector(f, 0.45).add(new THREE.Vector3(0, -0.12, 0)), to, push: 0.02 };
   }
 
   private fwd() { const r = this.z.root.rotation.y; return new THREE.Vector3(Math.sin(r), 0, Math.cos(r)); }
@@ -377,7 +386,7 @@ export class Waking {
       const k = performance.now() / 1000 - t0;
       for (let i = 0; i < N; i++) {
         const sp = 1.1 + (i % 4) * 0.3, tt = Math.max(0, k - i * 0.02);
-        p.copy(from).addScaledVector(dir, sp * tt).add(new THREE.Vector3(Math.sin(i * 3.1) * 0.35 * tt, 0.9 * tt - 4.9 * tt * tt, Math.cos(i * 2.3) * 0.35 * tt));
+        p.copy(from).addScaledVector(dir, sp * tt).add(new THREE.Vector3(Math.sin(i * 3.1) * 0.35 * tt, 1.3 * tt - 4.9 * tt * tt, Math.cos(i * 2.3) * 0.35 * tt));
         p.y = Math.max(p.y, ground + 0.005);
         drops.setMatrixAt(i, m4.compose(p, q, one.setScalar(i % 3 === 0 ? 1.5 : 1)));
       }

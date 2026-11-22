@@ -53,12 +53,13 @@ const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
       // the rim: uneven, and drawn up into the leaf's tip on the side away from the seam
       if (y < -H * 0.45) p.setY(i, y - 0.012 * Math.sin(a * 3 + 0.6) - 0.07 * Math.pow(Math.max(0, Math.cos(a - 2.2)), 6));
       const vein = Math.max(Math.pow(Math.max(0, Math.cos(a - 2.2)), 40), 0.5 * Math.pow(Math.abs(Math.sin((a - 2.2) * 3)), 30));
-      const k = 0.55 + 0.45 * vein;
-      col[i * 3] = 0.25 * k + 0.25 * vein; col[i * 3 + 1] = 0.55 * k + 0.25 * vein; col[i * 3 + 2] = 0.16 * k + 0.1 * vein;
+      // a dark, waxy leaf green (lit by a scene's key light it went lime and glowed)
+      const k = 0.6 + 0.4 * vein;
+      col[i * 3] = 0.12 * k + 0.12 * vein; col[i * 3 + 1] = 0.28 * k + 0.12 * vein; col[i * 3 + 2] = 0.08 * k + 0.05 * vein;
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.rotateX(Math.PI); g.computeVertexNormals();
-    return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.42, side: THREE.DoubleSide }));
+    return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.6, side: THREE.DoubleSide }));
   },
   berry: () => new THREE.Mesh(new THREE.SphereGeometry(0.036, 16, 12), new THREE.MeshStandardMaterial({ color: 0xc3172a, roughness: 0.28 })),
   // a fist-sized hammerstone (1.3) and the flint flake it knocks off
