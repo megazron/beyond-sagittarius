@@ -51,7 +51,7 @@ const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
     g.rotateX(Math.PI); g.computeVertexNormals();
     return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x3f7a2a, roughness: 0.55, side: THREE.DoubleSide }));
   },
-  berry: () => new THREE.Mesh(new THREE.SphereGeometry(0.017, 14, 10), new THREE.MeshStandardMaterial({ color: 0xc3172a, roughness: 0.28 })),
+  berry: () => new THREE.Mesh(new THREE.SphereGeometry(0.036, 16, 12), new THREE.MeshStandardMaterial({ color: 0xc3172a, roughness: 0.28 })),
 };
 /** What each task holds unless told otherwise. */
 const TASK_PROP: Partial<Record<TaskKind, PropKind>> = { eat: 'food', drink: 'cup', phone: 'phone', carry: 'box', fix: 'tool', type: 'phone' };
@@ -261,7 +261,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       else if (want === 'tool') { m.position.set(-0.07, -0.03, 0); m.rotation.set(0, Math.PI / 2, 0); }
       else if (want === 'cup') { m.position.set(-0.07, -0.05, 0.02); m.rotation.set(0, 0, Math.PI / 2); }
       else if (want === 'leaf') { m.position.set(-0.075, -0.06, 0.02); m.rotation.set(0, 0, Math.PI / 2); }
-      else if (want === 'berry') { m.position.set(-0.105, -0.03, 0.025); m.rotation.set(0, 0, 0); }
+      else if (want === 'berry') { m.position.set(-0.11, -0.04, 0.03); m.rotation.set(0, 0, 0); }
       else { m.position.set(-0.08, -0.03, 0); m.rotation.set(0, 0, 0.3); }
     }
     propOn = m;

@@ -204,7 +204,7 @@ export function createStream(T: Terrain, lakeUniforms: Record<string, THREE.IUni
         float th = smoothstep(0.62, 0.9, vnoise2(vec2(vUv.x * 7.0, vUv.y * 0.55 - uTime * sp * 0.9)));
         col += (refl * 0.35 + vec3(0.05)) * th * (0.3 + 0.7 * uDay);
         float fn = vnoise2(vec2(vUv.x * 4.0, vUv.y * 2.0 - uTime * sp * 1.6));
-        float foam = smoothstep(0.7, 0.86, fn) * (0.22 + vFast * 0.8) * (0.5 + 0.5 * smoothstep(0.75, 0.2, edge));
+        float foam = smoothstep(0.74, 0.95, fn) * (0.08 + vFast * 0.7) * (0.5 + 0.5 * smoothstep(0.75, 0.2, edge));
         col = mix(col, vec3(0.78, 0.82, 0.84) * (0.25 + 0.75 * uDay), clamp(foam, 0.0, 0.5));
         float alpha = clamp(0.62 + fres * 0.3 + foam * 0.3 + th * 0.1, 0.0, 0.96) * smoothstep(0.0, 0.3, edge);
         gl_FragColor = vec4(col, alpha);
