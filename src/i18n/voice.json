@@ -376,7 +376,11 @@
     "e1.fl.ok": "scientist",
     "e1.fi.sci": "scientist",
     "e1.fi.slow": "scientist",
-    "e1.fi.die": "scientist"
+    "e1.fi.die": "scientist",
+    "e1.sp.drax": "strong",
+    "e1.sp.burn": "scientist",
+    "e1.ni.held": "scientist",
+    "e1.ni.scar": "scientist"
   },
   "scenes": {
     "_comment": "Lines several people speak: 'Name: words' starts that person's part; text before any name is the player's.",

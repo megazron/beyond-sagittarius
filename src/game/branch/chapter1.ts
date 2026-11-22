@@ -43,6 +43,15 @@ export const DECISIONS: Decision[] = [
       { id: 'low', label: 'e1.fire.o.low', effects: [{ trait: 'honesty', by: 1 }, { flag: 'fire.low' }] },
     ],
   },
+  // Episode One 1.9: something beyond the firelight (6 s). Hide, brace the spear, or run for the fire.
+  {
+    id: 'e1.night', title: 'e1.night.title', prompt: 'e1.night.ask', who: 'scientist', seconds: 6, fallback: 'hide',
+    options: [
+      { id: 'hide', label: 'e1.night.o.hide', effects: [{ flag: 'e1.night.hide' }] },
+      { id: 'brace', label: 'e1.night.o.brace', effects: [{ trait: 'nerve', by: 1 }, { flag: 'e1.night.brace' }] },
+      { id: 'run', label: 'e1.night.o.run', effects: [{ flag: 'e1.night.run' }] },
+    ],
+  },
   {
     id: 'c1.fire', title: 'br.fire.title', prompt: 'br.fire.ask', who: 'explorer', fallback: 'small',
     options: [

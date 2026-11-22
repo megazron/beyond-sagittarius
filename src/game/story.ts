@@ -63,7 +63,7 @@ export class Story {
   npcs: Npcs;
   ch2: Chapter2;
   /** Set by the game: open the crafting and dialogue panels. */
-  hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean; away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void; quick: (id: string, done: () => void) => void; drill?: (lit: () => void) => boolean } = { away: () => {}, quick: () => {}, craft: () => {}, talk: () => {}, free: () => true };
+  hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean; away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void; quick: (id: string, done: () => void) => void; drill?: (lit: () => void) => boolean; spear?: (made: () => void) => boolean; night?: (done: (held: boolean) => void) => boolean } = { away: () => {}, quick: () => {}, craft: () => {}, talk: () => {}, free: () => true };
   private strikes = 0;
   private thrustT = 0;
   private spear: THREE.Group;
@@ -248,6 +248,8 @@ export class Story {
     }
     if (n === 6 && !this.flag('spear')) {
       out.push({ id: 'spear', pos: L.camp, radius: 3, label: t('action.craftSpear'), missing: this.missing(R.spear), run: () => {
+        // 1.9: a player's own press scrapes and fire-hardens the point (game.ts FirstNight); the level tests keep the craft
+        if (this.hooks.spear?.(() => { this.consume(R.spear); s.flags.spear = true; this.syncSpear(); this.ui.toast(t('msg.spearCrafted')); })) return;
         this.consume(R.spear);
         s.flags.spear = true;
         this.syncSpear();
@@ -329,8 +331,15 @@ export class Story {
       if (h.state === 'hidden') { this.world.hound.root.visible = false; return; }
     }
     if (h.state === 'hidden') {
-      if (s.level === 7 && !this.flag('houndGone') && this.flag('spear') && isNight(s.timeOfDay) && !this.sequence) this.startHound();
-      else return;
+      if (s.level === 7 && !this.flag('houndGone') && this.flag('spear') && isNight(s.timeOfDay) && !this.sequence) {
+        // 1.9: on a player's own night the first night is the choice and the combat set piece (game.ts FirstNight)
+        if (!this.flag('e1.night') && this.hooks.night?.((held) => {
+          s.flags.houndGone = true;
+          this.ui.toast(t(held ? 'msg.houndFled' : 'msg.houndBit'));
+        })) { s.flags['e1.night'] = true; return; }
+        if (this.flag('e1.night')) return;
+        this.startHound();
+      } else return;
     }
     h.timer += dt;
     const toP = this.tmp.set(p.x - h.pos.x, 0, p.z - h.pos.z);

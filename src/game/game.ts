@@ -24,6 +24,7 @@ import { Tutorial } from './tutorial';
 import { Waking } from './waking';
 import { Stones } from './knap';
 import { FireDrill } from './drill';
+import { FirstNight } from './night';
 import { Cutscene, Beat, SceneBranch } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
 import type { Combat } from '../combat/combat';
@@ -136,8 +137,13 @@ export class Game {
     this.waking = new Waking(world, player, ui, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn));
     this.stones = new Stones(world, player, ui, this.waking.stream, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn), (spec) => this.combat?.tension(spec) ?? null);
     this.drill = new FireDrill(world, player, ui, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn), (spec) => this.combat?.tension(spec) ?? null);
+    this.night = new FirstNight(world, player, ui, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn), (spec) => this.combat?.tension(spec) ?? null, () => this.combat);
     this.dialogue.onLine = (who, sec) => this.story.npcs.speak(who, sec);
-    this.story.hooks = { drill: (lit) => { if (this.debugActing) return false; this.drill.start(lit); return true; }, away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
+    this.story.hooks = {
+      drill: (lit) => { if (this.debugActing) return false; this.drill.start(lit); return true; },
+      spear: (made) => { if (this.debugActing) return false; this.night.spear(made); return true; },
+      night: (done) => { if (FirstNight.tested || this.mode !== 'play') return false; this.night.night(done); return true; },
+      away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
     this.craft.onFail = () => {
       const c = (this.save.crafts ??= { failed: 0 });
       c.failed++;
@@ -424,6 +430,8 @@ export class Game {
   stones: Stones;
   /** Episode One 1.6: fire by hand drill at the pit (level 4). */
   drill: FireDrill;
+  /** Episode One 1.9: the fire-hardened spear and the first night through the combat set pieces. */
+  night: FirstNight;
   /** True while a test presses the interact key through debugAct: the hand drill keeps the old strikes for it. */
   private debugActing = false;
   private streamHeard = true;

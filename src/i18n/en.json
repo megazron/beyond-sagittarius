@@ -1193,5 +1193,17 @@
   "e1.fire.ask": "How big?",
   "e1.fire.o.high": "Build it high",
   "e1.fire.o.low": "Keep it low",
-  "vo.anon.e1.fr.test": "You nerd. You just saved my life."
+  "e1.sp.drax": "“Scrape it, don't chop it. Then cook the point, slow, turning, like a sausage. Dry wood is hard wood.”",
+  "e1.sp.hint": "Turn the point in the coals: keep it in the band, out of the flame.",
+  "e1.sp.burn": "Cooked it. Burnt it. Same thing, apparently.",
+  "e1.learn.spear": "Learned: a fire-hardened spear.",
+  "e1.night.title": "Beyond the firelight",
+  "e1.night.ask": "Something is out there.",
+  "e1.night.o.hide": "Hide",
+  "e1.night.o.brace": "Brace the spear",
+  "e1.night.o.run": "Run for the fire",
+  "e1.ni.held": "It went away. It went away because of a stick I cooked.",
+  "e1.ni.scar": "Pressure, then clean, then cover. Okay, {f:medic}. Okay.",
+  "vo.anon.e1.fr.test": "You nerd. You just saved my life.",
+  "vo.anon.e1.ni.scar": "Pressure, then clean, then cover. Okay. Okay."
 }
