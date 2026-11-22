@@ -1,6 +1,6 @@
 // Every weapon and trap is a row of data. A later age adds rows (and a model in view/gear.ts); nothing else changes.
 
-export type WeaponId = 'fists' | 'rock' | 'flake' | 'club' | 'spear' | 'hafted' | 'atlatl' | 'torch' | 'sling' | 'bow' | 'crossbow' | 'coil';
+export type WeaponId = 'fists' | 'rock' | 'flake' | 'handaxe' | 'club' | 'spear' | 'hafted' | 'atlatl' | 'torch' | 'sling' | 'bow' | 'crossbow' | 'coil';
 export type DamageKind = 'blunt' | 'pierce' | 'fire' | 'energy';
 
 export interface ProjDef {
@@ -57,6 +57,11 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   // a sharp flake knocked off a core with a hammerstone: a knife first, a weapon only at arm's length of nothing
   flake: { id: 'flake', mass: 0.15, dur: 25, age: 0, craft: { stone: 2 }, block: 0.2,
     melee: { dmg: 8, reach: 1.15, arc: 0.9, windup: 0.16, active: 0.08, recover: 0.3, stamina: 6, knock: 0.8, poise: 8, kind: 'pierce', noise: 3 } },
+  // an Acheulean hand axe: a big flint nodule shaped on both faces into a heavy teardrop with an edge all round, held
+  // in the fist without a handle (Kenya, about 1.76 million years ago). A tool for chopping and butchering first; as a
+  // weapon it is a short, heavy chop that bites and lasts
+  handaxe: { id: 'handaxe', mass: 0.9, dur: 90, age: 1, craft: { stone: 3 }, block: 0.3,
+    melee: { dmg: 13, reach: 1.25, arc: 1.1, windup: 0.27, active: 0.1, recover: 0.42, stamina: 10, knock: 2.2, poise: 22, kind: 'pierce', noise: 5 } },
   // a heavy branch, trimmed: the first thing anyone picks up
   club: { id: 'club', mass: 1.6, dur: 70, age: 0, craft: { branch: 1 }, block: 0.55,
     melee: { dmg: 14, reach: 1.7, arc: 1.5, windup: 0.34, active: 0.14, recover: 0.5, stamina: 14, knock: 4, poise: 30, kind: 'blunt', noise: 7 } },

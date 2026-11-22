@@ -3,6 +3,7 @@
 import { CombatSim, noIntent, INFECT_AFTER } from '../../src/combat/sim/sim.ts';
 import type { Intent } from '../../src/combat/sim/sim.ts';
 import { WEAPONS } from '../../src/combat/sim/weapons.ts';
+import { INVENTIONS, knownFrom, weaponKnown } from '../../src/combat/sim/inventions.ts';
 import type { WeaponId } from '../../src/combat/sim/weapons.ts';
 import { SPECIES } from '../../src/combat/sim/species.ts';
 import type { Enemy, SpeciesId } from '../../src/combat/sim/species.ts';
@@ -598,5 +599,15 @@ section('determinism, difficulty');
   ok(min >= 0.4, 'fairness: no telegraph in the data is under 0.4 s on Hard', min.toFixed(2));
 }
 
+section('inventions: the Stone Age order');
+{
+  const byId = new Map(INVENTIONS.map((i) => [i.id, i]));
+  const before = (a: string, b: string): boolean => { const B = byId.get(b)!; return B.needs.includes(a) || B.needs.some((n) => before(a, n)); };
+  ok(INVENTIONS.every((i) => i.needs.every((n) => byId.has(n))), 'inventions: every need is an invention');
+  ok(before('flake', 'handAxe') && before('handAxe', 'hafting') === false && byId.get('handAxe')!.row === 11, 'inventions: the hand axe (row 11) comes after the flake');
+  ok(!weaponKnown('handaxe', knownFrom({ flags: { spear: true } })) && weaponKnown('handaxe', knownFrom({ flags: { 'inv.handAxe': true } })), 'inventions: the hand axe is in the hand only once it is taught');
+  const s2 = new CombatSim({ seed: 3 }); s2.inv = { stone: 3 };
+  ok(s2.craft('handaxe') && s2.player.has.handaxe && (s2.inv.stone ?? 0) === 0, 'inventions: a hand axe is three stones');
+}
 console.log(`\ncombat sim: ${passes} passed, ${fails} failed`);
 process.exit(fails ? 1 : 0);

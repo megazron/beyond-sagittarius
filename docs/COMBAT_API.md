@@ -72,6 +72,7 @@ their own Episode One kit; the dev arena ignores it all.
 | `fireDrill` | 5 | fire (and with it `torch`, `fireline`) |
 | `fireSpear` | 9 | fire-hardened spear (and `stakes`) |
 | `cordage` | 10 | (cord) |
+| `handAxe` | 11 | hand axe (a heavy short chop, three stones) |
 | `hafting` | 12 | stone-tipped spear |
 | `atlatl` | 13 | spear-thrower and darts |
 | `traps` | 14 | snare, rattle line |

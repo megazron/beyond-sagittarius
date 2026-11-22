@@ -145,6 +145,9 @@ actual shake values. Where I had no number I tuned by the tests and by playing, 
 - Here: `src/combat/sim/inventions.ts` holds the order. Episode One: thrown stones, fire, club, torch, a struck
   flake, the fire-hardened spear, traps. Then hafted points, the spear-thrower, the sling and the bow. Metal, the
   crossbow and the ship's salvage are ages later and live only in the dev arena.
+- The hand axe (Acheulean, the story tree's row 11, about 1.76 million years ago in Kenya) is a tool first: a flint
+  teardrop with an edge all round, held without a handle. As a weapon here it is a short, heavy chop: a little less
+  damage than the club, a shorter reach, faster, and it barely wears (stone). It needs the flake (row 3).
 
 ## 11. The spear-thrower cast (owner note: the full draw read as a wide "T")
 

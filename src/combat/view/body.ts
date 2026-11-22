@@ -67,6 +67,8 @@ function gearMesh(id: WeaponId): THREE.Object3D {
   if (id === 'rock') add(new THREE.DodecahedronGeometry(0.065, 0), stone);
   else if (id === 'club') { add(rod(0.022, 0.75), wood, 0.25); add(new THREE.SphereGeometry(0.06, 7, 5), wood, 0.6).scale.set(1, 1, 1.5); }
   else if (id === 'flake') { const f = new THREE.TetrahedronGeometry(0.05, 0); f.scale(0.5, 1, 1.6); add(f, stone, 0.04); }
+  // the hand axe: a flint teardrop, butt in the palm, the point out past the thumb
+  else if (id === 'handaxe') { const f = new THREE.OctahedronGeometry(0.06, 0); f.scale(0.42, 1, 1.9); add(f, new THREE.MeshStandardMaterial({ color: 0x7d7468, roughness: 0.75, flatShading: true }), 0.07); }
   // fire-hardened: one piece of wood, the point blackened by the coals
   else if (id === 'spear') { add(rod(0.016, 2), wood, 0.35); const tip = new THREE.ConeGeometry(0.016, 0.22, 6); tip.rotateX(Math.PI / 2); add(tip, new THREE.MeshStandardMaterial({ color: 0x2a211a, roughness: 0.9 }), 1.46); }
   else if (id === 'hafted') { add(rod(0.016, 2), wood, 0.35); const tip = new THREE.ConeGeometry(0.035, 0.2, 4); tip.rotateX(Math.PI / 2); add(tip, stone, 1.43); add(rod(0.022, 0.08), vine, 1.3); }

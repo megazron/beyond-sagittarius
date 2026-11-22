@@ -450,7 +450,7 @@ export class Combat {
       const known = this.known();
       for (const k of Object.keys(TRAPS) as TrapId[]) if (this.encounter || trapKnown(k, known)) items.push({ id: `trap:${k}`, label: t(`cb.t.${k}`), sub: cost(TRAPS[k].cost), ok: sim.canAfford(TRAPS[k].cost) });
       // only what has been invented can be made (a set piece's own kit stays inside Episode One)
-      for (const w of ['club', 'spear', 'torch', 'hafted', 'atlatl', 'sling', 'bow'] as WeaponId[]) if (!p.has[w] && (this.encounter ? EPISODE_WEAPONS.has(w) : weaponKnown(w, known)) && sim.canAfford(WEAPONS[w].craft!)) items.push({ id: `make:${w}`, label: `${t('cb.make')}: ${t(`cb.w.${w}`)}`, sub: cost(WEAPONS[w].craft!), ok: true });
+      for (const w of ['club', 'handaxe', 'spear', 'torch', 'hafted', 'atlatl', 'sling', 'bow'] as WeaponId[]) if (!p.has[w] && (this.encounter ? EPISODE_WEAPONS.has(w) : weaponKnown(w, known)) && sim.canAfford(WEAPONS[w].craft!)) items.push({ id: `make:${w}`, label: `${t('cb.make')}: ${t(`cb.w.${w}`)}`, sub: cost(WEAPONS[w].craft!), ok: true });
       if (p.has.atlatl && sim.canAfford(AMMO_CRAFT.dart.cost)) items.push({ id: 'make:dart', label: `${t('cb.make')}: ${t('cb.item.dart')}`, sub: cost(AMMO_CRAFT.dart.cost), ok: true });
       if (p.has.bow && sim.canAfford(AMMO_CRAFT.arrow.cost)) items.push({ id: 'make:arrow', label: `${t('cb.make')}: ${t('cb.item.arrow')}`, sub: cost(AMMO_CRAFT.arrow.cost), ok: true });
       if (sim.traps.some((q) => q.kind === 'rattle' && q.uses > 0)) items.push({ id: 'pull', label: t('cb.p.pull'), sub: t('cb.t.rattle'), ok: true });
