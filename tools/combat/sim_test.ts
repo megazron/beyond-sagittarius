@@ -499,8 +499,8 @@ const toward = (I: Intent, R: EncounterRun, x: number, z: number, o: { sprint?: 
     const s = R.sim, p = s.player, fire = s.fires.find((f) => !f.torch && !f.burnsOut)!;
     I.mx = I.mz = 0; I.block = false; I.sprint = false;
     if (R.phase === 'prep') {
-      // bait out in the dark with a snare on it, and another snare on the food itself
-      if (!s.traps.length) { const food = R.markers.find((m) => m.kind === 'food')!, f = s.fires[0]; const dx = food.x - f.x, dz = food.z - f.z, l = Math.hypot(dx, dz); s.placeTrap('bait', food.x + (dx / l) * 9, food.z + (dz / l) * 9); s.placeTrap('snare', food.x + (dx / l) * 9, food.z + (dz / l) * 9); s.placeTrap('snare', food.x, food.z); s.placeTrap('stakes', food.x + (dx / l) * 3, food.z + (dz / l) * 3); }
+      // read the smoke: bait out downwind with a snare on it, stakes on the line in, another snare on the food itself
+      if (!s.traps.length) { const food = R.markers.find((m) => m.kind === 'food')!, dx = s.windX, dz = s.windZ; s.placeTrap('bait', food.x + dx * 8, food.z + dz * 8); s.placeTrap('snare', food.x + dx * 8, food.z + dz * 8); s.placeTrap('snare', food.x, food.z); s.placeTrap('stakes', food.x + dx * 3.5, food.z + dz * 3.5); }
       if (R.phaseT > 8) R.ready();
       return;
     }
@@ -520,6 +520,14 @@ const toward = (I: Intent, R: EncounterRun, x: number, z: number, o: { sprint?: 
   ok(Number(r.out?.flags['night.food']) >= 2, 'night defence: most of the food is still there', `${r.out?.flags['night.food']}`);
   ok(r.R.wave === 3 && count(r.ev, 'spawn', 'skritch') >= 9 && has(r.ev, 'spawn', 'hound'), 'night defence: three waves came, the hunter with the second');
   ok(r.R.sim.stats.trapHits > 0, 'night defence: the traps did some of the work', `${r.R.sim.stats.trapHits}`);
+  {
+    // they come up the wind: every scavenger wave spawns on the downwind side of the fire
+    const f = r.R.sim.fires.find((q) => !q.torch && !q.burnsOut)!, sp = r.ev.filter((e) => e.t === 'spawn' && e.what === 'skritch');
+    const down = sp.filter((e) => ((e.x! - f.x) * r.R.sim.windX + (e.z! - f.z) * r.R.sim.windZ) / Math.hypot(e.x! - f.x, e.z! - f.z) > 0.45).length;
+    ok(sp.length > 0 && down === sp.length, 'night defence: the scavengers come up the wind (the side the smoke leans to)', `${down}/${sp.length}`);
+    const caught = r.R.sim.traps.filter((q) => q.caught > 0).map((q) => q.kind);
+    ok(caught.includes('snare') || caught.includes('stakes'), 'night defence: a trap set downwind catches something', caught.join(','));
+  }
   const idle = play('night.defence', (I, R) => { if (R.phase === 'prep') R.ready(); });
   ok(idle.out && (idle.out.result === 'lost' || Number(idle.out.flags['night.food']) < Number(r.out?.flags['night.food'])), 'night defence: doing nothing costs the food or the night', JSON.stringify(idle.out?.flags) + ' ' + idle.out?.result);
   // with someone beside you who cannot fight, and nobody keeping the fire, they can be lost

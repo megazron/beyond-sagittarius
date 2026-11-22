@@ -72,7 +72,9 @@ export interface SimPlayer {
 }
 
 export interface Projectile { alive: boolean; x: number; y: number; z: number; vx: number; vy: number; vz: number; weapon: WeaponId; dmg: number; life: number; g: number }
-export interface Trap { id: number; kind: TrapId; x: number; z: number; uses: number; armed: boolean; scent: number; fire: number }
+export interface Trap { id: number; kind: TrapId; x: number; z: number; uses: number; armed: boolean; scent: number; fire: number;
+  /** The last creature it caught (id, 0 none) and when (sim time): the view snaps the pole up and runs the cord to it. */
+  caught: number; sprungT: number }
 export interface Pickup { id: number; x: number; z: number; item: string; n: number; weapon: WeaponId | null }
 /** Someone with you who cannot fight: the story decides what losing them means. */
 export interface Ally { who: string; x: number; z: number; hp: number; down: boolean }
@@ -198,7 +200,7 @@ export class CombatSim {
     const d = TRAPS[kind];
     if (!this.canAfford(d.cost)) return null;
     this.pay(d.cost);
-    const tr: Trap = { id: this.nextId++, kind, x, z, uses: d.uses, armed: true, scent: 0, fire: 0 };
+    const tr: Trap = { id: this.nextId++, kind, x, z, uses: d.uses, armed: true, scent: 0, fire: 0, caught: 0, sprungT: -1 };
     if (kind === 'bait') tr.scent = this.addScent(x, z, 1, 26).id;
     if (kind === 'fireline') tr.fire = this.addFire(x, z, 26, { max: 26, burnsOut: true }).id;
     this.traps.push(tr);
@@ -607,13 +609,13 @@ export class CombatSim {
         if (dist2(e.x, e.z, tr.x, tr.z) > d.r + e.def.radius * 0.5) continue;
         if (tr.kind === 'snare') {
           if (e.heldT > 0 || e.def.temperament === 'machine') continue;
-          e.heldT = d.hold / Math.max(1, Math.sqrt(e.def.mass)); tr.uses--;
+          e.heldT = d.hold / Math.max(1, Math.sqrt(e.def.mass)); tr.uses--; tr.caught = e.id; tr.sprungT = this.t;
           this.interrupt(e);
           this.stats.trapHits++;
           this.emit({ t: 'trap', what: 'snared', id: e.id, x: tr.x, z: tr.z });
         } else if (tr.kind === 'stakes') {
           if (e.speed < 4.5) continue;
-          tr.uses--;
+          tr.uses--; tr.caught = e.id; tr.sprungT = this.t;
           this.stats.trapHits++;
           this.emit({ t: 'trap', what: 'staked', id: e.id, x: tr.x, z: tr.z });
           this.hurtEnemy(e, d.dmg, 'pierce', tr.x, tr.z, d.poise, 0, 'trap');

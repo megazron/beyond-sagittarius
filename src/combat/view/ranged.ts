@@ -139,24 +139,38 @@ export class RangedRig {
     } else if (this.mode === 'atlatl') {
       // the spear-thrower: held at the shoulder, the dart lying along it pointing at the target; drawn back with the
       // body turned; on the cast the arm drives forward and the thrower flips over the hand, flinging the dart
-      this.faceOffset = -0.35 * smooth(S.up);
+      // Posture from atlatl throwing guides (MECHANICS_NOTES section 11): side-on, the off foot to the target, the
+      // thrower held palm up at head height beside the ear with the elbow bent and down, the dart level over the
+      // shoulder; the off hand points the way in front of the chest (bent, not flung out); the turn is in the hips and
+      // chest, so from behind the throwing hand is back, not out to the side.
       const wantUp = up || p.act === 'charge' || recovering ? 1 : 0;
       S.up += (wantUp - S.up) * (1 - Math.exp(-dt * 7));
       if (p.act === 'charge') S.draw = out3(p.charge); else if (S.draw > 0 && since < 0.05) { S.rel = 0; S.relDraw = S.draw; S.draw = 0; } else S.draw = Math.max(0, S.draw - dt * 4);
       S.rel += dt;
+      const casting = p.act !== 'charge' && S.rel < 0.45;
+      // side-on while drawn, square again through the cast (the hips lead it)
+      const side = p.act === 'charge' ? 0.35 + 0.4 * S.draw : casting ? 0.75 * (1 - out3(S.rel / 0.14)) : 0.35;
+      this.faceOffset = -side * smooth(S.up);
       const flat = V().set(aim.x, 0, aim.z).normalize();
-      const ready = V().copy(sR).addScaledVector(flat, -0.12).add(V().set(-0.05, 0.12, 0));
-      const back = V().copy(sR).addScaledVector(flat, -0.42).add(V().set(-0.08, 0.2, 0));
-      const front = V().copy(sR).addScaledVector(flat, 0.5).add(V().set(0.02, 0.05, 0));
+      const out = V().set(-1, 0, 0); // the right side, root-local
+      const ready = V().copy(sR).addScaledVector(flat, -0.04).addScaledVector(out, -0.02).add(V().set(0, 0.2, 0));
+      const back = V().copy(sR).addScaledVector(flat, -0.26).addScaledVector(out, 0.02).add(V().set(0, 0.17, 0));
+      const front = V().copy(sR).addScaledVector(flat, 0.48).addScaledVector(out, -0.06).add(V().set(0, 0.1, 0));
       let tR: THREE.Vector3;
       if (p.act === 'charge') tR = V().copy(ready).lerp(back, S.draw);
-      else if (S.rel < 0.45) tR = S.rel < 0.12 ? V().copy(back).lerp(front, out3(S.rel / 0.12)) : V().copy(front).lerp(V().copy(sR).add(V().set(0.15, -0.45, 0.25)), smooth((S.rel - 0.12) / 0.33));
+      else if (casting) tR = S.rel < 0.12 ? V().copy(back).lerp(front, out3(S.rel / 0.12)) : V().copy(front).lerp(V().copy(sR).add(V().set(0.22, -0.5, 0.25)), smooth((S.rel - 0.12) / 0.33));
       else tR = S.up > 0.5 ? ready : V().set(-0.22, 0.95, 0.12);
       S.phase = p.act === 'charge' ? 0 : S.rel < 0.12 ? S.rel / 0.12 : S.rel < 0.45 ? 1 : 0;
       S.arrowIn = ammo > 0 && !(S.rel < 0.6 && S.rel >= 0) ? 'string' : S.rel >= 0.6 && ammo > 0 ? 'string' : 'none';
-      reach(sR, tR, R.a, R.b, V().set(-0.4, -0.7, -0.4), eR, wR);
-      reach(sL, V().copy(sL).addScaledVector(V().copy(aim).lerp(V().set(aim.x * 0.4, -0.8, aim.z * 0.4), 1 - smooth(S.up)).normalize(), (R.a + R.b) * 0.92), R.a, R.b, V().set(0, -1, 0), eL, wL);
-      const wind = p.act === 'charge' ? -0.5 * S.draw : S.rel < 0.3 ? -0.5 + 1.0 * out3(S.rel / 0.15) : 0;
+      // the elbow hangs down and a little out while the hand is by the head; forward on the cast
+      reach(sR, tR, R.a, R.b, casting && S.rel < 0.12 ? V().set(-0.3, -0.8, 0.2) : V().set(-0.35, -0.9, -0.15), eR, wR);
+      // the off hand: in front of the chest, forearm along the aim, upper arm down; it pulls in to the chest on the cast
+      const pointAt = V().copy(sL).addScaledVector(aim, 0.36).add(V().set(-0.09, -0.13, 0));
+      const tucked = V().copy(sL).add(V().set(-0.08, -0.3, 0.16));
+      const lowL = V().copy(sL).add(V().set(0.04, -0.5, 0.1));
+      const tL = casting ? V().copy(pointAt).lerp(tucked, out3(S.rel / 0.2)) : V().copy(lowL).lerp(pointAt, smooth(S.up));
+      reach(sL, tL, R.a, R.b, V().set(0.35, -1, -0.2), eL, wL);
+      const wind = p.act === 'charge' ? -0.25 - 0.4 * S.draw : casting && S.rel < 0.3 ? -0.65 + 1.1 * out3(S.rel / 0.15) : -0.25 * smooth(S.up);
       limbs = { armR: dirOf(eR, sR), foreR: dirOf(wR, eR), armL: dirOf(eL, sL), foreL: dirOf(wL, eL), twist: wind };
       if (S.rel < 0.4 || p.act === 'charge') { limbs.legL = [0.06, -0.93, 0.36]; limbs.shinL = [0, -1, 0.05]; limbs.legR = [-0.06, -0.96, -0.24]; limbs.shinR = [0, -0.98, -0.2]; }
     } else {

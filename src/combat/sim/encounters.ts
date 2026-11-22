@@ -119,6 +119,8 @@ export class EncounterRun {
       arm('spear', 'club'); give({ branch: 9, vine: 3, tinder: 2, stone: 6, fruit: 1 });
       const f = this.at(2.5, 0); s.addFire(f.x, f.z, this.story.fireHigh ? 100 : 72); this.markers.push({ x: f.x, z: f.z, kind: 'fire', r: 2 });
       const food = this.at(0.5, 2.2); s.addScent(food.x, food.z, 4, 60); this.markers.push({ x: food.x, z: food.z, kind: 'food', r: 1 });
+      // a steady night breeze from the fire across the food and out into the dark: the smoke leans the way the smell goes
+      const wa = Math.atan2(food.z - f.z, food.x - f.x) + (s.rand() - 0.5) * 0.6; s.windX = Math.cos(wa); s.windZ = Math.sin(wa);
       this.objective = 'cb.obj.prep'; this.go('prep');
     } else if (id === 'chase.escape') {
       this.hour = 19.9; s.night = true; // the last of the dusk: enough sky light to see the ground you run on
@@ -217,8 +219,9 @@ export class EncounterRun {
     // they come out of the dark to the edge of the light, where the food can be smelt (a home far out had them
     // wander beyond their noses all night in the real world's terrain, and nothing ever came)
     const fromDark = (kind: SpeciesId, n: number, pack: number, spread = 1.2) => {
-      const a0 = s.rand() * 6.283;
-      for (let i = 0; i < n; i++) { const a = a0 + (i - n / 2) * 0.22 * spread, r = 30 + s.rand() * 6; s.spawn(kind, fire.x + Math.cos(a) * r, fire.z + Math.sin(a) * r, { pack, homeX: fire.x + Math.cos(a) * 21, homeZ: fire.z + Math.sin(a) * 21 }); }
+      // up the wind: the food's smell drifts downwind and that is the side they come from (the smoke shows it)
+      const a0 = Math.atan2(s.windZ, s.windX) + (s.rand() - 0.5) * 0.5;
+      for (let i = 0; i < n; i++) { const a = a0 + (i - (n - 1) / 2) * 0.22 * spread, r = 30 + s.rand() * 6; s.spawn(kind, fire.x + Math.cos(a) * r, fire.z + Math.sin(a) * r, { pack, homeX: fire.x + Math.cos(a) * 21, homeZ: fire.z + Math.sin(a) * 21 }); }
     };
     const food = s.scents.reduce((n, sc) => n + Math.max(0, sc.food), 0);
     this.objN = { food, fuel: Math.round((fire.fuel / fire.max) * 100), wave: this.wave };
@@ -232,7 +235,7 @@ export class EncounterRun {
       if (packLeft(1) === 0 || this.phaseT > 75) { for (const e of s.enemies) if (e.pack === 1) s.rout(e); this.go('lull'); }
     } else if (this.phase === 'lull') {
       if (this.phaseT > 12) {
-        this.wave = 2; fromDark('skritch', 5, 2, 2.5);
+        this.wave = 2; fromDark('skritch', 5, 2, 1.7);
         const a = s.rand() * 6.283; this.hound = s.spawn('hound', fire.x + Math.cos(a) * 34, fire.z + Math.sin(a) * 34, { alert: 1.2, aware: true });
         if (straight) this.hound.cd = 0;
         this.go('wave2');
