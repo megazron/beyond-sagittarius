@@ -481,6 +481,8 @@ unlanded except this handoff commit and any recording in progress.
   the two diagnostics; CI 45007925771 all green on that exact commit, first try).
 - Machine: the heavy queue is shared with the combat agent's exclusive GPU captures; local SwiftShader runs of the gates
   took 20+ min and timed out. Use CI for SwiftShader numbers.
+- 12:00 LANDED 0c68d8c on main (bodies merged, program sort, GPU pass timer; CI 45016975922 green after one rerun of
+  combat's known SwiftShader click timeout, the same `#p-action` timeout that hit main df69603 and life-wip).
 - Bodies (owner goal 2), src/characters/bodymerge.ts: skin (body+head), clothes and eyes of a body are ONE skinned mesh
   with one material (aPart per vertex: 0 skin, 1 cloth, 2 eye; the fragment shader runs that part's code, copied from
   skinMaterial/eyeMaterial/the cloth patch; cloth's polygon offset became a 2 mm pull to the camera; DoubleSide). The
@@ -497,3 +499,7 @@ unlanded except this handoff commit and any recording in progress.
   p18/plan_ugpu.json / plan_wgpu.json print it per spot.
 - Tools: p18/ab.sh (same build, ?bodymerge=0 vs on), p18/ab2.sh (A = ?bodymerge=0&psort=0 = main's behaviour, B = new;
   Q=... appends to both URLs), plan_bodies.json (skinned draws per body), plan_look.json (photo-camera close-ups).
+- A/B on the A500 (Web, 1280x720, same build dist-new, exclusive heavy, single runs, swing ~5 fps; p18/pf1_A, pf1_B,
+  pf2_A): A = ?bodymerge=0&psort=0 (main before today), B = new. fps A/B/A2: bazaar 30.5/54.5/45.2, gate 35.5/47.7/40.2,
+  market 37.9/60.3/52.7, square 34.1/57.8/42.6 (crowd: A runs had a first-spot load hitch, not comparable). Skinned draws
+  B vs A2: bazaar 21/28, gate 14/26, market 4/6, square 11/19. The gate is still under 60 on Web (47.7).
