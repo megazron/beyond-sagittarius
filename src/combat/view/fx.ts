@@ -6,10 +6,18 @@ import type { CombatSim, Trap } from '../sim/sim';
 import type { WeaponId } from '../sim/weapons';
 
 const N_PART = 384;
-const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpQ2 = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+// the snare's pole: bent over the noose when set (tip about a hand above the loop), near upright once sprung
+const SNARE_SET = 0.66, SNARE_UP = 0.12;
+const Y1 = new THREE.Vector3(0, 1, 0);
+/** A unit cylinder (base at 0, up +y) stretched from a to b. */
+function seg(o: THREE.Object3D, a: THREE.Vector3, b: THREE.Vector3) {
+  const d = new THREE.Vector3().subVectors(b, a), l = d.length();
+  o.position.copy(a); o.quaternion.setFromUnitVectors(Y1, l > 1e-6 ? d.divideScalar(l) : Y1); o.scale.set(1, Math.max(1e-4, l), 1);
+}
 
-export type Puff = 'dust' | 'spark' | 'chip' | 'ember' | 'spore' | 'flash' | 'leaf' | 'arc';
-const PUFF: Record<Puff, { n: number; c: [number, number, number]; size: number; life: number; speed: number; up: number; g: number; add?: boolean }> = {
+export type Puff = 'dust' | 'spark' | 'chip' | 'ember' | 'spore' | 'flash' | 'leaf' | 'arc' | 'smoke';
+const PUFF: Record<Puff, { n: number; c: [number, number, number]; size: number; life: number; speed: number; up: number; g: number; add?: boolean; a?: number }> = {
   dust: { n: 9, c: [0.62, 0.56, 0.46], size: 0.5, life: 0.7, speed: 1.6, up: 1.2, g: 1.5 },
   chip: { n: 7, c: [0.86, 0.8, 0.66], size: 0.08, life: 0.55, speed: 3.6, up: 2.6, g: 9 },
   leaf: { n: 6, c: [0.3, 0.55, 0.32], size: 0.2, life: 0.9, speed: 2.2, up: 2.4, g: 5 },
@@ -18,6 +26,8 @@ const PUFF: Record<Puff, { n: number; c: [number, number, number]; size: number;
   spore: { n: 14, c: [0.55, 0.8, 0.3], size: 0.7, life: 4.5, speed: 1.1, up: 0.4, g: -0.05 },
   flash: { n: 1, c: [2.5, 2.3, 2], size: 1.3, life: 0.09, speed: 0, up: 0, g: 0, add: true },
   arc: { n: 8, c: [0.8, 2.2, 3], size: 0.06, life: 0.3, speed: 4, up: 1, g: 0, add: true },
+  // wood smoke: rises slowly and leans with the wind, so the camp shows which way the breeze carries the food's smell
+  smoke: { n: 1, c: [0.3, 0.29, 0.28], size: 0.5, life: 4.5, speed: 0.2, up: 0.5, g: -0.04, a: 0.16 },
 };
 
 export class CombatFx {
@@ -49,7 +59,9 @@ export class CombatFx {
       transparent: true, depthWrite: false, blending: THREE.NormalBlending,
       uniforms: { uScale: { value: 600 } },
       vertexShader: `attribute vec4 aCol; attribute float aSize; varying vec4 vCol; uniform float uScale;
-        void main() { vCol = aCol; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = aSize * uScale / max(0.1, -mv.z); }`,
+        void main() { vCol = aCol; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; float d = max(0.1, -mv.z);
+          // nothing swells over the lens: capped in size, and faded out right in front of the camera
+          gl_PointSize = min(aSize * uScale / d, 0.18 * uScale); vCol.a *= smoothstep(0.7, 2.8, d); }`,
       fragmentShader: `varying vec4 vCol; void main() { float d = length(gl_PointCoord - 0.5) * 2.0; float a = smoothstep(1.0, 0.2, d) * vCol.a; if (a < 0.01) discard; gl_FragColor = vec4(vCol.rgb, a); }`,
     });
     this.points = new THREE.Points(g, m);
@@ -64,6 +76,9 @@ export class CombatFx {
     this.numRoot = document.createElement('div'); this.numRoot.className = 'cb-numbers'; document.body.append(this.numRoot);
   }
 
+  /** How lit the smoke is (the controller sets it low at night). */
+  smokeK = 1;
+
   puff(kind: Puff, x: number, y: number, z: number, dx = 0, dz = 0, scale = 1) {
     const d = PUFF[kind];
     for (let k = 0; k < Math.ceil(d.n * scale); k++) {
@@ -71,7 +86,9 @@ export class CombatFx {
       const a = Math.random() * 6.283, r = Math.random();
       this.pos[i * 3] = x; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = z;
       this.vel[i * 3] = Math.cos(a) * d.speed * r + dx * d.speed; this.vel[i * 3 + 1] = d.up * (0.4 + Math.random() * 0.6); this.vel[i * 3 + 2] = Math.sin(a) * d.speed * r + dz * d.speed;
-      this.col[i * 4] = d.c[0]; this.col[i * 4 + 1] = d.c[1]; this.col[i * 4 + 2] = d.c[2]; this.col[i * 4 + 3] = d.add ? 1 : 0.55;
+      // smoke is lit by what is round it: at night only the fire's glow, so it is a dim grey, not white puffs
+      const lit = kind === 'smoke' ? this.smokeK : 1;
+      this.col[i * 4] = d.c[0] * lit; this.col[i * 4 + 1] = d.c[1] * lit; this.col[i * 4 + 2] = d.c[2] * lit; this.col[i * 4 + 3] = d.a ?? (d.add ? 1 : 0.55);
       this.size[i] = d.size * (0.6 + Math.random() * 0.7); this.life[i] = this.max[i] = d.life * (0.7 + Math.random() * 0.5); this.grav[i] = d.g;
     }
   }
@@ -133,9 +150,26 @@ export class CombatFx {
     const g = new THREE.Group();
     const wood = new THREE.MeshStandardMaterial({ color: 0x6b5238, roughness: 0.9 }), vine = new THREE.MeshStandardMaterial({ color: 0x3f6a44, roughness: 0.9 });
     const add = (geo: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0, rx = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, 0, rz); o.castShadow = true; g.add(o); return o; };
-    if (tr.kind === 'snare') { add(new THREE.TorusGeometry(0.32, 0.018, 5, 14), vine, 0, 0.04, 0, Math.PI / 2); add(new THREE.CylinderGeometry(0.02, 0.03, 1.3, 5), wood, 0.45, 0.55, 0, 0, -0.5); }
+    if (tr.kind === 'snare') {
+      // a spring-pole snare: a sapling bent over the noose and held by a trigger; a foot in the loop trips it, the pole
+      // whips up and the cord holds the leg. Children: 0 noose, 1 pole (pivot at its foot), 2 cord
+      add(new THREE.TorusGeometry(0.32, 0.018, 5, 14), vine, 0, 0.04, 0, Math.PI / 2);
+      const pole = add(new THREE.CylinderGeometry(0.018, 0.035, 1.7, 5).translate(0, 0.85, 0), wood, 1.1, 0, 0, 0, SNARE_SET);
+      void pole;
+      const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1, 4).translate(0, 0.5, 0), vine); cord.frustumCulled = false; g.add(cord);
+    }
     else if (tr.kind === 'stakes') for (let i = 0; i < 6; i++) add(new THREE.ConeGeometry(0.05, 0.9, 5), wood, (i - 2.5) * 0.36, 0.36, (i % 2) * 0.2, -0.75);
     else if (tr.kind === 'rattle') { add(new THREE.CylinderGeometry(0.02, 0.025, 1.1, 5), wood, 0, 0.55, 0); for (let i = 0; i < 3; i++) add(new THREE.DodecahedronGeometry(0.06, 0), new THREE.MeshStandardMaterial({ color: 0x8a8580, flatShading: true }), 0.1 + i * 0.06, 0.95 - i * 0.14, 0); }
+    else if (tr.kind === 'deadfall') {
+      // children: 0 the slab (pivot at its back edge on the ground), 1 to 3 the figure-four sticks, 4 the bait
+      const slab = new THREE.Group(); slab.position.set(0, 0, -0.32); g.add(slab);
+      const sm = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.07, 0.62).translate(0, 0.035, 0.31), new THREE.MeshStandardMaterial({ color: 0x77726a, roughness: 0.95, flatShading: true }));
+      sm.castShadow = true; slab.add(sm); slab.rotation.x = -0.5;
+      add(new THREE.CylinderGeometry(0.012, 0.012, 0.34, 4), wood, 0, 0.17, 0.02);
+      add(new THREE.CylinderGeometry(0.01, 0.01, 0.42, 4), wood, 0, 0.3, -0.02, 0, 1.0);
+      add(new THREE.CylinderGeometry(0.01, 0.01, 0.4, 4), wood, 0.02, 0.1, 0.08, 1.45, 0);
+      add(new THREE.SphereGeometry(0.06, 7, 5), new THREE.MeshStandardMaterial({ color: 0x3f6fd0, roughness: 0.5 }), 0.02, 0.06, 0.25);
+    }
     else if (tr.kind === 'bait') add(new THREE.SphereGeometry(0.11, 8, 6), new THREE.MeshStandardMaterial({ color: 0x3f6fd0, roughness: 0.5 }), 0, 0.1, 0);
     else for (let i = 0; i < 5; i++) add(new THREE.CylinderGeometry(0.03, 0.03, 0.8, 4), wood, (i - 2) * 0.75, 0.04, Math.sin(i * 3) * 0.2, 0, Math.PI / 2);
     return g;
@@ -174,12 +208,18 @@ export class CombatFx {
       const w: WeaponId = q.weapon;
       if (w === 'rock' || w === 'sling') { tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(1, 1, 1)); if (ns < 20) this.stones.setMatrixAt(ns++, tmpM); }
       else if (w === 'coil') { tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(1, 1, 1.6)); if (nb < 12) this.bolts.setMatrixAt(nb++, tmpM); }
+      else if (w === 'throwstick') {
+        // end over end: it turns about the axis across its flight, about eight turns a second
+        tmpQ.multiply(tmpQ2.setFromAxisAngle(tmpS.set(0, 1, 0), (t * 50) % 6.283));
+        tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(2.6, 2.6, 0.75)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM);
+      }
       else { const sp = w === 'spear' || w === 'hafted', len = sp ? 2 : w === 'atlatl' ? 1.7 : w === 'crossbow' ? 0.45 : 0.75, thick = sp ? 1.9 : w === 'atlatl' ? 1.3 : 1.25; tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(thick, thick, len)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM); }
     }
     // spears and arrows that stuck stay where they fell until picked up
     for (const k of sim.pickups) {
       const y = this.height(k.x, k.z);
-      if (k.weapon === 'spear' || k.weapon === 'hafted' || k.item === 'arrow' || k.item === 'bolt' || k.item === 'dart') { tmpQ.setFromAxisAngle(tmpS.set(1, 0, 0), 0.9 + (k.id % 5) * 0.1); tmpM.compose(tmpV.set(k.x, y + (k.weapon ? 0.7 : 0.25), k.z), tmpQ, tmpS.set(k.weapon ? 1.9 : 1, k.weapon ? 1.9 : 1, k.weapon ? 2 : 0.75)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM); }
+      if (k.weapon === 'throwstick') { tmpQ.setFromAxisAngle(tmpS.set(0, 1, 0), k.id * 1.7); tmpM.compose(tmpV.set(k.x, y + 0.04, k.z), tmpQ, tmpS.set(2.6, 2.6, 0.75)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM); }
+      else if (k.weapon === 'spear' || k.weapon === 'hafted' || k.item === 'arrow' || k.item === 'bolt' || k.item === 'dart') { tmpQ.setFromAxisAngle(tmpS.set(1, 0, 0), 0.9 + (k.id % 5) * 0.1); tmpM.compose(tmpV.set(k.x, y + (k.weapon ? 0.7 : 0.25), k.z), tmpQ, tmpS.set(k.weapon ? 1.9 : 1, k.weapon ? 1.9 : 1, k.weapon ? 2 : 0.75)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM); }
       else if (k.item === 'stone') { tmpM.compose(tmpV.set(k.x, y + 0.06, k.z), tmpQ.identity(), tmpS.set(1.2, 1.2, 1.2)); if (ns < 20) this.stones.setMatrixAt(ns++, tmpM); }
     }
     this.stones.count = ns; this.shafts.count = nh; this.bolts.count = nb;
@@ -192,7 +232,15 @@ export class CombatFx {
       seen.add(tr.id);
       let o = this.props.get(tr.id);
       if (!o) { o = this.makeTrap(tr); o.position.set(tr.x, this.height(tr.x, tr.z), tr.z); this.group.add(o); this.props.set(tr.id, o); }
-      o.visible = tr.kind === 'fireline' ? true : tr.armed || tr.kind === 'stakes';
+      o.visible = tr.kind === 'fireline' ? true : tr.armed || tr.kind === 'stakes' || tr.kind === 'snare';
+      if (tr.kind === 'snare') this.snare(o, tr, sim, t);
+      else if (tr.kind === 'deadfall') {
+        // the stone comes down in a fifth of a second; the sticks and the bait are gone with it
+        const k = tr.sprungT >= 0 ? Math.min(1, (sim.t - tr.sprungT) / 0.2) : 0;
+        o.children[0].rotation.x = -0.5 * (1 - k * k) + (k >= 1 ? Math.sin((sim.t - tr.sprungT) * 30) * 0.02 * Math.max(0, 1 - (sim.t - tr.sprungT) * 3) : 0);
+        for (let i = 1; i < o.children.length; i++) o.children[i].visible = k < 0.3;
+        o.visible = true;
+      }
     }
     for (const [id, o] of this.props) if (!seen.has(id)) { this.group.remove(o); this.props.delete(id); }
     // fires
@@ -205,7 +253,10 @@ export class CombatFx {
       fl.o.visible = true;
       fl.o.children.forEach((c, i) => { if ((c as THREE.Mesh).material instanceof THREE.MeshBasicMaterial) { c.visible = k > 0; c.scale.set(0.5 + k * 0.7, (0.3 + k * 1.1) * (0.8 + Math.sin(t * 9 + i * 2) * 0.25), 0.5 + k * 0.7); } });
       if (fl.light) fl.light.intensity = (f.burnsOut ? 16 : 70) * Math.sqrt(k) * flick;
-      if (k > 0 && this.emberT <= 0) this.puff('ember', f.x, this.height(f.x, f.z) + 0.5, f.z, 0, 0, 0.5);
+      if (k > 0 && this.emberT <= 0) {
+        this.puff('ember', f.x, this.height(f.x, f.z) + 0.5, f.z, 0, 0, 0.5);
+        if (!f.burnsOut) this.puff('smoke', f.x, this.height(f.x, f.z) + 0.9 + k * 0.4, f.z, sim.windX * 5, sim.windZ * 5, 1);
+      }
     }
     for (let i = this.flames.length - 1; i >= 0; i--) if (!sim.fires.some((f) => f.id === this.flames[i].id)) { this.group.remove(this.flames[i].o); this.flames.splice(i, 1); }
     if (this.emberT <= 0) this.emberT = 0.18;
@@ -220,6 +271,29 @@ export class CombatFx {
       if (n.t > 0.9 || tmpV.z > 1) { n.el.remove(); this.numbers.splice(i, 1); }
     }
     void UP;
+  }
+
+  /** The spring pole: bent and set, then snapped up with an overshoot; the cord runs to the caught leg while it holds. */
+  private snare(o: THREE.Object3D, tr: Trap, sim: CombatSim, t: number) {
+    const noose = o.children[0], pole = o.children[1], cord = o.children[2];
+    if (!pole || !cord) return;
+    const e = tr.caught ? sim.enemies.find((q) => q.id === tr.caught) : undefined;
+    const since = tr.sprungT >= 0 ? sim.t - tr.sprungT : -1;
+    const held = !!e && !e.dead && !e.gone && e.heldT > 0;
+    let rz = SNARE_SET;
+    if (since >= 0) {
+      // a damped spring from bent to upright: about a tenth of a second up, then it shivers
+      const up = SNARE_UP + (SNARE_SET - SNARE_UP) * Math.exp(-since * 9) * Math.cos(since * 26);
+      rz = held ? up + Math.sin(t * 17) * 0.05 * Math.min(1, since * 3) + 0.18 : up;
+    }
+    pole.rotation.z = rz;
+    noose.visible = since < 0;
+    const tip = tmpV.set(0, 1.7, 0).applyEuler(pole.rotation).add(pole.position);
+    if (since < 0) seg(cord, tmpS.set(0, 0.04, 0), tip);
+    // to the caught hind leg, not the middle of the body
+    else if (held) { const bx = e!.x - Math.sin(e!.yaw) * e!.def.radius * 0.8, bz = e!.z - Math.cos(e!.yaw) * e!.def.radius * 0.8; seg(cord, tip, o.worldToLocal(tmpS.set(bx, this.height(bx, bz) + 0.25, bz))); }
+    else seg(cord, tip, tmpS.copy(tip).add(tmpV2.set(0.05, -0.5, 0)));
+    cord.visible = true;
   }
 
   /** A fight is over: take its things off the ground. */

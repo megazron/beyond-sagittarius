@@ -1,6 +1,6 @@
 // Every weapon and trap is a row of data. A later age adds rows (and a model in view/gear.ts); nothing else changes.
 
-export type WeaponId = 'fists' | 'rock' | 'flake' | 'club' | 'spear' | 'hafted' | 'atlatl' | 'torch' | 'sling' | 'bow' | 'crossbow' | 'coil';
+export type WeaponId = 'fists' | 'rock' | 'flake' | 'handaxe' | 'club' | 'throwstick' | 'spear' | 'hafted' | 'atlatl' | 'torch' | 'sling' | 'bow' | 'crossbow' | 'coil';
 export type DamageKind = 'blunt' | 'pierce' | 'fire' | 'energy';
 
 export interface ProjDef {
@@ -57,9 +57,21 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   // a sharp flake knocked off a core with a hammerstone: a knife first, a weapon only at arm's length of nothing
   flake: { id: 'flake', mass: 0.15, dur: 25, age: 0, craft: { stone: 2 }, block: 0.2,
     melee: { dmg: 8, reach: 1.15, arc: 0.9, windup: 0.16, active: 0.08, recover: 0.3, stamina: 6, knock: 0.8, poise: 8, kind: 'pierce', noise: 3 } },
+  // an Acheulean hand axe: a big flint nodule shaped on both faces into a heavy teardrop with an edge all round, held
+  // in the fist without a handle (Kenya, about 1.76 million years ago). A tool for chopping and butchering first; as a
+  // weapon it is a short, heavy chop that bites and lasts
+  handaxe: { id: 'handaxe', mass: 0.9, dur: 90, age: 1, craft: { stone: 3 }, block: 0.3,
+    melee: { dmg: 13, reach: 1.25, arc: 1.1, windup: 0.27, active: 0.1, recover: 0.42, stamina: 10, knock: 2.2, poise: 22, kind: 'pierce', noise: 5 } },
   // a heavy branch, trimmed: the first thing anyone picks up
   club: { id: 'club', mass: 1.6, dur: 70, age: 0, craft: { branch: 1 }, block: 0.55,
     melee: { dmg: 14, reach: 1.7, arc: 1.5, windup: 0.34, active: 0.14, recover: 0.5, stamina: 14, knock: 4, poise: 30, kind: 'blunt', noise: 7 } },
+  // a throwing stick: a short, heavy length of hard wood, shaved flat-ish and thicker at one end, thrown so it spins
+  // end over end (Schoeningen, Germany, about 300 thousand years ago, beside the spears). A spinning stick sweeps a
+  // much wider path than a point, so it is the first thing that brings down small fast game; against anything big it
+  // only bruises. Swung, it is a light club
+  throwstick: { id: 'throwstick', mass: 0.7, dur: 60, age: 0, craft: { branch: 1 }, block: 0.35,
+    melee: { dmg: 9, reach: 1.45, arc: 1.3, windup: 0.22, active: 0.1, recover: 0.36, stamina: 9, knock: 2, poise: 14, kind: 'blunt', noise: 5 },
+    proj: { ammo: null, speed: 20, gravity: 9.81, dmg: 15, kind: 'blunt', charge: 0.45, weak: 0.6, radius: 0.32, knock: 2.6, poise: 22, recover: 1, noise: 8, spread: [5, 2.6] } },
   // a straight sapling, its point shaped with a flake and hardened in the coals (Schoeningen, Clacton): the point
   // dulls and splits with use, so it wears quicker than a club
   spear: { id: 'spear', mass: 1.3, dur: 35, age: 0, craft: { branch: 1 }, block: 0.6,
@@ -97,7 +109,7 @@ export const AMMO_CRAFT: Record<string, { cost: Record<string, number>; makes: n
   dart: { cost: { branch: 1, stone: 1, fibre: 1 }, makes: 2 },
 };
 
-export type TrapId = 'snare' | 'stakes' | 'fireline' | 'rattle' | 'bait';
+export type TrapId = 'snare' | 'stakes' | 'fireline' | 'rattle' | 'bait' | 'deadfall';
 export interface TrapDef {
   id: TrapId; cost: Record<string, number>;
   /** Trigger radius, and how many times it works. */
@@ -118,4 +130,7 @@ export const TRAPS: Record<TrapId, TrapDef> = {
   rattle: { id: 'rattle', cost: { vine: 1, stone: 2 }, r: 2.5, uses: 3, hold: 0, dmg: 0, poise: 0, setTime: 1.2 },
   // food left out: it brings them where you want them
   bait: { id: 'bait', cost: { fruit: 1 }, r: 0.8, uses: 1, hold: 0, dmg: 0, poise: 0, setTime: 0.6 },
+  // a figure-four deadfall: a flat stone propped on three notched sticks, the bait on the trigger stick. Something
+  // small that pulls at the bait brings the stone down on itself; something big only knocks it over
+  deadfall: { id: 'deadfall', cost: { stone: 1, branch: 1, fruit: 1 }, r: 0.85, uses: 1, hold: 0, dmg: 40, poise: 50, setTime: 2.6 },
 };

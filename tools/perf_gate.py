@@ -27,9 +27,17 @@ class H(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *x, **k): pass
 srv = http.server.ThreadingHTTPServer(('127.0.0.1', a.port), functools.partial(H, directory=a.dist))
 threading.Thread(target=srv.serve_forever, daemon=True).start()
-WORST = """(ms) => new Promise((res) => { let calls = 0, tris = 0, bodies = 0, sk = 0, t0 = performance.now();
-  const f = () => { const p = __bs.perf; calls = Math.max(calls, p.calls); tris = Math.max(tris, p.tris); bodies = Math.max(bodies, p.bodies); sk = Math.max(sk, p.skinned);
-    if (performance.now() - t0 < ms) requestAnimationFrame(f); else res({ calls, tris, bodies, skinned: sk }); }; requestAnimationFrame(f); })"""
+# the worst frame of the second, and what drew its triangles (object paths, main pass M or shadow S), for a failure's log
+WORST = """(ms) => new Promise((res) => { let calls = 0, tris = 0, bodies = 0, sk = 0, t0 = performance.now(); const r = __bs.gl, orig = r.renderBufferDirect; let cur = {}, top = null;
+  const name = (obj) => { const parts = []; for (let o = obj; o && parts.length < 4; o = o.parent) { let n = o.name || ''; if (o.userData && o.userData.isCharacter) n = 'BODY'; if (n) parts.push(n); }
+    return (parts.reverse().join('/') || obj.type) + (obj.isBatchedMesh ? ' [batch]' : obj.isInstancedMesh ? ' [inst ' + obj.count + ']' : obj.isSkinnedMesh ? ' [skin]' : ''); };
+  r.renderBufferDirect = function (cam, sc, g, m, obj, grp) { const a = r.info.render.triangles; const v = orig.apply(this, arguments);
+    const k = (cam.isOrthographicCamera ? 'S ' : 'M ') + name(obj) + ' |' + (m.name || m.type); cur[k] = (cur[k] || 0) + r.info.render.triangles - a; return v; };
+  const f = () => { const p = __bs.perf; calls = Math.max(calls, p.calls); bodies = Math.max(bodies, p.bodies); sk = Math.max(sk, p.skinned);
+    if (p.tris > tris) { tris = p.tris; top = cur; } cur = {};
+    if (performance.now() - t0 < ms) requestAnimationFrame(f); else { r.renderBufferDirect = orig;
+      res({ calls, tris, bodies, skinned: sk, top: Object.entries(top || {}).sort((x, y) => y[1] - x[1]).slice(0, 12).map(([k, v]) => k + ' ' + Math.round(v)) }); } };
+  requestAnimationFrame(f); })"""
 fails, report = [], {}
 with sync_playwright() as pw:
     b = pw.chromium.launch(headless=True, args=['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-background-timer-throttling', '--disable-renderer-backgrounding'])
@@ -48,10 +56,12 @@ with sync_playwright() as pw:
         D, T, B = BUDGET[q]; rows = {}
         for name, (x, z, yaw) in SPOTS.items():
             page.evaluate(f"__bs.awayTeleport({x}, {z}, {yaw})"); time.sleep(4)
-            r = page.evaluate(WORST, 1500); rows[name] = r
+            r = page.evaluate(WORST, 1500); top = r.pop('top'); rows[name] = r
             print(q, name, r, flush=True)
             if r['calls'] > D: fails.append(f"{q} {name}: {r['calls']} draw calls (budget {D})")
-            if r['tris'] > T: fails.append(f"{q} {name}: {r['tris']} triangles (budget {T})")
+            if r['tris'] > T:
+                fails.append(f"{q} {name}: {r['tris']} triangles (budget {T})")
+                print('  worst frame by triangles:\n   ' + '\n   '.join(top), flush=True)
             if r['bodies'] > B: fails.append(f"{q} {name}: {r['bodies']} bodies drawn (budget {B})")
             if r['calls'] < 10: fails.append(f"{q} {name}: nothing drawn")
         if errs: fails.append(f"{q}: errors {errs[:3]}")

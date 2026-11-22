@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { fitCanvasText } from '../../core/canvastext';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { CLOCK, stamp } from '../../core/cycle';
+import { nearFade } from '../../core/nearfade';
 
 /**
  * Zenvora at true 2189 scale, over the human-scale bazaar: the Taravel Ring arching over the whole city,
@@ -79,21 +81,27 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
       const along = i % 2 === 0;
       lane.push({ y: y + (rnd() - 0.5) * 3, along, c: along ? (rnd() - 0.5) * 70 : S - 40 + rnd() * (N - S + 80), p: rnd(), v: (i % 4 < 2 ? 1 : -1) * (0.035 + rnd() * 0.02) });
     }
-    const head = new THREE.InstancedMesh(new THREE.BoxGeometry(0.8, 0.5, 3.2), glowMat(0xfff0d8, 3), lane.length);
-    const tail = new THREE.InstancedMesh(new THREE.BoxGeometry(0.8, 0.5, 3.2), glowMat(0xff4060, 3), lane.length);
-    add(head); add(tail);
-    const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(1, 1, 1), UP = new THREE.Vector3(0, 1, 0);
-    updates.push((dt) => {
-      lane.forEach((l, i) => {
-        l.p = (l.p + l.v * dt + 1) % 1;
-        // along the street they start at the spaceport's near edge: further out they crossed the column the boarded liner
-        // lifts through at the end of the prologue (pad at x -44, z -208)
-        if (l.along) { P.set(l.c, l.y, S - 90 + l.p * (N - S + 190)); Q.setFromAxisAngle(UP, l.v > 0 ? 0 : Math.PI); }
-        else { P.set(-260 + l.p * 520, l.y, l.c); Q.setFromAxisAngle(UP, l.v > 0 ? Math.PI / 2 : -Math.PI / 2); }
-        (l.v > 0 ? head : tail).setMatrixAt(i, M.compose(P, Q, SC)); (l.v > 0 ? tail : head).setMatrixAt(i, M.compose(P.set(0, -9999, 0), Q, SC));
-      });
-      head.instanceMatrix.needsUpdate = tail.instanceMatrix.needsUpdate = true;
-    });
+    // one instanced mesh, every light's lane in its instance and its flight in the shader (two meshes and 520 matrices
+    // composed by script every frame before); headlights white where a lane runs one way, tail lights red the other
+    const lg = new THREE.InstancedBufferGeometry().copy(new THREE.BoxGeometry(0.8, 0.5, 3.2) as unknown as THREE.InstancedBufferGeometry);
+    const la = new Float32Array(lane.length * 4), lb = new Float32Array(lane.length);
+    lane.forEach((l, i) => { la.set([l.y, l.c, l.p, l.v], i * 4); lb[i] = l.along ? 1 : 0; });
+    lg.setAttribute('aLane', new THREE.InstancedBufferAttribute(la, 4)); lg.setAttribute('aAlong', new THREE.InstancedBufferAttribute(lb, 1));
+    const lm = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, fog: false });
+    lm.onBeforeCompile = (sh) => {
+      sh.uniforms.uClock = CLOCK;
+      sh.vertexShader = 'attribute vec4 aLane; attribute float aAlong; uniform float uClock;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+        { float p = fract(aLane.z + aLane.w * uClock), yaw = aAlong > 0.5 ? (aLane.w > 0.0 ? 0.0 : 3.14159265) : (aLane.w > 0.0 ? 1.57079633 : -1.57079633);
+          float c = cos(yaw), s = sin(yaw);
+          transformed = vec3(c * transformed.x + s * transformed.z, transformed.y, -s * transformed.x + c * transformed.z);
+          transformed += aAlong > 0.5 ? vec3(aLane.y, aLane.x, ${(S - 260).toFixed(1)} + p * ${(N - S + 360).toFixed(1)}) : vec3(-260.0 + p * 520.0, aLane.x, aLane.y); }`);
+      nearFade(lm, sh);
+    };
+    lm.customProgramCacheKey = () => 'mega-lanes|nearfade';
+    const lights = new THREE.InstancedMesh(lg, lm, lane.length); lights.frustumCulled = false;
+    const HEAD = new THREE.Color(0xfff0d8).multiplyScalar(3), TAIL = new THREE.Color(0xff4060).multiplyScalar(3);
+    lane.forEach((l, i) => lights.setColorAt(i, l.v > 0 ? HEAD : TAIL));
+    add(lights);
   }
 
   // ---- levitating platforms: plazas hanging in the air, lit underneath, little towers on top ----
@@ -114,43 +122,50 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
   }
 
   // ---- a koi of light, forty metres long, swimming slowly above the bazaar ----
+  // one mesh, one material: each part's place along the body is in its vertices and the swim is in the shader (it was
+  // twenty-nine meshes, a material and a draw each, moved by script every frame)
   if (rich) { // phones: left out (each is a handful of draw calls a frame for a detail in the sky)
-    const segs = rich ? 26 : 14;
-    const koi = add(new THREE.Group());
-    const parts: THREE.Mesh[] = [];
+    const segs = rich ? 26 : 14, geos: THREE.BufferGeometry[] = [];
+    const part = (g: THREE.BufferGeometry, c: number, k: number, opacity: number, seg: number) => { const col = new THREE.Color(c).multiplyScalar(k); geos.push(stamp(g, { color: [col.r, col.g, col.b, opacity], aKoi: [seg] })); };
     for (let i = 0; i < segs; i++) {
       const k = i / (segs - 1), r = Math.sin(Math.min(1, k * 1.25) * Math.PI) * 2.6 + 0.3;
-      const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 8), glowMat(i % 5 === 0 ? 0xffffff : k < 0.5 ? 0xff7a3a : 0xffd27a, 1.4, 0.45));
-      m.scale.set(1, 0.6, 1.4); m.userData.ground = false; koi.add(m); parts.push(m);
+      part(new THREE.SphereGeometry(r, 12, 8).scale(1, 0.6, 1.4), i % 5 === 0 ? 0xffffff : k < 0.5 ? 0xff7a3a : 0xffd27a, 1.4, 0.45, k);
     }
-    const fin = (side: number) => { const f = new THREE.Mesh(new THREE.ConeGeometry(2.2, 6, 3), glowMat(0xffe0a0, 1.2, 0.35)); f.rotation.z = side * 1.2; f.userData.ground = false; koi.add(f); return f; };
-    const fL = fin(1), fR = fin(-1), tailF = new THREE.Mesh(new THREE.ConeGeometry(3.2, 7, 4), glowMat(0xff9a5a, 1.3, 0.35)); tailF.userData.ground = false; koi.add(tailF);
-    updates.push((_, t) => {
-      for (let i = 0; i < segs; i++) {
-        const k = i / (segs - 1), s = t * 0.16 - k * 0.55;
-        parts[i].position.set(Math.sin(s * 1.3) * 14 + Math.sin(t * 0.9 - k * 5) * 1.5 * k, 30 + Math.sin(s * 0.7) * 4, -10 + Math.cos(s) * 60);
-      }
-      const h = parts[3].position, b = parts[segs - 1].position;
-      fL.position.set(h.x + 2.4, h.y - 0.6, h.z); fR.position.set(h.x - 2.4, h.y - 0.6, h.z); tailF.position.copy(b);
-    });
+    for (const side of [1, -1]) part(new THREE.ConeGeometry(2.2, 6, 3).rotateZ(side * 1.2).translate(side * 2.4, -0.6, 0), 0xffe0a0, 1.2, 0.35, 3 / (segs - 1));
+    part(new THREE.ConeGeometry(3.2, 7, 4), 0xff9a5a, 1.3, 0.35, 1);
+    const km = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false, transparent: true, depthWrite: false });
+    km.onBeforeCompile = (sh) => {
+      sh.uniforms.uClock = CLOCK;
+      sh.vertexShader = 'attribute float aKoi; uniform float uClock;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+        { float t = uClock, k = aKoi, s = t * 0.16 - k * 0.55;
+          transformed += vec3(sin(s * 1.3) * 14.0 + sin(t * 0.9 - k * 5.0) * 1.5 * k, 30.0 + sin(s * 0.7) * 4.0, -10.0 + cos(s) * 60.0); }`);
+      nearFade(km, sh);
+    };
+    km.customProgramCacheKey = () => 'mega-koi|nearfade';
+    const koi = add(new THREE.Mesh(mergeGeometries(geos, false)!, km));
+    koi.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 30, -10), 80);
   }
 
   // ---- the message tower: a slab of light scrolling the city's greeting in three scripts ----
+  // the strip is painted once and scrolls in the shader (it was a canvas repainted and uploaded twelve times a second)
   if (rich) { // phones: left out (each is a handful of draw calls a frame for a detail in the sky)
-    const c = document.createElement('canvas'); c.width = 128; c.height = 1024;
-    const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; tx.userData.live = true;
+    const c = document.createElement('canvas'); c.width = 128; c.height = 3600;
     const words = ['WELCOME TO ZENVORA', 'ज़ेनवोरा में स्वागत है', 'زینوورا میں خوش آمدید', 'LAST STOP BEFORE THE STARS'];
-    let off = 0;
-    const draw = () => {
-      const g = c.getContext('2d')!; g.fillStyle = '#05101e'; g.fillRect(0, 0, 128, 1024);
+    { const g = c.getContext('2d')!; g.fillStyle = '#05101e'; g.fillRect(0, 0, 128, 3600);
       g.save(); g.translate(64, 0); g.rotate(Math.PI / 2); g.font = '700 64px Rajdhani, sans-serif';
-      for (let i = 0; i < 6; i++) { g.fillStyle = ['#7fe9ff', '#ffb36e', '#ff6ec7', '#b6ff6e'][i % 4]; g.fillText(words[i % 4], -off + i * 900, 22); }
-      g.restore(); tx.needsUpdate = true;
+      for (let i = 0; i < 4; i++) { g.fillStyle = ['#7fe9ff', '#ffb36e', '#ff6ec7', '#b6ff6e'][i]; g.fillText(words[i], i * 900, 22); }
+      g.restore(); }
+    const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; tx.wrapT = THREE.RepeatWrapping;
+    const sm = new THREE.MeshBasicMaterial({ map: tx, color: new THREE.Color(1.8, 1.8, 1.8), toneMapped: false, fog: false });
+    sm.onBeforeCompile = (sh) => {
+      sh.uniforms.uClock = CLOCK;
+      // a 1024-pixel window down the strip, 75 pixels a second (6 every 0.08 s, as before)
+      sh.vertexShader = 'uniform float uClock;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv.y = 1.0 - ((1.0 - uv.y) * 1024.0 + mod(uClock * 75.0, 3600.0)) / 3600.0;');
+      nearFade(sm, sh);
     };
-    const slab = add(new THREE.Mesh(new THREE.PlaneGeometry(14, 110), new THREE.MeshBasicMaterial({ map: tx, color: new THREE.Color(1.8, 1.8, 1.8), toneMapped: false, fog: false })));
+    sm.customProgramCacheKey = () => 'mega-scroll|nearfade';
+    const slab = add(new THREE.Mesh(new THREE.PlaneGeometry(14, 110), sm));
     slab.position.set(-34, 60, S - 30); slab.rotation.y = 0.5;
-    let acc = 0; draw();
-    updates.push((dt) => { acc += dt; if (acc > 0.08) { acc = 0; off = (off + 6) % 3600; draw(); } });
   }
 
   // ---- the launch tower at the spaceport, and a ship climbing a column of light ----
@@ -182,14 +197,24 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
       const eng = new THREE.Mesh(new THREE.CircleGeometry(4, 24), glowMat(0x9fdcff, 2.8)); eng.position.z = -22; eng.rotation.y = Math.PI; g.add(eng);
       g.traverse((x2) => { x2.userData.ground = false; }); ships.push(g);
     }
-    const beams: THREE.Mesh[] = [];
-    for (let i = 0; i < (rich ? 6 : 3); i++) {
-      const bm = add(new THREE.Mesh(new THREE.CylinderGeometry(0.6, 9, 260, 16, 1, true), glowMat(0xbfe9ff, 0.7, 0.16)));
-      bm.geometry.translate(0, 130, 0); bm.position.set(-40 + i * 16, 0, S - 30 - (i % 2) * 30); beams.push(bm);
-    }
+    // the searchlights: one mesh, each beam's foot and sweep in its vertices, the sweep in the shader
+    const bgeos: THREE.BufferGeometry[] = [];
+    for (let i = 0; i < (rich ? 6 : 3); i++) bgeos.push(stamp(new THREE.CylinderGeometry(0.6, 9, 260, 16, 1, true).translate(0, 130, 0), { aBeam: [-40 + i * 16, S - 30 - (i % 2) * 30, i] }));
+    const bmM = glowMat(0xbfe9ff, 0.7, 0.16);
+    bmM.onBeforeCompile = (sh) => {
+      sh.uniforms.uClock = CLOCK;
+      sh.vertexShader = 'attribute vec3 aBeam; uniform float uClock;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+        { float t = uClock, i = aBeam.z, ax = sin(t * 0.3 + i) * 0.35, az = cos(t * 0.23 + i * 1.7) * 0.35;
+          vec3 v = transformed; v.xy = vec2(cos(az) * v.x - sin(az) * v.y, sin(az) * v.x + cos(az) * v.y);
+          v.yz = vec2(cos(ax) * v.y - sin(ax) * v.z, sin(ax) * v.y + cos(ax) * v.z);
+          transformed = v + vec3(aBeam.x, 0.0, aBeam.y); }`);
+      nearFade(bmM, sh);
+    };
+    bmM.customProgramCacheKey = () => 'mega-beams|nearfade';
+    const beamMesh = add(new THREE.Mesh(mergeGeometries(bgeos, false)!, bmM));
+    beamMesh.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 100, S - 45), 200);
     updates.push((_, t) => {
       ships.forEach((g, i) => { g.position.y += Math.sin(t * 0.4 + i) * 0.01; g.rotation.y = 0.3 + Math.sin(t * 0.05 + i) * 0.1; });
-      beams.forEach((b, i) => { b.rotation.set(Math.sin(t * 0.3 + i) * 0.35, 0, Math.cos(t * 0.23 + i * 1.7) * 0.35); });
     });
   }
 

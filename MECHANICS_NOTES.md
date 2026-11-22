@@ -145,3 +145,33 @@ actual shake values. Where I had no number I tuned by the tests and by playing, 
 - Here: `src/combat/sim/inventions.ts` holds the order. Episode One: thrown stones, fire, club, torch, a struck
   flake, the fire-hardened spear, traps. Then hafted points, the spear-thrower, the sling and the bow. Metal, the
   crossbow and the ship's salvage are ages later and live only in the dev arena.
+- The hand axe (Acheulean, the story tree's row 11, about 1.76 million years ago in Kenya) is a tool first: a flint
+  teardrop with an edge all round, held without a handle. As a weapon here it is a short, heavy chop: a little less
+  damage than the club, a shorter reach, faster, and it barely wears (stone). It needs the flake (row 3).
+
+## 11. The spear-thrower cast (owner note: the full draw read as a wide "T")
+
+- Throwing guides agree on the outline and differ in the details: a right-hander points the left foot at the target
+  with the right foot back about a shoulder's width (Make: "The Atlatl"); the dart is raised to eye level and the arm
+  drawn back with a straight wrist while the dart stays aimed at the target, then a step forward slides the arm ahead
+  and near full extension the wrist snaps so the thrower ends pointing at the target (University of Regina, "How to
+  throw"); the throw is a step, a turn of the body that brings shoulder and arm in, the wrist snap, and a follow-through
+  (World Atlatl Association, "How to throw"); most of the dart's speed comes from the lever turning at the wrist, not
+  the hand pushing (Baugh 2003, as cited there). 3 Rivers Archery notes there is no one right technique.
+- Here: side-on while drawn (the turn is in the hips and chest, so the drawn hand is behind the body, not out to the
+  side), the thrower hand at head height beside the ear with the elbow bent and down, the dart level over the
+  shoulder, the off hand bent in front of the chest pointing the way (not flung out straight). On the cast the body
+  squares, the off hand pulls in, the arm drives forward and the thrower flips over the hand, then follows through
+  down across the body.
+
+## 12. Traps that read at night (owner note: the traps must be seen catching)
+
+- Animals find food by smell carried downwind and come up the scent trail into the wind (the same reason hunters
+  stalk from downwind; the hunt already uses it). Here the night's breeze blows from the fire across the food and out
+  into the dark; the camp smoke leans that way, and the scavengers come from that side. A player who reads the smoke
+  knows where to set the traps.
+- The snare is a spring-pole snare: a bent sapling held by a trigger over a noose; a foot in the loop trips it and the
+  pole whips up and holds the leg. It is drawn that way and snaps up on a catch, with the cord to the leg.
+- The figure-four deadfall (the story tree's row 14 names it): a flat stone propped on three notched sticks, the bait
+  on the trigger stick. For small game; a big animal knocks it over. Here: small creatures that come to its bait are
+  crushed or stunned, a heavy one only springs it. Grazers now walk to fruit left within their nose.

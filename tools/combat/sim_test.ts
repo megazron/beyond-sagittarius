@@ -3,6 +3,7 @@
 import { CombatSim, noIntent, INFECT_AFTER } from '../../src/combat/sim/sim.ts';
 import type { Intent } from '../../src/combat/sim/sim.ts';
 import { WEAPONS } from '../../src/combat/sim/weapons.ts';
+import { INVENTIONS, knownFrom, weaponKnown } from '../../src/combat/sim/inventions.ts';
 import type { WeaponId } from '../../src/combat/sim/weapons.ts';
 import { SPECIES } from '../../src/combat/sim/species.ts';
 import type { Enemy, SpeciesId } from '../../src/combat/sim/species.ts';
@@ -407,6 +408,17 @@ const watch = (sim: CombatSim, e: Enemy, seconds: number, bot: (I: Intent, s: Co
   const h3 = sim3.spawn('hound', 0, 16, { alert: 1.2, aware: true }); sim3.player.z = 0;
   let minD = 99; run(sim3, 15, (I) => { I.lz = 1; minD = Math.min(minD, Math.hypot(h3.x, h3.z - 5)); });
   ok(minD > 2, 'fire line: the hunter stays off it while it burns', `${minD.toFixed(1)}`);
+  // the figure-four deadfall: the bait on its trigger brings something small under the stone; a big animal only knocks it over
+  const sim5 = new CombatSim({ seed: 71 }); sim5.inv = { stone: 2, branch: 2, fruit: 2 }; sim5.player.z = -30;
+  const df = sim5.placeTrap('deadfall', 0, 5)!;
+  const n5 = sim5.spawn('nibbet', 0, 14);
+  const ev5 = run(sim5, 40, () => {}, () => df.sprungT >= 0);
+  ok(has(ev5, 'trap', 'crushed') && (n5.dead || n5.stunT > 0), 'deadfall: the bait brings a small grazer under the stone', `${df.sprungT.toFixed(1)} ${n5.hp.toFixed(0)}`);
+  ok(!sim5.scents.some((sc) => sc.id === df.scent), 'deadfall: once down, the bait is gone');
+  const df2 = sim5.placeTrap('deadfall', 30, 5)!;
+  const m5 = sim5.spawn('mossback', 30, 9, { wander: 99 });
+  run(sim5, 40, (I) => { void I; }, () => df2.sprungT >= 0 || m5.dead);
+  ok(m5.hp === m5.maxHp && df2.uses === 0 ? true : df2.sprungT < 0, 'deadfall: a big animal is not hurt by it', `${m5.hp}/${m5.maxHp} sprung ${df2.sprungT.toFixed(1)}`);
 }
 
 // ---------------------------------------------------------------- aim assist
@@ -499,8 +511,8 @@ const toward = (I: Intent, R: EncounterRun, x: number, z: number, o: { sprint?: 
     const s = R.sim, p = s.player, fire = s.fires.find((f) => !f.torch && !f.burnsOut)!;
     I.mx = I.mz = 0; I.block = false; I.sprint = false;
     if (R.phase === 'prep') {
-      // bait out in the dark with a snare on it, and another snare on the food itself
-      if (!s.traps.length) { const food = R.markers.find((m) => m.kind === 'food')!, f = s.fires[0]; const dx = food.x - f.x, dz = food.z - f.z, l = Math.hypot(dx, dz); s.placeTrap('bait', food.x + (dx / l) * 9, food.z + (dz / l) * 9); s.placeTrap('snare', food.x + (dx / l) * 9, food.z + (dz / l) * 9); s.placeTrap('snare', food.x, food.z); s.placeTrap('stakes', food.x + (dx / l) * 3, food.z + (dz / l) * 3); }
+      // read the smoke: bait out downwind with a snare on it, stakes on the line in, another snare on the food itself
+      if (!s.traps.length) { const food = R.markers.find((m) => m.kind === 'food')!, dx = s.windX, dz = s.windZ; s.placeTrap('bait', food.x + dx * 8, food.z + dz * 8); s.placeTrap('snare', food.x + dx * 8, food.z + dz * 8); s.placeTrap('snare', food.x, food.z); s.placeTrap('stakes', food.x + dx * 3.5, food.z + dz * 3.5); }
       if (R.phaseT > 8) R.ready();
       return;
     }
@@ -520,6 +532,14 @@ const toward = (I: Intent, R: EncounterRun, x: number, z: number, o: { sprint?: 
   ok(Number(r.out?.flags['night.food']) >= 2, 'night defence: most of the food is still there', `${r.out?.flags['night.food']}`);
   ok(r.R.wave === 3 && count(r.ev, 'spawn', 'skritch') >= 9 && has(r.ev, 'spawn', 'hound'), 'night defence: three waves came, the hunter with the second');
   ok(r.R.sim.stats.trapHits > 0, 'night defence: the traps did some of the work', `${r.R.sim.stats.trapHits}`);
+  {
+    // they come up the wind: every scavenger wave spawns on the downwind side of the fire
+    const f = r.R.sim.fires.find((q) => !q.torch && !q.burnsOut)!, sp = r.ev.filter((e) => e.t === 'spawn' && e.what === 'skritch');
+    const down = sp.filter((e) => ((e.x! - f.x) * r.R.sim.windX + (e.z! - f.z) * r.R.sim.windZ) / Math.hypot(e.x! - f.x, e.z! - f.z) > 0.45).length;
+    ok(sp.length > 0 && down === sp.length, 'night defence: the scavengers come up the wind (the side the smoke leans to)', `${down}/${sp.length}`);
+    const caught = r.R.sim.traps.filter((q) => q.caught > 0).map((q) => q.kind);
+    ok(caught.includes('snare') || caught.includes('stakes'), 'night defence: a trap set downwind catches something', caught.join(','));
+  }
   const idle = play('night.defence', (I, R) => { if (R.phase === 'prep') R.ready(); });
   ok(idle.out && (idle.out.result === 'lost' || Number(idle.out.flags['night.food']) < Number(r.out?.flags['night.food'])), 'night defence: doing nothing costs the food or the night', JSON.stringify(idle.out?.flags) + ' ' + idle.out?.result);
   // with someone beside you who cannot fight, and nobody keeping the fire, they can be lost
@@ -590,5 +610,27 @@ section('determinism, difficulty');
   ok(min >= 0.4, 'fairness: no telegraph in the data is under 0.4 s on Hard', min.toFixed(2));
 }
 
+section('inventions: the Stone Age order');
+{
+  const byId = new Map(INVENTIONS.map((i) => [i.id, i]));
+  const before = (a: string, b: string): boolean => { const B = byId.get(b)!; return B.needs.includes(a) || B.needs.some((n) => before(a, n)); };
+  ok(INVENTIONS.every((i) => i.needs.every((n) => byId.has(n))), 'inventions: every need is an invention');
+  ok(before('flake', 'handAxe') && before('handAxe', 'hafting') === false && byId.get('handAxe')!.row === 11, 'inventions: the hand axe (row 11) comes after the flake');
+  {
+    // the throwing stick: a spinning stick sweeps a wide path, so a thrown one finds a nibbet a thrown stone would miss
+    const s3 = new CombatSim({ seed: 9 }); s3.player.has.throwstick = true; s3.equip('throwstick');
+    ok(WEAPONS.throwstick.proj!.radius > WEAPONS.rock.proj!.radius * 3 && WEAPONS.throwstick.proj!.ammo === null, 'throwing stick: a wide spinning path, and the stick itself is what flies');
+    ok(weaponKnown('throwstick', knownFrom({ flags: { 'inv.throwStick': true } })) && !weaponKnown('throwstick', knownFrom({})), 'inventions: the throwing stick is in the hand once it is taught');
+  }
+  {
+    // the hide wrap (row 15): the same lunge takes less through leather
+    const bite = (wrap: boolean) => { const sim = new CombatSim({ seed: 4 }); sim.player.wrap = wrap; sim.hurtPlayer(16, 0, 1, 0, 'lunge', null); return 100 - sim.player.hp; };
+    ok(bite(true) < bite(false) * 0.8 && bite(true) > 0, 'hide wrap: a lunge takes less through the wrap', `${bite(true)} ${bite(false)}`);
+    ok(INVENTIONS.find((i) => i.id === 'hideWrap')!.row === 15 && knownFrom({ flags: { 'inv.hideWrap': true } }).has('hideWrap') && !knownFrom({ flags: { spear: true } }).has('hideWrap'), 'inventions: the hide wrap is row 15 and only known once taught');
+  }
+  ok(!weaponKnown('handaxe', knownFrom({ flags: { spear: true } })) && weaponKnown('handaxe', knownFrom({ flags: { 'inv.handAxe': true } })), 'inventions: the hand axe is in the hand only once it is taught');
+  const s2 = new CombatSim({ seed: 3 }); s2.inv = { stone: 3 };
+  ok(s2.craft('handaxe') && s2.player.has.handaxe && (s2.inv.stone ?? 0) === 0, 'inventions: a hand axe is three stones');
+}
 console.log(`\ncombat sim: ${passes} passed, ${fails} failed`);
 process.exit(fails ? 1 : 0);

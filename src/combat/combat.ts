@@ -21,7 +21,7 @@ import type { Enemy, SpeciesId } from './sim/species';
 import { EncounterRun, ENCOUNTERS } from './sim/encounters';
 import type { EncounterId, EncounterOpts, Outcome } from './sim/encounters';
 import type { TensionSpec, TensionResult } from './sim/tension';
-import { createCreature, NIGHT } from './view/creatures';
+import { createCreature, NIGHT, NIGHT_RIM } from './view/creatures';
 import type { CreatureView } from './view/creatures';
 import { CombatFx } from './view/fx';
 import { FightBody } from './view/body';
@@ -52,7 +52,7 @@ interface Deps {
   home: () => boolean;
 }
 
-const KEYS = { attack: ['Mouse0'], aim: ['Mouse2'], alt: ['KeyG'], block: ['KeyQ'], dodge: ['KeyV'], sneak: ['KeyX'], weapon: ['KeyR'], kit: ['KeyT'] };
+const KEYS = { attack: ['Mouse0'], aim: ['Mouse2'], alt: ['KeyG'], block: ['KeyQ'], dodge: ['KeyV'], sneak: ['KeyX'], weapon: ['KeyR'], kit: ['KeyT'], back: ['KeyB'] };
 // pad, while a fight has the buttons: RT attack, LT aim, B roll, LB guard, RB throw, Y next weapon, d-pad up kit, R3 creep, L3 run
 const PAD = { attack: 7, aim: 6, dodge: 1, block: 4, alt: 5, weapon: 3, kit: 12, sneak: 11, sprint: 10 };
 const PAD_TAKEN = new Set(Object.values(PAD));
@@ -137,6 +137,7 @@ export class Combat {
     // only what has been invented can be in the hand (the proving ground is the one exception)
     const known = this.known();
     for (const w of Object.keys(p.has) as WeaponId[]) if (!weaponKnown(w, known)) delete p.has[w];
+    p.wrap = known.has('hideWrap');
     p.weapon = 'fists';
   }
   /** What the people of the crash know how to make (src/combat/sim/inventions.ts). */
@@ -292,7 +293,7 @@ export class Combat {
     this.body.release(D.player.model);
     document.body.classList.remove('cb-encounter');
     D.player.combat = null; D.input.padMask = null;
-    this.dropViews(); this.fx.clear();
+    this.dropViews(); this.fx.clear(); D.world.items.ringK = 1;
     if (e.opts.trial) {
       const b = JSON.parse(e.snap) as { stats: SaveData['stats']; inventory: Record<string, number>; combat?: CombatSave };
       Object.assign(s.stats, b.stats);
@@ -448,9 +449,9 @@ export class Combat {
     if (this.encounter?.id === 'arena') for (const k of ['skritch', 'hound', 'mossback', 'lashbloom', 'nibbet'] as SpeciesId[]) items.push({ id: `summon:${k}`, label: t(`cb.c.${k}`), sub: t('cb.summon'), ok: true });
     else {
       const known = this.known();
-      for (const k of Object.keys(TRAPS) as TrapId[]) if (this.encounter || trapKnown(k, known)) items.push({ id: `trap:${k}`, label: t(`cb.t.${k}`), sub: cost(TRAPS[k].cost), ok: sim.canAfford(TRAPS[k].cost) });
+      for (const k of Object.keys(TRAPS) as TrapId[]) if (this.encounter ? k !== 'deadfall' : trapKnown(k, known)) items.push({ id: `trap:${k}`, label: t(`cb.t.${k}`), sub: cost(TRAPS[k].cost), ok: sim.canAfford(TRAPS[k].cost) });
       // only what has been invented can be made (a set piece's own kit stays inside Episode One)
-      for (const w of ['club', 'spear', 'torch', 'hafted', 'atlatl', 'sling', 'bow'] as WeaponId[]) if (!p.has[w] && (this.encounter ? EPISODE_WEAPONS.has(w) : weaponKnown(w, known)) && sim.canAfford(WEAPONS[w].craft!)) items.push({ id: `make:${w}`, label: `${t('cb.make')}: ${t(`cb.w.${w}`)}`, sub: cost(WEAPONS[w].craft!), ok: true });
+      for (const w of ['club', 'throwstick', 'handaxe', 'spear', 'torch', 'hafted', 'atlatl', 'sling', 'bow'] as WeaponId[]) if (!p.has[w] && (this.encounter ? EPISODE_WEAPONS.has(w) : weaponKnown(w, known)) && sim.canAfford(WEAPONS[w].craft!)) items.push({ id: `make:${w}`, label: `${t('cb.make')}: ${t(`cb.w.${w}`)}`, sub: cost(WEAPONS[w].craft!), ok: true });
       if (p.has.atlatl && sim.canAfford(AMMO_CRAFT.dart.cost)) items.push({ id: 'make:dart', label: `${t('cb.make')}: ${t('cb.item.dart')}`, sub: cost(AMMO_CRAFT.dart.cost), ok: true });
       if (p.has.bow && sim.canAfford(AMMO_CRAFT.arrow.cost)) items.push({ id: 'make:arrow', label: `${t('cb.make')}: ${t('cb.item.arrow')}`, sub: cost(AMMO_CRAFT.arrow.cost), ok: true });
       if (sim.traps.some((q) => q.kind === 'rattle' && q.uses > 0)) items.push({ id: 'pull', label: t('cb.p.pull'), sub: t('cb.t.rattle'), ok: true });
@@ -517,7 +518,7 @@ export class Combat {
       return;
     }
     // the hour the encounter is in: the night runs from dusk to first light
-    s.timeOfDay = run.id === 'night.defence' ? (run.phase === 'prep' ? 20.6 + Math.min(1, run.phaseT / 70) * 0.9 : 21.5 + Math.min(1, (run.wave - 1 + Math.min(1, run.phaseT / 80)) / 3) * 7.6) % 24 : run.hour;
+    s.timeOfDay = run.id === 'night.defence' ? (run.phase === 'prep' ? 20.6 + Math.min(1, run.phaseT / 70) * 0.9 : run.phase === 'hush' ? 21.5 : 21.5 + Math.min(1, (run.wave - 1 + Math.min(1, run.phaseT / 80)) / 3) * 7.6) % 24 : run.hour;
     this.stepSim(dt, time, false);
     // stamina in a fight: running spends it, standing gives it back, and the body's state decides how fast
     const p = run.sim.player;
@@ -595,6 +596,16 @@ export class Combat {
       // a side-on archer hides the bow from behind the right shoulder: over the bow shoulder, looking down the arrow
       cb.shoulder = p.weapon === 'bow' ? -0.95 : 0.85; cb.lift = p.weapon === 'bow' ? 0.22 : 0.12; cb.jump = p.act === 'idle' && !p.blocking;
       cb.sprint = D.input.device === 'pad' && eng ? this.padSprint : null;
+      // the run: a glance back while the hunter gathers itself for a leap close behind you (or while B is held), so
+      // what chases you is seen, not only heard; the legs keep running where they were going
+      let back = 0;
+      if (run?.id === 'chase.escape' && D.free()) {
+        if (this.key(KEYS.back)) back = 1;
+        // the start of the run: a look over the shoulder at what is coming
+        if (run.t > 0.6 && run.t < 2.6) back = 1;
+        for (const e of sim.enemies) if (e.kind === 'hound' && !e.dead && !e.gone && !e.routed && (e.state === 'windup' || (e.state === 'strike' && e.stateT < 0.3)) && Math.hypot(e.x - p.x, e.z - p.z) < 16) back = 1;
+      }
+      cb.back = back;
     } else P.combat = null;
     // where the player looks (not the camera: a story or a recording may hold the camera elsewhere)
     { const cp = Math.cos(P.pitch); this.aimW.set(-Math.sin(P.yaw) * cp, Math.sin(P.pitch), -Math.cos(P.yaw) * cp); }
@@ -693,6 +704,7 @@ export class Combat {
         case 'trap': {
           if (e.what?.startsWith('set:')) { audio.sample('wood', 0.5); this.fx.puff('dust', e.x!, this.env.height(e.x!, e.z!) + 0.1, e.z!, 0, 0, 0.5); }
           else if (e.what === 'snared') { this.sfx('whip', 0.8, e.x, e.z); this.sfx('crack', 0.5, e.x, e.z, 1.5); this.fx.puff('leaf', e.x!, this.env.height(e.x!, e.z!) + 0.3, e.z!); }
+          else if (e.what === 'crushed' || e.what === 'knocked') { this.sfx('thud', e.what === 'crushed' ? 0.8 : 0.5, e.x, e.z, 1.3); this.fx.puff('dust', e.x!, this.env.height(e.x!, e.z!) + 0.1, e.z!, 0, 0, 0.8); }
           else if (e.what === 'staked') { this.sfx('crack', 1, e.x, e.z, 0.8); this.fx.puff('chip', e.x!, this.env.height(e.x!, e.z!) + 0.5, e.z!, 0, 0, 2); }
           else if (e.what === 'rattle') { this.sfx('rattle', 1, e.x, e.z); this.sfx('rattle', 0.8, e.x, e.z, 1.1, 0.45); }
           break;
@@ -758,8 +770,14 @@ export class Combat {
     // edge of the firelight (Earth's full moon is about 0.1 to 0.3 lux; a ringed giant filling a wide part of the
     // sky would give several times that)
     const nightRun = !!this.encounter && this.sim!.night;
+    // the world's pickup rings are HDR cyan: on a night ground they bloom into bright hoops that read as part of the fight
+    this.d.world.items.ringK = nightRun ? 0 : 1;
     // the light stays in the scene once made (switching lights on and off recompiles every material)
-    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? 0.8 : 0.55) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 40, P0.y + 80, P0.z + 30); this.shine.target.position.copy(P0); } }
+    this.fx.smokeK = nightRun ? 0.28 : 1;
+    // the night defence was too dark past the firelight to see what came (owner): 0.55 -> 0.85
+    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? 0.8 : 0.85) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 40, P0.y + 80, P0.z + 30); this.shine.target.position.copy(P0); } }
+    // the same cold light catches the animals' edges, so a shape beyond the fire reads as an animal, not a shadow
+    NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine ? this.shine.intensity * 0.55 : 0);
     const D = this.d, sim = this.sim!, P = D.player, p = sim.player, run = this.encounter, cam = P.camera;
     // creatures: a body for each within sight, none for those far off or gone
     NIGHT.on = sim.night;
@@ -802,7 +820,7 @@ export class Combat {
     this.hud.injuries(p.injuries.map((i) => ({ id: i.id, bad: !!i.infected })));
     if (run) {
       const N = run.objN;
-      this.hud.objective(t(run.objective), run.id === 'night.defence' && run.phase !== 'prep' ? `${t('cb.wave', { n: Math.max(1, N.wave ?? 1) })} · ${t('cb.fire', { n: N.fuel ?? 0 })} · ${t('cb.food', { n: N.food ?? 0 })}` : run.phase === 'prep' ? `${Math.max(0, Math.ceil(70 - run.phaseT))}` : null);
+      this.hud.objective(t(run.objective), run.id === 'night.defence' && run.phase !== 'prep' && run.phase !== 'hush' ? `${t('cb.wave', { n: Math.max(1, N.wave ?? 1) })} · ${t('cb.fire', { n: N.fuel ?? 0 })} · ${t('cb.food', { n: N.food ?? 0 })}` : run.phase === 'prep' ? `${Math.max(0, Math.ceil(70 - run.phaseT))}` : null);
     } else this.hud.objective(null);
     // the eye: how near the most suspicious thing is to knowing
     let top = 0, seen = false;
@@ -872,7 +890,7 @@ export class Combat {
   testHold(code: string, on: boolean) { this.testKeys = true; this.d.input.hold(code, on); }
   testTap(code: string) { this.testKeys = true; this.d.input.hold(code, true); this.tapUp.push(code); }
   /** Turn the view as a mouse would (pixels). */
-  testLook(dx: number, dy: number) { this.d.input.lookDX += dx; this.d.input.lookDY += dy; }
+  testLook(dx: number, dy: number) { if (Number.isFinite(dx) && Number.isFinite(dy)) { this.d.input.lookDX += dx; this.d.input.lookDY += dy; } }
   get cam() { const P = this.d.player; return { yaw: P.yaw, pitch: P.pitch, x: P.pos.x, y: P.pos.y, z: P.pos.z }; }
   debug() {
     const sim = this.sim, run = this.encounter;
