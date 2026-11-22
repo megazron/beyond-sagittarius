@@ -622,6 +622,12 @@ section('inventions: the Stone Age order');
     ok(WEAPONS.throwstick.proj!.radius > WEAPONS.rock.proj!.radius * 3 && WEAPONS.throwstick.proj!.ammo === null, 'throwing stick: a wide spinning path, and the stick itself is what flies');
     ok(weaponKnown('throwstick', knownFrom({ flags: { 'inv.throwStick': true } })) && !weaponKnown('throwstick', knownFrom({})), 'inventions: the throwing stick is in the hand once it is taught');
   }
+  {
+    // the hide wrap (row 15): the same lunge takes less through leather
+    const bite = (wrap: boolean) => { const sim = new CombatSim({ seed: 4 }); sim.player.wrap = wrap; sim.hurtPlayer(16, 0, 1, 0, 'lunge', null); return 100 - sim.player.hp; };
+    ok(bite(true) < bite(false) * 0.8 && bite(true) > 0, 'hide wrap: a lunge takes less through the wrap', `${bite(true)} ${bite(false)}`);
+    ok(INVENTIONS.find((i) => i.id === 'hideWrap')!.row === 15 && knownFrom({ flags: { 'inv.hideWrap': true } }).has('hideWrap') && !knownFrom({ flags: { spear: true } }).has('hideWrap'), 'inventions: the hide wrap is row 15 and only known once taught');
+  }
   ok(!weaponKnown('handaxe', knownFrom({ flags: { spear: true } })) && weaponKnown('handaxe', knownFrom({ flags: { 'inv.handAxe': true } })), 'inventions: the hand axe is in the hand only once it is taught');
   const s2 = new CombatSim({ seed: 3 }); s2.inv = { stone: 3 };
   ok(s2.craft('handaxe') && s2.player.has.handaxe && (s2.inv.stone ?? 0) === 0, 'inventions: a hand axe is three stones');

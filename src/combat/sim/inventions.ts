@@ -55,6 +55,9 @@ export const INVENTIONS: Invention[] = [
   { id: 'hafting', row: 12, age: 1, episodeOne: false, materials: { branch: 1, stone: 1, fibre: 1, resin: 1 }, steps: 5, needs: ['flake', 'cordage', 'fireDrill'], weapon: 'hafted' },
   { id: 'atlatl', row: 13, age: 1, episodeOne: false, materials: { branch: 2, fibre: 1 }, steps: 4, needs: ['hafting'], weapon: 'atlatl' },
   { id: 'traps', row: 14, age: 1, episodeOne: false, materials: { fibre: 1, branch: 1 }, steps: 3, needs: ['cordage'], traps: ['deadfall'] },
+  // a hide wrap (row 15): a hide scraped with a flake, stretched, dried and smoked so it stays soft, cut and sewn with
+  // sinew through holes made with a bone awl round the forearms and shoulders, where an animal's teeth go first
+  { id: 'hideWrap', row: 15, age: 1, episodeOne: false, materials: { hide: 2, sinew: 1 }, steps: 4, needs: ['flake', 'woodBone', 'fireDrill'] },
   // a pouch of hide (row 15) on two cords (row 10)
   { id: 'sling', row: 22, age: 1, episodeOne: false, materials: { fibre: 3, hide: 1 }, steps: 4, needs: ['cordage'], weapon: 'sling' },
   { id: 'bow', row: 19, age: 1, episodeOne: false, materials: { branch: 1, sinew: 2, fibre: 1 }, steps: 6, needs: ['cordage', 'hafting'], weapon: 'bow' },

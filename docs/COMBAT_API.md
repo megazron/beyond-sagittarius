@@ -78,6 +78,7 @@ their own Episode One kit; the dev arena ignores it all.
 | `hafting` | 12 | stone-tipped spear |
 | `atlatl` | 13 | spear-thrower and darts |
 | `traps` | 14 | figure-four deadfall (free play; small animals come to its bait) |
+| `hideWrap` | 15 | hide wrap worn on forearms and shoulders (free play): a quarter less through from a bite, half as many bite wounds |
 | `sling` | 22 | sling |
 | `bow` | 19 | bow and arrows |
 

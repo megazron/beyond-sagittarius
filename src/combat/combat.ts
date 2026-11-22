@@ -137,6 +137,7 @@ export class Combat {
     // only what has been invented can be in the hand (the proving ground is the one exception)
     const known = this.known();
     for (const w of Object.keys(p.has) as WeaponId[]) if (!weaponKnown(w, known)) delete p.has[w];
+    p.wrap = known.has('hideWrap');
     p.weapon = 'fists';
   }
   /** What the people of the crash know how to make (src/combat/sim/inventions.ts). */
