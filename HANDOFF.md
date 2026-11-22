@@ -300,3 +300,16 @@ unlanded except this handoff commit and any recording in progress.
   rears before the stomp, back fins open on the core after a beam. Not yet seen on the GPU.
 - Recording plan ~/bs-cap/combat/mkplan_v8.py (chase v4, atlatl ref v3, guardian v2, night v4) -> plan_v8.json.
 - Delivered 06_chase_v3 with notes; night v3 not sent (no stakes, no catch visible).
+- 02:40 v8 reviewed (~/bs-cap/combat/v8): chase v4 still never showed the hunter: it never got close (inside 14 m it
+  followed at 62% of its run, slower than a sprinting player, so it never leapt and the glance never fired). Fixed in
+  ai.ts (flat out while you run) + an opening look over the shoulder (run.t 0.6..2.6). Atlatl v3: side-on draw reads
+  right, dart went through the head: hand moved out from the ear. Guardian v2 read as a plant stand: heavier stone
+  legs. Night v4: MY smoke filled the screen (huge unlit point sprites near the camera): now thin wisps, point size
+  capped, particles fade within 2.8 m of the camera (all puffs). The world's camp has its own white plume already.
+- New content: hand axe (row 11, `handaxe`, craft 3 stones), figure-four deadfall (row 14, free play only; grazers
+  walk to fruit within their nose). sim_test 221.
+- QUESTION for the story agent: the night set piece offers snare and rattle (row 14 needs cordage, row 10), Episode
+  One has no cordage. I read them as vine traps for now (the kit gives vines). Say if Episode One should drop them.
+- 49a6f23 was CI-green but NOT landed (the smoke). Next land: d620dff or later on combat-land3 once green, after the
+  v9 recording (~/bs-cap/combat/mkplan_v9.py) looks right.
+
