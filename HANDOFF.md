@@ -602,3 +602,13 @@ unlanded except this handoff commit and any recording in progress.
   camera's view as a dark dithered shape). The crowd camera is on by default (?crowdcam=0 off); CI perf_gate passed with
   it on (perf18-land1). mobile_smoke failed twice there on a pixel7 screenshot timeout (SwiftShader, the job ran ~50%
   slower than main's; mobile_smoke never enters the city and both changes are city or Web/Ultra only).
+- 15:55 LANDED 97d58b2 on main (lens fade, crowd camera on, Ultra shadow + glass; CI 45038887812 all green on that
+  exact commit; perf18-land1's mobile_smoke screenshot timeout did not recur).
+- Web A/B p18/s1 (same session): crowd 53.2 -> 46.8, bazaar 59.0 -> 56.9, gate 55.1 -> 52.2, market 60.0 -> 57.1,
+  square 59.8 -> 55.4. The crowd camera draws ~30 more at crowd spots (234 -> 269, bazaar 174 -> 204); market and square
+  drew the same and still dropped 3-4 fps, so part is noise. Watch the crowd camera's cost.
+- Web gate is CPU-bound: GPU 6.5 ms a frame (p18/wg3, ?gputime=1), CPU update 5.8 + submission 15.6 ms (p18/wg2 profile).
+  Dynamic resolution still drops the pixel ratio to 0.76 there, for nothing. Biggest draw group: 30 unbatched
+  MeshBasicMaterial draws (1.8 ms) that the bazaar does not have; p18/plan_draws.json (probe_draws.js) names them.
+- 16:45 the PC rebooted. A "WIP: saved after restart" commit had swept in dist-new/ (3794 build files): I dropped it
+  (never pushed; no source in it) and excluded dist-*/ in the worktree's git info/exclude. Do not commit dist folders.
