@@ -122,7 +122,7 @@ window.__cbBot = (mode) => {
         } else if (st === plan.length) {
           // ready, said out here (by the fire the same key feeds it)
           stop(); if (since() > 0.8) { tapE(); next(); }
-        } else if (since() > 3) { const d = go(food.x - wx * 1.2, food.z - wz * 1.2); if (d < 0.8) stop(); }
+        } else if (since() > 3) { const d = go(food.x - wz * 1.8, food.z + wx * 1.8); if (d < 0.8) stop(); }
         return;
       }
       const h = living('hound').find((e) => !e.routed), thieves = living('skritch').filter((e) => !e.routed && dist(e, food) < 5);
@@ -132,7 +132,8 @@ window.__cbBot = (mode) => {
       if (h && h.weakT > 0 && dist(h, p) < 5) { fight([h]); return; }
       if (thieves.length) { fight(thieves); return; }
       // otherwise guard the food from its upwind side, looking out over the traps to the dark they come from
-      const d = go(food.x - wx * 1.2, food.z - wz * 1.2); if (d < 0.7) { stop(); if (h && dist(h, p) < 14) look(h.x, h.z, h.y + 0.6); else look(bait.x, bait.z, food.y); }
+      // to the side of the food, out of the smoke that drifts over it
+      const d = go(food.x - wz * 1.8, food.z + wx * 1.8); if (d < 0.7) { stop(); if (h && dist(h, p) < 14) look(h.x, h.z, h.y + 0.6); else look(bait.x, bait.z, food.y); }
     } else if (mode === 'chase') {
       const goal = run.markers.find((m) => m.kind === 'goal'), h = living('hound')[0];
       if (h && h.state === 'strike' && dist(h, p) < 3.6 && p.act !== 'roll' && p.stamina > 14) { hold('KeyD', 1); tap('KeyV'); setTimeout(() => hold('KeyD', 0), 450); return; }
