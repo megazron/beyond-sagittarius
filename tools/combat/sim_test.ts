@@ -395,8 +395,15 @@ const watch = (sim: CombatSim, e: Enemy, seconds: number, bot: (I: Intent, s: Co
   const sim = new CombatSim({ seed: 71 }); sim.inv = { vine: 2, branch: 2, tinder: 1, stone: 2, fruit: 1 }; sim.player.z = -30;
   sim.placeTrap('snare', 0, 6); sim.placeTrap('bait', 0, 5);
   const s1 = sim.spawn('skritch', 0, 20);
-  const ev = run(sim, 15, () => {}, () => s1.heldT > 0);
+  // it creeps the last metres (walking, heading in) for long enough that the game's warning cue plays before the snap
+  let creepT = 0, rushed = false;
+  const ev = run(sim, 15, () => {}, (s) => {
+    const d = Math.hypot(s1.x - 0, s1.z - 6);
+    if (s1.heldT <= 0 && d < 3.4 && s1.speed > 0.3) { creepT += DT; if (s1.speed > s1.def.walk + 0.01) rushed = true; }
+    return s1.heldT > 0;
+  });
   ok(s1.heldT > 0 && has(ev, 'trap', 'snared'), 'snare and bait: the bait brings it, the snare holds it');
+  ok(creepT > 1.1 && !rushed, 'bait: the last metres are a walk, long enough for the rustle, voice and twig', `${creepT.toFixed(2)} s, rushed ${rushed}`);
   ok(new CombatSim().placeTrap('snare', 0, 0) === null, 'traps: no materials, no trap');
   const sim2 = new CombatSim({ seed: 71 }); sim2.inv = { vine: 1, stone: 2 }; sim2.night = true; sim2.player.z = -25;
   sim2.placeTrap('rattle', 20, 0);
