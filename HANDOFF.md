@@ -620,3 +620,16 @@ unlanded except this handoff commit and any recording in progress.
   each, all casting shadows), the liner's hull pieces, ~6 more transparent glows. 4c38fa4: a bot is 2 draws (body, wheels
   and flag in vertex colours, + face, the face casts no shadow), the liner hull + spokes 1 mesh: ~25 fewer main draws
   and ~20 fewer shadow draws at the gate. Pushed as perf18-land3.
+- 23:05 LANDED 4c38fa4 on main (spaceport merges; CI 45077961066 green on that exact commit, first try).
+- QUIET-MACHINE numbers (after the restart, one heavy job machine-wide, A500, 1280x720, single runs, back to back;
+  base = dist-base = main before my work 983d105, new = dist-new3 = 4c38fa4). Everything Web/Ultra is at the vsync cap
+  (60), so these show headroom only through draw_ms/update_ms:
+  Web city (p18/s2_A_web, base): crowd 60.2, bazaar 60.0, gate 60.1, market 60.1, square 59.9; draw 4-5.5 ms, update 2-4.
+  Ultra city base -> new (p18/s2_A_ultra, s2_B_ultra): crowd 48.4 -> 59.8, bazaar 34.9 -> 60.3, gate 50.4 -> 60.2,
+  market 59.9 -> 60.2, square 60.2 -> 60.2; bazaar draw 20.0 -> 9.2 ms, 482 -> 312 draws; worst frame 50 -> 20 ms.
+  Planet Web (p18/pl1_web, new): wake 60.3, wake_back 60.2, lake 60.2, forest 60.1, camp 60.1, ridge 60.2.
+  Mobile proxy (p18/mb1, new, 4x CPU throttle, 844x390): flat 19.3, bazaar 20.5, crowd 17.5, gate 19.6, square 14.7,
+  downtown 20.7, market 16.8, waterfront 22.1, park 18.6. Update 13-28 ms and draw 22-39 ms for only 38-124 draws:
+  NOT at 30. Next: a CPU profile of Mobile (plan_mob.json + "profile": 6 at the square and crowd) and cut the update
+  (characters' animate, city update) and per-draw cost there.
+- Under contention the same builds read 20-35 (Ultra) and 47-55 (Web): the owner's "laggy" on a busy laptop is CPU.
