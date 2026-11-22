@@ -105,7 +105,9 @@ window.__cbBot = (mode) => {
       if (run.phase === 'prep') {
         // read the smoke: they will come up the wind. Stakes on the line in, bait out downwind, a snare on the bait.
         // Each one is set facing downwind: the last two metres are walked along the wind, so the body faces that way.
-        const plan = [{ k: 'Digit2', x: food.x + wx * 3.5, z: food.z + wz * 3.5 }, { k: 'Digit5', x: bait.x, z: bait.z }, { k: 'Digit1', x: bait.x, z: bait.z }];
+        // the snare goes on the bait where it really lies (a walk that ends short sets the bait where it stands)
+        const laid = sim.traps.find((q) => q.kind === 'bait'), sn = laid ? { x: laid.x, z: laid.z } : bait;
+        const plan = [{ k: 'Digit2', x: food.x + wx * 3.5, z: food.z + wz * 3.5 }, { k: 'Digit5', x: bait.x, z: bait.z }, { k: 'Digit1', x: sn.x, z: sn.z }];
         const now = performance.now();
         window.__cbDbg = { st, since: +since().toFixed(1), stuck: flag.stuck || 0, leg: flag.leg || 0, setting: !!C.setting, p: [+(p.x - food.x).toFixed(1), +(p.z - food.z).toFixed(1)], traps: sim.traps.map((q) => q.kind) };
         if (st < plan.length) {
