@@ -325,3 +325,30 @@ unlanded except this handoff commit and any recording in progress.
 - Next: a night take where a catch is framed (bot looks at the snare when a skritch nears it), identify the ring,
   guardian silhouette at fight distance, bow camera by play, bow/sling grips once life-wip's setGrip is on main,
   the deadfall in free play (food), Episode One 1.9 hooks are ready on the API side.
+
+### 2026-11-22 ~04:00 (combat agent, next session)
+- DECIDED (night traps vs cordage): Episode One keeps the snare and the rattle as VINE traps, not cordage. A green vine
+  is its own cord (the spear's head is already lashed with one: story.ts `spear: { branch, flint, vine }`; the world
+  scatters vines round the camp and pod 2). New invention `vineTraps` (row null, episodeOne, materials vine + branch,
+  traps snare + rattle, text cb.inv.vineTraps.1-3); known once `flags.spear` is set or `inv.vineTraps`. Row 14
+  (`traps`) now gives only the figure-four deadfall; spun cordage (row 10) stays Age 1 level 11. Labels: "Vine snare",
+  "Vine rattle". NOTE FOR THE STORY AGENT: nothing to add to Episode One; if a scene teaches traps, set
+  `flags['inv.vineTraps']`. Say in this file if you want it otherwise.
+- The bright cyan ring on the night ground was the WORLD's pickup marker (props.ts/resources.ts: stones, branches and
+  resources within 9 m get a pulsing HDR cyan ring that blooms hard on a dark ground). New `world.items.ringK`
+  (1 normal, 0 hidden); combat sets it to 0 while a night set piece runs, back to 1 when it ends.
+- Night: after "ready" (or the 70 s prep) a 10 s `hush` phase (objective "Quiet now. Watch the dark where the smoke
+  goes.") before wave 1, so the traps can be looked at. Snared animals now fight the cord in the view (hind leg pulled
+  out, body twisting, jaws open; the hound twists too); the cord runs to the hind leg. Bot: stands at the guard spot in
+  the hush looking over the traps; in the waves it turns to watch a snare/stakes a scavenger is within 6 m of, or one
+  that sprang in the last 3.5 s.
+- Chase hour 19.9 -> 18.5: this sky's sun sets at 18:00 (sky.ts: e = sin((h - 6) / 24 * 2pi)); at 19.9 the sun was
+  0.52 below the horizon (full night, no afterglow). At 18.5 the horizon is still dusk orange and the fog takes it, so
+  trees are silhouettes against it. Bot rolls sideways out of the lunge line when the hound is under 6.5 m into its
+  strike (once a lunge).
+- Guardian: pale weathered stone, glowing seams on all six edges, a crest of three bronze spines, heavier legs, core
+  glows through the closed fins whenever it is awake.
+- Spear-thrower: the cast's hand path arcs up over the shoulder (0.16 s), a pale swept smear of the thrower for 0.18 s.
+  Reference camera in mkplan_v10.py: behind and above the throwing shoulder first, then side-on.
+- Windows interop from my shell gave "Invalid argument" for .exe; `/init /mnt/c/...exe` works. ~/bs-cap/combat/cap2.sh
+  is cap.sh with that prefix.

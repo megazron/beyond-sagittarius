@@ -616,6 +616,12 @@ section('inventions: the Stone Age order');
   const before = (a: string, b: string): boolean => { const B = byId.get(b)!; return B.needs.includes(a) || B.needs.some((n) => before(a, n)); };
   ok(INVENTIONS.every((i) => i.needs.every((n) => byId.has(n))), 'inventions: every need is an invention');
   ok(before('flake', 'handAxe') && before('handAxe', 'hafting') === false && byId.get('handAxe')!.row === 11, 'inventions: the hand axe (row 11) comes after the flake');
+  {
+    // the throwing stick: a spinning stick sweeps a wide path, so a thrown one finds a nibbet a thrown stone would miss
+    const s3 = new CombatSim({ seed: 9 }); s3.player.has.throwstick = true; s3.equip('throwstick');
+    ok(WEAPONS.throwstick.proj!.radius > WEAPONS.rock.proj!.radius * 3 && WEAPONS.throwstick.proj!.ammo === null, 'throwing stick: a wide spinning path, and the stick itself is what flies');
+    ok(weaponKnown('throwstick', knownFrom({ flags: { 'inv.throwStick': true } })) && !weaponKnown('throwstick', knownFrom({})), 'inventions: the throwing stick is in the hand once it is taught');
+  }
   ok(!weaponKnown('handaxe', knownFrom({ flags: { spear: true } })) && weaponKnown('handaxe', knownFrom({ flags: { 'inv.handAxe': true } })), 'inventions: the hand axe is in the hand only once it is taught');
   const s2 = new CombatSim({ seed: 3 }); s2.inv = { stone: 3 };
   ok(s2.craft('handaxe') && s2.player.has.handaxe && (s2.inv.stone ?? 0) === 0, 'inventions: a hand axe is three stones');

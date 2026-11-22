@@ -69,6 +69,7 @@ their own Episode One kit; the dev arena ignores it all.
 | `goodStone` | 2 | (picking flint) |
 | `flake` | 3 | stone flake |
 | `woodBone` | 4 | club |
+| `throwStick` | (Episode One, after `woodBone` and `flake`) | throwing stick: thrown side-arm it spins and sweeps a wide path (small fast game), swung it is a light club |
 | `fireDrill` | 5 | fire (and with it `torch`, `fireline`) |
 | `fireSpear` | 9 | fire-hardened spear (and `stakes`) |
 | `vineTraps` | (Episode One) | vine snare and vine rattle: a raw green vine as the cord (also known once `flags.spear` is set: its head is lashed with a vine) |

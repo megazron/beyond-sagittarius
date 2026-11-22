@@ -146,7 +146,7 @@ export class EncounterRun {
     } else {
       // the proving ground: everything in the hand, nothing at stake
       this.hour = 11; s.night = false;
-      for (const w of ['rock', 'flake', 'handaxe', 'club', 'spear', 'hafted', 'atlatl', 'torch', 'sling', 'bow', 'crossbow', 'coil'] as WeaponId[]) { s.player.has[w] = true; }
+      for (const w of ['rock', 'flake', 'handaxe', 'club', 'throwstick', 'spear', 'hafted', 'atlatl', 'torch', 'sling', 'bow', 'crossbow', 'coil'] as WeaponId[]) { s.player.has[w] = true; }
       for (const [k, n] of Object.entries({ stone: 30, arrow: 30, dart: 12, bolt: 20, branch: 20, vine: 10, tinder: 6, fruit: 6 })) s.inv[k] = Math.max(s.inv[k] ?? 0, n);
       // the machine stands well off, so the bench fights near the start never wake it by accident
       this.put('guardian', 70, 0, { yaw: this.site.yaw + Math.PI });

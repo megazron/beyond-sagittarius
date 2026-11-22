@@ -6,7 +6,7 @@ import type { CombatSim, Trap } from '../sim/sim';
 import type { WeaponId } from '../sim/weapons';
 
 const N_PART = 384;
-const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpQ2 = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 // the snare's pole: bent over the noose when set (tip about a hand above the loop), near upright once sprung
 const SNARE_SET = 0.66, SNARE_UP = 0.12;
 const Y1 = new THREE.Vector3(0, 1, 0);
@@ -203,12 +203,18 @@ export class CombatFx {
       const w: WeaponId = q.weapon;
       if (w === 'rock' || w === 'sling') { tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(1, 1, 1)); if (ns < 20) this.stones.setMatrixAt(ns++, tmpM); }
       else if (w === 'coil') { tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(1, 1, 1.6)); if (nb < 12) this.bolts.setMatrixAt(nb++, tmpM); }
+      else if (w === 'throwstick') {
+        // end over end: it turns about the axis across its flight, about eight turns a second
+        tmpQ.multiply(tmpQ2.setFromAxisAngle(tmpS.set(0, 1, 0), (t * 50) % 6.283));
+        tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(2.6, 2.6, 0.75)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM);
+      }
       else { const sp = w === 'spear' || w === 'hafted', len = sp ? 2 : w === 'atlatl' ? 1.7 : w === 'crossbow' ? 0.45 : 0.75, thick = sp ? 1.9 : w === 'atlatl' ? 1.3 : 1.25; tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(thick, thick, len)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM); }
     }
     // spears and arrows that stuck stay where they fell until picked up
     for (const k of sim.pickups) {
       const y = this.height(k.x, k.z);
-      if (k.weapon === 'spear' || k.weapon === 'hafted' || k.item === 'arrow' || k.item === 'bolt' || k.item === 'dart') { tmpQ.setFromAxisAngle(tmpS.set(1, 0, 0), 0.9 + (k.id % 5) * 0.1); tmpM.compose(tmpV.set(k.x, y + (k.weapon ? 0.7 : 0.25), k.z), tmpQ, tmpS.set(k.weapon ? 1.9 : 1, k.weapon ? 1.9 : 1, k.weapon ? 2 : 0.75)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM); }
+      if (k.weapon === 'throwstick') { tmpQ.setFromAxisAngle(tmpS.set(0, 1, 0), k.id * 1.7); tmpM.compose(tmpV.set(k.x, y + 0.04, k.z), tmpQ, tmpS.set(2.6, 2.6, 0.75)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM); }
+      else if (k.weapon === 'spear' || k.weapon === 'hafted' || k.item === 'arrow' || k.item === 'bolt' || k.item === 'dart') { tmpQ.setFromAxisAngle(tmpS.set(1, 0, 0), 0.9 + (k.id % 5) * 0.1); tmpM.compose(tmpV.set(k.x, y + (k.weapon ? 0.7 : 0.25), k.z), tmpQ, tmpS.set(k.weapon ? 1.9 : 1, k.weapon ? 1.9 : 1, k.weapon ? 2 : 0.75)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM); }
       else if (k.item === 'stone') { tmpM.compose(tmpV.set(k.x, y + 0.06, k.z), tmpQ.identity(), tmpS.set(1.2, 1.2, 1.2)); if (ns < 20) this.stones.setMatrixAt(ns++, tmpM); }
     }
     this.stones.count = ns; this.shafts.count = nh; this.bolts.count = nb;

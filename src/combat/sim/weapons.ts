@@ -1,6 +1,6 @@
 // Every weapon and trap is a row of data. A later age adds rows (and a model in view/gear.ts); nothing else changes.
 
-export type WeaponId = 'fists' | 'rock' | 'flake' | 'handaxe' | 'club' | 'spear' | 'hafted' | 'atlatl' | 'torch' | 'sling' | 'bow' | 'crossbow' | 'coil';
+export type WeaponId = 'fists' | 'rock' | 'flake' | 'handaxe' | 'club' | 'throwstick' | 'spear' | 'hafted' | 'atlatl' | 'torch' | 'sling' | 'bow' | 'crossbow' | 'coil';
 export type DamageKind = 'blunt' | 'pierce' | 'fire' | 'energy';
 
 export interface ProjDef {
@@ -65,6 +65,13 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   // a heavy branch, trimmed: the first thing anyone picks up
   club: { id: 'club', mass: 1.6, dur: 70, age: 0, craft: { branch: 1 }, block: 0.55,
     melee: { dmg: 14, reach: 1.7, arc: 1.5, windup: 0.34, active: 0.14, recover: 0.5, stamina: 14, knock: 4, poise: 30, kind: 'blunt', noise: 7 } },
+  // a throwing stick: a short, heavy length of hard wood, shaved flat-ish and thicker at one end, thrown so it spins
+  // end over end (Schoeningen, Germany, about 300 thousand years ago, beside the spears). A spinning stick sweeps a
+  // much wider path than a point, so it is the first thing that brings down small fast game; against anything big it
+  // only bruises. Swung, it is a light club
+  throwstick: { id: 'throwstick', mass: 0.7, dur: 60, age: 0, craft: { branch: 1 }, block: 0.35,
+    melee: { dmg: 9, reach: 1.45, arc: 1.3, windup: 0.22, active: 0.1, recover: 0.36, stamina: 9, knock: 2, poise: 14, kind: 'blunt', noise: 5 },
+    proj: { ammo: null, speed: 20, gravity: 9.81, dmg: 15, kind: 'blunt', charge: 0.45, weak: 0.6, radius: 0.32, knock: 2.6, poise: 22, recover: 1, noise: 8, spread: [5, 2.6] } },
   // a straight sapling, its point shaped with a flake and hardened in the coals (Schoeningen, Clacton): the point
   // dulls and splits with use, so it wears quicker than a club
   spear: { id: 'spear', mass: 1.3, dur: 35, age: 0, craft: { branch: 1 }, block: 0.6,

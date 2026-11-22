@@ -37,6 +37,8 @@ export const INVENTIONS: Invention[] = [
   { id: 'goodStone', row: 2, age: 1, episodeOne: true, materials: { stone: 2 }, steps: 2, needs: [] },
   { id: 'flake', row: 3, age: 1, episodeOne: true, materials: { stone: 2 }, steps: 3, needs: ['goodStone'], weapon: 'flake' },
   { id: 'woodBone', row: 4, age: 1, episodeOne: true, materials: { branch: 1 }, steps: 2, needs: [], weapon: 'club' },
+  // a throwing stick of hard wood, shaved with a flake so it is heavier at one end and spins true
+  { id: 'throwStick', row: null, age: 1, episodeOne: true, materials: { branch: 1 }, steps: 3, needs: ['woodBone', 'flake'], weapon: 'throwstick' },
   { id: 'fireDrill', row: 5, age: 1, episodeOne: true, materials: { tinder: 1, branch: 2 }, steps: 3, needs: [] },
   { id: 'torch', row: null, age: 1, episodeOne: true, materials: { branch: 1, tinder: 1 }, steps: 2, needs: ['fireDrill'], weapon: 'torch' },
   { id: 'fireSpear', row: 9, age: 1, episodeOne: true, materials: { branch: 1 }, steps: 4, needs: ['flake', 'fireDrill'], weapon: 'spear' },
