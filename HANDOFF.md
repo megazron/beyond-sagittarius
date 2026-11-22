@@ -279,3 +279,14 @@ unlanded except this handoff commit and any recording in progress.
 - Coordinator notes: the Mobile crowd perf_gate (budget 120) needs real headroom (CI saw 122 on perf16 42f25f2);
   life-wip added setRibbon in src/world/grass.ts and src/world/stream.ts: keep those when they land; the combat CI's
   "full fight adds 381 draw calls" is being looked at by the combat agent (my batching is not known to be involved).
+- 02:30 LANDED perf16-land on main as 3a740a3 (CI 44974618050 all green; rebased on main 6160b3d, perf15's handoff
+  commits came along). perf_gate's Mobile crowd now passes with headroom (local drawlist: 127 on main -> 93; the phone
+  shadow casters cut the worst frame's shadow redraw). KTX2: 91 colour maps in public/textures (+14 MB), loader in
+  core/assets.ts (setKtx2Renderer, textures/ktx2.json, transcoder in public/basis); normal maps stay webp (UASTC was 8x).
+- Measuring caveat 02:30: a Web A/B (p16/a2_*) ran while other agents loaded the machine (load average 5, combat ffmpeg,
+  other Chrome instances): both builds 15-37 fps there, and the new one looked slower in bazaar/crowd/gate (draw ms
+  44-56 vs 17-21). An interleaved base/new/base/new run (p16/inter.sh, i1_*/i2_*) decides whether that is real.
+- Ultra bazaar census (p16/ucen): 737 draws, 141 materials; the prop scans are an InstancedMesh per prop kind per
+  stretch (wooden_crate 12 draws, drawer_cabinet 10, painted_wooden_cabinet 10...): next for Ultra is one InstancedBatch
+  per prop kind with per-stretch lists (like the forest). Bodies are still ~7 draws each (skin, cloth, eyes, kit 1-2,
+  hair, lash/cornea near); a shared skin+cloth atlas would be the next step for item 2.
