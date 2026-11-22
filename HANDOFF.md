@@ -612,3 +612,11 @@ unlanded except this handoff commit and any recording in progress.
   MeshBasicMaterial draws (1.8 ms) that the bazaar does not have; p18/plan_draws.json (probe_draws.js) names them.
 - 16:45 the PC rebooted. A "WIP: saved after restart" commit had swept in dist-new/ (3794 build files): I dropped it
   (never pushed; no source in it) and excluded dist-*/ in the worktree's git info/exclude. Do not commit dist folders.
+- 22:21 WSL restarted again. ~/bin/heavy now runs ONE heavy job machine-wide. GPU runs: p18/gpurun.sh OUT PLAN URL inside
+  heavy (starts Chrome via coldchrome.sh, runs the plan, closes the tabs with ~/bs-cap/combat/tabs.py). Previews: base
+  dist-base on :4182, new dist-new3 on :4183 (vite preview, started by hand; they die with WSL).
+- Quiet machine right after the restart (p18/dr1, plan_draws.json): Web gate 60.4 fps, bazaar 60.5 (vsync cap). The
+  earlier 48-55 at the gate was mostly contention. The gate's draws beyond the bazaar's: the 4 delivery bots (7 meshes
+  each, all casting shadows), the liner's hull pieces, ~6 more transparent glows. 4c38fa4: a bot is 2 draws (body, wheels
+  and flag in vertex colours, + face, the face casts no shadow), the liner hull + spokes 1 mesh: ~25 fewer main draws
+  and ~20 fewer shadow draws at the gate. Pushed as perf18-land3.
