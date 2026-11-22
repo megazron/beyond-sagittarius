@@ -600,6 +600,8 @@ export class Combat {
       let back = 0;
       if (run?.id === 'chase.escape' && D.free()) {
         if (this.key(KEYS.back)) back = 1;
+        // the start of the run: a look over the shoulder at what is coming
+        if (run.t > 0.6 && run.t < 2.6) back = 1;
         for (const e of sim.enemies) if (e.kind === 'hound' && !e.dead && !e.gone && !e.routed && (e.state === 'windup' || (e.state === 'strike' && e.stateT < 0.3)) && Math.hypot(e.x - p.x, e.z - p.z) < 16) back = 1;
       }
       cb.back = back;
