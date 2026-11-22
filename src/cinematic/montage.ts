@@ -1648,7 +1648,7 @@ function hullRaft() {
   }
   plate.setAttribute('color', new THREE.BufferAttribute(col, 3));
   plate.computeVertexNormals();
-  const m = new THREE.MeshStandardMaterial({ color: 0xc9ccd4, roughness: 0.45, metalness: 0.65, vertexColors: true });
+  const m = new THREE.MeshStandardMaterial({ color: 0xb4b6bb, roughness: 0.78, metalness: 0.45, vertexColors: true }); // scuffed and sooted: a broad dull sheen, no hard sun glint (WIP6)
   const g = new THREE.Group(); g.add(new THREE.Mesh(plate, m));
   const rib = new THREE.MeshStandardMaterial({ color: 0x5a5d64, roughness: 0.6, metalness: 0.7 });
   for (let i = -2; i <= 2; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.22, 3.4 - Math.abs(i) * 0.4), rib); b.position.set(i * 1.3, -0.14 - i * i * 0.03, 0); g.add(b); }
@@ -1699,15 +1699,16 @@ function aerolisSky(sun: THREE.Vector3) {
         // the dark above: a deep violet-brown, not black, the air still in it
         col = mix(vec3(0.06, 0.04, 0.07), col, a);
         a = max(a, 0.55 + 0.45 * thick);
-        // a few small blue galaxies, only where the air is thin
-        vec3 p = d * 18.0, id = floor(p), f = fract(p) - 0.5;
+        // a few small blue galaxies, only where the air is thin: few, but each a few degrees across with a bright
+        // core, so they read at 540p (WIP6: at a third of a degree they never showed)
+        vec3 p = d * 7.0, id = floor(p), f = fract(p) - 0.5;
         float h = hash13(id);
-        if (h > 0.86) {
-          vec3 q = f - (hash33(id) - 0.5) * 0.5; q -= d * dot(q, d);
+        if (h > 0.8) {
+          vec3 q = f - (hash33(id) - 0.5) * 0.4; q -= d * dot(q, d);
           vec3 ax = hash33(id + 3.0) - 0.5; ax -= d * dot(ax, d); ax = normalize(ax);
-          float u = dot(q, ax), v = length(q - ax * u), sz = 0.6 + h * 3.0;
-          float gx = exp(-(u * u * 220.0 + v * v * 1400.0) / sz) + 0.8 * exp(-(u * u + v * v) * 9000.0 / sz);
-          col += vec3(0.45, 0.62, 1.0) * gx * 0.55 * (1.0 - thick);
+          float u = dot(q, ax), v = length(q - ax * u), sz = 0.7 + (h - 0.8) * 6.0;
+          float gx = exp(-(u * u * 70.0 + v * v * 420.0) / sz) + 1.4 * exp(-(u * u + v * v) * 2600.0 / sz);
+          col += vec3(0.5, 0.68, 1.0) * gx * 0.9 * smoothstep(0.75, 0.2, thick);
         }
         gl_FragColor = vec4(col, a);
       }`,
