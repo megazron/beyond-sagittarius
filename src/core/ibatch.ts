@@ -23,7 +23,7 @@ export const BATCH = { on: false };
 export const MAX_GEOMETRIES = SHADOW_BASE;
 
 let pending: Int32Array | null = null;
-const FR = new THREE.Frustum(), PV = new THREE.Matrix4();
+const FR = new THREE.Frustum(), PV = new THREE.Matrix4(), BOX = new THREE.Box3(), TV = new THREE.Vector3();
 let patched = false;
 let info: THREE.WebGLInfo | null = null;
 /** The next multi-draw is ours: draw it instanced with these counts (set right before three issues it). */
@@ -82,13 +82,15 @@ export function batchDepth(extra?: (sh: THREE.WebGLProgramParametersWithUniforms
 }
 
 export class InstancedBatch extends THREE.BatchedMesh {
-  private lists: { ids: Int32Array; n: number; shadow: boolean }[] = [];
+  /**
+   * The sub-draws. Each geometry has one run of its own (run id = geometry id, made by addGeometry); `addRun` adds more
+   * runs of a geometry, each its own list, cull sphere and switches (e.g. a prop kind per stretch of street, every
+   * stretch in the same draw call, each culled on its own). Add every geometry before the first addRun.
+   */
+  private runs: { geo: number; ids: Int32Array; n: number; shadow: boolean; sphere: THREE.Sphere | null; hidden: boolean; mainHidden: boolean }[] = [];
   private dirty = true;
   private main = { starts: new Int32Array(SHADOW_BASE), counts: new Int32Array(SHADOW_BASE), inst: new Int32Array(SHADOW_BASE), geo: new Int32Array(SHADOW_BASE), cur: new Int32Array(SHADOW_BASE), n: 0 };
   private shad = { starts: new Int32Array(SHADOW_BASE), counts: new Int32Array(SHADOW_BASE), inst: new Int32Array(SHADOW_BASE), geo: new Int32Array(SHADOW_BASE), cur: new Int32Array(SHADOW_BASE), n: 0 };
-  /** Per geometry: a world-space sphere to cull it by in each pass (frustum of the pass's camera), and a switch. */
-  private spheres: (THREE.Sphere | null)[] = [];
-  private hidden: boolean[] = [];
   private culls = false;
 
   /** `instances`: how many instances it will hold; `vertices`, `indices`: of all its geometries together. */
@@ -110,28 +112,50 @@ export class InstancedBatch extends THREE.BatchedMesh {
   addGeometry(g: THREE.BufferGeometry, rv?: number, ri?: number): number {
     const id = super.addGeometry(g, rv, ri);
     if (id >= MAX_GEOMETRIES) throw new Error('InstancedBatch: too many geometries');
-    this.lists[id] = { ids: new Int32Array(0), n: 0, shadow: true };
+    if (this.runs.length !== id) throw new Error('InstancedBatch: add every geometry before the first addRun');
+    this.runs[id] = this.newRun(id);
     return id;
   }
+  private newRun(geo: number) { return { geo, ids: new Int32Array(0), n: 0, shadow: true, sphere: null, hidden: false, mainHidden: false }; }
+  /** One more list of a geometry's instances, drawn in the same call (returns its run id, for the calls below). */
+  addRun(geometryId: number): number {
+    if (this.runs.length >= MAX_GEOMETRIES) throw new Error('InstancedBatch: too many runs');
+    this.runs.push(this.newRun(geometryId)); return this.runs.length - 1;
+  }
+  /** Runs left before the batch is full (geometries count as runs). */
+  get runsLeft() { return MAX_GEOMETRIES - this.runs.length; }
 
-  /** Cull a geometry's sub-draw per pass by this world-space sphere (for static pieces drawn once each). */
-  setCullSphere(geometryId: number, sphere: THREE.Sphere | null) { this.spheres[geometryId] = sphere; this.culls ||= !!sphere; }
-  /** Leave a geometry out of every pass (e.g. what is only shown close by). */
-  setHidden(geometryId: number, on: boolean) { this.hidden[geometryId] = on; this.culls = true; }
-  isHidden(geometryId: number) { return !!this.hidden[geometryId]; }
-  /** Leave a geometry out of the camera's passes only (it still casts its shadow). */
-  setMainHidden(geometryId: number, on: boolean) { this.mainHidden[geometryId] = on; this.culls = true; }
-  private mainHidden: boolean[] = [];
+  /** Cull a run per pass by this world-space sphere (for static pieces drawn once each). */
+  setCullSphere(run: number, sphere: THREE.Sphere | null) { this.runs[run].sphere = sphere; this.culls ||= !!sphere; this.rebound(); }
+  /** Leave a run out of every pass (e.g. what is only shown close by). */
+  setHidden(run: number, on: boolean) { if (this.runs[run].hidden !== on) { this.runs[run].hidden = on; this.rebound(); } this.culls = true; }
+  /**
+   * The batch as a whole is culled by the bounds of its shown runs and not drawn at all when none is (a batch whose
+   * runs all draw nothing still cost a draw call in every pass). Only where every run has a cull sphere (BatchPool).
+   */
+  autoBounds = false;
+  private rebound() {
+    if (!this.autoBounds) return;
+    const box = BOX.makeEmpty();
+    for (const r of this.runs) if (r.n && !r.hidden && r.sphere) { box.expandByPoint(TV.copy(r.sphere.center).addScalar(r.sphere.radius)); box.expandByPoint(TV.copy(r.sphere.center).addScalar(-r.sphere.radius)); }
+    const on = !box.isEmpty();
+    if (this.visible !== on) this.visible = on;
+    this.frustumCulled = on;
+    if (on) { this.boundingSphere ??= new THREE.Sphere(); box.getBoundingSphere(this.boundingSphere); }
+  }
+  isHidden(run: number) { return this.runs[run].hidden; }
+  /** Leave a run out of the camera's passes only (it still casts its shadow). */
+  setMainHidden(run: number, on: boolean) { this.runs[run].mainHidden = on; this.culls = true; }
 
-  /** Whether a geometry's list is drawn into the shadow maps too. */
-  setShadow(geometryId: number, on: boolean) { this.lists[geometryId].shadow = on; this.dirty = true; }
+  /** Whether a run is drawn into the shadow maps too. */
+  setShadow(run: number, on: boolean) { const r = this.runs[run]; if (r.shadow !== on) { r.shadow = on; this.dirty = true; } }
 
-  /** The instances to draw with a geometry this frame (copied). */
-  setList(geometryId: number, ids: ArrayLike<number>, n: number) {
-    const l = this.lists[geometryId];
+  /** The instances to draw with a run this frame (copied). */
+  setList(run: number, ids: ArrayLike<number>, n: number) {
+    const l = this.runs[run];
     if (l.ids.length < n) l.ids = new Int32Array(Math.max(n, l.ids.length * 2, 16));
     for (let i = 0; i < n; i++) l.ids[i] = ids[i];
-    l.n = n; this.dirty = true;
+    l.n = n; this.dirty = true; this.rebound();
   }
 
   private layout() {
@@ -141,10 +165,10 @@ export class InstancedBatch extends THREE.BatchedMesh {
     const range = {} as THREE.BatchedMeshGeometryRange;
     let at = LIST_BASE;
     this.main.n = 0; this.shad.n = 0;
-    for (let g = 0; g < this.lists.length; g++) {
-      const l = this.lists[g];
+    for (let g = 0; g < this.runs.length; g++) {
+      const l = this.runs[g];
       if (!l || !l.n || at + l.n > cap) continue;
-      this.getGeometryRangeAt(g, range);
+      this.getGeometryRangeAt(l.geo, range);
       const base = at - LIST_BASE;
       data.set(l.ids.subarray(0, l.n), at); at += l.n;
       for (const p of l.shadow ? [this.main, this.shad] : [this.main]) {
@@ -169,8 +193,8 @@ export class InstancedBatch extends THREE.BatchedMesh {
       FR.setFromProjectionMatrix(PV.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
       inst = p.cur;
       for (let k = 0; k < p.n; k++) {
-        const g = p.geo[k], sp = this.spheres[g];
-        inst[k] = this.hidden[g] || (p === this.main && this.mainHidden[g]) || (sp && !FR.intersectsSphere(sp)) ? 0 : p.inst[k];
+        const r = this.runs[p.geo[k]], sp = r.sphere;
+        inst[k] = r.hidden || (p === this.main && r.mainHidden) || (sp && !FR.intersectsSphere(sp)) ? 0 : p.inst[k];
       }
     }
     pending = p.n ? inst : null;
@@ -269,4 +293,75 @@ export function batchStatic(root: THREE.Object3D, accept: (m: THREE.Mesh) => boo
     m.material = c;
   });
   return saved;
+}
+
+/** One run of a pooled batch (BatchPool), standing in for an InstancedMesh: `visible` and `castShadow` as before. */
+export class RunHandle {
+  b: InstancedBatch | null = null; r = -1;
+  private v = true; private s = true;
+  /** World-space bounds of the run's instances. */
+  readonly box = new THREE.Box3(); readonly sphere = new THREE.Sphere();
+  get visible() { return this.v; }
+  set visible(on: boolean) { if (on !== this.v) { this.v = on; this.b?.setHidden(this.r, !on); } }
+  get castShadow() { return this.s; }
+  set castShadow(on: boolean) { if (on !== this.s) { this.s = on; this.b?.setShadow(this.r, on); } }
+  /** Out of the camera's passes only (the flat's portals). */
+  mainHide(on: boolean) { this.b?.setMainHidden(this.r, on); }
+  bind(b: InstancedBatch, r: number) { this.b = b; this.r = r; b.setHidden(r, !this.v); b.setShadow(r, this.s); b.setCullSphere(r, this.sphere); }
+}
+
+const plainDepth = new Map<string, THREE.MeshDepthMaterial>();
+/** The shadow pass's material for a batch of `m`: cut-out pieces (leaves) keep their holes. */
+function depthFor(m: THREE.Material) {
+  const sm = m as THREE.MeshStandardMaterial, cut = m.alphaTest > 0 && !!sm.map;
+  const key = cut ? `${sm.map!.uuid}|${m.alphaTest}` : '';
+  let d = plainDepth.get(key);
+  if (!d) { d = batchDepth(undefined, cut ? 'cut' : ''); if (cut) { d.map = sm.map; d.alphaTest = m.alphaTest; } plainDepth.set(key, d); }
+  return d;
+}
+
+/**
+ * Instanced pieces gathered per material and drawn by one InstancedBatch each (a prop kind's parts in every stretch of
+ * street in one draw call per pass, each stretch still its own run: culled, hidden and shadowed on its own). `add`
+ * returns a handle at once; `build` makes the batches under `host` (matrices are in `host`'s space).
+ */
+export class BatchPool {
+  private byMat = new Map<string, { mat: THREE.Material; runs: { geo: THREE.BufferGeometry; at: THREE.Matrix4[]; h: RunHandle }[] }>();
+  add(geo: THREE.BufferGeometry, material: THREE.Material, at: THREE.Matrix4[]): RunHandle {
+    const h = new RunHandle();
+    if (!geo.boundingBox) geo.computeBoundingBox();
+    const bb = new THREE.Box3();
+    for (const m of at) h.box.union(bb.copy(geo.boundingBox!).applyMatrix4(m));
+    h.box.getBoundingSphere(h.sphere);
+    // a batch's geometries must all have the same attributes
+    const key = `${material.uuid}|${Object.keys(geo.attributes).sort().map((k) => `${k}${geo.attributes[k].itemSize}`).join(',')}|${!!geo.index}`;
+    (this.byMat.get(key) ?? this.byMat.set(key, { mat: material, runs: [] }).get(key)!).runs.push({ geo, at, h });
+    return h;
+  }
+  build(host: THREE.Object3D, shadow: boolean, name: string): InstancedBatch[] {
+    const out: InstancedBatch[] = [];
+    for (const { mat, runs } of this.byMat.values()) {
+      for (let i = 0; i < runs.length; i += MAX_GEOMETRIES) {
+        const chunk = runs.slice(i, i + MAX_GEOMETRIES), geos = [...new Set(chunk.map((r) => r.geo))];
+        let inst = 0, verts = 0, idx = 0;
+        for (const r of chunk) inst += r.at.length;
+        for (const g of geos) { verts += g.attributes.position.count; idx += g.index ? g.index.count : 0; }
+        const b = new InstancedBatch(inst, verts, Math.max(1, idx), mat);
+        b.castShadow = shadow; b.receiveShadow = true; b.autoBounds = true;
+        if (shadow) b.customDepthMaterial = depthFor(mat);
+        b.name = `${name}:${mat.name || mat.type}`; b.matrixAutoUpdate = false;
+        b.userData.ground = false; b.userData.prop = true;
+        const gid = new Map<THREE.BufferGeometry, number>(), first = new Set<number>();
+        for (const g of geos) gid.set(g, b.addGeometry(g));
+        for (const r of chunk) {
+          const g = gid.get(r.geo)!, run = first.has(g) ? b.addRun(g) : (first.add(g), g);
+          const ids = r.at.map((m) => { const id = b.addInstance(g); b.setMatrixAt(id, m); return id; });
+          b.setList(run, ids, ids.length); r.h.bind(b, run);
+        }
+        host.add(b); b.updateMatrixWorld(true); out.push(b);
+      }
+    }
+    this.byMat.clear();
+    return out;
+  }
 }

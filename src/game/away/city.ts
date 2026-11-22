@@ -12,7 +12,7 @@ import { buildMega } from './citymega';
 import { buildDense, Facade } from './citydense';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mergeChildren, passMaps, watchChanges, atlasCanvases, unifyLooks } from '../../core/merge';
-import { BATCH, batchStatic } from '../../core/ibatch';
+import { BATCH, batchStatic, BatchPool, RunHandle } from '../../core/ibatch';
 import { tickCycles } from '../../core/cycle';
 import { buildDistricts, inOld, BOUNDS as DIST_BOUNDS } from './districts';
 import { navGrid } from './navgrid';
@@ -56,6 +56,7 @@ const CROWD_FAR = 34; // beyond the 30 m everyone must stay drawn within (tools/
 const SMALL_PROP = 0.45, SMALL_FAR = 24;
 /** Props further than this from the camera (to their stretch of street) are drawn with their light build. */
 const PROP_NEAR = 14;
+const PROP_HIDE = new THREE.MeshBasicMaterial({ visible: false });
 const SHADOW_FAR0 = CHAR_BUDGET.shadowFar;
 
 export interface CityPerson { id: string; fig: Character; pos: THREE.Vector3; yaw: number; pose: CrewPose; phase: number; walk?: { z0: number; z1: number; dir: number; speed: number; home?: number; shop?: { x: number; z: number; t: number; stage: 'in' | 'inside' | 'out' }; nextShop?: number }; met?: boolean; greet?: number }
@@ -377,8 +378,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // shutters, chairs, crates and lamps cost a draw call each per pass (thousands a frame on a phone)
   const placed = new Map<string, { name: string; at: THREE.Matrix4[] }>();
   // phones: fruit, tea sets, baskets and the like are not drawn from further than SMALL_FAR (a few pixels each)
-  const propCells: { c: THREE.Vector3; r: number; near: THREE.InstancedMesh[]; far: THREE.Mesh | null; farSmall: THREE.Mesh | null; always: THREE.InstancedMesh[]; lod: number; old: boolean }[] = [];
-  let propTick = 0;
+  type PropDraw = { visible: boolean; castShadow: boolean };
+  const propCells: { c: THREE.Vector3; r: number; near: PropDraw[]; far: PropDraw | null; farSmall: PropDraw | null; always: PropDraw[]; lod: number; old: boolean }[] = [];
+  let propTick = 0, crowdK = 0;
   const place = (name: string, x: number, y: number, z: number, yaw: number, scale = 1) => {
     const key = tier === 0 ? `${name}|${Math.floor(z / 78)}` : `${name}|${cellOf(x, z, CELL)}`; // phones: longer stretches, both sides of the street as one
     const e = placed.get(key) ?? placed.set(key, { name, at: [] }).get(key)!;
@@ -1075,12 +1077,15 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // texture atlas (one draw for a whole stretch's lamps, shutters, crates, chairs and fruit); within PROP_NEAR metres
   // that mesh gives way to the scans (instanced, a draw per model part). Phones only ever draw the merged meshes.
   // As separate instanced models they were 600 draws looking down the street.
-  const instanced = (src: THREE.Object3D, at: THREE.Matrix4[], host: THREE.Object3D = oldTown) => {
+  // with InstancedBatch (BATCH.on) a prop kind's parts are drawn by one batch per material for the whole zone, each
+  // stretch its own run (core/ibatch.ts BatchPool): Ultra's bazaar drew ~260 prop draws a frame plus ~220 in the shadow pass
+  const instanced = (src: THREE.Object3D, at: THREE.Matrix4[], host: THREE.Object3D, pool: BatchPool | null): PropDraw[] => {
     src.updateMatrixWorld(true);
-    const out: THREE.InstancedMesh[] = [];
+    const out: PropDraw[] = [];
     src.traverse((o) => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
+      if (pool && !Array.isArray(m.material)) { out.push(pool.add(m.geometry, m.material, at.map((w) => new THREE.Matrix4().multiplyMatrices(w, m.matrixWorld)))); return; }
       const im = new THREE.InstancedMesh(m.geometry, m.material, at.length);
       at.forEach((w, i) => im.setMatrixAt(i, TMP_M.multiplyMatrices(w, m.matrixWorld)));
       im.castShadow = im.receiveShadow = true; im.userData.ground = false; im.userData.prop = true; im.matrixAutoUpdate = false;
@@ -1088,6 +1093,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     });
     return out;
   };
+  /** What a handle draws, as a sphere (for the stretch's bounds). */
+  const drawSphere = (o: PropDraw): THREE.Sphere => (o instanceof RunHandle ? o.sphere : (o as THREE.InstancedMesh).isInstancedMesh ? (o as THREE.InstancedMesh).boundingSphere! : (o as THREE.Mesh).geometry.boundingSphere!);
   const buildProps = (placed: Map<string, { name: string; at: THREE.Matrix4[] }>, host: THREE.Object3D, old: boolean) => {
     const names = [...new Set([...placed.values()].map((e) => e.name))];
     type Loaded = [string, THREE.Object3D | null, THREE.Object3D | null];
@@ -1140,6 +1147,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       const byCell = new Map<string, { name: string; at: THREE.Matrix4[] }[]>();
       for (const [key, e] of placed) { const c = key.slice(key.indexOf('|') + 1); (byCell.get(c) ?? byCell.set(c, []).get(c)!).push(e); }
       const P = new THREE.Vector3(), Nn = new THREE.Vector3(), M = new THREE.Matrix4(), inset = 0.5 / TILE;
+      const pool = BATCH.on ? new BatchPool() : null, bakePool = BATCH.on ? new BatchPool() : null;
       const bake = (entries: { name: string; at: THREE.Matrix4[] }[]) => {
         let nv = 0, ni = 0;
         for (const e of entries) for (const pt of farParts.get(e.name)!) { nv += pt.geo.attributes.position.count * e.at.length; ni += (pt.geo.index ? pt.geo.index.count : pt.geo.attributes.position.count) * e.at.length; }
@@ -1166,6 +1174,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         const g = new THREE.BufferGeometry();
         g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
         g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeBoundingSphere(); g.computeBoundingBox();
+        if (bakePool) { const h = bakePool.add(g, atlasM, [new THREE.Matrix4()]); h.castShadow = tier === 2; return h; }
         const mesh = new THREE.Mesh(g, atlasM); mesh.castShadow = tier === 2; mesh.receiveShadow = true; mesh.userData.ground = false; mesh.userData.prop = true; mesh.matrixAutoUpdate = false;
         mesh.userData.bakeOf = [...new Set(entries.map((e) => e.name))].join(',');
         host.add(mesh); return mesh;
@@ -1174,13 +1183,28 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         const mergeable = entries.filter((e) => farParts.has(e.name)), rest = entries.filter((e) => !farParts.has(e.name) && nearOf.has(e.name));
         const far = bake(tier === 0 ? mergeable.filter((e) => !small.get(e.name)) : mergeable);
         const farSmall = tier === 0 ? bake(mergeable.filter((e) => small.get(e.name))) : null;
-        const near = tier === 0 ? [] : mergeable.flatMap((e) => instanced(nearOf.get(e.name)!, e.at, host));
-        const always = rest.flatMap((e) => instanced(nearOf.get(e.name)!, e.at, host));
+        const near = tier === 0 ? [] : mergeable.flatMap((e) => instanced(nearOf.get(e.name)!, e.at, host, pool));
+        const always = rest.flatMap((e) => instanced(nearOf.get(e.name)!, e.at, host, pool));
         for (const im of near) im.visible = false;
         const box = new THREE.Box3();
-        for (const o of [far, farSmall, ...near, ...always]) if (o) { const sp = (o as THREE.InstancedMesh).isInstancedMesh ? (o as THREE.InstancedMesh).boundingSphere! : o.geometry.boundingSphere!; box.expandByPoint(TMP_V.copy(sp.center).addScalar(sp.radius)); box.expandByPoint(TMP_V.copy(sp.center).addScalar(-sp.radius)); }
+        for (const o of [far, farSmall, ...near, ...always]) if (o) { const sp = drawSphere(o); box.expandByPoint(TMP_V.copy(sp.center).addScalar(sp.radius)); box.expandByPoint(TMP_V.copy(sp.center).addScalar(-sp.radius)); }
         const sph = box.getBoundingSphere(new THREE.Sphere());
         propCells.push({ c: sph.center, r: sph.radius * 0.6, near, far, farSmall, always, lod: 1, old });
+      }
+      if (pool && bakePool) {
+        // the flat's portals hide what its door and window do not show: each run gets a stand-in they can find
+        const runs: RunHandle[] = [];
+        for (const pc of propCells) for (const o of [pc.far, pc.farSmall, ...pc.near, ...pc.always]) if (o instanceof RunHandle) runs.push(o);
+        pool.build(host, tier === 2, 'props'); bakePool.build(host, tier === 2, 'propBake');
+        if (old) {
+          const held = new THREE.Group(); held.name = 'propRuns'; held.visible = false; held.matrixAutoUpdate = false;
+          for (const h of runs) {
+            const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([h.box.min.x, h.box.min.y, h.box.min.z, h.box.max.x, h.box.max.y, h.box.max.z], 3));
+            const st = new THREE.Mesh(g, PROP_HIDE); st.matrixAutoUpdate = false; st.layers.mask = 0; st.frustumCulled = false;
+            st.userData.batchHide = (on: boolean) => h.mainHide(on); held.add(st);
+          }
+          host.add(held); held.updateMatrixWorld(true);
+        }
       }
     }).catch((e) => console.warn('[city] props', e));
   };
@@ -1222,7 +1246,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       b.dx += (want - b.dx) * (1 - Math.exp(-dt * 4));
       const bx = q.x + b.dx;
       b.fig.root.position.set(bx, hx(bx), q.z); b.fig.root.rotation.y = yaw;
-      const hide = inLens(bx, q.z); if (b.fig.root.visible === hide) b.fig.root.visible = !hide;
+      const hide = inLens(bx, q.z); if (!b.fig.setLensFade(hide ? 0 : 1) && b.fig.root.visible === hide) b.fig.root.visible = !hide; // Web, Ultra: a fade
       b.phase += dt * sp * 2.2;
       b.fig.animate(sp > 0.3 ? 'walk' : 'idle', b.phase, Math.min(1.1, sp / 3), time, dt);
     }
@@ -1287,7 +1311,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (b.ped < 0) continue;
       const q = ps[b.ped], walking = q.mode === 'walk' || q.mode === 'cross';
       b.fig.root.position.set(q.x, H(q.x, q.z), q.z); b.fig.root.rotation.y = q.yaw;
-      { const hide = inLens(q.x, q.z); if (b.fig.root.visible === hide) b.fig.root.visible = !hide; }
+      { const hide = inLens(q.x, q.z); if (!b.fig.setLensFade(hide ? 0 : 1) && b.fig.root.visible === hide) b.fig.root.visible = !hide; }
       // they notice you: within a few metres they look at you (and a walker steps round you, districts.ts)
       if (you && Math.hypot(you.position.x - q.x, you.position.z - q.z) < 4.5) b.fig.setLookTarget(eye.set(you.position.x, you.position.y + 1.6, you.position.z)); else b.fig.setLookTarget(null);
       b.phase += dt * (walking ? q.v * 2.2 : 1);
@@ -1535,7 +1559,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       },
     },
     /** Test hook: how a person is drawn now: a body, a card standing in for one, or (never, within sight) nothing. */
-    drawnAs(id: string) { const i = people.findIndex((q) => q.id === id); return i < 0 ? 'none' : people[i].fig.root.visible && oldTown.visible ? 'body' : stand.some((x) => x.k === i) ? 'card' : 'none'; },
+    crowdNear() { return crowdK; },
+    drawnAs(id: string) { const i = people.findIndex((q) => q.id === id); return i < 0 ? 'none' : people[i].fig.root.visible && !people[i].fig.faded && oldTown.visible ? 'body' : stand.some((x) => x.k === i) ? 'card' : 'none'; },
     get perfState() { return { tier, bodyCap: BODY_CAP, oldTown: oldTown.visible, cards: stand.length, probe: (() => { try { return probe?.debug() ?? null; } catch { return 'unreadable'; } })(), envI: scene.environmentIntensity, hour: day.state.hour, exposure: day.state.exposure }; },
     /** Test hook (tools/traffic_smoke.py): the cars and the people, old town and districts, this frame. */
     trafficState() {
@@ -1660,12 +1685,21 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         // a hard cap on real bodies (BODY_CAP): the friends and whoever is nearest are bodies, everyone else a card
         const cp = cam.position; let used = 0, nc = 0;
         lens.on = !!you && outroT < 0; lens.cx = cp.x; lens.cz = cp.z; if (you) { lens.px = you.position.x; lens.pz = you.position.z; }
+        // how many bodies are within a few steps of you (the follow camera rises over a thick crowd: crowdNear)
+        if (you) {
+          let n = 0; const ux = you.position.x, uz = you.position.z, R2 = 3.2 * 3.2;
+          const at = (f: Character) => { if (f.root.visible) { const dx = f.root.position.x - ux, dz = f.root.position.z - uz; if (dx * dx + dz * dz < R2) n++; } };
+          if (oldOn) { for (const q of people) at(q.fig); for (const b of crowdPool) if (b.card >= 0) at(b.fig); }
+          for (const b of dpool) if (b.ped >= 0) at(b.fig);
+          crowdK = Math.min(1, Math.max(0, (n - 1) / 3));
+        }
         if (oldOn) for (let i = 0; i < people.length; i++) {
           const q = people[i];
           if (boarding.has(q) || talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
           if (q.walk?.shop?.stage === 'inside') { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           const d = Math.hypot(q.pos.x - cp.x, q.pos.z - cp.z);
-          if (d < 9 && inLens(q.pos.x, q.pos.z)) { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
+          const lensHit = d < 9 && inLens(q.pos.x, q.pos.z);
+          if (!q.fig.setLensFade(lensHit ? 0 : 1) && lensHit) { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           // the six of the story and Mir have no card of their own look: they stay themselves (a body) out to 48 m
           if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = tier > 0 && d < 48; /* a body to 48 m (they have no card of their own look); phones: only within the card range */ if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; }
           if (d >= CROWD_FAR) { if (q.fig.root.visible) q.fig.root.visible = false; stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: i, v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk }); continue; }

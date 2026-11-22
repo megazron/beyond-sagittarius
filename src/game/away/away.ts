@@ -51,6 +51,7 @@ export class Away {
     // the body you play is drawn with its full build, phones too (see PLAYER_DETAIL in main.ts)
     const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: (fx, fz, cx, cz) => stage.clearance?.(fx, fz, cx, cz) ?? 1 }, this.camera, Math.max(this.detail, 0.8), id, id === 'strong' && this.skins.strong === 'suit' ? 'suit' : undefined); // the crew's chosen skin, on their own stage too
     p.physics = { gravity: stage.gravity, jump: stage.jump, gaps: true };
+    if (stage.crowdNear) p.crowdNear = () => stage.crowdNear!();
     // what the feet hear: Zenvora's paving and the flat's floorboards, ice on the ring, rock and metal elsewhere
     p.surface = location === 'city' ? (x, z) => (x > 9.4 && z > 61 && z < 77 ? 'wood' : 'stone') : location === 'ring' ? () => 'snow' : location === 'clouds' ? () => 'wood' : location === 'wreck' ? () => 'metal' : () => 'stone';
     p.model.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; } });

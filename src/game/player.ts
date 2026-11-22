@@ -68,6 +68,9 @@ export class Player {
     /** 0..1: the view swings round to look behind (a glance back in a chase); the walk keeps its own heading. */
     back?: number } | null = null;
   private aimS = 0;
+  /** How crowded it is round you (the stage's, 0 to 1): the camera rises over the heads and looks down at you. */
+  crowdNear: (() => number) | null = null;
+  private crowdS = 0;
   private backS = 0;
   /** Stages other than Verdaxis set their own gravity, and let you jump across open gaps. */
   physics = { gravity: 14, jump: 5.2, gaps: false };
@@ -239,7 +242,7 @@ export class Player {
     const cp = Math.cos(pitch);
     out.set(Math.sin(yaw) * cp, -Math.sin(pitch), Math.cos(yaw) * cp).multiplyScalar(dist);
     out.add(focus);
-    out.y += 1.65;
+    out.y += 1.65 + 0.3 * this.crowdS;
     // walk the line from the head to the camera: stop short of hills and trunks
     const hx = focus.x, hy = focus.y + 1.65, hz = focus.z;
     let free = 1;
@@ -281,7 +284,10 @@ export class Player {
     const backWant = this.combat?.back ?? 0;
     this.backS += (backWant - this.backS) * e(backWant > this.backS ? 7 : 5);
     const back = this.backS * this.backS * (3 - 2 * this.backS);
-    const yawV = this.yawS + back * 2.75, pitchV = this.pitchS - back * 0.12;
+    // in a thick crowd the camera does not sit low among the heads looking up: it rises and looks down (eased in and out)
+    const cw = this.crowdNear ? this.crowdNear() : 0;
+    this.crowdS += (cw - this.crowdS) * e(cw > this.crowdS ? 2.5 : 1.2);
+    const yawV = this.yawS + back * 2.75, pitchV = Math.min(this.pitchS, -0.18 - 0.2 * this.crowdS) - back * 0.12;
     // soft collision: pull in fast when a trunk blocks the view, ease back out slowly
     const want = this.orbit(tmpA, this.focus, yawV, pitchV, this.camDist);
     const clear = this.forest.clearance(this.focus.x, this.focus.z, want.x, want.z, 0.4);
