@@ -129,7 +129,7 @@ window.__cbBot = (mode) => {
       const guard = { x: food.x - wz * 1.8, z: food.z + wx * 1.8 };
       if (run.phase === 'hush') {
         // the quiet before: stand at the guard spot and look out over what was set
-        stop(); const d = go(guard.x, guard.z); if (d < 0.7) { stop(); look(bait.x, bait.z, food.y); }
+        stop(); const d = go(guard.x, guard.z); if (d < 0.7) { stop(); look(bait.x, bait.z); }
         return;
       }
       const h = living('hound').find((e) => !e.routed), thieves = living('skritch').filter((e) => !e.routed && dist(e, food) < 5);
@@ -138,7 +138,7 @@ window.__cbBot = (mode) => {
       const sprung = sim.traps.find((q) => (q.kind === 'snare' || q.kind === 'stakes') && q.sprungT >= 0 && sim.t - q.sprungT < 3.5);
       const near = sim.traps.find((q) => q.armed && q.uses > 0 && (q.kind === 'snare' || q.kind === 'stakes') && living('skritch').concat(h ? [h] : []).some((e) => dist(e, q) < 6 && dist(e, q) > 0.8));
       const watch = sprung || near;
-      if (watch && !danger() && !thieves.some((e) => dist(e, p) < 2.5)) { stop(); hold('KeyQ', 0); look(watch.x, watch.z, food.y + 0.3); return; }
+      if (watch && !danger() && !thieves.some((e) => dist(e, p) < 2.5)) { stop(); hold('KeyQ', 0); look(watch.x, watch.z); return; }
       if (fire.fuel < fire.max * 0.55 && (sim.inv.branch || 0) > 0 && !(h && (h.state === 'windup' || h.state === 'strike'))) { const d = go(fire.x, fire.z); if (d < 2.4) { stop(); if (since() > 0.8) { tapE(); stT = performance.now(); } } return; }
       if (h && (h.state === 'windup' || h.state === 'strike') && h.target === -1) { stop(); look(h.x, h.z, h.y + 0.6); hold('KeyQ', h.stateT > 0.3 || h.state === 'strike'); return; }
       hold('KeyQ', 0);
@@ -146,7 +146,7 @@ window.__cbBot = (mode) => {
       if (thieves.length) { fight(thieves); return; }
       // otherwise guard the food from its upwind side, looking out over the traps to the dark they come from
       // to the side of the food, out of the smoke that drifts over it
-      const d = go(guard.x, guard.z); if (d < 0.7) { stop(); if (h && dist(h, p) < 14) look(h.x, h.z, h.y + 0.6); else look(bait.x, bait.z, food.y); }
+      const d = go(guard.x, guard.z); if (d < 0.7) { stop(); if (h && dist(h, p) < 14) look(h.x, h.z, h.y + 0.6); else look(bait.x, bait.z); }
     } else if (mode === 'chase') {
       const goal = run.markers.find((m) => m.kind === 'goal'), h = living('hound')[0];
       // a runner who has seen it gather: roll out of the lunge's line when it is about a third of a second from

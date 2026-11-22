@@ -885,7 +885,7 @@ export class Combat {
   testHold(code: string, on: boolean) { this.testKeys = true; this.d.input.hold(code, on); }
   testTap(code: string) { this.testKeys = true; this.d.input.hold(code, true); this.tapUp.push(code); }
   /** Turn the view as a mouse would (pixels). */
-  testLook(dx: number, dy: number) { this.d.input.lookDX += dx; this.d.input.lookDY += dy; }
+  testLook(dx: number, dy: number) { if (Number.isFinite(dx) && Number.isFinite(dy)) { this.d.input.lookDX += dx; this.d.input.lookDY += dy; } }
   get cam() { const P = this.d.player; return { yaw: P.yaw, pitch: P.pitch, x: P.pos.x, y: P.pos.y, z: P.pos.z }; }
   debug() {
     const sim = this.sim, run = this.encounter;
