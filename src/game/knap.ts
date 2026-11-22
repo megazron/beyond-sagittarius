@@ -115,8 +115,9 @@ export class Stones {
     // from the model's heading: the first cut of this framed his back)
     const site = this.site!, w = at.clone().sub(site.kneel).setY(0).normalize(), r = new THREE.Vector3(w.z, 0, -w.x);
     const head = new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld);
-    const to = at.clone().lerp(head, 0.3);
-    return { from: at.clone().addScaledVector(w, dist * 0.75).addScaledVector(r, dist * 0.5).add(new THREE.Vector3(0, 0.32 + dist * 0.18, 0)), to, push: 0.03 };
+    // far and high enough that the stones sit low in frame and his face (looking down at them) at the top
+    const to = at.clone().lerp(head, 0.5);
+    return { from: at.clone().addScaledVector(w, dist * 1.15).addScaledVector(r, dist * 0.55).add(new THREE.Vector3(0, 0.55 + dist * 0.2, 0)), to, push: 0.03 };
   }
 
   /** The hammerstone in his right hand comes down on `at` twice (a tap) with the sound of what it hits. */
