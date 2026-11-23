@@ -125,6 +125,8 @@ let game: Game;
 let state: State = 'loading';
 let paused = false;
 let worldReady = false;
+/** True while warmAll compiles a scene in the background: the frame loop leaves the canvas as it is. */
+let warmHold = false;
 /** What the last trip away let go of on the GPU (phones), in MB: memory reports. */
 const AWAY_RELEASED: { last: { texMB: number; geoMB: number } | null } = { last: null };
 let pendingStart: (() => void) | null = null;
@@ -849,7 +851,7 @@ function draw(dt: number) {
   // props that pass right by the follow camera dissolve; cutscenes and films are framed by hand
   NEAR_FADE.value = state === 'game' && game && (game.mode === 'play' || game.mode === 'away' || game.mode === 'dead') && !photo ? 1 : 0;
   portraitFrame();
-  if (!(state === 'film' && film.videoOn)) renderer.render(dt, elapsed);
+  if (!(state === 'film' && film.videoOn) && !warmHold) renderer.render(dt, elapsed);
   if (activeCam.fov !== designFov) { activeCam.fov = designFov; activeCam.updateProjectionMatrix(); }
   input.endFrame();
   fpsFrames++;
@@ -869,7 +871,9 @@ async function warmAll() {
   // working, the loading bar shows how far it is), then drawn once through the real pipeline for what only a draw
   // builds (the shadow and AO passes' variants, the uploads)
   const STEPS = 5; let step = 0;
-  const pre = async (sc: THREE.Scene, cam: THREE.Camera) => { await renderer.prewarm(sc, cam, (k) => ui.setLoading(0.9 + 0.1 * Math.min(1, (step + k) / STEPS))); step++; };
+  // while a scene compiles in the background the frame loop does not draw (it drew the world being compiled, and its
+  // first use of each program waited for that program to link: the cold load's 3.4 s freeze at t 9 after c148ab9)
+  const pre = async (sc: THREE.Scene, cam: THREE.Camera) => { warmHold = true; try { await renderer.prewarm(sc, cam, (k) => ui.setLoading(0.9 + 0.1 * Math.min(1, (step + k) / STEPS))); } finally { warmHold = false; } step++; };
   renderer.warmBegin();
   // the world from the spawn point, in every direction: the wake-up turns the camera around
   const wide = new THREE.PerspectiveCamera(100, 16 / 9, 0.1, 2400);
