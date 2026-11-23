@@ -68,6 +68,38 @@ class Part:
         return pv, uv, inv.astype(np.uint32)
 
 
+def weld_seams(part, tol=0.0015):
+    """The source garments split their seams: a vertex per UV island, and on Nuvexa's sweater the front seam's two sides
+    lie 0.8 mm apart. To facing() that seam was an opening (a band pulled in to the skin under it: the dark notch at her
+    collar) and to the decimator two boundaries that shrink each on their own. Boundary vertices within `tol` of each
+    other become one (at their middle); the per-corner uv ids (TU) keep the seam in the texture."""
+    from collections import Counter
+    e = Counter()
+    for a, b, c in part.T:
+        for x, y in ((a, b), (b, c), (c, a)): e[(min(x, y), max(x, y))] += 1
+    bv = np.unique([v for k, n in e.items() if n == 1 for v in k])
+    rep = np.arange(len(part.P))
+    if len(bv):
+        for a, b in sorted(cKDTree(part.P[bv]).query_pairs(tol)):
+            ra, rb = rep[bv[a]], rep[bv[b]]
+            while rep[ra] != ra: ra = rep[ra]
+            while rep[rb] != rb: rb = rep[rb]
+            if ra != rb: rep[max(ra, rb)] = min(ra, rb)
+        for v in range(len(rep)):
+            r = v
+            while rep[r] != r: r = rep[r]
+            rep[v] = r
+        for r in np.unique(rep[bv]):
+            grp = np.where(rep == r)[0]
+            if len(grp) > 1: part.P[grp] = part.P[grp].mean(0)
+    T = rep[part.T]
+    ok = (T[:, 0] != T[:, 1]) & (T[:, 1] != T[:, 2]) & (T[:, 2] != T[:, 0])
+    part.T, part.TU = T[ok], part.TU[ok]
+    if hasattr(part, 'island'): part.island = part.island[ok]
+    part.welded = True
+    return part
+
+
 def write_prim(g, part, skin, mat):
     pv, uv, idx = part.corners()
     P = part.P[pv]
@@ -1099,6 +1131,9 @@ def build(c, cid, force=False):
     if not os.environ.get('NO_BAND'):
         surf = bodyv & ~((liner | cut) if LINER else cut)
         for g in garments:
+            # a split seam is a boundary loop to facing(): welded first, so only real openings get a facing (Nuvexa's front
+            # seam got a band pulled in to the skin: the dark notch at her collar)
+            if g.opt.get('knit') and not getattr(g, 'welded', False): weld_seams(g)
             n_ = facing(g, Vb[surf])
             if os.environ.get('CAP_DEBUG') and n_: print(f'    {g.asset}: {n_} edges of facing inside its openings', flush=True)
     Adj0 = pit.laplacian(Tall, len(V))[1]
@@ -1172,6 +1207,8 @@ def build(c, cid, force=False):
         # the clothes keep their shape at every LOD (the error bound of the full one): flattened on the lighter one, a coat's
         # shoulders and a trouser's seat cut inside the skin under them and it showed through
         ccost = min(L['cost'], LODS['']['cost'])
+        for p in garments:
+            if p.opt.get('knit') and not getattr(p, 'welded', False): weld_seams(p)
         cl = [p.decimated(max(300, int(budget * len(p.T) * p.opt.get('budget', 1) / tot)), None, None, ccost * (0.25 if p.opt.get('budget') else 1)) for p in garments]
         if not os.environ.get('NO_CAPS'):
             bb, nk, nd = cap_holes(bb, seam, V[bodyv], Nb[bodyv], piv, posed)
