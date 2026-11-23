@@ -134,8 +134,9 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
 /** lipsLetGo: how much of the fingers' torso guard lets go with the hand at the lips (eating, drinking). */
 /** throwTame: how much of the throw clip's lunge (legs and hips) is taken back towards the stance it began from. */
 export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65 };
-/** How far a long strand's tip falls (metres, before its sway) when the head is bent a quarter turn (hair.ts uDrop). */
-const HAIR_DROP = 0.24;
+/** How far a strand's tip falls towards the ground as the head turns from upright, per metre of strand and per unit of
+ *  change in the ground's direction seen from the head (hair.ts uDrop; times the strand's sway squared, at most 1.6) */
+const HAIR_DROP = 0.5;
 export const CLOTH_PULL = 0.007;
 /**
  * And every garment this much more on top of that, over the skin: a raised arm stretches a sweater thinner than the

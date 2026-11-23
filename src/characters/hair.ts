@@ -234,6 +234,12 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
   return hairMesh(geo, colors, sway, rough, cards);
 }
 const HAIR_GEO = new Map<string, THREE.BufferGeometry>();
+/** Each strand's length (metres) on its vertices: how far it can fall as the head bends (uDrop), so a short fringe barely
+ *  moves and a long ponytail swings down (one fall for every strand made Zenvik's bob hang like a curtain, kneeling) */
+function withLen(g: THREE.BufferGeometry, len: number) {
+  g.setAttribute('aLen', new THREE.BufferAttribute(new Float32Array(g.getAttribute('position').count).fill(len), 1));
+  return g;
+}
 
 function hairGeometry(locks: Lock[], rnd: () => number, detail: number, capLow: number, capFront: number, skull: Skull, volume: number, cards: boolean | 'curly') {
   const steps = detail < 0.8 ? 5 : 7;
@@ -249,7 +255,7 @@ function hairGeometry(locks: Lock[], rnd: () => number, detail: number, capLow: 
     const { path } = grow(l, steps + 3, skull);
     // curly: one card shows one clump of the texture (a quarter of its width)
     const u0 = cards === 'curly' ? Math.floor(rnd() * 4) * 0.25 + 0.01 : rnd() * 0.75, uw = cards === 'curly' ? 0.23 : 0.22 + rnd() * 0.1;
-    return swayByStrand(card(path, l.w ?? 0.035, skull, u0, uw), 0.15, l.sway ?? 1, rnd());
+    return withLen(swayByStrand(card(path, l.w ?? 0.035, skull, u0, uw), 0.15, l.sway ?? 1, rnd()), l.len);
   }) : fine.map((l) => {
     const { path, side } = grow(l, steps, skull);
     const w = l.w ?? 0.03, th = l.thick ?? w * 0.42;
@@ -260,9 +266,9 @@ function hairGeometry(locks: Lock[], rnd: () => number, detail: number, capLow: 
       thick: (t) => th * Math.pow(1 - t, 0.5) + 0.0006,
       sides: detail < 0.8 ? 4 : 6,
     });
-    return swayByStrand(g, 0.12, l.sway ?? 1, rnd());
+    return withLen(swayByStrand(g, 0.12, l.sway ?? 1, rnd()), l.len);
   });
-  parts.push(capShell(capLow, capFront, skull, volume, !!cards));
+  parts.push(withLen(capShell(capLow, capFront, skull, volume, !!cards), 0));
   return mergeGeometries(parts)!;
 }
 
@@ -283,8 +289,8 @@ function hairMesh(geo: THREE.BufferGeometry, colors: HairColors, sway: SwayUnifo
     Object.assign(sh.uniforms, u);
     // (uDrop: the strands hang. They are built for an upright head and ride it rigidly, so bending, Nuvexa's ponytails
     // stood out stiff and sideways; now each point falls by its sway squared towards where the ground is from the head)
-    sh.vertexShader = `attribute float aT; attribute vec3 aTan; varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uDrop;\n` + sh.vertexShader.replace(
-      '#include <begin_vertex>', `#include <begin_vertex>\n  vT = aT; vPh = aPhase; vTan = normalMatrix * aTan; transformed += uDrop * min(aSway * aSway, 1.6);`);
+    sh.vertexShader = `attribute float aT; attribute float aLen; attribute vec3 aTan; varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uDrop;\n` + sh.vertexShader.replace(
+      '#include <begin_vertex>', `#include <begin_vertex>\n  vT = aT; vPh = aPhase; vTan = normalMatrix * aTan; transformed += uDrop * min(aSway * aSway, 1.6) * aLen;`);
     sh.fragmentShader = `varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uRoot, uMid, uTip, uShine;\n` + sh.fragmentShader
       .replace('#include <color_fragment>', /* glsl */ `#include <color_fragment>
         diffuseColor.rgb = mix(mix(uRoot, uMid, smoothstep(0.0, 0.35, vT)), uTip, smoothstep(0.45, 1.0, vT));`)

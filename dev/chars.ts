@@ -420,13 +420,15 @@ const qaStone = new THREE.Mesh(new THREE.IcosahedronGeometry(0.045, 1), new THRE
 const qaShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 2.2, 10), new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.8 }));
 const qaDots = [0xff3030, 0x3080ff].map((c) => new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), new THREE.MeshBasicMaterial({ color: c, depthTest: false })));
 [qaStone, qaShaft, ...qaDots].forEach((m) => { m.visible = false; m.renderOrder = 9; scene.add(m); });
-W.qaLive = (i: number, names: string[], slow = 0.5, yaw = -2.4, dist = 2.0, every = 0) => {
+/** track: the camera aims half way between the hips and the head, eased, and stands level with that point (the fixed aim
+ *  at 0.85 m cut the heads of the tall crew off standing, and eating and drinking are at the face) */
+W.qaLive = (i: number, names: string[], slow = 0.5, yaw = -2.4, dist = 2.0, every = 0, track = false) => {
   const c0 = chars[i]; chars.forEach((o, j) => { o.root.visible = j === i; }); c0.setGround(() => 0);
   const cap = document.getElementById('qa-cap') ?? Object.assign(document.body.appendChild(document.createElement('div')), { id: 'qa-cap' });
   cap.setAttribute('style', 'position:fixed;left:16px;top:12px;font:600 22px sans-serif;color:#fff;text-shadow:0 1px 3px #000;white-space:pre');
   const step = (c: Character, p: CrewPose, amount: number, dt: number) => { t += dt; c.root.updateMatrixWorld(true); c.animate(p, 0, amount, t, dt); };
   W.qaDone = false; W.qaLiveRes = [];
-  let ni = 0, gen: Generator<number, unknown> | null = null, last = performance.now(), acc = 0;
+  let ni = 0, gen: Generator<number, unknown> | null = null, last = performance.now(), acc = 0, aimY = -1;
   const tick = () => {
     if (!gen) {
       if (ni >= names.length) { W.qaDone = true; cap.textContent = ''; return; }
@@ -444,7 +446,11 @@ W.qaLive = (i: number, names: string[], slow = 0.5, yaw = -2.4, dist = 2.0, ever
     if (qaShaft.visible) { const a = h!.R!.at, b = h!.L!.at, d = b.clone().sub(a).normalize(); qaShaft.position.copy(a).addScaledVector(d, 0.3); qaShaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); }
     const p = c0.root.position, y = c0.root.rotation.y + yaw;
     cam.fov = 40; cam.near = 0.05; cam.updateProjectionMatrix();
-    cam.position.set(p.x + Math.sin(y) * dist, p.y + 1.25, p.z + Math.cos(y) * dist); cam.lookAt(p.x, p.y + 0.85, p.z);
+    if (track) {
+      const hy = (c0.root.getObjectByName('hips')!.getWorldPosition(new THREE.Vector3()).y + c0.root.getObjectByName('head')!.getWorldPosition(new THREE.Vector3()).y) / 2 - p.y;
+      aimY = aimY < 0 ? hy : aimY + (hy - aimY) * 0.05;
+      cam.position.set(p.x + Math.sin(y) * dist, p.y + aimY + 0.25, p.z + Math.cos(y) * dist); cam.lookAt(p.x, p.y + aimY, p.z);
+    } else { cam.position.set(p.x + Math.sin(y) * dist, p.y + 1.25, p.z + Math.cos(y) * dist); cam.lookAt(p.x, p.y + 0.85, p.z); }
     cap.textContent = `${names[Math.min(ni, names.length - 1)]}   ${slow}x   (red/blue dots: where each hand is told to be)`;
     r.render(scene, cam); requestAnimationFrame(tick);
   };
