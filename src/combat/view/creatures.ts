@@ -521,7 +521,8 @@ function guardian(): CreatureView {
       const eye = e.dead ? 0 : s === 'strike' && beam ? 8 : wake * (1.1 + conv * 4);
       // in the second phase the eye burns white-hot rather than orange (the whole thing turning orange read as a
       // colour change, not as strain)
-      lensM.color.setRGB(over ? 1.15 * eye + 0.4 * wake : 0.2 * eye, over ? 1.1 * eye + 0.3 * wake : 1.2 * eye, over ? 1.0 * eye + 0.25 * wake : 1.6 * eye);
+      // (white-hot at about 60% of the blue eye's level: all three channels high bloomed into a disc over the face, v12)
+      lensM.color.setRGB(over ? 0.7 * eye + 0.25 * wake : 0.2 * eye, over ? 0.66 * eye + 0.2 * wake : 1.2 * eye, over ? 0.6 * eye + 0.16 * wake : 1.6 * eye);
       pupil.scale.set(Math.max(0.02, 1 - conv * 1.1), 1, 1); pupil.visible = !e.dead && conv < 0.9;
       // the hollow's walls take the eye's light (a cold glow deepening in the wind-up)
       hollowM.emissive.setRGB(0.03, 0.12, 0.16).multiplyScalar(Math.min(2, eye) * (over ? 0.5 : 1));
