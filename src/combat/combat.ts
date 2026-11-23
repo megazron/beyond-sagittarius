@@ -893,6 +893,18 @@ export class Combat {
           // the shadow on the bottom under it (fainter as the fish rises from it; gone once it floats)
           const sh = vw.v.root.userData.shadow as THREE.Mesh | undefined;
           if (sh) { const bot = this.env.height(e.x, e.z) + 0.012; sh.visible = !e.dead && surf - bot > 0.05; sh.position.y = bot - r.y; }
+          // the lit patch under it, the shaft of light down to it, and rings on the surface over it (a fish holding
+          // under the surface stirs it; more as it moves): what makes a dark fish in dark water findable
+          const ud = vw.v.root.userData, bot = this.env.height(e.x, e.z) + 0.01, deep = surf - bot;
+          const pa = ud.patch as THREE.Mesh | undefined, sf = ud.shaft as THREE.Mesh | undefined;
+          if (pa) { pa.visible = !e.dead && deep > 0.05; pa.position.y = bot - 0.003 - r.y; }
+          if (sf) {
+            sf.visible = !e.dead && deep > 0.12 && d < 40;
+            if (sf.visible) { sf.position.y = (surf + bot) / 2 - r.y; sf.scale.y = deep; sf.rotation.y = Math.atan2(cam.position.x - r.x, cam.position.z - r.z) - vw.v.root.rotation.y; }
+          }
+          const vr = vw as unknown as { ripT?: number };
+          vr.ripT = (vr.ripT ?? Math.random()) - dt * (0.45 + Math.min(2, e.speed) * 1.2);
+          if (!e.dead && d < 35 && vr.ripT <= 0) { vr.ripT = 1; this.fx.ripple(r.x, r.z, surf, 0.05 + Math.min(0.1, e.speed * 0.04)); }
         }
       }
       // a caught animal fights the cord: heard (thrashing, a squeal) and seen (grass and dirt kicked up) until it
