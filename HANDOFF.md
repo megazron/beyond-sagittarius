@@ -779,3 +779,15 @@ unlanded except this handoff commit and any recording in progress.
 - Bow, sling, atlatl are in ranged.ts (two-bone, hands on the gear already); not yet checked for penetration.
 - Machine rule (owner): at most one capture Chrome, only inside the heavy step: ~/bs-cap/combat/cap3.sh NAME PLAN
   "&query" starts preview + Chrome in the heavy step and closes both (verified) at its end.
+- 04:40 STATE of the weapons work. Unlanded: combat-land23..28 (land28 = 1c10752 holds all; CI run 45110552850
+  rerunning: combat failed once on the known pause-menu click timeout, perf_gate on mobile flat 738k (flaky); the
+  pose checks themselves passed). Land 1c10752 when that run is green (or the next sha's).
+- Numbers. Stand-in skeleton (pose_test, 60 Hz): every weapon passes (shaft and arms out, hands on, no pops). Real
+  rig on the A500 at full frame rate (21_weapon_holds_after, 3,799 frames): shaft at most 0.9 cm into the body
+  shape, right hand up to 22 cm off its mark (spear brace), left hand up to 28 cm off the spear shaft at worst. In
+  CI (50 ms steps) the right hand runs 0.3-0.7 m behind its mark in a blow (lag of the arm pose behind the fight's
+  step), so the play-test gates there only catch gross failures (8 cm, 60 cm) and print the numbers.
+- NEXT: find where the left hand leaves the shaft at full rate (log the frame like `worst`); the character.ts
+  keepArmsOut runs after applyLimbs and can move my arms (ask the story agent for an opt-out while a fight pose is
+  set); overhead club wind-up brings the hand beside the face; bow/sling/atlatl (ranged.ts) not yet measured;
+  21_weapon_holds_before (?meleerig=0) clip: recording queued at 04:40 (cap3.sh v21b).
