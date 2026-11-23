@@ -36,6 +36,8 @@ jobs:
           - { name: text_fit, run: 'python tools/text_fit.py --before --out "$RUNNER_TEMP/textfit.json"' }
           - { name: cutscene_qa, run: 'python tools/cutscene_qa.py --out "$RUNNER_TEMP/cutscene"' }
           - { name: combat, run: 'node --experimental-strip-types tools/combat/sim_test.ts && python tools/combat/play_test.py' }
+          - { name: anim_qa, run: 'python tools/anim_qa.py --serve --every 0 --out "$RUNNER_TEMP/anim_qa.json"' }
+          - { name: anim_qa_pixels, run: 'python tools/anim_qa.py --serve --every 15 --only zenvik,nuvexa,custom_f_social --out "$RUNNER_TEMP/anim_qa_px.json"' }
           - { name: app_smoke, cap: true, run: 'python tools/android/app_smoke.py --shots "$RUNNER_TEMP/shots"' }
     steps:
       - uses: actions/checkout@v4

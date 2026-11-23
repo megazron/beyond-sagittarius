@@ -1,0 +1,573 @@
+{
+ "note": "tools/anim_qa.py --write-budget; lower these as fixes land. Target: arm and hand penetration 0, jerk under 4 cm, holdErr under 2 cm, pixels near 0. Taken 2026-11-23 from the life-wip rig at 9a4dabe on lavapipe, every 10.",
+ "every": 10,
+ "scenarios": {
+  "stand": {
+   "armPenCm": 3.0,
+   "handPenCm": 3.0,
+   "jerkCm": 0.6,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 88,
+   "clothPx": 162
+  },
+  "idle": {
+   "armPenCm": 2.7,
+   "handPenCm": 2.7,
+   "jerkCm": 2.6,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 89,
+   "clothPx": 159
+  },
+  "walk": {
+   "armPenCm": 2.6,
+   "handPenCm": 2.6,
+   "jerkCm": 3.6,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 78,
+   "clothPx": 168
+  },
+  "run": {
+   "armPenCm": 2.7,
+   "handPenCm": 2.7,
+   "jerkCm": 10.3,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 99,
+   "clothPx": 254
+  },
+  "sprint": {
+   "armPenCm": 2.6,
+   "handPenCm": 2.6,
+   "jerkCm": 10.2,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 99,
+   "clothPx": 205
+  },
+  "turn": {
+   "armPenCm": 2.5,
+   "handPenCm": 2.5,
+   "jerkCm": 3.2,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 76,
+   "clothPx": 178
+  },
+  "limp": {
+   "armPenCm": 3.9,
+   "handPenCm": 2.7,
+   "jerkCm": 6.8,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 138,
+   "clothPx": 169
+  },
+  "crouch": {
+   "armPenCm": 1.5,
+   "handPenCm": 1.5,
+   "jerkCm": 11.9,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 132,
+   "clothPx": 166
+  },
+  "sit": {
+   "armPenCm": 1.6,
+   "handPenCm": 1.6,
+   "jerkCm": 5.9,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 152,
+   "clothPx": 258
+  },
+  "kneel": {
+   "armPenCm": 3.0,
+   "handPenCm": 3.0,
+   "jerkCm": 1.0,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 75,
+   "clothPx": 149
+  },
+  "kneel_heels": {
+   "armPenCm": 2.8,
+   "handPenCm": 2.8,
+   "jerkCm": 0.9,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 122,
+   "clothPx": 256
+  },
+  "injured": {
+   "armPenCm": 3.9,
+   "handPenCm": 3.9,
+   "jerkCm": 3.8,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 145,
+   "clothPx": 224
+  },
+  "lie": {
+   "armPenCm": 0.5,
+   "handPenCm": 0.5,
+   "jerkCm": 1.8,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 89,
+   "clothPx": 122
+  },
+  "wave": {
+   "armPenCm": 0.3,
+   "handPenCm": 0.3,
+   "jerkCm": 6.9,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 164,
+   "clothPx": 218
+  },
+  "point": {
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
+   "jerkCm": 2.4,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 131,
+   "clothPx": 325
+  },
+  "cheer": {
+   "armPenCm": 3.0,
+   "handPenCm": 3.0,
+   "jerkCm": 6.6,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 80,
+   "clothPx": 200
+  },
+  "shout": {
+   "armPenCm": 0.3,
+   "handPenCm": 0.3,
+   "jerkCm": 7.2,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 75,
+   "clothPx": 140
+  },
+  "argue": {
+   "armPenCm": 2.6,
+   "handPenCm": 0.5,
+   "jerkCm": 4.2,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 98,
+   "clothPx": 150
+  },
+  "present": {
+   "armPenCm": 2.3,
+   "handPenCm": 0.3,
+   "jerkCm": 3.5,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 88,
+   "clothPx": 136
+  },
+  "write": {
+   "armPenCm": 0.3,
+   "handPenCm": 0.3,
+   "jerkCm": 5.9,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 66,
+   "clothPx": 148
+  },
+  "facepalm": {
+   "armPenCm": 0.3,
+   "handPenCm": 0.3,
+   "jerkCm": 5.4,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 71,
+   "clothPx": 130
+  },
+  "selfie": {
+   "armPenCm": 3.0,
+   "handPenCm": 3.0,
+   "jerkCm": 6.0,
+   "holdErrCm": 0.3,
+   "propGapCm": 2.3,
+   "skinPx": 95,
+   "clothPx": 134
+  },
+  "jump": {
+   "armPenCm": 0.3,
+   "handPenCm": 0.3,
+   "jerkCm": 2.5,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 110,
+   "clothPx": 219
+  },
+  "swim": {
+   "armPenCm": 0.3,
+   "handPenCm": 0.3,
+   "jerkCm": 2.8,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 106,
+   "clothPx": 141
+  },
+  "task_pickup": {
+   "armPenCm": 16.7,
+   "handPenCm": 16.7,
+   "jerkCm": 9.4,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 131,
+   "clothPx": 198
+  },
+  "task_plant": {
+   "armPenCm": 13.7,
+   "handPenCm": 13.7,
+   "jerkCm": 11.9,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 136,
+   "clothPx": 189
+  },
+  "task_use": {
+   "armPenCm": 10.6,
+   "handPenCm": 6.0,
+   "jerkCm": 5.7,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 104,
+   "clothPx": 144
+  },
+  "task_fix": {
+   "armPenCm": 11.2,
+   "handPenCm": 11.2,
+   "jerkCm": 4.6,
+   "holdErrCm": 0.3,
+   "propGapCm": 1.1,
+   "skinPx": 125,
+   "clothPx": 170
+  },
+  "task_open": {
+   "armPenCm": 6.1,
+   "handPenCm": 2.7,
+   "jerkCm": 6.4,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 109,
+   "clothPx": 135
+  },
+  "task_give": {
+   "armPenCm": 2.8,
+   "handPenCm": 2.8,
+   "jerkCm": 8.0,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 88,
+   "clothPx": 131
+  },
+  "task_type": {
+   "armPenCm": 3.7,
+   "handPenCm": 3.2,
+   "jerkCm": 6.8,
+   "holdErrCm": 0.3,
+   "propGapCm": 2.3,
+   "skinPx": 76,
+   "clothPx": 135
+  },
+  "task_eat": {
+   "armPenCm": 3.4,
+   "handPenCm": 3.4,
+   "jerkCm": 6.0,
+   "holdErrCm": 0.3,
+   "propGapCm": 3.6,
+   "skinPx": 72,
+   "clothPx": 165
+  },
+  "task_drink": {
+   "armPenCm": 5.0,
+   "handPenCm": 5.0,
+   "jerkCm": 11.6,
+   "holdErrCm": 0.3,
+   "propGapCm": 3.4,
+   "skinPx": 102,
+   "clothPx": 198
+  },
+  "task_carry": {
+   "armPenCm": 3.0,
+   "handPenCm": 3.0,
+   "jerkCm": 19.4,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 85,
+   "clothPx": 150
+  },
+  "task_gesture": {
+   "armPenCm": 2.8,
+   "handPenCm": 2.8,
+   "jerkCm": 6.7,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 72,
+   "clothPx": 141
+  },
+  "task_phone": {
+   "armPenCm": 5.0,
+   "handPenCm": 5.0,
+   "jerkCm": 10.3,
+   "holdErrCm": 0.3,
+   "propGapCm": 2.3,
+   "skinPx": 74,
+   "clothPx": 140
+  },
+  "walk_carry_box": {
+   "armPenCm": 2.9,
+   "handPenCm": 2.9,
+   "jerkCm": 6.5,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 74,
+   "clothPx": 145
+  },
+  "kneel_pickup_stone": {
+   "armPenCm": 10.2,
+   "handPenCm": 10.2,
+   "jerkCm": 11.6,
+   "holdErrCm": 0.3,
+   "propGapCm": 4.8,
+   "skinPx": 84,
+   "clothPx": 161
+  },
+  "kneel_use_stone": {
+   "armPenCm": 15.0,
+   "handPenCm": 11.4,
+   "jerkCm": 4.5,
+   "holdErrCm": 0.3,
+   "propGapCm": 4.6,
+   "skinPx": 85,
+   "clothPx": 135
+  },
+  "sit_eat": {
+   "armPenCm": 10.3,
+   "handPenCm": 10.3,
+   "jerkCm": 11.7,
+   "holdErrCm": 0.3,
+   "propGapCm": 3.6,
+   "skinPx": 128,
+   "clothPx": 214
+  },
+  "sit_drink": {
+   "armPenCm": 7.8,
+   "handPenCm": 7.8,
+   "jerkCm": 21.6,
+   "holdErrCm": 0.3,
+   "propGapCm": 3.0,
+   "skinPx": 118,
+   "clothPx": 204
+  },
+  "walk_berry": {
+   "armPenCm": 2.7,
+   "handPenCm": 2.7,
+   "jerkCm": 2.9,
+   "holdErrCm": 0.3,
+   "propGapCm": 7.8,
+   "skinPx": 78,
+   "clothPx": 131
+  },
+  "walk_leafcup": {
+   "armPenCm": 2.9,
+   "handPenCm": 2.9,
+   "jerkCm": 2.6,
+   "holdErrCm": 0.3,
+   "propGapCm": 2.9,
+   "skinPx": 78,
+   "clothPx": 165
+  },
+  "spear_guard": {
+   "armPenCm": 9.9,
+   "handPenCm": 9.9,
+   "jerkCm": 4.9,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 104,
+   "clothPx": 142
+  },
+  "spear_thrust": {
+   "armPenCm": 10.2,
+   "handPenCm": 8.3,
+   "jerkCm": 5.9,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 111,
+   "clothPx": 158
+  },
+  "spear_walk": {
+   "armPenCm": 11.0,
+   "handPenCm": 11.0,
+   "jerkCm": 7.2,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 165,
+   "clothPx": 190
+  },
+  "spear_run": {
+   "armPenCm": 12.1,
+   "handPenCm": 12.1,
+   "jerkCm": 10.9,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 105,
+   "clothPx": 206
+  },
+  "stone_carry_walk": {
+   "armPenCm": 8.3,
+   "handPenCm": 8.3,
+   "jerkCm": 4.2,
+   "holdErrCm": 15.8,
+   "propGapCm": 4.8,
+   "skinPx": 71,
+   "clothPx": 169
+  },
+  "stone_chest_2h": {
+   "armPenCm": 8.9,
+   "handPenCm": 8.9,
+   "jerkCm": 12.6,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 168,
+   "clothPx": 188
+  },
+  "stone_knap": {
+   "armPenCm": 9.0,
+   "handPenCm": 5.0,
+   "jerkCm": 9.2,
+   "holdErrCm": 0.3,
+   "propGapCm": 4.8,
+   "skinPx": 151,
+   "clothPx": 159
+  },
+  "drill": {
+   "armPenCm": 11.0,
+   "handPenCm": 6.2,
+   "jerkCm": 5.4,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 136,
+   "clothPx": 152
+  },
+  "throw_over": {
+   "armPenCm": 3.5,
+   "handPenCm": 3.5,
+   "jerkCm": 17.4,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 86,
+   "clothPx": 129
+  },
+  "reach_far": {
+   "armPenCm": 4.9,
+   "handPenCm": 4.9,
+   "jerkCm": 6.4,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 95,
+   "clothPx": 134
+  },
+  "reach_inside": {
+   "armPenCm": 11.6,
+   "handPenCm": 11.6,
+   "jerkCm": 7.3,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 92,
+   "clothPx": 156
+  },
+  "reach_across": {
+   "armPenCm": 12.2,
+   "handPenCm": 9.7,
+   "jerkCm": 4.4,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 92,
+   "clothPx": 162
+  },
+  "hold_jump": {
+   "armPenCm": 6.0,
+   "handPenCm": 3.7,
+   "jerkCm": 12.3,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 89,
+   "clothPx": 159
+  },
+  "x_arms_up": {
+   "armPenCm": 0.3,
+   "handPenCm": 0.3,
+   "jerkCm": 0.4,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 84,
+   "clothPx": 206
+  },
+  "x_arms_across": {
+   "armPenCm": 5.2,
+   "handPenCm": 0.3,
+   "jerkCm": 8.3,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 128,
+   "clothPx": 184
+  },
+  "x_arms_back": {
+   "armPenCm": 0.3,
+   "handPenCm": 0.3,
+   "jerkCm": 0.3,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 120,
+   "clothPx": 148
+  },
+  "x_arms_out": {
+   "armPenCm": 0.3,
+   "handPenCm": 0.3,
+   "jerkCm": 0.4,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 126,
+   "clothPx": 142
+  },
+  "x_bend_twist": {
+   "armPenCm": 2.9,
+   "handPenCm": 2.9,
+   "jerkCm": 0.6,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 76,
+   "clothPx": 182
+  },
+  "x_kick": {
+   "armPenCm": 2.8,
+   "handPenCm": 2.8,
+   "jerkCm": 0.4,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 99,
+   "clothPx": 161
+  },
+  "x_squat": {
+   "armPenCm": 0.3,
+   "handPenCm": 0.3,
+   "jerkCm": 0.6,
+   "holdErrCm": 0.3,
+   "propGapCm": 0.3,
+   "skinPx": 144,
+   "clothPx": 301
+  }
+ }
+}

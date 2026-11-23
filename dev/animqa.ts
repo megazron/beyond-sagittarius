@@ -137,6 +137,11 @@ export function* scenarioFrames(c: Character, name: string, h: QaHooks, every = 
   const fl = { skinPoke: 0, clothPoke: 0, back: 0, samples: 0, worst: 0, worstK: -1 };
   for (let k = 0; k < frames; k++) {
     x.k = k;
+    // the body moves first and the hands are given this frame's targets (given before, they were a frame behind: 4 cm
+    // at a walk)
+    if (sc.w) R.rotation.y += sc.w * dt;
+    if (sc.v) { R.position.x += Math.sin(R.rotation.y) * sc.v * dt; R.position.z += Math.cos(R.rotation.y) * sc.v * dt; }
+    R.updateMatrixWorld(true);
     const hold = sc.hold ? sc.hold(x) : null;
     // the hold's targets are live points: the same objects are handed back each frame, moved (as the scenes do)
     if (hold) {
@@ -144,8 +149,6 @@ export function* scenarioFrames(c: Character, name: string, h: QaHooks, every = 
       else for (const s of ['L', 'R'] as const) if (hold[s] && lastHold[s]) { lastHold[s]!.at.copy(hold[s]!.at); lastHold[s]!.fingers.copy(hold[s]!.fingers); lastHold[s]!.palm.copy(hold[s]!.palm); }
     } else if (lastHold) { c.setHold(null); lastHold = null; }
     sc.frame?.(x);
-    if (sc.w) R.rotation.y += sc.w * dt;
-    if (sc.v) { R.position.x += Math.sin(R.rotation.y) * sc.v * dt; R.position.z += Math.cos(R.rotation.y) * sc.v * dt; }
     h.step(c, sc.pose ?? 'stand', (sc.v ?? 0) / 4, dt);
     R.updateMatrixWorld(true);
     // arms into the torso
