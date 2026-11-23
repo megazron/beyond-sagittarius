@@ -1045,7 +1045,7 @@ window.addEventListener('resize', () => {
     return ps.map((p) => ({ id: p.id, walk: !!p.walk, pos: p.pos, root: p.fig.root }));
   },
   /** Test hook: the painted crowd near the camera (14 m), the real bodies walking it, and cards hidden with no body. */
-  awayCrowd() { const st = game?.away?.stage as { crowdState?: () => { near: number; bodies: number; lost: number } } | null; return st?.crowdState?.() ?? { near: 0, bodies: 0, lost: 0 }; },
+  awayCrowd() { const st = game?.away?.stage as { crowdState?: () => { near: number; bodies: number; lost: number; held?: number[][] } } | null; return st?.crowdState?.() ?? { near: 0, bodies: 0, lost: 0 }; },
   /** Test hook: cars and people on the away stage this frame (tools/traffic_smoke.py). */
   awayTraffic() { return (game?.away?.stage as { trafficState?: () => unknown } | null)?.trafficState?.() ?? null; },
   /** Test hook: 'body', 'card' or 'none' for a person on the away stage (tools/crowd_smoke.py). */

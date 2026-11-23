@@ -50,6 +50,8 @@ const hx = (x: number) => {
 const FLOOR = 0.14;
 /** Phones: townsfolk past this many metres from the camera are not drawn. */
 const PHONE_CROWD_FAR = 34;
+/** ?lenshold=0: the old way (a body in the lens is let go and its card drawn), for an A/B of the bump fix. */
+const LENS_HOLD = typeof location === 'undefined' || new URLSearchParams(location.search).get('lenshold') !== '0';
 /** Other presets: townsfolk past this many metres are drawn as cards (citydense.ts stand-ins). */
 const CROWD_FAR = 34; // beyond the 30 m everyone must stay drawn within (tools/crowd_smoke.py), from a camera a few metres behind you
 /** Phones: props smaller than SMALL_PROP metres across (as a radius) are not drawn past SMALL_FAR metres. */
@@ -1242,7 +1244,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     const cards = dense.cards, taken = dense.taken, c = cam.position;
     near.length = 0;
     // a card in the lens (on the line from the camera to you) would be hidden as a body too: the body goes to the next one
-    for (let i = 0; i < cards.length; i++) { const d = Math.hypot(cards[i].x - c.x, cards[i].z - c.z); if (d < TAKE * (taken[i] ? 1.15 : 1) && !inLens(cards[i].x, cards[i].z)) near.push([d, i]); }
+    // someone already walking as a body keeps it in the lens too (the body fades or hides there itself): letting go
+    // there gave the body back to the pool and drew the painted card in its place, so a passer-by you bumped into turned
+    // into a flat picture of somebody, and back into a body once past (the owner: "the pedestrians suddenly change")
+    for (let i = 0; i < cards.length; i++) { const d = Math.hypot(cards[i].x - c.x, cards[i].z - c.z); if (d < TAKE * (taken[i] ? 1.15 : 1) && ((LENS_HOLD && byCard.has(i)) || !inLens(cards[i].x, cards[i].z))) near.push([d, i]); }
     near.sort((a, b) => a[0] - b[0]);
     cardsNear = 0; for (const [d] of near) if (d < 10) cardsNear++;
     const want = new Set(near.slice(0, Math.min(POOL, budget)).map(([, i]) => i));
@@ -1583,11 +1588,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     crowdState() {
       const cards = dense.cards, taken = dense.taken, c = lastCam;
       let nearN = 0, lost = 0;
+      // who walks the painted crowd as a body: card, the pool body's index and look, metres from the camera (soak_smoke's bump test)
+      const held = c ? [...byCard.entries()].map(([i, b]) => [i, crowdPool.indexOf(b), b.look, +Math.hypot(cards[i].x - c.x, cards[i].z - c.z).toFixed(2), +cards[i].x.toFixed(2), +cards[i].z.toFixed(2)]) : [];
       if (c) cards.forEach((q, i) => { if (Math.hypot(q.x - c.x, q.z - c.z) < TAKE) { nearN++; if (taken[i] && !(byCard.get(i)?.fig.root.visible) && !inLens(q.x, q.z)) lost++; } }); // someone cleared from the lens is not lost
       // the districts: every walker within 30 m of the camera is a body or a card, never nothing
       let dnear = 0, dlost = 0;
       dist.peds.forEach((q, i) => { if (Math.hypot(q.x - pedsAt.x, q.z - pedsAt.z) < 30) { dnear++; if (!dpool.some((b) => b.ped === i && b.fig.root.visible) && !stand.some((x) => x.k === 1e6 + i) && !inLens(q.x, q.z)) dlost++; } });
-      return { near: nearN, bodies: crowdPool.filter((b) => b.card >= 0 && b.fig.root.visible).length, lost, room: bodiesLeft, dnear, dbodies: dpool.filter((b) => b.ped >= 0 && b.fig.root.visible).length, dlost };
+      return { held, near: nearN, bodies: crowdPool.filter((b) => b.card >= 0 && b.fig.root.visible).length, lost, room: bodiesLeft, dnear, dbodies: dpool.filter((b) => b.ped >= 0 && b.fig.root.visible).length, dlost };
     },
     scene, gravity: 22, jump: 6.2, spawn: new THREE.Vector3(12.4, FLOOR, 68.4), tasks, people, clearance,
     // the hero views: stepping out of the flat, and the run to the gate
