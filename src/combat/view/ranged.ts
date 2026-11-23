@@ -153,7 +153,9 @@ export class RangedRig {
       const ready = V().copy(A).multiplyScalar(0.45).addScaledVector(F, 0.8).add(V().set(0, -0.6, 0)).normalize();
       const armDir = V().copy(low).lerp(V().copy(ready).lerp(raised, S.lift).normalize(), smooth(S.up)).normalize();
       if (S.tremor > 0) armDir.x += Math.sin(t * 23) * 0.006 * S.tremor, armDir.y += Math.sin(t * 17 + 1) * 0.008 * S.tremor;
-      reach(sL, V().copy(sL).addScaledVector(armDir, (R.a + R.b) * 0.97), R.a, R.b, V().set(0, -1, 0).addScaledVector(aim, -0.3), eL, wL);
+      // (the elbow's pole out to the left as well as down: down and back only, the elbow came in by the ribs while the bow came
+      // up from low on a body still turning, CI 4.2 cm)
+      reach(sL, V().copy(sL).addScaledVector(armDir, (R.a + R.b) * 0.97), R.a, R.b, V().set(0.6, -1, 0).addScaledVector(aim, -0.3), eL, wL);
       // the string hand: on the string at brace height, back to the anchor under the jaw as it draws, past the ear on
       // the loose, then down to the quiver for the next arrow and back
       const grip = V().copy(wL).addScaledVector(armDir, 0.07);
