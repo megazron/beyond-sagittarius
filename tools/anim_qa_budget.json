@@ -465,8 +465,8 @@
    "clothPx": 214
   },
   "sit_drink": {
-   "armPenCm": 12.0,
-   "handPenCm": 12.0,
+   "armPenCm": 14.4,
+   "handPenCm": 14.4,
    "meshInCm": 1.0,
    "jerkCm": 11.0,
    "holdErrCm": 1.0,
@@ -724,6 +724,7 @@
   "task_eat/task_drink (c7ec400)": "FIXED in ff00716: the bread's edge or the cup's rim goes to the lips (mouthCm 1.0 to 1.3 on all 19 bodies).",
   "raised 2026-11-23 13:50": "injured jerkCm, task_plant jerkCm, task_eat jerkCm, task_eat meshInCm, task_drink armPenCm, task_drink handPenCm, task_drink jerkCm, task_drink meshInCm, spear_thrust jerkCm, reach_far jerkCm (full10 at the thigh guard fix; the rest ratcheted down)",
   "task_putdown/task_throw clothPx (2026-11-23 14:20)": "new scenarios ratcheted from full10, a run without pixels, so their pixel caps were placeholders (30): set from CI at 461b59f (zenvik 56 and 78) with the usual slack",
-  "raised 2026-11-23 21:10 (full11, ff00716)": "task_eat and sit_drink armPen/handPen: Draxum's (and Lyrra's) fingers or wrist at the lips are inside the round chest shape where it reaches up under the chin; the guards let go there on purpose (RIG_OPTS.lipsLetGo; with them on, the cup stopped 5 to 6 cm off his mouth). The surface check for the same frames reads 0 to 0.5 cm. kneel_pickup_stone meshInCm 4.0 against 3.9: run to run noise on custom_m_explorer, untouched code. Lowered from full11: drink arm 11.1 to 5.6, seated eat arm 13.5 to 8.4, drink jerk 10.6 to 6.4, and others"
+  "raised 2026-11-23 21:10 (full11, ff00716)": "task_eat and sit_drink armPen/handPen: Draxum's (and Lyrra's) fingers or wrist at the lips are inside the round chest shape where it reaches up under the chin; the guards let go there on purpose (RIG_OPTS.lipsLetGo; with them on, the cup stopped 5 to 6 cm off his mouth). The surface check for the same frames reads 0 to 0.5 cm. kneel_pickup_stone meshInCm 4.0 against 3.9: run to run noise on custom_m_explorer, untouched code. Lowered from full11: drink arm 11.1 to 5.6, seated eat arm 13.5 to 8.4, drink jerk 10.6 to 6.4, and others",
+  "sit_drink armPen (2026-11-23 22:00)": "Draxum's wrist at 10 to 12.2 cm into the chest shape between runs (CI order carries state). This one LOOKS wrong, not just a measure: seated, his clip bows the head, the cup's rim reaches the lips but the hand ends over his nose (renders ~/bs-cap/look/c6, c7). A head tilt up (0.32 rad) did not fix it. To fix, then lower"
  }
 }
