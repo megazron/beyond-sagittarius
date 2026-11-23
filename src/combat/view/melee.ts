@@ -313,30 +313,9 @@ export function solveArms(f: WFrame, w: WeaponId, k: Skel, leftW: number, rightW
     const pk = key === 'L' ? 'pL' : 'pR', prev = mem[pk], pole = V(side * 0.75, -0.65, -0.25);
     if (prev) pole.normalize().addScaledVector(prev, 2.2);
     const miss = reach2(s, t, A, B, pole, e, wr);
-    const inside = (el: THREE.Vector3) => {
-      let worst = 0;
-      for (let i = 1; i <= 6; i++) {
-        const q = i <= 3 ? V().copy(s).lerp(el, 0.35 + i * 0.2) : V().copy(el).lerp(wr, (i - 3) / 3);
-        worst = Math.max(worst, depth(q, f.bend, 0.04));
-      }
-      return worst;
-    };
-    // the swing is remembered and changes at most 10 rad/s, so the elbow never jumps from one way out to another; it
-    // drifts back to the plain pose when that is clear
-    const ax = V().subVectors(wr, s).normalize(), c = V().copy(s).addScaledVector(ax, V().subVectors(e, s).dot(ax)), r0 = V().subVectors(e, c);
-    const at = (a: number) => V().copy(c).add(V().copy(r0).applyAxisAngle(ax, a));
-    const a0 = mem[key], cost = (a: number) => {
-      const el = at(a);
-      // an elbow up and in front of the face is no way out: prefer swings that keep it below the shoulder
-      return inside(el) * 10 + Math.max(0, el.y - s.y - 0.05) * 2 + Math.abs(a - a0) * 0.01 + Math.abs(a) * 0.004;
-    };
-    let bestA = a0, best = cost(a0);
-    for (let j = -14; j <= 14; j++) { const a = j * 0.13; const cs = cost(a); if (cs < best - 1e-5) { best = cs; bestA = a; } }
-    const step = 10 * dt, aNew = a0 + Math.max(-step, Math.min(step, bestA - a0));
-    mem[key] = aNew; e.copy(at(aNew));
-    // remembered without the swing (the swing is kept on its own)
-    (mem[pk] ??= V()).copy(r0).normalize();
-    armIn = Math.max(armIn, inside(e));
+    // the pole is remembered without the swing (the swing is kept on its own)
+    { const ax = V().subVectors(wr, s).normalize(), c = V().copy(s).addScaledVector(ax, V().subVectors(e, s).dot(ax)); (mem[pk] ??= V()).copy(e).sub(c).normalize(); }
+    armIn = Math.max(armIn, swingOut(s, e, wr, f.bend, mem, key, dt));
     return miss;
   };
   const missR = arm(k.sR, rt, -1, eR, wR, 'R'), missL = arm(k.sL, lt, 1, eL, wL, 'L');
@@ -347,6 +326,34 @@ export function solveArms(f: WFrame, w: WeaponId, k: Skel, leftW: number, rightW
   if (rightW > 0) { limbs.armR = dir(eR, k.sR); limbs.foreR = dir(wristR, eR); }
   if (leftW > 0) { limbs.armL = dir(eL, k.sL); limbs.foreL = dir(wristL, eL); }
   return { limbs, f, eL, wL, eR, wR, lt, rt, missL, missR, penetration, armIn };
+}
+
+/** Swing an elbow round its shoulder-to-hand line (the hand stays put) to the nearest place where the upper arm and
+ * forearm are out of the body; the swing is remembered in `mem` and changes at most 10 rad/s, so the elbow never jumps
+ * from one way out to another, and drifts back to the plain pose when that is clear. Returns how deep the arm still
+ * is (metres, <= 0 clear). Moves `e`. */
+export function swingOut(s: THREE.Vector3, e: THREE.Vector3, wr: THREE.Vector3, bend: number, mem: ArmMem, key: 'L' | 'R', dt: number): number {
+  const inside = (el: THREE.Vector3) => {
+    let worst = 0;
+    for (let i = 1; i <= 6; i++) {
+      const q = i <= 3 ? V().copy(s).lerp(el, 0.35 + i * 0.2) : V().copy(el).lerp(wr, (i - 3) / 3);
+      worst = Math.max(worst, depth(q, bend, 0.04));
+    }
+    return worst;
+  };
+  const ax = V().subVectors(wr, s); if (ax.lengthSq() < 1e-8) return inside(e); ax.normalize();
+  const c = V().copy(s).addScaledVector(ax, V().subVectors(e, s).dot(ax)), r0 = V().subVectors(e, c);
+  const at = (a: number) => V().copy(c).add(V().copy(r0).applyAxisAngle(ax, a));
+  const a0 = mem[key], cost = (a: number) => {
+    const el = at(a);
+    // an elbow up and in front of the face is no way out: prefer swings that keep it below the shoulder
+    return inside(el) * 10 + Math.max(0, el.y - s.y - 0.05) * 2 + Math.abs(a - a0) * 0.01 + Math.abs(a) * 0.004;
+  };
+  let bestA = a0, best = cost(a0);
+  for (let j = -14; j <= 14; j++) { const a = j * 0.13; const cs = cost(a); if (cs < best - 1e-5) { best = cs; bestA = a; } }
+  const step = 10 * dt, aNew = a0 + Math.max(-step, Math.min(step, bestA - a0));
+  mem[key] = aNew; e.copy(at(aNew));
+  return inside(e);
 }
 
 /** A frame's smoothed copy: follows the target with a time constant (seconds), directions turned, not snapped. */

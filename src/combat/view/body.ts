@@ -285,6 +285,8 @@ export class FightBody {
     this.hold(model, rw ? null : visible);
     if (rw && !p.down && p.act !== 'roll' && p.staggerT <= 0 && aimW) {
       this.since += dt; this.rollAngle = 0; this.crouch = 0;
+      const up = model.root.getObjectByName('upperarmR'), lo = model.root.getObjectByName('lowerarmR');
+      if (up && lo) { const wp = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()); this.shapes(model, { a: wp(up).distanceTo(wp(lo)), b: wp(lo).distanceTo(wp(model.handR)) }); }
       const pose = this.ranged.pose(model, p, dt, t, aiming || armed, aimW, ammo, this.since);
       if (p.act === 'charge') this.wasCharging = 'shot'; else if (this.since > 0.45) this.wasCharging = 'none';
       if (pose) { if (p.sneaking) { pose.bend = (pose.bend ?? 0) + 0.3; this.crouch = 0.2; } model.setLimbs(pose); return; }
@@ -382,8 +384,6 @@ export class FightBody {
       const wp = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3());
       this.bonesM = { upL, upR, loL, loR, a: wp(upR).distanceTo(wp(loR)), b: wp(loR).distanceTo(wp(model.handR)) };
     }
-    if (this.fitFor !== model) { this.fitFor = model; this.fit = measureBody(model); }
-    setBodyFit(this.fit);
     const B = this.bonesM, def = WEAPONS[w], m = def.melee;
     this.since += dt; this.kick = Math.max(0, this.kick - dt * 5);
     this.ready += ((armed || p.act !== 'idle' || p.blocking ? 1 : 0) - this.ready) * (1 - Math.exp(-dt * 9));
@@ -392,13 +392,8 @@ export class FightBody {
       weapon: w, act: p.act, actT: p.actT, combo: p.combo, charge: p.charge, charging: p.charging, blocking: p.blocking, blockT: p.blockT,
       up: this.ready, since: this.since, thrown: this.wasCharging === 'throw' && p.act !== 'charge', windup: m?.windup ?? 0.3, active: m?.active ?? 0.1, recover: m?.recover ?? 0.4,
     };
-    // the frames are for a 1.75 m man: scaled to this body by its arm length
-    const K = (B.a + B.b) / 0.53; setBodyScale(K);
+    const { K, ch } = this.shapes(model, B);
     const loc = (o: THREE.Object3D) => model.root.worldToLocal(o.getWorldPosition(new THREE.Vector3()));
-    // the body's shapes sit on its bones (last frame's): hips, chest, head; the frames are drawn round the chest
-    const hips = model.root.getObjectByName('hips'), chest = model.root.getObjectByName('chest');
-    const ch = chest ? loc(chest) : new THREE.Vector3(), hp = hips ? loc(hips) : new THREE.Vector3(), hd = loc(model.head);
-    setBodyCentres([{ x: hp.x, z: hp.z }, { x: ch.x, z: ch.z }, { x: hd.x, z: hd.z }]);
     targetFrame(s, this.tgt, this.tmp); this.tgt.g.multiplyScalar(K); this.tgt.lh.multiplyScalar(K);
     this.tgt.g.x += ch.x; this.tgt.g.z += ch.z; this.tgt.lh.x += ch.x; this.tgt.lh.z += ch.z;
     clearShaft(this.tgt, w);
@@ -423,6 +418,19 @@ export class FightBody {
     // the bones as posed, against this frame's shoulders.
     (r.limbs as Limbs & { ownArms?: 'L' | 'R' | 'both' }).ownArms = 'both';
     return r.limbs;
+  }
+
+  /** The body's shapes for this frame (view/melee.ts): scaled by the arm length (the frames are for a 1.75 m man),
+   * fitted to this model's skin, sitting on its bones as last posed (hips, chest, head). */
+  private shapes(model: Character, B: { a: number; b: number }) {
+    if (this.fitFor !== model) { this.fitFor = model; this.fit = measureBody(model); }
+    setBodyFit(this.fit);
+    const K = (B.a + B.b) / 0.53; setBodyScale(K);
+    const loc = (o: THREE.Object3D) => model.root.worldToLocal(o.getWorldPosition(new THREE.Vector3()));
+    const hips = model.root.getObjectByName('hips'), chest = model.root.getObjectByName('chest');
+    const ch = chest ? loc(chest) : new THREE.Vector3(), hp = hips ? loc(hips) : new THREE.Vector3(), hd = loc(model.head);
+    setBodyCentres([{ x: hp.x, z: hp.z }, { x: ch.x, z: ch.z }, { x: hd.x, z: hd.z }]);
+    return { K, ch };
   }
 
   // ---------------------------------------------------------------- what goes to the rig, eased

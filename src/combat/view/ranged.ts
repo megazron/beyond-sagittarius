@@ -6,6 +6,8 @@
 import * as THREE from 'three';
 import type { Character, Limbs, Dir } from '../../characters/character';
 import type { SimPlayer } from '../sim/sim';
+import { swingOut } from './melee';
+import type { ArmMem } from './melee';
 
 const V = () => new THREE.Vector3();
 const clamp01 = (k: number) => Math.min(1, Math.max(0, k));
@@ -135,6 +137,7 @@ export class RangedRig {
       } else target = S.up > 0.5 ? nock0 : V().set(-0.22, 1.0, 0.12);
       const pole = V().copy(aim).multiplyScalar(-1).add(V().set(0, 0.55, 0));
       reach(sR, V().copy(target).addScaledVector(aim, -0.06), R.a, R.b, pole, eR, wR);
+      this.clearArms(sL, eL, wL, sR, eR, wR, dt);
       limbs = { armL: dirOf(eL, sL), foreL: dirOf(wL, eL), armR: dirOf(eR, sR), foreR: dirOf(wR, eR), twist: 0.15 * smooth(S.up) };
     } else if (this.mode === 'atlatl') {
       // the spear-thrower: held at the shoulder, the dart lying along it pointing at the target; drawn back with the
@@ -176,6 +179,7 @@ export class RangedRig {
       const tL = casting ? V().copy(pointAt).lerp(tucked, out3(S.rel / 0.2)) : V().copy(lowL).lerp(pointAt, smooth(S.up));
       reach(sL, tL, R.a, R.b, V().set(0.35, -1, -0.2), eL, wL);
       const wind = p.act === 'charge' ? -0.25 - 0.4 * S.draw : casting && S.rel < 0.3 ? -0.65 + 1.1 * out3(S.rel / 0.15) : -0.25 * smooth(S.up);
+      this.clearArms(sL, eL, wL, sR, eR, wR, dt);
       limbs = { armR: dirOf(eR, sR), foreR: dirOf(wR, eR), armL: dirOf(eL, sL), foreL: dirOf(wL, eL), twist: wind };
       if (S.rel < 0.4 || p.act === 'charge') { limbs.legL = [0.06, -0.93, 0.36]; limbs.shinL = [0, -1, 0.05]; limbs.legR = [-0.06, -0.96, -0.24]; limbs.shinR = [0, -0.98, -0.2]; }
     } else {
@@ -216,6 +220,7 @@ export class RangedRig {
       reach(sR, tR, R.a, R.b, V().set(-0.6, -0.4, -0.3), eR, wR);
       reach(sL, tL, R.a, R.b, V().set(0.6, -0.5, -0.2), eL, wL);
       const wind = whirl ? -0.45 * smooth(p.actT / 0.4) : S.throwT >= 0 && S.throwT < 0.5 ? -0.45 + 1.0 * out3(S.throwT / 0.2) : 0;
+      this.clearArms(sL, eL, wL, sR, eR, wR, dt);
       limbs = { armR: dirOf(eR, sR), foreR: dirOf(wR, eR), armL: dirOf(eL, sL), foreL: dirOf(wL, eL), twist: wind };
       // stepping into it: the off foot forward, only while standing
       if ((whirl && p.speed < 0.6) || (S.throwT >= 0 && S.throwT < 0.45)) { limbs.legL = [0.06, -0.93, 0.36]; limbs.shinL = [0, -1, 0.05]; limbs.legR = [-0.06, -0.96, -0.24]; limbs.shinR = [0, -0.98, -0.2]; }
@@ -231,7 +236,18 @@ export class RangedRig {
     } else if (this.mode === 'atlatl') {
       grip(model, 'R', { shape: 'grip', radius: 0.012 }); grip(model, 'L', { shape: 'point' });
     }
+    // these arms are this rig's: the character's own push of the arms out of its torso is skipped (Limbs.ownArms)
+    (limbs as Limbs & { ownArms?: 'both' }).ownArms = 'both';
     return limbs;
+  }
+
+  /** The arms kept out of the body the way the melee rig keeps them (view/melee.ts swingOut, the body's shapes as the
+   * fight body set them this frame): each elbow swings round its shoulder-to-hand line, the hands stay on the gear. */
+  private armMem: ArmMem = { L: 0, R: 0 };
+  /** Worst depth of an arm in the body since the last read (metres), for the play test. */
+  armIn = 0;
+  private clearArms(sL: THREE.Vector3, eL: THREE.Vector3, wL: THREE.Vector3, sR: THREE.Vector3, eR: THREE.Vector3, wR: THREE.Vector3, dt: number) {
+    this.armIn = Math.max(this.armIn, swingOut(sL, eL, wL, 0, this.armMem, 'L', dt), swingOut(sR, eR, wR, 0, this.armMem, 'R', dt));
   }
 
   /** After the body is posed: put the bow, string, arrow, cords and pouch where the hands really are. */
