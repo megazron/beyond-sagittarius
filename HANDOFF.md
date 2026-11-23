@@ -1088,3 +1088,25 @@ unlanded except this handoff commit and any recording in progress.
   calm turns, thrusts once the aim is within 0.006 rad; every step logged in __cbFishLog (ev: start, target, walk,
   edge, aim, stall, thrust, result, lost, cam, hitch). Darter rebuilt: countershaded round-fronted body, forked tail,
   back fin, matt. sim_test: a thrust from the fishing camera takes a fish 1.3 to 2.2 m out.
+
+### 2026-11-23 ~10:00 (combat agent, weapons session 3)
+- LANDED 8d4e8e4 (combat-land36, CI 45121206610 green on that sha; main had not moved) to main.
+- Branch combat-land38 (on land37): arms, shapes, ranged re-solve, sling, wraps; merged combat-fish1 (b1e838a, the
+  fishing fixes by a helper agent: see its entry above). Land combat-land38's head once its CI is green on that sha.
+- Arms (melee.ts): the elbow pole now hangs down and back (side 0.32, more back for a free arm; out round the body only
+  when the hand crosses it); a free left hand is kept within 0.92 of the arm's reach (bent 40-60 deg on all three rigs;
+  the female rig's free arm was 12 deg); BUG fixed in swingOut: the stickiness (0.01/rad) outweighed the pull home
+  (0.004/rad), so an elbow swung out never came back (the free arm stayed out after a spear hold). pose_test now
+  prints and gates elbow bend (>= 25 deg outside blows) and the free elbow's sideways stand-out (<= 10 cm in carry/up):
+  free left elbow 20-24 cm out before, 4-6 cm now. 240 checks pass.
+- Weight shifts (body.ts meleePose): while standing calm the chest turns +-0.06 rad and leans a little, the breath lifts
+  the hands (eased out in blows, blocks, throws). No clavicle bones in the rig, so no real shoulder drop; no wrist flex
+  (the hand bone follows the forearm): both still to do.
+- Body shapes turn with the chest: CENTRE has a yaw per part (live: from the shoulder line and the hip line in body.ts
+  shapes(); tests: the frame's twist via setBodyTwist). Ranged (ranged.ts fixArms): the bow, sling and spear-thrower
+  arms are re-solved on the bones in late() like melee, and the depth of the drawn arms in the shapes is the play
+  test's new gate (rangedArmIn <= 2 cm; rangedSolveIn is the pre-pose solve, printed). Not yet seen in CI.
+- Sling: pale fibre cords 0.013, a bigger lighter pouch, a faint whirl disc. Wraps: snug (2.5 mm over the sleeve, cap
+  7.2 cm, smaller rolled edges, thinner upper-arm cap).
+- Capture plan ~/bs-cap/combat/plan_v23.json (mkplan_v23.py): 24_weapon_holds_v3_bent_arms,
+  25_bow_sling_spearthrower_holds_v2, 20_spear_fishing_v3, 19_hide_wrap_v9_slimmer, 05_night_defence_v15 (2:06 jump).
