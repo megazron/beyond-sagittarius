@@ -1060,7 +1060,8 @@ window.addEventListener('resize', () => {
     if (stage?.scene) out.stage = walk([stage.scene]);
     out.modelCache = walk(modelCacheNow());
     out.modelTexReleased = MODEL_RELEASE.textures;
-    const ac = assetCacheNow(); out.bodyAssets = walk(ac.scenes); out.bodyTex = +(ac.textures.reduce((n, t) => n + tex(t), 0) / 1e6).toFixed(1);
+    const ac = assetCacheNow(); out.bodyAssets = walk(ac.scenes); const bt = ac.textures.map((t) => [String((t.image as { src?: string } | undefined)?.src ?? '').replace(/^.*\/tex\//, ''), tex(t) / 1e6] as [string, number]).filter((r) => r[1] > 0);
+    out.bodyTex = +bt.reduce((n, r) => n + r[1], 0).toFixed(1); out.bodyTexTop = bt.sort((x, y) => y[1] - x[1]).slice(0, 40).map(([k, v]) => `${k} ${v.toFixed(1)}`);
     out.mergeCache = +(mergeCacheNow().reduce((n, g) => n + geo(g), 0) / 1e6).toFixed(1);
     const m = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory; out.heapMB = m ? Math.round(m.usedJSHeapSize / 1e6) : null;
     return out;

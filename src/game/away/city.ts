@@ -480,7 +480,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   blobs.count = 0; blobs.frustumCulled = false; blobs.userData.ground = false; blobs.renderOrder = 1; blobs.matrixAutoUpdate = false; top(blobs);
   // on phones the shadow map (the whole street) is redrawn every third frame: the sun never moves, only people do
   sun.shadow.autoUpdate = false; // redrawn when `due` below says (Ultra and Web every other frame)
-  let shadowFrame = 0, shadowStale = true, bodiesLeft = 0, cardsNear = 0;
+  let shadowFrame = 0, shadowStale = true, bodiesLeft = 0, cardsNear = 0, storyLog = 0;
+  /** Web: the most bodies in all (you aside): the story's people (never a card) or the cap, whichever is more, and two
+   * within reach of you. Phones: the cap and two. perf_gate's Web body budget sits over this, not at it. */
+  const ceilingNow = (story: number) => (tier === 1 ? Math.max(BODY_CAP, story) : BODY_CAP) + 2;
   /** Real bodies drawn at once, the player aside. */
   const BODY_CAP = [2, 5, 12][tier], OLD_FAR = [50, 80, 130][tier];
   const candK = new Float64Array(256), candI = new Int32Array(256);
@@ -1301,8 +1304,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     // phones: never more than BODY_CAP + 2 bodies in all (the townsfolk drawn last frame count first): the pinned, then
     // the budget, then whoever is within reach. In the bazaar the story's people use all of it, so there a passer-by at
     // your elbow can still be a card on a phone (perf_gate's phone budget). Web and Ultra: the held and the two within
-    // reach always (their own cap is POOL + 2)
-    const room = outroT >= 0 || tier > 0 ? 99 : BODY_CAP + 2 - usedLog;
+    // reach always (their own cap is POOL + 2). Web: the story's people or the cap, and two within reach, in all (perf_gate
+    // drew ten on Web in the crowd, six of the story among them, against a budget of nine)
+    const room = outroT >= 0 || tier > 1 ? 99 : ceilingNow(storyLog) - usedLog;
     const want = new Set<number>(); { const n = Math.min(POOL, budget); for (const [k, i] of near) { if ((want.size >= n && k > -500) || want.size >= room) break; want.add(i); } }
     for (const [, i] of elbow) if (want.size < Math.min(room, POOL + 2)) want.add(i);
     elbow.length = 0;
@@ -1392,7 +1396,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       pk.push([d - (mine ? 3 : 0) - (pin ? 1000 : 0) - (du < CONTACT ? 500 : 0), i]); // within reach: before the budget (as walkCrowd)
     }
     pk.sort((a, b) => a[0] - b[0]);
-    const room = outroT >= 0 || tier > 0 ? 99 : BODY_CAP + 2 - usedLog - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0);
+    const room = outroT >= 0 || tier > 1 ? 99 : ceilingNow(storyLog) - usedLog - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0);
     for (const [k, i] of pk) { if ((want.size >= dcap && k > -500 && !(k < -400 && want.size < dcap + 2)) || want.size >= room) break; want.add(i); }
     for (const b of dpool) if (b.ped >= 0 && !want.has(b.ped)) { b.ped = -1; b.fig.root.visible = false; }
     for (const i of want) if (!dpool.some((b) => b.ped === i)) { const b = dpool.find((x) => x.ped < 0 && x.look === i % NLOOK); if (b) { b.ped = i; b.fig.root.visible = true; } }
@@ -1809,7 +1813,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (cam) {
         stand.length = 0;
         // a hard cap on real bodies (BODY_CAP): the friends and whoever is nearest are bodies, everyone else a card
-        const cp = cam.position; let used = 0, nc = 0;
+        const cp = cam.position; let used = 0, nc = 0, story = 0;
         lens.on = !!you && outroT < 0; lens.cx = cp.x; lens.cz = cp.z; if (you) { lens.px = you.position.x; lens.pz = you.position.z; }
         // how many bodies are within a few steps of you (the follow camera rises over a thick crowd: crowdNear)
         if (you) {
@@ -1825,7 +1829,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         }
         if (oldOn) for (let i = 0; i < people.length; i++) {
           const q = people[i];
-          if (boarding.has(q) || talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
+          if (boarding.has(q) || talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; story++; continue; }
           if (q.walk?.shop?.stage === 'inside') { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           const d = Math.hypot(q.pos.x - cp.x, q.pos.z - cp.z);
           const lensHit = LENS_OLD && d < 9 && inLens(q.pos.x, q.pos.z);
@@ -1836,7 +1840,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // the six of the story (and Mir) are never a card within speaking distance, whatever the cap
           const dy = you ? Math.hypot(q.pos.x - you.position.x, q.pos.z - you.position.z) : 99;
           // the six of the story and Mir have no card of their own look, so they are never a card: a body out to the card range
-          if (!crowd.has(q.fig)) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
+          if (!crowd.has(q.fig)) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; story++; continue; }
           // whoever is drawn now holds on a little, the six of the story come first, and then anyone at your elbow (a
           // card reads as cardboard at arm's length), all within the cap
           // (phones too, once they are a body: a body you bump into is not turned into a card at your elbow)
@@ -1849,13 +1853,15 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         // kept for it while it is within reach
         // and the walkers pinned at your elbow (walkCrowd, drawPeds) keep their bodies before anyone further off gets one
         const cap = outroT >= 0 ? 99 : BODY_CAP - Math.max(Math.min(Math.floor(BODY_CAP / 2), cardsNear), crowdPinned + pedPinned);
+        // (Web: within the ceiling, the painted crowd's bodies counted: they and the townsfolk share the two within reach)
+        const walking = tier === 1 && outroT < 0 ? crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0) : 0;
         for (let j = 0; j < nc; j++) {
           // whoever is at your elbow is a body even when the cap is spent (two over it at most)
-          const q = people[candI[j]], show = used < cap || (j < 2 && candK[j] < -20);
+          const q = people[candI[j]], show = used < cap || (j < 2 && candK[j] < -20 && (tier !== 1 || outroT >= 0 || used + walking < ceilingNow(story)));
           if (show) used++; else stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: candI[j], v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
           if (show !== q.fig.root.visible) q.fig.root.visible = show;
         }
-        bodiesLeft = Math.max(0, (outroT >= 0 ? 99 : BODY_CAP) - used); usedLog = used;
+        bodiesLeft = Math.max(0, (outroT >= 0 ? 99 : BODY_CAP) - used); usedLog = used; storyLog = story;
         if (!deep) drawPeds(dt, time, cam, Math.max(0, bodiesLeft - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0))); else for (const b of dpool) if (b.ped >= 0) { b.ped = -1; b.fig.root.visible = false; }
         dense.standIns(stand, cam);
         // a soft contact shadow under every body that casts none of its own (the crowd: CHAR_BUDGET.crowdShadowFar)
