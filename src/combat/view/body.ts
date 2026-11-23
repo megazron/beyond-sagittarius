@@ -411,7 +411,9 @@ export class FightBody {
   private solvedL: number | null = null; private prevL: number | null = null;
   private mem: ArmMem = { L: 0, R: 0 }; private sol: (Solved & { sL: THREE.Vector3; sR: THREE.Vector3 }) | null = null;
   private fitFor: Character | null = null; private fit: BodyFit[] | null = null;
-  yawNow = 0; private calm = 0;
+  yawNow = 0; private calm = 0; private dropK = 0;
+  /** This frame's hand directions (world, wrist to knuckles) after the wrist's flex (fixArms); null: along the forearm. */
+  private hdR: THREE.Vector3 | null = null; private hdL: THREE.Vector3 | null = null;
   private meleePose(model: Character, p: SimPlayer, dt: number, armed: boolean, visible: WeaponId | null, t = 0): Limbs | null {
     const w = p.weapon;
     if (!RIG_ON || !visible || !MELEE_GEAR.includes(w) || p.down || p.act === 'roll' || p.staggerT > 0 || p.snareT > 0.15) return null;
@@ -426,6 +428,10 @@ export class FightBody {
     this.since += dt; this.kick = Math.max(0, this.kick - dt * 5);
     this.ready += ((armed || p.act !== 'idle' || p.blocking ? 1 : 0) - this.ready) * (1 - Math.exp(-dt * 9));
     if (p.act === 'charge') this.wasCharging = 'throw'; else if (this.since > 0.6) this.wasCharging = 'none';
+    // the throwing shoulder drops as the arm is drawn back (no collar bones in this rig: the chest rolls a little to
+    // the right instead, the neck takes it back so the head stays level; late() applies it)
+    const dropT = p.act === 'charge' ? out(Math.min(1, p.charge * 1.4)) : 0;
+    this.dropK += (dropT - this.dropK) * (1 - Math.exp(-dt * (dropT > this.dropK ? 8 : 12)));
     const s: ActState = {
       weapon: w, act: p.act, actT: p.actT, combo: p.combo, charge: p.charge, charging: p.charging, blocking: p.blocking, blockT: p.blockT,
       up: this.ready, since: this.since, thrown: this.wasCharging === 'throw' && p.act !== 'charge', windup: m?.windup ?? 0.3, active: m?.active ?? 0.1, recover: m?.recover ?? 0.4,
@@ -524,9 +530,10 @@ export class FightBody {
     this.ranged.late(model, dt, t);
     const id = this.heldId;
     if (!RIG_ON || !this.held || !id || !MELEE_GEAR.includes(id) || !this.bonesM) return;
-    if (this.mframe && this.sol) this.fixArms(model);
+    this.hdR = this.hdL = null;
+    if (this.mframe && this.sol) { this.dropShoulder(model); this.fixArms(model); }
     const hw = model.handR.getWorldPosition(new THREE.Vector3()), lw = this.bonesM.loR.getWorldPosition(new THREE.Vector3());
-    const fd = hw.clone().sub(lw).normalize(), K = (this.bonesM.a + this.bonesM.b) / 0.53;
+    const hdR = this.hdR as THREE.Vector3 | null, fd = hdR ? hdR.clone() : hw.clone().sub(lw).normalize(), K = (this.bonesM.a + this.bonesM.b) / 0.53;
     const grip = hw.clone().addScaledVector(fd, 0.07 * K);
     // the weapon rides on the hand bone (so it can never slip off the hand, whatever the rig does after this), turned
     // so that it points along this frame's solved shaft (a roll or a stagger: along the forearm)
@@ -549,7 +556,7 @@ export class FightBody {
     if (!st.skel) { const s0 = model.root.worldToLocal(this.bonesM.upR.getWorldPosition(new THREE.Vector3())); st.skel = `sR ${s0.toArray().map((x) => x.toFixed(2))} a ${this.bonesM.a.toFixed(3)} b ${this.bonesM.b.toFixed(3)} fit ${JSON.stringify(this.fit?.map((f) => [+f.off.toFixed(3), +f.az.toFixed(3), f.ax ? +f.ax.toFixed(3) : null]))}`; }
     if (F0.l !== null && F0.hold >= 0.98 && this.xfade >= 1) {
       const hl = model.handL.getWorldPosition(new THREE.Vector3()), ll = this.bonesM.loL.getWorldPosition(new THREE.Vector3());
-      const palm = hl.clone().addScaledVector(hl.clone().sub(ll).normalize(), 0.07 * K);
+      const palm = hl.clone().addScaledVector((this.hdL as THREE.Vector3 | null)?.clone() ?? hl.clone().sub(ll).normalize(), 0.07 * K);
       const rel = palm.sub(grip), along = rel.dot(d0);
       const gap = rel.addScaledVector(d0, -along).length() + Math.max(0, -along, along - S.front);
       if (gap > st.leftOff) { st.leftOff = gap; st.worstL = `${this.last.act} l ${F0.l.toFixed(2)} along ${along.toFixed(2)}`; }
@@ -565,20 +572,58 @@ export class FightBody {
     const wgt = this.xfade >= 1 ? 1 : smoothK(this.xfade);
     const W = (v: THREE.Vector3) => R.localToWorld(v.clone());
     const wp = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3());
-    const arm = (up: THREE.Object3D, lo: THREE.Object3D, hand: THREE.Object3D, tW: THREE.Vector3, eL: THREE.Vector3, sL: THREE.Vector3) => {
+    // the shaft as drawn this frame (world)
+    const shaft = this.cur.d.clone().applyQuaternion(R.getWorldQuaternion(new THREE.Quaternion())).normalize();
+    const arm = (up: THREE.Object3D, lo: THREE.Object3D, hand: THREE.Object3D, tW: THREE.Vector3, eL: THREE.Vector3, sL: THREE.Vector3, onShaft: boolean) => {
       const s = wp(up), a = s.distanceTo(wp(lo)), b = wp(lo).distanceTo(wp(hand));
       const pole = W(eL).sub(W(sL)), e = new THREE.Vector3(), wr = new THREE.Vector3();
       reach2(s, tW, a, b + palm, pole, e, wr);
+      // the wrist: a hand round a shaft lies across it, so the hand bends at the wrist from the forearm's line towards
+      // square to the shaft (cocked back under a spear drawn to throw, turned up under a club carried low), at most
+      // 26 degrees; the wrist is then solved to where that hand reaches the grip (the hand followed the forearm in a
+      // straight line before: "stiff wrists")
+      const fdir = wr.clone().sub(e).normalize();
+      let hd = fdir.clone();
+      if (onShaft) {
+        hd.addScaledVector(shaft, -0.6 * fdir.dot(shaft)).normalize();
+        const ang = fdir.angleTo(hd), MAX = 0.45;
+        if (ang > MAX) hd = fdir.clone().lerp(hd, MAX / ang).normalize();
+        hd = fdir.clone().lerp(hd, wgt).normalize();
+      }
+      const wristT = tW.clone().addScaledVector(hd, -palm);
+      reach2(s, wristT, a, b, pole, e, wr);
       aimBone(up, lo, e, wgt);
-      aimBone(lo, hand, e.clone().lerp(wr, b / (b + palm)), wgt);
+      aimBone(lo, hand, wr, wgt);
+      if (onShaft) {
+        // turn the hand itself (in the rig it lies along the forearm): from the forearm's line to the flexed one
+        const fd2 = wp(hand).sub(wp(lo)).normalize(), q = new THREE.Quaternion().setFromUnitVectors(fd2, hd);
+        const hw0 = hand.getWorldQuaternion(new THREE.Quaternion()), pw = hand.parent!.getWorldQuaternion(new THREE.Quaternion());
+        hand.quaternion.copy(pw.invert().multiply(q.multiply(hw0))); hand.updateWorldMatrix(false, true);
+      }
+      return onShaft ? hd : null;
     };
     const gT = W(r.rt);
-    arm(B.upR, B.loR, model.handR, gT, r.eR, r.sR);
+    this.hdR = arm(B.upR, B.loR, model.handR, gT, r.eR, r.sR, true);
     if (!r.limbs.armL) return;
     // the left hand's mark moves with the grip as it really is (the drawn shaft starts there)
-    const hw = wp(model.handR), grip = hw.clone().addScaledVector(hw.clone().sub(wp(B.loR)).normalize(), palm);
+    const hw = wp(model.handR), grip = hw.clone().addScaledVector(this.hdR ?? hw.clone().sub(wp(B.loR)).normalize(), palm);
     const lT = W(r.lt).sub(W(r.f.g)).add(grip);
-    arm(B.upL, B.loL, model.handL, lT, r.eL, r.sL);
+    this.hdL = arm(B.upL, B.loL, model.handL, lT, r.eL, r.sL, r.f.l !== null && r.f.hold > 0.5);
+  }
+  /** The throwing shoulder drops as the arm draws back (see meleePose): the chest rolls about the body's forward line,
+   * the right side down, and the neck rolls back by as much so the head stays level. */
+  private dropShoulder(model: Character) {
+    if (this.dropK < 0.01) return;
+    const ch = model.root.getObjectByName('chest'), nk = model.root.getObjectByName('neck') ?? model.head;
+    if (!ch || !ch.parent) return;
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(model.root.getWorldQuaternion(new THREE.Quaternion()));
+    const roll = (o: THREE.Object3D, ang: number) => {
+      const q = new THREE.Quaternion().setFromAxisAngle(fwd, ang), ow = o.getWorldQuaternion(new THREE.Quaternion()), pw = o.parent!.getWorldQuaternion(new THREE.Quaternion());
+      o.quaternion.copy(pw.invert().multiply(q.multiply(ow))); o.updateWorldMatrix(false, true);
+    };
+    const A = 0.085 * this.dropK;
+    roll(ch, A);
+    if (nk && nk.parent && nk !== ch) roll(nk, -A);
   }
   release(model: Character) { this.ranged.hide(model); model.setLimbs(null); this.hold(model, null); this.mframe = false; this.outL = {}; gripHand(model, 'R', null); gripHand(model, 'L', null); this.rollAngle = 0; this.crouch = 0; this.ready = 0; }
 }
