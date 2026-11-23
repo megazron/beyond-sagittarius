@@ -248,7 +248,10 @@ export class LeanTo {
         p.pos.copy(stand); p.vel.set(0, 0, 0); p.model.root.position.copy(stand);
         const facing = Math.atan2(-d.x, -d.z); p.facing = facing; p.model.root.rotation.y = facing + Math.PI; p.model.root.updateMatrixWorld(true);
         z.setLookTarget(stumpP.clone().add(new THREE.Vector3(0, 0.5, 0)));
-        z.setHold({ R: { at: new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld).addScaledVector(d, 0.35).add(new THREE.Vector3(0, -0.45, 0)), fingers: d.clone(), palm: new THREE.Vector3(0, 1, 0) } });
+        // the stick in his fist, standing up out of it (it was not in his hand at all until it flew: GPU take e13v4);
+        // the palm turned in, so the thumb's side is up
+        z.setProp('throwstick');
+        z.setHold({ R: { at: new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld).addScaledVector(d, 0.35).add(new THREE.Vector3(0, -0.45, 0)), fingers: d.clone(), palm: new THREE.Vector3(d.z, 0, -d.x), radius: 0.02 } });
       }, after: 0.2 },
     ], () => this.throwIt(d, stumpP, side, built));
   }
@@ -288,8 +291,8 @@ export class LeanTo {
     };
     this.playScene([
       { hold: 0.85, shot: () => side(3.8), run: () => {
-        z.setHold({ R: { at: from.clone().addScaledVector(d, 0.45).addScaledVector(r, -0.2).add(new THREE.Vector3(0, 0.1, 0)), fingers: d.clone(), palm: new THREE.Vector3(0, -1, 0) } });
-        this.after(0.12, fly); this.after(0.5, () => z.setHold(null)); audio.human('breath', 0.4);
+        z.setHold({ R: { at: from.clone().addScaledVector(d, 0.45).addScaledVector(r, -0.2).add(new THREE.Vector3(0, 0.1, 0)), fingers: d.clone(), palm: new THREE.Vector3(0, -1, 0), radius: 0.02 } });
+        this.after(0.12, () => { z.setProp(null); fly(); }); this.after(0.5, () => z.setHold(null)); audio.human('breath', 0.4);
       } },
       // from beside the stump, low, looking back up the line: the stick comes spinning in and lands (or flies past)
       { hold: 1.6, shot: () => ({ from: stumpP.clone().addScaledVector(r, 1.3).addScaledVector(d, 0.5).add(new THREE.Vector3(0, 0.55, 0)), to: stumpP.clone().addScaledVector(d, -1.6).add(new THREE.Vector3(0, 0.55, 0)), push: 0.01 }) },

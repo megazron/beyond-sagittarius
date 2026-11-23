@@ -843,7 +843,7 @@ export class Story {
 const V_LOOK = new THREE.Vector3();
 
 function buildSpear() {
-  const g = new THREE.Group();
+  const g = new THREE.Group(); g.name = 'heldSpear';
   const wood = new THREE.MeshStandardMaterial({ color: 0x6a4e3a, roughness: 0.85, flatShading: true });
   const flint = new THREE.MeshStandardMaterial({ color: 0x1a1f2e, roughness: 0.2, metalness: 0.35, flatShading: true });
   const vine = new THREE.MeshStandardMaterial({ color: 0x2c4a2a, roughness: 0.9, flatShading: true });

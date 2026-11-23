@@ -11,7 +11,11 @@ export interface KitInput {
   id: CrewId; custom?: PlayerLook; human: boolean; bones: Map<string, THREE.Bone>; meta: CrewMeta; look: Look; sway: SwayUniforms;
   skinC: number; glowC: number; shadeC: number; detail: number; heightM: number;
 }
-export interface Kit { splint: THREE.Group; footH: number; live: THREE.Object3D[]; update(t: number, amount: number): void; }
+export interface Kit {
+  splint: THREE.Group; footH: number; live: THREE.Object3D[]; update(t: number, amount: number): void;
+  /** Nuvexa's own phone to her left hand (true) or back to her right: her right hand takes the stone, the cup, the bread */
+  phoneLeft(on: boolean): void;
+}
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const cloth = (color: number, rough = 0.86) => new THREE.MeshStandardMaterial({ color, roughness: rough, side: THREE.DoubleSide, normalMap: weaveNormal(), normalScale: new THREE.Vector2(0.5, 0.5) });
@@ -118,6 +122,7 @@ export function addKit(k: KitInput): Kit {
     return { rx: rx * grow, rz: rz * grow, y: y - piv('hips').y, z: z - piv('hips').z };
   };
   let scarfEnds: THREE.Mesh[] = [];
+  let phone: THREE.Object3D | null = null, phoneTo: ((left: boolean) => void) | null = null;
   switch (outfit) {
     case 'scientist': {
       if (!custom) { glasses(); earGlow(); }
@@ -186,15 +191,20 @@ export function addKit(k: KitInput): Kit {
     }
     case 'social': {
       if (!custom) antennae();
-      const hand = B.get('handR')!;
-      const d = local('handR', piv('finger3_2R')), up = d.clone().normalize();
-      const ph = add(rbox(0.074, 0.15, 0.009, 0.008), metal(0xe6d7f0, 0.25), hand);
+      const ph = add(rbox(0.074, 0.15, 0.009, 0.008), metal(0xe6d7f0, 0.25), B.get('handR')!);
       // it lies in her palm with its screen facing out of the palm (the palm is the hand's -y at rest), so that when
-      // she lifts it for a selfie the screen is towards her face and her fingers are behind it
-      const pn = V(0, -1, 0); pn.addScaledVector(up, -pn.dot(up)).normalize();
-      ph.position.copy(d.multiplyScalar(0.55).addScaledVector(pn, 0.022));
-      ph.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(up, pn), up, pn));
+      // she lifts it for a selfie the screen is towards her face and her fingers are behind it. The same in the left
+      // hand, for when the right one takes something (throwing, she held the phone and the stone together)
+      const seat = (sd: 'L' | 'R') => {
+        const d = local(`hand${sd}`, piv(`finger3_2${sd}`)), up = d.clone().normalize();
+        const pn = V(0, -1, 0); pn.addScaledVector(up, -pn.dot(up)).normalize();
+        return { p: d.multiplyScalar(0.55).addScaledVector(pn, 0.022), q: new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(up, pn), up, pn)) };
+      };
+      const seats = { R: seat('R'), L: seat('L') };
+      ph.position.copy(seats.R.p); ph.quaternion.copy(seats.R.q);
       add(new THREE.BoxGeometry(0.066, 0.138, 0.001), glowMat(0x8fd8ff, 0.8), ph, 0, 0, 0.005, false);
+      phone = ph;
+      phoneTo = (left) => { const sd = left ? 'L' : 'R', h = B.get(`hand${sd}`); if (!h || ph.parent === h) return; h.add(ph); ph.position.copy(seats[sd].p); ph.quaternion.copy(seats[sd].q); };
       if (!custom) for (const s of [-1, 1]) { const r = add(new THREE.TorusGeometry(0.021, 0.0016, 8, 28), metal(0xffd66a, 0.2), head, s * (eye.x + 0.073), eye.y - 0.075, eye.z - 0.075, false); r.rotation.y = Math.PI / 2; }
       break;
     }
@@ -263,9 +273,9 @@ export function addKit(k: KitInput): Kit {
   shin.add(splint);
 
   return {
-    splint, footH: piv('footL').y,
+    splint, footH: piv('footL').y, phoneLeft: (on) => phoneTo?.(on),
     // what moves or hides on its own: never merged into the body (rigid.ts)
-    live: [splint, ...(halo ? [halo] : []), ...scarfEnds, ...(tailBones.length ? [tailBones[0].parent!] : [])],
+    live: [splint, ...(phone ? [phone] : []), ...(halo ? [halo] : []), ...scarfEnds, ...(tailBones.length ? [tailBones[0].parent!] : [])],
     update(t, amount) {
       if (halo) halo.rotation.z = t * 0.4;
       tailBones.forEach((b, i) => {

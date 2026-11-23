@@ -5,10 +5,12 @@ export interface SwayUniforms {
   uTime: { value: number };
   uSwing: { value: THREE.Vector3 };
   uFlutter: { value: number };
+  /** Hair only: how far a strand's tip falls towards the ground as the head bends, in the head's own space (metres). */
+  uDrop: { value: THREE.Vector3 };
 }
 
 export function swayUniforms(): SwayUniforms {
-  return { uTime: { value: 0 }, uSwing: { value: new THREE.Vector3() }, uFlutter: { value: 0.012 } };
+  return { uTime: { value: 0 }, uSwing: { value: new THREE.Vector3() }, uFlutter: { value: 0.012 }, uDrop: { value: new THREE.Vector3() } };
 }
 
 const VERT_HEAD = /* glsl */ `

@@ -281,8 +281,10 @@ function hairMesh(geo: THREE.BufferGeometry, colors: HairColors, sway: SwayUnifo
   };
   applySway(mat, sway, (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.vertexShader = `attribute float aT; attribute vec3 aTan; varying float vT; varying float vPh; varying vec3 vTan;\n` + sh.vertexShader.replace(
-      '#include <begin_vertex>', `#include <begin_vertex>\n  vT = aT; vPh = aPhase; vTan = normalMatrix * aTan;`);
+    // (uDrop: the strands hang. They are built for an upright head and ride it rigidly, so bending, Nuvexa's ponytails
+    // stood out stiff and sideways; now each point falls by its sway squared towards where the ground is from the head)
+    sh.vertexShader = `attribute float aT; attribute vec3 aTan; varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uDrop;\n` + sh.vertexShader.replace(
+      '#include <begin_vertex>', `#include <begin_vertex>\n  vT = aT; vPh = aPhase; vTan = normalMatrix * aTan; transformed += uDrop * min(aSway * aSway, 1.6);`);
     sh.fragmentShader = `varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uRoot, uMid, uTip, uShine;\n` + sh.fragmentShader
       .replace('#include <color_fragment>', /* glsl */ `#include <color_fragment>
         diffuseColor.rgb = mix(mix(uRoot, uMid, smoothstep(0.0, 0.35, vT)), uTip, smoothstep(0.45, 1.0, vT));`)
