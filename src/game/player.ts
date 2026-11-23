@@ -95,7 +95,7 @@ export class Player {
   /** Stages other than Verdaxis set their own gravity, and let you jump across open gaps. */
   physics = { gravity: 14, jump: 5.2, gaps: false };
 
-  constructor(private terrain: Pick<Terrain, 'height'>, private forest: Pick<Forest, 'collide' | 'blocks' | 'clearance'> & Partial<Pick<Forest, 'inFoliage'>> & { ceiling?: (fx: number, fz: number, fy: number, cx: number, cz: number) => number }, public camera: THREE.PerspectiveCamera, detail = 1, id: CrewId = 'scientist', skin?: string) {
+  constructor(private terrain: Pick<Terrain, 'height'>, private forest: Pick<Forest, 'collide' | 'blocks' | 'clearance'> & Partial<Pick<Forest, 'inFoliage'>> & { ceiling?: (fx: number, fz: number, fy: number, cx: number, cz: number) => number; keepOff?: (p: THREE.Vector3) => void }, public camera: THREE.PerspectiveCamera, detail = 1, id: CrewId = 'scientist', skin?: string) {
     this.model = createCharacter(id, detail, undefined, skin);
     this.baseFov = camera.fov;
     this.model.setGround((x, z) => this.terrain.height(x, z));
@@ -355,6 +355,9 @@ export class Player {
     // how far the view looks along the look itself (aiming, or a scene that asks for it) instead of at the body
     const along = Math.max(aim, this.overS);
     this.orbit(this.camPos, this.focus, yawV, pitchV, this.distS * (1 - aim) + Math.min(this.distS, 3.1) * aim);
+    // beside a big vehicle (the city's tram) the lens keeps a metre and a half off its side and nose: grazing them, its
+    // white side or nose filled half the frame
+    this.forest.keepOff?.(this.camPos);
     // under an awning or a shelter the camera stays below its roof (it rose into them in a thick crowd)
     if (this.forest.ceiling) {
       const top = this.forest.ceiling(this.focus.x, this.focus.z, this.focus.y, this.camPos.x, this.camPos.z);
