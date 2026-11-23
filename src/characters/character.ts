@@ -97,8 +97,9 @@ const TASK_CLIPS: Partial<Record<TaskKind, { low?: string; high?: string; touch:
   putdown: { low: 'pickup_low', high: 'pickup_table', touch: 0.55, hands: 'R', reverse: true, prop: 'before' },
   plant: { low: 'plant', touch: 0.45, hands: 'R', prop: 'before' },
   throw: { high: 'throw', touch: -1, release: 0.25, hands: 'R', prop: 'before' },
-  eat: { high: 'consume', touch: -1, hands: 'R', prop: 'all' },
-  drink: { high: 'consume', touch: -1, hands: 'R', prop: 'all' },
+  // eat and drink: not the Consume clip. Retargeted, its LEFT hand goes out to 26 cm beside the face and 45 cm in front,
+  // nowhere near the mouth, while the food stays in the right hand at the hip (tasksA2 GPU clip, 2026-11-23): the
+  // procedural path takes the hand with the food to the mouth
 };
 /** What the fingers of every character did since the page loaded (read by the checks): the largest bend of any finger
  * joint from its rest, in radians, and the fastest any joint turned, in radians a second. */
@@ -861,15 +862,31 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
    *  their tips are kept out too, a finger's thickness off the surface: a hold starting from the side or reaching across
    *  ran the fingertips 3 to 5 cm into the chest (the wrist alone was guarded). */
   const fingerPush = { L: new THREE.Vector3(), R: new THREE.Vector3() };
-  const HO = { a: new THREE.Vector3(), b: new THREE.Vector3(), o: new THREE.Vector3(), q: new THREE.Vector3() };
+  const taskPushW = { L: 0, R: 0 };
+  // at most this far per test point: a target given inside the chest with the fingers across it (reach_inside) pushed
+  // the goal 10 cm and more sideways, the arm folded through the body (22.7 cm) and the hand jumped 30 cm
+  const FINGER_PUSH_MAX = 0.04;
+  const HO = { p0: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3(), o: new THREE.Vector3(), q: new THREE.Vector3() };
   function holdOut(bs: Map<string, THREE.Bone>, p: THREE.Vector3, fingers?: THREE.Vector3, reach = 0) {
     if (!torsoR) return p;
-    for (let it = 0; it < 2; it++) for (let j = 0; j < TORSO.length; j++) {
-      const a = bs.get(TORSO[j][0])!.getWorldPosition(HO.a), b = bs.get(TORSO[j][1])!.getWorldPosition(HO.b);
-      if (fingers && reach > 0) for (const k of [0.55, 1]) {
-        const q = HO.q.copy(p).addScaledVector(fingers, reach * k);
-        if (torsoIn(j, a, b, q, 0.012, HO.o) > 0) p.add(HO.o.sub(q));
+    // the fingers first, their whole push capped; then the wrist
+    // (not when the wrist's own goal is inside: the wrist guard takes it out, and the two pushes fought, the hand
+    // jumping 10 to 20 cm on a target given inside the chest)
+    let wristIn = false;
+    for (let j = 0; j < TORSO.length && !wristIn; j++) wristIn = torsoIn(j, bs.get(TORSO[j][0])!.getWorldPosition(HO.a), bs.get(TORSO[j][1])!.getWorldPosition(HO.b), p, 0.045) > 0;
+    if (fingers && reach > 0 && !wristIn) {
+      const p0 = HO.p0.copy(p);
+      for (let it = 0; it < 2; it++) for (let j = 0; j < TORSO.length; j++) {
+        const a = bs.get(TORSO[j][0])!.getWorldPosition(HO.a), b = bs.get(TORSO[j][1])!.getWorldPosition(HO.b);
+        for (const k of [0.55, 1]) {
+          const q = HO.q.copy(p).addScaledVector(fingers, reach * k);
+          if (torsoIn(j, a, b, q, 0.012, HO.o) > 0) p.add(HO.o.sub(q));
+        }
       }
+      const d = HO.o.copy(p).sub(p0), l = d.length(); if (l > FINGER_PUSH_MAX) p.copy(p0).addScaledVector(d, FINGER_PUSH_MAX / l);
+    }
+    for (let j = 0; j < TORSO.length; j++) {
+      const a = bs.get(TORSO[j][0])!.getWorldPosition(HO.a), b = bs.get(TORSO[j][1])!.getWorldPosition(HO.b);
       if (torsoIn(j, a, b, p, 0.045, HO.o) > 0) p.copy(HO.o);
     }
     return p;
@@ -1206,7 +1223,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         const near = tcd.touch < 0 || !T.at || sd !== 'R' ? 0 : 1 - smooth01(Math.abs(k - tcd.touch) / 0.18);
         const d = near > 0 ? V3.copy(goal).sub(cur) : V3.set(0, 0, 0);
         if (d.length() > 0.12) d.setLength(0.12);
-        const wt = Math.max(near, clamp(push / 0.01, 0, 1));
+        // the guard's own weight eased in time (taken from the push each frame it switched the arm from the clip's elbow to
+        // the solve's in a frame or two: picking up jerked 10.7 cm on Lyrra)
+        const pw = taskPushW[sd] += (clamp(push / 0.02, 0, 1) - taskPushW[sd]) * (1 - Math.exp(-dt * 5));
+        const wt = Math.max(near, pw);
         if (wt > 0.001) armTo(bs, sd, up, lo, hd, cur.add(d.multiplyScalar(near / wt)).add(fp), w * wt, dt);
         continue;
       }
@@ -1471,7 +1491,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // the push that keeps them out is eased (taken whole each frame it came and went with the clip: knapping jerked 3 cm more)
       HO.q.copy(f3.getWorldPosition(V1)).sub(hd.getWorldPosition(V2)).normalize().lerp(hs.fingers, hw).normalize();
       const fp = fingerPush[sd], g0 = goal.clone(); holdOut(bs, goal, HO.q.clone(), palmLen * 2);
-      fp.lerp(goal.sub(g0), hs.fresh ? 1 : 1 - Math.exp(-dt * 18)); goal.copy(g0).add(fp);
+      fp.lerp(goal.sub(g0), 1 - Math.exp(-dt * 18)); goal.copy(g0).add(fp);
       armTo(bs, sd, up, lo, hd, goal, hw, dt);
       hd.getWorldPosition(V4s); hd.getWorldQuaternion(selfM.q0);
       const fl = selfM.a.copy(f3.getWorldPosition(V1)).sub(V4s).normalize().applyQuaternion(selfM.qi.copy(selfM.q0).invert());
