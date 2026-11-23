@@ -7,7 +7,7 @@ import type { SimPlayer } from '../sim/sim';
 import { WEAPONS } from '../sim/weapons';
 import { RangedRig } from './ranged';
 import { loft } from '../../characters/shapes';
-import { MELEE_GEAR, SHAFT, targetFrame, clearShaft, solveArms, follow, newFrame, copyFrame, depth, setBodyScale, setBodyCentres, setBodyFit, fitBody, reach2, aimBone, smooth as smoothK } from './melee';
+import { MELEE_GEAR, SHAFT, targetFrame, clearShaft, solveArms, follow, newFrame, copyFrame, depth, setBodyScale, setBodyCentres, setBodyFit, fitBody, reach2, aimBone, capChestWidth, smooth as smoothK } from './melee';
 import type { ActState, WFrame, ArmMem, Solved, BodyFit } from './melee';
 import type { WeaponId } from '../sim/weapons';
 
@@ -489,6 +489,7 @@ export class FightBody {
       return Math.atan2(-d.z, d.x);
     };
     const yc = yawOf('upperarmL', 'upperarmR'), yh = yawOf('upperlegL', 'upperlegR');
+    { const a = model.root.getObjectByName('upperarmL'), c = model.root.getObjectByName('upperarmR'); if (a && c) capChestWidth(loc(a).distanceTo(loc(c)) / 2); }
     setBodyCentres([{ x: hp.x, z: hp.z, yaw: yh }, { x: ch.x, z: ch.z, yaw: yc }, { x: hd.x, z: hd.z, yaw: yc }]);
     this.yawNow = yc;
     return { K, ch };
