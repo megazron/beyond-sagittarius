@@ -78,13 +78,15 @@ with sync_playwright() as pw:
     print('crowd bodies near the street', held, flush=True)
     if not held: fails.append('bump test: no crowd walker was a body near (-5.5, 0)')
     for card, body, look, d, x, z in held[:4]:
-        page.evaluate(f"__bs.awayTeleport({x + 0.45:.2f}, {z:.2f}, 0)")
-        for k in range(25):
-            page.evaluate('__bs.step(0.08)')
+        # walk into them: from 3 m to the side, 0.4 m a step (a teleport onto them would jump the camera as well)
+        hit = None
+        for k in range(14):
             now = {h[0]: h for h in (page.evaluate("__bs.awayCrowd().held") or [])}
             h = now.get(card)
-            if h is None or h[1] != body or h[2] != look:
-                fails.append(f'bump test: the walker of card {card} (body {body}, look {look}) became {h} {k * 0.08:.2f} s after the bump'); break
+            if h is None or h[1] != body or h[2] != look: hit = (k, h); break
+            px, pz = h[4] + max(0.0, 3.0 - 0.4 * k), h[5]
+            page.evaluate(f"__bs.awayTeleport({px:.2f}, {pz:.2f}, 1.5708)"); page.evaluate('__bs.step(0.1)')
+        if hit: fails.append(f'bump test: the walker of card {card} (body {body}, look {look}) became {hit[1]} at step {hit[0]} of walking into them')
     print('bump test done', flush=True)
     # 1c. time, not distance (the owner: "the longer we play the game, the laggier it gets"): six minutes in the bazaar,
     # moving between two spots, sampled every 30 s. The game's own update time (main thread, measurable even on software
