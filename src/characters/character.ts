@@ -1186,7 +1186,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const after = tcp ? tcp.prop === 'after' : T.kind === 'pickup';
     showProp(bs, T.prop, at < 0 || tcp?.prop === 'all' ? w : after === past ? 1 : 0);
     if (w <= 0.001) return;
-    const sides: ('L' | 'R')[] = T.hands === 'both' ? ['L', 'R'] : [T.hands];
+    const sides: ('L' | 'R')[] = T.hands === 'both' || (taskClipName && TASK_CLIPS[T.kind]) ? ['L', 'R'] : [T.hands];
     root.updateWorldMatrix(true, true);
     for (const sd of sides) {
       const up = bs.get(`upperarm${sd}`), lo = bs.get(`lowerarm${sd}`), hd = bs.get(`hand${sd}`);
@@ -1196,10 +1196,18 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (tcd) {
         // the clip does the reach; IK takes the hand the last few cm onto the thing round the moment of contact, at most
         // 12 cm, and none for a clip with no contact (eating: the hand to the mouth is the clip's)
-        if (tcd.touch < 0 || !T.at || sd !== 'R') continue;
-        const near = 1 - smooth01(Math.abs(k - tcd.touch) / 0.18), cur = hd.getWorldPosition(V2), d = V3.copy(goal).sub(cur);
+        // the clip's fingers are kept out of the torso (planting's seed held at the chest put them 3 to 4 cm in), the
+        // push eased as a hold's is
+        const f3 = bs.get(`finger3_1${sd}`), cur = hd.getWorldPosition(V2).clone(), fp = fingerPush[sd];
+        const fd = f3 ? f3.getWorldPosition(V3).sub(cur) : null, pl = fd ? fd.length() : 0;
+        const pg = cur.clone(); if (fd && pl > 1e-4) holdOut(bs, pg, fd.normalize(), pl * 2);
+        fp.lerp(pg.sub(cur), 1 - Math.exp(-dt * 18));
+        const push = fp.length();
+        const near = tcd.touch < 0 || !T.at || sd !== 'R' ? 0 : 1 - smooth01(Math.abs(k - tcd.touch) / 0.18);
+        const d = near > 0 ? V3.copy(goal).sub(cur) : V3.set(0, 0, 0);
         if (d.length() > 0.12) d.setLength(0.12);
-        armTo(bs, sd, up, lo, hd, cur.add(d), w * near, dt);
+        const wt = Math.max(near, clamp(push / 0.01, 0, 1));
+        if (wt > 0.001) armTo(bs, sd, up, lo, hd, cur.add(d.multiplyScalar(near / wt)).add(fp), w * wt, dt);
         continue;
       }
       armTo(bs, sd, up, lo, hd, goal, w, dt);
