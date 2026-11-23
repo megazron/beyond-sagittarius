@@ -386,9 +386,9 @@ W.qaLive = (i: number, names: string[], slow = 0.5, yaw = -2.4, dist = 2.0, ever
       gen = scenarioFrames(c0, names[ni], { step, settle: (c) => { c.root.position.set(0, 0, 0); c.root.rotation.y = 0; for (let k = 0; k < 45; k++) step(c, 'stand', 0, 1 / 30); }, flags: null }, Math.max(1, every));
     }
     const now = performance.now(); acc += (now - last) / 1000 * slow * 30; last = now;
-    let r: IteratorResult<number, unknown> | null = null;
-    for (let n = 0; acc >= 1 && n < 3; n++, acc--) { r = gen.next(); if (r.done) break; }
-    if (r?.done) { (W.qaLiveRes as unknown[]).push(r.value); gen = null; ni++; }
+    let it: IteratorResult<number, unknown> | null = null;
+    for (let n = 0; acc >= 1 && n < 3; n++, acc--) { it = gen.next(); if (it.done) break; }
+    if (it?.done) { (W.qaLiveRes as unknown[]).push(it.value); gen = null; ni++; }
     const p = c0.root.position, y = c0.root.rotation.y + yaw;
     cam.fov = 40; cam.near = 0.05; cam.updateProjectionMatrix();
     cam.position.set(p.x + Math.sin(y) * dist, p.y + 1.2, p.z + Math.cos(y) * dist); cam.lookAt(p.x, p.y + 0.95, p.z);
