@@ -908,8 +908,8 @@ export class Combat {
     // lights their sides and backs, and the side away from it stays dark, so a shape reads as a body)
     if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? 0.8 : 1.55) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 46, P0.y + 38, P0.z + 34); this.shine.target.position.copy(P0); } }
     // the same cold light catches the animals' edges, so a shape beyond the fire reads as an animal, not a shadow
-    // (0.55 and a thin edge: they still read only by their marks; now a wider, brighter edge)
-    NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine ? this.shine.intensity * 0.8 : 0);
+    // (0.55 and a thin edge: they still read only by their marks; 0.8 and pow 1.8 made them glassy, like lit ghosts, s6 take; now 0.65, pow 2)
+    NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine ? this.shine.intensity * 0.65 : 0);
     const D = this.d, sim = this.sim!, P = D.player, p = sim.player, run = this.encounter, cam = P.camera;
     // creatures: a body for each within sight, none for those far off or gone
     NIGHT.on = sim.night;

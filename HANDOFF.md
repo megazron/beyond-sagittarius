@@ -1323,3 +1323,16 @@ unlanded except this handoff commit and any recording in progress.
     draw (now 95-121; was 65-85).
   - Bot: ranged mode also takes the spear-thrower when window.__cbRangedAtlatl (aim views clip).
 - Capture: ~/bs-cap/combat/mkplan_s6.py (CLIPS=aim,spear,fire,fish,night), dirs s6a (fire only), s6b (all).
+- ~22:15 LANDING: main moved to 6b05e5a. combat-s5-fix's CI (45266259316) failed again: the bow's RIGHT arm 13.5 cm, same
+  frame shape (aim along the body's forward, up 1). Real cause: the ranged pose's raise (st.up) outlived the side-on
+  turn: hide(), a weapon switch and a frame without the pose (roll, stagger) zeroed faceOffset but kept up = 1, so the
+  next bow frame posed a raised bow on a body still facing the aim. Now lower() on all three (968d937). Everything
+  rebased on 6b05e5a as `combat-land50` (head 968d937): land THAT sha when its CI is green (soak_smoke failed once on
+  the fix branch with "textures 541 -> 643 after two more laps", city only, not combat code; watch it).
+  `combat-s6b` = combat-land50 + the session 6 work (fire, haze, night, rings, free arm); land after combat-land50.
+- s6 GPU take (s6b dir; in Downloads): fire: licks now rise past the sticks and read as flame; the base inside the
+  teepee is still a bright yellow-white mass. Haze: present in the column, hard to see against the dark night ground.
+  Night v3: the stand-in stays near the fire (the fire is in frame most of the take); animals now read as whole bodies
+  but 0.8 rim made them glassy/ghostly: toned to 0.65, pow 2 after the take (not seen yet). Spear free arm from behind
+  is bent now. Aim views (bow, sling, spear-thrower) look along the shot, reticle centred.
+
