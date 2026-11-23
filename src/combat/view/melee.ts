@@ -186,6 +186,14 @@ export function setBodyCentres(c: { x: number; z: number; yaw?: number }[] | nul
 let TWIST = 0;
 export function setBodyTwist(t: number) { TWIST = t; }
 /** The body's size against the frames' (a 1.75 m man): the frames and the body shape scale with it. */
+/** The chest between the arms is no wider than the shoulder joints allow: an upper arm hanging from a joint at
+ * |x| = half (metres, live, half the span between the shoulders) clears it by its own thickness. The shapes' default
+ * width (0.165) is not fitted (the arms hang beside it), and the game rig's shoulders in its idle sit at 0.10-0.14:
+ * every hanging arm read as 8-10 cm inside the chest. */
+export function capChestWidth(half: number) {
+  const w = Math.max(0.07, half / BODY_K - 0.055);
+  for (const i of [1, 2]) BODY[i].ax = Math.min(BODY[i].ax, w);
+}
 export function setBodyScale(k: number) { BODY_K = k > 0.5 && k < 1.5 ? k : 1; }
 export function bodyScale() { return BODY_K; }
 export function depth(pw: THREE.Vector3, bend: number, rw: number, outN?: THREE.Vector3): number {
