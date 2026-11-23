@@ -344,6 +344,11 @@ window.__cbBot = (mode) => {
         go(S.x, S.z); flag.still = now; return;
       }
       if (!flag.arrived) { flag.arrived = 1; flag.walking = 0; flag.still = Math.max(flag.still || 0, now); log('edge', { d: +dist(t, p).toFixed(2), feet: +depth(p.x, p.z).toFixed(2), wade: S.wade }); }
+      if (flag.backTo) {
+        const bd = Math.hypot(flag.backTo.x - p.x, flag.backTo.z - p.z);
+        if (bd > 0.2 && now - (flag.backT0 || (flag.backT0 = now)) < 1500) { go(flag.backTo.x, flag.backTo.z); flag.still = now; return; }
+        flag.backTo = null; flag.backT0 = 0; stop();
+      }
       // standing: only walk again if the spot has moved well off (the fish glided)
       if (ds > 0.9) { flag.arrived = 0; return; }
       stop();
@@ -356,6 +361,16 @@ window.__cbBot = (mode) => {
       if (!flag.aimT) flag.aimT = now;
       const settled = now - flag.still > 700, ok = a.err < 0.006 && settled && p.stamina > 14;
       if (now - (flag.aimLogT || 0) > 1500) { flag.aimLogT = now; log('aim', { id: t.id, err: +a.err.toFixed(4), dyaw: +a.d.toFixed(3), dpitch: +a.dp.toFixed(3), pitch: +C.cam.pitch.toFixed(3), camPitch: +camPitch().toFixed(3), d: +d.toFixed(2), stamina: Math.round(p.stamina), settled }); }
+      // too close to tip the view down to it (the look is at its lowest and the reticle still above the fish: v25's log,
+      // a 44 s wait for a fish 1.7 m off to drift out to 2.3 m): a step back, as a player would
+      if (settled && a.dp > 0.02 && C.cam.pitch <= -0.94) {
+        flag.closeT = flag.closeT || now;
+        if (now - flag.closeT > 900) {
+          const ux = (p.x - t.x) / (d || 1), uz = (p.z - t.z) / (d || 1);
+          flag.backTo = { x: p.x + ux * 0.8, z: p.z + uz * 0.8 }; flag.closeT = 0;
+          log('back', { d: +d.toFixed(2), dpitch: +a.dp.toFixed(3) });
+        }
+      } else flag.closeT = 0;
       if (now - flag.aimT > 6000 && !flag.stallT) { flag.stallT = 1; log('stall', { why: a.err >= 0.006 ? 'aim does not settle' : !settled ? 'waiting' : 'stamina', err: +a.err.toFixed(4), camPitch: +camPitch().toFixed(3), pitch: +C.cam.pitch.toFixed(3) }); }
       if (ok) {
         tap('Mouse0'); flag.n++; flag.still = now + 1200; flag.tid = 0; flag.stallT = 0;
