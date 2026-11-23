@@ -1059,3 +1059,12 @@ unlanded except this handoff commit and any recording in progress.
   empty: check the fish mode with the new low camera and pitch limit -0.95, the bot's aimAt uses testLook and may
   fight the limit), the fishing camera is still high when not aiming (lowCam only clamps the orbit pitch; also bring the
   distance in), fish still pale; the sling not readable in 23; wraps bulky. Night 2:06 camera fix not recorded yet.
+- 2026-11-23 combat-fish1 (spear fishing fixes, not yet seen on the GPU): why v2's bot never thrust: combat.ts's
+  lowCam clamped the orbit pitch at -0.32 and away from the aim the camera looked at his head from 5 m back, so
+  P.pitch going down moved nothing; the reticle line could not reach a fish and aimAt's error never fell under 0.004.
+  Now in fish.spear only (cb.over = 1, cb.dist = 2.5, lowCam -0.22): the view is in close, ~1.85 m up behind the
+  right shoulder, and looks along the look as aiming does (player.ts overS/capS, both eased). Bot fish mode: stands
+  at the water's edge across from the fish nearest its edge (wades 2 m from a fish only when none is in reach),
+  calm turns, thrusts once the aim is within 0.006 rad; every step logged in __cbFishLog (ev: start, target, walk,
+  edge, aim, stall, thrust, result, lost, cam, hitch). Darter rebuilt: countershaded round-fronted body, forked tail,
+  back fin, matt. sim_test: a thrust from the fishing camera takes a fish 1.3 to 2.2 m out.
