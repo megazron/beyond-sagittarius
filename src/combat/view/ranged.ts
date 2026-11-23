@@ -102,6 +102,15 @@ export class RangedRig {
     if (!R) return null;
     const S = this.st;
     const aim = this.aimL.copy(this.dirLocal(model, aimW));
+    // the arms pose to the aim as far as the body has turned to it: the body turns into a shot at its own rate (side-on
+    // for the bow), so for a few frames after a raise or a swing of the view the aim can lie off to the other side, and
+    // the bow arm (or the spear-thrower's pointing hand) reached across the chest after it (CI: 5.9 and 4.3 cm). Kept
+    // within 0.7 rad of where the turned body points it; the shot itself goes where it is aimed.
+    {
+      const az0 = -this.faceOffset, h = Math.hypot(aim.x, aim.z) || 1, az = Math.atan2(aim.x, aim.z);
+      const dz = Math.atan2(Math.sin(az - az0), Math.cos(az - az0)), lim = 0.7;
+      if (Math.abs(dz) > lim) { const a2 = az0 + Math.sign(dz) * lim; aim.x = Math.sin(a2) * h; aim.z = Math.cos(a2) * h; }
+    }
     const sL = this.local(model, R.upL), sR = this.local(model, R.upR), head = this.local(model, model.head);
     const eL = V(), wL = V(), eR = V(), wR = V();
     const fresh = p.act !== this.lastAct; this.lastAct = p.act;
