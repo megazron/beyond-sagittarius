@@ -1712,6 +1712,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     return top;
   };
   /** How far the camera may go from the player before a wall: 1 is all the way. */
+  // the camera keeps 0.7 m off walls (it was 0.25 m: a wall beside the lens was inside the near fade's band, 0.22 to
+  // 0.6 m, and read as a noisy dotted wall up close, the far NE street in the v5 clips)
+  const WALL_M = 0.7;
   const clearance = (fx: number, fz: number, cx: number, cz: number) => {
     let best = 1;
     const dx = cx - fx, dz = cz - fz;
@@ -1719,7 +1722,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       const b = blocks[k];
       if (b.max.y < 1.5) continue;
       let t0 = 0, t1 = 1;
-      for (const [o, d, lo, hi] of [[fx, dx, b.min.x - 0.25, b.max.x + 0.25], [fz, dz, b.min.z - 0.25, b.max.z + 0.25]] as [number, number, number, number][]) {
+      for (const [o, d, lo, hi] of [[fx, dx, b.min.x - WALL_M, b.max.x + WALL_M], [fz, dz, b.min.z - WALL_M, b.max.z + WALL_M]] as [number, number, number, number][]) {
         if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) { t0 = 2; break; } continue; }
         let a = (lo - o) / d, c = (hi - o) / d; if (a > c) [a, c] = [c, a];
         t0 = Math.max(t0, a); t1 = Math.min(t1, c);
@@ -1915,6 +1918,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         const push = (o: THREE.Object3D) => { const dx = p.x - o.position.x, dz = p.z - o.position.z, d = Math.hypot(dx, dz); if (d < 0.9 && d > 1e-4) { p.x = o.position.x + (dx / d) * 0.9; p.z = o.position.z + (dz / d) * 0.9; } };
         if (oldTown.visible) { for (const q of people) if (q.fig.root.visible) push(q.fig.root); for (const b of crowdPool) if (b.card >= 0 && b.fig.root.visible) push(b.fig.root); }
         for (const b of dpool) if (b.ped >= 0 && b.fig.root.visible) push(b.fig.root);
+      }
+      // and off walls (WALL_M): pushed out of the nearest face of any wall it has come within that of
+      for (const k of wallsNear(p.x - WALL_M, p.z - WALL_M, p.x + WALL_M, p.z + WALL_M)) {
+        const b = blocks[k]; if (b.max.y < 1.5 || p.y > b.max.y + 0.3) continue;
+        const cx = Math.max(b.min.x, Math.min(p.x, b.max.x)), cz = Math.max(b.min.z, Math.min(p.z, b.max.z)), dx = p.x - cx, dz = p.z - cz, d = Math.hypot(dx, dz);
+        if (d >= WALL_M || d < 1e-4) continue; // (inside one: the clearance pull deals with that)
+        p.x = cx + (dx / d) * WALL_M; p.z = cz + (dz / d) * WALL_M;
       }
       // the tram's body (x -3.5..-0.9 at its widest, rounded ends): the lens keeps 1.5 m off it
       if (p.y > 4.6) return;
