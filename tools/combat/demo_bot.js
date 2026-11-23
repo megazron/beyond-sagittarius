@@ -16,7 +16,9 @@ window.__cbBot = (mode) => {
     const c = C.cam, want = Math.atan2(-(x - c.x), -(z - c.z)), d = Math.atan2(Math.sin(want - c.yaw), Math.cos(want - c.yaw));
     const dist = Math.hypot(x - c.x, z - c.z), wp = y === undefined ? -0.14 : Math.atan2(y - (c.y + 1.55), dist) - 0.02;
     const k = Math.abs(d) > 0.5 ? 0.22 : 0.3;
-    C.testLook(Math.max(-70, Math.min(70, (-d / SENS) * k)), Math.max(-30, Math.min(30, ((c.pitch - wp) / SENS) * 0.2)));
+    // (a man on watch turns his head, he does not flick it: v14 swung half round in a few frames, which read as a cut)
+    const mx = flag.calm ? 22 : 70;
+    C.testLook(Math.max(-mx, Math.min(mx, (-d / SENS) * k)), Math.max(-30, Math.min(30, ((c.pitch - wp) / SENS) * 0.2)));
     return Math.abs(d);
   };
   const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -39,6 +41,7 @@ window.__cbBot = (mode) => {
   const nearest = (list) => { const p = C.activeSim.player; return list.slice().sort((a, b) => dist(a, p) - dist(b, p))[0]; };
   const danger = () => { const p = C.activeSim.player; return C.activeSim.enemies.find((e) => !e.dead && e.target === -1 && (e.state === 'strike' || (e.state === 'windup' && e.stateT > e.warned - 0.25)) && dist(e, p) < (e.kind === 'mossback' ? 7 : e.kind === 'guardian' ? 30 : 4)); };
   const fight = (targets, o = {}) => {
+    flag.calm = false;
     const sim = C.activeSim, p = sim.player, t = nearest(targets);
     if (!t) { stop(); hold('KeyQ', 0); return; }
     const d = dist(t, p), dg = danger();
@@ -144,7 +147,7 @@ window.__cbBot = (mode) => {
       // and the stakes, turns his head to what he hears out there (and raises the spear at a growl), and when something
       // is heard AT a trap he leaves the view to the game's own look and goes a few steps that way, spear up
       const watch = (o = {}) => {
-        const now = performance.now();
+        const now = performance.now(); flag.calm = true;
         // a cue at a trap: hands off the view (the game turns the head; a turn of ours would cancel it)
         if (C.beat) { stop(); hold('KeyQ', 0); flag.trapHeard = { id: C.beat.id, at: now }; return; }
         if (flag.trapHeard && now - flag.trapHeard.at < 5200) {
@@ -199,7 +202,7 @@ window.__cbBot = (mode) => {
       const h = living('hound').find((e) => !e.routed), thieves = living('skritch').filter((e) => !e.routed && dist(e, food) < 5);
       // wave 1 is watched from the watch spot, whatever the food and the fire do (only a fire nearly out calls it back)
       const hold1 = run.wave <= 1 && fire.fuel > fire.max * 0.2;
-      if (h && (h.state === 'windup' || h.state === 'strike') && h.target === -1) { stop(); look(h.x, h.z, h.y + 0.6); hold('KeyQ', h.stateT > 0.3 || h.state === 'strike'); return; }
+      if (h && (h.state === 'windup' || h.state === 'strike') && h.target === -1) { flag.calm = false; stop(); look(h.x, h.z, h.y + 0.6); hold('KeyQ', h.stateT > 0.3 || h.state === 'strike'); return; }
       hold('KeyQ', 0);
       const close = living('skritch').filter((e) => !e.routed && e.heldT <= 0 && dist(e, p) < 2.2);
       // a fire near out comes first, whatever is at the heels (they follow him to the light and are fought there)
