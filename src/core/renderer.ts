@@ -955,7 +955,7 @@ export class Renderer {
         const hw = (0.5 * h.size) / (2 * -d.z * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2));
         const fade = Math.sqrt(Math.max(0, h.k)) * (1 - THREE.MathUtils.smoothstep(dist, 16, 30));
         A[n].set(a.x * 0.5 + 0.5, a.y * 0.5 + 0.5, b.x * 0.5 + 0.5, b.y * 0.5 + 0.5);
-        B[n].set(hw, hw * 0.022 * fade);
+        B[n].set(hw, hw * 0.04 * fade);
         n++;
       }
       u.uAspect.value = cam.aspect; u.uHeatT.value = time;
