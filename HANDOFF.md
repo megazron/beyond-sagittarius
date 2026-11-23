@@ -1239,3 +1239,30 @@ unlanded except this handoff commit and any recording in progress.
   CI on combat-s5 3433dd3 was queued at handover; land it like land48 (new branch name if main moved).
   NEXT: fire look (flame.ts), the night's darkness (planetshine or a wider, softer camp fire fill), the spear free arm
   from behind, check that aim views feel right now that they look along the look (player.ts tmpD fix).
+
+### 2026-11-23 ~22:00 (combat agent, weapons session 6)
+- combat-s5 (760e0b1) CI run 45263159676: the combat job FAILED a real gate, not a flake: "with the bow the arms stay out
+  of the body" 9.8 cm, frame "st idle up 1 draw 0.25 yaw -0.01, aim 0,-0.12,0.99": the bow's F (the way the chest faces)
+  was A x up flipped to the front, which is sideways when the aim lies along the body's forward (first frames of the bow
+  after another weapon). The lowered bow arm then reached across the chest. Fix 2075ae3 on branch `combat-s5-fix`
+  (= 760e0b1 + that one commit): F = the body's forward minus its part along the aim, tending to the forward. Land
+  combat-s5-fix's head once its CI is green on that sha (not 760e0b1).
+- Branch `combat-s6` (on combat-s5, fix cherry-picked): 
+  - FIRE (src/world/flame.ts): soft additive layers: two dim glow bodies (never past orange), tongues on a ring round
+    the middle (none in the very middle, where the old wide core quad made the white wedge), thin licks 1.15-1.6 x size
+    that reach past the teepee and tear off; each tongue leaps and sinks at its own rate; heat colour broken by noise,
+    never white; LITE define (one noise octave less) on Mobile via setFireLite (combat.ts). The story's camp fire is made
+    with `defer: true`: while the fight's camp fire burns within 0.6 m only the fight's is drawn (two on one spot added
+    up to one white mass). STORY AGENT: one option added in story.ts makeFire call, nothing else.
+  - HEAT HAZE: src/core/heat.ts (fires say where they burn each frame they are drawn), renderer.ts bends the picture in
+    a column over the nearest two (inside the existing sanitize pass: no new pass; skipped when no fire is near; never
+    on quality 'mobile'). PERF AGENT: renderer.ts sanitize shader + Renderer.heat(), please keep when merging.
+  - NIGHT: planetshine 1.35 -> 1.55 and lower (34 deg up instead of 58), animal rim wider and brighter (pow 1.8,
+    x0.8), the eye stops down to 0.78 near the fire (was 0.7). Night bot: watches from the firelight's edge on the
+    snare's side (was beside the snare 7+ m out).
+  - Wading rings: thinner, standing ones faint (0.1) and small (15 cm spread), walking up to 0.24 / 40 cm, fewer standing.
+  - Spear (and every throw) draw: the free hand bent in front of the chest (LH_DRAW 0.17, 1.18, 0.3; was 0.3, 1.25,
+    0.5: the lead arm along the throw read as straight from behind). pose_test gates the free elbow >= 85 deg in a
+    draw (now 95-121; was 65-85).
+  - Bot: ranged mode also takes the spear-thrower when window.__cbRangedAtlatl (aim views clip).
+- Capture: ~/bs-cap/combat/mkplan_s6.py (CLIPS=aim,spear,fire,fish,night), dirs s6a (fire only), s6b (all).
