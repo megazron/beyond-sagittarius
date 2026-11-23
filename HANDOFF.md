@@ -1228,3 +1228,26 @@ unlanded except this handoff commit and any recording in progress.
   real-GPU Mobile) memory number is still missing. (2) Web line-fade shows a dithered half-shape for a moment.
   (3) The tram's look (big white capsule, end-on a white ball) is unchanged. (4) Far NE "held in place" clip not
   re-recorded. (5) Mobile proxy worst frame 50 ms at the crowd spot.
+
+## 2026-11-23 20:30 perf agent 25 (branch perf25; WIP, not landed yet)
+- a82f233 (CI 45252454087 on that sha): the tram is a vehicle now (teal lower body, gold stripe, cream upper panels,
+  six windows a side, two doors on the pavement side, panel seams, raked windscreen, headlights, destination boards,
+  roof equipment and pantograph, skirts; one merged mesh per material, 7 materials). The follow camera keeps 1.5 m off
+  the tram's body (stage.keepOff, player.ts after the clearance pull). Hero views take `after: <task>`: the square's
+  waits for the tram task and starts at z -39..-42 (past the tram's south end), the gate's waits for the ring. Lens-line
+  fade on Web/Ultra hides and shows at once (?lensfade=old keeps the band). Crowd bodies give you a wider berth (3.4 m
+  ahead to 1 m past, 1.5 m lateral, 1.7 m step, not into the road or the shopfronts) and ease apart below 0.8 m; story
+  walkers 1.6 m. The gate's talking threes moved to the pavements (x +-7.4..7.6).
+- SMOKE FLAKE "wake did not reach play", cause: CI attempt 1 of 0cc8adb printed mode 'play' right after the 30 s wait
+  timed out, so the page was blocked in one long task when the mode flipped. The wake hides the player until they get
+  up; a skip at 13.9 s made the player (a new look from the creator) visible for the first time and compiled all its
+  programs in one frame (on SwiftShader, tens of seconds). Fix: main.ts enterWorld compiles the player's look in the
+  background (compileFor with the root made visible for the call) once whenReady resolves during the wake. smoke.py now
+  prints the long tasks from the skip into play (and the long tasks over 1 s on failure). Local smoke: no long task.
+- e4cdf5c COLD LOAD: renderer.uploadTextures(scene) sends the world's and the vault's textures a few at a time (24 ms a
+  batch, a frame between) before the warm draws; the 448dd37 cold run's 2-3 s freezes (t 7.7, 11.0, 14.2 s) were warm
+  draws uploading 40-90 textures each. Not measured yet on the A500 (p24/coldstep.sh with a dist of e4cdf5c or later).
+- 2eee9f9: the stop's board is two single-sided planes (the double-sided one read backwards from the south).
+- Test hook: __bs.awayMarkDone(...ids) (recordings that need a hero view's task done).
+- GPU clips: ~/bs-assets/gpu/p25 (plans, clips.sh, chain.sh, memstep.sh + memsample.ps1: the capture Chrome's private
+  bytes per process type and the GPU's dedicated memory from Windows' GPU Process Memory counters).

@@ -221,7 +221,7 @@ const FRIENDS: { id: CrewId; x: number; z: number; yaw: number; pose: CrewPose }
   { id: 'medic', x: 7.4, z: -14, yaw: -Math.PI / 2, pose: 'idle' },
   { id: 'explorer', x: 6.2, z: 17.4, yaw: -Math.PI / 2, pose: 'write' },
   { id: 'builder', x: -4.05, z: -30.6, yaw: Math.PI / 2, pose: 'idle' }, // at the kerb just past the tram's door (you come from the north: he is in front of you, not between you and the camera), out of the walkers' way
-  { id: 'social', x: -5.4, z: -40.5, yaw: 0.3, pose: 'selfie' }, // on the pavement: the road is for the cars
+  { id: 'social', x: -7.3, z: -41, yaw: 0.3, pose: 'selfie' }, // on the pavement, back from the kerb: at x -5.4 she stood in the walking line south of the tram and filled the corner of the view as you passed
 ];
 
 /** Townsfolk standing: where, and the one line each gives you (`city.npc.*`). */
