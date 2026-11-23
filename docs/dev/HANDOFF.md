@@ -1418,3 +1418,16 @@ unlanded except this handoff commit and any recording in progress.
   away (core/disposeTree.ts releaseGpu, ?awayrelease=0 off); ibatch.ts batchStatic drops the batched originals'
   arrays. Not measured yet: p26/mem3 (census + heap sampling on dist-pg3).
 - Combat flake note left in ~/bs-combat/HANDOFF.md (play_test.py:210: the click's actionability wait; evaluate-click).
+- MEMORY A/B (p26/mem3, dist-pg3 = c92211c, Mobile, Windows counters, steady at the crowd): GPU dedicated 1546 ->
+  1160 MB, shared 431 -> 417, GPU process 2.38 -> 1.97 GB private, renderer 1.54 -> 1.37 GB, JS heap ~726-744 MB
+  (V8 backing stores 622 MB: typed arrays). releaseGpu reported 158 MB of textures + 33 MB of geometry let go, but
+  the census after it still finds world.scene 104 MB, combat.d.player.model (the planet player) 53 MB and
+  world.explorer 36 MB of textures on the GPU: something draws the planet's scene again while you are away (find it:
+  a portrait, a prewarm, the map?). WebGL's own count 653 -> 521 MB textures. Morph textures (RGBA32F): the player's
+  51 shapes 27 MB, the crowd looks' 13 shapes 2 x 6.8 MB. The heap sampling (p26/heaptop.py) saw only 49 MB: the
+  typed arrays are external; use a heap snapshot next. Still far over target (GPU < 500 MB, renderer < 700 MB).
+- COLD LOAD: CPU profile of the cold title load (p26/coldprof.sh + p26/profwin.cjs, dist-cold with source maps):
+  busy 3.9-10.1 s: getProgramInfoLog 3.2 s self, under boot -> world.update -> water.ts reflect 2.3 s (the lake drew
+  the planet before the background compile), texSubImage2D 0.7 s; busy 0-2.7 s: under.ts cast/overCloth 1.6 s (the
+  clothes' under/over passes at attach). Fixed in c148ab9 (boot update drawn=false; checkShaderErrors off outside
+  dev). Re-measure: hitch_p26_cold2.json.
