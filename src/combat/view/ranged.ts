@@ -94,7 +94,10 @@ export class RangedRig {
    */
   pose(model: Character, p: SimPlayer, dt: number, t: number, up: boolean, aimW: THREE.Vector3, ammo: number, since: number): Limbs | null {
     const w = p.weapon;
+    const was = this.mode;
     this.mode = w === 'bow' ? 'bow' : w === 'sling' ? 'sling' : w === 'atlatl' ? 'atlatl' : 'none';
+    // (a new ranged weapon comes up from down: each turns the body its own way, and the bow came up "up" from the sling)
+    if (this.mode !== was) this.lower();
     if (this.mode === 'none') { this.group.visible = false; this.faceOffset = 0; return null; }
     const R = this.bones(model);
     this.group.visible = true;
@@ -503,7 +506,9 @@ export class RangedRig {
     P.needsUpdate = true; C.needsUpdate = true;
   }
   /** Taken off: nothing left in the world. */
-  hide(model?: Character) { this.sol = null; if (model) { grip(model, 'L', null); grip(model, 'R', null); } this.group.visible = false; this.quiver.visible = false; this.mode = 'none'; this.faceOffset = 0; this.pouchInit = false; }
+  /** Down at once (the body has stopped turning into the shot). */
+  lower() { this.st.up = 0; this.st.lift = 0; this.st.draw = 0; }
+  hide(model?: Character) { this.sol = null; if (model) { grip(model, 'L', null); grip(model, 'R', null); } this.group.visible = false; this.quiver.visible = false; this.mode = 'none'; this.faceOffset = 0; this.pouchInit = false; this.lower(); }
 }
 
 type GripShape = 'open' | 'relaxed' | 'grip' | 'pinch' | 'point';

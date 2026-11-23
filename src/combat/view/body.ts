@@ -328,7 +328,10 @@ export class FightBody {
       if (p.act === 'charge') this.wasCharging = 'shot'; else if (this.since > 0.45) this.wasCharging = 'none';
       if (pose) { if (p.sneaking) { pose.bend = (pose.bend ?? 0) + 0.3; this.crouch = 0.2; } model.setLimbs(pose); return; }
     } else if (!rw) { if (this.ranged.mode !== 'none') this.ranged.hide(model); }
-    else this.ranged.faceOffset = 0;
+    // (a roll, a stagger or a frame without an aim: the body stops turning side-on, so the bow, sling or thrower goes
+    // down with it and comes up again with the turn. Left up, the next frame posed a raised bow on a body still facing
+    // the aim: the arms across the chest, CI 9.8 and 13.5 cm)
+    else { this.ranged.faceOffset = 0; this.ranged.lower(); }
     const out0 = this.meleePose(model, p, dt, armed, visible, t);
     if (out0) { this.emit(model, out0, dt, true); return; }
     this.mframe = false;
