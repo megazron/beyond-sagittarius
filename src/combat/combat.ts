@@ -599,6 +599,20 @@ export class Combat {
     if (passive) { for (const e of sim.enemies) { e.alert = 0; e.aware = false; } I.attack = I.alt = I.block = I.dodge = false; }
     const hp0 = p.hp;
     if (run) run.update(dt, I); else sim.step(dt, I);
+    // spear fishing: the sun's net of light lies still on the bed here and there over the shallows, so the light the fish
+    // swim over belongs to the water and not to the fish (owner: the patch under each fish read as a spotlight)
+    if (run?.id === 'fish.spear' && this.bedRun !== run) {
+      this.bedRun = run;
+      const spots: { x: number; y: number; z: number; s: number }[] = [], p0 = sim.player;
+      let sd = 7; const rr = () => (sd = (sd * 9301 + 49297) % 233280) / 233280;
+      for (let i = 0; i < 400 && spots.length < 26; i++) {
+        const x = p0.x + (rr() - 0.5) * 24, z = p0.z + (rr() - 0.5) * 24, surf = this.env.water?.(x, z);
+        if (surf === null || surf === undefined) continue;
+        const bot = this.env.height(x, z), dp = surf - bot;
+        if (dp > 0.1 && dp < 0.85) spots.push({ x, y: bot + 0.012, z, s: 0.3 + rr() * 0.45 });
+      }
+      this.fx.bedLight(spots);
+    } else if (run?.id !== 'fish.spear' && this.bedRun) { this.bedRun = null; this.fx.bedLight([]); }
     // what the fight did to the body goes back to the game
     st.stamina = p.stamina;
     if (p.hp !== hp0) st.health = Math.max(run ? 1 : 0, p.hp);
@@ -1042,6 +1056,7 @@ export class Combat {
   testPoseStats(reset = false) { const st = { ...this.body.stats, rangedArmIn: this.body.ranged.armIn, rangedWhere: this.body.ranged.armWhere, rangedSolveIn: this.body.ranged.solveIn }; if (reset) { this.body.ranged.armIn = 0; this.body.ranged.solveIn = 0; } if (reset) Object.assign(this.body.stats, { frames: 0, shaftIn: 0, handOff: 0, leftOff: 0, skel: undefined, worst: undefined, worstL: undefined }); return st; }
   /** Recordings: the whole game in slow motion (1 is normal). */
   testSlow = 1;
+  private bedRun: unknown = null;
   testHold(code: string, on: boolean) { this.testKeys = true; this.d.input.hold(code, on); }
   testTap(code: string) { this.testKeys = true; this.d.input.hold(code, true); this.tapUp.push(code); }
   /** Turn the view as a mouse would (pixels). */

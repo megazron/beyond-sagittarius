@@ -389,7 +389,11 @@ export class Player {
       tmpC.copy(this.camera.quaternion);
       this.camera.position.copy(tmpA);
       this.camera.lookAt(tmpA.x + fx * 30, tmpA.y + fy * 30, tmpA.z + fz * 30);
-      this.camera.quaternion.slerpQuaternions(tmpC, this.camera.quaternion, along);
+      // (slerpQuaternions(a, b) copies a into itself before it turns towards b: with b the camera's own quaternion, the
+      // look along the look was lost and the view always looked at the body; in spear fishing the view stayed at 17 deg
+      // down while the look went to 55, so a fish nearer than about 2.3 m could not be aimed at)
+      tmpD.copy(this.camera.quaternion);
+      this.camera.quaternion.slerpQuaternions(tmpC, tmpD, along);
     }
     // a touch of bank into fast turns
     this.lean += (clamp(dyaw * 1.4, -0.03, 0.03) - this.lean) * e(6);
@@ -411,3 +415,4 @@ export class Player {
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
 const tmpC = new THREE.Quaternion();
+const tmpD = new THREE.Quaternion();
