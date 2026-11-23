@@ -1,7 +1,7 @@
 // Dev-only turntable for the crew (not part of the build): vite, then /dev/chars.html
 import * as THREE from 'three';
 import { randomLook, OUTFITS } from '../src/characters/custom';
-import { createCharacter, CrewId, Character, CrewPose, CHAR_BUDGET, CLOTH_PULL, CLOTH_LIFT } from '../src/characters/character';
+import { createCharacter, CrewId, Character, CrewPose, CHAR_BUDGET, CLOTH_PULL, CLOTH_LIFT, RIG_OPTS } from '../src/characters/character';
 CHAR_BUDGET.throttle = false; CHAR_BUDGET.lodFar = Infinity; // the gate poses a body many times before it draws it once: every call must count
 import { voice } from '../src/core/voice';
 import { DECREEP } from '../src/characters/decreep';
@@ -359,6 +359,16 @@ W.film = (i: number, v: number, k: number) => {
  * also samples the pixel flags (poke) from the talking-distance front and side and a three-quarter view. */
 const QA_CAMS: [number, number][] = [[Math.PI, 2.4], [-Math.PI / 2, 2.4], [-2.4, 3.4]];
 W.qaNames = (crew: boolean) => scenarioNames(crew);
+W.rigOpts = RIG_OPTS;
+/** Per-frame world points of a scenario (bone names), for tracing a jerk or a penetration. */
+W.qaTrace = (i: number, name: string, bones: string[]) => {
+  const c0 = chars[i]; chars.forEach((o, j) => { o.root.visible = j === i; }); c0.setGround(() => 0);
+  const step = (c: Character, p: CrewPose, amount: number, dt: number) => { t += dt; c.root.updateMatrixWorld(true); c.animate(p, 0, amount, t, dt); };
+  const out: number[][][] = [];
+  const g = scenarioFrames(c0, name, { step, settle: (c) => { c.root.position.set(0, 0, 0); c.root.rotation.y = 0; for (let k = 0; k < 45; k++) step(c, 'stand', 0, 1 / 30); }, flags: null }, 1);
+  for (let it = g.next(); !it.done; it = g.next()) out.push(bones.map((b) => c0.root.worldToLocal(c0.root.getObjectByName(b)!.getWorldPosition(new THREE.Vector3())).toArray().map((v) => +v.toFixed(4))));
+  return out;
+};
 W.qa = (i: number, name: string, every = 10, sampleEvery = 0) => {
   const c0 = chars[i]; chars.forEach((o, j) => { o.root.visible = j === i; }); c0.setGround(() => 0);
   const step = (c: Character, p: CrewPose, amount: number, dt: number) => { t += dt; c.root.updateMatrixWorld(true); c.animate(p, 0, amount, t, dt); };
@@ -369,6 +379,21 @@ W.qa = (i: number, name: string, every = 10, sampleEvery = 0) => {
     settle: (c) => { c.root.position.set(0, 0, 0); c.root.rotation.y = 0; for (let k = 0; k < 45; k++) step(c, 'stand', 0, 1 / 30); },
     flags: every > 0 && !sampleEvery ? () => { const s = { skinPoke: 0, clothPoke: 0, back: 0 }; for (const [yo, d] of QA_CAMS) { follow(i, yo, d); const f = poke(false); s.skinPoke += f.skinPoke; s.clothPoke += f.clothPoke; s.back += f.back; } return s; } : null,
   }, Math.max(1, every), sampleEvery);
+};
+/** Flag composites for review: character i through scenario `name`, at each frame in `at` the three probe views with
+ * every flagged pixel painted (yellow skin through cloth, cyan inner garment through outer, magenta skin from behind). */
+W.qaShots = (i: number, name: string, at: number[]) => {
+  const c0 = chars[i]; chars.forEach((o, j) => { o.root.visible = j === i; }); c0.setGround(() => 0);
+  const step = (c: Character, p: CrewPose, amount: number, dt: number) => { t += dt; c.root.updateMatrixWorld(true); c.animate(p, 0, amount, t, dt); };
+  const poke = W.poke as (shot: boolean) => { skinPoke: number; clothPoke: number; back: number; url: string };
+  const follow = W.followCam as (i: number, yo: number, d: number) => void;
+  const out: { k: number; views: { skinPoke: number; clothPoke: number; url: string }[] }[] = [];
+  const g = scenarioFrames(c0, name, { step, settle: (c) => { c.root.position.set(0, 0, 0); c.root.rotation.y = 0; for (let k = 0; k < 45; k++) step(c, 'stand', 0, 1 / 30); }, flags: null }, 1);
+  for (let it = g.next(); !it.done; it = g.next()) {
+    if (!at.includes(it.value as number)) continue;
+    out.push({ k: it.value as number, views: QA_CAMS.map(([yo, d]) => { follow(i, yo, d); const f = poke(true); return { skinPoke: f.skinPoke, clothPoke: f.clothPoke, url: f.url }; }) });
+  }
+  return out;
 };
 /** The probe's scenarios drawn live for the review clips (GPU capture): character i through each named scenario at
  * `slow` x real time, a close camera from `yaw` (radians, 0 = from the front) at `dist` m, the scenario and live
@@ -397,7 +422,7 @@ W.qaLive = (i: number, names: string[], slow = 0.5, yaw = -2.4, dist = 2.0, ever
     const h = live.hold;
     qaStone.visible = !!h && !(h.L && h.R) && /stone|throw/.test(live.name); qaShaft.visible = !!h && !!h.L && !!h.R && /spear/.test(live.name);
     qaDots.forEach((d, j) => { const s = j ? h?.L : h?.R; d.visible = !!s; if (s) d.position.copy(s.at); });
-    if (qaStone.visible) { const s = (h!.R ?? h!.L)!; qaStone.position.copy(s.at).addScaledVector(s.palm, -0.045).addScaledVector(s.fingers, 0.06); }
+    if (qaStone.visible) { const s = (h!.R ?? h!.L)! as typeof h.R & { grasp?: boolean }; qaStone.position.copy(s!.at); if (!s!.grasp) qaStone.position.addScaledVector(s!.palm, -0.045).addScaledVector(s!.fingers, 0.06); }
     if (qaShaft.visible) { const a = h!.R!.at, b = h!.L!.at, d = b.clone().sub(a).normalize(); qaShaft.position.copy(a).addScaledVector(d, 0.3); qaShaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); }
     const p = c0.root.position, y = c0.root.rotation.y + yaw;
     cam.fov = 40; cam.near = 0.05; cam.updateProjectionMatrix();

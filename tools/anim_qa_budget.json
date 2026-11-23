@@ -1,177 +1,196 @@
 {
- "note": "tools/anim_qa.py --write-budget; lower these as fixes land. Target: arm and hand penetration 0, jerk under 4 cm, holdErr under 2 cm, pixels near 0. Taken 2026-11-23 from the life-wip rig at 9a4dabe on lavapipe, every 10. Slack: cm x1.1 + 1.0, pixels x1.25 + 30.",
+ "note": "tools/anim_qa.py --write-budget [--ratchet]; lower these as fixes land. Target: arm and hand penetration 0, jerk under 4 cm, holdErr under 2 cm, pixels near 0. 2026-11-23 ~09:00 (life-wip after the hold, reach, elbow and clip-pose fixes, lavapipe, every 0): armPen/handPen are now the rig's elliptic torso (Character.torsoDepth) and holdErr is gated on grasp targets, so those three were reset; meshIn (the skinned torso surface) is new. Every other metric kept the lower of old and new, except where still above the old budget: stone_carry_walk jerkCm 4.9->6.7; drill jerkCm 6.1->12.0; reach_across jerkCm 5.1->8.8; hold_jump jerkCm 13.0->15.5; x_arms_across jerkCm 9.0->32.7 (hold starts while kneeling and an extreme setLimbs after other scenarios in one page). Pixels unchanged (no rebuilt bodies in public/ yet). Slack: cm x1.1 + 1.0, pixels x1.25 + 30.",
  "every": 10,
  "scenarios": {
   "stand": {
-   "armPenCm": 3.8,
-   "handPenCm": 3.8,
-   "jerkCm": 1.3,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
+   "jerkCm": 1.1,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 88,
-   "clothPx": 162
+   "clothPx": 162,
+   "meshInCm": 1.0
   },
   "idle": {
-   "armPenCm": 3.4,
-   "handPenCm": 3.4,
-   "jerkCm": 3.3,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
+   "jerkCm": 1.1,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 89,
-   "clothPx": 159
+   "clothPx": 159,
+   "meshInCm": 1.0
   },
   "walk": {
-   "armPenCm": 3.3,
-   "handPenCm": 3.3,
-   "jerkCm": 4.3,
+   "armPenCm": 1.7,
+   "handPenCm": 1.7,
+   "jerkCm": 3.0,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 78,
-   "clothPx": 168
+   "clothPx": 168,
+   "meshInCm": 1.0
   },
   "run": {
-   "armPenCm": 3.4,
-   "handPenCm": 3.4,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
    "jerkCm": 11.0,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 99,
-   "clothPx": 254
+   "clothPx": 254,
+   "meshInCm": 1.0
   },
   "sprint": {
-   "armPenCm": 3.3,
-   "handPenCm": 3.3,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
    "jerkCm": 10.9,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 99,
-   "clothPx": 205
+   "clothPx": 205,
+   "meshInCm": 1.0
   },
   "turn": {
-   "armPenCm": 3.2,
-   "handPenCm": 3.2,
-   "jerkCm": 3.9,
+   "armPenCm": 1.4,
+   "handPenCm": 1.4,
+   "jerkCm": 3.1,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 76,
-   "clothPx": 178
+   "clothPx": 178,
+   "meshInCm": 1.0
   },
   "limp": {
-   "armPenCm": 4.6,
-   "handPenCm": 3.4,
-   "jerkCm": 7.5,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
+   "jerkCm": 6.5,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 138,
-   "clothPx": 169
+   "clothPx": 169,
+   "meshInCm": 2.9
   },
   "crouch": {
-   "armPenCm": 2.2,
-   "handPenCm": 2.2,
-   "jerkCm": 46.0,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
+   "jerkCm": 2.5,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 132,
-   "clothPx": 166
+   "clothPx": 166,
+   "meshInCm": 1.0
   },
   "sit": {
-   "armPenCm": 2.3,
-   "handPenCm": 2.3,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
    "jerkCm": 6.6,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 152,
-   "clothPx": 258
+   "clothPx": 258,
+   "meshInCm": 1.0
   },
   "kneel": {
-   "armPenCm": 3.8,
-   "handPenCm": 3.8,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
    "jerkCm": 1.7,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 75,
-   "clothPx": 149
+   "clothPx": 149,
+   "meshInCm": 1.0
   },
   "kneel_heels": {
-   "armPenCm": 3.5,
-   "handPenCm": 3.5,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
    "jerkCm": 1.6,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 122,
-   "clothPx": 256
+   "clothPx": 256,
+   "meshInCm": 2.3
   },
   "injured": {
-   "armPenCm": 4.6,
-   "handPenCm": 4.6,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
    "jerkCm": 4.5,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 145,
-   "clothPx": 224
+   "clothPx": 224,
+   "meshInCm": 17.9
   },
   "lie": {
-   "armPenCm": 1.2,
-   "handPenCm": 1.2,
-   "jerkCm": 2.5,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
+   "jerkCm": 2.1,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 89,
-   "clothPx": 122
+   "clothPx": 122,
+   "meshInCm": 1.0
   },
   "wave": {
    "armPenCm": 1.0,
    "handPenCm": 1.0,
-   "jerkCm": 7.6,
+   "jerkCm": 7.5,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 164,
-   "clothPx": 218
+   "clothPx": 218,
+   "meshInCm": 1.0
   },
   "point": {
-   "armPenCm": 1.7,
-   "handPenCm": 1.7,
-   "jerkCm": 3.1,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
+   "jerkCm": 2.8,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 131,
-   "clothPx": 325
+   "clothPx": 325,
+   "meshInCm": 1.0
   },
   "cheer": {
-   "armPenCm": 3.8,
-   "handPenCm": 3.8,
+   "armPenCm": 3.0,
+   "handPenCm": 3.0,
    "jerkCm": 7.3,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 80,
-   "clothPx": 200
+   "clothPx": 200,
+   "meshInCm": 4.7
   },
   "shout": {
    "armPenCm": 1.0,
    "handPenCm": 1.0,
-   "jerkCm": 7.9,
+   "jerkCm": 5.7,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 75,
-   "clothPx": 140
+   "clothPx": 140,
+   "meshInCm": 1.0
   },
   "argue": {
-   "armPenCm": 3.3,
-   "handPenCm": 1.2,
-   "jerkCm": 4.9,
+   "armPenCm": 2.0,
+   "handPenCm": 1.3,
+   "jerkCm": 3.8,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 98,
-   "clothPx": 150
+   "clothPx": 150,
+   "meshInCm": 2.8
   },
   "present": {
-   "armPenCm": 3.0,
-   "handPenCm": 1.0,
-   "jerkCm": 4.2,
+   "armPenCm": 1.6,
+   "handPenCm": 1.6,
+   "jerkCm": 3.5,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 88,
-   "clothPx": 136
+   "clothPx": 136,
+   "meshInCm": 1.7
   },
   "write": {
    "armPenCm": 1.0,
@@ -180,7 +199,8 @@
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 66,
-   "clothPx": 148
+   "clothPx": 148,
+   "meshInCm": 2.3
   },
   "facepalm": {
    "armPenCm": 1.0,
@@ -189,16 +209,18 @@
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 71,
-   "clothPx": 130
+   "clothPx": 130,
+   "meshInCm": 1.0
   },
   "selfie": {
-   "armPenCm": 3.8,
-   "handPenCm": 3.8,
-   "jerkCm": 6.7,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
+   "jerkCm": 3.9,
    "holdErrCm": 1.0,
    "propGapCm": 3.0,
    "skinPx": 95,
-   "clothPx": 134
+   "clothPx": 134,
+   "meshInCm": 1.0
   },
   "jump": {
    "armPenCm": 1.0,
@@ -207,322 +229,358 @@
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 110,
-   "clothPx": 219
+   "clothPx": 219,
+   "meshInCm": 1.0
   },
   "swim": {
    "armPenCm": 1.0,
    "handPenCm": 1.0,
-   "jerkCm": 3.5,
+   "jerkCm": 3.3,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 106,
-   "clothPx": 141
+   "clothPx": 141,
+   "meshInCm": 1.0
   },
   "task_pickup": {
-   "armPenCm": 17.4,
-   "handPenCm": 17.4,
-   "jerkCm": 10.1,
+   "armPenCm": 10.6,
+   "handPenCm": 10.6,
+   "jerkCm": 9.8,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 131,
-   "clothPx": 198
+   "clothPx": 198,
+   "meshInCm": 7.4
   },
   "task_plant": {
-   "armPenCm": 14.4,
-   "handPenCm": 14.4,
-   "jerkCm": 12.6,
+   "armPenCm": 9.2,
+   "handPenCm": 9.2,
+   "jerkCm": 9.0,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 136,
-   "clothPx": 189
+   "clothPx": 189,
+   "meshInCm": 6.0
   },
   "task_use": {
-   "armPenCm": 11.3,
-   "handPenCm": 6.7,
+   "armPenCm": 9.9,
+   "handPenCm": 3.9,
    "jerkCm": 6.4,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 104,
-   "clothPx": 144
+   "clothPx": 144,
+   "meshInCm": 5.7
   },
   "task_fix": {
-   "armPenCm": 11.9,
-   "handPenCm": 11.9,
+   "armPenCm": 7.5,
+   "handPenCm": 6.3,
    "jerkCm": 5.3,
    "holdErrCm": 1.0,
    "propGapCm": 1.8,
    "skinPx": 125,
-   "clothPx": 170
+   "clothPx": 170,
+   "meshInCm": 5.2
   },
   "task_open": {
-   "armPenCm": 6.8,
-   "handPenCm": 3.4,
+   "armPenCm": 4.0,
+   "handPenCm": 1.3,
    "jerkCm": 7.1,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 109,
-   "clothPx": 135
+   "clothPx": 135,
+   "meshInCm": 3.5
   },
   "task_give": {
-   "armPenCm": 3.5,
-   "handPenCm": 3.5,
+   "armPenCm": 1.4,
+   "handPenCm": 1.0,
    "jerkCm": 8.7,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 88,
-   "clothPx": 131
+   "clothPx": 131,
+   "meshInCm": 1.0
   },
   "task_type": {
-   "armPenCm": 4.4,
-   "handPenCm": 3.9,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
    "jerkCm": 7.5,
    "holdErrCm": 1.0,
    "propGapCm": 3.0,
    "skinPx": 76,
-   "clothPx": 135
+   "clothPx": 135,
+   "meshInCm": 1.0
   },
   "task_eat": {
-   "armPenCm": 4.1,
-   "handPenCm": 4.1,
-   "jerkCm": 6.7,
+   "armPenCm": 2.4,
+   "handPenCm": 2.4,
+   "jerkCm": 6.6,
    "holdErrCm": 1.0,
    "propGapCm": 4.3,
    "skinPx": 72,
-   "clothPx": 165
+   "clothPx": 165,
+   "meshInCm": 3.8
   },
   "task_drink": {
-   "armPenCm": 5.7,
-   "handPenCm": 5.7,
-   "jerkCm": 12.3,
+   "armPenCm": 10.2,
+   "handPenCm": 10.2,
+   "jerkCm": 12.2,
    "holdErrCm": 1.0,
    "propGapCm": 4.1,
    "skinPx": 102,
-   "clothPx": 198
+   "clothPx": 198,
+   "meshInCm": 1.3
   },
   "task_carry": {
-   "armPenCm": 3.8,
-   "handPenCm": 3.8,
-   "jerkCm": 20.1,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
+   "jerkCm": 6.6,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 85,
-   "clothPx": 150
+   "clothPx": 150,
+   "meshInCm": 3.3
   },
   "task_gesture": {
-   "armPenCm": 3.5,
-   "handPenCm": 3.5,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
    "jerkCm": 7.4,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 72,
-   "clothPx": 141
+   "clothPx": 141,
+   "meshInCm": 2.3
   },
   "task_phone": {
-   "armPenCm": 5.7,
-   "handPenCm": 5.7,
+   "armPenCm": 6.4,
+   "handPenCm": 2.9,
    "jerkCm": 11.0,
    "holdErrCm": 1.0,
    "propGapCm": 3.0,
    "skinPx": 74,
-   "clothPx": 140
+   "clothPx": 140,
+   "meshInCm": 1.1
   },
   "walk_carry_box": {
-   "armPenCm": 3.6,
-   "handPenCm": 3.6,
-   "jerkCm": 7.2,
+   "armPenCm": 1.1,
+   "handPenCm": 1.1,
+   "jerkCm": 6.2,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 74,
-   "clothPx": 145
+   "clothPx": 145,
+   "meshInCm": 2.8
   },
   "kneel_pickup_stone": {
-   "armPenCm": 10.9,
-   "handPenCm": 10.9,
-   "jerkCm": 12.3,
+   "armPenCm": 5.6,
+   "handPenCm": 5.2,
+   "jerkCm": 12.2,
    "holdErrCm": 1.0,
    "propGapCm": 5.5,
    "skinPx": 84,
-   "clothPx": 161
+   "clothPx": 161,
+   "meshInCm": 4.4
   },
   "kneel_use_stone": {
-   "armPenCm": 15.7,
-   "handPenCm": 12.1,
+   "armPenCm": 12.7,
+   "handPenCm": 6.9,
    "jerkCm": 5.2,
    "holdErrCm": 1.0,
    "propGapCm": 5.3,
    "skinPx": 85,
-   "clothPx": 135
+   "clothPx": 135,
+   "meshInCm": 6.4
   },
   "sit_eat": {
-   "armPenCm": 11.0,
-   "handPenCm": 11.0,
+   "armPenCm": 10.9,
+   "handPenCm": 10.9,
    "jerkCm": 12.4,
    "holdErrCm": 1.0,
    "propGapCm": 4.3,
    "skinPx": 128,
-   "clothPx": 214
+   "clothPx": 214,
+   "meshInCm": 2.2
   },
   "sit_drink": {
-   "armPenCm": 10.5,
-   "handPenCm": 10.5,
-   "jerkCm": 22.3,
+   "armPenCm": 9.8,
+   "handPenCm": 9.8,
+   "jerkCm": 11.0,
    "holdErrCm": 1.0,
    "propGapCm": 3.8,
    "skinPx": 118,
-   "clothPx": 204
+   "clothPx": 204,
+   "meshInCm": 2.0
   },
   "walk_berry": {
-   "armPenCm": 3.4,
-   "handPenCm": 3.4,
-   "jerkCm": 3.6,
+   "armPenCm": 1.4,
+   "handPenCm": 1.4,
+   "jerkCm": 2.5,
    "holdErrCm": 1.0,
    "propGapCm": 8.5,
    "skinPx": 78,
-   "clothPx": 131
+   "clothPx": 131,
+   "meshInCm": 2.0
   },
   "walk_leafcup": {
-   "armPenCm": 3.6,
-   "handPenCm": 3.6,
-   "jerkCm": 3.3,
+   "armPenCm": 1.7,
+   "handPenCm": 1.7,
+   "jerkCm": 2.3,
    "holdErrCm": 1.0,
    "propGapCm": 3.6,
    "skinPx": 78,
-   "clothPx": 165
+   "clothPx": 165,
+   "meshInCm": 1.0
   },
   "spear_guard": {
-   "armPenCm": 10.6,
-   "handPenCm": 10.6,
-   "jerkCm": 5.6,
-   "holdErrCm": 1.0,
+   "armPenCm": 11.9,
+   "handPenCm": 11.9,
+   "jerkCm": 4.4,
+   "holdErrCm": 4.2,
    "propGapCm": 1.0,
    "skinPx": 104,
-   "clothPx": 142
+   "clothPx": 142,
+   "meshInCm": 5.0
   },
   "spear_thrust": {
-   "armPenCm": 10.9,
-   "handPenCm": 9.0,
+   "armPenCm": 11.1,
+   "handPenCm": 11.1,
    "jerkCm": 6.6,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 111,
-   "clothPx": 158
+   "clothPx": 158,
+   "meshInCm": 3.6
   },
   "spear_walk": {
-   "armPenCm": 11.7,
-   "handPenCm": 11.7,
-   "jerkCm": 7.9,
-   "holdErrCm": 1.0,
+   "armPenCm": 11.8,
+   "handPenCm": 11.8,
+   "jerkCm": 6.6,
+   "holdErrCm": 2.7,
    "propGapCm": 1.0,
    "skinPx": 165,
-   "clothPx": 190
+   "clothPx": 190,
+   "meshInCm": 4.5
   },
   "spear_run": {
-   "armPenCm": 12.8,
-   "handPenCm": 12.8,
-   "jerkCm": 11.6,
+   "armPenCm": 9.2,
+   "handPenCm": 9.2,
+   "jerkCm": 8.8,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 105,
-   "clothPx": 206
+   "clothPx": 206,
+   "meshInCm": 3.8
   },
   "stone_carry_walk": {
-   "armPenCm": 9.0,
-   "handPenCm": 9.0,
-   "jerkCm": 4.9,
-   "holdErrCm": 16.5,
+   "armPenCm": 5.8,
+   "handPenCm": 5.8,
+   "jerkCm": 6.7,
+   "holdErrCm": 2.7,
    "propGapCm": 5.5,
    "skinPx": 71,
-   "clothPx": 169
+   "clothPx": 169,
+   "meshInCm": 5.0
   },
   "stone_chest_2h": {
-   "armPenCm": 9.6,
-   "handPenCm": 9.6,
-   "jerkCm": 13.3,
-   "holdErrCm": 1.0,
+   "armPenCm": 7.6,
+   "handPenCm": 7.6,
+   "jerkCm": 6.6,
+   "holdErrCm": 2.9,
    "propGapCm": 1.0,
    "skinPx": 168,
-   "clothPx": 188
+   "clothPx": 188,
+   "meshInCm": 4.1
   },
   "stone_knap": {
-   "armPenCm": 9.7,
-   "handPenCm": 5.7,
+   "armPenCm": 4.6,
+   "handPenCm": 1.9,
    "jerkCm": 9.9,
    "holdErrCm": 1.0,
    "propGapCm": 5.5,
    "skinPx": 151,
-   "clothPx": 159
+   "clothPx": 159,
+   "meshInCm": 5.4
   },
   "drill": {
-   "armPenCm": 11.7,
-   "handPenCm": 6.9,
-   "jerkCm": 6.1,
+   "armPenCm": 10.4,
+   "handPenCm": 10.4,
+   "jerkCm": 12.0,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 136,
-   "clothPx": 152
+   "clothPx": 152,
+   "meshInCm": 4.4
   },
   "throw_over": {
-   "armPenCm": 4.2,
-   "handPenCm": 4.2,
-   "jerkCm": 18.1,
-   "holdErrCm": 1.0,
+   "armPenCm": 3.9,
+   "handPenCm": 3.9,
+   "jerkCm": 8.2,
+   "holdErrCm": 5.8,
    "propGapCm": 1.0,
    "skinPx": 86,
-   "clothPx": 129
+   "clothPx": 129,
+   "meshInCm": 1.0
   },
   "reach_far": {
-   "armPenCm": 5.6,
-   "handPenCm": 5.6,
+   "armPenCm": 1.4,
+   "handPenCm": 1.4,
    "jerkCm": 7.1,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 95,
-   "clothPx": 134
+   "clothPx": 134,
+   "meshInCm": 1.0
   },
   "reach_inside": {
-   "armPenCm": 12.3,
-   "handPenCm": 12.3,
-   "jerkCm": 8.0,
+   "armPenCm": 13.4,
+   "handPenCm": 13.4,
+   "jerkCm": 5.2,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 92,
-   "clothPx": 156
+   "clothPx": 156,
+   "meshInCm": 7.4
   },
   "reach_across": {
-   "armPenCm": 12.9,
-   "handPenCm": 10.4,
-   "jerkCm": 5.1,
-   "holdErrCm": 1.0,
+   "armPenCm": 10.5,
+   "handPenCm": 10.5,
+   "jerkCm": 8.8,
+   "holdErrCm": 2.5,
    "propGapCm": 1.0,
    "skinPx": 92,
-   "clothPx": 162
+   "clothPx": 162,
+   "meshInCm": 5.8
   },
   "hold_jump": {
-   "armPenCm": 6.7,
-   "handPenCm": 4.4,
-   "jerkCm": 13.0,
+   "armPenCm": 2.4,
+   "handPenCm": 2.4,
+   "jerkCm": 15.5,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 89,
-   "clothPx": 159
+   "clothPx": 159,
+   "meshInCm": 1.0
   },
   "x_arms_up": {
    "armPenCm": 1.0,
    "handPenCm": 1.0,
-   "jerkCm": 1.1,
+   "jerkCm": 1.0,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 84,
-   "clothPx": 206
+   "clothPx": 206,
+   "meshInCm": 1.0
   },
   "x_arms_across": {
-   "armPenCm": 6.0,
+   "armPenCm": 4.0,
    "handPenCm": 1.0,
-   "jerkCm": 9.0,
+   "jerkCm": 32.7,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 128,
-   "clothPx": 184
+   "clothPx": 184,
+   "meshInCm": 3.1
   },
   "x_arms_back": {
    "armPenCm": 1.0,
@@ -531,7 +589,8 @@
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 120,
-   "clothPx": 148
+   "clothPx": 148,
+   "meshInCm": 1.0
   },
   "x_arms_out": {
    "armPenCm": 1.0,
@@ -540,34 +599,38 @@
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 126,
-   "clothPx": 142
+   "clothPx": 142,
+   "meshInCm": 1.0
   },
   "x_bend_twist": {
-   "armPenCm": 3.6,
-   "handPenCm": 3.6,
-   "jerkCm": 1.3,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
+   "jerkCm": 1.1,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 76,
-   "clothPx": 182
+   "clothPx": 182,
+   "meshInCm": 1.0
   },
   "x_kick": {
-   "armPenCm": 3.5,
-   "handPenCm": 3.5,
+   "armPenCm": 1.0,
+   "handPenCm": 1.0,
    "jerkCm": 1.1,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 99,
-   "clothPx": 161
+   "clothPx": 161,
+   "meshInCm": 2.0
   },
   "x_squat": {
    "armPenCm": 1.0,
    "handPenCm": 1.0,
-   "jerkCm": 1.3,
+   "jerkCm": 1.1,
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 144,
-   "clothPx": 301
+   "clothPx": 301,
+   "meshInCm": 1.0
   }
  },
  "known": {

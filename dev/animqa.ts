@@ -1,20 +1,25 @@
 // Dev-only: the animation QA probe (tools/anim_qa.py drives it through dev/chars.html). One body runs one scenario (a
 // clip, a task with its prop, a hold on a spear or a stone, an extreme joint range) from a settled stand, and every
 // frame is measured the way a viewer would see it go wrong:
-//   armPen   how far a hand, a finger, the forearm or the elbow goes inside the torso (three capsules measured from this
-//            body's skin and clothes at rest, as keepArmsOut sees it), cm; handPen is the hand and fingers only
+//   armPen   how far a hand, a finger, the forearm or the elbow goes inside the torso as the rig's guards see it
+//            (Character.torsoDepth: an elliptic section per segment, measured from this body's skin and clothes), cm;
+//            handPen is the hand and fingers only
+//   meshIn   the same points against the torso's skinned surface itself (skin and cloth hips to neck), cm: the truth
+//            the guards' shapes approximate
 //   jerk     the largest one-frame change of velocity of an elbow, a wrist or a fingertip (second difference at 30 fps),
 //            cm: smooth mocap moves a few cm; "all of a sudden the arms are somewhere else" is tens
-//   holdErr  how far a hand is from what it holds (the hold target), cm, once the hold has had 0.6 s to take
+//   holdErr  how far a hand is from what it holds, cm, once the hold has had 0.6 s to take: the wrist against its target
+//            or, for a grasp, against where the palm closes on the thing; a prop on the hand, its middle against the target
 //   propGap  how far a prop on the hand (a stone, a cup) sits from the palm, cm
 //   flags    the play capture's own pixel passes (dev/chars.ts poke): skin out through cloth, an inner garment out
 //            through an outer one, skin seen from behind; summed over the sampled views
 import * as THREE from 'three';
+import { graspWrist } from '../src/characters/character';
 import type { Character, CrewPose, TaskKind, PropKind, Limbs } from '../src/characters/character';
-import { bone, segDist, TORSO, radii } from './qa_lib';
+import { bone, TORSO } from './qa_lib';
 
 type Ctx = { c: Character; k: number; dt: number; P: (x: number, y: number, z: number) => THREE.Vector3; D: (x: number, y: number, z: number) => THREE.Vector3 };
-type HoldSide = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius?: number };
+type HoldSide = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius?: number; grasp?: boolean };
 interface Scenario {
   name: string; pose?: CrewPose; v?: number; w?: number; sec?: number;
   /** measured hold: every frame the targets the hands should be on (body space is turned into world by P/D) */
@@ -29,12 +34,15 @@ interface Scenario {
 const side = (s: 'L' | 'R') => (s === 'L' ? 1 : -1);
 const grip = (x: Ctx, at: [number, number, number], fingers: [number, number, number], palm: [number, number, number], radius = 0.02): HoldSide =>
   ({ at: x.P(...at), fingers: x.D(...fingers).normalize(), palm: x.D(...palm).normalize(), radius });
+// a thing in the hand: `at` is its middle (a stone's centre, the shaft's axis at this hand), the palm closes on it
+const item = (x: Ctx, at: [number, number, number], fingers: [number, number, number], palm: [number, number, number], radius: number): HoldSide =>
+  ({ ...grip(x, at, fingers, palm, radius), grasp: true });
 // a spear: the butt low behind the right hip, the shaft up and forward; the hands on it 0.35 m apart
 const spear = (x: Ctx, push: number, lift = 0) => {
   // the right hand low by the right hip, the left in front of the left chest; the shaft through both, its point ahead
   const r = new THREE.Vector3(-0.15, 0.95 + lift, 0.18 + push), l = new THREE.Vector3(0.02, 1.12 + lift, 0.38 + push);
   const f = l.clone().sub(r).normalize().toArray() as [number, number, number];
-  return { R: grip(x, r.toArray() as [number, number, number], f, [0, -1, 0], 0.015), L: grip(x, l.toArray() as [number, number, number], f, [0, -1, 0], 0.015) };
+  return { R: item(x, r.toArray() as [number, number, number], f, [0, -1, 0], 0.015), L: item(x, l.toArray() as [number, number, number], f, [0, -1, 0], 0.015) };
 };
 const ease = (a: number) => a * a * (3 - 2 * a);
 const tri = (s: number) => 1 - Math.abs(((s % 1) + 1) % 1 * 2 - 1);
@@ -68,19 +76,19 @@ const HOLDS: Scenario[] = [
   { name: 'spear_thrust', sec: 3, hold: (x) => spear(x, 0.25 * ease(tri(x.k * x.dt * 0.9))) },
   { name: 'spear_walk', v: 1.3, sec: 3, hold: (x) => spear(x, 0, 0.02 * Math.sin(x.k * 0.4)) },
   { name: 'spear_run', v: 3.4, sec: 2, hold: (x) => spear(x, 0, 0.03 * Math.sin(x.k * 0.6)), crewOnly: true },
-  { name: 'stone_carry_walk', v: 1.3, sec: 3, setup: (x) => x.c.setProp('stone'), hold: (x) => ({ R: grip(x, [-0.18, 1.04, 0.2], [0.3, 0, 1], [0, 1, 0], 0.035) }) },
-  { name: 'stone_chest_2h', v: 1.0, sec: 3, hold: (x) => ({ R: grip(x, [-0.07, 1.08, 0.3], [0.2, 0.3, 1], [1, 0.2, 0], 0.06), L: grip(x, [0.07, 1.08, 0.3], [-0.2, 0.3, 1], [-1, 0.2, 0], 0.06) }) },
+  { name: 'stone_carry_walk', v: 1.3, sec: 3, setup: (x) => x.c.setProp('stone'), hold: (x) => ({ R: item(x, [-0.18, 1.1, 0.26], [0.3, 0, 1], [0, 1, 0], 0.035) }) },
+  { name: 'stone_chest_2h', v: 1.0, sec: 3, hold: (x) => ({ R: item(x, [0, 1.08, 0.33], [0.2, 0.3, 1], [1, 0.2, 0], 0.06), L: item(x, [0, 1.08, 0.33], [-0.2, 0.3, 1], [-1, 0.2, 0], 0.06) }) },
   { name: 'stone_knap', sec: 3, setup: (x) => { x.c.setKneel(true); x.c.setProp('stone'); },
-    hold: (x) => ({ R: grip(x, [-0.08, 0.5 + 0.14 * ease(tri(x.k * x.dt * 2.5)), 0.42], [0.4, -0.6, 1], [0, -1, 0], 0.035), L: grip(x, [0.07, 0.42, 0.4], [-0.2, 0, 1], [0, 1, 0], 0.04) }) },
+    hold: (x) => ({ R: item(x, [-0.06, 0.48 + 0.14 * ease(tri(x.k * x.dt * 2.5)), 0.47], [0.4, -0.6, 1], [0, -1, 0], 0.035), L: item(x, [0.06, 0.46, 0.45], [-0.2, 0, 1], [0, 1, 0], 0.04) }) },
   { name: 'drill', sec: 3, setup: (x) => x.c.setKneel(true), crewOnly: true,
-    hold: (x) => { const r = 0.05 * Math.sin(x.k * x.dt * Math.PI * 2 * 2.2); return { R: grip(x, [-0.04 + r, 0.55, 0.38 - r * 0.3], [0, 0, 1], [1, 0, 0], 0.01), L: grip(x, [0.04 + r, 0.55, 0.38 + r * 0.3], [0, 0, 1], [-1, 0, 0], 0.01) }; } },
+    hold: (x) => { const r = 0.05 * Math.sin(x.k * x.dt * Math.PI * 2 * 2.2); return { R: item(x, [r, 0.55, 0.4 - r * 0.3], [0, 0, 1], [1, 0, 0], 0.01), L: item(x, [r, 0.55, 0.4 + r * 0.3], [0, 0, 1], [-1, 0, 0], 0.01) }; } },
   { name: 'throw_over', sec: 2.4, crewOnly: true, hold: (x) => {
     // wind back over the shoulder for 0.8 s, then forward and down in 0.25 s, then let go
     const s = x.k * x.dt; if (s > 1.3) return null;
     const back: [number, number, number] = [-0.26, 1.6, -0.12], fwd: [number, number, number] = [-0.14, 1.28, 0.42];
     const a = s < 0.8 ? ease(s / 0.8) : 1 - ease(Math.min(1, (s - 0.8) / 0.25));
     const p = back.map((b, i) => fwd[i] + (b - fwd[i]) * a) as [number, number, number];
-    return { R: grip(x, p, [0, 0.3, 1], [0, -1, 0], 0.035) };
+    return { R: item(x, p, [0, 0.3, 1], [0, -1, 0], 0.035) };
   } },
   { name: 'reach_far', holdFree: true, crewOnly: true, hold: (x) => ({ R: grip(x, [-0.25, 1.2, 1.1], [0, 0, 1], [0, -1, 0]) }) },
   { name: 'reach_inside', holdFree: true, hold: (x) => ({ R: grip(x, [0, 1.15, 0.02], [1, 0, 0], [0, 0, -1]) }) },
@@ -98,11 +106,50 @@ const EXTREMES: Scenario[] = [
   { name: 'x_kick', setup: L({ legR: [0, -0.1, 1], shinR: [0, -0.3, 1] }), crewOnly: true },
   { name: 'x_squat', setup: L({ legL: [0.1, -0.2, 1], legR: [-0.1, -0.2, 1], shinL: [0, -1, -0.3], shinR: [0, -1, -0.3], bend: 0.6 }), crewOnly: true },
 ];
+const propMid = (c: Character) => {
+  for (const ch of c.root.getObjectByName('handR')!.children) { const m = ch as THREE.Mesh; if (!m.isMesh) continue; m.geometry.computeBoundingSphere(); return m.geometry.boundingSphere!.center.clone().applyMatrix4(m.matrixWorld); }
+  return null;
+};
 /** What the hands of the running scenario are told to hold this frame (dev/chars.ts qaLive draws it). */
 export const live: { hold: { L?: HoldSide; R?: HoldSide } | null; name: string } = { hold: null, name: '' };
 export const SCENARIOS: Scenario[] = [...CLIPS, ...TASKS, ...COMBOS, ...HOLDS, ...EXTREMES];
 
-const radCache = new WeakMap<Character, number[]>();
+// the torso as drawn: body skin and clothes whose main bone is hips to neck (every second vertex), for a penetration
+// measured against the surface itself; the capsules are round and the hips are not (a hand passing in front of the
+// hip read 6 to 14 cm "inside" a capsule whose radius mixes the hip's width with its depth)
+const torsoVerts = new WeakMap<Character, { m: THREE.SkinnedMesh; idx: number[] }[]>();
+const TB = new Set(['hips', 'spine', 'spine1', 'chest', 'neck']);
+function surfaceOf(c: Character) {
+  let t = torsoVerts.get(c);
+  if (!t) {
+    t = [];
+    c.root.traverse((o) => {
+      const m = o as THREE.SkinnedMesh; if (!m.isSkinnedMesh || !(m.name.startsWith('skin_body') || m.name === 'cloth')) return;
+      const si = m.geometry.attributes.skinIndex, sw = m.geometry.attributes.skinWeight, idx: number[] = [];
+      for (let i = 0; i < si.count; i += 2) { let b = 0, w = -1; for (let j = 0; j < 4; j++) { const wj = sw.getComponent(i, j); if (wj > w) { w = wj; b = si.getComponent(i, j); } } if (TB.has(m.skeleton.bones[b]?.name)) idx.push(i); }
+      t!.push({ m, idx });
+    });
+    torsoVerts.set(c, t);
+  }
+  const out: number[] = [], V = new THREE.Vector3();
+  for (const { m, idx } of t) for (const i of idx) { m.getVertexPosition(i, V); V.applyMatrix4(m.matrixWorld); out.push(V.x, V.y, V.z); }
+  return out;
+}
+/** How far p is inside the torso surface: the nearest surface point within 20 cm, its outward direction taken from the
+ * torso's bone line; negative outside. */
+function meshPen(p: THREE.Vector3, S: number[], segs: (readonly [THREE.Vector3, THREE.Vector3])[]) {
+  let best = 0.2 * 0.2, k = -1;
+  for (let i = 0; i < S.length; i += 3) { const d = (S[i] - p.x) ** 2 + (S[i + 1] - p.y) ** 2 + (S[i + 2] - p.z) ** 2; if (d < best) { best = d; k = i; } }
+  if (k < 0) return -1;
+  const v = new THREE.Vector3(S[k], S[k + 1], S[k + 2]);
+  let bd = 9, ax = v;
+  for (const [a, b] of segs) { const ab = b.clone().sub(a), t = Math.max(0, Math.min(1, v.clone().sub(a).dot(ab) / ab.lengthSq())), q = a.clone().addScaledVector(ab, t), d = q.distanceTo(v); if (d < bd) { bd = d; ax = q; } }
+  const n = v.clone().sub(ax); if (n.lengthSq() < 1e-8) return -1; n.normalize();
+  // only straight in from that surface point: a fingertip below a flared hem has the hem above it, not round it
+  const dv = v.sub(p), along = dv.dot(n);
+  if (dv.addScaledVector(n, -along).length() > 0.03) return -1;
+  return along;
+}
 const R0 = (c: Character) => { c.root.updateMatrixWorld(true); return c.root; };
 const PTS = (s: 'L' | 'R') => [`hand${s}`, `finger3_2${s}`, `finger2_3${s}`, `lowerarm${s}`];
 
@@ -125,8 +172,6 @@ export function* scenarioFrames(c: Character, name: string, h: QaHooks, every = 
   // a clean start: everything let go, the stand settled, the body at the origin facing +z
   c.setLimbs(null); c.setHold(null); c.stopTask(); c.setProp(null); c.setKneel(false); c.setLimp(false); c.setFace(null); c.setLookTarget(null);
   h.settle(c);
-  if (!radCache.has(c)) radCache.set(c, radii(c));
-  const rad = radCache.get(c)!;
   // body space is in a 1.76 m body's metres: scaled by this body's neck height (1.57 m to 2.08 m), so a target is as
   // far from every body's shoulder
   const S = R0(c).worldToLocal(bone(c, 'neck')).y / 1.47;
@@ -134,7 +179,7 @@ export function* scenarioFrames(c: Character, name: string, h: QaHooks, every = 
   sc.setup?.(x);
   const tracks = new Map<string, THREE.Vector3[]>();
   let reach = 0, armPen = 0, handPen = 0, penAt = '', jerk = 0, jerkAt = '', holdErr = 0, holdAt = '', propGap = 0, propAt = '', holdStart = -1;
-  const holdErrs: number[] = []; let lastHold: { L?: HoldSide; R?: HoldSide } | null = null;
+  const holdErrs: number[] = [], holdK: string[] = []; let meshIn = 0, meshAt = ''; let lastHold: { L?: HoldSide; R?: HoldSide } | null = null;
   const poses: { pose: string; q: Record<string, number[]> }[] = [];
   const fl = { skinPoke: 0, clothPoke: 0, back: 0, samples: 0, worst: 0, worstK: -1 };
   for (let k = 0; k < frames; k++) {
@@ -156,14 +201,17 @@ export function* scenarioFrames(c: Character, name: string, h: QaHooks, every = 
     R.updateMatrixWorld(true);
     // arms into the torso
     const segs = TORSO.map(([a, b]) => [bone(c, a), bone(c, b)] as const);
+    const surf = k % 2 === 0 ? surfaceOf(c) : null;
     for (const s of ['L', 'R'] as const) {
       const pts = PTS(s).map((n) => [n, bone(c, n)] as const);
       pts.push(['forearm' + s, pts[3][1].clone().lerp(pts[0][1], 0.5)]);
-      for (const [n, p] of pts) segs.forEach(([a, b], j) => {
-        const pen = rad[j] - segDist(p, a, b);
+      // the rig's own torso shapes (Character.torsoDepth: elliptic, as keepArmsOut, holdOut and forearmOut see it)
+      for (const [n, p] of pts) {
+        const pen = c.torsoDepth(p) ?? -1;
         if (pen > armPen) { armPen = pen; penAt = `${n} f${k}`; }
         if (n.startsWith('hand') || n.startsWith('finger')) handPen = Math.max(handPen, pen);
-      });
+      }
+      if (surf) for (const [n, p] of pts) { const mp = meshPen(p, surf, segs); if (mp > meshIn) { meshIn = mp; meshAt = `${n} f${k}`; } }
       // the joints' paths: a one-frame change of velocity
       for (const [n, p] of pts) {
         const tr = tracks.get(n) ?? tracks.set(n, []).get(n)!; tr.push(p.clone());
@@ -171,12 +219,17 @@ export function* scenarioFrames(c: Character, name: string, h: QaHooks, every = 
       }
       // the hand on what it holds
       const hs = lastHold?.[s];
-      if (hs && holdStart >= 0 && k - holdStart >= 18) {
-        const e = bone(c, `hand${s}`).distanceTo(hs.at); holdErrs.push(e);
+      if (hs && holdStart >= 0 && k - holdStart >= ((globalThis as { __qaFrom?: number }).__qaFrom ?? 18)) {
+        // a grasp: the wrist against where it must be for the palm to close on the thing
+        const goal = hs.grasp ? graspWrist(new THREE.Vector3(), hs.at, hs.fingers, hs.palm, hs.radius ?? 0.02, bone(c, `hand${s}`).distanceTo(bone(c, `finger3_1${s}`))) : hs.at;
+        // a prop on the hand (a stone): its middle against the target, which is what is seen
+        const pm = hs.grasp && s === 'R' ? propMid(c) : null;
+        const e = pm ? pm.distanceTo(hs.at) : bone(c, `hand${s}`).distanceTo(goal); holdErrs.push(e);
+        holdK.push(`${s}${k}:${(e * 100).toFixed(1)}`);
         // how far the target is, as a share of the arm's length: over 0.97 the arm cannot get there (the scenario's
         // fault, or a scene's), and the error says nothing about the rig
         const sh = bone(c, `upperarm${s}`), el = bone(c, `lowerarm${s}`), wr = bone(c, `hand${s}`);
-        reach = Math.max(reach, sh.distanceTo(hs.at) / (sh.distanceTo(el) + el.distanceTo(wr)));
+        reach = Math.max(reach, sh.distanceTo(goal) / (sh.distanceTo(el) + el.distanceTo(wr)));
         if (e > holdErr) { holdErr = e; holdAt = `${s} f${k}`; }
       }
     }
@@ -204,7 +257,7 @@ export function* scenarioFrames(c: Character, name: string, h: QaHooks, every = 
   const cm = (v: number) => +(v * 100).toFixed(1);
   return {
     scenario: name, armPenCm: cm(Math.max(0, armPen)), handPenCm: cm(Math.max(0, handPen)), penAt, jerkCm: cm(jerk), jerkAt,
-    holdErrCm: cm(holdErr), holdP50Cm: cm(holdErrs[holdErrs.length >> 1] ?? 0), holdAt, holdFree: !!sc.holdFree, reach: +reach.toFixed(2), propGapCm: cm(propGap), propAt, flags: fl, poses,
+    holdErrCm: cm(holdErr), holdP50Cm: cm(holdErrs[holdErrs.length >> 1] ?? 0), holdAt, holdFree: !!sc.holdFree, reach: +reach.toFixed(2), propGapCm: cm(propGap), propAt, flags: fl, poses, holdK, meshInCm: cm(meshIn), meshAt,
   };
 }
 export const scenarioNames = (crew: boolean) => SCENARIOS.filter((s) => crew || !s.crewOnly).map((s) => s.name);

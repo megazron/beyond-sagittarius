@@ -22,7 +22,7 @@ ap = argparse.ArgumentParser(); ap.add_argument('--url', default='http://localho
 ap.add_argument('--every', type=int, default=10, help='frames between pixel-flag samples; 0 for none'); ap.add_argument('--only', default='')
 ap.add_argument('--scen', default='', help='only these scenarios (comma list)')
 ap.add_argument('--out', default='anim_qa.json'); ap.add_argument('--budget', default=str(ROOT / 'tools' / 'anim_qa_budget.json'))
-ap.add_argument('--write-budget', action='store_true'); ap.add_argument('--gpu', action='store_true'); ap.add_argument('--size', default='480x270')
+ap.add_argument('--write-budget', action='store_true'); ap.add_argument('--ratchet', default=None, help='with --write-budget: keep the lower of the old budget and this run, except these metrics (comma list, their measure changed)'); ap.add_argument('--gpu', action='store_true'); ap.add_argument('--size', default='480x270')
 a = ap.parse_args()
 if a.serve:
     port = urllib.parse.urlparse(a.url).port
@@ -35,7 +35,7 @@ if a.serve:
 NAMES = ['zenvik', 'draxum', 'lyrra', 'skyvra', 'bolzar', 'nuvexa', 'megazron']
 IDS = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social', 'megazron']
 OUTFITS = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social']
-METRICS = ['armPenCm', 'handPenCm', 'jerkCm', 'holdErrCm', 'propGapCm', 'skinPx', 'clothPx']
+METRICS = ['armPenCm', 'handPenCm', 'meshInCm', 'jerkCm', 'holdErrCm', 'propGapCm', 'skinPx', 'clothPx']
 
 
 def layers(cid):
@@ -45,7 +45,7 @@ def layers(cid):
 
 def flat(r):
     s = max(1, r['flags']['samples'])
-    return {'armPenCm': r['armPenCm'], 'handPenCm': r['handPenCm'], 'jerkCm': r['jerkCm'], 'holdErrCm': 0 if r['holdFree'] or r.get('reach', 0) > 0.97 else r['holdErrCm'],
+    return {'armPenCm': r['armPenCm'], 'handPenCm': r['handPenCm'], 'meshInCm': r.get('meshInCm', 0), 'jerkCm': r['jerkCm'], 'holdErrCm': 0 if r['holdFree'] or r.get('reach', 0) > 0.97 else r['holdErrCm'],
             'propGapCm': r['propGapCm'], 'skinPx': round(r['flags']['skinPoke'] / s), 'clothPx': round(r['flags']['clothPoke'] / s)}
 
 
@@ -80,10 +80,17 @@ for r in rows:
     for m in METRICS: d[m] = max(d[m], r[m])
 print('\nworst over all bodies, per metric:', ', '.join(f"{m} {max(d[m] for d in worst.values())}" for m in METRICS))
 print('scenarios over 2.5 cm arm penetration:', sum(1 for d in worst.values() if d['armPenCm'] > 2.5), '/', len(worst),
-      '| over 4 cm jerk:', sum(1 for d in worst.values() if d['jerkCm'] > 4), '| hand off its hold > 3 cm:', sum(1 for d in worst.values() if d['holdErrCm'] > 3))
+      '| over 2 cm into the torso surface:', sum(1 for d in worst.values() if d['meshInCm'] > 2), '| over 4 cm jerk:', sum(1 for d in worst.values() if d['jerkCm'] > 4), '| hand off its hold > 3 cm:', sum(1 for d in worst.values() if d['holdErrCm'] > 3))
 if a.write_budget:
     # slack: 10% plus 1 cm, so a rerun on another GPU passes; the pixel counts get more (rasterisers differ)
     bud = {s: {m: (round(v * 1.25 + 30) if m.endswith('Px') else round(v * 1.1 + 1.0, 1)) for m, v in d.items()} for s, d in worst.items()}
+    if a.ratchet is not None and os.path.isfile(a.budget):
+        old = json.load(open(a.budget))['scenarios']; reset = set(a.ratchet.split(','))
+        for s_, d in bud.items():
+            for m, v in d.items():
+                o = old.get(s_, {}).get(m)
+                if o is not None and m not in reset and (a.every > 0 or not m.endswith('Px')): d[m] = min(v, o)
+                elif o is not None and m.endswith('Px') and a.every <= 0: d[m] = o
     json.dump({'note': 'tools/anim_qa.py --write-budget; lower these as fixes land. Target: arm and hand penetration 0, jerk under 4 cm, holdErr under 2 cm, pixels near 0.', 'every': a.every, 'scenarios': bud}, open(a.budget, 'w'), indent=1)
     print('budget written', a.budget)
 fails = [f'page error: {e}' for e in errs[:3]]
