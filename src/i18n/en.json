@@ -1136,5 +1136,5 @@
   "mz.pull.2": "Don't look so worried. Nobody dies in the first chapter. Well. Not for long.",
   "msg.gfxLost": "The graphics reset. Getting the picture back...",
   "msg.gfxReload": "The picture did not come back. Your game is saved: tap to reload.",
-  "msg.memLow": "Memory is running low: the graphics are set lighter."
+  "msg.memLow": "Memory is running low: your game is saved, and the next start uses lighter graphics."
 }
