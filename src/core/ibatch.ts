@@ -258,6 +258,10 @@ export function batchStatic(root: THREE.Object3D, accept: (m: THREE.Mesh) => boo
       // drawn by the batch: three skips it at the layer test (no frustum test, no draw) in every pass
       m.material = HIDE; m.frustumCulled = false; m.layers.mask = 0;
       m.userData.batchHide = (on: boolean) => b.setMainHidden(geo, on); // for the flat's portals (city.ts)
+      // its own arrays are let go (the batch holds a copy): a stand-in geometry with only its bounds, for whoever still
+      // asks where it is (the flat's portals). The originals doubled the city's geometry in the page (perf agent 26)
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      const stand = new THREE.BufferGeometry(); stand.boundingBox = m.geometry.boundingBox!.clone(); stand.boundingSphere = m.geometry.boundingSphere!.clone(); m.geometry = stand;
       const mw = m.matrixWorld.clone(); m.removeFromParent(); held.add(m);
       m.matrixAutoUpdate = false; m.matrix.multiplyMatrices(inv, mw); m.matrixWorld.copy(mw);
       Object.defineProperty(m, 'visible', { get: () => !b.isHidden(geo), set: (v: boolean) => b.setHidden(geo, !v), configurable: true });
