@@ -227,7 +227,11 @@ for st in PLAN['steps']:
         print('rec', st['rec'], len(rec['frames']), 'frames', f'{fps:.1f} fps', 'sound' if b64 else 'no sound', flush=True)
     elif 'eval' in st:
         try:
-            print('eval', str(ev(st['eval'], st.get('await', False)))[:200], flush=True)
+            res = str(ev(st['eval'], st.get('await', False)))
+            print('eval', res[:200], flush=True)
+            # the whole result too (a bot's log, the pose numbers): the printed line is cut at 200 characters
+            if len(res) > 200:
+                with open(os.path.join(OUT, 'evals.txt'), 'a') as fh: fh.write(res + '\n')
         except RuntimeError as x:
             print('eval error', x, flush=True)
     elif 'wait' in st:
