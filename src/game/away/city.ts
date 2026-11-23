@@ -220,7 +220,7 @@ const FRIENDS: { id: CrewId; x: number; z: number; yaw: number; pose: CrewPose }
   { id: 'strong', x: -6.6, z: 2.5, yaw: Math.PI / 2, pose: 'idle' },
   { id: 'medic', x: 7.4, z: -14, yaw: -Math.PI / 2, pose: 'idle' },
   { id: 'explorer', x: 6.2, z: 17.4, yaw: -Math.PI / 2, pose: 'write' },
-  { id: 'builder', x: -4.05, z: -27.5, yaw: Math.PI / 2, pose: 'idle' }, // at the kerb beside the tram's door, out of the walkers' way
+  { id: 'builder', x: -4.05, z: -30.6, yaw: Math.PI / 2, pose: 'idle' }, // at the kerb just past the tram's door (you come from the north: he is in front of you, not between you and the camera), out of the walkers' way
   { id: 'social', x: -5.4, z: -40.5, yaw: 0.3, pose: 'selfie' }, // on the pavement: the road is for the cars
 ];
 
@@ -1188,7 +1188,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     type Loaded = [string, THREE.Object3D | null, THREE.Object3D | null];
     const load = (n: string): Promise<Loaded> => model(`${n}.lod1`).catch(() => null).then((far): Loaded | Promise<Loaded> => (tier === 0 && far ? [n, null, far] : model(n).then((near): Loaded => [n, near, far])));
     return Promise.all(names.map((n) => load(n).catch((): Loaded | null => null))).then((list) => {
-      const TILE = tier === 0 ? 256 : 512, COLS = 8;
+      const TILE = tier === 0 ? 128 : 512, COLS = 8; // phones: 128 px tiles (a 1024 px atlas, a quarter of the 2048 one): the light builds are seen from a few metres on
       const cv = document.createElement('canvas'); cv.width = cv.height = TILE * COLS;
       const g2 = cv.getContext('2d')!; g2.fillStyle = '#ffffff'; g2.fillRect(0, 0, TILE, TILE);
       const tileOf = new Map<unknown, number>(); let nTiles = 1;
@@ -1750,7 +1750,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     },
     scene, gravity: 22, jump: 6.2, spawn: new THREE.Vector3(12.4, FLOOR, 68.4), tasks, people, clearance, ceiling,
     // the hero views: stepping out of the flat, and the run to the gate
-    vistas: [{ x0: 4, x1: FRONT - 0.4, z0: 63, z1: 69, yaw: 0, pitch: 0.42, secs: 4 }, { x0: -8, x1: 8, z0: -40, z1: -30, yaw: 0, pitch: 0.3, secs: 3.5 }, { x0: -9, x1: 9, z0: -76, z1: -66, yaw: 0, pitch: 0.34, secs: 5 }],
+    // (the gate run: a gentle look up, the camera about 1.2 m up; at 0.34 it sat on the ground and the crowd filled the frame)
+    vistas: [{ x0: 4, x1: FRONT - 0.4, z0: 63, z1: 69, yaw: 0, pitch: 0.42, secs: 4 }, { x0: -8, x1: 8, z0: -40, z1: -30, yaw: 0, pitch: 0.3, secs: 3.5 }, { x0: -9, x1: 9, z0: -76, z1: -66, yaw: 0, pitch: 0.08, secs: 5 }],
     height: (x, z) => H(x, z),
     collide(p, r) {
       for (const k of wallsNear(p.x - r - 0.1, p.z - r - 0.1, p.x + r + 0.1, p.z + r + 0.1)) {

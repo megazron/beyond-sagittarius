@@ -1043,3 +1043,23 @@ unlanded except this handoff commit and any recording in progress.
 - GPU plans with waypoint steering (smooth turns, W let go at the last waypoint, position printed after each clip):
   ~/bs-assets/gpu/p24/plan_clips_mobile.json, plan_clips_web.json; one heavy step: p24/gpustep.sh DIST OUT PLAN QUERY
   (vite preview :4661 + p18/gpurun2.sh, both stopped by PID / process group).
+- 14:00 TRAM, probe result (walk.py with detours, Mobile, software GL): with the tram at z -32 every route reaches its
+  end (crowd spot -> square, shopfronts, kerb, road, east pavement, chai -> tram door 12 s, tram door -> ring 7 s,
+  square -> crowd); the only detours are at the fruit stall (-6.4, -20) and the lamps, by design. Honest note: with
+  detours the z -17 tram was also passable (one more detour at its north end, x -3.85 z -23.6); the old clips' "stuck"
+  was a straight hold-W into the stall under the shelter. The new place still removes the shelter roof from the camera
+  and the tram from beside the crowd spot. crowd_to_road_sw's target (-2.5, -36) is now inside the tram (unreachable).
+- CROWD CAMERA in the first Mobile GPU clips (p24/clips_mobile): camera height over the feet 2.55-2.6 m throughout (it
+  used to rise); a walker coming at the camera just in front of a blocked player (t > 0.72 of the line) stays drawn.
+- PHONE MEMORY (memTop, Mobile, crowd spot, software GL): before 2833 MB renderer + GPU (dist-mem). Owners: 16 merged
+  body geometries 111 MB (the story's seven with all 53 morphs, ~12 MB each), canvas atlases >= 1 Mpx ~127 MB, prop
+  bake geometry 67 MB, kit 29 MB. 448dd37 (litestory + canvashalf): 2558 MB (-275), JS heap 611 MB, skin_body 73 MB,
+  textures 207 MB. City colour maps were already KTX2 (ktx2.json); the big textures left are runtime canvases, which
+  KTX2 cannot cover without a runtime encoder. Next in line: prop atlas tiles 128 px on phones (uncommitted when I
+  wrote this), propBake geometry (67 MB), the player's 2048 skin maps (PLAYER_DETAIL, by design).
+- 14:45 LANDED 448dd37 on main (CI 45177122978 green on that sha): tram at z -32, crowd camera without the rise,
+  passers-by and (within 1.2 m of the camera) the story's people cleared from the camera-you line, phone memory trims.
+  GPU Mobile clips of it: p24/clips_mobile2 (all five routes reached their last waypoint; camera 2.58 m over the feet).
+- Next commit (perf24-wip): Bolzar south of the tram door (in clips_mobile2 he stood between you and the camera at the
+  door: his hair filled the bottom right), phones' prop atlas tiles 128 px, the gate vista pitch 0.34 -> 0.08 (it put
+  the camera on the ground looking up with the crowd filling the frame).
