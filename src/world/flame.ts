@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { heatAt } from '../core/heat';
 
 /**
  * A fire that reads as fire up close (owner: "pale blocky cones"): flame tongues drawn by a noise shader on quads that
@@ -18,43 +19,78 @@ const NOISE = `
 
 const uTime = { value: 0 };
 let flameMat: THREE.ShaderMaterial | null = null, coalMat: THREE.ShaderMaterial | null = null, emberMat: THREE.ShaderMaterial | null = null;
+let lite = false;
+/** Phones: one octave less of noise in the flames (the flames are the costliest pixels of a fire). */
+export function setFireLite(on: boolean) {
+  lite = on;
+  if (flameMat) { if (on) flameMat.defines.LITE = 1; else delete flameMat.defines.LITE; flameMat.needsUpdate = true; }
+}
+
+// The s5 GPU take (owner): "the core reads as a bright triangle inside the teepee, the flames do not rise above the
+// sticks". Why: one wide core quad in the middle plus seven tongues round it added up to one flat white-yellow wedge
+// at the base, and the noise ate every tongue's upper half, so nothing showed above 0.55 m. Now three kinds of layer,
+// all soft and additive, none of them white: a low wide glow that gives the fire a body (dim, no edges), tongues on a
+// ring round the middle (none in the very middle) that rise and fall at their own rates, and thin licks that reach
+// past the sticks and tear off at the top. The heat colour follows the noise, so the base is broken up, not a block.
+const FLAME_VS = `attribute vec3 aC; attribute vec2 aQ; attribute vec4 aS; attribute vec2 aK; uniform float uTime;
+  varying vec2 vQ; varying float vSeed; varying vec2 vK;
+  void main() {
+    vQ = aQ; vSeed = aS.x; vK = aK;
+    vec3 c = (modelMatrix * vec4(aC, 1.0)).xyz;
+    float sx = length(modelMatrix[0].xyz), sy = length(modelMatrix[1].xyz);
+    vec3 d = cameraPosition - c; d.y = 0.0; d = length(d) > 1e-4 ? normalize(d) : vec3(0.0, 0.0, 1.0);
+    vec3 r = vec3(d.z, 0.0, -d.x);
+    // each tongue leaps and sinks at its own rate (a fire's tongues never stand at one height)
+    float leap = 0.78 + 0.22 * sin(uTime * (3.1 + aS.w * 2.0) + aS.x * 23.0) + 0.1 * sin(uTime * (7.3 + aS.w) + aS.x * 9.0);
+    float h = aS.z * mix(1.0, leap, aK.y);
+    // and sways more at its tip
+    float sway = (sin(uTime * (2.3 + aS.w) + aS.x * 17.0) * 0.6 + sin(uTime * 5.1 + aS.x * 5.0) * 0.4) * 0.06 * aQ.y * aQ.y * aK.y;
+    vec3 p = c + r * (aQ.x * aS.y + sway) * sx + vec3(0.0, aQ.y * h * sy, 0.0);
+    gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+  }`;
+const FLAME_FS = `uniform float uTime; varying vec2 vQ; varying float vSeed; varying vec2 vK;
+  float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y); }
+  float fb(vec2 p) { float s = 0.5 * vn(p); p = p * 2.03 + vec2(1.7, 9.2); s += 0.25 * vn(p);
+  #ifndef LITE
+    p = p * 2.03 + vec2(1.7, 9.2); s += 0.125 * vn(p); s *= 1.14;
+  #else
+    s *= 1.33;
+  #endif
+    return s; }
+  void main() {
+    float y = vQ.y, x = vQ.x, t = uTime, kind = vK.x;
+    // turbulence rising through the flame, faster higher up; it bends the tongue more the higher it goes
+    float n1 = fb(vec2(x * 2.4 + vSeed * 11.0, y * 1.9 - t * 2.7 - vSeed * 3.0));
+    float n2 = vn(vec2(x * 6.0 - vSeed * 5.0, y * 5.0 - t * 5.6));
+    float xw = x + ((n1 - 0.5) * 0.5 + (n2 - 0.5) * 0.14) * y;
+    // the profile: round at the foot, drawn to a point; the glow layer is a soft round body
+    float foot = sqrt(clamp(y / 0.14, 0.0, 1.0));
+    float hw = kind < 0.5 ? 0.46 * foot * pow(max(1.0 - y, 0.0), 0.5) : 0.4 * foot * pow(max(1.0 - y, 0.0), 0.8) + 0.004;
+    float body = 1.0 - abs(xw) / max(hw, 1e-3);
+    // the top tears into separate licks and flecks that break away (less on the glow, which has no edge)
+    float tear = n2 * 0.55 + n1 * 0.45;
+    body -= smoothstep(0.35, 1.0, y) * (1.0 - tear) * (kind < 0.5 ? 0.5 : 1.25);
+    float a = kind < 0.5 ? smoothstep(0.0, 0.9, body) : smoothstep(0.0, 0.3, body);
+    a *= smoothstep(0.0, 0.08, y);
+    if (a < 0.004) discard;
+    // heat: hottest low in the middle of a tongue, broken by the noise (no even block of colour), cooling to red at
+    // the edges and the tips. Never white: the brightest is a deep yellow (the tone map and the bloom do the rest)
+    float heat = clamp(body * 1.15 - y * 0.85 + (n1 - 0.5) * 0.7 + 0.15, 0.0, 1.0);
+    vec3 col = mix(vec3(0.38, 0.03, 0.005), vec3(1.35, 0.36, 0.05), smoothstep(0.05, 0.45, heat));
+    col = mix(col, vec3(1.7, 0.95, 0.26), smoothstep(0.6, 1.0, heat));
+    gl_FragColor = vec4(col, a * vK.y);
+  }`;
 
 function mats() {
   if (flameMat) return;
   flameMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-    uniforms: { uTime },
-    // each quad: its foot at aC (object space), its corner aQ (x -0.5..0.5, y 0..1), its seed, width, height, rate
-    vertexShader: `attribute vec3 aC; attribute vec2 aQ; attribute vec4 aS; uniform float uTime; varying vec2 vQ; varying float vSeed;
-      void main() {
-        vQ = aQ; vSeed = aS.x;
-        vec3 c = (modelMatrix * vec4(aC, 1.0)).xyz;
-        float sx = length(modelMatrix[0].xyz), sy = length(modelMatrix[1].xyz);
-        vec3 d = cameraPosition - c; d.y = 0.0; d = length(d) > 1e-4 ? normalize(d) : vec3(0.0, 0.0, 1.0);
-        vec3 r = vec3(d.z, 0.0, -d.x);
-        // the tongue sways more at its tip, at its own rate
-        float sway = (sin(uTime * (2.3 + aS.w) + aS.x * 17.0) * 0.6 + sin(uTime * 5.1 + aS.x * 5.0) * 0.4) * 0.07 * aQ.y * aQ.y;
-        vec3 p = c + r * (aQ.x * aS.y + sway) * sx + vec3(0.0, aQ.y * aS.z * sy, 0.0);
-        gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
-      }`,
-    fragmentShader: `uniform float uTime; varying vec2 vQ; varying float vSeed; ${NOISE}
-      void main() {
-        float y = vQ.y, x = vQ.x;
-        // noise rising through the tongue, faster higher up; a second, slower layer bends it sideways
-        float n = fbm(vec2(x * 3.2 + vSeed * 7.0, y * 2.6 - uTime * 2.4 - vSeed * 3.0));
-        float bend = (fbm(vec2(vSeed * 3.0, y * 1.3 - uTime * 0.9)) - 0.5) * 0.35 * y;
-        float hw = 0.34 * pow(max(1.0 - y, 0.0), 0.6) * (0.75 + 0.5 * n) + 0.015;
-        float body = 1.0 - abs(x - bend) / hw;
-        // ragged at the top: the noise eats the upper tongue and leaves flecks that break away
-        body -= smoothstep(0.3, 1.0, y) * (1.0 - n) * 1.35;
-        float a = smoothstep(0.0, 0.3, body) * smoothstep(0.0, 0.06, y);
-        if (a < 0.003) discard;
-        // hot near the base and in the middle, dull red at the edges and the tips (lit linear values, the output pass tone maps; s5 GPU take: at 3.4 and 0.9 the layered tongues, and the camp's two fires on one spot, added up to one flat white-yellow mass)
-        float heat = clamp(body * 1.3 - y * 0.7 + (n - 0.5) * 0.4, 0.0, 1.0);
-        vec3 col = mix(vec3(0.45, 0.04, 0.01), vec3(1.5, 0.4, 0.06), smoothstep(0.0, 0.4, heat));
-        col = mix(col, vec3(2.1, 1.25, 0.5), smoothstep(0.55, 0.95, heat));
-        gl_FragColor = vec4(col, a * 0.6);
-      }`,
+    uniforms: { uTime }, defines: lite ? { LITE: 1 } : {},
+    // each quad: its foot at aC (object space), its corner aQ (x -0.5..0.5, y 0..1), its seed, width, height, rate;
+    // aK: kind (0 glow, 1 tongue or lick) and its strength
+    vertexShader: FLAME_VS, fragmentShader: FLAME_FS,
   });
   coalMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2,
@@ -103,30 +139,43 @@ export interface Fire {
   update(k: number, base: number): void;
 }
 
-/** size 1 is a camp fire about 0.9 m tall; tongues: how many flame quads; light: [colour, distance, decay] or null. */
-export function makeFire(o: { size?: number; tongues?: number; embers?: number; light?: [number, number, number] | null; seed?: number } = {}): Fire {
+/** Where the fires that do not give way burned last (the camp's own fire gives way to the fight's camp fire on the same
+ * spot: the two added up to one white mass, s5 take). */
+const leading: { pos: THREE.Vector3; at: number }[] = [];
+const wp = new THREE.Vector3();
+
+/** size 1 is a camp fire about 0.9 m tall; tongues: how many flame quads; light: [colour, distance, decay] or null;
+ * defer: draw nothing while another fire burns within 0.6 m of it. */
+export function makeFire(o: { size?: number; tongues?: number; embers?: number; light?: [number, number, number] | null; seed?: number; defer?: boolean } = {}): Fire {
   mats();
   const size = o.size ?? 1, nT = o.tongues ?? 7, nE = o.embers ?? 36;
   let s = (o.seed ?? 1) * 9301 + 49297;
   const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
   const group = new THREE.Group();
-  // the tongues: one tall core, the rest round it, shorter towards the edge
-  const C: number[] = [], Q: number[] = [], S: number[] = [], I: number[] = [];
-  for (let i = 0; i < nT; i++) {
-    const a = i * 2.39996 + rnd(), r = i === 0 ? 0 : 0.07 + rnd() * 0.13;
-    const w = (i === 0 ? 0.5 : 0.26 + rnd() * 0.16) * size, h = (i === 0 ? 0.95 : 0.45 + rnd() * 0.35) * size;
-    const cx = Math.cos(a) * r * size, cz = Math.sin(a) * r * size, seed = rnd(), rate = rnd() * 2;
-    const b = i * 4;
-    for (const [qx, qy] of [[-0.5, 0], [0.5, 0], [0.5, 1], [-0.5, 1]]) { C.push(cx, 0.04, cz); Q.push(qx, qy); S.push(seed, w, h, rate); }
+  // the layers (see FLAME_FS): two low glows, the tongues on a ring round the middle, thin licks that reach highest
+  const C: number[] = [], Q: number[] = [], S: number[] = [], K: number[] = [], I: number[] = [];
+  const quad = (cx: number, cz: number, w: number, h: number, kind: number, k: number) => {
+    const b = C.length / 3, seed = rnd(), rate = rnd() * 2;
+    for (const [qx, qy] of [[-0.5, 0], [0.5, 0], [0.5, 1], [-0.5, 1]]) { C.push(cx, 0.04, cz); Q.push(qx, qy); S.push(seed, w, h, rate); K.push(kind, k); }
     I.push(b, b + 1, b + 2, b, b + 2, b + 3);
+  };
+  for (let i = 0; i < 2; i++) quad((rnd() - 0.5) * 0.06 * size, (rnd() - 0.5) * 0.06 * size, (0.7 + 0.15 * i) * size, (0.5 + 0.12 * i) * size, 0, 0.3);
+  for (let i = 0; i < nT; i++) {
+    const a = i * 2.39996 + rnd(), r = (0.06 + rnd() * 0.12) * size;
+    quad(Math.cos(a) * r, Math.sin(a) * r, (0.24 + rnd() * 0.1) * size, (0.68 + rnd() * 0.32) * size, 1, 0.5);
+  }
+  for (let i = 0, n = Math.ceil(nT * 0.6); i < n; i++) {
+    const a = i * 2.39996 + 1.1 + rnd(), r = (0.02 + rnd() * 0.1) * size;
+    quad(Math.cos(a) * r, Math.sin(a) * r, (0.12 + rnd() * 0.05) * size, (1.05 + rnd() * 0.4) * size, 1, 0.6);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(C, 3));
   g.setAttribute('aC', new THREE.Float32BufferAttribute(C, 3));
   g.setAttribute('aQ', new THREE.Float32BufferAttribute(Q, 2));
   g.setAttribute('aS', new THREE.Float32BufferAttribute(S, 4));
+  g.setAttribute('aK', new THREE.Float32BufferAttribute(K, 2));
   g.setIndex(I);
-  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.5 * size, 0), 1.2 * size);
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.7 * size, 0), 1.3 * size);
   const flames = new THREE.Group();
   const tongues = new THREE.Mesh(g, flameMat!); tongues.renderOrder = 5; flames.add(tongues);
   group.add(flames);
@@ -155,7 +204,13 @@ export function makeFire(o: { size?: number; tongues?: number; embers?: number; 
     update(k, base) {
       const t = (performance.now() / 1000) % 3600;
       uTime.value = t;
-      const on = k > 0.001;
+      let on = k > 0.001;
+      group.getWorldPosition(wp);
+      const now = performance.now();
+      if (o.defer) { if (leading.some((q) => now - q.at < 300 && q.pos.distanceToSquared(wp) < 0.36)) { on = false; k = 0; } }
+      else if (on) { const q = leading.find((q) => q.pos.distanceToSquared(wp) < 0.36); if (q) { q.at = now; q.pos.copy(wp); } else { for (let i = leading.length - 1; i >= 0; i--) if (now - leading[i].at > 2000) leading.splice(i, 1); leading.push({ pos: wp.clone(), at: now }); } }
+      // the hot air over it (the renderer bends the picture there; core/heat.ts)
+      if (on && group.visible) heatAt(wp, size, k);
       flames.visible = on; coals.visible = on || k > 0;
       // the flames grow with the fuel; they never shrink to nothing while it burns
       flames.scale.set(0.55 + 0.45 * k, 0.4 + 0.6 * k, 0.55 + 0.45 * k);

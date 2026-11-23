@@ -156,8 +156,8 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
   ring.visible = false; logs.visible = false;
   fire.add(ring, logs);
   // flames: noise-shaded tongues and a coal bed (src/world/flame.ts; they were additive six-sided cones, pale and blocky
-  // up close: owner); this fire's own embers below, its light further down
-  const flameFx = makeFire({ size: 1.05, tongues: 8, embers: 0, light: null, seed: 3 });
+  // up close: owner); this fire's own embers below, its light further down (defer: while the fight's camp fire burns on this spot only that one is drawn; the two added up to one white mass)
+  const flameFx = makeFire({ size: 1.05, tongues: 8, embers: 0, light: null, seed: 3, defer: true });
   const flames = flameFx.group;
   for (let i = 0; i < 7; i++) rnd(); // (the old cones took seven draws: kept, so everything after is placed as before)
   flames.position.y = 0.04;

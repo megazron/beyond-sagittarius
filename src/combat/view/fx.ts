@@ -218,14 +218,14 @@ export class CombatFx {
   }
   wade(x: number, z: number, surf: number | null, legs: number, moving: number, dt: number) {
     if (!this.wadeRings.length) for (let i = 0; i < 8; i++) {
-      const m = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xdfe8e4, transparent: true, opacity: 0, depthWrite: false }));
+      const m = new THREE.Mesh(new THREE.RingGeometry(0.93, 1, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xc9d6d2, transparent: true, opacity: 0, depthWrite: false }));
       m.visible = false; m.renderOrder = 2; this.group.add(m); this.wadeRings.push({ m, age: 9 });
     }
-    this.wadeT -= dt * (surf === null ? 0 : 1.6 + moving * 4);
+    this.wadeT -= dt * (surf === null ? 0 : 0.9 + moving * 4);
     if (surf !== null && this.wadeT <= 0) {
       this.wadeT = 1;
       const r = this.wadeRings.reduce((a, b) => (b.age > a.age ? b : a));
-      r.age = 0; r.m.position.set(x, surf + 0.012, z); r.m.userData.r0 = legs;
+      r.age = 0; r.m.position.set(x, surf + 0.012, z); r.m.userData.r0 = legs; r.m.userData.v = moving;
     }
     for (const r of this.fishRings) {
       r.age += dt; const k = r.age / 1.3;
@@ -235,7 +235,9 @@ export class CombatFx {
     for (const r of this.wadeRings) {
       r.age += dt; const k = r.age / 1.6;
       r.m.visible = k < 1;
-      if (k < 1) { const rad = (r.m.userData.r0 as number) + k * 0.55; r.m.scale.setScalar(rad); (r.m.material as THREE.MeshBasicMaterial).opacity = 0.42 * (1 - k) * Math.min(1, k * 8); }
+      // (they were 0.42 bright and spread 55 cm whatever the legs did: big bright hoops round a man standing still, s5
+      // take. Now with how fast the legs move: standing, a faint ring that spreads 15 cm; walking, 40 cm and brighter)
+      if (k < 1) { const v = (r.m.userData.v as number) ?? 0, rad = (r.m.userData.r0 as number) + k * (0.15 + 0.25 * v); r.m.scale.setScalar(rad); (r.m.material as THREE.MeshBasicMaterial).opacity = (0.1 + 0.14 * v) * (1 - k) * Math.min(1, k * 8); }
     }
   }
 
