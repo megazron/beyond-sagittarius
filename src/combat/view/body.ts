@@ -183,8 +183,9 @@ class HideWrap {
     const m = new THREE.Mesh(loft(rings, 7), this.hide); m.castShadow = true; g.add(m);
     const at = (t: number) => { const u = (t - a) / (b - a); return (u < 0.5 ? ra + (rm - ra) * u * 2 : rm + (rb - rm) * (u - 0.5) * 2) * 1.05; };
     for (const t of laces) {
-      const c = new THREE.Mesh(new THREE.TorusGeometry(at(t), 0.0055 * k, 4, 12).rotateX(Math.PI / 2), this.cord);
-      c.position.y = t * len; c.rotation.y = t * 7; c.rotation.z = 0.12; g.add(c);
+      const c = new THREE.Mesh(new THREE.TorusGeometry(at(t) * 0.96, 0.0055 * k, 4, 12).rotateX(Math.PI / 2).scale(1, 1, 0.94), this.cord);
+      // bedded into the hide (a band tilted 0.12 rad stood a centimetre off one side: wire hoops in v6)
+      c.position.y = t * len; c.rotation.y = t * 7; c.rotation.z = 0.04; g.add(c);
     }
     // crossed lashing between the first and last band: two cords wound opposite ways
     if (laces.length > 1) {
@@ -192,7 +193,7 @@ class HideWrap {
       for (const dir of [1, -1]) {
         const pts: THREE.Vector3[] = [];
         for (let i = 0; i <= 24; i++) {
-          const t = t0 + (t1 - t0) * (i / 24), ang = dir * (i / 24) * Math.PI * 2 * (laces.length - 1) * 0.5 + (dir > 0 ? 0 : Math.PI), r = at(t) * 1.01;
+          const t = t0 + (t1 - t0) * (i / 24), ang = dir * (i / 24) * Math.PI * 2 * (laces.length - 1) * 0.5 + (dir > 0 ? 0 : Math.PI), r = at(t) * 0.97;
           pts.push(new THREE.Vector3(Math.sin(ang) * r, t * len, Math.cos(ang) * r * 0.94));
         }
         const c = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, 0.0045 * k, 4), this.cord); g.add(c);

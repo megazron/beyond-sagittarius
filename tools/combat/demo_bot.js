@@ -42,7 +42,8 @@ window.__cbBot = (mode) => {
     const sim = C.activeSim, p = sim.player, t = nearest(targets);
     if (!t) { stop(); hold('KeyQ', 0); return; }
     const d = dist(t, p), dg = danger();
-    look(t.x, t.z, t.y + t.def.height * 0.5);
+    // (o.level: eyes on the horizon, not down at a small animal at the feet: the follow camera went overhead)
+    look(t.x, t.z, o.level ? C.cam.y + 1.3 : t.y + t.def.height * 0.5);
     if (dg && o.roll && p.act !== 'roll' && p.stamina > 20) { hold('KeyQ', 0); hold('KeyA', 1); tap('KeyV'); setTimeout(() => hold('KeyA', 0), 500); return; }
     hold('KeyQ', !!dg && !o.roll && p.stamina > 8);
     if (dg && !o.roll) { stop(); return; }
@@ -148,7 +149,13 @@ window.__cbBot = (mode) => {
         if (C.beat) { stop(); hold('KeyQ', 0); flag.trapHeard = { id: C.beat.id, at: now }; return; }
         if (flag.trapHeard && now - flag.trapHeard.at < 5200) {
           const tr = sim.traps.find((q) => q.id === flag.trapHeard.id);
-          if (tr) { const d = dist(p, tr); look(tr.x, tr.z, C.cam.y + 0.5); if (d > 3.2 && now - flag.trapHeard.at < 3200) { hold('KeyW', 1); hold('KeyQ', 0); } else { stop(); hold('KeyQ', 1); } return; }
+          // after the beat: a few steps towards it if it is far, a step back from it if he stands over it (his body hid
+          // the catch in v13), then the spear up, facing it
+          if (tr) {
+            const d = dist(p, tr), early = now - flag.trapHeard.at < 3200; look(tr.x, tr.z, C.cam.y + 0.5);
+            if (d > 4.5 && early) { hold('KeyS', 0); hold('KeyW', 1); hold('KeyQ', 0); } else if (d < 3 && early) { hold('KeyW', 0); hold('KeyS', 1); hold('KeyQ', 0); } else { stop(); hold('KeyQ', 1); }
+            return;
+          }
         }
         if (flag.trapHeard) { flag.trapHeard = null; hold('KeyQ', 0); }
         // a sound out in the dark (a chitter, a growl, a rustle: the game's own placed sounds, C.heard): the head goes
@@ -195,10 +202,13 @@ window.__cbBot = (mode) => {
       if (h && (h.state === 'windup' || h.state === 'strike') && h.target === -1) { stop(); look(h.x, h.z, h.y + 0.6); hold('KeyQ', h.stateT > 0.3 || h.state === 'strike'); return; }
       hold('KeyQ', 0);
       const close = living('skritch').filter((e) => !e.routed && e.heldT <= 0 && dist(e, p) < 2.2);
-      if (close.length) { fight(close); return; }
+      // a fire near out comes first, whatever is at the heels (they follow him to the light and are fought there)
+      const dying = fire.fuel < fire.max * 0.3 && (sim.inv.branch || 0) > 0;
+      if (close.length && !(dying && dist(p, fire) > 2.2)) { if (dying && dist(p, fire) <= 2.2 && since() > 0.8) { tapE(); stT = performance.now(); } fight(close, { level: true }); return; }
+      if (dying) { const d = go(fire.x, fire.z); if (d < 2.2) { stop(); look(fire.x, fire.z, C.cam.y + 0.3); if (since() > 0.8) { tapE(); stT = performance.now(); } } return; }
       if (!hold1) {
         if (h && h.weakT > 0 && dist(h, p) < 5) { fight([h]); return; }
-        if (thieves.length && !flag.feeding) { fight(thieves); return; }
+        if (thieves.length && !flag.feeding) { fight(thieves, { level: true }); return; }
       }
       watch({ hold1 });
     } else if (mode === 'chase') {
