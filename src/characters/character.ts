@@ -85,6 +85,15 @@ const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
 /** What each task holds unless told otherwise. */
 const TASK_PROP: Partial<Record<TaskKind, PropKind>> = { eat: 'food', drink: 'cup', phone: 'phone', carry: 'box', fix: 'tool', type: 'phone' };
 const LOW_TASKS: Partial<Record<TaskKind, number>> = { pickup: 1, drink: 1, fix: 0.85, plant: 1 };
+/** Authored actions (tools/build_animations.py, Quaternius CC0): a task with one plays it as the body's pose, stretched
+ *  to the task's length, and IK only moves the hand the last few cm onto `at` round the moment of contact (`touch`, as a
+ *  share of the clip). Without the clip in anim.glb the task falls back to the procedural reach. */
+const TASK_CLIPS: Partial<Record<TaskKind, { low?: string; high?: string; touch: number; hands: 'R' | 'both' }>> = {
+  pickup: { low: 'pickup_low', high: 'pickup_table', touch: 0.42, hands: 'R' },
+  plant: { low: 'plant', touch: 0.45, hands: 'R' },
+  eat: { high: 'consume', touch: -1, hands: 'R' },
+  drink: { high: 'consume', touch: -1, hands: 'R' },
+};
 /** What the fingers of every character did since the page loaded (read by the checks): the largest bend of any finger
  * joint from its rest, in radians, and the fastest any joint turned, in radians a second. */
 export const HANDS = { maxCurl: 0, maxRate: 0, frames: 0 };
@@ -1063,6 +1072,15 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   }
 
   /** 0..1: how far into its task the body is (eases in, holds, eases out). */
+  let taskClipName: string | null = null;
+  /** The authored clip for the running task, if anim.glb has it: low or high by where `at` is against the hips. */
+  function taskClip() {
+    const c = task ? TASK_CLIPS[task.kind] : undefined; if (!c || !clips) return null;
+    let low = !!c.low && !c.high;
+    if (c.low && c.high) { const hy = B?.get('hips')?.getWorldPosition(V1).y ?? 1; low = !task!.at || task!.at.y < hy - 0.35; }
+    const n = low ? c.low : c.high ?? c.low;
+    return n && clips.has(n) ? n : null;
+  }
   function taskEnv() {
     if (!task) return 0;
     const a = Math.min(0.28, task.dur * 0.3), b = Math.min(0.35, task.dur * 0.3);
@@ -1153,6 +1171,16 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const up = bs.get(`upperarm${sd}`), lo = bs.get(`lowerarm${sd}`), hd = bs.get(`hand${sd}`);
       if (!up || !lo || !hd) continue;
       const goal = handGoal(bs, sd, k, t, new THREE.Vector3());
+      const tcd = taskClipName ? TASK_CLIPS[T.kind] : undefined;
+      if (tcd) {
+        // the clip does the reach; IK takes the hand the last few cm onto the thing round the moment of contact, at most
+        // 12 cm, and none for a clip with no contact (eating: the hand to the mouth is the clip's)
+        if (tcd.touch < 0 || !T.at || sd !== 'R') continue;
+        const near = 1 - smooth01(Math.abs(k - tcd.touch) / 0.18), cur = hd.getWorldPosition(V2), d = V3.copy(goal).sub(cur);
+        if (d.length() > 0.12) d.setLength(0.12);
+        armTo(bs, sd, up, lo, hd, cur.add(d), w * near, dt);
+        continue;
+      }
       armTo(bs, sd, up, lo, hd, goal, w, dt);
     }
     // eyes on the work
@@ -1248,8 +1276,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       s.target = 1;
       s.a.timeScale = style.rate;
       // reaching low (picking up, drinking, fixing something on the ground): the knees go with it
-      const low = task ? (LOW_TASKS[task.kind] ?? 0) * taskEnv() * (FULL_BODY.has(kind) ? 0 : 1) : 0;
-      if (low > 0 && clips!.has('crouch') && name !== 'crouch') { const c = action('crouch', false); c.target = low * 0.8; s.target = 1 - low * 0.8; }
+      const tc = task && !FULL_BODY.has(kind) && kneel === 0 ? taskClip() : null;
+      if (tc) { const c = action(tc, false); c.target = taskEnv(); s.target = 1 - taskEnv(); taskClipName = tc; }
+      else {
+        const low = task ? (LOW_TASKS[task.kind] ?? 0) * taskEnv() * (FULL_BODY.has(kind) ? 0 : 1) : 0;
+        if (low > 0 && clips!.has('crouch') && name !== 'crouch') { const c = action('crouch', false); c.target = low * 0.8; s.target = 1 - low * 0.8; }
+      }
     }
     const rate = firstFrame ? 1 : 1 - Math.exp(-dt * 4.5);
     let sum = 0;
@@ -1259,6 +1291,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       s.a.setEffectiveWeight(sum > 0 ? s.w / sum : 0);
       if (s.manual) { s.a.timeScale = 0; s.a.time = gaitPhase * s.a.getClip().duration; }
     }
+    // the task's clip runs on the task's own clock, stretched to its length
+    if (taskClipName) { const s = acts.get(taskClipName); if (s) { s.a.timeScale = 0; s.a.time = clamp(task ? task.t / task.dur : 1, 0, 1) * s.a.getClip().duration * 0.999; } if (!task) taskClipName = null; }
     // every bone back to the clip's own pose before the mixer runs: three's PropertyMixer writes a bone only when the
     // mixed value differs from last frame's, so where a clip held still (a crouch's last frames, a kneel) the bone kept
     // last frame's pose with every turn added on top (arms kept out, the elbow out, the reach), and they were added
