@@ -30,7 +30,7 @@ import { Wheel } from './ui/wheel';
 import { MapPin, interactiveMap, planetLayer } from './ui/map';
 import { Minimap, MapLayer, MapPoint, routeOf } from './ui/minimap';
 import { PERF, perfFrame } from './core/perfhud';
-import { setDisposeKeep } from './core/disposeTree';
+import { releaseGpu, setDisposeKeep } from './core/disposeTree';
 import { GpsTrail } from './world/gps';
 import type { AwayStage } from './game/away/stage';
 import type { MenuTab } from './ui/ui';
@@ -125,6 +125,8 @@ let game: Game;
 let state: State = 'loading';
 let paused = false;
 let worldReady = false;
+/** What the last trip away let go of on the GPU (phones), in MB: memory reports. */
+const AWAY_RELEASED: { last: { texMB: number; geoMB: number } | null } = { last: null };
 let pendingStart: (() => void) | null = null;
 let suppressPauseOnUnlock = false;
 let pendingNames: CrewNames = {};
@@ -923,7 +925,13 @@ async function boot() {
   player.invertY = settings.invertY;
   world.scene.add(player.model.root);
   game = new Game(world, player, input, ui, (id) => touch.highlight(id), (text) => ui.hint(text));
-  game.away = new Away(camera, input, ui, detail(), (sc) => (sc ? renderer.setScene(sc, camera, false) : renderer.setScene(world.scene, camera, true)));
+  game.away = new Away(camera, input, ui, detail(), (sc) => {
+    if (!sc) { renderer.setScene(world.scene, camera, true); return; }
+    renderer.setScene(sc, camera, false);
+    // phones: what the planet, the films, the vault and the title's stage hold on the GPU goes while you are away (it is
+    // uploaded again when next drawn); ?awayrelease=0 keeps it
+    if (quality.name === 'mobile' && new URLSearchParams(location.search).get('awayrelease') !== '0') AWAY_RELEASED.last = releaseGpu([world.scene, cine.scene, vault.scene, stage.scene], [sc]);
+  });
   game.away.skins = lastSkins;
   // the take-off from Zenvora is a scene like any other: letterboxed, with its Skip
   game.away.onOutro = (on) => {
@@ -1116,6 +1124,7 @@ window.addEventListener('resize', () => {
   /** Test hook (tools/soak_smoke.py): milliseconds of one GPS route search on the away stage, and its corners. */
   awayRoute(ax: number, az: number, bx: number, bz: number) { const L = (game?.away?.stage as AwayStage | null | undefined)?.mapLayer; if (!L?.route) return null; const t0 = performance.now(); const r = L.route(ax, az, bx, bz); return { ms: performance.now() - t0, n: r.length }; },
   /** Test hook: what the renderer holds (soak test). */
+  get awayReleased() { return AWAY_RELEASED.last; },
   get gpuMem() { const i = renderer.renderer.info; return { geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0 }; },
   get awayCam() { return game?.away?.camState ?? null; },
   holdSubs(on: boolean) { ui.holdSubs = on; },

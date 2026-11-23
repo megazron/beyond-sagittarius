@@ -154,7 +154,7 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     const mat = new THREE.MeshBasicMaterial({ map: sheet, transparent: true, alphaTest: 0.22, color: new THREE.Color(0.55, 0.52, 0.6) });
     // a busy street, not a packed one (the owner: "too many people, too crowded"); halved again with the pedestrian
     // fixes: near the camera every one of them is a body now, and the bodies have to cover them all
-    const n = rich ? 64 : 30, gateN = rich ? 12 : 8;
+    const n = rich ? 64 : 22, gateN = rich ? 12 : 6;
     const geo = new THREE.PlaneGeometry(1, 1); geo.translate(0, 0.5, 0);
     const offs = new Float32Array(n + gateN); for (let i = 0; i < n + gateN; i++) offs[i] = Math.floor(rnd() * 8) / 8; // every card its own figure, gate crowd included
     const tiles = new Float32Array((n + gateN) * 2); for (let i = 0; i < n + gateN; i++) tiles[i * 2] = offs[i];
@@ -224,16 +224,15 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
       // they keep a step apart and out of the way of whoever stands or walks in the street (obstacles, from city.ts):
       // someone within 0.8 m across and up to 2.2 m ahead is passed by easing aside, at most 0.6 m/s, on their own
       // pavement. Cards used to walk through each other and through the people standing in the street
-      const ob = obstacles;
+      // (the nearest one ahead is passed on the side the card is on, or on the other side when that is off the pavement:
+      // pushed apart towards the kerb, two used to end up pressed into each other at its edge)
+      const ob = obstacles, lo = 4.75, hi = FRONT - 0.7;
       for (let i = 0; i < ppl.length; i++) {
-        const q = ppl[i], sv = q.v >= 0 ? 1 : -1; let push = 0;
-        const away = (ox: number, oz: number, r: number) => { const dx = ox - q.x, ahead = (oz - q.z) * sv; if (ahead > -0.5 && ahead < 2.2 && Math.abs(dx) < r) push += (dx >= 0 ? -1 : 1) * (r - Math.abs(dx)); };
-        for (let j = 0; j < ppl.length; j++) if (j !== i && Math.abs(ppl[j].z - q.z) < 2.3) away(ppl[j].x, ppl[j].z, 0.8);
-        for (let k = 0; k + 1 < ob.length; k += 2) if (Math.abs(ob[k + 1] - q.z) < 2.3) away(ob[k], ob[k + 1], 0.9);
-        if (push) {
-          const side = q.x >= 0 ? 1 : -1;
-          q.x = side * Math.min(FRONT - 0.7, Math.max(4.7, (q.x + Math.max(-0.6 * dt, Math.min(0.6 * dt, push * 2 * dt))) * side));
-        }
+        const q = ppl[i], sv = q.v >= 0 ? 1 : -1, side = q.x >= 0 ? 1 : -1; let best = 9, tx = 0;
+        const by = (ox: number, oz: number, r: number) => { const dx = ox - q.x, ahead = (oz - q.z) * sv; if (ahead > -0.5 && ahead < 2.2 && ahead < best && Math.abs(dx) < r) { best = ahead; let t = ox + (dx >= 0 ? -r : r); if (t * side < lo || t * side > hi) t = ox + (dx >= 0 ? r : -r); tx = t; } };
+        for (let j = 0; j < ppl.length; j++) if (j !== i && Math.abs(ppl[j].z - q.z) < 2.3) by(ppl[j].x, ppl[j].z, 0.8);
+        for (let k = 0; k + 1 < ob.length; k += 2) if (Math.abs(ob[k + 1] - q.z) < 2.3) by(ob[k], ob[k + 1], 0.9);
+        if (best < 9) q.x = side * Math.min(hi, Math.max(lo, (q.x + Math.max(-0.45 * dt, Math.min(0.45 * dt, (tx - q.x) * 2 * dt))) * side));
       }
       ppl.forEach((q, i) => {
         q.z += q.v * dt;
