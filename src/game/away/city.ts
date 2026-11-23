@@ -230,8 +230,8 @@ const FOLK: { id: string; x: number; z: number; yaw: number; pose: CrewPose; lin
   { id: 'aunty', x: -7.6, z: -28, yaw: Math.PI / 2, pose: 'idle', lineage: 'sirelle' },
   { id: 'clerk', x: 8.9, z: 46.2, yaw: -Math.PI / 2, pose: 'idle', lineage: 'vael' },
   { id: 'driver', x: 3, z: 22, yaw: 0, pose: 'idle', lineage: 'korrath' },
-  { id: 'kid1', x: -1, z: -60, yaw: 0.4, pose: 'idle', lineage: 'tarnkin' },
-  { id: 'kid2', x: 2, z: -63, yaw: -2.6, pose: 'idle', lineage: 'ulari' },
+  { id: 'kid1', x: -6.2, z: -58.5, yaw: 0.4, pose: 'idle', lineage: 'tarnkin' }, // the two by the gate on the pavements: in the road (x -1, 2) one stood at the edge of the gate's hero view
+  { id: 'kid2', x: 6.4, z: -61, yaw: -2.6, pose: 'idle', lineage: 'ulari' },
   { id: 'queue1', x: -6.6, z: 4.2, yaw: Math.PI / 2, pose: 'idle', lineage: 'tarnkin' },
   { id: 'queue2', x: -6.6, z: 5.9, yaw: Math.PI / 2, pose: 'idle', lineage: 'vael' },
   { id: 'pharma', x: 8.9, z: -17.2, yaw: -Math.PI / 2, pose: 'idle', lineage: 'ulari' },
@@ -1033,7 +1033,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     const tramM = {
       liv: new THREE.MeshStandardMaterial({ color: 0x0f7d74, roughness: 0.45, metalness: 0.3 }),
       cream: new THREE.MeshStandardMaterial({ color: 0xe9dfc6, roughness: 0.55, metalness: 0.1 }),
-      glass: new THREE.MeshStandardMaterial({ color: 0x1a2630, emissive: 0xffd9a0, emissiveIntensity: 0.32, roughness: 0.08, metalness: 0.2 }),
+      glass: new THREE.MeshStandardMaterial({ color: 0x0c141b, emissive: 0xffd9a0, emissiveIntensity: 0.1, roughness: 0.06, metalness: 0.6 }), // dark glass with a faint warm inside (at 0.32 the Web clips read them as beige panels)
       trim: new THREE.MeshStandardMaterial({ color: 0x2b3036, roughness: 0.6, metalness: 0.4 }),
       roof: new THREE.MeshStandardMaterial({ color: 0x8e979f, roughness: 0.5, metalness: 0.5 }),
       gold: new THREE.MeshStandardMaterial({ color: 0xd9a441, roughness: 0.35, metalness: 0.7 }),

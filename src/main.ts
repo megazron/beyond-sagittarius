@@ -875,7 +875,6 @@ async function warmAll() {
   wide.updateMatrixWorld();
   renderer.setScene(world.scene, wide, true);
   await pre(world.scene, wide);
-  await renderer.uploadTextures(world.scene); // a few at a time, not 40-90 in each warm draw below
   for (let i = 0; i < 4; i++) {
     wide.rotation.set(0, (i / 4) * Math.PI * 2, 0);
     wide.updateMatrixWorld();
@@ -886,7 +885,6 @@ async function warmAll() {
   await breathe();
   vault.prepare();
   await pre(vault.scene, vault.camera);
-  await renderer.uploadTextures(vault.scene);
   renderer.warm(vault.scene, vault.camera, false);
   await breathe();
   stage.update(0.016);
