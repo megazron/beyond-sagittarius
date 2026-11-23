@@ -4,6 +4,8 @@
 import * as THREE from 'three';
 import type { CombatSim, Trap } from '../sim/sim';
 import type { WeaponId } from '../sim/weapons';
+import { makeFire, type Fire } from '../../world/flame';
+import { bedLightMaterial } from './creatures';
 
 const N_PART = 384;
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpQ2 = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
@@ -47,10 +49,11 @@ export class CombatFx {
   private blurs: THREE.InstancedMesh; private blurU = { uA: { value: 0 }, uCol: { value: new THREE.Color(0x9a7a55) } }; private lastSimT = 0;
   private tele: { mesh: THREE.Mesh; id: number; t: number; dur: number; ring: boolean; mat: THREE.ShaderMaterial }[] = [];
   private props = new Map<number, THREE.Object3D>();
-  private flames: { o: THREE.Object3D; id: number; light: THREE.PointLight | null }[] = [];
+  private flames: { o: THREE.Object3D; id: number; light: THREE.PointLight | null; fire: Fire }[] = [];
   private numbers: { el: HTMLDivElement; t: number; p: THREE.Vector3 }[] = [];
   private numRoot: HTMLDivElement;
   private emberT = 0;
+  private bedT = { value: 0 }; private beds: THREE.Mesh[] = [];
   showNumbers = false;
 
   constructor(private height: (x: number, z: number) => number, private lights: boolean) {
@@ -187,17 +190,16 @@ export class CombatFx {
     else for (let i = 0; i < 5; i++) add(new THREE.CylinderGeometry(0.03, 0.03, 0.8, 4), wood, (i - 2) * 0.75, 0.04, Math.sin(i * 3) * 0.2, 0, Math.PI / 2);
     return g;
   }
-  private makeFlame(id: number, big: boolean): { o: THREE.Object3D; id: number; light: THREE.PointLight | null } {
-    const g = new THREE.Group();
-    const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.0, 0.75, 0.18), transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending });
-    for (let i = 0; i < (big ? 5 : 3); i++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.16 + (i % 2) * 0.06, 0.6 + (i % 3) * 0.2, 5), m); c.position.set(Math.cos(i * 2.4) * 0.16 * (big ? 1.6 : 1), 0.3, Math.sin(i * 2.4) * 0.16 * (big ? 1.6 : 1)); g.add(c); }
-    if (big) { const logs = new THREE.MeshStandardMaterial({ color: 0x2b211b, roughness: 1 }); for (let i = 0; i < 4; i++) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 1, 5), logs); l.rotation.set(Math.PI / 2, i * 0.8, 0.35); l.position.y = 0.12; g.add(l); } }
-    let light: THREE.PointLight | null = null;
+  private makeFlame(id: number, big: boolean): { o: THREE.Object3D; id: number; light: THREE.PointLight | null; fire: Fire } {
+    // (the flames were five additive five-sided cones: up close, pale blocky cones; now noise-shaded tongues, a coal bed
+    // and rising embers, src/world/flame.ts)
     // (the camp fire's light, against the sun's 4.6 at noon: at 70 with a fall-off of 1.7 (and the story's own camp-fire
     // light, 16, on top) a white coat a metre from the fire took about ten times full daylight and burned out to flat
     // orange-white (v16, v25, v26). Now 7 at a metre (with the eye adapted, about daylight), falling off gently: 2.6 at 3 m, 1.4 at 6 m; at 5 the take was too dark round him)
-    if (this.lights) { light = new THREE.PointLight(0xff9a45, big ? 7 : 16, big ? 22 : 9, big ? 0.9 : 1.7); light.position.y = 1.1; g.add(light); }
-    return { o: g, id, light };
+    const fire = makeFire({ size: big ? 1 : 0.6, tongues: big ? 8 : 4, embers: big ? 40 : 12, seed: id + 1, light: this.lights ? [0xff9a45, big ? 22 : 9, big ? 0.9 : 1.7] : null });
+    const g = fire.group;
+    if (big) { const logs = new THREE.MeshStandardMaterial({ color: 0x2b211b, roughness: 1 }); for (let i = 0; i < 4; i++) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 1, 5), logs); l.rotation.set(Math.PI / 2, i * 0.8, 0.35); l.position.y = 0.12; g.add(l); } }
+    return { o: g, id, light: fire.light, fire };
   }
 
   /** Bring the picture in line with the simulation: projectiles, traps, fires, pickups. */
@@ -238,6 +240,7 @@ export class CombatFx {
   }
 
   sync(sim: CombatSim, dt: number, t: number, cam: THREE.Camera) {
+    this.bedT.value = t;
     // particles
     for (let i = 0; i < N_PART; i++) {
       if (this.life[i] <= 0) { if (this.size[i]) this.size[i] = 0; continue; }
@@ -309,10 +312,9 @@ export class CombatFx {
       if (f.torch) continue;
       let fl = this.flames.find((q) => q.id === f.id);
       if (!fl) { fl = this.makeFlame(f.id, !f.burnsOut); fl.o.position.set(f.x, this.height(f.x, f.z), f.z); this.group.add(fl.o); this.flames.push(fl); }
-      const k = Math.max(0, f.fuel / f.max), flick = 0.85 + Math.sin(t * 13 + f.id) * 0.1 + Math.sin(t * 7.3) * 0.07;
+      const k = Math.max(0, f.fuel / f.max);
       fl.o.visible = true;
-      fl.o.children.forEach((c, i) => { if ((c as THREE.Mesh).material instanceof THREE.MeshBasicMaterial) { c.visible = k > 0; c.scale.set(0.5 + k * 0.7, (0.3 + k * 1.1) * (0.8 + Math.sin(t * 9 + i * 2) * 0.25), 0.5 + k * 0.7); } });
-      if (fl.light) fl.light.intensity = (f.burnsOut ? 16 : 7) * Math.sqrt(k) * flick;
+      fl.fire.update(k, f.burnsOut ? 16 : 7);
       if (k > 0 && this.emberT <= 0) {
         this.puff('ember', f.x, this.height(f.x, f.z) + 0.5, f.z, 0, 0, 0.5);
         if (!f.burnsOut) this.puff('smoke', f.x, this.height(f.x, f.z) + 0.9 + k * 0.4, f.z, sim.windX * 5, sim.windZ * 5, 1);
@@ -357,7 +359,18 @@ export class CombatFx {
   }
 
   /** A fight is over: take its things off the ground. */
+  /** The sun's net of light lying still on the stream bed here and there (spear fishing): spots are on the bed, s the radius. */
+  bedLight(spots: { x: number; y: number; z: number; s: number }[]) {
+    for (const b of this.beds) this.group.remove(b);
+    this.beds = [];
+    if (!spots.length) return;
+    const geo = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2), mat = bedLightMaterial(this.bedT);
+    for (const q of spots) { const m = new THREE.Mesh(geo, mat); m.position.set(q.x, q.y, q.z); m.scale.setScalar(q.s); m.rotation.y = q.x * 1.7 + q.z; m.renderOrder = 0; this.group.add(m); this.beds.push(m); }
+  }
+
   clear() {
+    for (const b of this.beds) this.group.remove(b);
+    this.beds = [];
     for (const [, o] of this.props) this.group.remove(o);
     this.props.clear();
     for (const f of this.flames) this.group.remove(f.o);

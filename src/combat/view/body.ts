@@ -451,6 +451,19 @@ export class FightBody {
       T.g.y += c * breath; T.g.x += c * 0.012 * Math.sin(t * 0.53);
       if (T.l === null) { T.lh.y += c * (breath + 0.01 * Math.sin(t * 0.7 + 2)); T.lh.z += c * 0.02 * Math.sin(t * 0.61 + 0.4); }
     }
+    // the free hand in a throw's draw (owner: stiff, pointing out like a post): it leads, and it is alive. As the throw is
+    // drawn back it comes up and across in front of the chest with the chest's turn (the lead arm follows the coil),
+    // soft at the elbow (in from straight), and while the throw is held it keeps a balancing sway and the breath
+    if (p.act === 'charge' && this.tgt.l === null && (w === 'spear' || w === 'hafted' || w === 'rock' || w === 'flake' || w === 'throwstick' || w === 'club')) {
+      const T = this.tgt, c = out(p.charge), a = -0.35 * c;
+      const x = T.lh.x, z = T.lh.z, ca = Math.cos(a), sa = Math.sin(a);
+      T.lh.x = x * ca + z * sa; T.lh.z = -x * sa + z * ca;
+      T.lh.z -= 0.07 * c; T.lh.y += 0.06 * Math.sin(Math.PI * Math.min(1, c * 1.2));
+      const hold = smooth((p.charge - 0.6) / 0.4);
+      T.lh.y += hold * (0.014 * Math.sin(t * 1.9) + 0.008 * Math.sin(t * 3.3 + 1));
+      T.lh.x += hold * 0.016 * Math.sin(t * 1.3 + 0.5); T.lh.z += hold * 0.012 * Math.sin(t * 0.9 + 2);
+      T.twist += hold * 0.03 * Math.sin(t * 1.3 + 0.5);
+    }
     this.tgt.g.multiplyScalar(K); this.tgt.lh.multiplyScalar(K);
     this.tgt.g.x += ch.x; this.tgt.g.z += ch.z; this.tgt.lh.x += ch.x; this.tgt.lh.z += ch.z;
     clearShaft(this.tgt, w);
