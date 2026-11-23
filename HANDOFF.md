@@ -961,3 +961,7 @@ unlanded except this handoff commit and any recording in progress.
     originals 118 MB, 'skin_body+morph' 111 MB over 71 bodies with 3 visible). No Mobile budget job in CI yet: soak_smoke
     --quality mobile --mem-only --heap-mb N is ready; pick N after the geometry work.
   - Not started: phones to 30 fps (task 3), the gate camera and cold title load (task 5).
+- 11:40 LANDED bd16cf8 on main (perf20-land1: the bump fixes, key-driven bump test in soak_smoke, memOwners, phone
+  model-cache release; CI 45131682945 green on that sha after one rerun of combat's known #p-action flake). Unlanded:
+  handoff commits only. Clips + README: Downloads/BS_Game_v1.1/mobile_v2_GPU/ (no sound). Owner to judge the camera:
+  in a thick crowd it still rises (older 2+ bodies within 3.2 m rule) and now does so more often.
