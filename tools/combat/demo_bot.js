@@ -140,7 +140,7 @@ window.__cbBot = (mode) => {
       const sq = sim.traps.find((q) => q.kind === 'snare') || bait;
       const guard = { x: sq.x + wx * 1.2 - wz * 4.6, z: sq.z + wz * 1.2 + wx * 4.6 }, out = { x: sq.x + wx * 16 - wz * 2, z: sq.z + wz * 16 + wx * 2 };
       // a record of every catch (window.__cbTrapLog), so a take can be checked for one without watching it all
-      for (const q of sim.traps) if (q.sprungT >= 0 && !(window.__cbTrapLog ||= []).some((r) => r.id === q.id && r.t === q.sprungT)) window.__cbTrapLog.push({ id: q.id, kind: q.kind, t: q.sprungT, caught: q.caught, wave: run.wave, rec: +((performance.now() - t0) / 1000).toFixed(1) });
+      for (const q of sim.traps) if (q.sprungT >= 0 && !(window.__cbTrapLog ||= []).some((r) => r.id === q.id && r.t === q.sprungT)) window.__cbTrapLog.push({ id: q.id, kind: q.kind, t: q.sprungT, caught: q.caught, wave: run.wave, d: +dist(q, p).toFixed(1), rec: +((performance.now() - t0) / 1000).toFixed(1) });
       // and every warning cue (rustle, voice, twig before the snap), with its time in the take, to listen for it
       { const b = C.beat; if (b && b.snapT < 0 && b !== flag.cueB) { flag.cueB = b; window.__cbTrapLog.push({ cue: b.id, t: +sim.t.toFixed(2), rec: +((performance.now() - t0) / 1000).toFixed(2) }); } }
       // the watch: a man alone at night keeps busy. He keeps the fire up a branch at a time, scans the dark, the snare
