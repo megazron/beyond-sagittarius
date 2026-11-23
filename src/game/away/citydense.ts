@@ -15,6 +15,30 @@ export interface Facade { side: number; z0: number; z1: number; h: number }
 export interface StandIn { x: number; y: number; z: number; h: number; k: number; v?: number; yaw?: number; walk?: boolean }
 export interface DenseOpts { /** Where what is seen from the whole city goes (the stand-in cards). */ top?: THREE.Object3D; rich: boolean; FRONT: number; S: number; N: number; facades: Facade[] }
 
+/**
+ * Where across the pavement someone walking along z should be to pass whoever is just ahead: the x nearest `pref` in
+ * [lo, hi] that is `r` metres clear of every obstacle from 0.5 m behind to 2.4 m ahead ([x, z, x, z, ...], `self` = index
+ * of their own pair to skip). `blocked`: nowhere is clear and someone is right ahead (within 1 m): they wait.
+ */
+export function laneX(x: number, z: number, dir: number, lo: number, hi: number, ob: ArrayLike<number>, r: number, pref: number, self = -1) {
+  const near: number[] = [];
+  let ahead = false;
+  for (let k = 0; k + 1 < ob.length; k += 2) {
+    if (k / 2 === self) continue;
+    const a = (ob[k + 1] - z) * dir;
+    if (a > -0.5 && a < 2.4 && ob[k] > lo - r && ob[k] < hi + r) { near.push(ob[k]); if (a > 0 && a < 1.0 && Math.abs(ob[k] - x) < r) ahead = true; }
+  }
+  if (!near.length) return { tx: Math.min(hi, Math.max(lo, pref)), blocked: false };
+  let best = NaN, cost = 1e9;
+  for (let t = lo; t <= hi + 1e-6; t += 0.1) {
+    let ok = true; for (const o of near) if (Math.abs(o - t) < r) { ok = false; break; }
+    if (!ok) continue;
+    const c = Math.abs(t - pref) + 0.5 * Math.abs(t - x);
+    if (c < cost) { cost = c; best = t; }
+  }
+  return Number.isNaN(best) ? { tx: x, blocked: ahead } : { tx: best, blocked: false };
+}
+
 let seed = 4242;
 const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 
@@ -48,11 +72,14 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   const { rich, FRONT, S, N } = o;
   const updates: ((dt: number, t: number, cam: THREE.Camera | null) => void)[] = [];
   /** The painted crowd: where each card is and which way it walks; `taken` cards are hidden (a real body walks them). */
-  let cards: { x: number; z: number; v: number; gate: boolean; who: number }[] = [], taken = new Uint8Array(0);
+  let cards: { x: number; z: number; v: number; gate: boolean; who: number; lane: number; wait?: boolean; waitT?: number }[] = [], taken = new Uint8Array(0);
   /** Stand-ins: a card where a far body is not drawn (city.ts fills it each frame). */
   let standIns: (list: StandIn[], cam: THREE.Camera | null) => void = () => undefined;
   /** Where people stand or walk in the street this frame, [x, z, x, z, ...]: the cards walk round them. */
   let obstacles: number[] = [];
+  const all: number[] = [], mirrored: number[] = [];
+  /** The pairs seen from one side of the street walking one way: x times the side, z times the way (laneX works in +x, +z). */
+  const mirror = (a: number[], sx: number, sz: number) => { mirrored.length = a.length; for (let k = 0; k < a.length; k += 2) { mirrored[k] = a[k] * sx; mirrored[k + 1] = a[k + 1] * sz; } return mirrored; };
   /** Baked impostors (impostor.ts) take over from the painted figures when they are ready. */
   let imp: { cols: number; rows: number; variants: number; views: number } | null = null;
   const grid = { value: new THREE.Vector2(1 / 8, 1) };
@@ -171,11 +198,11 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     taken = new Uint8Array(n + gateN);
     const ppl = Array.from({ length: n }, (_, i) => {
       const side = i % 2 ? 1 : -1, x = side * (4.7 + rnd() * 3.8);
-      return { x, z: S + 4 + rnd() * (N - S - 14), v: (rnd() < 0.5 ? 1 : -1) * (0.8 + rnd() * 0.7), h: (offs[i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: false, who: i };
+      return { x, z: S + 4 + rnd() * (N - S - 14), v: (rnd() < 0.5 ? 1 : -1) * (0.8 + rnd() * 0.7), h: (offs[i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: false, who: i, lane: x, wait: false, waitT: 0 };
     });
     // travellers thronging the gate plaza: across the whole width, milling slowly, life-size
     cards = ppl;
-    for (let i = 0, tries = 0; i < gateN && tries < 400; tries++) { const gx = (rnd() < 0.5 ? -1 : 1) * (4.8 + rnd() * 3.6), gz = S + 2 + rnd() * 18; if (ppl.some((o) => o.gate && Math.hypot(o.x - gx, o.z - gz) < 1.6)) continue; ppl.push({ x: gx /* on the pavements, a step apart: the road through the gate is for the cars */, z: gz, v: (rnd() - 0.5) * 0.5, h: (offs[n + i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: true, who: n + i }); i++; }
+    for (let i = 0, tries = 0; i < gateN && tries < 400; tries++) { const gx = (rnd() < 0.5 ? -1 : 1) * (4.8 + rnd() * 3.6), gz = S + 2 + rnd() * 18; if (ppl.some((o) => o.gate && Math.hypot(o.x - gx, o.z - gz) < 1.6)) continue; ppl.push({ x: gx /* on the pavements, a step apart: the road through the gate is for the cars */, z: gz, v: (rnd() - 0.5) * 0.5, h: (offs[n + i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: true, who: n + i, lane: gx, wait: false, waitT: 0 }); i++; }
     // each card its own shade: a little warmer or cooler, lighter or darker, so no two neighbours match
     const TC = new THREE.Color();
     for (let i = 0; i < n + gateN; i++) { const k = 0.78 + rnd() * 0.42; im.setColorAt(i, TC.setRGB(k * (0.94 + rnd() * 0.12), k * (0.94 + rnd() * 0.1), k * (0.94 + rnd() * 0.12))); }
@@ -226,16 +253,19 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
       // pavement. Cards used to walk through each other and through the people standing in the street
       // (the nearest one ahead is passed on the side the card is on, or on the other side when that is off the pavement:
       // pushed apart towards the kerb, two used to end up pressed into each other at its edge)
-      const ob = obstacles, lo = 4.75, hi = FRONT - 0.7;
+      // the nearest clear line across the pavement (laneX), back to their own lane once past; nowhere clear and someone
+      // right ahead, they wait
+      const lo = 4.75, hi = FRONT - 0.7;
+      all.length = 0; for (const q of ppl) all.push(q.x, q.z); for (let k = 0; k < obstacles.length; k++) all.push(obstacles[k]);
       for (let i = 0; i < ppl.length; i++) {
-        const q = ppl[i], sv = q.v >= 0 ? 1 : -1, side = q.x >= 0 ? 1 : -1; let best = 9, tx = 0;
-        const by = (ox: number, oz: number, r: number) => { const dx = ox - q.x, ahead = (oz - q.z) * sv; if (ahead > -0.5 && ahead < 2.2 && ahead < best && Math.abs(dx) < r) { best = ahead; let t = ox + (dx >= 0 ? -r : r); if (t * side < lo || t * side > hi) t = ox + (dx >= 0 ? r : -r); tx = t; } };
-        for (let j = 0; j < ppl.length; j++) if (j !== i && Math.abs(ppl[j].z - q.z) < 2.3) by(ppl[j].x, ppl[j].z, 0.8);
-        for (let k = 0; k + 1 < ob.length; k += 2) if (Math.abs(ob[k + 1] - q.z) < 2.3) by(ob[k], ob[k + 1], 0.9);
-        if (best < 9) q.x = side * Math.min(hi, Math.max(lo, (q.x + Math.max(-0.45 * dt, Math.min(0.45 * dt, (tx - q.x) * 2 * dt))) * side));
+        const q = ppl[i], sv = q.v >= 0 ? 1 : -1, side = q.x >= 0 ? 1 : -1;
+        const L = laneX(q.x * side, q.z * sv, 1, lo, hi, mirror(all, side, sv), 0.8, q.lane * side, i);
+        q.wait = L.blocked; q.waitT = q.wait ? (q.waitT ?? 0) + dt : 0;
+        if ((q.waitT ?? 0) > 3) { q.v = -q.v; q.waitT = 0; q.wait = false; } // still blocked after 3 s: they turn back
+        q.x = side * Math.min(hi, Math.max(lo, q.x * side + Math.max(-0.45 * dt, Math.min(0.45 * dt, (L.tx - q.x * side) * 2 * dt))));
       }
       ppl.forEach((q, i) => {
-        q.z += q.v * dt;
+        if (!q.wait) q.z += q.v * dt;
         // at the ends of their stretch they turn round (they used to jump to the other end: a walker blinking out at the
         // gate and in at the bazaar, in plain view)
         const z0 = q.gate ? S + 2 : S + 4, z1 = q.gate ? S + 20 : N - 10;

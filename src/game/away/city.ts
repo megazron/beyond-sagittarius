@@ -10,7 +10,7 @@ import type { AwayStage, AwayTask } from './stage';
 import type { StageBody } from './kit';
 import { buildFuture } from './cityfuture';
 import { buildMega } from './citymega';
-import { buildDense, Facade, type StandIn } from './citydense';
+import { buildDense, Facade, laneX, type StandIn } from './citydense';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mergeChildren, passMaps, watchChanges, atlasCanvases, unifyLooks } from '../../core/merge';
 import { BATCH, batchStatic, BatchPool, RunHandle } from '../../core/ibatch';
@@ -534,6 +534,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     return ex * ex + ez * ez < 0.5 * 0.5;
   };
   const obs: number[] = []; // where people are in the old town's street, for the painted crowd to walk round (citydense.ts)
+  const wob: number[] = [], wmir: number[] = []; // the same for the walkers (people, then the painted crowd), filled once a frame
   const BLOBS = 80, BM = new THREE.Matrix4();
   const blobs = new THREE.InstancedMesh((() => { const g = new THREE.PlaneGeometry(1.1, 1.1); g.rotateX(-Math.PI / 2); return g; })(), new THREE.MeshBasicMaterial({
     map: canvasTex(64, 64, (g) => { const r = g.createRadialGradient(32, 32, 2, 32, 32, 31); r.addColorStop(0, 'rgba(0,0,0,.55)'); r.addColorStop(0.6, 'rgba(0,0,0,.25)'); r.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); }),
@@ -2116,6 +2117,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           shadowStale = false;
         }
       }
+      wob.length = 0;
       if (oldOn) for (const q of people) {
         if (boarding.has(q)) continue;
         const w = q.walk;
@@ -2158,16 +2160,15 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
             let want = dz > -1.0 && dz < 5.0 && Math.abs(dx) < 1.5 ? side - Math.sign(dx || 1) * 1.6 : side; // a wider berth (as the crowd's bodies)
             // and round a low camera behind you
             if (want === side && lastCam && lastCam.y < 2.4) { const cz = (lastCam.z - q.pos.z) * w.dir, cx = lastCam.x - q.pos.x; if (cz > -0.8 && cz < 3.0 && Math.abs(cx) < 1.0) want = side - Math.sign(cx || 1) * 1.2; }
-            // and round whoever else is on the pavement ahead (walkers, the people standing, the painted crowd): they used
-            // to walk through each other
-            if (want === side) {
-              // passed on the side they are on, or the other side when that is off the pavement (both used to be pushed
-              // to the kerb's edge and walk into each other there)
-              const sg0 = Math.sign(side) || 1, onPave = (x: number) => x * sg0 > 4.75 && x * sg0 < FRONT - 0.6;
-              const by = (ox: number, oz: number) => { const ah = (oz - q.pos.z) * w.dir, ex = ox - q.pos.x; if (ah > -0.5 && ah < 2.2 && Math.abs(ex) < 0.8) { want = ox - Math.sign(ex || 1) * 0.9; if (!onPave(want)) want = ox + Math.sign(ex || 1) * 0.9; return true; } return false; };
-              let hit = false;
-              for (const o of people) if (o !== q && Math.abs(o.pos.z - q.pos.z) < 2.3 && by(o.pos.x, o.pos.z)) { hit = true; break; }
-              if (!hit) for (const o of dense.cards) if (Math.abs(o.z - q.pos.z) < 2.3 && by(o.x, o.z)) break;
+            // and round whoever else is on the pavement ahead (walkers, the people standing, the painted crowd): the
+            // nearest clear line (citydense.ts laneX), and they wait when there is none and someone is right ahead (they
+            // used to walk through each other, and through a group standing there)
+            {
+              const sg0 = Math.sign(side) || 1;
+              if (wob.length === 0) { for (const o of people) wob.push(o.pos.x, o.pos.z); for (const o of dense.cards) wob.push(o.x, o.z); }
+              wmir.length = wob.length; for (let k = 0; k < wob.length; k += 2) { wmir[k] = wob[k] * sg0; wmir[k + 1] = wob[k + 1] * w.dir; }
+              const L = laneX(q.pos.x * sg0, q.pos.z * w.dir, 1, 4.75, FRONT - 0.6, wmir, 0.8, want * sg0, people.indexOf(q));
+              want = L.tx * sg0; if (L.blocked) w.pause = Math.max(w.pause ?? 0, 0.15);
             }
             // on the pavement, never into the road (|x| < 4.35 is the kerb) or the shopfronts
             const sg = Math.sign(side) || 1; want = sg * THREE.MathUtils.clamp(want * sg, 4.7, FRONT - 0.6);
