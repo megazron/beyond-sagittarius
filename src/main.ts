@@ -1066,6 +1066,28 @@ window.addEventListener('resize', () => {
     const m = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory; out.heapMB = m ? Math.round(m.usedJSHeapSize / 1e6) : null;
     return out;
   },
+  /** Test hook (memory work): the stage's biggest textures and geometry by owner, in MB (a texture counted once). */
+  memTop() {
+    const stage = renderer.stageInfo?.() as { scene?: THREE.Scene } | undefined; if (!stage?.scene) return null;
+    const seen = new Set<ArrayBufferLike>(), seenT = new Set<THREE.Texture>(), T = new Map<string, number>(), G = new Map<string, number>(), N = new Map<string, number>();
+    const bytes = (a: unknown) => { const x = a as { array?: { buffer?: ArrayBufferLike; byteLength?: number }; data?: { array: { buffer: ArrayBufferLike; byteLength: number } } } | null; const arr = x?.data?.array ?? x?.array; if (!arr?.buffer || seen.has(arr.buffer)) return 0; seen.add(arr.buffer); return arr.byteLength ?? 0; };
+    stage.scene.traverse((o) => {
+      const m = o as THREE.Mesh; let ch: THREE.Object3D | null = o; while (ch && !ch.userData?.isCharacter) ch = ch.parent;
+      const own = (ch ? 'char:' : '') + (o.name || o.parent?.name || o.type);
+      if (m.geometry) { let n = 0; const g = m.geometry; for (const k in g.attributes) n += bytes(g.attributes[k]); n += bytes(g.index); for (const a of Object.values(g.morphAttributes).flat()) n += bytes(a); if (n) { G.set(own, (G.get(own) ?? 0) + n); N.set(own, (N.get(own) ?? 0) + 1); } }
+      const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
+      for (const mt of mats) for (const v of Object.values(mt as unknown as Record<string, unknown>)) {
+        const t = v as THREE.Texture; if (!t?.isTexture || seenT.has(t)) continue; seenT.add(t);
+        const im = t.image as { width?: number; height?: number; src?: string; data?: { byteLength: number }; tagName?: string } | undefined;
+        const comp = (t as THREE.CompressedTexture).isCompressedTexture;
+        const b = comp ? ((t as THREE.CompressedTexture).mipmaps as { data: { byteLength: number } }[] ?? []).reduce((n, q) => n + (q.data?.byteLength ?? 0), 0) : im?.data?.byteLength ?? ((im?.width ?? 0) * (im?.height ?? 0) * 4);
+        const k = `${comp ? 'ktx2 ' : im?.tagName === 'CANVAS' ? 'canvas ' : ''}${String(im?.src ?? t.name ?? '').replace(/^.*\//, '') || 'unnamed'} ${im?.width}x${im?.height}`;
+        T.set(k, (T.get(k) ?? 0) + b);
+      }
+    });
+    const top = (M: Map<string, number>, n: number) => [...M.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, v]) => `${k} ${(v / 1e6).toFixed(1)}${N.has(k) ? ' x' + N.get(k) : ''}`);
+    return { texMB: +([...T.values()].reduce((a, b) => a + b, 0) / 1e6).toFixed(1), geoMB: +([...G.values()].reduce((a, b) => a + b, 0) / 1e6).toFixed(1), tex: top(T, 40), geo: top(G, 40) };
+  },
   awayCrowd() { const st = game?.away?.stage as { crowdState?: () => { near: number; bodies: number; lost: number; held?: number[][] } } | null; return st?.crowdState?.() ?? { near: 0, bodies: 0, lost: 0 }; },
   /** Test hook: cars and people on the away stage this frame (tools/traffic_smoke.py). */
   awayTraffic() { return (game?.away?.stage as { trafficState?: () => unknown } | null)?.trafficState?.() ?? null; },

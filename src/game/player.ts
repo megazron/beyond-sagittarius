@@ -74,8 +74,11 @@ export class Player {
     /** 0..1: draw the view in a little (narrower field of view) on something the fight wants seen (a trap's catch). */
     zoom?: number } | null = null;
   private aimS = 0;
-  /** How crowded it is round you (the stage's, 0 to 1): the camera rises over the heads and looks down at you. */
+  /** How crowded it is round you (the stage's, 0 to 1): the camera comes in a little closer behind you, at its usual
+   * height (the stage clears the bodies on the line from the camera to you). */
   crowdNear: (() => number) | null = null;
+  /** ?crowdcam=rise: the old way, the camera rises over the heads and looks down at you in a thick crowd. */
+  crowdRise = false;
   private crowdS = 0;
   /** How far the camera is held down under a roof (awning, shelter): in fast, out slowly. */
   private ceilS = 0;
@@ -252,7 +255,7 @@ export class Player {
     const cp = Math.cos(pitch);
     out.set(Math.sin(yaw) * cp, -Math.sin(pitch), Math.cos(yaw) * cp).multiplyScalar(dist);
     out.add(focus);
-    out.y += 1.65 + 0.3 * this.crowdS;
+    out.y += 1.65 + (this.crowdRise ? 0.3 * this.crowdS : 0);
     // walk the line from the head to the camera: stop short of hills and trunks
     const hx = focus.x, hy = focus.y + 1.65, hz = focus.z;
     let free = 1;
@@ -312,21 +315,22 @@ export class Player {
     const backWant = this.combat?.back ?? 0;
     this.backS += (backWant - this.backS) * e(backWant > this.backS ? 7 : 5);
     const back = this.backS * this.backS * (3 - 2 * this.backS);
-    // in a thick crowd the camera does not sit low among the heads looking up: it rises and looks down (eased in and out)
+    // in a thick crowd the camera stays at its over-the-shoulder height and comes a little closer (eased in and out);
+    // whoever walks between it and you is cleared by the stage. It used to rise and look down on the heads for seconds
     const cw = this.crowdNear ? this.crowdNear() : 0;
     this.crowdS += (cw - this.crowdS) * e(cw > this.crowdS ? 2.5 : 1.2);
     // a look aside (a trap springing nearby): eased in like a turn of the head, a little slower back
     const turnWant = this.combat?.turn ?? 0;
     this.turnS += (turnWant - this.turnS) * e(Math.abs(turnWant) > Math.abs(this.turnS) ? 4.5 : 2.2);
     const turnK = Math.min(1, Math.abs(this.turnS) / 0.6);
-    let pitchV0 = this.pitchS + (Math.min(this.pitchS, -0.38) - this.pitchS) * this.crowdS - back * 0.12 - turnK * 0.07;
+    let pitchV0 = this.pitchS + (this.crowdRise ? (Math.min(this.pitchS, -0.38) - this.pitchS) * this.crowdS : 0) - back * 0.12 - turnK * 0.07;
     // a view that looks down steeply from low (spear fishing): the camera stays low behind the shoulder, only the look tips down
     if (this.combat?.lowCam !== undefined) pitchV0 = Math.max(pitchV0, this.combat.lowCam);
     const yawV = this.yawS + back * 2.75 + this.turnS, pitchV = pitchV0;
     // soft collision: pull in fast when a trunk blocks the view, ease back out slowly
     const want = this.orbit(tmpA, this.focus, yawV, pitchV, this.camDist);
     const clear = this.forest.clearance(this.focus.x, this.focus.z, want.x, want.z, 0.4);
-    const target = Math.max(1.3, this.camDist * clear);
+    const target = Math.max(1.3, this.camDist * clear * (this.crowdRise ? 1 : 1 - 0.14 * this.crowdS));
     this.distS += (target - this.distS) * e(target < this.distS ? 16 : 2.5);
     // aiming: in close, over the right shoulder, looking where the shot will go instead of at the body
     const aimWant = this.combat?.aim ?? 0;

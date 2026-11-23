@@ -54,9 +54,11 @@ export class Away {
     const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: (fx, fz, cx, cz) => stage.clearance?.(fx, fz, cx, cz) ?? 1, ceiling: stage.ceiling ? (fx, fz, fy, cx, cz) => stage.ceiling!(fx, fz, fy, cx, cz) : undefined }, this.camera, Math.max(this.detail, 0.8), id, id === 'strong' && this.skins.strong === 'suit' ? 'suit' : undefined); // the crew's chosen skin, on their own stage too
     p.physics = { gravity: stage.gravity, jump: stage.jump, gaps: true };
     p.model.mergeParts(); // skin, clothes and eyes in one draw (bodymerge.ts)
-    // the camera rises over a thick crowd (?crowdcam=0 turns it off). It was off for a while because CI's perf_gate saw
+    // the camera comes in a little closer in a thick crowd (?crowdcam=0 turns it off, ?crowdcam=rise: it rises and looks
+    // down on the heads, the old way). It was off for a while because CI's perf_gate saw
     // the phone bazaar at 836k triangles with it; the same 836430 hit a branch without it, so that was the city's state
     if (stage.crowdNear && new URLSearchParams(window.location.search).get('crowdcam') !== '0') p.crowdNear = () => stage.crowdNear!();
+    p.crowdRise = new URLSearchParams(window.location.search).get('crowdcam') === 'rise';
     // what the feet hear: Zenvora's paving and the flat's floorboards, ice on the ring, rock and metal elsewhere
     p.surface = location === 'city' ? (x, z) => (x > 9.4 && z > 61 && z < 77 ? 'wood' : 'stone') : location === 'ring' ? () => 'snow' : location === 'clouds' ? () => 'wood' : location === 'wreck' ? () => 'metal' : () => 'stone';
     p.model.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; } });
@@ -82,7 +84,7 @@ export class Away {
   get position() { return this.player?.pos ?? null; }
   get grounded() { return !!this.player?.onGround; }
   /** Test hook: the camera's aim and any hero view in progress. */
-  get camState() { const p = this.player; return p ? { yaw: p.yaw, pitch: p.pitch, x: p.pos.x, z: p.pos.z, vista: this.vista, seen: [...this.seen] } : null; }
+  get camState() { const p = this.player, c = this.camera.position; return p ? { yaw: p.yaw, pitch: p.pitch, x: p.pos.x, y: p.pos.y, z: p.pos.z, cam: [c.x, c.y, c.z], vista: this.vista, seen: [...this.seen] } : null; }
 
   /** The skins chosen in the skins menu (set by main whenever they change). */
   skins: CrewSkins = {};

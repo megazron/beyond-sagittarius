@@ -35,6 +35,8 @@ import { Renderer } from '../../core/renderer';
 
 const N = 78, S = -78; // street ends (z)
 const FRONT = 9.5; // building line, both sides
+/** Where the tram stands on its track (x -2.2), its middle; its door is 3 m north of that, on the pavement side. */
+const TRAM_Z = -32;
 /** The friends' flat, from the street wall back: room enough for the follow camera (it was 6.5 m). */
 const FLAT_D = 11.5; // the flat runs almost the block's whole depth: a hall, a living room, a kitchen, a bedroom and a bathroom
 const FLAT_Z0 = 61.4, FLAT_Z1 = 76.6;
@@ -57,6 +59,10 @@ const LENS_HOLD = typeof location === 'undefined' || new URLSearchParams(locatio
  * they stay drawn (they pass in front of you for a moment); a body is only faded (quickly, all the way) when it is right at
  * the lens itself (character.ts). */
 const LENS_OLD = typeof location !== 'undefined' && new URLSearchParams(location.search).get('lensfade') === 'old';
+/** Passers-by (the painted crowd's bodies, the districts' walkers, the townsfolk, never the story's people) on the line
+ * from the camera to you are cleared (faded quickly on Web and Ultra, hidden on phones) until they have passed: in a thick
+ * crowd this is what keeps you in view, instead of the camera rising over the heads (player.ts). ?lensline=0: they stay drawn. */
+const LENS_LINE = LENS_OLD || typeof location === 'undefined' || new URLSearchParams(location.search).get('lensline') !== '0';
 /** Whoever is drawn as a body within CONTACT metres of you stays that body, whatever the budget or the ranking does
  * (?contact=0: the old way). Bumping into somebody pulls them out of the nearest-first order, so they used to be let go. */
 const CONTACT = typeof location !== 'undefined' && new URLSearchParams(location.search).get('contact') === '0' ? 0 : 4.5;
@@ -174,7 +180,7 @@ const TASKS: { id: string; x: number; z: number; r?: number; need?: string[] }[]
   { id: 'phone', x: 8.4, z: 44, need: ['pack'] },
   { id: 'parcel', x: -8.4, z: 30, need: ['phone'] },
   { id: 'chai', x: 7.4, z: 15.6, need: ['parcel'] },
-  { id: 'tram', x: -5.2, z: -14, need: ['chai'] },
+  { id: 'tram', x: -4.9, z: -29, need: ['chai'] }, // at the tram's door (TRAM_Z + 3)
   { id: 'ring', x: 2.8, z: -44, r: 2.2, need: ['tram'] },
   { id: 'gate', x: 0, z: -72, r: 4, need: ['ring'] },
 ];
@@ -184,7 +190,7 @@ const FRIENDS: { id: CrewId; x: number; z: number; yaw: number; pose: CrewPose }
   { id: 'strong', x: -6.6, z: 2.5, yaw: Math.PI / 2, pose: 'idle' },
   { id: 'medic', x: 7.4, z: -14, yaw: -Math.PI / 2, pose: 'idle' },
   { id: 'explorer', x: 6.2, z: 17.4, yaw: -Math.PI / 2, pose: 'write' },
-  { id: 'builder', x: -5.0, z: -16.4, yaw: Math.PI / 2, pose: 'idle' },
+  { id: 'builder', x: -4.05, z: -27.5, yaw: Math.PI / 2, pose: 'idle' }, // at the kerb beside the tram's door, out of the walkers' way
   { id: 'social', x: -5.4, z: -40.5, yaw: 0.3, pose: 'selfie' }, // on the pavement: the road is for the cars
 ];
 
@@ -900,11 +906,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   ] as [string, number, number, number, number][]) place(n, x, y, z, yaw);
 
   // cars parked along the kerbs (drawn with the traffic below: the same saloon, cars.ts)
-  const parkedAt: [number, number, number][] = rich ? [[-3.2, 52, 0xf4f4f6], [3.2, 38, 0xffb347], [-3.2, 22, 0x2c3e94], [3.2, -22, 0xe8e2d4], [-3.2, -30, 0xc0392b], [3.2, 58, 0x16a085]] : [[-3.2, 52, 0xf4f4f6], [3.2, -22, 0xffb347]];
+  const parkedAt: [number, number, number][] = rich ? [[-3.2, 52, 0xf4f4f6], [3.2, 38, 0xffb347], [-3.2, 22, 0x2c3e94], [3.2, -22, 0xe8e2d4], [-3.2, -7, 0xc0392b], [3.2, 58, 0x16a085]] : [[-3.2, 52, 0xf4f4f6], [3.2, -22, 0xffb347]];
   for (const [x, z] of parkedAt) blocks.push(new THREE.Box3(new THREE.Vector3(x - 0.95, 0, z - 2.4), new THREE.Vector3(x + 0.95, 1.5, z + 2.4)));
   // stalls spilling onto the road: mats of goods at the kerb
   const kerbMatM = over(new THREE.MeshStandardMaterial({ map: stripeSet.t, roughness: 1 }), 3);
-  for (const [x, z] of (rich ? [[3.3, 30], [-3.3, 10], [3.3, -32], [-3.3, -26], [3.3, 48]] : [[3.3, 30], [-3.3, -26]]) as [number, number][]) {
+  for (const [x, z] of (rich ? [[3.3, 30], [-3.3, 10], [3.3, -32], [-3.3, -16], [3.3, 48]] : [[3.3, 30], [-3.3, -16]]) as [number, number][]) {
     const mat = add(new THREE.Mesh(stripeSet.tile(new THREE.PlaneGeometry(1.3, 2.4), Math.abs(Math.round(z)) % awnings.length, true), kerbMatM)); mat.rotation.x = -Math.PI / 2; mat.position.set(x, 0, z); mat.userData.ground = false;
     for (const [n, dx, dz] of [['wicker_basket_01', 0, -0.6], ['plastic_crate_01', 0, 0.5], ['food_apple_01', 0.1, -0.6]] as [string, number, number][]) place(n, x + dx, n.startsWith('food') ? 0.3 : 0, z + dz, rnd() * 6);
     place('plastic_monobloc_chair_01', x + Math.sign(x) * 0.2, 0, z + 1.6, Math.sign(x) > 0 ? -Math.PI / 2 : Math.PI / 2);
@@ -997,13 +1003,17 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     part(new THREE.BoxGeometry(1.6, 0.08, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.5), toneMapped: false }), 0, 0.5, 0);
     part(new THREE.BoxGeometry(0.08, 2.0, 1.3), new THREE.MeshStandardMaterial({ color: 0x0f7d74, roughness: 0.4 }), -1.3, 1.6, 3);
     void cream;
-    // 8 m further down the street than it was: at the bazaar's start the white tram filled the view beside the camera
-    tram.position.set(-2.2, 0, -17);
-    blocks.push(new THREE.Box3(new THREE.Vector3(-3.5, 0, -23.5), new THREE.Vector3(-0.9, 3.5, -10.5)));
-    const shelter = add(new THREE.Group()); shelter.position.set(-6.8, FLOOR, -14);
-    const roofS = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 4), cream); roofS.position.y = 2.7; roofS.castShadow = true; shelter.add(roofS); cover(roofS);
-    for (const dz of [-1.8, 1.8]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.7, 0.08), railM); p.position.set(0.6, 1.35, dz); shelter.add(p); }
-    const stop = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.5), lit(sign('Tram 7: Spaceport', '#0f7d74', '#ffffff'), 0.4)); stop.position.set(0, 2.95, 0); stop.rotation.y = Math.PI / 2; shelter.add(stop);
+    // at the bottom of the bazaar, on its track, short of the junction: from the crowd (-5.5, 0) it is 25 m off, not
+    // beside the camera; the stall at z -20 and the lamps are clear of it, so the pavement beside it stays open (at z -17
+    // it closed the way south between the stall, the friend and the shelter, and walkers stuck there). No roofed shelter
+    // any more: its roof held the follow camera down and filled the top of the view. A stop pole at the kerb instead,
+    // in the lamps' line, out of the walkers' way
+    tram.position.set(-2.2, 0, TRAM_Z);
+    blocks.push(new THREE.Box3(new THREE.Vector3(-3.5, 0, TRAM_Z - 6.5), new THREE.Vector3(-0.9, 3.5, TRAM_Z + 6.5)));
+    const shelter = add(new THREE.Group()); shelter.position.set(-4.8, FLOOR, TRAM_Z - 3.2);
+    { const p = new THREE.Mesh(new THREE.BoxGeometry(0.09, 2.7, 0.09), railM); p.position.set(0, 1.35, 0); shelter.add(p); }
+    blocks.push(new THREE.Box3(new THREE.Vector3(-5.0, 0, TRAM_Z - 3.4), new THREE.Vector3(-4.6, 3, TRAM_Z - 3.0)));
+    const stop = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.45), lit(sign('Tram 7: Spaceport', '#0f7d74', '#ffffff'), 0.4)); stop.position.set(0, 2.55, 0); stop.rotation.y = Math.PI / 2; stop.material.side = THREE.DoubleSide; shelter.add(stop);
   }
 
   // ---- the square, the fountain, the gate and the liner ----
@@ -1319,7 +1329,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       b.dx += (want - b.dx) * (1 - Math.exp(-dt * 4));
       const bx = q.x + b.dx;
       b.fig.root.position.set(bx, hx(bx), q.z); b.fig.root.rotation.y = yaw;
-      const hide = LENS_OLD && inLens(bx, q.z); if (!b.fig.setLensFade(hide ? 0 : 1) && b.fig.root.visible === hide) b.fig.root.visible = !hide; // Web, Ultra: a fade
+      const hide = LENS_LINE && inLens(bx, q.z); if (!b.fig.setLensFade(hide ? 0 : 1) && b.fig.root.visible === hide) b.fig.root.visible = !hide; // Web, Ultra: a fade
       b.phase += dt * sp * 2.2;
       b.fig.animate(sp > 0.3 ? 'walk' : 'idle', b.phase, Math.min(1.1, sp / 3), time, dt);
     }
@@ -1406,7 +1416,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (b.ped < 0) continue;
       const q = ps[b.ped], walking = q.mode === 'walk' || q.mode === 'cross';
       b.fig.root.position.set(q.x, H(q.x, q.z), q.z); b.fig.root.rotation.y = q.yaw;
-      { const hide = LENS_OLD && inLens(q.x, q.z); if (!b.fig.setLensFade(hide ? 0 : 1) && b.fig.root.visible === hide) b.fig.root.visible = !hide; }
+      { const hide = LENS_LINE && inLens(q.x, q.z); if (!b.fig.setLensFade(hide ? 0 : 1) && b.fig.root.visible === hide) b.fig.root.visible = !hide; }
       // they notice you: within a few metres they look at you (and a walker steps round you, districts.ts)
       if (you && Math.hypot(you.position.x - q.x, you.position.z - q.z) < 4.5) b.fig.setLookTarget(eye.set(you.position.x, you.position.y + 1.6, you.position.z)); else b.fig.setLookTarget(null);
       b.phase += dt * (walking ? q.v * 2.2 : 1);
@@ -1819,7 +1829,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         // how many bodies are within a few steps of you (the follow camera rises over a thick crowd: crowdNear)
         if (you) {
           let n = 0, line = false; const ux = you.position.x, uz = you.position.z, R2 = 3.2 * 3.2;
-          // whoever walks between the camera and you stays drawn (no half-faded ghost; the old way hid them: lensfade=old)
+          // (whoever walks between the camera and you is cleared: LENS_LINE; `line` is only logged)
           const at = (f: Character) => { if (f.root.visible) { const dx = f.root.position.x - ux, dz = f.root.position.z - uz; if (dx * dx + dz * dz < R2) n++; if (!LENS_OLD && !line && inLens(f.root.position.x, f.root.position.z)) line = true; } };
           if (oldOn) { for (const q of people) at(q.fig); for (const b of crowdPool) if (b.card >= 0) at(b.fig); }
           for (const b of dpool) if (b.ped >= 0) at(b.fig);
@@ -1833,7 +1843,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           if (boarding.has(q) || talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
           if (q.walk?.shop?.stage === 'inside') { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           const d = Math.hypot(q.pos.x - cp.x, q.pos.z - cp.z);
-          const lensHit = LENS_OLD && d < 9 && inLens(q.pos.x, q.pos.z);
+          const lensHit = (LENS_OLD || (LENS_LINE && crowd.has(q.fig))) && d < 9 && inLens(q.pos.x, q.pos.z);
           if (!q.fig.setLensFade(lensHit ? 0 : 1) && lensHit) { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           // the six of the story and Mir have no card of their own look: they stay themselves (a body) out to 48 m
           if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = tier > 0 && d < 48; /* a body to 48 m (they have no card of their own look); phones: only within the card range */ if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; }
