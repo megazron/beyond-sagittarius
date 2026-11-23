@@ -141,7 +141,9 @@ export class RangedRig {
       const liftW = p.act === 'charge' ? smooth(Math.min(1, drawing * 1.25)) : recovering ? 1 - smooth((kr - 0.12) / 0.3) : 0;
       S.lift += (liftW - S.lift) * (1 - Math.exp(-dt * 16));
       const raised = V().copy(aim).addScaledVector(F, 0.3).normalize();
-      const ready = V().set(aim.x, aim.y - 0.8, aim.z).normalize().addScaledVector(F, 0.38).normalize();
+      // (out in front of the belly, not off to the left: with the bow low along the aim the hand reached 33 cm across a
+      // nock 11 cm in front of him, probe 14.5 cm into the body)
+      const ready = V().copy(A).multiplyScalar(0.45).addScaledVector(F, 0.8).add(V().set(0, -0.6, 0)).normalize();
       const armDir = V().copy(low).lerp(V().copy(ready).lerp(raised, S.lift).normalize(), smooth(S.up)).normalize();
       if (S.tremor > 0) armDir.x += Math.sin(t * 23) * 0.006 * S.tremor, armDir.y += Math.sin(t * 17 + 1) * 0.008 * S.tremor;
       reach(sL, V().copy(sL).addScaledVector(armDir, (R.a + R.b) * 0.97), R.a, R.b, V().set(0, -1, 0).addScaledVector(aim, -0.3), eL, wL);
@@ -164,7 +166,7 @@ export class RangedRig {
       const setP = V().copy(nock0).addScaledVector(F, 0.02);
       let target: THREE.Vector3; S.arrowIn = ammo > 0 ? 'string' : 'none'; S.nock = -1;
       // (the string comes back along the arrow, bowed a little out in front on the way so the forearm passes the chin)
-      if (p.act === 'charge') target = V().copy(setP).lerp(anchor, drawing).addScaledVector(F, 0.04 * Math.sin(Math.PI * drawing));
+      if (p.act === 'charge') target = V().copy(setP).lerp(anchor, drawing).addScaledVector(F, 0.1 * Math.sin(Math.PI * drawing));
       else if (recovering) {
         const k = p.actT / 1.05; S.nock = k;
         const past = V().copy(anchor).addScaledVector(aim, -0.17).add(V().set(0, 0.03, 0));
