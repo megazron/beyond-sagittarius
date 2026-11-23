@@ -7,6 +7,8 @@ import type { SimPlayer } from '../sim/sim';
 import { WEAPONS } from '../sim/weapons';
 import { RangedRig } from './ranged';
 import { loft } from '../../characters/shapes';
+import { MELEE_GEAR, SHAFT, targetFrame, clearShaft, solveArms, follow, newFrame, copyFrame, depth } from './melee';
+import type { ActState, WFrame } from './melee';
 import type { WeaponId } from '../sim/weapons';
 
 type Pose = Limbs;
@@ -236,6 +238,9 @@ class HideWrap {
 }
 
 /** Where each thing sits in a closed hand (hand space: -y along the fingers, +z out of the thumb side). */
+/** `?meleerig=0`: the old way (gear on the hand bone, poses switched, no clearance), for before/after recordings. */
+const RIG_ON = typeof location === 'undefined' || !/[?&]meleerig=0/.test(location.search);
+
 export const GRIP = { x: 0.035, y: -0.085, z: 0.0, rx: 0, ry: 0, rz: 0 };
 
 export class FightBody {
@@ -256,7 +261,9 @@ export class FightBody {
 
   /** The thing in the hand: the right for everything but the bow. */
   private hold(model: Character, id: WeaponId | null) {
-    const hand = id === 'bow' ? model.handL : model.handR;
+    // the weapons of the melee rig (view/melee.ts) live in the world and are placed at the real hand after the pose
+    const rig = RIG_ON && !!id && MELEE_GEAR.includes(id);
+    const hand = rig ? (model.root.parent ?? model.root) : id === 'bow' ? model.handL : model.handR;
     if (this.heldId === id && this.held?.parent === hand) return;
     this.held?.removeFromParent(); this.held = null; this.heldId = id;
     if (!id || id === 'fists') return;
@@ -284,7 +291,10 @@ export class FightBody {
       if (pose) { if (p.sneaking) { pose.bend = (pose.bend ?? 0) + 0.3; this.crouch = 0.2; } model.setLimbs(pose); return; }
     } else if (!rw) { if (this.ranged.mode !== 'none') this.ranged.hide(model); }
     else this.ranged.faceOffset = 0;
-    if (this.held) {
+    const out0 = this.meleePose(model, p, dt, armed, visible);
+    if (out0) { this.emit(model, out0, dt, true); return; }
+    this.mframe = false;
+    if (this.held && !(RIG_ON && MELEE_GEAR.includes(this.heldId!))) {
       const G = GRIP, gun = this.heldId === 'coil' || this.heldId === 'crossbow';
       // a stock is held like a grip: the barrel runs on along the forearm, not out of the thumb
       this.held.position.set(G.x * (this.heldId === 'bow' ? -1 : 1), G.y + (gun ? 0.03 : 0), G.z);
@@ -300,7 +310,7 @@ export class FightBody {
     // the stance the weapon is held in when it is up
     if (w === 'bow') base = P.bowHold; else if (w === 'crossbow' || w === 'coil') base = P.gunAim; else if (w === 'spear' || w === 'hafted') base = P.spearReady; else base = P.guard;
     this.rollAngle = 0; this.crouch = 0;
-    if (p.down) { model.setLimbs(null); return; }
+    if (p.down) { this.emit(model, null, dt, false); return; }
     if (p.act === 'roll') {
       // tucked, over the shoulder and up: the turn runs ahead of the clock so the feet are under by the end
       const k = Math.min(1, p.actT / 0.62);
@@ -350,11 +360,115 @@ export class FightBody {
     if (p.sneaking && p.act !== 'roll') { this.crouch = Math.max(this.crouch, 0.24); pose = pose ? { ...pose, bend: (pose.bend ?? 0) + 0.42 } : P.sneak; }
     if (p.act === 'charge') this.wasCharging = p.charging === 'none' ? 'shot' : p.charging; else if (this.since > 0.45) this.wasCharging = 'none';
     this.last.act = p.act; this.last.weapon = w;
-    model.setLimbs(pose);
+    this.emit(model, pose, dt, false);
+  }
+
+  // ---------------------------------------------------------------- the melee rig (view/melee.ts)
+  private cur: WFrame = newFrame(); private tgt: WFrame = newFrame(); private tmp: WFrame = newFrame();
+  private mframe = false; private lPrev: number | null = null; private leftW = 0;
+  private bonesM: { upL: THREE.Object3D; upR: THREE.Object3D; loR: THREE.Object3D; loL: THREE.Object3D; a: number; b: number } | null = null;
+  /** Per-frame numbers of what was drawn (for the play test): worst shaft depth in the body, worst left-hand gap
+   * from the shaft while it holds it, frames counted. */
+  stats = { frames: 0, shaftIn: 0, handOff: 0, leftOff: 0 };
+  private solvedL: number | null = null;
+  private meleePose(model: Character, p: SimPlayer, dt: number, armed: boolean, visible: WeaponId | null): Limbs | null {
+    const w = p.weapon;
+    if (!RIG_ON || !visible || !MELEE_GEAR.includes(w) || p.down || p.act === 'roll' || p.staggerT > 0 || p.snareT > 0.15) return null;
+    if (!this.bonesM) {
+      const g = (n: string) => model.root.getObjectByName(n);
+      const upL = g('upperarmL'), upR = g('upperarmR'), loL = g('lowerarmL'), loR = g('lowerarmR');
+      if (!upL || !upR || !loL || !loR) return null;
+      const wp = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3());
+      this.bonesM = { upL, upR, loL, loR, a: wp(upR).distanceTo(wp(loR)), b: wp(loR).distanceTo(wp(model.handR)) };
+    }
+    const B = this.bonesM, def = WEAPONS[w], m = def.melee;
+    this.since += dt; this.kick = Math.max(0, this.kick - dt * 5);
+    this.ready += ((armed || p.act !== 'idle' || p.blocking ? 1 : 0) - this.ready) * (1 - Math.exp(-dt * 9));
+    if (p.act === 'charge') this.wasCharging = 'throw'; else if (this.since > 0.6) this.wasCharging = 'none';
+    const s: ActState = {
+      weapon: w, act: p.act, actT: p.actT, combo: p.combo, charge: p.charge, charging: p.charging, blocking: p.blocking, blockT: p.blockT,
+      up: this.ready, since: this.since, thrown: this.wasCharging === 'throw' && p.act !== 'charge', windup: m?.windup ?? 0.3, active: m?.active ?? 0.1, recover: m?.recover ?? 0.4,
+    };
+    targetFrame(s, this.tgt, this.tmp); clearShaft(this.tgt, w);
+    const fast = p.act === 'active' || (s.thrown && this.since < 0.2);
+    if (!this.mframe) { copyFrame(this.tgt, this.cur); this.mframe = true; this.lPrev = null; } else follow(this.cur, this.tgt, dt, 0.04, fast ? 60 : 24);
+    const f = copyFrame(this.cur, this.tmp);
+    const loc = (o: THREE.Object3D) => model.root.worldToLocal(o.getWorldPosition(new THREE.Vector3()));
+    const wantL = this.ready > 0.05 || f.l !== null || p.act !== 'idle' || p.blocking ? 1 : 0;
+    this.leftW += (wantL - this.leftW) * (1 - Math.exp(-dt * 10));
+    const r = solveArms(f, w, { sL: loc(B.upL), sR: loc(B.upR), a: B.a, b: B.b, palm: 0.07 }, this.leftW > 0.02 ? 1 : 0, 1, this.lPrev, dt);
+    this.lPrev = r.f.l; this.solvedL = r.f.l;
+    copyFrame(r.f, this.cur); this.cur.l = r.f.l;
+    if (p.sneaking) { r.limbs.bend = (r.limbs.bend ?? 0) + 0.3; this.crouch = 0.2; } else this.crouch = p.blocking && (w === 'spear' || w === 'hafted') ? 0.16 * out(p.blockT / 0.2) : 0;
+    this.rollAngle = 0;
+    gripHand(model, 'R', { shape: 'grip', radius: SHAFT[w]!.r });
+    gripHand(model, 'L', r.f.l !== null ? { shape: 'grip', radius: SHAFT[w]!.r } : null);
+    this.last.act = p.act; this.last.weapon = w;
+    return r.limbs;
+  }
+
+  // ---------------------------------------------------------------- what goes to the rig, eased
+  private outL: Limbs = {}; private lastRig = false; private xfade = 1;
+  /** Hands the pose to the rig. Switching between the melee rig and the authored poses (a roll, a stagger, the
+   * fists) cross-fades over ~0.15 s; the authored poses are also low-passed (their own changes of state popped). */
+  private emit(model: Character, pose: Limbs | null, dt: number, rig: boolean) {
+    if (rig !== this.lastRig) { this.xfade = 0; this.lastRig = rig; }
+    this.xfade = Math.min(1, this.xfade + dt / 0.15);
+    if (!pose) { this.outL = {}; model.setLimbs(null); return; }
+    if (!RIG_ON) { model.setLimbs(pose); return; }
+    const k = rig && this.xfade >= 1 ? 1 : 1 - Math.exp(-dt / (this.xfade < 1 ? 0.06 : 0.035));
+    const o: Limbs = { bend: pose.bend, twist: pose.twist, openHands: pose.openHands };
+    for (const key of ['armL', 'armR', 'foreL', 'foreR', 'legL', 'legR', 'shinL', 'shinR'] as const) {
+      const t = pose[key], c = this.outL[key];
+      if (!t) continue;
+      if (!c || k >= 1) { o[key] = [t[0], t[1], t[2]]; continue; }
+      const x = c[0] + (t[0] - c[0]) * k, y = c[1] + (t[1] - c[1]) * k, z = c[2] + (t[2] - c[2]) * k, l = Math.hypot(x, y, z) || 1;
+      o[key] = [x / l, y / l, z / l];
+    }
+    const pb = this.outL.bend ?? 0, pt = this.outL.twist ?? 0;
+    o.bend = pb + ((pose.bend ?? 0) - pb) * k; o.twist = pt + ((pose.twist ?? 0) - pt) * k;
+    this.outL = o; model.setLimbs(o);
   }
 
   /** Give the body back to the walk and empty the hands. */
   /** After the body is posed this frame. */
-  late(model: Character, dt: number, t: number) { this.ranged.late(model, dt, t); }
-  release(model: Character) { this.ranged.hide(model); model.setLimbs(null); this.hold(model, null); this.rollAngle = 0; this.crouch = 0; this.ready = 0; }
+  late(model: Character, dt: number, t: number) {
+    this.ranged.late(model, dt, t);
+    const id = this.heldId;
+    if (!RIG_ON || !this.held || !id || !MELEE_GEAR.includes(id) || !this.bonesM) return;
+    if (!this.mframe) {
+      // a roll or a stagger: the weapon stays in the right hand, along the forearm
+      const hw = model.handR.getWorldPosition(new THREE.Vector3()), lw = this.bonesM.loR.getWorldPosition(new THREE.Vector3());
+      const fd = hw.clone().sub(lw).normalize();
+      this.held.position.copy(hw).addScaledVector(fd, 0.07);
+      this.held.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), fd);
+      return;
+    }
+    // the grip is in the palm: the hand bone's place plus the palm along the forearm
+    const hw = model.handR.getWorldPosition(new THREE.Vector3()), lw = this.bonesM.loR.getWorldPosition(new THREE.Vector3());
+    const grip = hw.clone().addScaledVector(hw.clone().sub(lw).normalize(), 0.07);
+    const rq = model.root.getWorldQuaternion(new THREE.Quaternion());
+    const dW = this.cur.d.clone().applyQuaternion(rq).normalize();
+    this.held.position.copy(grip);
+    this.held.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dW);
+    // the numbers: the drawn shaft against the body, the left hand against the shaft
+    const S = SHAFT[id]!, gl = model.root.worldToLocal(grip.clone()), q = new THREE.Vector3();
+    let worst = 0;
+    for (let k = -S.back; k <= S.front; k += 0.04) worst = Math.max(worst, depth(q.copy(gl).addScaledVector(this.cur.d, k), this.cur.bend, S.r));
+    const st = this.stats; st.frames++; st.shaftIn = Math.max(st.shaftIn, worst);
+    if (this.solvedL !== null) {
+      const hl = model.handL.getWorldPosition(new THREE.Vector3()), ll = this.bonesM.loL.getWorldPosition(new THREE.Vector3());
+      const palm = hl.clone().addScaledVector(hl.clone().sub(ll).normalize(), 0.07);
+      const rel = palm.sub(grip), along = rel.dot(dW);
+      st.leftOff = Math.max(st.leftOff, rel.addScaledVector(dW, -along).length());
+    }
+    void dt; void t;
+  }
+  release(model: Character) { this.ranged.hide(model); model.setLimbs(null); this.hold(model, null); this.mframe = false; this.outL = {}; gripHand(model, 'R', null); gripHand(model, 'L', null); this.rollAngle = 0; this.crouch = 0; this.ready = 0; }
+}
+
+type GripShape = 'open' | 'relaxed' | 'grip' | 'pinch' | 'point';
+/** Close a hand round what it holds (character.setGrip from the story's rig; absent on older builds). */
+function gripHand(model: Character, side: 'L' | 'R', g: { shape: GripShape; radius?: number } | null) {
+  (model as unknown as { setGrip?: (s: 'L' | 'R', g: { shape: GripShape; radius?: number } | null) => void }).setGrip?.(side, g);
 }

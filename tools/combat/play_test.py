@@ -97,6 +97,19 @@ with sync_playwright() as pw:
             page.evaluate("__bs.combat.testTap('Mouse0')"); step(page, 0.15)
             ok(page.evaluate(D)['player']['act'] in ('windup', 'active'), 'arena: a click swings the club', page.evaluate(D)['player']['act'])
             step(page, 3); shot(page, 'arena_pack')
+            # every weapon held in the hand, through blows, a block and a throw where it has one: the drawn shaft
+            # never inside the body, the left hand on a spear's shaft (view/melee.ts; numbers from the real skeleton)
+            for wpn in ['spear', 'club', 'throwstick', 'torch', 'handaxe', 'rock']:
+                for i in range(16):
+                    if page.evaluate(D)['player']['weapon'] == wpn: break
+                    page.evaluate("__bs.combat.testTap('KeyR')"); step(page, 0.1)
+                if page.evaluate(D)['player']['weapon'] != wpn: continue
+                page.evaluate("__bs.combat.testPoseStats(true)")
+                for i in range(3): page.evaluate("__bs.combat.testTap('Mouse0')"); step(page, 0.7)
+                page.evaluate("__bs.combat.testHold('KeyQ', true)"); step(page, 0.6); page.evaluate("__bs.combat.testHold('KeyQ', false)"); step(page, 0.5)
+                ps = page.evaluate("__bs.combat.testPoseStats(true)")
+                ok(ps['frames'] > 20 and ps['shaftIn'] <= 0.01, f'arena: the {wpn} stays out of the body through blows and a block', json.dumps(ps))
+                if wpn == 'spear': ok(ps['leftOff'] <= 0.05, 'arena: the left hand stays on the spear shaft', json.dumps(ps))
             # wake the guardian and let it work
             g = [e for e in page.evaluate(D)['enemies'] if e['kind'] == 'guardian'][0]
             page.evaluate(f"__bs.teleport({g['x']} - 3, {g['z']})"); step(page, 6)
