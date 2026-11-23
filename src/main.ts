@@ -1047,6 +1047,23 @@ window.addEventListener('resize', () => {
     return ps.map((p) => ({ id: p.id, walk: !!p.walk, pos: p.pos, root: p.fig.root }));
   },
   /** Test hook: the painted crowd near the camera (14 m), the real bodies walking it, and cards hidden with no body. */
+  /** CPU-side bytes (typed arrays, each counted once) by who holds them: the scene first, then each cache for what only it
+   * holds; textures by their image size (w x h x 4). Phone memory work (perf agent 20). */
+  async memOwners() {
+    const [{ modelCacheNow }, { assetCacheNow }, { mergeCacheNow }] = await Promise.all([import('./game/away/city'), import('./characters/assets'), import('./characters/bodymerge')]);
+    const seen = new Set<ArrayBufferLike>(), seenT = new Set<THREE.Texture>();
+    const geo = (g: THREE.BufferGeometry | undefined) => { let n = 0; if (!g) return 0; const f = (a: { array?: ArrayLike<number> & { buffer?: ArrayBufferLike; byteLength?: number }; data?: { array: ArrayLike<number> & { buffer: ArrayBufferLike; byteLength: number } } } | null | undefined) => { const arr = (a?.data?.array ?? a?.array) as (ArrayLike<number> & { buffer: ArrayBufferLike; byteLength: number }) | undefined; if (!arr || !arr.buffer || seen.has(arr.buffer)) return; seen.add(arr.buffer); n += arr.byteLength; }; for (const k in g.attributes) f(g.attributes[k] as never); f(g.index as never); for (const a of Object.values(g.morphAttributes).flat()) f(a as never); return n; };
+    const tex = (t: THREE.Texture | null | undefined) => { if (!t || seenT.has(t)) return 0; seenT.add(t); const im = t.image as { width?: number; height?: number; data?: { byteLength: number } } | undefined; return im?.data?.byteLength ?? ((im?.width ?? 0) * (im?.height ?? 0) * 4); };
+    const walk = (roots: THREE.Object3D[]) => { let g = 0, t = 0, chars = 0; for (const r of roots) r.traverse((o) => { const m = o as THREE.Mesh; const gb = geo(m.geometry); g += gb; if (o.userData?.isCharacter) chars++; const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : []; for (const mt of mats) for (const v of Object.values(mt as unknown as Record<string, unknown>)) if ((v as THREE.Texture)?.isTexture) t += tex(v as THREE.Texture); }); return { geoMB: +(g / 1e6).toFixed(1), texMB: +(t / 1e6).toFixed(1), chars }; };
+    const out: Record<string, unknown> = {};
+    const stage = renderer.stageInfo?.() as { scene?: THREE.Scene } | undefined;
+    if (stage?.scene) out.stage = walk([stage.scene]);
+    out.modelCache = walk(modelCacheNow());
+    const ac = assetCacheNow(); out.bodyAssets = walk(ac.scenes); out.bodyTex = +(ac.textures.reduce((n, t) => n + tex(t), 0) / 1e6).toFixed(1);
+    out.mergeCache = +(mergeCacheNow().reduce((n, g) => n + geo(g), 0) / 1e6).toFixed(1);
+    const m = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory; out.heapMB = m ? Math.round(m.usedJSHeapSize / 1e6) : null;
+    return out;
+  },
   awayCrowd() { const st = game?.away?.stage as { crowdState?: () => { near: number; bodies: number; lost: number; held?: number[][] } } | null; return st?.crowdState?.() ?? { near: 0, bodies: 0, lost: 0 }; },
   /** Test hook: cars and people on the away stage this frame (tools/traffic_smoke.py). */
   awayTraffic() { return (game?.away?.stage as { trafficState?: () => unknown } | null)?.trafficState?.() ?? null; },

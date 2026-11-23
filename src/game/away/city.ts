@@ -350,7 +350,9 @@ function flatPortals(scene: THREE.Scene, room: THREE.Box3, x: number, openings: 
 
 // ---------- models (CC0, Poly Haven, packed by tools/fetch_city.py) ----------
 const gl = new GLTFLoader(); gl.setMeshoptDecoder(MeshoptDecoder);
-const modelCache = new Map<string, Promise<THREE.Object3D>>();
+const modelCache = new Map<string, Promise<THREE.Object3D>>(), modelDone = new Map<string, THREE.Object3D>();
+/** What the props' model cache holds (memory reports: __bs.memOwners). */
+export const modelCacheNow = () => [...modelDone.values()];
 function model(name: string) {
   let p = modelCache.get(name);
   if (!p) {
@@ -367,6 +369,7 @@ function model(name: string) {
           m.castShadow = false;
         }
       });
+      modelDone.set(name, g.scene);
       return g.scene;
     });
     modelCache.set(name, p);

@@ -17,6 +17,8 @@ const PARTS = { skin: 0, cloth: 1, eye: 2 } as const;
 /** The attributes the merged shader reads (everything else the glTF brought is left out). */
 const KEEP: Record<string, number> = { position: 3, normal: 3, uv: 2, skinIndex: 4, skinWeight: 4, aUnder: 4, aOver: 3, aAccent: 1, aSway: 1, aPhase: 1 };
 const cache = new Map<string, { g: THREE.BufferGeometry; names: string[] }>();
+/** The merged bodies kept for reuse (memory reports: __bs.memOwners). */
+export const mergeCacheNow = () => [...cache.values()].map((c) => c.g);
 export const BODY_MERGE = { on: typeof location === 'undefined' || new URLSearchParams(location.search).get('bodymerge') !== '0', merged: 0, geometries: 0 };
 
 /** One geometry from the parts (cloth first, then skin, then eyes), with the morph targets `keep` lets through. */
