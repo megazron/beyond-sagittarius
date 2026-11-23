@@ -300,7 +300,9 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
   const beaconSite = siteRing(1.0);
   beacon.add(beaconSite);
 
-  forest.addObstacle(L.camp.x, L.camp.z, 0.75);
+  // the fire ring: knee high (the camera passes over it; as a trunk of no height it pulled the night watch's view in
+  // to over his head in one frame each time he came to the fire: 2:06 in v14, 2:13, 2:38 and 3:08 in v15)
+  forest.addObstacle(L.camp.x, L.camp.z, 0.75, 0.9);
   let shelterObstacles = false, beaconObstacle = false;
 
   const state = { fireStage: 0, lit: false, shelter: false, beaconBuilt: false, beaconOn: false, sites: { fire: false, shelter: false, beacon: false } };
