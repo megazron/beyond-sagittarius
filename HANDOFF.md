@@ -1139,3 +1139,34 @@ unlanded except this handoff commit and any recording in progress.
   head shape at the draw (measure only upper arm/forearm against chest, not the head). Decide with a GPU look.
   If the next agent needs main green quickly: revert the gate line in tools/combat/play_test.py to a print (it was a
   print before this session) and land the rest, saying so in the README.
+
+### 2026-11-23 ~13:30 (combat agent, weapons session 4)
+- land38 rebased on main bd16cf8 as `combat-land40` (876661b; combat-land39 is a stray mid-rebase push, ignore it).
+  On top (local, then pushed as the next land branch): fish readability, the softer camp-fire light.
+- BOW (ranged.ts): the real fault was ease() pushing the anchor out of the head shape by a forearm's thickness: the
+  string hand went 20 cm out in front of the face, the arm nearly straight, the elbow in front of the neck. Now the
+  anchor is at the side of the jaw (head + 0.115 along F, the way the chest faces, = the right cheek when the head
+  is turned to the target), not pushed out (only the arm above the hand is measured against the head); the drawing
+  elbow's pole runs from down/out at the brace to back along the arrow (-A, a little up, a little behind) at full
+  draw. Worked through on paper with the CI rig numbers: the elbow ends ~15 cm past the shoulder along -A, at the
+  arrow's height, forearm along the arrow. CI number pending. ease() now pushes and pulls in turn (one pull back into
+  reach could re-enter the chest: the sling's 2.3 cm); sling follow-through ends further out in front.
+- Rock gate: the rock is thrown on the first click, so frames measured were 7-18 by chance; play_test now holds each
+  weapon 0.8 s before the clicks (the check itself was right, the test's timing was not).
+- traffic_smoke on 252cef8: downtown "a car overlapped a person 18 times". Not combat code (city traffic), main's own
+  runs on bd16cf8 passed it; boot waits on real time (time.sleep(10)) before the stepped check, so it is timing
+  dependent. Rerun if it fails again; tell the city/perf agent if it repeats.
+- SPEAR drawn back (melee.ts): throwBack hand now reached back (-0.42, 1.56, -0.44), not by the ear (a folded arm
+  had nowhere for the elbow but out behind); a hand above and behind its shoulder takes an elbow pole down and out;
+  the release arcs up over the shoulder (the straight line passed through it). pose_test checks it: elbow not behind
+  the wrist (<= 4 cm; was 8-12 cm, now -10 to -16) and below it (>= 8 cm). 258 checks.
+- WRIST (body.ts fixArms): a hand on a shaft bends at the wrist towards square to the shaft (at most 26 deg), the
+  wrist re-solved so the grip stays put; the weapon and the left-hand gate use the flexed hand direction.
+- SHOULDER DROP (body.ts dropShoulder): no clavicles, so while drawing a throw the chest rolls 0.085 rad (right side
+  down) and the neck rolls back so the head stays level. Not yet seen on the GPU.
+- FIRE: the camp fire light 70/decay 1.7 -> 32/decay 1.25 (about half on the coat at 1 m, same at 3 m, a bit more past
+  6 m); the story's own fire light (story.ts, 16) also burns there.
+- FISH: a pale moving caustic patch on the bottom under each fish, a faint additive light shaft, surface rings over
+  it (fx.ripple). Bot not changed yet: waiting for the fishing take's evals.txt.
+- Plan ~/bs-cap/combat/plan_v25.json (mkplan_v25.py; CLIPS=spear,bow,fish,fire): 26_spear_drawn_back_v1,
+  27_bow_real_form_sling_v1, 20_spear_fishing_v4 (log in evals.txt), 28_coat_by_the_fire_v1.
