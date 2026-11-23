@@ -1275,12 +1275,15 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   blocks.push(...dist.solids);
   buildProps(placedD, scene, false);
   const day = dayCycle({ sky: skyMat, sun, hemi, fog: scene.fog as THREE.Fog, rich, scene });
-  let envTex: THREE.Texture | null = null;
+  // the sky's image light: the whole render target is kept and freed with it (only its texture was freed, so every
+  // refresh of the sky, about twice a minute, left a render target on the GPU for as long as you stayed in the city)
+  let envRT: THREE.WebGLRenderTarget | null = null;
+  const envTex = { dispose() { envRT?.dispose(); envRT = null; } };
   const refreshEnv = () => {
     const r = Renderer.current?.renderer; if (!r) return;
     const env = new THREE.Scene(); env.add(envSky);
-    const pm = new THREE.PMREMGenerator(r), t = pm.fromScene(env, 0.02, 0.1, 200).texture; pm.dispose();
-    envTex?.dispose(); envTex = t; scene.environment = t;
+    const pm = new THREE.PMREMGenerator(r), rt = pm.fromScene(env, 0.02, 0.1, 200); pm.dispose();
+    envTex.dispose(); envRT = rt; scene.environment = rt.texture;
   };
   // the grade by quarter: the bazaar warm, downtown cool, the bay a little teal
   const TINT = new THREE.Vector3(1, 1, 1), TW = new THREE.Vector3();
@@ -1654,7 +1657,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (tier > 0 && cam && Renderer.current && !NOPROBE) {
         probe ??= cityProbe(Renderer.current.renderer, scene, { size: tier === 2 ? 128 : 64, every: tier === 2 ? 5 : 14, hide: () => scene.children.filter((o) => o.userData.isCharacter) });
         const e = probe.step(cam.position);
-        if (e) { envTex?.dispose(); envTex = null; scene.environment = e; }
+        if (e) { envTex.dispose(); scene.environment = e; }
       }
       Renderer.current?.setLook(day.state.exposure, day.state.bloom, day.state.threshold);
       // the cards take the light of the hour: the sky's fill and what is left of the sun
@@ -1831,6 +1834,6 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       mega.update(dt, time);
       dense.update(dt, time, cam ?? null, oldOn);
     },
-    dispose() { CHAR_BUDGET.shadowFar = SHADOW_FAR0; Renderer.current?.setLook(); (Renderer.current?.final.uniforms.uTint.value as THREE.Vector3 | undefined)?.set(1, 1, 1); envTex?.dispose(); baker?.dispose(); probe?.dispose(); scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry.dispose(); }); },
+    dispose() { CHAR_BUDGET.shadowFar = SHADOW_FAR0; Renderer.current?.setLook(); (Renderer.current?.final.uniforms.uTint.value as THREE.Vector3 | undefined)?.set(1, 1, 1); envTex.dispose(); baker?.dispose(); probe?.dispose(); scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry.dispose(); }); },
   };
 }
