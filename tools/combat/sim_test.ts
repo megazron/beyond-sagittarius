@@ -625,6 +625,23 @@ section('spear fishing: the fish is not where it is seen');
     return { dead: f.dead, log: sim.fishLog.join(','), seenUp: seenY - cy, splash: ev.some((e) => e.t === 'sound' && e.what === 'splash') };
   };
   const seen = thrust('seen'), real = thrust('true'), below = thrust('below');
+  {
+    // the fishing camera (player.ts with combat.ts's fish.spear settings: 2.5 m back, 0.6 m right of the shoulder,
+    // about 1.85 m over the bank, looking along the look): from the water's edge a fish up to 2.2 m out is in reach
+    // (the stand-in player, demo_bot.js fish mode, thrusts at fish no further than that)
+    const at = (fz: number) => {
+      const sim = new CombatSim({ env: lake, seed: 21 }); sim.player.has.spear = true; sim.equip('spear');
+      sim.player.x = 0; sim.player.z = -0.4; sim.player.y = 0.2; sim.player.fx = 0; sim.player.fz = 1;
+      const f = sim.spawn('darter', 0.1, fz, { yaw: Math.PI / 2, wander: 9 });
+      run(sim, 0.2, () => {});
+      const E = { x: -0.6, y: 2.05, z: -2.9 }, cy = f.y + f.def.height * 0.5;
+      const dx = f.x - E.x, dy = cy - E.y, dz = f.z - E.z, k = (-0.5 - E.y) / dy;
+      let fired = false;
+      run(sim, 1.2, (I) => { I.eye = E; I.ax = E.x + dx * k; I.ay = -0.5; I.az = E.z + dz * k; I.lx = 0; I.lz = 1; if (!fired) { I.attack = true; fired = true; } });
+      return f.dead;
+    };
+    ok(at(0.9) && at(1.4) && at(1.8), 'spear fishing: from the low close fishing camera a thrust at a fish 1.3 to 2.2 m out from the bank takes it');
+  }
   ok(seen.seenUp > 0.08, 'refraction: a fish 0.4 m down, seen from a standing player, looks over 8 cm higher than it is', seen.seenUp.toFixed(3));
   ok(!seen.dead && seen.log === 'high' && seen.splash, 'spear fishing: a thrust at where the fish is seen goes over it (and the sim says so)', seen.log);
   ok(real.dead && real.log === 'hit', 'spear fishing: a thrust at where the fish really is takes it', real.log);
