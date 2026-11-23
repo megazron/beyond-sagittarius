@@ -24,7 +24,11 @@ export type Dir = [number, number, number];
  * crash landings). Directions are where each bone points, so the same pose fits
  * every build and no rig axes leak out of here.
  */
-export interface Limbs { armL?: Dir; armR?: Dir; foreL?: Dir; foreR?: Dir; legL?: Dir; legR?: Dir; shinL?: Dir; shinR?: Dir; bend?: number; twist?: number; openHands?: boolean; hair?: Dir }
+export interface Limbs { armL?: Dir; armR?: Dir; foreL?: Dir; foreR?: Dir; legL?: Dir; legR?: Dir; shinL?: Dir; shinR?: Dir; bend?: number; twist?: number; openHands?: boolean; hair?: Dir;
+  /** These arms were solved by their caller (combat's melee rig puts both hands on a weapon): the rig's own push of the
+   *  arms out of the torso (keepArmsOut) leaves them where they are set, so it never pulls a hand off the shaft. The
+   *  caller keeps them clear of the body itself, against Character.torsoCapsules() if it wants the rig's own shapes. */
+  ownArms?: 'L' | 'R' | 'both' }
 export type Face = Partial<Record<'smile' | 'frown' | 'fear' | 'squint' | 'open' | 'blink', number>>;
 /** A hand's finger shape for Character.setGrip. */
 export interface Grip { shape: 'open' | 'relaxed' | 'grip' | 'pinch' | 'point'; radius?: number; amount?: number }
@@ -256,7 +260,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const lookAt = { y: 0, x: 0 };
   const morph: Record<string, number> = {};
   let blinkAt = 2 + Math.random() * 3, blinkT = 0, speak = 0;
-  let limbs: Limbs | null = null, faceSet: Face | null = null;
+  let limbs: Limbs | null = null, faceSet: Face | null = null, armOwner: 'L' | 'R' | 'both' | null = null;
   // kneeling (0 standing, 1 on both knees) eases to its goal; a prop held outside any task
   let kneel = 0, kneelGoal = 0, heels = 0, heelsGoal = 0, heldProp: PropKind | null = null, heldShown = false;
   const kneelL: Limbs = {}, KD = new THREE.Vector3(), KQ = new THREE.Quaternion();
@@ -751,7 +755,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       torsoR = per.map((x) => { x.sort((a, b) => a - b); return x.length ? x[Math.floor(x.length * .45)] : .1; });
       torsoLen = seg.map(([a, b]) => a.distanceTo(b));
     }
+    const own = limbs?.ownArms ?? armOwner;
     for (const s of ['L', 'R']) {
+      if (own === 'both' || own === s) continue; // an external pose owner has these arms (claimArms, Limbs.ownArms)
       const upper = bs.get(`upperarm${s}`)!, sh = wp(upper);
       let turned = 0;
       for (let it = 0; it < 7 && turned < .7; it++) {
@@ -1484,6 +1490,21 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** Down on both knees (true) or back up (false); it takes about a second either way. */
     setKneel(on: boolean, sit = false) { kneelGoal = on ? 1 : 0; heelsGoal = on && sit ? 1 : 0; },
     get kneeling() { return kneel; },
+    /** An external pose owner (combat's melee rig) claims the arms until it lets go (null): keepArmsOut does not move
+     *  them. The same as Limbs.ownArms, for a caller that poses the bones itself instead of through setLimbs. */
+    claimArms(side: 'L' | 'R' | 'both' | null) { armOwner = side; },
+    /** The torso as the rig keeps arms out of it: three capsules (hips to spine1, spine1 to chest, chest to neck) in
+     *  root space, radius in metres (measured from this body's skin and clothes the first time it is posed; null
+     *  before). Last frame's pose: call it after animate(). */
+    torsoCapsules() {
+      if (!torsoR || !B) return null;
+      root.updateMatrixWorld(true);
+      return TORSO.map(([a, b], j) => {
+        const pa = B!.get(a)!.getWorldPosition(new THREE.Vector3()), pb = B!.get(b)!.getWorldPosition(new THREE.Vector3());
+        const r = torsoR![j] * (pa.distanceTo(pb) / (torsoLen[j] || 1));
+        return { a: root.worldToLocal(pa), b: root.worldToLocal(pb), r };
+      });
+    },
     /** Something held in the right hand outside any task (a leaf cup, a berry); null puts it away. */
     setProp(k: PropKind | null) { heldProp = k; },
     /** One of a crowd (CHAR_BUDGET): no corrective shapes, the light build and no shadow from closer in. */
