@@ -377,13 +377,13 @@
    "clothPx": 165
   },
   "task_drink": {
-   "armPenCm": 5.6,
-   "handPenCm": 5.6,
-   "meshInCm": 2.4,
+   "armPenCm": 4.3,
+   "handPenCm": 4.3,
+   "meshInCm": 2.9,
    "jerkCm": 6.4,
    "holdErrCm": 1.0,
    "propGapCm": 2.8,
-   "mouthCm": 2.1,
+   "mouthCm": 1.6,
    "skinPx": 102,
    "clothPx": 198
   },
@@ -465,13 +465,13 @@
    "clothPx": 214
   },
   "sit_drink": {
-   "armPenCm": 14.4,
-   "handPenCm": 14.4,
+   "armPenCm": 4.6,
+   "handPenCm": 4.6,
    "meshInCm": 1.0,
    "jerkCm": 11.0,
    "holdErrCm": 1.0,
    "propGapCm": 2.8,
-   "mouthCm": 2.1,
+   "mouthCm": 1.6,
    "skinPx": 118,
    "clothPx": 204
   },
@@ -725,6 +725,6 @@
   "raised 2026-11-23 13:50": "injured jerkCm, task_plant jerkCm, task_eat jerkCm, task_eat meshInCm, task_drink armPenCm, task_drink handPenCm, task_drink jerkCm, task_drink meshInCm, spear_thrust jerkCm, reach_far jerkCm (full10 at the thigh guard fix; the rest ratcheted down)",
   "task_putdown/task_throw clothPx (2026-11-23 14:20)": "new scenarios ratcheted from full10, a run without pixels, so their pixel caps were placeholders (30): set from CI at 461b59f (zenvik 56 and 78) with the usual slack",
   "raised 2026-11-23 21:10 (full11, ff00716)": "task_eat and sit_drink armPen/handPen: Draxum's (and Lyrra's) fingers or wrist at the lips are inside the round chest shape where it reaches up under the chin; the guards let go there on purpose (RIG_OPTS.lipsLetGo; with them on, the cup stopped 5 to 6 cm off his mouth). The surface check for the same frames reads 0 to 0.5 cm. kneel_pickup_stone meshInCm 4.0 against 3.9: run to run noise on custom_m_explorer, untouched code. Lowered from full11: drink arm 11.1 to 5.6, seated eat arm 13.5 to 8.4, drink jerk 10.6 to 6.4, and others",
-  "sit_drink armPen (2026-11-23 22:00)": "Draxum's wrist at 10 to 12.2 cm into the chest shape between runs (CI order carries state). This one LOOKS wrong, not just a measure: seated, his clip bows the head, the cup's rim reaches the lips but the hand ends over his nose (renders ~/bs-cap/look/c6, c7). A head tilt up (0.32 rad) did not fix it. To fix, then lower"
+  "ratchet 2026-11-23 23:40 (full12, e06ed0f)": "The sip: the face lifted at the lips and the cup tipped past level, held round its lower half. Lowered: sit_drink arm/hand 14.4 to 4.6 (Draxum's wrist was inside the chest shape under his bowed head), task_drink arm/hand 5.6 to 4.3, mouth 2.1 to 1.6 on both. Raised: task_drink meshInCm 2.4 to 2.9 (custom_f_medic, a finger at f68 as the hand comes down from the lips: CI 2.8). Seated Draxum still has his hand over his nose at the sip (renders ~/bs-cap/look/w2): his hand is bigger than the cup."
  }
 }

@@ -107,8 +107,9 @@ const EXTREMES: Scenario[] = [
   { name: 'x_kick', setup: L({ legR: [0, -0.1, 1], shinR: [0, -0.3, 1] }), crewOnly: true },
   { name: 'x_squat', setup: L({ legL: [0.1, -0.2, 1], legR: [-0.1, -0.2, 1], shinL: [0, -1, -0.3], shinR: [0, -1, -0.3], bend: 0.6 }), crewOnly: true },
 ];
+// (Nuvexa's own phone rides her hand too, now as its own mesh: it is not the scenario's prop)
 const propMid = (c: Character) => {
-  for (const ch of c.root.getObjectByName('handR')!.children) { const m = ch as THREE.Mesh; if (!m.isMesh) continue; m.geometry.computeBoundingSphere(); return m.geometry.boundingSphere!.center.clone().applyMatrix4(m.matrixWorld); }
+  for (const ch of c.root.getObjectByName('handR')!.children) { const m = ch as THREE.Mesh; if (!m.isMesh || m.name === 'ownPhone') continue; m.geometry.computeBoundingSphere(); return m.geometry.boundingSphere!.center.clone().applyMatrix4(m.matrixWorld); }
   return null;
 };
 /** What the hands of the running scenario are told to hold this frame (dev/chars.ts qaLive draws it). */

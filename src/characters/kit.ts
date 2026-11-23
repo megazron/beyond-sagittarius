@@ -203,7 +203,7 @@ export function addKit(k: KitInput): Kit {
       const seats = { R: seat('R'), L: seat('L') };
       ph.position.copy(seats.R.p); ph.quaternion.copy(seats.R.q);
       add(new THREE.BoxGeometry(0.066, 0.138, 0.001), glowMat(0x8fd8ff, 0.8), ph, 0, 0, 0.005, false);
-      phone = ph;
+      ph.name = 'ownPhone'; phone = ph;
       phoneTo = (left) => { const sd = left ? 'L' : 'R', h = B.get(`hand${sd}`); if (!h || ph.parent === h) return; h.add(ph); ph.position.copy(seats[sd].p); ph.quaternion.copy(seats[sd].q); };
       if (!custom) for (const s of [-1, 1]) { const r = add(new THREE.TorusGeometry(0.021, 0.0016, 8, 28), metal(0xffd66a, 0.2), head, s * (eye.x + 0.073), eye.y - 0.075, eye.z - 0.075, false); r.rotation.y = Math.PI / 2; }
       break;
