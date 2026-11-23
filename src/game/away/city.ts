@@ -1294,9 +1294,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       near.push([d - (mine && CONTACT > 0 ? 2 : 0) - (pin ? 1000 : 0), i]);
     }
     near.sort((a, b) => a[0] - b[0]);
-    // never more than BODY_CAP + 2 bodies in all (the townsfolk drawn last frame count first): the pinned, then the
-    // budget, then whoever is within reach
-    const room = (outroT >= 0 ? 99 : BODY_CAP + 2) - usedLog;
+    // phones: never more than BODY_CAP + 2 bodies in all (the townsfolk drawn last frame count first): the pinned, then
+    // the budget, then whoever is within reach. In the bazaar the story's people use all of it, so there a passer-by at
+    // your elbow can still be a card on a phone (perf_gate's phone budget). Web and Ultra: the held and the two within
+    // reach always (their own cap is POOL + 2)
+    const room = outroT >= 0 || tier > 0 ? 99 : BODY_CAP + 2 - usedLog;
     const want = new Set<number>(); { const n = Math.min(POOL, budget); for (const [k, i] of near) { if ((want.size >= n && k > -500) || want.size >= room) break; want.add(i); } }
     for (const [, i] of elbow) if (want.size < Math.min(room, POOL + 2)) want.add(i);
     elbow.length = 0;
@@ -1386,7 +1388,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       pk.push([d - (mine ? 3 : 0) - (pin ? 1000 : 0) - (du < CONTACT ? 500 : 0), i]); // within reach: before the budget (as walkCrowd)
     }
     pk.sort((a, b) => a[0] - b[0]);
-    const room = (outroT >= 0 ? 99 : BODY_CAP + 2) - usedLog - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0);
+    const room = outroT >= 0 || tier > 0 ? 99 : BODY_CAP + 2 - usedLog - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0);
     for (const [k, i] of pk) { if ((want.size >= dcap && k > -500 && !(k < -400 && want.size < dcap + 2)) || want.size >= room) break; want.add(i); }
     for (const b of dpool) if (b.ped >= 0 && !want.has(b.ped)) { b.ped = -1; b.fig.root.visible = false; }
     for (const i of want) if (!dpool.some((b) => b.ped === i)) { const b = dpool.find((x) => x.ped < 0 && x.look === i % NLOOK); if (b) { b.ped = i; b.fig.root.visible = true; } }
