@@ -78,7 +78,10 @@ window.__cbBot = (mode) => {
       if (st === 0) { if (equip('sling')) { run.summon('skritch', 3); next(); } }
       else if (st === 1) { const t = nearest(living('skritch')); if (t && since() < 22) shoot(t, { loft: 0.02 }); else { hold('Mouse2', 0); hold('Mouse0', 0); next(); } }
       else if (st === 2) { if (equip('bow')) { run.summon('nibbet', 3); next(); } }
-      else if (st === 3) { const t = nearest(living('nibbet')); if (t) shoot(t); else { hold('Mouse2', 0); hold('Mouse0', 0); } }
+      else if (st === 3) { const t = nearest(living('nibbet')); if (t && since() < 24) shoot(t); else { hold('Mouse2', 0); hold('Mouse0', 0); if (window.__cbRangedAtlatl) next(); } }
+      // (and the spear-thrower, when the take asks for it: the aim views after the camera fix)
+      else if (st === 4) { if (equip('atlatl')) { run.summon('skritch', 2); next(); } }
+      else if (st === 5) { const t = nearest(living('skritch')); if (t && since() < 22) shoot(t, { loft: 0.016 }); else { hold('Mouse2', 0); hold('Mouse0', 0); window.__cbRangedDone = true; } }
     } else if (mode === 'guardian') {
       const g = living('guardian')[0];
       if (st === 0) { if (equip('coil')) next(); }
@@ -139,7 +142,10 @@ window.__cbBot = (mode) => {
       // a hunter waits beside the snare, still, looking out into the dark the smoke goes to (where they come from).
       // The game's own look turns the view to the snare when something is heard at it; the bot does not turn for it
       const sq = sim.traps.find((q) => q.kind === 'snare') || bait;
-      const guard = { x: sq.x + wx * 1.2 - wz * 4.6, z: sq.z + wz * 1.2 + wx * 4.6 }, out = { x: sq.x + wx * 16 - wz * 2, z: sq.z + wz * 16 + wx * 2 };
+      // (he watched from beside the snare, 7 m or more out from the fire: much of the s5 take was dark field. Now from the
+      // edge of the firelight on the snare's side, a step to the side of the line, so the fire, he and the snare share the frame)
+      const fsx = sq.x - fire.x, fsz = sq.z - fire.z, fsl = Math.hypot(fsx, fsz) || 1, gd = Math.min(2.6, fsl * 0.5);
+      const guard = { x: fire.x + (fsx / fsl) * gd - (fsz / fsl) * 1.3, z: fire.z + (fsz / fsl) * gd + (fsx / fsl) * 1.3 }, out = { x: sq.x + wx * 16 - wz * 2, z: sq.z + wz * 16 + wx * 2 };
       // a record of every catch (window.__cbTrapLog), so a take can be checked for one without watching it all
       for (const q of sim.traps) if (q.sprungT >= 0 && !(window.__cbTrapLog ||= []).some((r) => r.id === q.id && r.t === q.sprungT)) window.__cbTrapLog.push({ id: q.id, kind: q.kind, t: q.sprungT, caught: q.caught, wave: run.wave, d: +dist(q, p).toFixed(1), rec: +((performance.now() - t0) / 1000).toFixed(1) });
       // and every warning cue (rustle, voice, twig before the snap), with its time in the take, to listen for it

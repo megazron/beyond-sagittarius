@@ -49,7 +49,7 @@ function timeline(w: WeaponId): Step[][] {
 for (const SK of SKELS) { SH = SK; setBodyFit(SK.fit); console.log(`-- ${SK.name}`);
 for (const w of MELEE_GEAR) {
   const m = WEAPONS[w]?.melee;
-  let elbowBack = -9, elbowLow = 9, minBendR = 180, minBendLh = 180, minBendLf = 180, maxOutLf = -1, wE = "", wV = "", wTurn = '', wArm = '', wMiss = '', worstPen = 0, worstArm = 0, worstMissR = 0, worstMissL = 0, worstV = 0, worstTurn = 0, worstE = 0, frames = 0, both = 0;
+  let chargeBendL = 180, elbowBack = -9, elbowLow = 9, minBendR = 180, minBendLh = 180, minBendLf = 180, maxOutLf = -1, wE = "", wV = "", wTurn = '', wArm = '', wMiss = '', worstPen = 0, worstArm = 0, worstMissR = 0, worstMissL = 0, worstV = 0, worstTurn = 0, worstE = 0, frames = 0, both = 0;
   for (const tl of timeline(w)) {
     const cur = newFrame(), tgt = newFrame(), tmp = newFrame();
     const mem = { L: 0, R: 0 };
@@ -76,6 +76,8 @@ for (const w of MELEE_GEAR) {
         }
         // drawn back to throw: the right elbow below the hand and not out behind it (the owner: "the right elbow sticking
         // out behind him" with the spear drawn back); metres the elbow is behind the wrist, and below it
+        // the free left arm while a throw is drawn (owner: "from behind the free arm is still nearly straight")
+        if (s.act === 'charge' && s.charge > 0.7 && r.f.l === null && r.f.hold < 0.02) { const K1 = skel(f.bend, f.twist); chargeBendL = Math.min(chargeBendL, r.eL.clone().sub(K1.sL).angleTo(r.wL.clone().sub(r.eL)) * 57.3); }
         if (s.act === 'charge' && s.charge > 0.7 && (w === 'spear' || w === 'hafted' || w === 'rock')) {
           const wristR = r.eR.clone().lerp(r.wR, SH.b / (SH.b + 0.07));
           elbowBack = Math.max(elbowBack, wristR.z - r.eR.z); elbowLow = Math.min(elbowLow, wristR.y - r.eR.y);
@@ -112,6 +114,7 @@ for (const w of MELEE_GEAR) {
     ok(elbowLow >= 0.08, `${SH.name} ${w}: drawn back, the right elbow hangs below the hand (8 cm)`, `${(elbowLow * 100).toFixed(0)} cm`);
   }
   ok(minBendR >= 25, `${SH.name} ${w}: the right elbow stays bent outside a blow (25 deg)`, `${minBendR.toFixed(0)} deg`);
+  if (chargeBendL < 180) ok(chargeBendL >= 85, `${SH.name} ${w}: the free left elbow is well bent while a throw is drawn (85 deg)`, `${chargeBendL.toFixed(0)} deg`);
   ok(minBendLf >= 25, `${SH.name} ${w}: the free left elbow stays bent (25 deg)`, `${minBendLf.toFixed(0)} deg`);
   ok(maxOutLf <= 0.1, `${SH.name} ${w}: the free left elbow hangs by the body when the weapon is carried or up (10 cm out; a wide coat needs the hand outside it)`, `${(maxOutLf * 100).toFixed(0)} cm`);
   ok(worstPen <= 0.003, `${SH.name} ${w}: the shaft stays out of the body`, `${(worstPen * 100).toFixed(1)} cm`);
