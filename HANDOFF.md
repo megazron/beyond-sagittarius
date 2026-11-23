@@ -1063,3 +1063,24 @@ unlanded except this handoff commit and any recording in progress.
 - Next commit (perf24-wip): Bolzar south of the tram door (in clips_mobile2 he stood between you and the camera at the
   door: his hair filled the bottom right), phones' prop atlas tiles 128 px, the gate vista pitch 0.34 -> 0.08 (it put
   the camera on the ground looking up with the crowd filling the frame).
+- 15:15 PHONES 30 FPS (task 5): Mobile proxy (p24/plan_proxy_mobile.json, CDP CPU throttle 4x, real GPU, dist-prof =
+  336708e code with sourcemaps; p24/proxy1): flat 60.2 fps, bazaar 59.7, crowd 54.2 (worst frame 50 ms), gate 59.7,
+  square 60.2, market 60.1; update 3-5 ms, draw 7.5-11 ms, 73-138 draws. So the proxy is over 30 at every spot now
+  (it read 15-22 in older handoffs). CPU profile at the crowd (tools/mapprof.cjs): render 4.4 of 6.1 s busy, of it
+  setProgram (uniform upload) 2.2 s; character animate 0.9 s; city update 0.8 s; matrix updates ~0.9 s. The proxy is
+  the laptop CPU slowed 4x with a laptop GPU: it says nothing about a phone's GPU or thermal throttling.
+- Clips delivered: Downloads/BS_Game_v1.1/mobile_v4_GPU (README.txt). Re-clip of 0cc8adb (door, gate) queued:
+  p24/clips_mobile3. Cold title load of 448dd37 queued: p24/coldstep.sh -> ~/bs-assets/gpu/hitch_p24_cold_448.json.
+- 15:45 Re-clip of 0cc8adb (p24/clips_mobile3, in Downloads as *_v2.mp4): Bolzar no longer blocks the view at the door,
+  but arriving from the north the tram's rounded white nose fills the right half of the frame (the door is in its north
+  half). Gate hero view: camera about head height now; the waiting crowd still fills the left of the frame.
+- COLD TITLE LOAD (p24/coldstep.sh: fresh Chrome via coldchrome.sh, tools/hitch_tour.py --stop-after load, main's
+  448dd37, Web default, laptop GPU): loaded in 20.7 s, max frame 2967 ms, 29 frames over 50 ms, p95 182 ms
+  (~/bs-assets/gpu/hitch_p24_cold_448.json). Older handoff: 86.1 s. Not worked on further.
+- CI on 0cc8adb: everything green but smoke ("wake did not reach play", the known flaky timeout, planet not city);
+  failed job re-run, green. LANDED: `git push origin 0cc8adb:main` fast-forwarded 448dd37..0cc8adb.
+- OPEN / NEXT: (1) phone memory 2558 MB on software GL, far from 400: propBake geometry 67 MB, kit 29 MB, the
+  player's 2048 skin maps (by design), the merged bodies' 13 face/build morphs (~4 MB a look); a real-phone (or
+  real-GPU Mobile) memory number is still missing. (2) Web line-fade shows a dithered half-shape for a moment.
+  (3) The tram's look (big white capsule, end-on a white ball) is unchanged. (4) Far NE "held in place" clip not
+  re-recorded. (5) Mobile proxy worst frame 50 ms at the crowd spot.
