@@ -688,3 +688,35 @@ unlanded except this handoff commit and any recording in progress.
   and that fish show through the lake's water. (4) clips < 30 MB to Downloads/.../combat with honest README notes.
   (5) setGrip still not on origin/main (checked 14:00): bow/sling grips wait. (6) story agent's answer on spear
   fishing: last section of ~/bs-story/INVENTION_TREE.md. Giant-creature thump: left as is (no owner decision yet).
+
+## 2026-11-22 23:00 takeover by perf agent 20 (branch perf17 continued; landing branches perf19-land1..)
+- Read first: GPU runs go through `~/bs-assets/gpu/p18/gpurun.sh OUT PLAN URL` inside `HEAVY_EXCLUSIVE=1 ~/bin/heavy`. It now
+  stops my own Chrome (profile bs-perf-cold) by PID afterwards (the tab close reported 0 and left windows open) and logs
+  `p18/busy.sh`: CPU seconds other Chrome instances burned in 5 s. The life agent's Chrome (bs-life-gpu2, a game tab at
+  quality=web) burned ~2 cores for an hour while my "exclusive" runs measured: Mobile proxy read 16-26 fps in one run and
+  28-37 in the next at the same spots. Compare only back-to-back pairs, and read the busy line.
+- OWNER REPORT (top priority from the coordinator): "The game lags and crashes the farther you go from the spawn point; the
+  more the map loads." Measured (p19/, plans from p19/mkjourney.py: teleports every 25 m round all districts, twice):
+  - LAG: the city GPS router (game/away/navgrid.ts, called by main.ts navFrame every 0.25 s). Far from the flat (NE
+    ~(290,260), SW ~(-290,-90)) the A* failed or ran long and was repeated four times a second: Web 17-19 fps, frames
+    of 650-730 ms, update 37-43 ms, 95% of it in route() (p19/fp1 profile). At spawn 60 fps. FIXED in 0878731 (typed-array
+    heap, closed set, failed searches remembered, forward corner pulling): a cross-city route 190-330 ms -> 13 ms in Node;
+    in game the Web journey's worst update sample went from 26-58 ms to 6 ms (p19/jc_web vs jc_web_new). LANDED 0878731
+    on main (CI 45087503687 green on that sha).
+  - LEAK on visits: the planet streams nothing (built once at load). But every stage visit left the last behind: base
+    re-entry soak (p19/re_base, plan_reenter.json: city x3, ring, clouds, wreck, scree, moon, city x2) textures
+    624 -> 1341 and climbing (+120-180 per city visit); only the city had a teardown and it freed geometry only; kit
+    stages none; the Player body made per visit never freed. 37cdd1e: core/disposeTree.ts (frees geometry, materials,
+    their textures, instanced/batched meshes, skeletons, env; skips anything the planet or the films still draw),
+    away.ts leave()/prepare()/enter() use it. Pushed as perf19-land2.
+  - Memory size: Web in the city holds ~1.3 GB of typed-array backing stores (geometry and texture data kept on the CPU)
+    plus 90-150 MB of JS objects. Flat over travel (not a leak) but large; p19/bytes.js breaks it down by owner.
+  - 37cdd1e also: WebGL context loss pauses, saves, says so (msg.gfxLost / msg.gfxReload in en/hi/ur), draws again on
+    restore (planet env recaptured), offers a reload with the game saved after 8 s; a memory guard at 85% of the heap
+    limit saves and drops one preset. tools/soak_smoke.py (new CI job soak_smoke): far-corner route time, three laps,
+    three visits, a context lost and restored.
+- Phones (before the priority switch): Mobile CPU profile p18/mp19 (plan_mprof19.json): render ~70% of the frame, all
+  three.js per-draw cost (setProgram/uniform upload) and scene traversal; update ~30% (player animate ~30% of it, city
+  ~36%, the planet's world.update 13% while in the city). 5160658 (landed with 0878731): planet pods/camp/items/giant and
+  its env capture wait while another stage is on screen; the hidden touch stick no longer rewrites styles every frame.
+  Not measured as an A/B yet. Rule reminder: no pkill -f / pgrep -f, even with [x] tricks (one of my waits hung on it).
