@@ -30,6 +30,7 @@ import { Wheel } from './ui/wheel';
 import { MapPin, interactiveMap, planetLayer } from './ui/map';
 import { Minimap, MapLayer, MapPoint, routeOf } from './ui/minimap';
 import { PERF, perfFrame } from './core/perfhud';
+import { setDisposeKeep } from './core/disposeTree';
 import { GpsTrail } from './world/gps';
 import type { AwayStage } from './game/away/stage';
 import type { MenuTab } from './ui/ui';
@@ -116,6 +117,8 @@ const film = new Montage(cine, () => (worldReady ? world : null), (sc, cam, ao) 
 const vault = new Vault((k, sp) => ui.subtitle(k, sp), quality.name === 'mobile' ? 0.6 : 1);
 film.small = quality.name === 'mobile';
 const world = new World(quality);
+// a stage left behind is freed on the GPU, except whatever the planet and the films still draw (core/disposeTree.ts)
+setDisposeKeep(() => [world.scene, cine.scene]);
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2400);
 let player: Player;
 let game: Game;
@@ -724,9 +727,51 @@ let fpsAcc = 0, fpsFrames = 0, fpsLast = performance.now();
 let frameCount = 0;
 /** Test hook: frames only move when asked, by a fixed step, so a slow GPU sees the same film. */
 const hold = { on: false, pending: 0, done: 0 };
+// ---- the graphics context: lost and restored without a crash; a memory guard before the browser kills the tab ----
+// A phone (or a laptop's driver) can take the WebGL context away: the game used to freeze on a black or garbled frame.
+// Now it saves, says so, waits for the context to come back (three.js uploads everything again; the image lights are
+// captured again), and if it does not come back offers a reload, with the game saved.
+let glLost = false, lostNote: HTMLDivElement | null = null, lostTimer = 0;
+function gfxNote(text: string | null, onTap?: () => void) {
+  if (!text) { lostNote?.remove(); lostNote = null; return; }
+  lostNote ??= document.body.appendChild(document.createElement('div'));
+  lostNote.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10000;max-width:80vw;padding:14px 20px;border-radius:10px;background:rgba(10,9,14,.86);color:#f2ebdd;font:600 16px/1.4 Barlow,sans-serif;text-align:center;cursor:' + (onTap ? 'pointer' : 'default');
+  lostNote.textContent = text; lostNote.onclick = onTap ?? null;
+}
+renderer.renderer.domElement.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault(); // lets the browser give the context back
+  if (glLost) return;
+  glLost = true;
+  try { if (state === 'game' && game) game.persist(); } catch { /* the save is best effort here */ }
+  gfxNote(t('msg.gfxLost'));
+  clearTimeout(lostTimer);
+  lostTimer = window.setTimeout(() => { if (glLost) gfxNote(t('msg.gfxReload'), () => location.reload()); }, 8000);
+});
+renderer.renderer.domElement.addEventListener('webglcontextrestored', () => {
+  glLost = false; clearTimeout(lostTimer); gfxNote(null);
+  (world.env as unknown as { dirty: boolean }).dirty = true; // the planet's image light was in a texture that is gone
+});
+let memAt = 0, memWarned = false;
+function memoryGuard(now: number) {
+  if (now - memAt < 5000 || memWarned) return;
+  memAt = now;
+  const m = (performance as unknown as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
+  if (!m || !m.jsHeapSizeLimit || m.usedJSHeapSize < m.jsHeapSizeLimit * 0.85) return;
+  // close to the browser's limit (a phone's is far lower than a laptop's): a lighter preset, the game saved, before
+  // the tab is killed with nothing saved
+  memWarned = true;
+  const lower: QualityName | null = quality.name === 'cinematic' ? 'ultra' : quality.name === 'ultra' ? 'web' : quality.name === 'web' ? 'mobile' : null;
+  console.warn('[memory] heap', Math.round(m.usedJSHeapSize / 1e6), 'of', Math.round(m.jsHeapSizeLimit / 1e6), 'MB', lower ? `-> ${lower}` : '');
+  if (!lower) return;
+  ui.toast(t('msg.memLow'));
+  window.setTimeout(() => changeQuality(lower), 2500);
+}
+
 function frame() {
   requestAnimationFrame(frame);
   frameCount++;
+  if (glLost) return; // nothing can draw until the context is back
+  memoryGuard(performance.now());
   clock.update();
   const real = Math.min(clock.getDelta(), 0.05);
   if (!hold.on) { const t0 = performance.now(); tick(real); const t1 = performance.now(); draw(real); perfFrame(renderer.renderer, real, t1 - t0, performance.now() - t1); return; }
@@ -1012,6 +1057,10 @@ window.addEventListener('resize', () => {
   get awayOutroOn() { return !!game?.away?.outroOn; },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
+  /** Test hook (tools/soak_smoke.py): milliseconds of one GPS route search on the away stage, and its corners. */
+  awayRoute(ax: number, az: number, bx: number, bz: number) { const L = (game?.away?.stage as AwayStage | null | undefined)?.mapLayer; if (!L?.route) return null; const t0 = performance.now(); const r = L.route(ax, az, bx, bz); return { ms: performance.now() - t0, n: r.length }; },
+  /** Test hook: what the renderer holds (soak test). */
+  get gpuMem() { const i = renderer.renderer.info; return { geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0 }; },
   get awayCam() { return game?.away?.camState ?? null; },
   holdSubs(on: boolean) { ui.holdSubs = on; },
   awayOrbit(o: { x: number; y: number; z: number; r: number; a: number; h: number } | null) { if (game?.away) game.away.orbit = o; },

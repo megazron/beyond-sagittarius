@@ -8,6 +8,7 @@ import { t } from '../../i18n';
 import { audio } from '../../core/audio';
 import type { AwayStage, AwayTask } from './stage';
 import { buildStage, STAGES } from './kit';
+import { disposeTree } from '../../core/disposeTree';
 import { buildCity } from './city';
 import type { TaskKind } from '../../characters/character';
 
@@ -38,7 +39,7 @@ export class Away {
   /** A stage built ahead (under a title card), so arriving is not a long freeze. */
   private prepared: { loc: string; stage: ReturnType<typeof make> } | null = null;
   prepare(location: string) {
-    if (this.prepared?.loc !== location) this.prepared = { loc: location, stage: make(location, t, 0, this.detail) };
+    if (this.prepared?.loc !== location) { if (this.prepared) dropStage(this.prepared.stage); this.prepared = { loc: location, stage: make(location, t, 0, this.detail) }; }
     return this.prepared.stage;
   }
 
@@ -46,6 +47,7 @@ export class Away {
     const pre = this.prepared;
     this.prepared = null;
     const stage = pre && pre.loc === location && !job ? pre.stage : make(location, t, job, this.detail);
+    if (pre && pre.stage !== stage) dropStage(pre.stage); // built ahead for another place (or for their story, not a job): freed, not left behind
     this.pace = 1;
     this.stage = stage; this.who = id; this.onDone = done; this.location = location; this.done.clear(); this.busy = false; this.seen.clear(); this.vista = null;
     // the body you play is drawn with its full build, phones too (see PLAYER_DETAIL in main.ts)
@@ -205,8 +207,8 @@ export class Away {
 
   leave() {
     const s = this.stage;
-    if (s && this.player) s.scene.remove(this.player.model.root);
-    s?.dispose?.();
+    if (s && this.player) { s.scene.remove(this.player.model.root); disposeTree(this.player.model.root); }
+    if (s) dropStage(s);
     this.stage = null; this.player = null; this.active = false; this.who = null;
     this.ui.setPrompt(null);
     this.show(null);
@@ -216,4 +218,11 @@ export class Away {
     this.quiet = 0.6;
     const d = this.onDone; this.onDone = null; d?.();
   }
+}
+
+/** A stage's own teardown, then everything its scene still holds on the GPU (only the city had a teardown, and it
+ *  freed only its geometries: every visit to a place left the last one behind). */
+function dropStage(s: { scene: THREE.Scene; dispose?: () => void }) {
+  s.dispose?.();
+  disposeTree(s.scene);
 }
