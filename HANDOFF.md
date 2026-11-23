@@ -1359,3 +1359,14 @@ unlanded except this handoff commit and any recording in progress.
 - s6c take delivered (Downloads: 31_camp_fire_close_v4, 34_camp_fire_mid_range_v2, 32_night_defence_v4,
   20_spear_fishing_v7; README notes). Still wrong: brightest yellow at the fire's foot inside the sticks; heat shimmer
   hard to see against night ground; animals' rim still a little glassy up close; walking wade rings still visible.
+- ~01:00 (combat) LANDED b157283 on main (combat-land50; CI 45277205973 green on that sha after rerunning smoke ("wake
+  did not reach play", the known flake) and perf_gate ("mobile flat: 738829 triangles", budget 720000; the same code
+  bar ranged.ts measured 550553 on fe26c19 and main's own run 602929: the flat's count varies run to run, worth a look
+  by the perf agent). So main now has the s5 work: aim camera slerp fix, bow ready-low + full draw, spear free hand,
+  fish sun-net, src/world/flame.ts, night fill 1.35, the bot crash fix, plus the bow transient fixes.
+- GUARDIAN WAKE: on b157283 the line printed "down True hp 1" 0.2 s after the teleport: the player is DOWN after the
+  ranged section (the arena revives after 2.5 s, inside the 6 s, so it woke this time). That is the flake's cause: when
+  the revive lands late the guardian stays dormant (ai.ts: no wake while p.down). Fix the test (heal before the
+  teleport, or wait for down false) rather than the game.
+- NOT landed: `combat-s6c` = main b157283 + the session 6 work (fire layers, heat haze, night light, rings, free arm,
+  bot). Land it the same way when its CI is green on its head sha.
