@@ -247,6 +247,26 @@ window.__cbBot = (mode) => {
       const way = [run.at(14, 3.5), run.at(30, -5), run.at(46, 2), run.at(60, 3), run.at(72, 0)], a = run.at(0, 0);
       const w = way.find((q) => Math.hypot(q.x - a.x, q.z - a.z) > Math.hypot(p.x - a.x, p.z - a.z) + 0.5) || way[4];
       go(w.x, w.z);
+    } else if (mode === 'pose') {
+      // close and slowed: each hand weapon in turn, carried, raised, three blows, a block, and a throw where it can
+      // be thrown, seen from the side then from the front (for the owner's "the spear goes inside the person")
+      const list = window.__cbPoseList || ['spear', 'club', 'throwstick', 'rock'];
+      const now = performance.now();
+      if (st === 0) { C.testSlow = 0.35; flag.i = 0; flag.t = now; next(); return; }
+      const w = list[flag.i];
+      if (!w) { __bs.photo(null); C.testSlow = 1; window.__cbPoseDone = true; return; }
+      if (p.weapon !== w) { if (p.act === 'idle' && now - (flag.rT || 0) > 250) { tap('KeyR'); flag.rT = now; } if (now - flag.t > 6000) { flag.i++; flag.t = now; } return; }
+      const T = (now - flag.t) / 1000, side = flag.i % 2 === 0, y = flag.yaw ?? (flag.yaw = C.cam.yaw);
+      const fx = -Math.sin(y), fz = -Math.cos(y), rx = Math.cos(y), rz = -Math.sin(y), c = C.cam;
+      const cam = side ? [p.x - rx * 2.3 + fx * 0.4, c.y + 1.25, p.z - rz * 2.3 + fz * 0.4] : [p.x + fx * 2.6 - rx * 0.5, c.y + 1.3, p.z + fz * 2.6 - rz * 0.5];
+      __bs.photo(cam, [p.x, c.y + 1.05, p.z]);
+      const throwable = w === 'spear' || w === 'throwstick' || w === 'rock';
+      if (T < 1.5) { stop(); }
+      else if (T < 10.5) { if (Math.floor((T - 1.5) / 3) !== flag.blow) { flag.blow = Math.floor((T - 1.5) / 3); tap('Mouse0'); } }
+      else if (T < 12.5) hold('KeyQ', 1);
+      else if (T < 13.5) hold('KeyQ', 0);
+      else if (throwable && T < 18) { hold('Mouse2', 1); hold('Mouse0', T < 16.5); }
+      else { hold('Mouse2', 0); hold('Mouse0', 0); flag.i++; flag.t = now; flag.blow = -1; }
     } else if (mode === 'fish') {
       // spear fishing: creep up to a fish that is holding still, aim the reticle exactly (the camera's own line), the
       // first thrust at where the fish is SEEN (it goes over: the lesson), then at where it really is (below)
