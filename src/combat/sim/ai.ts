@@ -215,6 +215,7 @@ export function think(sim: CombatSim, e: Enemy, dt: number) {
     const k = Math.exp(-dt * 7); e.vx *= k; e.vz *= k;
     if (Math.abs(e.vx) + Math.abs(e.vz) < 0.05) e.vx = e.vz = 0;
   }
+  if (def.temperament === 'fish') { fish(sim, e, dt); return; }
   e.y = sim.env.height(e.x, e.z);
   if (e.stunT > 0) { e.stunT -= dt; e.speed = 0; if (e.stunT <= 0 && e.state !== 'stagger' && e.state !== 'dormant') setState(sim, e, 'recover'); return; }
   if (e.state === 'stagger') { e.speed = 0; if (e.stateT > 0.95) setState(sim, e, e.routed ? 'flee' : 'idle'); return; }
@@ -244,6 +245,65 @@ export function think(sim: CombatSim, e: Enemy, dt: number) {
     case 'territorial': territorial(sim, e, dt, awake); break;
     case 'ambush': ambush(sim, e, dt); break;
     case 'machine': machine(sim, e, dt); break;
+  }
+}
+
+// ---------------- fish ----------------
+/** Water a darter lives in: wadeable shallows, deep enough to hide in (0.28 to 0.75 m). */
+export function fishWater(sim: CombatSim, x: number, z: number) {
+  const s = sim.env.water?.(x, z);
+  if (s === null || s === undefined) return false;
+  const d = s - sim.env.height(x, z);
+  return d > 0.28 && d < 0.75;
+}
+/**
+ * A darter holds still near the bottom facing one way (into the current; in the lake, into the light breeze's drift),
+ * now and then glides a body length or two, and is gone in a flick when something moves fast over it (a wading
+ * player within 2.6 m, faster than a slow step) or hits the water near it. It settles again a few metres off.
+ * It never leaves its water. Its y is its true depth: the view draws it where it is SEEN (raised by refraction).
+ */
+function fish(sim: CombatSim, e: Enemy, dt: number) {
+  const p = sim.player, def = e.def;
+  const step = (hx: number, hz: number, sp: number) => {
+    const nx = e.x + hx * sp * dt, nz = e.z + hz * sp * dt;
+    if (fishWater(sim, nx, nz)) { e.x = nx; e.z = nz; e.speed = sp; return true; }
+    e.speed = 0; return false;
+  };
+  const turnToward = (want: number, rate = 1) => { const max = def.turn * rate * dt; e.yaw += clamp(turnTo(e.yaw, want), -max, max); };
+  e.y = sim.env.height(e.x, e.z) + 0.07 + 0.03 * Math.sin(e.id * 1.7);
+  // what makes it bolt: a fast shadow close over it, or a splash near it
+  const dp = Math.hypot(p.x - e.x, p.z - e.z);
+  const shadow = dp < 2.6 && p.speed > 1.7;
+  const splash = sim.splashes.some((s) => sim.t - s.t < 0.35 && Math.hypot(s.x - e.x, s.z - e.z) < 2.4);
+  if ((shadow || splash) && e.state !== 'flee') {
+    setState(sim, e, 'flee'); e.wander = 0.6 + sim.rand() * 0.5;
+    const fx = e.x - (splash ? sim.splashes[sim.splashes.length - 1].x : p.x), fz = e.z - (splash ? sim.splashes[sim.splashes.length - 1].z : p.z);
+    e.angle = Math.atan2(fx, fz) + (sim.rand() - 0.5) * 1.2;
+    sim.emit({ t: 'sound', what: 'dart', x: e.x, z: e.z });
+  }
+  if (e.state === 'flee') {
+    // a flick of the tail: fast and nearly straight, turning off the edge of its water
+    turnToward(e.angle, 3);
+    if (!step(Math.sin(e.yaw), Math.cos(e.yaw), def.run)) e.angle += e.side * 1.4;
+    e.wander -= dt;
+    if (e.wander <= 0) { setState(sim, e, 'idle'); e.homeX = e.x; e.homeZ = e.z; e.wander = 2 + sim.rand() * 3; }
+    return;
+  }
+  // holding: a fin's worth of drift, now and then a slow glide to a spot near home, then hold again
+  e.wander -= dt;
+  if (e.state === 'idle') {
+    e.speed = 0;
+    if (e.wander <= 0) {
+      const a = sim.rand() * 6.283, r = 0.5 + sim.rand() * 1.4, tx = e.homeX + Math.sin(a) * r, tz = e.homeZ + Math.cos(a) * r;
+      if (fishWater(sim, tx, tz)) { e.wx = tx; e.wz = tz; setState(sim, e, 'investigate'); } else e.wander = 0.5;
+    }
+    return;
+  }
+  // gliding to (wx, wz)
+  const dx = e.wx - e.x, dz = e.wz - e.z, d = Math.hypot(dx, dz);
+  turnToward(Math.atan2(dx, dz), 0.6);
+  if (d < 0.12 || e.stateT > 8 || !step(Math.sin(e.yaw), Math.cos(e.yaw), def.walk * Math.min(1, d + 0.3))) {
+    setState(sim, e, 'idle'); e.wander = 2.5 + sim.rand() * 4;
   }
 }
 
@@ -313,7 +373,13 @@ function skittish(sim: CombatSim, e: Enemy, dt: number, awake: boolean) {
     if (!food) { setState(sim, e, e.aware ? 'stalk' : 'idle'); return; }
     // someone big walks at it: it backs off, and comes again
     if (d < 4.2 && facing && e.courage < 0.9) { setState(sim, e, 'flee'); e.wander = 1.6; return; }
-    const df = move(sim, e, food.x, food.z, def.run * 0.8, dt);
+    // the last few metres to food left out are a creep, with one stop to test the air first (foxes and jackals come
+    // to a bait warily, not at a run): that is the moment a set snare is heard, rustle, voice and twig, before it goes
+    // off. wander: -1 not stopped yet, > 0 stopped (seconds left), 0 stopped once already
+    const df0 = dist2(e.x, e.z, food.x, food.z);
+    if (e.wander < 0 && df0 < 5.2 && df0 > 1.5) e.wander = 0.8 + sim.rand() * 0.5;
+    if (e.wander > 0) { e.speed = 0; faceTo(e, food.x, food.z, dt); e.wander = Math.max(0, e.wander - dt); return; }
+    const df = move(sim, e, food.x, food.z, df0 < 3.5 ? def.walk * 0.65 : df0 < 5.2 ? def.walk : def.run * 0.8, dt);
     if (df < 0.9) {
       e.speed = 0; e.atkGone += dt;
       if (e.atkGone > 2.4) {
@@ -325,7 +391,7 @@ function skittish(sim: CombatSim, e: Enemy, dt: number, awake: boolean) {
     } else e.atkGone = 0;
     return;
   }
-  if (food && e.cd < 2) { e.atkGone = 0; setState(sim, e, 'feed'); return; }
+  if (food && e.cd < 2) { e.atkGone = 0; e.wander = -1; setState(sim, e, 'feed'); return; }
   if (e.state === 'idle' || e.state === 'investigate') {
     if (e.aware) setState(sim, e, 'stalk');
     else if (e.alert > 0.4) { setState(sim, e, 'investigate'); move(sim, e, e.lkx, e.lkz, def.walk * 1.5, dt); }

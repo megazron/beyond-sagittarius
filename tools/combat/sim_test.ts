@@ -8,6 +8,8 @@ import type { WeaponId } from '../../src/combat/sim/weapons.ts';
 import { SPECIES } from '../../src/combat/sim/species.ts';
 import type { Enemy, SpeciesId } from '../../src/combat/sim/species.ts';
 import { EncounterRun } from '../../src/combat/sim/encounters.ts';
+import { fishWater } from '../../src/combat/sim/ai.ts';
+import { seenDepthY, WATER_N } from '../../src/combat/sim/core.ts';
 import type { EncounterId, EncounterOpts } from '../../src/combat/sim/encounters.ts';
 import { Tension, noTensionInput } from '../../src/combat/sim/tension.ts';
 import type { TensionKind } from '../../src/combat/sim/tension.ts';
@@ -395,8 +397,15 @@ const watch = (sim: CombatSim, e: Enemy, seconds: number, bot: (I: Intent, s: Co
   const sim = new CombatSim({ seed: 71 }); sim.inv = { vine: 2, branch: 2, tinder: 1, stone: 2, fruit: 1 }; sim.player.z = -30;
   sim.placeTrap('snare', 0, 6); sim.placeTrap('bait', 0, 5);
   const s1 = sim.spawn('skritch', 0, 20);
-  const ev = run(sim, 15, () => {}, () => s1.heldT > 0);
+  // it creeps the last metres (walking, heading in) for long enough that the game's warning cue plays before the snap
+  let creepT = 0, rushed = false;
+  const ev = run(sim, 15, () => {}, (s) => {
+    const d = Math.hypot(s1.x - 0, s1.z - 6);
+    if (s1.heldT <= 0 && d < 3.4 && s1.speed > 0.3) { creepT += DT; if (s1.speed > s1.def.walk + 0.01) rushed = true; }
+    return s1.heldT > 0;
+  });
   ok(s1.heldT > 0 && has(ev, 'trap', 'snared'), 'snare and bait: the bait brings it, the snare holds it');
+  ok(creepT > 1.1 && !rushed, 'bait: the last metres are a walk, long enough for the rustle, voice and twig', `${creepT.toFixed(2)} s, rushed ${rushed}`);
   ok(new CombatSim().placeTrap('snare', 0, 0) === null, 'traps: no materials, no trap');
   const sim2 = new CombatSim({ seed: 71 }); sim2.inv = { vine: 1, stone: 2 }; sim2.night = true; sim2.player.z = -25;
   sim2.placeTrap('rattle', 20, 0);
@@ -434,6 +443,12 @@ section('aim assist');
   ok(shoot(0, 1.2) === 0, 'aim assist off: a shot more than a metre wide of a small target misses');
   ok(shoot(1, 1.2) === 1, 'aim assist on: the same shot is bent on to it');
   ok(shoot(2, 4.5) === 1 && shoot(1, 4.5) === 0, 'aim assist strong: reaches further than normal');
+  // a walking target is led by its own speed along its heading (its vx/vz is only a knock's slide, zero on a walk)
+  const sim = new CombatSim({ seed: 81, assist: { aim: 2, hold: false, slowMo: false, noTimers: false, damageNumbers: false } });
+  const e = dummy(sim, 0, 20, 'nibbet'); e.yaw = Math.PI / 2; e.speed = 5;
+  const I = noIntent(); I.aim = true; I.ax = 0; I.ay = 0.3; I.az = 20;
+  const at = sim.aimPoint(I, 20);
+  ok(at.x > e.x + 3, 'aim assist leads a walking target along its heading', `x ${at.x.toFixed(2)} target ${e.x.toFixed(2)}`);
 }
 
 // ---------------------------------------------------------------- tension
@@ -588,6 +603,57 @@ const toward = (I: Intent, R: EncounterRun, x: number, z: number, o: { sprint?: 
   const r = play('arena', (I, R) => { if (R.t > 1 && !summoned) { summoned = true; R.summon('skritch', 3); } if (R.t > 3) R.leave(); }, {}, 10);
   ok(r.out?.result === 'left' && r.R.sim.enemies.length === 4, 'arena: creatures can be summoned and you can leave');
   ok(['rock', 'club', 'spear', 'torch', 'sling', 'bow', 'crossbow', 'coil'].every((w) => r.R.sim.player.has[w as WeaponId]), 'arena: every weapon is on the bench');
+}
+
+section('spear fishing: the fish is not where it is seen');
+{
+  // a bank (z < 0, 0.2 m up) and still shallows beyond it (0.5 m of water over the bottom)
+  const lake: Env = { height: (_x, z) => (z < 0 ? 0.2 : -0.5), blocked: () => false, water: (_x, z) => (z < 0 ? null : 0) };
+  const thrust = (aimAt: 'seen' | 'true' | 'below') => {
+    const sim = new CombatSim({ env: lake, seed: 21 }); sim.player.has.spear = true; sim.equip('spear');
+    sim.player.x = 0; sim.player.z = -0.4; sim.player.y = 0.2; sim.player.fx = 0; sim.player.fz = 1;
+    const f = sim.spawn('darter', 0.15, 1.5, { yaw: Math.PI / 2, wander: 9 });
+    run(sim, 0.2, () => {});
+    // the eye: a third-person camera 3 m behind and 2.4 m above the player
+    const E = { x: 0, y: 2.6, z: -3.4 }, cy = f.y + f.def.height * 0.5;
+    const seenY = seenDepthY(E.x, E.y, E.z, f.x, cy, f.z, 0);
+    // aim below what is seen by as much as the water lifts it (what a practised spear fisher does by eye)
+    const ty = aimAt === 'true' ? cy : aimAt === 'seen' ? seenY : cy - (seenY - cy) * 0.1;
+    const dx = f.x - E.x, dy = ty - E.y, dz = f.z - E.z, k = (-0.5 - E.y) / dy;
+    let fired = false;
+    const ev = run(sim, 1.2, (I) => { I.eye = E; I.ax = E.x + dx * k; I.ay = -0.5; I.az = E.z + dz * k; I.lx = 0; I.lz = 1; if (!fired) { I.attack = true; fired = true; } });
+    return { dead: f.dead, log: sim.fishLog.join(','), seenUp: seenY - cy, splash: ev.some((e) => e.t === 'sound' && e.what === 'splash') };
+  };
+  const seen = thrust('seen'), real = thrust('true'), below = thrust('below');
+  ok(seen.seenUp > 0.08, 'refraction: a fish 0.4 m down, seen from a standing player, looks over 8 cm higher than it is', seen.seenUp.toFixed(3));
+  ok(!seen.dead && seen.log === 'high' && seen.splash, 'spear fishing: a thrust at where the fish is seen goes over it (and the sim says so)', seen.log);
+  ok(real.dead && real.log === 'hit', 'spear fishing: a thrust at where the fish really is takes it', real.log);
+  ok(below.dead, 'spear fishing: aiming below the fish you see takes it');
+  ok(Math.abs(seenDepthY(0, 2, 0, 0, -0.4, 0, 0) + 0.4 / WATER_N) < 1e-6, 'refraction: straight down a fish is seen at its depth / 1.33');
+  {
+    // a splash near it, or a fast shadow over it: it bolts and settles somewhere else in its water
+    const sim = new CombatSim({ env: lake, seed: 5 }); sim.player.z = -6;
+    const f = sim.spawn('darter', 0, 2, { wander: 9 }); const x0 = f.x, z0 = f.z;
+    run(sim, 0.3, () => {}); sim.splash(0.6, 2.4); run(sim, 0.1, () => {});
+    ok(f.state === 'flee', 'fish: a splash a little way off and it bolts');
+    run(sim, 4, () => {});
+    ok(Math.hypot(f.x - x0, f.z - z0) > 1 && f.z > 0 && f.state !== 'flee', 'fish: it settles again a body length or more away, still in the water');
+  }
+  {
+    // a thrown spear into water: a splash, it slows hard, and it does not carry on under water for metres
+    const sim = new CombatSim({ env: lake, seed: 2 }); sim.player.has.spear = true; sim.equip('spear'); sim.player.z = -1; sim.player.y = 0.2;
+    const ev = run(sim, 3, (I, s) => { I.aim = true; I.ax = 0; I.ay = -0.5; I.az = 3; I.lz = 1; I.attackHeld = s.t < 0.9; I.attack = s.t < 0.02; });
+    const landed = ev.find((e) => e.t === 'land' && e.what === 'spear');
+    ok(ev.some((e) => e.t === 'sound' && e.what === 'splash') && !!landed && landed.z! < 4.5, 'spear fishing: a thrown spear splashes in and stops within a metre or so under water', `${landed?.z?.toFixed(2)}`);
+  }
+  {
+    // the set piece: two fish is breakfast; a miss high and then a hit is the lesson learned
+    const R = new EncounterRun('fish.spear', { env: lake, seed: 3, site: { x: 0, z: -0.4, yaw: 0 } });
+    ok(R.sim.enemies.filter((e) => e.kind === 'darter').length >= 3 && R.sim.enemies.every((e) => fishWater(R.sim, e.x, e.z)), 'fish.spear: darters are put in wadeable water in front of the bank');
+    R.sim.fishLog.push('high'); for (const e of R.sim.enemies.slice(0, 2)) R.sim.hurtEnemy(e, 99, 'pierce', 0, 0, 0, 0, 'melee');
+    R.update(DT, noIntent());
+    ok(R.outcome?.result === 'won' && R.outcome.flags['fish.caught'] === 2 && R.outcome.flags['fish.lesson'] === true, 'fish.spear: two fish wins, and a miss high before the hit is the lesson');
+  }
 }
 
 // ---------------------------------------------------------------- determinism and fairness

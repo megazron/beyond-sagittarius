@@ -4,7 +4,7 @@ import { clamp, dist2, FLAT, lerp, rng, TUNING, defaultAssist, solveLaunch, v3, 
 import type { Env, SimEvent, Noise, Scent, Fire, Tuning, Difficulty, Assist, V3 } from './core.ts';
 import { WEAPONS, TRAPS, REFIRE, AMMO_CRAFT } from './weapons.ts';
 import type { WeaponId, WeaponDef, TrapId, DamageKind } from './weapons.ts';
-import { SPECIES } from './species.ts';
+import { SPECIES, DARTER_LEN } from './species.ts';
 import type { SpeciesId, Enemy, AttackDef } from './species.ts';
 import { think } from './ai.ts';
 
@@ -19,6 +19,8 @@ export interface Intent {
   /** The point under the reticle, and which way the camera looks along the ground. */
   ax: number; ay: number; az: number; lx: number; lz: number;
   air: boolean;
+  /** Where the eye (the camera) is: the reticle's line runs from it through (ax, ay, az). */
+  eye?: V3;
 }
 export const noIntent = (): Intent => ({ mx: 0, mz: 0, sprint: false, sneak: false, attack: false, attackHeld: false, alt: false, altHeld: false, dodge: false, block: false, aim: false, ax: 0, ay: 0, az: 0, lx: 0, lz: 1, air: false });
 
@@ -73,7 +75,7 @@ export interface SimPlayer {
   lastHitT: number;
 }
 
-export interface Projectile { alive: boolean; x: number; y: number; z: number; vx: number; vy: number; vz: number; weapon: WeaponId; dmg: number; life: number; g: number }
+export interface Projectile { alive: boolean; x: number; y: number; z: number; vx: number; vy: number; vz: number; weapon: WeaponId; dmg: number; life: number; g: number; wet?: boolean; near?: { d: number; dy: number } }
 export interface Trap { id: number; kind: TrapId; x: number; z: number; uses: number; armed: boolean; scent: number; fire: number;
   /** The last creature it caught (id, 0 none) and when (sim time): the view snaps the pole up and runs the cord to it. */
   caught: number; sprungT: number }
@@ -104,6 +106,10 @@ export class CombatSim {
   traps: Trap[] = [];
   fires: Fire[] = [];
   scents: Scent[] = [];
+  /** Where something hit the water lately (fish bolt from it). */
+  splashes: { x: number; z: number; t: number }[] = [];
+  /** What each spear into water did near a fish: 'hit', 'high' (went over it), 'low'. */
+  fishLog: string[] = [];
   noises: Noise[] = [];
   pickups: Pickup[] = [];
   clouds: Cloud[] = [];
@@ -130,7 +136,7 @@ export class CombatSim {
       forceVX: 0, forceVZ: 0, forceT: 0, moveScale: 1, snareT: 0, staggerT: 0, refire: 0, cell: WEAPONS.coil.proj!.cell!, cellT: 0,
       sneaking: false, speed: 0, air: false, injuries: [], down: false, stepT: 0, regenLock: 0, lastHitT: -9, dur: {}, reloadT: 0, wrap: false, holdT: 0, pendingT: 0, pendingK: 0,
     };
-    for (let i = 0; i < MAX_PROJ; i++) this.proj.push({ alive: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, weapon: 'rock', dmg: 0, life: 0, g: 0 });
+    for (let i = 0; i < MAX_PROJ; i++) this.proj.push({ alive: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, weapon: 'rock', dmg: 0, life: 0, g: 0, wet: false });
   }
 
   setDifficulty(d: Difficulty) { this.difficulty = d; this.tune = TUNING[d]; }
@@ -277,6 +283,7 @@ export class CombatSim {
     for (const e of this.enemies) if (!e.gone) think(this, e, dt);
     this.stepProjectiles(dt);
     this.stepTraps(dt);
+    if (this.splashes.length && this.t - this.splashes[0].t > 2) this.splashes = this.splashes.filter((s) => this.t - s.t <= 2);
     for (const f of this.fires) {
       if (f.torch) { f.x = this.player.x; f.z = this.player.z; continue; }
       if (f.fuel > 0) { f.fuel = Math.max(0, f.fuel - dt * (f.burnsOut ? 1 : 0.55) * (f.slow ?? 1)); f.r = this.fireRadius(f); if (f.fuel <= 0) this.emit({ t: 'fire', what: 'out', x: f.x, z: f.z }); }
@@ -400,7 +407,8 @@ export class CombatSim {
     const p = this.player;
     let best: Enemy | null = null, bs = 1e9;
     for (const e of this.enemies) {
-      if (e.dead || e.gone) continue;
+      // a fish is never 'found' for the player: where it really is, under the water, is the whole puzzle
+      if (e.dead || e.gone || e.def.temperament === 'fish') continue;
       const dx = e.x - p.x, dz = e.z - p.z, d = Math.hypot(dx, dz) - e.def.radius;
       if (d > reach * 1.7) continue;
       const dot = d < 0.3 ? 1 : (dx * lx + dz * lz) / Math.max(1e-3, Math.hypot(dx, dz));
@@ -474,14 +482,74 @@ export class CombatSim {
     if (tgt) this.face(tgt.x - p.x, tgt.z - p.z, 1, 99); else this.face(I.lx, I.lz, 1, 99);
     p.combo = p.act === 'recover' ? (p.combo + 1) % 3 : 0;
     p.act = 'windup'; p.actT = 0;
+    this.thrustAim.x = I.ax; this.thrustAim.y = I.ay; this.thrustAim.z = I.az;
+    this.thrustEye = I.eye ? { ...I.eye } : null;
     this.emit({ t: 'swing', what: w.id, n: p.combo, dur: m.windup + m.active });
+  }
+
+  /** Where the reticle was when the blow began: a spear thrust down into water goes along that line. */
+  private thrustAim = v3(0, 0, 0);
+  private thrustEye: V3 | null = null;
+  /** Distance from a point to a fish's body (a line nose to tail at its true depth), and how far above it the point is. */
+  fishGap(e: Enemy, x: number, y: number, z: number) {
+    const hx = Math.sin(e.yaw) * DARTER_LEN * 0.5, hz = Math.cos(e.yaw) * DARTER_LEN * 0.5, cy = e.y + e.def.height * 0.5;
+    const t = clamp(((x - e.x) * hx + (z - e.z) * hz) / (hx * hx + hz * hz), -1, 1);
+    const qx = e.x + hx * t, qz = e.z + hz * t;
+    return { d: Math.hypot(x - qx, y - cy, z - qz), dy: y - cy, flat: Math.hypot(x - qx, z - qz) };
+  }
+  /** Something hit the water at (x, z): heard, and every fish near it bolts. */
+  splash(x: number, z: number, big = 1) {
+    this.splashes.push({ x, z, t: this.t });
+    this.emit({ t: 'sound', what: 'splash', x, z, n: big });
+    this.noise(x, z, 3);
+  }
+  /**
+   * A spear thrust that reaches into water. The point goes in where the reticle's line meets the water and on under it
+   * along that line (what is under the reticle is what is struck: a third-person eye sits behind the hand, and a line
+   * from the hand would pass somewhere else under water), as far as the spear reaches from the hand. It hits a fish
+   * only where the fish really is. A miss that went over a fish near the line says so ('fish:high'): the spear went
+   * where the fish was SEEN, and that is higher than where it is.
+   */
+  private thrustFish(w: WeaponDef, mul: number): boolean {
+    const p = this.player, m = w.melee!, A = this.thrustAim, E = this.thrustEye;
+    const hx = p.x + p.fx * 0.3, hy = p.y + 1.35, hz = p.z + p.fz * 0.3;
+    const reach = m.reach + 0.5;
+    // the reticle's line, from the eye (or the hand when no eye is known) to its point
+    const ox = E ? E.x : hx, oy = E ? E.y : hy, oz = E ? E.z : hz;
+    let dx = A.x - ox, dy = A.y - oy, dz = A.z - oz; const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
+    // where it meets the water
+    let S: V3 | null = null;
+    for (let k = 0; k <= l; k += 0.05) {
+      const x = ox + dx * k, y = oy + dy * k, z = oz + dz * k, surf = this.env.water?.(x, z);
+      if (surf !== null && surf !== undefined && y <= surf) { S = v3(x, y, z); break; }
+    }
+    if (!S) return false;
+    const toS = Math.hypot(S.x - hx, S.y - hy, S.z - hz);
+    if (toS > reach) return false;
+    const fishes = this.enemies.filter((e) => !e.dead && !e.gone && e.def.temperament === 'fish' && Math.hypot(e.x - S!.x, e.z - S!.z) < reach);
+    const wetAt = S;
+    let best: { e: Enemy; d: number; dy: number } | null = null;
+    for (let k = 0; k <= reach - toS; k += 0.02) {
+      const x = S.x + dx * k, y = S.y + dy * k, z = S.z + dz * k;
+      if (y < this.env.height(x, z)) break;
+      for (const e of fishes) { const g = this.fishGap(e, x, y, z); if (!best || g.d < best.d) best = { e, d: g.d, dy: g.dy }; }
+    }
+    this.splash(wetAt.x, wetAt.z, 0.6);
+    if (best && best.d < best.e.def.radius + 0.03) {
+      this.hurtEnemy(best.e, m.dmg * mul * 2, m.kind, p.x, p.z, m.poise, 0, 'melee');
+      this.emit({ t: 'beat', what: 'fish:hit', id: best.e.id, x: best.e.x, z: best.e.z }); this.fishLog.push('hit');
+      return true;
+    }
+    if (best && best.d < 0.45) { this.emit({ t: 'beat', what: best.dy > 0 ? 'fish:high' : 'fish:low', id: best.e.id, x: best.e.x, z: best.e.z }); this.fishLog.push(best.dy > 0 ? 'high' : 'low'); }
+    return false;
   }
 
   private resolveMelee(w: WeaponDef, mul: number) {
     const p = this.player, m = w.melee!;
     let any = false;
+    if (this.env.water && this.thrustFish(w, mul)) any = true;
     for (const e of this.enemies) {
-      if (e.dead || e.gone) continue;
+      if (e.dead || e.gone || e.def.temperament === 'fish') continue;
       const dx = e.x - p.x, dz = e.z - p.z, d = Math.hypot(dx, dz), edge = d - e.def.radius;
       if (edge > m.reach) continue;
       const ang = d < 1e-3 ? 0 : Math.acos(clamp((dx * p.fx + dz * p.fz) / d, -1, 1));
@@ -512,7 +580,8 @@ export class CombatSim {
     const ax = aim.x - from.x, ay = aim.y - from.y, az = aim.z - from.z, al = Math.hypot(ax, ay, az) || 1;
     let best: Enemy | null = null, ba = cone;
     for (const e of this.enemies) {
-      if (e.dead || e.gone) continue;
+      // no aim help onto a fish (it would aim at where the fish is, not where it is seen)
+      if (e.dead || e.gone || e.def.temperament === 'fish') continue;
       const cx = e.x - from.x, cy = e.y + e.def.height * 0.55 - from.y, cz = e.z - from.z, cl = Math.hypot(cx, cy, cz);
       if (cl > 60 || cl < 0.5) continue;
       const a = Math.acos(clamp((ax * cx + ay * cy + az * cz) / (al * cl), -1, 1));
@@ -524,7 +593,9 @@ export class CombatSim {
     const k = lvl === 2 ? 1 : 0.75;
     // lead it by how long the shot is in the air
     const d = Math.hypot(best.x - from.x, best.z - from.z), lead = d / Math.max(1, speed);
-    const tx = best.x + best.vx * lead, tz = best.z + best.vz * lead, ty = best.y + best.def.height * 0.55;
+    // (vx/vz is only a knock's slide; a walking or running body moves at its speed along its heading)
+    const mvx = best.vx + Math.sin(best.yaw) * best.speed, mvz = best.vz + Math.cos(best.yaw) * best.speed;
+    const tx = best.x + mvx * lead, tz = best.z + mvz * lead, ty = best.y + best.def.height * 0.55;
     return v3(lerp(aim.x, tx, k), lerp(aim.y, ty, k), lerp(aim.z, tz, k));
   }
 
@@ -553,7 +624,7 @@ export class CombatSim {
     const from = v3(p.x + p.fx * ahead + p.fz * side, p.y + up, p.z + p.fz * ahead - p.fx * side);
     const v = solveLaunch(from, to, speed, pr.gravity);
     slot.alive = true; slot.x = from.x; slot.y = from.y; slot.z = from.z; slot.vx = v.x; slot.vy = v.y; slot.vz = v.z;
-    slot.weapon = w.id; slot.dmg = pr.dmg * k; slot.life = 6; slot.g = pr.gravity;
+    slot.weapon = w.id; slot.dmg = pr.dmg * k; slot.life = 6; slot.g = pr.gravity; slot.wet = false; slot.near = undefined;
     this.stats.shots++;
     this.emit({ t: 'shot', what: w.id, x: from.x, y: from.y, z: from.z, dx: v.x, dz: v.z, n: charge });
     this.noise(p.x, p.z, w.id === 'coil' ? 16 : 3);
@@ -570,8 +641,27 @@ export class CombatSim {
       for (let i = 0; i < n && q.alive; i++) {
         q.vy -= q.g * h;
         q.x += q.vx * h; q.y += q.vy * h; q.z += q.vz * h;
+        // into water: a splash, most of the speed gone at the surface, then the water's drag (a wooden shaft does
+        // not go far under water, and it floats: gravity all but cancelled)
+        const surf = this.env.water?.(q.x, q.z);
+        if (surf !== null && surf !== undefined && q.y < surf) {
+          if (!q.wet) { q.wet = true; this.splash(q.x, q.z, 1); q.vx *= 0.45; q.vy *= 0.45; q.vz *= 0.45; q.g *= 0.15; }
+          const k = Math.exp(-h * 3.5); q.vx *= k; q.vy *= k; q.vz *= k;
+        }
         for (const e of this.enemies) {
           if (e.dead || e.gone) continue;
+          if (e.def.temperament === 'fish') {
+            // a fish is hit where it is, not where it is seen; a near miss over it is remembered
+            if (!q.wet) continue;
+            const g = this.fishGap(e, q.x, q.y, q.z);
+            if (g.flat < 0.45 && (!q.near || g.d < q.near.d)) q.near = { d: g.d, dy: g.dy };
+            if (g.d > e.def.radius + pr.radius * 0.4) continue;
+            q.alive = false; this.stats.shotsHit++;
+            this.hurtEnemy(e, q.dmg * 2, pr.kind, q.x - q.vx, q.z - q.vz, pr.poise, 0, 'shot', 0, q);
+            this.emit({ t: 'beat', what: 'fish:hit', id: e.id, x: e.x, z: e.z }); this.fishLog.push('hit');
+            if (pr.recover > 0) this.drop(q, pr.ammo);
+            break;
+          }
           const r = e.def.radius + pr.radius;
           if (q.y < e.y - 0.1 || q.y > e.y + e.def.height + 0.2) continue;
           if (dist2(q.x, q.z, e.x, e.z) > r) continue;
@@ -585,6 +675,7 @@ export class CombatSim {
         const g = this.env.height(q.x, q.z);
         if (q.y <= g + 0.02 || (q.y < g + 7 && this.env.blocked(q.x, q.z, 0.05))) {
           q.alive = false; q.y = Math.max(q.y, g + 0.02);
+          if (q.wet && q.near) { this.emit({ t: 'beat', what: q.near.dy > 0 ? 'fish:high' : 'fish:low', x: q.x, z: q.z }); this.fishLog.push(q.near.dy > 0 ? 'high' : 'low'); }
           this.emit({ t: 'land', what: q.weapon, x: q.x, y: q.y, z: q.z });
           this.noise(q.x, q.z, pr.noise, -3);
           if (pr.recover > 0 && this.rand() < pr.recover) this.drop(q, pr.ammo);

@@ -372,20 +372,22 @@ function guardian(): CreatureView {
   part(body, Array.from({ length: 6 }, (_, i) => place(new THREE.BoxGeometry(0.035, 0.12, 0.04), (i - 2.5) * 0.09, 0.62, 0.66)), bronze, false);
   // moss and mineral crust on whatever faces up
   part(body, [[0.3, 1.62, 0.1, 0.32], [-0.35, 1.25, -0.2, 0.36], [0.15, 1.85, -0.05, 0.22], [-0.2, 0.32, 0.4, 0.28], [0.45, 0.3, -0.3, 0.3], [0.85, 1.32, -0.1, 0.26], [-0.9, 1.3, 0.1, 0.22]].map(([x, y, z, r]) => place(new THREE.IcosahedronGeometry(r * 0.8, 1), x * 0.8, y - r * 0.1, z * 0.8, 0, x * 3, 0, [1, 0.55, 1])), moss);
-  // the face: a carved socket under a heavy brow, cheek stones closing in on it in a V, a jaw stone below; in the
-  // socket a cluster of lenses round one big eye. Before the beam the small ones slide into the big one.
-  // No box and no flat panel (a square socket read as a screen): the face is a mask of stone worn into the front,
-  // turned on a lathe round the line of sight and then roughened by hand, its lip uneven and its hollow deepening
-  // to the eye, like a recess cut and weathered, not a window.
+  // the face: one carved EYE SOCKET under a heavy frowning brow, cheek stones under its corners, a jaw stone below;
+  // in the socket one big eye with a slit pupil and two small lenses in its corners. Before the beam the small ones
+  // slide into the big one and the pupil closes so the light pours out.
+  // No box and no flat panel (a square socket read as a screen), and not round (a round hollow read as a mouth or a
+  // porthole): the socket is an almond, wider than tall with pointed corners and a hooded upper lid, turned on a
+  // lathe round the line of sight, then drawn out sideways and roughened by hand.
   const FZ = 0.5, FY = 1.3;
   const rough = (a: number) => 1 + 0.09 * Math.sin(3 * a + 0.7) + 0.05 * Math.sin(5 * a + 2.1) + 0.03 * Math.sin(9 * a + 0.3);
   const mask = (prof: [number, number][]) => {
     const g = new THREE.LatheGeometry(prof.map(([r, h]) => new THREE.Vector2(r, h)), 15).rotateX(Math.PI / 2);
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
-      // taller than wide, narrowing to the chin (an oval drawn down), each angle its own chisel depth
-      const x = p.getX(i), y = p.getY(i), a = Math.atan2(y, x), k = rough(a);
-      p.setXYZ(i, x * k * 0.92, y * k * (y < 0 ? 1.18 : 1.05) - (y < 0 ? Math.abs(x) * 0.12 : 0), p.getZ(i) + 0.012 * Math.sin(7 * a));
+      // an almond: drawn out sideways, squeezed to points at the corners (the nearer a point is to the side, the
+      // flatter), the upper lid hooded a little lower than the lower one; each angle its own chisel depth
+      const x = p.getX(i), y = p.getY(i), a = Math.atan2(y, x), k = rough(a), pinch = 0.32 + 0.68 * Math.pow(Math.abs(Math.sin(a)), 0.8);
+      p.setXYZ(i, x * k * 1.3, y * k * 0.62 * pinch * (y > 0 ? 0.88 : 1), p.getZ(i) + 0.012 * Math.sin(7 * a));
     }
     g.computeVertexNormals();
     return place(g, 0, FY, FZ);
@@ -393,21 +395,25 @@ function guardian(): CreatureView {
   // the mound: from inside the body, up over a thick uneven lip; the hollow: from the lip down to the eye
   part(body, [mask([[0.36, -0.22], [0.34, -0.06], [0.3, 0.06], [0.24, 0.12], [0.19, 0.13]])], stone, false);
   part(body, [mask([[0.19, 0.13], [0.16, 0.1], [0.13, 0.05], [0.09, 0.01], [0.05, -0.01], [0.0, -0.02]])], hollowM, false);
-  // a heavy brow of rough stones overhanging the hollow, cheek stones closing in below it, a chin stone: rounded
-  // weathered lumps, not slabs
+  // a heavy brow ridge straight over the socket, its two halves dipping to the middle (a frown: the face looks AT
+  // you), cheek stones under the socket's corners, a chin stone: rounded weathered lumps, not slabs
   part(body, [
-    place(new THREE.DodecahedronGeometry(0.2, 0), -0.17, FY + 0.27, FZ + 0.06, 0.4, 0.3, 0.2, [1.25, 0.55, 0.9]),
-    place(new THREE.DodecahedronGeometry(0.2, 0), 0.17, FY + 0.28, FZ + 0.05, 0.3, -0.5, -0.15, [1.2, 0.6, 0.85]),
-    place(new THREE.DodecahedronGeometry(0.13, 0), 0, FY + 0.31, FZ + 0.1, 0.6, 0.9, 0, [1.2, 0.6, 1]),
-    place(new THREE.DodecahedronGeometry(0.13, 0), -0.29, FY - 0.08, FZ - 0.01, 0.2, 0.6, 0.3, [0.7, 1.35, 0.8]),
-    place(new THREE.DodecahedronGeometry(0.13, 0), 0.29, FY - 0.06, FZ - 0.01, -0.3, -0.5, -0.25, [0.7, 1.3, 0.8]),
-    place(new THREE.DodecahedronGeometry(0.15, 0), 0.02, FY - 0.34, FZ - 0.02, -0.3, 0.4, 0.05, [1.3, 0.6, 0.9]),
+    place(new THREE.DodecahedronGeometry(0.17, 0), -0.17, FY + 0.17, FZ + 0.08, 0.35, 0.2, -0.2, [1.55, 0.45, 0.85]),
+    place(new THREE.DodecahedronGeometry(0.17, 0), 0.17, FY + 0.175, FZ + 0.075, 0.3, -0.3, 0.2, [1.5, 0.47, 0.85]),
+    place(new THREE.DodecahedronGeometry(0.1, 0), 0, FY + 0.13, FZ + 0.11, 0.6, 0.9, 0, [1.1, 0.55, 0.9]),
+    place(new THREE.DodecahedronGeometry(0.12, 0), -0.25, FY - 0.15, FZ - 0.01, 0.2, 0.6, 0.5, [1.2, 0.7, 0.8]),
+    place(new THREE.DodecahedronGeometry(0.12, 0), 0.25, FY - 0.14, FZ - 0.01, -0.3, -0.5, -0.5, [1.2, 0.7, 0.8]),
+    place(new THREE.DodecahedronGeometry(0.15, 0), 0.02, FY - 0.36, FZ - 0.02, -0.3, 0.4, 0.05, [1.3, 0.6, 0.9]),
   ], stone);
-  // the eye deep in the hollow, three small ones on its walls; before the beam they slide down into the big one
-  const lens = (r: number) => new THREE.SphereGeometry(r, 12, 8).scale(1, 1, 0.45);
-  const lenses = ([[0, -0.01, 0.07], [-0.085, 0.07, 0.034], [0.085, 0.07, 0.034], [0, -0.1, 0.036]] as const).map(([dx, dy, r]) => {
-    const m = new THREE.Mesh(lens(r), lensM); m.position.set(dx, FY + dy, FZ + 0.02 + Math.hypot(dx, dy) * 0.35); body.add(m); return { m, dx, dy };
+  // the eye in the socket, wider than tall like the socket round it, two small lenses in the corners; before the
+  // beam they slide into the big one
+  const lens = (r: number, w: number) => new THREE.SphereGeometry(r, 12, 8).scale(w, 1, 0.45);
+  const lenses = ([[0, -0.005, 0.072, 1.3], [-0.17, 0.0, 0.03, 1], [0.17, 0.0, 0.03, 1]] as const).map(([dx, dy, r, w]) => {
+    const m = new THREE.Mesh(lens(r, w), lensM); m.position.set(dx, FY + dy, FZ + 0.02 + Math.abs(dx) * 0.2); body.add(m); return { m, dx, dy };
   });
+  // a slit pupil across the big eye (an eye looks, a lamp does not); it closes before the beam to let the light out
+  const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.12, 0.012), mat(0x08090a, { roughness: 0.5 }));
+  pupil.position.set(0, FY - 0.005, FZ + 0.054); body.add(pupil);
   // a glowing seam down every edge of the six-sided stone: awake, its outline is drawn in light against the dark
   const edge = (ax: number, ay: number, az: number, bx: number, by: number, bz: number) => {
     const a = new THREE.Vector3(ax, ay, az), b = new THREE.Vector3(bx, by, bz), d = b.clone().sub(a), l = d.length();
@@ -513,14 +519,20 @@ function guardian(): CreatureView {
       const over = e.phase ? 1 : 0;
       // idle the eye is a glint in the hollow (bright enough to find, not a lit panel); the wind-up brings it up
       const eye = e.dead ? 0 : s === 'strike' && beam ? 8 : wake * (1.1 + conv * 4);
-      lensM.color.setRGB(0.2 * eye + over * 0.9 * wake, 1.2 * eye * (over ? 0.45 : 1), 1.6 * eye * (over ? 0.35 : 1));
+      // in the second phase the eye burns white-hot rather than orange (the whole thing turning orange read as a
+      // colour change, not as strain)
+      lensM.color.setRGB(over ? 1.15 * eye + 0.4 * wake : 0.2 * eye, over ? 1.1 * eye + 0.3 * wake : 1.2 * eye, over ? 1.0 * eye + 0.25 * wake : 1.6 * eye);
+      pupil.scale.set(Math.max(0.02, 1 - conv * 1.1), 1, 1); pupil.visible = !e.dead && conv < 0.9;
       // the hollow's walls take the eye's light (a cold glow deepening in the wind-up)
       hollowM.emissive.setRGB(0.03, 0.12, 0.16).multiplyScalar(Math.min(2, eye) * (over ? 0.5 : 1));
-      lenses.forEach((l) => { const k = 1 - 0.9 * conv; l.m.position.x = l.dx * k; l.m.position.y = 1.3 + l.dy * k; l.m.scale.setScalar(0.4 + 0.6 * wake + conv * 0.3); });
-      seamM.color.setRGB(over ? 1.4 : 0.25, over ? 0.35 : 1.0, over ? 0.1 : 1.2).multiplyScalar(0.08 + wake * (0.9 + Math.sin(t * 2.2) * 0.15));
+      lenses.forEach((l) => { const k = 1 - 0.9 * conv; l.m.position.x = l.dx * k; l.m.position.y = FY + l.dy * k; l.m.scale.setScalar(0.4 + 0.6 * wake + conv * 0.3); });
+      // the second phase: the seams' cold light falters (a stutter, as if it were failing), with a pale amber edge,
+      // not a body gone orange
+      const stut = over ? (Math.sin(t * 13.0) * Math.sin(t * 5.3) > 0.35 ? 0.35 : 1) : 1;
+      seamM.color.setRGB(over ? 0.75 : 0.25, over ? 0.7 : 1.0, over ? 0.65 : 1.2).multiplyScalar((0.08 + wake * (0.9 + Math.sin(t * 2.2) * 0.15)) * stut);
       // the seams' light on its own stone (a rim on the faces turning away) and the core's warmth
       const sk = e.dead ? 0 : wake * (1 - sink) * (0.85 + Math.sin(t * 2.2) * 0.15);
-      rimU.value.setRGB(over ? 0.3 : 0.09, over ? 0.09 : 0.34, over ? 0.03 : 0.42).multiplyScalar(sk);
+      rimU.value.setRGB(over ? 0.14 : 0.09, over ? 0.22 : 0.34, over ? 0.26 : 0.42).multiplyScalar(sk * stut);
       // the legs keep a faint cold rim only (the overload's orange on them read as tan-orange stone)
       legRimU.value.setRGB(0.09, 0.34, 0.42).multiplyScalar(sk * 0.45);
       // the core's warmth on the body's stone: faint, a little more while it vents (it was strong enough to turn the
@@ -538,6 +550,56 @@ function guardian(): CreatureView {
   };
 }
 
+/**
+ * A darter: a slim fish about 35 cm long, olive-brown back over a pale belly (dark from above, so it is a shadow on
+ * the bottom more than a shape, which is how a fish is actually spotted), a silver line down the flank, a forked tail
+ * and a small back fin. The body bends from the middle back as it swims; held still, only the tail and fins stir.
+ * The controller puts the root where the fish is SEEN (raised by refraction); the sim keeps where it is.
+ * Killed it rolls belly up and floats to the surface.
+ */
+function darter(): CreatureView {
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  const L = 0.34;
+  const g = new THREE.SphereGeometry(1, 16, 10);
+  const p = g.attributes.position, c = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    // a spindle, blunt at the nose and drawn out to the tail, deeper than wide
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), taper = z < 0 ? 1 - 0.55 * z * z : 1 - 0.2 * z * z;
+    p.setXYZ(i, x * 0.04 * taper, y * 0.045 * taper, z * L * 0.5);
+    const back = THREE.MathUtils.smoothstep(y, -0.25, 0.45), line = Math.exp(-Math.pow((y - 0.05) / 0.12, 2)) * 0.35;
+    c[i * 3] = 0.72 - back * 0.52 + line; c[i * 3 + 1] = 0.7 - back * 0.46 + line; c[i * 3 + 2] = 0.6 - back * 0.46 + line;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.computeVertexNormals();
+  const skin = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.25 });
+  const fins = new THREE.MeshStandardMaterial({ color: 0x4d4a38, roughness: 0.7, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+  body.add(new THREE.Mesh(g, skin));
+  // the tail: a forked fin on a hinge at the wrist of the tail
+  const tail = new THREE.Group(); tail.position.z = -L * 0.48; body.add(tail);
+  const tg = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.055, -0.09), new THREE.Vector3(0, 0.0, -0.06), new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.0, -0.06), new THREE.Vector3(0, -0.05, -0.09)]);
+  tg.computeVertexNormals(); tail.add(new THREE.Mesh(tg, fins));
+  // a small back fin and two belly fins
+  const df = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.04, 0.04), new THREE.Vector3(0, 0.085, -0.02), new THREE.Vector3(0, 0.035, -0.06)]);
+  df.computeVertexNormals(); body.add(new THREE.Mesh(df, fins));
+  const pf = [-1, 1].map((s) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.025), fins); m.position.set(s * 0.035, -0.025, 0.07); m.rotation.set(0.3, s * 0.6, s * 0.5); body.add(m); return m; });
+  for (const o of [root]) o.traverse((q) => { q.castShadow = false; });
+  let sw = 0, roll = 0;
+  return {
+    root,
+    flinch() { /* a fish hit is a fish taken */ },
+    update(e, t, dt) {
+      root.position.set(e.x, e.y + 0.04, e.z); root.rotation.y = e.yaw;
+      const sp = e.dead ? 0 : e.speed;
+      // the body swings faster and wider the faster it goes; at rest a slow fan of the tail keeps it in place
+      sw += dt * (2.2 + sp * 9);
+      const amp = e.dead ? 0 : 0.12 + Math.min(0.45, sp * 0.12);
+      tail.rotation.y = Math.sin(sw) * amp * 2.2; body.rotation.y = Math.sin(sw - 1.2) * amp * 0.35;
+      pf.forEach((m, i) => { m.rotation.z = (i ? 1 : -1) * (0.5 + Math.sin(t * 5 + i) * 0.2); });
+      roll += ((e.dead ? Math.PI : 0) - roll) * (1 - Math.exp(-dt * 2));
+      body.rotation.z = roll;
+    },
+  };
+}
+
 /** A small animal's shadow is its body's alone: the head, tail and legs would each be drawn again for a few pixels. */
 function small(v: CreatureView): CreatureView {
   let first = true;
@@ -550,6 +612,7 @@ export function createCreature(kind: SpeciesId): CreatureView {
     case 'hound': return hound();
     case 'lashbloom': return lashbloom();
     case 'guardian': return guardian();
+    case 'darter': return darter();
     case 'skritch': return small(quadruped({ len: 0.75, girth: 0.17, legLen: 0.3, legR: 0.035, headLen: 0.3, neck: 0.1, tail: 0.5, ears: 0.9, hide: 0x4a3f33, belly: 0x8a7a62, ridge: [0.5, 1.5, 0.9], eye: [2.2, 1.6, 0.4], gait: 1.1 }));
     case 'nibbet': return small(quadruped({ len: 0.5, girth: 0.15, legLen: 0.26, legR: 0.03, headLen: 0.22, neck: 0.08, tail: 0.12, ears: 1.9, hide: 0x7d745a, belly: 0xc9c2a4, ridge: [0.4, 1.1, 1.3], eye: [1.2, 1.4, 1.5], gait: 1.3, flag: 0xf1eee4, perk: 0.85 }));
     default: return quadruped({ len: 2.5, girth: 0.72, legLen: 0.95, legR: 0.16, headLen: 0.8, neck: 0.3, tail: 0.5, ears: 0.35, hide: 0x4b4f45, belly: 0x6f6a58, ridge: [0.4, 1.2, 0.5], eye: [1.6, 1.3, 0.5], plates: 1, moss: 0x3f7a4c, gait: 0.42 });

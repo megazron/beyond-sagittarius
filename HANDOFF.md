@@ -582,3 +582,122 @@ unlanded except this handoff commit and any recording in progress.
   each). Clips of Ultra and the planet: not recorded (p18/plan_clips18_city_ultra.json, planet_web.json are ready;
   p18/clips.sh NAME records one).
 - Preview: I ran dist-new on :4182 (stopped at the end). Main's dist on :4180 is someone's long-running server, left alone.
+
+## 2026-11-22 14:20 takeover by perf agent 19 (branch perf17 continued, rebased on main 983d105; landing branches perf18-land1..)
+- Ultra CPU profile (p18/up1, plan_uprof.json, dist-base = main with --sourcemap, tools/mapprof.cjs): in the bazaar
+  three's renderTransmissionPass was 31% of the render (1.7 of 5.6 s sampled): the wall clock scan's glass
+  (KHR_materials_transmission, only Ultra draws the scans close) made three draw the whole opaque scene a second time
+  into its transmission buffer every frame it was in view. The sun's shadow pass (WebGLShadowMap.render) was 19-21%:
+  Ultra redrew the city's shadow every frame, Web every other. Lights are NOT the cost (5 point lights on Ultra);
+  WebGLBindingStates.setup is VAO binding, normal per-draw cost.
+- Fixed (97d58b2): city glass with transmission becomes plain see-through glass at load (city.ts model()); the city's sun
+  shadow every other frame on Ultra too (Ultra's preset already says shadowInterval 2).
+- WARNING about older numbers: the handoff's Ultra "12.6 / 13.7 fps, 61.8 ms submission" came from the ?gputime=1 run.
+  Without the timer the same base build measured 23.1 / 58.9 (bazaar / gate) in one run and 20.2 / 23.3 in the next:
+  the timer's queries inflate CPU time, and this machine swings 2x between runs. Compare only pairs run back to back.
+- A/B p18/s1 (ab3.sh: base :4182 vs new :4183, one exclusive heavy call each, A500 1280x720, back to back):
+  Ultra crowd 29.3 -> 38.6, bazaar 20.2 -> 32.6 (draw 40.8 -> 19.5 ms, 509 -> 319 draws), gate 23.3 -> 33.9,
+  market 30.7 -> 35.4, square 30.4 -> 31.8. Worst frames are still 100-230 ms on Ultra (hitches: not yet found).
+- Lens (4c59702): a passer-by fades from 2.2 m to gone at 1.1 m (was 1.3 -> 0.4: half-faded bodies filled ~40% of a low
+  camera's view as a dark dithered shape). The crowd camera is on by default (?crowdcam=0 off); CI perf_gate passed with
+  it on (perf18-land1). mobile_smoke failed twice there on a pixel7 screenshot timeout (SwiftShader, the job ran ~50%
+  slower than main's; mobile_smoke never enters the city and both changes are city or Web/Ultra only).
+- 15:55 LANDED 97d58b2 on main (lens fade, crowd camera on, Ultra shadow + glass; CI 45038887812 all green on that
+  exact commit; perf18-land1's mobile_smoke screenshot timeout did not recur).
+- Web A/B p18/s1 (same session): crowd 53.2 -> 46.8, bazaar 59.0 -> 56.9, gate 55.1 -> 52.2, market 60.0 -> 57.1,
+  square 59.8 -> 55.4. The crowd camera draws ~30 more at crowd spots (234 -> 269, bazaar 174 -> 204); market and square
+  drew the same and still dropped 3-4 fps, so part is noise. Watch the crowd camera's cost.
+- Web gate is CPU-bound: GPU 6.5 ms a frame (p18/wg3, ?gputime=1), CPU update 5.8 + submission 15.6 ms (p18/wg2 profile).
+  Dynamic resolution still drops the pixel ratio to 0.76 there, for nothing. Biggest draw group: 30 unbatched
+  MeshBasicMaterial draws (1.8 ms) that the bazaar does not have; p18/plan_draws.json (probe_draws.js) names them.
+- 16:45 the PC rebooted. A "WIP: saved after restart" commit had swept in dist-new/ (3794 build files): I dropped it
+  (never pushed; no source in it) and excluded dist-*/ in the worktree's git info/exclude. Do not commit dist folders.
+- 22:21 WSL restarted again. ~/bin/heavy now runs ONE heavy job machine-wide. GPU runs: p18/gpurun.sh OUT PLAN URL inside
+  heavy (starts Chrome via coldchrome.sh, runs the plan, closes the tabs with ~/bs-cap/combat/tabs.py). Previews: base
+  dist-base on :4182, new dist-new3 on :4183 (vite preview, started by hand; they die with WSL).
+- Quiet machine right after the restart (p18/dr1, plan_draws.json): Web gate 60.4 fps, bazaar 60.5 (vsync cap). The
+  earlier 48-55 at the gate was mostly contention. The gate's draws beyond the bazaar's: the 4 delivery bots (7 meshes
+  each, all casting shadows), the liner's hull pieces, ~6 more transparent glows. 4c38fa4: a bot is 2 draws (body, wheels
+  and flag in vertex colours, + face, the face casts no shadow), the liner hull + spokes 1 mesh: ~25 fewer main draws
+  and ~20 fewer shadow draws at the gate. Pushed as perf18-land3.
+- 23:05 LANDED 4c38fa4 on main (spaceport merges; CI 45077961066 green on that exact commit, first try).
+- QUIET-MACHINE numbers (after the restart, one heavy job machine-wide, A500, 1280x720, single runs, back to back;
+  base = dist-base = main before my work 983d105, new = dist-new3 = 4c38fa4). Everything Web/Ultra is at the vsync cap
+  (60), so these show headroom only through draw_ms/update_ms:
+  Web city (p18/s2_A_web, base): crowd 60.2, bazaar 60.0, gate 60.1, market 60.1, square 59.9; draw 4-5.5 ms, update 2-4.
+  Ultra city base -> new (p18/s2_A_ultra, s2_B_ultra): crowd 48.4 -> 59.8, bazaar 34.9 -> 60.3, gate 50.4 -> 60.2,
+  market 59.9 -> 60.2, square 60.2 -> 60.2; bazaar draw 20.0 -> 9.2 ms, 482 -> 312 draws; worst frame 50 -> 20 ms.
+  Planet Web (p18/pl1_web, new): wake 60.3, wake_back 60.2, lake 60.2, forest 60.1, camp 60.1, ridge 60.2.
+  Mobile proxy (p18/mb1, new, 4x CPU throttle, 844x390): flat 19.3, bazaar 20.5, crowd 17.5, gate 19.6, square 14.7,
+  downtown 20.7, market 16.8, waterfront 22.1, park 18.6. Update 13-28 ms and draw 22-39 ms for only 38-124 draws:
+  NOT at 30. Next: a CPU profile of Mobile (plan_mob.json + "profile": 6 at the square and crowd) and cut the update
+  (characters' animate, city update) and per-draw cost there.
+- Under contention the same builds read 20-35 (Ultra) and 47-55 (Web): the owner's "laggy" on a busy laptop is CPU.
+- Clips: Downloads/BS_Game_v1.1/city_v1.9_GPU (Web, ?perf=1, no sound, README with notes; p18/clips19_web). Seen: overlay
+  ~43 fps while recording; bazaar ~8 s a passer-by at ~2.5 m is solid and covers ~1/4 of the screen, beside him a
+  half-faded body reads as a see-through ghost (no big dark dithered shape any more); gate crowd: low camera, bodies
+  fill the frame. Ultra and planet clips not recorded.
+- NOT DONE (owner's order): (1) Ultra: city at the vsync cap on a quiet machine; instanced crowds with GPU skinning,
+  kit+hair into the body draw and static shadow caching NOT done (not needed for 30+ any more; would help a busy
+  machine). (2) Web gate: 60 quiet, ~52 busy. (3) lens: mid-fade ghost still visible briefly; maybe fade faster (rate
+  12 -> 20) or start at 2.6 m. (4) planet 60 on Web (quiet); Mobile proxy 15-22, needs a CPU profile and work.
+  (5) cold title load (p15/ab_load.sh) not run.
+- Previews :4182 and :4183 stopped at the end. dist-base, dist-new, dist-new3 are local build folders (excluded).
+
+### 2026-11-22 ~14:00 (combat agent, session after land17)
+- FOUND: the trap warning cue (rustle, voice, twig) could never play: trapBeat looked for an animal walking at the
+  trap by `e.vx/vz`, which is only a knock's slide (zero while walking). Now speed + heading. Scavengers also come to
+  a bait warily (ai.ts feed: walk the last 5.2 m, one 0.8-1.3 s stop to test the air, creep the last 3.5 m at 0.65 of
+  a walk): ~1.6 s of cue before the snap (night_watch_probe prints it; sim_test checks it). Bot logs each cue in
+  window.__cbTrapLog ({cue, t, rec}).
+- ALSO FOUND (not fixed): sim.aimPoint's lead uses best.vx/vz (knock velocity), so aim assist never leads a moving
+  target. Use speed*heading like the cue fix if it matters.
+- Guardian face: one almond eye socket (lathe mask drawn sideways, pinched corners, hooded upper lid), frowning brow,
+  one wide eye with a slit pupil that closes before the beam, two small corner lenses; phase two: white-hot eye, seams
+  stutter, cold rim (no orange body). player.ts orbit: the lens keeps 0.5 m off any trunk (bisection along the line;
+  skipped when the player stands against the trunk).
+- Throwing stick: a blurred spin disc (fx.blurs, fades in slow motion); bot side camera follows the fetch and back.
+- SPEAR FISHING built (fish.spear, species `darter`, temperament 'fish', Env.water, core.seenDepthY refraction,
+  sim.thrustFish along the reticle line, splashes/fishLog, strings en/hi/ur, bot mode `fish`, sim_test 247).
+  Story hook PROPOSED to the story agent in ~/bs-story/INVENTION_TREE.md (last section): after 1.9, the morning at
+  the stream; flags fish.caught / fish.lesson / inv.spearFish. Waiting for the answer there. Water on main = the lake
+  (terrain < WATER_LEVEL); life-wip's stream needs its own query when it lands. Known gap: the world's water does not
+  refract the lake bottom, so a fish drawn at its seen depth can look like it hovers over the bottom; thrown spears
+  follow their own arc (no reticle-line correction), so fishing is by thrust in practice.
+- ~14:20 PAUSED by the coordinator (urgent Text to Robot work). EXACT STATE:
+  - main = 983d105 (I landed the handoff-only commit: combat-land17 CI 45026751296 green on that sha).
+  - All my work is committed on `combat` and pushed as `combat-land18` (CI runs on push). NOT landed. Unlanded:
+    9388778 trap cue fix + wary bait approach, fa3ff5e guardian eye socket + phase-two colours + trunk-clear lens,
+    d3b9f5b stick spin blur + bot fetch camera, d8cab85 bot cue log, ac325d5 spear fishing, 5afad6c play test (six
+    set pieces, fish check), and the handoff commits. Land only once CI is green on the exact sha (its own push).
+  - NOTHING of this session is recorded or seen on the GPU yet. The v17c capture was queued and I cancelled it before it
+    started (no game tab left open). dist/ (built 13:38) has everything except spear fishing.
+  - Plans ready in ~/bs-cap/combat (they embed demo_bot.js: regenerate after any bot edit):
+    plan_v17c_night_wrap.json (night v13 + wrap v6), plan_v17c_guardian_throwstick.json (guardian v12 + stick v7),
+    plan_v18_fish.json (20_spear_fishing_v1, needs a rebuild first).
+  - Level measuring script for the cue: copy of my scratch tool is NOT in the repo; it is 25 lines (ffmpeg to s16le,
+    50 ms RMS full band, 2-5 kHz, < 80 Hz). The cue time in a take comes from window.__cbTrapLog entries with `cue`
+    (the night plan prints __cbTrapLog after the take into v17c.log).
+- NEXT on resume, in order: (1) `HEAVY_EXCLUSIVE=1 ~/bs-cap/combat/cap2.sh v17c plan_v17c_night_wrap.json`, review
+  (caught-animal light, wrist, puff colour: with bodymerge the puff takes the merged material's base colour, white;
+  the planet player is not merged unless it has been to the city), find the cue in the log and measure rustle, voice,
+  twig, snap levels against the world's 42 Hz thump. (2) `cap2.sh v17d plan_v17c_guardian_throwstick.json`: check the
+  eye socket reads as an eye, phase two not orange, no trunk in the lens, the stick's disc and the fetch camera.
+  (3) heavy build, `cap2.sh v18 plan_v18_fish.json`: first check the fishing site was found (log prints site + fish;
+  combat.ts site('fish.spear') scans round the camp for a bank over 0.3-0.72 m water; if none, the fish list is empty)
+  and that fish show through the lake's water. (4) clips < 30 MB to Downloads/.../combat with honest README notes.
+  (5) setGrip still not on origin/main (checked 14:00): bow/sling grips wait. (6) story agent's answer on spear
+  fishing: last section of ~/bs-story/INVENTION_TREE.md. Giant-creature thump: left as is (no owner decision yet).
+
+### 2026-11-23 ~00:30 (combat agent, resumed after the Text to Robot pause)
+- Rebased combat-land18 onto main (only HANDOFF.md conflicted: both appended sections, both kept; perf's lens fade,
+  crowd camera and batching untouched). Main moved again at 00:36, so the landing branch is `combat-land20`.
+- Recording bot night watch (demo_bot.js, the story's Episode One night embeds it): spear in hand before ready; after
+  the traps it keeps the fire up a branch at a time (two thirds; in wave 1 only under 45%), scans out, snare, the dark
+  either side, stakes, fire (3.4 s each), turns its head to the placed sounds the player hears (`combat.heard`, new:
+  name, x, z, wall ms; chitter/squeak/growl/snarl/howl/rustle/twig/snort, 2.5-24 m, 3 s rest between small sounds, a
+  growl always and raises the spear), and walks a few steps towards a trap that is heard (the game's beat turns the
+  view). Logged in window.__cbWatchLog. The story agent's copy ~/bs-cap/tools/night_bot.js had the first version of
+  this idea; mine replaces it (tell it to embed demo_bot.js again).
+- Aim assist lead fixed (speed along heading, sim_test 248).
+- Plans: ~/bs-cap/combat/mkplan_v19.py -> plan_v19_night_wrap.json, plan_v19_guardian_throwstick.json; plan_v18.json.

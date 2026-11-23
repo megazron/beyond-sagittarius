@@ -42,7 +42,8 @@ window.__cbBot = (mode) => {
     const sim = C.activeSim, p = sim.player, t = nearest(targets);
     if (!t) { stop(); hold('KeyQ', 0); return; }
     const d = dist(t, p), dg = danger();
-    look(t.x, t.z, t.y + t.def.height * 0.5);
+    // (o.level: eyes on the horizon, not down at a small animal at the feet: the follow camera went overhead)
+    look(t.x, t.z, o.level ? C.cam.y + 1.3 : t.y + t.def.height * 0.5);
     if (dg && o.roll && p.act !== 'roll' && p.stamina > 20) { hold('KeyQ', 0); hold('KeyA', 1); tap('KeyV'); setTimeout(() => hold('KeyA', 0), 500); return; }
     hold('KeyQ', !!dg && !o.roll && p.stamina > 8);
     if (dg && !o.roll) { stop(); return; }
@@ -126,7 +127,8 @@ window.__cbBot = (mode) => {
           if (look(p.x + wx * 10, p.z + wz * 10) < 0.2 && since() > 0.3) { tap('KeyT'); setTimeout(() => key(s.k), 260); setTimeout(() => keyUp(s.k), 340); flag.setting = 1; stT = now; }
         } else if (st === plan.length) {
           // ready, said out here (by the fire the same key feeds it)
-          stop(); if (since() > 0.8) { tapE(); next(); }
+          // the spear in the hand for the watch (it braces against a lunge when held up), then ready
+          stop(); if (!equip('spear')) return; if (since() > 0.8) { tapE(); next(); }
         } else if (since() > 3) { const d = go(food.x + wx * 2.8 - wz * 4, food.z + wz * 2.8 + wx * 4); if (d < 0.8) stop(); }
         return;
       }
@@ -136,24 +138,79 @@ window.__cbBot = (mode) => {
       const guard = { x: sq.x + wx * 1.2 - wz * 4.6, z: sq.z + wz * 1.2 + wx * 4.6 }, out = { x: sq.x + wx * 16 - wz * 2, z: sq.z + wz * 16 + wx * 2 };
       // a record of every catch (window.__cbTrapLog), so a take can be checked for one without watching it all
       for (const q of sim.traps) if (q.sprungT >= 0 && !(window.__cbTrapLog ||= []).some((r) => r.id === q.id && r.t === q.sprungT)) window.__cbTrapLog.push({ id: q.id, kind: q.kind, t: q.sprungT, caught: q.caught, wave: run.wave, rec: +((performance.now() - t0) / 1000).toFixed(1) });
-      if (run.phase === 'hush') {
-        // the quiet before: at the watch spot, a look over what was set, then out to the dark
-        const d = go(guard.x, guard.z); if (d < 0.7) { stop(); if (since() < 4) look(sq.x, sq.z); else look(out.x, out.z); }
-        return;
-      }
+      // and every warning cue (rustle, voice, twig before the snap), with its time in the take, to listen for it
+      { const b = C.beat; if (b && b.snapT < 0 && b !== flag.cueB) { flag.cueB = b; window.__cbTrapLog.push({ cue: b.id, t: +sim.t.toFixed(2), rec: +((performance.now() - t0) / 1000).toFixed(2) }); } }
+      // the watch: a man alone at night keeps busy. He keeps the fire up a branch at a time, scans the dark, the snare
+      // and the stakes, turns his head to what he hears out there (and raises the spear at a growl), and when something
+      // is heard AT a trap he leaves the view to the game's own look and goes a few steps that way, spear up
+      const watch = (o = {}) => {
+        const now = performance.now();
+        // a cue at a trap: hands off the view (the game turns the head; a turn of ours would cancel it)
+        if (C.beat) { stop(); hold('KeyQ', 0); flag.trapHeard = { id: C.beat.id, at: now }; return; }
+        if (flag.trapHeard && now - flag.trapHeard.at < 5200) {
+          const tr = sim.traps.find((q) => q.id === flag.trapHeard.id);
+          // after the beat: a few steps towards it if it is far, a step back from it if he stands over it (his body hid
+          // the catch in v13), then the spear up, facing it
+          if (tr) {
+            const d = dist(p, tr), early = now - flag.trapHeard.at < 3200; look(tr.x, tr.z, C.cam.y + 0.5);
+            if (d > 4.5 && early) { hold('KeyS', 0); hold('KeyW', 1); hold('KeyQ', 0); } else if (d < 3 && early) { hold('KeyW', 0); hold('KeyS', 1); hold('KeyQ', 0); } else { stop(); hold('KeyQ', 1); }
+            return;
+          }
+        }
+        if (flag.trapHeard) { flag.trapHeard = null; hold('KeyQ', 0); }
+        // a sound out in the dark (a chitter, a growl, a rustle: the game's own placed sounds, C.heard): the head goes
+        // to it for a couple of seconds; a hound's voice brings the spear up
+        // (a held animal's struggling is not new: it is not turned to again; after a listen, three seconds of other
+        // business before the next small sound turns the head; a growl always does)
+        flag.fedAt ||= now;
+        const low = fire.fuel < fire.max * (o.hold1 ? 0.45 : 0.66), due = !o.hold1 && now - flag.fedAt > 30000 && fire.fuel < fire.max * 0.92;
+        const wood = (sim.inv.branch || 0) > 0, busy = flag.feeding || (wood && low);
+        const H = (C.heard || []).filter((h) => h.t > (flag.heardT || 0) && h.t <= now && /chitter|squeak|growl|snarl|howl|rustle|twig|snort/.test(h.name) && dist(h, p) > 2.5 && dist(h, p) < 24);
+        if (H.length) {
+          const h = H[H.length - 1], hound = /growl|snarl|howl/.test(h.name); flag.heardT = h.t;
+          if (hound || (!busy && now - (flag.listenEnd || 0) > 3000)) flag.listen = { x: h.x, z: h.z, at: now, hound, name: h.name };
+        }
+        if (flag.listen && now - flag.listen.at < 2400) {
+          stop(); look(flag.listen.x, flag.listen.z, C.cam.y + 0.5); hold('KeyQ', flag.listen.hound && now - flag.listen.at > 400);
+          window.__cbWatchLog = (window.__cbWatchLog || []); if (flag.listenLogged !== flag.listen.at) { flag.listenLogged = flag.listen.at; window.__cbWatchLog.push({ heard: flag.listen.name, rec: +((now - t0) / 1000).toFixed(1) }); }
+          return;
+        }
+        if (flag.listen) { flag.listen = null; flag.listenEnd = now; hold('KeyQ', 0); }
+        // the fire: fed when it is down to two thirds (or every half minute while it is not full), a branch at a time,
+        // walked to and back; in wave 1 only when it is low (the snare is watched)
+        if (wood && (flag.feeding || low || due)) {
+          if (!flag.feeding) { flag.feeding = now; flag.fed = 0; (window.__cbWatchLog ||= []).push({ feed: +(fire.fuel / fire.max).toFixed(2), rec: +((now - t0) / 1000).toFixed(1) }); }
+          const d = go(fire.x, fire.z);
+          if (d < 2.2) { stop(); look(fire.x, fire.z, C.cam.y + 0.3); if (!flag.fed && now - flag.feeding > 600) { tapE(); flag.fed = now; } }
+          if ((flag.fed && now - flag.fed > 1600) || now - flag.feeding > 14000) { flag.feeding = 0; flag.fedAt = now; }
+          return;
+        }
+        // the scan: out where the smoke goes, along to the snare, across the dark, to the stakes, back out, the fire
+        const d = go(guard.x, guard.z);
+        if (d < 0.7) {
+          stop();
+          const st2 = sim.traps.find((q) => q.kind === 'stakes') || sq;
+          const spots = [out, sq, { x: out.x - wz * 9, z: out.z + wx * 9 }, st2, out, { x: out.x + wz * 9, z: out.z - wx * 9 }, fire];
+          const i = Math.floor(now / 3400) % spots.length, s2 = spots[i];
+          look(s2.x, s2.z, C.cam.y + (s2 === fire ? 0.3 : s2 === sq || s2 === st2 ? 0.2 : 1.1));
+        }
+      };
+      if (run.phase === 'hush') { watch({ hold1: true }); return; }
       const h = living('hound').find((e) => !e.routed), thieves = living('skritch').filter((e) => !e.routed && dist(e, food) < 5);
       // wave 1 is watched from the watch spot, whatever the food and the fire do (only a fire nearly out calls it back)
       const hold1 = run.wave <= 1 && fire.fuel > fire.max * 0.2;
       if (h && (h.state === 'windup' || h.state === 'strike') && h.target === -1) { stop(); look(h.x, h.z, h.y + 0.6); hold('KeyQ', h.stateT > 0.3 || h.state === 'strike'); return; }
       hold('KeyQ', 0);
       const close = living('skritch').filter((e) => !e.routed && e.heldT <= 0 && dist(e, p) < 2.2);
-      if (close.length) { fight(close); return; }
+      // a fire near out comes first, whatever is at the heels (they follow him to the light and are fought there)
+      const dying = fire.fuel < fire.max * 0.3 && (sim.inv.branch || 0) > 0;
+      if (close.length && !(dying && dist(p, fire) > 2.2)) { if (dying && dist(p, fire) <= 2.2 && since() > 0.8) { tapE(); stT = performance.now(); } fight(close, { level: true }); return; }
+      if (dying) { const d = go(fire.x, fire.z); if (d < 2.2) { stop(); look(fire.x, fire.z, C.cam.y + 0.3); if (since() > 0.8) { tapE(); stT = performance.now(); } } return; }
       if (!hold1) {
-        if (fire.fuel < fire.max * 0.55 && (sim.inv.branch || 0) > 0) { const d = go(fire.x, fire.z); if (d < 2.4) { stop(); if (since() > 0.8) { tapE(); stT = performance.now(); } } return; }
         if (h && h.weakT > 0 && dist(h, p) < 5) { fight([h]); return; }
-        if (thieves.length) { fight(thieves); return; }
+        if (thieves.length && !flag.feeding) { fight(thieves, { level: true }); return; }
       }
-      const d = go(guard.x, guard.z); if (d < 0.7) { stop(); look(out.x, out.z); }
+      watch({ hold1 });
     } else if (mode === 'chase') {
       const goal = run.markers.find((m) => m.kind === 'goal'), h = living('hound')[0];
       // a runner who has seen it gather: roll out of the lunge's line when it is about a third of a second from
@@ -187,6 +244,39 @@ window.__cbBot = (mode) => {
       const way = [run.at(14, 3.5), run.at(30, -5), run.at(46, 2), run.at(60, 3), run.at(72, 0)], a = run.at(0, 0);
       const w = way.find((q) => Math.hypot(q.x - a.x, q.z - a.z) > Math.hypot(p.x - a.x, p.z - a.z) + 0.5) || way[4];
       go(w.x, w.z);
+    } else if (mode === 'fish') {
+      // spear fishing: creep up to a fish that is holding still, aim the reticle exactly (the camera's own line), the
+      // first thrust at where the fish is SEEN (it goes over: the lesson), then at where it really is (below)
+      const cam = C.d.player.camera, eye = cam.position;
+      const seenY = (px, py, pz, surf) => {
+        const hc = eye.y - surf, df = surf - py, D = Math.hypot(px - eye.x, pz - eye.z);
+        if (df <= 0 || hc <= 0) return py; if (D < 1e-3) return surf - df / 1.333;
+        let lo = 0, hi = D; for (let i = 0; i < 40; i++) { const x = (lo + hi) / 2; if (x / Math.hypot(x, hc) > 1.333 * (D - x) / Math.hypot(D - x, df)) hi = x; else lo = x; }
+        const x = Math.max(1e-4, (lo + hi) / 2); return surf - ((D - x) * hc) / x;
+      };
+      const aimAt = (x, y, z) => {
+        const e = cam.matrixWorld.elements, fx = -e[8], fy = -e[9], fz = -e[10];
+        const dx = x - eye.x, dy = y - eye.y, dz = z - eye.z, l = Math.hypot(dx, dy, dz);
+        const d = Math.atan2(Math.sin(Math.atan2(-dx, -dz) - Math.atan2(-fx, -fz)), Math.cos(Math.atan2(-dx, -dz) - Math.atan2(-fx, -fz)));
+        const dp = Math.asin(Math.max(-1, Math.min(1, fy))) - Math.asin(dy / l);
+        C.testLook(Math.max(-40, Math.min(40, (-d / SENS) * 0.35)), Math.max(-30, Math.min(30, (dp / SENS) * 0.35)));
+        return Math.hypot(d, dp);
+      };
+      if (st === 0) { if (equip('spear')) { flag.n = 0; next(); } return; }
+      const fish = living('darter').filter((e) => e.state !== 'flee');
+      const tgt = flag.tid ? fish.find((e) => e.id === flag.tid) : null;
+      const t = tgt || nearest(fish);
+      if (!t) { stop(); return; }
+      flag.tid = t.id;
+      const d = dist(t, p);
+      if (d > 2.0) { if (!p.sneaking && !flag.sn) { flag.sn = 1; tap('KeyX'); } go(t.x, t.z); flag.still = performance.now(); return; }
+      stop();
+      if (p.act !== 'idle') return;
+      const cy = t.y + t.def.height * 0.5, surf = 0;
+      // first throw: at the fish as it is seen; after that, below it (at where it is)
+      const y = flag.n === 0 ? seenY(t.x, cy, t.z, surf) : cy;
+      const err = aimAt(t.x, y, t.z);
+      if (err < 0.004 && performance.now() - flag.still > 1500) { tap('Mouse0'); flag.n++; flag.still = performance.now() + 1200; flag.tid = 0; window.__cbFishLog = (window.__cbFishLog || []).concat([{ n: flag.n, aim: flag.n === 1 ? 'seen' : 'true', d: +d.toFixed(2), rec: +((performance.now() - t0) / 1000).toFixed(1) }]); }
     } else if (mode === 'throwplay') {
       // the throwing stick: stand in the open, throw side-arm at a Nibbet within twelve metres (or at the grass ahead
       // when none is), walk out and fetch the stick, come back to the spot; never chase (they outrun anyone)
@@ -208,6 +298,30 @@ window.__cbBot = (mode) => {
         // to the throwing-arm side of the line from thrower to prey
         const sx = -uz, sz = ux;
         __bs.photo([mx + sx * L, cy + 2.2, mz + sz * L], [mx, cy + 0.5, mz]); C.testSlow = 0.3;
+        flag.camP = [mx + sx * L, cy + 2.2, mz + sz * L]; flag.camT = [mx, cy + 0.5, mz]; flag.side1 = { sx, sz };
+      }
+      // once the stick is down, the camera goes with the fetch at full speed: the thrower walks out to the stick (and
+      // the animal it hit) and back, framed from the same side, the view eased (v6 held its spot and showed grass)
+      if (flag.side === 1 && !p.has.throwstick) {
+        const k = sim.pickups.find((q) => q.weapon === 'throwstick');
+        if (k) {
+          if (!flag.landT) flag.landT = performance.now();
+          if (performance.now() - flag.landT > 1500) {
+            C.testSlow = 1;
+            const mx = (p.x + k.x) / 2, mz = (p.z + k.z) / 2, D = Math.hypot(k.x - p.x, k.z - p.z), L = Math.max(4.5, D * 0.75 + 2.5), S = flag.side1;
+            const want = [mx + S.sx * L, C.cam.y + 2.0, mz + S.sz * L], tgt = [mx, C.cam.y + 0.6, mz];
+            for (let i = 0; i < 3; i++) { flag.camP[i] += (want[i] - flag.camP[i]) * 0.06; flag.camT[i] += (tgt[i] - flag.camT[i]) * 0.1; }
+            __bs.photo(flag.camP, flag.camT);
+          }
+        }
+      }
+      // picked up: follow the walk home for a few seconds, then hand the view back
+      if (flag.side === 1 && p.has.throwstick && flag.landT) { flag.landT = 0; flag.back = performance.now(); }
+      if (flag.side === 1 && flag.back) {
+        const S = flag.side1, L = 5, want = [p.x + S.sx * L, C.cam.y + 2.0, p.z + S.sz * L], tgt = [p.x, C.cam.y + 0.9, p.z];
+        for (let i = 0; i < 3; i++) { flag.camP[i] += (want[i] - flag.camP[i]) * 0.06; flag.camT[i] += (tgt[i] - flag.camT[i]) * 0.1; }
+        __bs.photo(flag.camP, flag.camT);
+        if (performance.now() - flag.back > 5000) { flag.side = 2; flag.back = 0; __bs.photo(null); C.testSlow = 1; }
       }
       if (W && Tm >= W[1] && flag.side === 1) { flag.side = 2; __bs.photo(null); C.testSlow = 1; }
       if (!p.has.throwstick) { const k = sim.pickups.find((q) => q.weapon === 'throwstick'); if (k) go(k.x, k.z); return; }

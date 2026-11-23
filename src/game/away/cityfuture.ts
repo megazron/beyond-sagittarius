@@ -212,13 +212,26 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   // ---- delivery bots on the pavements: little boxes on wheels with a face ----
   const botFace = canvasTex(128, 64, (g) => { g.fillStyle = '#10161f'; g.fillRect(0, 0, 128, 64); g.fillStyle = '#7fffd4'; g.beginPath(); g.arc(42, 30, 8, 0, 7); g.arc(86, 30, 8, 0, 7); g.fill(); g.fillRect(48, 46, 32, 4); });
   const bots: { g: THREE.Group; z0: number; z1: number; dir: number }[] = [];
+  // a bot is two draws: its body, wheels and flag as one mesh in vertex colours, and its lit face (it was seven meshes,
+  // each a draw in both passes: 28 of the gate's draws a frame, and as many again in the shadow)
+  const botFaceM = new THREE.MeshBasicMaterial({ map: botFace, color: new THREE.Color(1.5, 1.5, 1.5), toneMapped: false });
+  const botBodyM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45 });
+  const tinted = (g: THREE.BufferGeometry, c: number, m: THREE.Matrix4) => {
+    g.applyMatrix4(m); const col = new THREE.Color(c).convertSRGBToLinear(), n = g.attributes.position.count, a = new Float32Array(n * 3);
+    for (let k = 0; k < n; k++) col.toArray(a, k * 3);
+    g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g;
+  };
+  const botGeo = [0xff9900, 0xf4f4f6].map((body) => {
+    const parts = [tinted(new THREE.BoxGeometry(0.55, 0.5, 0.7), body, new THREE.Matrix4().makeTranslation(0, 0.42, 0)),
+      tinted(new THREE.CylinderGeometry(0.01, 0.01, 0.9), 0xffffff, new THREE.Matrix4().makeTranslation(0.2, 1.1, -0.25))];
+    for (const [x, z] of [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]]) parts.push(tinted(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 10), 0x222222, new THREE.Matrix4().makeTranslation(x, 0.1, z).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2))));
+    return mergeGeometries(parts, false)!;
+  });
   for (let i = 0; i < (rich ? 4 : 0); i++) {
     const g = new THREE.Group();
-    const b = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.5, 0.7), new THREE.MeshStandardMaterial({ color: i % 2 ? 0xff9900 : 0xf4f4f6, roughness: 0.4 })); b.position.y = 0.42; g.add(b);
-    const f = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.2), new THREE.MeshBasicMaterial({ map: botFace, color: new THREE.Color(1.5, 1.5, 1.5), toneMapped: false })); f.position.set(0, 0.5, 0.36); g.add(f);
-    const flag = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.9), new THREE.MeshBasicMaterial({ color: 0xffffff })); flag.position.set(0.2, 1.1, -0.25); g.add(flag);
-    for (const [x, z] of [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 10), new THREE.MeshStandardMaterial({ color: 0x222222 })); w.rotation.z = Math.PI / 2; w.position.set(x, 0.1, z); g.add(w); }
-    g.traverse((x) => { x.userData.ground = false; (x as THREE.Mesh).castShadow = true; });
+    g.add(new THREE.Mesh(botGeo[i % 2 ? 0 : 1], botBodyM));
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.2), botFaceM); f.position.set(0, 0.5, 0.36); g.add(f);
+    g.traverse((x) => { x.userData.ground = false; (x as THREE.Mesh).castShadow = x !== f; }); // the face is a decal on the body: no shadow of its own
     const side = i % 2 ? 1 : -1, z0 = S + 20 + rnd() * 40, z1 = z0 + 30 + rnd() * 40;
     g.position.set(side * 6.1, FLOOR, z0 + rnd() * (z1 - z0)); add(g); bots.push({ g, z0, z1, dir: rnd() < 0.5 ? 1 : -1 });
   }
@@ -235,10 +248,12 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   // (200 m out, not 120: at 120 its hull lay right over the take-off pad and the boarded liner lifted through it)
   const hero = new THREE.Group(); add(hero); hero.position.set(-6, 70, S - 200); hero.rotation.set(0.08, 0.5, 0.12);
   const heroHull = new THREE.MeshStandardMaterial({ color: 0xe9eef4, roughness: 0.3, metalness: 0.5, emissive: 0x22313f, emissiveIntensity: 0.3, fog: false });
-  const hb = new THREE.Mesh(new THREE.CapsuleGeometry(12, 110, 8, 32), heroHull); hb.rotation.x = Math.PI / 2; hero.add(hb);
+  // the hull and its four spokes are one mesh (five draws before); the ring turns, so it stays its own
+  const hullParts: THREE.BufferGeometry[] = [new THREE.CapsuleGeometry(12, 110, 8, 32).applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2))];
+  for (let i = 0; i < 4; i++) hullParts.push(new THREE.BoxGeometry(1.2, 26, 1.2).applyMatrix4(new THREE.Matrix4().makeTranslation(0, 0, 10).multiply(new THREE.Matrix4().makeRotationZ((i * Math.PI) / 4))));
+  hero.add(new THREE.Mesh(mergeGeometries(hullParts, false)!, heroHull));
   const ringH = new THREE.Mesh(new THREE.TorusGeometry(26, 2.2, 12, 64), heroHull); ringH.position.z = 10; hero.add(ringH);
   const ringGlow = new THREE.Mesh(new THREE.TorusGeometry(26, 0.6, 8, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.5), toneMapped: false, fog: false })); ringGlow.position.z = 10; hero.add(ringGlow);
-  for (let i = 0; i < 4; i++) { const sp = new THREE.Mesh(new THREE.BoxGeometry(1.2, 26, 1.2), heroHull); sp.position.z = 10; sp.rotation.z = (i * Math.PI) / 4; hero.add(sp); }
   const eng = new THREE.Mesh(new THREE.CircleGeometry(9, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9fdcff).multiplyScalar(2.8), toneMapped: false, fog: false })); eng.position.z = -67; eng.rotation.y = Math.PI; hero.add(eng);
   hero.traverse((x) => { x.userData.ground = false; });
   updates.push((dt) => { ringH.rotation.z += dt * 0.05; ringGlow.rotation.z = ringH.rotation.z; });
