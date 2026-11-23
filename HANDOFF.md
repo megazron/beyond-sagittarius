@@ -749,3 +749,11 @@ unlanded except this handoff commit and any recording in progress.
   player positions in __cbTrapLog; the camera snap by the fire (player.ts foliage/trunk pull?); guardian eye bloom;
   stick in slow motion (keep a faint disc, or a pale stick); spear fishing v1 take (plan_v18.json alone); setGrip
   still only on origin/life-wip (checked 01:00); story's answer on spear fishing (INVENTION_TREE.md last section).
+- 02:55 Fishing v1 take (plan_v18.json alone, v20f): site found at the lake, first thrust at the seen fish went
+  high, then two hits; works, but fish are tiny pale slivers, he wades in, the aim camera looks straight down. All
+  four clips plus fishing delivered with README notes (night v14 re-encoded crf 27 to 28 MB). After the takes,
+  committed and NOT yet recorded: guardian phase-two eye ~60%, stick slow-motion sweep floor 0.2, calm head turns on
+  watch, trap log `d` (player distance at the snap). combat-land22 (46921fe) in CI at 02:50; land it when green on
+  that sha. Chrome 9338 and preview 4651 closed by me (verified).
+- Spear fishing NEXT: fish bigger/darker with a shadow on the bottom; keep the bot on the bank (stop at the water's
+  edge, thrust from there); limit the aim pitch so the camera does not go overhead. Story placement still unanswered.
