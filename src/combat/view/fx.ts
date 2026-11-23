@@ -193,11 +193,50 @@ export class CombatFx {
     for (let i = 0; i < (big ? 5 : 3); i++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.16 + (i % 2) * 0.06, 0.6 + (i % 3) * 0.2, 5), m); c.position.set(Math.cos(i * 2.4) * 0.16 * (big ? 1.6 : 1), 0.3, Math.sin(i * 2.4) * 0.16 * (big ? 1.6 : 1)); g.add(c); }
     if (big) { const logs = new THREE.MeshStandardMaterial({ color: 0x2b211b, roughness: 1 }); for (let i = 0; i < 4; i++) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 1, 5), logs); l.rotation.set(Math.PI / 2, i * 0.8, 0.35); l.position.y = 0.12; g.add(l); } }
     let light: THREE.PointLight | null = null;
-    if (this.lights) { light = new THREE.PointLight(0xff9a45, big ? 60 : 16, big ? 22 : 9, 1.7); light.position.y = 1.1; g.add(light); }
+    // (the camp fire's light, against the sun's 4.6 at noon: at 70 with a fall-off of 1.7 (and the story's own camp-fire
+    // light, 16, on top) a white coat a metre from the fire took about ten times full daylight and burned out to flat
+    // orange-white (v16, v25, v26). Now 7 at a metre (with the eye adapted, about daylight), falling off gently: 2.6 at 3 m, 1.4 at 6 m; at 5 the take was too dark round him)
+    if (this.lights) { light = new THREE.PointLight(0xff9a45, big ? 7 : 16, big ? 22 : 9, big ? 0.9 : 1.7); light.position.y = 1.1; g.add(light); }
     return { o: g, id, light };
   }
 
   /** Bring the picture in line with the simulation: projectiles, traps, fires, pickups. */
+  /** Rings of water spreading from the legs of someone standing in it (wading reads as wading, not as standing on
+   * a floor that happens to be wet): one every half second or so standing, faster when the legs move. */
+  private wadeRings: { m: THREE.Mesh; age: number }[] = []; private wadeT = 0;
+  /** Faint rings on the surface over a fish (fx.wade's frame moves them on). */
+  private fishRings: { m: THREE.Mesh; age: number }[] = [];
+  ripple(x: number, z: number, surf: number, r0: number) {
+    if (!this.fishRings.length) for (let i = 0; i < 14; i++) {
+      const m = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xe6efe9, transparent: true, opacity: 0, depthWrite: false }));
+      m.visible = false; m.renderOrder = 2; this.group.add(m); this.fishRings.push({ m, age: 9 });
+    }
+    const r = this.fishRings.reduce((a, b) => (b.age > a.age ? b : a));
+    r.age = 0; r.m.position.set(x, surf + 0.01, z); r.m.userData.r0 = r0;
+  }
+  wade(x: number, z: number, surf: number | null, legs: number, moving: number, dt: number) {
+    if (!this.wadeRings.length) for (let i = 0; i < 8; i++) {
+      const m = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xdfe8e4, transparent: true, opacity: 0, depthWrite: false }));
+      m.visible = false; m.renderOrder = 2; this.group.add(m); this.wadeRings.push({ m, age: 9 });
+    }
+    this.wadeT -= dt * (surf === null ? 0 : 1.6 + moving * 4);
+    if (surf !== null && this.wadeT <= 0) {
+      this.wadeT = 1;
+      const r = this.wadeRings.reduce((a, b) => (b.age > a.age ? b : a));
+      r.age = 0; r.m.position.set(x, surf + 0.012, z); r.m.userData.r0 = legs;
+    }
+    for (const r of this.fishRings) {
+      r.age += dt; const k = r.age / 1.3;
+      r.m.visible = k < 1;
+      if (k < 1) { r.m.scale.setScalar((r.m.userData.r0 as number) + k * 0.38); (r.m.material as THREE.MeshBasicMaterial).opacity = 0.34 * (1 - k) * Math.min(1, k * 8); }
+    }
+    for (const r of this.wadeRings) {
+      r.age += dt; const k = r.age / 1.6;
+      r.m.visible = k < 1;
+      if (k < 1) { const rad = (r.m.userData.r0 as number) + k * 0.55; r.m.scale.setScalar(rad); (r.m.material as THREE.MeshBasicMaterial).opacity = 0.42 * (1 - k) * Math.min(1, k * 8); }
+    }
+  }
+
   sync(sim: CombatSim, dt: number, t: number, cam: THREE.Camera) {
     // particles
     for (let i = 0; i < N_PART; i++) {
@@ -216,7 +255,8 @@ export class CombatFx {
     let ns = 0, nh = 0, nb = 0, nd = 0;
     // how far the stick turns between two frames (50 rad/s of fight time): a full disc at a quarter turn a frame or more
     const simDt = Math.max(0, sim.t - this.lastSimT); this.lastSimT = sim.t;
-    this.blurU.uA.value = Math.min(1, (simDt * 50) / 1.6) * 0.55 * (0.35 + 0.65 * this.smokeK);
+    // (a faint sweep stays in slow motion too: without it the stick was a thin dark line lost in the grass, v7)
+    this.blurU.uA.value = Math.max(0.2, Math.min(1, (simDt * 50) / 1.6)) * 0.55 * (0.35 + 0.65 * this.smokeK);
     for (const q of sim.proj) {
       if (!q.alive) continue;
       tmpV.set(q.vx, q.vy, q.vz).normalize();
@@ -229,7 +269,9 @@ export class CombatFx {
         // (wall time strobed it in slow motion: 125 degrees a frame at 23 frames a second)
         tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(1, 1, 1)); if (nd < 6) this.blurs.setMatrixAt(nd++, tmpM);
         tmpQ.multiply(tmpQ2.setFromAxisAngle(tmpS.set(0, 1, 0), (sim.t * 50) % 6.283));
-        tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(2.6, 2.6, 0.75)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM);
+        // slowed down, the stick is seen turning rather than smeared: drawn a little fuller so it is not a thread
+        const slowK = Math.max(0, Math.min(1, 1 - (simDt * 50) / 0.8)), th = 2.6 + 1.2 * slowK;
+        tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(th, th, 0.75 + 0.08 * slowK)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM);
       }
       else { const sp = w === 'spear' || w === 'hafted', len = sp ? 2 : w === 'atlatl' ? 1.7 : w === 'crossbow' ? 0.45 : 0.75, thick = sp ? 1.9 : w === 'atlatl' ? 1.3 : 1.25; tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(thick, thick, len)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM); }
     }
@@ -270,7 +312,7 @@ export class CombatFx {
       const k = Math.max(0, f.fuel / f.max), flick = 0.85 + Math.sin(t * 13 + f.id) * 0.1 + Math.sin(t * 7.3) * 0.07;
       fl.o.visible = true;
       fl.o.children.forEach((c, i) => { if ((c as THREE.Mesh).material instanceof THREE.MeshBasicMaterial) { c.visible = k > 0; c.scale.set(0.5 + k * 0.7, (0.3 + k * 1.1) * (0.8 + Math.sin(t * 9 + i * 2) * 0.25), 0.5 + k * 0.7); } });
-      if (fl.light) fl.light.intensity = (f.burnsOut ? 16 : 70) * Math.sqrt(k) * flick;
+      if (fl.light) fl.light.intensity = (f.burnsOut ? 16 : 7) * Math.sqrt(k) * flick;
       if (k > 0 && this.emberT <= 0) {
         this.puff('ember', f.x, this.height(f.x, f.z) + 0.5, f.z, 0, 0, 0.5);
         if (!f.burnsOut) this.puff('smoke', f.x, this.height(f.x, f.z) + 0.9 + k * 0.4, f.z, sim.windX * 5, sim.windZ * 5, 1);

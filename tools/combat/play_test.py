@@ -97,6 +97,47 @@ with sync_playwright() as pw:
             page.evaluate("__bs.combat.testTap('Mouse0')"); step(page, 0.15)
             ok(page.evaluate(D)['player']['act'] in ('windup', 'active'), 'arena: a click swings the club', page.evaluate(D)['player']['act'])
             step(page, 3); shot(page, 'arena_pack')
+            # every weapon held in the hand, through blows, a block and a throw where it has one: the drawn shaft
+            # never inside the body, the left hand on a spear's shaft (view/melee.ts; numbers from the real skeleton)
+            for wpn in ['spear', 'club', 'throwstick', 'torch', 'handaxe', 'rock']:
+                for i in range(16):
+                    if page.evaluate(D)['player']['weapon'] == wpn: break
+                    page.evaluate("__bs.combat.testTap('KeyR')"); step(page, 0.1)
+                if page.evaluate(D)['player']['weapon'] != wpn: continue
+                page.evaluate("__bs.combat.testPoseStats(true)")
+                # (held a moment first: a rock or a stick is thrown on the first click and is then out of the hand, so the
+                # frames measured with it were 7 to 18 by chance of the step; the gate needs more than 10)
+                step(page, 0.8)
+                for i in range(3): page.evaluate("__bs.combat.testTap('Mouse0')"); step(page, 0.7)
+                page.evaluate("__bs.combat.testHold('KeyQ', true)"); step(page, 0.6); page.evaluate("__bs.combat.testHold('KeyQ', false)"); step(page, 0.5)
+                ps = page.evaluate("__bs.combat.testPoseStats(true)")
+                # what is drawn each frame: the arms are solved again on the bones after the character has posed them
+                # (view/body.ts fixArms), so the hands land on the weapon whatever the step; the shaft against the body's
+                # shapes as fitted to this model's own skin
+                print(f'pose {wpn}', json.dumps(ps), flush=True)
+                ok(ps['frames'] > 10 and ps['shaftIn'] <= 0.01, f'arena: the {wpn} stays out of the body (within 1 cm) through blows and a block', json.dumps(ps))
+                # (the weapon rides on the right hand, so that hand is on it by construction; this is how far the grip is
+                # from where the pose put it: a low carry grip at the edge of a walking arm's reach misses by up to 3 cm)
+                ok(ps['handOff'] <= 0.04, f'arena: the {wpn} is where the pose put it (within 4 cm)', json.dumps(ps))
+                if wpn == 'spear': ok(ps['leftOff'] <= 0.02, 'arena: the left hand stays on the spear shaft (within 2 cm)', json.dumps(ps))
+            # the bow, the sling and the spear-thrower: aimed, drawn or whirled, let go and made ready again, the arms out
+            # of the body (view/ranged.ts, the same elbow swing as the melee rig)
+            for wpn in ['bow', 'sling', 'atlatl']:
+                for i in range(16):
+                    if page.evaluate(D)['player']['weapon'] == wpn: break
+                    page.evaluate("__bs.combat.testTap('KeyR')"); step(page, 0.1)
+                if page.evaluate(D)['player']['weapon'] != wpn: continue
+                page.evaluate("__bs.combat.testPoseStats(true)")
+                for i in range(2):
+                    page.evaluate("__bs.combat.testHold('Mouse2', true); __bs.combat.testHold('Mouse0', true)"); step(page, 1.0)
+                    page.evaluate("__bs.combat.testHold('Mouse0', false)"); step(page, 1.2)
+                page.evaluate("__bs.combat.testHold('Mouse2', false)"); step(page, 0.3)
+                ps = page.evaluate("__bs.combat.testPoseStats(true)")
+                print(f'pose {wpn}', json.dumps(ps), flush=True)
+                # the arms as drawn (re-solved on the bones after the character posed them, view/ranged.ts fixArms),
+                # against the body's shapes turned with the chest (a side-on archer, a wound-up sling)
+                print(f'  {wpn}: arm depth in the body shapes {ps["rangedArmIn"] * 100:.1f} cm at {ps.get("rangedWhere")} (solve {ps.get("rangedSolveIn", 0) * 100:.1f})', flush=True)
+                ok(ps['rangedArmIn'] <= 0.02, f'arena: with the {wpn} the arms stay out of the body (within 2 cm)', json.dumps(ps))
             # wake the guardian and let it work
             g = [e for e in page.evaluate(D)['enemies'] if e['kind'] == 'guardian'][0]
             page.evaluate(f"__bs.teleport({g['x']} - 3, {g['z']})"); step(page, 6)
@@ -176,7 +217,10 @@ with sync_playwright() as pw:
     page.evaluate("document.getElementById('p-action').click()")
     page.wait_for_selector('[data-cb="difficulty"] [data-v="story"]', state='visible', timeout=30000)
     ok(page.evaluate("document.querySelectorAll('[data-enc]').length") == 6, 'menu: Action lists the six set pieces')
-    page.evaluate("document.querySelector('[data-cb=\"difficulty\"] [data-v=\"story\"]').click()")
+    # (the button clicked in the page: Playwright's own click waits for the menu to be "stable" under the software renderer
+    # and timed out at 30 s in about one CI run in three; what is checked here is that the choice is saved)
+    page.wait_for_selector('[data-cb="difficulty"] [data-v="story"]', state='attached', timeout=30000)
+    page.evaluate("""document.querySelector('[data-cb="difficulty"] [data-v="story"]').click()""")
     ok(page.evaluate("JSON.parse(localStorage.getItem('bs-settings-v1')).combat.difficulty") == 'story', 'menu: difficulty is saved')
     for lang in ['hi', 'ur']:
         page.evaluate(f"__bs.setLang('{lang}')")

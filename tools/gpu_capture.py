@@ -311,10 +311,13 @@ for st in PLAN['steps']:
         print('rec', st['rec'], len(rec['frames']), 'frames', f'{fps:.1f} fps', 'sound' if b64 else 'no sound', flush=True)
     elif 'eval' in st:
         try:
-            r = ev(st['eval'], st.get('await', False))
+            r = ev(st['eval'], st.get('await', False)); res = str(r)
             if st.get('save'):
-                open(os.path.join(OUT, st['save']), 'w').write(str(r))  # the whole result, for results too long to print
-            print('eval', str(r)[:200], flush=True)
+                open(os.path.join(OUT, st['save']), 'w').write(res)  # the whole result, for results too long to print
+            print('eval', res[:200], flush=True)
+            # the whole result too (a bot's log, the pose numbers): the printed line is cut at 200 characters
+            if len(res) > 200:
+                with open(os.path.join(OUT, 'evals.txt'), 'a') as fh: fh.write(res + '\n')
         except RuntimeError as x:
             print('eval error', x, flush=True)
     elif 'wait' in st:

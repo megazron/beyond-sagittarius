@@ -7,6 +7,8 @@ import type { SimPlayer } from '../sim/sim';
 import { WEAPONS } from '../sim/weapons';
 import { RangedRig } from './ranged';
 import { loft } from '../../characters/shapes';
+import { MELEE_GEAR, SHAFT, targetFrame, clearShaft, solveArms, follow, newFrame, copyFrame, depth, setBodyScale, setBodyCentres, setBodyFit, fitBody, reach2, aimBone, capChestWidth, smooth as smoothK } from './melee';
+import type { ActState, WFrame, ArmMem, Solved, BodyFit } from './melee';
 import type { WeaponId } from '../sim/weapons';
 
 type Pose = Limbs;
@@ -163,22 +165,24 @@ class HideWrap {
       const i = Math.max(0, Math.min(7, Math.floor(t * 8)));
       return Math.max(M.R[i], M.R[Math.max(0, i - 1)] * 0.9, M.R[Math.min(7, i + 1)] * 0.9);
     };
-    const rad = (t: number, base: number) => Math.max(base * k, under(t) * 1.05 + 0.004 * k);
+    // (snug: v8 read as blocks on the forearms; the hide is laid 2.5 mm over the cloth, not 4 mm plus 5%)
+    const rad = (t: number, base: number) => Math.max(base * k, under(t) * 1.02 + 0.0025 * k);
     const g = new THREE.Group(); g.name = 'hideWrap';
     g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.clone().normalize());
     // a wrap is bound tight: never wider than a hand's breadth round (a flared cuff is squeezed in, the cloth spills out
     // past the wrist instead of the hide flaring into a wide open tube round the hand)
-    const cap = (t: number, m: number) => Math.min(rad(t, m), (M ? 0.085 : 1) * k);
+    const cap = (t: number, m: number) => Math.min(rad(t, m), (M ? 0.072 : 1) * k);
     const ra = cap(a, r0), rb = Math.min(cap(b, r1), ra * 0.92), rm = cap((a + b) / 2, (r0 + r1) / 2);
     // a hide sleeve: seven sides, not quite round, the edges rolled a little proud, pulled in a little under the cords
     const rings = [
-      { y: a * len, rx: ra * (1.06 + flare), rz: ra * (0.98 + flare) },
+      { y: a * len, rx: ra * (1.03 + flare), rz: ra * (0.96 + flare) },
       { y: (a + 0.04) * len, rx: ra * 1.02, rz: ra * 0.95 },
-      { y: (a + b) * 0.5 * len, rx: rm, rz: rm * 0.92 },
+      { y: (a + b) * 0.5 * len, rx: rm * 0.97, rz: rm * 0.88 },
       { y: (b - 0.04) * len, rx: rb * 1.02, rz: rb * 0.95 },
-      { y: b * len, rx: rb * 1.08, rz: rb * 1.0 },
-      // the edge rolled in over the wrist, so from the front the end is closed hide, not a dark open ring
-      { y: (b + 0.015) * len, rx: rb * 0.8, rz: rb * 0.74 },
+      { y: b * len, rx: rb * 1.04, rz: rb * 0.97 },
+      // the end eases in over the wrist: a closed end without a hard turned-in ring (the rolled edge of v7 faced the
+      // camera from the front and read as a dark band at the wrist)
+      { y: (b + 0.02) * len, rx: rb * 0.93, rz: rb * 0.88 },
     ];
     const m = new THREE.Mesh(loft(rings, 7), this.hide); m.castShadow = true; g.add(m);
     const at = (t: number) => { const u = (t - a) / (b - a); return (u < 0.5 ? ra + (rm - ra) * u * 2 : rm + (rb - rm) * (u - 0.5) * 2) * 1.05; };
@@ -217,6 +221,39 @@ class HideWrap {
     }
     bone.add(g); this.parts.push(g);
   }
+  /** The coat's cuff where it runs on over the hand (cloth skinned to the hand bone): a short band of hide over it,
+   * so no pale tab of cuff shows past the wrap. Nothing when the cuff stops at the wrist. */
+  private cuffCover(model: Character, hand: THREE.Object3D, s: string) {
+    const fing = model.root.getObjectByName(`finger3_1${s}`) ?? model.root.getObjectByName(`finger2_1${s}`);
+    if (!fing) return;
+    hand.updateWorldMatrix(true, false); fing.updateWorldMatrix(true, false);
+    const axis = hand.worldToLocal(fing.getWorldPosition(new THREE.Vector3())), len = axis.length();
+    if (len < 1e-4) return;
+    const ax = axis.clone().normalize(), v = new THREE.Vector3();
+    let far = 0, r = 0;
+    model.root.traverse((o) => {
+      const m = o as THREE.SkinnedMesh;
+      if (!m.isSkinnedMesh || m.name !== 'cloth' || !m.visible) return;
+      const sk = m.skeleton, si = m.geometry.attributes.skinIndex, sw = m.geometry.attributes.skinWeight, pos = m.geometry.attributes.position;
+      if (!sk || !si || !sw) return;
+      const hi = sk.bones.indexOf(hand as THREE.Bone); if (hi < 0) return;
+      m.updateWorldMatrix(true, false);
+      for (let i = 0; i < pos.count; i++) {
+        let w = 0; for (let c = 0; c < 4; c++) if (si.getComponent(i, c) === hi) w += sw.getComponent(i, c);
+        if (w < 0.3) continue;
+        m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld); hand.worldToLocal(v);
+        const t = v.dot(ax) / len; if (t < 0 || t > 0.6) continue;
+        far = Math.max(far, t); r = Math.max(r, v.addScaledVector(ax, -v.dot(ax)).length());
+      }
+    });
+    if (far < 0.03) return;
+    const wl = hand.getWorldPosition(new THREE.Vector3()).distanceTo(fing.getWorldPosition(new THREE.Vector3())), k = wl > 1e-4 ? len / wl : 1;
+    const rr = Math.min(r * 1.06 + 0.003 * k, 0.07 * k), y1 = Math.min(0.6, far + 0.04) * len;
+    const g = new THREE.Group(); g.name = 'hideWrap';
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ax);
+    const band = new THREE.Mesh(loft([{ y: -0.02 * len, rx: rr, rz: rr * 0.8 }, { y: y1 * 0.6, rx: rr * 1.02, rz: rr * 0.82 }, { y: y1, rx: rr * 0.94, rz: rr * 0.76 }], 7), this.hide);
+    band.castShadow = true; g.add(band); hand.add(g); this.parts.push(g);
+  }
   private build(model: Character) {
     const g = (n: string) => model.root.getObjectByName(n);
     for (const s of ['L', 'R']) {
@@ -228,14 +265,19 @@ class HideWrap {
         const src = probe.cloth as THREE.MeshStandardMaterial | null;
         this.cloth = new THREE.MeshStandardMaterial({ color: src?.color ? src.color.clone() : new THREE.Color(0xe8e8e4), roughness: 0.92 });
       }
-      this.sleeve(model, lo, hd, 0.12, 0.84, 0.05, 0.045, [0.18, 0.5, 0.8], 0, (n) => n === `lowerarm${s}` || (n.startsWith('forearmtw') && n.endsWith(s)));
-      this.sleeve(model, up, lo, -0.06, 0.36, 0.092, 0.08, [0.3], 0.12);
+      // to the wrist: the coat's cuff ends there, and a wrap that stopped short left the cuff's pale tab showing
+      this.sleeve(model, lo, hd, 0.12, 0.95, 0.044, 0.038, [0.18, 0.52, 0.86], 0, (n) => n === `lowerarm${s}` || (n.startsWith('forearmtw') && n.endsWith(s)));
+      this.cuffCover(model, hd, s);
+      this.sleeve(model, up, lo, -0.06, 0.36, 0.082, 0.072, [0.3], 0.05);
     }
     this.model = model;
   }
 }
 
 /** Where each thing sits in a closed hand (hand space: -y along the fingers, +z out of the thumb side). */
+/** `?meleerig=0`: the old way (gear on the hand bone, poses switched, no clearance), for before/after recordings. */
+const RIG_ON = typeof location === 'undefined' || !/[?&]meleerig=0/.test(location.search);
+
 export const GRIP = { x: 0.035, y: -0.085, z: 0.0, rx: 0, ry: 0, rz: 0 };
 
 export class FightBody {
@@ -256,6 +298,7 @@ export class FightBody {
 
   /** The thing in the hand: the right for everything but the bow. */
   private hold(model: Character, id: WeaponId | null) {
+    // the weapons of the melee rig (view/melee.ts) live in the world and are placed at the real hand after the pose
     const hand = id === 'bow' ? model.handL : model.handR;
     if (this.heldId === id && this.held?.parent === hand) return;
     this.held?.removeFromParent(); this.held = null; this.heldId = id;
@@ -279,12 +322,17 @@ export class FightBody {
     this.hold(model, rw ? null : visible);
     if (rw && !p.down && p.act !== 'roll' && p.staggerT <= 0 && aimW) {
       this.since += dt; this.rollAngle = 0; this.crouch = 0;
+      const up = model.root.getObjectByName('upperarmR'), lo = model.root.getObjectByName('lowerarmR');
+      if (up && lo) { const wp = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()); this.shapes(model, { a: wp(up).distanceTo(wp(lo)), b: wp(lo).distanceTo(wp(model.handR)) }); }
       const pose = this.ranged.pose(model, p, dt, t, aiming || armed, aimW, ammo, this.since);
       if (p.act === 'charge') this.wasCharging = 'shot'; else if (this.since > 0.45) this.wasCharging = 'none';
       if (pose) { if (p.sneaking) { pose.bend = (pose.bend ?? 0) + 0.3; this.crouch = 0.2; } model.setLimbs(pose); return; }
     } else if (!rw) { if (this.ranged.mode !== 'none') this.ranged.hide(model); }
     else this.ranged.faceOffset = 0;
-    if (this.held) {
+    const out0 = this.meleePose(model, p, dt, armed, visible, t);
+    if (out0) { this.emit(model, out0, dt, true); return; }
+    this.mframe = false;
+    if (this.held && !(RIG_ON && MELEE_GEAR.includes(this.heldId!))) {
       const G = GRIP, gun = this.heldId === 'coil' || this.heldId === 'crossbow';
       // a stock is held like a grip: the barrel runs on along the forearm, not out of the thumb
       this.held.position.set(G.x * (this.heldId === 'bow' ? -1 : 1), G.y + (gun ? 0.03 : 0), G.z);
@@ -300,7 +348,7 @@ export class FightBody {
     // the stance the weapon is held in when it is up
     if (w === 'bow') base = P.bowHold; else if (w === 'crossbow' || w === 'coil') base = P.gunAim; else if (w === 'spear' || w === 'hafted') base = P.spearReady; else base = P.guard;
     this.rollAngle = 0; this.crouch = 0;
-    if (p.down) { model.setLimbs(null); return; }
+    if (p.down) { this.emit(model, null, dt, false); return; }
     if (p.act === 'roll') {
       // tucked, over the shoulder and up: the turn runs ahead of the clock so the feet are under by the end
       const k = Math.min(1, p.actT / 0.62);
@@ -350,11 +398,259 @@ export class FightBody {
     if (p.sneaking && p.act !== 'roll') { this.crouch = Math.max(this.crouch, 0.24); pose = pose ? { ...pose, bend: (pose.bend ?? 0) + 0.42 } : P.sneak; }
     if (p.act === 'charge') this.wasCharging = p.charging === 'none' ? 'shot' : p.charging; else if (this.since > 0.45) this.wasCharging = 'none';
     this.last.act = p.act; this.last.weapon = w;
-    model.setLimbs(pose);
+    this.emit(model, pose, dt, false);
+  }
+
+  // ---------------------------------------------------------------- the melee rig (view/melee.ts)
+  private cur: WFrame = newFrame(); private prevF: WFrame = newFrame(); private tgt: WFrame = newFrame(); private tmp: WFrame = newFrame();
+  private mframe = false; private lPrev: number | null = null; private leftW = 0;
+  private bonesM: { upL: THREE.Object3D; upR: THREE.Object3D; loR: THREE.Object3D; loL: THREE.Object3D; a: number; b: number } | null = null;
+  /** Per-frame numbers of what was drawn (for the play test): worst shaft depth in the body, worst left-hand gap
+   * from the shaft while it holds it, frames counted. */
+  stats: { frames: number; shaftIn: number; handOff: number; leftOff: number; skel?: string; worst?: string; worstL?: string } = { frames: 0, shaftIn: 0, handOff: 0, leftOff: 0 };
+  private solvedL: number | null = null; private prevL: number | null = null;
+  private mem: ArmMem = { L: 0, R: 0 }; private sol: (Solved & { sL: THREE.Vector3; sR: THREE.Vector3 }) | null = null;
+  private fitFor: Character | null = null; private fit: BodyFit[] | null = null;
+  yawNow = 0; private calm = 0; private dropK = 0;
+  /** This frame's hand directions (world, wrist to knuckles) after the wrist's flex (fixArms); null: along the forearm. */
+  private hdR: THREE.Vector3 | null = null; private hdL: THREE.Vector3 | null = null;
+  private meleePose(model: Character, p: SimPlayer, dt: number, armed: boolean, visible: WeaponId | null, t = 0): Limbs | null {
+    const w = p.weapon;
+    if (!RIG_ON || !visible || !MELEE_GEAR.includes(w) || p.down || p.act === 'roll' || p.staggerT > 0 || p.snareT > 0.15) return null;
+    if (!this.bonesM) {
+      const g = (n: string) => model.root.getObjectByName(n);
+      const upL = g('upperarmL'), upR = g('upperarmR'), loL = g('lowerarmL'), loR = g('lowerarmR');
+      if (!upL || !upR || !loL || !loR) return null;
+      const wp = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3());
+      this.bonesM = { upL, upR, loL, loR, a: wp(upR).distanceTo(wp(loR)), b: wp(loR).distanceTo(wp(model.handR)) };
+    }
+    const B = this.bonesM, def = WEAPONS[w], m = def.melee;
+    this.since += dt; this.kick = Math.max(0, this.kick - dt * 5);
+    this.ready += ((armed || p.act !== 'idle' || p.blocking ? 1 : 0) - this.ready) * (1 - Math.exp(-dt * 9));
+    if (p.act === 'charge') this.wasCharging = 'throw'; else if (this.since > 0.6) this.wasCharging = 'none';
+    // the throwing shoulder drops as the arm is drawn back (no collar bones in this rig: the chest rolls a little to
+    // the right instead, the neck takes it back so the head stays level; late() applies it)
+    const dropT = p.act === 'charge' ? out(Math.min(1, p.charge * 1.4)) : 0;
+    this.dropK += (dropT - this.dropK) * (1 - Math.exp(-dt * (dropT > this.dropK ? 8 : 12)));
+    const s: ActState = {
+      weapon: w, act: p.act, actT: p.actT, combo: p.combo, charge: p.charge, charging: p.charging, blocking: p.blocking, blockT: p.blockT,
+      up: this.ready, since: this.since, thrown: this.wasCharging === 'throw' && p.act !== 'charge', windup: m?.windup ?? 0.3, active: m?.active ?? 0.1, recover: m?.recover ?? 0.4,
+    };
+    const { K, ch } = this.shapes(model, B);
+    const loc = (o: THREE.Object3D) => model.root.worldToLocal(o.getWorldPosition(new THREE.Vector3()));
+    targetFrame(s, this.tgt, this.tmp);
+    // standing with a weapon, a body is never still: the weight shifts from foot to foot (the chest turns and leans a
+    // little with it), the breath lifts the hands; eased out in a blow, a block or a throw
+    const calm = p.act === 'idle' && !p.blocking && !s.thrown ? 1 : 0;
+    this.calm += (calm - this.calm) * (1 - Math.exp(-dt * (calm ? 2 : 8)));
+    if (this.calm > 1e-3) {
+      const c = this.calm, T = this.tgt;
+      T.twist += c * (0.06 * Math.sin(t * 0.53) + 0.025 * Math.sin(t * 1.37 + 0.6));
+      T.bend += c * 0.02 * Math.sin(t * 0.91 + 1.1);
+      const breath = 0.008 * Math.sin(t * 1.6);
+      T.g.y += c * breath; T.g.x += c * 0.012 * Math.sin(t * 0.53);
+      if (T.l === null) { T.lh.y += c * (breath + 0.01 * Math.sin(t * 0.7 + 2)); T.lh.z += c * 0.02 * Math.sin(t * 0.61 + 0.4); }
+    }
+    this.tgt.g.multiplyScalar(K); this.tgt.lh.multiplyScalar(K);
+    this.tgt.g.x += ch.x; this.tgt.g.z += ch.z; this.tgt.lh.x += ch.x; this.tgt.lh.z += ch.z;
+    clearShaft(this.tgt, w);
+    const fast = p.act === 'active' || (s.thrown && this.since < 0.2);
+    // (the rig applies these limbs after this frame's late(): late() sees last frame's pose, so it keeps last frame's)
+    if (!this.mframe) { copyFrame(this.tgt, this.cur); copyFrame(this.tgt, this.prevF); this.mframe = true; this.lPrev = null; this.mem = { L: 0, R: 0 }; } else { copyFrame(this.cur, this.prevF); follow(this.cur, this.tgt, dt, 0.04, fast ? 60 : 24); }
+    const f = copyFrame(this.cur, this.tmp);
+    const wantL = this.ready > 0.05 || f.l !== null || p.act !== 'idle' || p.blocking ? 1 : 0;
+    this.leftW += (wantL - this.leftW) * (1 - Math.exp(-dt * 10));
+    const sL = loc(B.upL), sR = loc(B.upR);
+    const r = solveArms(f, w, { sL, sR, a: B.a, b: B.b, palm: 0.07 * K }, this.leftW > 0.02 || f.l !== null ? 1 : 0, 1, this.lPrev, dt, this.mem);
+    this.sol = Object.assign(r, { sL, sR });
+    this.lPrev = r.f.l; this.solvedL = r.f.l;
+    copyFrame(r.f, this.cur); this.cur.l = r.f.l;
+    if (p.sneaking) { r.limbs.bend = (r.limbs.bend ?? 0) + 0.3; this.crouch = 0.2; } else this.crouch = p.blocking && (w === 'spear' || w === 'hafted') ? 0.16 * out(p.blockT / 0.2) : 0;
+    this.rollAngle = 0;
+    gripHand(model, 'R', { shape: 'grip', radius: SHAFT[w]!.r });
+    gripHand(model, 'L', r.f.l !== null ? { shape: 'grip', radius: SHAFT[w]!.r } : null);
+    this.last.act = p.act; this.last.weapon = w;
+    // these arms are the rig's: the character's own push of the arms out of its torso must not pull a hand off the
+    // weapon (Limbs.ownArms, the character agent's opt-out; ignored by a build without it). late() re-solves them on
+    // the bones as posed, against this frame's shoulders.
+    (r.limbs as Limbs & { ownArms?: 'L' | 'R' | 'both' }).ownArms = 'both';
+    return r.limbs;
+  }
+
+  /** The body's shapes for this frame (view/melee.ts): scaled by the arm length (the frames are for a 1.75 m man),
+   * fitted to this model's skin, sitting on its bones as last posed (hips, chest, head). */
+  private shapes(model: Character, B: { a: number; b: number }) {
+    if (this.fitFor !== model) { this.fitFor = model; this.fit = measureBody(model); }
+    setBodyFit(this.fit);
+    const K = (B.a + B.b) / 0.53; setBodyScale(K);
+    const loc = (o: THREE.Object3D) => model.root.worldToLocal(o.getWorldPosition(new THREE.Vector3()));
+    const hips = model.root.getObjectByName('hips'), chest = model.root.getObjectByName('chest');
+    const ch = chest ? loc(chest) : new THREE.Vector3(), hp = hips ? loc(hips) : new THREE.Vector3(), hd = loc(model.head);
+    // each part turned as the body really is this frame: the chest and head by the line between the shoulders (the
+    // twist, a side-on stance), the hips by the line between the hips (left minus right is +x when facing ahead)
+    const yawOf = (l: string, r: string) => {
+      const a = model.root.getObjectByName(l), b = model.root.getObjectByName(r);
+      if (!a || !b) return 0;
+      const d = loc(a).sub(loc(b));
+      return Math.atan2(-d.z, d.x);
+    };
+    const yc = yawOf('upperarmL', 'upperarmR'), yh = yawOf('upperlegL', 'upperlegR');
+    { const a = model.root.getObjectByName('upperarmL'), c = model.root.getObjectByName('upperarmR'); if (a && c) capChestWidth(loc(a).distanceTo(loc(c)) / 2); }
+    setBodyCentres([{ x: hp.x, z: hp.z, yaw: yh }, { x: ch.x, z: ch.z, yaw: yc }, { x: hd.x, z: hd.z, yaw: yc }]);
+    this.yawNow = yc;
+    return { K, ch };
+  }
+
+  // ---------------------------------------------------------------- what goes to the rig, eased
+  private outL: Limbs = {}; private lastRig = false; private xfade = 1;
+  /** Hands the pose to the rig. Switching between the melee rig and the authored poses (a roll, a stagger, the
+   * fists) cross-fades over ~0.15 s; the authored poses are also low-passed (their own changes of state popped). */
+  private emit(model: Character, pose: Limbs | null, dt: number, rig: boolean) {
+    if (rig !== this.lastRig) { this.xfade = 0; this.lastRig = rig; }
+    this.xfade = Math.min(1, this.xfade + dt / 0.15);
+    if (!pose) { this.outL = {}; model.setLimbs(null); return; }
+    if (!RIG_ON) { model.setLimbs(pose); return; }
+    const k = rig && this.xfade >= 1 ? 1 : 1 - Math.exp(-dt / (this.xfade < 1 ? 0.06 : 0.035));
+    const o: Limbs & { ownArms?: 'L' | 'R' | 'both' } = { bend: pose.bend, twist: pose.twist, openHands: pose.openHands, ownArms: (pose as { ownArms?: 'L' | 'R' | 'both' }).ownArms };
+    for (const key of ['armL', 'armR', 'foreL', 'foreR', 'legL', 'legR', 'shinL', 'shinR'] as const) {
+      const t = pose[key], c = this.outL[key];
+      if (!t) continue;
+      if (!c || k >= 1) { o[key] = [t[0], t[1], t[2]]; continue; }
+      const x = c[0] + (t[0] - c[0]) * k, y = c[1] + (t[1] - c[1]) * k, z = c[2] + (t[2] - c[2]) * k, l = Math.hypot(x, y, z) || 1;
+      o[key] = [x / l, y / l, z / l];
+    }
+    const pb = this.outL.bend ?? 0, pt = this.outL.twist ?? 0;
+    o.bend = pb + ((pose.bend ?? 0) - pb) * k; o.twist = pt + ((pose.twist ?? 0) - pt) * k;
+    this.outL = o; model.setLimbs(o);
   }
 
   /** Give the body back to the walk and empty the hands. */
   /** After the body is posed this frame. */
-  late(model: Character, dt: number, t: number) { this.ranged.late(model, dt, t); }
-  release(model: Character) { this.ranged.hide(model); model.setLimbs(null); this.hold(model, null); this.rollAngle = 0; this.crouch = 0; this.ready = 0; }
+  late(model: Character, dt: number, t: number) {
+    this.ranged.late(model, dt, t);
+    const id = this.heldId;
+    if (!RIG_ON || !this.held || !id || !MELEE_GEAR.includes(id) || !this.bonesM) return;
+    this.hdR = this.hdL = null;
+    if (this.mframe && this.sol) { this.dropShoulder(model); this.fixArms(model); }
+    const hw = model.handR.getWorldPosition(new THREE.Vector3()), lw = this.bonesM.loR.getWorldPosition(new THREE.Vector3());
+    const hdR = this.hdR as THREE.Vector3 | null, fd = hdR ? hdR.clone() : hw.clone().sub(lw).normalize(), K = (this.bonesM.a + this.bonesM.b) / 0.53;
+    const grip = hw.clone().addScaledVector(fd, 0.07 * K);
+    // the weapon rides on the hand bone (so it can never slip off the hand, whatever the rig does after this), turned
+    // so that it points along this frame's solved shaft (a roll or a stagger: along the forearm)
+    const rq = model.root.getWorldQuaternion(new THREE.Quaternion()), hq = model.handR.getWorldQuaternion(new THREE.Quaternion());
+    const dW = this.mframe ? this.cur.d.clone().applyQuaternion(rq).normalize() : fd;
+    const want = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dW);
+    this.held.quaternion.copy(hq.clone().invert().multiply(want));
+    this.held.position.copy(model.handR.worldToLocal(grip.clone()));
+    const ws = model.handR.getWorldScale(new THREE.Vector3()); this.held.scale.set(1 / ws.x, 1 / ws.y, 1 / ws.z);
+    if (!this.mframe) return;
+    // the numbers, on what is drawn this frame: the shaft from the real grip along this frame's solve, the right hand
+    // against the grip the solve asked for, the left palm against the drawn shaft
+    const F0 = this.cur, d0 = F0.d.clone().applyQuaternion(rq).normalize();
+    const S = SHAFT[id]!, gl = model.root.worldToLocal(grip.clone()), q = new THREE.Vector3();
+    let worst = 0;
+    for (let k = -S.back; k <= S.front; k += 0.04) worst = Math.max(worst, depth(q.copy(gl).addScaledVector(F0.d, k), F0.bend, S.r));
+    const st = this.stats; st.frames++; st.shaftIn = Math.max(st.shaftIn, worst);
+    const off = this.xfade >= 1 && this.sol ? gl.distanceTo(this.sol.rt) : 0;
+    if (off > st.handOff) { st.handOff = off; st.worst = `${this.last.act} g ${this.sol!.rt.toArray().map((x) => x.toFixed(2))} grip ${gl.toArray().map((x) => x.toFixed(2))}`; }
+    if (!st.skel) { const s0 = model.root.worldToLocal(this.bonesM.upR.getWorldPosition(new THREE.Vector3())); st.skel = `sR ${s0.toArray().map((x) => x.toFixed(2))} a ${this.bonesM.a.toFixed(3)} b ${this.bonesM.b.toFixed(3)} fit ${JSON.stringify(this.fit?.map((f) => [+f.off.toFixed(3), +f.az.toFixed(3), f.ax ? +f.ax.toFixed(3) : null]))}`; }
+    if (F0.l !== null && F0.hold >= 0.98 && this.xfade >= 1) {
+      const hl = model.handL.getWorldPosition(new THREE.Vector3()), ll = this.bonesM.loL.getWorldPosition(new THREE.Vector3());
+      const palm = hl.clone().addScaledVector((this.hdL as THREE.Vector3 | null)?.clone() ?? hl.clone().sub(ll).normalize(), 0.07 * K);
+      const rel = palm.sub(grip), along = rel.dot(d0);
+      const gap = rel.addScaledVector(d0, -along).length() + Math.max(0, -along, along - S.front);
+      if (gap > st.leftOff) { st.leftOff = gap; st.worstL = `${this.last.act} l ${F0.l.toFixed(2)} along ${along.toFixed(2)}`; }
+    }
+    this.prevL = this.solvedL;
+    void dt; void t;
+  }
+  /** The arms, solved again on the bones as the character posed them this frame (its clip, bend and turn moved the
+   * shoulders since the solve), and set on the bones directly: the right hand lands on the grip, the left on the shaft
+   * that is drawn this frame. The elbows keep the solve's way out of the body. Eased in over the rig's cross-fade. */
+  private fixArms(model: Character) {
+    const B = this.bonesM!, r = this.sol!, R = model.root, K = (B.a + B.b) / 0.53, palm = 0.07 * K;
+    const wgt = this.xfade >= 1 ? 1 : smoothK(this.xfade);
+    const W = (v: THREE.Vector3) => R.localToWorld(v.clone());
+    const wp = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3());
+    // the shaft as drawn this frame (world)
+    const shaft = this.cur.d.clone().applyQuaternion(R.getWorldQuaternion(new THREE.Quaternion())).normalize();
+    const arm = (up: THREE.Object3D, lo: THREE.Object3D, hand: THREE.Object3D, tW: THREE.Vector3, eL: THREE.Vector3, sL: THREE.Vector3, onShaft: boolean) => {
+      const s = wp(up), a = s.distanceTo(wp(lo)), b = wp(lo).distanceTo(wp(hand));
+      const pole = W(eL).sub(W(sL)), e = new THREE.Vector3(), wr = new THREE.Vector3();
+      reach2(s, tW, a, b + palm, pole, e, wr);
+      // the wrist: a hand round a shaft lies across it, so the hand bends at the wrist from the forearm's line towards
+      // square to the shaft (cocked back under a spear drawn to throw, turned up under a club carried low), at most
+      // 26 degrees; the wrist is then solved to where that hand reaches the grip (the hand followed the forearm in a
+      // straight line before: "stiff wrists")
+      const fdir = wr.clone().sub(e).normalize();
+      let hd = fdir.clone();
+      if (onShaft) {
+        hd.addScaledVector(shaft, -0.6 * fdir.dot(shaft)).normalize();
+        const ang = fdir.angleTo(hd), MAX = 0.45;
+        if (ang > MAX) hd = fdir.clone().lerp(hd, MAX / ang).normalize();
+        hd = fdir.clone().lerp(hd, wgt).normalize();
+      }
+      const wristT = tW.clone().addScaledVector(hd, -palm);
+      reach2(s, wristT, a, b, pole, e, wr);
+      aimBone(up, lo, e, wgt);
+      aimBone(lo, hand, wr, wgt);
+      if (onShaft) {
+        // turn the hand itself (in the rig it lies along the forearm): from the forearm's line to the flexed one
+        const fd2 = wp(hand).sub(wp(lo)).normalize(), q = new THREE.Quaternion().setFromUnitVectors(fd2, hd);
+        const hw0 = hand.getWorldQuaternion(new THREE.Quaternion()), pw = hand.parent!.getWorldQuaternion(new THREE.Quaternion());
+        hand.quaternion.copy(pw.invert().multiply(q.multiply(hw0))); hand.updateWorldMatrix(false, true);
+      }
+      return onShaft ? hd : null;
+    };
+    const gT = W(r.rt);
+    this.hdR = arm(B.upR, B.loR, model.handR, gT, r.eR, r.sR, true);
+    if (!r.limbs.armL) return;
+    // the left hand's mark moves with the grip as it really is (the drawn shaft starts there)
+    const hw = wp(model.handR), grip = hw.clone().addScaledVector(this.hdR ?? hw.clone().sub(wp(B.loR)).normalize(), palm);
+    const lT = W(r.lt).sub(W(r.f.g)).add(grip);
+    this.hdL = arm(B.upL, B.loL, model.handL, lT, r.eL, r.sL, r.f.l !== null && r.f.hold > 0.5);
+  }
+  /** The throwing shoulder drops as the arm draws back (see meleePose): the chest rolls about the body's forward line,
+   * the right side down, and the neck rolls back by as much so the head stays level. */
+  private dropShoulder(model: Character) {
+    if (this.dropK < 0.01) return;
+    const ch = model.root.getObjectByName('chest'), nk = model.root.getObjectByName('neck') ?? model.head;
+    if (!ch || !ch.parent) return;
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(model.root.getWorldQuaternion(new THREE.Quaternion()));
+    const roll = (o: THREE.Object3D, ang: number) => {
+      const q = new THREE.Quaternion().setFromAxisAngle(fwd, ang), ow = o.getWorldQuaternion(new THREE.Quaternion()), pw = o.parent!.getWorldQuaternion(new THREE.Quaternion());
+      o.quaternion.copy(pw.invert().multiply(q.multiply(ow))); o.updateWorldMatrix(false, true);
+    };
+    const A = 0.085 * this.dropK;
+    roll(ch, A);
+    if (nk && nk.parent && nk !== ch) roll(nk, -A);
+  }
+  release(model: Character) { this.ranged.hide(model); model.setLimbs(null); this.hold(model, null); this.mframe = false; this.outL = {}; gripHand(model, 'R', null); gripHand(model, 'L', null); this.rollAngle = 0; this.crouch = 0; this.ready = 0; }
+}
+
+/** The body's depth from its own skin and clothes at rest (the skinned meshes' bind pose), for the melee rig's
+ * shapes: null when it cannot be read (the defaults then stand). */
+function measureBody(model: Character): BodyFit[] | null {
+  try {
+    const meshes: THREE.SkinnedMesh[] = [];
+    model.root.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && /skin|cloth|body/i.test(m.name) && !/eye|lash|cornea|mouth/i.test(m.name)) meshes.push(m); });
+    if (!meshes.length) return null;
+    const sk = meshes[0].skeleton, inv = (n: string) => { const b = sk.bones.find((x) => x.name === n); if (!b) return null; return new THREE.Matrix4().copy(sk.boneInverses[sk.bones.indexOf(b)]).invert(); };
+    const hip = inv('hips'), ch = inv('chest'), hd = inv('head'), up = inv('upperarmR'), lo = inv('lowerarmR'), ha = inv('handR');
+    if (!hip || !ch || !hd || !up || !lo || !ha) return null;
+    const P = (m: THREE.Matrix4) => new THREE.Vector3().setFromMatrixPosition(m);
+    const k = (P(up).distanceTo(P(lo)) + P(lo).distanceTo(P(ha))) / 0.53;
+    const pts: number[] = [], v = new THREE.Vector3();
+    for (const m of meshes) {
+      const pos = m.geometry.attributes.position, n = pos.count, step = n > 6000 ? 2 : 1;
+      for (let i = 0; i < n; i += step) { v.fromBufferAttribute(pos, i).applyMatrix4(m.bindMatrix); pts.push(v.x, v.y, v.z); }
+    }
+    return fitBody(pts, [P(hip).z, P(ch).z, P(hd).z], k);
+  } catch { return null; }
+}
+
+type GripShape = 'open' | 'relaxed' | 'grip' | 'pinch' | 'point';
+/** Close a hand round what it holds (character.setGrip from the story's rig; absent on older builds). */
+function gripHand(model: Character, side: 'L' | 'R', g: { shape: GripShape; radius?: number } | null) {
+  (model as unknown as { setGrip?: (s: 'L' | 'R', g: { shape: GripShape; radius?: number } | null) => void }).setGrip?.(side, g);
 }

@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { loft, limb, grainNormal } from '../../characters/shapes';
 import { createHound } from '../../world/predator';
 import type { Enemy, SpeciesId } from '../sim/species';
+import { DARTER_LEN } from '../sim/species';
 import { reach } from './ranged';
 import { nearFade } from '../../core/nearfade';
 
@@ -521,7 +522,8 @@ function guardian(): CreatureView {
       const eye = e.dead ? 0 : s === 'strike' && beam ? 8 : wake * (1.1 + conv * 4);
       // in the second phase the eye burns white-hot rather than orange (the whole thing turning orange read as a
       // colour change, not as strain)
-      lensM.color.setRGB(over ? 1.15 * eye + 0.4 * wake : 0.2 * eye, over ? 1.1 * eye + 0.3 * wake : 1.2 * eye, over ? 1.0 * eye + 0.25 * wake : 1.6 * eye);
+      // (white-hot at about 60% of the blue eye's level: all three channels high bloomed into a disc over the face, v12)
+      lensM.color.setRGB(over ? 0.7 * eye + 0.25 * wake : 0.2 * eye, over ? 0.66 * eye + 0.2 * wake : 1.2 * eye, over ? 0.6 * eye + 0.16 * wake : 1.6 * eye);
       pupil.scale.set(Math.max(0.02, 1 - conv * 1.1), 1, 1); pupil.visible = !e.dead && conv < 0.9;
       // the hollow's walls take the eye's light (a cold glow deepening in the wind-up)
       hollowM.emissive.setRGB(0.03, 0.12, 0.16).multiplyScalar(Math.min(2, eye) * (over ? 0.5 : 1));
@@ -551,43 +553,101 @@ function guardian(): CreatureView {
 }
 
 /**
- * A darter: a slim fish about 35 cm long, olive-brown back over a pale belly (dark from above, so it is a shadow on
- * the bottom more than a shape, which is how a fish is actually spotted), a silver line down the flank, a forked tail
- * and a small back fin. The body bends from the middle back as it swims; held still, only the tail and fins stir.
- * The controller puts the root where the fish is SEEN (raised by refraction); the sim keeps where it is.
- * Killed it rolls belly up and floats to the surface.
+ * A darter: a slim fish about 35 cm long. Countershaded the way a stream fish is: a dark olive-brown back with darker
+ * bars across it grading down the flanks to a dull buff belly (dark from above, so from the bank it is a dark shape
+ * and its shadow on the bottom, which is how a fish is actually spotted). Deep and round at the head and shoulders,
+ * tapering to a narrow wrist and a forked tail, a back fin and a small fin under the tail; matt, never shiny or pale
+ * (v2's leaf: a flat pale spindle with a metal sheen that took the sky). The body bends from the middle back as it
+ * swims; held still, only the tail and fins stir. The controller puts the root where the fish is SEEN (raised by
+ * refraction); the sim keeps where it is. Killed it rolls belly up and floats to the surface.
  */
 function darter(): CreatureView {
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
-  const L = 0.34;
-  const g = new THREE.SphereGeometry(1, 16, 10);
-  const p = g.attributes.position, c = new Float32Array(p.count * 3);
-  for (let i = 0; i < p.count; i++) {
-    // a spindle, blunt at the nose and drawn out to the tail, deeper than wide
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), taper = z < 0 ? 1 - 0.55 * z * z : 1 - 0.2 * z * z;
-    p.setXYZ(i, x * 0.04 * taper, y * 0.045 * taper, z * L * 0.5);
-    const back = THREE.MathUtils.smoothstep(y, -0.25, 0.45), line = Math.exp(-Math.pow((y - 0.05) / 0.12, 2)) * 0.35;
-    c[i * 3] = 0.72 - back * 0.52 + line; c[i * 3 + 1] = 0.7 - back * 0.46 + line; c[i * 3 + 2] = 0.6 - back * 0.46 + line;
+  const L = 0.34, RINGS = 15, AROUND = 12, H = 0.043, W = 0.026;
+  // the body: rings from the nose (+z) back to the wrist of the tail (-z); a small mesh (15 x 12 points)
+  const pos: number[] = [], col: number[] = [], idx: number[] = [];
+  // (linear values: vertex colours are not converted; in sRGB about #383520 back, #615938 flank, #958c69 belly)
+  const back = [0.04, 0.036, 0.014], flank = [0.12, 0.1, 0.04], belly = [0.3, 0.26, 0.14];
+  for (let r = 0; r < RINGS; r++) {
+    const u = r / (RINGS - 1), z = L * (0.5 - u);
+    // blunt round head, deepest about a third of the way back, then a long taper to a narrow wrist
+    const prof = u < 0.3 ? Math.sqrt(Math.max(0, 1 - Math.pow((0.3 - u) / 0.3, 2))) : 1 - 0.82 * Math.pow((u - 0.3) / 0.7, 1.25);
+    const rr = r === RINGS - 1 ? 0.12 : prof;
+    for (let k = 0; k < AROUND; k++) {
+      const ang = (k / AROUND) * Math.PI * 2, cy = Math.sin(ang), cx = Math.cos(ang);
+      // the back a little higher than the belly is deep; the belly a touch flatter
+      const y = cy * H * rr * (cy < 0 ? 0.85 : 1), x = cx * W * rr;
+      pos.push(x, y, z);
+      // countershading: dark back, through the flank to the belly, darker bars across the back (parr marks)
+      const kb = THREE.MathUtils.smoothstep(cy, -0.15, 0.75), kf = THREE.MathUtils.smoothstep(cy, -0.85, -0.1);
+      const bar = kb * 0.016 * Math.max(0, Math.sin(u * 26)) * (u > 0.15 && u < 0.85 ? 1 : 0);
+      for (let i = 0; i < 3; i++) { const lo = belly[i] + (flank[i] - belly[i]) * kf; col.push(Math.max(0, lo + (back[i] - lo) * kb - bar)); }
+    }
   }
-  g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.computeVertexNormals();
-  const skin = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.25 });
-  const fins = new THREE.MeshStandardMaterial({ color: 0x4d4a38, roughness: 0.7, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+  for (let r = 0; r < RINGS - 1; r++) for (let k = 0; k < AROUND; k++) {
+    const a = r * AROUND + k, b = r * AROUND + ((k + 1) % AROUND), c = a + AROUND, d = b + AROUND;
+    idx.push(a, c, b, b, c, d);
+  }
+  // the nose and the end of the wrist, closed
+  const nose = pos.length / 3; pos.push(0, -H * 0.05, L * 0.5 + 0.004); col.push(...flank);
+  const end = pos.length / 3; pos.push(0, 0, -L * 0.5 - 0.004); col.push(...flank);
+  for (let k = 0; k < AROUND; k++) { const k2 = (k + 1) % AROUND; idx.push(nose, k, k2); idx.push(end, (RINGS - 1) * AROUND + k2, (RINGS - 1) * AROUND + k); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx); g.computeVertexNormals();
+  const skin = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0 });
+  const fins = new THREE.MeshStandardMaterial({ color: 0x2f2b1d, roughness: 0.8, side: THREE.DoubleSide, transparent: true, opacity: 0.88 });
   body.add(new THREE.Mesh(g, skin));
-  // the tail: a forked fin on a hinge at the wrist of the tail
-  const tail = new THREE.Group(); tail.position.z = -L * 0.48; body.add(tail);
-  const tg = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.055, -0.09), new THREE.Vector3(0, 0.0, -0.06), new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.0, -0.06), new THREE.Vector3(0, -0.05, -0.09)]);
-  tg.computeVertexNormals(); tail.add(new THREE.Mesh(tg, fins));
-  // a small back fin and two belly fins
-  const df = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.04, 0.04), new THREE.Vector3(0, 0.085, -0.02), new THREE.Vector3(0, 0.035, -0.06)]);
-  df.computeVertexNormals(); body.add(new THREE.Mesh(df, fins));
-  const pf = [-1, 1].map((s) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.025), fins); m.position.set(s * 0.035, -0.025, 0.07); m.rotation.set(0.3, s * 0.6, s * 0.5); body.add(m); return m; });
+  // an eye each side, dark, just behind the nose
+  const eyeG = new THREE.SphereGeometry(0.0065, 6, 4), eyeM = new THREE.MeshStandardMaterial({ color: 0x0b0a07, roughness: 0.3 });
+  for (const sx of [-1, 1]) { const m = new THREE.Mesh(eyeG, eyeM); m.position.set(sx * W * 0.62, H * 0.28, L * 0.39); body.add(m); }
+  const tri = (pts: number[][]) => { const q = new THREE.BufferGeometry().setFromPoints(pts.map((v) => new THREE.Vector3(v[0], v[1], v[2]))); q.computeVertexNormals(); return q; };
+  // the tail: a forked fin on a hinge at the wrist of the tail (two lobes and the notch between them)
+  const tail = new THREE.Group(); tail.position.z = -L * 0.49; body.add(tail);
+  const B1 = [0, 0.012, 0.004], B2 = [0, -0.011, 0.004], U = [0, 0.058, -0.085], N = [0, 0, -0.048], D = [0, -0.052, -0.085];
+  tail.add(new THREE.Mesh(tri([B1, U, N, B1, N, B2, B2, N, D]), fins));
+  // a back fin over the deepest part of the body, and a small fin under the tail
+  const df = tri([[0, H * 0.9, L * 0.12], [0, H * 0.9 + 0.045, L * 0.02], [0, H * 0.72, -L * 0.1]]);
+  body.add(new THREE.Mesh(df, fins));
+  const af = tri([[0, -H * 0.5, -L * 0.18], [0, -H * 0.5 - 0.025, -L * 0.27], [0, -H * 0.35, -L * 0.3]]);
+  body.add(new THREE.Mesh(af, fins));
+  const pf = [-1, 1].map((s) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.022), fins); m.position.set(s * W * 0.95, -H * 0.55, L * 0.25); m.rotation.set(0.3, s * 0.6, s * 0.5); body.add(m); return m; });
   for (const o of [root]) o.traverse((q) => { q.castShadow = false; });
+  // drawn to the sim's length (DARTER_LEN; the shapes above are for a 34 cm fish)
+  body.scale.setScalar(DARTER_LEN / L);
+  // its shadow on the bottom, under where the fish really is: how a fish is actually spotted from the bank. The
+  // controller sets its height (root.userData.shadow) to the bottom; soft and dark, it moves with the fish
+  const sh = new THREE.Mesh(new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    vertexShader: 'varying vec2 vP; void main() { vP = position.xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'varying vec2 vP; void main() { float r = length(vP); float a = 0.55 * smoothstep(1.0, 0.25, r); if (a < 0.01) discard; gl_FragColor = vec4(0.03, 0.04, 0.03, a); }',
+  }));
+  sh.scale.set(DARTER_LEN * 0.16, 1, DARTER_LEN * 0.55); sh.renderOrder = 1; root.add(sh); root.userData.shadow = sh;
+  // so a dark fish reads against dark water (owner: "hard to see in the dark water"): the sun through the surface
+  // lays a pale, moving net of light on the gravel under it, and the dark fish and its shadow sit on that patch; a
+  // faint shaft of light comes down through the water to it. The controller sets their heights like the shadow's.
+  const uT = { value: 0 };
+  const patch = new THREE.Mesh(new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, uniforms: { uT },
+    vertexShader: 'varying vec2 vP; void main() { vP = position.xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform float uT; varying vec2 vP; void main() { float r = length(vP); float e = smoothstep(1.0, 0.35, r); if (e < 0.01) discard;'
+      + ' vec2 q = vP * 5.0; float c = abs(sin(q.x * 1.7 + uT * 1.3) + sin(q.y * 1.3 - uT * 1.1) + sin((q.x + q.y) * 1.1 + uT * 0.7)) / 3.0; c = 1.0 - smoothstep(0.0, 0.35, c);'
+      + ' gl_FragColor = vec4(vec3(0.62, 0.64, 0.46) * (0.75 + 0.6 * c), e * (0.3 + 0.25 * c)); }',
+  }));
+  patch.scale.setScalar(DARTER_LEN * 1.25); patch.renderOrder = 0; root.add(patch); root.userData.patch = patch;
+  const shaft = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, uniforms: { uT },
+    vertexShader: 'varying vec2 vU; void main() { vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform float uT; varying vec2 vU; void main() { float a = smoothstep(0.0, 0.5, vU.x) * smoothstep(1.0, 0.5, vU.x) * (0.25 + 0.75 * vU.y);'
+      + ' a *= 0.8 + 0.2 * sin(uT * 1.7 + vU.x * 6.0); gl_FragColor = vec4(vec3(0.5, 0.55, 0.42) * a * 0.22, 1.0); }',
+  }));
+  shaft.scale.set(DARTER_LEN * 0.9, 1, 1); shaft.renderOrder = 2; root.add(shaft); root.userData.shaft = shaft;
   let sw = 0, roll = 0;
   return {
     root,
     flinch() { /* a fish hit is a fish taken */ },
     update(e, t, dt) {
-      root.position.set(e.x, e.y + 0.04, e.z); root.rotation.y = e.yaw;
+      root.position.set(e.x, e.y + 0.04, e.z); root.rotation.y = e.yaw; uT.value = t;
       const sp = e.dead ? 0 : e.speed;
       // the body swings faster and wider the faster it goes; at rest a slow fan of the tail keeps it in place
       sw += dt * (2.2 + sp * 9);

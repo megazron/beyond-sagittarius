@@ -41,7 +41,10 @@ export class Cinematic {
   private earth = createEarth(100, this.sunDir);
   private ring = createOrbitalRing(128);
   private ship = createShip();
-  private interior = createInterior(matchMedia('(pointer: coarse)').matches ? 0.6 : 1);
+  /** The deck's crew: the light builds and textures on a phone or on the Mobile preset (the full ones are 2048 px
+   * textures, about 400 MB decoded for the six, kept in memory through the whole game). */
+  private interior: ReturnType<typeof createInterior>;
+  private crewDetail: number;
   private mars = createPlanet(60, 'mars', this.sunDir);
   private giant = createPlanet(260, 'giant', this.sunDir);
   private home = createPlanet(400, 'home', V(0.86, 0.22, -0.46).normalize());
@@ -57,7 +60,9 @@ export class Cinematic {
   private ins!: Inserts;
   private pilot!: Character;
 
-  constructor(private ui: CineUI) {
+  constructor(private ui: CineUI, light = false) {
+    this.crewDetail = light || matchMedia('(pointer: coarse)').matches ? 0.6 : 1;
+    this.interior = createInterior(this.crewDetail);
     const s = this.scene;
     s.add(this.dome.mesh);
     s.add(this.earth.group);
@@ -215,7 +220,7 @@ export class Cinematic {
   setCast(look: PlayerLook, skins: CrewSkins) {
     const dl = defaultLook() as unknown as Record<string, unknown>, lk = look as unknown as Record<string, unknown>;
     this.playerDefault = Object.keys(dl).every((k) => k === 'name' || JSON.stringify(dl[k]) === JSON.stringify(lk[k]));
-    const g = this.interior.group, crew = this.interior.crew, d = matchMedia('(pointer: coarse)').matches ? 0.6 : 1;
+    const g = this.interior.group, crew = this.interior.crew, d = this.crewDetail;
     const swap = (i: number, c: Character) => { const o = crew[i]; c.root.position.copy(o.root.position); c.root.rotation.copy(o.root.rotation); g.remove(o.root); g.add(c.root); crew[i] = c; };
     swap(0, createCharacter('scientist', d, look));
     swap(1, createCharacter('strong', d, undefined, skins.strong === 'suit' ? 'suit' : undefined));

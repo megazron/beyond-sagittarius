@@ -113,6 +113,8 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   // nothing built here moves as an object (cars and bulbs move by instance): no matrix refresh per frame
   const add = <T extends THREE.Object3D>(x: T) => { x.userData.ground = false; x.matrixAutoUpdate = false; x.updateMatrix(); scene.add(x); return x; };
   const solids: THREE.Box3[] = [];
+  /** Roofs over the pavement (awnings, shelters): the follow camera stays under them (city.ts ceiling). */
+  const covers: THREE.Box3[] = [];
   const solid = (x0: number, z0: number, x1: number, z1: number, h = 30) => solids.push(new THREE.Box3(new THREE.Vector3(Math.min(x0, x1), -2, Math.min(z0, z1)), new THREE.Vector3(Math.max(x0, x1), h, Math.max(z0, z1))));
 
   // ---- zones: 160 m squares; each holds its own merged meshes ----
@@ -285,6 +287,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       const g = new THREE.BoxGeometry(nx ? 1.5 : aw, 0.05, nx ? aw : 1.5);
       if (nx) g.rotateZ(-nx * tilt); else g.rotateX(nz * tilt);
       g.translate(fx + nx * 0.86 + (nx ? 0 : sh), FLOOR + fh * 0.72, fz + nz * 0.86 + (nx ? sh : 0));
+      g.computeBoundingBox(); covers.push(g.boundingBox!.clone());
       kitGeo('kit', g, col, fx, fz);
       const v = new THREE.BoxGeometry(nx ? 0.04 : aw, 0.22, nx ? aw : 0.04).translate(fx + nx * 1.56 + (nx ? 0 : sh), FLOOR + fh * 0.72 - 0.34, fz + nz * 1.56 + (nx ? sh : 0));
       kitGeo('kit', v, col, fx, fz);
@@ -551,6 +554,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   const shelterAt = (x: number, z: number, nx: number, nz: number) => {
     const w = nx ? 1.6 : 4.4, d = nx ? 4.4 : 1.6;
     kitBox('metal', x, FLOOR + 2.5, z, w, 0.1, d, 0xd8dde2, x, z);
+    covers.push(new THREE.Box3(new THREE.Vector3(x - w / 2, FLOOR + 2.45, z - d / 2), new THREE.Vector3(x + w / 2, FLOOR + 2.55, z + d / 2)));
     kitBox('metal', x - nx * 0.75, FLOOR, z - nz * 0.75, nx ? 0.06 : 4.4, 2.5, nx ? 4.4 : 0.06, 0x9fb8c8, x, z);
     for (const s of [-2.1, 2.1]) kitBox('metal', x + (nx ? 0 : s) - nx * 0.75, FLOOR, z + (nx ? s : 0) - nz * 0.75, 0.08, 2.5, 0.08, 0x30343a, x, z);
     solid(x - nx * 0.75 - (nx ? 0.1 : 2.2), z - nz * 0.75 - (nz ? 0.1 : 2.2), x - nx * 0.75 + (nx ? 0.1 : 2.2), z - nz * 0.75 + (nz ? 0.1 : 2.2), 2.6);
@@ -1009,6 +1013,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     nodes: sigNodes,
     bounds: BOUNDS,
     footprints,
+    covers,
     update(dt: number, t: number, cam: THREE.Camera | null, you: THREE.Vector3 | null, deep = false) {
       phase = phaseAt(t);
       if (phase !== lastPhase) { lastPhase = phase; setBulbs(); }

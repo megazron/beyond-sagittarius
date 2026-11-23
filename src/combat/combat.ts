@@ -620,6 +620,13 @@ export class Combat {
       // a side-on archer hides the bow from behind the right shoulder: over the bow shoulder, looking down the arrow
       cb.shoulder = p.weapon === 'bow' ? -0.95 : 0.85; cb.lift = p.weapon === 'bow' ? 0.22 : 0.12; cb.jump = p.act === 'idle' && !p.blocking;
       cb.sprint = D.input.device === 'pad' && eng ? this.padSprint : null;
+      // spear fishing: low over the water behind the shoulder, looking down into it at a slant, never from straight
+      // above (v1 looked down on his head with the water and the fish behind his body)
+      // (v2 clamped only where the camera sits: away from the aim it stayed 5 m back looking at his head, and the look
+      // could not tip down at all, so the reticle's line never came near a fish. Now, in this scene only, the view
+      // is in close, about 1.85 m up behind the right shoulder, and looks along the look itself as aiming does)
+      if (run?.id === 'fish.spear') { cb.lowCam = -0.22; cb.lift = -0.35; cb.shoulder = 0.6; cb.over = 1; cb.dist = 2.5; P.pitch = Math.max(P.pitch, -0.95); }
+      else { cb.lowCam = undefined; cb.over = undefined; cb.dist = undefined; }
       // the run: a glance back while the hunter gathers itself for a leap close behind you (or while B is held), so
       // what chases you is seen, not only heard; the legs keep running where they were going
       let back = 0;
@@ -853,7 +860,22 @@ export class Combat {
     return q;
   }
 
+  /** The eye's adaptation to a camp fire close by (main.ts scales the exposure by it after the world sets its own):
+   * at night a metre from the fire a white coat burned out to flat orange-white (owner); the eye stops down there. */
+  private exposure = 1;
+  get exposureScale() { if (!this.encounter) this.exposure = 1; return this.exposure; }
   private present(dt: number, time: number) {
+    {
+      const sim = this.sim!, P = this.d.player;
+      let near = 0;
+      if (sim.night) for (const f of sim.fires) if (!f.torch && !f.burnsOut && f.fuel > 0) {
+        const d = Math.hypot(f.x - P.pos.x, f.z - P.pos.z), k = Math.sqrt(Math.max(0, f.fuel / f.max));
+        near = Math.max(near, k * THREE.MathUtils.smoothstep(4.5 - d, 0, 3));
+      }
+      // (about a second to adapt, as an eye does; down to 0.7 at the fire's edge)
+      const want = 1 - 0.3 * near;
+      this.exposure += (want - this.exposure) * (1 - Math.exp(-dt * 1.2));
+    }
     // a night set piece: the giant planet overhead throws a cold planetshine, enough to see shapes move at the
     // edge of the firelight (Earth's full moon is about 0.1 to 0.3 lux; a ringed giant filling a wide part of the
     // sky would give several times that)
@@ -883,6 +905,21 @@ export class Combat {
           const cy = e.y + e.def.height * 0.5, r = vw.v.root.position;
           if (e.dead) r.y = Math.min(surf - 0.02, cy + Math.min(e.deadT, 3) * 0.15);
           else r.y += seenDepthY(cam.position.x, cam.position.y, cam.position.z, e.x, cy, e.z, surf) - cy;
+          // the shadow on the bottom under it (fainter as the fish rises from it; gone once it floats)
+          const sh = vw.v.root.userData.shadow as THREE.Mesh | undefined;
+          if (sh) { const bot = this.env.height(e.x, e.z) + 0.012; sh.visible = !e.dead && surf - bot > 0.05; sh.position.y = bot - r.y; }
+          // the lit patch under it, the shaft of light down to it, and rings on the surface over it (a fish holding
+          // under the surface stirs it; more as it moves): what makes a dark fish in dark water findable
+          const ud = vw.v.root.userData, bot = this.env.height(e.x, e.z) + 0.01, deep = surf - bot;
+          const pa = ud.patch as THREE.Mesh | undefined, sf = ud.shaft as THREE.Mesh | undefined;
+          if (pa) { pa.visible = !e.dead && deep > 0.05; pa.position.y = bot - 0.003 - r.y; }
+          if (sf) {
+            sf.visible = !e.dead && deep > 0.12 && d < 40;
+            if (sf.visible) { sf.position.y = (surf + bot) / 2 - r.y; sf.scale.y = deep; sf.rotation.y = Math.atan2(cam.position.x - r.x, cam.position.z - r.z) - vw.v.root.rotation.y; }
+          }
+          const vr = vw as unknown as { ripT?: number };
+          vr.ripT = (vr.ripT ?? Math.random()) - dt * (0.45 + Math.min(2, e.speed) * 1.2);
+          if (!e.dead && d < 35 && vr.ripT <= 0) { vr.ripT = 1; this.fx.ripple(r.x, r.z, surf, 0.05 + Math.min(0.1, e.speed * 0.04)); }
         }
       }
       // a caught animal fights the cord: heard (thrashing, a squeal) and seen (grass and dirt kicked up) until it
@@ -916,6 +953,10 @@ export class Combat {
       this.shake = Math.max(0, this.shake - dt * 0.7);
     }
     this.body.late(P.model, dt, this.clock);
+    { // standing in water: rings spread from the legs
+      const sf = this.env.water?.(P.pos.x, P.pos.z), dep = sf === null || sf === undefined ? 0 : sf - this.env.height(P.pos.x, P.pos.z);
+      this.fx.wade(P.pos.x, P.pos.z, dep > 0.08 && dep < 1.1 && !P.swimming ? sf! : null, 0.17, Math.min(1, P.speedNow / 2), dt);
+    }
     this.fx.sync(sim, dt, this.clock, cam);
     void time;
     // HUD
@@ -997,6 +1038,8 @@ export class Combat {
   }
   /** The fight's placed sounds lately played (name, where, wall-clock ms), newest last: what a listener heard. */
   heard: { name: string; x: number; z: number; vol: number; t: number }[] = [];
+  /** Tests: what the drawn weapon did since the last reset (worst shaft depth in the body, worst left-hand gap). */
+  testPoseStats(reset = false) { const st = { ...this.body.stats, rangedArmIn: this.body.ranged.armIn, rangedWhere: this.body.ranged.armWhere, rangedSolveIn: this.body.ranged.solveIn }; if (reset) { this.body.ranged.armIn = 0; this.body.ranged.solveIn = 0; } if (reset) Object.assign(this.body.stats, { frames: 0, shaftIn: 0, handOff: 0, leftOff: 0, skel: undefined, worst: undefined, worstL: undefined }); return st; }
   /** Recordings: the whole game in slow motion (1 is normal). */
   testSlow = 1;
   testHold(code: string, on: boolean) { this.testKeys = true; this.d.input.hold(code, on); }

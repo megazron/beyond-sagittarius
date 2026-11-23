@@ -41,7 +41,7 @@ export class Player {
   /** Body pose (the wake-up lies down, cutscenes can override). */
   pose: CrewPose = 'idle';
   private camPos = new THREE.Vector3();
-  private camClip = 1;
+  private camClip = 1; private camDt = 1 / 60;
   /** Damped point the camera orbits, so it trails the body a little. */
   private focus = new THREE.Vector3();
   private yawS = 0;
@@ -65,6 +65,13 @@ export class Player {
    * `sprint` overrides the sprint button, `sneak` caps the speed to a creep.
    */
   combat: { scale: number; force: { x: number; z: number } | null; face: number | null; aim: number; crouch: number; sprint: boolean | null; sneak: boolean; jump: boolean; shoulder?: number; lift?: number;
+    /** radians: the camera is placed no higher than this pitch would put it (the look itself may tip further down). */
+    lowCam?: number;
+    /** 0..1: the view looks along the look (yaw, pitch) from behind the shoulder without aiming, as aiming does (spear
+     * fishing: the camera stays low behind the shoulder and the look itself tips down into the water). Eased. */
+    over?: number;
+    /** metres: the follow camera comes no further back than this (spear fishing: in close). Eased. */
+    dist?: number;
     /** 0..1: the view swings round to look behind (a glance back in a chase); the walk keeps its own heading. */
     back?: number;
     /** radians: the view turns this far from the walk's heading (a look at a trap that springs nearby); view only. */
@@ -72,16 +79,23 @@ export class Player {
     /** 0..1: draw the view in a little (narrower field of view) on something the fight wants seen (a trap's catch). */
     zoom?: number } | null = null;
   private aimS = 0;
-  /** How crowded it is round you (the stage's, 0 to 1): the camera rises over the heads and looks down at you. */
+  private overS = 0;
+  private capS = 5.2;
+  /** How crowded it is round you (the stage's, 0 to 1): the camera comes in a little closer behind you, at its usual
+   * height (the stage clears the bodies on the line from the camera to you). */
   crowdNear: (() => number) | null = null;
+  /** ?crowdcam=rise: the old way, the camera rises over the heads and looks down at you in a thick crowd. */
+  crowdRise = false;
   private crowdS = 0;
+  /** How far the camera is held down under a roof (awning, shelter): in fast, out slowly. */
+  private ceilS = 0;
   private backS = 0;
   private turnS = 0;
   private zoomS = 0;
   /** Stages other than Verdaxis set their own gravity, and let you jump across open gaps. */
   physics = { gravity: 14, jump: 5.2, gaps: false };
 
-  constructor(private terrain: Pick<Terrain, 'height'>, private forest: Pick<Forest, 'collide' | 'blocks' | 'clearance'> & Partial<Pick<Forest, 'inFoliage'>>, public camera: THREE.PerspectiveCamera, detail = 1, id: CrewId = 'scientist', skin?: string) {
+  constructor(private terrain: Pick<Terrain, 'height'>, private forest: Pick<Forest, 'collide' | 'blocks' | 'clearance'> & Partial<Pick<Forest, 'inFoliage'>> & { ceiling?: (fx: number, fz: number, fy: number, cx: number, cz: number) => number; keepOff?: (p: THREE.Vector3) => void }, public camera: THREE.PerspectiveCamera, detail = 1, id: CrewId = 'scientist', skin?: string) {
     this.model = createCharacter(id, detail, undefined, skin);
     this.baseFov = camera.fov;
     this.model.setGround((x, z) => this.terrain.height(x, z));
@@ -256,24 +270,29 @@ export class Player {
     const cp = Math.cos(pitch);
     out.set(Math.sin(yaw) * cp, -Math.sin(pitch), Math.cos(yaw) * cp).multiplyScalar(dist);
     out.add(focus);
-    out.y += 1.65 + 0.3 * this.crowdS;
+    out.y += 1.65 + (this.crowdRise ? 0.3 * this.crowdS : 0);
     // walk the line from the head to the camera: stop short of hills and trunks
     const hx = focus.x, hy = focus.y + 1.65, hz = focus.z;
     let free = 1;
     for (let k = 1; k <= 10; k++) {
       const f = k / 10, x = hx + (out.x - hx) * f, y = hy + (out.y - hy) * f, z = hz + (out.z - hz) * f;
-      if (y < this.terrain.height(x, z) + 0.3 || this.forest.blocks(x, z, 0.28) || (k > 2 && this.forest.inFoliage?.(x, y, z))) { free = Math.max(0.16, (k - 1) / 10); break; }
+      const gy = this.terrain.height(x, z);
+      if (y < gy + 0.3 || this.forest.blocks(x, z, 0.28, y - gy) || (k > 2 && this.forest.inFoliage?.(x, y, z))) { free = Math.max(0.16, (k - 1) / 10); break; }
     }
     // pull in at once, ease back out, so the view never pops
-    this.camClip = free < this.camClip ? free : this.camClip + (free - this.camClip) * 0.05;
+    // in fast, but over a few frames (in one frame it read as a cut: the night watch by the fire, 2:06 in v14, the
+    // view jumped from over the fire to close behind him when a bush crossed the line); the lens's own trunk margin
+    // below and the ground keep it out of anything solid meanwhile
+    this.camClip = free < this.camClip ? this.camClip + (free - this.camClip) * (1 - Math.exp(-this.camDt * 18)) : this.camClip + (free - this.camClip) * 0.05;
     out.x = hx + (out.x - hx) * this.camClip; out.y = hy + (out.y - hy) * this.camClip; out.z = hz + (out.z - hz) * this.camClip;
     // the lens itself keeps half a metre off any trunk: the line test passes a trunk the camera ends up grazing from
     // the side (a dark wall over a third of the picture, or the inside of the bark for a frame as the view swings)
     // (a search along the line, not fixed steps, so the pull is smooth as the view swings)
     // (not when the player stands against the trunk: then every spot near the head is 'too close')
-    if (this.forest.blocks(out.x, out.z, 0.5) && !this.forest.blocks(hx, hz, 0.5)) {
+    const outA = out.y - this.terrain.height(out.x, out.z);
+    if (this.forest.blocks(out.x, out.z, 0.5, outA) && !this.forest.blocks(hx, hz, 0.5)) {
       let lo = 0, hi = 1;
-      for (let s = 0; s < 7; s++) { const m = (lo + hi) / 2; if (this.forest.blocks(hx + (out.x - hx) * m, hz + (out.z - hz) * m, 0.5)) hi = m; else lo = m; }
+      for (let s = 0; s < 7; s++) { const m = (lo + hi) / 2; if (this.forest.blocks(hx + (out.x - hx) * m, hz + (out.z - hz) * m, 0.5, hy + (out.y - hy) * m - this.terrain.height(hx + (out.x - hx) * m, hz + (out.z - hz) * m))) hi = m; else lo = m; }
       const f = Math.max(0.16, lo);
       out.x = hx + (out.x - hx) * f; out.y = hy + (out.y - hy) * f; out.z = hz + (out.z - hz) * f;
     }
@@ -288,16 +307,18 @@ export class Player {
 
   snapCamera() {
     this.focus.copy(this.pos);
-    this.yawS = this.yaw; this.pitchS = this.pitch; this.distS = this.camDist;
+    this.yawS = this.yaw; this.pitchS = this.pitch; this.distS = this.camDist; this.ceilS = 0;
     this.fovKick = 0; this.bobK = 0; this.lean = 0; this.dip = 0; this.dipV = 0; this.backS = 0; this.turnS = 0; this.zoomS = 0;
     if (this.camera.fov !== this.baseFov) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
-    this.camClip = 1;
-    this.orbit(this.camPos, this.focus, this.yaw, this.pitch, this.camDist);
+    this.overS = this.combat?.over ?? 0; this.capS = Math.min(this.camDist, this.combat?.dist ?? this.camDist);
+    this.camClip = 1; this.camDt = 1; // (a cut: pulled in at once)
+    this.orbit(this.camPos, this.focus, this.yaw, this.pitch, this.camDist); this.camDt = 1 / 60;
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.pos.x, this.pos.y + 1.5, this.pos.z);
   }
 
   private updateCamera(dt: number) {
+    this.camDt = Math.min(0.1, Math.max(0, dt));
     const e = (r: number) => 1 - Math.exp(-dt * r);
     // the body leads, the camera catches up: more slack vertically, so steps and jumps feel soft
     this.focus.x += (this.pos.x - this.focus.x) * e(12);
@@ -312,24 +333,47 @@ export class Player {
     const backWant = this.combat?.back ?? 0;
     this.backS += (backWant - this.backS) * e(backWant > this.backS ? 7 : 5);
     const back = this.backS * this.backS * (3 - 2 * this.backS);
-    // in a thick crowd the camera does not sit low among the heads looking up: it rises and looks down (eased in and out)
+    // in a thick crowd the camera stays at its over-the-shoulder height and comes a little closer (eased in and out);
+    // whoever walks between it and you is cleared by the stage. It used to rise and look down on the heads for seconds
     const cw = this.crowdNear ? this.crowdNear() : 0;
     this.crowdS += (cw - this.crowdS) * e(cw > this.crowdS ? 2.5 : 1.2);
     // a look aside (a trap springing nearby): eased in like a turn of the head, a little slower back
     const turnWant = this.combat?.turn ?? 0;
     this.turnS += (turnWant - this.turnS) * e(Math.abs(turnWant) > Math.abs(this.turnS) ? 4.5 : 2.2);
     const turnK = Math.min(1, Math.abs(this.turnS) / 0.6);
-    const yawV = this.yawS + back * 2.75 + this.turnS, pitchV = this.pitchS + (Math.min(this.pitchS, -0.38) - this.pitchS) * this.crowdS - back * 0.12 - turnK * 0.07;
+    let pitchV0 = this.pitchS + (this.crowdRise ? (Math.min(this.pitchS, -0.38) - this.pitchS) * this.crowdS : 0) - back * 0.12 - turnK * 0.07;
+    // a view that looks down steeply from low (spear fishing): the camera stays low behind the shoulder, only the look tips down
+    if (this.combat?.lowCam !== undefined) pitchV0 = Math.max(pitchV0, this.combat.lowCam);
+    const yawV = this.yawS + back * 2.75 + this.turnS, pitchV = pitchV0;
     // soft collision: pull in fast when a trunk blocks the view, ease back out slowly
     const want = this.orbit(tmpA, this.focus, yawV, pitchV, this.camDist);
-    const clear = this.forest.clearance(this.focus.x, this.focus.z, want.x, want.z, 0.4);
-    const target = Math.max(1.3, this.camDist * clear);
+    // (the line from the head to the camera is no lower than the lower of its two ends above the ground under them)
+    const lowA = Math.min(this.focus.y + 1.65 - this.terrain.height(this.focus.x, this.focus.z), want.y - this.terrain.height(want.x, want.z));
+    const clear = this.forest.clearance(this.focus.x, this.focus.z, want.x, want.z, 0.4, lowA);
+    // a scene's own follow distance (spear fishing: in close) eases in and out, it never cuts
+    this.capS += (Math.min(this.camDist, this.combat?.dist ?? this.camDist) - this.capS) * e(2.2);
+    const target = Math.max(1.3, Math.min(this.camDist, this.capS) * clear * (this.crowdRise ? 1 : 1 - 0.14 * this.crowdS));
     this.distS += (target - this.distS) * e(target < this.distS ? 16 : 2.5);
     // aiming: in close, over the right shoulder, looking where the shot will go instead of at the body
     const aimWant = this.combat?.aim ?? 0;
     this.aimS += (aimWant - this.aimS) * e(aimWant > this.aimS ? 12 : 8);
     const aim = this.aimS;
+    const overWant = this.combat?.over ?? 0;
+    this.overS += (overWant - this.overS) * e(2.5);
+    // how far the view looks along the look itself (aiming, or a scene that asks for it) instead of at the body
+    const along = Math.max(aim, this.overS);
     this.orbit(this.camPos, this.focus, yawV, pitchV, this.distS * (1 - aim) + Math.min(this.distS, 3.1) * aim);
+    // beside a big vehicle (the city's tram) the lens keeps a metre and a half off its side and nose: grazing them, its
+    // white side or nose filled half the frame
+    this.forest.keepOff?.(this.camPos);
+    // under an awning or a shelter the camera stays below its roof (it rose into them in a thick crowd)
+    if (this.forest.ceiling) {
+      const top = this.forest.ceiling(this.focus.x, this.focus.z, this.focus.y, this.camPos.x, this.camPos.z);
+      const want = Math.max(0, this.camPos.y - Math.max(top, this.focus.y + 1.2));
+      this.ceilS += (want - this.ceilS) * e(want > this.ceilS ? 18 : 3);
+      this.ceilS = Math.max(this.ceilS, want - 0.2); // never into the roof itself (the top keeps 0.3 m under it)
+      this.camPos.y -= this.ceilS;
+    }
 
     // stride: vertical twice per cycle, sideways once, growing with speed
     const run = clamp(this.speedNow / 7.2, 0, 1);
@@ -344,16 +388,16 @@ export class Player {
     this.camera.position.y += bobY + this.dip * 0.12;
     this.camera.up.set(0, 1, 0);
     this.camera.lookAt(this.focus.x, this.focus.y + 1.45 + bobY * 0.4 + this.dip * 0.05, this.focus.z);
-    if (aim > 0.002) {
+    if (along > 0.002) {
       const cp = Math.cos(this.pitchS), fx = -Math.sin(this.yawS) * cp, fy = Math.sin(this.pitchS), fz = -Math.cos(this.yawS) * cp;
       const rx = Math.cos(this.yawS), rz = -Math.sin(this.yawS);
       tmpA.copy(this.camera.position);
       const sh = this.combat?.shoulder ?? 0.85, lift = this.combat?.lift ?? 0.12;
-      tmpA.x += rx * sh * aim; tmpA.z += rz * sh * aim; tmpA.y += lift * aim;
+      tmpA.x += rx * sh * along; tmpA.z += rz * sh * along; tmpA.y += lift * along;
       tmpC.copy(this.camera.quaternion);
       this.camera.position.copy(tmpA);
       this.camera.lookAt(tmpA.x + fx * 30, tmpA.y + fy * 30, tmpA.z + fz * 30);
-      this.camera.quaternion.slerpQuaternions(tmpC, this.camera.quaternion, aim);
+      this.camera.quaternion.slerpQuaternions(tmpC, this.camera.quaternion, along);
     }
     // a touch of bank into fast turns
     this.lean += (clamp(dyaw * 1.4, -0.03, 0.03) - this.lean) * e(6);

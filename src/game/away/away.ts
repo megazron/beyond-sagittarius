@@ -8,6 +8,7 @@ import { t } from '../../i18n';
 import { audio } from '../../core/audio';
 import type { AwayStage, AwayTask } from './stage';
 import { buildStage, STAGES } from './kit';
+import { disposeTree } from '../../core/disposeTree';
 import { buildCity } from './city';
 import type { TaskKind } from '../../characters/character';
 
@@ -38,7 +39,7 @@ export class Away {
   /** A stage built ahead (under a title card), so arriving is not a long freeze. */
   private prepared: { loc: string; stage: ReturnType<typeof make> } | null = null;
   prepare(location: string) {
-    if (this.prepared?.loc !== location) this.prepared = { loc: location, stage: make(location, t, 0, this.detail) };
+    if (this.prepared?.loc !== location) { if (this.prepared) dropStage(this.prepared.stage); this.prepared = { loc: location, stage: make(location, t, 0, this.detail) }; }
     return this.prepared.stage;
   }
 
@@ -46,15 +47,18 @@ export class Away {
     const pre = this.prepared;
     this.prepared = null;
     const stage = pre && pre.loc === location && !job ? pre.stage : make(location, t, job, this.detail);
+    if (pre && pre.stage !== stage) dropStage(pre.stage); // built ahead for another place (or for their story, not a job): freed, not left behind
     this.pace = 1;
     this.stage = stage; this.who = id; this.onDone = done; this.location = location; this.done.clear(); this.busy = false; this.seen.clear(); this.vista = null;
     // the body you play is drawn with its full build, phones too (see PLAYER_DETAIL in main.ts)
-    const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: (fx, fz, cx, cz) => stage.clearance?.(fx, fz, cx, cz) ?? 1 }, this.camera, Math.max(this.detail, 0.8), id, id === 'strong' && this.skins.strong === 'suit' ? 'suit' : undefined); // the crew's chosen skin, on their own stage too
+    const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: (fx, fz, cx, cz) => stage.clearance?.(fx, fz, cx, cz) ?? 1, ceiling: stage.ceiling ? (fx, fz, fy, cx, cz) => stage.ceiling!(fx, fz, fy, cx, cz) : undefined, keepOff: stage.keepOff ? (v) => stage.keepOff!(v) : undefined }, this.camera, Math.max(this.detail, 0.8), id, id === 'strong' && this.skins.strong === 'suit' ? 'suit' : undefined); // the crew's chosen skin, on their own stage too
     p.physics = { gravity: stage.gravity, jump: stage.jump, gaps: true };
     p.model.mergeParts(); // skin, clothes and eyes in one draw (bodymerge.ts)
-    // the camera rises over a thick crowd (?crowdcam=0 turns it off). It was off for a while because CI's perf_gate saw
+    // the camera comes in a little closer in a thick crowd (?crowdcam=0 turns it off, ?crowdcam=rise: it rises and looks
+    // down on the heads, the old way). It was off for a while because CI's perf_gate saw
     // the phone bazaar at 836k triangles with it; the same 836430 hit a branch without it, so that was the city's state
     if (stage.crowdNear && new URLSearchParams(window.location.search).get('crowdcam') !== '0') p.crowdNear = () => stage.crowdNear!();
+    p.crowdRise = new URLSearchParams(window.location.search).get('crowdcam') === 'rise';
     // what the feet hear: Zenvora's paving and the flat's floorboards, ice on the ring, rock and metal elsewhere
     p.surface = location === 'city' ? (x, z) => (x > 9.4 && z > 61 && z < 77 ? 'wood' : 'stone') : location === 'ring' ? () => 'snow' : location === 'clouds' ? () => 'wood' : location === 'wreck' ? () => 'metal' : () => 'stone';
     p.model.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; } });
@@ -80,7 +84,7 @@ export class Away {
   get position() { return this.player?.pos ?? null; }
   get grounded() { return !!this.player?.onGround; }
   /** Test hook: the camera's aim and any hero view in progress. */
-  get camState() { const p = this.player; return p ? { yaw: p.yaw, pitch: p.pitch, x: p.pos.x, z: p.pos.z, vista: this.vista, seen: [...this.seen] } : null; }
+  get camState() { const p = this.player, c = this.camera.position; return p ? { yaw: p.yaw, pitch: p.pitch, x: p.pos.x, y: p.pos.y, z: p.pos.z, cam: [c.x, c.y, c.z], vista: this.vista, seen: [...this.seen] } : null; }
 
   /** The skins chosen in the skins menu (set by main whenever they change). */
   skins: CrewSkins = {};
@@ -109,8 +113,9 @@ export class Away {
     }
     this.ui.setStageObjective(t(`away.${this.location}.place`), this.next?.label ?? null);
     p.update(dt, this.input, canMove && !this.busy, 100, this.pace);
-    // a hero view: the camera turns to it once, eases back, and the player can always look away
-    const v = s.vistas?.find((b, i) => !this.seen.has(i) && p.pos.x > b.x0 && p.pos.x < b.x1 && p.pos.z > b.z0 && p.pos.z < b.z1);
+    // a hero view: the camera turns to it once, eases back, and the player can always look away; one with `after` waits
+    // until that task is done (the square's fired on the walk past the tram, before you had held its door)
+    const v = s.vistas?.find((b, i) => !this.seen.has(i) && (!b.after || this.done.has(b.after)) && p.pos.x > b.x0 && p.pos.x < b.x1 && p.pos.z > b.z0 && p.pos.z < b.z1);
     if (v) { this.seen.add(s.vistas!.indexOf(v)); this.vista = { ...v, t: v.secs }; }
     if (this.vista) {
       const k = 1 - Math.exp(-Math.min(dt, 0.25) * 4), V = this.vista;
@@ -205,8 +210,8 @@ export class Away {
 
   leave() {
     const s = this.stage;
-    if (s && this.player) s.scene.remove(this.player.model.root);
-    s?.dispose?.();
+    if (s && this.player) { s.scene.remove(this.player.model.root); disposeTree(this.player.model.root); }
+    if (s) dropStage(s);
     this.stage = null; this.player = null; this.active = false; this.who = null;
     this.ui.setPrompt(null);
     this.show(null);
@@ -216,4 +221,11 @@ export class Away {
     this.quiet = 0.6;
     const d = this.onDone; this.onDone = null; d?.();
   }
+}
+
+/** A stage's own teardown, then everything its scene still holds on the GPU (only the city had a teardown, and it
+ *  freed only its geometries: every visit to a place left the last one behind). */
+function dropStage(s: { scene: THREE.Scene; dispose?: () => void }) {
+  s.dispose?.();
+  disposeTree(s.scene);
 }

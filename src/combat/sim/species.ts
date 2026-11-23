@@ -75,14 +75,14 @@ export const SPECIES: Record<SpeciesId, SpeciesDef> = {
   // Nibbet: a small grazer with ears like leaves. It is food, and it knows it.
   nibbet: { id: 'nibbet', temperament: 'prey', hp: 12, radius: 0.3, height: 0.45, mass: 0.4, walk: 1.2, run: 8.2, turn: 10,
     sightDay: 20, sightNight: 10, fov: 4.6, hear: 1.6, smell: 9, fireFear: 6, active: 'day', poise: 6, weak: 1, armor: 1, fleeAt: 0, attacks: [] },
-  // Darter: a stream and lake-shallows fish of Verdaxis, about 35 cm, a dark back over a pale belly. It holds still
+  // Darter: a stream and lake-shallows fish of Verdaxis, about half a metre (35 cm read as a pale sliver from the bank), a dark back over a pale belly. It holds still
   // near the bottom facing into the current and is gone in a flick when a shadow moves fast over it or something hits
   // the water near it. radius is half its thickness, height its depth of body; its length is DARTER_LEN.
-  darter: { id: 'darter', temperament: 'fish', hp: 6, radius: 0.045, height: 0.08, mass: 0.4, walk: 0.35, run: 3.2, turn: 7,
+  darter: { id: 'darter', temperament: 'fish', hp: 6, radius: 0.065, height: 0.115, mass: 0.4, walk: 0.35, run: 3.2, turn: 7,
     sightDay: 6, sightNight: 2, fov: 5, hear: 1, smell: 0, fireFear: 0, active: 'both', poise: 1, weak: 1, armor: 1, fleeAt: 0, attacks: [] },
 };
 /** A darter's body length (metres), nose to tail fork. */
-export const DARTER_LEN = 0.34;
+export const DARTER_LEN = 0.5;
 
 /** A creature in a fight. Plain data: the picture reads it, the tests compare it. */
 export interface Enemy {

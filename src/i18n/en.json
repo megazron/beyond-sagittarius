@@ -1219,5 +1219,8 @@
   "e1.ni.held": "It went away. It went away because of a stick I cooked.",
   "e1.ni.scar": "Pressure, then clean, then cover. Okay, {f:medic}. Okay.",
   "vo.anon.e1.fr.test": "You nerd. You just saved my life.",
-  "vo.anon.e1.ni.scar": "Pressure, then clean, then cover. Okay. Okay."
+  "vo.anon.e1.ni.scar": "Pressure, then clean, then cover. Okay. Okay.",
+  "msg.gfxLost": "The graphics reset. Getting the picture back...",
+  "msg.gfxReload": "The picture did not come back. Your game is saved: tap to reload.",
+  "msg.memLow": "Memory is running low: your game is saved, and the next start uses lighter graphics."
 }

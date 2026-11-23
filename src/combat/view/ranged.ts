@@ -6,6 +6,8 @@
 import * as THREE from 'three';
 import type { Character, Limbs, Dir } from '../../characters/character';
 import type { SimPlayer } from '../sim/sim';
+import { swingOut, reach2, aimBone, depth, bodyYaw } from './melee';
+import type { ArmMem } from './melee';
 
 const V = () => new THREE.Vector3();
 const clamp01 = (k: number) => Math.min(1, Math.max(0, k));
@@ -35,7 +37,7 @@ export class RangedRig {
   // bow: riser and two limbs of four pieces, the string in two, the arrow (shaft, head, fletching)
   private bowSeg: THREE.Mesh[] = []; private str: THREE.Mesh[] = []; private arrow = new THREE.Group(); private quiver = new THREE.Group();
   // sling: two cords, the pouch, the stone in it, and the free end of the let-go cord
-  private cords: THREE.Mesh[] = []; private pouch: THREE.Mesh; private stone: THREE.Mesh;
+  private cords: THREE.Mesh[] = []; private pouch: THREE.Mesh; private stone: THREE.Mesh; private disc: THREE.Mesh;
   private pP = V(); private pPrev = V(); private tail = V(); private tailPrev = V(); private pouchInit = false;
   // where the hands are asked to be this frame (world), and what the gear does
   mode: 'none' | 'bow' | 'sling' | 'atlatl' = 'none';
@@ -43,12 +45,13 @@ export class RangedRig {
   /** Which way to turn the body from the aim (radians): side-on for the bow. */
   faceOffset = 0;
   private aimL = V(); private D = V(); private Uw = V();
-  private lastAct = 'idle';
+  private lastAct = 'idle'; private whirlK = 0; private whirlPole = V();
 
   constructor() {
     const wood = new THREE.MeshStandardMaterial({ color: 0x7a5a3a, roughness: 0.8 });
     const gut = new THREE.MeshStandardMaterial({ color: 0xd8cfb8, roughness: 0.6 });
-    const fibre = new THREE.MeshStandardMaterial({ color: 0x8d7a55, roughness: 0.95 });
+    // (pale plant fibre, thick enough to read at play distance: the darker, thinner cords of v1 vanished against grass)
+    const fibre = new THREE.MeshStandardMaterial({ color: 0xcdb98e, roughness: 0.9 });
     const stoneM = new THREE.MeshStandardMaterial({ color: 0x8a8580, roughness: 0.9, flatShading: true });
     const cyl = (r: number, m: THREE.Material) => { const g = new THREE.CylinderGeometry(r, r, 1, 6); g.translate(0, 0.5, 0); const o = new THREE.Mesh(g, m); o.castShadow = true; o.frustumCulled = false; this.group.add(o); return o; };
     for (let i = 0; i < 9; i++) this.bowSeg.push(cyl(i === 4 ? 0.02 : 0.013, wood));
@@ -61,8 +64,11 @@ export class RangedRig {
     const qv = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.035, 0.5, 7).translate(0, 0.25, 0), new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 1 }));
     this.quiver.add(qv);
     for (let i = 0; i < 3; i++) { const a = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.22, 4).translate(0, 0.6, 0), wood); a.position.set((i - 1) * 0.015, 0, (i % 2) * 0.012); this.quiver.add(a); }
-    for (let i = 0; i < 2; i++) this.cords.push(cyl(0.009, fibre));
-    this.pouch = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.6).scale(1, 0.55, 1.3), new THREE.MeshStandardMaterial({ color: 0x6e5a44, roughness: 1, side: THREE.DoubleSide }));
+    for (let i = 0; i < 2; i++) this.cords.push(cyl(0.013, fibre));
+    this.pouch = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.6).scale(1, 0.55, 1.3), new THREE.MeshStandardMaterial({ color: 0x9a7a55, roughness: 1, side: THREE.DoubleSide }));
+    // the whirl as the eye keeps it: a faint disc where the pouch goes round, stronger as it speeds up
+    this.disc = new THREE.Mesh(new THREE.RingGeometry(0.15, 0.62, 32, 1), new THREE.MeshBasicMaterial({ color: 0xd8c7a0, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+    this.disc.rotation.x = -Math.PI / 2; this.disc.frustumCulled = false; this.group.add(this.disc);
     this.pouch.castShadow = true; this.group.add(this.pouch);
     this.stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.032, 0), stoneM); this.stone.castShadow = true; this.group.add(this.stone);
     this.group.visible = false;
@@ -96,6 +102,15 @@ export class RangedRig {
     if (!R) return null;
     const S = this.st;
     const aim = this.aimL.copy(this.dirLocal(model, aimW));
+    // the arms pose to the aim as far as the body has turned to it: the body turns into a shot at its own rate (side-on
+    // for the bow), so for a few frames after a raise or a swing of the view the aim can lie off to the other side, and
+    // the bow arm (or the spear-thrower's pointing hand) reached across the chest after it (CI: 5.9 and 4.3 cm). Kept
+    // within 0.7 rad of where the turned body points it; the shot itself goes where it is aimed.
+    {
+      const az0 = -this.faceOffset, h = Math.hypot(aim.x, aim.z) || 1, az = Math.atan2(aim.x, aim.z);
+      const dz = Math.atan2(Math.sin(az - az0), Math.cos(az - az0)), lim = 0.7;
+      if (Math.abs(dz) > lim) { const a2 = az0 + Math.sign(dz) * lim; aim.x = Math.sin(a2) * h; aim.z = Math.cos(a2) * h; }
+    }
     const sL = this.local(model, R.upL), sR = this.local(model, R.upR), head = this.local(model, model.head);
     const eL = V(), wL = V(), eR = V(), wR = V();
     const fresh = p.act !== this.lastAct; this.lastAct = p.act;
@@ -113,28 +128,61 @@ export class RangedRig {
       S.tremor = p.act === 'charge' && p.charge >= 1 ? Math.min(1, Math.max(0, (p.holdT - 1.2) * 0.5)) : 0;
       this.faceOffset = -1.3 * smooth(S.up);
       // the bow arm: out along the aim at full raise, low and forward when lowered
+      // (out along the aim and a little forward: this rig's shoulder joints sit near the back, ~15 cm behind the face, so
+      // a bow arm straight along the aim held the bow behind the line of the arrow from the jaw; measured in the probe)
+      const A = V().set(aim.x, 0, aim.z).normalize(), F = V().crossVectors(A, UP).normalize();
+      if (F.z < 0) F.negate();
       const low = V().set(aim.x * 0.6, -0.75, aim.z * 0.6).normalize();
-      const armDir = V().copy(low).lerp(aim, smooth(S.up)).normalize();
+      const armDir = V().copy(low).lerp(V().copy(aim).addScaledVector(F, 0.3).normalize(), smooth(S.up)).normalize();
       if (S.tremor > 0) armDir.x += Math.sin(t * 23) * 0.006 * S.tremor, armDir.y += Math.sin(t * 17 + 1) * 0.008 * S.tremor;
       reach(sL, V().copy(sL).addScaledVector(armDir, (R.a + R.b) * 0.97), R.a, R.b, V().set(0, -1, 0).addScaledVector(aim, -0.3), eL, wL);
       // the string hand: on the string at brace height, back to the anchor under the jaw as it draws, past the ear on
       // the loose, then down to the quiver for the next arrow and back
       const grip = V().copy(wL).addScaledVector(armDir, 0.07);
-      const anchor = V().copy(head).addScaledVector(aim, 0.13).add(V().set(0, -0.13, 0));
+      // The anchor as archers take it: the string hand against the side of the jaw, the arrow under the cheek. With the
+      // head turned to the target the right cheek faces the way the chest faces (F), so the hand sits a cheek's depth
+      // out along F, not ahead of the face along the aim (that pushed it 20 cm out in front of the face and the folded
+      // elbow came up in front of the neck: CI 9-11 cm in the head shape). From there the forearm runs back along the
+      // arrow and the elbow ends behind the head along the arrow's line, at the side, a little above the shoulder.
+      // (under the chin, the string to the chin and nose: higher, at the jaw's side, the forearm behind the hand ran into the
+      // jaw; offline sweep of the probe's frame: under the chin the elbow clears, 22 cm behind the head along the arrow)
+      const anchor = V().copy(head).addScaledVector(F, 0.12).addScaledVector(A, 0.01).add(V().set(0, -0.115, 0));
       const nock0 = V().copy(grip).addScaledVector(aim, -0.15).add(V().set(0, 0.012, 0));
       const quiver = V().set(-0.2, 0.92, -0.1);
+      // the set: raised, the string is held a little drawn, halfway back to the chin (a pre-draw, as many archers hold
+      // it; probe: at half way the line from the shoulder still ran through the neck, 8.4 cm): with the hand out at the bow the folded arm crossed the upper chest (this rig's shoulder joints sit ~32 cm
+      // behind the coat's front), probe 6-14 cm; from the set the elbow is already back along the arrow
+      const setP = V().copy(nock0).lerp(anchor, 0.88).addScaledVector(F, 0.02);
       let target: THREE.Vector3; S.arrowIn = ammo > 0 ? 'string' : 'none'; S.nock = -1;
-      if (p.act === 'charge') target = V().copy(nock0).lerp(anchor, drawing);
+      // (the string comes back along the arrow, bowed a little out in front on the way so the forearm passes the chin)
+      if (p.act === 'charge') target = V().copy(setP).lerp(anchor, drawing).addScaledVector(F, 0.04 * Math.sin(Math.PI * drawing));
       else if (recovering) {
         const k = p.actT / 1.05; S.nock = k;
         const past = V().copy(anchor).addScaledVector(aim, -0.17).add(V().set(0, 0.03, 0));
         if (k < 0.25) { target = V().copy(anchor).lerp(past, out3(k / 0.12)); S.arrowIn = 'none'; }
-        else if (k < 0.55) { target = V().copy(past).lerp(quiver, smooth((k - 0.25) / 0.3)); S.arrowIn = k > 0.5 && ammo > 0 ? 'hand' : 'none'; }
-        else if (k < 0.85) { target = V().copy(quiver).lerp(nock0, smooth((k - 0.55) / 0.3)); S.arrowIn = ammo > 0 ? 'hand' : 'none'; }
-        else target = nock0;
-      } else target = S.up > 0.5 ? nock0 : V().set(-0.22, 1.0, 0.12);
-      const pole = V().copy(aim).multiplyScalar(-1).add(V().set(0, 0.55, 0));
-      reach(sR, V().copy(target).addScaledVector(aim, -0.06), R.a, R.b, pole, eR, wR);
+        // (to the quiver at the hip and back to the string round the front of the body, not straight across the chest:
+        // the probe had the arm through it, 14.7 cm, on the way back up)
+        else if (k < 0.55) { const u = smooth((k - 0.25) / 0.3); target = V().copy(past).lerp(quiver, u).addScaledVector(F, 0.12 * Math.sin(Math.PI * u)); S.arrowIn = k > 0.5 && ammo > 0 ? 'hand' : 'none'; }
+        else if (k < 0.85) { const u = smooth((k - 0.55) / 0.3); target = V().copy(quiver).lerp(setP, u).addScaledVector(F, 0.3 * Math.sin(Math.PI * u)).addScaledVector(A, -0.14 * Math.sin(Math.PI * u)); S.arrowIn = ammo > 0 ? 'hand' : 'none'; }
+        else target = setP;
+      } else target = S.up > 0.5 ? setP : V().set(-0.22, 1.0, 0.12);
+      // the drawing elbow: out in front at the brace, then back along the arrow's line as the string comes to the jaw
+      // (a little up and a little behind the back, as a drawing elbow is in real form); past the head, not up into it
+      const dk0 = p.act === 'charge' ? drawing : recovering ? Math.max(0, 1 - p.actT / 0.4) : 0;
+      // (at the set the elbow is most of the way back already; down by the quiver it is not)
+      const kq = p.actT / 1.05, atQuiver = recovering ? smooth((kq - 0.25) / 0.1) * (1 - smooth((kq - 0.6) / 0.25)) : 0;
+      const dk = Math.max(dk0, (0.85 + 0.15 * dk0) * (1 - atQuiver)) * (S.up > 0.5 || p.act === 'charge' || recovering ? 1 : 0);
+      // (at the brace the hand reaches across the chest to the string: an elbow sent down fell into the chest, CI 14 cm;
+      // it goes out in front of the chest, at about shoulder height, as an archer's does when he takes the string)
+      const pole = V().copy(A).multiplyScalar(-(0.25 + 0.75 * dk)).addScaledVector(F, 0.7 * (1 - dk) - 0.15 * dk).addScaledVector(UP, -0.35 * (1 - dk) + 0.1 * dk);
+      // lowered, the arm hangs: the elbow down and a little back
+      pole.lerp(V().set(-0.3, -1, -0.35), 1 - smooth(Math.max(S.up, p.act === 'charge' || recovering ? 1 : 0)));
+      // the hand's mark is kept out of the body by a forearm's thickness, except at the jaw, where the hand rests on the
+      // head on purpose (only the arm above the hand is checked against the head)
+      const tRaw = V().copy(target).addScaledVector(aim, -0.06), tE = this.ease(sR, tRaw.clone(), R);
+      const tR = dk > 0 ? tE.lerp(this.reachClamp(sR, tRaw, R), smooth(dk)) : tE;
+      reach(sR, tR, R.a, R.b, pole, eR, wR);
+      this.clearArms(sL, eL, wL, sR, eR, wR, dt); this.keep(sL, eL, wL, sR, eR, wR);
       limbs = { armL: dirOf(eL, sL), foreL: dirOf(wL, eL), armR: dirOf(eR, sR), foreR: dirOf(wR, eR), twist: 0.15 * smooth(S.up) };
     } else if (this.mode === 'atlatl') {
       // the spear-thrower: held at the shoulder, the dart lying along it pointing at the target; drawn back with the
@@ -176,29 +224,35 @@ export class RangedRig {
       const tL = casting ? V().copy(pointAt).lerp(tucked, out3(S.rel / 0.2)) : V().copy(lowL).lerp(pointAt, smooth(S.up));
       reach(sL, tL, R.a, R.b, V().set(0.35, -1, -0.2), eL, wL);
       const wind = p.act === 'charge' ? -0.25 - 0.4 * S.draw : casting && S.rel < 0.3 ? -0.65 + 1.1 * out3(S.rel / 0.15) : -0.25 * smooth(S.up);
+      this.clearArms(sL, eL, wL, sR, eR, wR, dt); this.keep(sL, eL, wL, sR, eR, wR);
       limbs = { armR: dirOf(eR, sR), foreR: dirOf(wR, eR), armL: dirOf(eL, sL), foreL: dirOf(wL, eL), twist: wind };
       if (S.rel < 0.4 || p.act === 'charge') { limbs.legL = [0.06, -0.93, 0.36]; limbs.shinL = [0, -1, 0.05]; limbs.legR = [-0.06, -0.96, -0.24]; limbs.shinR = [0, -0.98, -0.2]; }
     } else {
       // the sling: the pouch rests in the left hand, whirls overhead while drawn, comes over on the throw
       this.faceOffset = 0;
       const whirl = p.act === 'charge';
+      const Rt = V().subVectors(sR, sL).setY(0).normalize(), Fc = V().crossVectors(UP, Rt);
       if (whirl && fresh) S.phase = 0;
       if (recovering && fresh) S.throwT = 0;
       if (S.throwT >= 0) S.throwT += dt;
       if (!recovering) S.throwT = -1;
-      const rest = V().set(0.02, 1.02, 0.32);
+      // (the pouch held well out in front: at 0.32 the right hand on it sat inside the coat's front, the elbow in the chest)
+      const rest = V().set(0.02, 1.02, 0.42);
       let tR: THREE.Vector3, tL = V().copy(rest).add(V().set(0.05, 0, 0));
       if (whirl) {
-        const k = p.charge, speed = 2 * Math.PI * (1.1 + 1.6 * k);
+        const k = p.charge, speed = 2 * Math.PI * (1.1 + 1.6 * k); this.whirlK = k;
         S.phase += dt * speed * smooth(Math.min(1, p.actT / 0.25));
-        const c = V().copy(sR).add(V().set(0.08, 0.3, 0.12));
+        // over the right shoulder by the chest's own right and front (the chest winds back for the whirl: in the root's
+        // axes the circle sat over his head and the elbow in front of his face, probe 9.6 cm)
+        const c = V().copy(sR).addScaledVector(Rt, 0.1).addScaledVector(Fc, 0.08).add(V().set(0, 0.3, 0));
+        this.whirlPole.copy(Rt).add(V().set(0, 0.25, 0)).addScaledVector(Fc, -0.1);
         tR = V().copy(c).add(V().set(Math.cos(S.phase) * 0.09, 0, Math.sin(S.phase) * 0.09));
         tL = V().copy(sL).add(V().set(0.05, -0.25, 0.25)).addScaledVector(aim, 0.25);
         S.hold = 'whirl';
       } else if (S.throwT >= 0 && S.throwT < 0.5) {
         // over the shoulder and down across the body: the stone left at the top of the arc
         const k = S.throwT;
-        const top = V().copy(sR).add(V().set(0, 0.5, -0.05)), front = V().copy(sR).addScaledVector(aim, 0.55).add(V().set(0, 0.15, 0)), across = V().set(0.2, 0.95, 0.3);
+        const top = V().copy(sR).add(V().set(0, 0.5, -0.05)), front = V().copy(sR).addScaledVector(aim, 0.55).addScaledVector(Rt, 0.12).add(V().set(0, 0.12, 0)), across = V().set(0.14, 1.0, 0.46);
         tR = k < 0.14 ? V().copy(top).lerp(front, out3(k / 0.14)) : V().copy(front).lerp(across, smooth((k - 0.14) / 0.36));
         tL = V().copy(sL).addScaledVector(aim, 0.3).add(V().set(0.05, -0.15, 0));
         S.hold = k < 0.14 ? 'throw' : 'free';
@@ -207,15 +261,17 @@ export class RangedRig {
         const k = clamp01((p.actT - 0.5) / 0.5);
         const bag = V().set(0.22, 0.95, -0.02);
         tL = k < 0.45 ? V().copy(rest).lerp(bag, smooth(k / 0.45)) : V().copy(bag).lerp(rest, smooth((k - 0.45) / 0.55));
-        tR = V().copy(rest).add(V().set(-0.12, 0.08, 0));
+        tR = V().copy(rest).add(V().set(-0.17, 0.08, 0));
         S.hold = k > 0.9 ? 'left' : 'free';
       } else {
-        tR = up ? V().copy(rest).add(V().set(-0.12, 0.08, 0)) : V().set(-0.22, 0.95, 0.12);
+        tR = up ? V().copy(rest).add(V().set(-0.17, 0.08, 0)) : V().set(-0.22, 0.95, 0.12);
         S.hold = up ? 'left' : 'free';
       }
-      reach(sR, tR, R.a, R.b, V().set(-0.6, -0.4, -0.3), eR, wR);
-      reach(sL, tL, R.a, R.b, V().set(0.6, -0.5, -0.2), eL, wL);
+      // (the right elbow out to the side by the ribs, not in front of them: CI 7.7 cm with the pouch at rest)
+      reach(sR, this.ease(sR, tR, R), R.a, R.b, whirl ? this.whirlPole : V().set(-0.8, -0.45, -0.1), eR, wR);
+      reach(sL, this.ease(sL, tL, R), R.a, R.b, V().set(0.6, -0.5, -0.2), eL, wL);
       const wind = whirl ? -0.45 * smooth(p.actT / 0.4) : S.throwT >= 0 && S.throwT < 0.5 ? -0.45 + 1.0 * out3(S.throwT / 0.2) : 0;
+      this.clearArms(sL, eL, wL, sR, eR, wR, dt); this.keep(sL, eL, wL, sR, eR, wR);
       limbs = { armR: dirOf(eR, sR), foreR: dirOf(wR, eR), armL: dirOf(eL, sL), foreL: dirOf(wL, eL), twist: wind };
       // stepping into it: the off foot forward, only while standing
       if ((whirl && p.speed < 0.6) || (S.throwT >= 0 && S.throwT < 0.45)) { limbs.legL = [0.06, -0.93, 0.36]; limbs.shinL = [0, -1, 0.05]; limbs.legR = [-0.06, -0.96, -0.24]; limbs.shinR = [0, -0.98, -0.2]; }
@@ -231,7 +287,76 @@ export class RangedRig {
     } else if (this.mode === 'atlatl') {
       grip(model, 'R', { shape: 'grip', radius: 0.012 }); grip(model, 'L', { shape: 'point' });
     }
+    // these arms are this rig's: the character's own push of the arms out of its torso is skipped (Limbs.ownArms)
+    (limbs as Limbs & { ownArms?: 'both' }).ownArms = 'both';
     return limbs;
+  }
+
+  /** The arms kept out of the body the way the melee rig keeps them (view/melee.ts swingOut, the body's shapes as the
+   * fight body set them this frame): each elbow swings round its shoulder-to-hand line, the hands stay on the gear. */
+  private armMem: ArmMem = { L: 0, R: 0 };
+  /** Worst depth of an arm in the body since the last read (metres), for the play test. */
+  armIn = 0; armWhere = '';
+  /** The same, of the solve itself (before the character posed the body): for debugging. */
+  solveIn = 0; solveWhere = '';
+  private clearArms(sL: THREE.Vector3, eL: THREE.Vector3, wL: THREE.Vector3, sR: THREE.Vector3, eR: THREE.Vector3, wR: THREE.Vector3, dt: number) {
+    // (the hands' own end is left out: a bow's string hand anchors at the jaw and a sling's pouch rests against the
+    // belly on purpose; the upper arm, the elbow and the forearm to its middle are what must not go in)
+    const l = swingOut(sL, eL, wL, 0, this.armMem, 'L', dt, 0.6), r = swingOut(sR, eR, wR, 0, this.armMem, 'R', dt, 0.6);
+    if (Math.max(l, r) > this.solveIn) { this.solveIn = Math.max(l, r); const f = (v: THREE.Vector3) => v.toArray().map((x) => x.toFixed(2)).join(','); this.solveWhere = `${this.mode} ${l > r ? 'L' : 'R'} s ${f(l > r ? sL : sR)} e ${f(l > r ? eL : eR)} w ${f(l > r ? wL : wR)}`; }
+  }
+
+  /** A hand's mark as an arm can take it: out of the body's shapes by a forearm's thickness, and within an easy reach
+   * of its shoulder (a string hand sent straight across the chest for a string past its reach drew a straight arm
+   * through the chest: 9.7 cm in CI; a bent arm leaves the elbow room to swing out of the body). */
+  private ease(s: THREE.Vector3, t: THREE.Vector3, R: Rig) {
+    // (pushed out and pulled back in turn: a push out of the chest followed by one pull into reach could land the mark
+    // back inside the chest, the sling's follow-through across the body: CI 2.3 cm)
+    const n = V();
+    for (let it = 0; it < 4; it++) {
+      for (let i = 0; i < 2; i++) { const dp = depth(t, 0, 0.1, n); if (dp > 0) t.addScaledVector(n, dp + 0.01); }
+      this.reachClamp(s, t, R);
+    }
+    return t;
+  }
+  private reachClamp(s: THREE.Vector3, t: THREE.Vector3, R: Rig) {
+    const max = (R.a + R.b) * 0.88, d = V().subVectors(t, s), l = d.length();
+    if (l > max) t.copy(s).addScaledVector(d, max / l);
+    return t;
+  }
+  /** What this frame's solve asked for (root-local): shoulders, elbows, wrists. */
+  private sol: { sL: THREE.Vector3; eL: THREE.Vector3; wL: THREE.Vector3; sR: THREE.Vector3; eR: THREE.Vector3; wR: THREE.Vector3 } | null = null;
+  private keep(sL: THREE.Vector3, eL: THREE.Vector3, wL: THREE.Vector3, sR: THREE.Vector3, eR: THREE.Vector3, wR: THREE.Vector3) {
+    this.sol = { sL: sL.clone(), eL: eL.clone(), wL: wL.clone(), sR: sR.clone(), eR: eR.clone(), wR: wR.clone() };
+  }
+  /**
+   * The arms solved again on the bones as the character posed them this frame (its clip, bend and the chest's turn
+   * moved the shoulders since pose() solved them; the melee rig does the same, body.ts fixArms): the wrists land
+   * where the solve put them, the elbows keep its way out of the body. Then how deep the arms drawn this frame are in
+   * the body's shapes (which turn with the chest), for the play test's gate.
+   */
+  private fixArms(model: Character) {
+    const R = this.rig!, s = this.sol!, root = model.root;
+    const W = (v: THREE.Vector3) => root.localToWorld(v.clone()), wp = (o: THREE.Object3D) => o.getWorldPosition(V());
+    const one = (up: THREE.Object3D, lo: THREE.Object3D, hand: THREE.Object3D, sh: THREE.Vector3, el: THREE.Vector3, wr: THREE.Vector3) => {
+      const s0 = wp(up), a = s0.distanceTo(wp(lo)), b = wp(lo).distanceTo(wp(hand)), e = V(), w = V();
+      reach2(s0, W(wr), a, b, W(el).sub(W(sh)), e, w);
+      aimBone(up, lo, e, 1); aimBone(lo, hand, w, 1);
+    };
+    one(R.upL, R.loL, R.hL, s.sL, s.eL, s.wL); one(R.upR, R.loR, R.hR, s.sR, s.eR, s.wR);
+    // measured on what is drawn: the upper arm past the shoulder's own ball and the forearm to its middle (the hand's
+    // end is left out on purpose: a string hand anchors at the jaw, the sling's pouch rests against the belly)
+    const loc = (o: THREE.Object3D) => root.worldToLocal(wp(o));
+    let worst = 0, where = '';
+    for (const [up, lo, hd, k] of [[R.upL, R.loL, R.hL, 'L'], [R.upR, R.loR, R.hR, 'R']] as const) {
+      const a = loc(up), e = loc(lo), w = loc(hd), q = V();
+      for (let i = 1; i <= 6; i++) {
+        if (i <= 3) q.copy(a).lerp(e, 0.35 + i * 0.2); else q.copy(e).lerp(w, (i - 3) / 3 * 0.6);
+        const d = depth(q, 0, 0.04);
+        if (d > worst) { worst = d; const f = (v: THREE.Vector3) => v.toArray().map((x) => x.toFixed(2)).join(','); where = `${this.mode} ${k} s ${f(a)} e ${f(e)} w ${f(w)} h ${f(loc(model.head))} sO ${f(loc(k === 'L' ? R.upR : R.upL))} aim ${f(this.aimL)} st ${this.lastAct} up ${this.st.up.toFixed(2)} draw ${this.st.draw.toFixed(2)} yaw ${bodyYaw().toFixed(2)} at ${i} (drawn)`; }
+      }
+    }
+    if (worst > this.armIn) { this.armIn = worst; this.armWhere = where; }
   }
 
   /** After the body is posed: put the bow, string, arrow, cords and pouch where the hands really are. */
@@ -239,13 +364,15 @@ export class RangedRig {
     if (this.mode === 'none' || !this.rig) return;
     const R = this.rig, S = this.st;
     model.root.updateWorldMatrix(true, true);
+    // (only for a frame that pose() solved: a roll or a stagger in between leaves the arms to the body)
+    if (this.sol) { this.fixArms(model); model.root.updateWorldMatrix(true, true); this.sol = null; }
     const hL = model.handL.localToWorld(V().set(0, -0.05, 0)), hR = model.handR.localToWorld(V().set(0, -0.06, 0));
     const rq = model.root.getWorldQuaternion(new THREE.Quaternion());
     const aim = V().copy(this.aimL).applyQuaternion(rq).normalize();
     const vis = (o: THREE.Object3D, v: boolean) => { o.visible = v; };
     this.bowSeg.forEach((o) => vis(o, this.mode === 'bow')); this.str.forEach((o) => vis(o, this.mode === 'bow'));
     if (this.trailMesh && this.mode !== 'atlatl') this.trailMesh.visible = false;
-    vis(this.arrow, false); this.cords.forEach((o) => vis(o, this.mode === 'sling')); vis(this.pouch, this.mode === 'sling'); vis(this.stone, false);
+    vis(this.arrow, false); vis(this.disc, false); this.cords.forEach((o) => vis(o, this.mode === 'sling')); vis(this.pouch, this.mode === 'sling'); vis(this.stone, false);
     if (this.mode === 'atlatl') {
       this.quiver.visible = false;
       this.bowSeg.forEach((o, i) => vis(o, i === 0)); this.str.forEach((o) => vis(o, false));
@@ -270,7 +397,8 @@ export class RangedRig {
       const U = this.Uw.copy(UP).addScaledVector(D, -UP.dot(D)).normalize();
       const side = V().crossVectors(D, U);
       U.applyAxisAngle(D, 0.12).applyAxisAngle(side, -0.5 * Math.sin(Math.min(1, S.roll) * Math.PI) * 0.6);
-      const draw = S.draw, brace = 0.15;
+      // (the set holds the string a little drawn: the limbs bend that much too)
+      const draw = Math.max(S.draw, S.nock < 0 || S.nock > 0.85 ? 0.8 * clamp01(S.up * 2 - 1) : 0), brace = 0.15;
       const pt = (u: number) => { const s = Math.sign(u), a = Math.abs(u); return V().copy(hL).addScaledVector(U, s * (0.08 + 0.6 * a) * (1 - 0.05 * draw * a * a)).addScaledVector(D, -(brace * 0.7 + 0.14 * draw) * a * a); };
       const pts = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1].map(pt);
       pts[4] = V().copy(hL).addScaledVector(U, -0.08);
@@ -318,6 +446,13 @@ export class RangedRig {
         const d = V().subVectors(this.tail, this.pP); if (d.length() > L) this.tail.copy(this.pP).addScaledVector(d.normalize(), L);
       } else { this.tail.copy(hR).add(V().set(0.01, 0, 0)); this.tailPrev.copy(this.tail); }
       seg(this.cords[0], hR, this.pP); seg(this.cords[1], this.tail, this.pP);
+      // the disc: centred on the hand, tilted as the cone is (the pouch 0.22 below the hand at 0.95 of the cord)
+      const dm = this.disc.material as THREE.MeshBasicMaterial;
+      // (faint: at 0.26 it read as a solid plate over his head in v2)
+      const want = S.hold === 'whirl' ? 0.04 + 0.07 * clamp01(this.whirlK) : 0;
+      dm.opacity += (want - dm.opacity) * (1 - Math.exp(-dt * 10));
+      this.disc.visible = dm.opacity > 0.01;
+      if (this.disc.visible) { this.disc.position.copy(hR).add(V().set(0, -0.11, 0)); this.disc.quaternion.copy(rq).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0))); }
       this.pouch.position.copy(this.pP); this.pouch.lookAt(hR);
       this.stone.visible = S.hold !== 'free';
       this.stone.position.copy(this.pP);
@@ -353,7 +488,7 @@ export class RangedRig {
     P.needsUpdate = true; C.needsUpdate = true;
   }
   /** Taken off: nothing left in the world. */
-  hide(model?: Character) { if (model) { grip(model, 'L', null); grip(model, 'R', null); } this.group.visible = false; this.quiver.visible = false; this.mode = 'none'; this.faceOffset = 0; this.pouchInit = false; }
+  hide(model?: Character) { this.sol = null; if (model) { grip(model, 'L', null); grip(model, 'R', null); } this.group.visible = false; this.quiver.visible = false; this.mode = 'none'; this.faceOffset = 0; this.pouchInit = false; }
 }
 
 type GripShape = 'open' | 'relaxed' | 'grip' | 'pinch' | 'point';

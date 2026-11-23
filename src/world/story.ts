@@ -229,7 +229,9 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
   fire.add(sparks);
   let sparkT = 1;
   // the light exists from the start (intensity 0) so lighting it never recompiles shaders
-  const light = new THREE.PointLight(0xff9a4a, 0, 22, 1.6);
+  // (about full daylight on someone a metre away, falling off gently; at 16 with a fall-off of 1.6 a white coat by the fire
+  // took several times full daylight and burned out to flat orange-white: combat agent, owner's complaint)
+  const light = new THREE.PointLight(0xff9a4a, 0, 22, 1.0);
   light.position.set(0, 0.9, 0);
   fire.add(light);
   // a work light for the hand-drill at dusk, also there from the start and off: the last glow of the sky after sunset,
@@ -354,7 +356,9 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
   const beaconSite = siteRing(1.0);
   beacon.add(beaconSite);
 
-  forest.addObstacle(L.camp.x, L.camp.z, 0.75);
+  // the fire ring: knee high (the camera passes over it; as a trunk of no height it pulled the night watch's view in
+  // to over his head in one frame each time he came to the fire: 2:06 in v14, 2:13, 2:38 and 3:08 in v15)
+  forest.addObstacle(L.camp.x, L.camp.z, 0.75, 0.9);
   let shelterObstacles = false, beaconObstacle = false, baseQ: THREE.Quaternion | null = null;
 
   const state = { fireStage: 0, lit: false, shelter: false, beaconBuilt: false, beaconOn: false, sites: { fire: false, shelter: false, beacon: false } };
@@ -437,7 +441,7 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
           m.scale.set(m.userData.s * (0.8 + 0.2 * f), m.userData.s * f * (i ? 0.8 : 1.15), m.userData.s * (0.8 + 0.2 * f));
           m.rotation.y = t * (0.5 + i * 0.1);
         });
-        light.intensity = 16 * (0.85 + 0.1 * Math.sin(t * 13) + 0.05 * Math.sin(t * 31));
+        light.intensity = 3.5 * (0.85 + 0.1 * Math.sin(t * 13) + 0.05 * Math.sin(t * 31));
         for (let i = 0; i < embersN; i++) {
           const life = (t * (0.35 + emberSeed[i] * 0.3) + emberSeed[i]) % 1;
           const a = emberSeed[i] * 40 + t * 0.6;

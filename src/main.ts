@@ -5,7 +5,7 @@ import { BATCH, batchSupported } from './core/ibatch';
 import { clipProbe, clipStats, type ClipHit } from './core/clipprobe';
 import { NEAR_FADE } from './core/nearfade';
 import { setLang, setPlayer, t, Lang } from './i18n';
-import { detectQuality, isPhone, saveQualityChoice, QualityName } from './core/quality';
+import { detectQuality, isPhone, saveQualityChoice, QualityName, qualityFromUrl } from './core/quality';
 import { desktop } from './core/desktop';
 import { Away } from './game/away/away';
 import type { CrewId } from './characters/character';
@@ -31,6 +31,7 @@ import { Wheel } from './ui/wheel';
 import { MapPin, interactiveMap, planetLayer } from './ui/map';
 import { Minimap, MapLayer, MapPoint, routeOf } from './ui/minimap';
 import { PERF, perfFrame } from './core/perfhud';
+import { setDisposeKeep } from './core/disposeTree';
 import { GpsTrail } from './world/gps';
 import type { AwayStage } from './game/away/stage';
 import type { MenuTab } from './ui/ui';
@@ -112,11 +113,13 @@ const syncDevice = () => {
 };
 input.onDevice(syncDevice);
 syncDevice();
-const cine = new Cinematic(ui);
+const cine = new Cinematic(ui, quality.name === 'mobile');
 const film = new Montage(cine, () => (worldReady ? world : null), (sc, cam, ao) => renderer.setScene(sc, cam, ao), () => pendingLook.glow, () => (player ? [player.model.root, ...(game?.story.npcs.roots() ?? [])] : []), ui);
 const vault = new Vault((k, sp) => ui.subtitle(k, sp), quality.name === 'mobile' ? 0.6 : 1);
 film.small = quality.name === 'mobile';
 const world = new World(quality);
+// a stage left behind is freed on the GPU, except whatever the planet and the films still draw (core/disposeTree.ts)
+setDisposeKeep(() => [world.scene, cine.scene]);
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2400);
 let player: Player;
 let game: Game;
@@ -468,6 +471,10 @@ function enterWorld(fresh: boolean) {
   const replay = !!settings.replayTutorial;
   if (replay) { save.flags.tutorialDone = false; settings.replayTutorial = false; persistSettings(); }
   game.start(save, fresh);
+  // the wake-up keeps you hidden until you get up, so your look's programs (a new look from the creator) were compiled in
+  // the first frame after a skip, in one long task: on CI's software GL it outlasted smoke's 30 s wait for play (the
+  // "wake did not reach play" flake: the mode read 'play' right after). Compiled now, in the background, while the sky shows
+  if (fresh) { const fig = player.model; void fig.whenReady.then(() => { if (player.model !== fig || game.mode !== 'wake') return; const r = fig.root, was = r.visible; r.visible = true; void renderer.compileFor(world.scene, camera); r.visible = was; }); }
   if (!fresh && replay) game.startTutorial();
   // ?combat=<encounter>: straight into a set piece once play begins (recordings, tests)
   { const want = new URLSearchParams(location.search).get('combat'); if (want) { const go = () => { if (game.mode === 'play' && combat && !combat.encounter) combat.trial(want as Parameters<Combat['trial']>[0]); else setTimeout(go, 500); }; setTimeout(go, 800); } }
@@ -725,12 +732,56 @@ let fpsAcc = 0, fpsFrames = 0, fpsLast = performance.now();
 let frameCount = 0;
 /** Test hook: frames only move when asked, by a fixed step, so a slow GPU sees the same film. */
 const hold = { on: false, pending: 0, done: 0 };
+// ---- the graphics context: lost and restored without a crash; a memory guard before the browser kills the tab ----
+// A phone (or a laptop's driver) can take the WebGL context away: the game used to freeze on a black or garbled frame.
+// Now it saves, says so, waits for the context to come back (three.js uploads everything again; the image lights are
+// captured again), and if it does not come back offers a reload, with the game saved.
+let glLost = false, lostNote: HTMLDivElement | null = null, lostTimer = 0;
+function gfxNote(text: string | null, onTap?: () => void) {
+  if (!text) { lostNote?.remove(); lostNote = null; return; }
+  lostNote ??= document.body.appendChild(document.createElement('div'));
+  lostNote.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10000;max-width:80vw;padding:14px 20px;border-radius:10px;background:rgba(10,9,14,.86);color:#f2ebdd;font:600 16px/1.4 Barlow,sans-serif;text-align:center;cursor:' + (onTap ? 'pointer' : 'default');
+  lostNote.textContent = text; lostNote.onclick = onTap ?? null;
+}
+renderer.renderer.domElement.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault(); // lets the browser give the context back
+  if (glLost) return;
+  glLost = true;
+  try { if (state === 'game' && game) game.persist(); } catch { /* the save is best effort here */ }
+  try { openPause(); } catch { /* the menu is the game's own pause: nothing runs on while the picture is gone */ }
+  gfxNote(t('msg.gfxLost'));
+  clearTimeout(lostTimer);
+  lostTimer = window.setTimeout(() => { if (glLost) gfxNote(t('msg.gfxReload'), () => location.reload()); }, 8000);
+});
+renderer.renderer.domElement.addEventListener('webglcontextrestored', () => {
+  glLost = false; clearTimeout(lostTimer); gfxNote(null);
+  (world.env as unknown as { dirty: boolean }).dirty = true; // the planet's image light was in a texture that is gone
+});
+let memAt = 0, memWarned = false;
+function memoryGuard(now: number) {
+  if (now - memAt < 5000 || memWarned || navigator.webdriver) return; // not under test automation: it must not change a run
+  memAt = now;
+  const m = (performance as unknown as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
+  if (!m || !m.jsHeapSizeLimit || m.usedJSHeapSize < m.jsHeapSizeLimit * 0.92) return;
+  // close to the browser's limit (a phone's is far lower than a laptop's): the game is saved and the next start uses a
+  // lighter preset. No reload in the middle of play (the first version reloaded: that is a crash of its own)
+  memWarned = true;
+  const lower: QualityName | null = quality.name === 'cinematic' ? 'ultra' : quality.name === 'ultra' ? 'web' : quality.name === 'web' ? 'mobile' : null;
+  console.warn('[memory] heap', Math.round(m.usedJSHeapSize / 1e6), 'of', Math.round(m.jsHeapSizeLimit / 1e6), 'MB', lower ? `-> ${lower} next start` : '');
+  try { if (state === 'game' && game) game.persist(); } catch { /* best effort */ }
+  if (!lower || qualityFromUrl()) return;
+  saveQualityChoice(lower);
+  ui.toast(t('msg.memLow'));
+}
+
 function frame() {
   requestAnimationFrame(frame);
   frameCount++;
+  memoryGuard(performance.now());
   clock.update();
   const real = Math.min(clock.getDelta(), 0.05);
-  if (!hold.on) { const t0 = performance.now(); tick(real); const t1 = performance.now(); draw(real); perfFrame(renderer.renderer, real, t1 - t0, performance.now() - t1); return; }
+  // a lost context: the game is paused (openPause above) and only the drawing waits, so menus and input still work
+  if (!hold.on) { const t0 = performance.now(); tick(real); const t1 = performance.now(); if (!glLost) draw(real); perfFrame(renderer.renderer, real, t1 - t0, performance.now() - t1); return; }
   if (hold.pending <= 0) return;
   for (let left = hold.pending; left > 1e-6; left -= 1 / 30) tick(Math.min(left, 1 / 30));
   hold.pending = 0;
@@ -771,6 +822,8 @@ function tick(step: number) {
     const focus = player.pos;
     if (photo) { camera.position.copy(photo.from); camera.lookAt(photo.to); }
     world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer, renderer.stageInfo().scene === world.scene);
+    // the eye adapting to a camp fire close by in a fight (combat.ts exposure; 1 elsewhere)
+    if (combat) renderer.renderer.toneMappingExposure *= combat.exposureScale;
   }
   navFrame(dt);
   if (stage.active) stage.update(dt);
@@ -1005,7 +1058,48 @@ window.addEventListener('resize', () => {
     return ps.map((p) => ({ id: p.id, walk: !!p.walk, pos: p.pos, root: p.fig.root }));
   },
   /** Test hook: the painted crowd near the camera (14 m), the real bodies walking it, and cards hidden with no body. */
-  awayCrowd() { const st = game?.away?.stage as { crowdState?: () => { near: number; bodies: number; lost: number } } | null; return st?.crowdState?.() ?? { near: 0, bodies: 0, lost: 0 }; },
+  /** CPU-side bytes (typed arrays, each counted once) by who holds them: the scene first, then each cache for what only it
+   * holds; textures by their image size (w x h x 4). Phone memory work (perf agent 20). */
+  async memOwners() {
+    const [{ modelCacheNow, MODEL_RELEASE }, { assetCacheNow, CREW_RELEASE }, { mergeCacheNow }] = await Promise.all([import('./game/away/city'), import('./characters/assets'), import('./characters/bodymerge')]);
+    const seen = new Set<ArrayBufferLike>(), seenT = new Set<THREE.Texture>();
+    const geo = (g: THREE.BufferGeometry | undefined) => { let n = 0; if (!g) return 0; const f = (a: { array?: ArrayLike<number> & { buffer?: ArrayBufferLike; byteLength?: number }; data?: { array: ArrayLike<number> & { buffer: ArrayBufferLike; byteLength: number } } } | null | undefined) => { const arr = (a?.data?.array ?? a?.array) as (ArrayLike<number> & { buffer: ArrayBufferLike; byteLength: number }) | undefined; if (!arr || !arr.buffer || seen.has(arr.buffer)) return; seen.add(arr.buffer); n += arr.byteLength; }; for (const k in g.attributes) f(g.attributes[k] as never); f(g.index as never); for (const a of Object.values(g.morphAttributes).flat()) f(a as never); return n; };
+    const tex = (t: THREE.Texture | null | undefined) => { if (!t || seenT.has(t)) return 0; seenT.add(t); const im = t.image as { width?: number; height?: number; data?: { byteLength: number } } | undefined; return im?.data?.byteLength ?? ((im?.width ?? 0) * (im?.height ?? 0) * 4); };
+    const walk = (roots: THREE.Object3D[]) => { let g = 0, t = 0, chars = 0; for (const r of roots) r.traverse((o) => { const m = o as THREE.Mesh; const gb = geo(m.geometry); g += gb; if (o.userData?.isCharacter) chars++; const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : []; for (const mt of mats) for (const v of Object.values(mt as unknown as Record<string, unknown>)) if ((v as THREE.Texture)?.isTexture) t += tex(v as THREE.Texture); }); return { geoMB: +(g / 1e6).toFixed(1), texMB: +(t / 1e6).toFixed(1), chars }; };
+    const out: Record<string, unknown> = {};
+    const stage = renderer.stageInfo?.() as { scene?: THREE.Scene } | undefined;
+    if (stage?.scene) out.stage = walk([stage.scene]);
+    out.modelCache = walk(modelCacheNow());
+    out.modelTexReleased = MODEL_RELEASE.textures;
+    out.crewReleased = { ...CREW_RELEASE }; const ac = assetCacheNow(); out.bodyAssets = walk(ac.scenes); const bt = ac.textures.map((t) => [String((t.image as { src?: string } | undefined)?.src ?? '').replace(/^.*\/tex\//, ''), tex(t) / 1e6] as [string, number]).filter((r) => r[1] > 0);
+    out.bodyTex = +bt.reduce((n, r) => n + r[1], 0).toFixed(1); out.bodyTexTop = bt.sort((x, y) => y[1] - x[1]).slice(0, 40).map(([k, v]) => `${k} ${v.toFixed(1)}`);
+    out.mergeCache = +(mergeCacheNow().reduce((n, g) => n + geo(g), 0) / 1e6).toFixed(1);
+    const m = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory; out.heapMB = m ? Math.round(m.usedJSHeapSize / 1e6) : null;
+    return out;
+  },
+  /** Test hook (memory work): the stage's biggest textures and geometry by owner, in MB (a texture counted once). */
+  memTop() {
+    const stage = renderer.stageInfo?.() as { scene?: THREE.Scene } | undefined; if (!stage?.scene) return null;
+    const seen = new Set<ArrayBufferLike>(), seenT = new Set<THREE.Texture>(), T = new Map<string, number>(), G = new Map<string, number>(), N = new Map<string, number>();
+    const bytes = (a: unknown) => { const x = a as { array?: { buffer?: ArrayBufferLike; byteLength?: number }; data?: { array: { buffer: ArrayBufferLike; byteLength: number } } } | null; const arr = x?.data?.array ?? x?.array; if (!arr?.buffer || seen.has(arr.buffer)) return 0; seen.add(arr.buffer); return arr.byteLength ?? 0; };
+    stage.scene.traverse((o) => {
+      const m = o as THREE.Mesh; let ch: THREE.Object3D | null = o; while (ch && !ch.userData?.isCharacter) ch = ch.parent;
+      const own = (ch ? 'char:' : '') + (o.name || o.parent?.name || o.type);
+      if (m.geometry) { let n = 0; const g = m.geometry; for (const k in g.attributes) n += bytes(g.attributes[k]); n += bytes(g.index); for (const a of Object.values(g.morphAttributes).flat()) n += bytes(a); if (n) { G.set(own, (G.get(own) ?? 0) + n); N.set(own, (N.get(own) ?? 0) + 1); } }
+      const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
+      for (const mt of mats) for (const v of Object.values(mt as unknown as Record<string, unknown>)) {
+        const t = v as THREE.Texture; if (!t?.isTexture || seenT.has(t)) continue; seenT.add(t);
+        const im = t.image as { width?: number; height?: number; src?: string; data?: { byteLength: number }; tagName?: string } | undefined;
+        const comp = (t as THREE.CompressedTexture).isCompressedTexture;
+        const b = comp ? ((t as THREE.CompressedTexture).mipmaps as { data: { byteLength: number } }[] ?? []).reduce((n, q) => n + (q.data?.byteLength ?? 0), 0) : im?.data?.byteLength ?? ((im?.width ?? 0) * (im?.height ?? 0) * 4);
+        const k = `${comp ? 'ktx2 ' : im?.tagName === 'CANVAS' ? 'canvas ' : ''}${String(im?.src ?? t.name ?? '').replace(/^.*\//, '') || 'unnamed'} ${im?.width}x${im?.height}`;
+        T.set(k, (T.get(k) ?? 0) + b);
+      }
+    });
+    const top = (M: Map<string, number>, n: number) => [...M.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, v]) => `${k} ${(v / 1e6).toFixed(1)}${N.has(k) ? ' x' + N.get(k) : ''}`);
+    return { texMB: +([...T.values()].reduce((a, b) => a + b, 0) / 1e6).toFixed(1), geoMB: +([...G.values()].reduce((a, b) => a + b, 0) / 1e6).toFixed(1), tex: top(T, 40), geo: top(G, 40) };
+  },
+  awayCrowd() { const st = game?.away?.stage as { crowdState?: () => { near: number; bodies: number; lost: number; held?: number[][] } } | null; return st?.crowdState?.() ?? { near: 0, bodies: 0, lost: 0 }; },
   /** Test hook: cars and people on the away stage this frame (tools/traffic_smoke.py). */
   awayTraffic() { return (game?.away?.stage as { trafficState?: () => unknown } | null)?.trafficState?.() ?? null; },
   /** Test hook: 'body', 'card' or 'none' for a person on the away stage (tools/crowd_smoke.py). */
@@ -1020,8 +1114,17 @@ window.addEventListener('resize', () => {
   takeoffFrame() { return (game?.away?.stage as { takeoffFrame?: (f?: number, a?: number) => unknown } | null)?.takeoffFrame?.(camera.fov, camera.aspect) ?? null; },
   takeoffClearance() { return (game?.away?.stage as { takeoffClearance?: () => unknown } | null)?.takeoffClearance?.() ?? null; },
   get awayOutroOn() { return !!game?.away?.outroOn; },
+  /** Test hook (recordings): these tasks count as done (the hero views that wait for one). */
+  awayMarkDone(...ids: string[]) { for (const id of ids) game?.away?.done.add(id); },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
+  /** Walk with the keys, not a teleport (soak_smoke's bump test): hold or let go a key, and turn the away body to a heading. */
+  key(code: string, on: boolean) { if (on) input.keys.add(code); else input.keys.delete(code); },
+  awayYaw(yaw: number) { const p = (game?.away as unknown as { player?: Player } | undefined)?.player; if (p) p.yaw = yaw; },
+  /** Test hook (tools/soak_smoke.py): milliseconds of one GPS route search on the away stage, and its corners. */
+  awayRoute(ax: number, az: number, bx: number, bz: number) { const L = (game?.away?.stage as AwayStage | null | undefined)?.mapLayer; if (!L?.route) return null; const t0 = performance.now(); const r = L.route(ax, az, bx, bz); return { ms: performance.now() - t0, n: r.length }; },
+  /** Test hook: what the renderer holds (soak test). */
+  get gpuMem() { const i = renderer.renderer.info; return { geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0 }; },
   get awayCam() { return game?.away?.camState ?? null; },
   holdSubs(on: boolean) { ui.holdSubs = on; },
   awayOrbit(o: { x: number; y: number; z: number; r: number; a: number; h: number } | null) { if (game?.away) game.away.orbit = o; },

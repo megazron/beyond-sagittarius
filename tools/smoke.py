@@ -123,6 +123,7 @@ def main():
         page.evaluate("window.__bs.wakeSeek(13.9)")
         time.sleep(4)
         shot("03-wakeup-sky")
+        t_enter = page.evaluate("performance.now()")
         page.keyboard.press("Enter")  # skip the rest of the wake-up sequence
         try:
             # 60 s: on CI's software renderer the wake-up's skip has reached play just after 30 s (82f05cb's run printed
@@ -130,9 +131,13 @@ def main():
             page.wait_for_function("window.__bs.mode === 'play'", timeout=60000)
         except Exception:
             print("wake did not reach play:", page.evaluate("({state: __bs.state, mode: __bs.mode})"), flush=True)
+            print("long tasks over 1 s (ms, mode after):", page.evaluate("__bs.longTasks.filter(t => t.ms > 1000).slice(-8).map(t => [t.t, t.ms, t.state, t.mode])"), flush=True)
             for e in errors:
                 print(e, flush=True)
             raise
+        # the longest stall from the skip into play (the "wake did not reach play" flake: one long task here outlasted
+        # the wait, and the mode was already 'play' when it was read)
+        print("skip -> play long tasks (ms):", page.evaluate(f"__bs.longTasks.filter(t => t.t > {t_enter} - 50).map(t => t.ms).sort((a, b) => b - a).slice(0, 5)"), flush=True)
         time.sleep(4)
         shot("04-planet-hud")
         page.keyboard.down("KeyW")

@@ -15,6 +15,8 @@ import { mergeRigid } from './rigid';
 import { BODY_MERGE, BODY_PARTS, bodyMaterial, mergeBodyGeometry } from './bodymerge';
 import { perfBody } from '../core/perfhud';
 
+/** ?lensfade=old: a crowd body fades through a dithered half-shape from 2.2 m to 1.1 m of the camera (the old way). */
+const LENS_BAND = typeof location !== 'undefined' && new URLSearchParams(location.search).get('lensfade') === 'old';
 export type { CrewId } from './looks';
 export { preloadCrew } from './assets';
 /** A direction in the body's own space: +x left, +y up, +z forward. */
@@ -707,7 +709,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let bodyMats: { skin: THREE.MeshStandardMaterial; cloth: THREE.MeshStandardMaterial; eyes: THREE.MeshStandardMaterial; sphere: THREE.Sphere } | null = null, bodyMat: THREE.MeshStandardMaterial | null = null;
   // the shapes a crowd body keeps: the face and the build (not the correctives: a crowd body has none)
   const crowdKeep = (n: string) => !/^(pit|nape|hip)[LR]?\d/.test(n), keepAll = (_n: string) => true;
-  let mergeWanted = false;
+  let mergeWanted = false, mergeLite = false;
   function mergeCrowd() {
     if (!(crowd || mergeWanted) || !bodyMats || !BODY_MERGE.on) return;
     const { skin, cloth, eyes, sphere } = bodyMats;
@@ -721,7 +723,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // one skeleton, one bind, one parent and the same place: otherwise leave this set as it is
       if (parts.some((p) => p.mesh.parent !== sk.parent || !sameSkeleton(p.mesh.skeleton, sk.skeleton) || !p.mesh.bindMatrix.equals(sk.bindMatrix) || !p.mesh.matrix.equals(sk.matrix)
         || (p.mesh.geometry.morphAttributes.position && p.mesh.geometry.morphTargetsRelative !== sk.geometry.morphTargetsRelative) || Object.keys(p.mesh.geometry.morphAttributes).some((k) => k !== 'position'))) continue;
-      const { g, names } = mergeBodyGeometry(parts, crowd ? crowdKeep : keepAll);
+      const { g, names } = mergeBodyGeometry(parts, crowd || mergeLite ? crowdKeep : keepAll);
       bodyMat ??= bodyMaterial(skin, cloth, eyes);
       const mesh = new THREE.SkinnedMesh(g, bodyMat);
       mesh.name = 'skin_body'; mesh.boundingSphere = sphere; g.boundingSphere = sphere;
@@ -1514,10 +1516,15 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
           // line from the camera to you), over a fifth of a second either way. From 1.3 m to 0.4 m a low camera looking
           // up saw a half-faded body fill ~40% of the screen as a dark dithered shape; gone by 1.1 m it is a quarter
           // of the width at most, and mostly faded long before
-          const band = dy > -0.3 && dy < 2.3, x = band ? THREE.MathUtils.clamp((d - 1.1) / 1.1, 0, 1) : 1;
+          // Now (the owner: "pedestrians change when touched or bumped"): that half-faded shape from 2.2 m to 1.1 m read as
+          // the person changing. A body is whole until it is right at the lens (0.85 m, back at 1.1 m), and then gone in a
+          // tenth of a second, all the way. ?lensfade=old: the band
+          const band = dy > -0.3 && dy < 2.3;
+          const x = LENS_BAND ? (band ? THREE.MathUtils.clamp((d - 1.1) / 1.1, 0, 1) : 1) : band && d < (fadeK > 0.5 ? 0.85 : 1.1) ? 0 : 1;
           const want = Math.min(x * x * (3 - 2 * x), lensWant);
-          fadeK += (want - fadeK) * (1 - Math.exp(-dt * 12));
-          if (Math.abs(fadeK - want) < 0.01) fadeK = want;
+          // the v4 Web clips still caught the tenth of a second in between as a dithered half-shape: now a body is
+          // hidden or shown at once, like on phones (?lensfade=old keeps the band's fade)
+          if (LENS_BAND) { fadeK += (want - fadeK) * (1 - Math.exp(-dt * 12)); if (Math.abs(fadeK - want) < 0.01) fadeK = want; } else fadeK = want;
           setFade(fadeK);
         } else {
           const near = dy > -0.3 && dy < 2.3 && d < (fig.visible ? 0.7 : 0.9);
@@ -2021,7 +2028,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** One of a crowd (CHAR_BUDGET): no corrective shapes, the light build and no shadow from closer in. */
     setCrowd(on: boolean) { crowd = on; prepFade(); },
     /** Draw skin, clothes and eyes as one mesh (bodymerge.ts; crowd bodies always do). For the stages, not the films. */
-    mergeParts() { mergeWanted = true; mergeCrowd(); },
+    /** `lite` (the city's story people on phones): without the forty corrective shapes (armpits, nape, hips), as a crowd
+     * body: about 8 MB less per body in the page and as much again in the GPU's morph texture. */
+    mergeParts(lite = false) { mergeWanted = true; mergeLite = lite; mergeCrowd(); },
     /** A crowd body that can fade (Web, Ultra) fades out towards 0 and back in towards 1; false: the stage hides it. */
     setLensFade(target: number) { lensWant = target; return fadeOn; },
     get canFade() { return fadeOn; },
