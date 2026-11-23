@@ -50,3 +50,43 @@ export function disposeTree(root: THREE.Object3D, keep: THREE.Object3D[] = keepR
 let keepRoots: () => THREE.Object3D[] = () => [];
 /** What must survive any disposeTree (main.ts: the planet's scene). */
 export function setDisposeKeep(f: () => THREE.Object3D[]) { keepRoots = f; }
+
+/** Every texture a material draws with: its maps, its uniforms' and its patched-in uniforms' (material.userData.u). */
+function texturesOf(x: THREE.Material, out: Set<THREE.Texture>) {
+  const add = (v: unknown) => { if (v && (v as THREE.Texture).isTexture) out.add(v as THREE.Texture); };
+  for (const v of Object.values(x)) add(v);
+  for (const u of [(x as THREE.ShaderMaterial).uniforms, (x.userData as { u?: Record<string, { value?: unknown }> } | undefined)?.u]) if (u) for (const k in u) add(u[k]?.value);
+}
+
+/**
+ * Frees the GPU copies of the textures and geometry a set of trees draws, keeping the data (images, arrays): drawn
+ * again, each is uploaded again then. Phones while they are away from the planet (main.ts): the planet, the films and
+ * the vault held ~260 MB of textures and their geometry on the GPU behind the city. Whatever `keep` draws is left.
+ * Returns what was let go, in MB (textures by their image size, geometry by its arrays).
+ */
+export function releaseGpu(roots: THREE.Object3D[], keep: THREE.Object3D[]) {
+  const keepT = new Set<THREE.Texture>(), keepG = new Set<THREE.BufferGeometry>();
+  for (const k of keep) k.traverse((o) => { const m = o as THREE.Mesh; if (m.geometry) keepG.add(m.geometry); const mm = m.material as THREE.Material | THREE.Material[] | undefined; if (mm) for (const x of Array.isArray(mm) ? mm : [mm]) texturesOf(x, keepT); });
+  const texs = new Set<THREE.Texture>(), geos = new Set<THREE.BufferGeometry>();
+  for (const r of roots) r.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.geometry && !(m as THREE.InstancedMesh).isInstancedMesh && !(m as THREE.BatchedMesh).isBatchedMesh) geos.add(m.geometry);
+    const mm = m.material as THREE.Material | THREE.Material[] | undefined;
+    if (mm) for (const x of Array.isArray(mm) ? mm : [mm]) texturesOf(x, texs);
+    const s = o as THREE.Scene; if (s.isScene && s.background && (s.background as THREE.Texture).isTexture) texs.add(s.background as THREE.Texture);
+  });
+  let tb = 0, gb = 0;
+  for (const t of texs) {
+    if (keepT.has(t) || (t as THREE.Texture & { isRenderTargetTexture?: boolean }).isRenderTargetTexture || (t as THREE.VideoTexture).isVideoTexture) continue;
+    const im = t.image as { width?: number; height?: number; data?: { byteLength: number } } | undefined;
+    if (!im) continue; // nothing to upload it again from
+    tb += im.data?.byteLength ?? (im.width ?? 0) * (im.height ?? 0) * 4;
+    t.dispose();
+  }
+  for (const g of geos) {
+    if (keepG.has(g)) continue;
+    for (const k in g.attributes) gb += (g.attributes[k] as THREE.BufferAttribute).array?.byteLength ?? 0;
+    g.dispose();
+  }
+  return { texMB: Math.round(tb / 1e6), geoMB: Math.round(gb / 1e6) };
+}
