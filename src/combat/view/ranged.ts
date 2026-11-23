@@ -140,7 +140,7 @@ export class RangedRig {
         else target = nock0;
       } else target = S.up > 0.5 ? nock0 : V().set(-0.22, 1.0, 0.12);
       const pole = V().copy(aim).multiplyScalar(-1).add(V().set(0, 0.55, 0));
-      reach(sR, V().copy(target).addScaledVector(aim, -0.06), R.a, R.b, pole, eR, wR);
+      reach(sR, this.ease(sR, V().copy(target).addScaledVector(aim, -0.06), R), R.a, R.b, pole, eR, wR);
       this.clearArms(sL, eL, wL, sR, eR, wR, dt); this.keep(sL, eL, wL, sR, eR, wR);
       limbs = { armL: dirOf(eL, sL), foreL: dirOf(wL, eL), armR: dirOf(eR, sR), foreR: dirOf(wR, eR), twist: 0.15 * smooth(S.up) };
     } else if (this.mode === 'atlatl') {
@@ -194,7 +194,8 @@ export class RangedRig {
       if (recovering && fresh) S.throwT = 0;
       if (S.throwT >= 0) S.throwT += dt;
       if (!recovering) S.throwT = -1;
-      const rest = V().set(0.02, 1.02, 0.32);
+      // (the pouch held well out in front: at 0.32 the right hand on it sat inside the coat's front, the elbow in the chest)
+      const rest = V().set(0.02, 1.02, 0.42);
       let tR: THREE.Vector3, tL = V().copy(rest).add(V().set(0.05, 0, 0));
       if (whirl) {
         const k = p.charge, speed = 2 * Math.PI * (1.1 + 1.6 * k); this.whirlK = k;
@@ -221,8 +222,8 @@ export class RangedRig {
         tR = up ? V().copy(rest).add(V().set(-0.12, 0.08, 0)) : V().set(-0.22, 0.95, 0.12);
         S.hold = up ? 'left' : 'free';
       }
-      reach(sR, tR, R.a, R.b, V().set(-0.6, -0.4, -0.3), eR, wR);
-      reach(sL, tL, R.a, R.b, V().set(0.6, -0.5, -0.2), eL, wL);
+      reach(sR, this.ease(sR, tR, R), R.a, R.b, V().set(-0.6, -0.4, -0.3), eR, wR);
+      reach(sL, this.ease(sL, tL, R), R.a, R.b, V().set(0.6, -0.5, -0.2), eL, wL);
       const wind = whirl ? -0.45 * smooth(p.actT / 0.4) : S.throwT >= 0 && S.throwT < 0.5 ? -0.45 + 1.0 * out3(S.throwT / 0.2) : 0;
       this.clearArms(sL, eL, wL, sR, eR, wR, dt); this.keep(sL, eL, wL, sR, eR, wR);
       limbs = { armR: dirOf(eR, sR), foreR: dirOf(wR, eR), armL: dirOf(eL, sL), foreL: dirOf(wL, eL), twist: wind };
@@ -259,6 +260,16 @@ export class RangedRig {
     if (Math.max(l, r) > this.solveIn) { this.solveIn = Math.max(l, r); const f = (v: THREE.Vector3) => v.toArray().map((x) => x.toFixed(2)).join(','); this.solveWhere = `${this.mode} ${l > r ? 'L' : 'R'} s ${f(l > r ? sL : sR)} e ${f(l > r ? eL : eR)} w ${f(l > r ? wL : wR)}`; }
   }
 
+  /** A hand's mark as an arm can take it: out of the body's shapes by a forearm's thickness, and within an easy reach
+   * of its shoulder (a string hand sent straight across the chest for a string past its reach drew a straight arm
+   * through the chest: 9.7 cm in CI; a bent arm leaves the elbow room to swing out of the body). */
+  private ease(s: THREE.Vector3, t: THREE.Vector3, R: Rig) {
+    const n = V();
+    for (let i = 0; i < 2; i++) { const dp = depth(t, 0, 0.1, n); if (dp > 0) t.addScaledVector(n, dp + 0.01); }
+    const max = (R.a + R.b) * 0.88, d = V().subVectors(t, s), l = d.length();
+    if (l > max) t.copy(s).addScaledVector(d, max / l);
+    return t;
+  }
   /** What this frame's solve asked for (root-local): shoulders, elbows, wrists. */
   private sol: { sL: THREE.Vector3; eL: THREE.Vector3; wL: THREE.Vector3; sR: THREE.Vector3; eR: THREE.Vector3; wR: THREE.Vector3 } | null = null;
   private keep(sL: THREE.Vector3, eL: THREE.Vector3, wL: THREE.Vector3, sR: THREE.Vector3, eR: THREE.Vector3, wR: THREE.Vector3) {
