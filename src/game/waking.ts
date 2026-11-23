@@ -353,28 +353,28 @@ export class Waking {
         // the lip starts to tingle
         this.after(1.6, () => z.setFace({ squint: 0.55, frown: 0.5, open: 0.15 }));
       } },
-      // he spits, wipes his mouth with the back of his hand, and throws the berry away
+      // he spits (out and away, a step in front of him), grimaces and shakes his head
       { hold: 2.1, if: TESTED, shot: () => {
         // v4: built from where he stands and the bush (the model's heading put the lens behind his head): he turns his
         // head to his side, and the lens is in front of him on that side, with room for the spray between
         const F = at.clone().sub(stand).setY(0).normalize(), side = new THREE.Vector3(F.z, 0, -F.x);
         const head = new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld);
         const to = head.clone().addScaledVector(side, 0.3).addScaledVector(F, 0.15).add(new THREE.Vector3(0, -0.15, 0));
-        return { from: head.clone().addScaledVector(F, 1.15).addScaledVector(side, 0.55).add(new THREE.Vector3(0, -0.1, 0)), to, push: 0.02 };
+        // v7: further back and aimed a little ahead of him, so the arc out and down stays in frame
+        return { from: head.clone().addScaledVector(F, 1.5).addScaledVector(side, 0.95).add(new THREE.Vector3(0, -0.2, 0)), to: to.addScaledVector(F, 0.25).addScaledVector(side, -0.2).add(new THREE.Vector3(0, -0.2, 0)), push: 0.02 };
       }, run: () => {
         z.setProp(null);
         z.setHold(null);
         const F = at.clone().sub(stand).setY(0).normalize(), side = new THREE.Vector3(F.z, 0, -F.x);
         // v6: mostly forwards (v5 went out to his side and fell down his coat), still turned a little to the lens side
-        const dir = side.clone().multiplyScalar(0.55).addScaledVector(F, 0.85).normalize();
+        const dir = side.clone().multiplyScalar(-0.55).addScaledVector(F, 0.85).normalize(); // v7: away from the lens side, so it crosses the frame (v6 flew at the lens and was gone in two frames)
         const mth = () => new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld).addScaledVector(dir, 0.1).add(new THREE.Vector3(0, -0.075, 0));
         z.setLookTarget(mth().addScaledVector(dir, 1.0).add(new THREE.Vector3(0, -0.45, 0)));
         z.setFace({ frown: 0.7, squint: 0.6, open: 0.3 });
         this.after(0.45, () => { audio.sample('splash', 0.07, { rate: 3.1 }); audio.human('breath', 0.5); this.spit(mth(), dir); });
-        // then the back of his hand across his mouth, after the spray is seen
-        // v6: palm down, the wrist level (palm out twisted the forearm and the sleeve crumpled into a grey shape)
-        this.after(1.3, () => z.setHold({ R: { at: mth().addScaledVector(dir, 0.06).add(new THREE.Vector3(0, -0.02, 0)), fingers: side.clone().negate().addScaledVector(F, 0.3).normalize(), palm: new THREE.Vector3(0, -1, 0) } }));
-        this.after(1.85, () => z.setHold(null));
+        // v7: no wipe: any hand at his mouth twisted the sleeve into a grey crumple at 540p; a grimace and a shake instead
+        this.after(1.2, () => { z.setFace({ frown: 0.8, squint: 0.7, open: 0.1 }); z.setLookTarget(mth().addScaledVector(side, -0.6).addScaledVector(F, 1.0).add(new THREE.Vector3(0, -0.2, 0))); });
+        this.after(1.5, () => z.setLookTarget(mth().addScaledVector(side, 0.6).addScaledVector(F, 1.0).add(new THREE.Vector3(0, -0.2, 0))));
       } },
       { key: 'e1.fr.test', who: 'scientist', if: TESTED, shot: () => cover.close(z, 0.3, 0.95), run: () => { z.setLookTarget(null); z.setFace({ smile: 0.4 }); }, after: 0.5 },
       { key: 'e1.fr.no', who: 'scientist', if: HUNGRY, shot: () => cover.close(z, 0.3, 0.95), run: () => this.release(), after: 0.5 },
@@ -421,8 +421,8 @@ export class Waking {
       const k = performance.now() / 1000 - t0;
       for (let i = 0; i < N; i++) {
         // v6: out and away (1.5 to 2.4 m/s, a small lift) so the drops clear his chest and land a step in front of him
-        const sp = 1.5 + (i % 4) * 0.3, tt = Math.max(0, k - i * 0.02);
-        p.copy(from).addScaledVector(dir, 0.05 + sp * tt).add(new THREE.Vector3(Math.sin(i * 3.1) * 0.25 * tt, 0.9 * tt - 4.9 * tt * tt, Math.cos(i * 2.3) * 0.25 * tt));
+        const sp = 1.0 + (i % 4) * 0.2, tt = Math.max(0, k - i * 0.02);
+        p.copy(from).addScaledVector(dir, 0.05 + sp * tt).add(new THREE.Vector3(Math.sin(i * 3.1) * 0.25 * tt, 0.8 * tt - 4.9 * tt * tt, Math.cos(i * 2.3) * 0.25 * tt));
         p.y = Math.max(p.y, this.world.terrain.height(p.x, p.z) + 0.005);
         drops.setMatrixAt(i, m4.compose(p, q, one.setScalar(i % 3 === 0 ? 1.5 : 1)));
       }
