@@ -353,6 +353,24 @@ function flatPortals(scene: THREE.Scene, room: THREE.Box3, x: number, openings: 
 // ---------- models (CC0, Poly Haven, packed by tools/fetch_city.py) ----------
 const gl = new GLTFLoader(); gl.setMeshoptDecoder(MeshoptDecoder);
 const modelCache = new Map<string, Promise<THREE.Object3D>>(), modelDone = new Map<string, THREE.Object3D>();
+/** Frees what only the props' model cache holds (textures no material under `keep` uses) and empties the cache. */
+function releaseModels(keep: THREE.Object3D) {
+  const used = new Set<THREE.Texture>();
+  const texOf = (m: THREE.Material) => Object.values(m as unknown as Record<string, unknown>).filter((v): v is THREE.Texture => !!(v as THREE.Texture)?.isTexture);
+  keep.traverse((o) => { const mt = (o as THREE.Mesh).material; for (const m of Array.isArray(mt) ? mt : mt ? [mt] : []) for (const t of texOf(m)) used.add(t); });
+  let n = 0;
+  for (const root of modelDone.values()) root.traverse((o) => {
+    const mt = (o as THREE.Mesh).material;
+    for (const m of Array.isArray(mt) ? mt : mt ? [mt] : []) for (const t of texOf(m)) {
+      if (used.has(t)) continue;
+      t.dispose(); const im = t.image as { close?: () => void } | null; if (im && typeof im.close === 'function') im.close();
+      t.image = null; n++;
+    }
+  });
+  modelCache.clear(); modelDone.clear();
+  MODEL_RELEASE.textures += n;
+}
+export const MODEL_RELEASE = { textures: 0 };
 /** What the props' model cache holds (memory reports: __bs.memOwners). */
 export const modelCacheNow = () => [...modelDone.values()];
 function model(name: string) {
@@ -1124,7 +1142,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     const names = [...new Set([...placed.values()].map((e) => e.name))];
     type Loaded = [string, THREE.Object3D | null, THREE.Object3D | null];
     const load = (n: string): Promise<Loaded> => model(`${n}.lod1`).catch(() => null).then((far): Loaded | Promise<Loaded> => (tier === 0 && far ? [n, null, far] : model(n).then((near): Loaded => [n, near, far])));
-    void Promise.all(names.map((n) => load(n).catch((): Loaded | null => null))).then((list) => {
+    return Promise.all(names.map((n) => load(n).catch((): Loaded | null => null))).then((list) => {
       const TILE = tier === 0 ? 256 : 512, COLS = 8;
       const cv = document.createElement('canvas'); cv.width = cv.height = TILE * COLS;
       const g2 = cv.getContext('2d')!; g2.fillStyle = '#ffffff'; g2.fillRect(0, 0, TILE, TILE);
@@ -1233,7 +1251,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       }
     }).catch((e) => console.warn('[city] props', e));
   };
-  buildProps(placed, oldTown, true);
+  const propsBuilt: Promise<unknown>[] = [buildProps(placed, oldTown, true)];
   const future = buildFuture(oldTown as unknown as THREE.Scene, { rich, N, S, FRONT, FLOOR, shops: SHOPS });
   blocks.push(...future.solids);
   const mega = buildMega(scene, { rich, N, S, FRONT, haze: HAZE });
@@ -1310,7 +1328,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   };
   const dist = buildDistricts(scene, { rich, tier, place: placeD, paving, road: roadM, kerb: kerbM, label });
   blocks.push(...dist.solids);
-  buildProps(placedD, scene, false);
+  propsBuilt.push(buildProps(placedD, scene, false));
+  // phones: the props' models were only read to paint the far bakes' atlas; their textures (decoded images, ~230 MB on
+  // the Mobile preset) are let go once both are built, and the cache with them (a later visit loads them again)
+  if (tier === 0) void Promise.all(propsBuilt).then(() => releaseModels(scene)).catch(() => undefined);
   const day = dayCycle({ sky: skyMat, sun, hemi, fog: scene.fog as THREE.Fog, rich, scene });
   // the sky's image light: the whole render target is kept and freed with it (only its texture was freed, so every
   // refresh of the sky, about twice a minute, left a render target on the GPU for as long as you stayed in the city)
