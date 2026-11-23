@@ -18,10 +18,15 @@ def bump(page, at, kind='crowd', rounds=4, log=None, say=print):
     settle, then W held and the body turned at them each step, through them and 1.5 m past. A swap is any walker who
     was a body within 4.5 m of the player becoming a card or another body. Returns a list of failures."""
     fails = []; reached = 0
-    page.evaluate(f"__bs.awayTeleport({at[0]}, {at[1]}, 0)")
-    for _ in range(60):  # the bodies load on first sight
-        time.sleep(1)
-        if len(_walkers(page.evaluate(STATE), kind)) >= 2: break
+    spots = [at] if isinstance(at[0], (int, float)) else list(at)
+    for sp in spots:  # the first spot where somebody walks as a body (the bodies load on first sight)
+        page.evaluate(f"__bs.awayTeleport({sp[0]}, {sp[1]}, 0)")
+        for _ in range(45):
+            time.sleep(1); page.evaluate('__bs.step(0.1)')
+            if len(_walkers(page.evaluate(STATE), kind)) >= 2: break
+        st = page.evaluate(STATE)
+        if _walkers(st, kind): break
+        c = st['c']; say(f'{kind}: no body at {sp}: near {c.get("near")} room {c.get("room")} dbg {json.dumps(c.get("dbg", {}))[:300]}')
     tested = set()
     for rnd in range(rounds):
         st = page.evaluate(STATE); w = _walkers(st, kind); p = st['p']

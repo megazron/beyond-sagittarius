@@ -88,7 +88,7 @@ with sync_playwright() as pw:
     # 1b. bump into the walkers with the keys (a teleport jumps the camera and the body budget): whoever walks as a body
     # within reach stays that same body (the owner: "the pedestrians suddenly change when touched or bumped into"). The
     # old town's painted crowd, then a district's walkers (tools/bump_probe.py logs every step with --log)
-    fails += bump_probe.bump(page, (-5.5, 0), 'crowd', 4, say=lambda m: print(m, flush=True))
+    fails += bump_probe.bump(page, [(-5.5, 0), (5.5, -20), (-5.0, 30), (5.0, 45)], 'crowd', 4, say=lambda m: print(m, flush=True))
     fails += bump_probe.bump(page, (175, 70), 'peds', 3, say=lambda m: print(m, flush=True))
     print('bump test done', flush=True)
     # 1c. time, not distance (the owner: "the longer we play the game, the laggier it gets"): six minutes in the bazaar,
