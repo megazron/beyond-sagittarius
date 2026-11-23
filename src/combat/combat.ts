@@ -872,8 +872,8 @@ export class Combat {
         const d = Math.hypot(f.x - P.pos.x, f.z - P.pos.z), k = Math.sqrt(Math.max(0, f.fuel / f.max));
         near = Math.max(near, k * THREE.MathUtils.smoothstep(4.5 - d, 0, 3));
       }
-      // (about a second to adapt, as an eye does; down to 0.5 at the fire's edge)
-      const want = 1 - 0.5 * near;
+      // (about a second to adapt, as an eye does; down to 0.7 at the fire's edge)
+      const want = 1 - 0.3 * near;
       this.exposure += (want - this.exposure) * (1 - Math.exp(-dt * 1.2));
     }
     // a night set piece: the giant planet overhead throws a cold planetshine, enough to see shapes move at the
