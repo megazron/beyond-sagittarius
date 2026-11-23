@@ -817,6 +817,8 @@ function tick(step: number) {
     const focus = player.pos;
     if (photo) { camera.position.copy(photo.from); camera.lookAt(photo.to); }
     world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer, renderer.stageInfo().scene === world.scene);
+    // the eye adapting to a camp fire close by in a fight (combat.ts exposure; 1 elsewhere)
+    if (combat) renderer.renderer.toneMappingExposure *= combat.exposureScale;
   }
   navFrame(dt);
   if (stage.active) stage.update(dt);
