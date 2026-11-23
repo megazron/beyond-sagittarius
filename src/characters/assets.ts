@@ -28,6 +28,8 @@ const loaded = new Map<string, CrewAsset>();
 let animP: Promise<AnimSet> | null = null;
 let anim: AnimSet | null = null;
 const texCache = new Map<string, THREE.Texture>();
+/** What the body caches hold (memory reports: __bs.memOwners). */
+export const assetCacheNow = () => ({ scenes: [...loaded.values()].map((a) => a.scene), textures: [...texCache.values()] });
 const pending = new Set<Promise<void>>();
 const loadTex = (url: string) => {
   let done: () => void = () => {};
