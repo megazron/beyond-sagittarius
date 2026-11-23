@@ -216,15 +216,27 @@ def ear_morphs(Vdm, scale):
     return {k: v * scale for k, v in out.items()}
 
 
-def resolve_layers(inner_P, outer, margin):
-    """Push anything poking through an outer garment back under it."""
+def resolve_layers(inner_P, outer, margin, rim_margin=None):
+    """Push anything poking through an outer garment back under it. rim_margin: deeper within 3 cm of the outer
+    garment's open edges (a coat's lapels: the decimated edge bows in between its vertices and the shirt under it
+    showed through along the opening, the "inner collar" flags)."""
     tree = cKDTree(outer.P)
     d, j = tree.query(inner_P, workers=1)
     n = outer.N[j]
     s = np.einsum('ij,ij->i', inner_P - outer.P[j], n)
-    m = (d < 0.05) & (s > -margin)
+    mg = np.full(len(inner_P), margin)
+    if rim_margin is not None:
+        e = {}
+        for t in outer.T:
+            for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+                k = (min(a_, b_), max(a_, b_)); e[k] = e.get(k, 0) + 1
+        rim = np.unique([k[0] for k, c in e.items() if c == 1])
+        if len(rim):
+            rd = cKDTree(outer.P[rim]).query(inner_P, workers=1)[0]
+            mg = np.where(rd < 0.03, np.maximum(mg, rim_margin), mg)
+    m = (d < 0.05) & (s > -mg)
     out = inner_P.copy()
-    out[m] -= n[m] * (s[m] + margin)[:, None]
+    out[m] -= n[m] * (s[m] + mg[m])[:, None]
     return out
 
 
@@ -797,7 +809,7 @@ def build(c, cid, force=False):
         outer = [o for o in garments[i + 1:] if 'boot' not in o.asset and 'shoe' not in o.asset]
         g = garments[i]
         for o in outer:
-            g.P = resolve_layers(g.P, o, 0.012)
+            g.P = resolve_layers(g.P, o, 0.012, 0.02)
         if not g.opt.get('skirt'):
             g.W = follow(g.P, g.W, outer)
         # whatever an outer layer really covers is cut, along exact sight lines
