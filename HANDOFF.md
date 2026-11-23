@@ -733,3 +733,88 @@ unlanded except this handoff commit and any recording in progress.
   ~36%, the planet's world.update 13% while in the city). 5160658 (landed with 0878731): planet pods/camp/items/giant and
   its env capture wait while another stage is on screen; the hidden touch stick no longer rewrites styles every frame.
   Not measured as an A/B yet. Rule reminder: no pkill -f / pgrep -f, even with [x] tricks (one of my waits hung on it).
+- 02:25 results (p19/): re-entry soak on the new build (re_new) textures 618 -> 449 over ten visits (base re_base
+  624 -> 1341, climbing); geometries and programs bounded; backing store back to ~1.19 GB in the city. Two city samples
+  right after re-entry read 23-25 fps (base 59) while other Chrome instances were busy; later city visits read 60. Not
+  settled: recheck on a quiet machine. Web journey after the router fix: no update sample over 6.1 ms (before 26-58 ms
+  at the far corners). Mobile journey (jc_mob_new, 4x throttle, contended): memory flat (geo 726 -> 733, tex 463 -> 470,
+  heap 770-835 MB), 20-26 fps: phones are still NOT at 30.
+- Memory (p19/bytes.js, by_web / by_mob): in the city Web holds 1.31 GB of typed-array data + ~160 MB JS objects; Mobile
+  745 MB + 95 MB. In the scene on Mobile: bodies (Group/Group) 157 MB, prop bakes ~67 MB, static merges ~46 MB, planet
+  geometry 74 MB; ~385 MB is held outside the scene graph (asset caches: glTF originals, character assets). That is the
+  next phone target (an Android WebView renderer near 1 GB risks an OOM kill). p19/bodybytes.js (plan_bodybytes.json)
+  breaks the bodies down by mesh; run it.
+- CI: soak_smoke is a gate now. On restore after a lost context three.js recompiles every program: on SwiftShader that
+  takes minutes (the test waits up to 150 s); on a real GPU expect a freeze of seconds, with the note on screen.
+- Clips: Downloads/BS_Game_v1.1/mobile_v1_GPU/travel_*_before.mp4 (main before the fix, Web, ?perf=1, no sound): the far
+  northeast reads update 54.9 ms. The far northeast spot (287,237) is an empty flat plane at the city's edge: that looks
+  wrong in itself and is not mine to judge. *_after.mp4 when p19/clips.sh finishes.
+- 03:10 LANDED 8d74f21 on main (teardown, context loss, memory guard, soak_smoke; CI 45099868510 green on that sha after
+  two reruns of combat's play test, which timed out on a click at a different step each time: a flake on the slow runner,
+  combat passed on the same code before). Main's own Gates run on combat's ff7f293 is red on perf_gate (not mine).
+- Clips with notes: Downloads/BS_Game_v1.1/mobile_v1_GPU/ (README.txt, travel_*_before/after.mp4, travel_and_visits.png).
+  Far northeast: before update 54.9 ms, worst 50 ms; after update 2.0 ms, 60 fps, worst 20 ms. No sound.
+- Planet journey (p19/jp_web_new): geometries 396 -> 506 over the first lap then flat; textures/programs flat; heap
+  1.40 -> 0.75 GB once the city is left (the teardown frees it). 60 fps.
+- OWNER: "pedestrians suddenly change when touched or bumped into". Cause: a painted-crowd walker drawn as a body was
+  dropped from walkCrowd's wanted list when it entered the camera lens (1.7 m of the camera or on the camera-player
+  line: exactly a bump); the body went back to the pool and the flat card was drawn in its place, then a body again.
+  619b92d: a held card keeps its body in the lens (?lenshold=0 = old way). awayCrowd().held lists [card, pool body,
+  look, dist, x, z]; soak_smoke bumps up to four walkers and checks each keeps body and look. Other possible swaps NOT
+  checked: a walker crossing TAKE (14 m) swaps card <-> body (the card's atlas look is card % variants, the body's is
+  card % NLOOK; they match only if the atlas holds NLOOK variants); district peds swap at DNEAR 30 m.
+- OWNER: "the longer we play the game, the laggier it gets". 3c48f2b: soak_smoke stands six minutes in the bazaar and
+  asserts update time, heap, geometries, textures, programs flat. GPU 30-minute session: p19/plan_long.json -> p19/long_web
+  (also counts event listeners added after load). Results below if I got them.
+- Machine: at most ONE capture Chrome, only inside a heavy step. p18/gpurun2.sh stops it by PID on any exit (trap) and
+  verifies the process and the 9446 listener are gone. Use gpurun2.sh from now on.
+- 04:20 OVER TIME: GPU 30-minute session in the bazaar (p19/long_web, Web, quiet machine): 60 fps, update ~2 ms, heap,
+  geometries, programs, scene objects all flat start to end; textures 632 -> 695 (~2 a minute). A WebGL texture trace
+  (p19/plan_texleak.json: gl.createTexture/deleteTexture wrapped, stacks mapped with the build's source map) named
+  city.ts refreshEnv: it kept PMREM's texture and disposed only that, never the render target. 0de154e (on main as
+  2e5e512 once CI is green) keeps and frees the render target. Bloom/GTAO/post render targets in the trace are re-made
+  on resolution changes with the old ones freed: not leaks.
+- LANDED a152c2e (memory guard): the first guard (8d74f21) could reload the page mid-play when usedJSHeapSize (which
+  includes geometry and texture data, 1.4 GB on Web) passed 85% of the limit. That most likely broke combat's play test
+  and levels_smoke on CI (menus gone after a reload to the title). Now: 92%, never reloads (saves, next start lighter),
+  off under navigator.webdriver. With it, combat and levels_smoke passed again.
+- BUMP TEST: not trustworthy yet. Teleporting the player onto or next to a walker jumps the camera and the body budget,
+  and the walker can be let go for that reason (CI and my local A/B both showed "None at step 0"). 60fddca/next commits
+  re-pick the nearest body each round and walk 0.4 m a step. A/B script: scratchpad bump.py (--url with lenshold=0/1)
+  through heavy; I did not get a clean pass/fail pair before handing over. The fix (619b92d) is on branch perf17 only,
+  NOT on main. To land it: prove the test fails with ?lenshold=0 and passes without, then CI.
+- 05:00 BUMP, still open: on CI (perf19-wip, fix 619b92d in) the nearest crowd body (card 22) is let go one step after
+  the player walks in from 2 m to the side (awayCrowd().held loses it). So either the lens was not the only path, or the
+  test's moves change the budget: walkCrowd keeps min(POOL, bodiesLeft) nearest cards, and bodiesLeft = BODY_CAP minus
+  the townsfolk drawn as bodies last frame (two over cap "at your elbow"). Next: log budget, near and want per step in
+  the hook; drive the player with keys (input.keys add/delete via a test hook, like demo.ts hold()) instead of teleports.
+  Also possible for the owner's report on Web/Ultra: the lens fade itself (a body fades to a dithered half-shape from
+  2.2 m to 1.1 m) reads as "changing". Main has NO bump test (it lives on perf19-wip only); 619b92d is not on main.
+- 05:00 context loss: 6c53bf0 opens the pause menu and skips only drawing (it froze the whole loop, menus included).
+  Branch perf19-env2 = main + sky light fix + this; it lands itself if green (my background watcher). CI is flaky today
+  on several branches (combat's play test at the pause menu's #p-action, smoke, levels_smoke): main's own runs on
+  a152c2e and ff7f293 are red too. Check before blaming a change.
+
+## 2026-11-23 05:00 perf agent 21 (branch perf20 = main cf5de40 + 619b92d + the soak tests, then my commits)
+- BUMP, the paths I found that drop a walker's body during contact (city.ts):
+  1. walkCrowd kept the `min(POOL, budget)` nearest cards to the CAMERA with no slack: as you push past, the camera
+     swings and someone else becomes nearer, so the walker you touch was handed back to the card.
+  2. the budget: bodiesLeft = BODY_CAP minus townsfolk bodies; townsfolk "at your elbow" go two over the cap, so walking
+     into a crowd with a townsperson near cut the crowd's budget to 0 and every crowd body went back to a card.
+  3. drawPeds (district walkers): the nearest dcap within 30 m, no slack and no hold at all.
+  4. phones: a townsperson in the lens line was simply hidden (no fade), and the elbow rule was Web/Ultra only.
+  5. the lens itself (Web/Ultra): a dithered half-body from 2.2 m to 1.1 m of the camera, and hidden on the
+     camera-to-you line: reads as the person changing.
+  Fix (4a30124): a body within CONTACT 4.5 m of you is pinned (kept whatever the budget/order), bodies already drawn get
+  2-3 m of slack; townsfolk cap leaves room for pinned walkers; phones keep a visible townsperson at the elbow too. Lens:
+  bodies on the camera-to-you line stay drawn and the camera rises over them (crowdK >= 0.8); a body only fades, fully,
+  in about 0.1 s, when within 0.85 m of the lens (back at 1.1 m). A/B flags: ?contact=0, ?lensfade=old, ?lenshold=0.
+- Test: tools/bump_probe.py drives the player with the keys (__bs.key / __bs.awayYaw, new hooks), one teleport per
+  round to 5 m off and 2 s to settle, then walks through the walker; logs budget/want/pinned/lens per step (--log).
+  soak_smoke now uses it for the old town crowd and a district (175, 70).
+- FAR NORTHEAST "empty plane" (mobile_v1_GPU/travel_01): the spot (287.7, 237.3) is on the pavement in front of the
+  NE tower block's podium (block x 250-330, z 230-310, inset 10 m), yet the clip shows no buildings at all, only shop
+  signs floating. So it is a missing-building bug there, not an unbuilt edge. Suspect: districts.ts zone merge keeps only
+  geometries with the first geometry's exact attribute set (`ok` filter) and drops the rest silently. Not verified yet.
+- Memory hook: __bs.memOwners() (bytes by owner: stage scene, model cache, body assets, merged-body cache, heap).
+  soak_smoke --mem-only --heap-mb N for the Mobile budget (job not added to CI until I have a number).
