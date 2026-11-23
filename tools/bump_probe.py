@@ -3,6 +3,7 @@ pinned, the lens and each held walker's body. The owner: "pedestrians change whe
 (the gate) and on its own: python tools/bump_probe.py --url 'http://127.0.0.1:PORT/index.html?quality=web' [--log f]."""
 import json, math, time
 
+REACH = 4.5  # metres: anyone a body this close to you is being bumped (city.ts CONTACT)
 STATE = "(()=>{const c=__bs.awayCrowd(),p=__bs.awayCam;return {c,p:p?[p.x,p.z]:null}})()"
 
 
@@ -16,7 +17,7 @@ def bump(page, at, kind='crowd', rounds=4, log=None, say=print):
     """Bump `rounds` walkers near `at` (x, z). Each round: one teleport to 5 m from the nearest untested body, 2 s to
     settle, then W held and the body turned at them each step, through them and 1.5 m past. A swap is any walker who
     was a body within 4.5 m of the player becoming a card or another body. Returns a list of failures."""
-    fails = []
+    fails = []; reached = 0
     page.evaluate(f"__bs.awayTeleport({at[0]}, {at[1]}, 0)")
     for _ in range(60):  # the bodies load on first sight
         time.sleep(1)
@@ -35,32 +36,37 @@ def bump(page, at, kind='crowd', rounds=4, log=None, say=print):
         if tgt not in w: say(f'{kind} round {rnd}: walker {tgt} let go during the settle after the teleport (not a bump)'); continue
         ref = {k: v[:2] for k, v in w.items()}  # who is whom once settled
         body, look = ref[tgt]
-        hit, passed, t0, closest, last_near = None, None, time.time(), 99.0, set()
+        hit, passed, t0, closest, last_near, last_d = None, None, time.time(), 99.0, set(), 99.0
         page.evaluate("__bs.key('KeyW', true)")
         try:
-            while time.time() - t0 < 12:
+            while time.time() - t0 < 40:
                 st = page.evaluate(STATE); w = _walkers(st, kind); p = st['p']
                 if log: log.write(json.dumps({'kind': kind, 'round': rnd, 'tgt': tgt, 't': round(time.time() - t0, 2), 'p': p, 'dbg': st['c'].get('dbg'), 'held': st['c'].get('held')}) + '\n')
                 # everyone who was a body and is now within reach must still be the same body
+                # (further off, a walker going back to a card is the ordinary distance swap, not a bump: logged, not failed)
                 for k, (b0, l0) in ref.items():
                     now = w.get(k)
-                    near = now and math.hypot(now[2] - p[0], now[3] - p[1]) < 4.5
-                    if now and (now[0], now[1]) != (b0, l0): hit = (k, 'became body', now[:2]); break
-                    if not now and k == tgt: hit = (k, 'became a card', None); break
-                    if not now and k in last_near: hit = (k, 'became a card at your elbow', None); break
-                if hit: break
-                last_near = {k for k, v in w.items() if math.hypot(v[2] - p[0], v[3] - p[1]) < 4.5}
+                    if now and k in last_near and (now[0], now[1]) != (b0, l0): hit = (k, 'became body', now[:2]); break
+                    if not now and k in last_near: hit = (k, f'became a card within {REACH} m of you', None); break
+                    if not now and k == tgt: say(f'  walker {tgt} let go {last_d:.1f} m off, before reaching them: {json.dumps(st["c"].get("dbg", {}))[:400]}'); break
+                if hit:
+                    say(f'  state: {json.dumps(st["c"].get("dbg", {}))[:600]}'); break
+                if tgt not in w: break
+                last_near = {k for k, v in w.items() if math.hypot(v[2] - p[0], v[3] - p[1]) < REACH}
                 ref.update({k: v[:2] for k, v in w.items() if k not in ref})
-                tx, tz = w[tgt][2], w[tgt][3]; d = math.hypot(tx - p[0], tz - p[1]); closest = min(closest, d)
+                tx, tz = w[tgt][2], w[tgt][3]; d = math.hypot(tx - p[0], tz - p[1]); closest = min(closest, d); last_d = d
                 if passed is None and (d < 0.7 or (closest < 1.6 and d > closest + 0.3)): passed = time.time()
                 if passed and time.time() - passed > 1.5: break
                 if passed is None: page.evaluate(f"__bs.awayYaw({math.atan2(-(tx - p[0]), -(tz - p[1])):.3f})")
-                time.sleep(0.08)
+                # the game steps on as well as drawing: on software GL a few frames a second would never get there
+                page.evaluate('__bs.step(0.1)'); time.sleep(0.05)
         finally:
             page.evaluate("__bs.key('KeyW', false)")
         say(f'{kind} round {rnd}: walker {tgt} body {body} look {look}, closest {closest:.2f} m -> {"same" if not hit else hit}')
         if closest > 1.6: say(f'  (did not reach them: closest {closest:.2f} m)')
+        else: reached += 1
         if hit: fails.append(f'bump test ({kind}): walker {hit[0]} {hit[1]} {hit[2] or ""} while walking into walker {tgt}')
+    if not reached: fails.append(f'bump test ({kind}): never got within 1.6 m of a walker drawn as a body (the test did not test)')
     return fails
 
 
