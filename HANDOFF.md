@@ -1008,8 +1008,9 @@ unlanded except this handoff commit and any recording in progress.
   processes 3.69 GB. With releaseCrew (phones: dispose body textures no stage material uses, forget loaded body builds
   after every city body is made; ?crewrelease=0 for the old way): all processes 3.16 GB (-0.53 GB). The 509 MB "outside
   the stage" were the six crew's 2048 px skin/cloth maps: Cinematic's deck crew picked detail by `pointer: coarse` only,
-  so the Mobile preset on a laptop loaded the full builds; now quality mobile also gets 0.6 (measure: scratchpad
-  mem_p23b.txt). Body originals 118 -> 9.8 MB in memOwners, JS heap 830 -> 804 MB. FAR from 400 MB: software GL keeps
+  so the Mobile preset on a laptop loaded the full builds; now quality mobile also gets 0.6. With both (dist-p23b,
+  scratchpad mem_p23b.txt): renderer 1159 + GPU 1723 = 2882 MB at the crowd (was 3532), all processes ~3.03 GB (was
+  3.69), JS heap 716 MB (was 830). CI job mobile_memory (--proc-mb 3200) added on perf23-wip as a tripwire. Body originals 118 -> 9.8 MB in memOwners, JS heap 830 -> 804 MB. FAR from 400 MB: software GL keeps
   every texture and buffer uncompressed in the GPU process; the stage alone is 279 MB geometry + 283 MB textures by
   memOwners. Next: KTX2 for the city's colour maps on Mobile (check SwiftShader's format: it may decompress), the stage
   geometry (71 bodies' skin_body+morph 111 MB with 3 visible: share one geometry per look), then a Mobile CI job:

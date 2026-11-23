@@ -33,6 +33,9 @@ jobs:
           - { name: crowd_smoke, run: 'python tools/crowd_smoke.py' }
           - { name: traffic_smoke, run: 'python tools/traffic_smoke.py' }
           - { name: soak_smoke, run: 'python tools/soak_smoke.py' }
+          # phones: the city's memory at process level on the Mobile preset (renderer + GPU process PSS on software GL,
+          # 2.89 GB on the laptop on 2026-11-23 at the crowd spot): a tripwire for now, to come down towards the phones' 400 MB
+          - { name: mobile_memory, run: 'python tools/soak_smoke.py --quality mobile --mem-only --proc-mb 3200' }
           - { name: perf_gate, run: 'python tools/perf_gate.py --out "$RUNNER_TEMP/perf.json"' }
           - { name: text_fit, run: 'python tools/text_fit.py --before --out "$RUNNER_TEMP/textfit.json"' }
           - { name: cutscene_qa, run: 'python tools/cutscene_qa.py --out "$RUNNER_TEMP/cutscene"' }
