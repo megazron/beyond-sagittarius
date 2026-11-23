@@ -768,3 +768,18 @@ unlanded except this handoff commit and any recording in progress.
   (also counts event listeners added after load). Results below if I got them.
 - Machine: at most ONE capture Chrome, only inside a heavy step. p18/gpurun2.sh stops it by PID on any exit (trap) and
   verifies the process and the 9446 listener are gone. Use gpurun2.sh from now on.
+- 04:20 OVER TIME: GPU 30-minute session in the bazaar (p19/long_web, Web, quiet machine): 60 fps, update ~2 ms, heap,
+  geometries, programs, scene objects all flat start to end; textures 632 -> 695 (~2 a minute). A WebGL texture trace
+  (p19/plan_texleak.json: gl.createTexture/deleteTexture wrapped, stacks mapped with the build's source map) named
+  city.ts refreshEnv: it kept PMREM's texture and disposed only that, never the render target. 0de154e (on main as
+  2e5e512 once CI is green) keeps and frees the render target. Bloom/GTAO/post render targets in the trace are re-made
+  on resolution changes with the old ones freed: not leaks.
+- LANDED a152c2e (memory guard): the first guard (8d74f21) could reload the page mid-play when usedJSHeapSize (which
+  includes geometry and texture data, 1.4 GB on Web) passed 85% of the limit. That most likely broke combat's play test
+  and levels_smoke on CI (menus gone after a reload to the title). Now: 92%, never reloads (saves, next start lighter),
+  off under navigator.webdriver. With it, combat and levels_smoke passed again.
+- BUMP TEST: not trustworthy yet. Teleporting the player onto or next to a walker jumps the camera and the body budget,
+  and the walker can be let go for that reason (CI and my local A/B both showed "None at step 0"). 60fddca/next commits
+  re-pick the nearest body each round and walk 0.4 m a step. A/B script: scratchpad bump.py (--url with lenshold=0/1)
+  through heavy; I did not get a clean pass/fail pair before handing over. The fix (619b92d) is on branch perf17 only,
+  NOT on main. To land it: prove the test fails with ?lenshold=0 and passes without, then CI.
