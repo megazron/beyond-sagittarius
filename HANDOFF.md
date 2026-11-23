@@ -749,3 +749,22 @@ unlanded except this handoff commit and any recording in progress.
 - Clips: Downloads/BS_Game_v1.1/mobile_v1_GPU/travel_*_before.mp4 (main before the fix, Web, ?perf=1, no sound): the far
   northeast reads update 54.9 ms. The far northeast spot (287,237) is an empty flat plane at the city's edge: that looks
   wrong in itself and is not mine to judge. *_after.mp4 when p19/clips.sh finishes.
+- 03:10 LANDED 8d74f21 on main (teardown, context loss, memory guard, soak_smoke; CI 45099868510 green on that sha after
+  two reruns of combat's play test, which timed out on a click at a different step each time: a flake on the slow runner,
+  combat passed on the same code before). Main's own Gates run on combat's ff7f293 is red on perf_gate (not mine).
+- Clips with notes: Downloads/BS_Game_v1.1/mobile_v1_GPU/ (README.txt, travel_*_before/after.mp4, travel_and_visits.png).
+  Far northeast: before update 54.9 ms, worst 50 ms; after update 2.0 ms, 60 fps, worst 20 ms. No sound.
+- Planet journey (p19/jp_web_new): geometries 396 -> 506 over the first lap then flat; textures/programs flat; heap
+  1.40 -> 0.75 GB once the city is left (the teardown frees it). 60 fps.
+- OWNER: "pedestrians suddenly change when touched or bumped into". Cause: a painted-crowd walker drawn as a body was
+  dropped from walkCrowd's wanted list when it entered the camera lens (1.7 m of the camera or on the camera-player
+  line: exactly a bump); the body went back to the pool and the flat card was drawn in its place, then a body again.
+  619b92d: a held card keeps its body in the lens (?lenshold=0 = old way). awayCrowd().held lists [card, pool body,
+  look, dist, x, z]; soak_smoke bumps up to four walkers and checks each keeps body and look. Other possible swaps NOT
+  checked: a walker crossing TAKE (14 m) swaps card <-> body (the card's atlas look is card % variants, the body's is
+  card % NLOOK; they match only if the atlas holds NLOOK variants); district peds swap at DNEAR 30 m.
+- OWNER: "the longer we play the game, the laggier it gets". 3c48f2b: soak_smoke stands six minutes in the bazaar and
+  asserts update time, heap, geometries, textures, programs flat. GPU 30-minute session: p19/plan_long.json -> p19/long_web
+  (also counts event listeners added after load). Results below if I got them.
+- Machine: at most ONE capture Chrome, only inside a heavy step. p18/gpurun2.sh stops it by PID on any exit (trap) and
+  verifies the process and the 9446 listener are gone. Use gpurun2.sh from now on.
