@@ -6,7 +6,7 @@ CHAR_BUDGET.throttle = false; CHAR_BUDGET.lodFar = Infinity; // the gate poses a
 import { voice } from '../src/core/voice';
 import { DECREEP } from '../src/characters/decreep';
 import { preloadCrew } from '../src/characters/assets';
-import { runScenario, scenarioNames } from './animqa';
+import { runScenario, scenarioFrames, scenarioNames } from './animqa';
 
 const ids: CrewId[] = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social', 'megazron'];
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -369,6 +369,33 @@ W.qa = (i: number, name: string, every = 10, sampleEvery = 0) => {
     settle: (c) => { c.root.position.set(0, 0, 0); c.root.rotation.y = 0; for (let k = 0; k < 45; k++) step(c, 'stand', 0, 1 / 30); },
     flags: every > 0 && !sampleEvery ? () => { const s = { skinPoke: 0, clothPoke: 0, back: 0 }; for (const [yo, d] of QA_CAMS) { follow(i, yo, d); const f = poke(false); s.skinPoke += f.skinPoke; s.clothPoke += f.clothPoke; s.back += f.back; } return s; } : null,
   }, Math.max(1, every), sampleEvery);
+};
+/** The probe's scenarios drawn live for the review clips (GPU capture): character i through each named scenario at
+ * `slow` x real time, a close camera from `yaw` (radians, 0 = from the front) at `dist` m, the scenario and live
+ * numbers in a caption. window.qaDone turns true at the end. */
+W.qaLive = (i: number, names: string[], slow = 0.5, yaw = -2.4, dist = 2.0, every = 0) => {
+  const c0 = chars[i]; chars.forEach((o, j) => { o.root.visible = j === i; }); c0.setGround(() => 0);
+  const cap = document.getElementById('qa-cap') ?? Object.assign(document.body.appendChild(document.createElement('div')), { id: 'qa-cap' });
+  cap.setAttribute('style', 'position:fixed;left:16px;top:12px;font:600 22px sans-serif;color:#fff;text-shadow:0 1px 3px #000;white-space:pre');
+  const step = (c: Character, p: CrewPose, amount: number, dt: number) => { t += dt; c.root.updateMatrixWorld(true); c.animate(p, 0, amount, t, dt); };
+  W.qaDone = false; W.qaLiveRes = [];
+  let ni = 0, gen: Generator<number, unknown> | null = null, last = performance.now(), acc = 0;
+  const tick = () => {
+    if (!gen) {
+      if (ni >= names.length) { W.qaDone = true; cap.textContent = ''; return; }
+      gen = scenarioFrames(c0, names[ni], { step, settle: (c) => { c.root.position.set(0, 0, 0); c.root.rotation.y = 0; for (let k = 0; k < 45; k++) step(c, 'stand', 0, 1 / 30); }, flags: null }, Math.max(1, every));
+    }
+    const now = performance.now(); acc += (now - last) / 1000 * slow * 30; last = now;
+    let r: IteratorResult<number, unknown> | null = null;
+    for (let n = 0; acc >= 1 && n < 3; n++, acc--) { r = gen.next(); if (r.done) break; }
+    if (r?.done) { (W.qaLiveRes as unknown[]).push(r.value); gen = null; ni++; }
+    const p = c0.root.position, y = c0.root.rotation.y + yaw;
+    cam.fov = 40; cam.near = 0.05; cam.updateProjectionMatrix();
+    cam.position.set(p.x + Math.sin(y) * dist, p.y + 1.2, p.z + Math.cos(y) * dist); cam.lookAt(p.x, p.y + 0.95, p.z);
+    cap.textContent = `${names[Math.min(ni, names.length - 1)]}   ${slow}x`;
+    r.render(scene, cam); requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 };
 (W.view as Function)(-1, 1, 0, 1.3, 11);
 const keys = customs === 'all' ? roster.map((o, i) => `custom_${i % 2 ? 'f' : 'm'}_${o}`) : roster.map((id) => (id === 'strong' && alt ? 'strong_suit' : id));
