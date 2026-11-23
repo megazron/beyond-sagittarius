@@ -74,6 +74,8 @@ const FLAME_FS = `uniform float uTime; varying vec2 vQ; varying float vSeed; var
     body -= smoothstep(0.35, 1.0, y) * (1.0 - tear) * (kind < 0.5 ? 0.5 : 1.25);
     float a = kind < 0.5 ? smoothstep(0.0, 0.9, body) : smoothstep(0.0, 0.3, body);
     a *= smoothstep(0.0, 0.08, y);
+    // (low down every tongue overlaps every other: there they are thinner, so the overlap is not one bright mass; s6 take)
+    if (kind > 0.5) a *= 0.55 + 0.45 * smoothstep(0.08, 0.4, y);
     if (a < 0.004) discard;
     // heat: hottest low in the middle of a tongue, broken by the noise (no even block of colour), cooling to red at
     // the edges and the tips. Never white: the brightest is a deep yellow (the tone map and the bloom do the rest)
