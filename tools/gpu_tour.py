@@ -82,6 +82,8 @@ t = json.load(urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{
 w = WS(t['webSocketDebuggerUrl']); w.call('Page.enable'); w.call('Runtime.enable')
 W, H = PLAN.get('size', [1280, 720])
 w.call('Emulation.setDeviceMetricsOverride', width=W, height=H, deviceScaleFactor=1, mobile=False)
+# plan "inject": a script (beside this tool) run before every page load, e.g. glmem.js (GPU memory by owner)
+if PLAN.get('inject'): w.call('Page.addScriptToEvaluateOnNewDocument', source=open(os.path.join(os.path.dirname(os.path.abspath(__file__)), PLAN['inject'])).read())
 if PLAN.get('throttle'): w.call('Emulation.setCPUThrottlingRate', rate=PLAN['throttle'])
 if PLAN.get('heapsample'): w.call('HeapProfiler.enable'); w.call('HeapProfiler.startSampling', samplingInterval=131072)
 

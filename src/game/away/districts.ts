@@ -872,7 +872,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
   };
 
   // ---- people: walkers round the blocks, crossing at the zebras; others sit, shop, chat, film, wait for a bus ----
-  type Ped = { b: Block; s: number; dir: number; off: number; v: number; mode: 'walk' | 'wait' | 'cross' | 'stay'; pose: string; x: number; z: number; yaw: number; t: number; cross?: { x0: number; z0: number; x1: number; z1: number; axis: 'x' | 'z'; nb: Block; ns: number } };
+  type Ped = { b: Block; s: number; dir: number; off: number; v: number; mode: 'walk' | 'wait' | 'cross' | 'stay'; pose: string; x: number; z: number; yaw: number; t: number; lat?: number; cross?: { x0: number; z0: number; x1: number; z1: number; axis: 'x' | 'z'; nb: Block; ns: number } };
   const walkBlocks = BLOCKS.filter((b) => b.kind !== 'park');
   const ring = (b: Block, off: number) => ({ x0: b.x0 + 6 + off, x1: b.x1 - 6 - off, z0: b.z0 + 6 + off, z1: b.z1 - 6 - off });
   const perim = (b: Block, off: number) => { const R = ring(b, off); return 2 * (R.x1 - R.x0 + R.z1 - R.z0); };
@@ -954,7 +954,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
       const s2 = rnd() * perim(b, p.off); onRing(b, p.off, s2, P0);
       const dx = P0.x - cam.x, dz = P0.z - cam.z, d = Math.hypot(dx, dz);
       if (d < 55 || d > 140 || (dx * fx + dz * fz) / d > 0.2) continue; // never in view: nobody pops in
-      p.b = b; p.s = s2; p.mode = 'walk'; p.cross = undefined; p.x = P0.x; p.z = P0.z; p.yaw = p.dir > 0 ? P0.yaw : P0.yaw + Math.PI;
+      p.b = b; p.s = s2; p.mode = 'walk'; p.cross = undefined; p.lat = 0; p.x = P0.x; p.z = P0.z; p.yaw = p.dir > 0 ? P0.yaw : P0.yaw + Math.PI;
       return;
     }
   };
@@ -973,10 +973,24 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
         p.s = (((p.s + p.dir * p.v * dt) % P) + P) % P;
         const hit = side(p.s) !== before;
         onRing(p.b, p.off, p.s, P0);
-        // step round you, like the bazaar's walkers
-        let ox = 0, oz = 0;
-        if (you) { const dx = you.x - P0.x, dz = you.z - P0.z, d = Math.hypot(dx, dz); if (d < 1.4 && d > 1e-3) { ox = -dx / d * (1.4 - d); oz = -dz / d * (1.4 - d); } }
-        p.x = P0.x + ox; p.z = P0.z + oz; p.yaw = p.dir > 0 ? P0.yaw : P0.yaw + Math.PI;
+        // step round you, like the bazaar's walkers: across the pavement (towards the shops or the kerb, never off it),
+        // walked at most 1.1 m/s and facing the way they go. They used to be pushed straight away from you as you came
+        // within 1.4 m: sliding sideways at your own speed
+        const fx = Math.sin(P0.yaw) * p.dir, fz = Math.cos(P0.yaw) * p.dir; // the way they walk
+        const nx = -Math.cos(P0.yaw), nz = Math.sin(P0.yaw); // across the pavement, towards the block (the ring runs anticlockwise round it)
+        let lw = 0;
+        if (you) {
+          const dx = you.x - P0.x, dz = you.z - P0.z, ahead = dx * fx + dz * fz, ac = dx * nx + dz * nz;
+          if (ahead > -1.0 && ahead < 4.5 && Math.abs(ac) < 1.4) lw = ac > 0 ? -1.5 : 1.5;
+          // and round a low camera (behind you on the pavement)
+          const ex = cam.x - P0.x, ez = cam.z - P0.z, ah2 = ex * fx + ez * fz, ac2 = ex * nx + ez * nz;
+          if (!lw && cam.y < 2.4 && ah2 > -0.8 && ah2 < 3.0 && Math.abs(ac2) < 1.0) lw = ac2 > 0 ? -1.2 : 1.2;
+          const lo = -(p.off - 0.45), hi = 3.6 - p.off;
+          if (lw < lo || lw > hi) lw = lw < lo ? (hi > 1 ? Math.min(hi, 1.5) : lo) : (lo < -1 ? Math.max(lo, -1.5) : hi);
+        }
+        const l0 = p.lat ?? 0, dl = Math.max(-1.1 * dt, Math.min(1.1 * dt, (lw - l0) * (1 - Math.exp(-dt * 3)))); p.lat = l0 + dl;
+        p.x = P0.x + nx * p.lat; p.z = P0.z + nz * p.lat;
+        p.yaw = (p.dir > 0 ? P0.yaw : P0.yaw + Math.PI) + Math.atan2(dl / Math.max(dt, 1e-3) * (p.dir > 0 ? -1 : 1), p.v);
         if (hit && rnd() < 0.45) { const c = across(p, yaw0); if (c) { p.cross = c; p.mode = 'wait'; p.t = 0; } }
       } else if (p.mode === 'wait') {
         p.t += dt;
