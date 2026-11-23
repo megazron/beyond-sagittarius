@@ -126,7 +126,8 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
  */
 /** Rig switches for A/B tests (dev/animqa.ts): reach, the chest and collarbone helping a held hand get there. */
 /** lipsLetGo: how much of the fingers' torso guard lets go with the hand at the lips (eating, drinking). */
-export const RIG_OPTS = { reach: true, lipsLetGo: 1 };
+/** throwTame: how much of the throw clip's lunge (legs and hips) is taken back towards the stance it began from. */
+export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5 };
 export const CLOTH_PULL = 0.007;
 /**
  * And every garment this much more on top of that, over the skin: a raised arm stretches a sweater thinner than the
@@ -1201,6 +1202,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
 
   /** 0..1: how far into its task the body is (eases in, holds, eases out). */
   let taskClipName: string | null = null;
+  const LOWER = ['hips', 'upperlegL', 'lowerlegL', 'footL', 'upperlegR', 'lowerlegR', 'footR'], lowerAt = new Map<THREE.Bone, { q: THREE.Quaternion; p: THREE.Vector3 }>();
   /** The authored clip for the running task, if anim.glb has it: low or high by where `at` is against the hips. */
   function taskClip() {
     const c = task ? TASK_CLIPS[task.kind] : undefined; if (!c || !clips) return null;
@@ -1546,6 +1548,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     mixer.update(firstFrame ? 0.001 : dt);
     firstFrame = false;
     for (const b of bs.values()) { const c = clipPose.get(b); if (c) { c.q.copy(b.quaternion); c.p.copy(b.position); } else clipPose.set(b, { q: b.quaternion.clone(), p: b.position.clone() }); }
+    // the throw's legs: OverhandThrow lunges so deep a body nearly kneels (Nuvexa, GPU tasksA3). Its legs and hips are
+    // taken part of the way back to the pose they had as the throw began (the arm and the chest keep the clip's whole throw)
+    if (taskClipName && task?.kind === 'throw' && lowerAt.size) {
+      const k = RIG_OPTS.throwTame * taskEnv();
+      for (const [b, q] of lowerAt) { b.quaternion.slerp(q.q, k); if (b === bs.get('hips')) b.position.lerp(q.p, k); }
+    } else if (!taskClipName) for (const n of LOWER) { const b = bs.get(n); if (!b) continue; const c = lowerAt.get(b); if (c) { c.q.copy(b.quaternion); c.p.copy(b.position); } else lowerAt.set(b, { q: b.quaternion.clone(), p: b.position.clone() }); }
 
     // ---- style on top of the clip ----
     const bp = Math.sin(t * 1.25);
