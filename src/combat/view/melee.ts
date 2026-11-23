@@ -176,10 +176,15 @@ export function fitBody(pts: ArrayLike<number>, boneZ: [number, number, number],
 let BODY_K = 1;
 /** Where the body really is this frame (body-local x, z of the hips, the chest and the head), from the rig's bones:
  * the frames were drawn round x = z = 0 and the body's shapes follow these; the lean comes with them. */
-const CENTRE = [{ x: 0, z: 0 }, { x: 0, z: 0 }, { x: 0, z: 0 }]; let LIVE = false;
-export function setBodyCentres(c: { x: number; z: number }[] | null) {
-  LIVE = !!c; for (let i = 0; i < 3; i++) { CENTRE[i].x = c ? c[i].x : 0; CENTRE[i].z = c ? c[i].z : 0; }
+const CENTRE = [{ x: 0, z: 0, yaw: 0 }, { x: 0, z: 0, yaw: 0 }, { x: 0, z: 0, yaw: 0 }]; let LIVE = false;
+/** `yaw`: how far each part is turned about the vertical from facing ahead (radians, the twist's way): the chest and
+ * the head turn with the chest bone, so a twisted or side-on chest is not checked as if it faced ahead. */
+export function setBodyCentres(c: { x: number; z: number; yaw?: number }[] | null) {
+  LIVE = !!c; for (let i = 0; i < 3; i++) { CENTRE[i].x = c ? c[i].x : 0; CENTRE[i].z = c ? c[i].z : 0; CENTRE[i].yaw = c ? c[i].yaw ?? 0 : 0; }
 }
+/** Without live bones (the tests): the chest's turn, from the frame's twist (clearShaft and solveArms set it). */
+let TWIST = 0;
+export function setBodyTwist(t: number) { TWIST = t; }
 /** The body's size against the frames' (a 1.75 m man): the frames and the body shape scale with it. */
 export function setBodyScale(k: number) { BODY_K = k > 0.5 && k < 1.5 ? k : 1; }
 export function bodyScale() { return BODY_K; }
@@ -192,10 +197,18 @@ function depthN(p: THREE.Vector3, bend: number, r: number, outN?: THREE.Vector3)
     const b = BODY[i];
     if (p.y < b.y0 - r || p.y > b.y1 + r) continue;
     // live: the bone's own place (it already leans); else the lean from the bend
-    const C = CENTRE[b.bone], cz = LIVE ? C.z / BODY_K + b.off : b.cz + Math.sin(bend) * (p.y - 0.95) * b.lean * 0.9, cx = LIVE ? C.x / BODY_K : 0;
-    const ex = b.ax + r, ez = b.az + r, dx = (p.x - cx) / ex, dz = (p.z - cz) / ez, rho = Math.hypot(dx, dz);
+    // turned with its bone: the middle sits `off` ahead along the part's own front, and the ellipse is read in the
+    // part's own frame
+    const C = CENTRE[b.bone], yaw = LIVE ? C.yaw : b.bone === 0 ? 0 : TWIST, cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const fz = LIVE ? b.off : b.cz + Math.sin(bend) * (p.y - 0.95) * b.lean * 0.9;
+    const cx = (LIVE ? C.x / BODY_K : 0) + sy * fz, cz = (LIVE ? C.z / BODY_K : 0) + cy * fz;
+    const qx = p.x - cx, qz = p.z - cz, lx = qx * cy - qz * sy, lz = qx * sy + qz * cy;
+    const ex = b.ax + r, ez = b.az + r, dx = lx / ex, dz = lz / ez, rho = Math.hypot(dx, dz);
     const dpt = (1 - rho) * Math.min(ex, ez);
-    if (dpt > best) { best = dpt; if (outN) { if (rho < 1e-4) outN.set(-1, 0, 0); else outN.set(dx / rho, 0, dz / rho).normalize(); } }
+    if (dpt > best) {
+      best = dpt;
+      if (outN) { if (rho < 1e-4) outN.set(-cy, 0, sy); else { const nx = dx / rho, nz = dz / rho; outN.set(nx * cy + nz * sy, 0, -nx * sy + nz * cy).normalize(); } }
+    }
   }
   return best;
 }
@@ -204,6 +217,7 @@ function depthN(p: THREE.Vector3, bend: number, r: number, outN?: THREE.Vector3)
  * it is the hand. Returns the worst depth left (<= 0 is clear). */
 export function clearShaft(f: WFrame, w: WeaponId): number {
   const S = SHAFT[w]; if (!S) return -1;
+  setBodyTwist(f.twist);
   const n = V(), p = V();
   for (let it = 0; it < 8; it++) {
     let worst = 0, ws = 0;
@@ -267,6 +281,7 @@ export function reachGrip(f: WFrame, w: WeaponId, k: Skel) {
 /** What the arm solve remembers between frames: how far each elbow is swung round its shoulder-to-hand line. */
 export interface ArmMem { L: number; R: number; pL?: THREE.Vector3; pR?: THREE.Vector3; /** where along the shaft the front hand last held it, and whether it is letting go from there */ slide?: number; peel?: boolean }
 export function solveArms(f: WFrame, w: WeaponId, k: Skel, leftW: number, rightW: number, lPrev: number | null = null, dt = 1 / 60, mem: ArmMem = { L: 0, R: 0 }): Solved {
+  setBodyTwist(f.twist);
   reachGrip(f, w, k);
   // a two-handed shaft comes to the front hand: a body with short arms would otherwise have the left hand reach right
   // across its chest to a shaft that passes too far from its left shoulder
@@ -300,6 +315,10 @@ export function solveArms(f: WFrame, w: WeaponId, k: Skel, leftW: number, rightW
   if (f.l === null && mem.peel && mem.slide !== undefined && TWO(w)) lt.lerp(V().copy(f.g).addScaledVector(f.d, mem.slide), smooth(f.hold));
   // taking hold: the hand closes the last of the gap as the (eased) hold comes up, so it never jumps on to the shaft
   if (f.l !== null) lt.lerp(V().copy(f.g).addScaledVector(f.d, f.l), smooth((f.hold - 0.55) / 0.43));
+  // a free hand is not reached for: it hangs or guards within an easy reach, so the elbow stays bent (on a body whose
+  // shoulders sit higher than the frames', a fixed mark pulled the free arm straight: 12 degrees of bend)
+  const easy = (k.a + k.b + k.palm) * 0.92, toL = V().subVectors(lt, k.sL), dL = toL.length(), free = 1 - smooth(f.hold);
+  if (dL > easy && free > 0) lt.copy(k.sL).addScaledVector(toL, (dL + (easy - dL) * free) / dL);
   const rt = V().copy(f.g);
   const n = V();
   for (const t of [lt, rt]) { const dp = depth(t, f.bend, 0.05, n); if (dp > 0) t.addScaledVector(n, dp + 0.005); }
@@ -311,8 +330,13 @@ export function solveArms(f: WFrame, w: WeaponId, k: Skel, leftW: number, rightW
     // shoulder-to-hand line (the hand stays where it is) to the nearest place where the arm is clear
     // the pole leans on where the elbow was last frame (as seen from the shoulder): a hand passing close to the
     // shoulder or along the pole's own line would otherwise flip the elbow to the other side in one frame
-    const pk = key === 'L' ? 'pL' : 'pR', prev = mem[pk], pole = V(side * 0.75, -0.65, -0.25);
-    if (prev) pole.normalize().addScaledVector(prev, 2.2);
+    // (elbows hang down and back by the ribs, a little out; out to the side read as wings, and a free left elbow 22 cm
+    // out from its shoulder as a hand on the hip. A free arm's elbow goes further back, its forearm forward)
+    const freeK = key === 'L' ? 1 - smooth(f.hold) : 0;
+    const pk = key === 'L' ? 'pL' : 'pR', prev = mem[pk], across = clamp01((t.x - s.x) * -side / 0.3),
+      pole = V(side * (0.32 - 0.16 * freeK + 0.45 * across), -0.75 + 0.2 * freeK, -0.6 - 0.3 * freeK + 0.3 * across);
+    // (a hand across the body takes the elbow out round it, as the old wide pole did; by the side it hangs down)
+    if (prev) pole.normalize().addScaledVector(prev, key === "L" ? 2.2 - 1.6 * freeK : 2.2);
     const miss = reach2(s, t, A, B, pole, e, wr);
     // the pole is remembered without the swing (the swing is kept on its own)
     { const ax = V().subVectors(wr, s).normalize(), c = V().copy(s).addScaledVector(ax, V().subVectors(e, s).dot(ax)); (mem[pk] ??= V()).copy(e).sub(c).normalize(); }
@@ -348,7 +372,9 @@ export function swingOut(s: THREE.Vector3, e: THREE.Vector3, wr: THREE.Vector3, 
   const a0 = mem[key], cost = (a: number) => {
     const el = at(a);
     // an elbow up and in front of the face is no way out: prefer swings that keep it below the shoulder
-    return inside(el) * 10 + Math.max(0, el.y - s.y - 0.05) * 2 + Math.abs(a - a0) * 0.01 + Math.abs(a) * 0.004;
+    // (the pull home must outweigh the stickiness: with them the other way round an elbow once swung out never came back,
+    // and a free arm stayed out at the side after a spear hold: "sticks straight out")
+    return inside(el) * 10 + Math.max(0, el.y - s.y - 0.05) * 2 + Math.abs(a - a0) * 0.003 + Math.abs(a) * 0.01;
   };
   let bestA = a0, best = cost(a0);
   for (let j = -14; j <= 14; j++) { const a = j * 0.13; const cs = cost(a); if (cs < best - 1e-5) { best = cs; bestA = a; } }
@@ -374,3 +400,15 @@ export function follow(cur: WFrame, tgt: WFrame, dt: number, tau = 0.04, maxTurn
 }
 export function newFrame(): WFrame { return { g: V(), d: V(0, 0, 1), l: null, lh: V(), bend: 0, twist: 0, hold: 0 }; }
 export function copyFrame(a: WFrame, into: WFrame) { into.g.copy(a.g); into.d.copy(a.d); into.l = a.l; into.lh.copy(a.lh); into.bend = a.bend; into.twist = a.twist; into.hold = a.hold; return into; }
+
+/** Turn a bone so its child lands on `to` (world), by weight w. */
+export function aimBone(bone: THREE.Object3D, child: THREE.Object3D, to: THREE.Vector3, w: number) {
+  const bp = bone.getWorldPosition(new THREE.Vector3()), cp = child.getWorldPosition(new THREE.Vector3());
+  const from = cp.sub(bp), dir = to.clone().sub(bp);
+  if (from.lengthSq() < 1e-10 || dir.lengthSq() < 1e-10 || !bone.parent) return;
+  const q = new THREE.Quaternion().setFromUnitVectors(from.normalize(), dir.normalize());
+  if (w < 1) q.copy(new THREE.Quaternion().slerp(q, w));
+  const bw = bone.getWorldQuaternion(new THREE.Quaternion()), pw = bone.parent.getWorldQuaternion(new THREE.Quaternion());
+  bone.quaternion.copy(pw.invert().multiply(q.multiply(bw)));
+  bone.updateWorldMatrix(false, true);
+}
