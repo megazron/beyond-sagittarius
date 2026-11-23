@@ -939,3 +939,51 @@ unlanded except this handoff commit and any recording in progress.
   First release (b3a...): phones free the props' model cache textures once both buildProps are done (releaseModels).
   Next candidates: body asset originals after the city's bodies are made (careful: later createCharacter needs them),
   character textures not used by either scene (remove from texCache so they reload), the props atlas canvas after upload.
+- 10:30 perf agent 21 state (landing branch perf20-land1 = origin/main 23 commits newer + my commits; bd16cf8 waits
+  for CI; perf20 is the old WIP line, not rebased).
+  - GPU clips (p20/clips_web_new, _web_old, _mobile_new; dist-bump4 = before bd16cf8): with the camera lifting over a
+    body on the line, the bazaar view stayed high, in the stalls' awnings, and one second was fully black; the old way
+    framed the street better. bd16cf8 removes that lift (bodies on the line just pass in front of you). Re-clip:
+    p20/clips_web_new5 (dist-bump5). WATCH THEM before calling the camera better or worse. The clip steering snaps the
+    yaw at the nearest walker every few ms (a test driver, not a player): the spinning is the driver.
+  - CI 8a40730 (perf20): perf_gate green; soak_smoke crowd 3 of 4 bumps kept their body, the 4th was a second walker
+    of a look already held (one body per look on Web/phones): now counted apart (elbowSameLook), not a failure.
+  - FAR NORTHEAST (task 4): NOT an unbuilt edge. At (287.7, 237.3) the district geometry is there (wall_glass up to
+    134 m, kit, metal, lamps, leaves; visible; frustumCulled false), yet on both GPU and SwiftShader nothing but signs,
+    cars and people draws: a pale flat plane. Ruled out: the facade shader has no discard; fog is constant (45-300/520);
+    the citymega veil (cylinder r 520 centred (0, -204), BackSide) is behind the camera there. Next: render that spot
+    with scene.overrideMaterial = MeshBasic red to see if the walls rasterise; check renderer per-stage hide lists /
+    batchHide / portals and the camera far plane; then the real edge (x > 340, z > 320) needs a look once this is fixed.
+    Probe: scratchpad neprobe.py (copy in p20/ if lost: teleport, count vertices inside the block, screenshot).
+  - MEMORY: releaseModels frees 464 textures (~229 MB decoded) on Mobile; the JS heap does not show it (decoded images
+    live outside it): measure the renderer process instead (CDP SystemInfo.getProcessInfo / Memory.getBrowserSamplingProfile
+    or Android's dumpsys meminfo) before claiming a number. Heap stays 832 MB: geometry typed arrays (stage 279 MB, body
+    originals 118 MB, 'skin_body+morph' 111 MB over 71 bodies with 3 visible). No Mobile budget job in CI yet: soak_smoke
+    --quality mobile --mem-only --heap-mb N is ready; pick N after the geometry work.
+  - Not started: phones to 30 fps (task 3), the gate camera and cold title load (task 5).
+- 11:40 LANDED bd16cf8 on main (perf20-land1: the bump fixes, key-driven bump test in soak_smoke, memOwners, phone
+  model-cache release; CI 45131682945 green on that sha after one rerun of combat's known #p-action flake). Unlanded:
+  handoff commits only. Clips + README: Downloads/BS_Game_v1.1/mobile_v2_GPU/ (no sound). Owner to judge the camera:
+  in a thick crowd it still rises (older 2+ bodies within 3.2 m rule) and now does so more often.
+
+## 2026-11-23 09:30 perf agent 22 (branch perf22 = main bd16cf8 + 5516a5b; NOT landed)
+- STOPPED: `git push origin 93b4e04:main` (the handoff commit, CI 45135610803 green on that sha) was refused by the
+  permission layer. Per the owner's rule I stopped there. Nothing of mine is on main. Main's own Gates run on bd16cf8
+  (45135563238) is red: perf_gate "web crowd: 10 bodies drawn (budget 9)"; the same code passed on perf20-land1, so the
+  web crowd sits on the budget's edge (Web's ceiling is the pool plus two since a3f6225). Check before blaming a change.
+- FAR NORTHEAST, cause found (5516a5b): the flat's portals (city.ts flatPortals) take most of the city off the camera
+  while the camera is in the flat (layer 1, or batch setMainHidden) and only their own next call restores it; that call
+  ran only while the old town was visible. A jump from the flat to the far districts (teleport, the clips' travel) left
+  every building, road and pavement hidden: only cars, signs, people drew. Probe (scratchpad ne2.py, dist-ne1 = bd16cf8):
+  every batch run near (287.7, 237.3) mainHidden, 73 meshes on layer 1 only; forcing them shown draws the street. Fix:
+  portals run every frame. After (dist-ne2, scan.py): flat -> NE jump leaves 0 hidden runs, 0 layer-1 meshes. The city-wide
+  grid scan did not finish (SwiftShader screenshot timed out after the first spot): rerun it without screenshots. Not
+  seen on the GPU yet. The same symptom can only follow a jump out of the flat, so it was never a per-zone bug.
+- CAMERA (5516a5b, untested in play): awnings, stall canopies, the tram shelter and the districts' awnings and bus
+  shelters are listed as covers (Box3); stage.ceiling() returns the lowest roof the head-to-camera line passes under and
+  player.ts holds the camera 0.3 m under it (in fast, out slowly, never more than 0.2 m over). Needs GPU clips in the
+  bazaar crowd before anyone calls it better.
+- POD: the "large white pod" at the bazaar start is the tram (white capsule, city.ts tram stop). It is a story prop
+  (task 'tram', hold the door), so I moved the stop 8 m south (tram z -17, shelter and task z -14, builder z -16.4, the
+  rich kerb mat (-3.3, -16) to -26). Owner to judge; reverting is one commit.
+- Not started: phone memory (task 3), phones 30 fps (4), gate camera and cold title load (5).
