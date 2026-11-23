@@ -67,6 +67,11 @@ export class Player {
   combat: { scale: number; force: { x: number; z: number } | null; face: number | null; aim: number; crouch: number; sprint: boolean | null; sneak: boolean; jump: boolean; shoulder?: number; lift?: number;
     /** radians: the camera is placed no higher than this pitch would put it (the look itself may tip further down). */
     lowCam?: number;
+    /** 0..1: the view looks along the look (yaw, pitch) from behind the shoulder without aiming, as aiming does (spear
+     * fishing: the camera stays low behind the shoulder and the look itself tips down into the water). Eased. */
+    over?: number;
+    /** metres: the follow camera comes no further back than this (spear fishing: in close). Eased. */
+    dist?: number;
     /** 0..1: the view swings round to look behind (a glance back in a chase); the walk keeps its own heading. */
     back?: number;
     /** radians: the view turns this far from the walk's heading (a look at a trap that springs nearby); view only. */
@@ -74,6 +79,8 @@ export class Player {
     /** 0..1: draw the view in a little (narrower field of view) on something the fight wants seen (a trap's catch). */
     zoom?: number } | null = null;
   private aimS = 0;
+  private overS = 0;
+  private capS = 5.2;
   /** How crowded it is round you (the stage's, 0 to 1): the camera rises over the heads and looks down at you. */
   crowdNear: (() => number) | null = null;
   private crowdS = 0;
@@ -288,6 +295,7 @@ export class Player {
     this.yawS = this.yaw; this.pitchS = this.pitch; this.distS = this.camDist;
     this.fovKick = 0; this.bobK = 0; this.lean = 0; this.dip = 0; this.dipV = 0; this.backS = 0; this.turnS = 0; this.zoomS = 0;
     if (this.camera.fov !== this.baseFov) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
+    this.overS = this.combat?.over ?? 0; this.capS = Math.min(this.camDist, this.combat?.dist ?? this.camDist);
     this.camClip = 1; this.camDt = 1; // (a cut: pulled in at once)
     this.orbit(this.camPos, this.focus, this.yaw, this.pitch, this.camDist); this.camDt = 1 / 60;
     this.camera.position.copy(this.camPos);
@@ -324,12 +332,18 @@ export class Player {
     // soft collision: pull in fast when a trunk blocks the view, ease back out slowly
     const want = this.orbit(tmpA, this.focus, yawV, pitchV, this.camDist);
     const clear = this.forest.clearance(this.focus.x, this.focus.z, want.x, want.z, 0.4);
-    const target = Math.max(1.3, this.camDist * clear);
+    // a scene's own follow distance (spear fishing: in close) eases in and out, it never cuts
+    this.capS += (Math.min(this.camDist, this.combat?.dist ?? this.camDist) - this.capS) * e(2.2);
+    const target = Math.max(1.3, Math.min(this.camDist, this.capS) * clear);
     this.distS += (target - this.distS) * e(target < this.distS ? 16 : 2.5);
     // aiming: in close, over the right shoulder, looking where the shot will go instead of at the body
     const aimWant = this.combat?.aim ?? 0;
     this.aimS += (aimWant - this.aimS) * e(aimWant > this.aimS ? 12 : 8);
     const aim = this.aimS;
+    const overWant = this.combat?.over ?? 0;
+    this.overS += (overWant - this.overS) * e(2.5);
+    // how far the view looks along the look itself (aiming, or a scene that asks for it) instead of at the body
+    const along = Math.max(aim, this.overS);
     this.orbit(this.camPos, this.focus, yawV, pitchV, this.distS * (1 - aim) + Math.min(this.distS, 3.1) * aim);
 
     // stride: vertical twice per cycle, sideways once, growing with speed
@@ -345,16 +359,16 @@ export class Player {
     this.camera.position.y += bobY + this.dip * 0.12;
     this.camera.up.set(0, 1, 0);
     this.camera.lookAt(this.focus.x, this.focus.y + 1.45 + bobY * 0.4 + this.dip * 0.05, this.focus.z);
-    if (aim > 0.002) {
+    if (along > 0.002) {
       const cp = Math.cos(this.pitchS), fx = -Math.sin(this.yawS) * cp, fy = Math.sin(this.pitchS), fz = -Math.cos(this.yawS) * cp;
       const rx = Math.cos(this.yawS), rz = -Math.sin(this.yawS);
       tmpA.copy(this.camera.position);
       const sh = this.combat?.shoulder ?? 0.85, lift = this.combat?.lift ?? 0.12;
-      tmpA.x += rx * sh * aim; tmpA.z += rz * sh * aim; tmpA.y += lift * aim;
+      tmpA.x += rx * sh * along; tmpA.z += rz * sh * along; tmpA.y += lift * along;
       tmpC.copy(this.camera.quaternion);
       this.camera.position.copy(tmpA);
       this.camera.lookAt(tmpA.x + fx * 30, tmpA.y + fy * 30, tmpA.z + fz * 30);
-      this.camera.quaternion.slerpQuaternions(tmpC, this.camera.quaternion, aim);
+      this.camera.quaternion.slerpQuaternions(tmpC, this.camera.quaternion, along);
     }
     // a touch of bank into fast turns
     this.lean += (clamp(dyaw * 1.4, -0.03, 0.03) - this.lean) * e(6);
