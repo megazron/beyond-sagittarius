@@ -126,7 +126,8 @@ window.__cbBot = (mode) => {
           if (look(p.x + wx * 10, p.z + wz * 10) < 0.2 && since() > 0.3) { tap('KeyT'); setTimeout(() => key(s.k), 260); setTimeout(() => keyUp(s.k), 340); flag.setting = 1; stT = now; }
         } else if (st === plan.length) {
           // ready, said out here (by the fire the same key feeds it)
-          stop(); if (since() > 0.8) { tapE(); next(); }
+          // the spear in the hand for the watch (it braces against a lunge when held up), then ready
+          stop(); if (!equip('spear')) return; if (since() > 0.8) { tapE(); next(); }
         } else if (since() > 3) { const d = go(food.x + wx * 2.8 - wz * 4, food.z + wz * 2.8 + wx * 4); if (d < 0.8) stop(); }
         return;
       }
@@ -138,11 +139,56 @@ window.__cbBot = (mode) => {
       for (const q of sim.traps) if (q.sprungT >= 0 && !(window.__cbTrapLog ||= []).some((r) => r.id === q.id && r.t === q.sprungT)) window.__cbTrapLog.push({ id: q.id, kind: q.kind, t: q.sprungT, caught: q.caught, wave: run.wave, rec: +((performance.now() - t0) / 1000).toFixed(1) });
       // and every warning cue (rustle, voice, twig before the snap), with its time in the take, to listen for it
       { const b = C.beat; if (b && b.snapT < 0 && b !== flag.cueB) { flag.cueB = b; window.__cbTrapLog.push({ cue: b.id, t: +sim.t.toFixed(2), rec: +((performance.now() - t0) / 1000).toFixed(2) }); } }
-      if (run.phase === 'hush') {
-        // the quiet before: at the watch spot, a look over what was set, then out to the dark
-        const d = go(guard.x, guard.z); if (d < 0.7) { stop(); if (since() < 4) look(sq.x, sq.z); else look(out.x, out.z); }
-        return;
-      }
+      // the watch: a man alone at night keeps busy. He keeps the fire up a branch at a time, scans the dark, the snare
+      // and the stakes, turns his head to what he hears out there (and raises the spear at a growl), and when something
+      // is heard AT a trap he leaves the view to the game's own look and goes a few steps that way, spear up
+      const watch = (o = {}) => {
+        const now = performance.now();
+        // a cue at a trap: hands off the view (the game turns the head; a turn of ours would cancel it)
+        if (C.beat) { stop(); hold('KeyQ', 0); flag.trapHeard = { id: C.beat.id, at: now }; return; }
+        if (flag.trapHeard && now - flag.trapHeard.at < 5200) {
+          const tr = sim.traps.find((q) => q.id === flag.trapHeard.id);
+          if (tr) { const d = dist(p, tr); look(tr.x, tr.z, C.cam.y + 0.5); if (d > 3.2 && now - flag.trapHeard.at < 3200) { hold('KeyW', 1); hold('KeyQ', 0); } else { stop(); hold('KeyQ', 1); } return; }
+        }
+        if (flag.trapHeard) { flag.trapHeard = null; hold('KeyQ', 0); }
+        // a sound out in the dark (a chitter, a growl, a rustle: the game's own placed sounds, C.heard): the head goes
+        // to it for a couple of seconds; a hound's voice brings the spear up
+        // (a held animal's struggling is not new: it is not turned to again; after a listen, three seconds of other
+        // business before the next small sound turns the head; a growl always does)
+        flag.fedAt ||= now;
+        const low = fire.fuel < fire.max * (o.hold1 ? 0.45 : 0.66), due = !o.hold1 && now - flag.fedAt > 30000 && fire.fuel < fire.max * 0.92;
+        const wood = (sim.inv.branch || 0) > 0, busy = flag.feeding || (wood && low);
+        const H = (C.heard || []).filter((h) => h.t > (flag.heardT || 0) && h.t <= now && /chitter|squeak|growl|snarl|howl|rustle|twig|snort/.test(h.name) && dist(h, p) > 2.5 && dist(h, p) < 24);
+        if (H.length) {
+          const h = H[H.length - 1], hound = /growl|snarl|howl/.test(h.name); flag.heardT = h.t;
+          if (hound || (!busy && now - (flag.listenEnd || 0) > 3000)) flag.listen = { x: h.x, z: h.z, at: now, hound, name: h.name };
+        }
+        if (flag.listen && now - flag.listen.at < 2400) {
+          stop(); look(flag.listen.x, flag.listen.z, C.cam.y + 0.5); hold('KeyQ', flag.listen.hound && now - flag.listen.at > 400);
+          window.__cbWatchLog = (window.__cbWatchLog || []); if (flag.listenLogged !== flag.listen.at) { flag.listenLogged = flag.listen.at; window.__cbWatchLog.push({ heard: flag.listen.name, rec: +((now - t0) / 1000).toFixed(1) }); }
+          return;
+        }
+        if (flag.listen) { flag.listen = null; flag.listenEnd = now; hold('KeyQ', 0); }
+        // the fire: fed when it is down to two thirds (or every half minute while it is not full), a branch at a time,
+        // walked to and back; in wave 1 only when it is low (the snare is watched)
+        if (wood && (flag.feeding || low || due)) {
+          if (!flag.feeding) { flag.feeding = now; flag.fed = 0; (window.__cbWatchLog ||= []).push({ feed: +(fire.fuel / fire.max).toFixed(2), rec: +((now - t0) / 1000).toFixed(1) }); }
+          const d = go(fire.x, fire.z);
+          if (d < 2.2) { stop(); look(fire.x, fire.z, C.cam.y + 0.3); if (!flag.fed && now - flag.feeding > 600) { tapE(); flag.fed = now; } }
+          if ((flag.fed && now - flag.fed > 1600) || now - flag.feeding > 14000) { flag.feeding = 0; flag.fedAt = now; }
+          return;
+        }
+        // the scan: out where the smoke goes, along to the snare, across the dark, to the stakes, back out, the fire
+        const d = go(guard.x, guard.z);
+        if (d < 0.7) {
+          stop();
+          const st2 = sim.traps.find((q) => q.kind === 'stakes') || sq;
+          const spots = [out, sq, { x: out.x - wz * 9, z: out.z + wx * 9 }, st2, out, { x: out.x + wz * 9, z: out.z - wx * 9 }, fire];
+          const i = Math.floor(now / 3400) % spots.length, s2 = spots[i];
+          look(s2.x, s2.z, C.cam.y + (s2 === fire ? 0.3 : s2 === sq || s2 === st2 ? 0.2 : 1.1));
+        }
+      };
+      if (run.phase === 'hush') { watch({ hold1: true }); return; }
       const h = living('hound').find((e) => !e.routed), thieves = living('skritch').filter((e) => !e.routed && dist(e, food) < 5);
       // wave 1 is watched from the watch spot, whatever the food and the fire do (only a fire nearly out calls it back)
       const hold1 = run.wave <= 1 && fire.fuel > fire.max * 0.2;
@@ -151,11 +197,10 @@ window.__cbBot = (mode) => {
       const close = living('skritch').filter((e) => !e.routed && e.heldT <= 0 && dist(e, p) < 2.2);
       if (close.length) { fight(close); return; }
       if (!hold1) {
-        if (fire.fuel < fire.max * 0.55 && (sim.inv.branch || 0) > 0) { const d = go(fire.x, fire.z); if (d < 2.4) { stop(); if (since() > 0.8) { tapE(); stT = performance.now(); } } return; }
         if (h && h.weakT > 0 && dist(h, p) < 5) { fight([h]); return; }
-        if (thieves.length) { fight(thieves); return; }
+        if (thieves.length && !flag.feeding) { fight(thieves); return; }
       }
-      const d = go(guard.x, guard.z); if (d < 0.7) { stop(); look(out.x, out.z); }
+      watch({ hold1 });
     } else if (mode === 'chase') {
       const goal = run.markers.find((m) => m.kind === 'goal'), h = living('hound')[0];
       // a runner who has seen it gather: roll out of the lunge's line when it is about a third of a second from

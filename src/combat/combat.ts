@@ -702,6 +702,8 @@ export class Combat {
   /** One of the fight's own sounds (public/audio/sfx/cb_*, made by tools/combat/make_sounds.py), placed in the world. */
   private sfx(name: string, vol = 0.8, x?: number, z?: number, rate = 1, delay = 0, near = 4) {
     const at = x !== undefined && z !== undefined ? { x, y: this.env.height(x, z) + 0.8, z } : undefined;
+    // what the player could hear out in the world, newest last (read by the recording bot's night watch)
+    if (at) { this.heard.push({ name, x: at.x, z: at.z, vol, t: performance.now() + delay * 1000 }); if (this.heard.length > 16) this.heard.shift(); }
     audio.sample(`cb_${name}`, vol, { at, near, far: 90, rate, delay });
   }
   private voice(what: string, x?: number, z?: number) {
@@ -993,6 +995,8 @@ export class Combat {
     this.fx.group.visible = !on; this.body.ranged.group.visible = !on;
     this.hud.root.style.display = on ? 'none' : '';
   }
+  /** The fight's placed sounds lately played (name, where, wall-clock ms), newest last: what a listener heard. */
+  heard: { name: string; x: number; z: number; vol: number; t: number }[] = [];
   /** Recordings: the whole game in slow motion (1 is normal). */
   testSlow = 1;
   testHold(code: string, on: boolean) { this.testKeys = true; this.d.input.hold(code, on); }
