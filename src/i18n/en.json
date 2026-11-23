@@ -1133,5 +1133,8 @@
   "pull.scientist": "It's not a storm. Something is pulling us in, and it doesn't let go.",
   "pull.ai2": "TIDAL STRESS CRITICAL. HULL INTEGRITY 19 PERCENT. GOODBYE.",
   "mz.pull.1": "And that, little travellers, is what a black hole does to a holiday.",
-  "mz.pull.2": "Don't look so worried. Nobody dies in the first chapter. Well. Not for long."
+  "mz.pull.2": "Don't look so worried. Nobody dies in the first chapter. Well. Not for long.",
+  "msg.gfxLost": "The graphics reset. Getting the picture back...",
+  "msg.gfxReload": "The picture did not come back. Your game is saved: tap to reload.",
+  "msg.memLow": "Memory is running low: the graphics are set lighter."
 }
