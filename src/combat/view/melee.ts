@@ -136,6 +136,12 @@ export const BODY: BodyShape[] = [
 ];
 /** How deep a point is inside the body (>0 inside, in metres, roughly), and the way out (horizontal). */
 let BODY_K = 1;
+/** Where the body really is this frame (body-local x, z of the hips, the chest and the head), from the rig's bones:
+ * the frames were drawn round x = z = 0 and the body's shapes follow these; the lean comes with them. */
+const CENTRE = [{ x: 0, z: 0 }, { x: 0, z: 0 }, { x: 0, z: 0 }]; let LIVE = false;
+export function setBodyCentres(c: { x: number; z: number }[] | null) {
+  LIVE = !!c; for (let i = 0; i < 3; i++) { CENTRE[i].x = c ? c[i].x : 0; CENTRE[i].z = c ? c[i].z : 0; }
+}
 /** The body's size against the frames' (a 1.75 m man): the frames and the body shape scale with it. */
 export function setBodyScale(k: number) { BODY_K = k > 0.5 && k < 1.5 ? k : 1; }
 export function bodyScale() { return BODY_K; }
@@ -144,10 +150,12 @@ export function depth(pw: THREE.Vector3, bend: number, rw: number, outN?: THREE.
 }
 function depthN(p: THREE.Vector3, bend: number, r: number, outN?: THREE.Vector3): number {
   let best = -9;
-  for (const b of BODY) {
+  for (let i = 0; i < BODY.length; i++) {
+    const b = BODY[i];
     if (p.y < b.y0 - r || p.y > b.y1 + r) continue;
-    const cz = b.cz + Math.sin(bend) * (p.y - 0.95) * b.lean * 0.9;
-    const ex = b.ax + r, ez = b.az + r, dx = p.x / ex, dz = (p.z - cz) / ez, rho = Math.hypot(dx, dz);
+    // live: the bone's own place (it already leans); else the lean from the bend
+    const cz = LIVE ? CENTRE[i].z / BODY_K + b.cz : b.cz + Math.sin(bend) * (p.y - 0.95) * b.lean * 0.9, cx = LIVE ? CENTRE[i].x / BODY_K : 0;
+    const ex = b.ax + r, ez = b.az + r, dx = (p.x - cx) / ex, dz = (p.z - cz) / ez, rho = Math.hypot(dx, dz);
     const dpt = (1 - rho) * Math.min(ex, ez);
     if (dpt > best) { best = dpt; if (outN) { if (rho < 1e-4) outN.set(-1, 0, 0); else outN.set(dx / rho, 0, dz / rho).normalize(); } }
   }
