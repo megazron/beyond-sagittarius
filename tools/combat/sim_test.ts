@@ -443,6 +443,12 @@ section('aim assist');
   ok(shoot(0, 1.2) === 0, 'aim assist off: a shot more than a metre wide of a small target misses');
   ok(shoot(1, 1.2) === 1, 'aim assist on: the same shot is bent on to it');
   ok(shoot(2, 4.5) === 1 && shoot(1, 4.5) === 0, 'aim assist strong: reaches further than normal');
+  // a walking target is led by its own speed along its heading (its vx/vz is only a knock's slide, zero on a walk)
+  const sim = new CombatSim({ seed: 81, assist: { aim: 2, hold: false, slowMo: false, noTimers: false, damageNumbers: false } });
+  const e = dummy(sim, 0, 20, 'nibbet'); e.yaw = Math.PI / 2; e.speed = 5;
+  const I = noIntent(); I.aim = true; I.ax = 0; I.ay = 0.3; I.az = 20;
+  const at = sim.aimPoint(I, 20);
+  ok(at.x > e.x + 3, 'aim assist leads a walking target along its heading', `x ${at.x.toFixed(2)} target ${e.x.toFixed(2)}`);
 }
 
 // ---------------------------------------------------------------- tension

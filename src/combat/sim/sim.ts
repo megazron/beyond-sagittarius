@@ -593,7 +593,9 @@ export class CombatSim {
     const k = lvl === 2 ? 1 : 0.75;
     // lead it by how long the shot is in the air
     const d = Math.hypot(best.x - from.x, best.z - from.z), lead = d / Math.max(1, speed);
-    const tx = best.x + best.vx * lead, tz = best.z + best.vz * lead, ty = best.y + best.def.height * 0.55;
+    // (vx/vz is only a knock's slide; a walking or running body moves at its speed along its heading)
+    const mvx = best.vx + Math.sin(best.yaw) * best.speed, mvz = best.vz + Math.cos(best.yaw) * best.speed;
+    const tx = best.x + mvx * lead, tz = best.z + mvz * lead, ty = best.y + best.def.height * 0.55;
     return v3(lerp(aim.x, tx, k), lerp(aim.y, ty, k), lerp(aim.z, tz, k));
   }
 
