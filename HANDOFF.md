@@ -1018,3 +1018,11 @@ unlanded except this handoff commit and any recording in progress.
 - NOT DONE: phones 30 fps (plan ready: p23/plan_proxy_mobile.json, 4x throttle + a CPU profile at the crowd; the old
   profile p18/mp19 says render is 46 % renderBufferDirect / 33 % setProgram-uniform upload at 60-124 draws), gate camera,
   cold title load (p15/ab_load.sh).
+- 12:00 SCAN (task 2, scratchpad scan2.py, dist-p23b, Web, software GL, no screenshots): flat, then 50 spots (the far
+  NE spot and a 7x7 grid from -360 to 360 every 120 m), each reached by a jump from inside the flat: 0 hidden batch runs
+  and 0 layer-1-only meshes at every spot; 48 to 233 draws (fewest at the corners: the city's edge).
+- MOBILE GPU CLIPS (dist-p23b, Downloads/BS_Game_v1.1/mobile_v3_GPU/mobile_*, README): the NE street draws after the
+  jump (60 fps, 32-35 draws) but the player seems held in place (lamp post?); in both bazaar clips the player ends up
+  stuck under the tram shelter beside the tram for most of the clip: the moved tram (z -17) and shelter (z -14) now sit
+  in the path south from the crowd spot (-5.5, 0). Owner to decide where the tram goes (5516a5b).
+- perf23-wip CI (mobile_memory's first number on a runner) not seen yet: read `gh run list --branch perf23-wip`.
