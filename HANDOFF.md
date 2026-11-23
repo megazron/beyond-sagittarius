@@ -701,3 +701,19 @@ unlanded except this handoff commit and any recording in progress.
   this idea; mine replaces it (tell it to embed demo_bot.js again).
 - Aim assist lead fixed (speed along heading, sim_test 248).
 - Plans: ~/bs-cap/combat/mkplan_v19.py -> plan_v19_night_wrap.json, plan_v19_guardian_throwstick.json; plan_v18.json.
+- 02:20 LANDED e5e1698 (rebased land18 + watch bot + aim lead; CI 45090111355 green) and ff7f293 (bot fixes from
+  the v13 take + wrap cords bedded; CI 45096488100 green). Unlanded: handoff commits only.
+- Capture notes: Windows Chrome reaches the WSL preview at `localhost:4651`, NOT `127.0.0.1` (cap2.sh fixed; the
+  first v19a take timed out on __bs.ready). Chrome 9338 launch line in the 11-22 10:00 entry. A plan that appends a
+  second BOOT (plan_v20_all.json) stuck on the New Game confirm: one encounter set per plan BOOT. Tools in
+  ~/bs-cap/combat: cue_levels.py CLIP T.. (2-5 kHz vs the bed), synccheck.py CLIP (brightness jumps vs sound onsets;
+  camera cuts/snaps show as false offsets).
+- Seen on the GPU (Downloads/.../combat, README notes): guardian v12 (eye socket reads as an eye, maybe cartoonish;
+  phase two cold stone + white-hot eye, the eye's bloom too big), stick v7 (fetch camera works; the stick in slow
+  motion is a thin line), wrap v7 (cords on the hide; dark band at the wrist end from the front, pale cuff tab),
+  night v14 (watch works: fire 60-98% all night, scans, feeds, fights at eye level; cue heard 0:22-0:24 at -23 dB in
+  2-5 kHz vs -52 bed; the caught Skritch struggles at his side, half hidden; camera snap at 2:06 by the fire).
+- NEXT: why the Skritches pass within a metre of the watch spot (the snare catches beside him): log the trap and
+  player positions in __cbTrapLog; the camera snap by the fire (player.ts foliage/trunk pull?); guardian eye bloom;
+  stick in slow motion (keep a faint disc, or a pale stick); spear fishing v1 take (plan_v18.json alone); setGrip
+  still only on origin/life-wip (checked 01:00); story's answer on spear fishing (INVENTION_TREE.md last section).
