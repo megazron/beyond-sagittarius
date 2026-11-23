@@ -87,7 +87,15 @@ export class FireDrill {
     const step = () => {
       const k = (performance.now() - t0) / 1000;
       if (k > sec || run !== this.rubN || !sp.parent) return;
-      sp.rotation.y = Math.cos(k * 14 * speed) * 2.5;
+      // it leans to run between his palms (the arms do not always reach the notch exactly): base in the notch, the
+      // shaft through the middle of his two hands, turned back and forth by the rub
+      const hb = this.handBones();
+      if (hb) {
+        const m = hb[0].getWorldPosition(new THREE.Vector3()).add(hb[1].getWorldPosition(new THREE.Vector3())).multiplyScalar(0.5).addScaledVector(f, 0.05);
+        const dir = m.sub(sp.position); if (dir.y < 0.1) dir.y = 0.1;
+        sp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+        sp.rotateY(Math.cos(k * 14 * speed) * 2.5);
+      } else sp.rotation.y = Math.cos(k * 14 * speed) * 2.5;
       const down = (k * 0.55 * speed) % 1, h = 0.48 - down * 0.3, w = Math.sin(k * 14 * speed) * 0.05;
       const c = at.clone().add(new THREE.Vector3(0, h, 0));
       z.setHold({
@@ -101,6 +109,15 @@ export class FireDrill {
   }
 
   private rubN = 0;
+  private hands: [THREE.Object3D, THREE.Object3D] | null = null;
+  private handBones() {
+    if (!this.hands) {
+      let l: THREE.Object3D | undefined, r: THREE.Object3D | undefined;
+      this.z.root.traverse((o) => { if ((o as THREE.Bone).isBone) { if (o.name === 'handL') l = o; else if (o.name === 'handR') r = o; } });
+      if (l && r) this.hands = [l, r];
+    }
+    return this.hands;
+  }
   private spindle: THREE.Mesh | null = null;
   /** The spindle upright in the notch at `at` (null takes it away). */
   private stick(at: THREE.Vector3 | null): THREE.Mesh {

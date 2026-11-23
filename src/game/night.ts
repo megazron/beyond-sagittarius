@@ -202,7 +202,7 @@ export class FirstNight {
     // the vine: a green line from fist to fist that sags as they come together and pulls straight as they spread, its
     // loose ends hanging out of each fist
     // v4: thicker and a lighter, living green with a little sheen (the 7 mm dark green line was lost at dusk at 540p)
-    const green = new THREE.MeshStandardMaterial({ color: 0x6e9e3a, roughness: 0.55, emissive: 0x1c2a0e });
+    const green = new THREE.MeshStandardMaterial({ color: 0x5f8a34, roughness: 0.6, emissive: 0x111a08 });
     const segs = [0, 1, 2, 3].map(() => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 1, 8), green); m.castShadow = true; return m; });
     const lay = (m: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3) => { m.position.copy(a).lerp(b, 0.5); m.scale.set(1, a.distanceTo(b), 1); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); };
     const pull = (sec: number) => {
