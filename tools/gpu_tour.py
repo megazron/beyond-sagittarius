@@ -83,6 +83,7 @@ w = WS(t['webSocketDebuggerUrl']); w.call('Page.enable'); w.call('Runtime.enable
 W, H = PLAN.get('size', [1280, 720])
 w.call('Emulation.setDeviceMetricsOverride', width=W, height=H, deviceScaleFactor=1, mobile=False)
 if PLAN.get('throttle'): w.call('Emulation.setCPUThrottlingRate', rate=PLAN['throttle'])
+if PLAN.get('heapsample'): w.call('HeapProfiler.enable'); w.call('HeapProfiler.startSampling', samplingInterval=131072)
 
 def ev(x, aw=False):
     r = w.call('Runtime.evaluate', expression=x, returnByValue=True, awaitPromise=aw)
@@ -150,6 +151,13 @@ for st in PLAN['steps']:
         if st.get('census'): row['census'] = ev(CENSUS, True)
         if st.get('ctime'): row['ctime'] = ev(CTIME, True)
         if st.get('js'): row['js'] = ev(st['js'], True)
+        if st.get('heap'):
+            # V8's own split: JS objects vs typed-array backing stores (geometry, textures kept on the CPU)
+            row['heap'] = {k: round(v / 1e6, 1) for k, v in w.call('Runtime.getHeapUsage').items() if isinstance(v, (int, float))}
+        if st.get('heapsample'):
+            # what holds the heap, by allocation site: live objects sampled since the page loaded (plan "heapsample": true)
+            prof = w.call('HeapProfiler.getSamplingProfile')['profile']
+            open(os.path.join(OUT, f"{st['shot']}.heapprofile"), 'w').write(json.dumps(prof))
         if st.get('profile'):
             # the main thread's self time by function over a few seconds (top 25)
             w.call('Profiler.enable'); w.call('Profiler.setSamplingInterval', interval=200); w.call('Profiler.start'); time.sleep(st['profile'])

@@ -33,14 +33,27 @@ export function navGrid(bounds: [number, number, number, number], solids: THREE.
     for (let k = 1; k < n; k++) { const t = k / n, i = Math.round(ai + (bi - ai) * t), j = Math.round(aj + (bj - aj) * t); if (!free(i, j) || extra[j * W + i] > 0.5) return false; }
     return true;
   };
-  // A* with a binary heap
-  const g = new Float32Array(W * H), from = new Int32Array(W * H), seen = new Uint32Array(W * H);
-  let stamp = 0;
-  const heap: number[] = [], key: number[] = [];
-  const push = (n: number, f: number) => { heap.push(n); key.push(f); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (key[p] <= key[i]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; [key[p], key[i]] = [key[i], key[p]]; i = p; } };
-  const pop = () => { const top = heap[0]; const ln = heap.pop()!, lk = key.pop()!; if (heap.length) { heap[0] = ln; key[0] = lk; let i = 0; for (;;) { const l = i * 2 + 1, r = l + 1; let m = i; if (l < heap.length && key[l] < key[m]) m = l; if (r < heap.length && key[r] < key[m]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; [key[m], key[i]] = [key[i], key[m]]; i = m; } } return top; };
+  // A* with a binary heap in typed arrays, and each cell expanded once (closed). The old heap swapped through
+  // destructured arrays and expanded cells again and again: a route across the districts took 0.2 to 0.7 s, and far out
+  // from the old town, where the search failed, it ran four times a second (the city fell to 17 fps on a laptop)
+  const g = new Float32Array(W * H), from = new Int32Array(W * H), seen = new Uint32Array(W * H), closed = new Uint32Array(W * H);
+  let stamp = 0, hn = 0, hNode = new Int32Array(4096), hKey = new Float32Array(4096);
+  const push = (n: number, f: number) => {
+    if (hn === hNode.length) { const a = new Int32Array(hn * 2), b = new Float32Array(hn * 2); a.set(hNode); b.set(hKey); hNode = a; hKey = b; }
+    let i = hn++;
+    while (i > 0) { const p = (i - 1) >> 1; if (hKey[p] <= f) break; hNode[i] = hNode[p]; hKey[i] = hKey[p]; i = p; }
+    hNode[i] = n; hKey[i] = f;
+  };
+  const pop = () => {
+    const top = hNode[0], ln = hNode[--hn], lk = hKey[hn];
+    let i = 0;
+    for (;;) { const l = i * 2 + 1, r = l + 1; if (l >= hn) break; const m = r < hn && hKey[r] < hKey[l] ? r : l; if (hKey[m] >= lk) break; hNode[i] = hNode[m]; hKey[i] = hKey[m]; i = m; }
+    if (hn) { hNode[i] = ln; hKey[i] = lk; }
+    return top;
+  };
   const D8 = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
   let last: { bx: number; bz: number; ax: number; az: number; path: [number, number][] } | null = null;
+  let miss: { bx: number; bz: number; ax: number; az: number } | null = null;
   function route(ax: number, az: number, bx: number, bz: number): [number, number][] {
     if (last && Math.hypot(last.bx - bx, last.bz - bz) < 0.5) {
       // still on the last route (within 4 m of it): carry on along it from the nearest leg
@@ -52,35 +65,45 @@ export function navGrid(bounds: [number, number, number, number], solids: THREE.
       }
       if (best < 4) return [[ax, az], ...P.slice(seg + 1)];
     }
+    // a target that cannot be reached from here was searched across the whole city: not again for every quarter second
+    // while you stay near where it failed (far out in the districts that was a full search four times a second)
+    if (miss && Math.hypot(miss.bx - bx, miss.bz - bz) < 0.5 && Math.hypot(miss.ax - ax, miss.az - az) < 12) return [[ax, az], [bx, bz]];
     const a = nearestFree(...at(ax, az)), b = nearestFree(...at(bx, bz));
     if (!a || !b) return [[ax, az], [bx, bz]];
-    stamp++; heap.length = key.length = 0;
+    stamp++; hn = 0;
     const s = a[1] * W + a[0], t = b[1] * W + b[0];
     g[s] = 0; seen[s] = stamp; from[s] = -1; push(s, 0);
     let found = false, iters = 0;
-    while (heap.length && iters++ < 400000) {
+    while (hn && iters++ < W * H * 4) {
       const n = pop();
+      if (closed[n] === stamp) continue;
+      closed[n] = stamp;
       if (n === t) { found = true; break; }
       const i = n % W, j = (n / W) | 0;
       for (const [di, dj, c] of D8) {
         const ni = i + di, nj = j + dj;
         if (!free(ni, nj) || (di && dj && (!free(i + di, j) || !free(i, j + dj)))) continue;
         const m = nj * W + ni, ng = g[n] + c * (1 + extra[m]);
-        if (seen[m] === stamp && g[m] <= ng) continue;
+        if (closed[m] === stamp || (seen[m] === stamp && g[m] <= ng)) continue;
         seen[m] = stamp; g[m] = ng; from[m] = n;
         push(m, ng + Math.hypot(ni - b[0], nj - b[1]));
       }
     }
-    if (!found) return [[ax, az], [bx, bz]];
+    if (!found) { miss = { ax, az, bx, bz }; return [[ax, az], [bx, bz]]; }
+    miss = null;
     const cells: [number, number][] = [];
     for (let n = t; n !== -1; n = from[n]) cells.push([n % W, (n / W) | 0]);
     cells.reverse();
-    // string pulling: keep a corner only when the straight line past it is blocked
+    // string pulling: keep a corner only when the straight line past it is blocked. Walking forward from each corner
+    // (a few blocked cells in a row end the leg); it tried every later cell from the far end first, which for a route
+    // across the city was hundreds of line-of-sight walks per corner, tens of milliseconds a search
     const keep: [number, number][] = [cells[0]];
     let k = 0;
     while (k < cells.length - 1) {
-      let far = k + 1;
-      for (let m = cells.length - 1; m > k + 1; m--) if (sight(cells[k][0], cells[k][1], cells[m][0], cells[m][1])) { far = m; break; }
+      let far = k + 1, misses = 0;
+      for (let m = k + 2; m < cells.length && misses < 6; m++) {
+        if (sight(cells[k][0], cells[k][1], cells[m][0], cells[m][1])) { far = m; misses = 0; } else misses++;
+      }
       keep.push(cells[far]); k = far;
     }
     const path: [number, number][] = [[ax, az], ...keep.slice(1, -1).map(([i, j]) => [x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell] as [number, number]), [bx, bz]];
