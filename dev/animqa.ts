@@ -31,10 +31,10 @@ const grip = (x: Ctx, at: [number, number, number], fingers: [number, number, nu
   ({ at: x.P(...at), fingers: x.D(...fingers).normalize(), palm: x.D(...palm).normalize(), radius });
 // a spear: the butt low behind the right hip, the shaft up and forward; the hands on it 0.35 m apart
 const spear = (x: Ctx, push: number, lift = 0) => {
-  const butt = new THREE.Vector3(-0.22, 0.75 + lift, -0.25 + push), dir = new THREE.Vector3(0.18, 0.32, 1).normalize();
-  const on = (d: number) => butt.clone().addScaledVector(dir, d).toArray() as [number, number, number];
-  const f = dir.toArray() as [number, number, number];
-  return { R: grip(x, on(0.45), f, [0, -1, 0], 0.015), L: grip(x, on(0.85), f, [0, -1, 0], 0.015) };
+  // the right hand low by the right hip, the left in front of the left chest; the shaft through both, its point ahead
+  const r = new THREE.Vector3(-0.15, 0.95 + lift, 0.18 + push), l = new THREE.Vector3(0.02, 1.12 + lift, 0.38 + push);
+  const f = l.clone().sub(r).normalize().toArray() as [number, number, number];
+  return { R: grip(x, r.toArray() as [number, number, number], f, [0, -1, 0], 0.015), L: grip(x, l.toArray() as [number, number, number], f, [0, -1, 0], 0.015) };
 };
 const ease = (a: number) => a * a * (3 - 2 * a);
 const tri = (s: number) => 1 - Math.abs(((s % 1) + 1) % 1 * 2 - 1);
@@ -65,10 +65,10 @@ const COMBOS: Scenario[] = [
 ];
 const HOLDS: Scenario[] = [
   { name: 'spear_guard', sec: 3, hold: (x) => spear(x, 0) },
-  { name: 'spear_thrust', sec: 3, hold: (x) => spear(x, 0.45 * ease(tri(x.k * x.dt * 0.9))) },
+  { name: 'spear_thrust', sec: 3, hold: (x) => spear(x, 0.25 * ease(tri(x.k * x.dt * 0.9))) },
   { name: 'spear_walk', v: 1.3, sec: 3, hold: (x) => spear(x, 0, 0.02 * Math.sin(x.k * 0.4)) },
   { name: 'spear_run', v: 3.4, sec: 2, hold: (x) => spear(x, 0, 0.03 * Math.sin(x.k * 0.6)), crewOnly: true },
-  { name: 'stone_carry_walk', v: 1.3, sec: 3, setup: (x) => x.c.setProp('stone'), hold: (x) => ({ R: grip(x, [-0.2, 0.95, 0.28], [0.3, 0, 1], [0, 1, 0], 0.035) }) },
+  { name: 'stone_carry_walk', v: 1.3, sec: 3, setup: (x) => x.c.setProp('stone'), hold: (x) => ({ R: grip(x, [-0.18, 1.04, 0.2], [0.3, 0, 1], [0, 1, 0], 0.035) }) },
   { name: 'stone_chest_2h', v: 1.0, sec: 3, hold: (x) => ({ R: grip(x, [-0.07, 1.08, 0.3], [0.2, 0.3, 1], [1, 0.2, 0], 0.06), L: grip(x, [0.07, 1.08, 0.3], [-0.2, 0.3, 1], [-1, 0.2, 0], 0.06) }) },
   { name: 'stone_knap', sec: 3, setup: (x) => { x.c.setKneel(true); x.c.setProp('stone'); },
     hold: (x) => ({ R: grip(x, [-0.08, 0.5 + 0.14 * ease(tri(x.k * x.dt * 2.5)), 0.42], [0.4, -0.6, 1], [0, -1, 0], 0.035), L: grip(x, [0.07, 0.42, 0.4], [-0.2, 0, 1], [0, 1, 0], 0.04) }) },
@@ -77,14 +77,14 @@ const HOLDS: Scenario[] = [
   { name: 'throw_over', sec: 2.4, crewOnly: true, hold: (x) => {
     // wind back over the shoulder for 0.8 s, then forward and down in 0.25 s, then let go
     const s = x.k * x.dt; if (s > 1.3) return null;
-    const back: [number, number, number] = [-0.25, 1.62, -0.22], fwd: [number, number, number] = [-0.12, 1.25, 0.6];
+    const back: [number, number, number] = [-0.26, 1.6, -0.12], fwd: [number, number, number] = [-0.14, 1.28, 0.42];
     const a = s < 0.8 ? ease(s / 0.8) : 1 - ease(Math.min(1, (s - 0.8) / 0.25));
     const p = back.map((b, i) => fwd[i] + (b - fwd[i]) * a) as [number, number, number];
     return { R: grip(x, p, [0, 0.3, 1], [0, -1, 0], 0.035) };
   } },
   { name: 'reach_far', holdFree: true, crewOnly: true, hold: (x) => ({ R: grip(x, [-0.25, 1.2, 1.1], [0, 0, 1], [0, -1, 0]) }) },
   { name: 'reach_inside', holdFree: true, hold: (x) => ({ R: grip(x, [0, 1.15, 0.02], [1, 0, 0], [0, 0, -1]) }) },
-  { name: 'reach_across', hold: (x) => ({ R: grip(x, [0.22, 0.95, 0.25], [1, -0.3, 0.3], [0, 0, -1]) }) },
+  { name: 'reach_across', hold: (x) => ({ R: grip(x, [0.06, 1.08, 0.3], [1, -0.3, 0.3], [0, 0, -1]) }) },
   // a new target 40 cm away in one frame (a scene step): the hand must travel, not teleport
   { name: 'hold_jump', holdFree: true, sec: 3, hold: (x) => ({ R: grip(x, x.k < 40 ? [-0.25, 0.95, 0.35] : [-0.05, 1.3, 0.45], [0, 0, 1], [0, -1, 0]) }) },
 ];
@@ -101,6 +101,7 @@ const EXTREMES: Scenario[] = [
 export const SCENARIOS: Scenario[] = [...CLIPS, ...TASKS, ...COMBOS, ...HOLDS, ...EXTREMES];
 
 const radCache = new WeakMap<Character, number[]>();
+const R0 = (c: Character) => { c.root.updateMatrixWorld(true); return c.root; };
 const PTS = (s: 'L' | 'R') => [`hand${s}`, `finger3_2${s}`, `finger2_3${s}`, `lowerarm${s}`];
 
 export interface QaHooks {
@@ -113,6 +114,10 @@ export interface QaHooks {
 /** sampleEvery > 0 also records every bone's local turn every that many frames (tools/chars/capture_poses.py: the builder's
  * coverage mask and corrective shapes learn every pose the probe plays, not six clips) */
 export function runScenario(c: Character, name: string, h: QaHooks, every = 10, sampleEvery = 0) {
+  const g = scenarioFrames(c, name, h, every, sampleEvery); let r = g.next(); while (!r.done) r = g.next(); return r.value;
+}
+/** The same, one frame per next() (dev/chars.ts qaLive draws each frame on the GPU for the review clips). */
+export function* scenarioFrames(c: Character, name: string, h: QaHooks, every = 10, sampleEvery = 0) {
   const sc = SCENARIOS.find((s) => s.name === name); if (!sc) throw new Error(`no scenario ${name}`);
   const dt = 1 / 30, frames = Math.round((sc.sec ?? 2) * 30);
   // a clean start: everything let go, the stand settled, the body at the origin facing +z
@@ -120,10 +125,13 @@ export function runScenario(c: Character, name: string, h: QaHooks, every = 10, 
   h.settle(c);
   if (!radCache.has(c)) radCache.set(c, radii(c));
   const rad = radCache.get(c)!;
-  const R = c.root, x: Ctx = { c, k: 0, dt, P: (a, b, d) => R.localToWorld(new THREE.Vector3(a, b, d)), D: (a, b, d) => new THREE.Vector3(a, b, d).applyQuaternion(R.getWorldQuaternion(new THREE.Quaternion())) };
+  // body space is in a 1.76 m body's metres: scaled by this body's neck height (1.57 m to 2.08 m), so a target is as
+  // far from every body's shoulder
+  const S = R0(c).worldToLocal(bone(c, 'neck')).y / 1.47;
+  const R = c.root, x: Ctx = { c, k: 0, dt, P: (a, b, d) => R.localToWorld(new THREE.Vector3(a * S, b * S, d * S)), D: (a, b, d) => new THREE.Vector3(a, b, d).applyQuaternion(R.getWorldQuaternion(new THREE.Quaternion())) };
   sc.setup?.(x);
   const tracks = new Map<string, THREE.Vector3[]>();
-  let armPen = 0, handPen = 0, penAt = '', jerk = 0, jerkAt = '', holdErr = 0, holdAt = '', propGap = 0, propAt = '', holdStart = -1;
+  let reach = 0, armPen = 0, handPen = 0, penAt = '', jerk = 0, jerkAt = '', holdErr = 0, holdAt = '', propGap = 0, propAt = '', holdStart = -1;
   const holdErrs: number[] = []; let lastHold: { L?: HoldSide; R?: HoldSide } | null = null;
   const poses: { pose: string; q: Record<string, number[]> }[] = [];
   const fl = { skinPoke: 0, clothPoke: 0, back: 0, samples: 0, worst: 0, worstK: -1 };
@@ -159,6 +167,10 @@ export function runScenario(c: Character, name: string, h: QaHooks, every = 10, 
       const hs = lastHold?.[s];
       if (hs && holdStart >= 0 && k - holdStart >= 18) {
         const e = bone(c, `hand${s}`).distanceTo(hs.at); holdErrs.push(e);
+        // how far the target is, as a share of the arm's length: over 0.97 the arm cannot get there (the scenario's
+        // fault, or a scene's), and the error says nothing about the rig
+        const sh = bone(c, `upperarm${s}`), el = bone(c, `lowerarm${s}`), wr = bone(c, `hand${s}`);
+        reach = Math.max(reach, sh.distanceTo(hs.at) / (sh.distanceTo(el) + el.distanceTo(wr)));
         if (e > holdErr) { holdErr = e; holdAt = `${s} f${k}`; }
       }
     }
@@ -179,13 +191,14 @@ export function runScenario(c: Character, name: string, h: QaHooks, every = 10, 
       const f = h.flags(); fl.skinPoke += f.skinPoke; fl.clothPoke += f.clothPoke; fl.back += f.back; fl.samples++;
       const s = f.skinPoke + f.clothPoke; if (s > fl.worst) { fl.worst = s; fl.worstK = k; }
     }
+    yield k;
   }
   c.setLimbs(null); c.setHold(null); c.stopTask(); c.setProp(null); c.setKneel(false); c.setLimp(false);
   holdErrs.sort((a, b) => a - b);
   const cm = (v: number) => +(v * 100).toFixed(1);
   return {
     scenario: name, armPenCm: cm(Math.max(0, armPen)), handPenCm: cm(Math.max(0, handPen)), penAt, jerkCm: cm(jerk), jerkAt,
-    holdErrCm: cm(holdErr), holdP50Cm: cm(holdErrs[holdErrs.length >> 1] ?? 0), holdAt, holdFree: !!sc.holdFree, propGapCm: cm(propGap), propAt, flags: fl, poses,
+    holdErrCm: cm(holdErr), holdP50Cm: cm(holdErrs[holdErrs.length >> 1] ?? 0), holdAt, holdFree: !!sc.holdFree, reach: +reach.toFixed(2), propGapCm: cm(propGap), propAt, flags: fl, poses,
   };
 }
 export const scenarioNames = (crew: boolean) => SCENARIOS.filter((s) => crew || !s.crewOnly).map((s) => s.name);

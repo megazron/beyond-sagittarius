@@ -786,6 +786,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   // (a hold let go eases out from there), and the target's last position (a jump in it goes into the offset)
   type HoldState = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; on: boolean; off: THREE.Vector3; offV: THREE.Vector3; prev: THREE.Vector3; loc: THREE.Vector3; last: HoldSide };
   const holdS: { L?: HoldState; R?: HoldState } = {};
+  const FA = { e: new THREE.Vector3(), w: new THREE.Vector3(), m: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3(), q: new THREE.Quaternion() };
   /** A hand target inside the torso (hips to neck capsules, plus a hand's thickness) is moved out to its surface. */
   function holdOut(bs: Map<string, THREE.Bone>, p: THREE.Vector3) {
     if (!torsoR) return p;
@@ -813,6 +814,47 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     worldRotate(up, new THREE.Quaternion().setFromAxisAngle(ax, ang));
     up.updateWorldMatrix(false, true);
     void bs;
+  }
+
+  /** How far the elbow or the middle of the forearm is inside the torso (capsules plus a forearm's thickness), m. */
+  function forearmPen(bs: Map<string, THREE.Bone>, lo: THREE.Bone, hd: THREE.Bone) {
+    if (!torsoR) return 0;
+    const el = lo.getWorldPosition(FA.e), wr = hd.getWorldPosition(FA.w), mid = FA.m.copy(el).lerp(wr, 0.5);
+    let pen = 0;
+    for (let j = 0; j < TORSO.length; j++) {
+      const a = bs.get(TORSO[j][0])!.getWorldPosition(FA.a), b = bs.get(TORSO[j][1])!.getWorldPosition(FA.b);
+      const r = torsoR[j] * (a.distanceTo(b) / (torsoLen[j] || 1)) + 0.035;
+      for (const p of [el, mid]) pen = Math.max(pen, r - segDist(p, a, b));
+    }
+    return pen;
+  }
+  /** After the solve: an elbow or forearm inside the body is swung out about the shoulder-to-wrist line (the hand stays
+   *  on what it holds), the smallest turn that clears it ("the arms go inside the person": only the wrist point was
+   *  kept out of the torso, and a hand held at the hip laid the forearm through it). */
+  // the swing is eased per arm (picked fresh each frame from a few steps, the elbow flicked between them)
+  const faAng = { L: 0, R: 0 };
+  function forearmOut(bs: Map<string, THREE.Bone>, sd: 'L' | 'R', up: THREE.Bone, lo: THREE.Bone, hd: THREE.Bone, dt: number) {
+    const p0 = forearmPen(bs, lo, hd);
+    const sh = up.getWorldPosition(new THREE.Vector3()), ax = hd.getWorldPosition(new THREE.Vector3()).sub(sh);
+    if (ax.lengthSq() < 1e-6) return; ax.normalize();
+    const q0 = up.quaternion.clone(); let best = 0, bestPen = p0;
+    // the search starts on the side the arm is already swung to, so the choice does not flip from side to side
+    const sg = faAng[sd] < 0 ? -1 : 1;
+    if (p0 > 0) for (const a of [0.15, 0.3, 0.5, 0.75, 1.0].flatMap((v) => [v * sg, -v * sg])) {
+      up.quaternion.copy(q0); worldRotate(up, FA.q.setFromAxisAngle(ax, a)); up.updateWorldMatrix(false, true);
+      const pn = forearmPen(bs, lo, hd);
+      if (pn < bestPen - 1e-4) { bestPen = pn; best = a; }
+      if (pn <= 0) break;
+    }
+    // ease towards the chosen swing; back to none once clear (a held swing, if that would put it back in, stays)
+    let want = best;
+    if (p0 <= 0 && faAng[sd]) {
+      up.quaternion.copy(q0); worldRotate(up, FA.q.setFromAxisAngle(ax, faAng[sd] * 0.8)); up.updateWorldMatrix(false, true);
+      if (forearmPen(bs, lo, hd) > 0) want = faAng[sd];
+    }
+    faAng[sd] += (want - faAng[sd]) * (1 - Math.exp(-dt * 10));
+    if (Math.abs(faAng[sd]) < 1e-3) faAng[sd] = 0;
+    up.quaternion.copy(q0); if (faAng[sd]) worldRotate(up, FA.q.setFromAxisAngle(ax, faAng[sd])); up.updateWorldMatrix(false, true);
   }
 
   function locomotion(speed: number, dt: number) {
@@ -982,6 +1024,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const ql = (taskQ.get(lo.name) ?? taskQ.set(lo.name, new THREE.Quaternion()).get(lo.name)!).copy(lo.quaternion);
       solveLeg(up, lo, hd, holdOut(bs, goal));
       elbowOut(bs, sd, up, lo, hd);
+      forearmOut(bs, sd, up, lo, hd, dt);
       up.quaternion.copy(qu.slerp(up.quaternion, w));
       lo.quaternion.copy(ql.slerp(lo.quaternion, w));
       up.updateWorldMatrix(false, true);
@@ -1209,6 +1252,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const tgt = holdOut(bs, hs.at.clone());
       solveLeg(up, lo, hd, tgt);
       elbowOut(bs, sd, up, lo, hd);
+      forearmOut(bs, sd, up, lo, hd, dt);
       up.quaternion.copy(qu.slerp(up.quaternion, hw)); lo.quaternion.copy(ql.slerp(lo.quaternion, hw));
       up.updateWorldMatrix(false, true);
       hd.getWorldPosition(V4s); hd.getWorldQuaternion(selfM.q0);

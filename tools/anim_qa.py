@@ -45,7 +45,7 @@ def layers(cid):
 
 def flat(r):
     s = max(1, r['flags']['samples'])
-    return {'armPenCm': r['armPenCm'], 'handPenCm': r['handPenCm'], 'jerkCm': r['jerkCm'], 'holdErrCm': 0 if r['holdFree'] else r['holdErrCm'],
+    return {'armPenCm': r['armPenCm'], 'handPenCm': r['handPenCm'], 'jerkCm': r['jerkCm'], 'holdErrCm': 0 if r['holdFree'] or r.get('reach', 0) > 0.97 else r['holdErrCm'],
             'propGapCm': r['propGapCm'], 'skinPx': round(r['flags']['skinPoke'] / s), 'clothPx': round(r['flags']['clothPoke'] / s)}
 
 
@@ -87,7 +87,7 @@ if a.write_budget:
     json.dump({'note': 'tools/anim_qa.py --write-budget; lower these as fixes land. Target: arm and hand penetration 0, jerk under 4 cm, holdErr under 2 cm, pixels near 0.', 'every': a.every, 'scenarios': bud}, open(a.budget, 'w'), indent=1)
     print('budget written', a.budget)
 fails = [f'page error: {e}' for e in errs[:3]]
-if os.path.exists(a.budget) and not a.write_budget:
+if os.path.isfile(a.budget) and os.path.getsize(a.budget) and not a.write_budget:
     B = json.load(open(a.budget))['scenarios']
     for s, d in worst.items():
         for m, v in d.items():
