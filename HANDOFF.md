@@ -886,3 +886,19 @@ unlanded except this handoff commit and any recording in progress.
   7.2 cm, smaller rolled edges, thinner upper-arm cap).
 - Capture plan ~/bs-cap/combat/plan_v23.json (mkplan_v23.py): 24_weapon_holds_v3_bent_arms,
   25_bow_sling_spearthrower_holds_v2, 20_spear_fishing_v3, 19_hide_wrap_v9_slimmer, 05_night_defence_v15 (2:06 jump).
+- ~11:00 GPU takes v23 (plan_v23) and v24 (plan_v24: fishing with the merged bot, ranged v3, night v16). NOTE: mkplan.py
+  embeds tools/combat/demo_bot.js when the PLAN is made: regenerate the plan after any bot change (v23's fishing ran
+  the old bot). gpu_capture.py now also writes full eval results (> 200 chars) to OUTDIR/evals.txt; the printed line
+  is cut at 200 (v24's fishing log was lost that way).
+- Night camera jump FIXED and seen (v16): the camp fire was a forest obstacle of no height (story.ts), so the camera's
+  trunk tests pulled the view to over his head whenever the line passed over the fire (v15: 2:13, 2:38, 3:08). Obstacles
+  now take a height (forest.addObstacle h; blocks(.., above); clearance(.., above)); the fire ring is 0.9 m.
+- CI on 6e4a406 (shapes turned): bow string arm 9.7 cm and sling arm 8 cm in the chest (real, gated). 1ef2969: ranged
+  hand marks pushed out of the body and kept within 0.88 of reach (ranged.ts ease), sling pouch further out. Not yet
+  confirmed by CI at the time of writing.
+- Fishing v24: first thrust at 0:05 (high, as planned), then he wades in and stands with no more thrusts until the
+  80 s limit. Cause unknown (log lost). NEXT: rerun the fishing clip alone (regenerate the plan) and read evals.txt
+  (__cbFishLog: stall/why, edge feet, cam). Fish still hard to see in the dark water at that distance.
+- Delivered: 24_weapon_holds_v3_bent_arms, 25_bow_sling_spearthrower_holds_v3, 19_hide_wrap_v9_slimmer,
+  20_spear_fishing_v3, 05_night_defence_v16_camera_over_fire (README notes). Seen still wrong: spear drawn back puts the
+  right elbow out behind; stiff wrists; no shoulder drop (no clavicle bones); coat blown out by the fire up close.
