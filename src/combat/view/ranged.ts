@@ -135,13 +135,15 @@ export class RangedRig {
       // out along F, not ahead of the face along the aim (that pushed it 20 cm out in front of the face and the folded
       // elbow came up in front of the neck: CI 9-11 cm in the head shape). From there the forearm runs back along the
       // arrow and the elbow ends behind the head along the arrow's line, at the side, a little above the shoulder.
-      const anchor = V().copy(head).addScaledVector(F, 0.12).addScaledVector(A, 0.01).add(V().set(0, -0.085, 0));
+      // (under the chin, the string to the chin and nose: higher, at the jaw's side, the forearm behind the hand ran into the
+      // jaw; offline sweep of the probe's frame: under the chin the elbow clears, 22 cm behind the head along the arrow)
+      const anchor = V().copy(head).addScaledVector(F, 0.12).addScaledVector(A, 0.01).add(V().set(0, -0.115, 0));
       const nock0 = V().copy(grip).addScaledVector(aim, -0.15).add(V().set(0, 0.012, 0));
       const quiver = V().set(-0.2, 0.92, -0.1);
       // the set: raised, the string is held a little drawn, halfway back to the chin (a pre-draw, as many archers hold
       // it; probe: at half way the line from the shoulder still ran through the neck, 8.4 cm): with the hand out at the bow the folded arm crossed the upper chest (this rig's shoulder joints sit ~32 cm
       // behind the coat's front), probe 6-14 cm; from the set the elbow is already back along the arrow
-      const setP = V().copy(nock0).lerp(anchor, 0.78).addScaledVector(F, 0.03);
+      const setP = V().copy(nock0).lerp(anchor, 0.88).addScaledVector(F, 0.02);
       let target: THREE.Vector3; S.arrowIn = ammo > 0 ? 'string' : 'none'; S.nock = -1;
       // (the string comes back along the arrow, bowed a little out in front on the way so the forearm passes the chin)
       if (p.act === 'charge') target = V().copy(setP).lerp(anchor, drawing).addScaledVector(F, 0.04 * Math.sin(Math.PI * drawing));
@@ -163,7 +165,7 @@ export class RangedRig {
       const dk = Math.max(dk0, (0.85 + 0.15 * dk0) * (1 - atQuiver)) * (S.up > 0.5 || p.act === 'charge' || recovering ? 1 : 0);
       // (at the brace the hand reaches across the chest to the string: an elbow sent down fell into the chest, CI 14 cm;
       // it goes out in front of the chest, at about shoulder height, as an archer's does when he takes the string)
-      const pole = V().copy(A).multiplyScalar(-(0.25 + 0.75 * dk)).addScaledVector(F, 0.7 * (1 - dk) - 0.15 * dk).addScaledVector(UP, -0.35 * (1 - dk) + 0.3 * dk);
+      const pole = V().copy(A).multiplyScalar(-(0.25 + 0.75 * dk)).addScaledVector(F, 0.7 * (1 - dk) - 0.15 * dk).addScaledVector(UP, -0.35 * (1 - dk) + 0.1 * dk);
       // lowered, the arm hangs: the elbow down and a little back
       pole.lerp(V().set(-0.3, -1, -0.35), 1 - smooth(Math.max(S.up, p.act === 'charge' || recovering ? 1 : 0)));
       // the hand's mark is kept out of the body by a forearm's thickness, except at the jaw, where the hand rests on the
@@ -387,7 +389,7 @@ export class RangedRig {
       const side = V().crossVectors(D, U);
       U.applyAxisAngle(D, 0.12).applyAxisAngle(side, -0.5 * Math.sin(Math.min(1, S.roll) * Math.PI) * 0.6);
       // (the set holds the string a little drawn: the limbs bend that much too)
-      const draw = Math.max(S.draw, S.nock < 0 || S.nock > 0.85 ? 0.7 * clamp01(S.up * 2 - 1) : 0), brace = 0.15;
+      const draw = Math.max(S.draw, S.nock < 0 || S.nock > 0.85 ? 0.8 * clamp01(S.up * 2 - 1) : 0), brace = 0.15;
       const pt = (u: number) => { const s = Math.sign(u), a = Math.abs(u); return V().copy(hL).addScaledVector(U, s * (0.08 + 0.6 * a) * (1 - 0.05 * draw * a * a)).addScaledVector(D, -(brace * 0.7 + 0.14 * draw) * a * a); };
       const pts = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1].map(pt);
       pts[4] = V().copy(hL).addScaledVector(U, -0.08);
