@@ -245,9 +245,12 @@ export class RangedRig {
    * fight body set them this frame): each elbow swings round its shoulder-to-hand line, the hands stay on the gear. */
   private armMem: ArmMem = { L: 0, R: 0 };
   /** Worst depth of an arm in the body since the last read (metres), for the play test. */
-  armIn = 0;
+  armIn = 0; armWhere = '';
   private clearArms(sL: THREE.Vector3, eL: THREE.Vector3, wL: THREE.Vector3, sR: THREE.Vector3, eR: THREE.Vector3, wR: THREE.Vector3, dt: number) {
-    this.armIn = Math.max(this.armIn, swingOut(sL, eL, wL, 0, this.armMem, 'L', dt), swingOut(sR, eR, wR, 0, this.armMem, 'R', dt));
+    // (the hands' own end is left out: a bow's string hand anchors at the jaw and a sling's pouch rests against the
+    // belly on purpose; the upper arm, the elbow and the forearm to its middle are what must not go in)
+    const l = swingOut(sL, eL, wL, 0, this.armMem, 'L', dt, 0.6), r = swingOut(sR, eR, wR, 0, this.armMem, 'R', dt, 0.6);
+    if (Math.max(l, r) > this.armIn) { this.armIn = Math.max(l, r); const f = (v: THREE.Vector3) => v.toArray().map((x) => x.toFixed(2)).join(','); this.armWhere = `${this.mode} ${l > r ? 'L' : 'R'} s ${f(l > r ? sL : sR)} e ${f(l > r ? eL : eR)} w ${f(l > r ? wL : wR)}`; }
   }
 
   /** After the body is posed: put the bow, string, arrow, cords and pouch where the hands really are. */

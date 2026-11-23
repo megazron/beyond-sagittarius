@@ -1008,7 +1008,7 @@ export class Combat {
   /** The fight's placed sounds lately played (name, where, wall-clock ms), newest last: what a listener heard. */
   heard: { name: string; x: number; z: number; vol: number; t: number }[] = [];
   /** Tests: what the drawn weapon did since the last reset (worst shaft depth in the body, worst left-hand gap). */
-  testPoseStats(reset = false) { const st = { ...this.body.stats, rangedArmIn: this.body.ranged.armIn }; if (reset) this.body.ranged.armIn = 0; if (reset) Object.assign(this.body.stats, { frames: 0, shaftIn: 0, handOff: 0, leftOff: 0, skel: undefined, worst: undefined, worstL: undefined }); return st; }
+  testPoseStats(reset = false) { const st = { ...this.body.stats, rangedArmIn: this.body.ranged.armIn, rangedWhere: this.body.ranged.armWhere }; if (reset) this.body.ranged.armIn = 0; if (reset) Object.assign(this.body.stats, { frames: 0, shaftIn: 0, handOff: 0, leftOff: 0, skel: undefined, worst: undefined, worstL: undefined }); return st; }
   /** Recordings: the whole game in slow motion (1 is normal). */
   testSlow = 1;
   testHold(code: string, on: boolean) { this.testKeys = true; this.d.input.hold(code, on); }

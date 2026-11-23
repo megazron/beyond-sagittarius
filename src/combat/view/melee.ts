@@ -247,7 +247,8 @@ export interface Solved { limbs: Limbs; f: WFrame; eL: THREE.Vector3; wL: THREE.
  * for a grip 12 cm past the real arm). A two-handed shaft slides through the hand (its line stays); anything else
  * comes in towards the shoulder. */
 export function reachGrip(f: WFrame, w: WeaponId, k: Skel) {
-  const maxR = (k.a + k.b + k.palm) * 0.975, toS = V().subVectors(f.g, k.sR), dist = toS.length();
+  // (with slack: the shoulders the grip is checked against are last frame's, and a walk's bob moves them)
+  const maxR = (k.a + k.b + k.palm) * 0.94, toS = V().subVectors(f.g, k.sR), dist = toS.length();
   if (dist <= maxR) return 0;
   if (TWO(w)) {
     const rel = V().subVectors(k.sR, f.g), s0 = rel.dot(f.d), h2 = rel.lengthSq() - s0 * s0;
@@ -332,11 +333,11 @@ export function solveArms(f: WFrame, w: WeaponId, k: Skel, leftW: number, rightW
  * forearm are out of the body; the swing is remembered in `mem` and changes at most 10 rad/s, so the elbow never jumps
  * from one way out to another, and drifts back to the plain pose when that is clear. Returns how deep the arm still
  * is (metres, <= 0 clear). Moves `e`. */
-export function swingOut(s: THREE.Vector3, e: THREE.Vector3, wr: THREE.Vector3, bend: number, mem: ArmMem, key: 'L' | 'R', dt: number): number {
+export function swingOut(s: THREE.Vector3, e: THREE.Vector3, wr: THREE.Vector3, bend: number, mem: ArmMem, key: 'L' | 'R', dt: number, handEnd = 1): number {
   const inside = (el: THREE.Vector3) => {
     let worst = 0;
     for (let i = 1; i <= 6; i++) {
-      const q = i <= 3 ? V().copy(s).lerp(el, 0.35 + i * 0.2) : V().copy(el).lerp(wr, (i - 3) / 3);
+      const q = i <= 3 ? V().copy(s).lerp(el, 0.35 + i * 0.2) : V().copy(el).lerp(wr, (i - 3) / 3 * handEnd);
       worst = Math.max(worst, depth(q, bend, 0.04));
     }
     return worst;
