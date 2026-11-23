@@ -170,9 +170,13 @@ with sync_playwright() as pw:
         if page.evaluate("!!window.__t"): break
     ok(page.evaluate("window.__t && window.__t.passed === false"), 'API: a tension moment resolves (failed, nobody pressed)', page.evaluate("JSON.stringify({ t: window.__t, open: __bs.combat.tensionUi.open, ring: __bs.combat.tensionUi.cur && __bs.combat.tensionUi.cur.T.ring, endT: __bs.combat.tensionUi.cur && __bs.combat.tensionUi.cur.endT, vis: document.visibilityState })"))
     # the Action menu from pause
-    page.keyboard.press('Escape'); page.wait_for_selector('#p-action', timeout=10000); page.click('#p-action')
+    # DOM clicks: on the CI software renderer a frame can take seconds, so Playwright's
+    # "stable" check (two equal rAF boxes) timed out at 30 s on main and life-wip alike
+    page.keyboard.press('Escape'); page.wait_for_selector('#p-action', state='visible', timeout=30000)
+    page.evaluate("document.getElementById('p-action').click()")
+    page.wait_for_selector('[data-cb="difficulty"] [data-v="story"]', state='visible', timeout=30000)
     ok(page.evaluate("document.querySelectorAll('[data-enc]').length") == 6, 'menu: Action lists the six set pieces')
-    page.click('[data-cb="difficulty"] [data-v="story"]')
+    page.evaluate("document.querySelector('[data-cb=\"difficulty\"] [data-v=\"story\"]').click()")
     ok(page.evaluate("JSON.parse(localStorage.getItem('bs-settings-v1')).combat.difficulty") == 'story', 'menu: difficulty is saved')
     for lang in ['hi', 'ur']:
         page.evaluate(f"__bs.setLang('{lang}')")
