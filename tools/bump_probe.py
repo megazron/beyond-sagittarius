@@ -7,6 +7,14 @@ REACH = 4.5  # metres: anyone a body this close to you is being bumped (city.ts 
 STATE = "(()=>{const c=__bs.awayCrowd(),p=__bs.awayCam;return {c,p:p?[p.x,p.z]:null}})()"
 
 
+def _where(st, kind):
+    """{id: (x, z)} of every walker the test may aim at: bodies, and on the old town's street the painted cards too."""
+    w = {k: (v[2], v[3]) for k, v in _walkers(st, kind).items()}
+    if kind == 'crowd':
+        for r in st['c'].get('dbg', {}).get('nearCards', []): w.setdefault(r[0], (r[1], r[2]))
+    return w
+
+
 def _walkers(st, kind):
     """{id: (body, look, x, z)} of whoever walks as a body: 'crowd' the old town's painted crowd, 'peds' the districts'."""
     rows = st['c'].get('held', []) if kind == 'crowd' else st['c'].get('dbg', {}).get('peds', [])
@@ -29,19 +37,20 @@ def bump(page, at, kind='crowd', rounds=4, log=None, say=print):
         c = st['c']; say(f'{kind}: no body at {sp}: near {c.get("near")} room {c.get("room")} dbg {json.dumps(c.get("dbg", {}))[:300]}')
     tested = set()
     for rnd in range(rounds):
-        st = page.evaluate(STATE); w = _walkers(st, kind); p = st['p']
-        cur = sorted((k for k in w if k not in tested), key=lambda k: math.hypot(w[k][2] - p[0], w[k][3] - p[1]))
+        st = page.evaluate(STATE); w = _walkers(st, kind); p = st['p']; wh = _where(st, kind)
+        # a body first, nearest first; a painted card if nobody near is a body
+        cur = sorted((k for k in wh if k not in tested), key=lambda k: (k not in w, math.hypot(wh[k][0] - p[0], wh[k][1] - p[1])))
         if not cur: say(f'{kind} round {rnd}: nobody left to bump'); break
-        tgt = cur[0]; tested.add(tgt); body, look, x, z = w[tgt]
+        tgt = cur[0]; tested.add(tgt); x, z = wh[tgt]
         # start 5 m off, across their path (they walk along z): from the side the street is wider on
         sx = x + (5 if x < 0 else -5)
         page.evaluate(f"__bs.awayTeleport({sx:.2f}, {z:.2f}, {math.atan2(-(x - sx), 0):.3f})")
         time.sleep(2.0)
         st = page.evaluate(STATE); w = _walkers(st, kind)
-        if tgt not in w: say(f'{kind} round {rnd}: walker {tgt} let go during the settle after the teleport (not a bump)'); continue
+        if tgt not in _where(st, kind): say(f'{kind} round {rnd}: walker {tgt} out of sight after the teleport'); continue
         ref = {k: v[:2] for k, v in w.items()}  # who is whom once settled
-        body, look = ref[tgt]
-        hit, passed, t0, closest, last_near, last_d = None, None, time.time(), 99.0, set(), 99.0
+        body, look = ref.get(tgt, ('card', '-'))
+        hit, passed, t0, closest, last_near, last_d, flat = None, None, time.time(), 99.0, set(), 99.0, 0
         page.evaluate("__bs.key('KeyW', true)")
         try:
             while time.time() - t0 < 40:
@@ -53,13 +62,18 @@ def bump(page, at, kind='crowd', rounds=4, log=None, say=print):
                     now = w.get(k)
                     if now and k in last_near and (now[0], now[1]) != (b0, l0): hit = (k, 'became body', now[:2]); break
                     if not now and k in last_near: hit = (k, f'became a card within {REACH} m of you', None); break
-                    if not now and k == tgt: say(f'  walker {tgt} let go {last_d:.1f} m off, before reaching them: {json.dumps(st["c"].get("dbg", {}))[:400]}'); break
+                    if not now and k == tgt and k in ref: say(f'  walker {tgt} let go {last_d:.1f} m off, before reaching them: {json.dumps(st["c"].get("dbg", {}))[:400]}'); break
+                # a painted card you walk into reads as cardboard, and the lens hides it: within 1.2 m nobody is a card
+                eb = st['c'].get('dbg', {}).get('elbowCards', 0) if kind == 'crowd' else 0
+                flat = flat + 1 if eb else 0
+                if flat >= 3 and not hit: hit = ('-', f'{eb} painted card(s) within 1.2 m of you for {flat} steps', None)
                 if hit:
                     say(f'  state: {json.dumps(st["c"].get("dbg", {}))[:600]}'); break
-                if tgt not in w: break
+                wh = _where(st, kind)
+                if tgt not in wh: break
                 last_near = {k for k, v in w.items() if math.hypot(v[2] - p[0], v[3] - p[1]) < REACH}
                 ref.update({k: v[:2] for k, v in w.items() if k not in ref})
-                tx, tz = w[tgt][2], w[tgt][3]; d = math.hypot(tx - p[0], tz - p[1]); closest = min(closest, d); last_d = d
+                tx, tz = wh[tgt]; d = math.hypot(tx - p[0], tz - p[1]); closest = min(closest, d); last_d = d
                 if passed is None and (d < 0.7 or (closest < 1.6 and d > closest + 0.3)): passed = time.time()
                 if passed and time.time() - passed > 1.5: break
                 if passed is None: page.evaluate(f"__bs.awayYaw({math.atan2(-(tx - p[0]), -(tz - p[1])):.3f})")

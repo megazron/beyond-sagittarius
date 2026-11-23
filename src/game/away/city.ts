@@ -1247,7 +1247,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     fig.root.visible = false; fig.setGround((px) => hx(px)); add(fig.root);
     crowdPool.push({ fig, card: -1, phase: rnd() * 10, dx: 0, look: i % NLOOK });
   }
-  const byCard = new Map<number, (typeof crowdPool)[number]>(), near: [number, number][] = [];
+  const byCard = new Map<number, (typeof crowdPool)[number]>(), near: [number, number][] = [], elbow: [number, number][] = [];
   let lastCam: THREE.Vector3 | null = null, lineLog = false, crowdPinned = 0, pedPinned = 0, wantLog: number[] = [], usedLog = 0;
   const walkCrowd = (dt: number, time: number, cam: THREE.Camera, budget: number) => {
     lastCam = cam.position;
@@ -1266,12 +1266,17 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       const d = Math.hypot(cards[i].x - c.x, cards[i].z - c.z), mine = byCard.has(i);
       if (!(d < TAKE * (taken[i] ? 1.15 : 1) && ((LENS_HOLD && mine) || !inLens(cards[i].x, cards[i].z)))) continue;
       if (d < 10) cardsNear++;
-      const pin = mine && CONTACT > 0 && Math.hypot(cards[i].x - ux, cards[i].z - uz) < CONTACT;
+      const du = Math.hypot(cards[i].x - ux, cards[i].z - uz), pin = mine && CONTACT > 0 && du < CONTACT;
       if (pin) crowdPinned++;
+      // within reach of you, a walker is a body even when the budget is spent (the story's people near the flat use all
+      // of it): the two nearest to you, so nobody you walk into is a flat card (two over the cap at most, as townsfolk)
+      else if (CONTACT > 0 && du < CONTACT) { const e = elbow; if (e.length < 2 || du < e[e.length - 1][0]) { e.push([du, i]); e.sort((a, b) => a[0] - b[0]); if (e.length > 2) e.pop(); } }
       near.push([d - (mine && CONTACT > 0 ? 2 : 0) - (pin ? 1000 : 0), i]);
     }
     near.sort((a, b) => a[0] - b[0]);
     const want = new Set<number>(); { const n = Math.min(POOL, budget); for (const [k, i] of near) { if (want.size >= n && k > -500) break; want.add(i); } }
+    for (const [, i] of elbow) if (crowdPinned + want.size < POOL + 2) want.add(i);
+    elbow.length = 0;
     wantLog = [...want];
     for (const b of crowdPool) if (b.card >= 0 && !want.has(b.card)) { taken[b.card] = 0; byCard.delete(b.card); b.card = -1; b.fig.root.visible = false; }
     for (const i of want) if (!byCard.has(i)) { const b = crowdPool.find((x) => x.card < 0 && x.look === i % NLOOK); if (!b) continue; b.card = i; b.dx = 0; byCard.set(i, b); taken[i] = 1; b.fig.root.visible = true; }
@@ -1350,12 +1355,12 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     for (const [d, i] of dnear) {
       const mine = CONTACT > 0 && dpool.some((b) => b.ped === i);
       if (d > DNEAR * (mine ? 1.2 : 1)) { if (d > DNEAR * 1.2) break; continue; }
-      const pin = mine && Math.hypot(ps[i].x - ux, ps[i].z - uz) < CONTACT;
+      const du = CONTACT > 0 ? Math.hypot(ps[i].x - ux, ps[i].z - uz) : 99, pin = mine && du < CONTACT;
       if (pin) pedPinned++;
-      pk.push([d - (mine ? 3 : 0) - (pin ? 1000 : 0), i]);
+      pk.push([d - (mine ? 3 : 0) - (pin ? 1000 : 0) - (du < CONTACT ? 500 : 0), i]); // within reach: before the budget (as walkCrowd)
     }
     pk.sort((a, b) => a[0] - b[0]);
-    for (const [k, i] of pk) { if (want.size >= dcap && k > -500) break; want.add(i); }
+    for (const [k, i] of pk) { if (want.size >= dcap && k > -500 && !(k < -400 && want.size < dcap + 2)) break; want.add(i); }
     for (const b of dpool) if (b.ped >= 0 && !want.has(b.ped)) { b.ped = -1; b.fig.root.visible = false; }
     for (const i of want) if (!dpool.some((b) => b.ped === i)) { const b = dpool.find((x) => x.ped < 0 && x.look === i % NLOOK); if (b) { b.ped = i; b.fig.root.visible = true; } }
     const held = new Set(dpool.map((b) => b.ped));
@@ -1631,7 +1636,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       let dnear = 0, dlost = 0;
       dist.peds.forEach((q, i) => { if (Math.hypot(q.x - pedsAt.x, q.z - pedsAt.z) < 30) { dnear++; if (!dpool.some((b) => b.ped === i && b.fig.root.visible) && !stand.some((x) => x.k === 1e6 + i) && !inLens(q.x, q.z)) dlost++; } });
       // per step of soak_smoke's bump test: the budget, who is wanted, who is pinned, the lens, each held body's own fade
-      const dbg = { want: wantLog, pinned: crowdPinned, pedPinned, used: usedLog, cardsNear, line: lineLog, lensOn: lens.on,
+      const elbowCards = you ? cards.filter((q, i) => !byCard.has(i) && Math.hypot(q.x - you!.position.x, q.z - you!.position.z) < 1.2).length : 0;
+      const nearCards = you ? cards.map((q, i) => [i, +q.x.toFixed(2), +q.z.toFixed(2), Math.hypot(q.x - you!.position.x, q.z - you!.position.z)]).filter((r) => r[3] < 9).map((r) => r.slice(0, 3)) : [];
+      const dbg = { elbowCards, nearCards, want: wantLog, pinned: crowdPinned, pedPinned, used: usedLog, cardsNear, line: lineLog, lensOn: lens.on,
         figs: [...byCard.entries()].map(([i, b]) => [i, b.fig.root.visible ? 1 : 0, b.fig.faded ? 1 : 0, inLens(cards[i].x, cards[i].z) ? 1 : 0]),
         peds: dpool.filter((b) => b.ped >= 0).map((b) => [b.ped, dpool.indexOf(b), b.look, +Math.hypot(dist.peds[b.ped].x - pedsAt.x, dist.peds[b.ped].z - pedsAt.z).toFixed(2), +dist.peds[b.ped].x.toFixed(2), +dist.peds[b.ped].z.toFixed(2)]) };
       return { dbg, held, near: nearN, bodies: crowdPool.filter((b) => b.card >= 0 && b.fig.root.visible).length, lost, room: bodiesLeft, dnear, dbodies: dpool.filter((b) => b.ped >= 0 && b.fig.root.visible).length, dlost };
