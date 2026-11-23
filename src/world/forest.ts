@@ -314,7 +314,8 @@ const tmpIds = (n: number) => (tmpBuf.length >= n ? tmpBuf : (tmpBuf = new Int32
 const SECTORS = 32, CULL_FROM = 1;
 const CULL = { on: typeof location === 'undefined' || new URLSearchParams(location.search).get('cull') !== '0' };
 
-export interface Obstacle { x: number; z: number; r: number }
+/** `h`: how tall it stands above the ground (metres); absent: a trunk, as tall as the camera can go. */
+export interface Obstacle { x: number; z: number; r: number; h?: number }
 
 /** The conifer species' (height, crown start, spread) by field index, as built in Forest.build: for the camera screens. */
 const CONIFER_SHAPE: Record<number, [number, number, number]> = { 0: [23, 0.16, 0.24], 1: [31, 0.22, 0.2], 2: [21, 0.58, 0.3] };
@@ -343,19 +344,20 @@ export class Forest {
 
   private key(x: number, z: number) { return `${Math.floor(x / 10)},${Math.floor(z / 10)}`; }
 
-  addObstacle(x: number, z: number, r: number) {
+  addObstacle(x: number, z: number, r: number, h?: number) {
     const k = this.key(x, z);
     let a = this.obstacles.get(k);
     if (!a) { a = []; this.obstacles.set(k, a); }
-    a.push({ x, z, r });
+    a.push(h === undefined ? { x, z, r } : { x, z, r, h });
   }
 
-  /** Is a circle of radius r at (x,z) inside an obstacle? (camera collision) */
-  blocks(x: number, z: number, r: number): boolean {
+  /** Is a circle of radius r at (x,z) inside an obstacle? (camera collision) `above`: the point's height over the
+   * ground; a low obstacle (a camp fire) does not block a camera that is over it. */
+  blocks(x: number, z: number, r: number, above = 0): boolean {
     const cx = Math.floor(x / 10), cz = Math.floor(z / 10);
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
       const a = this.obstacles.get(`${cx + dx},${cz + dz}`);
-      if (a) for (const o of a) if (Math.hypot(x - o.x, z - o.z) < o.r + r) return true;
+      if (a) for (const o of a) if ((o.h === undefined || above < o.h) && Math.hypot(x - o.x, z - o.z) < o.r + r) return true;
     }
     return false;
   }
@@ -408,7 +410,7 @@ export class Forest {
    * How much of the segment (ax,az)-(bx,bz) is free of obstacles, 1 = all of it.
    * Used by the camera to stay on the player's side of a trunk.
    */
-  clearance(ax: number, az: number, bx: number, bz: number, pad: number): number {
+  clearance(ax: number, az: number, bx: number, bz: number, pad: number, above = 0): number {
     const dx = bx - ax, dz = bz - az, len2 = dx * dx + dz * dz;
     if (len2 < 1e-6) return 1;
     let best = 1;
@@ -418,6 +420,8 @@ export class Forest {
       const list = this.obstacles.get(`${cx},${cz}`);
       if (!list) continue;
       for (const o of list) {
+        // (the line is `above` the ground or higher all along it: a low obstacle under it is no wall)
+        if (o.h !== undefined && above >= o.h) continue;
         const t = ((o.x - ax) * dx + (o.z - az) * dz) / len2;
         if (t <= 0.05 || t >= best) continue;
         const r = o.r + pad, ex = ax + dx * t - o.x, ez = az + dz * t - o.z;
