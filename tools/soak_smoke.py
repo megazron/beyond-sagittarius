@@ -86,6 +86,19 @@ with sync_playwright() as pw:
             if h is None or h[1] != body or h[2] != look:
                 fails.append(f'bump test: the walker of card {card} (body {body}, look {look}) became {h} {k * 0.08:.2f} s after the bump'); break
     print('bump test done', flush=True)
+    # 1c. time, not distance (the owner: "the longer we play the game, the laggier it gets"): six minutes in the bazaar,
+    # moving between two spots, sampled every 30 s. The game's own update time (main thread, measurable even on software
+    # GL), the heap after a GC and what the renderer holds must stay flat
+    TS = "(()=>{window.gc&&window.gc();const m=performance.memory||{};const g=__bs.gpuMem;return {tick:+__bs.perf.tick.toFixed(2),geo:g.geometries,tex:g.textures,progs:g.programs,heap:Math.round((m.usedJSHeapSize||0)/1e6)}})()"
+    samples = []
+    for k in range(12):
+        page.evaluate(f"__bs.awayTeleport(6.0, {50.0 if k % 2 == 0 else 42.0}, {3.14 if k % 2 == 0 else 0})")
+        time.sleep(30); samples.append(page.evaluate(TS)); print('time', (k + 1) * 30, 's', samples[-1], flush=True)
+    first, last = samples[1:3], samples[-2:]
+    avg = lambda rows, k: sum(r[k] for r in rows) / len(rows)
+    if avg(last, 'tick') > avg(first, 'tick') * 1.5 + 3: fails.append(f"over time: update {avg(first, 'tick'):.1f} -> {avg(last, 'tick'):.1f} ms")
+    for k, f, c in (('geo', 1.05, 10), ('tex', 1.05, 8), ('progs', 1.05, 6), ('heap', 1.2, 40)):
+        if avg(last, k) > avg(first, k) * f + c: fails.append(f'over time: {k} {avg(first, k):.0f} -> {avg(last, k):.0f}')
     # 2. two more laps, back to the flat
     walk(page, ROUTE); walk(page, ROUTE)
     page.evaluate(f"__bs.awayTeleport({HOME[0]}, {HOME[1]}, 3.14)")
