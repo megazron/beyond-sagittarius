@@ -484,7 +484,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         float wearN = texture2D(uDetail, vMapUv * 5.0).b;
         float dust = (1.0 - smoothstep(0.0, 0.62, vBindY / uHeightM)) * 0.75 + smoothstep(0.55, 0.8, wearN) * 0.5;
         dust = clamp(dust * (0.45 + wearN), 0.0, 1.0) * uDust;
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.66, 0.6, 0.52) + vec3(0.035, 0.028, 0.02), dust);`)
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.66, 0.6, 0.52) + vec3(0.035, 0.028, 0.02), dust);
+        // the inside of a garment is in its own shade: the inside of the lab coat's back, seen between the legs through
+        // the open front, was lit as brightly as its outside and read as a big grey mass (owner, 2026-11-23)
+        if (!gl_FrontFacing) diffuseColor.rgb *= 0.4;`)
         .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         roughnessFactor = min(1.0, roughnessFactor + dust * 0.14);
         roughnessFactor = mix(roughnessFactor, 0.44, vAccent * uSatin);`)
