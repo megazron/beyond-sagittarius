@@ -11,6 +11,7 @@ the farther you go from the spawn point." Checks, on software GL (counts and the
 import argparse, functools, http.server, json, math, pathlib, sys, threading, time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import pw_pin  # noqa: E402,F401
+import bump_probe  # noqa: E402
 from playwright.sync_api import sync_playwright
 
 ap = argparse.ArgumentParser()
@@ -71,28 +72,11 @@ with sync_playwright() as pw:
         r = page.evaluate(f"__bs.awayRoute({x}, {z}, {HOME[0] + 0.7 * (i + 1)}, {HOME[1]})")
         print('route from', (x, z), r, flush=True)
         if r and r['ms'] > a.route_ms: fails.append(f'route search from {(x, z)} took {r["ms"]:.0f} ms (at most {a.route_ms})')
-    # 1b. bump into the painted crowd's walkers: whoever walks as a body stays that same body (the owner: "the pedestrians
-    # suddenly change when touched or bumped into"; in the lens the body was let go and the card drawn instead)
-    page.evaluate("__bs.awayTeleport(-5.5, 0, 0)")
-    for i in range(60):  # the crowd's bodies load on first sight
-        time.sleep(1); held = page.evaluate("__bs.awayCrowd().held") or []
-        if len(held) >= 2: break
-    print('crowd bodies near the street', held, flush=True)
-    if not held: fails.append('bump test: no crowd walker was a body near (-5.5, 0)')
-    tested = set()
-    for rnd in range(4):
-        # each round: whoever is a body now, nearest first, and walk into them from 2 m to the side, 0.4 m a step
-        cur = sorted((h for h in (page.evaluate("__bs.awayCrowd().held") or []) if h[0] not in tested), key=lambda h: h[3])
-        if not cur: break
-        card, body, look = cur[0][:3]; tested.add(card); hit = None
-        for k in range(6):
-            now = {h[0]: h for h in (page.evaluate("__bs.awayCrowd().held") or [])}
-            h = now.get(card)
-            if k and (h is None or h[1] != body or h[2] != look): hit = (k, h); break
-            if h is None: break
-            page.evaluate(f"__bs.awayTeleport({h[4] + max(0.0, 2.0 - 0.4 * k):.2f}, {h[5]:.2f}, 1.5708)"); page.evaluate('__bs.step(0.1)')
-        print('bumped card', card, 'body', body, 'look', look, '->', 'same' if not hit else hit, flush=True)
-        if hit: fails.append(f'bump test: the walker of card {card} (body {body}, look {look}) became {hit[1]} at step {hit[0]} of walking into them')
+    # 1b. bump into the walkers with the keys (a teleport jumps the camera and the body budget): whoever walks as a body
+    # within reach stays that same body (the owner: "the pedestrians suddenly change when touched or bumped into"). The
+    # old town's painted crowd, then a district's walkers (tools/bump_probe.py logs every step with --log)
+    fails += bump_probe.bump(page, (-5.5, 0), 'crowd', 4, say=lambda m: print(m, flush=True))
+    fails += bump_probe.bump(page, (175, 70), 'peds', 3, say=lambda m: print(m, flush=True))
     print('bump test done', flush=True)
     # 1c. time, not distance (the owner: "the longer we play the game, the laggier it gets"): six minutes in the bazaar,
     # moving between two spots, sampled every 30 s. The game's own update time (main thread, measurable even on software

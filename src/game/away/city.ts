@@ -52,6 +52,13 @@ const FLOOR = 0.14;
 const PHONE_CROWD_FAR = 34;
 /** ?lenshold=0: the old way (a body in the lens is let go and its card drawn), for an A/B of the bump fix. */
 const LENS_HOLD = typeof location === 'undefined' || new URLSearchParams(location.search).get('lenshold') !== '0';
+/** ?lensfade=old: bodies on the line from the camera to you are hidden (faded on Web and Ultra) as before, for an A/B. Now
+ * they stay drawn and the camera rises to look over them; a body is only faded (quickly, all the way) when it is right at
+ * the lens itself (character.ts). */
+const LENS_OLD = typeof location !== 'undefined' && new URLSearchParams(location.search).get('lensfade') === 'old';
+/** Whoever is drawn as a body within CONTACT metres of you stays that body, whatever the budget or the ranking does
+ * (?contact=0: the old way). Bumping into somebody pulls them out of the nearest-first order, so they used to be let go. */
+const CONTACT = typeof location !== 'undefined' && new URLSearchParams(location.search).get('contact') === '0' ? 0 : 4.5;
 /** Other presets: townsfolk past this many metres are drawn as cards (citydense.ts stand-ins). */
 const CROWD_FAR = 34; // beyond the 30 m everyone must stay drawn within (tools/crowd_smoke.py), from a camera a few metres behind you
 /** Phones: props smaller than SMALL_PROP metres across (as a radius) are not drawn past SMALL_FAR metres. */
@@ -1238,7 +1245,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     crowdPool.push({ fig, card: -1, phase: rnd() * 10, dx: 0, look: i % NLOOK });
   }
   const byCard = new Map<number, (typeof crowdPool)[number]>(), near: [number, number][] = [];
-  let lastCam: THREE.Vector3 | null = null;
+  let lastCam: THREE.Vector3 | null = null, lineLog = false, crowdPinned = 0, pedPinned = 0, wantLog: number[] = [], usedLog = 0;
   const walkCrowd = (dt: number, time: number, cam: THREE.Camera, budget: number) => {
     lastCam = cam.position;
     const cards = dense.cards, taken = dense.taken, c = cam.position;
@@ -1247,10 +1254,22 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     // someone already walking as a body keeps it in the lens too (the body fades or hides there itself): letting go
     // there gave the body back to the pool and drew the painted card in its place, so a passer-by you bumped into turned
     // into a flat picture of somebody, and back into a body once past (the owner: "the pedestrians suddenly change")
-    for (let i = 0; i < cards.length; i++) { const d = Math.hypot(cards[i].x - c.x, cards[i].z - c.z); if (d < TAKE * (taken[i] ? 1.15 : 1) && ((LENS_HOLD && byCard.has(i)) || !inLens(cards[i].x, cards[i].z))) near.push([d, i]); }
+    // the order is nearest the camera first, but whoever already walks as a body holds on (2 m of slack), and whoever is
+    // a body within CONTACT of you is pinned: the camera swings and the budget moves as you push past, and either used
+    // to hand their body to someone else in the middle of the bump
+    const ux = you ? you.position.x : c.x, uz = you ? you.position.z : c.z;
+    cardsNear = 0; crowdPinned = 0;
+    for (let i = 0; i < cards.length; i++) {
+      const d = Math.hypot(cards[i].x - c.x, cards[i].z - c.z), mine = byCard.has(i);
+      if (!(d < TAKE * (taken[i] ? 1.15 : 1) && ((LENS_HOLD && mine) || !inLens(cards[i].x, cards[i].z)))) continue;
+      if (d < 10) cardsNear++;
+      const pin = mine && CONTACT > 0 && Math.hypot(cards[i].x - ux, cards[i].z - uz) < CONTACT;
+      if (pin) crowdPinned++;
+      near.push([d - (mine && CONTACT > 0 ? 2 : 0) - (pin ? 1000 : 0), i]);
+    }
     near.sort((a, b) => a[0] - b[0]);
-    cardsNear = 0; for (const [d] of near) if (d < 10) cardsNear++;
-    const want = new Set(near.slice(0, Math.min(POOL, budget)).map(([, i]) => i));
+    const want = new Set<number>(); { const n = Math.min(POOL, budget); for (const [k, i] of near) { if (want.size >= n && k > -500) break; want.add(i); } }
+    wantLog = [...want];
     for (const b of crowdPool) if (b.card >= 0 && !want.has(b.card)) { taken[b.card] = 0; byCard.delete(b.card); b.card = -1; b.fig.root.visible = false; }
     for (const i of want) if (!byCard.has(i)) { const b = crowdPool.find((x) => x.card < 0 && x.look === i % NLOOK); if (!b) continue; b.card = i; b.dx = 0; byCard.set(i, b); taken[i] = 1; b.fig.root.visible = true; }
     for (const b of crowdPool) {
@@ -1262,7 +1281,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       b.dx += (want - b.dx) * (1 - Math.exp(-dt * 4));
       const bx = q.x + b.dx;
       b.fig.root.position.set(bx, hx(bx), q.z); b.fig.root.rotation.y = yaw;
-      const hide = inLens(bx, q.z); if (!b.fig.setLensFade(hide ? 0 : 1) && b.fig.root.visible === hide) b.fig.root.visible = !hide; // Web, Ultra: a fade
+      const hide = LENS_OLD && inLens(bx, q.z); if (!b.fig.setLensFade(hide ? 0 : 1) && b.fig.root.visible === hide) b.fig.root.visible = !hide; // Web, Ultra: a fade
       b.phase += dt * sp * 2.2;
       b.fig.animate(sp > 0.3 ? 'walk' : 'idle', b.phase, Math.min(1.1, sp / 3), time, dt);
     }
@@ -1303,7 +1322,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     fig.root.visible = false; fig.setGround((px, pz) => H(px, pz ?? 0)); top(fig.root);
     dpool.push({ fig, ped: -1, phase: rnd() * 10, look: i % NLOOK });
   }
-  const dnear: [number, number][] = [];
+  const dnear: [number, number][] = [], pk: [number, number][] = [];
   // a walker's ground height, looked up again only once they have gone half a metre (it was a height lookup per card a frame)
   const pedAt = new Float32Array(4096 * 3).fill(1e9);
   const pedH = (i: number, x: number, z: number) => {
@@ -1322,7 +1341,18 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     dnear.sort((a, b) => a[0] - b[0]);
     const want = new Set<number>();
     const dcap = Math.min(DPOOL, budget);
-    for (const [d, i] of dnear) { if (d > DNEAR || want.size >= dcap) break; want.add(i); }
+    // nearest first with slack for whoever is a body already, and pinned within CONTACT of you (as walkCrowd)
+    pedPinned = 0; pk.length = 0;
+    const ux = you ? you.position.x : c.x, uz = you ? you.position.z : c.z;
+    for (const [d, i] of dnear) {
+      const mine = CONTACT > 0 && dpool.some((b) => b.ped === i);
+      if (d > DNEAR * (mine ? 1.2 : 1)) { if (d > DNEAR * 1.2) break; continue; }
+      const pin = mine && Math.hypot(ps[i].x - ux, ps[i].z - uz) < CONTACT;
+      if (pin) pedPinned++;
+      pk.push([d - (mine ? 3 : 0) - (pin ? 1000 : 0), i]);
+    }
+    pk.sort((a, b) => a[0] - b[0]);
+    for (const [k, i] of pk) { if (want.size >= dcap && k > -500) break; want.add(i); }
     for (const b of dpool) if (b.ped >= 0 && !want.has(b.ped)) { b.ped = -1; b.fig.root.visible = false; }
     for (const i of want) if (!dpool.some((b) => b.ped === i)) { const b = dpool.find((x) => x.ped < 0 && x.look === i % NLOOK); if (b) { b.ped = i; b.fig.root.visible = true; } }
     const held = new Set(dpool.map((b) => b.ped));
@@ -1330,7 +1360,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (b.ped < 0) continue;
       const q = ps[b.ped], walking = q.mode === 'walk' || q.mode === 'cross';
       b.fig.root.position.set(q.x, H(q.x, q.z), q.z); b.fig.root.rotation.y = q.yaw;
-      { const hide = inLens(q.x, q.z); if (!b.fig.setLensFade(hide ? 0 : 1) && b.fig.root.visible === hide) b.fig.root.visible = !hide; }
+      { const hide = LENS_OLD && inLens(q.x, q.z); if (!b.fig.setLensFade(hide ? 0 : 1) && b.fig.root.visible === hide) b.fig.root.visible = !hide; }
       // they notice you: within a few metres they look at you (and a walker steps round you, districts.ts)
       if (you && Math.hypot(you.position.x - q.x, you.position.z - q.z) < 4.5) b.fig.setLookTarget(eye.set(you.position.x, you.position.y + 1.6, you.position.z)); else b.fig.setLookTarget(null);
       b.phase += dt * (walking ? q.v * 2.2 : 1);
@@ -1597,7 +1627,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       // the districts: every walker within 30 m of the camera is a body or a card, never nothing
       let dnear = 0, dlost = 0;
       dist.peds.forEach((q, i) => { if (Math.hypot(q.x - pedsAt.x, q.z - pedsAt.z) < 30) { dnear++; if (!dpool.some((b) => b.ped === i && b.fig.root.visible) && !stand.some((x) => x.k === 1e6 + i) && !inLens(q.x, q.z)) dlost++; } });
-      return { held, near: nearN, bodies: crowdPool.filter((b) => b.card >= 0 && b.fig.root.visible).length, lost, room: bodiesLeft, dnear, dbodies: dpool.filter((b) => b.ped >= 0 && b.fig.root.visible).length, dlost };
+      // per step of soak_smoke's bump test: the budget, who is wanted, who is pinned, the lens, each held body's own fade
+      const dbg = { want: wantLog, pinned: crowdPinned, pedPinned, used: usedLog, cardsNear, line: lineLog, lensOn: lens.on,
+        figs: [...byCard.entries()].map(([i, b]) => [i, b.fig.root.visible ? 1 : 0, b.fig.faded ? 1 : 0, inLens(cards[i].x, cards[i].z) ? 1 : 0]),
+        peds: dpool.filter((b) => b.ped >= 0).map((b) => [b.ped, dpool.indexOf(b), b.look, +Math.hypot(dist.peds[b.ped].x - pedsAt.x, dist.peds[b.ped].z - pedsAt.z).toFixed(2), +dist.peds[b.ped].x.toFixed(2), +dist.peds[b.ped].z.toFixed(2)]) };
+      return { dbg, held, near: nearN, bodies: crowdPool.filter((b) => b.card >= 0 && b.fig.root.visible).length, lost, room: bodiesLeft, dnear, dbodies: dpool.filter((b) => b.ped >= 0 && b.fig.root.visible).length, dlost };
     },
     scene, gravity: 22, jump: 6.2, spawn: new THREE.Vector3(12.4, FLOOR, 68.4), tasks, people, clearance,
     // the hero views: stepping out of the flat, and the run to the gate
@@ -1708,18 +1742,21 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         lens.on = !!you && outroT < 0; lens.cx = cp.x; lens.cz = cp.z; if (you) { lens.px = you.position.x; lens.pz = you.position.z; }
         // how many bodies are within a few steps of you (the follow camera rises over a thick crowd: crowdNear)
         if (you) {
-          let n = 0; const ux = you.position.x, uz = you.position.z, R2 = 3.2 * 3.2;
-          const at = (f: Character) => { if (f.root.visible) { const dx = f.root.position.x - ux, dz = f.root.position.z - uz; if (dx * dx + dz * dz < R2) n++; } };
+          let n = 0, line = false; const ux = you.position.x, uz = you.position.z, R2 = 3.2 * 3.2;
+          // and over whoever walks between the camera and you: they stay drawn (no half-faded ghost) and the view looks
+          // down past them (the old way hid them: lensfade=old)
+          const at = (f: Character) => { if (f.root.visible) { const dx = f.root.position.x - ux, dz = f.root.position.z - uz; if (dx * dx + dz * dz < R2) n++; if (!LENS_OLD && !line && inLens(f.root.position.x, f.root.position.z)) line = true; } };
           if (oldOn) { for (const q of people) at(q.fig); for (const b of crowdPool) if (b.card >= 0) at(b.fig); }
           for (const b of dpool) if (b.ped >= 0) at(b.fig);
-          crowdK = Math.min(1, Math.max(0, (n - 1) / 3));
+          crowdK = Math.max(line ? 0.8 : 0, Math.min(1, Math.max(0, (n - 1) / 3)));
+          lineLog = line;
         }
         if (oldOn) for (let i = 0; i < people.length; i++) {
           const q = people[i];
           if (boarding.has(q) || talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
           if (q.walk?.shop?.stage === 'inside') { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           const d = Math.hypot(q.pos.x - cp.x, q.pos.z - cp.z);
-          const lensHit = d < 9 && inLens(q.pos.x, q.pos.z);
+          const lensHit = LENS_OLD && d < 9 && inLens(q.pos.x, q.pos.z);
           if (!q.fig.setLensFade(lensHit ? 0 : 1) && lensHit) { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           // the six of the story and Mir have no card of their own look: they stay themselves (a body) out to 48 m
           if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = tier > 0 && d < 48; /* a body to 48 m (they have no card of their own look); phones: only within the card range */ if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; }
@@ -1730,21 +1767,23 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           if (!crowd.has(q.fig)) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
           // whoever is drawn now holds on a little, the six of the story come first, and then anyone at your elbow (a
           // card reads as cardboard at arm's length), all within the cap
-          const key = d - (q.fig.root.visible ? 1.5 : 0) - (crowd.has(q.fig) ? 0 : 5) - (tier > 0 && dy < 4 ? 30 : 0);
+          // (phones too, once they are a body: a body you bump into is not turned into a card at your elbow)
+          const key = d - (q.fig.root.visible ? 1.5 : 0) - (crowd.has(q.fig) ? 0 : 5) - ((tier > 0 || (CONTACT > 0 && q.fig.root.visible)) && dy < 4 ? 30 : 0);
           let j = nc++; while (j > 0 && candK[j - 1] > key) { candK[j] = candK[j - 1]; candI[j] = candI[j - 1]; j--; }
           candK[j] = key; candI[j] = i;
         }
         else for (const q of people) if (q.fig.root.visible && !boarding.has(q)) q.fig.root.visible = false;
         // the painted crowd right beside you comes before a townsperson thirty metres off: up to half the bodies are
         // kept for it while it is within reach
-        const cap = outroT >= 0 ? 99 : BODY_CAP - Math.min(Math.floor(BODY_CAP / 2), cardsNear);
+        // and the walkers pinned at your elbow (walkCrowd, drawPeds) keep their bodies before anyone further off gets one
+        const cap = outroT >= 0 ? 99 : BODY_CAP - Math.max(Math.min(Math.floor(BODY_CAP / 2), cardsNear), crowdPinned + pedPinned);
         for (let j = 0; j < nc; j++) {
           // whoever is at your elbow is a body even when the cap is spent (two over it at most)
           const q = people[candI[j]], show = used < cap || (j < 2 && candK[j] < -20);
           if (show) used++; else stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: candI[j], v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
           if (show !== q.fig.root.visible) q.fig.root.visible = show;
         }
-        bodiesLeft = Math.max(0, (outroT >= 0 ? 99 : BODY_CAP) - used);
+        bodiesLeft = Math.max(0, (outroT >= 0 ? 99 : BODY_CAP) - used); usedLog = used;
         if (!deep) drawPeds(dt, time, cam, Math.max(0, bodiesLeft - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0))); else for (const b of dpool) if (b.ped >= 0) { b.ped = -1; b.fig.root.visible = false; }
         dense.standIns(stand, cam);
         // a soft contact shadow under every body that casts none of its own (the crowd: CHAR_BUDGET.crowdShadowFar)

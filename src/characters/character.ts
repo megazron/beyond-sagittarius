@@ -15,6 +15,8 @@ import { mergeRigid } from './rigid';
 import { BODY_MERGE, BODY_PARTS, bodyMaterial, mergeBodyGeometry } from './bodymerge';
 import { perfBody } from '../core/perfhud';
 
+/** ?lensfade=old: a crowd body fades through a dithered half-shape from 2.2 m to 1.1 m of the camera (the old way). */
+const LENS_BAND = typeof location !== 'undefined' && new URLSearchParams(location.search).get('lensfade') === 'old';
 export type { CrewId } from './looks';
 export { preloadCrew } from './assets';
 /** A direction in the body's own space: +x left, +y up, +z forward. */
@@ -867,9 +869,13 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
           // line from the camera to you), over a fifth of a second either way. From 1.3 m to 0.4 m a low camera looking
           // up saw a half-faded body fill ~40% of the screen as a dark dithered shape; gone by 1.1 m it is a quarter
           // of the width at most, and mostly faded long before
-          const band = dy > -0.3 && dy < 2.3, x = band ? THREE.MathUtils.clamp((d - 1.1) / 1.1, 0, 1) : 1;
+          // Now (the owner: "pedestrians change when touched or bumped"): that half-faded shape from 2.2 m to 1.1 m read as
+          // the person changing. A body is whole until it is right at the lens (0.85 m, back at 1.1 m), and then gone in a
+          // tenth of a second, all the way. ?lensfade=old: the band
+          const band = dy > -0.3 && dy < 2.3;
+          const x = LENS_BAND ? (band ? THREE.MathUtils.clamp((d - 1.1) / 1.1, 0, 1) : 1) : band && d < (fadeK > 0.5 ? 0.85 : 1.1) ? 0 : 1;
           const want = Math.min(x * x * (3 - 2 * x), lensWant);
-          fadeK += (want - fadeK) * (1 - Math.exp(-dt * 12));
+          fadeK += (want - fadeK) * (1 - Math.exp(-dt * (LENS_BAND ? 12 : 40)));
           if (Math.abs(fadeK - want) < 0.01) fadeK = want;
           setFade(fadeK);
         } else {

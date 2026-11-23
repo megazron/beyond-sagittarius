@@ -1059,6 +1059,9 @@ window.addEventListener('resize', () => {
   get awayOutroOn() { return !!game?.away?.outroOn; },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
+  /** Walk with the keys, not a teleport (soak_smoke's bump test): hold or let go a key, and turn the away body to a heading. */
+  key(code: string, on: boolean) { if (on) input.keys.add(code); else input.keys.delete(code); },
+  awayYaw(yaw: number) { const p = (game?.away as unknown as { player?: Player } | undefined)?.player; if (p) p.yaw = yaw; },
   /** Test hook (tools/soak_smoke.py): milliseconds of one GPS route search on the away stage, and its corners. */
   awayRoute(ax: number, az: number, bx: number, bz: number) { const L = (game?.away?.stage as AwayStage | null | undefined)?.mapLayer; if (!L?.route) return null; const t0 = performance.now(); const r = L.route(ax, az, bx, bz); return { ms: performance.now() - t0, n: r.length }; },
   /** Test hook: what the renderer holds (soak test). */
