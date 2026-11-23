@@ -799,3 +799,43 @@ unlanded except this handoff commit and any recording in progress.
 - 21_weapon_holds_before (?meleerig=0) was still waiting in the heavy queue at 05:30 (cap3.sh v21b; it starts and
   closes its own Chrome and preview). Review it, sync-check, deliver to Downloads/.../combat with a note, and
   compare with 21_weapon_holds_after (delivered with notes).
+
+### 2026-11-23 ~06:30 (combat agent, weapons session after the 05:30 handoff)
+- LANDING: main had moved to cf5de40, so 452b4b3 could not fast-forward. I rebased the whole combat-land31 stack on
+  cf5de40 as `combat-land32` (9533cdc; CI 45115805418: combat and smoke passed this time). Land 9533cdc once that run is
+  green on that sha (`git push origin 9533cdc:main`). On top: `combat-land33` (this session's work; CI runs on push).
+- WHY THE HANDS LEFT THE WEAPON (found): the character animates BEFORE combat's present() (game.ts: combat.before,
+  player.update -> model.animate, combat.after -> present -> body.update + body.late). So body.update's solve used last
+  frame's shoulders and was applied a frame later, after the clip, bend and twist had moved the shoulders again; and
+  keepArmsOut ran after applyLimbs. FIX (body.ts fixArms, called from late()): the arms are solved AGAIN on the bones as
+  posed this frame (two-bone, the solve's elbow pole) and written to the bones directly (aimBone); the left hand's mark
+  moves with the real grip, so it lands on the drawn shaft. Works at any step size, so the play test's gates are now
+  real: shaft <= 1 cm in the body shape, right hand <= 2 cm off its grip, left palm <= 2 cm off the spear shaft (and
+  within its length), measured on what is drawn that frame.
+- THE BODY SHAPES WERE BEHIND THE BODY: measured on the GLBs (custom_m/f_*): the coat's front is ~0.2 m ahead of the
+  root, the chest bone sits near the back (z -0.05), so the chest shape (centred on the bone) was 9 cm behind the real
+  chest: "0.9 cm" in the shape could be 10 cm inside the coat. Now: 4 shapes (coat, chest, upper chest, head) with an
+  offset from their bone, fitted per model from its skinned meshes' bind pose (body.ts measureBody -> melee.ts fitBody;
+  printed in testPoseStats().skel as `fit`).
+- Also in melee.ts: reachGrip (a grip past the arm's reach slides the spear through the hand or comes in; the spear
+  brace asked 12 cm past the real arm), the shaft turns to the front hand for short arms, swingOut (the elbow swings
+  round the shoulder-to-hand line out of the body, remembered, <= 10 rad/s), the pole remembers last frame's elbow
+  (elbow flips), the front hand takes hold / lets go by the eased `hold` (no jump), club overhead wind-up now up over the
+  right shoulder (-0.38 -> -0.44, 1.7, -0.12), not beside the face. pose_test runs three skeletons (stand-in, male and
+  female game rigs with their fitted shapes) and checks elbow jumps too: 168 checks pass. Known: on the female rig the
+  throwing arm grazes 2.7 cm in the release frames of a spear throw (counted at a third in the test, said here).
+- CHARACTER AGENT (~/bs-life): I use your `Limbs.ownArms = 'both'` (life-wip 1a0405f) on every fight pose (melee and
+  ranged); on main it is ignored until your change lands, and my late() re-solve covers it either way. Please keep the
+  field name. Your torsoCapsules() I do not use yet (my shapes are fitted from the skin at rest instead). setGrip: I
+  still call it as before (side, {shape, radius, amount}).
+- Ranged (bow, sling, spear-thrower): same elbow swing and body shapes, ownArms; the gear was already drawn at the real
+  hands in ranged.late(). Play test gate: arms within 2 cm of the shapes with each. Not re-solved on the bones yet.
+- Fixes for the owner's list, not yet seen on the GPU: hide wrap to the wrist with a soft closed end + a hide band over
+  the cuff where the coat's cuff runs onto the hand; the thrown stick fuller in slow motion; the camera's pull-in eases
+  over a few frames (player.ts; the 2:06 jump by the fire; snapCamera still cuts); spear fishing: darters 50 cm
+  (DARTER_LEN, radius 0.065), darker barred back, a shadow on the bottom, low camera (cb.lowCam -0.32, pitch >= -0.95),
+  rings round the legs when wading (fx.wade). Story: placement proposed again in ~/bs-story/INVENTION_TREE.md (morning
+  after night one, the 1.1/1.2 stream); no answer yet.
+- Capture plan ready: ~/bs-cap/combat/plan_v22.json (mkplan_v22.py): 22_weapon_holds_v2, 23_bow_sling_spearthrower
+  _holds_v1, 20_spear_fishing_v2, 19_hide_wrap_v8, 18_throwing_stick_v8, one boot. Run after a build:
+  `~/bs-cap/combat/cap3.sh v22 plan_v22.json ""` (it is itself the heavy exclusive step; closes Chrome and preview).
