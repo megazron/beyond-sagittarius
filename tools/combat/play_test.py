@@ -131,9 +131,10 @@ with sync_playwright() as pw:
                 page.evaluate("__bs.combat.testHold('Mouse2', false)"); step(page, 0.3)
                 ps = page.evaluate("__bs.combat.testPoseStats(true)")
                 print(f'pose {wpn}', json.dumps(ps), flush=True)
-                # REPORTED, not yet a gate: the body's shapes do not turn with the chest, and a side-on archer or a
-                # wound-up sling turns it a long way, so this reads 10 cm where it may be less (HANDOFF, 2026-11-23)
-                print(f'  {wpn}: arm depth in the body shapes {ps["rangedArmIn"] * 100:.1f} cm at {ps.get("rangedWhere")}', flush=True)
+                # the arms as drawn (re-solved on the bones after the character posed them, view/ranged.ts fixArms),
+                # against the body's shapes turned with the chest (a side-on archer, a wound-up sling)
+                print(f'  {wpn}: arm depth in the body shapes {ps["rangedArmIn"] * 100:.1f} cm at {ps.get("rangedWhere")} (solve {ps.get("rangedSolveIn", 0) * 100:.1f})', flush=True)
+                ok(ps['rangedArmIn'] <= 0.02, f'arena: with the {wpn} the arms stay out of the body (within 2 cm)', json.dumps(ps))
             # wake the guardian and let it work
             g = [e for e in page.evaluate(D)['enemies'] if e['kind'] == 'guardian'][0]
             page.evaluate(f"__bs.teleport({g['x']} - 3, {g['z']})"); step(page, 6)

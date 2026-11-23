@@ -7,7 +7,7 @@ import type { SimPlayer } from '../sim/sim';
 import { WEAPONS } from '../sim/weapons';
 import { RangedRig } from './ranged';
 import { loft } from '../../characters/shapes';
-import { MELEE_GEAR, SHAFT, targetFrame, clearShaft, solveArms, follow, newFrame, copyFrame, depth, setBodyScale, setBodyCentres, setBodyFit, fitBody, reach2, smooth as smoothK } from './melee';
+import { MELEE_GEAR, SHAFT, targetFrame, clearShaft, solveArms, follow, newFrame, copyFrame, depth, setBodyScale, setBodyCentres, setBodyFit, fitBody, reach2, aimBone, smooth as smoothK } from './melee';
 import type { ActState, WFrame, ArmMem, Solved, BodyFit } from './melee';
 import type { WeaponId } from '../sim/weapons';
 
@@ -165,20 +165,21 @@ class HideWrap {
       const i = Math.max(0, Math.min(7, Math.floor(t * 8)));
       return Math.max(M.R[i], M.R[Math.max(0, i - 1)] * 0.9, M.R[Math.min(7, i + 1)] * 0.9);
     };
-    const rad = (t: number, base: number) => Math.max(base * k, under(t) * 1.05 + 0.004 * k);
+    // (snug: v8 read as blocks on the forearms; the hide is laid 2.5 mm over the cloth, not 4 mm plus 5%)
+    const rad = (t: number, base: number) => Math.max(base * k, under(t) * 1.02 + 0.0025 * k);
     const g = new THREE.Group(); g.name = 'hideWrap';
     g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.clone().normalize());
     // a wrap is bound tight: never wider than a hand's breadth round (a flared cuff is squeezed in, the cloth spills out
     // past the wrist instead of the hide flaring into a wide open tube round the hand)
-    const cap = (t: number, m: number) => Math.min(rad(t, m), (M ? 0.085 : 1) * k);
+    const cap = (t: number, m: number) => Math.min(rad(t, m), (M ? 0.072 : 1) * k);
     const ra = cap(a, r0), rb = Math.min(cap(b, r1), ra * 0.92), rm = cap((a + b) / 2, (r0 + r1) / 2);
     // a hide sleeve: seven sides, not quite round, the edges rolled a little proud, pulled in a little under the cords
     const rings = [
-      { y: a * len, rx: ra * (1.06 + flare), rz: ra * (0.98 + flare) },
+      { y: a * len, rx: ra * (1.03 + flare), rz: ra * (0.96 + flare) },
       { y: (a + 0.04) * len, rx: ra * 1.02, rz: ra * 0.95 },
-      { y: (a + b) * 0.5 * len, rx: rm, rz: rm * 0.92 },
+      { y: (a + b) * 0.5 * len, rx: rm * 0.97, rz: rm * 0.88 },
       { y: (b - 0.04) * len, rx: rb * 1.02, rz: rb * 0.95 },
-      { y: b * len, rx: rb * 1.08, rz: rb * 1.0 },
+      { y: b * len, rx: rb * 1.04, rz: rb * 0.97 },
       // the end eases in over the wrist: a closed end without a hard turned-in ring (the rolled edge of v7 faced the
       // camera from the front and read as a dark band at the wrist)
       { y: (b + 0.02) * len, rx: rb * 0.93, rz: rb * 0.88 },
@@ -265,9 +266,9 @@ class HideWrap {
         this.cloth = new THREE.MeshStandardMaterial({ color: src?.color ? src.color.clone() : new THREE.Color(0xe8e8e4), roughness: 0.92 });
       }
       // to the wrist: the coat's cuff ends there, and a wrap that stopped short left the cuff's pale tab showing
-      this.sleeve(model, lo, hd, 0.12, 0.95, 0.05, 0.045, [0.18, 0.52, 0.86], 0, (n) => n === `lowerarm${s}` || (n.startsWith('forearmtw') && n.endsWith(s)));
+      this.sleeve(model, lo, hd, 0.12, 0.95, 0.044, 0.038, [0.18, 0.52, 0.86], 0, (n) => n === `lowerarm${s}` || (n.startsWith('forearmtw') && n.endsWith(s)));
       this.cuffCover(model, hd, s);
-      this.sleeve(model, up, lo, -0.06, 0.36, 0.092, 0.08, [0.3], 0.12);
+      this.sleeve(model, up, lo, -0.06, 0.36, 0.082, 0.072, [0.3], 0.05);
     }
     this.model = model;
   }
@@ -328,7 +329,7 @@ export class FightBody {
       if (pose) { if (p.sneaking) { pose.bend = (pose.bend ?? 0) + 0.3; this.crouch = 0.2; } model.setLimbs(pose); return; }
     } else if (!rw) { if (this.ranged.mode !== 'none') this.ranged.hide(model); }
     else this.ranged.faceOffset = 0;
-    const out0 = this.meleePose(model, p, dt, armed, visible);
+    const out0 = this.meleePose(model, p, dt, armed, visible, t);
     if (out0) { this.emit(model, out0, dt, true); return; }
     this.mframe = false;
     if (this.held && !(RIG_ON && MELEE_GEAR.includes(this.heldId!))) {
@@ -410,7 +411,8 @@ export class FightBody {
   private solvedL: number | null = null; private prevL: number | null = null;
   private mem: ArmMem = { L: 0, R: 0 }; private sol: (Solved & { sL: THREE.Vector3; sR: THREE.Vector3 }) | null = null;
   private fitFor: Character | null = null; private fit: BodyFit[] | null = null;
-  private meleePose(model: Character, p: SimPlayer, dt: number, armed: boolean, visible: WeaponId | null): Limbs | null {
+  yawNow = 0; private calm = 0;
+  private meleePose(model: Character, p: SimPlayer, dt: number, armed: boolean, visible: WeaponId | null, t = 0): Limbs | null {
     const w = p.weapon;
     if (!RIG_ON || !visible || !MELEE_GEAR.includes(w) || p.down || p.act === 'roll' || p.staggerT > 0 || p.snareT > 0.15) return null;
     if (!this.bonesM) {
@@ -430,7 +432,20 @@ export class FightBody {
     };
     const { K, ch } = this.shapes(model, B);
     const loc = (o: THREE.Object3D) => model.root.worldToLocal(o.getWorldPosition(new THREE.Vector3()));
-    targetFrame(s, this.tgt, this.tmp); this.tgt.g.multiplyScalar(K); this.tgt.lh.multiplyScalar(K);
+    targetFrame(s, this.tgt, this.tmp);
+    // standing with a weapon, a body is never still: the weight shifts from foot to foot (the chest turns and leans a
+    // little with it), the breath lifts the hands; eased out in a blow, a block or a throw
+    const calm = p.act === 'idle' && !p.blocking && !s.thrown ? 1 : 0;
+    this.calm += (calm - this.calm) * (1 - Math.exp(-dt * (calm ? 2 : 8)));
+    if (this.calm > 1e-3) {
+      const c = this.calm, T = this.tgt;
+      T.twist += c * (0.06 * Math.sin(t * 0.53) + 0.025 * Math.sin(t * 1.37 + 0.6));
+      T.bend += c * 0.02 * Math.sin(t * 0.91 + 1.1);
+      const breath = 0.008 * Math.sin(t * 1.6);
+      T.g.y += c * breath; T.g.x += c * 0.012 * Math.sin(t * 0.53);
+      if (T.l === null) { T.lh.y += c * (breath + 0.01 * Math.sin(t * 0.7 + 2)); T.lh.z += c * 0.02 * Math.sin(t * 0.61 + 0.4); }
+    }
+    this.tgt.g.multiplyScalar(K); this.tgt.lh.multiplyScalar(K);
     this.tgt.g.x += ch.x; this.tgt.g.z += ch.z; this.tgt.lh.x += ch.x; this.tgt.lh.z += ch.z;
     clearShaft(this.tgt, w);
     const fast = p.act === 'active' || (s.thrown && this.since < 0.2);
@@ -465,7 +480,17 @@ export class FightBody {
     const loc = (o: THREE.Object3D) => model.root.worldToLocal(o.getWorldPosition(new THREE.Vector3()));
     const hips = model.root.getObjectByName('hips'), chest = model.root.getObjectByName('chest');
     const ch = chest ? loc(chest) : new THREE.Vector3(), hp = hips ? loc(hips) : new THREE.Vector3(), hd = loc(model.head);
-    setBodyCentres([{ x: hp.x, z: hp.z }, { x: ch.x, z: ch.z }, { x: hd.x, z: hd.z }]);
+    // each part turned as the body really is this frame: the chest and head by the line between the shoulders (the
+    // twist, a side-on stance), the hips by the line between the hips (left minus right is +x when facing ahead)
+    const yawOf = (l: string, r: string) => {
+      const a = model.root.getObjectByName(l), b = model.root.getObjectByName(r);
+      if (!a || !b) return 0;
+      const d = loc(a).sub(loc(b));
+      return Math.atan2(-d.z, d.x);
+    };
+    const yc = yawOf('upperarmL', 'upperarmR'), yh = yawOf('upperlegL', 'upperlegR');
+    setBodyCentres([{ x: hp.x, z: hp.z, yaw: yh }, { x: ch.x, z: ch.z, yaw: yc }, { x: hd.x, z: hd.z, yaw: yc }]);
+    this.yawNow = yc;
     return { K, ch };
   }
 
@@ -555,18 +580,6 @@ export class FightBody {
     arm(B.upL, B.loL, model.handL, lT, r.eL, r.sL);
   }
   release(model: Character) { this.ranged.hide(model); model.setLimbs(null); this.hold(model, null); this.mframe = false; this.outL = {}; gripHand(model, 'R', null); gripHand(model, 'L', null); this.rollAngle = 0; this.crouch = 0; this.ready = 0; }
-}
-
-/** Turn a bone so its child lands on `to` (world), by weight w. */
-function aimBone(bone: THREE.Object3D, child: THREE.Object3D, to: THREE.Vector3, w: number) {
-  const bp = bone.getWorldPosition(new THREE.Vector3()), cp = child.getWorldPosition(new THREE.Vector3());
-  const from = cp.sub(bp), dir = to.clone().sub(bp);
-  if (from.lengthSq() < 1e-10 || dir.lengthSq() < 1e-10 || !bone.parent) return;
-  const q = new THREE.Quaternion().setFromUnitVectors(from.normalize(), dir.normalize());
-  if (w < 1) q.copy(new THREE.Quaternion().slerp(q, w));
-  const bw = bone.getWorldQuaternion(new THREE.Quaternion()), pw = bone.parent.getWorldQuaternion(new THREE.Quaternion());
-  bone.quaternion.copy(pw.invert().multiply(q.multiply(bw)));
-  bone.updateWorldMatrix(false, true);
 }
 
 /** The body's depth from its own skin and clothes at rest (the skinned meshes' bind pose), for the melee rig's
