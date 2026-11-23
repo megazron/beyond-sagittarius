@@ -1,0 +1,41 @@
+name: Bug report
+description: Something in the game is broken or looks wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead. Screenshots or a short clip help a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: Where in the game
+      description: The chapter, level or place, and what you were doing.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Browser, Android app, Windows app]
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      description: For example "Pixel 7, Android 15" or "Windows 11, Chrome 131, GTX 1660".
+  - type: input
+    id: version
+    attributes:
+      label: Game version
+      description: Shown on the title screen.
+  - type: dropdown
+    id: quality
+    attributes:
+      label: Quality preset
+      options: [Mobile, Web, Ultra, Not sure]
+  - type: markdown
+    attributes:
+      value: Please do not post story spoilers in the title. Security problems go through the Security tab instead.

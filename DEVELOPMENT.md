@@ -58,7 +58,7 @@ back to any installed Playwright Chromium if the pinned build is missing.
 
 `src/combat/sim/` is the fight itself with no browser in it (weapons, creatures and their senses, traps, fire, the set
 pieces, the tension moments); `src/combat/view/` draws it; `src/combat/combat.ts` joins it to the game. The rules and
-where they come from are in `MECHANICS_NOTES.md`, the calls the story makes in `docs/COMBAT_API.md`.
+where they come from are in `docs/dev/MECHANICS_NOTES.md`, the calls the story makes in `docs/COMBAT_API.md`.
 
 ```bash
 node --experimental-strip-types tools/combat/sim_test.ts   # every weapon, creature, trap and outcome on a fixed seed, about 2 s
@@ -141,7 +141,7 @@ src/
   i18n/         en.json, hi.json, ur.json, voice.json
 ```
 
-[LEVELS.md](LEVELS.md) holds the level design notes.
+[docs/dev/LEVELS.md](docs/dev/LEVELS.md) holds the level design notes.
 
 ## Moved from the README
 

@@ -1,14 +1,10 @@
 # Credits & licences
 
-BEYOND SAGITTARIUS is an original game design by its owner. Crew, creatures,
-hair, clothes, the Vault, shaders and synthesised sound effects are generated
-in code at runtime. The photo textures, scanned models, the HDRI and the voice
-model below are third-party and credited here. Every in-game company or
-BEYOND SAGITTARIUS is an original game design by its owner. Creatures,
-anime hair, the Vault, shaders, synthesised sound effects and the foliage
-atlas are generated in code at runtime. The photo textures, the HDRI and the
-voice model below are third-party and credited here. Every in-game company or
-product name is a made-up parody.
+BEYOND SAGITTARIUS is an original game design by its owner. Creatures, hair, the Vault's geometry,
+shaders, the title theme, the logo and the synthesised sound effects are made for this game. The photo
+textures, scanned models, HDRI, character base data and clothing, animation, music, recorded sounds, fonts
+and voice models below are third-party and credited here. Every in-game company or product name is a
+made-up parody.
 
 ## Science
 
@@ -19,7 +15,8 @@ at home. Dangerous procedures stay high-level or are left out.
 
 | Library | Use | Licence |
 | --- | --- | --- |
-| [three.js](https://threejs.org) (r187) incl. `examples/jsm` post-processing (EffectComposer, UnrealBloomPass, GTAOPass, FXAAPass, OutputPass, ShaderPass), loaders (HDRLoader, GLTFLoader, meshopt decoder), SunLight and `BufferGeometryUtils` | Rendering | MIT |
+| [three.js](https://threejs.org) (r187) incl. `examples/jsm` post-processing (EffectComposer, UnrealBloomPass, GTAOPass, FXAAPass, OutputPass, ShaderPass), loaders (HDRLoader, GLTFLoader, KTX2Loader, meshopt decoder), SunLight and `BufferGeometryUtils` | Rendering | MIT |
+| [Basis Universal](https://github.com/BinomialLLC/basis_universal) transcoder (`public/basis/`, from three.js `examples/jsm/libs/basis`) | KTX2 texture decoding | Apache-2.0 |
 | [Capacitor](https://capacitorjs.com) (`@capacitor/core`, `app`, `splash-screen`, `android`) | Android app runtime and native bridge | MIT |
 | [Electron](https://www.electronjs.org) (includes Chromium; its notices ship as `LICENSES.chromium.html` in the download) | Desktop build runtime | MIT |
 | [electron-builder](https://www.electron.build) | Desktop packaging (dev only) | MIT |
@@ -43,6 +40,10 @@ Re-encoded to WebP at 512 / 1k / 2k into `public/textures/`.
 | Rock, cliffs | Rock Face 03 | https://polyhaven.com/a/rock_face_03 | CC0 |
 | Alien grove bark (fallback) | Bark Brown 02 | https://polyhaven.com/a/bark_brown_02 | CC0 |
 | Escape pod metal | Blue Metal Plate | https://polyhaven.com/a/blue_metal_plate | CC0 |
+| Ring ice | Snow 02 | https://polyhaven.com/a/snow_02 | CC0 |
+| Asteroid regolith | Moon Dusted 02 | https://polyhaven.com/a/moon_dusted_02 | CC0 |
+| Wreck hull | Metal Plate 02 | https://polyhaven.com/a/metal_plate_02 | CC0 |
+| Methane moon ground | Mud Cracked Dry 03 | https://polyhaven.com/a/mud_cracked_dry_03 | CC0 |
 | Image-based lighting (`public/hdri/sky_1k.hdr`) | Misty Pines HDRI | https://polyhaven.com/a/misty_pines | CC0 |
 
 ### Scanned models and foliage
@@ -155,6 +156,18 @@ Re-downloaded and packed by `tools/fetch_city.py`: textures to WebP in `public/t
 | City props and the flat | Wall Clock | https://polyhaven.com/a/wall_clock | CC0 |
 | City props and the flat | Vintage Electric Kettle | https://polyhaven.com/a/vintage_electric_kettle | CC0 |
 | City props and the flat | Wooden Bookshelf Worn | https://polyhaven.com/a/wooden_bookshelf_worn | CC0 |
+| City props and the flat | Painted Wooden Cabinet | https://polyhaven.com/a/painted_wooden_cabinet | CC0 |
+| City props and the flat | Ornate Mirror 01 | https://polyhaven.com/a/ornate_mirror_01 | CC0 |
+| City props and the flat | Throw Pillows 01 | https://polyhaven.com/a/throw_pillows_01 | CC0 |
+| City props and the flat | Television 02 | https://polyhaven.com/a/television_02 | CC0 |
+| City props and the flat | Book Encyclopedia Set 01 | https://polyhaven.com/a/book_encyclopedia_set_01 | CC0 |
+| City props and the flat | Desk Lamp Arm 01 | https://polyhaven.com/a/desk_lamp_arm_01 | CC0 |
+| City props and the flat | Jug 01 | https://polyhaven.com/a/jug_01 | CC0 |
+| City props and the flat | Brass Pan 01 | https://polyhaven.com/a/brass_pan_01 | CC0 |
+| City props and the flat | Wooden Bowl 01 | https://polyhaven.com/a/wooden_bowl_01 | CC0 |
+| City props and the flat | Multi Cleaner Bottle | https://polyhaven.com/a/multi_cleaner_bottle | CC0 |
+| City props and the flat | Binder Notebook | https://polyhaven.com/a/binder_notebook | CC0 |
+| City props and the flat | Ceramic Vase 01 | https://polyhaven.com/a/ceramic_vase_01 | CC0 |
 
 ## Characters
 
@@ -276,7 +289,8 @@ synthetic voice lines run backwards, pitched and smeared so no word is left). Th
 (`step_metal_*`) are cut from Kenney's CC0 light metal impacts.
 
 The breaths, gasps, grunts, yelps, screams, laughs and crowd in `public/audio/sfx/human/` are cut from CC0 Freesound
-recordings listed in `tools/tts/fetch_human.py`. Every other interface tone is synthesised in the browser.
+recordings listed in `tools/tts/fetch_human.py`. The creature, combat and impact sounds (`cb_*`) are synthesised by `tools/combat/make_sounds.py` and use no
+recordings. Every other interface tone is synthesised in the browser.
 
 ## Voices
 
