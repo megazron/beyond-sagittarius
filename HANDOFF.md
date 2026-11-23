@@ -1203,3 +1203,7 @@ unlanded except this handoff commit and any recording in progress.
   28_coat_by_the_fire_v1 (still blown out, superseded) and _v4.
 - Open, below the bar: bow "T" arms between shots from behind; the set means the visible draw is short; free left arm stiff
   in the spear draw; flames are pale blocky cones up close; fishing tilt (above); fishing placement waits on the story.
+- ~16:30 LANDING UPDATE: run 45184760079 went GREEN on 934d701 after the rerun, but main had moved to 0cc8adb, so it
+  could not fast-forward. Everything (all of land45..47 + this note) rebased on 0cc8adb and pushed as `combat-land48`.
+  Next agent: wait for land48's CI on its exact sha (rerun smoke/levels_smoke if they fail on the known flakes), check
+  `git merge-base --is-ancestor origin/main <sha>`, then `git push origin <sha>:main` as its own command.
