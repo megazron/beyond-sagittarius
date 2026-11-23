@@ -878,6 +878,29 @@ export class Renderer {
       tick();
     });
   }
+  /**
+   * Every texture the visible materials of `scene` use, sent to the GPU a few at a time, yielding a frame whenever a
+   * batch has taken `budgetMs`: the cold title load's warm draws uploaded 40-90 textures each in one frame (freezes of
+   * 2-3 s on the A500 with an empty cache). Returns how many it sent.
+   */
+  async uploadTextures(scene: THREE.Scene, budgetMs = 24) {
+    const r = this.renderer, seen = new Set<THREE.Texture>(), list: THREE.Texture[] = [];
+    scene.traverseVisible((o) => {
+      const m = (o as THREE.Mesh).material; if (!m) return;
+      for (const mat of Array.isArray(m) ? m : [m]) for (const v of Object.values(mat)) {
+        const t = v as THREE.Texture;
+        if (t && t.isTexture && !seen.has(t) && !(t as THREE.Texture & { isRenderTargetTexture?: boolean }).isRenderTargetTexture && t.image) {
+          seen.add(t); if (!(r.properties.get(t) as { __webglInit?: boolean }).__webglInit) list.push(t);
+        }
+      }
+    });
+    let t0 = performance.now();
+    for (const t of list) {
+      try { r.initTexture(t); } catch { /* sent with its first draw instead */ }
+      if (performance.now() - t0 > budgetMs) { await new Promise((ok) => requestAnimationFrame(ok)); t0 = performance.now(); }
+    }
+    return list.length;
+  }
   warm(scene: THREE.Scene, cam: THREE.PerspectiveCamera, ao: boolean) {
     this.setScene(scene, cam, ao);
     if (this.volumetric) this.volumetric.source = (scene.userData.post as PostSource | undefined) ?? null;

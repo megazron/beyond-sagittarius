@@ -875,6 +875,7 @@ async function warmAll() {
   wide.updateMatrixWorld();
   renderer.setScene(world.scene, wide, true);
   await pre(world.scene, wide);
+  await renderer.uploadTextures(world.scene); // a few at a time, not 40-90 in each warm draw below
   for (let i = 0; i < 4; i++) {
     wide.rotation.set(0, (i / 4) * Math.PI * 2, 0);
     wide.updateMatrixWorld();
@@ -885,6 +886,7 @@ async function warmAll() {
   await breathe();
   vault.prepare();
   await pre(vault.scene, vault.camera);
+  await renderer.uploadTextures(vault.scene);
   renderer.warm(vault.scene, vault.camera, false);
   await breathe();
   stage.update(0.016);
@@ -1104,6 +1106,8 @@ window.addEventListener('resize', () => {
   /** Test hook: every Zenvora task done at once, so the take-off plays now. */
   awayOutro() { game?.away?.debugOutro(); },
   get awayOutroOn() { return !!game?.away?.outroOn; },
+  /** Test hook (recordings): these tasks count as done (the hero views that wait for one). */
+  awayMarkDone(...ids: string[]) { for (const id of ids) game?.away?.done.add(id); },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
   /** Walk with the keys, not a teleport (soak_smoke's bump test): hold or let go a key, and turn the away body to a heading. */
