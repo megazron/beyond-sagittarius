@@ -80,10 +80,14 @@ export class FireDrill {
   /** Palms flat either side of the spindle, rubbing in opposite directions, working down it and back to the top. */
   private rub(b: { kneel: THREE.Vector3; at: THREE.Vector3 }, sec: number, speed = 1) {
     const at = b.at, z = this.z, f = this.dir(b), r = new THREE.Vector3(f.z, 0, -f.x), t0 = performance.now();
-    z.setProp('spindle');
+    // the spindle stands upright in the board's notch, in the world, between his palms (parented to a hand it pointed
+    // sideways out of his fist); it turns back and forth with the rub
+    z.setProp(null);
+    const sp = this.stick(at), run = ++this.rubN;
     const step = () => {
       const k = (performance.now() - t0) / 1000;
-      if (k > sec) return;
+      if (k > sec || run !== this.rubN || !sp.parent) return;
+      sp.rotation.y = Math.cos(k * 14 * speed) * 2.5;
       const down = (k * 0.55 * speed) % 1, h = 0.48 - down * 0.3, w = Math.sin(k * 14 * speed) * 0.05;
       const c = at.clone().add(new THREE.Vector3(0, h, 0));
       z.setHold({
@@ -94,6 +98,21 @@ export class FireDrill {
       requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
+  }
+
+  private rubN = 0;
+  private spindle: THREE.Mesh | null = null;
+  /** The spindle upright in the notch at `at` (null takes it away). */
+  private stick(at: THREE.Vector3 | null): THREE.Mesh {
+    if (!this.spindle) {
+      const g = new THREE.CylinderGeometry(0.0055, 0.0065, 0.5, 8); g.translate(0, 0.25, 0);
+      this.spindle = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x9a7a52, roughness: 0.8 }));
+      this.spindle.castShadow = true; this.spindle.name = 'e1-spindle';
+    }
+    if (!at) { this.spindle.removeFromParent(); this.rubN++; return this.spindle; }
+    this.spindle.position.copy(at).add(new THREE.Vector3(0, 0.01, 0));
+    if (!this.spindle.parent) this.world.scene.add(this.spindle);
+    return this.spindle;
   }
 
   /** Grey smoke from the notch, thin or thick. */
@@ -172,7 +191,7 @@ export class FireDrill {
     if (res !== 'ok') {
       this.fails++;
       this.playScene([
-        { hold: 1.4, shot: () => this.drillShot(b, 0.8), run: () => { z.setHold(null); z.setProp(null); this.emberAt(res === 'die' ? b.at.clone().add(new THREE.Vector3(0, 0.02, 0)) : null); this.after(0.9, () => this.emberAt(null)); } },
+        { hold: 1.4, shot: () => this.drillShot(b, 0.8), run: () => { z.setHold(null); z.setProp(null); this.stick(null); this.emberAt(res === 'die' ? b.at.clone().add(new THREE.Vector3(0, 0.02, 0)) : null); this.after(0.9, () => this.emberAt(null)); } },
         { key: res === 'slow' ? 'e1.fi.slow' : 'e1.fi.die', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95), run: () => { z.setFace({ frown: 0.4, squint: 0.3 }); audio.human('breath', 0.5); }, after: 0.3 },
       ], () => { z.setFace(null); this.after(0.5, () => this.attempt(b, lit)); });
       return;
@@ -181,7 +200,7 @@ export class FireDrill {
     const nest = () => new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld).addScaledVector(this.fwd(), 0.28).add(new THREE.Vector3(0, -0.22, 0));
     this.playScene([
       { hold: 2.4, shot: () => cover.close(z, 0.3, 0.8, 0.25), run: () => {
-        z.setProp(null);
+        z.setProp(null); this.stick(null);
         const n = nest(), f = this.fwd();
         z.setHold({ R: { at: n.clone().addScaledVector(new THREE.Vector3(f.z, 0, -f.x), -0.04), fingers: f.clone(), palm: new THREE.Vector3(0, 1, 0) }, L: { at: n.clone().addScaledVector(new THREE.Vector3(f.z, 0, -f.x), 0.04), fingers: f.clone(), palm: new THREE.Vector3(0, 1, 0) } });
         z.setLookTarget(n); z.setFace({ open: 0.3, squint: 0.2 });
@@ -197,6 +216,7 @@ export class FireDrill {
       } },
       { choice: 'e1.fire', shot: () => cover.mid(z, 0.7, 2.4) },
     ], () => {
+      this.stick(null);
       this.dusk(null);
       this.s.flags['inv.fireDrill'] = true;
       this.ui.toast(t('e1.learn.fire'));

@@ -365,13 +365,15 @@ export class Waking {
         z.setProp(null);
         z.setHold(null);
         const F = at.clone().sub(stand).setY(0).normalize(), side = new THREE.Vector3(F.z, 0, -F.x);
-        const dir = side.clone().multiplyScalar(0.85).addScaledVector(F, 0.5).normalize();
+        // v6: mostly forwards (v5 went out to his side and fell down his coat), still turned a little to the lens side
+        const dir = side.clone().multiplyScalar(0.55).addScaledVector(F, 0.85).normalize();
         const mth = () => new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld).addScaledVector(dir, 0.1).add(new THREE.Vector3(0, -0.075, 0));
         z.setLookTarget(mth().addScaledVector(dir, 1.0).add(new THREE.Vector3(0, -0.45, 0)));
         z.setFace({ frown: 0.7, squint: 0.6, open: 0.3 });
         this.after(0.45, () => { audio.sample('splash', 0.07, { rate: 3.1 }); audio.human('breath', 0.5); this.spit(mth(), dir); });
         // then the back of his hand across his mouth, after the spray is seen
-        this.after(1.3, () => z.setHold({ R: { at: mth().addScaledVector(dir, 0.05), fingers: side.clone().negate(), palm: dir.clone() } }));
+        // v6: palm down, the wrist level (palm out twisted the forearm and the sleeve crumpled into a grey shape)
+        this.after(1.3, () => z.setHold({ R: { at: mth().addScaledVector(dir, 0.06).add(new THREE.Vector3(0, -0.02, 0)), fingers: side.clone().negate().addScaledVector(F, 0.3).normalize(), palm: new THREE.Vector3(0, -1, 0) } }));
         this.after(1.85, () => z.setHold(null));
       } },
       { key: 'e1.fr.test', who: 'scientist', if: TESTED, shot: () => cover.close(z, 0.3, 0.95), run: () => { z.setLookTarget(null); z.setFace({ smile: 0.4 }); }, after: 0.5 },
@@ -415,13 +417,13 @@ export class Waking {
     for (let i = 0; i < N; i++) drops.setColorAt(i, i % 3 === 0 ? c.set(0xb01a28) : c.set(0xe9dcd8));
     drops.frustumCulled = false; drops.name = 'e1-spit';
     const t0 = performance.now() / 1000, m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
-    const ground = this.world.terrain.height(from.x, from.z);
     drops.onBeforeRender = () => {
       const k = performance.now() / 1000 - t0;
       for (let i = 0; i < N; i++) {
-        const sp = 0.55 + (i % 4) * 0.15, tt = Math.max(0, k - i * 0.025);
-        p.copy(from).addScaledVector(dir, sp * tt).add(new THREE.Vector3(Math.sin(i * 3.1) * 0.2 * tt, 0.6 * tt - 4.9 * tt * tt, Math.cos(i * 2.3) * 0.2 * tt));
-        p.y = Math.max(p.y, ground + 0.005);
+        // v6: out and away (1.5 to 2.4 m/s, a small lift) so the drops clear his chest and land a step in front of him
+        const sp = 1.5 + (i % 4) * 0.3, tt = Math.max(0, k - i * 0.02);
+        p.copy(from).addScaledVector(dir, 0.05 + sp * tt).add(new THREE.Vector3(Math.sin(i * 3.1) * 0.25 * tt, 0.9 * tt - 4.9 * tt * tt, Math.cos(i * 2.3) * 0.25 * tt));
+        p.y = Math.max(p.y, this.world.terrain.height(p.x, p.z) + 0.005);
         drops.setMatrixAt(i, m4.compose(p, q, one.setScalar(i % 3 === 0 ? 1.5 : 1)));
       }
       drops.instanceMatrix.needsUpdate = true;

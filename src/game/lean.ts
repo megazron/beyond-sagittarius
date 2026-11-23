@@ -217,9 +217,10 @@ export class LeanTo {
   }
   /** A bent offcut, about the length of his forearm and hand, the bend in the middle. */
   private makeStick() {
-    const g = new THREE.Group(), wood = new THREE.MeshStandardMaterial({ color: 0x8b6a45, roughness: 0.85 });
+    // v4: peeled pale wood, a little thicker, so it reads against grass and dusk in flight (the dark 3 cm stick was lost)
+    const g = new THREE.Group(), wood = new THREE.MeshStandardMaterial({ color: 0xd2b088, roughness: 0.7, emissive: 0x2a1e10 });
     for (const s of [-1, 1]) {
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.017, 0.3, 6), wood);
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.019, 0.022, 0.3, 6), wood);
       m.rotation.z = Math.PI / 2 + s * 0.28; m.position.set(s * 0.14, 0.02, 0); g.add(m);
     }
     g.traverse((o) => { o.castShadow = true; });
@@ -266,12 +267,13 @@ export class LeanTo {
     const stick = this.makeStick();
     const fly = () => {
       // side-arm: the arm sweeps across, the stick leaves flat and spins about its middle all the way there
-      const T = hit ? 0.62 : 0.8, t0 = performance.now(); stick.position.copy(from); this.world.scene.add(stick); this.fx.push(stick);
+      // v4: a touch slower than life (1.3 s) and fewer turns, so the flight is seen; the second shot is from the stump
+      const T = hit ? 1.3 : 1.5, t0 = performance.now(); stick.position.copy(from); this.world.scene.add(stick); this.fx.push(stick);
       audio.sample('cb_whirr', 0.45);
       const step = () => {
         const k = Math.min(1, (performance.now() - t0) / 1000 / T);
         stick.position.copy(from).lerp(to, k); stick.position.y += Math.sin(k * Math.PI) * 0.35;
-        stick.rotation.set(0.15, k * 14, 0);
+        stick.rotation.set(0.15, k * 9, 0);
         if (k < 1) { requestAnimationFrame(step); return; }
         if (hit) { audio.sample('cb_thud', 0.6); audio.sample('wood', 0.5, { rate: 0.7 }); }
         else audio.sample('leather', 0.25, { rate: 0.6 });
@@ -281,10 +283,12 @@ export class LeanTo {
       requestAnimationFrame(step);
     };
     this.playScene([
-      { hold: 2.0, shot: () => side(3.8), run: () => {
+      { hold: 0.85, shot: () => side(3.8), run: () => {
         z.setHold({ R: { at: from.clone().addScaledVector(d, 0.45).addScaledVector(r, -0.2).add(new THREE.Vector3(0, 0.1, 0)), fingers: d.clone(), palm: new THREE.Vector3(0, -1, 0) } });
         this.after(0.12, fly); this.after(0.5, () => z.setHold(null)); audio.human('breath', 0.4);
       } },
+      // from beside the stump, low, looking back up the line: the stick comes spinning in and lands (or flies past)
+      { hold: 1.6, shot: () => ({ from: stumpP.clone().addScaledVector(r, 1.3).addScaledVector(d, 0.5).add(new THREE.Vector3(0, 0.55, 0)), to: stumpP.clone().addScaledVector(d, -1.6).add(new THREE.Vector3(0, 0.55, 0)), push: 0.01 }) },
       { key: hit ? 'e1.ts.hit' : 'e1.ts.miss', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0), run: () => z.setFace(hit ? { smile: 0.6 } : { squint: 0.3, smile: 0.2 }), after: 0.3 },
     ], () => {
       z.setFace(null); z.setLookTarget(null);

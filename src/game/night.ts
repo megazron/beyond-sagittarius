@@ -197,11 +197,13 @@ export class FirstNight {
    */
   private vines(camp: THREE.Vector3) {
     const z = this.z, { f, r } = this.axes(camp);
-    const work = this.kneel.clone().addScaledVector(f, -0.1).addScaledVector(r, 0.25).add(new THREE.Vector3(0, 0.45, 0));
+    // v4: in front of his lap where the spear lay (f -0.1 put his fists behind his back in e169v4)
+    const work = this.kneel.clone().addScaledVector(f, 0.3).add(new THREE.Vector3(0, 0.45, 0));
     // the vine: a green line from fist to fist that sags as they come together and pulls straight as they spread, its
     // loose ends hanging out of each fist
-    const green = new THREE.MeshStandardMaterial({ color: 0x3f6b2a, roughness: 0.8 });
-    const segs = [0, 1, 2, 3].map(() => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 1, 6), green); m.castShadow = true; return m; });
+    // v4: thicker and a lighter, living green with a little sheen (the 7 mm dark green line was lost at dusk at 540p)
+    const green = new THREE.MeshStandardMaterial({ color: 0x6e9e3a, roughness: 0.55, emissive: 0x1c2a0e });
+    const segs = [0, 1, 2, 3].map(() => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 1, 8), green); m.castShadow = true; return m; });
     const lay = (m: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3) => { m.position.copy(a).lerp(b, 0.5); m.scale.set(1, a.distanceTo(b), 1); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); };
     const pull = (sec: number) => {
       const t0 = performance.now();
@@ -222,7 +224,8 @@ export class FirstNight {
       requestAnimationFrame(step);
     };
     this.playScene([
-      { key: 'e1.vn.1', who: 'scientist', shot: () => this.scrapeShot(camp, 1.25), run: () => { pull(5); z.setLookTarget(work); audio.sample('leather', 0.3, { rate: 0.6 }); } },
+      // framed on the vine itself: from in front of him (the fire behind the lens, lighting him), low, his fists and face
+      { key: 'e1.vn.1', who: 'scientist', shot: () => ({ from: work.clone().addScaledVector(f, 0.95).addScaledVector(r, -0.3).add(new THREE.Vector3(0, 0.12, 0)), to: work.clone().add(new THREE.Vector3(0, 0.1, 0)), push: 0.02 }), run: () => { pull(5); z.setLookTarget(work); audio.sample('leather', 0.3, { rate: 0.6 }); } },
       { key: 'e1.vn.2', who: 'scientist', shot: () => cover.mid(z, -0.7, 2.2), run: () => { z.setHold(null); z.setLookTarget(this.kneel.clone().addScaledVector(f, -4).add(new THREE.Vector3(0, 0.3, 0))); this.after(0.8, () => audio.sample('cb_rattle', 0.3)); }, after: 0.4 },
     ], () => {
       this.s.flags['inv.vineTraps'] = true;
