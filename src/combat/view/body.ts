@@ -262,8 +262,7 @@ export class FightBody {
   /** The thing in the hand: the right for everything but the bow. */
   private hold(model: Character, id: WeaponId | null) {
     // the weapons of the melee rig (view/melee.ts) live in the world and are placed at the real hand after the pose
-    const rig = RIG_ON && !!id && MELEE_GEAR.includes(id);
-    const hand = rig ? (model.root.parent ?? model.root) : id === 'bow' ? model.handL : model.handR;
+    const hand = id === 'bow' ? model.handL : model.handR;
     if (this.heldId === id && this.held?.parent === hand) return;
     this.held?.removeFromParent(); this.held = null; this.heldId = id;
     if (!id || id === 'fists') return;
@@ -364,13 +363,13 @@ export class FightBody {
   }
 
   // ---------------------------------------------------------------- the melee rig (view/melee.ts)
-  private cur: WFrame = newFrame(); private tgt: WFrame = newFrame(); private tmp: WFrame = newFrame();
+  private cur: WFrame = newFrame(); private prevF: WFrame = newFrame(); private tgt: WFrame = newFrame(); private tmp: WFrame = newFrame();
   private mframe = false; private lPrev: number | null = null; private leftW = 0;
   private bonesM: { upL: THREE.Object3D; upR: THREE.Object3D; loR: THREE.Object3D; loL: THREE.Object3D; a: number; b: number } | null = null;
   /** Per-frame numbers of what was drawn (for the play test): worst shaft depth in the body, worst left-hand gap
    * from the shaft while it holds it, frames counted. */
   stats: { frames: number; shaftIn: number; handOff: number; leftOff: number; skel?: string; worst?: string } = { frames: 0, shaftIn: 0, handOff: 0, leftOff: 0 };
-  private solvedL: number | null = null;
+  private solvedL: number | null = null; private prevL: number | null = null;
   private meleePose(model: Character, p: SimPlayer, dt: number, armed: boolean, visible: WeaponId | null): Limbs | null {
     const w = p.weapon;
     if (!RIG_ON || !visible || !MELEE_GEAR.includes(w) || p.down || p.act === 'roll' || p.staggerT > 0 || p.snareT > 0.15) return null;
@@ -400,7 +399,8 @@ export class FightBody {
     this.tgt.g.x += ch.x; this.tgt.g.z += ch.z; this.tgt.lh.x += ch.x; this.tgt.lh.z += ch.z;
     clearShaft(this.tgt, w);
     const fast = p.act === 'active' || (s.thrown && this.since < 0.2);
-    if (!this.mframe) { copyFrame(this.tgt, this.cur); this.mframe = true; this.lPrev = null; } else follow(this.cur, this.tgt, dt, 0.04, fast ? 60 : 24);
+    // (the rig applies these limbs after this frame's late(): late() sees last frame's pose, so it keeps last frame's)
+    if (!this.mframe) { copyFrame(this.tgt, this.cur); copyFrame(this.tgt, this.prevF); this.mframe = true; this.lPrev = null; } else { copyFrame(this.cur, this.prevF); follow(this.cur, this.tgt, dt, 0.04, fast ? 60 : 24); }
     const f = copyFrame(this.cur, this.tmp);
     const wantL = this.ready > 0.05 || f.l !== null || p.act !== 'idle' || p.blocking ? 1 : 0;
     this.leftW += (wantL - this.leftW) * (1 - Math.exp(-dt * 10));
@@ -444,35 +444,34 @@ export class FightBody {
     this.ranged.late(model, dt, t);
     const id = this.heldId;
     if (!RIG_ON || !this.held || !id || !MELEE_GEAR.includes(id) || !this.bonesM) return;
-    if (!this.mframe) {
-      // a roll or a stagger: the weapon stays in the right hand, along the forearm
-      const hw = model.handR.getWorldPosition(new THREE.Vector3()), lw = this.bonesM.loR.getWorldPosition(new THREE.Vector3());
-      const fd = hw.clone().sub(lw).normalize();
-      this.held.position.copy(hw).addScaledVector(fd, 0.07);
-      this.held.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), fd);
-      return;
-    }
-    // the grip is in the palm: the hand bone's place plus the palm along the forearm
     const hw = model.handR.getWorldPosition(new THREE.Vector3()), lw = this.bonesM.loR.getWorldPosition(new THREE.Vector3());
-    const grip = hw.clone().addScaledVector(hw.clone().sub(lw).normalize(), 0.07);
-    const rq = model.root.getWorldQuaternion(new THREE.Quaternion());
-    const dW = this.cur.d.clone().applyQuaternion(rq).normalize();
-    this.held.position.copy(grip);
-    this.held.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dW);
-    // the numbers: the drawn shaft against the body, the left hand against the shaft
+    const fd = hw.clone().sub(lw).normalize(), K = (this.bonesM.a + this.bonesM.b) / 0.53;
+    const grip = hw.clone().addScaledVector(fd, 0.07 * K);
+    // the weapon rides on the hand bone (so it can never slip off the hand, whatever the rig does after this), turned
+    // so that it points along this frame's solved shaft (a roll or a stagger: along the forearm)
+    const rq = model.root.getWorldQuaternion(new THREE.Quaternion()), hq = model.handR.getWorldQuaternion(new THREE.Quaternion());
+    const dW = this.mframe ? this.cur.d.clone().applyQuaternion(rq).normalize() : fd;
+    const want = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dW);
+    this.held.quaternion.copy(hq.clone().invert().multiply(want));
+    this.held.position.copy(model.handR.worldToLocal(grip.clone()));
+    const ws = model.handR.getWorldScale(new THREE.Vector3()); this.held.scale.set(1 / ws.x, 1 / ws.y, 1 / ws.z);
+    if (!this.mframe) return;
+    // the numbers, on the pose the bones show now (last frame's) against last frame's solve
+    const F0 = this.prevF, d0 = F0.d.clone().applyQuaternion(rq).normalize();
     const S = SHAFT[id]!, gl = model.root.worldToLocal(grip.clone()), q = new THREE.Vector3();
     let worst = 0;
-    for (let k = -S.back; k <= S.front; k += 0.04) worst = Math.max(worst, depth(q.copy(gl).addScaledVector(this.cur.d, k), this.cur.bend, S.r));
+    for (let k = -S.back; k <= S.front; k += 0.04) worst = Math.max(worst, depth(q.copy(gl).addScaledVector(F0.d, k), F0.bend, S.r));
     const st = this.stats; st.frames++; st.shaftIn = Math.max(st.shaftIn, worst);
-    const off = gl.distanceTo(this.cur.g);
-    if (off > st.handOff) { st.handOff = off; st.worst = `${this.last.act} xf ${this.xfade.toFixed(2)} g ${this.cur.g.toArray().map((x) => x.toFixed(2))} grip ${gl.toArray().map((x) => x.toFixed(2))} sR ${model.root.worldToLocal(this.bonesM.upR.getWorldPosition(new THREE.Vector3())).toArray().map((x) => x.toFixed(2))}`; }
-    if (!st.skel) { const s0 = model.root.worldToLocal(this.bonesM.upR.getWorldPosition(new THREE.Vector3())); st.skel = `sR ${s0.toArray().map((x) => x.toFixed(2))} a ${this.bonesM.a.toFixed(3)} b ${this.bonesM.b.toFixed(3)} g ${this.cur.g.toArray().map((x) => x.toFixed(2))} grip ${gl.toArray().map((x) => x.toFixed(2))}`; }
-    if (this.solvedL !== null && this.xfade >= 1) {
+    const off = this.xfade >= 1 ? gl.distanceTo(F0.g) : 0;
+    if (off > st.handOff) { st.handOff = off; st.worst = `${this.last.act} g ${F0.g.toArray().map((x) => x.toFixed(2))} grip ${gl.toArray().map((x) => x.toFixed(2))}`; }
+    if (!st.skel) { const s0 = model.root.worldToLocal(this.bonesM.upR.getWorldPosition(new THREE.Vector3())); st.skel = `sR ${s0.toArray().map((x) => x.toFixed(2))} a ${this.bonesM.a.toFixed(3)} b ${this.bonesM.b.toFixed(3)}`; }
+    if (this.prevL !== null && this.xfade >= 1) {
       const hl = model.handL.getWorldPosition(new THREE.Vector3()), ll = this.bonesM.loL.getWorldPosition(new THREE.Vector3());
-      const palm = hl.clone().addScaledVector(hl.clone().sub(ll).normalize(), 0.07);
-      const rel = palm.sub(grip), along = rel.dot(dW);
-      st.leftOff = Math.max(st.leftOff, rel.addScaledVector(dW, -along).length());
+      const palm = hl.clone().addScaledVector(hl.clone().sub(ll).normalize(), 0.07 * K);
+      const rel = palm.sub(grip), along = rel.dot(d0);
+      st.leftOff = Math.max(st.leftOff, rel.addScaledVector(d0, -along).length());
     }
+    this.prevL = this.solvedL;
     void dt; void t;
   }
   release(model: Character) { this.ranged.hide(model); model.setLimbs(null); this.hold(model, null); this.mframe = false; this.outL = {}; gripHand(model, 'R', null); gripHand(model, 'L', null); this.rollAngle = 0; this.crouch = 0; this.ready = 0; }
