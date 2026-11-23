@@ -130,8 +130,12 @@ export class RangedRig {
       // the bow arm: out along the aim at full raise, low and forward when lowered
       // (out along the aim and a little forward: this rig's shoulder joints sit near the back, ~15 cm behind the face, so
       // a bow arm straight along the aim held the bow behind the line of the arrow from the jaw; measured in the probe)
-      const A = V().set(aim.x, 0, aim.z).normalize(), F = V().crossVectors(A, UP).normalize();
-      if (F.z < 0) F.negate();
+      // F: the way the chest faces, square to the arrow (the part of the body's forward that is not along the aim). It was
+      // A x up flipped to the front, which is sideways when the aim lies along the body's forward (the first frames of
+      // the bow after another weapon, before the body has turned): F pointed to his right and the lowered bow arm
+      // reached across the chest (CI on 760e0b1: 9.8 cm). Now it tends to the body's forward as the aim does.
+      const A = V().set(aim.x, 0, aim.z).normalize(), F = V().set(0, 0, 1).addScaledVector(A, -A.z);
+      F.z += Math.max(0, 0.35 - F.length()); F.normalize();
       const low = V().set(aim.x * 0.6, -0.75, aim.z * 0.6).normalize();
       // Between shots the bow is held low and canted out in front, the string hand on the string at the nock (an
       // archer's ready position); the click raises and draws together, so the whole draw, from the nock to the chin,
