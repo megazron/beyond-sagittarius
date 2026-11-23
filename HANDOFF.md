@@ -791,3 +791,11 @@ unlanded except this handoff commit and any recording in progress.
   keepArmsOut runs after applyLimbs and can move my arms (ask the story agent for an opt-out while a fight pose is
   set); overhead club wind-up brings the hand beside the face; bow/sling/atlatl (ranged.ts) not yet measured;
   21_weapon_holds_before (?meleerig=0) clip: recording queued at 04:40 (cap3.sh v21b).
+- 05:30 HANDING OFF (context full). main = a152c2e (+ cf5de40 queued) has e5e1698 and ff7f293 of mine. NOT landed:
+  combat-land30 = 452b4b3 (rebased on a152c2e: watch bot fixes, eye/stick tweaks, the whole melee rig, pose_test,
+  play-test pose gates). CI 45113614541: combat (pause-menu click timeout) and smoke ("wake did not reach play")
+  failed on known flaky timeouts; a rerun of the failed jobs is triggered by a background wait; land 452b4b3 when
+  green (its own `git push origin 452b4b3:main`), else rerun. combat-land31 = this handoff commit on top.
+- 21_weapon_holds_before (?meleerig=0) was still waiting in the heavy queue at 05:30 (cap3.sh v21b; it starts and
+  closes its own Chrome and preview). Review it, sync-check, deliver to Downloads/.../combat with a note, and
+  compare with 21_weapon_holds_after (delivered with notes).
