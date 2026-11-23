@@ -12,3 +12,12 @@ desktop-assets/
 tools/tts/kokoro/.cache/
 tools/.line_pauses.json
 public/models/crew_dc/
+# build outputs (any dist-* folder made for a comparison build)
+dist-*/
+android/app/release/
+# signing keys and secrets never go in the repo
+*.jks
+*.keystore
+keystore.properties
+.env
+.env.*
