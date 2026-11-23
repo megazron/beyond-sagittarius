@@ -37,7 +37,7 @@ export class RangedRig {
   // bow: riser and two limbs of four pieces, the string in two, the arrow (shaft, head, fletching)
   private bowSeg: THREE.Mesh[] = []; private str: THREE.Mesh[] = []; private arrow = new THREE.Group(); private quiver = new THREE.Group();
   // sling: two cords, the pouch, the stone in it, and the free end of the let-go cord
-  private cords: THREE.Mesh[] = []; private pouch: THREE.Mesh; private stone: THREE.Mesh;
+  private cords: THREE.Mesh[] = []; private pouch: THREE.Mesh; private stone: THREE.Mesh; private disc: THREE.Mesh;
   private pP = V(); private pPrev = V(); private tail = V(); private tailPrev = V(); private pouchInit = false;
   // where the hands are asked to be this frame (world), and what the gear does
   mode: 'none' | 'bow' | 'sling' | 'atlatl' = 'none';
@@ -45,12 +45,13 @@ export class RangedRig {
   /** Which way to turn the body from the aim (radians): side-on for the bow. */
   faceOffset = 0;
   private aimL = V(); private D = V(); private Uw = V();
-  private lastAct = 'idle';
+  private lastAct = 'idle'; private whirlK = 0;
 
   constructor() {
     const wood = new THREE.MeshStandardMaterial({ color: 0x7a5a3a, roughness: 0.8 });
     const gut = new THREE.MeshStandardMaterial({ color: 0xd8cfb8, roughness: 0.6 });
-    const fibre = new THREE.MeshStandardMaterial({ color: 0x8d7a55, roughness: 0.95 });
+    // (pale plant fibre, thick enough to read at play distance: the darker, thinner cords of v1 vanished against grass)
+    const fibre = new THREE.MeshStandardMaterial({ color: 0xcdb98e, roughness: 0.9 });
     const stoneM = new THREE.MeshStandardMaterial({ color: 0x8a8580, roughness: 0.9, flatShading: true });
     const cyl = (r: number, m: THREE.Material) => { const g = new THREE.CylinderGeometry(r, r, 1, 6); g.translate(0, 0.5, 0); const o = new THREE.Mesh(g, m); o.castShadow = true; o.frustumCulled = false; this.group.add(o); return o; };
     for (let i = 0; i < 9; i++) this.bowSeg.push(cyl(i === 4 ? 0.02 : 0.013, wood));
@@ -63,8 +64,11 @@ export class RangedRig {
     const qv = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.035, 0.5, 7).translate(0, 0.25, 0), new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 1 }));
     this.quiver.add(qv);
     for (let i = 0; i < 3; i++) { const a = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.22, 4).translate(0, 0.6, 0), wood); a.position.set((i - 1) * 0.015, 0, (i % 2) * 0.012); this.quiver.add(a); }
-    for (let i = 0; i < 2; i++) this.cords.push(cyl(0.009, fibre));
-    this.pouch = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.6).scale(1, 0.55, 1.3), new THREE.MeshStandardMaterial({ color: 0x6e5a44, roughness: 1, side: THREE.DoubleSide }));
+    for (let i = 0; i < 2; i++) this.cords.push(cyl(0.013, fibre));
+    this.pouch = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.6).scale(1, 0.55, 1.3), new THREE.MeshStandardMaterial({ color: 0x9a7a55, roughness: 1, side: THREE.DoubleSide }));
+    // the whirl as the eye keeps it: a faint disc where the pouch goes round, stronger as it speeds up
+    this.disc = new THREE.Mesh(new THREE.RingGeometry(0.15, 0.62, 32, 1), new THREE.MeshBasicMaterial({ color: 0xd8c7a0, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+    this.disc.rotation.x = -Math.PI / 2; this.disc.frustumCulled = false; this.group.add(this.disc);
     this.pouch.castShadow = true; this.group.add(this.pouch);
     this.stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.032, 0), stoneM); this.stone.castShadow = true; this.group.add(this.stone);
     this.group.visible = false;
@@ -193,7 +197,7 @@ export class RangedRig {
       const rest = V().set(0.02, 1.02, 0.32);
       let tR: THREE.Vector3, tL = V().copy(rest).add(V().set(0.05, 0, 0));
       if (whirl) {
-        const k = p.charge, speed = 2 * Math.PI * (1.1 + 1.6 * k);
+        const k = p.charge, speed = 2 * Math.PI * (1.1 + 1.6 * k); this.whirlK = k;
         S.phase += dt * speed * smooth(Math.min(1, p.actT / 0.25));
         const c = V().copy(sR).add(V().set(0.08, 0.3, 0.12));
         tR = V().copy(c).add(V().set(Math.cos(S.phase) * 0.09, 0, Math.sin(S.phase) * 0.09));
@@ -303,7 +307,7 @@ export class RangedRig {
     const vis = (o: THREE.Object3D, v: boolean) => { o.visible = v; };
     this.bowSeg.forEach((o) => vis(o, this.mode === 'bow')); this.str.forEach((o) => vis(o, this.mode === 'bow'));
     if (this.trailMesh && this.mode !== 'atlatl') this.trailMesh.visible = false;
-    vis(this.arrow, false); this.cords.forEach((o) => vis(o, this.mode === 'sling')); vis(this.pouch, this.mode === 'sling'); vis(this.stone, false);
+    vis(this.arrow, false); vis(this.disc, false); this.cords.forEach((o) => vis(o, this.mode === 'sling')); vis(this.pouch, this.mode === 'sling'); vis(this.stone, false);
     if (this.mode === 'atlatl') {
       this.quiver.visible = false;
       this.bowSeg.forEach((o, i) => vis(o, i === 0)); this.str.forEach((o) => vis(o, false));
@@ -376,6 +380,12 @@ export class RangedRig {
         const d = V().subVectors(this.tail, this.pP); if (d.length() > L) this.tail.copy(this.pP).addScaledVector(d.normalize(), L);
       } else { this.tail.copy(hR).add(V().set(0.01, 0, 0)); this.tailPrev.copy(this.tail); }
       seg(this.cords[0], hR, this.pP); seg(this.cords[1], this.tail, this.pP);
+      // the disc: centred on the hand, tilted as the cone is (the pouch 0.22 below the hand at 0.95 of the cord)
+      const dm = this.disc.material as THREE.MeshBasicMaterial;
+      const want = S.hold === 'whirl' ? 0.1 + 0.16 * clamp01(this.whirlK) : 0;
+      dm.opacity += (want - dm.opacity) * (1 - Math.exp(-dt * 10));
+      this.disc.visible = dm.opacity > 0.01;
+      if (this.disc.visible) { this.disc.position.copy(hR).add(V().set(0, -0.11, 0)); this.disc.quaternion.copy(rq).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0))); }
       this.pouch.position.copy(this.pP); this.pouch.lookAt(hR);
       this.stone.visible = S.hold !== 'free';
       this.stone.position.copy(this.pP);
