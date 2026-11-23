@@ -1426,3 +1426,21 @@ unlanded except this handoff commit and any recording in progress.
   the planet before the background compile), texSubImage2D 0.7 s; busy 0-2.7 s: under.ts cast/overCloth 1.6 s (the
   clothes' under/over passes at attach). Fixed in c148ab9 (boot update drawn=false; checkShaderErrors off outside
   dev). Re-measure: hitch_p26_cold2.json.
+- FINAL (a4 = 94bf400 + the cold fix, 7 min each): Mobile all pop types 0 (vanish, appear, far pops, swap, identity,
+  lod, teleport, road, carHit), overlap 13, slide 3, cardClose 64. Web all pop types 0, overlap 97, slide 7,
+  cardClose 135, near27 up to 45, 22 bodies, 1.55 M triangles on the A500. Since a4: Web/Ultra BODY_CAP 26/28 and POOL
+  20 (soak's bump test: a card at the elbow when the bazaar's townsfolk used 17 of 20), Web gate 8 (perf_gate
+  triangles), Mobile perf_gate budget 145 draws / 0.76 M triangles / 14 bodies, Web 30, Ultra 32 bodies.
+- GPU clips (94bf400): Downloads/BS_Game_v1.1/mobile_v6_GPU (README.txt). Per clip the detector shows swaps only in the
+  first 0.35 s after the plan's teleport (a cut: city.ts allows swaps 20 frames) except ONE at 17 m, 4.2 s into the
+  Web west-pavement clip (p:walker9, card -> body), not explained, and one at 24.5 m in a Web long run. Still wrong,
+  seen: the NE street's dotted wall up close is STILL there (WALL_M 0.7 did not fix it: find what draws the dots; it may
+  not be the near fade, or that wall is not in `blocks`); a small group stands round you at the tram door on Web; the
+  tram's windows read as beige panels on Web.
+- COLD LOAD after c148ab9 (hitch_p26_cold2.json): 21.2 s, the t 8 freeze gone but a 3.4 s one at t 9.15 (getProgramParameter
+  3.5 s: the frame loop drew the world while warmAll compiled it). c30f92d holds the frame loop's draw during each
+  prewarm (warmHold): not measured yet (p26/coldprof.sh dist-cold3 p26_cold3 is queued after the clips; read
+  hitch_p26_cold3.json). texSubImage2D 2.5 s of uploads at the warm draws remains.
+- NOT DONE: task 3 (draws/uniform uploads for phones); memory targets (GPU < 500 MB, renderer < 700 MB): find what
+  re-uploads the planet while away, then the city's 175 MB of textures (atlases, canvases), morph textures, the 622 MB
+  of typed arrays (use a heap snapshot).
