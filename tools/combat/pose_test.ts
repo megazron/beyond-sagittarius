@@ -3,7 +3,7 @@
 // and its follow-through, and abrupt changes between them, at 60 frames a second:
 //  - the shaft never inside the body (legs and coat, chest, head), and the arms not through the chest;
 //  - the right hand on the grip and the left hand on the shaft whenever the pose says both hands hold it;
-//  - no pops: neither hand moves faster than a fast human hand (12 m/s) and the shaft never turns more than a
+//  - no pops: neither hand moves faster than a fast human hand (12 m/s; 18 in the blow or release itself) and the shaft never turns more than a
 //    quarter turn in a frame.
 // node --experimental-strip-types tools/combat/pose_test.ts   (prints the worst numbers per weapon)
 import * as THREE from 'three';
@@ -56,7 +56,7 @@ for (const w of MELEE_GEAR) {
         worstPen = Math.max(worstPen, r.penetration); worstArm = Math.max(worstArm, r.armIn);
         worstMissR = Math.max(worstMissR, r.missR);
         if (r.f.l !== null) { both++; worstMissL = Math.max(worstMissL, r.missL); }
-        if (prevR) worstV = Math.max(worstV, r.wR.distanceTo(prevR) / DT, prevL!.distanceTo(r.wL) / DT);
+        if (prevR) { const fastV = s.act === 'active' || (s.thrown && since < 0.2); worstV = Math.max(worstV, Math.max(r.wR.distanceTo(prevR), prevL!.distanceTo(r.wL)) / DT * (fastV ? 12 / 18 : 1)); }
         // a blow or a release is fast on purpose (a club turns ~150 degrees in a tenth of a second): there a frame may
         // turn up to 65 degrees; anywhere else more than 30 in a frame is a pop
         const fast = s.act === 'active' || (s.thrown && since < 0.2);
@@ -76,7 +76,7 @@ for (const w of MELEE_GEAR) {
   ok(worstArm <= 0.01, `${w}: the arms stay out of the chest`, `${(worstArm * 100).toFixed(1)} cm at ${wArm}`);
   ok(worstMissR <= 0.02, `${w}: the right hand stays on the grip`, `${(worstMissR * 100).toFixed(1)} cm`);
   ok(worstMissL <= 0.02, `${w}: the left hand stays on the shaft while it holds it`, `${(worstMissL * 100).toFixed(1)} cm at ${wMiss}`);
-  ok(worstV <= 12, `${w}: no hand jumps (under 12 m/s)`, `${worstV.toFixed(1)} m/s`);
+  ok(worstV <= 12, `${w}: no hand jumps (12 m/s; 18 in a blow or a release, a thrower's hand)`, `${worstV.toFixed(1)} m/s`);
   ok(worstTurn <= Math.PI / 6, `${w}: the shaft never snaps round (30 deg a frame; 65 in a blow)`, `${(worstTurn * 57.3).toFixed(0)} deg (scaled) at ${wTurn}`);
 }
 console.log(`\npose: ${pass} passed, ${fail} failed`);
