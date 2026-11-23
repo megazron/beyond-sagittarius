@@ -56,7 +56,7 @@ const CLIPS: Scenario[] = [
   ...(['injured', 'lie', 'wave', 'point', 'cheer', 'shout', 'argue', 'present', 'write', 'facepalm', 'selfie', 'jump', 'swim'] as CrewPose[]).map((p) => ({ name: p, pose: p, crewOnly: !['wave', 'point', 'argue', 'cheer'].includes(p) })),
 ];
 const TASKS: Scenario[] = ([
-  ['pickup', [0.05, 0.04, 0.42]], ['plant', [0, 0.02, 0.45]], ['use', [0, 0.95, 0.42]], ['fix', [0, 0.5, 0.45]], ['open', [-0.15, 1.0, 0.5]],
+  ['pickup', [0.05, 0.04, 0.42]], ['putdown', [0.05, 0.04, 0.42]], ['throw', null], ['plant', [0, 0.02, 0.45]], ['use', [0, 0.95, 0.42]], ['fix', [0, 0.5, 0.45]], ['open', [-0.15, 1.0, 0.5]],
   ['give', [0, 1.1, 0.55]], ['type', [0, 1.0, 0.35]], ['eat', null], ['drink', null], ['carry', null], ['gesture', null], ['phone', null],
 ] as [TaskKind, [number, number, number] | null][]).map(([kind, at]) => ({
   name: `task_${kind}`, sec: 3, crewOnly: !['pickup', 'eat', 'drink', 'carry'].includes(kind),

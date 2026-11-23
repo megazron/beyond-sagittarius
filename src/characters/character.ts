@@ -41,9 +41,9 @@ export interface Limbs { armL?: Dir; armR?: Dir; foreL?: Dir; foreR?: Dir; legL?
 export type Face = Partial<Record<'smile' | 'frown' | 'fear' | 'squint' | 'open' | 'blink', number>>;
 /** A hand's finger shape for Character.setGrip. */
 export interface Grip { shape: 'open' | 'relaxed' | 'grip' | 'pinch' | 'point'; radius?: number; amount?: number }
-/** Something the hands do (Character.doTask): reach and pick up, use a thing in front of you, eat, drink, type, open,
- * carry, fix, give, plant, or talk with the hands. */
-export type TaskKind = 'pickup' | 'use' | 'eat' | 'drink' | 'type' | 'open' | 'carry' | 'fix' | 'give' | 'plant' | 'gesture' | 'phone';
+/** Something the hands do (Character.doTask): reach and pick up, put down, throw, use a thing in front of you, eat,
+ * drink, type, open, carry, fix, give, plant, or talk with the hands. */
+export type TaskKind = 'pickup' | 'putdown' | 'throw' | 'use' | 'eat' | 'drink' | 'type' | 'open' | 'carry' | 'fix' | 'give' | 'plant' | 'gesture' | 'phone';
 /** Things a task puts in the hands: food, a cup, a phone, a parcel, a tool, a sheet of paper, a broad leaf folded into a
  * cone, a berry held between finger and thumb. */
 export type PropKind = 'food' | 'cup' | 'phone' | 'box' | 'tool' | 'paper' | 'leaf' | 'berry' | 'stone' | 'flake' | 'spindle';
@@ -83,16 +83,22 @@ const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
   flake: () => { const g = new THREE.CylinderGeometry(0.0, 0.032, 0.1, 5, 1); g.scale(1, 1, 0.25); return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x4a4650, roughness: 0.12, metalness: 0.2 })); },
 };
 /** What each task holds unless told otherwise. */
-const TASK_PROP: Partial<Record<TaskKind, PropKind>> = { eat: 'food', drink: 'cup', phone: 'phone', carry: 'box', fix: 'tool', type: 'phone' };
-const LOW_TASKS: Partial<Record<TaskKind, number>> = { pickup: 1, drink: 1, fix: 0.85, plant: 1 };
+const TASK_PROP: Partial<Record<TaskKind, PropKind>> = { throw: 'stone', eat: 'food', drink: 'cup', phone: 'phone', carry: 'box', fix: 'tool', type: 'phone' };
+const LOW_TASKS: Partial<Record<TaskKind, number>> = { pickup: 1, putdown: 1, drink: 1, fix: 0.85, plant: 1 };
 /** Authored actions (tools/build_animations.py, Quaternius CC0): a task with one plays it as the body's pose, stretched
  *  to the task's length, and IK only moves the hand the last few cm onto `at` round the moment of contact (`touch`, as a
  *  share of the clip). Without the clip in anim.glb the task falls back to the procedural reach. */
-const TASK_CLIPS: Partial<Record<TaskKind, { low?: string; high?: string; touch: number; hands: 'R' | 'both' }>> = {
-  pickup: { low: 'pickup_low', high: 'pickup_table', touch: 0.42, hands: 'R' },
-  plant: { low: 'plant', touch: 0.45, hands: 'R' },
-  eat: { high: 'consume', touch: -1, hands: 'R' },
-  drink: { high: 'consume', touch: -1, hands: 'R' },
+// touch: the moment the hand is on the thing (IK there, the prop taken or left); release: a throw's prop leaves the hand
+// (OverhandThrow's hand is fastest at 0.24 of the clip, measured from the clip's own hand path); reverse: played
+// backwards (putting down is picking up run back, its touch at 1 less the pick up's lowest hand, 0.47); prop: when the
+// task's prop is in the hand ('after' the touch, 'before' it, 'all' of it)
+const TASK_CLIPS: Partial<Record<TaskKind, { low?: string; high?: string; touch: number; hands: 'R' | 'both'; reverse?: boolean; release?: number; prop: 'after' | 'before' | 'all' }>> = {
+  pickup: { low: 'pickup_low', high: 'pickup_table', touch: 0.42, hands: 'R', prop: 'after' },
+  putdown: { low: 'pickup_low', high: 'pickup_table', touch: 0.55, hands: 'R', reverse: true, prop: 'before' },
+  plant: { low: 'plant', touch: 0.45, hands: 'R', prop: 'before' },
+  throw: { high: 'throw', touch: -1, release: 0.25, hands: 'R', prop: 'before' },
+  eat: { high: 'consume', touch: -1, hands: 'R', prop: 'all' },
+  drink: { high: 'consume', touch: -1, hands: 'R', prop: 'all' },
 };
 /** What the fingers of every character did since the page loaded (read by the checks): the largest bend of any finger
  * joint from its rest, in radians, and the fastest any joint turned, in radians a second. */
@@ -287,7 +293,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let kneel = 0, kneelGoal = 0, heels = 0, heelsGoal = 0, heldProp: PropKind | null = null, heldShown = false;
   const kneelL: Limbs = {}, KD = new THREE.Vector3(), KQ = new THREE.Quaternion();
   // a task in the hands (doTask): time in, length, where the hand goes, which hands
-  let task: { kind: TaskKind; t: number; dur: number; at: THREE.Vector3 | null; hands: 'L' | 'R' | 'both'; prop: PropKind | null } | null = null;
+  let task: { kind: TaskKind; t: number; dur: number; at: THREE.Vector3 | null; hands: 'L' | 'R' | 'both'; prop: PropKind | null; onContact?: (() => void) | null } | null = null;
   // the thing in the hand: made once per kind, parented to the hand (or held in front of the hips for a parcel)
   const props = new Map<PropKind, THREE.Mesh>();
   let propOn: THREE.Mesh | null = null;
@@ -850,13 +856,21 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   type HoldState = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; on: boolean; fresh?: boolean; off: THREE.Vector3; offV: THREE.Vector3; prev: THREE.Vector3; loc: THREE.Vector3; last: HoldSide };
   const holdS: { L?: HoldState; R?: HoldState } = {};
   const FA = { e: new THREE.Vector3(), w: new THREE.Vector3(), m: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3(), q: new THREE.Quaternion() };
-  /** A hand target inside the torso (hips to neck capsules, plus a hand's thickness) is moved out to its surface. */
-  function holdOut(bs: Map<string, THREE.Bone>, p: THREE.Vector3) {
+  /** A hand target inside the torso (hips to neck capsules, plus a hand's thickness) is moved out to its surface. With
+   *  `fingers` (the way the held hand's fingers point) and `reach` (wrist to fingertip, m), the middle of the fingers and
+   *  their tips are kept out too, a finger's thickness off the surface: a hold starting from the side or reaching across
+   *  ran the fingertips 3 to 5 cm into the chest (the wrist alone was guarded). */
+  const fingerPush = { L: new THREE.Vector3(), R: new THREE.Vector3() };
+  const HO = { a: new THREE.Vector3(), b: new THREE.Vector3(), o: new THREE.Vector3(), q: new THREE.Vector3() };
+  function holdOut(bs: Map<string, THREE.Bone>, p: THREE.Vector3, fingers?: THREE.Vector3, reach = 0) {
     if (!torsoR) return p;
-    for (let j = 0; j < TORSO.length; j++) {
-      const a = bs.get(TORSO[j][0])!.getWorldPosition(new THREE.Vector3()), b = bs.get(TORSO[j][1])!.getWorldPosition(new THREE.Vector3());
-      const out = new THREE.Vector3();
-      if (torsoIn(j, a, b, p, 0.045, out) > 0) p.copy(out);
+    for (let it = 0; it < 2; it++) for (let j = 0; j < TORSO.length; j++) {
+      const a = bs.get(TORSO[j][0])!.getWorldPosition(HO.a), b = bs.get(TORSO[j][1])!.getWorldPosition(HO.b);
+      if (fingers && reach > 0) for (const k of [0.55, 1]) {
+        const q = HO.q.copy(p).addScaledVector(fingers, reach * k);
+        if (torsoIn(j, a, b, q, 0.012, HO.o) > 0) p.add(HO.o.sub(q));
+      }
+      if (torsoIn(j, a, b, p, 0.045, HO.o) > 0) p.copy(HO.o);
     }
     return p;
   }
@@ -935,9 +949,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   /** An arm to a hand goal, weighted by w: solved in full with its guards, then the joint turns blended from the clip's
    *  by w (an arc about the shoulder). Blending the goal instead (tried 2026-11-23) ran a phone's hand straight through
    *  the head on the way down and made task starts jerk 10 to 40 cm. */
-  function armTo(bs: Map<string, THREE.Bone>, sd: 'L' | 'R', up: THREE.Bone, lo: THREE.Bone, hd: THREE.Bone, goal: THREE.Vector3, w: number, dt: number) {
+  function armTo(bs: Map<string, THREE.Bone>, sd: 'L' | 'R', up: THREE.Bone, lo: THREE.Bone, hd: THREE.Bone, goal: THREE.Vector3, w: number, dt: number, fingers?: THREE.Vector3, reach = 0) {
     const qu = AT.u.copy(up.quaternion), ql = AT.l.copy(lo.quaternion);
-    solveLeg(up, lo, hd, holdOut(bs, goal)); elbowOut(bs, sd, up, lo, hd, dt); forearmOut(bs, sd, up, lo, hd, dt);
+    solveLeg(up, lo, hd, holdOut(bs, goal, fingers, reach)); elbowOut(bs, sd, up, lo, hd, dt); forearmOut(bs, sd, up, lo, hd, dt);
     up.quaternion.copy(qu.slerp(up.quaternion, w)); lo.quaternion.copy(ql.slerp(lo.quaternion, w)); up.updateWorldMatrix(false, true);
   }
   const AT = { u: new THREE.Quaternion(), l: new THREE.Quaternion() };
@@ -1097,7 +1111,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const mouth = () => out.copy(head).addScaledVector(fwd, 0.11).add(V1.set(0, -0.09, 0)).addScaledVector(side, -0.02);
     const front = (y: number, f: number, s: number) => out.copy(hip).setY(y).addScaledVector(fwd, f).addScaledVector(side, s);
     switch (T.kind) {
-      case 'pickup': case 'plant': {
+      case 'pickup': case 'putdown': case 'plant': {
         const reach = T.at ? out.copy(T.at).add(V1.set(0, 0.06, 0)) : front(hip.y - 0.55, 0.45, 0.12);
         if (k > 0.55) { const r = smooth01((k - 0.55) / 0.35); reach.lerp(V2.copy(hip).setY(waistY + 0.1).addScaledVector(fwd, 0.28).addScaledVector(side, 0.12), r); }
         if (T.kind === 'plant' && k > 0.3 && k < 0.6) reach.y += Math.sin(t * 14) * 0.03;
@@ -1161,10 +1175,17 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const T = task!;
     T.t += dt;
     const w = taskEnv();
+    const k = clamp(T.t / T.dur, 0, 1), tcp = taskClipName ? TASK_CLIPS[T.kind] : undefined;
+    // the moment of contact (or a throw's release): the prop goes into or out of the hand then, not as the task eases
+    // in, and the caller hears of it (a stone on the ground taken away, a thrown one launched from the hand)
+    // (the procedural reach, kneeling: its hand is lowest half way)
+    const proc = !tcp && (T.kind === 'pickup' || T.kind === 'putdown' || T.kind === 'plant');
+    const at = tcp ? (tcp.release ?? tcp.touch) : proc ? 0.5 : -1, past = at >= 0 && k >= at;
+    if (past && T.onContact) { const cb = T.onContact; T.onContact = null; cb(); }
     if (T.t >= T.dur) { task = null; showProp(bs, null, 0); return; }
-    showProp(bs, T.prop, w);
+    const after = tcp ? tcp.prop === 'after' : T.kind === 'pickup';
+    showProp(bs, T.prop, at < 0 || tcp?.prop === 'all' ? w : after === past ? 1 : 0);
     if (w <= 0.001) return;
-    const k = clamp(T.t / T.dur, 0, 1);
     const sides: ('L' | 'R')[] = T.hands === 'both' ? ['L', 'R'] : [T.hands];
     root.updateWorldMatrix(true, true);
     for (const sd of sides) {
@@ -1292,7 +1313,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (s.manual) { s.a.timeScale = 0; s.a.time = gaitPhase * s.a.getClip().duration; }
     }
     // the task's clip runs on the task's own clock, stretched to its length
-    if (taskClipName) { const s = acts.get(taskClipName); if (s) { s.a.timeScale = 0; s.a.time = clamp(task ? task.t / task.dur : 1, 0, 1) * s.a.getClip().duration * 0.999; } if (!task) taskClipName = null; }
+    if (taskClipName) { const s = acts.get(taskClipName); if (s) { const kk = clamp(task ? task.t / task.dur : 1, 0, 1), rv = task && TASK_CLIPS[task.kind]?.reverse; s.a.timeScale = 0; s.a.time = (rv ? 1 - kk : kk) * s.a.getClip().duration * 0.999; } if (!task) taskClipName = null; }
     // every bone back to the clip's own pose before the mixer runs: three's PropertyMixer writes a bone only when the
     // mixed value differs from last frame's, so where a clip held still (a crouch's last frames, a kneel) the bone kept
     // last frame's pose with every turn added on top (arms kept out, the elbow out, the reach), and they were added
@@ -1438,6 +1459,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         const mid = (propOn.geometry.computeBoundingSphere(), propOn.geometry.boundingSphere!.center);
         goal = V3.copy(mid).applyQuaternion(propOn.quaternion).add(propOn.position).multiply(hd.getWorldScale(V2)).applyQuaternion(GQ.q).negate().add(hs.at).clone();
       } else goal = h.grasp ? graspWrist(new THREE.Vector3(), hs.at, hs.fingers, hs.palm, clamp(h.radius ?? 0.02, 0, 0.08), palmLen, h.along ?? 0.6) : hs.at.clone();
+      // fingers: the way they will point once turned onto the hold, eased in with it from the clip's own
+      // the push that keeps them out is eased (taken whole each frame it came and went with the clip: knapping jerked 3 cm more)
+      HO.q.copy(f3.getWorldPosition(V1)).sub(hd.getWorldPosition(V2)).normalize().lerp(hs.fingers, hw).normalize();
+      const fp = fingerPush[sd], g0 = goal.clone(); holdOut(bs, goal, HO.q.clone(), palmLen * 2);
+      fp.lerp(goal.sub(g0), hs.fresh ? 1 : 1 - Math.exp(-dt * 18)); goal.copy(g0).add(fp);
       armTo(bs, sd, up, lo, hd, goal, hw, dt);
       hd.getWorldPosition(V4s); hd.getWorldQuaternion(selfM.q0);
       const fl = selfM.a.copy(f3.getWorldPosition(V1)).sub(V4s).normalize().applyQuaternion(selfM.qi.copy(selfM.q0).invert());
@@ -1713,10 +1739,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     setFace(f: Face | null) { faceSet = f; },
     say(seconds: number) { speak = Math.max(speak, seconds); },
     /** Do something with the hands for `seconds`: reach to `at` (world), eat, drink, type... See TaskKind. */
-    doTask(kind: TaskKind, o: { at?: THREE.Vector3 | null; seconds?: number; hands?: 'L' | 'R' | 'both'; prop?: PropKind | null } = {}) {
-      const dur = o.seconds ?? ({ pickup: 1.1, plant: 1.6, drink: 2.2, eat: 2.6, type: 2.4, carry: 2.0, open: 1.2, give: 1.3, fix: 2.4, use: 1.8, gesture: 3, phone: 3 } as Record<TaskKind, number>)[kind];
+    doTask(kind: TaskKind, o: { at?: THREE.Vector3 | null; seconds?: number; hands?: 'L' | 'R' | 'both'; prop?: PropKind | null; onContact?: () => void } = {}) {
+      const dur = o.seconds ?? ({ pickup: 1.1, putdown: 1.1, throw: 1.4, plant: 1.6, drink: 2.2, eat: 2.6, type: 2.4, carry: 2.0, open: 1.2, give: 1.3, fix: 2.4, use: 1.8, gesture: 3, phone: 3 } as Record<TaskKind, number>)[kind];
       const hands = o.hands ?? (kind === 'type' || kind === 'carry' || kind === 'drink' || kind === 'gesture' || kind === 'fix' ? 'both' : 'R');
-      task = { kind, t: 0, dur, at: o.at ? o.at.clone() : null, hands, prop: o.prop === undefined ? TASK_PROP[kind] ?? null : o.prop };
+      task = { kind, t: 0, dur, at: o.at ? o.at.clone() : null, hands, prop: o.prop === undefined ? TASK_PROP[kind] ?? null : o.prop, onContact: o.onContact ?? null };
     },
     /** Hold on to something with one or both hands: live world points and directions (mutate them to move the hands
      *  with what they hold); null lets go. */

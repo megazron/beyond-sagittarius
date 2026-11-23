@@ -125,7 +125,9 @@ def main():
         shot("03-wakeup-sky")
         page.keyboard.press("Enter")  # skip the rest of the wake-up sequence
         try:
-            page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
+            # 60 s: on CI's software renderer the wake-up's skip has reached play just after 30 s (82f05cb's run printed
+            # mode 'play' in this except)
+            page.wait_for_function("window.__bs.mode === 'play'", timeout=60000)
         except Exception:
             print("wake did not reach play:", page.evaluate("({state: __bs.state, mode: __bs.mode})"), flush=True)
             for e in errors:
