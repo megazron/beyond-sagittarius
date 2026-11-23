@@ -924,3 +924,18 @@ unlanded except this handoff commit and any recording in progress.
   geometries with the first geometry's exact attribute set (`ok` filter) and drops the rest silently. Not verified yet.
 - Memory hook: __bs.memOwners() (bytes by owner: stage scene, model cache, body assets, merged-body cache, heap).
   soak_smoke --mem-only --heap-mb N for the Mobile budget (job not added to CI until I have a number).
+- 08:40 BUMP, what the key-driven probe showed (headless, Web, dist-bump3, scratchpad A/B): at the bazaar spot the
+  story's people (always bodies) use the whole Web budget (used 6-7 of 5), so the painted crowd had NO bodies: you walked
+  into flat cards (which the lens then hid). Old way: 3 rounds "painted card within 1.2 m of you" + 1 body let go within
+  4.5 m. Fixes since: the two walkers nearest you within 4.5 m get a body whatever the budget (elbow rule, as townsfolk);
+  held until 8 m (CONTACT_OUT) so the swap back happens away from you; on PHONES a total ceiling of BODY_CAP + 2
+  (perf_gate's mobile crowd budget 4 failed at 5), so on phones in the bazaar a passer-by at your elbow can still be a
+  card: budget vs bump, owner's call. District walkers: every bump kept its body in both old and new ways (not the bug).
+- CI note: the probe calls __bs.step(0.1) each sample (software GL alone never reached anyone in 12 s).
+- MEMORY (Mobile, headless, __bs.memOwners at the flat/bazaar/(0,-60), heap 831-834 MB): stage scene geometry 279 MB,
+  stage textures 283 MB (decoded image size), props' model cache textures NOT used by the scene 229 MB, body asset
+  originals (glTF geometry, merged copies are what is drawn) 118 MB, character texture cache outside the stage 509 MB
+  (this one includes the planet scene's crew: I did not walk the planet scene; check before freeing).
+  First release (b3a...): phones free the props' model cache textures once both buildProps are done (releaseModels).
+  Next candidates: body asset originals after the city's bodies are made (careful: later createCharacter needs them),
+  character textures not used by either scene (remove from texCache so they reload), the props atlas canvas after upload.
