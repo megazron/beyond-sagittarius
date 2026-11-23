@@ -59,6 +59,8 @@ const LENS_OLD = typeof location !== 'undefined' && new URLSearchParams(location
 /** Whoever is drawn as a body within CONTACT metres of you stays that body, whatever the budget or the ranking does
  * (?contact=0: the old way). Bumping into somebody pulls them out of the nearest-first order, so they used to be let go. */
 const CONTACT = typeof location !== 'undefined' && new URLSearchParams(location.search).get('contact') === '0' ? 0 : 4.5;
+/** ...and is let go only past CONTACT_OUT, so the swap back to a card happens well away from you, not at your elbow. */
+const CONTACT_OUT = 8;
 /** Other presets: townsfolk past this many metres are drawn as cards (citydense.ts stand-ins). */
 const CROWD_FAR = 34; // beyond the 30 m everyone must stay drawn within (tools/crowd_smoke.py), from a camera a few metres behind you
 /** Phones: props smaller than SMALL_PROP metres across (as a radius) are not drawn past SMALL_FAR metres. */
@@ -1266,7 +1268,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       const d = Math.hypot(cards[i].x - c.x, cards[i].z - c.z), mine = byCard.has(i);
       if (!(d < TAKE * (taken[i] ? 1.15 : 1) && ((LENS_HOLD && mine) || !inLens(cards[i].x, cards[i].z)))) continue;
       if (d < 10) cardsNear++;
-      const du = Math.hypot(cards[i].x - ux, cards[i].z - uz), pin = mine && CONTACT > 0 && du < CONTACT;
+      const du = Math.hypot(cards[i].x - ux, cards[i].z - uz), pin = mine && CONTACT > 0 && du < CONTACT_OUT && crowdPinned < POOL + 2;
       if (pin) crowdPinned++;
       // within reach of you, a walker is a body even when the budget is spent (the story's people near the flat use all
       // of it): the two nearest to you, so nobody you walk into is a flat card (two over the cap at most, as townsfolk)
@@ -1274,8 +1276,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       near.push([d - (mine && CONTACT > 0 ? 2 : 0) - (pin ? 1000 : 0), i]);
     }
     near.sort((a, b) => a[0] - b[0]);
-    const want = new Set<number>(); { const n = Math.min(POOL, budget); for (const [k, i] of near) { if (want.size >= n && k > -500) break; want.add(i); } }
-    for (const [, i] of elbow) if (crowdPinned + want.size < POOL + 2) want.add(i);
+    // never more than BODY_CAP + 2 bodies in all (the townsfolk drawn last frame count first): the pinned, then the
+    // budget, then whoever is within reach
+    const room = (outroT >= 0 ? 99 : BODY_CAP + 2) - usedLog;
+    const want = new Set<number>(); { const n = Math.min(POOL, budget); for (const [k, i] of near) { if ((want.size >= n && k > -500) || want.size >= room) break; want.add(i); } }
+    for (const [, i] of elbow) if (want.size < Math.min(room, POOL + 2)) want.add(i);
     elbow.length = 0;
     wantLog = [...want];
     for (const b of crowdPool) if (b.card >= 0 && !want.has(b.card)) { taken[b.card] = 0; byCard.delete(b.card); b.card = -1; b.fig.root.visible = false; }
@@ -1355,12 +1360,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     for (const [d, i] of dnear) {
       const mine = CONTACT > 0 && dpool.some((b) => b.ped === i);
       if (d > DNEAR * (mine ? 1.2 : 1)) { if (d > DNEAR * 1.2) break; continue; }
-      const du = CONTACT > 0 ? Math.hypot(ps[i].x - ux, ps[i].z - uz) : 99, pin = mine && du < CONTACT;
+      const du = CONTACT > 0 ? Math.hypot(ps[i].x - ux, ps[i].z - uz) : 99, pin = mine && du < CONTACT_OUT && pedPinned < DPOOL + 2;
       if (pin) pedPinned++;
       pk.push([d - (mine ? 3 : 0) - (pin ? 1000 : 0) - (du < CONTACT ? 500 : 0), i]); // within reach: before the budget (as walkCrowd)
     }
     pk.sort((a, b) => a[0] - b[0]);
-    for (const [k, i] of pk) { if (want.size >= dcap && k > -500 && !(k < -400 && want.size < dcap + 2)) break; want.add(i); }
+    const room = (outroT >= 0 ? 99 : BODY_CAP + 2) - usedLog - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0);
+    for (const [k, i] of pk) { if ((want.size >= dcap && k > -500 && !(k < -400 && want.size < dcap + 2)) || want.size >= room) break; want.add(i); }
     for (const b of dpool) if (b.ped >= 0 && !want.has(b.ped)) { b.ped = -1; b.fig.root.visible = false; }
     for (const i of want) if (!dpool.some((b) => b.ped === i)) { const b = dpool.find((x) => x.ped < 0 && x.look === i % NLOOK); if (b) { b.ped = i; b.fig.root.visible = true; } }
     const held = new Set(dpool.map((b) => b.ped));
