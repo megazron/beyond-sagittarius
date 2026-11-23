@@ -1290,3 +1290,21 @@ unlanded except this handoff commit and any recording in progress.
   textures 16384x2 RGBA32F x51 (27 MB) and x13 (14+7 MB), 4.6k-8k x1 x53 morph textures 3-7 MB each. Images held on the
   CPU side 402 MB (city 87 + 39 canvas, world 78, combat player 73). Geometry: city 83 MB GPU (163 MB CPU), merged
   statics 75 MB, terrain 13 MB. Full dump: ~/bs-assets/gpu/p26/census0/report.json. Not cut yet.
+- AFTER (7 min each, same routes; a2 = c92211c's parent, GPU): Mobile vanish 0, appear 0, appearFar 0, swap 0, identity
+  0, lod 0, teleport 0, road 0, carHit 0, overlap 14, slide 3, cardClose 61 (fps 60, up to 16 bodies, 177 draws).
+  Web vanish 1 (0.4 m from the lens: the last-resort hide), appear 1 (0.6 m), swap 1 (24.5 m, t 6 s, not explained),
+  identity 0, lod 0, teleport 0, road 0, carHit 0, overlap 129, slide 4, cardClose 148 (fps 59.9, up to 23 bodies,
+  352 draws, 1.52 M triangles). Then 987ae07: the painted crowd and the walkers take the nearest clear line across the
+  pavement (citydense.ts laneX) and wait when none is clear: for the overlaps. Results: p26/ped_a3_*, ped_a4_*.
+- What changed (city.ts unless said): SWAP_FAR 27 m + swapOK()/inView() (a frustum with 2.5 m margin, cuts after a
+  teleport free for 20 frames); LENS_LINE off (?lensline=1 old); keepOff pushes the camera 0.9 m off bodies and 0.7 m
+  off walls (WALL_M; the clearance margin too: the NE dotted wall was the near-fade dither on a wall 0.25 m from the
+  lens); crowd cards turn round at the ends (citydense.ts), have a mutable look (`who`) taken from a body only while
+  out of view; district walkers likewise (pedLook); pools: BODY_CAP 11/20/24, POOL 8/16/16, DPOOL 6/12/14, TAKE 36,
+  DNEAR 36, painted crowd 22/64 + gate 4/12; crowd LOD (character.ts pickLod) only off screen or past lodSwapFar;
+  people's step aside clamped to the pavement and faced; walkers pause to turn at their ends; shop doors only unseen;
+  the builder and the driver on the kerb; story people drawn to 0.85 x CARD_FAR. perf_gate body budgets 14/24/28.
+- Memory so far: main.ts releases the planet's, films', vault's and title stage's GPU copies on Mobile when you go
+  away (core/disposeTree.ts releaseGpu, ?awayrelease=0 off); ibatch.ts batchStatic drops the batched originals'
+  arrays. Not measured yet: p26/mem3 (census + heap sampling on dist-pg3).
+- Combat flake note left in ~/bs-combat/HANDOFF.md (play_test.py:210: the click's actionability wait; evaluate-click).
