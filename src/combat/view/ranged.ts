@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import type { Character, Limbs, Dir } from '../../characters/character';
 import type { SimPlayer } from '../sim/sim';
-import { swingOut } from './melee';
+import { swingOut, reach2, aimBone, depth } from './melee';
 import type { ArmMem } from './melee';
 
 const V = () => new THREE.Vector3();
@@ -137,7 +137,7 @@ export class RangedRig {
       } else target = S.up > 0.5 ? nock0 : V().set(-0.22, 1.0, 0.12);
       const pole = V().copy(aim).multiplyScalar(-1).add(V().set(0, 0.55, 0));
       reach(sR, V().copy(target).addScaledVector(aim, -0.06), R.a, R.b, pole, eR, wR);
-      this.clearArms(sL, eL, wL, sR, eR, wR, dt);
+      this.clearArms(sL, eL, wL, sR, eR, wR, dt); this.keep(sL, eL, wL, sR, eR, wR);
       limbs = { armL: dirOf(eL, sL), foreL: dirOf(wL, eL), armR: dirOf(eR, sR), foreR: dirOf(wR, eR), twist: 0.15 * smooth(S.up) };
     } else if (this.mode === 'atlatl') {
       // the spear-thrower: held at the shoulder, the dart lying along it pointing at the target; drawn back with the
@@ -179,7 +179,7 @@ export class RangedRig {
       const tL = casting ? V().copy(pointAt).lerp(tucked, out3(S.rel / 0.2)) : V().copy(lowL).lerp(pointAt, smooth(S.up));
       reach(sL, tL, R.a, R.b, V().set(0.35, -1, -0.2), eL, wL);
       const wind = p.act === 'charge' ? -0.25 - 0.4 * S.draw : casting && S.rel < 0.3 ? -0.65 + 1.1 * out3(S.rel / 0.15) : -0.25 * smooth(S.up);
-      this.clearArms(sL, eL, wL, sR, eR, wR, dt);
+      this.clearArms(sL, eL, wL, sR, eR, wR, dt); this.keep(sL, eL, wL, sR, eR, wR);
       limbs = { armR: dirOf(eR, sR), foreR: dirOf(wR, eR), armL: dirOf(eL, sL), foreL: dirOf(wL, eL), twist: wind };
       if (S.rel < 0.4 || p.act === 'charge') { limbs.legL = [0.06, -0.93, 0.36]; limbs.shinL = [0, -1, 0.05]; limbs.legR = [-0.06, -0.96, -0.24]; limbs.shinR = [0, -0.98, -0.2]; }
     } else {
@@ -220,7 +220,7 @@ export class RangedRig {
       reach(sR, tR, R.a, R.b, V().set(-0.6, -0.4, -0.3), eR, wR);
       reach(sL, tL, R.a, R.b, V().set(0.6, -0.5, -0.2), eL, wL);
       const wind = whirl ? -0.45 * smooth(p.actT / 0.4) : S.throwT >= 0 && S.throwT < 0.5 ? -0.45 + 1.0 * out3(S.throwT / 0.2) : 0;
-      this.clearArms(sL, eL, wL, sR, eR, wR, dt);
+      this.clearArms(sL, eL, wL, sR, eR, wR, dt); this.keep(sL, eL, wL, sR, eR, wR);
       limbs = { armR: dirOf(eR, sR), foreR: dirOf(wR, eR), armL: dirOf(eL, sL), foreL: dirOf(wL, eL), twist: wind };
       // stepping into it: the off foot forward, only while standing
       if ((whirl && p.speed < 0.6) || (S.throwT >= 0 && S.throwT < 0.45)) { limbs.legL = [0.06, -0.93, 0.36]; limbs.shinL = [0, -1, 0.05]; limbs.legR = [-0.06, -0.96, -0.24]; limbs.shinR = [0, -0.98, -0.2]; }
@@ -246,11 +246,48 @@ export class RangedRig {
   private armMem: ArmMem = { L: 0, R: 0 };
   /** Worst depth of an arm in the body since the last read (metres), for the play test. */
   armIn = 0; armWhere = '';
+  /** The same, of the solve itself (before the character posed the body): for debugging. */
+  solveIn = 0; solveWhere = '';
   private clearArms(sL: THREE.Vector3, eL: THREE.Vector3, wL: THREE.Vector3, sR: THREE.Vector3, eR: THREE.Vector3, wR: THREE.Vector3, dt: number) {
     // (the hands' own end is left out: a bow's string hand anchors at the jaw and a sling's pouch rests against the
     // belly on purpose; the upper arm, the elbow and the forearm to its middle are what must not go in)
     const l = swingOut(sL, eL, wL, 0, this.armMem, 'L', dt, 0.6), r = swingOut(sR, eR, wR, 0, this.armMem, 'R', dt, 0.6);
-    if (Math.max(l, r) > this.armIn) { this.armIn = Math.max(l, r); const f = (v: THREE.Vector3) => v.toArray().map((x) => x.toFixed(2)).join(','); this.armWhere = `${this.mode} ${l > r ? 'L' : 'R'} s ${f(l > r ? sL : sR)} e ${f(l > r ? eL : eR)} w ${f(l > r ? wL : wR)}`; }
+    if (Math.max(l, r) > this.solveIn) { this.solveIn = Math.max(l, r); const f = (v: THREE.Vector3) => v.toArray().map((x) => x.toFixed(2)).join(','); this.solveWhere = `${this.mode} ${l > r ? 'L' : 'R'} s ${f(l > r ? sL : sR)} e ${f(l > r ? eL : eR)} w ${f(l > r ? wL : wR)}`; }
+  }
+
+  /** What this frame's solve asked for (root-local): shoulders, elbows, wrists. */
+  private sol: { sL: THREE.Vector3; eL: THREE.Vector3; wL: THREE.Vector3; sR: THREE.Vector3; eR: THREE.Vector3; wR: THREE.Vector3 } | null = null;
+  private keep(sL: THREE.Vector3, eL: THREE.Vector3, wL: THREE.Vector3, sR: THREE.Vector3, eR: THREE.Vector3, wR: THREE.Vector3) {
+    this.sol = { sL: sL.clone(), eL: eL.clone(), wL: wL.clone(), sR: sR.clone(), eR: eR.clone(), wR: wR.clone() };
+  }
+  /**
+   * The arms solved again on the bones as the character posed them this frame (its clip, bend and the chest's turn
+   * moved the shoulders since pose() solved them; the melee rig does the same, body.ts fixArms): the wrists land
+   * where the solve put them, the elbows keep its way out of the body. Then how deep the arms drawn this frame are in
+   * the body's shapes (which turn with the chest), for the play test's gate.
+   */
+  private fixArms(model: Character) {
+    const R = this.rig!, s = this.sol!, root = model.root;
+    const W = (v: THREE.Vector3) => root.localToWorld(v.clone()), wp = (o: THREE.Object3D) => o.getWorldPosition(V());
+    const one = (up: THREE.Object3D, lo: THREE.Object3D, hand: THREE.Object3D, sh: THREE.Vector3, el: THREE.Vector3, wr: THREE.Vector3) => {
+      const s0 = wp(up), a = s0.distanceTo(wp(lo)), b = wp(lo).distanceTo(wp(hand)), e = V(), w = V();
+      reach2(s0, W(wr), a, b, W(el).sub(W(sh)), e, w);
+      aimBone(up, lo, e, 1); aimBone(lo, hand, w, 1);
+    };
+    one(R.upL, R.loL, R.hL, s.sL, s.eL, s.wL); one(R.upR, R.loR, R.hR, s.sR, s.eR, s.wR);
+    // measured on what is drawn: the upper arm past the shoulder's own ball and the forearm to its middle (the hand's
+    // end is left out on purpose: a string hand anchors at the jaw, the sling's pouch rests against the belly)
+    const loc = (o: THREE.Object3D) => root.worldToLocal(wp(o));
+    let worst = 0, where = '';
+    for (const [up, lo, hd, k] of [[R.upL, R.loL, R.hL, 'L'], [R.upR, R.loR, R.hR, 'R']] as const) {
+      const a = loc(up), e = loc(lo), w = loc(hd), q = V();
+      for (let i = 1; i <= 6; i++) {
+        if (i <= 3) q.copy(a).lerp(e, 0.35 + i * 0.2); else q.copy(e).lerp(w, (i - 3) / 3 * 0.6);
+        const d = depth(q, 0, 0.04);
+        if (d > worst) { worst = d; const f = (v: THREE.Vector3) => v.toArray().map((x) => x.toFixed(2)).join(','); where = `${this.mode} ${k} s ${f(a)} e ${f(e)} w ${f(w)} (drawn)`; }
+      }
+    }
+    if (worst > this.armIn) { this.armIn = worst; this.armWhere = where; }
   }
 
   /** After the body is posed: put the bow, string, arrow, cords and pouch where the hands really are. */
@@ -258,6 +295,8 @@ export class RangedRig {
     if (this.mode === 'none' || !this.rig) return;
     const R = this.rig, S = this.st;
     model.root.updateWorldMatrix(true, true);
+    // (only for a frame that pose() solved: a roll or a stagger in between leaves the arms to the body)
+    if (this.sol) { this.fixArms(model); model.root.updateWorldMatrix(true, true); this.sol = null; }
     const hL = model.handL.localToWorld(V().set(0, -0.05, 0)), hR = model.handR.localToWorld(V().set(0, -0.06, 0));
     const rq = model.root.getWorldQuaternion(new THREE.Quaternion());
     const aim = V().copy(this.aimL).applyQuaternion(rq).normalize();
@@ -372,7 +411,7 @@ export class RangedRig {
     P.needsUpdate = true; C.needsUpdate = true;
   }
   /** Taken off: nothing left in the world. */
-  hide(model?: Character) { if (model) { grip(model, 'L', null); grip(model, 'R', null); } this.group.visible = false; this.quiver.visible = false; this.mode = 'none'; this.faceOffset = 0; this.pouchInit = false; }
+  hide(model?: Character) { this.sol = null; if (model) { grip(model, 'L', null); grip(model, 'R', null); } this.group.visible = false; this.quiver.visible = false; this.mode = 'none'; this.faceOffset = 0; this.pouchInit = false; }
 }
 
 type GripShape = 'open' | 'relaxed' | 'grip' | 'pinch' | 'point';
