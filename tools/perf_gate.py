@@ -21,7 +21,12 @@ SPOTS = {'flat': (12.4, 68.4, 3.14), 'bazaar': (6.0, 50.0, 3.14), 'crowd': (-5.5
 # The budgets are set from this test's own counts under software GL (1.2: phones 44 to 94 draws and up to 0.58 M
 # triangles, Web 130 to 470 and 1.03 M, Ultra 135 to 1,180 and 3.45 M: there every body near the gate is drawn in the
 # shadow pass too), with about a fifth of headroom over the worst spot, so honest growth passes and a doubling does not.
-BUDGET = {'mobile': (120, 720_000, 4), 'web': (580, 1_300_000, 9), 'ultra': (1420, 4_200_000, 16)}
+# Web's bodies (2026-11-23): 10 in the crowd on main bd16cf8 (the story's people, never a card and drawn out to 48 m, use
+# more than the cap of five, and the walkers held near you and the two within reach are bodies over it since a3f6225 and
+# 0905d5e, so nobody you walk into is a card). A ceiling that took those back made a walker at 2.5 m a card again
+# (crowd_smoke, soak_smoke's bump test failed on perf23-land 9b83112), so the budget is set over the design instead:
+# 12, a fifth over the 10. The crowd spot's draws (240 to 255) and triangles (0.72 to 0.81 M) stay far under theirs.
+BUDGET = {'mobile': (120, 720_000, 4), 'web': (580, 1_300_000, 12), 'ultra': (1420, 4_200_000, 16)}
 
 class H(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *x, **k): pass
