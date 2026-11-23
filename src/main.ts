@@ -743,6 +743,7 @@ renderer.renderer.domElement.addEventListener('webglcontextlost', (e) => {
   if (glLost) return;
   glLost = true;
   try { if (state === 'game' && game) game.persist(); } catch { /* the save is best effort here */ }
+  try { openPause(); } catch { /* the menu is the game's own pause: nothing runs on while the picture is gone */ }
   gfxNote(t('msg.gfxLost'));
   clearTimeout(lostTimer);
   lostTimer = window.setTimeout(() => { if (glLost) gfxNote(t('msg.gfxReload'), () => location.reload()); }, 8000);
@@ -771,11 +772,11 @@ function memoryGuard(now: number) {
 function frame() {
   requestAnimationFrame(frame);
   frameCount++;
-  if (glLost) return; // nothing can draw until the context is back
   memoryGuard(performance.now());
   clock.update();
   const real = Math.min(clock.getDelta(), 0.05);
-  if (!hold.on) { const t0 = performance.now(); tick(real); const t1 = performance.now(); draw(real); perfFrame(renderer.renderer, real, t1 - t0, performance.now() - t1); return; }
+  // a lost context: the game is paused (openPause above) and only the drawing waits, so menus and input still work
+  if (!hold.on) { const t0 = performance.now(); tick(real); const t1 = performance.now(); if (!glLost) draw(real); perfFrame(renderer.renderer, real, t1 - t0, performance.now() - t1); return; }
   if (hold.pending <= 0) return;
   for (let left = hold.pending; left > 1e-6; left -= 1 / 30) tick(Math.min(left, 1 / 30));
   hold.pending = 0;
