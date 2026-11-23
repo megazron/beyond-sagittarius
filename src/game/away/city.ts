@@ -1665,9 +1665,12 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       let dnear = 0, dlost = 0;
       dist.peds.forEach((q, i) => { if (Math.hypot(q.x - pedsAt.x, q.z - pedsAt.z) < 30) { dnear++; if (!dpool.some((b) => b.ped === i && b.fig.root.visible) && !stand.some((x) => x.k === 1e6 + i) && !inLens(q.x, q.z)) dlost++; } });
       // per step of soak_smoke's bump test: the budget, who is wanted, who is pinned, the lens, each held body's own fade
-      const elbowCards = you ? cards.filter((q, i) => !byCard.has(i) && Math.hypot(q.x - you!.position.x, q.z - you!.position.z) < 1.2).length : 0;
+      // a card at your elbow that the pool could have walked (a body of its look was free); with one body a look a second
+      // walker of a look already held stays a card: counted apart (elbowSameLook, a limit of the pool)
+      const atElbow = you ? cards.map((_q, k) => k).filter((k) => !byCard.has(k) && Math.hypot(cards[k].x - you!.position.x, cards[k].z - you!.position.z) < 1.2) : [];
+      const elbowCards = atElbow.filter((k) => crowdPool.some((b) => b.card < 0 && b.look === k % NLOOK)).length, elbowSameLook = atElbow.length - elbowCards;
       const nearCards = you ? cards.map((q, i) => [i, +q.x.toFixed(2), +q.z.toFixed(2), Math.hypot(q.x - you!.position.x, q.z - you!.position.z)]).filter((r) => r[3] < 9).map((r) => r.slice(0, 3)) : [];
-      const dbg = { elbowCards, nearCards, want: wantLog, pinned: crowdPinned, pedPinned, used: usedLog, cardsNear, line: lineLog, lensOn: lens.on,
+      const dbg = { elbowCards, elbowSameLook, nearCards, want: wantLog, pinned: crowdPinned, pedPinned, used: usedLog, cardsNear, line: lineLog, lensOn: lens.on,
         figs: [...byCard.entries()].map(([i, b]) => [i, b.fig.root.visible ? 1 : 0, b.fig.faded ? 1 : 0, inLens(cards[i].x, cards[i].z) ? 1 : 0]),
         peds: dpool.filter((b) => b.ped >= 0).map((b) => [b.ped, dpool.indexOf(b), b.look, +Math.hypot(dist.peds[b.ped].x - pedsAt.x, dist.peds[b.ped].z - pedsAt.z).toFixed(2), +dist.peds[b.ped].x.toFixed(2), +dist.peds[b.ped].z.toFixed(2)]) };
       return { dbg, held, near: nearN, bodies: crowdPool.filter((b) => b.card >= 0 && b.fig.root.visible).length, lost, room: bodiesLeft, dnear, dbodies: dpool.filter((b) => b.ped >= 0 && b.fig.root.visible).length, dlost };
