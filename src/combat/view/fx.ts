@@ -216,7 +216,8 @@ export class CombatFx {
     let ns = 0, nh = 0, nb = 0, nd = 0;
     // how far the stick turns between two frames (50 rad/s of fight time): a full disc at a quarter turn a frame or more
     const simDt = Math.max(0, sim.t - this.lastSimT); this.lastSimT = sim.t;
-    this.blurU.uA.value = Math.min(1, (simDt * 50) / 1.6) * 0.55 * (0.35 + 0.65 * this.smokeK);
+    // (a faint sweep stays in slow motion too: without it the stick was a thin dark line lost in the grass, v7)
+    this.blurU.uA.value = Math.max(0.2, Math.min(1, (simDt * 50) / 1.6)) * 0.55 * (0.35 + 0.65 * this.smokeK);
     for (const q of sim.proj) {
       if (!q.alive) continue;
       tmpV.set(q.vx, q.vy, q.vz).normalize();
