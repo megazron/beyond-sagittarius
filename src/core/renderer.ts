@@ -584,6 +584,10 @@ export class Renderer {
     this.pixelRatio = Math.min(window.devicePixelRatio || 1, quality.maxPixelRatio);
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    // three.js reads every program's and shader's info log on first use to report errors: each read waits for that
+    // program to finish linking on the main thread, so a cold start's first draws froze while the background compile
+    // was still running (getProgramInfoLog was the top self time of the cold load). ?shadercheck=1 turns it back on
+    this.renderer.debug.checkShaderErrors = new URLSearchParams(location.search).get('shadercheck') === '1' || !!import.meta.env.DEV;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
