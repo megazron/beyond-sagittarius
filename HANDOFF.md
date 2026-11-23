@@ -1231,3 +1231,11 @@ unlanded except this handoff commit and any recording in progress.
     in front. Probe: 14.5 cm (first try, bow low along the aim) -> 1.2 cm worst.
   - SPEAR draw free hand (body.ts): comes up and across with the chest's coil, softer elbow, a balancing sway while held.
 - Clips: plan ~/bs-cap/combat/plan_s5.json (mkplan_s5.py), capture dir ~/bs-cap/combat/s5.
+- ~21:50 s5 GPU review (clips in Downloads/BS_Game_v1.1/combat, notes in README_review.txt): 29 bow (low ready between
+  shots OK; full draw from behind still a T = real form), 30 spear free hand (better from the side, still out from
+  behind), 20 fishing v5 (view tips down; 3 thrusts in 10 s), 31 fire v2 (better, NOT real fire yet: the core reads as a
+  bright triangle inside the teepee; flames should rise above the sticks, fewer and more distinct tongues; no heat haze),
+  28 coat v6 OK, 32 night v2 (planetshine 1.35, still dark past the fire; the night bot idles away from the fire).
+  CI on combat-s5 3433dd3 was queued at handover; land it like land48 (new branch name if main moved).
+  NEXT: fire look (flame.ts), the night's darkness (planetshine or a wider, softer camp fire fill), the spear free arm
+  from behind, check that aim views feel right now that they look along the look (player.ts tmpD fix).
