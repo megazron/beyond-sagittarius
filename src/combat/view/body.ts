@@ -179,8 +179,9 @@ class HideWrap {
       { y: (a + b) * 0.5 * len, rx: rm, rz: rm * 0.92 },
       { y: (b - 0.04) * len, rx: rb * 1.02, rz: rb * 0.95 },
       { y: b * len, rx: rb * 1.08, rz: rb * 1.0 },
-      // the edge rolled in over the wrist, so from the front the end is closed hide, not a dark open ring
-      { y: (b + 0.015) * len, rx: rb * 0.8, rz: rb * 0.74 },
+      // the end eases in over the wrist: a closed end without a hard turned-in ring (the rolled edge of v7 faced the
+      // camera from the front and read as a dark band at the wrist)
+      { y: (b + 0.02) * len, rx: rb * 0.93, rz: rb * 0.88 },
     ];
     const m = new THREE.Mesh(loft(rings, 7), this.hide); m.castShadow = true; g.add(m);
     const at = (t: number) => { const u = (t - a) / (b - a); return (u < 0.5 ? ra + (rm - ra) * u * 2 : rm + (rb - rm) * (u - 0.5) * 2) * 1.05; };
@@ -219,6 +220,39 @@ class HideWrap {
     }
     bone.add(g); this.parts.push(g);
   }
+  /** The coat's cuff where it runs on over the hand (cloth skinned to the hand bone): a short band of hide over it,
+   * so no pale tab of cuff shows past the wrap. Nothing when the cuff stops at the wrist. */
+  private cuffCover(model: Character, hand: THREE.Object3D, s: string) {
+    const fing = model.root.getObjectByName(`finger3_1${s}`) ?? model.root.getObjectByName(`finger2_1${s}`);
+    if (!fing) return;
+    hand.updateWorldMatrix(true, false); fing.updateWorldMatrix(true, false);
+    const axis = hand.worldToLocal(fing.getWorldPosition(new THREE.Vector3())), len = axis.length();
+    if (len < 1e-4) return;
+    const ax = axis.clone().normalize(), v = new THREE.Vector3();
+    let far = 0, r = 0;
+    model.root.traverse((o) => {
+      const m = o as THREE.SkinnedMesh;
+      if (!m.isSkinnedMesh || m.name !== 'cloth' || !m.visible) return;
+      const sk = m.skeleton, si = m.geometry.attributes.skinIndex, sw = m.geometry.attributes.skinWeight, pos = m.geometry.attributes.position;
+      if (!sk || !si || !sw) return;
+      const hi = sk.bones.indexOf(hand as THREE.Bone); if (hi < 0) return;
+      m.updateWorldMatrix(true, false);
+      for (let i = 0; i < pos.count; i++) {
+        let w = 0; for (let c = 0; c < 4; c++) if (si.getComponent(i, c) === hi) w += sw.getComponent(i, c);
+        if (w < 0.3) continue;
+        m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld); hand.worldToLocal(v);
+        const t = v.dot(ax) / len; if (t < 0 || t > 0.6) continue;
+        far = Math.max(far, t); r = Math.max(r, v.addScaledVector(ax, -v.dot(ax)).length());
+      }
+    });
+    if (far < 0.03) return;
+    const wl = hand.getWorldPosition(new THREE.Vector3()).distanceTo(fing.getWorldPosition(new THREE.Vector3())), k = wl > 1e-4 ? len / wl : 1;
+    const rr = Math.min(r * 1.06 + 0.003 * k, 0.07 * k), y1 = Math.min(0.6, far + 0.04) * len;
+    const g = new THREE.Group(); g.name = 'hideWrap';
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ax);
+    const band = new THREE.Mesh(loft([{ y: -0.02 * len, rx: rr, rz: rr * 0.8 }, { y: y1 * 0.6, rx: rr * 1.02, rz: rr * 0.82 }, { y: y1, rx: rr * 0.94, rz: rr * 0.76 }], 7), this.hide);
+    band.castShadow = true; g.add(band); hand.add(g); this.parts.push(g);
+  }
   private build(model: Character) {
     const g = (n: string) => model.root.getObjectByName(n);
     for (const s of ['L', 'R']) {
@@ -230,7 +264,9 @@ class HideWrap {
         const src = probe.cloth as THREE.MeshStandardMaterial | null;
         this.cloth = new THREE.MeshStandardMaterial({ color: src?.color ? src.color.clone() : new THREE.Color(0xe8e8e4), roughness: 0.92 });
       }
-      this.sleeve(model, lo, hd, 0.12, 0.84, 0.05, 0.045, [0.18, 0.5, 0.8], 0, (n) => n === `lowerarm${s}` || (n.startsWith('forearmtw') && n.endsWith(s)));
+      // to the wrist: the coat's cuff ends there, and a wrap that stopped short left the cuff's pale tab showing
+      this.sleeve(model, lo, hd, 0.12, 0.95, 0.05, 0.045, [0.18, 0.52, 0.86], 0, (n) => n === `lowerarm${s}` || (n.startsWith('forearmtw') && n.endsWith(s)));
+      this.cuffCover(model, hd, s);
       this.sleeve(model, up, lo, -0.06, 0.36, 0.092, 0.08, [0.3], 0.12);
     }
     this.model = model;

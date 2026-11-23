@@ -41,7 +41,7 @@ export class Player {
   /** Body pose (the wake-up lies down, cutscenes can override). */
   pose: CrewPose = 'idle';
   private camPos = new THREE.Vector3();
-  private camClip = 1;
+  private camClip = 1; private camDt = 1 / 60;
   /** Damped point the camera orbits, so it trails the body a little. */
   private focus = new THREE.Vector3();
   private yawS = 0;
@@ -257,7 +257,10 @@ export class Player {
       if (y < this.terrain.height(x, z) + 0.3 || this.forest.blocks(x, z, 0.28) || (k > 2 && this.forest.inFoliage?.(x, y, z))) { free = Math.max(0.16, (k - 1) / 10); break; }
     }
     // pull in at once, ease back out, so the view never pops
-    this.camClip = free < this.camClip ? free : this.camClip + (free - this.camClip) * 0.05;
+    // in fast, but over a few frames (in one frame it read as a cut: the night watch by the fire, 2:06 in v14, the
+    // view jumped from over the fire to close behind him when a bush crossed the line); the lens's own trunk margin
+    // below and the ground keep it out of anything solid meanwhile
+    this.camClip = free < this.camClip ? this.camClip + (free - this.camClip) * (1 - Math.exp(-this.camDt * 18)) : this.camClip + (free - this.camClip) * 0.05;
     out.x = hx + (out.x - hx) * this.camClip; out.y = hy + (out.y - hy) * this.camClip; out.z = hz + (out.z - hz) * this.camClip;
     // the lens itself keeps half a metre off any trunk: the line test passes a trunk the camera ends up grazing from
     // the side (a dark wall over a third of the picture, or the inside of the bark for a frame as the view swings)
@@ -283,13 +286,14 @@ export class Player {
     this.yawS = this.yaw; this.pitchS = this.pitch; this.distS = this.camDist;
     this.fovKick = 0; this.bobK = 0; this.lean = 0; this.dip = 0; this.dipV = 0; this.backS = 0; this.turnS = 0; this.zoomS = 0;
     if (this.camera.fov !== this.baseFov) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
-    this.camClip = 1;
-    this.orbit(this.camPos, this.focus, this.yaw, this.pitch, this.camDist);
+    this.camClip = 1; this.camDt = 1; // (a cut: pulled in at once)
+    this.orbit(this.camPos, this.focus, this.yaw, this.pitch, this.camDist); this.camDt = 1 / 60;
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.pos.x, this.pos.y + 1.5, this.pos.z);
   }
 
   private updateCamera(dt: number) {
+    this.camDt = Math.min(0.1, Math.max(0, dt));
     const e = (r: number) => 1 - Math.exp(-dt * r);
     // the body leads, the camera catches up: more slack vertically, so steps and jumps feel soft
     this.focus.x += (this.pos.x - this.focus.x) * e(12);

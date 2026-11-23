@@ -230,7 +230,9 @@ export class CombatFx {
         // (wall time strobed it in slow motion: 125 degrees a frame at 23 frames a second)
         tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(1, 1, 1)); if (nd < 6) this.blurs.setMatrixAt(nd++, tmpM);
         tmpQ.multiply(tmpQ2.setFromAxisAngle(tmpS.set(0, 1, 0), (sim.t * 50) % 6.283));
-        tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(2.6, 2.6, 0.75)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM);
+        // slowed down, the stick is seen turning rather than smeared: drawn a little fuller so it is not a thread
+        const slowK = Math.max(0, Math.min(1, 1 - (simDt * 50) / 0.8)), th = 2.6 + 1.2 * slowK;
+        tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(th, th, 0.75 + 0.08 * slowK)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM);
       }
       else { const sp = w === 'spear' || w === 'hafted', len = sp ? 2 : w === 'atlatl' ? 1.7 : w === 'crossbow' ? 0.45 : 0.75, thick = sp ? 1.9 : w === 'atlatl' ? 1.3 : 1.25; tmpM.compose(tmpV.set(q.x, q.y, q.z), tmpQ, tmpS.set(thick, thick, len)); if (nh < 20) this.shafts.setMatrixAt(nh++, tmpM); }
     }
