@@ -7,7 +7,7 @@ import type { SimPlayer } from '../sim/sim';
 import { WEAPONS } from '../sim/weapons';
 import { RangedRig } from './ranged';
 import { loft } from '../../characters/shapes';
-import { MELEE_GEAR, SHAFT, targetFrame, clearShaft, solveArms, follow, newFrame, copyFrame, depth } from './melee';
+import { MELEE_GEAR, SHAFT, targetFrame, clearShaft, solveArms, follow, newFrame, copyFrame, depth, setBodyScale } from './melee';
 import type { ActState, WFrame } from './melee';
 import type { WeaponId } from '../sim/weapons';
 
@@ -369,7 +369,7 @@ export class FightBody {
   private bonesM: { upL: THREE.Object3D; upR: THREE.Object3D; loR: THREE.Object3D; loL: THREE.Object3D; a: number; b: number } | null = null;
   /** Per-frame numbers of what was drawn (for the play test): worst shaft depth in the body, worst left-hand gap
    * from the shaft while it holds it, frames counted. */
-  stats = { frames: 0, shaftIn: 0, handOff: 0, leftOff: 0 };
+  stats: { frames: number; shaftIn: number; handOff: number; leftOff: number; skel?: string } = { frames: 0, shaftIn: 0, handOff: 0, leftOff: 0 };
   private solvedL: number | null = null;
   private meleePose(model: Character, p: SimPlayer, dt: number, armed: boolean, visible: WeaponId | null): Limbs | null {
     const w = p.weapon;
@@ -389,14 +389,16 @@ export class FightBody {
       weapon: w, act: p.act, actT: p.actT, combo: p.combo, charge: p.charge, charging: p.charging, blocking: p.blocking, blockT: p.blockT,
       up: this.ready, since: this.since, thrown: this.wasCharging === 'throw' && p.act !== 'charge', windup: m?.windup ?? 0.3, active: m?.active ?? 0.1, recover: m?.recover ?? 0.4,
     };
-    targetFrame(s, this.tgt, this.tmp); clearShaft(this.tgt, w);
+    // the frames are for a 1.75 m man: scaled to this body by its arm length
+    const K = (B.a + B.b) / 0.53; setBodyScale(K);
+    targetFrame(s, this.tgt, this.tmp); this.tgt.g.multiplyScalar(K); this.tgt.lh.multiplyScalar(K); clearShaft(this.tgt, w);
     const fast = p.act === 'active' || (s.thrown && this.since < 0.2);
     if (!this.mframe) { copyFrame(this.tgt, this.cur); this.mframe = true; this.lPrev = null; } else follow(this.cur, this.tgt, dt, 0.04, fast ? 60 : 24);
     const f = copyFrame(this.cur, this.tmp);
     const loc = (o: THREE.Object3D) => model.root.worldToLocal(o.getWorldPosition(new THREE.Vector3()));
     const wantL = this.ready > 0.05 || f.l !== null || p.act !== 'idle' || p.blocking ? 1 : 0;
     this.leftW += (wantL - this.leftW) * (1 - Math.exp(-dt * 10));
-    const r = solveArms(f, w, { sL: loc(B.upL), sR: loc(B.upR), a: B.a, b: B.b, palm: 0.07 }, this.leftW > 0.02 ? 1 : 0, 1, this.lPrev, dt);
+    const r = solveArms(f, w, { sL: loc(B.upL), sR: loc(B.upR), a: B.a, b: B.b, palm: 0.07 * K }, this.leftW > 0.02 || f.l !== null ? 1 : 0, 1, this.lPrev, dt);
     this.lPrev = r.f.l; this.solvedL = r.f.l;
     copyFrame(r.f, this.cur); this.cur.l = r.f.l;
     if (p.sneaking) { r.limbs.bend = (r.limbs.bend ?? 0) + 0.3; this.crouch = 0.2; } else this.crouch = p.blocking && (w === 'spear' || w === 'hafted') ? 0.16 * out(p.blockT / 0.2) : 0;
@@ -456,7 +458,9 @@ export class FightBody {
     let worst = 0;
     for (let k = -S.back; k <= S.front; k += 0.04) worst = Math.max(worst, depth(q.copy(gl).addScaledVector(this.cur.d, k), this.cur.bend, S.r));
     const st = this.stats; st.frames++; st.shaftIn = Math.max(st.shaftIn, worst);
-    if (this.solvedL !== null) {
+    st.handOff = Math.max(st.handOff, gl.distanceTo(this.cur.g));
+    if (!st.skel) { const s0 = model.root.worldToLocal(this.bonesM.upR.getWorldPosition(new THREE.Vector3())); st.skel = `sR ${s0.toArray().map((x) => x.toFixed(2))} a ${this.bonesM.a.toFixed(3)} b ${this.bonesM.b.toFixed(3)} g ${this.cur.g.toArray().map((x) => x.toFixed(2))} grip ${gl.toArray().map((x) => x.toFixed(2))}`; }
+    if (this.solvedL !== null && this.xfade >= 1) {
       const hl = model.handL.getWorldPosition(new THREE.Vector3()), ll = this.bonesM.loL.getWorldPosition(new THREE.Vector3());
       const palm = hl.clone().addScaledVector(hl.clone().sub(ll).normalize(), 0.07);
       const rel = palm.sub(grip), along = rel.dot(dW);
