@@ -260,7 +260,7 @@
    "holdErrCm": 1.0,
    "propGapCm": 1.0,
    "skinPx": 30,
-   "clothPx": 30
+   "clothPx": 100
   },
   "task_throw": {
    "armPenCm": 1.0,
@@ -270,7 +270,7 @@
    "holdErrCm": 1.0,
    "propGapCm": 5.3,
    "skinPx": 30,
-   "clothPx": 30
+   "clothPx": 128
   },
   "task_plant": {
    "armPenCm": 2.7,
@@ -657,6 +657,7 @@
   "crouch jerkCm": "a pop near the end of the crouch clip (f55-58): 10.5 cm locally, 42.1 cm on CI (clip phase differs by machine). A real glitch to fix, then lower this.",
   "sit_drink armPenCm": "megazron finger in the torso drinking seated: 8.5 locally, 9.4 on CI.",
   "task_eat/task_drink (c7ec400)": "back on the procedural reach: the retargeted Consume clip took the LEFT hand out beside the face while the food stayed at the hip (GPU, tasksA2). Procedural drinking: jerk 8.7, a finger 9.2 cm in the chest (Draxum, cup at the chest). To fix, then lower.",
-  "raised 2026-11-23 13:50": "injured jerkCm, task_plant jerkCm, task_eat jerkCm, task_eat meshInCm, task_drink armPenCm, task_drink handPenCm, task_drink jerkCm, task_drink meshInCm, spear_thrust jerkCm, reach_far jerkCm (full10 at the thigh guard fix; the rest ratcheted down)"
+  "raised 2026-11-23 13:50": "injured jerkCm, task_plant jerkCm, task_eat jerkCm, task_eat meshInCm, task_drink armPenCm, task_drink handPenCm, task_drink jerkCm, task_drink meshInCm, spear_thrust jerkCm, reach_far jerkCm (full10 at the thigh guard fix; the rest ratcheted down)",
+  "task_putdown/task_throw clothPx (2026-11-23 14:20)": "new scenarios ratcheted from full10, a run without pixels, so their pixel caps were placeholders (30): set from CI at 461b59f (zenvik 56 and 78) with the usual slack"
  }
 }
