@@ -146,10 +146,12 @@ export class RangedRig {
         else if (k < 0.85) { target = V().copy(quiver).lerp(nock0, smooth((k - 0.55) / 0.3)); S.arrowIn = ammo > 0 ? 'hand' : 'none'; }
         else target = nock0;
       } else target = S.up > 0.5 ? nock0 : V().set(-0.22, 1.0, 0.12);
-      // the drawing elbow: down and out at the brace, then back along the arrow's line as the string comes to the jaw
+      // the drawing elbow: out in front at the brace, then back along the arrow's line as the string comes to the jaw
       // (a little up and a little behind the back, as a drawing elbow is in real form); past the head, not up into it
       const dk = p.act === 'charge' ? drawing : recovering ? Math.max(0, 1 - p.actT / 0.4) : 0;
-      const pole = V().copy(A).multiplyScalar(-(0.5 + 0.5 * dk)).addScaledVector(UP, -1 + 1.12 * dk).addScaledVector(F, -0.15);
+      // (at the brace the hand reaches across the chest to the string: an elbow sent down fell into the chest, CI 14 cm;
+      // it goes out in front of the chest, at about shoulder height, as an archer's does when he takes the string)
+      const pole = V().copy(A).multiplyScalar(-(0.25 + 0.75 * dk)).addScaledVector(F, 0.7 * (1 - dk) - 0.15 * dk).addScaledVector(UP, -0.35 * (1 - dk) + 0.12 * dk);
       // the hand's mark is kept out of the body by a forearm's thickness, except at the jaw, where the hand rests on the
       // head on purpose (only the arm above the hand is checked against the head)
       const tRaw = V().copy(target).addScaledVector(aim, -0.06), tE = this.ease(sR, tRaw.clone(), R);
