@@ -1024,15 +1024,69 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
 
   // ---- the tram at its stop, and the shelter ----
   {
+    const stopM = lit(sign('Tram 7: Spaceport', '#0f7d74', '#ffffff'), 0.4); stopM.side = THREE.DoubleSide;
     const tram = add(new THREE.Group());
-    const liv = new THREE.MeshStandardMaterial({ color: 0x0f7d74, roughness: 0.45, metalness: 0.3 }), cream = new THREE.MeshStandardMaterial({ color: 0xf4ead2, roughness: 0.5 });
-    const part = (g: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = true; tram.add(o); return o; };
-    const capsule = new THREE.Mesh(new THREE.CapsuleGeometry(1.3, 10.4, 6, 16), new THREE.MeshStandardMaterial({ color: 0xf2f4f6, roughness: 0.25, metalness: 0.5 })); capsule.rotation.x = Math.PI / 2; capsule.position.y = 1.9; capsule.castShadow = true; tram.add(capsule);
-    void liv;
-    const band = new THREE.Mesh(new THREE.CapsuleGeometry(1.32, 9.4, 4, 16), new THREE.MeshStandardMaterial({ color: 0x223344, emissive: 0xffe6c0, emissiveIntensity: 0.4, roughness: 0.1 })); band.rotation.x = Math.PI / 2; band.position.y = 2.15; band.scale.set(1, 1, 0.35); tram.add(band);
-    part(new THREE.BoxGeometry(1.6, 0.08, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.5), toneMapped: false }), 0, 0.5, 0);
-    part(new THREE.BoxGeometry(0.08, 2.0, 1.3), new THREE.MeshStandardMaterial({ color: 0x0f7d74, roughness: 0.4 }), -1.3, 1.6, 3);
-    void cream;
+    // A tram, not a white capsule (the owner's v4 clips: its white side and nose filled the view like a slab): a teal
+    // lower body with a gold stripe, cream upper panels between six windows a side, panel seams, two doors on the
+    // pavement side, a raked windscreen, headlights and the destination board at each end, a grey roof with its
+    // equipment and pantograph, dark skirts over the bogies. Each material's parts are merged into one mesh.
+    const tramM = {
+      liv: new THREE.MeshStandardMaterial({ color: 0x0f7d74, roughness: 0.45, metalness: 0.3 }),
+      cream: new THREE.MeshStandardMaterial({ color: 0xe9dfc6, roughness: 0.55, metalness: 0.1 }),
+      glass: new THREE.MeshStandardMaterial({ color: 0x1a2630, emissive: 0xffd9a0, emissiveIntensity: 0.32, roughness: 0.08, metalness: 0.2 }),
+      trim: new THREE.MeshStandardMaterial({ color: 0x2b3036, roughness: 0.6, metalness: 0.4 }),
+      roof: new THREE.MeshStandardMaterial({ color: 0x8e979f, roughness: 0.5, metalness: 0.5 }),
+      gold: new THREE.MeshStandardMaterial({ color: 0xd9a441, roughness: 0.35, metalness: 0.7 }),
+      lamp: new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff2d0).multiplyScalar(2.2), toneMapped: false }),
+    };
+    const tg: Record<keyof typeof tramM, THREE.BufferGeometry[]> = { liv: [], cream: [], glass: [], trim: [], roof: [], gold: [], lamp: [] };
+    const bx = (k: keyof typeof tramM, w: number, h: number, d: number, x: number, y: number, z: number, rx = 0) => {
+      const g = new THREE.BoxGeometry(w, h, d); if (rx) g.rotateX(rx); g.translate(x, y, z); tg[k].push(g);
+    };
+    const W = 2.5, L = 12.2, hw = W / 2;
+    bx('trim', W - 0.2, 0.42, L - 1.2, 0, 0.36, 0); // skirts over the bogies
+    bx('liv', W, 1.0, L, 0, 1.05, 0); // lower body
+    bx('cream', W, 1.55, L, 0, 2.32, 0); // upper body
+    bx('gold', W + 0.02, 0.07, L + 0.02, 0, 1.56, 0); // the stripe
+    bx('trim', W + 0.02, 0.05, L + 0.02, 0, 0.56, 0); // the rubbing strip
+    bx('roof', W - 0.12, 0.16, L - 0.2, 0, 3.17, 0);
+    bx('roof', 1.3, 0.32, 2.6, 0, 3.4, -2.6); bx('roof', 1.1, 0.26, 1.8, 0, 3.38, 3.2); // roof equipment
+    // the pantograph: two arms in a diamond, the bow across the top
+    bx('trim', 0.06, 0.06, 1.3, 0.35, 3.75, -0.4, 0.55); bx('trim', 0.06, 0.06, 1.3, -0.35, 3.75, -0.4, 0.55);
+    bx('trim', 0.06, 0.06, 1.3, 0.35, 4.2, -0.4, -0.55); bx('trim', 0.06, 0.06, 1.3, -0.35, 4.2, -0.4, -0.55);
+    bx('trim', 1.5, 0.05, 0.08, 0, 4.48, -0.4);
+    for (const sd of [-1, 1]) {
+      const xs = sd * (hw + 0.005);
+      // six windows a side with cream pillars between; the pavement side (-x) has its two doors in the 2nd and 5th bays
+      for (let i = 0; i < 6; i++) {
+        const z = -L / 2 + 1.25 + i * ((L - 2.5) / 5);
+        if (sd < 0 && (i === 1 || i === 4)) {
+          bx('glass', 0.02, 2.0, 1.22, xs, 1.55, z); // the door's two glazed leaves
+          bx('trim', 0.03, 2.08, 0.05, xs, 1.55, z); bx('liv', 0.03, 0.06, 1.34, xs, 2.6, z); bx('liv', 0.03, 2.1, 0.06, xs, 1.55, z - 0.64); bx('liv', 0.03, 2.1, 0.06, xs, 1.55, z + 0.64);
+        } else bx('glass', 0.02, 0.95, 1.55, xs, 2.25, z);
+        // panel seams on the lower body
+        bx('trim', 0.02, 0.9, 0.025, sd * (hw + 0.008), 1.03, z + (L - 2.5) / 10);
+      }
+      bx('trim', 0.02, 0.04, L - 0.4, sd * (hw + 0.008), 2.95, 0); // the seam under the roof
+    }
+    // the ends: a raked windscreen, the board over it (the stop's own sign texture), two headlights
+    for (const e of [-1, 1]) {
+      const ze = e * (L / 2);
+      bx('cream', W - 0.1, 1.5, 0.5, 0, 2.3, ze + e * 0.15, e * 0.12); // raked upper nose
+      bx('liv', W - 0.04, 1.0, 0.5, 0, 1.05, ze + e * 0.15);
+      bx('glass', W - 0.5, 1.05, 0.04, 0, 2.2, ze + e * 0.42, e * 0.12);
+      bx('trim', W - 0.3, 0.08, 0.06, 0, 1.62, ze + e * 0.41); // bumper line
+      for (const lx of [-0.8, 0.8]) bx('lamp', 0.32, 0.14, 0.04, lx, 1.05, ze + e * 0.42);
+      bx('trim', W - 0.2, 0.32, 0.3, 0, 0.4, ze + e * 0.25); // the coupler fairing
+    }
+    for (const k of Object.keys(tg) as (keyof typeof tramM)[]) {
+      const m = new THREE.Mesh(mergeGeometries(tg[k]), tramM[k]); for (const g of tg[k]) g.dispose();
+      m.castShadow = k !== 'lamp' && k !== 'glass'; m.receiveShadow = k === 'liv' || k === 'cream'; tram.add(m);
+    }
+    // the destination boards, both ends (the stop's sign texture, no new canvas)
+    for (const e of [-1, 1]) { const b = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.28), stopM); b.position.set(0, 2.92, e * (L / 2 + 0.43)); b.rotation.y = e > 0 ? 0 : Math.PI; tram.add(b); }
+    // the cyan glow under it, as before
+    { const o = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.5), toneMapped: false })); o.position.set(0, 0.12, 0); tram.add(o); }
     // at the bottom of the bazaar, on its track, short of the junction: from the crowd (-5.5, 0) it is 25 m off, not
     // beside the camera; the stall at z -20 and the lamps are clear of it, so the pavement beside it stays open (at z -17
     // it closed the way south between the stall, the friend and the shelter, and walkers stuck there). No roofed shelter
@@ -1043,7 +1097,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     const shelter = add(new THREE.Group()); shelter.position.set(-4.8, FLOOR, TRAM_Z - 3.2);
     { const p = new THREE.Mesh(new THREE.BoxGeometry(0.09, 2.7, 0.09), railM); p.position.set(0, 1.35, 0); shelter.add(p); }
     blocks.push(new THREE.Box3(new THREE.Vector3(-5.0, 0, TRAM_Z - 3.4), new THREE.Vector3(-4.6, 3, TRAM_Z - 3.0)));
-    const stop = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.45), lit(sign('Tram 7: Spaceport', '#0f7d74', '#ffffff'), 0.4)); stop.position.set(0, 2.55, 0); stop.rotation.y = Math.PI / 2; stop.material.side = THREE.DoubleSide; shelter.add(stop);
+    const stop = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.45), stopM); stop.position.set(0, 2.55, 0); stop.rotation.y = Math.PI / 2; shelter.add(stop);
   }
 
   // ---- the square, the fountain, the gate and the liner ----
@@ -1354,9 +1408,25 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (b.card < 0) continue;
       const q = cards[b.card], sp = Math.abs(q.v), yaw = q.v > 0 ? 0 : Math.PI;
       // nobody walks through you: a body about to reach you steps round (a card has no idea where you are)
+      // A wider berth than before (the v4 Web clip lost you in a knot of bodies at the kerb): from 3.4 m ahead to 1 m
+      // past, anyone within 1.5 m of your line steps 1.7 m aside, away from you, unless that puts them in the road or the
+      // shopfronts (then the other way); and two bodies closer than 0.8 m ease apart
       let want = 0;
-      if (you) { const ahead = (you.position.z - q.z) * Math.sign(q.v || 1), ax = you.position.x - (q.x + b.dx); if (ahead > -0.6 && ahead < 2.6 && Math.abs(ax) < 1.1) want = -Math.sign(ax || 1) * 1.3; }
-      b.dx += (want - b.dx) * (1 - Math.exp(-dt * 4));
+      if (you) {
+        const ahead = (you.position.z - q.z) * Math.sign(q.v || 1), ax = you.position.x - (q.x + b.dx);
+        if (ahead > -1.0 && ahead < 3.4 && Math.abs(ax) < 1.5) {
+          let sg = -Math.sign(ax || 1);
+          const ok = (x: number) => Math.abs(x) > 4.6 && Math.abs(x) < 9.1;
+          if (!ok(q.x + sg * 1.7) && ok(q.x - sg * 1.7)) sg = -sg;
+          want = sg * 1.7;
+        }
+      }
+      for (const o of crowdPool) {
+        if (o === b || o.card < 0) continue;
+        const oq = cards[o.card], ddx = q.x + b.dx - (oq.x + o.dx), ddz = q.z - oq.z;
+        if (Math.abs(ddz) < 0.8 && Math.abs(ddx) < 0.8) want += (ddx >= 0 ? 1 : -1) * (0.8 - Math.abs(ddx));
+      }
+      b.dx += (want - b.dx) * (1 - Math.exp(-dt * 5));
       const bx = q.x + b.dx;
       b.fig.root.position.set(bx, hx(bx), q.z); b.fig.root.rotation.y = yaw;
       const hide = LENS_LINE && inLens(bx, q.z); if (!b.fig.setLensFade(hide ? 0 : 1) && b.fig.root.visible === hide) b.fig.root.visible = !hide; // Web, Ultra: a fade
@@ -1518,7 +1588,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   sun.shadow.camera.layers.enable(1); // what the flat hides still casts its shadow
   scene.traverse((o) => { if (o !== ground && o.userData.ground === undefined) o.userData.ground = false; });
   // people stood in threes, talking, on the pavements
-  const groups: [number, number][] = rich ? [[6.6, 38], [-6.4, 12], [6.4, -8], [-6.6, -36], [6.2, -58], [-3, -66], [3.5, -69], [-5.5, -71], [5.5, -73]] : [[6.6, 38], [-6.6, -36], [-3, -66]];
+  // (the gate's threes stand on the pavements either side, not in the road: at (-3, -66) and (-5.5, -71) they filled
+  // the left of the gate's hero view)
+  const groups: [number, number][] = rich ? [[6.6, 38], [-6.4, 12], [6.4, -8], [-6.6, -36], [6.2, -58], [-7.4, -63], [7.4, -67], [-7.6, -71.5], [7.6, -73]] : [[6.6, 38], [-6.6, -36], [-7.4, -63]];
   // no stock emotes on a loop: they stand easy, look at whoever in the three is talking, and the talker's mouth moves
   const chats: { members: CityPerson[]; next: number; who: number }[] = [];
   groups.forEach(([x, z], gi) => {
@@ -1749,9 +1821,20 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       return { dbg, held, near: nearN, bodies: crowdPool.filter((b) => b.card >= 0 && b.fig.root.visible).length, lost, room: bodiesLeft, dnear, dbodies: dpool.filter((b) => b.ped >= 0 && b.fig.root.visible).length, dlost };
     },
     scene, gravity: 22, jump: 6.2, spawn: new THREE.Vector3(12.4, FLOOR, 68.4), tasks, people, clearance, ceiling,
-    // the hero views: stepping out of the flat, and the run to the gate
+    keepOff(p) {
+      // the tram's body (x -3.5..-0.9 at its widest, rounded ends): the lens keeps 1.5 m off it
+      if (p.y > 4.6) return;
+      const x0 = -3.45, x1 = -0.95, z0 = TRAM_Z - 6.4, z1 = TRAM_Z + 6.4, M = 1.5;
+      const nx = Math.max(x0, Math.min(p.x, x1)), nz = Math.max(z0, Math.min(p.z, z1)), dx = p.x - nx, dz = p.z - nz, d = Math.hypot(dx, dz);
+      if (d >= M) return;
+      if (d > 1e-4) { p.x = nx + (dx / d) * M; p.z = nz + (dz / d) * M; return; }
+      const o = [[p.x - x0, -1, 0], [x1 - p.x, 1, 0], [p.z - z0, 0, -1], [z1 - p.z, 0, 1]].sort((a, b) => a[0] - b[0])[0];
+      p.x += o[1] * (o[0] + M); p.z += o[2] * (o[0] + M);
+    },
+    // the hero views: stepping out of the flat, the square (only once you have held the tram's door, and past the tram's
+    // south end at z -38.5: at z -40..-30 it took the camera on any walk beside the tram), and the run to the gate (after the ring)
     // (the gate run: a gentle look up, the camera about 1.2 m up; at 0.34 it sat on the ground and the crowd filled the frame)
-    vistas: [{ x0: 4, x1: FRONT - 0.4, z0: 63, z1: 69, yaw: 0, pitch: 0.42, secs: 4 }, { x0: -8, x1: 8, z0: -40, z1: -30, yaw: 0, pitch: 0.3, secs: 3.5 }, { x0: -9, x1: 9, z0: -76, z1: -66, yaw: 0, pitch: 0.08, secs: 5 }],
+    vistas: [{ x0: 4, x1: FRONT - 0.4, z0: 63, z1: 69, yaw: 0, pitch: 0.42, secs: 4 }, { x0: -8, x1: 8, z0: -42, z1: -39, yaw: 0, pitch: 0.3, secs: 3.5, after: 'tram' }, { x0: -9, x1: 9, z0: -76, z1: -66, yaw: 0, pitch: 0.08, secs: 5, after: 'ring' }],
     height: (x, z) => H(x, z),
     collide(p, r) {
       for (const k of wallsNear(p.x - r - 0.1, p.z - r - 0.1, p.x + r + 0.1, p.z + r + 0.1)) {
@@ -1964,7 +2047,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           if (you) {
             const dz = (you.position.z - q.pos.z) * w.dir, dx = you.position.x - q.pos.x;
             const side = w.home ?? (w.home = q.pos.x);
-            const want = dz > -0.5 && dz < 3.2 && Math.abs(dx) < 1.1 ? side - Math.sign(dx || 1) * 1.2 : side;
+            const want = dz > -1.0 && dz < 3.4 && Math.abs(dx) < 1.5 ? side - Math.sign(dx || 1) * 1.6 : side; // a wider berth (as the crowd's bodies)
             q.pos.x += (want - q.pos.x) * (1 - Math.exp(-dt * 4));
           }
           const want = w.dir > 0 ? 0 : Math.PI; q.yaw += Math.atan2(Math.sin(want - q.yaw), Math.cos(want - q.yaw)) * (1 - Math.exp(-dt * 5));

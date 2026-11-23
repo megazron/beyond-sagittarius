@@ -875,8 +875,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
           const band = dy > -0.3 && dy < 2.3;
           const x = LENS_BAND ? (band ? THREE.MathUtils.clamp((d - 1.1) / 1.1, 0, 1) : 1) : band && d < (fadeK > 0.5 ? 0.85 : 1.1) ? 0 : 1;
           const want = Math.min(x * x * (3 - 2 * x), lensWant);
-          fadeK += (want - fadeK) * (1 - Math.exp(-dt * (LENS_BAND ? 12 : 40)));
-          if (Math.abs(fadeK - want) < 0.01) fadeK = want;
+          // the v4 Web clips still caught the tenth of a second in between as a dithered half-shape: now a body is
+          // hidden or shown at once, like on phones (?lensfade=old keeps the band's fade)
+          if (LENS_BAND) { fadeK += (want - fadeK) * (1 - Math.exp(-dt * 12)); if (Math.abs(fadeK - want) < 0.01) fadeK = want; } else fadeK = want;
           setFade(fadeK);
         } else {
           const near = dy > -0.3 && dy < 2.3 && d < (fig.visible ? 0.7 : 0.9);

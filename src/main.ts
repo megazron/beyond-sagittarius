@@ -470,6 +470,10 @@ function enterWorld(fresh: boolean) {
   const replay = !!settings.replayTutorial;
   if (replay) { save.flags.tutorialDone = false; settings.replayTutorial = false; persistSettings(); }
   game.start(save, fresh);
+  // the wake-up keeps you hidden until you get up, so your look's programs (a new look from the creator) were compiled in
+  // the first frame after a skip, in one long task: on CI's software GL it outlasted smoke's 30 s wait for play (the
+  // "wake did not reach play" flake: the mode read 'play' right after). Compiled now, in the background, while the sky shows
+  if (fresh) { const fig = player.model; void fig.whenReady.then(() => { if (player.model !== fig || game.mode !== 'wake') return; const r = fig.root, was = r.visible; r.visible = true; void renderer.compileFor(world.scene, camera); r.visible = was; }); }
   if (!fresh && replay) game.startTutorial();
   // ?combat=<encounter>: straight into a set piece once play begins (recordings, tests)
   { const want = new URLSearchParams(location.search).get('combat'); if (want) { const go = () => { if (game.mode === 'play' && combat && !combat.encounter) combat.trial(want as Parameters<Combat['trial']>[0]); else setTimeout(go, 500); }; setTimeout(go, 800); } }
