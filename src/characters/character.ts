@@ -86,7 +86,7 @@ const CROWD_FACE_FAR: Record<string, number> = { cornea: 5, lash: 7, eyes: 12 };
 const STRIPPED = new WeakMap<THREE.BufferGeometry, { g: THREE.BufferGeometry; dict: Record<string, number> | undefined }>();
 /** Where the game camera was when it last drew a body (for passers-by at the lens). */
 const LENS = new THREE.Vector3(0, -1e6, 0);
-export const CHAR_BUDGET = { throttle: true, correctiveNear: 9, lodFar: 11, shadowFar: 16, crowdLodFar: 6, crowdShadowFar: 0 };
+export const CHAR_BUDGET = { throttle: true, correctiveNear: 9, lodFar: 11, shadowFar: 16, crowdLodFar: 6, crowdShadowFar: 0, lodSwapFar: 0 };
 
 /** Mocap style per character: how they stand and how they walk. */
 const STYLE: Record<string, { walk: string; idle: string; rate: number }> = {
@@ -587,6 +587,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (far) m.visible = camD < far * (m.visible ? 1.1 : 0.9);
     }
     for (const h of hairs) if (h) h.castShadow = sh;
+    // a crowd body changes its build or hair only while it is off the screen (not drawn last frame) or far off
+    // (CHAR_BUDGET.lodSwapFar): switching at 6 m in front of you read as their clothes and hair changing
+    if (crowd && sinceDrawn < 1 && camD < CHAR_BUDGET.lodSwapFar) return;
     const wantH = hairs[1] && camD > (crowd ? CHAR_BUDGET.crowdLodFar : CHAR_BUDGET.lodFar) * (hairOn ? 0.9 : 1.1) ? 1 : 0;
     if (wantH !== hairOn) { hairOn = wantH; hairs[0]!.visible = wantH === 0; hairs[1]!.visible = wantH === 1; }
     if (!lodSets[1].length) return;

@@ -1375,3 +1375,28 @@ unlanded except this handoff commit and any recording in progress.
 - LANDED combat-s6c 5155be8 on main (CI 45284692079 fully green on that sha, no reruns; perf_gate mobile flat 602929).
 - My working notes moved: HANDOFF.md, LEVELS.md, NAMES.md and MECHANICS_NOTES.md now live in docs/dev/. Rebasing onto
   main carries edits to the old paths over (git follows the rename); write to docs/dev/HANDOFF.md from now on.
+## 2026-11-23 22:45 perf agent 26 (branch ped26; WIP, not landed)
+- OWNER, first: "Pedestrian glitches are still there no fix." Before memory now. tools/pedglitch.js (injected by
+  tools/gpu_tour.py plan "inject") reads __bs.awayPeds() (city.ts pedProbe: everyone drawn this frame as a body or a
+  card, with their look) after each frame, projects them with the game's camera and counts per walker: vanish/appear in
+  view within 25 m (and far), body<->card swaps within 25 m, look changes, body LOD/hair switches, >0.5 m/frame
+  teleports, in a road lane with a car near, inside a car, overlaps < 0.45 m, sideways sliding, cards within 12 m.
+  Plans: ~/bs-assets/gpu/p26/plan_ped_{mobile,web}.json (7 routes: crowd loop, bazaar, chai->tram door, tram->square,
+  gate, downtown, market; ~7 min each); p26/pedrun.sh DIST TAG builds and runs both presets.
+- BASELINE (main 6b05e5a code + hooks, A500, 7 min each): Mobile vanish 32, appear 8, appearFar 11, swap 41,
+  identity 0, lod 0, teleport 133, road 18, carHit 0, overlap 129, slide 20. Web vanish 108, appear 51, vanishFar 12,
+  appearFar 20, swap 216, identity 0, lod 233, teleport 237, road 22, carHit 0, overlap 518, slide 111, cardClose 322;
+  Web had up to 56 walkers in view within 27 m.
+- Causes found: the lens line hid anyone between the camera and you at once (most "vanish" at 1.7 m); bodies and cards
+  traded places nearest-first at 14 m with pools of 2 (phones) and 5 (Web); crowd bodies switched build and hair at 6 m;
+  the painted crowd jumped 142 m (and the gate's 18 m) at the ends of its stretch; cards walked through each other and
+  through people standing; the step aside eased 1.7 m sideways in a few tenths of a second facing straight on; a released
+  body's card reappeared 1.7 m to the side; walkers' step aside went into the road; the builder (x -4.05) and the taxi
+  driver (x 3) stood in the road; district walkers' cards wore look (1e6 + i) mod 12 on Web, not their body's.
+- MEMORY CENSUS (tools/glmem.js, injected; __glmem.census() names every WebGL allocation by the path from __bs that
+  holds it; Mobile, crowd spot, main's code): WebGL's own count 653 MB textures + 198 MB buffers + 12 MB renderbuffers
+  (Windows says 1.55 GB dedicated: ANGLE/D3D keeps more). Textures: the city stage 175 MB (182 maps), the PLANET WORLD
+  STILL RESIDENT 104 MB + forest 13 + explorer 36 + reflHidden 45, combat's player model 53 MB (2048 maps), morph-target
+  textures 16384x2 RGBA32F x51 (27 MB) and x13 (14+7 MB), 4.6k-8k x1 x53 morph textures 3-7 MB each. Images held on the
+  CPU side 402 MB (city 87 + 39 canvas, world 78, combat player 73). Geometry: city 83 MB GPU (163 MB CPU), merged
+  statics 75 MB, terrain 13 MB. Full dump: ~/bs-assets/gpu/p26/census0/report.json. Not cut yet.
