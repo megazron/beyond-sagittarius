@@ -65,6 +65,12 @@ const LENS_OLD = typeof location !== 'undefined' && new URLSearchParams(location
 const LENS_LINE = LENS_OLD || typeof location === 'undefined' || new URLSearchParams(location.search).get('lensline') !== '0';
 /** Whoever is drawn as a body within CONTACT metres of you stays that body, whatever the budget or the ranking does
  * (?contact=0: the old way). Bumping into somebody pulls them out of the nearest-first order, so they used to be let go. */
+/** Phones: the story's people without corrective shapes (character.ts mergeParts lite); ?litestory=0 keeps them. And
+ * the big painted canvases at half size (halveCanvases); ?canvashalf=0 keeps them whole. */
+/** What halveCanvases saved on the last city built, in MB (memory reports). */
+export const CANVAS_SAVED = { mb: 0 };
+const LITE_STORY = typeof location === 'undefined' || new URLSearchParams(location.search).get('litestory') !== '0';
+const CANVAS_HALF = typeof location === 'undefined' || new URLSearchParams(location.search).get('canvashalf') !== '0';
 const CONTACT = typeof location !== 'undefined' && new URLSearchParams(location.search).get('contact') === '0' ? 0 : 4.5;
 /** ...and is let go only past CONTACT_OUT, so the swap back to a card happens well away from you, not at your elbow. */
 const CONTACT_OUT = 8;
@@ -89,6 +95,30 @@ function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => 
   fitCanvasText(c.getContext('2d')!, draw);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   return t;
+}
+/**
+ * Phones: every canvas texture of a million pixels or more (the sign, shopfront and awning atlases, the facades) is
+ * redrawn at half its width and height, a quarter of the memory, in the page and on the GPU. Nothing redraws these
+ * canvases after the city is built. A canvas shared by several textures is halved once. Returns the bytes saved.
+ */
+function halveCanvases(root: THREE.Object3D, minPx = 1 << 20) {
+  const seen = new Set<THREE.Texture>(), made = new Map<HTMLCanvasElement, HTMLCanvasElement>(); let saved = 0;
+  root.traverse((o) => {
+    const m = (o as THREE.Mesh).material; if (!m) return;
+    for (const x of Array.isArray(m) ? m : [m]) for (const v of Object.values(x as unknown as Record<string, unknown>)) {
+      const t = v as THREE.Texture; if (!t?.isTexture || seen.has(t)) continue; seen.add(t);
+      const c = t.image as HTMLCanvasElement; if (typeof HTMLCanvasElement === 'undefined' || !(c instanceof HTMLCanvasElement) || c.width * c.height < minPx) continue;
+      let h = made.get(c);
+      if (!h) {
+        h = document.createElement('canvas'); h.width = Math.max(1, c.width >> 1); h.height = Math.max(1, c.height >> 1);
+        const g = h.getContext('2d')!; g.imageSmoothingQuality = 'high'; g.drawImage(c, 0, 0, h.width, h.height);
+        made.set(c, h); saved += (c.width * c.height - h.width * h.height) * 4;
+      }
+      t.image = h; t.needsUpdate = true;
+    }
+  });
+  for (const c of made.keys()) { c.width = c.height = 1; } // the full-size backing stores go
+  return saved;
 }
 function shade(hex: string, k: number) { const c = new THREE.Color(hex); c.offsetHSL(0, 0, k); return `#${c.getHexString()}`; }
 const sign = (text: string, bg: string, fg: string) => canvasTex(1024, 192, (g) => {
@@ -1089,7 +1119,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     add(fig.root);
     people.push({ id, fig, pos: fig.root.position, yaw, pose, phase: rnd() * 10, walk });
   };
-  for (const f of FRIENDS) { const c = createCharacter(f.id, detail); c.mergeParts(); person(f.id, c, f.x, f.z, f.yaw, f.pose); }
+  for (const f of FRIENDS) { const c = createCharacter(f.id, detail); c.mergeParts(tier === 0 && LITE_STORY); person(f.id, c, f.x, f.z, f.yaw, f.pose); }
   // the townsfolk, the walkers and the people stood in groups are a crowd (CHAR_BUDGET): no corrective shapes, the light
   // build and no shadow from closer in
   const crowd = new Set<Character>();
@@ -1108,7 +1138,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   };
   FOLK.forEach((f, i) => person(f.id, someone(f.lineage, i), f.x, f.z, f.yaw, f.pose));
   // Mir: a chai stall regular in a three-piece, the same man as the suit skin and the Drexon cameo
-  { const c = createCharacter('strong', detail, undefined, 'suit'); c.mergeParts(); person('mir', c, 5.0, 15.4, Math.PI / 2 + 0.5, 'idle'); }
+  { const c = createCharacter('strong', detail, undefined, 'suit'); c.mergeParts(tier === 0 && LITE_STORY); person('mir', c, 5.0, 15.4, Math.PI / 2 + 0.5, 'idle'); }
   // walkers: up and down the pavements' outer edge, clear of the stalls
   const lineages = Object.keys(LINEAGES) as PlayerLook['lineage'][];
   for (let i = 0, n = rich ? 14 : 6; i < n; i++) {
@@ -1640,6 +1670,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     if (T >= OUTRO) endOutro();
   }
 
+  // phones: the big painted canvases at half size (a quarter of their memory)
+  if (tier === 0 && CANVAS_HALF) CANVAS_SAVED.mb = Math.round(halveCanvases(scene) / 1e6);
   return {
     outro: { start: startOutro, skip: endOutro, get active() { return outroT >= 0; }, get remaining() { return outroT >= 0 ? OUTRO - outroT : 0; } },
     // what the sky is doing, for the ears (soundscape.ts lays the rain bed under the street)
@@ -1843,7 +1875,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           if (boarding.has(q) || talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
           if (q.walk?.shop?.stage === 'inside') { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           const d = Math.hypot(q.pos.x - cp.x, q.pos.z - cp.z);
-          const lensHit = (LENS_OLD || (LENS_LINE && crowd.has(q.fig))) && d < 9 && inLens(q.pos.x, q.pos.z);
+          const lensHit = ((LENS_OLD || (LENS_LINE && crowd.has(q.fig))) && d < 9 && inLens(q.pos.x, q.pos.z)) || (LENS_LINE && d < 1.2); // the story's people too, right at the lens (their hair filled the bottom of a phone's view)
           if (!q.fig.setLensFade(lensHit ? 0 : 1) && lensHit) { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           // the six of the story and Mir have no card of their own look: they stay themselves (a body) out to 48 m
           if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = tier > 0 && d < 48; /* a body to 48 m (they have no card of their own look); phones: only within the card range */ if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; }

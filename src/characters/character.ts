@@ -515,7 +515,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let bodyMats: { skin: THREE.MeshStandardMaterial; cloth: THREE.MeshStandardMaterial; eyes: THREE.MeshStandardMaterial; sphere: THREE.Sphere } | null = null, bodyMat: THREE.MeshStandardMaterial | null = null;
   // the shapes a crowd body keeps: the face and the build (not the correctives: a crowd body has none)
   const crowdKeep = (n: string) => !/^(pit|nape|hip)[LR]?\d/.test(n), keepAll = (_n: string) => true;
-  let mergeWanted = false;
+  let mergeWanted = false, mergeLite = false;
   function mergeCrowd() {
     if (!(crowd || mergeWanted) || !bodyMats || !BODY_MERGE.on) return;
     const { skin, cloth, eyes, sphere } = bodyMats;
@@ -529,7 +529,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // one skeleton, one bind, one parent and the same place: otherwise leave this set as it is
       if (parts.some((p) => p.mesh.parent !== sk.parent || !sameSkeleton(p.mesh.skeleton, sk.skeleton) || !p.mesh.bindMatrix.equals(sk.bindMatrix) || !p.mesh.matrix.equals(sk.matrix)
         || (p.mesh.geometry.morphAttributes.position && p.mesh.geometry.morphTargetsRelative !== sk.geometry.morphTargetsRelative) || Object.keys(p.mesh.geometry.morphAttributes).some((k) => k !== 'position'))) continue;
-      const { g, names } = mergeBodyGeometry(parts, crowd ? crowdKeep : keepAll);
+      const { g, names } = mergeBodyGeometry(parts, crowd || mergeLite ? crowdKeep : keepAll);
       bodyMat ??= bodyMaterial(skin, cloth, eyes);
       const mesh = new THREE.SkinnedMesh(g, bodyMat);
       mesh.name = 'skin_body'; mesh.boundingSphere = sphere; g.boundingSphere = sphere;
@@ -1179,7 +1179,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** One of a crowd (CHAR_BUDGET): no corrective shapes, the light build and no shadow from closer in. */
     setCrowd(on: boolean) { crowd = on; prepFade(); },
     /** Draw skin, clothes and eyes as one mesh (bodymerge.ts; crowd bodies always do). For the stages, not the films. */
-    mergeParts() { mergeWanted = true; mergeCrowd(); },
+    /** `lite` (the city's story people on phones): without the forty corrective shapes (armpits, nape, hips), as a crowd
+     * body: about 8 MB less per body in the page and as much again in the GPU's morph texture. */
+    mergeParts(lite = false) { mergeWanted = true; mergeLite = lite; mergeCrowd(); },
     /** A crowd body that can fade (Web, Ultra) fades out towards 0 and back in towards 1; false: the stage hides it. */
     setLensFade(target: number) { lensWant = target; return fadeOn; },
     get canFade() { return fadeOn; },
