@@ -93,11 +93,17 @@ with sync_playwright() as pw:
     f0 = page.evaluate("(window.__ext=__bs.gl.getContext().getExtension('WEBGL_lose_context'), __bs.debug.frames)")
     if page.evaluate('!!window.__ext'):
         page.evaluate('__ext.loseContext()'); time.sleep(2)
-        page.evaluate('__ext.restoreContext()'); time.sleep(6)
-        lost = page.evaluate('__bs.gl.getContext().isContextLost()')
-        r0 = page.evaluate('__bs.gl.info.render.frame'); time.sleep(2); r1 = page.evaluate('__bs.gl.info.render.frame')
-        print('context lost and restored: lost now', lost, 'frames drawn in 2 s', r1 - r0, flush=True)
-        if lost or r1 <= r0: fails.append('the game did not draw again after the WebGL context came back')
+        page.evaluate('__ext.restoreContext()')
+        # three.js uploads everything again and every shader compiles again: on software GL that is a long wait
+        t0 = time.time(); r0 = None; drawn = False
+        while time.time() - t0 < 150:
+            time.sleep(3)
+            if page.evaluate('__bs.gl.getContext().isContextLost()'): continue
+            r = page.evaluate('__bs.gl.info.render.frame')
+            if r0 is not None and r > r0: drawn = True; break
+            r0 = r
+        print('context lost and restored: drawing again', drawn, f'after {time.time() - t0:.0f} s', flush=True)
+        if not drawn: fails.append('the game did not draw again within 150 s after the WebGL context came back')
     if errs: fails.append(f'errors {errs[:3]}')
     b.close()
 print(json.dumps({'fails': fails}, indent=1))
