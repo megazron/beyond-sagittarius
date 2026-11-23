@@ -745,7 +745,13 @@ def build(c, cid, force=False):
         flip = np.einsum('ij,ij->i', g.N, Nb0[bodyidx[j]]) < -0.15
         g.N[flip] *= -1
     for g in garments:
-        if g.opt.get('drape'):
+        if g.opt.get('knit'):
+            # a knit top as a tube round the torso (tools/chars/knit.py): it bridges the hollows, stands off the bust,
+            # falls straight below it and ends in a level hem (drape() left it close over the bust, the hem uneven)
+            from knit import knit_fit
+            g.P = knit_fit(g.P, g.T, g.W, V[bodyidx], Nb0[bodyidx], [rig.index.get(n, -1) for n in ('spine1', 'spine2', 'chest', 'spine')])
+            g.N = vnormals(g.P, g.T)
+        elif g.opt.get('drape'):
             drape(g, V[bodyidx], Nb0[bodyidx], None, rig, g.opt['drape'])
     # layers: inner garments never show through outer ones, and hidden cloth is not shipped
     for i in range(len(garments)):
