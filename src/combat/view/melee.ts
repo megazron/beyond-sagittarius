@@ -147,7 +147,11 @@ const BODY0: BodyShape[] = [
   // shallower and narrower than the belly and the coat's front)
   { y0: 0.98, y1: 1.32, ax: 0.165, az: 0.17, cz: 0.04, off: 0.09, lean: 0.55, bone: 1 },
   { y0: 1.32, y1: 1.46, ax: 0.15, az: 0.14, cz: 0.005, off: 0.05, lean: 0.75, bone: 1 },
-  { y0: 1.46, y1: 1.8, ax: 0.11, az: 0.13, cz: 0.035, off: -0.01, lean: 1, bone: 2 },
+  // (the head from the jaw up; below it the neck, its own and much thinner: with the head's ellipse taken down to the
+  // shoulders a 21 x 24 cm "neck" filled the space under the chin where a drawn arrow and the string arm really go)
+  { y0: 1.555, y1: 1.8, ax: 0.11, az: 0.13, cz: 0.035, off: -0.01, lean: 1, bone: 2 },
+  // the neck (not fitted from the skin: the coat's collar sits there), last so a model's four fitted shapes keep their places
+  { y0: 1.46, y1: 1.555, ax: 0.068, az: 0.072, cz: 0.02, off: -0.012, lean: 1, bone: 2 },
 ];
 export const BODY: BodyShape[] = BODY0.map((b) => ({ ...b }));
 /** A model's own depth (from its skin, see body.ts fitBody): per shape the middle ahead of its bone and the half depth
@@ -164,7 +168,7 @@ export function setBodyFit(fit: BodyFit[] | null) {
  * z of the hips, chest and head bones. Depth for every shape; width only for the coat and the head (between the arms
  * the chest's width cannot be told from the arms that hang beside it). */
 export function fitBody(pts: ArrayLike<number>, boneZ: [number, number, number], k: number): BodyFit[] {
-  const XL = [0.3, 0.25, 0.2, 0.15], fits: BodyFit[] = [];
+  const XL = [0.3, 0.25, 0.2, 0.15, 0.1], fits: BodyFit[] = [];
   for (let i = 0; i < BODY0.length; i++) {
     const b = BODY0[i], lo = i === 0 ? Math.max(b.y0, 0.55) : b.y0, zs: number[] = [], xs: number[] = [];
     for (let j = 0; j + 2 < pts.length; j += 3) {
@@ -172,7 +176,7 @@ export function fitBody(pts: ArrayLike<number>, boneZ: [number, number, number],
       // (the width from the top of the coat, where a hand at the hip meets it, not the flare at the hem)
       if (y >= lo && y < b.y1 && Math.abs(x) < XL[i]) { zs.push(z); if (i !== 0 || y > b.y1 - 0.15) xs.push(Math.abs(x)); }
     }
-    if (zs.length < 30 || xs.length < 10) { fits.push({ off: b.off, az: b.az }); continue; }
+    if (i === 4 || zs.length < 30 || xs.length < 10) { fits.push({ off: b.off, az: b.az }); continue; }
     zs.sort((a, c) => a - c); xs.sort((a, c) => a - c);
     const zlo = zs[Math.floor(zs.length * 0.02)], zhi = zs[Math.floor(zs.length * 0.98)], cz = (zlo + zhi) / 2;
     fits.push({ off: cz - boneZ[b.bone] / k, az: (zhi - zlo) / 2, cz, ax: i === 0 || i === 3 ? xs[Math.floor(xs.length * 0.98)] : undefined });
@@ -189,6 +193,8 @@ const CENTRE = [{ x: 0, z: 0, yaw: 0 }, { x: 0, z: 0, yaw: 0 }, { x: 0, z: 0, ya
 export function setBodyCentres(c: { x: number; z: number; yaw?: number }[] | null) {
   LIVE = !!c; for (let i = 0; i < 3; i++) { CENTRE[i].x = c ? c[i].x : 0; CENTRE[i].z = c ? c[i].z : 0; CENTRE[i].yaw = c ? c[i].yaw ?? 0 : 0; }
 }
+/** The chest's turn the shapes use now (radians; for the play test's notes). */
+export function bodyYaw() { return LIVE ? CENTRE[1].yaw : TWIST; }
 /** Without live bones (the tests): the chest's turn, from the frame's twist (clearShaft and solveArms set it). */
 let TWIST = 0;
 export function setBodyTwist(t: number) { TWIST = t; }
