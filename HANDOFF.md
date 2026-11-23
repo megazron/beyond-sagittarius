@@ -783,3 +783,14 @@ unlanded except this handoff commit and any recording in progress.
   re-pick the nearest body each round and walk 0.4 m a step. A/B script: scratchpad bump.py (--url with lenshold=0/1)
   through heavy; I did not get a clean pass/fail pair before handing over. The fix (619b92d) is on branch perf17 only,
   NOT on main. To land it: prove the test fails with ?lenshold=0 and passes without, then CI.
+- 05:00 BUMP, still open: on CI (perf19-wip, fix 619b92d in) the nearest crowd body (card 22) is let go one step after
+  the player walks in from 2 m to the side (awayCrowd().held loses it). So either the lens was not the only path, or the
+  test's moves change the budget: walkCrowd keeps min(POOL, bodiesLeft) nearest cards, and bodiesLeft = BODY_CAP minus
+  the townsfolk drawn as bodies last frame (two over cap "at your elbow"). Next: log budget, near and want per step in
+  the hook; drive the player with keys (input.keys add/delete via a test hook, like demo.ts hold()) instead of teleports.
+  Also possible for the owner's report on Web/Ultra: the lens fade itself (a body fades to a dithered half-shape from
+  2.2 m to 1.1 m) reads as "changing". Main has NO bump test (it lives on perf19-wip only); 619b92d is not on main.
+- 05:00 context loss: 6c53bf0 opens the pause menu and skips only drawing (it froze the whole loop, menus included).
+  Branch perf19-env2 = main + sky light fix + this; it lands itself if green (my background watcher). CI is flaky today
+  on several branches (combat's play test at the pause menu's #p-action, smoke, levels_smoke): main's own runs on
+  a152c2e and ff7f293 are red too. Check before blaming a change.
