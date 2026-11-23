@@ -939,3 +939,25 @@ unlanded except this handoff commit and any recording in progress.
   First release (b3a...): phones free the props' model cache textures once both buildProps are done (releaseModels).
   Next candidates: body asset originals after the city's bodies are made (careful: later createCharacter needs them),
   character textures not used by either scene (remove from texCache so they reload), the props atlas canvas after upload.
+- 10:30 perf agent 21 state (landing branch perf20-land1 = origin/main 23 commits newer + my commits; bd16cf8 waits
+  for CI; perf20 is the old WIP line, not rebased).
+  - GPU clips (p20/clips_web_new, _web_old, _mobile_new; dist-bump4 = before bd16cf8): with the camera lifting over a
+    body on the line, the bazaar view stayed high, in the stalls' awnings, and one second was fully black; the old way
+    framed the street better. bd16cf8 removes that lift (bodies on the line just pass in front of you). Re-clip:
+    p20/clips_web_new5 (dist-bump5). WATCH THEM before calling the camera better or worse. The clip steering snaps the
+    yaw at the nearest walker every few ms (a test driver, not a player): the spinning is the driver.
+  - CI 8a40730 (perf20): perf_gate green; soak_smoke crowd 3 of 4 bumps kept their body, the 4th was a second walker
+    of a look already held (one body per look on Web/phones): now counted apart (elbowSameLook), not a failure.
+  - FAR NORTHEAST (task 4): NOT an unbuilt edge. At (287.7, 237.3) the district geometry is there (wall_glass up to
+    134 m, kit, metal, lamps, leaves; visible; frustumCulled false), yet on both GPU and SwiftShader nothing but signs,
+    cars and people draws: a pale flat plane. Ruled out: the facade shader has no discard; fog is constant (45-300/520);
+    the citymega veil (cylinder r 520 centred (0, -204), BackSide) is behind the camera there. Next: render that spot
+    with scene.overrideMaterial = MeshBasic red to see if the walls rasterise; check renderer per-stage hide lists /
+    batchHide / portals and the camera far plane; then the real edge (x > 340, z > 320) needs a look once this is fixed.
+    Probe: scratchpad neprobe.py (copy in p20/ if lost: teleport, count vertices inside the block, screenshot).
+  - MEMORY: releaseModels frees 464 textures (~229 MB decoded) on Mobile; the JS heap does not show it (decoded images
+    live outside it): measure the renderer process instead (CDP SystemInfo.getProcessInfo / Memory.getBrowserSamplingProfile
+    or Android's dumpsys meminfo) before claiming a number. Heap stays 832 MB: geometry typed arrays (stage 279 MB, body
+    originals 118 MB, 'skin_body+morph' 111 MB over 71 bodies with 3 visible). No Mobile budget job in CI yet: soak_smoke
+    --quality mobile --mem-only --heap-mb N is ready; pick N after the geometry work.
+  - Not started: phones to 30 fps (task 3), the gate camera and cold title load (task 5).
