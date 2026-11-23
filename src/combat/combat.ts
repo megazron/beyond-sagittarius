@@ -899,7 +899,7 @@ export class Combat {
     // the light stays in the scene once made (switching lights on and off recompiles every material)
     this.fx.smokeK = nightRun ? 0.28 : 1;
     // the night defence was too dark past the firelight to see what came (owner): 0.55 -> 0.85
-    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? 0.8 : 0.85) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 40, P0.y + 80, P0.z + 30); this.shine.target.position.copy(P0); } }
+    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? 0.8 : 1.35) : 0; /* (night defence 0.85 -> 1.35: with the dimmer fire (7) and the eye stopped down by it, past the firelight the ground was black, s5 GPU take) */ this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 40, P0.y + 80, P0.z + 30); this.shine.target.position.copy(P0); } }
     // the same cold light catches the animals' edges, so a shape beyond the fire reads as an animal, not a shadow
     NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine ? this.shine.intensity * 0.55 : 0);
     const D = this.d, sim = this.sim!, P = D.player, p = sim.player, run = this.encounter, cam = P.camera;

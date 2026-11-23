@@ -43,17 +43,17 @@ function mats() {
         // noise rising through the tongue, faster higher up; a second, slower layer bends it sideways
         float n = fbm(vec2(x * 3.2 + vSeed * 7.0, y * 2.6 - uTime * 2.4 - vSeed * 3.0));
         float bend = (fbm(vec2(vSeed * 3.0, y * 1.3 - uTime * 0.9)) - 0.5) * 0.35 * y;
-        float hw = 0.46 * pow(max(1.0 - y, 0.0), 0.6) * (0.75 + 0.5 * n) + 0.015;
+        float hw = 0.34 * pow(max(1.0 - y, 0.0), 0.6) * (0.75 + 0.5 * n) + 0.015;
         float body = 1.0 - abs(x - bend) / hw;
         // ragged at the top: the noise eats the upper tongue and leaves flecks that break away
-        body -= smoothstep(0.35, 1.0, y) * (1.0 - n) * 1.1;
+        body -= smoothstep(0.3, 1.0, y) * (1.0 - n) * 1.35;
         float a = smoothstep(0.0, 0.3, body) * smoothstep(0.0, 0.06, y);
         if (a < 0.003) discard;
-        // hot near the base and in the middle, dull red at the edges and the tips (lit linear values, the output pass tone maps)
+        // hot near the base and in the middle, dull red at the edges and the tips (lit linear values, the output pass tone maps; s5 GPU take: at 3.4 and 0.9 the layered tongues, and the camp's two fires on one spot, added up to one flat white-yellow mass)
         float heat = clamp(body * 1.3 - y * 0.7 + (n - 0.5) * 0.4, 0.0, 1.0);
-        vec3 col = mix(vec3(0.55, 0.05, 0.01), vec3(2.3, 0.62, 0.1), smoothstep(0.0, 0.4, heat));
-        col = mix(col, vec3(3.4, 2.1, 0.9), smoothstep(0.5, 0.95, heat));
-        gl_FragColor = vec4(col, a * 0.9);
+        vec3 col = mix(vec3(0.45, 0.04, 0.01), vec3(1.5, 0.4, 0.06), smoothstep(0.0, 0.4, heat));
+        col = mix(col, vec3(2.1, 1.25, 0.5), smoothstep(0.55, 0.95, heat));
+        gl_FragColor = vec4(col, a * 0.6);
       }`,
   });
   coalMat = new THREE.ShaderMaterial({
