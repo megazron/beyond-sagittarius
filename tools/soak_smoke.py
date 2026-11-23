@@ -20,6 +20,7 @@ ap.add_argument('--quality', default='web'); ap.add_argument('--port', type=int,
 ap.add_argument('--route-ms', type=float, default=150, help='most one route search may take (the old router: 600+ on CI)')
 ap.add_argument('--mem-only', action='store_true', help='only the memory budget in the city (the Mobile job), then stop')
 ap.add_argument('--heap-mb', type=float, default=0, help='most the JS heap (geometry and texture data included) may hold in the city, after a GC')
+ap.add_argument('--body-js', default='', help='a script whose result is printed with each memory line (a body breakdown)')
 a = ap.parse_args()
 class H(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *x, **k): pass
@@ -69,6 +70,7 @@ with sync_playwright() as pw:
             page.evaluate(f"__bs.awayTeleport({at[0]}, {at[1]}, 0)"); time.sleep(8)
             mo = page.evaluate("(async()=>{window.gc&&window.gc();await new Promise(r=>setTimeout(r,500));window.gc&&window.gc();return await __bs.memOwners()})()")
             print('memory at', at, json.dumps(mo), flush=True)
+            if a.body_js: print('bodies at', at, json.dumps(page.evaluate(pathlib.Path(a.body_js).read_text())), flush=True)
             if a.heap_mb and mo.get('heapMB') and mo['heapMB'] > a.heap_mb: fails.append(f"memory at {at}: JS heap {mo['heapMB']} MB (budget {a.heap_mb:.0f} MB on {a.quality})")
     if a.mem_only:
         b.close(); print(json.dumps({'fails': fails, 'errors': errs[:5]}, indent=1)); sys.exit(1 if fails else 0)
