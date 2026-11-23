@@ -1094,6 +1094,8 @@ window.addEventListener('resize', () => {
     const top = (M: Map<string, number>, n: number) => [...M.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, v]) => `${k} ${(v / 1e6).toFixed(1)}${N.has(k) ? ' x' + N.get(k) : ''}`);
     return { texMB: +([...T.values()].reduce((a, b) => a + b, 0) / 1e6).toFixed(1), geoMB: +([...G.values()].reduce((a, b) => a + b, 0) / 1e6).toFixed(1), tex: top(T, 40), geo: top(G, 40) };
   },
+  /** Test hook (tools/pedglitch.js): everyone in the street as drawn this frame, and the cars. */
+  awayPeds() { return (game?.away?.stage as { pedProbe?: () => unknown } | null)?.pedProbe?.() ?? null; },
   awayCrowd() { const st = game?.away?.stage as { crowdState?: () => { near: number; bodies: number; lost: number; held?: number[][] } } | null; return st?.crowdState?.() ?? { near: 0, bodies: 0, lost: 0 }; },
   /** Test hook: cars and people on the away stage this frame (tools/traffic_smoke.py). */
   awayTraffic() { return (game?.away?.stage as { trafficState?: () => unknown } | null)?.trafficState?.() ?? null; },

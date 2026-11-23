@@ -873,14 +873,14 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
           // the person changing. A body is whole until it is right at the lens (0.85 m, back at 1.1 m), and then gone in a
           // tenth of a second, all the way. ?lensfade=old: the band
           const band = dy > -0.3 && dy < 2.3;
-          const x = LENS_BAND ? (band ? THREE.MathUtils.clamp((d - 1.1) / 1.1, 0, 1) : 1) : band && d < (fadeK > 0.5 ? 0.85 : 1.1) ? 0 : 1;
+          const x = LENS_BAND ? (band ? THREE.MathUtils.clamp((d - 1.1) / 1.1, 0, 1) : 1) : band && d < (fadeK > 0.5 ? 0.6 : 0.75) ? 0 : 1; // a last resort now: the city's camera keeps 0.9 m off bodies (keepOff)
           const want = Math.min(x * x * (3 - 2 * x), lensWant);
           // the v4 Web clips still caught the tenth of a second in between as a dithered half-shape: now a body is
           // hidden or shown at once, like on phones (?lensfade=old keeps the band's fade)
           if (LENS_BAND) { fadeK += (want - fadeK) * (1 - Math.exp(-dt * 12)); if (Math.abs(fadeK - want) < 0.01) fadeK = want; } else fadeK = want;
           setFade(fadeK);
         } else {
-          const near = dy > -0.3 && dy < 2.3 && d < (fig.visible ? 0.7 : 0.9);
+          const near = dy > -0.3 && dy < 2.3 && d < (fig.visible ? 0.6 : 0.75); // a last resort (the city's camera keeps 0.9 m off bodies)
           if (fig.visible === near) fig.visible = !near;
         }
       }
@@ -1186,6 +1186,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** A crowd body that can fade (Web, Ultra) fades out towards 0 and back in towards 1; false: the stage hides it. */
     setLensFade(target: number) { lensWant = target; return fadeOn; },
     get canFade() { return fadeOn; },
+    /** Test hook (tools/pedglitch.js): which build and which hair are drawn (0 near, 1 far each: build + 2 x hair). */
+    get lodState() { return lodOn + hairOn * 2; },
     /** Faded out at the lens (not drawn). */
     get faded() { return fadeOn && !fig.visible; },
     /** Held expression (null goes back to what the pose asks for). */
