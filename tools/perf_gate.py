@@ -27,9 +27,9 @@ SPOTS = {'flat': (12.4, 68.4, 3.14), 'bazaar': (6.0, 50.0, 3.14), 'crowd': (-5.5
 # (crowd_smoke, soak_smoke's bump test failed on perf23-land 9b83112), so the budget is set over the design instead:
 # 12, a fifth over the 10. The crowd spot's draws (240 to 255) and triangles (0.72 to 0.81 M) stay far under theirs.
 # Bodies (2026-11-23, perf agent 26, the owner's pedestrian glitches): nobody in view within 27 m changes between a body
-# and a card any more, so whoever walks into the view must already be a body: the caps went up (city.ts BODY_CAP 12 /
+# and a card any more, so whoever walks into the view must already be a body: the caps went up (city.ts BODY_CAP 11 /
 # 20 / 24, the painted crowd halved) and the budget with them, the player and the frozen few over the cap included.
-BUDGET = {'mobile': (120, 720_000, 15), 'web': (580, 1_300_000, 24), 'ultra': (1420, 4_200_000, 28)}
+BUDGET = {'mobile': (120, 720_000, 14), 'web': (580, 1_300_000, 24), 'ultra': (1420, 4_200_000, 28)}
 
 class H(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *x, **k): pass

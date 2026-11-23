@@ -90,7 +90,7 @@
       }
       onset(id + ':car', 'carHit', hit, { id, rep: b.rep, d: +b.d.toFixed(1), at: [+b.x.toFixed(1), +b.z.toFixed(1)] });
       // a road lane: the road surface is below the pavement (y under 0.07 where the paving is 0.14)
-      onset(id + ':road', 'road', carNear && b.y < 0.07 && !(st.crossing || []).includes(id), { id, rep: b.rep, d: +b.d.toFixed(1), at: [+b.x.toFixed(1), +b.z.toFixed(1)], y: +b.y.toFixed(2) });
+      onset(id + ':road', 'road', carNear && b.y < 0.07 && b.y > -0.1 /* lower is someone sitting */ && !(st.crossing || []).includes(id), { id, rep: b.rep, d: +b.d.toFixed(1), at: [+b.x.toFixed(1), +b.z.toFixed(1)], y: +b.y.toFixed(2) });
     }
     for (let i = 0; i < near.length; i++) for (let j = i + 1; j < near.length; j++) {
       const [ia, a] = near[i], [ib, b] = near[j];

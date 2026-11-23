@@ -587,9 +587,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (far) m.visible = camD < far * (m.visible ? 1.1 : 0.9);
     }
     for (const h of hairs) if (h) h.castShadow = sh;
-    // a crowd body changes its build or hair only while it is off the screen (not drawn last frame) or far off
-    // (CHAR_BUDGET.lodSwapFar): switching at 6 m in front of you read as their clothes and hair changing
-    if (crowd && sinceDrawn < 1 && camD < CHAR_BUDGET.lodSwapFar) return;
+    // in the city a body changes its build or hair only while it is off the screen (not drawn last frame) or far off
+    // (CHAR_BUDGET.lodSwapFar, 0 elsewhere): switching at 6 m in front of you read as their clothes and hair changing
+    if (sinceDrawn < 1 && camD < CHAR_BUDGET.lodSwapFar) return;
     const wantH = hairs[1] && camD > (crowd ? CHAR_BUDGET.crowdLodFar : CHAR_BUDGET.lodFar) * (hairOn ? 0.9 : 1.1) ? 1 : 0;
     if (wantH !== hairOn) { hairOn = wantH; hairs[0]!.visible = wantH === 0; hairs[1]!.visible = wantH === 1; }
     if (!lodSets[1].length) return;
@@ -876,14 +876,14 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
           // the person changing. A body is whole until it is right at the lens (0.85 m, back at 1.1 m), and then gone in a
           // tenth of a second, all the way. ?lensfade=old: the band
           const band = dy > -0.3 && dy < 2.3;
-          const x = LENS_BAND ? (band ? THREE.MathUtils.clamp((d - 1.1) / 1.1, 0, 1) : 1) : band && d < (fadeK > 0.5 ? 0.6 : 0.75) ? 0 : 1; // a last resort now: the city's camera keeps 0.9 m off bodies (keepOff)
+          const x = LENS_BAND ? (band ? THREE.MathUtils.clamp((d - 1.1) / 1.1, 0, 1) : 1) : band && d < (fadeK > 0.5 ? 0.42 : 0.55) ? 0 : 1; // a last resort now: the city's camera keeps 0.9 m off bodies (keepOff)
           const want = Math.min(x * x * (3 - 2 * x), lensWant);
           // the v4 Web clips still caught the tenth of a second in between as a dithered half-shape: now a body is
           // hidden or shown at once, like on phones (?lensfade=old keeps the band's fade)
           if (LENS_BAND) { fadeK += (want - fadeK) * (1 - Math.exp(-dt * 12)); if (Math.abs(fadeK - want) < 0.01) fadeK = want; } else fadeK = want;
           setFade(fadeK);
         } else {
-          const near = dy > -0.3 && dy < 2.3 && d < (fig.visible ? 0.6 : 0.75); // a last resort (the city's camera keeps 0.9 m off bodies)
+          const near = dy > -0.3 && dy < 2.3 && d < (fig.visible ? 0.42 : 0.55); // a last resort (the city's camera keeps 0.9 m off bodies)
           if (fig.visible === near) fig.visible = !near;
         }
       }
