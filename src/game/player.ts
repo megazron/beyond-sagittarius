@@ -77,13 +77,15 @@ export class Player {
   /** How crowded it is round you (the stage's, 0 to 1): the camera rises over the heads and looks down at you. */
   crowdNear: (() => number) | null = null;
   private crowdS = 0;
+  /** How far the camera is held down under a roof (awning, shelter): in fast, out slowly. */
+  private ceilS = 0;
   private backS = 0;
   private turnS = 0;
   private zoomS = 0;
   /** Stages other than Verdaxis set their own gravity, and let you jump across open gaps. */
   physics = { gravity: 14, jump: 5.2, gaps: false };
 
-  constructor(private terrain: Pick<Terrain, 'height'>, private forest: Pick<Forest, 'collide' | 'blocks' | 'clearance'> & Partial<Pick<Forest, 'inFoliage'>>, public camera: THREE.PerspectiveCamera, detail = 1, id: CrewId = 'scientist', skin?: string) {
+  constructor(private terrain: Pick<Terrain, 'height'>, private forest: Pick<Forest, 'collide' | 'blocks' | 'clearance'> & Partial<Pick<Forest, 'inFoliage'>> & { ceiling?: (fx: number, fz: number, fy: number, cx: number, cz: number) => number }, public camera: THREE.PerspectiveCamera, detail = 1, id: CrewId = 'scientist', skin?: string) {
     this.model = createCharacter(id, detail, undefined, skin);
     this.baseFov = camera.fov;
     this.model.setGround((x, z) => this.terrain.height(x, z));
@@ -285,7 +287,7 @@ export class Player {
 
   snapCamera() {
     this.focus.copy(this.pos);
-    this.yawS = this.yaw; this.pitchS = this.pitch; this.distS = this.camDist;
+    this.yawS = this.yaw; this.pitchS = this.pitch; this.distS = this.camDist; this.ceilS = 0;
     this.fovKick = 0; this.bobK = 0; this.lean = 0; this.dip = 0; this.dipV = 0; this.backS = 0; this.turnS = 0; this.zoomS = 0;
     if (this.camera.fov !== this.baseFov) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
     this.camClip = 1; this.camDt = 1; // (a cut: pulled in at once)
@@ -331,6 +333,14 @@ export class Player {
     this.aimS += (aimWant - this.aimS) * e(aimWant > this.aimS ? 12 : 8);
     const aim = this.aimS;
     this.orbit(this.camPos, this.focus, yawV, pitchV, this.distS * (1 - aim) + Math.min(this.distS, 3.1) * aim);
+    // under an awning or a shelter the camera stays below its roof (it rose into them in a thick crowd)
+    if (this.forest.ceiling) {
+      const top = this.forest.ceiling(this.focus.x, this.focus.z, this.focus.y, this.camPos.x, this.camPos.z);
+      const want = Math.max(0, this.camPos.y - Math.max(top, this.focus.y + 1.2));
+      this.ceilS += (want - this.ceilS) * e(want > this.ceilS ? 18 : 3);
+      this.ceilS = Math.max(this.ceilS, want - 0.2); // never into the roof itself (the top keeps 0.3 m under it)
+      this.camPos.y -= this.ceilS;
+    }
 
     // stride: vertical twice per cycle, sideways once, growing with speed
     const run = clamp(this.speedNow / 7.2, 0, 1);

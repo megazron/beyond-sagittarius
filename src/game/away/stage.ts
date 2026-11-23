@@ -13,6 +13,8 @@ export interface AwayStage {
   collide(p: THREE.Vector3, r: number): void;
   /** How far the camera may pull back before a wall (0 to 1). Open stages leave it out. */
   clearance?(fx: number, fz: number, cx: number, cz: number): number;
+  /** The highest the follow camera may be with the player's feet at fy (under awnings and shelters). */
+  ceiling?(fx: number, fz: number, fy: number, cx: number, cz: number): number;
   /** How crowded it is round the player (0 to 1): the follow camera rises and looks down over the heads. */
   crowdNear?(): number;
   /** Hero views: the first time the player walks into a box, the camera turns to the view for a few seconds. */

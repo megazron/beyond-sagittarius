@@ -173,7 +173,7 @@ const TASKS: { id: string; x: number; z: number; r?: number; need?: string[] }[]
   { id: 'phone', x: 8.4, z: 44, need: ['pack'] },
   { id: 'parcel', x: -8.4, z: 30, need: ['phone'] },
   { id: 'chai', x: 7.4, z: 15.6, need: ['parcel'] },
-  { id: 'tram', x: -5.2, z: -6, need: ['chai'] },
+  { id: 'tram', x: -5.2, z: -14, need: ['chai'] },
   { id: 'ring', x: 2.8, z: -44, r: 2.2, need: ['tram'] },
   { id: 'gate', x: 0, z: -72, r: 4, need: ['ring'] },
 ];
@@ -183,7 +183,7 @@ const FRIENDS: { id: CrewId; x: number; z: number; yaw: number; pose: CrewPose }
   { id: 'strong', x: -6.6, z: 2.5, yaw: Math.PI / 2, pose: 'idle' },
   { id: 'medic', x: 7.4, z: -14, yaw: -Math.PI / 2, pose: 'idle' },
   { id: 'explorer', x: 6.2, z: 17.4, yaw: -Math.PI / 2, pose: 'write' },
-  { id: 'builder', x: -5.0, z: -8.6, yaw: Math.PI / 2, pose: 'idle' },
+  { id: 'builder', x: -5.0, z: -16.4, yaw: Math.PI / 2, pose: 'idle' },
   { id: 'social', x: -5.4, z: -40.5, yaw: 0.3, pose: 'selfie' }, // on the pavement: the road is for the cars
 ];
 
@@ -404,6 +404,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const HAZE = new THREE.Color(0x4a4468);
   scene.fog = new THREE.Fog(HAZE, 45, 300); // blue-hour haze: the far city fades to violet
   const blocks: THREE.Box3[] = [];
+  /** Roofs over where you walk (awnings, canopies, the tram shelter): the follow camera stays under them (ceiling). */
+  const covers: THREE.Box3[] = [];
+  const cover = (o: THREE.Object3D) => { o.updateWorldMatrix(true, false); covers.push(new THREE.Box3().setFromObject(o)); };
   // what the preset can afford: 0 phones, 1 Web, 2 Ultra and Cinematic
   const qn = Renderer.current?.quality.name ?? (rich ? 'ultra' : 'mobile');
   const tier = !rich ? 0 : qn === 'web' ? 1 : 2;
@@ -666,7 +669,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         const ag = new THREE.PlaneGeometry(1.7, len - 1.4), auv = ag.attributes.uv as THREE.BufferAttribute;
         for (let i = 0; i < auv.count; i++) auv.setY(i, auv.getY(i) * (len - 1.4) / 2);
         const aw = add(new THREE.Mesh(stripeSet.tile(ag, k % awnings.length, true), awningM));
-        aw.rotation.set(-Math.PI / 2, out * 0.3, 0, 'XYZ'); aw.position.set(face + out * 0.8, 3.75 + FLOOR, zc); aw.castShadow = true;
+        aw.rotation.set(-Math.PI / 2, out * 0.3, 0, 'XYZ'); aw.position.set(face + out * 0.8, 3.75 + FLOOR, zc); aw.castShadow = true; cover(aw);
       }
       z -= len; k++;
     }
@@ -883,7 +886,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     for (const [n, dx, dy, dz, yaw] of [['wooden_crate_01', 0, 0, 0, 0.2], ['wooden_crate_01', 0, 0, 1, -0.1], ['wicker_basket_01', 0, 0.55, 0, 0], ['wicker_basket_02', 0, 0.55, 1, 0]] as [string, number, number, number, number][]) place(n, x + dx, FLOOR + dy, z + dz, yaw);
     for (const f of ['food_apple_01', 'food_pomegranate_01', 'food_lime_01', 'food_pears_asian_01']) place(f, x + (rnd() - 0.5) * 0.3, FLOOR + 0.72, z + rnd() * 1.0, rnd() * 6);
     const canopy = add(new THREE.Mesh(stripeSet.tile(new THREE.PlaneGeometry(2.2, 2.8), (x > 0 ? 1 : 0) + (z > 0 ? 2 : 0), true), canopyM));
-    canopy.rotation.set(-Math.PI / 2 + 0.12, 0, 0); canopy.position.set(x, 2.4, z + 0.5); canopy.castShadow = true;
+    canopy.rotation.set(-Math.PI / 2 + 0.12, 0, 0); canopy.position.set(x, 2.4, z + 0.5); canopy.castShadow = true; cover(canopy);
     for (const dz of [-0.8, 1.8]) for (const dx of [-0.95, 0.95]) box(0.05, 2.3, 0.05, railM, x + dx, 1.2, z + dz);
     blocks.push(new THREE.Box3(new THREE.Vector3(x - 0.95, 0, z - 0.8), new THREE.Vector3(x + 0.95, 2, z + 1.8)));
   }
@@ -900,7 +903,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   for (const [x, z] of parkedAt) blocks.push(new THREE.Box3(new THREE.Vector3(x - 0.95, 0, z - 2.4), new THREE.Vector3(x + 0.95, 1.5, z + 2.4)));
   // stalls spilling onto the road: mats of goods at the kerb
   const kerbMatM = over(new THREE.MeshStandardMaterial({ map: stripeSet.t, roughness: 1 }), 3);
-  for (const [x, z] of (rich ? [[3.3, 30], [-3.3, 10], [3.3, -32], [-3.3, -16], [3.3, 48]] : [[3.3, 30], [-3.3, -16]]) as [number, number][]) {
+  for (const [x, z] of (rich ? [[3.3, 30], [-3.3, 10], [3.3, -32], [-3.3, -26], [3.3, 48]] : [[3.3, 30], [-3.3, -26]]) as [number, number][]) {
     const mat = add(new THREE.Mesh(stripeSet.tile(new THREE.PlaneGeometry(1.3, 2.4), Math.abs(Math.round(z)) % awnings.length, true), kerbMatM)); mat.rotation.x = -Math.PI / 2; mat.position.set(x, 0, z); mat.userData.ground = false;
     for (const [n, dx, dz] of [['wicker_basket_01', 0, -0.6], ['plastic_crate_01', 0, 0.5], ['food_apple_01', 0.1, -0.6]] as [string, number, number][]) place(n, x + dx, n.startsWith('food') ? 0.3 : 0, z + dz, rnd() * 6);
     place('plastic_monobloc_chair_01', x + Math.sign(x) * 0.2, 0, z + 1.6, Math.sign(x) > 0 ? -Math.PI / 2 : Math.PI / 2);
@@ -993,10 +996,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     part(new THREE.BoxGeometry(1.6, 0.08, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.5), toneMapped: false }), 0, 0.5, 0);
     part(new THREE.BoxGeometry(0.08, 2.0, 1.3), new THREE.MeshStandardMaterial({ color: 0x0f7d74, roughness: 0.4 }), -1.3, 1.6, 3);
     void cream;
-    tram.position.set(-2.2, 0, -9);
-    blocks.push(new THREE.Box3(new THREE.Vector3(-3.5, 0, -15.5), new THREE.Vector3(-0.9, 3.5, -2.5)));
-    const shelter = add(new THREE.Group()); shelter.position.set(-6.8, FLOOR, -6);
-    const roofS = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 4), cream); roofS.position.y = 2.7; roofS.castShadow = true; shelter.add(roofS);
+    // 8 m further down the street than it was: at the bazaar's start the white tram filled the view beside the camera
+    tram.position.set(-2.2, 0, -17);
+    blocks.push(new THREE.Box3(new THREE.Vector3(-3.5, 0, -23.5), new THREE.Vector3(-0.9, 3.5, -10.5)));
+    const shelter = add(new THREE.Group()); shelter.position.set(-6.8, FLOOR, -14);
+    const roofS = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 4), cream); roofS.position.y = 2.7; roofS.castShadow = true; shelter.add(roofS); cover(roofS);
     for (const dz of [-1.8, 1.8]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.7, 0.08), railM); p.position.set(0.6, 1.35, dz); shelter.add(p); }
     const stop = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.5), lit(sign('Tram 7: Spaceport', '#0f7d74', '#ffffff'), 0.4)); stop.position.set(0, 2.95, 0); stop.rotation.y = Math.PI / 2; shelter.add(stop);
   }
@@ -1505,6 +1509,28 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     }
     return cand.sort((a, b) => a - b);
   };
+  /**
+   * The highest the follow camera may be (Infinity: no limit): under any roof over where you walk (an awning, a stall's
+   * canopy, a shelter) that the line from your head to the camera passes under, so the camera never rises into one.
+   * In a thick crowd it rose (crowdNear) into the stalls' awnings and the tram shelter's roof.
+   */
+  for (const c of dist.covers) covers.push(c);
+  const ceiling = (fx: number, fz: number, fy: number, cx: number, cz: number) => {
+    let top = Infinity;
+    const x0 = Math.min(fx, cx) - 0.4, x1 = Math.max(fx, cx) + 0.4, z0 = Math.min(fz, cz) - 0.4, z1 = Math.max(fz, cz) + 0.4, dx = cx - fx, dz = cz - fz;
+    for (const b of covers) {
+      if (b.max.x < x0 || b.min.x > x1 || b.max.z < z0 || b.min.z > z1 || b.min.y < fy + 1.75 || b.min.y > fy + 7) continue;
+      // the segment (a little wider than the camera) against the roof's footprint
+      let t0 = 0, t1 = 1;
+      for (const [o, d, lo, hi] of [[fx, dx, b.min.x - 0.35, b.max.x + 0.35], [fz, dz, b.min.z - 0.35, b.max.z + 0.35]] as [number, number, number, number][]) {
+        if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) { t0 = 2; break; } continue; }
+        let a = (lo - o) / d, c = (hi - o) / d; if (a > c) [a, c] = [c, a];
+        t0 = Math.max(t0, a); t1 = Math.min(t1, c);
+      }
+      if (t0 <= t1) top = Math.min(top, b.min.y - 0.3);
+    }
+    return top;
+  };
   /** How far the camera may go from the player before a wall: 1 is all the way. */
   const clearance = (fx: number, fz: number, cx: number, cz: number) => {
     let best = 1;
@@ -1675,7 +1701,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         peds: dpool.filter((b) => b.ped >= 0).map((b) => [b.ped, dpool.indexOf(b), b.look, +Math.hypot(dist.peds[b.ped].x - pedsAt.x, dist.peds[b.ped].z - pedsAt.z).toFixed(2), +dist.peds[b.ped].x.toFixed(2), +dist.peds[b.ped].z.toFixed(2)]) };
       return { dbg, held, near: nearN, bodies: crowdPool.filter((b) => b.card >= 0 && b.fig.root.visible).length, lost, room: bodiesLeft, dnear, dbodies: dpool.filter((b) => b.ped >= 0 && b.fig.root.visible).length, dlost };
     },
-    scene, gravity: 22, jump: 6.2, spawn: new THREE.Vector3(12.4, FLOOR, 68.4), tasks, people, clearance,
+    scene, gravity: 22, jump: 6.2, spawn: new THREE.Vector3(12.4, FLOOR, 68.4), tasks, people, clearance, ceiling,
     // the hero views: stepping out of the flat, and the run to the gate
     vistas: [{ x0: 4, x1: FRONT - 0.4, z0: 63, z1: 69, yaw: 0, pitch: 0.42, secs: 4 }, { x0: -8, x1: 8, z0: -40, z1: -30, yaw: 0, pitch: 0.3, secs: 3.5 }, { x0: -9, x1: 9, z0: -76, z1: -66, yaw: 0, pitch: 0.34, secs: 5 }],
     height: (x, z) => H(x, z),
@@ -1731,7 +1757,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         deep = outroT < 0 && p.y < 20 && Math.abs(p.x) < 48 && p.z < 52;
       }
       const oldOn = oldTown.visible;
-      if (cam) { if (oldOn) portals(cam); walkCrowd(dt, time, cam, oldOn ? bodiesLeft : 0); }
+      // the portals run wherever the camera is: from inside the flat they take most of the city off the camera's
+      // layer, and only their own call puts it back. Called only while the old town showed, a jump from the flat to the
+      // far districts (a teleport, the clips' travel) left everything but cars, signs and people hidden there
+      if (cam) { portals(cam); walkCrowd(dt, time, cam, oldOn ? bodiesLeft : 0); }
       if (oldOn) drive(dt, time);
       dist.update(dt, time, cam ?? null, you ? you.position : null, deep);
       if (day.update(dt, time, cam ?? null) && !probe?.ready) refreshEnv();
