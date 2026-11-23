@@ -98,6 +98,8 @@ const EXTREMES: Scenario[] = [
   { name: 'x_kick', setup: L({ legR: [0, -0.1, 1], shinR: [0, -0.3, 1] }), crewOnly: true },
   { name: 'x_squat', setup: L({ legL: [0.1, -0.2, 1], legR: [-0.1, -0.2, 1], shinL: [0, -1, -0.3], shinR: [0, -1, -0.3], bend: 0.6 }), crewOnly: true },
 ];
+/** What the hands of the running scenario are told to hold this frame (dev/chars.ts qaLive draws it). */
+export const live: { hold: { L?: HoldSide; R?: HoldSide } | null; name: string } = { hold: null, name: '' };
 export const SCENARIOS: Scenario[] = [...CLIPS, ...TASKS, ...COMBOS, ...HOLDS, ...EXTREMES];
 
 const radCache = new WeakMap<Character, number[]>();
@@ -149,6 +151,7 @@ export function* scenarioFrames(c: Character, name: string, h: QaHooks, every = 
       else for (const s of ['L', 'R'] as const) if (hold[s] && lastHold[s]) { lastHold[s]!.at.copy(hold[s]!.at); lastHold[s]!.fingers.copy(hold[s]!.fingers); lastHold[s]!.palm.copy(hold[s]!.palm); }
     } else if (lastHold) { c.setHold(null); lastHold = null; }
     sc.frame?.(x);
+    live.hold = lastHold; live.name = name;
     h.step(c, sc.pose ?? 'stand', (sc.v ?? 0) / 4, dt);
     R.updateMatrixWorld(true);
     // arms into the torso
