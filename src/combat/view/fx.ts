@@ -236,8 +236,8 @@ export class CombatFx {
       r.age += dt; const k = r.age / 1.6;
       r.m.visible = k < 1;
       // (they were 0.42 bright and spread 55 cm whatever the legs did: big bright hoops round a man standing still, s5
-      // take. Now with how fast the legs move: standing, a faint ring that spreads 15 cm; walking, 40 cm and brighter)
-      if (k < 1) { const v = (r.m.userData.v as number) ?? 0, rad = (r.m.userData.r0 as number) + k * (0.15 + 0.25 * v); r.m.scale.setScalar(rad); (r.m.material as THREE.MeshBasicMaterial).opacity = (0.1 + 0.14 * v) * (1 - k) * Math.min(1, k * 8); }
+      // take. Now with how fast the legs move: standing, a faint ring that spreads 15 cm; walking, 32 cm and a little brighter; s6 take: 40 cm and 0.24 walking still read as white hoops)
+      if (k < 1) { const v = (r.m.userData.v as number) ?? 0, rad = (r.m.userData.r0 as number) + k * (0.15 + 0.17 * v); r.m.scale.setScalar(rad); (r.m.material as THREE.MeshBasicMaterial).opacity = (0.1 + 0.08 * v) * (1 - k) * Math.min(1, k * 8); }
     }
   }
 
