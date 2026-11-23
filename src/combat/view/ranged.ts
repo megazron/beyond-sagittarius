@@ -126,7 +126,8 @@ export class RangedRig {
       // the string hand: on the string at brace height, back to the anchor under the jaw as it draws, past the ear on
       // the loose, then down to the quiver for the next arrow and back
       const grip = V().copy(wL).addScaledVector(armDir, 0.07);
-      const anchor = V().copy(head).addScaledVector(aim, 0.13).add(V().set(0, -0.13, 0));
+      // (at the jaw, not 13 cm ahead of it: the drawing arm then folds with the elbow back, not up across the face)
+      const anchor = V().copy(head).addScaledVector(aim, 0.07).add(V().set(0, -0.13, 0));
       const nock0 = V().copy(grip).addScaledVector(aim, -0.15).add(V().set(0, 0.012, 0));
       const quiver = V().set(-0.2, 0.92, -0.1);
       let target: THREE.Vector3; S.arrowIn = ammo > 0 ? 'string' : 'none'; S.nock = -1;
@@ -139,7 +140,9 @@ export class RangedRig {
         else if (k < 0.85) { target = V().copy(quiver).lerp(nock0, smooth((k - 0.55) / 0.3)); S.arrowIn = ammo > 0 ? 'hand' : 'none'; }
         else target = nock0;
       } else target = S.up > 0.5 ? nock0 : V().set(-0.22, 1.0, 0.12);
-      const pole = V().copy(aim).multiplyScalar(-1).add(V().set(0, 0.55, 0));
+      // the drawing elbow back along the arrow's line at shoulder height and away from the chest (behind the back); up
+      // 0.55 put it into the head (CI: 9.3 cm)
+      const pole = V().copy(aim).multiplyScalar(-1).add(V().set(0, 0.15, -0.5));
       reach(sR, this.ease(sR, V().copy(target).addScaledVector(aim, -0.06), R), R.a, R.b, pole, eR, wR);
       this.clearArms(sL, eL, wL, sR, eR, wR, dt); this.keep(sL, eL, wL, sR, eR, wR);
       limbs = { armL: dirOf(eL, sL), foreL: dirOf(wL, eL), armR: dirOf(eR, sR), foreR: dirOf(wR, eR), twist: 0.15 * smooth(S.up) };
