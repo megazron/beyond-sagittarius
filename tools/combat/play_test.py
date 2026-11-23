@@ -105,6 +105,9 @@ with sync_playwright() as pw:
                     page.evaluate("__bs.combat.testTap('KeyR')"); step(page, 0.1)
                 if page.evaluate(D)['player']['weapon'] != wpn: continue
                 page.evaluate("__bs.combat.testPoseStats(true)")
+                # (held a moment first: a rock or a stick is thrown on the first click and is then out of the hand, so the
+                # frames measured with it were 7 to 18 by chance of the step; the gate needs more than 10)
+                step(page, 0.8)
                 for i in range(3): page.evaluate("__bs.combat.testTap('Mouse0')"); step(page, 0.7)
                 page.evaluate("__bs.combat.testHold('KeyQ', true)"); step(page, 0.6); page.evaluate("__bs.combat.testHold('KeyQ', false)"); step(page, 0.5)
                 ps = page.evaluate("__bs.combat.testPoseStats(true)")
