@@ -176,14 +176,20 @@ def skirt_weights(c, p, pivots):
     k = k * k * (3 - 2 * k)
     a = np.clip((x + 0.11) / 0.22, 0, 1)
     a = a * a * (3 - 2 * a)
+    # in front, each panel goes more with the thigh behind it: at a run the knee rises 50 degrees and a panel turned
+    # with 62% of the thigh was punched through by it (the lab coat, 2026-11-23 flags); behind, the hips keep the
+    # back from splitting
+    fz = np.clip((p.P[:, 2] - pivots[ix['hips']][2]) / 0.08, 0, 1)
+    fz = fz * fz * (3 - 2 * fz)
+    leg = 0.62 + 0.23 * fz
     Wn = np.zeros_like(p.W)
-    Wn[:, ix['upperlegL']] = a * 0.62
-    Wn[:, ix['upperlegR']] = (1 - a) * 0.62
-    Wn[:, ix['hips']] = 0.38
+    Wn[:, ix['upperlegL']] = a * leg
+    Wn[:, ix['upperlegR']] = (1 - a) * leg
+    Wn[:, ix['hips']] = 1 - leg
     p.W = p.W * (1 - k[:, None]) + Wn * k[:, None]
-    # a skirt stands clear of the legs it hides: striding thighs must not come through
+    # a skirt stands clear of the legs it hides: striding thighs must not come through (a little more in front)
     r = np.stack([x, np.zeros_like(x), p.P[:, 2] - pivots[ix['hips']][2]], 1)
-    p.P = p.P + r / np.maximum(np.linalg.norm(r, axis=1, keepdims=True), 1e-6) * (k * 0.075)[:, None]
+    p.P = p.P + r / np.maximum(np.linalg.norm(r, axis=1, keepdims=True), 1e-6) * (k * (0.075 + 0.015 * fz))[:, None]
     sway = np.clip((crotch + 0.12 - y) / max(crotch + 0.12, 1e-3), 0, 1).astype(np.float32)
     p.extra['_SWAY'] = sway
     return p
