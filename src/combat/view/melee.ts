@@ -135,7 +135,14 @@ export const BODY: BodyShape[] = [
   { y0: 1.46, y1: 1.8, ax: 0.11, az: 0.12, cz: 0.02, lean: 1 },
 ];
 /** How deep a point is inside the body (>0 inside, in metres, roughly), and the way out (horizontal). */
-export function depth(p: THREE.Vector3, bend: number, r: number, outN?: THREE.Vector3): number {
+let BODY_K = 1;
+/** The body's size against the frames' (a 1.75 m man): the frames and the body shape scale with it. */
+export function setBodyScale(k: number) { BODY_K = k > 0.5 && k < 1.5 ? k : 1; }
+export function bodyScale() { return BODY_K; }
+export function depth(pw: THREE.Vector3, bend: number, rw: number, outN?: THREE.Vector3): number {
+  return depthN(V().copy(pw).divideScalar(BODY_K), bend, rw / BODY_K, outN) * BODY_K;
+}
+function depthN(p: THREE.Vector3, bend: number, r: number, outN?: THREE.Vector3): number {
   let best = -9;
   for (const b of BODY) {
     if (p.y < b.y0 - r || p.y > b.y1 + r) continue;
