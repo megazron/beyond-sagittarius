@@ -860,7 +860,22 @@ export class Combat {
     return q;
   }
 
+  /** The eye's adaptation to a camp fire close by (main.ts scales the exposure by it after the world sets its own):
+   * at night a metre from the fire a white coat burned out to flat orange-white (owner); the eye stops down there. */
+  private exposure = 1;
+  get exposureScale() { if (!this.encounter) this.exposure = 1; return this.exposure; }
   private present(dt: number, time: number) {
+    {
+      const sim = this.sim!, P = this.d.player;
+      let near = 0;
+      if (sim.night) for (const f of sim.fires) if (!f.torch && !f.burnsOut && f.fuel > 0) {
+        const d = Math.hypot(f.x - P.pos.x, f.z - P.pos.z), k = Math.sqrt(Math.max(0, f.fuel / f.max));
+        near = Math.max(near, k * THREE.MathUtils.smoothstep(4.5 - d, 0, 3));
+      }
+      // (about a second to adapt, as an eye does; down to 0.5 at the fire's edge)
+      const want = 1 - 0.5 * near;
+      this.exposure += (want - this.exposure) * (1 - Math.exp(-dt * 1.2));
+    }
     // a night set piece: the giant planet overhead throws a cold planetshine, enough to see shapes move at the
     // edge of the firelight (Earth's full moon is about 0.1 to 0.3 lux; a ringed giant filling a wide part of the
     // sky would give several times that)
