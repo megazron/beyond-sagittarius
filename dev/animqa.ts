@@ -11,6 +11,7 @@
 //   holdErr  how far a hand is from what it holds, cm, once the hold has had 0.6 s to take: the wrist against its target
 //            or, for a grasp, against where the palm closes on the thing; a prop on the hand, its middle against the target
 //   propGap  how far a prop on the hand (a stone, a cup) sits from the palm, cm
+//   mouth    eating and drinking: how near the bread or the cup comes to the lips, cm (the closest over the task)
 //   flags    the play capture's own pixel passes (dev/chars.ts poke): skin out through cloth, an inner garment out
 //            through an outer one, skin seen from behind; summed over the sampled views
 import * as THREE from 'three';
@@ -179,7 +180,7 @@ export function* scenarioFrames(c: Character, name: string, h: QaHooks, every = 
   sc.setup?.(x);
   const tracks = new Map<string, THREE.Vector3[]>();
   let reach = 0, armPen = 0, handPen = 0, penAt = '', jerk = 0, jerkAt = '', holdErr = 0, holdAt = '', propGap = 0, propAt = '', holdStart = -1;
-  const holdErrs: number[] = [], holdK: string[] = []; let meshIn = 0, meshAt = ''; let lastHold: { L?: HoldSide; R?: HoldSide } | null = null;
+  const holdErrs: number[] = [], holdK: string[] = []; let meshIn = 0, meshAt = ''; let mouth = Infinity, mouthAt = ''; let lastHold: { L?: HoldSide; R?: HoldSide } | null = null;
   const poses: { pose: string; q: Record<string, number[]> }[] = [];
   const fl = { skinPoke: 0, clothPoke: 0, back: 0, samples: 0, worst: 0, worstK: -1 };
   for (let k = 0; k < frames; k++) {
@@ -239,8 +240,24 @@ export function* scenarioFrames(c: Character, name: string, h: QaHooks, every = 
       const m = ch as THREE.Mesh; if (!m.isMesh) continue;
       m.geometry.computeBoundingSphere(); const mid = m.geometry.boundingSphere!.center.clone().applyMatrix4(m.matrixWorld);
       const palm = bone(c, 'handR').lerp(bone(c, 'finger3_1R'), 0.55);
-      const g = Math.max(0, mid.distanceTo(palm) - m.geometry.boundingSphere!.radius * 0.6);
+      // a flat thing (the bread, pinched at its edge with most of it out past the fingers) from its nearest point: from its
+      // middle it read 7 to 8 cm off a palm it touches
+      m.geometry.computeBoundingBox(); const bx = m.geometry.boundingBox!.getSize(new THREE.Vector3());
+      let g = Math.max(0, mid.distanceTo(palm) - m.geometry.boundingSphere!.radius * 0.6);
+      if (Math.min(bx.x, bx.y, bx.z) < 0.25 * Math.max(bx.x, bx.y, bx.z) && m.geometry.type === 'CylinderGeometry') {
+        const pa = m.geometry.attributes.position, V = new THREE.Vector3(); let near = Infinity;
+        for (let i = 0; i < pa.count; i++) near = Math.min(near, V.fromBufferAttribute(pa, i).applyMatrix4(m.matrixWorld).distanceTo(palm));
+        g = Math.min(g, Math.max(0, near - 0.02));
+      }
       if (g > propGap) { propGap = g; propAt = `f${k}`; }
+    }
+    // eating and drinking: how near the bread or the cup comes to the lips (its nearest vertex), the closest over the task
+    if (/eat|drink/.test(name)) {
+      const lp = c.lipsAt(new THREE.Vector3()), V = new THREE.Vector3();
+      for (const ch of hr.children) {
+        const m = ch as THREE.Mesh; if (!m.isMesh) continue; const pa = m.geometry.attributes.position;
+        for (let i = 0; i < pa.count; i++) { const dd = V.fromBufferAttribute(pa, i).applyMatrix4(m.matrixWorld).distanceTo(lp); if (dd < mouth) { mouth = dd; mouthAt = `f${k}`; } }
+      }
     }
     if (sampleEvery > 0 && k >= 10 && (k - 10) % sampleEvery === 0) {
       const q: Record<string, number[]> = {}; R.traverse((o) => { if ((o as THREE.Bone).isBone) q[o.name] = [o.quaternion.x, o.quaternion.y, o.quaternion.z, o.quaternion.w].map((v) => Math.round(v * 1e4) / 1e4); });
@@ -257,7 +274,7 @@ export function* scenarioFrames(c: Character, name: string, h: QaHooks, every = 
   const cm = (v: number) => +(v * 100).toFixed(1);
   return {
     scenario: name, armPenCm: cm(Math.max(0, armPen)), handPenCm: cm(Math.max(0, handPen)), penAt, jerkCm: cm(jerk), jerkAt,
-    holdErrCm: cm(holdErr), holdP50Cm: cm(holdErrs[holdErrs.length >> 1] ?? 0), holdAt, holdFree: !!sc.holdFree, reach: +reach.toFixed(2), propGapCm: cm(propGap), propAt, flags: fl, poses, holdK, meshInCm: cm(meshIn), meshAt,
+    holdErrCm: cm(holdErr), holdP50Cm: cm(holdErrs[holdErrs.length >> 1] ?? 0), holdAt, holdFree: !!sc.holdFree, reach: +reach.toFixed(2), propGapCm: cm(propGap), propAt, flags: fl, poses, holdK, meshInCm: cm(meshIn), meshAt, mouthCm: Number.isFinite(mouth) ? cm(mouth) : 0, mouthAt,
   };
 }
 export const scenarioNames = (crew: boolean) => SCENARIOS.filter((s) => crew || !s.crewOnly).map((s) => s.name);

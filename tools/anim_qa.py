@@ -35,7 +35,7 @@ if a.serve:
 NAMES = ['zenvik', 'draxum', 'lyrra', 'skyvra', 'bolzar', 'nuvexa', 'megazron']
 IDS = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social', 'megazron']
 OUTFITS = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social']
-METRICS = ['armPenCm', 'handPenCm', 'meshInCm', 'jerkCm', 'holdErrCm', 'propGapCm', 'skinPx', 'clothPx']
+METRICS = ['armPenCm', 'handPenCm', 'meshInCm', 'jerkCm', 'holdErrCm', 'propGapCm', 'mouthCm', 'skinPx', 'clothPx']
 
 
 def layers(cid):
@@ -46,7 +46,7 @@ def layers(cid):
 def flat(r):
     s = max(1, r['flags']['samples'])
     return {'armPenCm': r['armPenCm'], 'handPenCm': r['handPenCm'], 'meshInCm': r.get('meshInCm', 0), 'jerkCm': r['jerkCm'], 'holdErrCm': 0 if r['holdFree'] or r.get('reach', 0) > 0.97 else r['holdErrCm'],
-            'propGapCm': r['propGapCm'], 'skinPx': round(r['flags']['skinPoke'] / s), 'clothPx': round(r['flags']['clothPoke'] / s)}
+            'propGapCm': r['propGapCm'], 'mouthCm': r.get('mouthCm', 0), 'skinPx': round(r['flags']['skinPoke'] / s), 'clothPx': round(r['flags']['clothPoke'] / s)}
 
 
 W_, H_ = map(int, a.size.split('x'))

@@ -395,6 +395,24 @@ W.qaShots = (i: number, name: string, at: number[]) => {
   }
   return out;
 };
+/** Close looks for review: character i through scenario `name`, at each frame in `at` a picture from each camera
+ * [yaw (0 = from the front), distance, height of the eye, height looked at] (m, round the body's own root). */
+W.qaLook = (i: number, name: string, at: number[], cams: [number, number, number, number][]) => {
+  const c0 = chars[i]; chars.forEach((o, j) => { o.root.visible = j === i; }); c0.setGround(() => 0);
+  const step = (c: Character, p: CrewPose, amount: number, dt: number) => { t += dt; c.root.updateMatrixWorld(true); c.animate(p, 0, amount, t, dt); };
+  const out: { k: number; urls: string[] }[] = [];
+  const g = scenarioFrames(c0, name, { step, settle: (c) => { c.root.position.set(0, 0, 0); c.root.rotation.y = 0; for (let k = 0; k < 45; k++) step(c, 'stand', 0, 1 / 30); }, flags: null }, 1);
+  for (let it = g.next(); !it.done; it = g.next()) {
+    if (!at.includes(it.value as number)) continue;
+    const p = c0.root.position, ry = c0.root.rotation.y;
+    out.push({ k: it.value as number, urls: cams.map(([yaw, d, h, ly]) => {
+      cam.fov = 35; cam.near = 0.03; cam.updateProjectionMatrix();
+      cam.position.set(p.x + Math.sin(ry + yaw) * d, p.y + h, p.z + Math.cos(ry + yaw) * d); cam.lookAt(p.x, p.y + ly, p.z);
+      r.render(scene, cam); return r.domElement.toDataURL('image/jpeg', 0.85);
+    }) });
+  }
+  return out;
+};
 /** The probe's scenarios drawn live for the review clips (GPU capture): character i through each named scenario at
  * `slow` x real time, a close camera from `yaw` (radians, 0 = from the front) at `dist` m, the scenario and live
  * numbers in a caption. window.qaDone turns true at the end. */
