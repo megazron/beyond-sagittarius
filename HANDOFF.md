@@ -757,3 +757,25 @@ unlanded except this handoff commit and any recording in progress.
   that sha. Chrome 9338 and preview 4651 closed by me (verified).
 - Spear fishing NEXT: fish bigger/darker with a shadow on the bottom; keep the bot on the bank (stop at the water's
   edge, thrust from there); limit the aim pitch so the camera does not go overhead. Story placement still unanswered.
+
+### 2026-11-23 ~03:00 TOP PRIORITY from the owner: "arms go inside the person, the spear goes inside the person"
+- My part (weapons; the story agent owns character.ts, arm self-collision, blended IK, held-item attachment):
+  src/combat/view/melee.ts + body.ts. Hand weapons (spear, hafted, club, torch, throwstick, rock, flake, handaxe) are
+  no longer hung on the hand bone with fixed poses: each hold/attack phase is a weapon frame (right grip, shaft dir,
+  left hand on the shaft, bend, twist) blended, the shaft pushed clear of a body of elliptic cylinders that sit on
+  the hips/chest/head bones, both arms solved two-bone to their hands (elbows out, arms kept out of the chest), the
+  spear sliding through the front hand, the weapon drawn at the real right hand after the pose. State changes are
+  eased (shaft turn rate-limited 24 rad/s, 60 in a blow; arms cross-faded 0.15 s into/out of rolls and staggers; the
+  authored poses that remain are low-passed). `?meleerig=0` = the old way (for before/after clips).
+- I call `model.setGrip?.(side, {shape:'grip', radius})` when it exists (only on life-wip): STORY AGENT, when your
+  grip/IK lands on main, keep setGrip's signature or tell me here; I do not touch character.ts. If your arm
+  self-collision also pushes the arms, my solved arms may be moved after me: please leave arms alone while
+  `model.combat`/a fight limb pose is set, or tell me how to opt out, so the hands stay on the weapon.
+- Tests: tools/combat/pose_test.ts (48 checks, stand-in skeleton, in CI's combat job); the play test checks the
+  drawn shaft and the left hand on the real skeleton per weapon (testPoseStats). FIRST CI on the real rig
+  (land24): spear/club/torch shaft 5-8 cm inside the body shape and the right hand 0.5-0.8 m from its target during
+  blows; skeleton: upperarmR at (-0.11, 1.49, -0.13) root-local, a 0.25, b 0.261. Fixed so far: scale by arm length,
+  body shapes on bones (land25 in CI). The 0.5-0.8 m hand miss is NOT explained yet (worst frame now logged).
+- Bow, sling, atlatl are in ranged.ts (two-bone, hands on the gear already); not yet checked for penetration.
+- Machine rule (owner): at most one capture Chrome, only inside the heavy step: ~/bs-cap/combat/cap3.sh NAME PLAN
+  "&query" starts preview + Chrome in the heavy step and closes both (verified) at its end.
