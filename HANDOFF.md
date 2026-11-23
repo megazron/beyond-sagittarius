@@ -1043,3 +1043,19 @@ unlanded except this handoff commit and any recording in progress.
 - GPU plans with waypoint steering (smooth turns, W let go at the last waypoint, position printed after each clip):
   ~/bs-assets/gpu/p24/plan_clips_mobile.json, plan_clips_web.json; one heavy step: p24/gpustep.sh DIST OUT PLAN QUERY
   (vite preview :4661 + p18/gpurun2.sh, both stopped by PID / process group).
+- ~07:00 STATE. main = 9533cdc (I landed the rebased 452b4b3 stack: CI 45115805418 green on that sha). NOT landed:
+  `combat-land36` (all of this session; its CI run 45121206610 is GREEN after rerunning smoke/levels_smoke, known
+  flakies that also fail on main's own runs). My push of it to main was refused by the permission check (I was only
+  cleared to land 452b4b3): the coordinator or the next agent should land origin/combat-land36 if main has not moved
+  (else rebase, push a new branch name, wait for green).
+- CI numbers (play test, 50 ms steps, real rig): every hand weapon shaft 0 cm, left palm to spear shaft ~0, weapon from
+  its planned grip <= 2.7 cm (gate 4 cm; the weapon rides on the hand). GPU take v22 (full rate, 3,692 frames): shaft 0,
+  hands ~0. Ranged arm depth is PRINTED not gated: 10 cm with bow and sling, but the shapes do not turn with the chest
+  twist/faceOffset, so first make the shapes turn with the chest bone (yaw of chest in root space), then gate.
+- Delivered with honest notes (README_review.txt): 22_weapon_holds_v2, 23_bow_sling_spearthrower_holds_v1,
+  20_spear_fishing_v2, 19_hide_wrap_v8, 18_throwing_stick_v8. What I saw that is still wrong: stiff, nearly straight
+  arms (the solve's elbow pole sends the elbows out and down but the arms read straight: bring the targets closer to
+  the body or bend more); the left arm sticks straight out when free; the fishing bot made no thrust in 80 s (bot log
+  empty: check the fish mode with the new low camera and pitch limit -0.95, the bot's aimAt uses testLook and may
+  fight the limit), the fishing camera is still high when not aiming (lowCam only clamps the orbit pitch; also bring the
+  distance in), fish still pale; the sling not readable in 23; wraps bulky. Night 2:06 camera fix not recorded yet.
