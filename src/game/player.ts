@@ -263,7 +263,8 @@ export class Player {
     let free = 1;
     for (let k = 1; k <= 10; k++) {
       const f = k / 10, x = hx + (out.x - hx) * f, y = hy + (out.y - hy) * f, z = hz + (out.z - hz) * f;
-      if (y < this.terrain.height(x, z) + 0.3 || this.forest.blocks(x, z, 0.28) || (k > 2 && this.forest.inFoliage?.(x, y, z))) { free = Math.max(0.16, (k - 1) / 10); break; }
+      const gy = this.terrain.height(x, z);
+      if (y < gy + 0.3 || this.forest.blocks(x, z, 0.28, y - gy) || (k > 2 && this.forest.inFoliage?.(x, y, z))) { free = Math.max(0.16, (k - 1) / 10); break; }
     }
     // pull in at once, ease back out, so the view never pops
     // in fast, but over a few frames (in one frame it read as a cut: the night watch by the fire, 2:06 in v14, the
@@ -275,9 +276,10 @@ export class Player {
     // the side (a dark wall over a third of the picture, or the inside of the bark for a frame as the view swings)
     // (a search along the line, not fixed steps, so the pull is smooth as the view swings)
     // (not when the player stands against the trunk: then every spot near the head is 'too close')
-    if (this.forest.blocks(out.x, out.z, 0.5) && !this.forest.blocks(hx, hz, 0.5)) {
+    const outA = out.y - this.terrain.height(out.x, out.z);
+    if (this.forest.blocks(out.x, out.z, 0.5, outA) && !this.forest.blocks(hx, hz, 0.5)) {
       let lo = 0, hi = 1;
-      for (let s = 0; s < 7; s++) { const m = (lo + hi) / 2; if (this.forest.blocks(hx + (out.x - hx) * m, hz + (out.z - hz) * m, 0.5)) hi = m; else lo = m; }
+      for (let s = 0; s < 7; s++) { const m = (lo + hi) / 2; if (this.forest.blocks(hx + (out.x - hx) * m, hz + (out.z - hz) * m, 0.5, hy + (out.y - hy) * m - this.terrain.height(hx + (out.x - hx) * m, hz + (out.z - hz) * m))) hi = m; else lo = m; }
       const f = Math.max(0.16, lo);
       out.x = hx + (out.x - hx) * f; out.y = hy + (out.y - hy) * f; out.z = hz + (out.z - hz) * f;
     }
@@ -331,7 +333,9 @@ export class Player {
     const yawV = this.yawS + back * 2.75 + this.turnS, pitchV = pitchV0;
     // soft collision: pull in fast when a trunk blocks the view, ease back out slowly
     const want = this.orbit(tmpA, this.focus, yawV, pitchV, this.camDist);
-    const clear = this.forest.clearance(this.focus.x, this.focus.z, want.x, want.z, 0.4);
+    // (the line from the head to the camera is no lower than the lower of its two ends above the ground under them)
+    const lowA = Math.min(this.focus.y + 1.65 - this.terrain.height(this.focus.x, this.focus.z), want.y - this.terrain.height(want.x, want.z));
+    const clear = this.forest.clearance(this.focus.x, this.focus.z, want.x, want.z, 0.4, lowA);
     // a scene's own follow distance (spear fishing: in close) eases in and out, it never cuts
     this.capS += (Math.min(this.camDist, this.combat?.dist ?? this.camDist) - this.capS) * e(2.2);
     const target = Math.max(1.3, Math.min(this.camDist, this.capS) * clear);

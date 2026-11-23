@@ -382,7 +382,8 @@ export class RangedRig {
       seg(this.cords[0], hR, this.pP); seg(this.cords[1], this.tail, this.pP);
       // the disc: centred on the hand, tilted as the cone is (the pouch 0.22 below the hand at 0.95 of the cord)
       const dm = this.disc.material as THREE.MeshBasicMaterial;
-      const want = S.hold === 'whirl' ? 0.1 + 0.16 * clamp01(this.whirlK) : 0;
+      // (faint: at 0.26 it read as a solid plate over his head in v2)
+      const want = S.hold === 'whirl' ? 0.04 + 0.07 * clamp01(this.whirlK) : 0;
       dm.opacity += (want - dm.opacity) * (1 - Math.exp(-dt * 10));
       this.disc.visible = dm.opacity > 0.01;
       if (this.disc.visible) { this.disc.position.copy(hR).add(V().set(0, -0.11, 0)); this.disc.quaternion.copy(rq).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0))); }
