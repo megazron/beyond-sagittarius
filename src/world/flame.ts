@@ -67,7 +67,7 @@ const FLAME_FS = `uniform float uTime; varying vec2 vQ; varying float vSeed; var
     float xw = x + ((n1 - 0.5) * 0.5 + (n2 - 0.5) * 0.14) * y;
     // the profile: round at the foot, drawn to a point; the glow layer is a soft round body
     float foot = sqrt(clamp(y / 0.14, 0.0, 1.0));
-    float hw = kind < 0.5 ? 0.46 * foot * pow(max(1.0 - y, 0.0), 0.5) : 0.4 * foot * pow(max(1.0 - y, 0.0), 0.8) + 0.004;
+    float hw = kind < 0.5 ? 0.46 * foot * pow(max(1.0 - y, 0.0), 0.5) : 0.42 * foot * pow(max(1.0 - y, 0.0), 0.62) + 0.004;
     float body = 1.0 - abs(xw) / max(hw, 1e-3);
     // the top tears into separate licks and flecks that break away (less on the glow, which has no edge)
     float tear = n2 * 0.55 + n1 * 0.45;
@@ -77,7 +77,9 @@ const FLAME_FS = `uniform float uTime; varying vec2 vQ; varying float vSeed; var
     if (a < 0.004) discard;
     // heat: hottest low in the middle of a tongue, broken by the noise (no even block of colour), cooling to red at
     // the edges and the tips. Never white: the brightest is a deep yellow (the tone map and the bloom do the rest)
-    float heat = clamp(body * 1.15 - y * 0.85 + (n1 - 0.5) * 0.7 + 0.15, 0.0, 1.0);
+    // (the foot, among the fuel, is a little cooler than a hand's breadth up: the brightest is low but not on the coals;
+    // the glow layer never gets past orange. s6 first take: still a yellow-white wedge inside the teepee)
+    float heat = clamp(body * 1.1 - y * 0.62 + (n1 - 0.5) * 0.75 + 0.08 - 0.25 * (1.0 - smoothstep(0.0, 0.16, y)), 0.0, 1.0) * (kind < 0.5 ? 0.55 : 1.0);
     vec3 col = mix(vec3(0.38, 0.03, 0.005), vec3(1.35, 0.36, 0.05), smoothstep(0.05, 0.45, heat));
     col = mix(col, vec3(1.7, 0.95, 0.26), smoothstep(0.6, 1.0, heat));
     gl_FragColor = vec4(col, a * vK.y);
@@ -159,14 +161,14 @@ export function makeFire(o: { size?: number; tongues?: number; embers?: number; 
     for (const [qx, qy] of [[-0.5, 0], [0.5, 0], [0.5, 1], [-0.5, 1]]) { C.push(cx, 0.04, cz); Q.push(qx, qy); S.push(seed, w, h, rate); K.push(kind, k); }
     I.push(b, b + 1, b + 2, b, b + 2, b + 3);
   };
-  for (let i = 0; i < 2; i++) quad((rnd() - 0.5) * 0.06 * size, (rnd() - 0.5) * 0.06 * size, (0.7 + 0.15 * i) * size, (0.5 + 0.12 * i) * size, 0, 0.3);
+  for (let i = 0; i < 2; i++) quad((rnd() - 0.5) * 0.06 * size, (rnd() - 0.5) * 0.06 * size, (0.75 + 0.15 * i) * size, (0.6 + 0.15 * i) * size, 0, 0.17);
   for (let i = 0; i < nT; i++) {
     const a = i * 2.39996 + rnd(), r = (0.06 + rnd() * 0.12) * size;
-    quad(Math.cos(a) * r, Math.sin(a) * r, (0.24 + rnd() * 0.1) * size, (0.68 + rnd() * 0.32) * size, 1, 0.5);
+    quad(Math.cos(a) * r, Math.sin(a) * r, (0.3 + rnd() * 0.12) * size, (0.85 + rnd() * 0.4) * size, 1, 0.38);
   }
   for (let i = 0, n = Math.ceil(nT * 0.6); i < n; i++) {
     const a = i * 2.39996 + 1.1 + rnd(), r = (0.02 + rnd() * 0.1) * size;
-    quad(Math.cos(a) * r, Math.sin(a) * r, (0.12 + rnd() * 0.05) * size, (1.05 + rnd() * 0.4) * size, 1, 0.6);
+    quad(Math.cos(a) * r, Math.sin(a) * r, (0.16 + rnd() * 0.06) * size, (1.15 + rnd() * 0.45) * size, 1, 0.55);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(C, 3));
