@@ -1351,3 +1351,11 @@ unlanded except this handoff commit and any recording in progress.
   combat-land50: the bow arm's elbow pole out to the left as well as down; the play test prints the body's place and
   state 0.2 s after the teleport and at the end of the wake check (read those lines if it fails again); perf agent 26's
   pause-menu flake fix applied. Land combat-land50 at fe26c19 or later once green. combat-s6b carries the same commit.
+- ~23:40 (combat) fe26c19 CI 45273172868: everything green but the combat job's bow check, 11 cm (string arm, up 0.5:
+  the string hand jumped from the hip to the nock at up 0.5 before the bow and the turn came round). b157283 on
+  combat-land50: the hand goes there smoothly with the raise. Headless probe of that build (probe/ranged_s6a.txt): bow
+  0.4 cm, sling 0, atlatl 0. Guardian wake passed on fe26c19 (body 3.14 m off, not down, 0.2 s after the teleport).
+  Land combat-land50 at b157283 when its CI is green on that sha.
+- s6c take delivered (Downloads: 31_camp_fire_close_v4, 34_camp_fire_mid_range_v2, 32_night_defence_v4,
+  20_spear_fishing_v7; README notes). Still wrong: brightest yellow at the fire's foot inside the sticks; heat shimmer
+  hard to see against night ground; animals' rim still a little glassy up close; walking wade rings still visible.
