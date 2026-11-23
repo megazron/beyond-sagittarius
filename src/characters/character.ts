@@ -811,17 +811,22 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       thighR = { L: pc(per.L), R: pc(per.R) };
     }
     for (const s of ['L', 'R'] as const) {
-      if (own === 'both' || own === s || (hold?.[s] && holdW[s] > 0.01) || (task && (task.hands === 'both' || task.hands === s))) { thighW[s] *= Math.exp(-dt * 5); thighPush[s].multiplyScalar(Math.exp(-dt * 5)); continue; }
       const hd = bs.get(`hand${s}`)!, f = bs.get(`finger3_2${s}`), push = V4.set(0, 0, 0);
-      for (const p of [wp(`hand${s}`), f ? wp(`finger3_2${s}`) : null]) {
+      // only where the hand can rest on a thigh: seated, crouched, kneeling (thigh within 50 degrees of level). Standing,
+      // the hands hang beside upright thighs and the guard nudged them every frame (idle jerk 0.1 to 1.2 cm), and where
+      // it then stopped for a hold or a task the arm snapped back (10 to 30 cm jerks: full9)
+      const busy = own === 'both' || own === s || (hold?.[s] && holdW[s] > 0.01) || (task && (task.hands === 'both' || task.hands === s));
+      if (!busy) for (const p of [wp(`hand${s}`), f ? wp(`finger3_2${s}`) : null]) {
         if (!p) continue;
         for (const [k, [a, b]] of legs.entries()) {
+          if (Math.abs(V5.copy(b).sub(a).normalize().y) > 0.64) continue;
           const r = (k === 0 ? thighR.L : thighR.R) + 0.012, ab = SB.copy(b).sub(a), tt = clamp(SA.copy(p).sub(a).dot(ab) / ab.lengthSq(), 0, 1);
           const c = SA.copy(a).addScaledVector(ab, tt), d = V5.copy(p).sub(c), dl = d.length();
           if (dl < r && dl > 1e-5) { d.multiplyScalar((r - dl) / dl); if (d.length() > push.length()) push.copy(d); }
         }
       }
       if (push.length() > 0.06) push.setLength(0.06);
+      if (own === 'both' || own === s) { thighW[s] = 0; thighPush[s].set(0, 0, 0); continue; }
       thighPush[s].lerp(push, 1 - Math.exp(-dt * 12));
       thighW[s] += (clamp(thighPush[s].length() / 0.01, 0, 1) - thighW[s]) * (1 - Math.exp(-dt * 8));
       if (thighW[s] < 0.01) continue;
