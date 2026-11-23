@@ -947,7 +947,10 @@ async function boot() {
   game.timersOff = !!settings.noTimers;
   // warm up shaders so the first in-game frame doesn't hitch
   player.spawn(0, 2, 0.35);
-  world.update(0.016, 0, 8.2, player.pos, camera, renderer.renderer);
+  // drawn = false: light and sky only. Drawn, the lake mirrored the whole planet here, before any of its programs were
+  // compiled in the background: every one linked on the main thread at once (the cold title load's 3 s freeze at t 8,
+  // a CPU profile of the A500 cold run: water.ts reflect 2.3 s, getProgramInfoLog 3.2 s)
+  world.update(0.016, 0, 8.2, player.pos, camera, renderer.renderer, false);
   game.story.npcs.prepare();
   // the default look is set up now, so an unchanged Begin rebuilds nothing
   await crewAll.catch(() => {});
