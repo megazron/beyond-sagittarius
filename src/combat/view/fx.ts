@@ -195,8 +195,8 @@ export class CombatFx {
     let light: THREE.PointLight | null = null;
     // (the camp fire's light, against the sun's 4.6 at noon: at 70 with a fall-off of 1.7 (and the story's own camp-fire
     // light, 16, on top) a white coat a metre from the fire took about ten times full daylight and burned out to flat
-    // orange-white (v16, v25, v26). Now about daylight at a metre, falling off gently: 2 at 3 m, 1.1 at 6 m)
-    if (this.lights) { light = new THREE.PointLight(0xff9a45, big ? 5 : 16, big ? 22 : 9, big ? 0.9 : 1.7); light.position.y = 1.1; g.add(light); }
+    // orange-white (v16, v25, v26). Now 7 at a metre (with the eye adapted, about daylight), falling off gently: 2.6 at 3 m, 1.4 at 6 m; at 5 the take was too dark round him)
+    if (this.lights) { light = new THREE.PointLight(0xff9a45, big ? 7 : 16, big ? 22 : 9, big ? 0.9 : 1.7); light.position.y = 1.1; g.add(light); }
     return { o: g, id, light };
   }
 
@@ -312,7 +312,7 @@ export class CombatFx {
       const k = Math.max(0, f.fuel / f.max), flick = 0.85 + Math.sin(t * 13 + f.id) * 0.1 + Math.sin(t * 7.3) * 0.07;
       fl.o.visible = true;
       fl.o.children.forEach((c, i) => { if ((c as THREE.Mesh).material instanceof THREE.MeshBasicMaterial) { c.visible = k > 0; c.scale.set(0.5 + k * 0.7, (0.3 + k * 1.1) * (0.8 + Math.sin(t * 9 + i * 2) * 0.25), 0.5 + k * 0.7); } });
-      if (fl.light) fl.light.intensity = (f.burnsOut ? 16 : 5) * Math.sqrt(k) * flick;
+      if (fl.light) fl.light.intensity = (f.burnsOut ? 16 : 7) * Math.sqrt(k) * flick;
       if (k > 0 && this.emberT <= 0) {
         this.puff('ember', f.x, this.height(f.x, f.z) + 0.5, f.z, 0, 0, 0.5);
         if (!f.burnsOut) this.puff('smoke', f.x, this.height(f.x, f.z) + 0.9 + k * 0.4, f.z, sim.windX * 5, sim.windZ * 5, 1);
