@@ -260,7 +260,8 @@ window.__cbBot = (mode) => {
       const fx = -Math.sin(y), fz = -Math.cos(y), rx = Math.cos(y), rz = -Math.sin(y), c = C.cam;
       const cam = side ? [p.x - rx * 2.3 + fx * 0.4, c.y + 1.25, p.z - rz * 2.3 + fz * 0.4] : [p.x + fx * 2.6 - rx * 0.5, c.y + 1.3, p.z + fz * 2.6 - rz * 0.5];
       __bs.photo(cam, [p.x, c.y + 1.05, p.z]);
-      const throwable = w === 'spear' || w === 'throwstick' || w === 'rock';
+      // (the bow, the sling and the spear-thrower: drawn, whirled or cocked, and let go, the same way)
+      const throwable = w === 'spear' || w === 'throwstick' || w === 'rock' || w === 'bow' || w === 'sling' || w === 'atlatl';
       if (T < 1.5) { stop(); }
       else if (T < 10.5) { if (Math.floor((T - 1.5) / 3) !== flag.blow) { flag.blow = Math.floor((T - 1.5) / 3); tap('Mouse0'); } }
       else if (T < 12.5) hold('KeyQ', 1);
