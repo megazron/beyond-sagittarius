@@ -1,10 +1,10 @@
 # Terms of Use
 
-Template, not reviewed by a lawyer. Last updated 2026-11-06.
+Template, not reviewed by a lawyer. Last updated 2026-11-23.
 
 BEYOND SAGITTARIUS is a free game made by megazron. By playing it you agree to these terms.
 
-- **What you may do.** Play the game, in the browser or with the desktop download, for personal use. Share links to it.
+- **What you may do.** Play the game, in the browser, with the desktop download or in the Android app, for personal use. Share links to it.
 - **What you may not do.** Resell it, or publish modified copies, without permission. See [LICENSE](LICENSE). Third-party parts keep their own licences, listed in [CREDITS.md](CREDITS.md).
 - **No warranty.** The game is provided as it is. It may have bugs, change or go offline. Saves can be lost.
 - **Liability.** To the extent the law allows, megazron is not liable for loss or damage from using the game.

@@ -1,8 +1,8 @@
 {
   "name": "beyond-sagittarius",
   "private": true,
-  "version": "0.1.0",
-  "description": "BEYOND SAGITTARIUS - A Survival Story Beyond the Known Universe (vertical slice)",
+  "version": "1.2.0",
+  "description": "Beyond Sagittarius: a sci-fi survival story game",
   "type": "module",
   "scripts": {
     "dev": "vite",
