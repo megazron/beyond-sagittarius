@@ -1100,10 +1100,23 @@ unlanded except this handoff commit and any recording in progress.
   programs in one frame (on SwiftShader, tens of seconds). Fix: main.ts enterWorld compiles the player's look in the
   background (compileFor with the root made visible for the call) once whenReady resolves during the wake. smoke.py now
   prints the long tasks from the skip into play (and the long tasks over 1 s on failure). Local smoke: no long task.
-- e4cdf5c COLD LOAD: renderer.uploadTextures(scene) sends the world's and the vault's textures a few at a time (24 ms a
-  batch, a frame between) before the warm draws; the 448dd37 cold run's 2-3 s freezes (t 7.7, 11.0, 14.2 s) were warm
-  draws uploading 40-90 textures each. Not measured yet on the A500 (p24/coldstep.sh with a dist of e4cdf5c or later).
+- COLD LOAD, tried and taken back out: e4cdf5c sent the world's and the vault's textures a few at a time before the warm
+  draws. A500 cold run of it (dist-p25d, p24/coldstep.sh, ~/bs-assets/gpu/hitch_hitch_p25_cold_d.json.json): loaded in
+  22.8 s (448dd37: 20.7), stalls 3216 ms at t 8.2 (0 new programs, 0 textures, 0 geometries: not uploads; the first
+  warm draw of the world, 124 calls), 3300 ms at 11.5 (73 textures, 66 geometries still counted in that frame: the
+  textures it uploads were not the ones these draws needed, or not loaded yet), 2183 ms at 15.6. No gain: removed.
+  Next: find what the t 8.2 stall is (a CPU profile of the cold run: tools/hitch_tour.py with profiles).
 - 2eee9f9: the stop's board is two single-sided planes (the double-sided one read backwards from the south).
 - Test hook: __bs.awayMarkDone(...ids) (recordings that need a hero view's task done).
 - GPU clips: ~/bs-assets/gpu/p25 (plans, clips.sh, chain.sh, memstep.sh + memsample.ps1: the capture Chrome's private
   bytes per process type and the GPU's dedicated memory from Windows' GPU Process Memory counters).
+- REAL-GPU MOBILE MEMORY (first one; p25/memstep.sh, Windows counters for the capture Chrome, Mobile preset 844x390,
+  dist-p25d, steady after the city loads, flat -> crowd -> gate): renderer 1.36-1.54 GB private, GPU process 2.38 GB
+  private, GPU memory 1.55 GB dedicated + 0.43 GB shared, JS heap 595-727 MB. The prop atlas change (0cc8adb) was not
+  measured on its own (no A/B run).
+- Clips: Downloads/BS_Game_v1.1/mobile_v5_GPU (README.txt). Seen in them and fixed after (not in a clip yet): Nuvena in
+  the walking line south of the tram (moved to x -7.3), the two kids in the road at the gate (moved to the pavements),
+  the tram's windows read as beige panels on Web (darker glass). Still open: a noisy dotted wall up close in the far
+  NE street; a small crowd round you at the tram door on Web.
+- NOT DONE: (2) draws/uniform uploads (Mobile proxy 54 fps at the crowd from perf 24 still stands; nothing changed
+  there), (3) cold load (above).
