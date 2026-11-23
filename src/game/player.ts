@@ -65,6 +65,8 @@ export class Player {
    * `sprint` overrides the sprint button, `sneak` caps the speed to a creep.
    */
   combat: { scale: number; force: { x: number; z: number } | null; face: number | null; aim: number; crouch: number; sprint: boolean | null; sneak: boolean; jump: boolean; shoulder?: number; lift?: number;
+    /** radians: the camera is placed no higher than this pitch would put it (the look itself may tip further down). */
+    lowCam?: number;
     /** 0..1: the view swings round to look behind (a glance back in a chase); the walk keeps its own heading. */
     back?: number;
     /** radians: the view turns this far from the walk's heading (a look at a trap that springs nearby); view only. */
@@ -315,7 +317,10 @@ export class Player {
     const turnWant = this.combat?.turn ?? 0;
     this.turnS += (turnWant - this.turnS) * e(Math.abs(turnWant) > Math.abs(this.turnS) ? 4.5 : 2.2);
     const turnK = Math.min(1, Math.abs(this.turnS) / 0.6);
-    const yawV = this.yawS + back * 2.75 + this.turnS, pitchV = this.pitchS + (Math.min(this.pitchS, -0.38) - this.pitchS) * this.crowdS - back * 0.12 - turnK * 0.07;
+    let pitchV0 = this.pitchS + (Math.min(this.pitchS, -0.38) - this.pitchS) * this.crowdS - back * 0.12 - turnK * 0.07;
+    // a view that looks down steeply from low (spear fishing): the camera stays low behind the shoulder, only the look tips down
+    if (this.combat?.lowCam !== undefined) pitchV0 = Math.max(pitchV0, this.combat.lowCam);
+    const yawV = this.yawS + back * 2.75 + this.turnS, pitchV = pitchV0;
     // soft collision: pull in fast when a trunk blocks the view, ease back out slowly
     const want = this.orbit(tmpA, this.focus, yawV, pitchV, this.camDist);
     const clear = this.forest.clearance(this.focus.x, this.focus.z, want.x, want.z, 0.4);

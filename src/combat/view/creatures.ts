@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { loft, limb, grainNormal } from '../../characters/shapes';
 import { createHound } from '../../world/predator';
 import type { Enemy, SpeciesId } from '../sim/species';
+import { DARTER_LEN } from '../sim/species';
 import { reach } from './ranged';
 import { nearFade } from '../../core/nearfade';
 
@@ -568,7 +569,9 @@ function darter(): CreatureView {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i), taper = z < 0 ? 1 - 0.55 * z * z : 1 - 0.2 * z * z;
     p.setXYZ(i, x * 0.04 * taper, y * 0.045 * taper, z * L * 0.5);
     const back = THREE.MathUtils.smoothstep(y, -0.25, 0.45), line = Math.exp(-Math.pow((y - 0.05) / 0.12, 2)) * 0.35;
-    c[i * 3] = 0.72 - back * 0.52 + line; c[i * 3 + 1] = 0.7 - back * 0.46 + line; c[i * 3 + 2] = 0.6 - back * 0.46 + line;
+    // (a darker back, with dark bars across it, and a brighter flank line: v1's pale sliver did not read through water)
+    const bar = back * 0.12 * Math.max(0, Math.sin(z * 9));
+    c[i * 3] = 0.78 - back * 0.66 - bar + line; c[i * 3 + 1] = 0.76 - back * 0.6 - bar + line; c[i * 3 + 2] = 0.66 - back * 0.6 - bar + line;
   }
   g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.computeVertexNormals();
   const skin = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.25 });
@@ -583,6 +586,16 @@ function darter(): CreatureView {
   df.computeVertexNormals(); body.add(new THREE.Mesh(df, fins));
   const pf = [-1, 1].map((s) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.025), fins); m.position.set(s * 0.035, -0.025, 0.07); m.rotation.set(0.3, s * 0.6, s * 0.5); body.add(m); return m; });
   for (const o of [root]) o.traverse((q) => { q.castShadow = false; });
+  // drawn to the sim's length (DARTER_LEN; the shapes above are for a 34 cm fish)
+  body.scale.setScalar(DARTER_LEN / L);
+  // its shadow on the bottom, under where the fish really is: how a fish is actually spotted from the bank. The
+  // controller sets its height (root.userData.shadow) to the bottom; soft and dark, it moves with the fish
+  const sh = new THREE.Mesh(new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    vertexShader: 'varying vec2 vP; void main() { vP = position.xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'varying vec2 vP; void main() { float r = length(vP); float a = 0.55 * smoothstep(1.0, 0.25, r); if (a < 0.01) discard; gl_FragColor = vec4(0.03, 0.04, 0.03, a); }',
+  }));
+  sh.scale.set(DARTER_LEN * 0.16, 1, DARTER_LEN * 0.55); sh.renderOrder = 1; root.add(sh); root.userData.shadow = sh;
   let sw = 0, roll = 0;
   return {
     root,

@@ -620,6 +620,9 @@ export class Combat {
       // a side-on archer hides the bow from behind the right shoulder: over the bow shoulder, looking down the arrow
       cb.shoulder = p.weapon === 'bow' ? -0.95 : 0.85; cb.lift = p.weapon === 'bow' ? 0.22 : 0.12; cb.jump = p.act === 'idle' && !p.blocking;
       cb.sprint = D.input.device === 'pad' && eng ? this.padSprint : null;
+      // spear fishing: low over the water behind the shoulder, looking down into it at a slant, never from straight
+      // above (v1 looked down on his head with the water and the fish behind his body)
+      if (run?.id === 'fish.spear') { cb.lowCam = -0.32; cb.lift = -0.35; cb.shoulder = 0.6; P.pitch = Math.max(P.pitch, -0.95); } else cb.lowCam = undefined;
       // the run: a glance back while the hunter gathers itself for a leap close behind you (or while B is held), so
       // what chases you is seen, not only heard; the legs keep running where they were going
       let back = 0;
@@ -883,6 +886,9 @@ export class Combat {
           const cy = e.y + e.def.height * 0.5, r = vw.v.root.position;
           if (e.dead) r.y = Math.min(surf - 0.02, cy + Math.min(e.deadT, 3) * 0.15);
           else r.y += seenDepthY(cam.position.x, cam.position.y, cam.position.z, e.x, cy, e.z, surf) - cy;
+          // the shadow on the bottom under it (fainter as the fish rises from it; gone once it floats)
+          const sh = vw.v.root.userData.shadow as THREE.Mesh | undefined;
+          if (sh) { const bot = this.env.height(e.x, e.z) + 0.012; sh.visible = !e.dead && surf - bot > 0.05; sh.position.y = bot - r.y; }
         }
       }
       // a caught animal fights the cord: heard (thrashing, a squeal) and seen (grass and dirt kicked up) until it
@@ -916,6 +922,10 @@ export class Combat {
       this.shake = Math.max(0, this.shake - dt * 0.7);
     }
     this.body.late(P.model, dt, this.clock);
+    { // standing in water: rings spread from the legs
+      const sf = this.env.water?.(P.pos.x, P.pos.z), dep = sf === null || sf === undefined ? 0 : sf - this.env.height(P.pos.x, P.pos.z);
+      this.fx.wade(P.pos.x, P.pos.z, dep > 0.08 && dep < 1.1 && !P.swimming ? sf! : null, 0.17, Math.min(1, P.speedNow / 2), dt);
+    }
     this.fx.sync(sim, dt, this.clock, cam);
     void time;
     // HUD
