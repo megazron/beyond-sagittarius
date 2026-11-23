@@ -1,6 +1,6 @@
 // A stand-in player for recordings: it plays the fight through the game's own controls (keys, mouse buttons, mouse
 // look), never by reaching into the simulation to change it. tools/gpu_capture.py evals this file, then calls
-// __cbBot('<mode>'). Modes: melee, ranged, guardian, hunt, night, chase, stealth, tour. __cbStop = true ends it.
+// __cbBot('<mode>'). Modes: melee, ranged, guardian, hunt, night, chase, stealth, tour, fish (log in window.__cbFishLog). __cbStop = true ends it.
 window.__cbBot = (mode) => {
   const C = __bs.combat, held = {};
   window.__cbStop = false;
@@ -18,7 +18,8 @@ window.__cbBot = (mode) => {
     const k = Math.abs(d) > 0.5 ? 0.22 : 0.3;
     // (a man on watch turns his head, he does not flick it: v14 swung half round in a few frames, which read as a cut)
     const mx = flag.calm ? 22 : 70;
-    C.testLook(Math.max(-mx, Math.min(mx, (-d / SENS) * k)), Math.max(-30, Math.min(30, ((c.pitch - wp) / SENS) * 0.2)));
+    const mp = flag.calmPitch ? 9 : 30; // (fishing: the view itself tips with the look, so it tips slowly)
+    C.testLook(Math.max(-mx, Math.min(mx, (-d / SENS) * k)), Math.max(-mp, Math.min(mp, ((c.pitch - wp) / SENS) * 0.2)));
     return Math.abs(d);
   };
   const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -269,38 +270,97 @@ window.__cbBot = (mode) => {
       else if (throwable && T < 18) { hold('Mouse2', 1); hold('Mouse0', T < 16.5); }
       else { hold('Mouse2', 0); hold('Mouse0', 0); flag.i++; flag.t = now; flag.blow = -1; }
     } else if (mode === 'fish') {
-      // spear fishing: creep up to a fish that is holding still, aim the reticle exactly (the camera's own line), the
-      // first thrust at where the fish is SEEN (it goes over: the lesson), then at where it really is (below)
-      const cam = C.d.player.camera, eye = cam.position;
+      // spear fishing: walk to the water's edge across from a fish that is holding still (never wading in unless no
+      // fish is within reach of the bank), aim the reticle exactly (the camera's own line), the first thrust at where
+      // the fish is SEEN (it goes over: the lesson), then at where it really is (below)
+      // (v2 never thrust: the low camera clamped the orbit, the view looked at his head from 5 m back and its line
+      // could not tip down to a fish, so the aim never settled. player.ts now looks along the look in this scene.)
+      // Every step it takes, and why it waits, goes to window.__cbFishLog (ev: start, target, walk, edge, aim, stall,
+      // thrust, result, lost, cam, hitch), so a take shows what the stand-in was doing.
+      const P = C.d.player, cam = P.camera, eye = cam.position, now = performance.now(), env = sim.env;
+      const rec = +((now - t0) / 1000).toFixed(1);
+      const log = (ev, o = {}) => { const L = window.__cbFishLog || (window.__cbFishLog = []); if (L.length < 600) L.push({ ev, rec, ...o }); };
+      const depth = (x, z) => { const w = env.water ? env.water(x, z) : null; return w === null || w === undefined ? -1 : w - env.height(x, z); };
+      const camPitch = () => { const e = cam.matrixWorld.elements; return Math.asin(Math.max(-1, Math.min(1, -e[9]))); };
+      flag.calm = true; flag.calmPitch = true;
+      // the camera: a jump or a hitch between two frames is logged with what the camera was doing
+      {
+        const q = cam.quaternion, last = flag.camLast, ms = flag.camT ? now - flag.camT : 16;
+        if (last) {
+          const dpos = Math.hypot(eye.x - last.x, eye.y - last.y, eye.z - last.z), dot = Math.min(1, Math.abs(q.x * last.qx + q.y * last.qy + q.z * last.qz + q.w * last.qw)), dang = 2 * Math.acos(dot);
+          const info = { dpos: +dpos.toFixed(2), dang: +dang.toFixed(2), ms: Math.round(ms), clip: +(P.camClip ?? 0).toFixed(2), distS: +(P.distS ?? 0).toFixed(2), swim: !!P.swimming, act: p.act, st, tid: flag.tid || 0 };
+          if (dpos > 0.35 || dang > 0.2) log('cam', info);
+          else if (ms > 200) log('hitch', info);
+        }
+        flag.camLast = { x: eye.x, y: eye.y, z: eye.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w }; flag.camT = now;
+      }
       const seenY = (px, py, pz, surf) => {
         const hc = eye.y - surf, df = surf - py, D = Math.hypot(px - eye.x, pz - eye.z);
         if (df <= 0 || hc <= 0) return py; if (D < 1e-3) return surf - df / 1.333;
         let lo = 0, hi = D; for (let i = 0; i < 40; i++) { const x = (lo + hi) / 2; if (x / Math.hypot(x, hc) > 1.333 * (D - x) / Math.hypot(D - x, df)) hi = x; else lo = x; }
         const x = Math.max(1e-4, (lo + hi) / 2); return surf - ((D - x) * hc) / x;
       };
+      // a hand on a mouse: a steady turn, never a flick (the yaw and pitch steps are small)
       const aimAt = (x, y, z) => {
         const e = cam.matrixWorld.elements, fx = -e[8], fy = -e[9], fz = -e[10];
         const dx = x - eye.x, dy = y - eye.y, dz = z - eye.z, l = Math.hypot(dx, dy, dz);
         const d = Math.atan2(Math.sin(Math.atan2(-dx, -dz) - Math.atan2(-fx, -fz)), Math.cos(Math.atan2(-dx, -dz) - Math.atan2(-fx, -fz)));
         const dp = Math.asin(Math.max(-1, Math.min(1, fy))) - Math.asin(dy / l);
-        C.testLook(Math.max(-40, Math.min(40, (-d / SENS) * 0.35)), Math.max(-30, Math.min(30, (dp / SENS) * 0.35)));
-        return Math.hypot(d, dp);
+        C.testLook(Math.max(-18, Math.min(18, (-d / SENS) * 0.35)), Math.max(-14, Math.min(14, (dp / SENS) * 0.35)));
+        return { err: Math.hypot(d, dp), d, dp };
       };
-      if (st === 0) { if (equip('spear')) { flag.n = 0; next(); } return; }
+      // where to stand for a fish: back from it towards him to the first dry ground (the water's edge), a step onto
+      // the bank; when that is out of a thrust's reach, a short way into the shallows instead (2 m from the fish)
+      const REACH = 2.2;
+      const stand = (f) => {
+        const dx = p.x - f.x, dz = p.z - f.z, l = Math.hypot(dx, dz) || 1, ux = dx / l, uz = dz / l;
+        let k = 0;
+        for (; k < Math.min(l + 3, 12); k += 0.2) if (depth(f.x + ux * k, f.z + uz * k) < 0.06) break;
+        const de = k;
+        if (de <= REACH) { const s = Math.min(de + 0.25, REACH); return { x: f.x + ux * s, z: f.z + uz * s, de, wade: false }; }
+        return { x: f.x + ux * 2.0, z: f.z + uz * 2.0, de, wade: true };
+      };
+      if (st === 0) { if (equip('spear')) { flag.n = 0; flag.seenLog = 0; log('start', { x: +p.x.toFixed(1), z: +p.z.toFixed(1), feet: +depth(p.x, p.z).toFixed(2) }); next(); } return; }
+      // what the sim made of each thrust
+      if (sim.fishLog.length > flag.seenLog) { for (const w of sim.fishLog.slice(flag.seenLog)) log('result', { what: w }); flag.seenLog = sim.fishLog.length; }
       const fish = living('darter').filter((e) => e.state !== 'flee');
-      const tgt = flag.tid ? fish.find((e) => e.id === flag.tid) : null;
-      const t = tgt || nearest(fish);
-      if (!t) { stop(); return; }
-      flag.tid = t.id;
-      const d = dist(t, p);
-      if (d > 2.0) { if (!p.sneaking && !flag.sn) { flag.sn = 1; tap('KeyX'); } go(t.x, t.z); flag.still = performance.now(); return; }
+      let t = flag.tid ? fish.find((e) => e.id === flag.tid) : null;
+      if (flag.tid && !t) { log('lost', { id: flag.tid }); flag.tid = 0; }
+      let S = t ? stand(t) : null;
+      if (t && S.de > REACH + 0.6 && !S.wade) { log('lost', { id: t.id, why: 'moved off', de: +S.de.toFixed(2) }); t = null; flag.tid = 0; }
+      if (!t) {
+        // the fish easiest to reach from the bank: nearest to its own water's edge, then nearest to walk to
+        let best = null, bc = 1e9;
+        for (const f of fish) { const q = stand(f), c = q.de + (q.wade ? 3 : 0) + 0.25 * Math.hypot(q.x - p.x, q.z - p.z); if (c < bc) { bc = c; best = f; S = q; } }
+        t = best;
+        if (!t) { stop(); if (!flag.none) { flag.none = 1; log('stall', { why: 'no fish holding still' }); } return; }
+        flag.none = 0; flag.tid = t.id; flag.arrived = 0; flag.aimLogT = 0; flag.aimT = 0; flag.stallT = 0; flag.walking = 0;
+        log('target', { id: t.id, d: +dist(t, p).toFixed(2), de: +S.de.toFixed(2), wade: S.wade, state: t.state });
+      }
+      const ds = Math.hypot(S.x - p.x, S.z - p.z);
+      if (!flag.arrived && ds > 0.35) {
+        if (!p.sneaking && !flag.sn) { flag.sn = 1; tap('KeyX'); }
+        if (!flag.walking) { flag.walking = 1; log('walk', { to: [+S.x.toFixed(1), +S.z.toFixed(1)], ds: +ds.toFixed(2), wade: S.wade }); }
+        go(S.x, S.z); flag.still = now; return;
+      }
+      if (!flag.arrived) { flag.arrived = 1; flag.walking = 0; flag.still = Math.max(flag.still || 0, now); log('edge', { d: +dist(t, p).toFixed(2), feet: +depth(p.x, p.z).toFixed(2), wade: S.wade }); }
+      // standing: only walk again if the spot has moved well off (the fish glided)
+      if (ds > 0.9) { flag.arrived = 0; return; }
       stop();
       if (p.act !== 'idle') return;
-      const cy = t.y + t.def.height * 0.5, surf = 0;
-      // first throw: at the fish as it is seen; after that, below it (at where it is)
+      const d = dist(t, p);
+      const cy = t.y + t.def.height * 0.5, surf = (env.water && env.water(t.x, t.z)) ?? 0;
+      // first thrust: at the fish as it is seen; after that, below it (at where it is)
       const y = flag.n === 0 ? seenY(t.x, cy, t.z, surf) : cy;
-      const err = aimAt(t.x, y, t.z);
-      if (err < 0.004 && performance.now() - flag.still > 1500) { tap('Mouse0'); flag.n++; flag.still = performance.now() + 1200; flag.tid = 0; window.__cbFishLog = (window.__cbFishLog || []).concat([{ n: flag.n, aim: flag.n === 1 ? 'seen' : 'true', d: +d.toFixed(2), rec: +((performance.now() - t0) / 1000).toFixed(1) }]); }
+      const a = aimAt(t.x, y, t.z);
+      if (!flag.aimT) flag.aimT = now;
+      const settled = now - flag.still > 700, ok = a.err < 0.006 && settled && p.stamina > 14;
+      if (now - (flag.aimLogT || 0) > 1500) { flag.aimLogT = now; log('aim', { id: t.id, err: +a.err.toFixed(4), dyaw: +a.d.toFixed(3), dpitch: +a.dp.toFixed(3), pitch: +C.cam.pitch.toFixed(3), camPitch: +camPitch().toFixed(3), d: +d.toFixed(2), stamina: Math.round(p.stamina), settled }); }
+      if (now - flag.aimT > 6000 && !flag.stallT) { flag.stallT = 1; log('stall', { why: a.err >= 0.006 ? 'aim does not settle' : !settled ? 'waiting' : 'stamina', err: +a.err.toFixed(4), camPitch: +camPitch().toFixed(3), pitch: +C.cam.pitch.toFixed(3) }); }
+      if (ok) {
+        tap('Mouse0'); flag.n++; flag.still = now + 1200; flag.tid = 0; flag.stallT = 0;
+        log('thrust', { n: flag.n, aim: flag.n === 1 ? 'seen' : 'true', d: +d.toFixed(2), err: +a.err.toFixed(4), camPitch: +camPitch().toFixed(3), wait: +((now - flag.aimT) / 1000).toFixed(1) });
+      }
     } else if (mode === 'throwplay') {
       // the throwing stick: stand in the open, throw side-arm at a Nibbet within twelve metres (or at the grass ahead
       // when none is), walk out and fetch the stick, come back to the spot; never chase (they outrun anyone)
