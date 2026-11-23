@@ -108,13 +108,13 @@ with sync_playwright() as pw:
                 for i in range(3): page.evaluate("__bs.combat.testTap('Mouse0')"); step(page, 0.7)
                 page.evaluate("__bs.combat.testHold('KeyQ', true)"); step(page, 0.6); page.evaluate("__bs.combat.testHold('KeyQ', false)"); step(page, 0.5)
                 ps = page.evaluate("__bs.combat.testPoseStats(true)")
-                # the test steps the game 50 ms at a time and the rig poses the arms after the fight's own step, so the
-                # hand here runs a 50 ms frame behind its solve: in a fast blow that alone is several centimetres. These
-                # gates catch a gross failure (a shaft through the body, a hand off the spear); the real numbers come
-                # from the GPU recording at full frame rate (plan_v21_after prints testPoseStats)
+                # what is drawn each frame: the arms are solved again on the bones after the character has posed them
+                # (view/body.ts fixArms), so the hands land on the weapon whatever the step; the shaft against the body's
+                # shapes as fitted to this model's own skin
                 print(f'pose {wpn}', json.dumps(ps), flush=True)
-                ok(ps['frames'] > 10 and ps['shaftIn'] <= 0.08, f'arena: the {wpn} does not go through the body through blows and a block', json.dumps(ps))
-                if wpn == 'spear': ok(ps['leftOff'] <= 0.6, 'arena: the left hand is not torn off the spear shaft', json.dumps(ps))
+                ok(ps['frames'] > 10 and ps['shaftIn'] <= 0.01, f'arena: the {wpn} stays out of the body (within 1 cm) through blows and a block', json.dumps(ps))
+                ok(ps['handOff'] <= 0.02, f'arena: the right hand stays on the {wpn} (within 2 cm)', json.dumps(ps))
+                if wpn == 'spear': ok(ps['leftOff'] <= 0.02, 'arena: the left hand stays on the spear shaft (within 2 cm)', json.dumps(ps))
             # wake the guardian and let it work
             g = [e for e in page.evaluate(D)['enemies'] if e['kind'] == 'guardian'][0]
             page.evaluate(f"__bs.teleport({g['x']} - 3, {g['z']})"); step(page, 6)

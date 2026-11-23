@@ -22,9 +22,9 @@ export const out3 = (k: number) => 1 - (1 - clamp01(k)) ** 3;
 /** A weapon pose: right grip (body-local, +z ahead, +x to the body's left), the shaft's way from the grip to the
  * working end, the left hand's place along the shaft (metres from the grip; null: the left hand is not on it), and the
  * left hand's own mark when it is free (body-local), the chest's bend and turn. */
-export interface WFrame { g: THREE.Vector3; d: THREE.Vector3; l: number | null; lh: THREE.Vector3; bend: number; twist: number }
+export interface WFrame { g: THREE.Vector3; d: THREE.Vector3; l: number | null; lh: THREE.Vector3; bend: number; twist: number; /** 0..1: how far the left hand is on the shaft (eases, unlike l) */ hold: number }
 const F = (g: [number, number, number], d: [number, number, number], l: number | null, lh: [number, number, number], bend = 0, twist = 0): WFrame =>
-  ({ g: V(...g), d: V(...d).normalize(), l, lh: V(...lh), bend, twist });
+  ({ g: V(...g), d: V(...d).normalize(), l, lh: V(...lh), bend, twist, hold: l === null ? 0 : 1 });
 
 /** The shaft of each weapon: how far it reaches behind the grip and ahead of it (metres), and its radius. */
 export const SHAFT: Partial<Record<WeaponId, { back: number; front: number; r: number }>> = {
@@ -42,20 +42,21 @@ const LH_GUARD: [number, number, number] = [0.24, 1.12, 0.3], LH_LOW: [number, n
  * club a second swing, for throwable things the throw's draw and release, and the spear's brace. */
 const SPEAR = {
   carry: F([-0.27, 0.95, 0.1], [0.05, 1, 0.16], null, LH_LOW),
-  ready: F([-0.24, 1.0, -0.02], [0.24, 0.2, 1], 0.45, LH_GUARD, 0.12, -0.3),
-  back: F([-0.24, 1.06, -0.22], [0.26, 0.12, 1], 0.5, LH_GUARD, 0.08, -0.55),
+  ready: F([-0.24, 1.0, 0.05], [0.32, 0.2, 1], 0.45, LH_GUARD, 0.12, -0.3),
+  back: F([-0.25, 1.06, -0.15], [0.34, 0.12, 1], 0.5, LH_GUARD, 0.08, -0.55),
   hit: F([-0.12, 1.2, 0.12], [0.14, 0.05, 1], 0.4, LH_GUARD, 0.3, 0.2),
-  brace: F([-0.24, 0.84, -0.06], [0.22, 0.36, 1], 0.5, LH_GUARD, 0.36, -0.3),
+  brace: F([-0.24, 0.92, 0.02], [0.3, 0.36, 1], 0.5, LH_GUARD, 0.36, -0.3),
   throwBack: F([-0.4, 1.58, -0.18], [0.06, 0.12, 1], null, [0.3, 1.25, 0.5], -0.12, -0.65),
   throwHit: F([-0.16, 1.42, 0.42], [0.03, -0.08, 1], null, [0.33, 0.95, -0.05], 0.34, 0.55),
 };
 const CLUB = {
   carry: F([-0.27, 0.88, 0.08], [-0.12, -0.5, 1], null, LH_LOW),
   ready: F([-0.29, 1.12, 0.28], [0.08, 0.88, 0.32], null, LH_GUARD, 0.1),
-  // (the hand out to the side of the head, not over it: the rig pushes an arm away from the head and neck)
-  back: F([-0.42, 1.56, -0.08], [0.0, 0.4, -1], null, LH_BAL, -0.12, -0.4),
+  // the hand up above and behind the right shoulder, clear of the head and out of the face's way from the front; the
+  // club over the shoulder behind
+  back: F([-0.44, 1.7, -0.12], [-0.12, 0.95, -0.3], null, LH_BAL, -0.12, -0.4),
   hit: F([-0.1, 1.02, 0.5], [0.05, -0.62, 0.8], null, [0.36, 0.9, 0.02], 0.44, 0.4),
-  back2: F([-0.5, 1.2, -0.12], [-0.62, 0.22, -0.72], null, [0.33, 1.05, 0.35], 0, -0.7),
+  back2: F([-0.5, 1.2, -0.08], [-0.78, 0.3, -0.5], null, [0.33, 1.05, 0.35], 0, -0.7),
   hit2: F([0.12, 1.16, 0.5], [0.86, 0.05, 0.5], null, [0.42, 0.92, -0.05], 0.2, 0.7),
   throwBack: F([-0.46, 1.52, -0.22], [-0.2, 0.7, -0.6], null, [0.3, 1.25, 0.5], -0.15, -0.7),
   throwHit: F([-0.12, 1.3, 0.48], [0.05, 0.2, 1], null, [0.33, 0.95, -0.05], 0.36, 0.6),
@@ -85,8 +86,8 @@ export function mixF(a: WFrame, b: WFrame, k: number, into: WFrame, w: WeaponId)
   into.g.copy(a.g).lerp(b.g, k);
   into.d.copy(a.d).lerp(b.d, k); if (into.d.lengthSq() < 1e-6) into.d.copy(b.d); into.d.normalize();
   const la = a.l === null ? null : V().copy(a.g).addScaledVector(a.d, a.l), lb = b.l === null ? null : V().copy(b.g).addScaledVector(b.d, b.l);
-  if (la && lb) { into.l = a.l! + (b.l! - a.l!) * k; into.lh.copy(la).lerp(lb, k); }
-  else if (!la && !lb) { into.l = null; into.lh.copy(a.lh).lerp(b.lh, k); }
+  if (la && lb) { into.l = a.l! + (b.l! - a.l!) * k; into.lh.copy(la).lerp(lb, k); into.hold = 1; }
+  else if (!la && !lb) { into.l = null; into.lh.copy(a.lh).lerp(b.lh, k); into.hold = 0; }
   else {
     // one grips, one does not: the hand travels between the free mark and the shaft, and counts as on the shaft only
     // once it gets there (the last tenth)
@@ -95,7 +96,7 @@ export function mixF(a: WFrame, b: WFrame, k: number, into: WFrame, w: WeaponId)
     into.lh.copy(mark).lerp(at, smooth(on));
     // across the front of the body, not through it: the hand's path bows forward on the way
     into.lh.z += Math.sin(Math.PI * smooth(on)) * 0.16;
-    into.l = on > 0.9 ? sl : null;
+    into.l = on > 0.9 ? sl : null; into.hold = smooth(on);
   }
   into.bend = a.bend + (b.bend - a.bend) * k; into.twist = a.twist + (b.twist - a.twist) * k;
   void w;
@@ -109,7 +110,7 @@ export interface ActState { weapon: WeaponId; act: string; actT: number; combo: 
 export function targetFrame(s: ActState, into: WFrame, tmp: WFrame): WFrame {
   const w = s.weapon, Fr = frames(w) as typeof CLUB & Partial<typeof SPEAR>;
   const rest = mixF(Fr.carry, Fr.ready, smooth(s.up), tmp, w);
-  const copy = (f: WFrame) => { into.g.copy(f.g); into.d.copy(f.d); into.l = f.l; into.lh.copy(f.lh); into.bend = f.bend; into.twist = f.twist; return into; };
+  const copy = (f: WFrame) => copyFrame(f, into);
   if (s.blocking && Fr.brace) return mixF(rest, Fr.brace, out3(s.blockT / 0.12), into, w);
   if (s.blocking) return mixF(rest, Fr.ready, 1, into, w);
   if (s.act === 'charge') return mixF(rest, Fr.throwBack, out3(s.charge), into, w);
@@ -128,13 +129,49 @@ export function targetFrame(s: ActState, into: WFrame, tmp: WFrame): WFrame {
 // ---------------------------------------------------------------- the body, for keeping things out of it
 /** Stacked elliptic cylinders in the body's frame (metres; the coat over both legs is one skirt). The chest and head
  * lean forward with the bend. */
-export interface BodyShape { y0: number; y1: number; ax: number; az: number; cz: number; lean: number }
-export const BODY: BodyShape[] = [
-  { y0: 0.0, y1: 0.98, ax: 0.2, az: 0.14, cz: 0, lean: 0 },
-  // (the chest between the arms: an arm hanging at the side is not in it)
-  { y0: 0.98, y1: 1.46, ax: 0.165, az: 0.14, cz: 0, lean: 0.55 },
-  { y0: 1.46, y1: 1.8, ax: 0.11, az: 0.12, cz: 0.02, lean: 1 },
+export interface BodyShape { y0: number; y1: number; ax: number; az: number; cz: number; off: number; lean: number; bone: number }
+/** Measured on the crew's own skin and clothes (tools: the GLB's body and cloth, |x| < 0.12): the front of the coat is
+ * about 0.2 m ahead of the root and the back 0.13 behind, so the middle is 4 cm ahead; the chest bone sits near the
+ * back (z -0.05), so the chest's middle is 9 cm ahead of its bone. `cz`: the middle without bones (the tests), `off`:
+ * the middle ahead of its bone (in the game). setBodyFit replaces both with what a model's own skin says. */
+const BODY0: BodyShape[] = [
+  { y0: 0.0, y1: 0.98, ax: 0.2, az: 0.17, cz: 0.035, off: 0.03, lean: 0, bone: 0 },
+  // (the chest between the arms: an arm hanging at the side is not in it; the top of it, under the collar bones, is
+  // shallower and narrower than the belly and the coat's front)
+  { y0: 0.98, y1: 1.32, ax: 0.165, az: 0.17, cz: 0.04, off: 0.09, lean: 0.55, bone: 1 },
+  { y0: 1.32, y1: 1.46, ax: 0.15, az: 0.14, cz: 0.005, off: 0.05, lean: 0.75, bone: 1 },
+  { y0: 1.46, y1: 1.8, ax: 0.11, az: 0.13, cz: 0.035, off: -0.01, lean: 1, bone: 2 },
 ];
+export const BODY: BodyShape[] = BODY0.map((b) => ({ ...b }));
+/** A model's own depth (from its skin, see body.ts fitBody): per shape the middle ahead of its bone and the half depth
+ * (metres at the 1.75 m scale); null: the measured defaults. */
+export interface BodyFit { off: number; az: number; ax?: number; cz?: number }
+export function setBodyFit(fit: BodyFit[] | null) {
+  for (let i = 0; i < BODY.length; i++) {
+    const f = fit?.[i], b = BODY[i], b0 = BODY0[i];
+    b.off = f ? Math.max(-0.08, Math.min(0.18, f.off)) : b0.off; b.az = f ? Math.max(0.1, Math.min(0.26, f.az)) : b0.az;
+    b.ax = f?.ax ? Math.max(0.1, Math.min(0.28, f.ax)) : b0.ax; b.cz = f?.cz ?? b0.cz;
+  }
+}
+/** Fit the body's shapes to a body's own skin and clothes at rest: points (root-local at rest, metres) and the rest
+ * z of the hips, chest and head bones. Depth for every shape; width only for the coat and the head (between the arms
+ * the chest's width cannot be told from the arms that hang beside it). */
+export function fitBody(pts: ArrayLike<number>, boneZ: [number, number, number], k: number): BodyFit[] {
+  const XL = [0.3, 0.25, 0.2, 0.15], fits: BodyFit[] = [];
+  for (let i = 0; i < BODY0.length; i++) {
+    const b = BODY0[i], lo = i === 0 ? Math.max(b.y0, 0.55) : b.y0, zs: number[] = [], xs: number[] = [];
+    for (let j = 0; j + 2 < pts.length; j += 3) {
+      const x = pts[j] / k, y = pts[j + 1] / k, z = pts[j + 2] / k;
+      // (the width from the top of the coat, where a hand at the hip meets it, not the flare at the hem)
+      if (y >= lo && y < b.y1 && Math.abs(x) < XL[i]) { zs.push(z); if (i !== 0 || y > b.y1 - 0.15) xs.push(Math.abs(x)); }
+    }
+    if (zs.length < 30 || xs.length < 10) { fits.push({ off: b.off, az: b.az }); continue; }
+    zs.sort((a, c) => a - c); xs.sort((a, c) => a - c);
+    const zlo = zs[Math.floor(zs.length * 0.02)], zhi = zs[Math.floor(zs.length * 0.98)], cz = (zlo + zhi) / 2;
+    fits.push({ off: cz - boneZ[b.bone] / k, az: (zhi - zlo) / 2, cz, ax: i === 0 || i === 3 ? xs[Math.floor(xs.length * 0.98)] : undefined });
+  }
+  return fits;
+}
 /** How deep a point is inside the body (>0 inside, in metres, roughly), and the way out (horizontal). */
 let BODY_K = 1;
 /** Where the body really is this frame (body-local x, z of the hips, the chest and the head), from the rig's bones:
@@ -155,7 +192,7 @@ function depthN(p: THREE.Vector3, bend: number, r: number, outN?: THREE.Vector3)
     const b = BODY[i];
     if (p.y < b.y0 - r || p.y > b.y1 + r) continue;
     // live: the bone's own place (it already leans); else the lean from the bend
-    const cz = LIVE ? CENTRE[i].z / BODY_K + b.cz : b.cz + Math.sin(bend) * (p.y - 0.95) * b.lean * 0.9, cx = LIVE ? CENTRE[i].x / BODY_K : 0;
+    const C = CENTRE[b.bone], cz = LIVE ? C.z / BODY_K + b.off : b.cz + Math.sin(bend) * (p.y - 0.95) * b.lean * 0.9, cx = LIVE ? C.x / BODY_K : 0;
     const ex = b.ax + r, ez = b.az + r, dx = (p.x - cx) / ex, dz = (p.z - cz) / ez, rho = Math.hypot(dx, dz);
     const dpt = (1 - rho) * Math.min(ex, ez);
     if (dpt > best) { best = dpt; if (outN) { if (rho < 1e-4) outN.set(-1, 0, 0); else outN.set(dx / rho, 0, dz / rho).normalize(); } }
@@ -204,11 +241,42 @@ export function reach2(s: THREE.Vector3, t: THREE.Vector3, a: number, b: number,
 
 /** The skeleton the arms are solved on: shoulders (body-local, this frame) and the two arm bone lengths. */
 export interface Skel { sL: THREE.Vector3; sR: THREE.Vector3; a: number; b: number; palm: number }
-export interface Solved { limbs: Limbs; f: WFrame; eL: THREE.Vector3; wL: THREE.Vector3; eR: THREE.Vector3; wR: THREE.Vector3; missL: number; missR: number; penetration: number; armIn: number }
+export interface Solved { limbs: Limbs; f: WFrame; eL: THREE.Vector3; wL: THREE.Vector3; eR: THREE.Vector3; wR: THREE.Vector3; lt: THREE.Vector3; rt: THREE.Vector3; missL: number; missR: number; penetration: number; armIn: number }
+
+/** Keep the grip within the right arm's reach: a hand cannot hold what it cannot get to (the spear's low brace asked
+ * for a grip 12 cm past the real arm). A two-handed shaft slides through the hand (its line stays); anything else
+ * comes in towards the shoulder. */
+export function reachGrip(f: WFrame, w: WeaponId, k: Skel) {
+  const maxR = (k.a + k.b + k.palm) * 0.975, toS = V().subVectors(f.g, k.sR), dist = toS.length();
+  if (dist <= maxR) return 0;
+  if (TWO(w)) {
+    const rel = V().subVectors(k.sR, f.g), s0 = rel.dot(f.d), h2 = rel.lengthSq() - s0 * s0;
+    if (h2 < maxR * maxR * 0.98) {
+      const c = Math.sqrt(maxR * maxR * 0.98 - h2), s = Math.abs(s0 - c) < Math.abs(s0 + c) ? s0 - c : s0 + c;
+      // a slide of at most 0.45 m (past that the hold itself is wrong; come in)
+      if (Math.abs(s) < 0.45) { f.g.addScaledVector(f.d, s); return dist - maxR; }
+    }
+  }
+  f.g.copy(k.sR).addScaledVector(toS.normalize(), maxR);
+  return dist - maxR;
+}
 
 /** Arms for a frame: the right hand on the grip, the left on the shaft (or at its free mark), elbows out, the arms kept
  * out of the chest by swinging the elbow further out. */
-export function solveArms(f: WFrame, w: WeaponId, k: Skel, leftW: number, rightW: number, lPrev: number | null = null, dt = 1 / 60): Solved {
+/** What the arm solve remembers between frames: how far each elbow is swung round its shoulder-to-hand line. */
+export interface ArmMem { L: number; R: number; pL?: THREE.Vector3; pR?: THREE.Vector3; /** where along the shaft the front hand last held it, and whether it is letting go from there */ slide?: number; peel?: boolean }
+export function solveArms(f: WFrame, w: WeaponId, k: Skel, leftW: number, rightW: number, lPrev: number | null = null, dt = 1 / 60, mem: ArmMem = { L: 0, R: 0 }): Solved {
+  reachGrip(f, w, k);
+  // a two-handed shaft comes to the front hand: a body with short arms would otherwise have the left hand reach right
+  // across its chest to a shaft that passes too far from its left shoulder
+  if (TWO(w) && f.hold > 0) {
+    const hMax = (k.a + k.b + k.palm) * 0.62;
+    for (let it = 0; it < 4; it++) {
+      const rel = V().subVectors(k.sL, f.g), s0 = Math.max(0.3, rel.dot(f.d)), perp = rel.addScaledVector(f.d, -rel.dot(f.d)), h = perp.length();
+      if (h <= hMax) break;
+      f.d.addScaledVector(perp.normalize(), (h - hMax) / s0 * f.hold).normalize();
+    }
+  }
   const penetration = clearShaft(f, w);
   // the left hand's target: on the shaft (the far side of it from the body by the shaft's radius) or its free mark;
   // kept out of the body as well
@@ -220,44 +288,72 @@ export function solveArms(f: WFrame, w: WeaponId, k: Skel, leftW: number, rightW
     const h = rel.addScaledVector(f.d, -s0).length();
     const want = Math.min(1.0, Math.max(0.3, s0 + Math.sqrt(Math.max(0, R * R - h * h)) * 0.55));
     // the slide is a slide: at most 2.5 m/s along the shaft
-    f.l = lPrev === null ? want : lPrev + Math.max(-2.5 * dt, Math.min(2.5 * dt, want - lPrev));
-  }
-  const lt = f.l !== null ? V().copy(f.g).addScaledVector(f.d, f.l) : V().copy(f.lh);
+    // (a hand just come on to the shaft starts where it took hold, then slides)
+    const from = lPrev ?? f.l, l0 = f.l;
+    f.l = from + Math.max(-2.5 * dt, Math.min(2.5 * dt, want - from));
+    mem.slide = f.l; mem.peel = true; void l0;
+  } else if (f.hold < 0.01) mem.peel = false;
+  // a hand letting go leaves from where it really held the shaft (after its slide and the shaft's turn to it), not
+  // from the frame's own mark: it peels off as the hold eases away
+  const lt = V().copy(f.lh);
+  if (f.l === null && mem.peel && mem.slide !== undefined && TWO(w)) lt.lerp(V().copy(f.g).addScaledVector(f.d, mem.slide), smooth(f.hold));
+  // taking hold: the hand closes the last of the gap as the (eased) hold comes up, so it never jumps on to the shaft
+  if (f.l !== null) lt.lerp(V().copy(f.g).addScaledVector(f.d, f.l), smooth((f.hold - 0.55) / 0.43));
   const rt = V().copy(f.g);
   const n = V();
   for (const t of [lt, rt]) { const dp = depth(t, f.bend, 0.05, n); if (dp > 0) t.addScaledVector(n, dp + 0.005); }
   const eL = V(), wL = V(), eR = V(), wR = V();
   const A = k.a, B = k.b + k.palm;
   let armIn = 0;
-  const arm = (s: THREE.Vector3, t: THREE.Vector3, side: number, e: THREE.Vector3, wr: THREE.Vector3) => {
-    let miss = 0;
-    // elbow out to the side, down, a little back; further out if the arm would go through the chest
-    for (let o = 0; o < 5; o++) {
-      const pole = V(side * (0.75 + o * 0.35), -0.65 + o * 0.08, -0.25);
-      miss = reach2(s, t, A, B, pole, e, wr);
+  const arm = (s: THREE.Vector3, t: THREE.Vector3, side: number, e: THREE.Vector3, wr: THREE.Vector3, key: 'L' | 'R') => {
+    // elbow out to the side, down, a little back; if the arm would go through the body, the elbow swings round the
+    // shoulder-to-hand line (the hand stays where it is) to the nearest place where the arm is clear
+    // the pole leans on where the elbow was last frame (as seen from the shoulder): a hand passing close to the
+    // shoulder or along the pole's own line would otherwise flip the elbow to the other side in one frame
+    const pk = key === 'L' ? 'pL' : 'pR', prev = mem[pk], pole = V(side * 0.75, -0.65, -0.25);
+    if (prev) pole.normalize().addScaledVector(prev, 2.2);
+    const miss = reach2(s, t, A, B, pole, e, wr);
+    const inside = (el: THREE.Vector3) => {
       let worst = 0;
       for (let i = 1; i <= 6; i++) {
-        const q = i <= 3 ? V().copy(s).lerp(e, 0.35 + i * 0.2) : V().copy(e).lerp(wr, (i - 3) / 3);
+        const q = i <= 3 ? V().copy(s).lerp(el, 0.35 + i * 0.2) : V().copy(el).lerp(wr, (i - 3) / 3);
         worst = Math.max(worst, depth(q, f.bend, 0.04));
       }
-      if (worst <= 0.002 || o === 4) { armIn = Math.max(armIn, worst); break; }
-    }
+      return worst;
+    };
+    // the swing is remembered and changes at most 10 rad/s, so the elbow never jumps from one way out to another; it
+    // drifts back to the plain pose when that is clear
+    const ax = V().subVectors(wr, s).normalize(), c = V().copy(s).addScaledVector(ax, V().subVectors(e, s).dot(ax)), r0 = V().subVectors(e, c);
+    const at = (a: number) => V().copy(c).add(V().copy(r0).applyAxisAngle(ax, a));
+    const a0 = mem[key], cost = (a: number) => {
+      const el = at(a);
+      // an elbow up and in front of the face is no way out: prefer swings that keep it below the shoulder
+      return inside(el) * 10 + Math.max(0, el.y - s.y - 0.05) * 2 + Math.abs(a - a0) * 0.01 + Math.abs(a) * 0.004;
+    };
+    let bestA = a0, best = cost(a0);
+    for (let j = -14; j <= 14; j++) { const a = j * 0.13; const cs = cost(a); if (cs < best - 1e-5) { best = cs; bestA = a; } }
+    const step = 10 * dt, aNew = a0 + Math.max(-step, Math.min(step, bestA - a0));
+    mem[key] = aNew; e.copy(at(aNew));
+    // remembered without the swing (the swing is kept on its own)
+    (mem[pk] ??= V()).copy(r0).normalize();
+    armIn = Math.max(armIn, inside(e));
     return miss;
   };
-  const missR = arm(k.sR, rt, -1, eR, wR), missL = arm(k.sL, lt, 1, eL, wL);
+  const missR = arm(k.sR, rt, -1, eR, wR, 'R'), missL = arm(k.sL, lt, 1, eL, wL, 'L');
   // the wrist is the palm's length short of the hand target: the bone handed to the rig is the forearm to the wrist
   const wristR = V().copy(eR).lerp(wR, k.b / B), wristL = V().copy(eL).lerp(wL, k.b / B);
   const dir = (a: THREE.Vector3, b: THREE.Vector3): Dir => { const d = V().subVectors(a, b).normalize(); return [d.x, d.y, d.z]; };
   const limbs: Limbs = { bend: f.bend, twist: f.twist };
   if (rightW > 0) { limbs.armR = dir(eR, k.sR); limbs.foreR = dir(wristR, eR); }
   if (leftW > 0) { limbs.armL = dir(eL, k.sL); limbs.foreL = dir(wristL, eL); }
-  return { limbs, f, eL, wL, eR, wR, missL, missR, penetration, armIn };
+  return { limbs, f, eL, wL, eR, wR, lt, rt, missL, missR, penetration, armIn };
 }
 
 /** A frame's smoothed copy: follows the target with a time constant (seconds), directions turned, not snapped. */
 export function follow(cur: WFrame, tgt: WFrame, dt: number, tau = 0.04, maxTurn = 24) {
   const k = 1 - Math.exp(-dt / tau);
-  cur.g.lerp(tgt.g, k); cur.lh.lerp(tgt.lh, k);
+  cur.g.lerp(tgt.g, k);
+  cur.lh.lerp(tgt.lh, k);
   // the shaft turns towards its target, at most maxTurn radians a second (a cancelled blow swings back, not snaps)
   const ang = cur.d.angleTo(tgt.d), step = Math.min(ang * k, maxTurn * dt);
   if (ang > 1e-5) {
@@ -266,7 +362,7 @@ export function follow(cur: WFrame, tgt: WFrame, dt: number, tau = 0.04, maxTurn
     cur.d.applyAxisAngle(ax.normalize(), step).normalize();
   }
   cur.l = tgt.l === null ? null : cur.l === null ? tgt.l : cur.l + (tgt.l - cur.l) * k;
-  cur.bend += (tgt.bend - cur.bend) * k; cur.twist += (tgt.twist - cur.twist) * k;
+  cur.bend += (tgt.bend - cur.bend) * k; cur.twist += (tgt.twist - cur.twist) * k; cur.hold += (tgt.hold - cur.hold) * k;
 }
-export function newFrame(): WFrame { return { g: V(), d: V(0, 0, 1), l: null, lh: V(), bend: 0, twist: 0 }; }
-export function copyFrame(a: WFrame, into: WFrame) { into.g.copy(a.g); into.d.copy(a.d); into.l = a.l; into.lh.copy(a.lh); into.bend = a.bend; into.twist = a.twist; return into; }
+export function newFrame(): WFrame { return { g: V(), d: V(0, 0, 1), l: null, lh: V(), bend: 0, twist: 0, hold: 0 }; }
+export function copyFrame(a: WFrame, into: WFrame) { into.g.copy(a.g); into.d.copy(a.d); into.l = a.l; into.lh.copy(a.lh); into.bend = a.bend; into.twist = a.twist; into.hold = a.hold; return into; }
