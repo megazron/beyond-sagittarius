@@ -1026,3 +1026,20 @@ unlanded except this handoff commit and any recording in progress.
   stuck under the tram shelter beside the tram for most of the clip: the moved tram (z -17) and shelter (z -14) now sit
   in the path south from the crowd spot (-5.5, 0). Owner to decide where the tram goes (5516a5b).
 - perf23-wip CI (mobile_memory's first number on a runner) not seen yet: read `gh run list --branch perf23-wip`.
+
+## 2026-11-23 13:00 perf agent 24 (LANDED 83e4644 on main; WIP branch perf24-wip)
+- LANDED: `git push origin 83e4644:main` fast-forwarded b74a401..83e4644 (CI 45166997241 green on that exact sha): the
+  phone memory work (releaseCrew, crew detail 0.6 on quality mobile), the mobile_memory CI job, perf 23's handoff.
+  mobile_memory's first runner numbers: renderer + GPU 2844 / 2873 / 2888 MB (flat, crowd, gate), a second run 2694 /
+  2925 / 2907. Budget 3200 -> 3300 MB (13-14 % over the highest): a tripwire, not a target. One earlier run's smoke
+  failed on "wake did not reach play" (known flaky timeout); the next run passed it.
+- perf24-wip 336708e (NOT landed, CI pending): the tram moved to z -32 (door task -4.9, -29; Bolzar at the kerb by the
+  door; the roofed shelter replaced by a stop pole in the lamps' line; parked car -30 -> -7; kerb mat back to -16), and
+  the crowd camera no longer rises (?crowdcam=rise = old); passers-by on the camera-you line are cleared
+  (?lensline=0 = old). Test hooks: awayCam.cam (camera position), memTop() (stage textures and geometry by owner).
+- Walking probe: scratchpad walk.py (steps the game with __bs.step, holds W, steers at a target, detours like a player
+  when stuck). On the z -17 tram (dist-walk, Mobile): straight south from the crowd spot stuck at (-5.7, -17.9)
+  (the stall at z -20 with the tram closing the road side), the old shelter walk stuck at (-6.4, -17.9).
+- GPU plans with waypoint steering (smooth turns, W let go at the last waypoint, position printed after each clip):
+  ~/bs-assets/gpu/p24/plan_clips_mobile.json, plan_clips_web.json; one heavy step: p24/gpustep.sh DIST OUT PLAN QUERY
+  (vite preview :4661 + p18/gpurun2.sh, both stopped by PID / process group).
