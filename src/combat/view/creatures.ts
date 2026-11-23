@@ -623,12 +623,31 @@ function darter(): CreatureView {
     fragmentShader: 'varying vec2 vP; void main() { float r = length(vP); float a = 0.55 * smoothstep(1.0, 0.25, r); if (a < 0.01) discard; gl_FragColor = vec4(0.03, 0.04, 0.03, a); }',
   }));
   sh.scale.set(DARTER_LEN * 0.16, 1, DARTER_LEN * 0.55); sh.renderOrder = 1; root.add(sh); root.userData.shadow = sh;
+  // so a dark fish reads against dark water (owner: "hard to see in the dark water"): the sun through the surface
+  // lays a pale, moving net of light on the gravel under it, and the dark fish and its shadow sit on that patch; a
+  // faint shaft of light comes down through the water to it. The controller sets their heights like the shadow's.
+  const uT = { value: 0 };
+  const patch = new THREE.Mesh(new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, uniforms: { uT },
+    vertexShader: 'varying vec2 vP; void main() { vP = position.xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform float uT; varying vec2 vP; void main() { float r = length(vP); float e = smoothstep(1.0, 0.35, r); if (e < 0.01) discard;'
+      + ' vec2 q = vP * 5.0; float c = abs(sin(q.x * 1.7 + uT * 1.3) + sin(q.y * 1.3 - uT * 1.1) + sin((q.x + q.y) * 1.1 + uT * 0.7)) / 3.0; c = 1.0 - smoothstep(0.0, 0.35, c);'
+      + ' gl_FragColor = vec4(vec3(0.62, 0.64, 0.46) * (0.75 + 0.6 * c), e * (0.3 + 0.25 * c)); }',
+  }));
+  patch.scale.setScalar(DARTER_LEN * 1.25); patch.renderOrder = 0; root.add(patch); root.userData.patch = patch;
+  const shaft = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, uniforms: { uT },
+    vertexShader: 'varying vec2 vU; void main() { vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform float uT; varying vec2 vU; void main() { float a = smoothstep(0.0, 0.5, vU.x) * smoothstep(1.0, 0.5, vU.x) * (0.25 + 0.75 * vU.y);'
+      + ' a *= 0.8 + 0.2 * sin(uT * 1.7 + vU.x * 6.0); gl_FragColor = vec4(vec3(0.5, 0.55, 0.42) * a * 0.22, 1.0); }',
+  }));
+  shaft.scale.set(DARTER_LEN * 0.9, 1, 1); shaft.renderOrder = 2; root.add(shaft); root.userData.shaft = shaft;
   let sw = 0, roll = 0;
   return {
     root,
     flinch() { /* a fish hit is a fish taken */ },
     update(e, t, dt) {
-      root.position.set(e.x, e.y + 0.04, e.z); root.rotation.y = e.yaw;
+      root.position.set(e.x, e.y + 0.04, e.z); root.rotation.y = e.yaw; uT.value = t;
       const sp = e.dead ? 0 : e.speed;
       // the body swings faster and wider the faster it goes; at rest a slow fan of the tail keeps it in place
       sw += dt * (2.2 + sp * 9);
