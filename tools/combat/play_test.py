@@ -213,7 +213,10 @@ with sync_playwright() as pw:
     # the Action menu from pause
     page.keyboard.press('Escape'); page.wait_for_selector('#p-action', timeout=10000); page.click('#p-action')
     ok(page.evaluate("document.querySelectorAll('[data-enc]').length") == 6, 'menu: Action lists the six set pieces')
-    page.click('[data-cb="difficulty"] [data-v="story"]')
+    # (the button clicked in the page: Playwright's own click waits for the menu to be "stable" under the software renderer
+    # and timed out at 30 s in about one CI run in three; what is checked here is that the choice is saved)
+    page.wait_for_selector('[data-cb="difficulty"] [data-v="story"]', state='attached', timeout=30000)
+    page.evaluate("""document.querySelector('[data-cb="difficulty"] [data-v="story"]').click()""")
     ok(page.evaluate("JSON.parse(localStorage.getItem('bs-settings-v1')).combat.difficulty") == 'story', 'menu: difficulty is saved')
     for lang in ['hi', 'ur']:
         page.evaluate(f"__bs.setLang('{lang}')")
