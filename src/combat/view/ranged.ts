@@ -126,8 +126,14 @@ export class RangedRig {
       // the string hand: on the string at brace height, back to the anchor under the jaw as it draws, past the ear on
       // the loose, then down to the quiver for the next arrow and back
       const grip = V().copy(wL).addScaledVector(armDir, 0.07);
-      // (at the jaw, not 13 cm ahead of it: the drawing arm then folds with the elbow back, not up across the face)
-      const anchor = V().copy(head).addScaledVector(aim, 0.07).add(V().set(0, -0.13, 0));
+      // The anchor as archers take it: the string hand against the side of the jaw, the arrow under the cheek. With the
+      // head turned to the target the right cheek faces the way the chest faces (F), so the hand sits a cheek's depth
+      // out along F, not ahead of the face along the aim (that pushed it 20 cm out in front of the face and the folded
+      // elbow came up in front of the neck: CI 9-11 cm in the head shape). From there the forearm runs back along the
+      // arrow and the elbow ends behind the head along the arrow's line, at the side, a little above the shoulder.
+      const A = V().set(aim.x, 0, aim.z).normalize(), F = V().crossVectors(A, UP).normalize();
+      if (F.z < 0) F.negate();
+      const anchor = V().copy(head).addScaledVector(F, 0.115).addScaledVector(A, 0.01).add(V().set(0, -0.085, 0));
       const nock0 = V().copy(grip).addScaledVector(aim, -0.15).add(V().set(0, 0.012, 0));
       const quiver = V().set(-0.2, 0.92, -0.1);
       let target: THREE.Vector3; S.arrowIn = ammo > 0 ? 'string' : 'none'; S.nock = -1;
@@ -140,10 +146,15 @@ export class RangedRig {
         else if (k < 0.85) { target = V().copy(quiver).lerp(nock0, smooth((k - 0.55) / 0.3)); S.arrowIn = ammo > 0 ? 'hand' : 'none'; }
         else target = nock0;
       } else target = S.up > 0.5 ? nock0 : V().set(-0.22, 1.0, 0.12);
-      // the drawing elbow back along the arrow's line at shoulder height and away from the chest (behind the back); up
-      // 0.55 put it into the head (CI: 9.3 cm)
-      const pole = V().copy(aim).multiplyScalar(-1).add(V().set(0, 0.15, -0.5));
-      reach(sR, this.ease(sR, V().copy(target).addScaledVector(aim, -0.06), R), R.a, R.b, pole, eR, wR);
+      // the drawing elbow: down and out at the brace, then back along the arrow's line as the string comes to the jaw
+      // (a little up and a little behind the back, as a drawing elbow is in real form); past the head, not up into it
+      const dk = p.act === 'charge' ? drawing : recovering ? Math.max(0, 1 - p.actT / 0.4) : 0;
+      const pole = V().copy(A).multiplyScalar(-(0.5 + 0.5 * dk)).addScaledVector(UP, -1 + 1.12 * dk).addScaledVector(F, -0.15);
+      // the hand's mark is kept out of the body by a forearm's thickness, except at the jaw, where the hand rests on the
+      // head on purpose (only the arm above the hand is checked against the head)
+      const tRaw = V().copy(target).addScaledVector(aim, -0.06), tE = this.ease(sR, tRaw.clone(), R);
+      const tR = dk > 0 ? tE.lerp(this.reachClamp(sR, tRaw, R), smooth(dk)) : tE;
+      reach(sR, tR, R.a, R.b, pole, eR, wR);
       this.clearArms(sL, eL, wL, sR, eR, wR, dt); this.keep(sL, eL, wL, sR, eR, wR);
       limbs = { armL: dirOf(eL, sL), foreL: dirOf(wL, eL), armR: dirOf(eR, sR), foreR: dirOf(wR, eR), twist: 0.15 * smooth(S.up) };
     } else if (this.mode === 'atlatl') {
@@ -210,7 +221,7 @@ export class RangedRig {
       } else if (S.throwT >= 0 && S.throwT < 0.5) {
         // over the shoulder and down across the body: the stone left at the top of the arc
         const k = S.throwT;
-        const top = V().copy(sR).add(V().set(0, 0.5, -0.05)), front = V().copy(sR).addScaledVector(aim, 0.55).add(V().set(0, 0.15, 0)), across = V().set(0.2, 0.95, 0.3);
+        const top = V().copy(sR).add(V().set(0, 0.5, -0.05)), front = V().copy(sR).addScaledVector(aim, 0.55).add(V().set(0, 0.15, 0)), across = V().set(0.14, 1.0, 0.46);
         tR = k < 0.14 ? V().copy(top).lerp(front, out3(k / 0.14)) : V().copy(front).lerp(across, smooth((k - 0.14) / 0.36));
         tL = V().copy(sL).addScaledVector(aim, 0.3).add(V().set(0.05, -0.15, 0));
         S.hold = k < 0.14 ? 'throw' : 'free';
@@ -267,8 +278,16 @@ export class RangedRig {
    * of its shoulder (a string hand sent straight across the chest for a string past its reach drew a straight arm
    * through the chest: 9.7 cm in CI; a bent arm leaves the elbow room to swing out of the body). */
   private ease(s: THREE.Vector3, t: THREE.Vector3, R: Rig) {
+    // (pushed out and pulled back in turn: a push out of the chest followed by one pull into reach could land the mark
+    // back inside the chest, the sling's follow-through across the body: CI 2.3 cm)
     const n = V();
-    for (let i = 0; i < 2; i++) { const dp = depth(t, 0, 0.1, n); if (dp > 0) t.addScaledVector(n, dp + 0.01); }
+    for (let it = 0; it < 4; it++) {
+      for (let i = 0; i < 2; i++) { const dp = depth(t, 0, 0.1, n); if (dp > 0) t.addScaledVector(n, dp + 0.01); }
+      this.reachClamp(s, t, R);
+    }
+    return t;
+  }
+  private reachClamp(s: THREE.Vector3, t: THREE.Vector3, R: Rig) {
     const max = (R.a + R.b) * 0.88, d = V().subVectors(t, s), l = d.length();
     if (l > max) t.copy(s).addScaledVector(d, max / l);
     return t;
@@ -302,7 +321,7 @@ export class RangedRig {
       for (let i = 1; i <= 6; i++) {
         if (i <= 3) q.copy(a).lerp(e, 0.35 + i * 0.2); else q.copy(e).lerp(w, (i - 3) / 3 * 0.6);
         const d = depth(q, 0, 0.04);
-        if (d > worst) { worst = d; const f = (v: THREE.Vector3) => v.toArray().map((x) => x.toFixed(2)).join(','); where = `${this.mode} ${k} s ${f(a)} e ${f(e)} w ${f(w)} (drawn)`; }
+        if (d > worst) { worst = d; const f = (v: THREE.Vector3) => v.toArray().map((x) => x.toFixed(2)).join(','); where = `${this.mode} ${k} s ${f(a)} e ${f(e)} w ${f(w)} h ${f(loc(model.head))} at ${i} (drawn)`; }
       }
     }
     if (worst > this.armIn) { this.armIn = worst; this.armWhere = where; }

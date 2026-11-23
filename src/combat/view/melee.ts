@@ -46,7 +46,9 @@ const SPEAR = {
   back: F([-0.25, 1.06, -0.15], [0.34, 0.12, 1], 0.5, LH_GUARD, 0.08, -0.55),
   hit: F([-0.12, 1.2, 0.12], [0.14, 0.05, 1], 0.4, LH_GUARD, 0.3, 0.2),
   brace: F([-0.24, 0.92, 0.02], [0.3, 0.36, 1], 0.5, LH_GUARD, 0.36, -0.3),
-  throwBack: F([-0.4, 1.58, -0.18], [0.06, 0.12, 1], null, [0.3, 1.25, 0.5], -0.12, -0.65),
+  // (drawn back is the arm reached back along the throw, the hand behind the shoulder at its height, the spear along
+  // the forearm's line over it: with the hand by the ear the folded arm had nowhere for its elbow but out behind him)
+  throwBack: F([-0.42, 1.56, -0.44], [0.06, 0.12, 1], null, [0.3, 1.25, 0.5], -0.12, -0.65),
   throwHit: F([-0.16, 1.42, 0.42], [0.03, -0.08, 1], null, [0.33, 0.95, -0.05], 0.34, 0.55),
 };
 const CLUB = {
@@ -74,7 +76,7 @@ const SMALL = {
   ready: F([-0.24, 1.15, 0.3], [0, 0.4, 1], null, LH_GUARD, 0.1),
   back: F([-0.27, 1.2, -0.05], [0, 0.3, 1], null, LH_GUARD, 0, -0.3),
   hit: F([-0.06, 1.3, 0.55], [0, 0, 1], null, [0.3, 1.05, 0.2], 0.15, 0.45),
-  throwBack: F([-0.4, 1.6, -0.25], [-0.1, 0.5, -0.8], null, [0.3, 1.25, 0.5], -0.15, -0.7),
+  throwBack: F([-0.42, 1.58, -0.36], [-0.1, 0.5, -0.8], null, [0.3, 1.25, 0.5], -0.15, -0.7),
   throwHit: F([-0.12, 1.3, 0.5], [0, 0, 1], null, [0.33, 0.95, -0.05], 0.36, 0.6),
 };
 function frames(w: WeaponId) { return TWO(w) ? SPEAR : w === 'throwstick' ? STICK : w === 'club' || w === 'torch' ? CLUB : SMALL; }
@@ -121,7 +123,12 @@ export function targetFrame(s: ActState, into: WFrame, tmp: WFrame): WFrame {
   if (s.act === 'recover' && s.combo !== 9) return mixF(hit, rest, smooth(s.actT / s.recover), into, w);
   if (s.thrown && s.since < 0.5) {
     const k = s.since / 0.5;
-    return k < 0.3 ? mixF(Fr.throwBack, Fr.throwHit, out3(k / 0.3), into, w) : mixF(Fr.throwHit, rest, smooth((k - 0.3) / 0.7), into, w);
+    if (k >= 0.3) return mixF(Fr.throwHit, rest, smooth((k - 0.3) / 0.7), into, w);
+    // overarm: the hand comes up and over the shoulder on its way forward, not straight through it (from the hand
+    // drawn right back the straight line passed through the shoulder); the side-arm stick stays level
+    const u = out3(k / 0.3), r = mixF(Fr.throwBack, Fr.throwHit, u, into, w);
+    if (w !== 'throwstick') { const lift = Math.sin(Math.PI * u); r.g.y += 0.17 * lift; r.g.x -= 0.07 * lift; }
+    return r;
   }
   return copy(rest);
 }
@@ -344,6 +351,13 @@ export function solveArms(f: WFrame, w: WeaponId, k: Skel, leftW: number, rightW
     const pk = key === 'L' ? 'pL' : 'pR', prev = mem[pk], across = clamp01((t.x - s.x) * -side / 0.3),
       pole = V(side * (0.32 - 0.16 * freeK + 0.45 * across), -0.75 + 0.2 * freeK, -0.6 - 0.3 * freeK + 0.3 * across);
     // (a hand across the body takes the elbow out round it, as the old wide pole did; by the side it hangs down)
+    // a hand drawn back above and behind its shoulder (a spear or stone drawn to throw, the club over the shoulder):
+    // the elbow under the hand's line and out to the side, pointing down, not out behind him (the owner: "the right
+    // elbow sticking out behind him" with the spear drawn back). Continuous in where the hand is, so no flip.
+    if (key === 'R') {
+      const over = clamp01((t.y - s.y + 0.02) / 0.12) * clamp01((s.z - t.z) / 0.12);
+      if (over > 0) pole.normalize().lerp(V(side * 0.5, -0.85, 0.22).normalize(), over);
+    }
     if (prev) pole.normalize().addScaledVector(prev, key === "L" ? 2.2 - 1.6 * freeK : 2.2);
     const miss = reach2(s, t, A, B, pole, e, wr);
     // the pole is remembered without the swing (the swing is kept on its own)
