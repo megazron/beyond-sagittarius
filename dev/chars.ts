@@ -6,6 +6,7 @@ CHAR_BUDGET.throttle = false; CHAR_BUDGET.lodFar = Infinity; // the gate poses a
 import { voice } from '../src/core/voice';
 import { DECREEP } from '../src/characters/decreep';
 import { preloadCrew } from '../src/characters/assets';
+import { runScenario, scenarioNames } from './animqa';
 
 const ids: CrewId[] = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social', 'megazron'];
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -353,6 +354,21 @@ W.film = (i: number, v: number, k: number) => {
   const p = c.root.position;
   cam.position.set(p.x + 3.6, 1.1, p.z + 0.2); cam.lookAt(p.x, 0.95, p.z);
   r.render(scene, cam);
+};
+/** Animation QA probe (dev/animqa.ts, tools/anim_qa.py): one scenario on character i, measured every frame; every > 0
+ * also samples the pixel flags (poke) from the talking-distance front and side and a three-quarter view. */
+const QA_CAMS: [number, number][] = [[Math.PI, 2.4], [-Math.PI / 2, 2.4], [-2.4, 3.4]];
+W.qaNames = (crew: boolean) => scenarioNames(crew);
+W.qa = (i: number, name: string, every = 10, sampleEvery = 0) => {
+  const c0 = chars[i]; chars.forEach((o, j) => { o.root.visible = j === i; }); c0.setGround(() => 0);
+  const step = (c: Character, p: CrewPose, amount: number, dt: number) => { t += dt; c.root.updateMatrixWorld(true); c.animate(p, 0, amount, t, dt); };
+  const poke = W.poke as (shot: boolean) => { skinPoke: number; clothPoke: number; back: number };
+  const follow = W.followCam as (i: number, yo: number, d: number) => void;
+  return runScenario(c0, name, {
+    step,
+    settle: (c) => { c.root.position.set(0, 0, 0); c.root.rotation.y = 0; for (let k = 0; k < 45; k++) step(c, 'stand', 0, 1 / 30); },
+    flags: every > 0 && !sampleEvery ? () => { const s = { skinPoke: 0, clothPoke: 0, back: 0 }; for (const [yo, d] of QA_CAMS) { follow(i, yo, d); const f = poke(false); s.skinPoke += f.skinPoke; s.clothPoke += f.clothPoke; s.back += f.back; } return s; } : null,
+  }, Math.max(1, every), sampleEvery);
 };
 (W.view as Function)(-1, 1, 0, 1.3, 11);
 const keys = customs === 'all' ? roster.map((o, i) => `custom_${i % 2 ? 'f' : 'm'}_${o}`) : roster.map((id) => (id === 'strong' && alt ? 'strong_suit' : id));

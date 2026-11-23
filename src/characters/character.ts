@@ -782,7 +782,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   }
 
   // ---- arm IK guards (setHold): a held hand never goes inside the body, and the elbow always points out and down ----
-  const holdS: { L?: { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; on: boolean }; R?: { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; on: boolean } } = {};
+  // per hand: where the hand is aimed (the target plus an offset that springs to zero), the last target in body space
+  // (a hold let go eases out from there), and the target's last position (a jump in it goes into the offset)
+  type HoldState = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; on: boolean; off: THREE.Vector3; offV: THREE.Vector3; prev: THREE.Vector3; loc: THREE.Vector3; last: HoldSide };
+  const holdS: { L?: HoldState; R?: HoldState } = {};
   /** A hand target inside the torso (hips to neck capsules, plus a hand's thickness) is moved out to its surface. */
   function holdOut(bs: Map<string, THREE.Bone>, p: THREE.Vector3) {
     if (!torsoR) return p;
@@ -1167,23 +1170,40 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     // ---- hands held on something: two-bone IK to the wrist point, then the hand turned so the fingers and the palm
     // face where they are told (the same frame the selfie reads from the skeleton) ----
     for (const sd of ['L', 'R'] as const) {
-      const h = hold?.[sd];
-      holdW[sd] += ((h ? 1 : 0) - holdW[sd]) * (1 - Math.exp(-dt * 5));
+      const h0 = hold?.[sd];
+      // a task in the hands takes the arm: the hold eases out under it and back in after it (it was dropped in one
+      // frame, and the arm jumped)
+      holdW[sd] += ((h0 && !task ? 1 : 0) - holdW[sd]) * (1 - Math.exp(-dt * 5));
       const hw = holdW[sd] * holdW[sd] * (3 - 2 * holdW[sd]);
-      // a task in the hands takes the arm; the hold eases back in after it (it snapped back at full weight)
-      if (task && h) { holdW[sd] = 0; if (holdS[sd]) holdS[sd]!.on = false; continue; }
-      if (!h || hw < 0.004) { if (holdS[sd] && hw < 0.004) holdS[sd]!.on = false; continue; }
+      const hs0 = holdS[sd];
+      // let go (or taken by a task): the hand eases back to the clip from the last place it held, carried with the body
+      // (the IK stopped the frame the hold was dropped, and the arm jumped to the clip's pose)
+      let h = h0 && !task ? h0 : undefined;
+      if (!h && hs0?.on) { h = hs0.last; root.localToWorld(h.at.copy(hs0.loc)); }
+      if (!h || hw < 0.004) { if (hs0 && hw < 0.004) hs0.on = false; continue; }
       root.updateWorldMatrix(true, true);
       const up = bs.get(`upperarm${sd}`), lo = bs.get(`lowerarm${sd}`), hd = bs.get(`hand${sd}`), f3 = bs.get(`finger3_1${sd}`);
       if (!up || !lo || !hd || !f3) continue;
       const qu = (taskQ.get(`hold${sd}U`) ?? taskQ.set(`hold${sd}U`, new THREE.Quaternion()).get(`hold${sd}U`)!).copy(up.quaternion);
       const ql = (taskQ.get(`hold${sd}L`) ?? taskQ.set(`hold${sd}L`, new THREE.Quaternion()).get(`hold${sd}L`)!).copy(lo.quaternion);
-      // the hold's target eases to where it is told (a new target never snaps the arm across: "all of a sudden the
-      // arms are somewhere else"); a fresh hold starts from where the hand is now
-      const hs = holdS[sd] ??= { at: new THREE.Vector3(), fingers: new THREE.Vector3(), palm: new THREE.Vector3(), on: false };
-      if (!hs.on || hw < 0.02) { hd.getWorldPosition(hs.at); hs.fingers.copy(h.fingers); hs.palm.copy(h.palm); hs.on = true; }
+      // the hand follows a moving target exactly (eased towards it, a hand walking with a stone trailed it by 11 cm: "the
+      // rocks are out of the hands"). Only a jump (the target faster than 4 m/s, a new scene step) goes into an offset
+      // that springs back to zero, critically damped, so the arm travels there instead of teleporting; a fresh hold
+      // starts from where the hand is now
+      const hs = holdS[sd] ??= { at: new THREE.Vector3(), fingers: new THREE.Vector3(), palm: new THREE.Vector3(), on: false, off: new THREE.Vector3(), offV: new THREE.Vector3(), prev: new THREE.Vector3(), loc: new THREE.Vector3(), last: { at: new THREE.Vector3(), fingers: new THREE.Vector3(), palm: new THREE.Vector3() } };
+      const ok = Number.isFinite(h.at.x + h.at.y + h.at.z);
+      if (!hs.on || hw < 0.02) {
+        hd.getWorldPosition(hs.at); hs.off.copy(hs.at); if (ok) hs.off.sub(h.at); else hs.off.set(0, 0, 0);
+        hs.offV.set(0, 0, 0); hs.prev.copy(ok ? h.at : hs.at); hs.fingers.copy(h.fingers); hs.palm.copy(h.palm); hs.on = true;
+      } else if (ok) {
+        const st = V1.copy(h.at).sub(hs.prev), len = st.length(), lim = 4 * dt;
+        if (len > lim) hs.off.addScaledVector(st, -(len - lim) / len);
+      }
+      if (ok) hs.prev.copy(h.at);
+      const sw0 = 9; hs.offV.addScaledVector(hs.off, -sw0 * sw0 * dt).addScaledVector(hs.offV, -2 * sw0 * dt); hs.off.addScaledVector(hs.offV, dt);
+      hs.at.copy(hs.prev).add(hs.off);
+      if (h !== hs.last) { root.worldToLocal(hs.loc.copy(hs.prev)); hs.last.fingers.copy(h.fingers); hs.last.palm.copy(h.palm); }
       const ek = 1 - Math.exp(-dt * 12);
-      if (Number.isFinite(h.at.x + h.at.y + h.at.z)) hs.at.lerp(h.at, ek);
       if (h.fingers.lengthSq() > 1e-8) hs.fingers.lerp(V1.copy(h.fingers).normalize(), ek).normalize();
       if (h.palm.lengthSq() > 1e-8) hs.palm.lerp(V1.copy(h.palm).normalize(), ek).normalize();
       const tgt = holdOut(bs, hs.at.clone());
