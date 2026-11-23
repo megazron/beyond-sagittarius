@@ -622,7 +622,11 @@ export class Combat {
       cb.sprint = D.input.device === 'pad' && eng ? this.padSprint : null;
       // spear fishing: low over the water behind the shoulder, looking down into it at a slant, never from straight
       // above (v1 looked down on his head with the water and the fish behind his body)
-      if (run?.id === 'fish.spear') { cb.lowCam = -0.32; cb.lift = -0.35; cb.shoulder = 0.6; P.pitch = Math.max(P.pitch, -0.95); } else cb.lowCam = undefined;
+      // (v2 clamped only where the camera sits: away from the aim it stayed 5 m back looking at his head, and the look
+      // could not tip down at all, so the reticle's line never came near a fish. Now, in this scene only, the view
+      // is in close, about 1.85 m up behind the right shoulder, and looks along the look itself as aiming does)
+      if (run?.id === 'fish.spear') { cb.lowCam = -0.22; cb.lift = -0.35; cb.shoulder = 0.6; cb.over = 1; cb.dist = 2.5; P.pitch = Math.max(P.pitch, -0.95); }
+      else { cb.lowCam = undefined; cb.over = undefined; cb.dist = undefined; }
       // the run: a glance back while the hunter gathers itself for a leap close behind you (or while B is held), so
       // what chases you is seen, not only heard; the legs keep running where they were going
       let back = 0;
