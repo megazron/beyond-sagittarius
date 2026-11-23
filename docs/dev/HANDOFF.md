@@ -1370,3 +1370,8 @@ unlanded except this handoff commit and any recording in progress.
   teleport, or wait for down false) rather than the game.
 - NOT landed: `combat-s6c` = main b157283 + the session 6 work (fire layers, heat haze, night light, rings, free arm,
   bot). Land it the same way when its CI is green on its head sha.
+
+## 2026-11-23 ~23:59 release agent (branch rel2)
+- LANDED combat-s6c 5155be8 on main (CI 45284692079 fully green on that sha, no reruns; perf_gate mobile flat 602929).
+- My working notes moved: HANDOFF.md, LEVELS.md, NAMES.md and MECHANICS_NOTES.md now live in docs/dev/. Rebasing onto
+  main carries edits to the old paths over (git follows the rename); write to docs/dev/HANDOFF.md from now on.
