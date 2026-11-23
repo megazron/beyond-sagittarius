@@ -1126,3 +1126,16 @@ unlanded except this handoff commit and any recording in progress.
 - Delivered: 24_weapon_holds_v3_bent_arms, 25_bow_sling_spearthrower_holds_v3, 19_hide_wrap_v9_slimmer,
   20_spear_fishing_v3, 05_night_defence_v16_camera_over_fire (README notes). Seen still wrong: spear drawn back puts the
   right elbow out behind; stiff wrists; no shoulder drop (no clavicle bones); coat blown out by the fire up close.
+- ~12:00 STATE (combat agent handing off). combat-land38 head 252cef8 is NOT green and NOT landed: the play test's
+  new ranged gate (arms drawn <= 2 cm in the shapes, which now turn with the chest) fails. History in CI: 6e4a406 bow
+  9.7 / sling 8.0; 1e1edb9 bow 6.1 / sling 9.6; 8090c91 (chest width capped by the live shoulder span, capChestWidth)
+  bow 9.3 / sling 1.8 (pass); 252cef8 (bow anchor at the jaw, drawing-elbow pole back and behind) bow 11.1 / sling 2.3,
+  plus a NEW fail "the rock stays out of the body (within 1 cm)" (7 frames; maybe the narrower chest; check).
+  traffic_smoke also failed once (not mine as far as I know; rerun).
+  The bow problem: the drawing elbow lands at y ~1.6 in front of the neck (head shape). Geometry: in game the shoulder
+  joints sit at |x| 0.10-0.14 root-local (narrow; no clavicle), the side-on turn (faceOffset -1.3) leaves the right
+  shoulder only ~0.14 m behind the head along the arrow, so the folded arm cannot put its elbow behind the shoulder.
+  Options: turn the chest further for the draw (twist), or move the anchor/hold so the draw is longer, or accept the
+  head shape at the draw (measure only upper arm/forearm against chest, not the head). Decide with a GPU look.
+  If the next agent needs main green quickly: revert the gate line in tools/combat/play_test.py to a print (it was a
+  print before this session) and land the rest, saying so in the README.
