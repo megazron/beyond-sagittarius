@@ -19,6 +19,15 @@ export type { CrewId } from './looks';
 export { preloadCrew } from './assets';
 /** A direction in the body's own space: +x left, +y up, +z forward. */
 export type Dir = [number, number, number];
+/** Where the wrist goes for a hand to close on a thing whose centre is `at` (setHold with grasp): back from it along the
+ * fingers to the palm's middle (`palm` of the way from the wrist to the middle finger's root), then out from the palm by
+ * the hand's half thickness and the thing's radius. Hold targets were the wrist point, so a stone or a shaft drawn at
+ * the target sat 8 cm short of the palm. */
+export function graspWrist(out: THREE.Vector3, at: THREE.Vector3, fingers: THREE.Vector3, palm: THREE.Vector3, radius: number, palmLen: number, along = 0.6) {
+  const f = fingers.lengthSq() > 1e-8 ? fingers.clone().normalize() : new THREE.Vector3(0, 0, 1);
+  const n = palm.clone(); n.addScaledVector(f, -n.dot(f)); if (n.lengthSq() < 1e-8) n.set(0, -1, 0); n.normalize();
+  return out.copy(at).addScaledVector(f, -palmLen * along).addScaledVector(n, -(palmLen * 0.16 + radius));
+}
 /**
  * A hand-set body pose laid over the clip, for bodies no mocap covers (free fall,
  * crash landings). Directions are where each bone points, so the same pose fits
@@ -99,6 +108,8 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
  * flagged pixels fell from 33,600 to 25,800 over every action and view; the lab coat's count did not move (its inner
  * shirt really is outside the coat at the lapels, which needs the garment rebuilt).
  */
+/** Rig switches for A/B tests (dev/animqa.ts): reach, the chest and collarbone helping a held hand get there. */
+export const RIG_OPTS = { reach: true };
 export const CLOTH_PULL = 0.007;
 /**
  * And every garment this much more on top of that, over the skin: a raised arm stretches a sweater thinner than the
@@ -159,6 +170,7 @@ const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3
 /** Rotate a bone by a world-space rotation. */
 const TORSO: [string, string][] = [['hips', 'spine1'], ['spine1', 'chest'], ['chest', 'neck']];
 const SA = new THREE.Vector3(), SB = new THREE.Vector3();
+const TORSO_BONES = new Set(['hips', 'spine', 'spine1', 'chest', 'neck']);
 function segDist(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3) { const ab = SB.copy(b).sub(a), t = Math.max(0, Math.min(1, SA.copy(p).sub(a).dot(ab) / ab.lengthSq())); return p.distanceTo(SA.copy(a).addScaledVector(ab, t)); }
 
 const smooth01 = (x: number) => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); };
@@ -245,6 +257,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const gazeAt = new THREE.Vector3();
   let gaze: THREE.Vector3 | null = null, gazeY = 0, gazeX = 0, gazeRate = 2.2;
   let B: Map<string, THREE.Bone> | null = null;
+  const clipPose = new Map<THREE.Bone, { q: THREE.Quaternion; p: THREE.Vector3 }>();
   // the forearm's own axis per side (rest frames carry no rotation, so it is the same in the twist bone and the hand)
   const twistAx: Record<string, THREE.Vector3> = {};
   let mixer: THREE.AnimationMixer | null = null;
@@ -329,7 +342,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let selfieT = 0, selfieHeld = false; const V4s = new THREE.Vector3();
   /** A hand held on something in the scene (a control yoke, a rail): the wrist at a live world point, the fingers and
    *  the palm turned to given world directions, the fingers closed. Eased in and out. */
-  type HoldSide = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius?: number };
+  // grasp: `at` is the middle of the held thing (a stone, a shaft at this hand's place on it), not the wrist; the palm
+  // closes on it, `radius` out from the palm (graspWrist). along: where on the palm, 0 the wrist, 1 the knuckles (0.6)
+  type HoldSide = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius?: number; grasp?: boolean; along?: number };
   let hold: { L?: HoldSide; R?: HoldSide } | null = null; const holdW = { L: 0, R: 0 };
   const selfM = { a: new THREE.Vector3(), b: new THREE.Vector3(), l: new THREE.Matrix4(), q0: new THREE.Quaternion(), qi: new THREE.Quaternion(), x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), m: new THREE.Matrix4(), q: new THREE.Quaternion() };
   let gaitPhase = 0, inited = false, hipDrop = 0, sacAt = 1, sacX = 0, sacY = 0, firstFrame = true, eyeAimX = 0, eyeAimY = 0;
@@ -345,7 +360,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const scene = cloneSkinned(asset.scene) as THREE.Group;
     const M = asset.meta;
     const bs = bones(scene);
-    B = bs; A = a;
+    B = bs; A = a; clipPose.clear();
     for (const sd of ['L', 'R']) twistAx[sd] = new THREE.Vector3(...M.pivots[`hand${sd}`]).sub(new THREE.Vector3(...M.pivots[`forearmtw${sd}`])).normalize();
     const piv = (n: string) => new THREE.Vector3(...M.pivots[n]);
     // creator build slider: move joints with the morphs, then rebind
@@ -705,7 +720,28 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     LENS.set(a[12], a[13], a[14]);
     camD = Math.hypot(a[12] - b[12], a[13] - b[13], a[14] - b[14]);
   }
-  let torsoR: number[] | null = null, torsoLen: number[] = [], torsoBody: THREE.SkinnedMesh[] = []; // read by keepArmsOut
+  // the torso as the arm guards see it: per segment (hips to spine1, spine1 to chest, chest to neck) an elliptic
+  // cylinder round the bone line, its half width and its depth in front and behind measured from this body's skin and
+  // clothes (bind units; torsoLen scales them to the posed segment). A round capsule could not fit: the hips are wider
+  // than deep, and one radius either read a hand hanging beside the hip as 6 to 14 cm inside or let fingers into a
+  // bulky sweater's side
+  let torsoR: { x: number; f: number; b: number }[] | null = null, torsoLen: number[] = [], torsoBody: THREE.SkinnedMesh[] = []; // read by keepArmsOut
+  const TI = { ab: new THREE.Vector3(), c: new THREE.Vector3(), d: new THREE.Vector3(), f: new THREE.Vector3(), l: new THREE.Vector3(), q: new THREE.Quaternion() };
+  /** How far p is inside torso segment j (a to b, world) grown by `margin`, m (negative outside); `out`, if given, gets
+   *  the point on that grown surface straight out from the bone line through p. */
+  function torsoIn(j: number, a: THREE.Vector3, b: THREE.Vector3, p: THREE.Vector3, margin: number, out?: THREE.Vector3) {
+    const R = torsoR![j], ab = TI.ab.copy(b).sub(a), L2 = ab.lengthSq(); if (L2 < 1e-10) return -1;
+    const t = clamp(TI.d.copy(p).sub(a).dot(ab) / L2, 0, 1), c = TI.c.copy(a).addScaledVector(ab, t), d = TI.d.copy(p).sub(c);
+    const s = Math.sqrt(L2) / (torsoLen[j] || 1), axn = ab.normalize();
+    const f = TI.f.set(0, 0, 1).applyQuaternion(root.getWorldQuaternion(TI.q)); f.addScaledVector(axn, -f.dot(axn)); if (f.lengthSq() < 1e-8) return -1; f.normalize();
+    const l = TI.l.crossVectors(axn, f);
+    // across the bone line the section is an ellipse; past either end (t clamped) the end is rounded like a capsule's
+    const dx = d.dot(l), dz = d.dot(f), rx = R.x * s + margin, rz = (dz >= 0 ? R.f : R.b) * s + margin;
+    const e = Math.hypot(dx / rx, dz / rz), dp = Math.hypot(dx, dz), dl = d.length();
+    const rd = e < 1e-6 ? rz : dp / e;
+    if (out) { if (dl < 1e-6) out.copy(c).addScaledVector(f, rz); else out.copy(c).addScaledVector(d, rd / dl); }
+    return rd - dl;
+  }
   const go = () => { const a = animNow(), as = assetNow(key, lod); if (a && as) { attach(as, a); return true; } return false; };
   if (!go()) Promise.all([loadAnim(), loadAsset(key, lod)]).then(([a, as]) => attach(as, a)).catch((e) => console.error('[crew]', key, e));
 
@@ -739,20 +775,32 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const seg = TORSO.map(([a, b]) => [wp(bs.get(a)!), wp(bs.get(b)!)] as const);
     if (!torsoR) {
       // the skinned, morphed skin as it really stands, in world space: the raw attribute is not the body you see
-      const per: number[][] = TORSO.map(() => []), v = new THREE.Vector3();
+      const per = TORSO.map(() => ({ x: [] as number[], f: [] as number[], b: [] as number[] })), v = new THREE.Vector3();
       // clothes count only above the hips: a coat's skirt flares away from the body and is not torso
       const hip = seg[0][0], up = seg[2][1].clone().sub(hip), upL2 = up.lengthSq();
+      const fwdW = new THREE.Vector3(0, 0, 1).applyQuaternion(root.getWorldQuaternion(new THREE.Quaternion()));
       for (const m of torsoBody) {
         m.updateWorldMatrix(true, false);
         const clothN = m.geometry.userData.clothCount ?? (m.name === 'cloth' ? Infinity : 0); // a merged crowd body: its cloth comes first
+        const si = m.geometry.attributes.skinIndex, sw = m.geometry.attributes.skinWeight;
         for (let i = 0, n = m.geometry.userData.torsoCount ?? m.geometry.attributes.position.count; i < n; i += 2) {
+          // the torso's own skin and cloth only (main bone hips to neck): arms and sleeves hang within 30 cm of the spine
+          let mb = 0, mw = -1; for (let q = 0; q < 4; q++) { const wq = sw.getComponent(i, q); if (wq > mw) { mw = wq; mb = si.getComponent(i, q); } }
+          if (!TORSO_BONES.has(m.skeleton.bones[mb]?.name)) continue;
           m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld); let best = 9, k = -1;
           if (i < clothN && SA.copy(v).sub(hip).dot(up) / upL2 < .05) continue;
           seg.forEach(([a, b], j) => { const d = segDist(v, a, b); if (d < best) { best = d; k = j; } });
-          if (k >= 0 && best < .3) per[k].push(best);
+          // only the front half (within 50 degrees of straight ahead): a reaching arm crosses the front, and the hips are
+          // wider than deep, so a radius mixing the two read a hand hanging beside the hip as 6 to 14 cm inside
+          if (k < 0 || best >= .3) continue;
+          // sorted by which way the skin lies from the bone line: to the side, in front or behind (within 40 degrees)
+          const [a, b] = seg[k], ab = SB.copy(b).sub(a), tt = clamp(V2.copy(v).sub(a).dot(ab) / ab.lengthSq(), 0, 1), rad = V2.copy(v).sub(a).addScaledVector(ab, -tt);
+          const fz = rad.dot(V3.copy(fwdW).addScaledVector(ab, -fwdW.dot(ab) / ab.lengthSq()).normalize()), rl = rad.length();
+          if (fz > 0.77 * rl) per[k].f.push(best); else if (fz < -0.77 * rl) per[k].b.push(best); else if (Math.abs(fz) < 0.64 * rl) per[k].x.push(best);
         }
       }
-      torsoR = per.map((x) => { x.sort((a, b) => a - b); return x.length ? x[Math.floor(x.length * .45)] : .1; });
+      const pc = (x: number[], d: number) => { x.sort((a, b) => a - b); return x.length ? x[Math.floor(x.length * .45)] : d; };
+      torsoR = per.map((q) => { const x = pc(q.x, .12); return { x, f: pc(q.f, x * .8), b: pc(q.b, x * .7) }; });
       torsoLen = seg.map(([a, b]) => a.distanceTo(b));
     }
     const own = limbs?.ownArms ?? armOwner;
@@ -765,7 +813,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         for (const n of [`hand${s}`, `finger3_2${s}`, `lowerarm${s}`]) {
           const bn = bs.get(n); if (!bn) continue; const p = wp(bn);
           seg.forEach(([a, b], j) => {
-            const pen = torsoR![j] * (a.distanceTo(b) / (torsoLen[j] || 1)) + 0.015 - segDist(p, a, b); // bind units to world
+            const pen = torsoIn(j, a, b, p, 0.015);
             if (pen > worst) { worst = pen; at = p; const ab = b.clone().sub(a), t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / ab.lengthSq())); axisPt = a.clone().addScaledVector(ab, t); }
           });
         }
@@ -790,7 +838,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   // ---- arm IK guards (setHold): a held hand never goes inside the body, and the elbow always points out and down ----
   // per hand: where the hand is aimed (the target plus an offset that springs to zero), the last target in body space
   // (a hold let go eases out from there), and the target's last position (a jump in it goes into the offset)
-  type HoldState = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; on: boolean; off: THREE.Vector3; offV: THREE.Vector3; prev: THREE.Vector3; loc: THREE.Vector3; last: HoldSide };
+  type HoldState = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; on: boolean; fresh?: boolean; off: THREE.Vector3; offV: THREE.Vector3; prev: THREE.Vector3; loc: THREE.Vector3; last: HoldSide };
   const holdS: { L?: HoldState; R?: HoldState } = {};
   const FA = { e: new THREE.Vector3(), w: new THREE.Vector3(), m: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3(), q: new THREE.Quaternion() };
   /** A hand target inside the torso (hips to neck capsules, plus a hand's thickness) is moved out to its surface. */
@@ -798,24 +846,37 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (!torsoR) return p;
     for (let j = 0; j < TORSO.length; j++) {
       const a = bs.get(TORSO[j][0])!.getWorldPosition(new THREE.Vector3()), b = bs.get(TORSO[j][1])!.getWorldPosition(new THREE.Vector3());
-      const r = torsoR[j] * (a.distanceTo(b) / (torsoLen[j] || 1)) + 0.045;
-      const ab = b.clone().sub(a), t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / ab.lengthSq())), c = a.addScaledVector(ab, t);
-      const d = p.distanceTo(c);
-      if (d < r) { const out = p.clone().sub(c); if (out.lengthSq() < 1e-8) out.set(0, 0, 1).applyQuaternion(root.getWorldQuaternion(new THREE.Quaternion())); p.copy(c).addScaledVector(out.normalize(), r); }
+      const out = new THREE.Vector3();
+      if (torsoIn(j, a, b, p, 0.045, out) > 0) p.copy(out);
     }
     return p;
   }
   /** Turn the arm about the shoulder-to-wrist line (the hand stays put) so the elbow points out from the body and down:
    *  the two-bone solve kept whatever bend plane the clip had, and a straightish arm flipped its elbow into the ribs. */
-  function elbowOut(bs: Map<string, THREE.Bone>, sd: 'L' | 'R', up: THREE.Bone, lo: THREE.Bone, hd: THREE.Bone) {
+  // the elbow's way out, per arm, in body space: eased so it can never flip in a frame (the throw's wind back took the
+  // hand to just where the pole points, the pole's part across the arm vanished and the elbow jumped 30 cm in 2 frames)
+  const elbowDir = { L: new THREE.Vector3(), R: new THREE.Vector3() }, elbowAt = { L: -1, R: -1 };
+  let rigClock = 0;
+  function elbowOut(bs: Map<string, THREE.Bone>, sd: 'L' | 'R', up: THREE.Bone, lo: THREE.Bone, hd: THREE.Bone, dt: number) {
     const sh = up.getWorldPosition(new THREE.Vector3()), el = lo.getWorldPosition(new THREE.Vector3()), wr = hd.getWorldPosition(new THREE.Vector3());
     const ax = wr.clone().sub(sh); if (ax.lengthSq() < 1e-6) return; ax.normalize();
     const rq = root.getWorldQuaternion(new THREE.Quaternion());
-    const pole = new THREE.Vector3(sd === 'L' ? 1 : -1, 0, 0).applyQuaternion(rq).add(new THREE.Vector3(0, -0.9, 0)).add(new THREE.Vector3(0, 0, -0.3).applyQuaternion(rq));
-    const cur = el.sub(sh); cur.addScaledVector(ax, -cur.dot(ax)); pole.addScaledVector(ax, -pole.dot(ax));
-    if (cur.lengthSq() < 1e-6 || pole.lengthSq() < 1e-6) return;
-    cur.normalize(); pole.normalize();
-    const ang = Math.atan2(new THREE.Vector3().crossVectors(cur, pole).dot(ax), cur.dot(pole));
+    const sx = sd === 'L' ? 1 : -1;
+    // out, down and a little back; where the arm itself points that way, out and up (a hand wound back over the shoulder)
+    const across = (v: THREE.Vector3) => v.applyQuaternion(rq).addScaledVector(ax, -v.dot(ax));
+    const p1 = across(new THREE.Vector3(sx, -0.9, -0.3)), p2 = across(new THREE.Vector3(sx * 0.8, 0.6, -0.2));
+    const l1 = p1.length(), pw = clamp((l1 / Math.hypot(1, 0.9, 0.3) - 0.3) / 0.35, 0, 1);
+    const pole = p1.normalize().multiplyScalar(pw).addScaledVector(p2.normalize(), 1 - pw);
+    if (pole.lengthSq() < 1e-6) return;
+    // eased in body space; a fresh solve (not run last frame) starts on the pole
+    const want = pole.normalize().clone().applyQuaternion(rq.clone().invert()), st = elbowDir[sd];
+    if (elbowAt[sd] < 0 || rigClock - elbowAt[sd] > 0.1 || st.lengthSq() < 0.5) st.copy(want); else st.lerp(want, 1 - Math.exp(-dt * 14)).normalize();
+    elbowAt[sd] = rigClock;
+    const goal = st.clone().applyQuaternion(rq); goal.addScaledVector(ax, -goal.dot(ax));
+    const cur = el.sub(sh); cur.addScaledVector(ax, -cur.dot(ax));
+    if (cur.lengthSq() < 1e-6 || goal.lengthSq() < 1e-6) return;
+    cur.normalize(); goal.normalize();
+    const ang = Math.atan2(new THREE.Vector3().crossVectors(cur, goal).dot(ax), cur.dot(goal));
     if (!Number.isFinite(ang) || Math.abs(ang) < 1e-3) return;
     worldRotate(up, new THREE.Quaternion().setFromAxisAngle(ax, ang));
     up.updateWorldMatrix(false, true);
@@ -829,8 +890,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     let pen = 0;
     for (let j = 0; j < TORSO.length; j++) {
       const a = bs.get(TORSO[j][0])!.getWorldPosition(FA.a), b = bs.get(TORSO[j][1])!.getWorldPosition(FA.b);
-      const r = torsoR[j] * (a.distanceTo(b) / (torsoLen[j] || 1)) + 0.035;
-      for (const p of [el, mid]) pen = Math.max(pen, r - segDist(p, a, b));
+      for (const p of [el, mid]) pen = Math.max(pen, torsoIn(j, a, b, p, 0.035));
     }
     return pen;
   }
@@ -861,6 +921,73 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     faAng[sd] += (want - faAng[sd]) * (1 - Math.exp(-dt * 10));
     if (Math.abs(faAng[sd]) < 1e-3) faAng[sd] = 0;
     up.quaternion.copy(q0); if (faAng[sd]) worldRotate(up, FA.q.setFromAxisAngle(ax, faAng[sd])); up.updateWorldMatrix(false, true);
+  }
+
+  /** An arm to a hand goal, weighted by w: solved in full with its guards, then the joint turns blended from the clip's
+   *  by w (an arc about the shoulder). Blending the goal instead (tried 2026-11-23) ran a phone's hand straight through
+   *  the head on the way down and made task starts jerk 10 to 40 cm. */
+  function armTo(bs: Map<string, THREE.Bone>, sd: 'L' | 'R', up: THREE.Bone, lo: THREE.Bone, hd: THREE.Bone, goal: THREE.Vector3, w: number, dt: number) {
+    const qu = AT.u.copy(up.quaternion), ql = AT.l.copy(lo.quaternion);
+    solveLeg(up, lo, hd, holdOut(bs, goal)); elbowOut(bs, sd, up, lo, hd, dt); forearmOut(bs, sd, up, lo, hd, dt);
+    up.quaternion.copy(qu.slerp(up.quaternion, w)); lo.quaternion.copy(ql.slerp(lo.quaternion, w)); up.updateWorldMatrix(false, true);
+  }
+  const AT = { u: new THREE.Quaternion(), l: new THREE.Quaternion() };
+  const handTurn = { L: new THREE.Quaternion(), R: new THREE.Quaternion() }, HT = { d: new THREE.Quaternion(), i: new THREE.Quaternion(), ax: new THREE.Vector3() };
+  const GQ = { q0: new THREE.Quaternion(), qi: new THREE.Quaternion(), q: new THREE.Quaternion(), a: new THREE.Vector3(), b: new THREE.Vector3(), x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), l: new THREE.Matrix4(), m: new THREE.Matrix4() };
+  const RA = { on: false, cur: new THREE.Quaternion(), want: new THREE.Quaternion(), cl: { L: new THREE.Quaternion(), R: new THREE.Quaternion() }, q: new THREE.Quaternion(), r: new THREE.Quaternion(), ri: new THREE.Quaternion(),
+    c: new THREE.Vector3(), s: new THREE.Vector3(), e: new THREE.Vector3(), w: new THREE.Vector3(), f: new THREE.Vector3(), g: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3(), x: new THREE.Vector3() };
+  /** How far a held hand's goal is past 0.92 of its arm from where its shoulder is (m, 0 if within), and the goal. */
+  function reachShort(bs: Map<string, THREE.Bone>, sd: 'L' | 'R', h: HoldSide, sh: THREE.Vector3) {
+    const lo = bs.get(`lowerarm${sd}`)!, hd = bs.get(`hand${sd}`)!, f3 = bs.get(`finger3_1${sd}`)!, up = bs.get(`upperarm${sd}`)!;
+    const el = lo.getWorldPosition(RA.e), wr = hd.getWorldPosition(RA.w), len = up.getWorldPosition(RA.a).distanceTo(el) + el.distanceTo(wr);
+    const goal = h.grasp ? graspWrist(RA.g, h.at, h.fingers, h.palm, clamp(h.radius ?? 0.02, 0, 0.08), wr.distanceTo(f3.getWorldPosition(RA.f)), h.along ?? 0.6) : RA.g.copy(h.at);
+    if (!Number.isFinite(goal.x + goal.y + goal.z)) return 0;
+    return Math.max(0, sh.distanceTo(goal) - 0.92 * len);
+  }
+  function reachFor(bs: Map<string, THREE.Bone>, spine1: THREE.Bone, chestB: THREE.Bone, dt: number) {
+    root.updateWorldMatrix(true, true);
+    root.getWorldQuaternion(RA.r); RA.ri.copy(RA.r).invert();
+    const ek = 1 - Math.exp(-dt * 6);
+    // the chest: the turn about its own joint that brings the shoulders nearer their goals
+    const ch = chestB.getWorldPosition(RA.c), want = RA.want.identity();
+    for (let it = 0; it < 2; it++) for (const sd of ['L', 'R'] as const) {
+      const h = hold?.[sd]; if (!h || task || holdW[sd] < 0.01) continue;
+      const sh = bs.get(`upperarm${sd}`)!.getWorldPosition(RA.s).sub(ch).applyQuaternion(want).add(ch);
+      const short = reachShort(bs, sd, h, sh); if (short <= 0) continue;
+      const a = sh.sub(ch), b = RA.b.copy(RA.g).sub(ch), ax = RA.x.crossVectors(a, b);
+      if (ax.lengthSq() < 1e-10) continue;
+      // never more than the angle between the shoulder's way and the goal's (near parallel, the cross product's axis
+      // is noise: a full turn about it put the shoulder 5 cm off for a frame)
+      want.premultiply(RA.q.setFromAxisAngle(ax.normalize(), Math.min(short / Math.max(0.15, a.length()), 0.35, a.angleTo(b)) * holdW[sd] * 0.6));
+    }
+    // at most 0.45 rad (26 degrees) in all; eased in body space so it rides with the body
+    const ang = 2 * Math.acos(clamp(Math.abs(want.w), 0, 1)); if (ang > 0.45) want.slerp(RA.q.identity(), 1 - 0.45 / ang);
+    RA.q.copy(RA.ri).multiply(want).multiply(RA.r);
+    RA.cur.slerp(RA.q, ek);
+    const big = 1 - Math.abs(RA.cur.w) > 1e-6;
+    if (big) {
+      const W = RA.q.copy(RA.r).multiply(RA.cur).multiply(RA.ri);
+      // 40% in the spine below the chest, the rest in the chest
+      worldRotate(spine1, new THREE.Quaternion().slerp(W, 0.4)); spine1.updateWorldMatrix(false, true);
+      worldRotate(chestB, new THREE.Quaternion().slerp(W, 0.6)); chestB.updateWorldMatrix(false, true);
+    }
+    // the collarbone: what is still short, the shoulder brought forward or up (at most 0.3 rad)
+    let on = big;
+    for (const sd of ['L', 'R'] as const) {
+      const cl = bs.get(`clavicle${sd}`), h = hold?.[sd];
+      if (!cl) continue;
+      RA.q.identity();
+      if (h && !task && holdW[sd] >= 0.01) {
+        const sh = bs.get(`upperarm${sd}`)!.getWorldPosition(RA.s), short = reachShort(bs, sd, h, sh);
+        if (short > 0) {
+          const c0 = cl.getWorldPosition(RA.c), a = sh.clone().sub(c0), b = RA.b.copy(RA.g).sub(c0), ax = RA.x.crossVectors(a, b);
+          if (ax.lengthSq() > 1e-10) RA.q.setFromAxisAngle(ax.normalize(), Math.min(short / Math.max(0.08, a.length()), 0.3, a.angleTo(b)) * holdW[sd]).premultiply(RA.ri).multiply(RA.r);
+        }
+      }
+      RA.cl[sd].slerp(RA.q, ek);
+      if (1 - Math.abs(RA.cl[sd].w) > 1e-6) { on = true; worldRotate(cl, RA.q.copy(RA.r).multiply(RA.cl[sd]).multiply(RA.ri)); cl.updateWorldMatrix(false, true); }
+    }
+    RA.on = on;
   }
 
   function locomotion(speed: number, dt: number) {
@@ -1026,14 +1153,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const up = bs.get(`upperarm${sd}`), lo = bs.get(`lowerarm${sd}`), hd = bs.get(`hand${sd}`);
       if (!up || !lo || !hd) continue;
       const goal = handGoal(bs, sd, k, t, new THREE.Vector3());
-      const qu = (taskQ.get(up.name) ?? taskQ.set(up.name, new THREE.Quaternion()).get(up.name)!).copy(up.quaternion);
-      const ql = (taskQ.get(lo.name) ?? taskQ.set(lo.name, new THREE.Quaternion()).get(lo.name)!).copy(lo.quaternion);
-      solveLeg(up, lo, hd, holdOut(bs, goal));
-      elbowOut(bs, sd, up, lo, hd);
-      forearmOut(bs, sd, up, lo, hd, dt);
-      up.quaternion.copy(qu.slerp(up.quaternion, w));
-      lo.quaternion.copy(ql.slerp(lo.quaternion, w));
-      up.updateWorldMatrix(false, true);
+      armTo(bs, sd, up, lo, hd, goal, w, dt);
     }
     // eyes on the work
     if (T.at && T.kind !== 'gesture') { headLook(bs, T.at, w * 0.8); }
@@ -1062,6 +1182,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   }
 
   function animate(kind: CrewPose, phase: number, amount: number, t: number, dt: number) {
+    rigClock += Math.max(0, dt);
     if (!mixer || !B) return;
     if (CHAR_BUDGET.throttle && !firstFrame) { // the first pose is always set at once: never a frame of bind pose
       // a body its stage has hidden (a phone's far townsfolk, the crowd pool's idle bodies) is not posed at all; the
@@ -1138,8 +1259,14 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       s.a.setEffectiveWeight(sum > 0 ? s.w / sum : 0);
       if (s.manual) { s.a.timeScale = 0; s.a.time = gaitPhase * s.a.getClip().duration; }
     }
+    // every bone back to the clip's own pose before the mixer runs: three's PropertyMixer writes a bone only when the
+    // mixed value differs from last frame's, so where a clip held still (a crouch's last frames, a kneel) the bone kept
+    // last frame's pose with every turn added on top (arms kept out, the elbow out, the reach), and they were added
+    // again: an arm popped out for a frame and back
+    if (clipPose.size) for (const [b, q] of clipPose) { b.quaternion.copy(q.q); b.position.copy(q.p); }
     mixer.update(firstFrame ? 0.001 : dt);
     firstFrame = false;
+    for (const b of bs.values()) { const c = clipPose.get(b); if (c) { c.q.copy(b.quaternion); c.p.copy(b.position); } else clipPose.set(b, { q: b.quaternion.clone(), p: b.position.clone() }); }
 
     // ---- style on top of the clip ----
     const bp = Math.sin(t * 1.25);
@@ -1216,6 +1343,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     } else if (selfieHeld && !task) showProp(bs, null, 0);
     if (!task && kind !== 'selfie' && (heldProp || heldShown)) { showProp(bs, heldProp, 1); heldShown = !!heldProp; }
     selfieHeld = sw > 0.004;
+    // ---- reach: a held target past what the arm does from the clip's shoulder ----
+    // the clips carry the shoulders as they like (the stand keeps the right one 10 cm back, the shoulder line turned
+    // 18 degrees), and a spear's grips in front of the body were 1.1 to 1.2 arm lengths from it: the hand stopped short
+    // of the shaft. The chest turns towards the target (split with the spine below it) and then the collarbone brings
+    // the shoulder on, each within what a body does and eased, as a person reaches
+    if (RIG_OPTS.reach && (hold || RA.on)) reachFor(bs, spine1, chestB, dt);
     // ---- hands held on something: two-bone IK to the wrist point, then the hand turned so the fingers and the palm
     // face where they are told (the same frame the selfie reads from the skeleton) ----
     for (const sd of ['L', 'R'] as const) {
@@ -1233,8 +1366,6 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       root.updateWorldMatrix(true, true);
       const up = bs.get(`upperarm${sd}`), lo = bs.get(`lowerarm${sd}`), hd = bs.get(`hand${sd}`), f3 = bs.get(`finger3_1${sd}`);
       if (!up || !lo || !hd || !f3) continue;
-      const qu = (taskQ.get(`hold${sd}U`) ?? taskQ.set(`hold${sd}U`, new THREE.Quaternion()).get(`hold${sd}U`)!).copy(up.quaternion);
-      const ql = (taskQ.get(`hold${sd}L`) ?? taskQ.set(`hold${sd}L`, new THREE.Quaternion()).get(`hold${sd}L`)!).copy(lo.quaternion);
       // the hand follows a moving target exactly (eased towards it, a hand walking with a stone trailed it by 11 cm: "the
       // rocks are out of the hands"). Only a jump (the target faster than 4 m/s, a new scene step) goes into an offset
       // that springs back to zero, critically damped, so the arm travels there instead of teleporting; a fresh hold
@@ -1243,24 +1374,37 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const ok = Number.isFinite(h.at.x + h.at.y + h.at.z);
       if (!hs.on || hw < 0.02) {
         hd.getWorldPosition(hs.at); hs.off.copy(hs.at); if (ok) hs.off.sub(h.at); else hs.off.set(0, 0, 0);
-        hs.offV.set(0, 0, 0); hs.prev.copy(ok ? h.at : hs.at); hs.fingers.copy(h.fingers); hs.palm.copy(h.palm); hs.on = true;
+        hs.offV.set(0, 0, 0); hs.prev.copy(ok ? h.at : hs.at); hs.fingers.copy(h.fingers); hs.palm.copy(h.palm); hs.on = true; hs.fresh = true;
       } else if (ok) {
         const st = V1.copy(h.at).sub(hs.prev), len = st.length(), lim = 4 * dt;
         if (len > lim) hs.off.addScaledVector(st, -(len - lim) / len);
       }
       if (ok) hs.prev.copy(h.at);
-      const sw0 = 9; hs.offV.addScaledVector(hs.off, -sw0 * sw0 * dt).addScaledVector(hs.offV, -2 * sw0 * dt); hs.off.addScaledVector(hs.offV, dt);
+      // the exact critically damped step (the explicit one damped the kicked velocity again in the same frame: at 30 fps
+      // it ran at half speed, a hand still 15 cm off its stone after 0.6 s)
+      const sw0 = 9, se = Math.exp(-sw0 * dt), sk = V1.copy(hs.offV).addScaledVector(hs.off, sw0).multiplyScalar(dt);
+      hs.off.add(sk).multiplyScalar(se); hs.offV.addScaledVector(sk, -sw0).multiplyScalar(se);
       hs.at.copy(hs.prev).add(hs.off);
-      if (h !== hs.last) { root.worldToLocal(hs.loc.copy(hs.prev)); hs.last.fingers.copy(h.fingers); hs.last.palm.copy(h.palm); }
+      if (h !== hs.last) { root.worldToLocal(hs.loc.copy(hs.prev)); hs.last.fingers.copy(h.fingers); hs.last.palm.copy(h.palm); hs.last.grasp = h.grasp; hs.last.radius = h.radius; hs.last.along = h.along; }
       const ek = 1 - Math.exp(-dt * 12);
       if (h.fingers.lengthSq() > 1e-8) hs.fingers.lerp(V1.copy(h.fingers).normalize(), ek).normalize();
       if (h.palm.lengthSq() > 1e-8) hs.palm.lerp(V1.copy(h.palm).normalize(), ek).normalize();
-      const tgt = holdOut(bs, hs.at.clone());
-      solveLeg(up, lo, hd, tgt);
-      elbowOut(bs, sd, up, lo, hd);
-      forearmOut(bs, sd, up, lo, hd, dt);
-      up.quaternion.copy(qu.slerp(up.quaternion, hw)); lo.quaternion.copy(ql.slerp(lo.quaternion, hw));
-      up.updateWorldMatrix(false, true);
+      // a grasp: the wrist where the palm closes on the thing (the eased directions, as the hand is turned below)
+      const palmLen = hd.getWorldPosition(V1).distanceTo(f3.getWorldPosition(V2));
+      let goal: THREE.Vector3;
+      if (h.grasp && sd === 'R' && propOn && propOn.parent === hd) {
+        // a prop on this hand (the hammerstone, a flake): the wrist where the prop's own place on the hand puts its
+        // middle on the target, the hand turned as it is about to be (below)
+        hd.getWorldQuaternion(GQ.q0);
+        const fl = GQ.a.copy(f3.getWorldPosition(V1)).sub(hd.getWorldPosition(V2)).normalize().applyQuaternion(GQ.qi.copy(GQ.q0).invert());
+        const nl = GQ.b.set(0, -1, 0); nl.addScaledVector(fl, -nl.dot(fl)).normalize();
+        GQ.y.crossVectors(nl, fl); GQ.l.makeBasis(fl, GQ.y, nl);
+        const fw = GQ.x.copy(hs.fingers).normalize(), pw = GQ.z.copy(hs.palm); pw.addScaledVector(fw, -pw.dot(fw)).normalize();
+        GQ.y.crossVectors(pw, fw); GQ.m.makeBasis(fw, GQ.y, pw).multiply(GQ.l.transpose()); GQ.q.setFromRotationMatrix(GQ.m);
+        const mid = (propOn.geometry.computeBoundingSphere(), propOn.geometry.boundingSphere!.center);
+        goal = V3.copy(mid).applyQuaternion(propOn.quaternion).add(propOn.position).multiply(hd.getWorldScale(V2)).applyQuaternion(GQ.q).negate().add(hs.at).clone();
+      } else goal = h.grasp ? graspWrist(new THREE.Vector3(), hs.at, hs.fingers, hs.palm, clamp(h.radius ?? 0.02, 0, 0.08), palmLen, h.along ?? 0.6) : hs.at.clone();
+      armTo(bs, sd, up, lo, hd, goal, hw, dt);
       hd.getWorldPosition(V4s); hd.getWorldQuaternion(selfM.q0);
       const fl = selfM.a.copy(f3.getWorldPosition(V1)).sub(V4s).normalize().applyQuaternion(selfM.qi.copy(selfM.q0).invert());
       const nl = selfM.b.set(0, -1, 0); nl.addScaledVector(fl, -nl.dot(fl)).normalize();
@@ -1269,7 +1413,13 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       selfM.y.crossVectors(pw, fw);
       selfM.m.makeBasis(fw, selfM.y, pw).multiply(selfM.l.transpose()); selfM.q.setFromRotationMatrix(selfM.m);
       hd.parent!.getWorldQuaternion(Q).invert(); selfM.q.premultiply(Q);
-      hd.quaternion.slerp(selfM.q, hw);
+      // the turn from the clip's hand to the held one, its way round kept from frame to frame: near half a turn the shortest
+      // way switched sides between two frames and the fingertips jumped 17 cm (a palm turned up to hold a stone)
+      const dq = HT.d.copy(selfM.q).multiply(HT.i.copy(hd.quaternion).invert()), pd = handTurn[sd];
+      if (hs.fresh) hs.fresh = false; else if (pd.x * dq.x + pd.y * dq.y + pd.z * dq.z + pd.w * dq.w < 0) dq.set(-dq.x, -dq.y, -dq.z, -dq.w);
+      pd.copy(dq);
+      const ang = 2 * Math.acos(clamp(dq.w, -1, 1)), sn = Math.sqrt(Math.max(0, 1 - dq.w * dq.w));
+      if (sn > 1e-6) hd.quaternion.premultiply(HT.d.setFromAxisAngle(HT.ax.set(dq.x / sn, dq.y / sn, dq.z / sn), ang * hw));
     }
     // head look-at, clamped and shared with the neck; the eyes lead
     // someone to look at: only within what a neck can do, otherwise ease back to the front
@@ -1501,9 +1651,18 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       root.updateMatrixWorld(true);
       return TORSO.map(([a, b], j) => {
         const pa = B!.get(a)!.getWorldPosition(new THREE.Vector3()), pb = B!.get(b)!.getWorldPosition(new THREE.Vector3());
-        const r = torsoR![j] * (pa.distanceTo(pb) / (torsoLen[j] || 1));
-        return { a: root.worldToLocal(pa), b: root.worldToLocal(pb), r };
+        const k = pa.distanceTo(pb) / (torsoLen[j] || 1), R = torsoR![j];
+        // r: one radius, the mean of the half width and the depth (rx, rf, rb: the elliptic shape the rig itself uses)
+        return { a: root.worldToLocal(pa), b: root.worldToLocal(pb), r: (R.x + (R.f + R.b) / 2) / 2 * k, rx: R.x * k, rf: R.f * k, rb: R.b * k };
       });
+    },
+    /** How far a world point is inside the torso as the arm guards see it (torsoCapsules' elliptic shapes, grown by
+     *  margin), m; negative outside; null before the body is first posed. */
+    torsoDepth(p: THREE.Vector3, margin = 0) {
+      if (!torsoR || !B) return null;
+      let pen = -9;
+      for (let j = 0; j < TORSO.length; j++) pen = Math.max(pen, torsoIn(j, B.get(TORSO[j][0])!.getWorldPosition(new THREE.Vector3()), B.get(TORSO[j][1])!.getWorldPosition(new THREE.Vector3()), p, margin));
+      return pen;
     },
     /** Something held in the right hand outside any task (a leaf cup, a berry); null puts it away. */
     setProp(k: PropKind | null) { heldProp = k; },

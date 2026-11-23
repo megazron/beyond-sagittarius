@@ -124,7 +124,8 @@ export class Stones {
   private tap(at: THREE.Vector3, k: Kind | 'strike', hard = false) {
     const z = this.z, f = this.fwd();
     const up = at.clone().add(new THREE.Vector3(0, 0.12, 0)).addScaledVector(f, -0.04), hit = at.clone().add(new THREE.Vector3(0, 0.045, 0));
-    const pose = (p: THREE.Vector3) => z.setHold({ R: { at: p, fingers: f.clone().add(new THREE.Vector3(0, -0.6, 0)).normalize(), palm: new THREE.Vector3(0, -1, 0), radius: 0.035 }, L: { at: at.clone().add(new THREE.Vector3(0, 0.06, 0)).addScaledVector(f, -0.07).addScaledVector(new THREE.Vector3(f.z, 0, -f.x), 0.08), fingers: f.clone(), palm: new THREE.Vector3(0, -1, 0) } });
+    // grasp: `p` is where the hammerstone's middle goes (it sat 8 cm off when the wrist was sent there)
+    const pose = (p: THREE.Vector3) => z.setHold({ R: { at: p, fingers: f.clone().add(new THREE.Vector3(0, -0.6, 0)).normalize(), palm: new THREE.Vector3(0, -1, 0), radius: 0.035, grasp: true }, L: { at: at.clone().add(new THREE.Vector3(0, 0.06, 0)).addScaledVector(f, -0.07).addScaledVector(new THREE.Vector3(f.z, 0, -f.x), 0.08), fingers: f.clone(), palm: new THREE.Vector3(0, -1, 0) } });
     pose(up);
     const sound = () => {
       if (k === 'flint') { audio.sample('flint', 0.5); audio.tone(2350, 0.4, 'sine', 0.07); audio.tone(3520, 0.28, 'sine', 0.035, 0.01); }
