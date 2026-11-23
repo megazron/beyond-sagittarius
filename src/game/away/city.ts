@@ -53,7 +53,7 @@ const PHONE_CROWD_FAR = 34;
 /** ?lenshold=0: the old way (a body in the lens is let go and its card drawn), for an A/B of the bump fix. */
 const LENS_HOLD = typeof location === 'undefined' || new URLSearchParams(location.search).get('lenshold') !== '0';
 /** ?lensfade=old: bodies on the line from the camera to you are hidden (faded on Web and Ultra) as before, for an A/B. Now
- * they stay drawn and the camera rises to look over them; a body is only faded (quickly, all the way) when it is right at
+ * they stay drawn (they pass in front of you for a moment); a body is only faded (quickly, all the way) when it is right at
  * the lens itself (character.ts). */
 const LENS_OLD = typeof location !== 'undefined' && new URLSearchParams(location.search).get('lensfade') === 'old';
 /** Whoever is drawn as a body within CONTACT metres of you stays that body, whatever the budget or the ranking does
@@ -1785,12 +1785,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         // how many bodies are within a few steps of you (the follow camera rises over a thick crowd: crowdNear)
         if (you) {
           let n = 0, line = false; const ux = you.position.x, uz = you.position.z, R2 = 3.2 * 3.2;
-          // and over whoever walks between the camera and you: they stay drawn (no half-faded ghost) and the view looks
-          // down past them (the old way hid them: lensfade=old)
+          // whoever walks between the camera and you stays drawn (no half-faded ghost; the old way hid them: lensfade=old)
           const at = (f: Character) => { if (f.root.visible) { const dx = f.root.position.x - ux, dz = f.root.position.z - uz; if (dx * dx + dz * dz < R2) n++; if (!LENS_OLD && !line && inLens(f.root.position.x, f.root.position.z)) line = true; } };
           if (oldOn) { for (const q of people) at(q.fig); for (const b of crowdPool) if (b.card >= 0) at(b.fig); }
           for (const b of dpool) if (b.ped >= 0) at(b.fig);
-          crowdK = Math.max(line ? 0.8 : 0, Math.min(1, Math.max(0, (n - 1) / 3)));
+          // (a body on the line used to lift the camera too: on the GPU in the bazaar that kept the view high and in the
+          // stalls' awnings most of the time; now they simply pass in front of you for a moment, as in most games)
+          crowdK = Math.min(1, Math.max(0, (n - 1) / 3));
           lineLog = line;
         }
         if (oldOn) for (let i = 0; i < people.length; i++) {
