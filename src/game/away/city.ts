@@ -1024,7 +1024,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
 
   // ---- the tram at its stop, and the shelter ----
   {
-    const stopM = lit(sign('Tram 7: Spaceport', '#0f7d74', '#ffffff'), 0.4); stopM.side = THREE.DoubleSide;
+    const stopM = lit(sign('Tram 7: Spaceport', '#0f7d74', '#ffffff'), 0.4);
     const tram = add(new THREE.Group());
     // A tram, not a white capsule (the owner's v4 clips: its white side and nose filled the view like a slab): a teal
     // lower body with a gold stripe, cream upper panels between six windows a side, panel seams, two doors on the
@@ -1097,7 +1097,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     const shelter = add(new THREE.Group()); shelter.position.set(-4.8, FLOOR, TRAM_Z - 3.2);
     { const p = new THREE.Mesh(new THREE.BoxGeometry(0.09, 2.7, 0.09), railM); p.position.set(0, 1.35, 0); shelter.add(p); }
     blocks.push(new THREE.Box3(new THREE.Vector3(-5.0, 0, TRAM_Z - 3.4), new THREE.Vector3(-4.6, 3, TRAM_Z - 3.0)));
-    const stop = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.45), stopM); stop.position.set(0, 2.55, 0); stop.rotation.y = Math.PI / 2; shelter.add(stop);
+    // a board each way (one double-sided plane read backwards from the south: the v5 clip)
+    for (const ry of [Math.PI / 2, -Math.PI / 2]) { const stop = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.45), stopM); stop.position.set(ry > 0 ? 0.01 : -0.01, 2.55, 0); stop.rotation.y = ry; shelter.add(stop); }
   }
 
   // ---- the square, the fountain, the gate and the liner ----
