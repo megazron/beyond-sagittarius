@@ -193,10 +193,10 @@ export class CombatFx {
     for (let i = 0; i < (big ? 5 : 3); i++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.16 + (i % 2) * 0.06, 0.6 + (i % 3) * 0.2, 5), m); c.position.set(Math.cos(i * 2.4) * 0.16 * (big ? 1.6 : 1), 0.3, Math.sin(i * 2.4) * 0.16 * (big ? 1.6 : 1)); g.add(c); }
     if (big) { const logs = new THREE.MeshStandardMaterial({ color: 0x2b211b, roughness: 1 }); for (let i = 0; i < 4; i++) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 1, 5), logs); l.rotation.set(Math.PI / 2, i * 0.8, 0.35); l.position.y = 0.12; g.add(l); } }
     let light: THREE.PointLight | null = null;
-    // (the camp fire's light falls off more gently and starts lower: at 70 with a fall-off of 1.7 a white coat a metre
-    // from the fire took about 70 units and burned out to flat orange-white under the night's raised exposure; at 32 and
-    // 1.25 it takes about half that up close and the same as before from 3 m out, a little more past 6 m)
-    if (this.lights) { light = new THREE.PointLight(0xff9a45, big ? 32 : 16, big ? 22 : 9, big ? 1.25 : 1.7); light.position.y = 1.1; g.add(light); }
+    // (the camp fire's light, against the sun's 4.6 at noon: at 70 with a fall-off of 1.7 (and the story's own camp-fire
+    // light, 16, on top) a white coat a metre from the fire took about ten times full daylight and burned out to flat
+    // orange-white (v16, v25, v26). Now about daylight at a metre, falling off gently: 2 at 3 m, 1.1 at 6 m)
+    if (this.lights) { light = new THREE.PointLight(0xff9a45, big ? 5 : 16, big ? 22 : 9, big ? 0.9 : 1.7); light.position.y = 1.1; g.add(light); }
     return { o: g, id, light };
   }
 
@@ -312,7 +312,7 @@ export class CombatFx {
       const k = Math.max(0, f.fuel / f.max), flick = 0.85 + Math.sin(t * 13 + f.id) * 0.1 + Math.sin(t * 7.3) * 0.07;
       fl.o.visible = true;
       fl.o.children.forEach((c, i) => { if ((c as THREE.Mesh).material instanceof THREE.MeshBasicMaterial) { c.visible = k > 0; c.scale.set(0.5 + k * 0.7, (0.3 + k * 1.1) * (0.8 + Math.sin(t * 9 + i * 2) * 0.25), 0.5 + k * 0.7); } });
-      if (fl.light) fl.light.intensity = (f.burnsOut ? 16 : 32) * Math.sqrt(k) * flick;
+      if (fl.light) fl.light.intensity = (f.burnsOut ? 16 : 5) * Math.sqrt(k) * flick;
       if (k > 0 && this.emberT <= 0) {
         this.puff('ember', f.x, this.height(f.x, f.z) + 0.5, f.z, 0, 0, 0.5);
         if (!f.burnsOut) this.puff('smoke', f.x, this.height(f.x, f.z) + 0.9 + k * 0.4, f.z, sim.windX * 5, sim.windZ * 5, 1);
