@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { BATCH, batchSupported } from './core/ibatch';
 import { NEAR_FADE } from './core/nearfade';
 import { setLang, setPlayer, t, Lang } from './i18n';
-import { detectQuality, isPhone, saveQualityChoice, QualityName } from './core/quality';
+import { detectQuality, isPhone, saveQualityChoice, QualityName, qualityFromUrl } from './core/quality';
 import { desktop } from './core/desktop';
 import { Away } from './game/away/away';
 import type { CrewId } from './characters/character';
@@ -753,18 +753,19 @@ renderer.renderer.domElement.addEventListener('webglcontextrestored', () => {
 });
 let memAt = 0, memWarned = false;
 function memoryGuard(now: number) {
-  if (now - memAt < 5000 || memWarned) return;
+  if (now - memAt < 5000 || memWarned || navigator.webdriver) return; // not under test automation: it must not change a run
   memAt = now;
   const m = (performance as unknown as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
-  if (!m || !m.jsHeapSizeLimit || m.usedJSHeapSize < m.jsHeapSizeLimit * 0.85) return;
-  // close to the browser's limit (a phone's is far lower than a laptop's): a lighter preset, the game saved, before
-  // the tab is killed with nothing saved
+  if (!m || !m.jsHeapSizeLimit || m.usedJSHeapSize < m.jsHeapSizeLimit * 0.92) return;
+  // close to the browser's limit (a phone's is far lower than a laptop's): the game is saved and the next start uses a
+  // lighter preset. No reload in the middle of play (the first version reloaded: that is a crash of its own)
   memWarned = true;
   const lower: QualityName | null = quality.name === 'cinematic' ? 'ultra' : quality.name === 'ultra' ? 'web' : quality.name === 'web' ? 'mobile' : null;
-  console.warn('[memory] heap', Math.round(m.usedJSHeapSize / 1e6), 'of', Math.round(m.jsHeapSizeLimit / 1e6), 'MB', lower ? `-> ${lower}` : '');
-  if (!lower) return;
+  console.warn('[memory] heap', Math.round(m.usedJSHeapSize / 1e6), 'of', Math.round(m.jsHeapSizeLimit / 1e6), 'MB', lower ? `-> ${lower} next start` : '');
+  try { if (state === 'game' && game) game.persist(); } catch { /* best effort */ }
+  if (!lower || qualityFromUrl()) return;
+  saveQualityChoice(lower);
   ui.toast(t('msg.memLow'));
-  window.setTimeout(() => changeQuality(lower), 2500);
 }
 
 function frame() {
