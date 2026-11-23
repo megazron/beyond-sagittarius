@@ -733,3 +733,19 @@ unlanded except this handoff commit and any recording in progress.
   ~36%, the planet's world.update 13% while in the city). 5160658 (landed with 0878731): planet pods/camp/items/giant and
   its env capture wait while another stage is on screen; the hidden touch stick no longer rewrites styles every frame.
   Not measured as an A/B yet. Rule reminder: no pkill -f / pgrep -f, even with [x] tricks (one of my waits hung on it).
+- 02:25 results (p19/): re-entry soak on the new build (re_new) textures 618 -> 449 over ten visits (base re_base
+  624 -> 1341, climbing); geometries and programs bounded; backing store back to ~1.19 GB in the city. Two city samples
+  right after re-entry read 23-25 fps (base 59) while other Chrome instances were busy; later city visits read 60. Not
+  settled: recheck on a quiet machine. Web journey after the router fix: no update sample over 6.1 ms (before 26-58 ms
+  at the far corners). Mobile journey (jc_mob_new, 4x throttle, contended): memory flat (geo 726 -> 733, tex 463 -> 470,
+  heap 770-835 MB), 20-26 fps: phones are still NOT at 30.
+- Memory (p19/bytes.js, by_web / by_mob): in the city Web holds 1.31 GB of typed-array data + ~160 MB JS objects; Mobile
+  745 MB + 95 MB. In the scene on Mobile: bodies (Group/Group) 157 MB, prop bakes ~67 MB, static merges ~46 MB, planet
+  geometry 74 MB; ~385 MB is held outside the scene graph (asset caches: glTF originals, character assets). That is the
+  next phone target (an Android WebView renderer near 1 GB risks an OOM kill). p19/bodybytes.js (plan_bodybytes.json)
+  breaks the bodies down by mesh; run it.
+- CI: soak_smoke is a gate now. On restore after a lost context three.js recompiles every program: on SwiftShader that
+  takes minutes (the test waits up to 150 s); on a real GPU expect a freeze of seconds, with the note on screen.
+- Clips: Downloads/BS_Game_v1.1/mobile_v1_GPU/travel_*_before.mp4 (main before the fix, Web, ?perf=1, no sound): the far
+  northeast reads update 54.9 ms. The far northeast spot (287,237) is an empty flat plane at the city's edge: that looks
+  wrong in itself and is not mine to judge. *_after.mp4 when p19/clips.sh finishes.
