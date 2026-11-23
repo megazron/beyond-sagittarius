@@ -172,7 +172,9 @@ export class RangedRig {
       // between shots: on the string at the nock of the lowered bow (no set: held at 88% of the draw near the chin it
       // read as a "T" from behind and the draw was a few centimetres; the arm to a string at the RAISED bow crossed the
       // upper chest on this rig, so the bow rises with the draw instead and the hand is near the chin by full raise)
-      const setP = V().copy(nock0).addScaledVector(F, 0.02);
+      // (the hand goes from its rest by the hip to the nock as the bow comes up: it jumped there at up 0.5, before the
+      // bow and the body's turn had come round, and the arm crossed the chest, CI 11 cm)
+      const setP = V().set(-0.22, 1.0, 0.12).lerp(V().copy(nock0).addScaledVector(F, 0.02), smooth((S.up - 0.35) / 0.55));
       let target: THREE.Vector3; S.arrowIn = ammo > 0 ? 'string' : 'none'; S.nock = -1;
       // (the string comes back along the arrow, bowed a little out in front on the way so the forearm passes the chin)
       if (p.act === 'charge') target = V().copy(setP).lerp(anchor, drawing).addScaledVector(F, 0.1 * Math.sin(Math.PI * drawing));
@@ -185,7 +187,7 @@ export class RangedRig {
         else if (k < 0.55) { const u = smooth((k - 0.25) / 0.3); target = V().copy(past).lerp(quiver, u).addScaledVector(F, 0.12 * Math.sin(Math.PI * u)); S.arrowIn = k > 0.5 && ammo > 0 ? 'hand' : 'none'; }
         else if (k < 0.85) { const u = smooth((k - 0.55) / 0.3); target = V().copy(quiver).lerp(setP, u).addScaledVector(F, 0.3 * Math.sin(Math.PI * u)).addScaledVector(A, -0.14 * Math.sin(Math.PI * u)); S.arrowIn = ammo > 0 ? 'hand' : 'none'; }
         else target = setP;
-      } else target = S.up > 0.5 ? setP : V().set(-0.22, 1.0, 0.12);
+      } else target = setP;
       // the drawing elbow: out in front at the brace, then back along the arrow's line as the string comes to the jaw
       // (a little up and a little behind the back, as a drawing elbow is in real form); past the head, not up into it
       const dk0 = p.act === 'charge' ? drawing : recovering ? Math.max(0, 1 - p.actT / 0.4) : 0;
