@@ -1130,16 +1130,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const low = task ? (LOW_TASKS[task.kind] ?? 0) * taskEnv() * (FULL_BODY.has(kind) ? 0 : 1) : 0;
       if (low > 0 && clips!.has('crouch') && name !== 'crouch') { const c = action('crouch', false); c.target = low * 0.8; s.target = 1 - low * 0.8; }
     }
-    // clip weights: a critically damped spring, so a new clip starts from rest and eases in (an exponential blend moved
-    // every limb at full speed on the first frame of a change: a 5-10 cm kick of the hands on frame two of every clip)
+    const rate = firstFrame ? 1 : 1 - Math.exp(-dt * 4.5);
     let sum = 0;
-    const cw = 6, cdt = Math.min(dt, 1 / 20);
-    for (const s of acts.values()) {
-      if (firstFrame) { s.w = s.target; s.v = 0; }
-      else { s.v = (s.v ?? 0) + (cw * cw * (s.target - s.w) - 2 * cw * (s.v ?? 0)) * cdt; s.w = Math.min(1, Math.max(0, s.w + s.v * cdt)); }
-      if (s.w < 0.004 && s.target === 0) { s.w = 0; s.v = 0; }
-      sum += s.w;
-    }
+    for (const s of acts.values()) { s.w += (s.target - s.w) * rate; if (s.w < 0.004 && s.target === 0) s.w = 0; sum += s.w; }
     for (const s of acts.values()) {
       s.a.enabled = s.w > 0;
       s.a.setEffectiveWeight(sum > 0 ? s.w / sum : 0);

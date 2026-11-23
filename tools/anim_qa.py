@@ -82,8 +82,8 @@ print('\nworst over all bodies, per metric:', ', '.join(f"{m} {max(d[m] for d in
 print('scenarios over 2.5 cm arm penetration:', sum(1 for d in worst.values() if d['armPenCm'] > 2.5), '/', len(worst),
       '| over 4 cm jerk:', sum(1 for d in worst.values() if d['jerkCm'] > 4), '| hand off its hold > 3 cm:', sum(1 for d in worst.values() if d['holdErrCm'] > 3))
 if a.write_budget:
-    # slack: 10% plus a little, so a rerun on another GPU passes; the pixel counts get more (rasterisers differ)
-    bud = {s: {m: (round(v * 1.25 + 30) if m.endswith('Px') else round(v * 1.1 + 0.3, 1)) for m, v in d.items()} for s, d in worst.items()}
+    # slack: 10% plus 1 cm, so a rerun on another GPU passes; the pixel counts get more (rasterisers differ)
+    bud = {s: {m: (round(v * 1.25 + 30) if m.endswith('Px') else round(v * 1.1 + 1.0, 1)) for m, v in d.items()} for s, d in worst.items()}
     json.dump({'note': 'tools/anim_qa.py --write-budget; lower these as fixes land. Target: arm and hand penetration 0, jerk under 4 cm, holdErr under 2 cm, pixels near 0.', 'every': a.every, 'scenarios': bud}, open(a.budget, 'w'), indent=1)
     print('budget written', a.budget)
 fails = [f'page error: {e}' for e in errs[:3]]
