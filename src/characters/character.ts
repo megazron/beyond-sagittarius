@@ -294,7 +294,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let kneel = 0, kneelGoal = 0, heels = 0, heelsGoal = 0, heldProp: PropKind | null = null, heldShown = false;
   const kneelL: Limbs = {}, KD = new THREE.Vector3(), KQ = new THREE.Quaternion();
   // a task in the hands (doTask): time in, length, where the hand goes, which hands
-  let task: { kind: TaskKind; t: number; dur: number; at: THREE.Vector3 | null; hands: 'L' | 'R' | 'both'; prop: PropKind | null; onContact?: (() => void) | null } | null = null;
+  let task: { kind: TaskKind; t: number; dur: number; at: THREE.Vector3 | null; hands: 'L' | 'R' | 'both'; prop: PropKind | null; onContact?: (() => void) | null; clipOk?: boolean } | null = null;
   // the thing in the hand: made once per kind, parented to the hand (or held in front of the hips for a parcel)
   const props = new Map<PropKind, THREE.Mesh>();
   let propOn: THREE.Mesh | null = null;
@@ -547,7 +547,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     }
     // the torso as three capsules, measured from this body's own skin the first time it is posed (keepArmsOut)
     // the surface you see: body skin and the clothes over it (a full suit leaves almost no body skin)
-    torsoR = null; torsoBody = [];
+    torsoR = null; torsoBody = []; thighR = null;
     scene.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && (m.name === 'skin_body' || m.name === 'cloth')) torsoBody.push(m); });
     // hair on the real head
     const headP = piv('head');
@@ -741,6 +741,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   // clothes (bind units; torsoLen scales them to the posed segment). A round capsule could not fit: the hips are wider
   // than deep, and one radius either read a hand hanging beside the hip as 6 to 14 cm inside or let fingers into a
   // bulky sweater's side
+  let thighR: { L: number; R: number } | null = null; // thighsOut: each thigh's radius, skin and cloth
   let torsoR: { x: number; f: number; b: number }[] | null = null, torsoLen: number[] = [], torsoBody: THREE.SkinnedMesh[] = []; // read by keepArmsOut
   const TI = { ab: new THREE.Vector3(), c: new THREE.Vector3(), d: new THREE.Vector3(), f: new THREE.Vector3(), l: new THREE.Vector3(), q: new THREE.Quaternion() };
   /** How far p is inside torso segment j (a to b, world) grown by `margin`, m (negative outside); `out`, if given, gets
@@ -782,6 +783,52 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
 
   let limpOn = false;
 
+  /** Hands never sink into the thighs (seated, the clip's hands rest on the lap and wide trousers swallowed the fingers:
+   *  the townsman's worst flag, 195 px): a capsule per thigh from its own skin and cloth, the hand moved out of it by
+   *  the arm, the push eased per hand. */
+  const thighPush = { L: new THREE.Vector3(), R: new THREE.Vector3() }, thighW = { L: 0, R: 0 };
+  function thighsOut(bs: Map<string, THREE.Bone>, dt: number) {
+    if (!torsoBody.length) return;
+    const own = limbs?.ownArms ?? armOwner;
+    root.updateWorldMatrix(true, true);
+    const wp = (n: string) => new THREE.Vector3().setFromMatrixPosition(bs.get(n)!.matrixWorld);
+    const legs = (['L', 'R'] as const).map((sd) => [wp(`upperleg${sd}`), wp(`lowerleg${sd}`)] as const);
+    if (!thighR) {
+      const per: { L: number[]; R: number[] } = { L: [], R: [] }, v = new THREE.Vector3();
+      for (const m of torsoBody) {
+        m.updateWorldMatrix(true, false);
+        const si = m.geometry.attributes.skinIndex, sw = m.geometry.attributes.skinWeight;
+        for (let i = 0, n = m.geometry.attributes.position.count; i < n; i += 3) {
+          let mb = 0, mw = -1; for (let q = 0; q < 4; q++) { const wq = sw.getComponent(i, q); if (wq > mw) { mw = wq; mb = si.getComponent(i, q); } }
+          const bn = m.skeleton.bones[mb]?.name; const sd = bn === 'upperlegL' ? 'L' : bn === 'upperlegR' ? 'R' : null; if (!sd) continue;
+          m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld);
+          const [a, b] = legs[sd === 'L' ? 0 : 1], ab = SB.copy(b).sub(a), tt = SA.copy(v).sub(a).dot(ab) / ab.lengthSq();
+          if (tt < 0.2 || tt > 0.85) continue;
+          per[sd].push(segDist(v, a, b));
+        }
+      }
+      const pc = (x: number[]) => { x.sort((a, b) => a - b); return x.length ? x[Math.floor(x.length * 0.6)] : 0.08; };
+      thighR = { L: pc(per.L), R: pc(per.R) };
+    }
+    for (const s of ['L', 'R'] as const) {
+      if (own === 'both' || own === s || (hold?.[s] && holdW[s] > 0.01) || (task && (task.hands === 'both' || task.hands === s))) { thighW[s] *= Math.exp(-dt * 5); thighPush[s].multiplyScalar(Math.exp(-dt * 5)); continue; }
+      const hd = bs.get(`hand${s}`)!, f = bs.get(`finger3_2${s}`), push = V4.set(0, 0, 0);
+      for (const p of [wp(`hand${s}`), f ? wp(`finger3_2${s}`) : null]) {
+        if (!p) continue;
+        for (const [k, [a, b]] of legs.entries()) {
+          const r = (k === 0 ? thighR.L : thighR.R) + 0.012, ab = SB.copy(b).sub(a), tt = clamp(SA.copy(p).sub(a).dot(ab) / ab.lengthSq(), 0, 1);
+          const c = SA.copy(a).addScaledVector(ab, tt), d = V5.copy(p).sub(c), dl = d.length();
+          if (dl < r && dl > 1e-5) { d.multiplyScalar((r - dl) / dl); if (d.length() > push.length()) push.copy(d); }
+        }
+      }
+      if (push.length() > 0.06) push.setLength(0.06);
+      thighPush[s].lerp(push, 1 - Math.exp(-dt * 12));
+      thighW[s] += (clamp(thighPush[s].length() / 0.01, 0, 1) - thighW[s]) * (1 - Math.exp(-dt * 8));
+      if (thighW[s] < 0.01) continue;
+      const up = bs.get(`upperarm${s}`)!, lo = bs.get(`lowerarm${s}`)!;
+      armTo(bs, s, up, lo, hd, hd.getWorldPosition(new THREE.Vector3()).add(thighPush[s]), thighW[s], dt);
+    }
+  }
   /** Hands and forearms never sink into the torso: the upper arm swings out just enough to clear it. */
   function keepArmsOut(bs: Map<string, THREE.Bone>) {
     if (!torsoR && !torsoBody.length) return;
@@ -1325,7 +1372,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       s.target = 1;
       s.a.timeScale = style.rate;
       // reaching low (picking up, drinking, fixing something on the ground): the knees go with it
-      const tc = task && !FULL_BODY.has(kind) && kneel === 0 ? taskClip() : null;
+      // the path (authored clip or procedural reach) is chosen once, as the task starts: a kneel still easing out when a pick
+      // up began switched it to the clip mid-reach a few frames in (a 37 cm jerk, the townsman picking up after kneeling)
+      const tc = task && !FULL_BODY.has(kind) && task.clipOk ? taskClip() : null;
       if (tc) { const c = action(tc, false); c.target = taskEnv(); s.target = 1 - taskEnv(); taskClipName = tc; }
       else {
         const low = task ? (LOW_TASKS[task.kind] ?? 0) * taskEnv() * (FULL_BODY.has(kind) ? 0 : 1) : 0;
@@ -1387,6 +1436,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     // a hand in the torso is a pixel or two further off; the check walks the whole body's matrices (a crowd's worth was
     // a few per cent of the frame)
     if (!CHAR_BUDGET.throttle || camD < (crowd ? 8 : 16)) keepArmsOut(bs);
+    if (!CHAR_BUDGET.throttle || camD < (crowd ? 8 : 16)) thighsOut(bs, dt);
     if (task) taskArms(bs, kind, t, dt);
     else if (kind === 'idle' && !gaze && speak <= 0 && !moving) idleLife(bs, t, dt);
     else { idleLook *= Math.exp(-dt * 3); }
@@ -1770,7 +1820,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     doTask(kind: TaskKind, o: { at?: THREE.Vector3 | null; seconds?: number; hands?: 'L' | 'R' | 'both'; prop?: PropKind | null; onContact?: () => void } = {}) {
       const dur = o.seconds ?? ({ pickup: 1.1, putdown: 1.1, throw: 1.4, plant: 1.6, drink: 2.2, eat: 2.6, type: 2.4, carry: 2.0, open: 1.2, give: 1.3, fix: 2.4, use: 1.8, gesture: 3, phone: 3 } as Record<TaskKind, number>)[kind];
       const hands = o.hands ?? (kind === 'type' || kind === 'carry' || kind === 'drink' || kind === 'gesture' || kind === 'fix' ? 'both' : 'R');
-      task = { kind, t: 0, dur, at: o.at ? o.at.clone() : null, hands, prop: o.prop === undefined ? TASK_PROP[kind] ?? null : o.prop, onContact: o.onContact ?? null };
+      task = { kind, t: 0, dur, at: o.at ? o.at.clone() : null, hands, prop: o.prop === undefined ? TASK_PROP[kind] ?? null : o.prop, onContact: o.onContact ?? null, clipOk: kneelGoal === 0 };
     },
     /** Hold on to something with one or both hands: live world points and directions (mutate them to move the hands
      *  with what they hold); null lets go. */
