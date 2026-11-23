@@ -8,7 +8,7 @@ the farther you go from the spawn point." Checks, on software GL (counts and the
   3. leaving the city and coming back, twice, holds the same: a visit no longer leaves the last one behind;
   4. a lost WebGL context is survived: the game pauses, and draws again once the context is back.
   python tools/soak_smoke.py [--quality web] [--port 4387]"""
-import argparse, functools, http.server, json, math, pathlib, sys, threading, time
+import argparse, re, functools, http.server, json, math, pathlib, sys, threading, time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import pw_pin  # noqa: E402,F401
 import bump_probe  # noqa: E402
@@ -48,7 +48,7 @@ def proc_mb():
         try:
             cmd = open(f'/proc/{x}/cmdline').read().split('\0')
             if not ('chrom' in cmd[0] or 'headless_shell' in cmd[0]): continue
-            t = next((c[7:] for c in cmd if c.startswith('--type=')), 'browser')
+            m = re.search(r'--type=([\w-]+)', ' '.join(cmd)); t = m.group(1) if m else 'browser'
             kb = next(int(l.split()[1]) for l in open(f'/proc/{x}/smaps_rollup') if l.startswith('Pss:'))
             rows[t] = rows.get(t, 0) + kb // 1024
         except Exception: pass

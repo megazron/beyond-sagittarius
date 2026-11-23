@@ -38,6 +38,28 @@ const loadTex = (url: string) => {
   const fin = () => { pending.delete(p); done(); };
   return new THREE.TextureLoader().load(url, fin, undefined, () => { console.warn('[crew] texture', url); fin(); });
 };
+/** What releaseCrew let go (memory reports: __bs.memOwners). */
+export const CREW_RELEASE = { textures: 0, assets: 0 };
+/**
+ * Phones, once a stage's bodies are all made: the body textures nothing under `keep` uses leave the GPU (the title's,
+ * the creator's and the portraits' looks; three.js uploads one again if another scene draws it), and the loaded body
+ * builds are forgotten (every body made already holds its own geometry; a later one loads its build again, from the
+ * browser's cache). `?crewrelease=0` keeps them.
+ */
+export function releaseCrew(keep: THREE.Object3D) {
+  if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('crewrelease') === '0') return;
+  const used = new Set<THREE.Texture>();
+  keep.traverse((o) => {
+    const mt = (o as THREE.Mesh).material;
+    for (const m of Array.isArray(mt) ? mt : mt ? [mt] : []) {
+      for (const v of Object.values(m as unknown as Record<string, unknown>)) if ((v as THREE.Texture)?.isTexture) used.add(v as THREE.Texture);
+      const u = (m as THREE.ShaderMaterial).uniforms; if (u) for (const x of Object.values(u)) if ((x?.value as THREE.Texture)?.isTexture) used.add(x.value as THREE.Texture);
+    }
+  });
+  for (const t of texCache.values()) if (!used.has(t)) { t.dispose(); CREW_RELEASE.textures++; }
+  CREW_RELEASE.assets += loaded.size;
+  loaded.clear(); assets.clear();
+}
 /** Resolves when every texture requested so far has arrived. */
 export const texturesReady = async () => { await Promise.all([...pending]); };
 

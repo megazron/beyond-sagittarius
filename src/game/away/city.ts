@@ -3,6 +3,7 @@ import { fitCanvasText } from '../../core/canvastext';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { createCharacter, Character, CrewId, CrewPose, CHAR_BUDGET } from '../../characters/character';
+import { releaseCrew } from '../../characters/assets';
 import { LINEAGES, townLook, PlayerLook, defaultLook } from '../../characters/custom';
 import { loadTexture } from '../../core/assets';
 import type { AwayStage, AwayTask } from './stage';
@@ -1362,6 +1363,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     fig.root.visible = false; fig.setGround((px, pz) => H(px, pz ?? 0)); top(fig.root);
     dpool.push({ fig, ped: -1, phase: rnd() * 10, look: i % NLOOK });
   }
+  // and the body caches (assets.ts releaseCrew): the textures of looks no body here wears leave the GPU, and the loaded
+  // builds are forgotten once every body of the city is made (509 MB of decoded body textures and 118 MB of builds sat
+  // outside the stage on the Mobile preset)
+  if (tier === 0) void Promise.all([...propsBuilt, ...people.map((q) => q.fig.whenReady), ...crowdPool.map((b) => b.fig.whenReady), ...dpool.map((b) => b.fig.whenReady)]).then(() => releaseCrew(scene)).catch(() => undefined);
   const dnear: [number, number][] = [], pk: [number, number][] = [];
   // a walker's ground height, looked up again only once they have gone half a metre (it was a height lookup per card a frame)
   const pedAt = new Float32Array(4096 * 3).fill(1e9);
