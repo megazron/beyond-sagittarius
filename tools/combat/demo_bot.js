@@ -143,7 +143,7 @@ window.__cbBot = (mode) => {
       // a record of every catch (window.__cbTrapLog), so a take can be checked for one without watching it all
       for (const q of sim.traps) if (q.sprungT >= 0 && !(window.__cbTrapLog ||= []).some((r) => r.id === q.id && r.t === q.sprungT)) window.__cbTrapLog.push({ id: q.id, kind: q.kind, t: q.sprungT, caught: q.caught, wave: run.wave, d: +dist(q, p).toFixed(1), rec: +((performance.now() - t0) / 1000).toFixed(1) });
       // and every warning cue (rustle, voice, twig before the snap), with its time in the take, to listen for it
-      { const b = C.beat; if (b && b.snapT < 0 && b !== flag.cueB) { flag.cueB = b; window.__cbTrapLog.push({ cue: b.id, t: +sim.t.toFixed(2), rec: +((performance.now() - t0) / 1000).toFixed(2) }); } }
+      { const b = C.beat; if (b && b.snapT < 0 && b !== flag.cueB) { flag.cueB = b; (window.__cbTrapLog ||= []).push({ cue: b.id, t: +sim.t.toFixed(2), rec: +((performance.now() - t0) / 1000).toFixed(2) }); } }
       // the watch: a man alone at night keeps busy. He keeps the fire up a branch at a time, scans the dark, the snare
       // and the stakes, turns his head to what he hears out there (and raises the spear at a growl), and when something
       // is heard AT a trap he leaves the view to the game's own look and goes a few steps that way, spear up

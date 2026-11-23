@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mulberry32, smoothstep } from '../core/noise';
 import { LAKE, Terrain } from './terrain';
 import type { Forest } from './forest';
+import { makeFire } from './flame';
 
 /** Fixed story locations for "The First 24 Hours" (levels 4-10). */
 export interface StoryLayout {
@@ -192,21 +193,12 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
   logs.add(ash);
   ring.visible = false; logs.visible = false;
   fire.add(ring, logs);
-  // flames: additive cones, flickered every frame
-  const flameMats = [new THREE.Color(2.4, 0.75, 0.16), new THREE.Color(2.8, 1.3, 0.3), new THREE.Color(2.2, 1.9, 0.8)].map((c) =>
-    new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
-  const flames = new THREE.Group();
-  const flameGeo = new THREE.ConeGeometry(0.22, 0.9, 6, 1, true);
-  flameGeo.translate(0, 0.45, 0);
-  const flameParts: THREE.Mesh[] = [];
-  for (let i = 0; i < 7; i++) {
-    const m = new THREE.Mesh(flameGeo, flameMats[i % 3]);
-    const a = i * 2.4;
-    m.position.set(Math.cos(a) * 0.12 * (i ? 1 : 0), 0.08, Math.sin(a) * 0.12 * (i ? 1 : 0));
-    m.userData.s = 0.6 + rnd() * 0.6;
-    flameParts.push(m);
-    flames.add(m);
-  }
+  // flames: noise-shaded tongues and a coal bed (src/world/flame.ts; they were additive six-sided cones, pale and blocky
+  // up close: owner); this fire's own embers below, its light further down
+  const flameFx = makeFire({ size: 1.05, tongues: 8, embers: 0, light: null, seed: 3 });
+  const flames = flameFx.group;
+  for (let i = 0; i < 7; i++) rnd(); // (the old cones took seven draws: kept, so everything after is placed as before)
+  flames.position.y = 0.04;
   flames.visible = false;
   fire.add(flames);
   const embersN = 40;
@@ -436,12 +428,9 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
         (m.material as THREE.MeshBasicMaterial).opacity = pulse;
       }
       if (state.lit) {
-        flameParts.forEach((m, i) => {
-          const f = 0.75 + 0.25 * Math.sin(t * (9 + i * 1.7) + i) + 0.12 * Math.sin(t * 23 + i * 3);
-          m.scale.set(m.userData.s * (0.8 + 0.2 * f), m.userData.s * f * (i ? 0.8 : 1.15), m.userData.s * (0.8 + 0.2 * f));
-          m.rotation.y = t * (0.5 + i * 0.1);
-        });
-        light.intensity = 3.5 * (0.85 + 0.1 * Math.sin(t * 13) + 0.05 * Math.sin(t * 31));
+        flameFx.update(1, 0);
+        light.intensity = 3.5 * (0.82 + 0.08 * Math.sin(t * 11.3) + 0.06 * Math.sin(t * 23.7 + 1.3) + 0.05 * Math.sin(t * 4.1 + 0.4) + 0.04 * Math.sin(t * 37.1));
+        light.position.set(Math.sin(t * 5.3) * 0.04, 0.9 + Math.sin(t * 7.9) * 0.05, Math.cos(t * 4.7) * 0.04);
         for (let i = 0; i < embersN; i++) {
           const life = (t * (0.35 + emberSeed[i] * 0.3) + emberSeed[i]) % 1;
           const a = emberSeed[i] * 40 + t * 0.6;

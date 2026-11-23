@@ -599,6 +599,20 @@ export class Combat {
     if (passive) { for (const e of sim.enemies) { e.alert = 0; e.aware = false; } I.attack = I.alt = I.block = I.dodge = false; }
     const hp0 = p.hp;
     if (run) run.update(dt, I); else sim.step(dt, I);
+    // spear fishing: the sun's net of light lies still on the bed here and there over the shallows, so the light the fish
+    // swim over belongs to the water and not to the fish (owner: the patch under each fish read as a spotlight)
+    if (run?.id === 'fish.spear' && this.bedRun !== run) {
+      this.bedRun = run;
+      const spots: { x: number; y: number; z: number; s: number }[] = [], p0 = sim.player;
+      let sd = 7; const rr = () => (sd = (sd * 9301 + 49297) % 233280) / 233280;
+      for (let i = 0; i < 400 && spots.length < 26; i++) {
+        const x = p0.x + (rr() - 0.5) * 24, z = p0.z + (rr() - 0.5) * 24, surf = this.env.water?.(x, z);
+        if (surf === null || surf === undefined) continue;
+        const bot = this.env.height(x, z), dp = surf - bot;
+        if (dp > 0.1 && dp < 0.85) spots.push({ x, y: bot + 0.012, z, s: 0.3 + rr() * 0.45 });
+      }
+      this.fx.bedLight(spots);
+    } else if (run?.id !== 'fish.spear' && this.bedRun) { this.bedRun = null; this.fx.bedLight([]); }
     // what the fight did to the body goes back to the game
     st.stamina = p.stamina;
     if (p.hp !== hp0) st.health = Math.max(run ? 1 : 0, p.hp);
@@ -885,7 +899,7 @@ export class Combat {
     // the light stays in the scene once made (switching lights on and off recompiles every material)
     this.fx.smokeK = nightRun ? 0.28 : 1;
     // the night defence was too dark past the firelight to see what came (owner): 0.55 -> 0.85
-    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? 0.8 : 0.85) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 40, P0.y + 80, P0.z + 30); this.shine.target.position.copy(P0); } }
+    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? 0.8 : 1.35) : 0; /* (night defence 0.85 -> 1.35: with the dimmer fire (7) and the eye stopped down by it, past the firelight the ground was black, s5 GPU take) */ this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 40, P0.y + 80, P0.z + 30); this.shine.target.position.copy(P0); } }
     // the same cold light catches the animals' edges, so a shape beyond the fire reads as an animal, not a shadow
     NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine ? this.shine.intensity * 0.55 : 0);
     const D = this.d, sim = this.sim!, P = D.player, p = sim.player, run = this.encounter, cam = P.camera;
@@ -1042,6 +1056,7 @@ export class Combat {
   testPoseStats(reset = false) { const st = { ...this.body.stats, rangedArmIn: this.body.ranged.armIn, rangedWhere: this.body.ranged.armWhere, rangedSolveIn: this.body.ranged.solveIn }; if (reset) { this.body.ranged.armIn = 0; this.body.ranged.solveIn = 0; } if (reset) Object.assign(this.body.stats, { frames: 0, shaftIn: 0, handOff: 0, leftOff: 0, skel: undefined, worst: undefined, worstL: undefined }); return st; }
   /** Recordings: the whole game in slow motion (1 is normal). */
   testSlow = 1;
+  private bedRun: unknown = null;
   testHold(code: string, on: boolean) { this.testKeys = true; this.d.input.hold(code, on); }
   testTap(code: string) { this.testKeys = true; this.d.input.hold(code, true); this.tapUp.push(code); }
   /** Turn the view as a mouse would (pixels). */

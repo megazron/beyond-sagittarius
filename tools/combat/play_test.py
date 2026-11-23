@@ -140,9 +140,16 @@ with sync_playwright() as pw:
                 ok(ps['rangedArmIn'] <= 0.02, f'arena: with the {wpn} the arms stay out of the body (within 2 cm)', json.dumps(ps))
             # wake the guardian and let it work
             g = [e for e in page.evaluate(D)['enemies'] if e['kind'] == 'guardian'][0]
-            page.evaluate(f"__bs.teleport({g['x']} - 3, {g['z']})"); step(page, 6)
-            g2 = [e for e in page.evaluate(D)['enemies'] if e['kind'] == 'guardian'][0]
-            ok(g2['state'] != 'dormant', 'arena: come close and the guardian wakes', g2['state'])
+            page.evaluate(f"__bs.teleport({g['x']} - 3, {g['z']})"); step(page, 0.2)
+            # (it failed twice, dormant after 6 s: the wake is inside 4.5 m and not while down, so print where the body
+            # really is a moment after the teleport and at the end, and whether it is down)
+            d0 = page.evaluate(D); pl0 = d0['player']
+            print(f"  guardian wake: guardian {g['x']:.1f},{g['z']:.1f}; 0.2 s after the teleport the body at {pl0['x']:.1f},{pl0['z']:.1f} (d {((pl0['x'] - g['x']) ** 2 + (pl0['z'] - g['z']) ** 2) ** 0.5:.2f}) down {pl0['down']} act {pl0['act']} hp {pl0['hp']}", flush=True)
+            step(page, 5.8)
+            d1 = page.evaluate(D); pl1 = d1['player']
+            g2 = [e for e in d1['enemies'] if e['kind'] == 'guardian'][0]
+            why = f"{g2['state']}; body at {pl1['x']:.1f},{pl1['z']:.1f} d {((pl1['x'] - g2['x']) ** 2 + (pl1['z'] - g2['z']) ** 2) ** 0.5:.2f} down {pl1['down']} act {pl1['act']}"
+            ok(g2['state'] != 'dormant', 'arena: come close and the guardian wakes', why)
             ok(page.evaluate("document.querySelector('#cb-hud .boss').classList.contains('on')"), 'arena: its bar is on the screen')
             shot(page, 'arena_guardian')
             # what the fight itself adds: the same view, the same frame state, with and without its draws
@@ -211,11 +218,13 @@ with sync_playwright() as pw:
         if page.evaluate("!!window.__t"): break
     ok(page.evaluate("window.__t && window.__t.passed === false"), 'API: a tension moment resolves (failed, nobody pressed)', page.evaluate("JSON.stringify({ t: window.__t, open: __bs.combat.tensionUi.open, ring: __bs.combat.tensionUi.cur && __bs.combat.tensionUi.cur.T.ring, endT: __bs.combat.tensionUi.cur && __bs.combat.tensionUi.cur.endT, vis: document.visibilityState })"))
     # the Action menu from pause
-    # DOM clicks: on the CI software renderer a frame can take seconds, so Playwright's
-    # "stable" check (two equal rAF boxes) timed out at 30 s on main and life-wip alike
-    page.keyboard.press('Escape'); page.wait_for_selector('#p-action', state='visible', timeout=30000)
+    # (clicked in the page, as the difficulty below: Playwright's click waits for "stable" and the pause menu's fade under
+    # the software renderer kept it unstable for tens of seconds now and then; perf agent 26's note)
+    page.keyboard.press('Escape'); time.sleep(0.5)
+    if not page.evaluate("!!(window.__bs && __bs.paused)"): page.keyboard.press('Escape')
+    page.wait_for_selector('#p-action', state='attached', timeout=10000)
     page.evaluate("document.getElementById('p-action').click()")
-    page.wait_for_selector('[data-cb="difficulty"] [data-v="story"]', state='visible', timeout=30000)
+    page.wait_for_selector('[data-enc]', state='attached', timeout=10000)
     ok(page.evaluate("document.querySelectorAll('[data-enc]').length") == 6, 'menu: Action lists the six set pieces')
     # (the button clicked in the page: Playwright's own click waits for the menu to be "stable" under the software renderer
     # and timed out at 30 s in about one CI run in three; what is checked here is that the choice is saved)

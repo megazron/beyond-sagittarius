@@ -1264,3 +1264,35 @@ unlanded except this handoff commit and any recording in progress.
   NE street; a small crowd round you at the tram door on Web.
 - NOT DONE: (2) draws/uniform uploads (Mobile proxy 54 fps at the crowd from perf 24 still stands; nothing changed
   there), (3) cold load (above).
+
+### 2026-11-23 ~21:30 (combat agent, weapons session 5)
+- LANDED b67349a on main (combat-land48, CI 45252497698): the first run failed only the combat job's "arena: come close
+  and the guardian wakes" (dormant after the teleport + 6 s); the rerun of that job was green. New flake to watch: if it
+  repeats, the teleport to 3 m (wake radius 4.5, ai.ts) is being pushed off or the player is down after the ranged checks.
+- Branch `combat-s5` (on top of b67349a, NOT landed; CI runs on its push):
+  - FISHING VIEW, the real cause: player.ts `camera.quaternion.slerpQuaternions(tmpC, camera.quaternion, along)` passes
+    the target as `this` and `qb`; three copies qa into `this` first, so the look along the look was always lost and
+    every "over"/aim view kept the look-at-the-body orientation. Now via tmpD. Probe (~/bs-cap/combat/probe/
+    fishcam_probe.py): camera pitch = look pitch down to -0.95 (was stuck at -0.297). This also changes every aim view
+    (bow, sling...): they now look where the shot goes (the aim point comes from the camera's real direction, so the
+    reticle and the shot agree either way).
+  - FIRE: src/world/flame.ts makeFire(): noise-shaded flame tongues (quads turned round the vertical), coal bed, GPU
+    embers, light flicker at several rates with the source moving a few cm. Used by fx.ts (fight fires) and story.ts
+    (camp fire; story agent told in ~/bs-story/HANDOFF.md; 7 rnd() draws kept). One shared program each; the fight's
+    flame material compiles the first time a fight fire is drawn (small; not added to any warm-up yet).
+  - FISH: the patch under each fish is a caustic net only (no fill, irregular outline, pattern fixed to the world), the
+    per-fish light shaft is near invisible (0.06), and fx.bedLight scatters ~26 still caustic patches over the shallows
+    when fish.spear starts, so the light belongs to the water, not the fish.
+  - BOW: no 88% set. Between shots the bow is low and out in front of the belly (ready = 0.45A + 0.8F - 0.6 up), the
+    hand at the nock; the click raises and draws together (lift = smooth(1.25 * draw)), the draw path bowed 10 cm out
+    in front. Probe: 14.5 cm (first try, bow low along the aim) -> 1.2 cm worst.
+  - SPEAR draw free hand (body.ts): comes up and across with the chest's coil, softer elbow, a balancing sway while held.
+- Clips: plan ~/bs-cap/combat/plan_s5.json (mkplan_s5.py), capture dir ~/bs-cap/combat/s5.
+- ~21:50 s5 GPU review (clips in Downloads/BS_Game_v1.1/combat, notes in README_review.txt): 29 bow (low ready between
+  shots OK; full draw from behind still a T = real form), 30 spear free hand (better from the side, still out from
+  behind), 20 fishing v5 (view tips down; 3 thrusts in 10 s), 31 fire v2 (better, NOT real fire yet: the core reads as a
+  bright triangle inside the teepee; flames should rise above the sticks, fewer and more distinct tongues; no heat haze),
+  28 coat v6 OK, 32 night v2 (planetshine 1.35, still dark past the fire; the night bot idles away from the fire).
+  CI on combat-s5 3433dd3 was queued at handover; land it like land48 (new branch name if main moved).
+  NEXT: fire look (flame.ts), the night's darkness (planetshine or a wider, softer camp fire fill), the spear free arm
+  from behind, check that aim views feel right now that they look along the look (player.ts tmpD fix).

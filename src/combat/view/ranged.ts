@@ -41,7 +41,7 @@ export class RangedRig {
   private pP = V(); private pPrev = V(); private tail = V(); private tailPrev = V(); private pouchInit = false;
   // where the hands are asked to be this frame (world), and what the gear does
   mode: 'none' | 'bow' | 'sling' | 'atlatl' = 'none';
-  private st = { draw: 0, up: 0, rel: 9, relDraw: 0, nock: -1, arrowIn: 'string' as 'string' | 'hand' | 'none', tremor: 0, roll: 0, vib: 0, phase: 0, throwT: -1, reload: -1, hold: 'left' as 'left' | 'free' | 'whirl' | 'throw' };
+  private st = { draw: 0, up: 0, lift: 0, rel: 9, relDraw: 0, nock: -1, arrowIn: 'string' as 'string' | 'hand' | 'none', tremor: 0, roll: 0, vib: 0, phase: 0, throwT: -1, reload: -1, hold: 'left' as 'left' | 'free' | 'whirl' | 'throw' };
   /** Which way to turn the body from the aim (radians): side-on for the bow. */
   faceOffset = 0;
   private aimL = V(); private D = V(); private Uw = V();
@@ -94,7 +94,10 @@ export class RangedRig {
    */
   pose(model: Character, p: SimPlayer, dt: number, t: number, up: boolean, aimW: THREE.Vector3, ammo: number, since: number): Limbs | null {
     const w = p.weapon;
+    const was = this.mode;
     this.mode = w === 'bow' ? 'bow' : w === 'sling' ? 'sling' : w === 'atlatl' ? 'atlatl' : 'none';
+    // (a new ranged weapon comes up from down: each turns the body its own way, and the bow came up "up" from the sling)
+    if (this.mode !== was) this.lower();
     if (this.mode === 'none') { this.group.visible = false; this.faceOffset = 0; return null; }
     const R = this.bones(model);
     this.group.visible = true;
@@ -130,12 +133,29 @@ export class RangedRig {
       // the bow arm: out along the aim at full raise, low and forward when lowered
       // (out along the aim and a little forward: this rig's shoulder joints sit near the back, ~15 cm behind the face, so
       // a bow arm straight along the aim held the bow behind the line of the arrow from the jaw; measured in the probe)
-      const A = V().set(aim.x, 0, aim.z).normalize(), F = V().crossVectors(A, UP).normalize();
-      if (F.z < 0) F.negate();
+      // F: the way the chest faces, square to the arrow (the part of the body's forward that is not along the aim). It was
+      // A x up flipped to the front, which is sideways when the aim lies along the body's forward (the first frames of
+      // the bow after another weapon, before the body has turned): F pointed to his right and the lowered bow arm
+      // reached across the chest (CI on 760e0b1: 9.8 cm). Now it tends to the body's forward as the aim does.
+      const A = V().set(aim.x, 0, aim.z).normalize(), F = V().set(0, 0, 1).addScaledVector(A, -A.z);
+      F.z += Math.max(0, 0.35 - F.length()); F.normalize();
       const low = V().set(aim.x * 0.6, -0.75, aim.z * 0.6).normalize();
-      const armDir = V().copy(low).lerp(V().copy(aim).addScaledVector(F, 0.3).normalize(), smooth(S.up)).normalize();
+      // Between shots the bow is held low and canted out in front, the string hand on the string at the nock (an
+      // archer's ready position); the click raises and draws together, so the whole draw, from the nock to the chin,
+      // is seen. (A set held near the chin between shots stood him in a "T" from behind, both arms out flat, and left a
+      // draw of a few centimetres: owner, GPU review.)
+      const kr = p.actT / 1.05;
+      const liftW = p.act === 'charge' ? smooth(Math.min(1, drawing * 1.25)) : recovering ? 1 - smooth((kr - 0.12) / 0.3) : 0;
+      S.lift += (liftW - S.lift) * (1 - Math.exp(-dt * 16));
+      const raised = V().copy(aim).addScaledVector(F, 0.3).normalize();
+      // (out in front of the belly, not off to the left: with the bow low along the aim the hand reached 33 cm across a
+      // nock 11 cm in front of him, probe 14.5 cm into the body)
+      const ready = V().copy(A).multiplyScalar(0.45).addScaledVector(F, 0.8).add(V().set(0, -0.6, 0)).normalize();
+      const armDir = V().copy(low).lerp(V().copy(ready).lerp(raised, S.lift).normalize(), smooth(S.up)).normalize();
       if (S.tremor > 0) armDir.x += Math.sin(t * 23) * 0.006 * S.tremor, armDir.y += Math.sin(t * 17 + 1) * 0.008 * S.tremor;
-      reach(sL, V().copy(sL).addScaledVector(armDir, (R.a + R.b) * 0.97), R.a, R.b, V().set(0, -1, 0).addScaledVector(aim, -0.3), eL, wL);
+      // (the elbow's pole out to the left as well as down: down and back only, the elbow came in by the ribs while the bow came
+      // up from low on a body still turning, CI 4.2 cm)
+      reach(sL, V().copy(sL).addScaledVector(armDir, (R.a + R.b) * 0.97), R.a, R.b, V().set(0.6, -1, 0).addScaledVector(aim, -0.3), eL, wL);
       // the string hand: on the string at brace height, back to the anchor under the jaw as it draws, past the ear on
       // the loose, then down to the quiver for the next arrow and back
       const grip = V().copy(wL).addScaledVector(armDir, 0.07);
@@ -149,13 +169,15 @@ export class RangedRig {
       const anchor = V().copy(head).addScaledVector(F, 0.12).addScaledVector(A, 0.01).add(V().set(0, -0.115, 0));
       const nock0 = V().copy(grip).addScaledVector(aim, -0.15).add(V().set(0, 0.012, 0));
       const quiver = V().set(-0.2, 0.92, -0.1);
-      // the set: raised, the string is held a little drawn, halfway back to the chin (a pre-draw, as many archers hold
-      // it; probe: at half way the line from the shoulder still ran through the neck, 8.4 cm): with the hand out at the bow the folded arm crossed the upper chest (this rig's shoulder joints sit ~32 cm
-      // behind the coat's front), probe 6-14 cm; from the set the elbow is already back along the arrow
-      const setP = V().copy(nock0).lerp(anchor, 0.88).addScaledVector(F, 0.02);
+      // between shots: on the string at the nock of the lowered bow (no set: held at 88% of the draw near the chin it
+      // read as a "T" from behind and the draw was a few centimetres; the arm to a string at the RAISED bow crossed the
+      // upper chest on this rig, so the bow rises with the draw instead and the hand is near the chin by full raise)
+      // (the hand goes from its rest by the hip to the nock as the bow comes up: it jumped there at up 0.5, before the
+      // bow and the body's turn had come round, and the arm crossed the chest, CI 11 cm)
+      const setP = V().set(-0.22, 1.0, 0.12).lerp(V().copy(nock0).addScaledVector(F, 0.02), smooth((S.up - 0.35) / 0.55));
       let target: THREE.Vector3; S.arrowIn = ammo > 0 ? 'string' : 'none'; S.nock = -1;
       // (the string comes back along the arrow, bowed a little out in front on the way so the forearm passes the chin)
-      if (p.act === 'charge') target = V().copy(setP).lerp(anchor, drawing).addScaledVector(F, 0.04 * Math.sin(Math.PI * drawing));
+      if (p.act === 'charge') target = V().copy(setP).lerp(anchor, drawing).addScaledVector(F, 0.1 * Math.sin(Math.PI * drawing));
       else if (recovering) {
         const k = p.actT / 1.05; S.nock = k;
         const past = V().copy(anchor).addScaledVector(aim, -0.17).add(V().set(0, 0.03, 0));
@@ -165,13 +187,13 @@ export class RangedRig {
         else if (k < 0.55) { const u = smooth((k - 0.25) / 0.3); target = V().copy(past).lerp(quiver, u).addScaledVector(F, 0.12 * Math.sin(Math.PI * u)); S.arrowIn = k > 0.5 && ammo > 0 ? 'hand' : 'none'; }
         else if (k < 0.85) { const u = smooth((k - 0.55) / 0.3); target = V().copy(quiver).lerp(setP, u).addScaledVector(F, 0.3 * Math.sin(Math.PI * u)).addScaledVector(A, -0.14 * Math.sin(Math.PI * u)); S.arrowIn = ammo > 0 ? 'hand' : 'none'; }
         else target = setP;
-      } else target = S.up > 0.5 ? setP : V().set(-0.22, 1.0, 0.12);
+      } else target = setP;
       // the drawing elbow: out in front at the brace, then back along the arrow's line as the string comes to the jaw
       // (a little up and a little behind the back, as a drawing elbow is in real form); past the head, not up into it
       const dk0 = p.act === 'charge' ? drawing : recovering ? Math.max(0, 1 - p.actT / 0.4) : 0;
       // (at the set the elbow is most of the way back already; down by the quiver it is not)
-      const kq = p.actT / 1.05, atQuiver = recovering ? smooth((kq - 0.25) / 0.1) * (1 - smooth((kq - 0.6) / 0.25)) : 0;
-      const dk = Math.max(dk0, (0.85 + 0.15 * dk0) * (1 - atQuiver)) * (S.up > 0.5 || p.act === 'charge' || recovering ? 1 : 0);
+      // (at the nock between shots the elbow is out in front and down; it goes back along the arrow with the draw)
+      const dk = dk0 * (S.up > 0.5 || p.act === 'charge' || recovering ? 1 : 0);
       // (at the brace the hand reaches across the chest to the string: an elbow sent down fell into the chest, CI 14 cm;
       // it goes out in front of the chest, at about shoulder height, as an archer's does when he takes the string)
       const pole = V().copy(A).multiplyScalar(-(0.25 + 0.75 * dk)).addScaledVector(F, 0.7 * (1 - dk) - 0.15 * dk).addScaledVector(UP, -0.35 * (1 - dk) + 0.1 * dk);
@@ -488,7 +510,9 @@ export class RangedRig {
     P.needsUpdate = true; C.needsUpdate = true;
   }
   /** Taken off: nothing left in the world. */
-  hide(model?: Character) { this.sol = null; if (model) { grip(model, 'L', null); grip(model, 'R', null); } this.group.visible = false; this.quiver.visible = false; this.mode = 'none'; this.faceOffset = 0; this.pouchInit = false; }
+  /** Down at once (the body has stopped turning into the shot). */
+  lower() { this.st.up = 0; this.st.lift = 0; this.st.draw = 0; }
+  hide(model?: Character) { this.sol = null; if (model) { grip(model, 'L', null); grip(model, 'R', null); } this.group.visible = false; this.quiver.visible = false; this.mode = 'none'; this.faceOffset = 0; this.pouchInit = false; this.lower(); }
 }
 
 type GripShape = 'open' | 'relaxed' | 'grip' | 'pinch' | 'point';

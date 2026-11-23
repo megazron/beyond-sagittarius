@@ -627,19 +627,13 @@ function darter(): CreatureView {
   // lays a pale, moving net of light on the gravel under it, and the dark fish and its shadow sit on that patch; a
   // faint shaft of light comes down through the water to it. The controller sets their heights like the shadow's.
   const uT = { value: 0 };
-  const patch = new THREE.Mesh(new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, uniforms: { uT },
-    vertexShader: 'varying vec2 vP; void main() { vP = position.xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'uniform float uT; varying vec2 vP; void main() { float r = length(vP); float e = smoothstep(1.0, 0.35, r); if (e < 0.01) discard;'
-      + ' vec2 q = vP * 5.0; float c = abs(sin(q.x * 1.7 + uT * 1.3) + sin(q.y * 1.3 - uT * 1.1) + sin((q.x + q.y) * 1.1 + uT * 0.7)) / 3.0; c = 1.0 - smoothstep(0.0, 0.35, c);'
-      + ' gl_FragColor = vec4(vec3(0.62, 0.64, 0.46) * (0.75 + 0.6 * c), e * (0.3 + 0.25 * c)); }',
-  }));
-  patch.scale.setScalar(DARTER_LEN * 1.25); patch.renderOrder = 0; root.add(patch); root.userData.patch = patch;
+  const patch = new THREE.Mesh(new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2), bedLightMaterial(uT));
+  patch.scale.setScalar(DARTER_LEN * 1.6); patch.renderOrder = 0; root.add(patch); root.userData.patch = patch;
   const shaft = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, uniforms: { uT },
     vertexShader: 'varying vec2 vU; void main() { vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: 'uniform float uT; varying vec2 vU; void main() { float a = smoothstep(0.0, 0.5, vU.x) * smoothstep(1.0, 0.5, vU.x) * (0.25 + 0.75 * vU.y);'
-      + ' a *= 0.8 + 0.2 * sin(uT * 1.7 + vU.x * 6.0); gl_FragColor = vec4(vec3(0.5, 0.55, 0.42) * a * 0.22, 1.0); }',
+      + ' a *= 0.8 + 0.2 * sin(uT * 1.7 + vU.x * 6.0); gl_FragColor = vec4(vec3(0.5, 0.55, 0.42) * a * 0.06, 1.0); }',
   }));
   shaft.scale.set(DARTER_LEN * 0.9, 1, 1); shaft.renderOrder = 2; root.add(shaft); root.userData.shaft = shaft;
   let sw = 0, roll = 0;
@@ -665,6 +659,26 @@ function small(v: CreatureView): CreatureView {
   let first = true;
   v.root.traverse((o) => { if ((o as THREE.Mesh).isMesh) { if (!first) o.castShadow = false; first = false; } });
   return v;
+}
+
+/**
+ * The sun's net of light on a stream bed (caustics): bright wavering lines only, no pale fill, an outline that is not a
+ * circle, and the pattern fixed to the ground (world x, z), so a patch that moves with a fish uncovers the light on the
+ * gravel instead of carrying a lit disc about (owner: the patches under the fish read as spotlights). The same material
+ * lies, still, here and there over the shallows round a fishing spot (fx.bedLight), so the light belongs to the water.
+ */
+export function bedLightMaterial(uT: { value: number }) {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, uniforms: { uT },
+    vertexShader: 'varying vec2 vP; varying vec2 vW; void main() { vP = position.xz; vW = (modelMatrix * vec4(position, 1.0)).xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform float uT; varying vec2 vP; varying vec2 vW; void main() { float r = length(vP), an = atan(vP.y, vP.x);'
+      + ' float edge = 0.78 + 0.14 * sin(an * 3.0 + vW.x * 0.7) + 0.08 * sin(an * 5.0 - vW.y * 0.9);'
+      + ' float e = smoothstep(edge, edge * 0.25, r); if (e < 0.01) discard;'
+      + ' vec2 q = vW * 6.5; float c = abs(sin(q.x * 1.7 + uT * 1.3) + sin(q.y * 1.3 - uT * 1.1) + sin((q.x + q.y) * 1.1 + uT * 0.7)) / 3.0;'
+      + ' vec2 q2 = vW * 11.0 + 3.1; float c2 = abs(sin(q2.x * 1.3 - uT * 1.6) + sin(q2.y * 1.6 + uT * 1.2) + sin((q2.x - q2.y) * 0.9 - uT * 0.8)) / 3.0;'
+      + ' float net = max(1.0 - smoothstep(0.0, 0.22, c), 0.6 * (1.0 - smoothstep(0.0, 0.18, c2)));'
+      + ' gl_FragColor = vec4(vec3(0.85, 0.86, 0.66), e * net * 0.42); }',
+  });
 }
 
 export function createCreature(kind: SpeciesId): CreatureView {
