@@ -20,6 +20,7 @@ ap.add_argument('--quality', default='web'); ap.add_argument('--port', type=int,
 ap.add_argument('--route-ms', type=float, default=150, help='most one route search may take (the old router: 600+ on CI)')
 ap.add_argument('--mem-only', action='store_true', help='only the memory budget in the city (the Mobile job), then stop')
 ap.add_argument('--heap-mb', type=float, default=0, help='most the JS heap (geometry and texture data included) may hold in the city, after a GC')
+ap.add_argument('--proc-mb', type=float, default=0, help='most the page may hold at process level in the city: the renderer and GPU processes\' PSS (Linux), which on software GL holds the textures and buffers too, as a phone\'s shared memory does')
 ap.add_argument('--body-js', default='', help='a script whose result is printed with each memory line (a body breakdown)')
 a = ap.parse_args()
 class H(http.server.SimpleHTTPRequestHandler):
@@ -32,6 +33,26 @@ ROUTE = [HOME, (0, 20), (0, -60), (60, 30), (175, 70), (330, 300), (10, 200), (0
 FAR = [(290.0, 260.0), (-290.0, -90.0), (330.0, 300.0)]
 MEM = "(()=>{window.gc&&window.gc();const m=performance.memory||{};const g=__bs.gpuMem;return {geo:g.geometries,tex:g.textures,progs:g.programs,heap:Math.round((m.usedJSHeapSize||0)/1e6)}})()"
 fails = []
+
+def proc_mb():
+    # PSS (MB) of this script's Chromium processes by --type (Linux /proc): the browser, the renderer, the GPU process
+    import os
+    ch = {}
+    for p in os.listdir('/proc'):
+        if p.isdigit():
+            try: ch.setdefault(int(open(f'/proc/{p}/stat').read().rsplit(')', 1)[1].split()[1]), []).append(int(p))
+            except Exception: pass
+    rows, st = {}, [os.getpid()]
+    while st:
+        x = st.pop(); st += ch.get(x, [])
+        try:
+            cmd = open(f'/proc/{x}/cmdline').read().split('\0')
+            if not ('chrom' in cmd[0] or 'headless_shell' in cmd[0]): continue
+            t = next((c[7:] for c in cmd if c.startswith('--type=')), 'browser')
+            kb = next(int(l.split()[1]) for l in open(f'/proc/{x}/smaps_rollup') if l.startswith('Pss:'))
+            rows[t] = rows.get(t, 0) + kb // 1024
+        except Exception: pass
+    return rows
 
 def walk(page, pts, step=30):
     for (x0, z0), (x1, z1) in zip(pts, pts[1:]):
@@ -64,12 +85,15 @@ with sync_playwright() as pw:
         if page.evaluate('__bs.state') == 'narrator': page.evaluate('__bs.skip()')
         time.sleep(1)
     who = page.evaluate('__bs.away.who')
-    if a.mem_only or a.heap_mb:
+    if a.mem_only or a.heap_mb or a.proc_mb:
         # phones: an Android WebView near 1 GB risks being killed. What the city holds, by owner, at the flat and in the bazaar
         for at in [HOME, (-5.5, 0.0), (0.0, -60.0)]:
             page.evaluate(f"__bs.awayTeleport({at[0]}, {at[1]}, 0)"); time.sleep(8)
             mo = page.evaluate("(async()=>{window.gc&&window.gc();await new Promise(r=>setTimeout(r,500));window.gc&&window.gc();return await __bs.memOwners()})()")
             print('memory at', at, json.dumps(mo), flush=True)
+            pm = proc_mb(); page_mb = pm.get('renderer', 0) + pm.get('gpu-process', 0)
+            print('process memory at', at, json.dumps(pm), 'renderer + GPU', page_mb, 'MB', flush=True)
+            if a.proc_mb and page_mb > a.proc_mb: fails.append(f"memory at {at}: renderer + GPU process {page_mb} MB (budget {a.proc_mb:.0f} MB on {a.quality})")
             if a.body_js: print('bodies at', at, json.dumps(page.evaluate(pathlib.Path(a.body_js).read_text())), flush=True)
             if a.heap_mb and mo.get('heapMB') and mo['heapMB'] > a.heap_mb: fails.append(f"memory at {at}: JS heap {mo['heapMB']} MB (budget {a.heap_mb:.0f} MB on {a.quality})")
     if a.mem_only:
