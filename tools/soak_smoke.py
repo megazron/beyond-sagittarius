@@ -73,8 +73,10 @@ with sync_playwright() as pw:
         if r and r['ms'] > a.route_ms: fails.append(f'route search from {(x, z)} took {r["ms"]:.0f} ms (at most {a.route_ms})')
     # 1b. bump into the painted crowd's walkers: whoever walks as a body stays that same body (the owner: "the pedestrians
     # suddenly change when touched or bumped into"; in the lens the body was let go and the card drawn instead)
-    page.evaluate("__bs.awayTeleport(-5.5, 0, 0)"); time.sleep(4)
-    held = page.evaluate("__bs.awayCrowd().held") or []
+    page.evaluate("__bs.awayTeleport(-5.5, 0, 0)")
+    for i in range(60):  # the crowd's bodies load on first sight
+        time.sleep(1); held = page.evaluate("__bs.awayCrowd().held") or []
+        if len(held) >= 2: break
     print('crowd bodies near the street', held, flush=True)
     if not held: fails.append('bump test: no crowd walker was a body near (-5.5, 0)')
     for card, body, look, d, x, z in held[:4]:
