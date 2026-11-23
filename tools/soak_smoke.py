@@ -71,6 +71,21 @@ with sync_playwright() as pw:
         r = page.evaluate(f"__bs.awayRoute({x}, {z}, {HOME[0] + 0.7 * (i + 1)}, {HOME[1]})")
         print('route from', (x, z), r, flush=True)
         if r and r['ms'] > a.route_ms: fails.append(f'route search from {(x, z)} took {r["ms"]:.0f} ms (at most {a.route_ms})')
+    # 1b. bump into the painted crowd's walkers: whoever walks as a body stays that same body (the owner: "the pedestrians
+    # suddenly change when touched or bumped into"; in the lens the body was let go and the card drawn instead)
+    page.evaluate("__bs.awayTeleport(-5.5, 0, 0)"); time.sleep(4)
+    held = page.evaluate("__bs.awayCrowd().held") or []
+    print('crowd bodies near the street', held, flush=True)
+    if not held: fails.append('bump test: no crowd walker was a body near (-5.5, 0)')
+    for card, body, look, d, x, z in held[:4]:
+        page.evaluate(f"__bs.awayTeleport({x + 0.45:.2f}, {z:.2f}, 0)")
+        for k in range(25):
+            page.evaluate('__bs.step(0.08)')
+            now = {h[0]: h for h in (page.evaluate("__bs.awayCrowd().held") or [])}
+            h = now.get(card)
+            if h is None or h[1] != body or h[2] != look:
+                fails.append(f'bump test: the walker of card {card} (body {body}, look {look}) became {h} {k * 0.08:.2f} s after the bump'); break
+    print('bump test done', flush=True)
     # 2. two more laps, back to the flat
     walk(page, ROUTE); walk(page, ROUTE)
     page.evaluate(f"__bs.awayTeleport({HOME[0]}, {HOME[1]}, 3.14)")
