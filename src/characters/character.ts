@@ -781,6 +781,37 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     }
   }
 
+  // ---- arm IK guards (setHold): a held hand never goes inside the body, and the elbow always points out and down ----
+  const holdS: { L?: { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; on: boolean }; R?: { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; on: boolean } } = {};
+  /** A hand target inside the torso (hips to neck capsules, plus a hand's thickness) is moved out to its surface. */
+  function holdOut(bs: Map<string, THREE.Bone>, p: THREE.Vector3) {
+    if (!torsoR) return p;
+    for (let j = 0; j < TORSO.length; j++) {
+      const a = bs.get(TORSO[j][0])!.getWorldPosition(new THREE.Vector3()), b = bs.get(TORSO[j][1])!.getWorldPosition(new THREE.Vector3());
+      const r = torsoR[j] * (a.distanceTo(b) / (torsoLen[j] || 1)) + 0.045;
+      const ab = b.clone().sub(a), t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / ab.lengthSq())), c = a.addScaledVector(ab, t);
+      const d = p.distanceTo(c);
+      if (d < r) { const out = p.clone().sub(c); if (out.lengthSq() < 1e-8) out.set(0, 0, 1).applyQuaternion(root.getWorldQuaternion(new THREE.Quaternion())); p.copy(c).addScaledVector(out.normalize(), r); }
+    }
+    return p;
+  }
+  /** Turn the arm about the shoulder-to-wrist line (the hand stays put) so the elbow points out from the body and down:
+   *  the two-bone solve kept whatever bend plane the clip had, and a straightish arm flipped its elbow into the ribs. */
+  function elbowOut(bs: Map<string, THREE.Bone>, sd: 'L' | 'R', up: THREE.Bone, lo: THREE.Bone, hd: THREE.Bone) {
+    const sh = up.getWorldPosition(new THREE.Vector3()), el = lo.getWorldPosition(new THREE.Vector3()), wr = hd.getWorldPosition(new THREE.Vector3());
+    const ax = wr.clone().sub(sh); if (ax.lengthSq() < 1e-6) return; ax.normalize();
+    const rq = root.getWorldQuaternion(new THREE.Quaternion());
+    const pole = new THREE.Vector3(sd === 'L' ? 1 : -1, 0, 0).applyQuaternion(rq).add(new THREE.Vector3(0, -0.9, 0)).add(new THREE.Vector3(0, 0, -0.3).applyQuaternion(rq));
+    const cur = el.sub(sh); cur.addScaledVector(ax, -cur.dot(ax)); pole.addScaledVector(ax, -pole.dot(ax));
+    if (cur.lengthSq() < 1e-6 || pole.lengthSq() < 1e-6) return;
+    cur.normalize(); pole.normalize();
+    const ang = Math.atan2(new THREE.Vector3().crossVectors(cur, pole).dot(ax), cur.dot(pole));
+    if (!Number.isFinite(ang) || Math.abs(ang) < 1e-3) return;
+    worldRotate(up, new THREE.Quaternion().setFromAxisAngle(ax, ang));
+    up.updateWorldMatrix(false, true);
+    void bs;
+  }
+
   function locomotion(speed: number, dt: number) {
     // stylised walk -> brisk walk -> run -> sprint, phase locked so feet stay in step
     const m = A!.meta;
@@ -946,7 +977,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const goal = handGoal(bs, sd, k, t, new THREE.Vector3());
       const qu = (taskQ.get(up.name) ?? taskQ.set(up.name, new THREE.Quaternion()).get(up.name)!).copy(up.quaternion);
       const ql = (taskQ.get(lo.name) ?? taskQ.set(lo.name, new THREE.Quaternion()).get(lo.name)!).copy(lo.quaternion);
-      solveLeg(up, lo, hd, goal);
+      solveLeg(up, lo, hd, holdOut(bs, goal));
+      elbowOut(bs, sd, up, lo, hd);
       up.quaternion.copy(qu.slerp(up.quaternion, w));
       lo.quaternion.copy(ql.slerp(lo.quaternion, w));
       up.updateWorldMatrix(false, true);
@@ -1138,20 +1170,32 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const h = hold?.[sd];
       holdW[sd] += ((h ? 1 : 0) - holdW[sd]) * (1 - Math.exp(-dt * 5));
       const hw = holdW[sd] * holdW[sd] * (3 - 2 * holdW[sd]);
-      if (!h || hw < 0.004 || task) continue;
+      // a task in the hands takes the arm; the hold eases back in after it (it snapped back at full weight)
+      if (task && h) { holdW[sd] = 0; if (holdS[sd]) holdS[sd]!.on = false; continue; }
+      if (!h || hw < 0.004) { if (holdS[sd] && hw < 0.004) holdS[sd]!.on = false; continue; }
       root.updateWorldMatrix(true, true);
       const up = bs.get(`upperarm${sd}`), lo = bs.get(`lowerarm${sd}`), hd = bs.get(`hand${sd}`), f3 = bs.get(`finger3_1${sd}`);
       if (!up || !lo || !hd || !f3) continue;
       const qu = (taskQ.get(`hold${sd}U`) ?? taskQ.set(`hold${sd}U`, new THREE.Quaternion()).get(`hold${sd}U`)!).copy(up.quaternion);
       const ql = (taskQ.get(`hold${sd}L`) ?? taskQ.set(`hold${sd}L`, new THREE.Quaternion()).get(`hold${sd}L`)!).copy(lo.quaternion);
-      solveLeg(up, lo, hd, h.at.clone());
+      // the hold's target eases to where it is told (a new target never snaps the arm across: "all of a sudden the
+      // arms are somewhere else"); a fresh hold starts from where the hand is now
+      const hs = holdS[sd] ??= { at: new THREE.Vector3(), fingers: new THREE.Vector3(), palm: new THREE.Vector3(), on: false };
+      if (!hs.on || hw < 0.02) { hd.getWorldPosition(hs.at); hs.fingers.copy(h.fingers); hs.palm.copy(h.palm); hs.on = true; }
+      const ek = 1 - Math.exp(-dt * 12);
+      if (Number.isFinite(h.at.x + h.at.y + h.at.z)) hs.at.lerp(h.at, ek);
+      if (h.fingers.lengthSq() > 1e-8) hs.fingers.lerp(V1.copy(h.fingers).normalize(), ek).normalize();
+      if (h.palm.lengthSq() > 1e-8) hs.palm.lerp(V1.copy(h.palm).normalize(), ek).normalize();
+      const tgt = holdOut(bs, hs.at.clone());
+      solveLeg(up, lo, hd, tgt);
+      elbowOut(bs, sd, up, lo, hd);
       up.quaternion.copy(qu.slerp(up.quaternion, hw)); lo.quaternion.copy(ql.slerp(lo.quaternion, hw));
       up.updateWorldMatrix(false, true);
       hd.getWorldPosition(V4s); hd.getWorldQuaternion(selfM.q0);
       const fl = selfM.a.copy(f3.getWorldPosition(V1)).sub(V4s).normalize().applyQuaternion(selfM.qi.copy(selfM.q0).invert());
       const nl = selfM.b.set(0, -1, 0); nl.addScaledVector(fl, -nl.dot(fl)).normalize();
       selfM.y.crossVectors(nl, fl); selfM.l.makeBasis(fl, selfM.y, nl);
-      const fw = selfM.x.copy(h.fingers).normalize(), pw = selfM.z.copy(h.palm); pw.addScaledVector(fw, -pw.dot(fw)).normalize();
+      const fw = selfM.x.copy(hs.fingers).normalize(), pw = selfM.z.copy(hs.palm); pw.addScaledVector(fw, -pw.dot(fw)).normalize();
       selfM.y.crossVectors(pw, fw);
       selfM.m.makeBasis(fw, selfM.y, pw).multiply(selfM.l.transpose()); selfM.q.setFromRotationMatrix(selfM.m);
       hd.parent!.getWorldQuaternion(Q).invert(); selfM.q.premultiply(Q);
