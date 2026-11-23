@@ -1150,3 +1150,36 @@ unlanded except this handoff commit and any recording in progress.
   it (fx.ripple). Bot not changed yet: waiting for the fishing take's evals.txt.
 - Plan ~/bs-cap/combat/plan_v25.json (mkplan_v25.py; CLIPS=spear,bow,fish,fire): 26_spear_drawn_back_v1,
   27_bow_real_form_sling_v1, 20_spear_fishing_v4 (log in evals.txt), 28_coat_by_the_fire_v1.
+- ~15:30 STATE (combat agent, session 4, handing off).
+  LANDING: combat-land45 = 934d701 (rebased on main 448dd37): its CI run 45184760079 has the combat job GREEN (bow 1.6 cm,
+  sling 0, atlatl 0; rock 66 frames; the difficulty click fix) and failed only smoke ("wake did not reach play") and
+  levels_smoke (".path-tree" 5 s), both known flakes; `gh run rerun 45184760079 --failed` was started. Land 934d701 when
+  that run is green on that sha and main has not moved (`git push origin 934d701...:main`, its own command).
+  combat-land46 = 2916a51 on top (fire light recalibrated, eye adaptation, fishing bot step-back reverted): CI pending; land
+  after 934d701. Stray branches combat-land39/42 were mid-rebase pushes: ignore. LESSON: never chain rebase && push.
+- What fixed the bow for real (worked on a headless probe of the real rig: ~/bs-cap/combat/probe/ranged_probe.py, one
+  heavy step = build + probe, ~10 min; prints the worst frame with aim, state, chest yaw): (1) the head shape went down to
+  the shoulders at head size: now a neck shape (melee.ts BODY[4], y 1.46-1.555, 0.068 x 0.072, not fitted) and the head
+  from 1.555; (2) anchor under the chin (head - 0.115 y, + 0.12 F); (3) a "set" held at 88% of the draw while aiming
+  (the arm across the chest to a string at the bow went through the upper chest on this rig: its shoulder joints sit ~32 cm
+  behind the coat's front); (4) to the quiver and back round the front; (5) the posed aim clamped within 0.7 rad of the
+  body's turn (CI frames right after a raise had the aim to his right). Sling: whirl centre and pole in the chest's axes;
+  rest elbow out by the ribs.
+- Spear drawn back, wrist, shoulder drop: as in the 13:30 entry; seen on the GPU (26_spear_drawn_back_v1): the elbow
+  hangs under the hand now. Wrist bend and shoulder drop are too small to judge at that size.
+- FIRE (owner: coat blown out): the fight's camp fire light 70/decay 1.7 -> 7/0.9 and the story's camp-fire light
+  (src/world/story.ts, STORY AGENT please note) 16/1.6 -> 3.5/1.0: together they put ~10x full daylight (sun 4.6) on a coat
+  at 1 m. Plus combat.exposureScale (main.ts multiplies the exposure after world.update): down to 0.7 near a burning camp
+  fire at night, 1 outside a set piece. Seen: 28_coat_by_the_fire_v4 (coat holds detail). Not yet seen: a full night
+  defence with the new light (it may be too dark past the fire now; planetshine is the far fill).
+- FISHING: v25 (20_spear_fishing_v4) the stand-in thrusts three times and catches two; it stopped only because the VIEW
+  CANNOT TIP DOWN: in fish.spear the camera's pitch stays at -0.297 while the look (C.cam.pitch / P.pitch) goes to -0.98,
+  so a fish closer than ~2.3 m cannot be aimed at (a real player problem). player.ts's over-view (along = overS, looks
+  along pitchS) should follow; find what holds the camera (lowCam -0.22 only clamps the orbit; check overS really reaches
+  1 while wading, and whether C.cam.pitch is the player's pitch). My bot step-back made it worse (v26): reverted.
+  Fish readability: lit caustic patch + light shaft + surface rings (creatures.ts darter, combat.ts, fx.ripple), seen in
+  v25: readable; the patches can read as spotlights.
+- Delivered (README notes): 20_spear_fishing_v4, 26_spear_drawn_back_v1, 27_bow_real_form_sling_v1 and _v2,
+  28_coat_by_the_fire_v1 (still blown out, superseded) and _v4.
+- Open, below the bar: bow "T" arms between shots from behind; the set means the visible draw is short; free left arm stiff
+  in the spear draw; flames are pale blocky cones up close; fishing tilt (above); fishing placement waits on the story.
