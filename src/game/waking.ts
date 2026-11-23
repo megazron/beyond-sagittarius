@@ -235,7 +235,8 @@ export class Waking {
   private cupHands(fwd: number) {
     const m = this.z, f = new THREE.Vector3(Math.sin(m.root.rotation.y), 0, Math.cos(m.root.rotation.y));
     const fingers = f.clone().multiplyScalar(0.8).add(new THREE.Vector3(0, 0.4, 0)).normalize();
-    m.setHold({ L: { at: this.chest(fwd, 0.045, 0.5), fingers, palm: new THREE.Vector3(0.3, 1, 0).normalize(), radius: 0.04 }, R: { at: this.chest(fwd, -0.045, 0.5), fingers, palm: new THREE.Vector3(-0.3, 1, 0).normalize(), radius: 0.04 } });
+    // grasps: the leaf's middle (the prop on his right hand) in front of his chest, the left palm under it
+    m.setHold({ L: { at: this.chest(fwd, 0.02, 0.5), fingers, palm: new THREE.Vector3(0.3, 1, 0).normalize(), radius: 0.03, grasp: true }, R: { at: this.chest(fwd, -0.01, 0.5), fingers, palm: new THREE.Vector3(-0.3, 1, 0).normalize(), grasp: true } });
     m.setLookTarget(this.chest(fwd, 0, 0.52));
   }
 
@@ -253,8 +254,9 @@ export class Waking {
       const c = top.clone().lerp(low, d);
       const fingers = f.clone().multiplyScalar(0.8).add(new THREE.Vector3(0, 0.4 - d * 0.6, 0)).normalize();
       m.setHold({
-        R: { at: c.clone().addScaledVector(r, -0.03), fingers, palm: new THREE.Vector3(-0.3, 1, 0).normalize(), radius: 0.04 },
-        L: { at: c.clone().addScaledVector(r, 0.035).add(new THREE.Vector3(0, -0.035, 0)), fingers, palm: new THREE.Vector3(0.3, 1, 0).normalize(), radius: 0.045 },
+        // grasps: the leaf's middle at c, the left palm under it
+        R: { at: c.clone().addScaledVector(r, -0.01), fingers, palm: new THREE.Vector3(-0.3, 1, 0).normalize(), grasp: true },
+        L: { at: c.clone().addScaledVector(r, 0.02).add(new THREE.Vector3(0, -0.01, 0)), fingers, palm: new THREE.Vector3(0.3, 1, 0).normalize(), radius: 0.03, grasp: true },
       });
       m.setLookTarget(c);
       requestAnimationFrame(step);
@@ -330,7 +332,7 @@ export class Waking {
         const f = this.fwd(), side = new THREE.Vector3(f.z, 0, -f.x);
         z.setHold({
           L: { at: w, fingers: f.clone().add(side.clone().multiplyScalar(-0.6)).normalize(), palm: new THREE.Vector3(0, 1, 0) },
-          R: { at: r, fingers: f.clone().add(side.clone().multiplyScalar(0.5)).normalize(), palm: new THREE.Vector3(0, -1, 0) },
+          R: { at: r, fingers: f.clone().add(side.clone().multiplyScalar(0.5)).normalize(), palm: new THREE.Vector3(0, -1, 0), grasp: true }, // the berry's middle on his wrist's skin
         });
         z.setLookTarget(w.clone());
         const r0 = r.clone(), t0 = performance.now();
@@ -341,13 +343,13 @@ export class Waking {
       { hold: 2.4, if: TESTED, shot: () => cover.close(z, 0.25, 0.75, 0.0), run: () => {
         rub = null;
         const m = mouth(), f = this.fwd();
-        z.setHold({ R: { at: m.clone().addScaledVector(f, 0.03).add(new THREE.Vector3(0, -0.02, 0)), fingers: f.clone().negate().add(new THREE.Vector3(0, 0.3, 0)).normalize(), palm: new THREE.Vector3(0, 0, 0).sub(f).normalize() } });
+        z.setHold({ R: { at: m.clone().addScaledVector(f, 0.035).add(new THREE.Vector3(0, -0.02, 0)), fingers: f.clone().negate().add(new THREE.Vector3(0, 0.3, 0)).normalize(), palm: new THREE.Vector3(0, 0, 0).sub(f).normalize(), grasp: true } }); // the berry's middle at his lower lip
         z.setLookTarget(m.clone().addScaledVector(f, 0.4).add(new THREE.Vector3(0, -0.25, 0)));
         z.setFace({ squint: 0.15 });
       } },
       // and waits: the hand comes down, he is very still
       { hold: 2.6, if: TESTED, shot: () => cover.close(z, -0.4, 0.85), run: () => {
-        z.setHold({ R: { at: this.chest(0.28, -0.08, 0.55), fingers: this.fwd(), palm: new THREE.Vector3(0, 1, 0) } });
+        z.setHold({ R: { at: this.chest(0.3, -0.08, 0.5), fingers: this.fwd(), palm: new THREE.Vector3(0, 1, 0), grasp: true } }); // the berry held in front of him
         z.setLookTarget(null); z.setFace({ open: 0.05 });
         audio.human('breath', 0.35);
         // the lip starts to tingle

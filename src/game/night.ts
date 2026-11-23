@@ -109,8 +109,8 @@ export class FirstNight {
         const stroke = (k * 1.6) % 1, at = 0.95 + Math.min(stroke, 0.75) / 0.75 * 0.4;
         const lift = stroke > 0.75 ? 0.035 : 0;
         z.setHold({
-          L: { at: this.along(L.butt, L.dir, 0.55), fingers: f.clone(), palm: L.dir.clone().negate(), radius: 0.02 },
-          R: { at: this.along(L.butt, L.dir, at).add(new THREE.Vector3(0, 0.03 + lift, 0)), fingers: L.dir.clone(), palm: new THREE.Vector3(0, -1, 0) },
+          L: { at: this.along(L.butt, L.dir, 0.55), fingers: f.clone(), palm: L.dir.clone().negate(), radius: 0.018, grasp: true },
+          R: { at: this.along(L.butt, L.dir, at).add(new THREE.Vector3(0, 0.022 + lift, 0)), fingers: L.dir.clone(), palm: new THREE.Vector3(0, -1, 0), grasp: true },
         });
         if (stroke < 0.75 && Math.random() < 0.12) audio.sample('wood', 0.15, { rate: 2.2 });
         requestAnimationFrame(step);
@@ -136,8 +136,8 @@ export class FirstNight {
       this.stick!.rotateY(0.06);
       if (this.tipMat) this.tipMat.color.lerp(new THREE.Color(deep ? 0x1a120c : 0x5a4030), 0.004);
       z.setHold({
-        L: { at: this.along(butt, dir, 0.3), fingers: dir.clone(), palm: new THREE.Vector3(0, -1, 0), radius: 0.02 },
-        R: { at: this.along(butt, dir, 0.5), fingers: dir.clone(), palm: new THREE.Vector3(0, -1, 0), radius: 0.02 },
+        L: { at: this.along(butt, dir, 0.3), fingers: dir.clone(), palm: new THREE.Vector3(0, -1, 0), radius: 0.018, grasp: true },
+        R: { at: this.along(butt, dir, 0.5), fingers: dir.clone(), palm: new THREE.Vector3(0, -1, 0), radius: 0.018, grasp: true },
       });
       requestAnimationFrame(step);
     };
@@ -162,9 +162,10 @@ export class FirstNight {
         { hold: 1.5, shot: () => this.scrapeShot(camp, 1.0), run: () => {
           // the point pressed into the ground at his knee: it snaps off
           const tip = this.kneel.clone().addScaledVector(f, 0.55); tip.y = this.world.terrain.height(tip.x, tip.z) + 0.02;
-          const butt = tip.clone().add(new THREE.Vector3(0, 1.45, 0)).addScaledVector(f, -0.5), dir = tip.clone().sub(butt).normalize();
+          // its top out past his right shoulder (straight up from in front of his knee it ran past his face)
+          const butt = tip.clone().add(new THREE.Vector3(0, 1.4, 0)).addScaledVector(f, -0.45).addScaledVector(this.axes(camp).r, 0.32), dir = tip.clone().sub(butt).normalize();
           this.layStick(butt, dir);
-          z.setHold({ R: { at: this.along(butt, dir, 0.9), fingers: f.clone(), palm: new THREE.Vector3(0, -1, 0), radius: 0.02 }, L: { at: this.along(butt, dir, 0.7), fingers: f.clone(), palm: new THREE.Vector3(0, -1, 0), radius: 0.02 } });
+          z.setHold({ R: { at: this.along(butt, dir, 0.9), fingers: f.clone(), palm: new THREE.Vector3(0, -1, 0), radius: 0.018, grasp: true }, L: { at: this.along(butt, dir, 0.7), fingers: f.clone(), palm: new THREE.Vector3(0, -1, 0), radius: 0.018, grasp: true } });
           this.after(0.6, () => { audio.sample('wood', 0.5, { rate: 1.4 }); const tp = this.stick!.children[1] as THREE.Mesh; tp.scale.set(1, 0.35, 1); tp.position.y = 1.53; });
         } },
         { key: 'e1.sp.burn', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95), run: () => { z.setHold(null); this.dropStick(); z.setFace({ frown: 0.4 }); }, after: 0.3 },
@@ -179,7 +180,7 @@ export class FirstNight {
       { hold: 1.8, shot: () => this.scrapeShot(camp, 1.3), run: () => {
         // out of the coals: the point dark and hard, held up to look at
         const L = this.lap(camp); this.layStick(L.butt, L.dir.clone().add(new THREE.Vector3(0, 0.5, 0)).normalize());
-        z.setHold({ L: { at: this.along(L.butt, L.dir, 0.4), fingers: this.axes(camp).f, palm: new THREE.Vector3(0, -1, 0), radius: 0.02 } });
+        z.setHold({ L: { at: this.along(L.butt, L.dir, 0.4), fingers: this.axes(camp).f, palm: new THREE.Vector3(0, -1, 0), radius: 0.018, grasp: true } });
         z.setLookTarget(this.along(L.butt, L.dir.clone().add(new THREE.Vector3(0, 0.5, 0)).normalize(), 1.6)); audio.chime();
       } },
     ], () => {
@@ -218,7 +219,7 @@ export class FirstNight {
         lay(segs[0], a, sag); lay(segs[1], sag, b);
         lay(segs[2], a, a.clone().addScaledVector(r, -0.05).add(new THREE.Vector3(0, -0.3, 0)));
         lay(segs[3], b, b.clone().addScaledVector(r, 0.05).add(new THREE.Vector3(0, -0.3, 0)));
-        z.setHold({ L: { at: a, fingers: f.clone(), palm: r.clone(), radius: 0.02 }, R: { at: b, fingers: f.clone(), palm: r.clone().negate(), radius: 0.02 } });
+        z.setHold({ L: { at: a, fingers: f.clone(), palm: r.clone(), radius: 0.012, grasp: true }, R: { at: b, fingers: f.clone(), palm: r.clone().negate(), radius: 0.012, grasp: true } });
         requestAnimationFrame(step);
       };
       requestAnimationFrame(step);

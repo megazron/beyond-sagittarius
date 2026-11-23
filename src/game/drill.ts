@@ -99,8 +99,9 @@ export class FireDrill {
       const down = (k * 0.55 * speed) % 1, h = 0.48 - down * 0.3, w = Math.sin(k * 14 * speed) * 0.05;
       const c = at.clone().add(new THREE.Vector3(0, h, 0));
       z.setHold({
-        R: { at: c.clone().addScaledVector(r, 0.035).addScaledVector(f, w), fingers: f.clone().add(new THREE.Vector3(0, 0.6, 0)).normalize(), palm: r.clone().negate(), radius: 0.012 },
-        L: { at: c.clone().addScaledVector(r, -0.035).addScaledVector(f, -w), fingers: f.clone().add(new THREE.Vector3(0, 0.6, 0)).normalize(), palm: r.clone() },
+        // grasps: both palms closed on the spindle's line at c (wrist points 3.5 cm out left the stem between the wrists)
+        R: { at: c.clone().addScaledVector(f, w), fingers: f.clone().add(new THREE.Vector3(0, 0.6, 0)).normalize(), palm: r.clone().negate(), radius: 0.007, along: 0.5, grasp: true },
+        L: { at: c.clone().addScaledVector(f, -w), fingers: f.clone().add(new THREE.Vector3(0, 0.6, 0)).normalize(), palm: r.clone(), radius: 0.007, along: 0.5, grasp: true },
       });
       if (Math.random() < 0.08 * speed) audio.sample('wood', 0.12, { rate: 1.6 + Math.random() * 0.3 });
       requestAnimationFrame(step);
@@ -219,7 +220,8 @@ export class FireDrill {
       { hold: 2.4, shot: () => cover.close(z, 0.3, 0.8, 0.25), run: () => {
         z.setProp(null); this.stick(null);
         const n = nest(), f = this.fwd();
-        z.setHold({ R: { at: n.clone().addScaledVector(new THREE.Vector3(f.z, 0, -f.x), -0.04), fingers: f.clone(), palm: new THREE.Vector3(0, 1, 0) }, L: { at: n.clone().addScaledVector(new THREE.Vector3(f.z, 0, -f.x), 0.04), fingers: f.clone(), palm: new THREE.Vector3(0, 1, 0) } });
+        // grasps: the palms cupped under the nest's middle
+        z.setHold({ R: { at: n.clone().addScaledVector(new THREE.Vector3(f.z, 0, -f.x), -0.035), fingers: f.clone(), palm: new THREE.Vector3(0, 1, 0), radius: 0.02, grasp: true }, L: { at: n.clone().addScaledVector(new THREE.Vector3(f.z, 0, -f.x), 0.035), fingers: f.clone(), palm: new THREE.Vector3(0, 1, 0), radius: 0.02, grasp: true } });
         z.setLookTarget(n); z.setFace({ open: 0.3, squint: 0.2 });
         this.emberAt(n.clone().add(new THREE.Vector3(0, 0.02, 0)));
         for (let i = 0; i < 3; i++) this.after(0.4 + i * 0.6, () => audio.human('breath', 0.6));

@@ -73,8 +73,8 @@ export class LeanTo {
       const k = (performance.now() - t0) / 1000; if (k > sec) { z.setHold(null); return; }
       const w = Math.sin(k * 5) * 0.05;
       z.setHold({
-        L: { at: at.clone().addScaledVector(S.r, -0.22 + w), fingers: S.open.clone().negate(), palm: S.open.clone().negate(), radius: 0.03 },
-        R: { at: at.clone().addScaledVector(S.r, 0.22 - w).add(new THREE.Vector3(0, 0.04, 0)), fingers: S.open.clone().negate(), palm: S.open.clone().negate(), radius: 0.03 },
+        L: { at: at.clone().addScaledVector(S.r, -0.22 + w), fingers: S.open.clone().negate(), palm: S.open.clone().negate(), radius: 0.03, grasp: true },
+        R: { at: at.clone().addScaledVector(S.r, 0.22 - w).add(new THREE.Vector3(0, 0.04, 0)), fingers: S.open.clone().negate(), palm: S.open.clone().negate(), radius: 0.03, grasp: true },
       });
       requestAnimationFrame(step);
     };
@@ -268,7 +268,11 @@ export class LeanTo {
     const fly = () => {
       // side-arm: the arm sweeps across, the stick leaves flat and spins about its middle all the way there
       // v4: a touch slower than life (1.3 s) and fewer turns, so the flight is seen; the second shot is from the stump
-      const T = hit ? 1.3 : 1.5, t0 = performance.now(); stick.position.copy(from); this.world.scene.add(stick); this.fx.push(stick);
+      const T = hit ? 1.3 : 1.5, t0 = performance.now();
+      // from his hand as it is at the release (a fixed point by his head left the stick 20 to 40 cm off the hand)
+      let hand: THREE.Object3D | undefined; z.root.traverse((o) => { if (o.name === 'handR' && (o as THREE.Bone).isBone) hand = o; });
+      if (hand) from.setFromMatrixPosition(hand.matrixWorld);
+      stick.position.copy(from); this.world.scene.add(stick); this.fx.push(stick);
       audio.sample('cb_whirr', 0.45);
       const step = () => {
         const k = Math.min(1, (performance.now() - t0) / 1000 / T);
