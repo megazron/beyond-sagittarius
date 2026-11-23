@@ -688,3 +688,16 @@ unlanded except this handoff commit and any recording in progress.
   and that fish show through the lake's water. (4) clips < 30 MB to Downloads/.../combat with honest README notes.
   (5) setGrip still not on origin/main (checked 14:00): bow/sling grips wait. (6) story agent's answer on spear
   fishing: last section of ~/bs-story/INVENTION_TREE.md. Giant-creature thump: left as is (no owner decision yet).
+
+### 2026-11-23 ~00:30 (combat agent, resumed after the Text to Robot pause)
+- Rebased combat-land18 onto main (only HANDOFF.md conflicted: both appended sections, both kept; perf's lens fade,
+  crowd camera and batching untouched). Main moved again at 00:36, so the landing branch is `combat-land20`.
+- Recording bot night watch (demo_bot.js, the story's Episode One night embeds it): spear in hand before ready; after
+  the traps it keeps the fire up a branch at a time (two thirds; in wave 1 only under 45%), scans out, snare, the dark
+  either side, stakes, fire (3.4 s each), turns its head to the placed sounds the player hears (`combat.heard`, new:
+  name, x, z, wall ms; chitter/squeak/growl/snarl/howl/rustle/twig/snort, 2.5-24 m, 3 s rest between small sounds, a
+  growl always and raises the spear), and walks a few steps towards a trap that is heard (the game's beat turns the
+  view). Logged in window.__cbWatchLog. The story agent's copy ~/bs-cap/tools/night_bot.js had the first version of
+  this idea; mine replaces it (tell it to embed demo_bot.js again).
+- Aim assist lead fixed (speed along heading, sim_test 248).
+- Plans: ~/bs-cap/combat/mkplan_v19.py -> plan_v19_night_wrap.json, plan_v19_guardian_throwstick.json; plan_v18.json.
