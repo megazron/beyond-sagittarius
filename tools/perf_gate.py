@@ -70,8 +70,9 @@ TOP_ON = """() => { const r = __bs.gl, orig = r.renderBufferDirect; window.__pgT
   const name = (obj) => { const parts = []; for (let o = obj; o && parts.length < 4; o = o.parent) { let n = o.name || ''; if (o.userData && o.userData.isCharacter) n = 'BODY'; if (n) parts.push(n); }
     return (parts.reverse().join('/') || obj.type) + (obj.isBatchedMesh ? ' [batch]' : obj.isInstancedMesh ? ' [inst ' + obj.count + ']' : obj.isSkinnedMesh ? ' [skin]' : ''); };
   r.renderBufferDirect = function (cam, sc, g, m, obj, grp) { const a = r.info.render.triangles; const v = orig.apply(this, arguments);
-    const k = (cam.isOrthographicCamera ? 'S ' : 'M ') + name(obj) + ' |' + (m.name || m.type); const c = window.__pgTop.cur; c[k] = (c[k] || 0) + r.info.render.triangles - a; return v; }; }"""
-TOP_TAKE = """() => { const c = window.__pgTop.cur; window.__pgTop.cur = {}; return Object.entries(c).sort((x, y) => y[1] - x[1]).slice(0, 12).map(([k, v]) => k + ' ' + Math.round(v)); }"""
+    const k = (cam.isOrthographicCamera ? 'S ' : 'M ') + name(obj) + ' |' + (m.name || m.type); const c = window.__pgTop.cur; const e = c[k] || (c[k] = [0, 0]); e[0] += r.info.render.triangles - a; e[1]++; return v; }; }"""
+TOP_TAKE = """() => { const c = Object.entries(window.__pgTop.cur); window.__pgTop.cur = {};
+  return { tris: c.sort((x, y) => y[1][0] - x[1][0]).slice(0, 12).map(([k, v]) => k + ' ' + Math.round(v[0])), calls: c.sort((x, y) => y[1][1] - x[1][1]).slice(0, 16).map(([k, v]) => k + ' x' + v[1]) }; }"""
 TOP_OFF = """() => { __bs.gl.renderBufferDirect = window.__pgTop.orig; }"""
 SEED = """(() => { let s = 7; Math.random = () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();"""
 
@@ -144,11 +145,12 @@ with sync_playwright() as pw:
                 if not still: raise NotSettled(f'a frozen frame still changed after 40 draws: {prev} then {cur}')
                 pending = [w for w in page.evaluate('__bs.settled()')]
                 if pending: raise NotSettled('; '.join(pending))
-                page.evaluate(TOP_ON); r = {'calls': 0, 'tris': 0, 'bodies': 0, 'skinned': 0}; top = []
+                page.evaluate(TOP_ON); r = {'calls': 0, 'tris': 0, 'bodies': 0, 'skinned': 0}; top = []; topc = []
                 for _ in range(4):
                     p = step(1 / 30, dl, ticking=True); t = page.evaluate(TOP_TAKE)
                     for k in r: r[k] = max(r[k], p[k])
-                    if p['tris'] >= r['tris']: top = t
+                    if p['tris'] >= r['tris']: top = t['tris']
+                    if p['calls'] >= r['calls']: topc = t['calls']
                 page.evaluate(TOP_OFF)
             except NotSettled as e:
                 fails.append(f"{q} {name}: did not settle in {a.settle:.0f} s ({e})"); print(fails[-1], flush=True); continue
@@ -156,7 +158,9 @@ with sync_playwright() as pw:
             print(q, name, 'settled', st, flush=True)
             rows[name] = r
             print(q, name, r, flush=True)
-            if r['calls'] > D: fails.append(f"{q} {name}: {r['calls']} draw calls (budget {D})")
+            if r['calls'] > D:
+                fails.append(f"{q} {name}: {r['calls']} draw calls (budget {D})")
+                print('  worst frame by draw calls:\n   ' + '\n   '.join(topc), flush=True)
             if r['tris'] > T:
                 fails.append(f"{q} {name}: {r['tris']} triangles (budget {T})")
                 print('  worst frame by triangles:\n   ' + '\n   '.join(top), flush=True)
