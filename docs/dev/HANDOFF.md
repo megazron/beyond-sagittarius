@@ -1754,6 +1754,26 @@ Why: the release pass found the set pieces reachable only from Pause, Action or 
     range and outside the cap). Now on phones they are drawn, nearest first, only while the phone total (BODY_CAP + 2,
     the crowd's and district walkers' bodies counted) has room. Local gate spot: 13 bodies, 588 011 triangles. A story
     person 50 m+ down the street can now wait out of sight on phones when the near bodies fill the total.
-- NE WALL: ?facx=bits (facade.ts; live as window.__facx.value) turns facade shader parts off: 1 glass shine, 2 reveal,
-  4 far averaging, 8 ledge lines, 16 room/goods, 32 glass normal map. Probe plan p30/plan_ne_facx.json (Mobile, the p29
-  ne_street_far frame, one shot per bit).
+- LANDED: 3b1eef8 (ped30-land, CI all green on that sha, no reruns): the phones' far story people and the Web budget.
+  The far-story rule then showed popping in the detector (p30/ped_e1_mobile: the story's people blinking out and back
+  46-82 m off, 9 vanishFar + 9 appearFar, none before): taken out on ped30b; perf_gate's Mobile body budget 14 -> 16
+  counts them instead (they are drawn outside the cap by design; comment in perf_gate.py).
+- DETECTOR p30/ped_e1 (dist-p30e = ped30b with the far-story rule, Web out-of-view cards, phone pool 16): Mobile cardClose
+  9 (p29 best 13), overlap 0, slide 0, plus the 9/9 far blinks above. Web cardClose 22 (p29f 12, a-d 23-26), overlap 18,
+  slide 3, identity 1, appear 1. Web tram square: 11 of the 22, each with the crowd pool full (want 20, held 19-20:
+  POOL 20 on Web while 24 bodies are built, ceil(20/12)*12); next to try: Web POOL 24 (watch the gate's 1.45 M).
+- INCIDENT (mine): 3b1eef8 also carried 1258b70, my first facade probe switch, which put the reveal block's
+  `float fReveal` under an if/else: the facade shader did not compile and the facade buildings were NOT DRAWN on main
+  for about an hour (every gate green: three does not report shader errors unless ?shadercheck=1). Reverted by
+  56e639b (facade-hotfix, CI green after one rerun of the known levels_smoke "inventory did not open" flake), landed.
+  perf_gate now loads with ?shadercheck=1 and fails on a shader error (ped30b). Check any shader edit with
+  p30/shcheck.py DIST QUALITY "shadercheck=1" before pushing.
+- NE WALL: ?facx=bits (facade.ts, fixed form on ped30b; live as window.__facx.value) turns facade shader parts off:
+  1 glass shine, 2 reveal, 4 far averaging, 8 ledge lines, 16 room/goods, 32 glass normal map. GPU probe p30/ne_facx
+  (Mobile, plan p30/plan_ne_facx.json, the ne_street_far frame, one shot per bit): the speckle is there with EVERY bit
+  and with all six off (f63): it is not the glass shine, reveal, far averaging, ledges, room or the normal map. p30/
+  ne_depth: hiding the facade meshes takes the purple wall AND the shopfront away (both facade); drawing the facade
+  meshes last (renderOrder 9999) clears the speckle in one triangle of the panel and not the other (a diagonal split),
+  so it is a depth race with something drawn before, not the shader's colour. p30/geo.py: only ONE facade quad lies
+  in z = 220 there (tris 980/981 of static:MeshStandardMaterial, x 260-320). Next: p30/geo2.py lists every mesh's
+  triangles near that corner (any material) to find the other surface.
