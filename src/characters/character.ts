@@ -570,9 +570,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // build is in, a far body keeps its near hair (showKitHair)
       const extra: Parameters<typeof mergeBodyGeometry>[2] = [];
       let kitHere: THREE.SkinnedMesh[] = [], hairHere: THREE.Object3D | null = null;
-      const bound = rigid.length && rigid.every((r) => sameSkeleton(r.skeleton, sk.skeleton) && r.bindMatrix.equals(sk.bindMatrix) && (r.parent ?? parkedOn.get(r)) === sk.parent && r.matrix.equals(sk.matrix));
+      // the kit is skinned in the same bind space (rigid.ts binds it as the body's first mesh); a skinned mesh's own place
+      // does not move its vertices (attached bind: its world matrix cancels), so only the skeleton and the bind must match
+      // (a different bind is taken into this one's: sk bind inverse x the kit's bind)
+      const bound = rigid.length && rigid.every((r) => sameSkeleton(r.skeleton, sk.skeleton));
       if (BODY_MERGE.extras && bound) {
-        const k = kitParts(rigid, kitSlots);
+        const k = kitParts(rigid, kitSlots, sk.bindMatrix);
         if (k.parts.length) { extra.push(...k.parts); kitHere = k.parts.map((p) => p.from); kitCull ||= k.cull; }
       }
       const hs = (s === 1 ? hairs[1] : null) ?? hairs[0];

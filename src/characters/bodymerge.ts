@@ -51,12 +51,17 @@ function closed(g: THREE.BufferGeometry) {
   return true;
 }
 /** The body's rigid kit meshes (rigid.ts, already skinned in the body's bind space) as merge parts. */
-export function kitParts(kit: THREE.SkinnedMesh[], slots: string[]) {
+export function kitParts(kit: THREE.SkinnedMesh[], slots: string[], bind: THREE.Matrix4) {
   const out: (Extra & { from: THREE.SkinnedMesh })[] = [];
   let cull = false;
   for (const sm of kit) {
-    const mat = sm.material as THREE.MeshStandardMaterial, g0 = sm.geometry;
-    if (mat.customProgramCacheKey?.() !== 'crew-rigid') continue;
+    const mat = sm.material as THREE.MeshStandardMaterial;
+    let g0 = sm.geometry;
+    if (!sm.bindMatrix.equals(bind)) {
+      const t = bind.clone().invert().multiply(sm.bindMatrix);
+      g0 = g0.clone(); g0.applyMatrix4(t);
+    }
+    if (!mat.customProgramCacheKey?.().startsWith('crew-rigid')) continue; // (the city's atmosphere adds its own key: 'crew-rigid|atmo')
     let slot = 0;
     if (mat.normalMap) { const k = rigidSlotKey(mat); slot = slots.indexOf(k) + 1; if (!slot) { if (slots.length >= 2) continue; slots.push(k); slot = slots.length; } }
     const front = mat.side === THREE.FrontSide;
