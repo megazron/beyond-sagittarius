@@ -52,8 +52,8 @@ export function departScene(a: Cast, origin: THREE.Vector3, seats: Record<string
   };
   const look = (c: Character, at: Character | THREE.Vector3 | null) => c.setLookTarget(at === null ? null : at instanceof THREE.Vector3 ? at : head(at));
   const phone = () => head(a.social).add(V(0.12, -0.05, 0.38)); // her phone, up at arm's length in front of her
-  const pane = o(-1.2, -1.6, -4.2); // Earth, below and ahead, through the window
-  const bag = o(-0.25, -1.95, 1.25);
+  const pane = o(-1.6, -2.4, -4.4); // Earth, below and ahead, through the window
+  const bag = o(-0.6, -1.95, 0.85);
   const lap = (c: Character) => new THREE.Vector3().setFromMatrixPosition(c.root.matrixWorld).add(V(0, 0.6, 0)).addScaledVector(V(Math.sin(c.root.rotation.y), 0, Math.cos(c.root.rotation.y)), 0.6);
   const stand = (id: CrewId, s: Seat) => { const c = a[id]; c.root.position.copy(o(s.x, -2.2, s.z)); c.root.rotation.set(0, s.yaw, 0); c.root.updateMatrixWorld(true); };
   const all = { scientist: 'sit', strong: 'sit', medic: 'sit', builder: 'sit', explorer: 'stand', social: 'selfie' } as const;
@@ -74,12 +74,12 @@ export function departScene(a: Cast, origin: THREE.Vector3, seats: Record<string
     { key: 'dep.3', who: 'social', shot: () => { const m = head(a.social).add(head(a.builder)).multiplyScalar(0.5); return { from: m.clone().add(V(0.35, 0.1, 2.7)), to: m.clone().add(V(0, -0.15, 0)), push: 0.03, fov: LENS.m35 }; },
       run: () => look(a.social, a.builder), tick: (t) => { if (t > 0.9) look(a.social, phone()); }, after: 0.4 },
     // L5 the argument: Skyvra at her bag, then up at Zenvik
-    { key: 'dep.4', who: 'explorer', shot: () => aim(a.explorer, 0.75, 2.0, LENS.m50, 0.05, 0.25), poses: { social: 'stand' },
+    { key: 'dep.4', who: 'explorer', shot: () => aim(a.explorer, 1.2, 2.0, LENS.m50, 0.05, 0.25), poses: { social: 'stand' },
       run: () => { look(a.explorer, bag); look(a.social, a.explorer); }, tick: (t) => { if (t > 0.5) look(a.explorer, a.scientist); } },
     // L6 reverse: Zenvik, calm, a little smug
     { key: 'dep.5', who: 'scientist', shot: () => aim(a.scientist, -0.55, 1.6, LENS.c85), run: () => look(a.scientist, a.explorer) },
     // L7 reverse: her excuse, with a grin she cannot hold back
-    { key: 'dep.6', who: 'explorer', shot: () => aim(a.explorer, 0.95, 1.6, LENS.c85), run: () => { look(a.explorer, a.scientist); a.explorer.setFace({ smile: 0.6 }); }, after: 0.4 },
+    { key: 'dep.6', who: 'explorer', shot: () => aim(a.explorer, 1.25, 1.6, LENS.c85), run: () => { look(a.explorer, a.scientist); a.explorer.setFace({ smile: 0.6 }); }, after: 0.4 },
     // L8 Lyrra, not looking up from her list
     { key: 'dep.7', who: 'medic', shot: () => aim(a.medic, -0.55, 1.6, LENS.c85, -0.02, 0.08), run: () => { a.explorer.setFace(null); look(a.medic, lap(a.medic)); }, after: 0.6 },
     // L9 back to the trip: Nuvexa turns her phone on Zenvik
@@ -99,11 +99,11 @@ export function departScene(a: Cast, origin: THREE.Vector3, seats: Record<string
     { key: 'dep.9', who: undefined, shot: () => ({ from: o(0.15, -0.62, 0.75), to: o(0, -0.58, -1.43), push: 0.12, fov: LENS.m50 }),
       run: () => {
         fx.display(true); a.medic.doTask('use', { seconds: 0.2, prop: null });
-        stand('explorer', { x: 3.2, z: -2.0, yaw: Math.PI + 0.55 }); look(a.explorer, pane);
+        stand('explorer', { x: 2.9, z: -2.05, yaw: -2.2 }); look(a.explorer, pane);
         for (const id of ['strong', 'scientist', 'social'] as CrewId[]) look(a[id], o(0, -0.55, -1.43));
       }, after: 0.6 },
     // L15 Skyvra at the window, Earth below her: the owner's first line
-    { key: 'cine.line1', who: 'explorer', shot: () => aim(a.explorer, 2.12, 1.9, LENS.m50, 0.02, 0.15), poses: { social: 'selfie' },
+    { key: 'cine.line1', who: 'explorer', shot: () => { const h = head(a.explorer), f = pane.clone().sub(h).setY(0).normalize(), r = V(-f.z, 0, f.x); return { from: h.clone().addScaledVector(f, -0.95).addScaledVector(r, 0.38).add(V(0, 0.08, 0)), to: h.clone().addScaledVector(f, 3).add(V(0, -0.75, 0)), push: 0.04, fov: LENS.m35 }; }, poses: { social: 'selfie' },
       run: () => { fx.display(false); look(a.explorer, pane); }, tick: (t) => { if (t > 1.3) look(a.explorer, o(1.2, -1.0, 0.0)); } },
     // L16 the reply, word for word, into Nuvexa's phone
     { key: 'dep.10', who: 'strong', shot: () => aim(a.strong, 0.35, 2.1, LENS.m50, 0.05, 0.2), run: () => { look(a.strong, phone()); look(a.social, a.strong); }, after: 0.3 },
