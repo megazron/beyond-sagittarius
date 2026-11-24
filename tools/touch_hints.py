@@ -16,7 +16,7 @@ SCAN = r"""() => {
   const vis = (el) => { const r = el.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false; for (let e = el; e; e = e.parentElement) { const s = getComputedStyle(e); if (s.display === 'none' || s.visibility === 'hidden' || +s.opacity === 0) return false; } return true; };
   const out = [];
   for (const k of document.querySelectorAll('kbd, .kc, .pc')) if (vis(k)) out.push('cap: ' + (k.textContent || k.className).trim().slice(0, 30));
-  const words = /(^|[^\w])(Esc|Enter|Space|Tab|WASD|Shift|Ctrl)([^\w]|$)/;
+  const words = /(^|[^\w])(Esc|Enter|Space(?! Age)|Tab|WASD|Shift|Ctrl)([^\w]|$)/; // (the Space Age is a codex era)
   const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let n; (n = walk.nextNode());) { const tx = n.textContent.trim(); if (tx && words.test(tx) && n.parentElement && vis(n.parentElement) && !n.parentElement.closest('#settings-keys, .bind, .remap')) out.push('text: ' + tx.slice(0, 60)); }
   return out;
