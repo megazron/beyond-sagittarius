@@ -1943,7 +1943,11 @@ Fixing the owner's list from the flow4 GPU takes, in order.
     ~5 %, character.ts animate 2.5 %; walkCrowd is not near the top. Next for item 2: fewer nodes walked per frame
     (bones and hidden pool bodies under matrixAutoUpdate, static groups with matrixWorldAutoUpdate off), in
     character.ts/bodymerge.ts (draw1's) or with them.
-  - DETECTOR b1/b2 on dist-p32a: p32/ped_b1_*, ped_b2_* (summaries with python3 p29/cc.py <dir>/report.json).
+  - DETECTOR b1/b2 on dist-p32a (lens berth + steal-look), cardClose/overlap/slide/lens: Mobile 12/0/0/15 and
+    11/1/0/14 (dist-p31a: 11/1/0/- and 12/0/0/13); Web 19/19/2/34 and 19/11/2/29 (dist-p31a: 17/34/7/33 and 13/19/8/34).
+    Steal-look (4e1728a) shows NO gain on flat cards (Web cardClose 19, 19 vs 17, 13): revert it or A/B with
+    ?steallook=0 before landing p31's crowd commits. Web overlaps and slides were lower in both runs (19/11 vs 34/19,
+    2/2 vs 7/8); two runs each, not proven. Not 0 anywhere (item 5).
 - NEXT: items 1, 2, 5, 6 are open; 3 did not reproduce; 4 reduced; 7 in the coordinator's hands. Builds kept:
-  dist, dist-p31a, dist-p32a (delete dist-p31a and dist-p32a when no longer needed).
+  dist, dist-p32a (dist-p31a deleted; delete dist-p32a when no longer needed). Raw capture frames deleted, mp4s kept.
 
