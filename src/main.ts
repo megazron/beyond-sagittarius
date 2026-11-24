@@ -138,7 +138,11 @@ let pendingNames: CrewNames = {};
 /** Chapter being replayed by the next world start. */
 let replaying: number | null = null;
 /** Debug camera override used for documentation screenshots. */
-let photo: { from: THREE.Vector3; to: THREE.Vector3 } | null = null;
+let photo: { from: THREE.Vector3; to: THREE.Vector3; fov?: number } | null = null;
+/** Cinema mode (?cinema=1 or __bs.cinema(true)) for trailers and screenshots: everything on the page but the 3D view is
+ * hidden (HUD, hints, minimap, prompts, subtitles, menus, letterbox bars, fades) and so is the cursor. */
+const setCinema = (on: boolean) => document.body.classList.toggle('cinema', on);
+if (new URLSearchParams(location.search).get('cinema') === '1') setCinema(true);
 
 document.getElementById('quality-badge')!.textContent = quality.name.toUpperCase();
 document.getElementById('version-badge')!.textContent = `v${__APP_VERSION__}`;
@@ -826,7 +830,10 @@ function tick(step: number) {
     // after the update: a prompt set this frame is placed this frame, never drawn once in the corner
     if (state === 'game') ui.track(camera);
     const focus = player.pos;
-    if (photo) { camera.position.copy(photo.from); camera.lookAt(photo.to); }
+    if (photo) {
+      camera.position.copy(photo.from); camera.lookAt(photo.to);
+      if (photo.fov && camera.fov !== photo.fov) { camera.fov = photo.fov; camera.updateProjectionMatrix(); }
+    }
     world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer, renderer.stageInfo().scene === world.scene);
     // the eye adapting to a camp fire close by in a fight (combat.ts exposure; 1 elsewhere)
     if (combat) renderer.renderer.toneMappingExposure *= combat.exposureScale;
@@ -1171,8 +1178,14 @@ window.addEventListener('resize', () => {
     return [m.x, m.z];
   },
   act() { return game?.debugAct() ?? null; },
-  /** Freeze the camera at `from` looking at `to` (null releases it). */
-  photo(from: number[] | null, to?: number[]) { photo = from && to ? { from: new THREE.Vector3(...from), to: new THREE.Vector3(...to) } : null; },
+  /** Freeze the camera at `from` looking at `to` (null releases it), with a vertical field of view in degrees if given.
+   * A capture that calls it every stepped frame moves the camera along its own path (dolly, crane, orbit). */
+  photo(from: number[] | null, to?: number[], fov?: number) { photo = from && to ? { from: new THREE.Vector3(...from), to: new THREE.Vector3(...to), fov } : null; },
+  /** Cinema mode: hide every bit of UI and the cursor, leaving only the 3D view (also `?cinema=1`). */
+  cinema(on: boolean) { setCinema(on); return on; },
+  get cinemaOn() { return document.body.classList.contains('cinema'); },
+  /** Depth of field for a capture: focus distance in metres and aperture (0 turns it off). Only on presets with DoF. */
+  dof(focus: number, aperture: number) { renderer.setDof(focus, aperture); },
   step(sec: number) { game?.debugStep(sec, elapsed); },
   get save() { return game?.save; },
   get wheelOpen() { return wheel.open; },
