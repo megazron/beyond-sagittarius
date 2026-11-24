@@ -75,7 +75,12 @@ export class Away {
     this.ui.setPrompt(null);
     // why they are alive at all, in their own words, the moment you arrive
     if (!job) window.setTimeout(() => { if (this.who === id) this.ui.say(`away.${location}.intro`, `crew.${id}.name`, 6); }, 900);
+    this.entered?.();
   }
+  /** Called at the end of enter() (tools/perf_gate.py holds the clock from this moment: main.ts holdAtArrival). */
+  entered: (() => void) | null = null;
+  /** What the stage is still loading (an empty list once everything it builds is in). */
+  get pending() { return this.stage?.pending?.() ?? []; }
 
   private open(k: AwayTask) { return (k.repeat || !this.done.has(k.id)) && (k.need ?? []).every((n) => this.done.has(n)); }
 

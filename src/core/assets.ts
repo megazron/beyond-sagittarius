@@ -28,6 +28,8 @@ function pumpWarm() {
   warmer(t);
   setTimeout(() => { pumping = false; pumpWarm(); }, 60);
 }
+/** Textures still waiting for their upload (perf_gate's settle). */
+export function warmPending() { return warmQueue.length + (pumping ? 1 : 0); }
 export function setTextureWarmer(f: (t: THREE.Texture) => void) { warmer = f; pumpWarm(); }
 
 /**

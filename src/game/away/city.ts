@@ -1748,8 +1748,14 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // after two more laps on Web with the bigger pools). Under the title card when they are in time (prebake)
   const allFigs = () => [...people.map((q) => q.fig), ...crowdPool.map((b) => b.fig), ...dpool.map((b) => b.fig)];
   let poolDrawn: Promise<void> | null = null;
-  const drawPools = (cam: THREE.Camera) => (poolDrawn ??= Promise.all(allFigs().map((f) => f.whenFull)).then(() => Renderer.current?.drawOnce(scene, cam, allFigs().map((f) => f.root))).catch(() => undefined));
-  scene.userData.prebake = async (cam?: THREE.Camera) => {
+  // what is still on its way (pending(), for perf_gate's settle): bodies whose light and full builds have not both loaded, props
+  let poolDone = false, figsLeft = 0, propsLeft = propsBuilt.length;
+  for (const f of allFigs()) { figsLeft++; void f.whenFull.then(() => { figsLeft--; }, () => { figsLeft--; }); }
+  for (const pb of propsBuilt) void pb.then(() => { propsLeft--; }, () => { propsLeft--; });
+  const drawPools = (cam: THREE.Camera) => (poolDrawn ??= Promise.all(allFigs().map((f) => f.whenFull)).then(() => Renderer.current?.drawOnce(scene, cam, allFigs().map((f) => f.root))).catch(() => undefined).finally(() => { poolDone = true; }));
+  let prebaking = false;
+  scene.userData.prebake = async (cam?: THREE.Camera) => { prebaking = true; try { await prebake(cam); } finally { prebaking = false; } };
+  const prebake = async (cam?: THREE.Camera) => {
     if (cam) await Promise.race([drawPools(cam), new Promise((r) => setTimeout(r, 8000))]);
     refreshEnv(); // its blur's program compiles here, under the title card, not 30 s into play (a 0.2 s freeze)
     const all = Promise.all(bakeBodies.map((b) => b.whenReady)).then(() => true);
@@ -1979,6 +1985,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     },
     /** Test hook: how a person is drawn now: a body, a card standing in for one, or (never, within sight) nothing. */
     crowdNear() { return crowdK; },
+    pending() { const w: string[] = []; if (figsLeft > 0) w.push(`bodies ${figsLeft}`); if (propsLeft > 0) w.push(`props ${propsLeft}`); if (poolDrawn && !poolDone) w.push('pools drawing'); if (bakeBodies.length >= 4 && !baker?.done) w.push('card atlas baking'); if (prebaking) w.push('prebake'); return w; },
     drawnAs(id: string) { const i = people.findIndex((q) => q.id === id); return i < 0 ? 'none' : people[i].fig.root.visible && !people[i].fig.faded && oldTown.visible ? 'body' : stand.some((x) => x.k === i) ? 'card' : 'none'; },
     get perfState() { return { tier, bodyCap: BODY_CAP, oldTown: oldTown.visible, cards: stand.length, probe: (() => { try { return probe?.debug() ?? null; } catch { return 'unreadable'; } })(), envI: scene.environmentIntensity, hour: day.state.hour, exposure: day.state.exposure }; },
     /** Test hook (tools/pedglitch.js): everyone in the street as drawn this frame, [id, 'b' body or 'c' card, look, x, y, z,

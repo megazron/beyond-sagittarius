@@ -2,8 +2,17 @@
 """Perf gate for Zenvora: software GL cannot measure frame rate, but it can count. At set spots on each preset this
 checks the draw calls, triangles and real bodies of a frame against budgets (set from the frame-time targets: Mobile 30
 fps on a mid-range phone, Web 60 and Ultra 30 on a laptop GPU, measured with tools/gpu_tour.py), so a change that
-doubles the draw calls fails here instead of on a phone. Counts are the worst frame of a second at each spot.
-  python tools/perf_gate.py [--quality mobile,web,ultra] [--dist DIR] [--out report.json]"""
+doubles the draw calls fails here instead of on a phone. Counts are the worst of four frames at each spot.
+How it measures (2026-11-24, gate agent): on a held clock. From the moment you arrive in the city the game's clock is
+held (main.ts holdAtArrival: the clock set to 600 s, Math.random seeded) and this script steps it by hand, so every run
+simulates the same thing whatever the machine's speed. Before every step it waits until the scene is all in: no request
+in flight, nothing in __bs.settled() (the city's bodies and props still loading, textures waiting for their upload,
+shader programs still linking, the card atlas). At each spot: teleport, 3 s of play in 0.3 s steps, then frames drawn
+without a step until two in a row draw the same (a frozen scene that still changes is still loading), then four
+frames of 1/30 s each: their worst is the count. If a wait runs past --settle seconds the spot FAILS as "did not settle"
+(what was still pending is printed) instead of measuring a half-loaded scene. The free-running version (wall-clock
+settle) measured 8 to 40 frames per spot on CI and the same code read 145, 167 and 181 draw calls at the phone gate.
+  python tools/perf_gate.py [--quality mobile,web,ultra] [--dist DIR] [--out report.json] [--settle 300]"""
 import argparse, functools, http.server, json, pathlib, sys, threading, time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import pw_pin  # noqa: E402,F401
@@ -13,6 +22,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument('--dist', default=str(pathlib.Path(__file__).resolve().parent.parent / 'dist'))
 ap.add_argument('--quality', default='mobile,web,ultra'); ap.add_argument('--port', type=int, default=4387); ap.add_argument('--out', default='')
 ap.add_argument('--query', default='', help='extra URL query (e.g. berth=1.7), for bisecting'); ap.add_argument('--spots', default='', help='only these spots, comma separated')
+ap.add_argument('--settle', type=float, default=300, help='seconds of wall clock a spot may wait for its scene to be all in')
 a = ap.parse_args()
 
 # x, z, yaw
@@ -52,27 +62,21 @@ class H(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *x, **k): pass
 srv = http.server.ThreadingHTTPServer(('127.0.0.1', a.port), functools.partial(H, directory=a.dist))
 threading.Thread(target=srv.serve_forever, daemon=True).start()
-# the worst frame of the second, and what drew its triangles (object paths, main pass M or shadow S), for a failure's log
-WORST = """(ms) => new Promise((res) => { let calls = 0, tris = 0, bodies = 0, sk = 0, t0 = performance.now(); const r = __bs.gl, orig = r.renderBufferDirect; let cur = {}, top = null;
+# one held frame: `sec` of game time in ticks of 1/30 s, then one draw (1e-9: a draw without a tick); the frame's counts
+STEP = """(sec) => new Promise((res) => { const n = __bs.frames; __bs.advance(sec);
+  const f = () => (__bs.frames > n ? res(__bs.perf) : requestAnimationFrame(f)); requestAnimationFrame(f); })"""
+# what drew each frame's triangles (object paths, main pass M or shadow S), kept for a failure's log
+TOP_ON = """() => { const r = __bs.gl, orig = r.renderBufferDirect; window.__pgTop = { orig, cur: {} };
   const name = (obj) => { const parts = []; for (let o = obj; o && parts.length < 4; o = o.parent) { let n = o.name || ''; if (o.userData && o.userData.isCharacter) n = 'BODY'; if (n) parts.push(n); }
     return (parts.reverse().join('/') || obj.type) + (obj.isBatchedMesh ? ' [batch]' : obj.isInstancedMesh ? ' [inst ' + obj.count + ']' : obj.isSkinnedMesh ? ' [skin]' : ''); };
   r.renderBufferDirect = function (cam, sc, g, m, obj, grp) { const a = r.info.render.triangles; const v = orig.apply(this, arguments);
-    const k = (cam.isOrthographicCamera ? 'S ' : 'M ') + name(obj) + ' |' + (m.name || m.type); cur[k] = (cur[k] || 0) + r.info.render.triangles - a; return v; };
-  const f = () => { const p = __bs.perf; calls = Math.max(calls, p.calls); bodies = Math.max(bodies, p.bodies); sk = Math.max(sk, p.skinned);
-    if (p.tris > tris) { tris = p.tris; top = cur; } cur = {};
-    if (performance.now() - t0 < ms) requestAnimationFrame(f); else { r.renderBufferDirect = orig;
-      res({ calls, tris, bodies, skinned: sk, top: Object.entries(top || {}).sort((x, y) => y[1] - x[1]).slice(0, 12).map(([k, v]) => k + ' ' + Math.round(v)) }); } };
-  requestAnimationFrame(f); })"""
-# after a teleport: at least `n` drawn frames, then until the triangles drawn per frame stop climbing (the highest of
-# each 10 frames within 2% of the one before, twice running), at most `ms` (the CI runner draws 1 to 3 frames a second:
-# 120 frames and 60-frame windows never settled there and the job ran past its 30 minutes). A fixed 4 s of wall clock under SwiftShader
-# measured "mobile flat" anywhere from 550k to 739k triangles on the same code: how many batches had streamed in by then
-# depended on how fast the runner was
-SETTLE = """([n, ms]) => new Promise((res) => { let k = 0, hi = 0, prev = -1, calm = 0; const t0 = performance.now();
-  const f = () => { k++; hi = Math.max(hi, __bs.perf.tris || 0);
-    if (k >= n && k % 10 === 0) { if (prev >= 0 && hi <= prev * 1.02) calm++; else calm = 0; prev = hi; hi = 0; }
-    if (calm >= 2 || performance.now() - t0 > ms) res({ frames: k, secs: +((performance.now() - t0) / 1000).toFixed(1), settled: calm >= 2 }); else requestAnimationFrame(f); };
-  requestAnimationFrame(f); })"""
+    const k = (cam.isOrthographicCamera ? 'S ' : 'M ') + name(obj) + ' |' + (m.name || m.type); const c = window.__pgTop.cur; c[k] = (c[k] || 0) + r.info.render.triangles - a; return v; }; }"""
+TOP_TAKE = """() => { const c = window.__pgTop.cur; window.__pgTop.cur = {}; return Object.entries(c).sort((x, y) => y[1] - x[1]).slice(0, 12).map(([k, v]) => k + ' ' + Math.round(v)); }"""
+TOP_OFF = """() => { __bs.gl.renderBufferDirect = window.__pgTop.orig; }"""
+SEED = """(() => { let s = 7; Math.random = () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();"""
+
+class NotSettled(Exception): pass
+
 fails, report = [], {}
 with sync_playwright() as pw:
     b = pw.chromium.launch(headless=True, args=['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-background-timer-throttling', '--disable-renderer-backgrounding'])
@@ -82,21 +86,75 @@ with sync_playwright() as pw:
         # a shader that does not compile draws nothing and throws nothing (main 3b1eef8: the facade buildings were gone
         # for an hour, every gate green): ?shadercheck=1 makes three log it, and that fails this gate
         page.on('console', lambda m: errs.append('shader: ' + m.text[:300]) if m.type == 'error' and ('Shader Error' in m.text or 'ERROR: 0:' in m.text) else None)
-        page.add_init_script("localStorage.setItem('bs-consent-v1', '1')")
+        # requests in flight (a model, a texture, a voice take): a step waits until there are none
+        flight = {}
+        page.on('request', lambda r: flight.__setitem__(id(r), r.url))
+        page.on('requestfinished', lambda r: flight.pop(id(r), None)); page.on('requestfailed', lambda r: flight.pop(id(r), None))
+        page.add_init_script("localStorage.setItem('bs-consent-v1', '1');" + SEED)
         page.goto(f'http://127.0.0.1:{a.port}/index.html?quality={q}&tod=17.5&shadercheck=1' + (f'&{a.query}' if a.query else ''))
         page.wait_for_function("window.__bs && __bs.state === 'title' && __bs.ready", timeout=600000)
+        page.evaluate('__bs.holdAtArrival(600, 1)')
         page.click('#btn-new'); page.wait_for_selector('#nm-ok', timeout=30000); page.click('#nm-ok')
-        for i in range(300):
+        for i in range(600):
             if page.evaluate("__bs.mode === 'away' && !!(__bs.away && __bs.away.who)"): break
             if page.evaluate('__bs.state') == 'narrator': page.evaluate('__bs.skip()')
-            time.sleep(1)
-        time.sleep(25)  # every model and its light build in
+            page.wait_for_timeout(1000)
+        clock = page.evaluate('__bs.clock')
+        if clock != 600: fails.append(f'{q}: the clock was not held on arrival (clock {clock})'); page.close(); continue
+
+        def wait_in(deadline, ticking=False):
+            """Until nothing is pending (and no request for 0.3 s); the atlas bakes only in ticks, so a step need not wait for it."""
+            quiet = None; waited = 0
+            while True:
+                why = [w for w in page.evaluate('__bs.settled()') if ticking or w != 'card atlas baking']
+                if flight: why.append(f'{len(flight)} requests (' + ', '.join(sorted(u.rsplit('/', 1)[-1][:40] for u in flight.values())[:4]) + ')')
+                now = time.time()
+                if not why:
+                    quiet = quiet or now
+                    if now - quiet >= 0.3: return waited
+                else: quiet = None
+                if now > deadline: raise NotSettled('; '.join(why))
+                page.wait_for_timeout(100); waited += 1
+
+        def step(sec, deadline, ticking=False):
+            wait_in(deadline, ticking)
+            return page.evaluate(STEP, sec)
+
+        # arrival: everything in, a few draws to upload what is first drawn, then 4 s of play (the atlas bakes in ticks)
+        try:
+            dl = time.time() + a.settle * 2
+            for _ in range(3): step(1e-9, dl)
+            for _ in range(10): step(0.4, dl, ticking=True)
+            wait_in(dl, ticking=False)
+        except NotSettled as e:
+            fails.append(f'{q} arrival: did not settle in {a.settle * 2:.0f} s ({e})'); print(fails[-1], flush=True); page.close(); continue
+
         D, T, B = BUDGET[q]; rows = {}
         for name, (x, z, yaw) in SPOTS.items():
             if a.spots and name not in a.spots.split(','): continue
-            page.evaluate(f"__bs.awayTeleport({x}, {z}, {yaw})"); st = page.evaluate(SETTLE, [20, 15000])
+            page.evaluate(f"__bs.awayTeleport({x}, {z}, {yaw})"); t0 = time.time(); dl = t0 + a.settle
+            try:
+                for _ in range(10): step(0.3, dl)  # 3 s of play after the teleport
+                # frozen: draws without a tick until two in a row are the same (anything still arriving changes them)
+                prev, still = None, 0
+                for k in range(40):
+                    p = step(1e-9, dl); cur = (p['calls'], p['tris'], p['bodies'], p['skinned'])
+                    if cur == prev and k >= 1: still = 1; break
+                    prev = cur
+                if not still: raise NotSettled(f'a frozen frame still changed after 40 draws: {prev} then {cur}')
+                pending = [w for w in page.evaluate('__bs.settled()')]
+                if pending: raise NotSettled('; '.join(pending))
+                page.evaluate(TOP_ON); r = {'calls': 0, 'tris': 0, 'bodies': 0, 'skinned': 0}; top = []
+                for _ in range(4):
+                    p = step(1 / 30, dl, ticking=True); t = page.evaluate(TOP_TAKE)
+                    for k in r: r[k] = max(r[k], p[k])
+                    if p['tris'] >= r['tris']: top = t
+                page.evaluate(TOP_OFF)
+            except NotSettled as e:
+                fails.append(f"{q} {name}: did not settle in {a.settle:.0f} s ({e})"); print(fails[-1], flush=True); continue
+            st = {'clock': round(page.evaluate('__bs.clock'), 3), 'secs': round(time.time() - t0, 1), 'frozen': k + 1}
             print(q, name, 'settled', st, flush=True)
-            r = page.evaluate(WORST, 1500); top = r.pop('top'); rows[name] = r
+            rows[name] = r
             print(q, name, r, flush=True)
             if r['calls'] > D: fails.append(f"{q} {name}: {r['calls']} draw calls (budget {D})")
             if r['tris'] > T:
