@@ -70,8 +70,9 @@ with sync_playwright() as pw:
     tap('#btn-new'); page.wait_for_selector('#nm-ok', timeout=30000); tap('#nm-ok')
     for _ in range(200):
         if page.evaluate("__bs.state === 'game' && (__bs.mode === 'play' || __bs.mode === 'away')"): break
-        if page.evaluate('__bs.state') == 'narrator': page.evaluate('__bs.skip()')
+        page.evaluate('__bs.skip()')  # the wake, the narrator: on to play
         time.sleep(1)
+    if not page.evaluate("__bs.state === 'game' && (__bs.mode === 'play' || __bs.mode === 'away')"): fails.append('never reached play: ' + str(page.evaluate('[__bs.state, __bs.mode]')))
     time.sleep(3)
     for lang in ('en', 'hi', 'ur'):
         page.evaluate(f"__bs.setLang('{lang}')"); time.sleep(0.3)
