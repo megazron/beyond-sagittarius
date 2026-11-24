@@ -751,6 +751,96 @@
 "tags": [],
 "fx": "breathless"
 },
+"dep.1": {
+"emotion": "hype",
+"intensity": 0.6,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"dep.2": {
+"emotion": "deadpan",
+"intensity": 0.3,
+"pace": 0.95,
+"pre": 0.1,
+"post": 0.2,
+"tags": [],
+"fx": "room"
+},
+"dep.3": {
+"emotion": "sarcasm",
+"intensity": 0.35,
+"pace": 0.95,
+"pre": 0.05,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"dep.4": {
+"emotion": "suspicious",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.05,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"dep.5": {
+"emotion": "smug",
+"intensity": 0.45,
+"pace": 0.95,
+"pre": 0.1,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"dep.6": {
+"emotion": "theatrical",
+"intensity": 0.55,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"dep.7": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 0.95,
+"pre": 0.1,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"dep.8": {
+"emotion": "warm",
+"intensity": 0.55,
+"pace": 1.0,
+"pre": 0.05,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
+"dep.9": {
+"emotion": "calm",
+"intensity": 0.3,
+"pace": 1.0,
+"pre": 0.1,
+"post": 0.15,
+"tags": [],
+"fx": ""
+},
+"dep.10": {
+"emotion": "easy",
+"intensity": 0.4,
+"pace": 0.95,
+"pre": 0.05,
+"post": 0.1,
+"tags": [],
+"fx": "room"
+},
 "dlg.4.1": {
 "emotion": "smug",
 "intensity": 0.45,
