@@ -251,6 +251,9 @@ with sync_playwright() as pw:
         if page.evaluate("!document.getElementById('modal').classList.contains('hidden') && !!document.querySelector('[data-diff]') || !!(__bs.combat.run)"): break
         step(page, 0.5); time.sleep(0.1)
     ok(page.evaluate("!document.getElementById('modal').classList.contains('hidden') && !!document.querySelector('[data-diff]')"), 'story: the first story fight asks how hard fights should be')
+    # the question holds the game still on real frames (the main loop, not the test's step): the clock does not move
+    h0 = page.evaluate("__bs.save.timeOfDay"); time.sleep(2.5); h1 = page.evaluate("__bs.save.timeOfDay")
+    ok(abs(h1 - h0) < 1e-6, 'story: the world waits while the difficulty question is open', [h0, h1])
     page.evaluate("""document.querySelector('[data-diff="normal"]').click()"""); step(page, 0.5)
     d = page.evaluate(D)
     ok(d['encounter'] == 'night.defence', 'story: level 7 at night starts the night at the fire by itself', d['encounter'])
