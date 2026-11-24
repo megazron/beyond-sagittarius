@@ -140,6 +140,11 @@ with sync_playwright() as pw:
                 ok(ps['rangedArmIn'] <= 0.02, f'arena: with the {wpn} the arms stay out of the body (within 2 cm)', json.dumps(ps))
             # wake the guardian and let it work
             g = [e for e in page.evaluate(D)['enemies'] if e['kind'] == 'guardian'][0]
+            # (the ranged section can leave him down: no wake while down (ai.ts), and the arena's revive after 2.5 s came
+            # inside the 6 s some runs and not others. Wait for the revive first)
+            for _ in range(40):
+                if not page.evaluate(D)['player']['down']: break
+                step(page, 0.1)
             page.evaluate(f"__bs.teleport({g['x']} - 3, {g['z']})"); step(page, 0.2)
             # (it failed twice, dormant after 6 s: the wake is inside 4.5 m and not while down, so print where the body
             # really is a moment after the teleport and at the end, and whether it is down)

@@ -37,6 +37,9 @@ export const MELEE_GEAR = Object.keys(SHAFT) as WeaponId[];
 const TWO = (w: WeaponId) => w === 'spear' || w === 'hafted';
 
 // the free left hand's marks
+// (LH_DRAW: the free hand while a throw is drawn, bent in front of the chest; at 0.3, 1.25, 0.5 the lead arm reached out
+// along the throw and from behind read as a straight arm out to the side, s5 GPU take)
+const LH_DRAW: [number, number, number] = [0.17, 1.18, 0.3];
 const LH_GUARD: [number, number, number] = [0.24, 1.12, 0.3], LH_LOW: [number, number, number] = [0.27, 0.92, 0.08], LH_BAL: [number, number, number] = [0.38, 1.05, 0.18];
 /** The frames, by weapon kind: carry (walking, nothing near), ready (up), back (wind-up), hit (the blow), and for the
  * club a second swing, for throwable things the throw's draw and release, and the spear's brace. */
@@ -48,7 +51,7 @@ const SPEAR = {
   brace: F([-0.24, 0.92, 0.02], [0.3, 0.36, 1], 0.5, LH_GUARD, 0.36, -0.3),
   // (drawn back is the arm reached back along the throw, the hand behind the shoulder at its height, the spear along
   // the forearm's line over it: with the hand by the ear the folded arm had nowhere for its elbow but out behind him)
-  throwBack: F([-0.42, 1.56, -0.44], [0.06, 0.12, 1], null, [0.3, 1.25, 0.5], -0.12, -0.65),
+  throwBack: F([-0.42, 1.56, -0.44], [0.06, 0.12, 1], null, LH_DRAW, -0.12, -0.65),
   throwHit: F([-0.16, 1.42, 0.42], [0.03, -0.08, 1], null, [0.33, 0.95, -0.05], 0.34, 0.55),
 };
 const CLUB = {
@@ -60,7 +63,7 @@ const CLUB = {
   hit: F([-0.1, 1.02, 0.5], [0.05, -0.62, 0.8], null, [0.36, 0.9, 0.02], 0.44, 0.4),
   back2: F([-0.5, 1.2, -0.08], [-0.78, 0.3, -0.5], null, [0.33, 1.05, 0.35], 0, -0.7),
   hit2: F([0.12, 1.16, 0.5], [0.86, 0.05, 0.5], null, [0.42, 0.92, -0.05], 0.2, 0.7),
-  throwBack: F([-0.46, 1.52, -0.22], [-0.2, 0.7, -0.6], null, [0.3, 1.25, 0.5], -0.15, -0.7),
+  throwBack: F([-0.46, 1.52, -0.22], [-0.2, 0.7, -0.6], null, LH_DRAW, -0.15, -0.7),
   throwHit: F([-0.12, 1.3, 0.48], [0.05, 0.2, 1], null, [0.33, 0.95, -0.05], 0.36, 0.6),
 };
 const STICK = {
@@ -68,7 +71,7 @@ const STICK = {
   carry: F([-0.27, 0.9, 0.06], [-0.08, -0.4, 1], null, LH_LOW),
   ready: F([-0.3, 1.1, 0.22], [-0.28, 0.6, 0.72], null, LH_GUARD, 0.08),
   // the throwing stick goes side-arm: drawn back low at the right hip, flat, and let go level in front
-  throwBack: F([-0.5, 1.15, -0.3], [-0.72, 0.08, -0.68], null, [0.3, 1.2, 0.5], 0, -0.75),
+  throwBack: F([-0.5, 1.15, -0.3], [-0.72, 0.08, -0.68], null, LH_DRAW, 0, -0.75),
   throwHit: F([0.02, 1.18, 0.5], [0.72, 0.02, 0.7], null, [0.36, 0.95, -0.05], 0.3, 0.6),
 };
 const SMALL = {
@@ -76,7 +79,7 @@ const SMALL = {
   ready: F([-0.24, 1.15, 0.3], [0, 0.4, 1], null, LH_GUARD, 0.1),
   back: F([-0.27, 1.2, -0.05], [0, 0.3, 1], null, LH_GUARD, 0, -0.3),
   hit: F([-0.06, 1.3, 0.55], [0, 0, 1], null, [0.3, 1.05, 0.2], 0.15, 0.45),
-  throwBack: F([-0.42, 1.58, -0.36], [-0.1, 0.5, -0.8], null, [0.3, 1.25, 0.5], -0.15, -0.7),
+  throwBack: F([-0.42, 1.58, -0.36], [-0.1, 0.5, -0.8], null, LH_DRAW, -0.15, -0.7),
   throwHit: F([-0.12, 1.3, 0.5], [0, 0, 1], null, [0.33, 0.95, -0.05], 0.36, 0.6),
 };
 function frames(w: WeaponId) { return TWO(w) ? SPEAR : w === 'throwstick' ? STICK : w === 'club' || w === 'torch' ? CLUB : SMALL; }

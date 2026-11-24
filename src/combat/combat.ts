@@ -8,6 +8,7 @@ import { audio } from '../core/audio';
 import type { SaveData } from '../core/save';
 import type { World } from '../world/world';
 import { WATER_LEVEL } from '../world/terrain';
+import { setFireLite } from '../world/flame';
 import type { Player } from '../game/player';
 import type { Input } from '../game/input';
 import type { UI } from '../ui/ui';
@@ -99,6 +100,7 @@ export class Combat {
     const W = deps.world;
     // water: the lake (still, at WATER_LEVEL over every bit of ground below it)
     this.env = { height: (x, z) => W.terrain.height(x, z), blocked: (x, z, r) => W.terrain.height(x, z) < -0.7 || W.forest.blocks(x, z, r), water: (x, z) => (W.terrain.height(x, z) < WATER_LEVEL ? WATER_LEVEL : null) };
+    setFireLite(W.q.name === 'mobile');
     this.fx = new CombatFx((x, z) => W.terrain.height(x, z), W.q.name !== 'mobile');
     W.scene.add(this.fx.group);
     // the planetshine for night set pieces: made once at the start and left in the scene at zero, because adding or
@@ -887,7 +889,8 @@ export class Combat {
         near = Math.max(near, k * THREE.MathUtils.smoothstep(4.5 - d, 0, 3));
       }
       // (about a second to adapt, as an eye does; down to 0.7 at the fire's edge)
-      const want = 1 - 0.3 * near;
+      // (0.7 at the fire's edge stopped the whole frame down with it: past the firelight it went black. 0.78 now)
+      const want = 1 - 0.22 * near;
       this.exposure += (want - this.exposure) * (1 - Math.exp(-dt * 1.2));
     }
     // a night set piece: the giant planet overhead throws a cold planetshine, enough to see shapes move at the
@@ -899,9 +902,14 @@ export class Combat {
     // the light stays in the scene once made (switching lights on and off recompiles every material)
     this.fx.smokeK = nightRun ? 0.28 : 1;
     // the night defence was too dark past the firelight to see what came (owner): 0.55 -> 0.85
-    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? 0.8 : 1.35) : 0; /* (night defence 0.85 -> 1.35: with the dimmer fire (7) and the eye stopped down by it, past the firelight the ground was black, s5 GPU take) */ this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 40, P0.y + 80, P0.z + 30); this.shine.target.position.copy(P0); } }
+    // (night defence 0.85 -> 1.35: with the dimmer fire (7) and the eye stopped down by it, past the firelight the ground
+    // was black, s5 GPU take; then 1.35 -> 1.55 and the planet lower in the sky, 34 deg up instead of 58: from high
+    // overhead it lit the tops of the grass and left every animal a dark lump with glowing marks (s5 night v2). Low, it
+    // lights their sides and backs, and the side away from it stays dark, so a shape reads as a body)
+    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? 0.8 : 1.55) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 46, P0.y + 38, P0.z + 34); this.shine.target.position.copy(P0); } }
     // the same cold light catches the animals' edges, so a shape beyond the fire reads as an animal, not a shadow
-    NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine ? this.shine.intensity * 0.55 : 0);
+    // (0.55 and a thin edge: they still read only by their marks; 0.8 and pow 1.8 made them glassy, like lit ghosts, s6 take; now 0.65, pow 2)
+    NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine ? this.shine.intensity * 0.65 : 0);
     const D = this.d, sim = this.sim!, P = D.player, p = sim.player, run = this.encounter, cam = P.camera;
     // creatures: a body for each within sight, none for those far off or gone
     NIGHT.on = sim.night;

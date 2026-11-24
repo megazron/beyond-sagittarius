@@ -13,6 +13,7 @@ import type { SunLight } from 'three/examples/jsm/lights/SunLight.js';
 import type { Quality } from './quality';
 import { setMaxAnisotropy } from './assets';
 import { installSoftShadows } from './softShadows';
+import { heatSources } from './heat';
 
 const QUAD_VS = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
@@ -106,10 +107,30 @@ const FinalShader = {
 
 /** Replaces NaN/Inf pixels so a single bad sample can't be smeared over the frame by bloom. */
 const SanitizeShader = {
-  uniforms: { tDiffuse: { value: null as THREE.Texture | null } },
+  // (and the heat over a fire: the picture bends in a column of hot air over the nearest two fires, core/heat.ts; Web
+  // and up, never on phones. uHeatA: the column's foot and top in uv; uHeatB: its half width (uv, by height) and how far
+  // it bends. Nothing is done while no fire is near: one uniform test per pixel)
+  uniforms: { tDiffuse: { value: null as THREE.Texture | null }, uHeatN: { value: 0 }, uHeatT: { value: 0 }, uAspect: { value: 1 },
+    uHeatA: { value: [new THREE.Vector4(), new THREE.Vector4()] }, uHeatB: { value: [new THREE.Vector2(), new THREE.Vector2()] } },
   vertexShader: QUAD_VS,
-  fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
-    void main(){ vec4 c = texture2D(tDiffuse, vUv);
+  fragmentShader: `uniform sampler2D tDiffuse; uniform int uHeatN; uniform float uHeatT, uAspect; uniform vec4 uHeatA[2]; uniform vec2 uHeatB[2]; varying vec2 vUv;
+    void main(){
+      vec2 uv = vUv;
+      for (int i = 0; i < 2; i++) {
+        if (i >= uHeatN) break;
+        vec2 ax = uHeatA[i].zw - uHeatA[i].xy, q = vUv - uHeatA[i].xy;
+        ax.x *= uAspect; q.x *= uAspect;
+        float al = dot(q, ax) / max(dot(ax, ax), 1e-8), hw = uHeatB[i].x * (0.75 + 0.9 * max(al, 0.0));
+        vec2 s = vec2(length(q - ax * al), al * length(ax)) / hw;
+        float m = smoothstep(0.0, 0.1, al) * (1.0 - smoothstep(0.5, 1.0, al)) * (1.0 - smoothstep(0.3, 1.0, s.x));
+        if (m > 0.0) {
+          // rising ripples, finer than the fire, that wander as they climb
+          float t = uHeatT;
+          vec2 w = vec2(sin(s.y * 11.0 - t * 8.5 + sin(q.x / hw * 5.0 + t * 1.7) * 1.6), 0.6 * sin(s.y * 8.0 - t * 6.3 + q.x / hw * 4.0));
+          uv += vec2(w.x / uAspect, w.y) * m * uHeatB[i].y;
+        }
+      }
+      vec4 c = texture2D(tDiffuse, uv);
       if (any(isnan(c)) || any(isinf(c))) c = vec4(0.0, 0.0, 0.0, 1.0);
       gl_FragColor = vec4(min(c.rgb, vec3(64.0)), c.a); }`,
 };
@@ -558,6 +579,7 @@ export class Renderer {
   bloom: UnrealBloomPass;
   ao: GTAOPass | null = null;
   final: ShaderPass;
+  private sanitize: ShaderPass;
   pixelRatio: number;
   aoHidden: THREE.Object3D[] = [];
   private volumetric: VolumetricPass | null = null;
@@ -649,7 +671,8 @@ export class Renderer {
       this.volumetric = new VolumetricPass(depth, quality.volumetricScale, quality.volumetricSteps, quality.pcss);
       this.composer.addPass(this.volumetric);
     }
-    this.composer.addPass(new ShaderPass(SanitizeShader));
+    this.sanitize = new ShaderPass(SanitizeShader);
+    this.composer.addPass(this.sanitize);
     if (depth && (quality.taa || quality.motionBlur)) {
       this.temporal = new TemporalPass(depth, quality.taa, quality.motionBlur);
       this.composer.addPass(this.temporal);
@@ -903,6 +926,7 @@ export class Renderer {
     if (this.volumetric) this.volumetric.source = (this.renderPass.scene.userData.post as PostSource | undefined) ?? null;
     if (this.ssr) { const k = (this.renderPass.scene.userData.ssr as number | undefined) ?? 0; this.ssr.strength = k; this.ssr.enabled = k > 0.01 && this.shed < 2; }
     const cam = this.renderPass.camera as THREE.PerspectiveCamera;
+    this.heat(cam, time);
     const jittered = !!this.temporal && this.quality.taa && cam.isPerspectiveCamera;
     if (jittered) {
       const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -915,6 +939,31 @@ export class Renderer {
       this.renderer.setRenderTarget(null); this.renderer.render(this.renderPass.scene, cam);
     } else this.composer.render(dt);
     if (jittered) cam.clearViewOffset();
+  }
+
+  /** The hot air over the nearest two fires that burn on screen (core/heat.ts). */
+  private heatTmp = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  private heat(cam: THREE.PerspectiveCamera, time: number) {
+    const u = this.sanitize.uniforms;
+    let n = 0;
+    if (this.quality.name !== 'mobile' && cam.isPerspectiveCamera && heatSources.length) {
+      const now = performance.now(), [a, b, d] = this.heatTmp, A = u.uHeatA.value as THREE.Vector4[], B = u.uHeatB.value as THREE.Vector2[];
+      const live = heatSources.filter((h) => now - h.at < 250).map((h) => ({ h, dist: h.pos.distanceTo(cam.position) })).filter((o) => o.dist < 30 && o.dist > 0.4).sort((p, q) => p.dist - q.dist);
+      for (const { h, dist } of live) {
+        if (n >= 2) break;
+        // the column runs from just over the flames' foot to about two and a half fire heights up
+        a.copy(h.pos).setY(h.pos.y + 0.25 * h.size).project(cam); b.copy(h.pos).setY(h.pos.y + 2.4 * h.size).project(cam);
+        d.copy(h.pos).applyMatrix4(cam.matrixWorldInverse);
+        if (d.z > -0.3 || Math.abs(a.x) > 1.6 || a.y > 1.6 || b.y < -1.6) continue;
+        const hw = (0.5 * h.size) / (2 * -d.z * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2));
+        const fade = Math.sqrt(Math.max(0, h.k)) * (1 - THREE.MathUtils.smoothstep(dist, 16, 30));
+        A[n].set(a.x * 0.5 + 0.5, a.y * 0.5 + 0.5, b.x * 0.5 + 0.5, b.y * 0.5 + 0.5);
+        B[n].set(hw, hw * 0.04 * fade);
+        n++;
+      }
+      u.uAspect.value = cam.aspect; u.uHeatT.value = time;
+    }
+    u.uHeatN.value = n;
   }
 
   private lastDrop: { pr: number; avg: number } | null = null;

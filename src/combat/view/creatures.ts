@@ -29,11 +29,11 @@ function rimmed<T extends THREE.MeshStandardMaterial>(m: T, held: { value: THREE
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uNightRim = NIGHT_RIM; sh.uniforms.uHeldLit = held;
     sh.fragmentShader = 'uniform vec3 uNightRim;\nuniform vec3 uHeldLit;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
-      '#include <emissivemap_fragment>\n  { float fr = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0); totalEmissiveRadiance += uNightRim * pow(fr, 2.6) + uHeldLit * (0.12 + 0.88 * pow(fr, 1.6)); }');
+      '#include <emissivemap_fragment>\n  { float fr = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0); totalEmissiveRadiance += uNightRim * pow(fr, 2.0) + uHeldLit * (0.12 + 0.88 * pow(fr, 1.6)); }');
     nearFade(m, sh);
   };
   const key = m.customProgramCacheKey.bind(m);
-  m.customProgramCacheKey = () => key() + '|nightRim3';
+  m.customProgramCacheKey = () => key() + '|nightRim5';
   return m;
 }
 const glow = (r: number, g: number, b: number) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b) });

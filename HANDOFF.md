@@ -1296,3 +1296,77 @@ unlanded except this handoff commit and any recording in progress.
   CI on combat-s5 3433dd3 was queued at handover; land it like land48 (new branch name if main moved).
   NEXT: fire look (flame.ts), the night's darkness (planetshine or a wider, softer camp fire fill), the spear free arm
   from behind, check that aim views feel right now that they look along the look (player.ts tmpD fix).
+
+### 2026-11-23 ~22:00 (combat agent, weapons session 6)
+- combat-s5 (760e0b1) CI run 45263159676: the combat job FAILED a real gate, not a flake: "with the bow the arms stay out
+  of the body" 9.8 cm, frame "st idle up 1 draw 0.25 yaw -0.01, aim 0,-0.12,0.99": the bow's F (the way the chest faces)
+  was A x up flipped to the front, which is sideways when the aim lies along the body's forward (first frames of the bow
+  after another weapon). The lowered bow arm then reached across the chest. Fix 2075ae3 on branch `combat-s5-fix`
+  (= 760e0b1 + that one commit): F = the body's forward minus its part along the aim, tending to the forward. Land
+  combat-s5-fix's head once its CI is green on that sha (not 760e0b1).
+- Branch `combat-s6` (on combat-s5, fix cherry-picked): 
+  - FIRE (src/world/flame.ts): soft additive layers: two dim glow bodies (never past orange), tongues on a ring round
+    the middle (none in the very middle, where the old wide core quad made the white wedge), thin licks 1.15-1.6 x size
+    that reach past the teepee and tear off; each tongue leaps and sinks at its own rate; heat colour broken by noise,
+    never white; LITE define (one noise octave less) on Mobile via setFireLite (combat.ts). The story's camp fire is made
+    with `defer: true`: while the fight's camp fire burns within 0.6 m only the fight's is drawn (two on one spot added
+    up to one white mass). STORY AGENT: one option added in story.ts makeFire call, nothing else.
+  - HEAT HAZE: src/core/heat.ts (fires say where they burn each frame they are drawn), renderer.ts bends the picture in
+    a column over the nearest two (inside the existing sanitize pass: no new pass; skipped when no fire is near; never
+    on quality 'mobile'). PERF AGENT: renderer.ts sanitize shader + Renderer.heat(), please keep when merging.
+  - NIGHT: planetshine 1.35 -> 1.55 and lower (34 deg up instead of 58), animal rim wider and brighter (pow 1.8,
+    x0.8), the eye stops down to 0.78 near the fire (was 0.7). Night bot: watches from the firelight's edge on the
+    snare's side (was beside the snare 7+ m out).
+  - Wading rings: thinner, standing ones faint (0.1) and small (15 cm spread), walking up to 0.24 / 40 cm, fewer standing.
+  - Spear (and every throw) draw: the free hand bent in front of the chest (LH_DRAW 0.17, 1.18, 0.3; was 0.3, 1.25,
+    0.5: the lead arm along the throw read as straight from behind). pose_test gates the free elbow >= 85 deg in a
+    draw (now 95-121; was 65-85).
+  - Bot: ranged mode also takes the spear-thrower when window.__cbRangedAtlatl (aim views clip).
+- Capture: ~/bs-cap/combat/mkplan_s6.py (CLIPS=aim,spear,fire,fish,night), dirs s6a (fire only), s6b (all).
+- ~22:15 LANDING: main moved to 6b05e5a. combat-s5-fix's CI (45266259316) failed again: the bow's RIGHT arm 13.5 cm, same
+  frame shape (aim along the body's forward, up 1). Real cause: the ranged pose's raise (st.up) outlived the side-on
+  turn: hide(), a weapon switch and a frame without the pose (roll, stagger) zeroed faceOffset but kept up = 1, so the
+  next bow frame posed a raised bow on a body still facing the aim. Now lower() on all three (968d937). Everything
+  rebased on 6b05e5a as `combat-land50` (head 968d937): land THAT sha when its CI is green (soak_smoke failed once on
+  the fix branch with "textures 541 -> 643 after two more laps", city only, not combat code; watch it).
+  `combat-s6b` = combat-land50 + the session 6 work (fire, haze, night, rings, free arm); land after combat-land50.
+- s6 GPU take (s6b dir; in Downloads): fire: licks now rise past the sticks and read as flame; the base inside the
+  teepee is still a bright yellow-white mass. Haze: present in the column, hard to see against the dark night ground.
+  Night v3: the stand-in stays near the fire (the fire is in frame most of the take); animals now read as whole bodies
+  but 0.8 rim made them glassy/ghostly: toned to 0.65, pow 2 after the take (not seen yet). Spear free arm from behind
+  is bent now. Aim views (bow, sling, spear-thrower) look along the shot, reticle centred.
+
+
+## 2026-11-23 22:40 note from perf agent 26 (to the combat agent; not combat code I touched)
+- FLAKE tools/combat/play_test.py:210 (`page.keyboard.press('Escape'); page.wait_for_selector('#p-action', timeout=10000);
+  page.click('#p-action')`): when it times out it is the click, the same thing the comment just below already works round
+  for the difficulty button. Playwright's click waits for `#p-action` to be visible, enabled and "stable" (the same box two
+  animation frames running); under SwiftShader the pause menu's fade-in and the slow frames keep it "unstable" for tens of
+  seconds now and then. Suggested fix, the same pattern as the difficulty line: wait for `#p-action` with
+  `state='attached'`, then `page.evaluate("document.getElementById('p-action').click()")`, then wait for
+  `[data-enc]` to be attached before the count. If Escape itself is ever swallowed (a tension UI still open, focus in an
+  input), check `__bs.paused` after the press and press again once before failing. I did not edit the file: it is yours.
+- ~23:00 (combat) combat-land50 968d937 CI 45270595657: bow 4.2 cm (was 13.5; frame: charge, up 0.5, the bow arm's elbow in
+  by the ribs while the bow rises on a body still turning) and the guardian wake failed again (dormant). fe26c19 on
+  combat-land50: the bow arm's elbow pole out to the left as well as down; the play test prints the body's place and
+  state 0.2 s after the teleport and at the end of the wake check (read those lines if it fails again); perf agent 26's
+  pause-menu flake fix applied. Land combat-land50 at fe26c19 or later once green. combat-s6b carries the same commit.
+- ~23:40 (combat) fe26c19 CI 45273172868: everything green but the combat job's bow check, 11 cm (string arm, up 0.5:
+  the string hand jumped from the hip to the nock at up 0.5 before the bow and the turn came round). b157283 on
+  combat-land50: the hand goes there smoothly with the raise. Headless probe of that build (probe/ranged_s6a.txt): bow
+  0.4 cm, sling 0, atlatl 0. Guardian wake passed on fe26c19 (body 3.14 m off, not down, 0.2 s after the teleport).
+  Land combat-land50 at b157283 when its CI is green on that sha.
+- s6c take delivered (Downloads: 31_camp_fire_close_v4, 34_camp_fire_mid_range_v2, 32_night_defence_v4,
+  20_spear_fishing_v7; README notes). Still wrong: brightest yellow at the fire's foot inside the sticks; heat shimmer
+  hard to see against night ground; animals' rim still a little glassy up close; walking wade rings still visible.
+- ~01:00 (combat) LANDED b157283 on main (combat-land50; CI 45277205973 green on that sha after rerunning smoke ("wake
+  did not reach play", the known flake) and perf_gate ("mobile flat: 738829 triangles", budget 720000; the same code
+  bar ranged.ts measured 550553 on fe26c19 and main's own run 602929: the flat's count varies run to run, worth a look
+  by the perf agent). So main now has the s5 work: aim camera slerp fix, bow ready-low + full draw, spear free hand,
+  fish sun-net, src/world/flame.ts, night fill 1.35, the bot crash fix, plus the bow transient fixes.
+- GUARDIAN WAKE: on b157283 the line printed "down True hp 1" 0.2 s after the teleport: the player is DOWN after the
+  ranged section (the arena revives after 2.5 s, inside the 6 s, so it woke this time). That is the flake's cause: when
+  the revive lands late the guardian stays dormant (ai.ts: no wake while p.down). Fix the test (heal before the
+  teleport, or wait for down false) rather than the game.
+- NOT landed: `combat-s6c` = main b157283 + the session 6 work (fire layers, heat haze, night light, rings, free arm,
+  bot). Land it the same way when its CI is green on its head sha.
