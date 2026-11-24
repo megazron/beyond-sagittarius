@@ -29,6 +29,14 @@ const ALL_ITEMS = ['stone', 'branch', 'tinder', 'frond', 'flint', 'vine', 'scrap
 
 export interface Stats { health: number; thirst: number; hunger: number; stamina: number }
 
+/** The last modal opens and closes (window.__modalLog: [ms, 'open' | 'close', what]), for a test that fails waiting on one. */
+const MODAL_LOG: [number, string, string][] = [];
+function modalLog(kind: string, what: string) {
+  MODAL_LOG.push([Math.round(performance.now()), kind, what.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60)]);
+  if (MODAL_LOG.length > 24) MODAL_LOG.shift();
+}
+if (typeof window !== 'undefined') (window as unknown as { __modalLog: typeof MODAL_LOG }).__modalLog = MODAL_LOG;
+
 export class UI implements CineUI {
   private typeTimer = 0;
   private subTimer = 0;
@@ -362,6 +370,7 @@ export class UI implements CineUI {
   /** Any module with its own screen (the Action menu) opens it through here. */
   openModal(html: string) {
     const m = $('modal');
+    modalLog('open', html);
     clearTimeout(this.leaveTimer);
     if (m.classList.contains('hidden') || m.classList.contains('leaving')) audio.uiOpen();
     m.classList.remove('leaving');
@@ -373,6 +382,7 @@ export class UI implements CineUI {
   }
   closeModal() {
     const m = $('modal');
+    modalLog('close', m.classList.contains('hidden') ? 'hidden' : m.classList.contains('leaving') ? 'leaving' : 'shown');
     document.body.classList.remove('in-menu');
     if (!m.classList.contains('hidden') && !m.classList.contains('leaving')) {
       audio.uiClose();
