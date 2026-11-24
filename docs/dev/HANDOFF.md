@@ -1599,3 +1599,16 @@ Owns: mirrored text, touch hints, night readability, fire base, the Android buil
   stills of four sets (~/bs-cap/fix/tune): the frame's mean brightness 12/255 before, 26-30 now. The fight's planet fill (1.55) and the eye
   stopping down by the fire (0.78) sit on top, so fight nights are a little brighter too.
 - Captures: ~/bs-cap/fix (mkplan.py desktop|phone, run.sh NAME PLAN QUERY: one exclusive heavy step, Chrome 9352).
+- 05:20 (release fixes) GPU takes watched: ~/bs-cap/fix/d1 (signs, minimap), p1 (phone touch menus en/hi/ur, phone
+  signs), d3 (night before/after, fire close/mid, night fight edge); clips and notes in
+  Downloads/BS_Game_v1.1/release_fixes (README_release_fixes.txt). Fire chosen from headless stills with the tongues,
+  coals and light switched off one at a time (~/bs-cap/fix/diag): the white-yellow mass was the tongues overlapping.
+- Android: `BS_INTERNAL_TEST=1 store/release.sh --same` from fix3 eb25016 built and checked (check_aab ok, 1.2.0 (2),
+  158.9 MB); saved as Downloads/BeyondSagittarius_PlayStore/1.2.0/BeyondSagittarius-1.2.0-2-INTERNAL-TEST-fixes-eb25016.aab
+  (the release agent's AAB of 393e094 kept as ~/beyond-sagittarius-release/beyond-sagittarius-1.2.0-2-rel393e094.aab).
+  Note: with node_modules linked from another worktree, `cap sync` writes that path into
+  android/capacitor.settings.gradle; I reverted it after the build.
+- Open: the combat play test's "phone: the fight buttons are on the screen" failed on 2 of 5 fix runs in CI and never
+  locally (0 failed on my build); never seen on other branches. I could not find a cause in my input change (a finger
+  anywhere now switches to touch, which should only make it pass more). Combat agent: worth a look at that check's
+  timing (0.5 s after the tap under SwiftShader).
