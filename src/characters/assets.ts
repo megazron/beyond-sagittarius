@@ -215,8 +215,8 @@ export const clothDetail = () => detailTile('detail_cloth');
 export interface SkinLook { skin: number; shade: number; lip: number; glow: number; over: number; glowK: number; }
 
 /** Photo detail, species colour: the neutral map is recoloured here, so every skin keeps its pores. */
-export function skinMaterial(sex: string, marks: string, l: SkinLook, lod: number) {
-  const m = new THREE.MeshStandardMaterial({ map: tex(`skin_${sex}`, lod), normalMap: tex(`skin_${sex}_n`, lod), normalScale: new THREE.Vector2(0.55, 0.55), roughness: 0.52 });
+export function skinMaterial(sex: string, marks: string, l: SkinLook, lod: number, normalLod = lod) {
+  const m = new THREE.MeshStandardMaterial({ map: tex(`skin_${sex}`, lod), normalMap: tex(`skin_${sex}_n`, normalLod), normalScale: new THREE.Vector2(0.55, 0.55), roughness: 0.52 });
   m.userData.film = { kind: 'skin', sex, marks, ...l };
   const u = {
     uSkin: { value: col(l.skin) }, uShade: { value: col(l.shade) }, uLip: { value: col(l.lip) }, uGlow: { value: col(l.glow) }, uOver: { value: col(l.over) },

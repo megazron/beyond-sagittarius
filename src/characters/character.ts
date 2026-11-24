@@ -156,8 +156,8 @@ function solveLeg(hip: THREE.Bone, knee: THREE.Bone, foot: THREE.Bone, target: T
  * plain Object3D handles, so callers can use a character the moment it is created;
  * the body drops in when its GLB has arrived (preloadCrew makes that instant).
  */
-/** `texDetail`: the detail the body's textures are picked for, when not its own (the body you play in the city on phones:
- * the full build, the phone's 1024 maps) */
+/** `texDetail`: the detail the body's colour maps are picked for, when not its own (the body you play in the city on
+ * phones: the full build and its normal maps, the phone's 1024 colour maps; its 1024 normal maps lost the coat's weave) */
 export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, skinId?: string, texDetail = detail) {
   const L: Look = LOOKS[id];
   const human = skinId === 'suit';
@@ -305,12 +305,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const glowC = custom ? custom.glow : human ? 0 : L.glow;
     const marks = custom ? MARK_OF[custom.marks] : human ? 'strong_suit' : id;
     const overC = marks === 'explorer' ? 0xf3e7cf : marks === 'strong' ? 0xe8c49a : 0x1e1e1e;
-    const skin = skinMaterial(M.skin, marks, { skin: skinC, shade: shadeC, lip: lipC, glow: glowC, over: overC, glowK: human ? 0 : 1.15 }, texLod);
+    const skin = skinMaterial(M.skin, marks, { skin: skinC, shade: shadeC, lip: lipC, glow: glowC, over: overC, glowK: human ? 0 : 1.15 }, texLod, lod);
     const irisC = custom ? custom.iris : human ? 0x1e120b : L.face.iris;
     const eyes = eyeMaterial(irisC, (custom ? custom.eyeGlow : !human) ? 0.55 : 0);
     const browC = custom ? new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex() : human ? 0x2c1d14 : L.face.brow;
     const atlas = M.atlas;
-    const cloth = new THREE.MeshStandardMaterial({ map: tex(`${atlas}_cloth`, texLod, true), normalMap: tex(`${atlas}_cloth_n`, texLod), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, side: THREE.DoubleSide });
+    const cloth = new THREE.MeshStandardMaterial({ map: tex(`${atlas}_cloth`, texLod, true), normalMap: tex(`${atlas}_cloth_n`, lod), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, side: THREE.DoubleSide });
     cloth.userData.film = { kind: 'cloth', atlas, satin: human, velvet: id === 'megazron' }; // the narrator's coat is velvet in the films
     const lay = M.layers ?? [];
     const accent = { uAccent: { value: new THREE.Color(custom?.accent ?? 0xffffff) }, uAccentK: { value: custom ? 1 : 0 }, uDetail: { value: clothDetail() }, uHeightM: { value: heightM }, uSatin: { value: human ? 1 : 0 }, uDust: { value: human ? 0.12 : 1 },
@@ -609,7 +609,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const weights = (ns: string[], m: THREE.SkinnedMesh) => { if (!ns.length) return; m.morphTargetDictionary = Object.fromEntries(ns.map((n, i) => [n, i])); m.morphTargetInfluences = ns.map((n) => { for (const p of parts) { const d = p.mesh.morphTargetDictionary; if (d && d[n] !== undefined) return p.mesh.morphTargetInfluences![d[n]]; } return morph[n] ?? 0; }); faces.push({ dict: m.morphTargetDictionary, infl: m.morphTargetInfluences }); };
       weights(names, mesh); morphVertex(mesh);
       // the test hook's other half (BODY_MERGE.setSeparate): the body as main drew it, for an A/B of one frame
-      mergeSrc[s] = () => { const r = mergeBodyGeometry(parts, keepN, [], true); const m = new THREE.SkinnedMesh(r.g, bodyMat!); m.name = 'skin_body_ref'; m.boundingSphere = sphere; m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale); mesh.parent!.add(m); m.bind(mesh.skeleton, mesh.bindMatrix); m.visible = false; m.frustumCulled = mesh.frustumCulled; m.receiveShadow = true; m.castShadow = mesh.castShadow; m.onBeforeRender = () => morphUniforms(bu, m); weights(r.names, m); return m; };
+      mergeSrc[s] = () => { const r = mergeBodyGeometry(parts, keepN, [], true); const m = new THREE.SkinnedMesh(r.g, bodyMat!); m.name = 'skin_body_ref'; m.boundingSphere = sphere; m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale); mesh.parent!.add(m); m.bind(mesh.skeleton, mesh.bindMatrix); m.visible = false; m.frustumCulled = mesh.frustumCulled; m.receiveShadow = true; m.castShadow = mesh.castShadow; m.onBeforeRender = () => morphUniforms(bu, m); weights(r.names, m); r.names.forEach((n, i) => { const j = mesh.morphTargetDictionary?.[n]; if (j !== undefined) m.morphTargetInfluences![i] = mesh.morphTargetInfluences![j]; }); return m; };
       for (const p of parts) {
         castable.delete(p.mesh); p.mesh.removeFromParent();
         const fi = faces.findIndex((f) => f.infl === p.mesh.morphTargetInfluences); if (fi >= 0) faces.splice(fi, 1);
