@@ -380,7 +380,7 @@ function vestibule(D: typeof LINER) {
   }
   wall(lit, -V.passX, V.hallY0, V.passX, V.hallY0);              // the back of the hall and the passages
   const mk = (pos: number[], mat: THREE.Material) => { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals(); const m = new THREE.Mesh(geo, mat); g.add(m); return m; };
-  mk(lit, new THREE.MeshStandardMaterial({ color: 0x9a8a76, roughness: 0.75, metalness: 0.15, emissive: 0xffb070, emissiveIntensity: 0.3, side: THREE.DoubleSide }));
+  mk(lit, new THREE.MeshStandardMaterial({ color: 0x6e6458, roughness: 0.8, metalness: 0.15, emissive: 0xffb070, emissiveIntensity: 0.12, side: THREE.DoubleSide }));
   mk(dark, new THREE.MeshBasicMaterial({ color: 0x050505, side: THREE.DoubleSide }));
   // a light strip along the hall's ceiling
   const strip = new THREE.Mesh(new THREE.PlaneGeometry(V.hallX * 1.8, 0.05), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.9, 1.3), side: THREE.DoubleSide }));
