@@ -251,7 +251,9 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   // size) holding station above the spaceport, framed by the street from its first step. 200 m out, not 120: at 120 it
   // hung over the column the boarded liner climbs at the end of the prologue ----
   const heroShip = createShip(); const hero = heroShip.group; add(hero);
-  hero.position.set(-6, 70, S - 200); hero.rotation.set(0.08, 0.5, 0.12); hero.scale.setScalar(7);
+  // (high and east of the pad's column: lower, it hung beside the boarded liner in the boarding's wide shot and read as
+  // a part of it)
+  hero.position.set(20, 140, S - 200); hero.rotation.set(0.08, 0.5, 0.12); hero.scale.setScalar(7);
   bakeStatic(hero, [heroShip.ring, heroShip.plume]);
   hero.traverse((x) => { x.userData.ground = false; });
   updates.push((dt) => { heroShip.ring.rotation.z += dt * 0.05; });

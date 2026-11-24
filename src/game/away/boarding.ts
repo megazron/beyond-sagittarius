@@ -34,7 +34,7 @@ const HALL_Z = -((LINER.vest.hallY0 + LINER.vest.hallY1) / 2) * SC;
 const PASS_Z = -((LINER.vest.hallY0 + LINER.vest.passY1) / 2) * SC, PASS_X = (LINER.vest.passX - 0.1) * SC;
 const DECK_W = 1.8;
 /** walking speeds (m/s): on the apron, up the ramp, on the platform and inside; the gap kept to the one in front */
-const V_GROUND = 1.3, V_RAMP = 1.15, V_FLAT = 1.05, GAP = 2.1;
+const V_GROUND = 1.3, V_RAMP = 1.3, V_FLAT = 1.1, GAP = 1.9;
 
 export interface Boarder { id: string; fig: Character; pos: THREE.Vector3; yaw: number; phase: number }
 
@@ -118,11 +118,12 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
   let plans: (Plan & { segs: Seg[] })[] = [];
   const ev = { stop: 0, go: 0, hall: 0, shut: 0, arm: 0, jets: 0, lift: 0, end: 0 };
   /** the last look: he turns round (towards the camera's side), looks at the city, turns back */
-  const LOOK = { turn: 0.9, hold: 2.8 };
+  const LOOK = { turn: 0.85, hold: 2.4 };
   function plan() {
     plans = [];
     for (let k = 0; k < N; k++) {
-      const p = pathFor(k % 2 ? 1 : -1);
+      // everyone turns along the hall towards the cameras' side: the hull's own wall then hides them from every shot
+      const p = pathFor(1);
       const s = new Float32Array(STEPS + 1);
       // the last one (him) starts a step from the foot of the ramp; the others ahead of him, a gap apart
       let x = sFoot - 1.2 + (N - 1 - k) * GAP, v = segAt(p, x).v;
@@ -138,7 +139,8 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
           if (stopT >= 0 && t < ev.go) want = 0;
         }
         // never closer than the gap to the one in front
-        if (k > 0) { const ahead = plans[k - 1].s[i] - x; if (ahead < GAP) want = 0; else if (ahead < GAP + 0.6) want = Math.min(want, segAt(p, x).v * (ahead - GAP) / 0.6); }
+        // (once the one in front has turned into the hall they are out of the way: each goes to their own end of it)
+        if (k > 0 && plans[k - 1].s[i] < sHall + 0.6) { const ahead = plans[k - 1].s[i] - x; if (ahead < GAP) want = 0; else if (ahead < GAP + 0.6) want = Math.min(want, segAt(p, x).v * (ahead - GAP) / 0.6); }
         // anticipation and settle: a step speeds up and slows down over about a third of a second
         v += (want - v) * Math.min(1, DT * 6);
         x = Math.min(me && stopT < 0 ? sStop : p.len, x + v * DT);
@@ -147,7 +149,7 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
     }
     const me = plans[N - 1];
     ev.hall = me.s.findIndex((x) => x >= sHall) * DT;
-    ev.shut = ev.hall + 0.3; ev.arm = ev.shut + 1.5; ev.jets = ev.arm + 1.4; ev.lift = ev.jets + 1.6; ev.end = ev.lift + 9.5;
+    ev.shut = ev.hall + 0.3; ev.arm = ev.shut + 1.3; ev.jets = ev.arm + 1.2; ev.lift = ev.jets + 1.5; ev.end = ev.lift + 8.8;
   }
   const sOf = (k: number, T: number) => { const p = plans[k].s, i = Math.min(p.length - 2, Math.max(0, T / DT)), j = Math.floor(i); return lerp(p[j], p[j + 1], i - j); };
 
@@ -159,7 +161,8 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
     const up = t < 6.5 ? 320 * Math.pow(t / 6.5, 2.2) : 320 + (t - 6.5) * 110;
     const over = smooth(4.5, 9, t);
     g.position.set(PAD.x, up, PAD.z - over * over * 60 * Math.max(0, t - 4.5));
-    g.rotation.set(-over * 0.7, PAD.yaw, 0, 'YXZ');
+    // (nose over towards the way it goes: south, away from the city)
+    g.rotation.set(over * 0.7, PAD.yaw, 0, 'YXZ');
     return { legs: 1 - smooth(1.5, 3.2, t) };
   }
 
@@ -172,12 +175,12 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
   function cut() {
     const s = ev.stop;
     shots = [
-      { t0: 0, t1: 4.6, fov: 50, cam: (_T, k, e, a) => { F(lerp(30, 25, k), lerp(1.7, 2.3, k), lerp(-34, -29, k), e); F(0, 13, -6, a); } },
-      { t0: 4.6, t1: 9.0, fov: 42, cam: (_T, k, e, a) => { F(8.2, 2.6, lerp(-13.5, -12, k), e); F(0, lerp(3.6, 4.6, k), lerp(-10, -8, k), a); } },
-      { t0: 9.0, t1: s, fov: 46, cam: (T, k, e, a) => { F(2.4, 0.9, FOOT - 3.2, e); headOf(N - 1, T, tmpA); F(0, 6.2, HULL_Z, tmpB); a.lerpVectors(tmpA, tmpB, 0.25 + k * 0.5); } },
-      { t0: s, t1: s + 2.5, fov: 34, cam: (_T, k, e, a) => { F(1.2, SILL + 1.55, PLAT0 - 3.1 + k * 0.3, e); at(plans[N - 1], sStop, a); a.y += 1.5; } },
-      { t0: s + 2.5, t1: s + 4.3, fov: 44, cam: (_T, k, e, a) => { F(0.5, SILL + 1.68, STOP_Z + 0.6, e); F(lerp(-8, 8, k), 30, -420, a); } },
-      { t0: s + 4.3, t1: ev.arm, fov: 40, cam: (_T, k, e, a) => { F(5.6, SILL + 0.9, PLAT0 - 5.2, e); F(0, SILL + 1.2 + k * 0.4, HULL_Z - 0.6, a); } },
+      { t0: 0, t1: 4.2, fov: 50, cam: (_T, k, e, a) => { F(lerp(30, 25, k), lerp(1.7, 2.3, k), lerp(-34, -29, k), e); F(0, 13, -6, a); } },
+      { t0: 4.2, t1: 8.4, fov: 42, cam: (_T, k, e, a) => { F(8.2, 2.6, lerp(-13.5, -12, k), e); F(0, lerp(3.6, 4.6, k), lerp(-10, -8, k), a); } },
+      { t0: 8.4, t1: s, fov: 46, cam: (T, k, e, a) => { F(2.4, 0.9, FOOT - 3.2, e); headOf(N - 1, T, tmpA); F(0, 6.2, HULL_Z, tmpB); a.lerpVectors(tmpA, tmpB, 0.25 + k * 0.5); } },
+      { t0: s, t1: s + 2.2, fov: 34, cam: (_T, k, e, a) => { F(1.2, SILL + 1.55, PLAT0 - 3.1 + k * 0.3, e); at(plans[N - 1], sStop, a); a.y += 1.5; } },
+      { t0: s + 2.2, t1: s + 3.9, fov: 44, cam: (_T, k, e, a) => { F(0.5, SILL + 1.68, STOP_Z + 0.6, e); F(lerp(-8, 8, k), 30, -420, a); } },
+      { t0: s + 3.9, t1: ev.arm, fov: 40, cam: (_T, k, e, a) => { F(5.6, SILL + 0.9, PLAT0 - 5.2, e); F(0, SILL + 1.2 + k * 0.4, HULL_Z - 0.6, a); } },
       { t0: ev.arm, t1: ev.lift, fov: 48, cam: (_T, k, e, a) => { F(lerp(36, 33, k), 1.9, -40, e); F(0, 14, -4, a); } },
       { t0: ev.lift, t1: ev.lift + 5.2, fov: 52, cam: (T, _k, e, a) => { F(40, 1.6, -52, e); a.copy(tmpLiner(T)); a.y += 16; } },
       { t0: ev.lift + 5.2, t1: ev.end + 1, fov: 55, cam: (T, k, e, a) => { const L = tmpLiner(T); e.set(L.x + 45 - k * 10, L.y - 60 + k * 10, L.z + 95 - k * 15); a.set(L.x, L.y + 8, L.z - 10); } },
@@ -434,7 +437,8 @@ export function insideHull(p: THREE.Vector3) {
 export function designOf(g: THREE.Object3D) {
   const out: string[] = [];
   // (the landing legs are only on the ground: not part of the comparison)
-  g.traverse((x) => { const m = x as THREE.Mesh; if (!m.isMesh) return; for (let p: THREE.Object3D | null = x; p && p !== g; p = p.parent) if (p.userData.landing) return; const mat = m.material as THREE.MeshStandardMaterial; out.push(`${m.geometry.type}:${m.geometry.getAttribute('position').count}:${mat.color?.getHexString?.() ?? '-'}`); });
+  g.traverse((x) => { const m = x as THREE.Mesh; if (!m.isMesh) return; for (let p: THREE.Object3D | null = x; p && p !== g; p = p.parent) if (p.userData.landing) return; const mat = m.material as THREE.MeshStandardMaterial; // (lit materials by colour; glows and lamps change colour as they run, so only their kind)
+    out.push(`${m.geometry.type}:${m.geometry.getAttribute('position').count}:${(mat as unknown as THREE.MeshBasicMaterial).isMeshBasicMaterial ? 'glow' : mat.color?.getHexString?.() ?? '-'}`); });
   return out;
 }
 
