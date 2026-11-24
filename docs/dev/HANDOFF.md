@@ -1510,3 +1510,22 @@ unlanded except this handoff commit and any recording in progress.
   uploads: not touched. Coordinator notes: the store take's hair-at-the-lens (t02) should be better with the landed
   body keepOff (0.9 m), not re-checked on the GPU; t03 car grille: keepOff off cars on ped27, not clipped.
   ped27 needs CI (pushed; perf_gate now settles by frames, so its budgets may need a look) before it can land.
+
+## 2026-11-24 perf agent 28 (worktree ~/bs-perf, branch ped27; GPU scripts and results ~/bs-assets/gpu/p28)
+- DETECTOR (tools/pedglitch.js): keeps 400 samples a type (was 40), logs each overlap's two speeds (head on, catching
+  up, standing) and, with each flat card close by, how it came within 27 m in view (`entered`: distance and drawn as
+  what) and the body budget then (`why`, from city.ts pedProbe `diag`: townsfolk bodies used, cap left, painted crowd
+  wanted/held, looks of the free pool bodies). p28/an.py summarises a report.
+- OVERLAPS (Web 170 on ped27 b2; 173 again on the same build, c0): 108 of them in tram_square, all at the gate end
+  (z -58 to -73), most cards standing or head on: the street's cards turned at S + 4, inside the gate plaza, into the
+  plaza's own throng and five threes standing there; the thinning's turn-backs added head-on pairs. Fixes: a card does
+  not take a step that brings it within 0.5 m of anyone ahead (holds, keeps easing aside, turns back after 3 s; it
+  stands, not walks on the spot, body or card); street cards turn 12 m into the plaza (S0); two gate threes on Web, not
+  five; a thinning turn-back only with 4.5 m clear behind; story walkers do not step within 0.5 m of anyone
+  (stepBlocked). p28a (first three): Web overlap 173 -> 40, Mobile 13 -> 5, Mobile slide 2 -> 0.
+- FLAT CARDS CLOSE: the diag shows the cause is the budget, not the looks: Web's painted crowd had its floor of 8
+  bodies held (16 pool bodies free) while the townsfolk used 20-24 of 26; Mobile's townsfolk used all 11 (painted crowd
+  0), mostly the six story people, counted even behind the camera. Fixes: Web/Ultra painted-crowd floor 12 (CROWD_MIN);
+  the story people count against the cap only in view or within 8 m; townsfolk out of view beyond 8 m rank 12 m later
+  (FOLK_VIEW, ?folkview=0 off); a body held out of view ranks 10 m later than one in view; cards out of view for two
+  frames take a look the pool has a free body of (LOOK_SPREAD, ?looks=0 off).

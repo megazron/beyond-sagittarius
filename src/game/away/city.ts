@@ -1434,7 +1434,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   }
   const byCard = new Map<number, (typeof crowdPool)[number]>(), near: [number, number][] = [], elbow: [number, number][] = [];
   const thinK: [number, number][] = [], thinF = new THREE.Vector3();
-  const lookN = new Int32Array(NLOOK), lookQ: [number, number][] = [], perLook = new Int32Array(NLOOK); let lookSeen = new Uint8Array(0); for (const b of crowdPool) perLook[b.look]++;
+  const lookN = new Int32Array(NLOOK), lookQ: [number, number][] = [], perLook = new Int32Array(NLOOK); let lookSeen = new Uint8Array(0); const lookF = new THREE.Vector3(); for (const b of crowdPool) perLook[b.look]++;
   // a card is moved only from and to where no camera swing could show it: 6 m of margin, not inView's 2.5
   const VSW = new THREE.Sphere(new THREE.Vector3(), 6);
   const inViewWide = (x: number, z: number) => (VSW.center.set(x, FLOOR + 0.9, z), VIEW.intersectsSphere(VSW) || VIEW2.intersectsSphere(VSW));
@@ -1483,11 +1483,12 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     // looks: within TAKE + 10 m of the camera, the cards that hold a body or may be seen keep their look; the others,
     // nearest first, keep theirs while the pool has a body of it to spare, else take the look with the most to spare
     if (LOOK_SPREAD && viewOn) {
-      lookN.fill(0); lookQ.length = 0; if (lookSeen.length !== cards.length) lookSeen = new Uint8Array(cards.length).fill(1);
+      cam.getWorldDirection(lookF); lookN.fill(0); lookQ.length = 0; if (lookSeen.length !== cards.length) lookSeen = new Uint8Array(cards.length).fill(1);
       for (let i = 0; i < cards.length; i++) {
         const q = cards[i], d = Math.hypot(q.x - c.x, q.z - c.z); if (d > TAKE + 10) { lookSeen[i] = 1; continue; }
         // (seen this frame or the last: a card that left the view this frame was still on the screen the frame before)
-        const seen = inViewWide(q.x, q.z), was = lookSeen[i]; lookSeen[i] = seen ? 1 : 0;
+        // (and only behind the camera: in front of it, beyond the view's edge, the detector still caught a few in view)
+        const seen = inViewWide(q.x, q.z) || (q.x - c.x) * lookF.x + (q.z - c.z) * lookF.z > -2, was = lookSeen[i]; lookSeen[i] = seen ? 1 : 0;
         if (taken[i] || seen || was) lookN[q.who % NLOOK]++; else lookQ.push([d, i]);
       }
       lookQ.sort((a, b) => a[0] - b[0]);
@@ -1577,7 +1578,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       }
       // the step aside is walked, not slid: at most 1.1 m/s across, and the body turns into the way it goes (it used to
       // ease 1.7 m sideways in a few tenths of a second facing straight on, feet walking forwards)
-      const ddx = THREE.MathUtils.clamp((want - b.dx) * (1 - Math.exp(-dt * 3)), -0.9 * dt, 0.9 * dt);
+      const latV = q.wait || q.holdT ? 0.5 : 0.9; // (stood waiting for someone ahead: a slower step aside, not a slide)
+      const ddx = THREE.MathUtils.clamp((want - b.dx) * (1 - Math.exp(-dt * 3)), -latV * dt, latV * dt);
       b.dx += ddx;
       const bx = q.x + b.dx, vx = Number.isFinite(b.lastX) ? (bx - b.lastX) / Math.max(dt, 1e-3) : 0; b.lastX = bx;
       const head = Math.atan2(vx, q.v || 1e-3), turn = Math.atan2(Math.sin(head - b.yaw), Math.cos(head - b.yaw));
@@ -2333,7 +2335,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
             }
             // on the pavement, never into the road (|x| < 4.35 is the kerb) or the shopfronts
             const sg = Math.sign(side) || 1; want = sg * THREE.MathUtils.clamp(want * sg, 4.7, FRONT - 0.6);
-            lat = THREE.MathUtils.clamp((want - q.pos.x) * (1 - Math.exp(-dt * 3)), -0.9 * dt, 0.9 * dt); // walked, not slid
+            // (0.5 m/s while they wait for someone ahead: stood still, a faster step aside read as a slide)
+            const latV = (w.pause ?? 0) > 0 ? 0.5 : 0.9;
+            lat = THREE.MathUtils.clamp((want - q.pos.x) * (1 - Math.exp(-dt * 3)), -latV * dt, latV * dt); // walked, not slid
             if (stepBlocked(q, q.pos.x + lat, q.pos.z)) lat = 0;
             q.pos.x += lat;
           }
