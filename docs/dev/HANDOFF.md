@@ -1897,3 +1897,20 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   films' canvas texture, coarse up close. CI on 8359db8: every gate green but combat's bow arms (2.9 cm vs 2 cm), which
   my change does not touch (that gate has read 0.1 to 5.5 cm across runs, see the life notes).
 
+
+## 2026-11-24 gate agent (worktree ~/bs-gate, branch gate1, pushed as gate2; landing queue)
+- PERF_GATE ON A HELD CLOCK (tools/perf_gate.py docstring has the whole method). Cause of the run-to-run spread (145,
+  167, 181 draws at the phone gate on the same code): the clock ran free, so on CI's 1 to 3 frames a second each spot
+  got 8 to 40 frames (0.05 s each) of crowd simulation and the crowd stood elsewhere each run; and "settled: False"
+  everywhere. Now: `__bs.holdAtArrival(600, 1)` holds the clock from Away.enter (game clock 600 s, Math.random seeded),
+  the script steps it; before each step it waits for `__bs.settled()` (city.ts pending(): bodies not full, props, pools
+  drawing, card atlas, prebake; textures waiting for upload; shader programs linking) and no request in flight. A spot
+  whose wait passes --settle (300 s) fails "did not settle (what was pending)". `advance(1e-9)` draws without a tick.
+- LANDING QUEUE (mine): gate, modal-land2 (= modal-land rebased, play_test conflict: the modal wait from modal-land,
+  the brace night from main), intro4, land3 (= land2 + landing_smoke wake fix), cabin5. ~/bs-story/DECISIONS.md: the
+  cabin decisions are C1-C5 now (land2's are L1-L10).
+- land2's landing_smoke "wake: did not reach play": the wake's cues are stretched by wakeRate (0.48 with the English
+  takes: wake.line3 6.72 s in a 3.4 s slot), so 22.2 s of cues is about 46 s of game time; the test held only 40 s.
+  Now up to 90 s held. smoke's known flake "wake did not reach play" is likely the same stretch (not checked).
+- levels_smoke "the first night did not end through the fight": fixed on main by 32945fa (night.ts kept no cb.* flags
+  when the fight was won), not by me.
