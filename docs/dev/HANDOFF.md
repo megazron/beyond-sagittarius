@@ -6,20 +6,19 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
-## Departure lounge (Scene 1) and Nuvexa's sweater (2026-11-24, cabin agent, branches ports1 / cabin2)
-- The friends' talk now plays in the lounge while the liner is still docked at Earth (owner's design doc, Scene 1):
-  `src/cinematic/scenes.ts` `departScene` (shots L1 to L18 of `~/bs-story/SHOTLIST_departure_lounge.md`), started by
-  `cinematic.ts` `holdDepart()` at 14.2 s; the liner leaves after it. The old deck chat (`deckScene`, op.1 to op.12,
-  j.1-3, j.9) is gone; the end of the journey keeps the window, op.17 and op.18 as `readingScene`.
-- The deck shell is dressed as a lounge in `ship.ts` `createInterior`: two sofas, a table, a bag, end bulkheads with the
-  aft hatch, warm strips (`stripLight`), Earth's light (`earthLight`), the mission text on the holo (`display`), the
-  departure marks (`seats`) and `keepOut()` (the event pushes thrown bodies out of the furniture).
+## Departure lounge (Scene 1) (2026-11-24, cabin agent, branch cabin3)
+- The friends' talk now plays in the passenger lounge while the liner is still docked at Earth (owner's design doc,
+  Scene 1): `src/cinematic/scenes.ts` `departScene` (shots L1 to L18 of `~/bs-story/SHOTLIST_departure_lounge.md`),
+  started by `cinematic.ts` `holdDepart()` at 14.2 s; the liner leaves after it. The old deck chat (`deckScene`, op.1
+  to op.16, j.1-3, j.9) is gone; the journey cuts at 33.45 s straight to the pull's A1 (S = 39).
+- The lounge is the deck shell dressed in `ship.ts` `createInterior`: `lounge` (two sofas, table, cups, bag, runner;
+  visible only in the departure), end bulkheads with the aft hatch and ceiling strips (always), `stripLight` and
+  `earthLight` (departure only), the mission text on the holo (`display`), the departure marks (`seats`).
 - `cutscene.ts`: `Shot.fov` (a lens per set-up, the scene's own restored at the end) and `Beat.tick(t)` (a look that
-  moves on within a line). `__bs.syncMark(n)`: capture sync beeps with a white corner square.
-- New lines dep.1 to dep.10 (en/hi/ur takes, dep.5~f). From life-wip: 2d1a7df (hand shapes, authored selfie) and
-  Nuvexa's built sweater (social*, custom_*_social*, social_cloth textures, under.ts, tools/chars/knit.py, config.py).
-- Nuvexa's clothes, 8 deck views at 1 to 2 m, flag pixels per view (main -> now): skin through cloth standing
-  1407 -> 25, selfie 2244 -> 397, argue 2840 -> 119; seated 519 -> 596 (worse, small). Probe: ~/bs-cap/cabin/nv_probe.py.
+  moves on within a line). New lines dep.1 to dep.10 (en/hi/ur takes, dep.5~f).
+- Nuvexa's sweater and the authored selfie came to main with life-wip. Measured in the deck's 8 views at 1 to 2 m
+  (flag pixels per view, a98ead4 -> life-wip build): skin through cloth standing 1407 -> 25, selfie 2244 -> 397, argue
+  2840 -> 119; seated 519 -> 596 (worse, small). Probe: ~/bs-cap/cabin/nv_probe.py.
 
 ## Cinema mode for trailers and screenshots (2026-11-24, trailer agent)
 - `?cinema=1` or `__bs.cinema(true)`: every page element but the 3D canvas is hidden (HUD, minimap, hints, prompts,
