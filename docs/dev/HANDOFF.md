@@ -1461,3 +1461,22 @@ unlanded except this handoff commit and any recording in progress.
 - COLD LOAD after c30f92d (hitch_p26_cold3.json): loaded in 16.8 s (main 20.7 s), worst frame 1567 ms (was 2950-3366),
   stalls over 0.9 s: 1.57 s at t 8.3, 0.98 s at t 10.8 (33 programs). (The log also shows a "loaded in 19.2 s" line I
   could not place.)
+
+## 2026-11-24 perf agent 27 (worktree ~/bs-perf; landing branch ped27-land, WIP branch ped27 on top of it)
+- LANDING: ped26-land rebased on main 393e094 as `ped27-land` (the handoff conflicts were both-sides appends: kept both).
+  Its new commit c4c894d/660c638: every pooled body and story person is drawn once under the title card (renderer.ts
+  drawOnce: a spare layer 30, the scene's own lights, one pixel of the scene's target, no shadow pass, programs compiled
+  with compileAsync first; character.ts whenFull = body + light build loaded) so soak_smoke's geometry count stops
+  climbing lap after lap. Called from city prebake (now given the camera), waits up to 8 s, else finishes in play.
+- WIP on ped27 (not landed): painted-crowd thinning (city.ts walkCrowd, THIN/THIN_R 32/THIN_TURN 18, ?thin=0 off):
+  within 32 m of the camera never more painted people than bodies for them; the extra ones out of view are moved
+  further off out of view, an un-bodied card in view coming towards the camera within 18 m turns back. The view used
+  for "may this person change between body and card" now also covers where the camera will be after it moves (VIEW2:
+  last frame's motion repeated), and a camera jump over 3 m is a cut only if it also turned (a wall/body push is not).
+  Facades (facade.ts): aa from fwidth(u/bw)+fwidth(v/fh), not of the fract: the NE street's dotted wall was half-lit
+  windows in the 2x2 quads along every bay/floor seam of blank walls. Tram glass: its sky-map light scaled x0.25 in the
+  shader (three overrides envMapIntensity with scene.environmentIntensity). Camera keeps 0.6 m off cars (keepOff,
+  districts.eachCar; store take t03). perf_gate settles by frames and triangle plateau after teleports (SETTLE), not 4 s.
+  glmem census walks the on-screen stage first (shared body textures were booked to world.* / combat.d.player).
+- GPU scripts: ~/bs-assets/gpu/p27 (pedrun.sh DIST TAG; proxy_ab.sh = 4x CPU proxy main 5155be8 vs c4c894d in the
+  ~/bs-p27-ab worktree).
