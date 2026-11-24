@@ -433,9 +433,6 @@ function playOpening(withCity: boolean, replay: boolean) {
     renderer.setScene(cine.scene, cine.camera, false);
     cine.start(() => playFilm(replay));
   };
-  // ?earlycity=1 (trial): Zenvora is built under the black before MegaZroN and its programs compile in the background
-  // while he speaks, so less of it is left for the black after the title card
-  if (withCity && new URLSearchParams(location.search).get('earlycity') === '1') setTimeout(() => { if (!game?.away) return; const st = game.away.prepare('city'); void renderer.compileFor(st.scene, camera); }, 600);
   playVault('intro', () => (withCity ? playPrologue(() => titleCard(films, 'takeoff.card')) : films()));
 }
 
