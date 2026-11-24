@@ -1838,3 +1838,21 @@ Fixing the owner's list from the flow4 GPU takes, in order.
   volume); set the facade quad's material depthFunc to LessEqual vs Less explicitly; split the 60 m quad into bay-wide
   strips (facadeBox: the far end of one huge grazing triangle is where it fails, and the renderOrder probe split it
   along the diagonal); log depth on the facade material.
+
+## 2026-11-24 perf agent 31 (worktree ~/bs-perf, branch p31 from ped30-handoff 7c841b3; GPU and probes ~/bs-assets/gpu/p31)
+- CLIPS SENT: p30/final.sh's clips (dist-p30g = 888c558), all watched (contact sheets of every 12th frame plus a
+  frame-difference scan, flagged frames at full size; p31/sheets.py, notes p31/clip_notes.md), copied with a README to
+  Downloads/BS_Game_v1.1/mobile_v9_GPU (no sound). Seen wrong: Mobile NE wall speckle (ne_street_far 8-10 s); Web
+  walker at the lens (bump_west about 17 s, bump_east about 3 s); Web tram_pavement_south 23-27 fps for its first 4 s
+  (20 bodies, 1.34 M triangles, 325 draws). Mobile 58-60 fps everywhere on this GPU.
+- final.sh trap: its ffmpeg joins ran in the background and stopped on a tty read (state T); kill -CONT resumes it
+  (p31/cont.sh did that in a loop). Run ffmpeg with -nostdin or `< /dev/null` in background scripts.
+- CHARACTER RELAY (character.ts, shared; for the character and draw1 agents): pickLod now, for a body not drawn last
+  frame (hidden, off screen, or never drawn), sets camD from the last game camera's position (LENS) to where the body
+  is now, before choosing shadow/face/hair/build. Six lines at the top of pickLod; nothing else in the file changed.
+- city.ts: Web crowd POOL 20 -> 24 (24 bodies were already built: ceil(20/12)*12). Not yet measured.
+- CI note: levels_smoke failed on main's own run of 888c558 (45414153299) and on p31's first run at the path tree
+  (".pt-cols" not hidden 5 s after #m-close), while ped30c and ped30-handoff (same code) passed it. Not on the known
+  flake list, so not rerun.
+- Disk: keep at most 3 dist-* in ~/bs-perf and delete raw capture frames once joined and watched (coordinator, C: hit
+  22 MB free). I removed the old dist-* and p30's clip_* frame folders (mp4s and sheets kept).
