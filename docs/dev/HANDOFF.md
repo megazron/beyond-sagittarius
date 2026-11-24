@@ -1805,6 +1805,12 @@ Fixing the owner's list from the flow4 GPU takes, in order.
   9 (p29 best 13), overlap 0, slide 0, plus the 9/9 far blinks above. Web cardClose 22 (p29f 12, a-d 23-26), overlap 18,
   slide 3, identity 1, appear 1. Web tram square: 11 of the 22, each with the crowd pool full (want 20, held 19-20:
   POOL 20 on Web while 24 bodies are built, ceil(20/12)*12); next to try: Web POOL 24 (watch the gate's 1.45 M).
+- DETECTOR p30/ped_f1 (dist-p30f = ped30b 6c886be, the far-story rule out): Mobile cardClose 13, overlap 0, slide 0,
+  no vanish/appear (far or near), max bodies 16. Web cardClose 22 (tram square 9), overlap 18, slide 3. So the Web
+  out-of-view rule did NOT halve Web's flat cards this time (22 and 22 in e1/f1 vs 12 in p29f); phone pool 16 did not
+  bring Mobile under p29's 13-14 in f1 (9 in e1 was with the far-story rule giving the near bodies room). NOT 0.
+- NOT DONE: GPU clips (final.sh) and the proxy fps, the walker-at-the-lens re-check, phone memory/load for pool 16
+  (CI mobile_memory passes; not measured on the proxy).
 - INCIDENT (mine): 3b1eef8 also carried 1258b70, my first facade probe switch, which put the reveal block's
   `float fReveal` under an if/else: the facade shader did not compile and the facade buildings were NOT DRAWN on main
   for about an hour (every gate green: three does not report shader errors unless ?shadercheck=1). Reverted by
@@ -1818,5 +1824,11 @@ Fixing the owner's list from the flow4 GPU takes, in order.
   ne_depth: hiding the facade meshes takes the purple wall AND the shopfront away (both facade); drawing the facade
   meshes last (renderOrder 9999) clears the speckle in one triangle of the panel and not the other (a diagonal split),
   so it is a depth race with something drawn before, not the shader's colour. p30/geo.py: only ONE facade quad lies
-  in z = 220 there (tris 980/981 of static:MeshStandardMaterial, x 260-320). Next: p30/geo2.py lists every mesh's
-  triangles near that corner (any material) to find the other surface.
+  in z = 220 there (tris 980/981 of static:MeshStandardMaterial, x 260-320). p30/geo2.py/geo3.py (every visible mesh's
+  triangles near that corner): besides that quad only a 96-triangle MeshBasicMaterial (white, transparent, depthWrite
+  off, BackSide, no map; tris 8/9 run x 260-316.6, y -5..115, z 250.3 -> 212.5, a diagonal vertical face across the
+  street) and a ShaderMaterial far overhead (y 1768+, sky). NOT FIXED. What I would try next, one at a time in a GPU
+  probe on that frame: hide that 96-triangle basic mesh (find what builds it: a BackSide white box, haze or light
+  volume); set the facade quad's material depthFunc to LessEqual vs Less explicitly; split the 60 m quad into bay-wide
+  strips (facadeBox: the far end of one huge grazing triangle is where it fails, and the renderOrder probe split it
+  along the diagonal); log depth on the facade material.
