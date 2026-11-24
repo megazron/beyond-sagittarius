@@ -1875,3 +1875,30 @@ Fixing the owner's list from the flow4 GPU takes, in order.
   52e8e7c: p31/ped_a1_*, ped_a2_*), p31/run_b.sh (Mobile memory with Windows counters p31/mem_a.mem.txt + glmem
   census, then the 4x proxy p31/proxy_a), p31/run_c.sh (who.py Mobile gate: which 16 bodies, for the margin).
   Summaries: python3 p29/cc.py p31/ped_a1_web/report.json. Delete dist-p31a and dist-p30g when they are done.
+
+## 2026-11-24 perf agent 32 (worktree ~/bs-perf, branch p31 on c0c6060; GPU and probes ~/bs-assets/gpu/p32)
+- CI levels_smoke (task 7): three failures read (main 888c558 job 138515681519 at levels_smoke.py:882 `.path-tree`
+  visible; p31 52e8e7c job 138520510025 and cinema2 dd6ca65 job 138558543691 at :535 `.pt-cols` hidden after
+  #m-close; cinema1 37ef630 at :318 `#dlg-choices`). Playwright's call logs: at :882 the locator "resolved to visible"
+  once and then nothing for 5 s; at :535 only 4 polls (or none) in 5 s, where a responsive page gets about 10. That is
+  the page's main thread blocked for seconds on the CI runner (SwiftShader), not a stacked modal (a second modal would
+  still be polled at the normal rate). closeModal hides #modal 130 ms after the click by setTimeout, which a blocked
+  thread delays. Not fixed; the test is unchanged. A longer timeout at those waits, or finding what blocks the thread
+  (the next level's load after the path tree; the planet's load after the reload) would be the next step.
+- LENS (task 4), c7d4771: a crowd body on the camera's line now steps aside from 6.5 m ahead of the camera (was 4 m,
+  and only when it was not already stepping round you), and within 4.5 m of the lens at up to 1.1 m/s (was 0.7),
+  turning into the way it goes. pedglitch.js counts `lens`: someone drawn in view within 1.3 m of the camera. Not
+  measured yet: p32/run_p32.sh (PID in p32/run_p32.pid) runs on dist-p32a after p31/run_c.sh: Web tram_pavement_south
+  twice + both bumps with the detector (p32/web_a), the NE facade one-at-a-time probe (p32/ne_fac), the NE clip with
+  ?batch=0 (p32/ne_nob), the Mobile 4x proxy with 5 s CPU profiles at crowd and gate (p32/proxy_prof; dist-p32a has
+  source maps).
+- TRAM (task 3): the p30 Web clip's HUD read at 1 fps: 21-33 fps for ~15 s, not 4 s, with update 10-16 ms AND draw
+  18-28 ms at 700 k-990 k triangles, then 48-53 fps at 600-740 k with update 6 ms, draw 10 ms. Update and draw doubled
+  together at the same triangle counts, and the capture ran at 16 fps over that clip only: that looks like the machine
+  at that moment, not the scene. Re-measured twice in p32/web_a before anything is changed.
+- NE WALL (task 6): never tried at that frame: ?batch=0 (the city's statics, the facade included, are drawn by
+  core/ibatch.ts as instanced multi-draws; p29 found the speckle is the wall's own pixels dropping out in one triangle
+  of a 60 m quad). p32/ne_nob tests it; p32/ne_fac shows each facade draw alone and each hidden.
+- DETECTOR p31/ped_a1_mobile (dist-p31a = 52e8e7c): cardClose 11, overlap 1, slide 0, 60 fps, 16 bodies at most. The
+  cardClose diag: want 2-5 with bodies left 1-5 (the phone cap, story people first), free bodies of the card's look
+  existed in all but one; tram_square c:4 twice with 8 left and want 5 (not explained yet).
