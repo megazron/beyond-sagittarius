@@ -128,7 +128,8 @@ CHARS = {  # noqa
         look=dict(skin=0x4d70e0, shade=0x2a2f9e, iris=0xffd84a, brow=0xc32e8f, lip=0xff4fa8, glow=0xffe07a, marks='stars', ear='round'),
         height=1.67, macro=dict(gender=0.0, muscle=0.42, weight=0.5, proportions=0.85, cup=0.68),
         skin_src='f',
-        clothes=[('toigo_fisherman_sweater', (0xff, 0xc8, 0x1e), {'accent': True}),
+        cloth_k=1.8,  # the sweater keeps its round front: decimated to 6000 it went flat-faceted and pointed
+        clothes=[('toigo_fisherman_sweater', (0xff, 0xc8, 0x1e), {'accent': True, 'knit': True}),
                  ('elvs_gored_elephant_pants', (0x6b, 0x2b, 0xd0), {}),
                  ('toigo_ankle_boots_female', (0xf5, 0xf0, 0xea), {})],
     ),
