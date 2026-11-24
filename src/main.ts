@@ -936,7 +936,7 @@ async function boot() {
     renderer.setScene(sc, camera, false);
     // phones: what the planet, the films, the vault and the title's stage hold on the GPU goes while you are away (it is
     // uploaded again when next drawn); ?awayrelease=0 keeps it
-    if (quality.name === 'mobile' && new URLSearchParams(location.search).get('awayrelease') !== '0') AWAY_RELEASED.last = releaseGpu([world.scene, cine.scene, vault.scene, stage.scene], [sc]);
+    if (quality.name === 'mobile' && new URLSearchParams(location.search).get('awayrelease') !== '0') AWAY_RELEASED.last = releaseGpu([world.scene, cine.scene, vault.scene, stage.scene, player.model.root], [sc]); // (your planet body too: out of the planet's scene while away, its two 2048 maps, 45 MB, stayed: glmem census p28)
   });
   game.away.skins = lastSkins;
   // the take-off from Zenvora is a scene like any other: letterboxed, with its Skip
