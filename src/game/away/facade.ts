@@ -171,7 +171,9 @@ export function facadeMaterial(o: FacadeOpts = {}) {
           } else if (style > 1.5) { lo = vec2(-0.1, 0.3); hi = vec2(1.1, 0.84); }
           else if (style > 0.5) { lo = vec2(0.03, 0.05); hi = vec2(0.97, 0.97); }
           else { lo = vec2(0.2 + 0.07 * step(0.5, h), 0.25); hi = vec2(0.8 - 0.07 * step(0.5, h), 0.86); }
-          float aa = fwidth(fx) + fwidth(fy);
+          // (the derivatives of u and v, not of fx and fy: fract jumps at every bay and floor, and there fwidth was about 1,
+          // so a blank wall lit up as a half window in the 2x2 pixels along each seam: the NE street's dotted wall up close)
+          float aa = fwidth(u / bw) + fwidth(v / fh);
           float inX = smoothstep(lo.x - aa, lo.x + aa, fx) * smoothstep(hi.x + aa, hi.x - aa, fx);
           float inY = smoothstep(lo.y - aa, lo.y + aa, fy) * smoothstep(hi.y + aa, hi.y - aa, fy);
           fWin = inX * inY;
