@@ -448,6 +448,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   // grasp: `at` is the middle of the held thing (a stone, a shaft at this hand's place on it), not the wrist; the palm
   // closes on it, `radius` out from the palm (graspWrist). along: where on the palm, 0 the wrist, 1 the knuckles (0.6)
   type HoldSide = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius?: number; grasp?: boolean; along?: number };
+  let plantKneel = false;
   let hold: { L?: HoldSide; R?: HoldSide } | null = null; const holdW = { L: 0, R: 0 };
   const selfM = { a: new THREE.Vector3(), b: new THREE.Vector3(), l: new THREE.Matrix4(), q0: new THREE.Quaternion(), qi: new THREE.Quaternion(), x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), m: new THREE.Matrix4(), q: new THREE.Quaternion() };
   let gaitPhase = 0, inited = false, hipDrop = 0, sacAt = 1, sacX = 0, sacY = 0, firstFrame = true, eyeAimX = 0, eyeAimY = 0;
@@ -1605,7 +1606,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const proc = !tcp && (T.kind === 'pickup' || T.kind === 'putdown' || T.kind === 'plant');
     const at = tcp ? (tcp.release ?? tcp.touch) : proc ? 0.5 : -1, past = at >= 0 && k >= at;
     if (past && T.onContact) { const cb = T.onContact; T.onContact = null; cb(); }
-    if (T.t >= T.dur) { task = null; showProp(bs, null, 0); return; }
+    if (T.t >= T.dur) { task = null; showProp(bs, null, 0); if (plantKneel) { plantKneel = false; kneelGoal = 0; heelsGoal = 0; } return; }
     const after = tcp ? tcp.prop === 'after' : T.kind === 'pickup';
     // (not while her own phone is still in that hand on its way to the pocket: the stone and the phone were in her hand
     // together for a quarter second, GPU take tasks9)
@@ -2295,7 +2296,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // drinking from a cup is one hand's; from cupped hands, both
       const hands = o.hands ?? (kind === 'type' || kind === 'carry' || (kind === 'drink' && !prop) || kind === 'gesture' || kind === 'fix' ? 'both' : 'R');
       MA.fresh = true;
-      task = { kind, t: 0, dur, at: o.at ? o.at.clone() : null, hands, prop, onContact: o.onContact ?? null, clipOk: kneelGoal === 0 };
+      // planting goes down on the knees, sat back on the heels (standing, or kneeling upright, the hand stopped at knee
+      // height, 17 to 40 cm over the soil: owner, studio holds clips); it gets up again at the end
+      let dur2 = dur;
+      if (kind === 'plant' && kneelGoal === 0) { kneelGoal = 1; heelsGoal = 1; plantKneel = true; dur2 = Math.max(dur, 3.0); }
+      task = { kind, t: 0, dur: dur2, at: o.at ? o.at.clone() : null, hands, prop, onContact: o.onContact ?? null, clipOk: kneelGoal === 0 && !plantKneel };
     },
     /** Hold on to something with one or both hands: live world points and directions (mutate them to move the hands
      *  with what they hold); null lets go. */
