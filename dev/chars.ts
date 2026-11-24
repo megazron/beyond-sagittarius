@@ -359,6 +359,8 @@ W.film = (i: number, v: number, k: number) => {
  * also samples the pixel flags (poke) from the talking-distance front and side and a three-quarter view. */
 const QA_CAMS: [number, number][] = [[Math.PI, 2.4], [-Math.PI / 2, 2.4], [-2.4, 3.4]];
 W.qaNames = (crew: boolean) => scenarioNames(crew);
+/** a body and THREE.Vector3 for close probes of authored holds (the lean-to throwing stick) */
+W.ch = (i: number) => chars[i]; W.V3 = THREE.Vector3;
 W.rigOpts = RIG_OPTS;
 /** Per-frame world points of a scenario (bone names), for tracing a jerk or a penetration. */
 W.qaTrace = (i: number, name: string, bones: string[]) => {
