@@ -1609,7 +1609,14 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // a row a frame in play (half a row on phones), so the bake never shows in the frame time; but normally it is all done
   // under the title card, before you arrive (prebake, called by Renderer.precompile)
   const makeBaker = () => impostorBaker(Renderer.current!.renderer, bakeBodies, tier === 0 ? [72, 128] : [124, 224], () => scene.environment, tier === 0 ? 4 : 8, tier === 0 ? 2 : 8, tier === 0 ? 14 : 7);
-  scene.userData.prebake = async () => {
+  // every pooled body (and the story people) drawn once, both builds and both hairs, as soon as all are in place: their
+  // meshes go to the GPU then, not the first time each is shown on a later lap (soak_smoke: geometries 1003 -> 1104
+  // after two more laps on Web with the bigger pools). Under the title card when they are in time (prebake)
+  const allFigs = () => [...people.map((q) => q.fig), ...crowdPool.map((b) => b.fig), ...dpool.map((b) => b.fig)];
+  let poolDrawn: Promise<void> | null = null;
+  const drawPools = (cam: THREE.Camera) => (poolDrawn ??= Promise.all(allFigs().map((f) => f.whenFull)).then(() => Renderer.current?.drawOnce(scene, cam, allFigs().map((f) => f.root))).catch(() => undefined));
+  scene.userData.prebake = async (cam?: THREE.Camera) => {
+    if (cam) await Promise.race([drawPools(cam), new Promise((r) => setTimeout(r, 8000))]);
     refreshEnv(); // its blur's program compiles here, under the title card, not 30 s into play (a 0.2 s freeze)
     const all = Promise.all(bakeBodies.map((b) => b.whenReady)).then(() => true);
     if (!(await Promise.race([all, new Promise<boolean>((r) => setTimeout(() => r(false), 6000))])) || !Renderer.current || bakeBodies.length < 4) return;
