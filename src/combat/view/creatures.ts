@@ -29,11 +29,13 @@ function rimmed<T extends THREE.MeshStandardMaterial>(m: T, held: { value: THREE
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uNightRim = NIGHT_RIM; sh.uniforms.uHeldLit = held;
     sh.fragmentShader = 'uniform vec3 uNightRim;\nuniform vec3 uHeldLit;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
-      '#include <emissivemap_fragment>\n  { float fr = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0); totalEmissiveRadiance += uNightRim * pow(fr, 2.0) + uHeldLit * (0.12 + 0.88 * pow(fr, 1.6)); }');
+      '#include <emissivemap_fragment>\n  { float fr = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0); vec3 tint = 0.15 + 1.6 * diffuseColor.rgb; totalEmissiveRadiance += (uNightRim * pow(fr, 2.0) + uHeldLit * (0.12 + 0.88 * pow(fr, 1.6))) * tint; }');
     nearFade(m, sh);
   };
   const key = m.customProgramCacheKey.bind(m);
-  m.customProgramCacheKey = () => key() + '|nightRim5';
+  // (the edge light tinted by the hide's own colour: as a flat cold-white edge of 0.9 on dark hides the animals glowed
+  // white at night like lit ghosts, GPU take e169v8; a dark hide now gets about a quarter of it, in its own hue)
+  m.customProgramCacheKey = () => key() + '|nightRim6';
   return m;
 }
 const glow = (r: number, g: number, b: number) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b) });
