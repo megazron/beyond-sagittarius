@@ -67,6 +67,9 @@ const LENS_LINE = LENS_OLD || (typeof location !== 'undefined' && new URLSearchP
 /** Nobody in view and nearer than SWAP_FAR metres changes how they are drawn (a body, a card, nothing) or whose look
  * they wear: the change waits until they are out of the view or that far off. ?swapfree=1: the old way, for an A/B. */
 const SWAP_FAR = 27;
+/** The painted crowd near the camera is thinned to the bodies there are for it (walkCrowd): within THIN_R metres, at most
+ * as many as there are bodies; a card in view coming towards the camera turns back within THIN_TURN. ?thin=0: off. */
+const THIN = new URLSearchParams(globalThis.location?.search ?? '').get('thin') !== '0', THIN_R = 32, THIN_TURN = 18;
 const SWAP_FREE = typeof location !== 'undefined' && new URLSearchParams(location.search).get('swapfree') === '1';
 /** Whoever is drawn as a body within CONTACT metres of you stays that body, whatever the budget or the ranking does
  * (?contact=0: the old way). Bumping into somebody pulls them out of the nearest-first order, so they used to be let go. */
@@ -1396,11 +1399,47 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     crowdPool.push({ fig, card: -1, last: -1, phase: rnd() * 10, dx: 0, yaw: 0, lastX: NaN, look: i % NLOOK });
   }
   const byCard = new Map<number, (typeof crowdPool)[number]>(), near: [number, number][] = [], elbow: [number, number][] = [];
+  const thinK: [number, number][] = [], thinF = new THREE.Vector3();
   let lastCam: THREE.Vector3 | null = null, lineLog = false, crowdPinned = 0, pedPinned = 0, wantLog: number[] = [], usedLog = 0;
   const walkCrowd = (dt: number, time: number, cam: THREE.Camera, budget: number) => {
     lastCam = cam.position;
     const cards = dense.cards, taken = dense.taken, c = cam.position;
     near.length = 0;
+    // never more of the painted crowd within THIN_R of the camera than there are bodies for them (the owner: flat cards
+    // up close when more people were in view than bodies): whoever is over that and out of view goes on further off,
+    // out of view; a card nobody walks coming towards the camera in view within THIN_TURN turns back
+    if (THIN && viewOn && cut <= 0) {
+      const nB = Math.max(0, Math.min(tier > 0 ? Math.max(8, Math.min(POOL, budget)) : Math.min(POOL, budget), outroT >= 0 || tier > 0 ? 99 : BODY_CAP + 2 - usedLog));
+      thinK.length = 0;
+      for (let i = 0; i < cards.length; i++) {
+        const q = cards[i], d = Math.hypot(q.x - c.x, q.z - c.z); if (d > THIN_R) continue;
+        const seen = inView(q.x, FLOOR, q.z);
+        thinK.push([(taken[i] ? -1000 : 0) + (seen ? 0 : 100) + d, i]);
+      }
+      if (thinK.length > nB) {
+        thinK.sort((a, b) => a[0] - b[0]);
+        cam.getWorldDirection(thinF); const back = thinF.z > 0 ? -1 : 1;
+        for (let j = nB; j < thinK.length; j++) {
+          const i = thinK[j][1], q = cards[i]; if (taken[i]) continue;
+          const d = thinK[j][0] % 100;
+          if (thinK[j][0] < 100) { // in view: a card coming towards the camera turns back near it
+            if (d < THIN_TURN && Math.sign(q.v) === Math.sign(c.z - q.z) && Math.abs(q.v) > 0.05) q.v = -q.v;
+            continue;
+          }
+          if (q.gate) continue; // the plaza is too small to walk them out of sight
+          const [z0, z1] = dense.stretch(i);
+          for (const sg of [back, -back]) {
+            let done = false;
+            for (const dz of [THIN_R + 8, THIN_R + 16, THIN_R + 26, THIN_R + 40]) {
+              const z = c.z + sg * dz; if (z < z0 || z > z1 || inView(q.x, FLOOR, z) || Math.hypot(q.x - c.x, z - c.z) < THIN_R + 4) continue;
+              if (cards.some((o, k) => k !== i && Math.abs(o.z - z) < 1.2 && Math.abs(o.x - q.x) < 0.8)) continue;
+              q.z = z; done = true; break;
+            }
+            if (done) break;
+          }
+        }
+      }
+    }
     // a card in the lens (on the line from the camera to you) would be hidden as a body too: the body goes to the next one
     // someone already walking as a body keeps it in the lens too (the body fades or hides there itself): letting go
     // there gave the body back to the pool and drew the painted card in its place, so a passer-by you bumped into turned

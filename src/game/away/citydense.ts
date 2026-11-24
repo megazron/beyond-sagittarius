@@ -287,6 +287,8 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   return { update: (dt: number, t: number, cam: THREE.Camera | null, on = true) => { if (on) for (const u of updates) u(dt, t, cam); }, get cards() { return cards; }, get taken() { return taken; },
     standIns: (list: StandIn[], cam: THREE.Camera | null) => standIns(list, cam), setObstacles: (o: number[]) => { obstacles = o; }, setFar: (m: number) => { cardFar.value = m; },
     setAtlas: (t: THREE.Texture, cols: number, rows: number, variants: number, views = 4) => setAtlas(t, cols, rows, variants, views), setLight: (c: THREE.Color) => setLight(c),
+    /** Where card i walks to and fro (z from, to): the gate's plaza or the street. */
+    stretch: (i: number): [number, number] => (cards[i].gate ? [S + 2, S + 20] : [S + 4, N - 10]),
     /** Test hook (tools/pedglitch.js): which look a crowd card and a stand-in card wear (-1: a painted figure, before the bake) and where cards stop. */
     cardLook: (i: number) => (imp ? ((cards[i].who % imp.variants) + imp.variants) % imp.variants : -1), standLook: (s: StandIn) => (imp ? (((s.v ?? s.k) % imp.variants) + imp.variants) % imp.variants : -1), get far() { return cardFar.value; } };
 }
