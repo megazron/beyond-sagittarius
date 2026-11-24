@@ -557,6 +557,18 @@ const toward = (I: Intent, R: EncounterRun, x: number, z: number, o: { sprint?: 
   }
   const idle = play('night.defence', (I, R) => { if (R.phase === 'prep') R.ready(); });
   ok(idle.out && (idle.out.result === 'lost' || Number(idle.out.flags['night.food']) < Number(r.out?.flags['night.food'])), 'night defence: doing nothing costs the food or the night', JSON.stringify(idle.out?.flags) + ' ' + idle.out?.result);
+  {
+    // the story's night: the wood pile beside the fire is burnt before the bag's branches, and on Story a player who
+    // only stands there still sees the dawn (on Normal doing nothing loses: above)
+    const R = new EncounterRun('night.defence', { seed: 5, inv: { branch: 8, vine: 2, stone: 4, fruit: 1 }, has: { fists: true, spear: true } });
+    const f = R.sim.fires.find((q) => !q.torch && !q.burnsOut)!, pile0 = f.pile ?? 0;
+    f.fuel = 40; R.sim.feedFire(f);
+    ok(pile0 === 6 && f.pile === 5 && R.sim.inv.branch === 8, 'night defence: the wood pile by the fire is fed first (6 on Normal), the bag keeps its branches', `${pile0} ${f.pile} ${R.sim.inv.branch}`);
+    const still = play('night.defence', (I, R2) => { if (R2.phase === 'prep') R2.ready(); }, { difficulty: 'story', inv: { branch: 8, vine: 2, stone: 4, fruit: 1 }, has: { fists: true, spear: true } });
+    ok(still.out?.result === 'won', 'night defence: on Story a player who only stands there still sees the dawn', `${still.out?.result} hp ${still.R.sim.player.hp.toFixed(0)}`);
+    const fed = play('night.defence', (I, R2) => { if (R2.phase === 'prep') R2.ready(); const q = R2.sim.fires.find((x) => !x.torch && !x.burnsOut)!; if (q.fuel < q.max * 0.6) R2.sim.feedFire(q); }, { difficulty: 'hard', inv: { branch: 0 }, has: { fists: true, spear: true } });
+    ok(fed.out?.result === 'won', 'night defence: on Hard the pile alone, fed when low, holds the night', `${fed.out?.result} hp ${fed.R.sim.player.hp.toFixed(0)}`);
+  }
   // with someone beside you who cannot fight, and nobody keeping the fire, they can be lost
   const alone = play('night.defence', (I, R) => { if (R.phase === 'prep') R.ready(); const f = R.sim.fires[0]; const p = R.sim.player; const d = Math.hypot(f.x - p.x, f.z - p.z); if (d > 1.5) toward(I, R, f.x, f.z); else { I.mx = I.mz = 0; } }, { companion: 'explorer', difficulty: 'hard' });
   ok(alone.out !== null, 'night defence: ends with a companion present', alone.out?.result);
