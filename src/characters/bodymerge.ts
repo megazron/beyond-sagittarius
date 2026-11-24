@@ -422,7 +422,7 @@ uniform vec3 uRoot, uMid, uTip, uShine; uniform float uHairRough; varying vec3 v
     float slot = mod(floor(vPart + 0.5) - 3.0, 3.0);
     if (slot > 0.5) {
       // as the kit's own material drew it: its map's own repeat, its own tangent frame from that uv
-      vec2 kuv = (slot < 1.5 ? uKitNT1 : uKitNT2) * vec3(vUv0, 1.0)).xy;
+      vec2 kuv = ((slot < 1.5 ? uKitNT1 : uKitNT2) * vec3(vUv0, 1.0)).xy;
       mat3 ktbn = getTangentFrame(- vViewPosition, normal, kuv);
       ktbn[0] *= faceDirection; ktbn[1] *= faceDirection;
       vec3 mapN = (slot < 1.5 ? texture2D(uKitN1, kuv).xyz : texture2D(uKitN2, kuv).xyz) * 2.0 - 1.0;
