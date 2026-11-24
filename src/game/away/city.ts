@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { nearFade } from '../../core/nearfade';
 import { fitCanvasText } from '../../core/canvastext';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -1076,7 +1077,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       // dark glass with a faint warm inside (at 0.32 the Web clips read them as beige panels). Still beige at 0.1 on Web:
       // a sharp, metal-like pane mirrored the hazy bright horizon of the sky map, the same flat colour in every window.
       // Now it mirrors a quarter as much, so the dark of the car shows and the street's lights still glint
-      glass: new THREE.MeshStandardMaterial({ color: 0x0a1218, emissive: 0xffd9a0, emissiveIntensity: 0.06, roughness: 0.12, metalness: 0.35, envMapIntensity: 0.25 }),
+      glass: Object.assign(new THREE.MeshStandardMaterial({ color: 0x0a1218, emissive: 0xffd9a0, emissiveIntensity: 0.06, roughness: 0.12, metalness: 0.35 }), {
+        // (envMapIntensity is overridden by the scene's environmentIntensity: the sky map's light is scaled in the shader)
+        onBeforeCompile(this: THREE.Material, sh: THREE.WebGLProgramParametersWithUniforms) { sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n  radiance *= 0.25; iblIrradiance *= 0.25;'); nearFade(this, sh); },
+      }),
       trim: new THREE.MeshStandardMaterial({ color: 0x2b3036, roughness: 0.6, metalness: 0.4 }),
       roof: new THREE.MeshStandardMaterial({ color: 0x8e979f, roughness: 0.5, metalness: 0.5 }),
       gold: new THREE.MeshStandardMaterial({ color: 0xd9a441, roughness: 0.35, metalness: 0.7 }),
