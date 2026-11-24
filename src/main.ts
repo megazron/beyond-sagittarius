@@ -977,6 +977,11 @@ async function boot() {
     if (quality.name === 'mobile' && new URLSearchParams(location.search).get('awayrelease') !== '0') AWAY_RELEASED.last = releaseGpu([world.scene, cine.scene, vault.scene, stage.scene], [sc]);
   });
   game.away.skins = lastSkins;
+  // someone's arrival on their own world (game/arrival.ts) is a scene too: letterboxed, HUD off, with its Skip
+  game.away.onIntro = (on) => {
+    ui.show('cine', on); ui.show('hud', !on);
+    document.getElementById('btn-skip')!.classList.toggle('hidden', !on);
+  };
   // the take-off from Zenvora is a scene like any other: letterboxed, with its Skip
   game.away.onOutro = (on) => {
     // (its sounds are the scene's own, on its clock: boarding.ts)
@@ -1193,6 +1198,9 @@ window.addEventListener('resize', () => {
   get awayOutroOn() { return !!game?.away?.outroOn; },
   /** Test hook (recordings): these tasks count as done (the hero views that wait for one). */
   awayMarkDone(...ids: string[]) { for (const id of ids) game?.away?.done.add(id); },
+  /** The arrival on someone's own world (game/arrival.ts): who, how far in, how long, and the body's wounds after. */
+  get arrival() { const a = game?.away?.arrival; return a?.active ? { id: a.def.id, t: a.t, dur: a.def.dur } : null; },
+  get wounds() { const i = game?.mode === 'away' ? game?.away?.injuries : game?.injuries; return i ? { who: i.who, wounds: i.wounds.map((w) => ({ ...w })), effects: i.effects() } : null; },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
   /** Walk with the keys, not a teleport (soak_smoke's bump test): hold or let go a key, and turn the away body to a heading. */
