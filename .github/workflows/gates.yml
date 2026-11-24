@@ -29,6 +29,7 @@ jobs:
           - { name: smoke, run: 'python tools/smoke.py --quality web --out "$RUNNER_TEMP/shots"' }
           - { name: levels_smoke, run: 'python tools/levels_smoke.py --quality web --shots "$RUNNER_TEMP/shots"' }
           - { name: prologue_smoke, run: 'python tools/prologue_smoke.py --quality web' }
+          - { name: intro_smoke, run: 'python tools/intro_smoke.py --quality web' }
           - { name: mobile_smoke, run: 'python tools/mobile_smoke.py --shots "$RUNNER_TEMP/shots"' }
           - { name: crowd_smoke, run: 'python tools/crowd_smoke.py' }
           - { name: traffic_smoke, run: 'python tools/traffic_smoke.py' }

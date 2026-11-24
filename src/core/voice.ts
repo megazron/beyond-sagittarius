@@ -109,6 +109,13 @@ class Voice {
     return p;
   }
 
+  /** Resolves once the index is in and the first of `keys` is decoded (or after `ms`): a scene's first line then starts
+   * with its subtitle instead of after a fetch. */
+  async ready(keys: string[], ms = 4000) {
+    const go = (async () => { await this.load(); this.preload(keys); const f = keys.length ? this.file(keys[0]) : null; if (f && audio.ctx) await this.fetchBuffer(f); })();
+    await Promise.race([go.catch(() => undefined), new Promise((r) => setTimeout(r, ms))]);
+  }
+
   preload(keys: string[]) { for (const k of keys) { const f = this.file(k); if (f && audio.ctx) void this.fetchBuffer(f); } }
 
   /** Play a line (replacing the current one). Returns its length, or null. */
@@ -127,7 +134,9 @@ class Voice {
     // on a held clock (recordings) the mouth runs on the game's time, from the moment the line starts
     if (this.manual && dur !== null) { this.lipFile = f; this.startedAt = this.manual(); this.manualEnd = this.startedAt + dur; }
     if (!audio.ctx) return dur;
+    this.waiting = tk;
     void this.fetchBuffer(f).then((b) => {
+      if (this.waiting === tk) this.waiting = 0;
       if (!b || tk !== this.token || !audio.ctx) return;
       const s = audio.ctx.createBufferSource();
       s.buffer = b;
@@ -140,6 +149,11 @@ class Voice {
     });
     return dur;
   }
+
+  /** The token of a line still being fetched and decoded (0: none). */
+  private waiting = 0;
+  /** A line is being said, or is still loading to be said (scenes wait for it before the next line). */
+  speaking() { if (this.manual) return false; return (this.waiting !== 0 && this.waiting === this.token) || !!this.src; }
 
   /** Lines cut off by the next line since load (not by Skip): { cut, by, left seconds }. */
   cuts: { cut: string; by: string; left: number }[] = [];
