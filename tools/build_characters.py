@@ -182,6 +182,10 @@ def skirt_weights(c, p, pivots):
     fz = np.clip((p.P[:, 2] - pivots[ix['hips']][2]) / 0.08, 0, 1)
     fz = fz * fz * (3 - 2 * fz)
     leg = 0.62 + 0.23 * fz
+    # behind, the middle of the back panel goes with the hips: half on each thigh, standing wide the two thighs turned it
+    # opposite ways, the blend pulled it in and it showed as a grey mass between Zenvik's legs (GPU takes e13v4, e13v5)
+    mid = 1 - np.abs(2 * a - 1)
+    leg = leg * (1 - 0.75 * mid * (1 - fz))
     Wn = np.zeros_like(p.W)
     Wn[:, ix['upperlegL']] = a * leg
     Wn[:, ix['upperlegR']] = (1 - a) * leg
