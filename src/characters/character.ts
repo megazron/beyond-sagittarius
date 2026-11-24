@@ -532,10 +532,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     for (let s = 0; s < 2; s++) {
       const mk = mergeSrc[s], m = lodSets[s][0];
       if (!mk || !m) continue;
-      if (sep && !mergeRef[s]) mergeRef[s] = mk();
+      if (BODY_MERGE.separateBody && sep && !mergeRef[s]) mergeRef[s] = mk();
       const ref = mergeRef[s];
       if (!ref) continue;
-      if (sep && !ref.visible && m.visible) { ref.visible = true; m.visible = false; }
+      if (sep && BODY_MERGE.separateBody && !ref.visible && m.visible) { ref.visible = true; m.visible = false; }
       else if (!sep && ref.visible) { ref.visible = false; m.visible = true; }
     }
     for (const m of rigid) m.visible = kitShown && (sep || !kitIn[lodOn].has(m));
@@ -599,7 +599,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const weights = (ns: string[], m: THREE.SkinnedMesh) => { if (!ns.length) return; m.morphTargetDictionary = Object.fromEntries(ns.map((n, i) => [n, i])); m.morphTargetInfluences = ns.map((n) => { for (const p of parts) { const d = p.mesh.morphTargetDictionary; if (d && d[n] !== undefined) return p.mesh.morphTargetInfluences![d[n]]; } return morph[n] ?? 0; }); faces.push({ dict: m.morphTargetDictionary, infl: m.morphTargetInfluences }); };
       weights(names, mesh); morphVertex(mesh);
       // the test hook's other half (BODY_MERGE.setSeparate): the body as main drew it, for an A/B of one frame
-      mergeSrc[s] = () => { const r = mergeBodyGeometry(parts, keepN, [], true); const m = new THREE.SkinnedMesh(r.g, bodyMat!); m.name = 'skin_body_ref'; m.boundingSphere = sphere; m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale); mesh.parent!.add(m); m.bind(mesh.skeleton, mesh.bindMatrix); m.visible = false; m.frustumCulled = mesh.frustumCulled; m.receiveShadow = true; m.onBeforeRender = () => morphUniforms(bu, m); weights(r.names, m); return m; };
+      mergeSrc[s] = () => { const r = mergeBodyGeometry(parts, keepN, [], true); const m = new THREE.SkinnedMesh(r.g, bodyMat!); m.name = 'skin_body_ref'; m.boundingSphere = sphere; m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale); mesh.parent!.add(m); m.bind(mesh.skeleton, mesh.bindMatrix); m.visible = false; m.frustumCulled = mesh.frustumCulled; m.receiveShadow = true; m.castShadow = mesh.castShadow; m.onBeforeRender = () => morphUniforms(bu, m); weights(r.names, m); return m; };
       for (const p of parts) {
         castable.delete(p.mesh); p.mesh.removeFromParent();
         const fi = faces.findIndex((f) => f.infl === p.mesh.morphTargetInfluences); if (fi >= 0) faces.splice(fi, 1);

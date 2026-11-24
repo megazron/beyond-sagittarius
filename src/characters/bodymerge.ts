@@ -112,8 +112,9 @@ const Q = typeof location === 'undefined' ? null : new URLSearchParams(location.
  * before); `?bodymorphs=0`: three.js's own morph texture of every shape, as before (no baked build, no compact texture). */
 export const BODY_MERGE = { on: Q?.get('bodymerge') !== '0', extras: Q?.get('bodyextras') !== '0', morphs: Q?.get('bodymorphs') !== '0', merged: 0, geometries: 0,
   /** Test hook: true draws every merged body's kit and hair as their own meshes again (an A/B of one frame). */
-  separate: false, bodies: [] as WeakRef<() => void>[],
-  setSeparate(on: boolean) { BODY_MERGE.separate = on; BODY_MERGE.bodies = BODY_MERGE.bodies.filter((w) => { const f = w.deref(); f?.(); return !!f; }); },
+  separate: false, separateBody: true, bodies: [] as WeakRef<() => void>[],
+  /** `body` false: only the kit and the hair go back to their own meshes (the merged body stays as it is). */
+  setSeparate(on: boolean, body = true) { BODY_MERGE.separate = on; BODY_MERGE.separateBody = body; BODY_MERGE.bodies = BODY_MERGE.bodies.filter((w) => { const f = w.deref(); f?.(); return !!f; }); },
 };
 
 /** One geometry from the parts (cloth first, then skin, then eyes), with the morph targets `keep` lets through. */
