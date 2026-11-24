@@ -1774,3 +1774,7 @@ Fixing the owner's list from the flow4 GPU takes, in order.
 - Still wrong, as I see it: after the fight the world outside is a little brighter than the fight's last frame at dawn;
   the bot stands out in the dark grass a lot (a player may not); the Nibbets read as orange-brown dots at 15-25 m, but in
   the long grass by the hunt station they are still small; the free-play reticle ring stays on screen after fishing.
+- Skipping the difficulty question in captures and tests: it is stored in localStorage `bs-settings-v1` (settings.combat
+  .asked), not in the save, so setting anything on the save does nothing. Use `?diff=story|normal|hard` in the address,
+  or `__bs.combat.setDifficulty('normal')` (answers it if it is open, and it is never asked after). `ensureAsked` is
+  one question at a time: callers that ask while it is open all go on after the one answer.
