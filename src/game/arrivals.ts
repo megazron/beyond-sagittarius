@@ -100,7 +100,7 @@ function hullPiece(w: number, h: number, seed: number) {
   g.rotation.x = -Math.PI / 2; const o = new THREE.Group(); o.add(g); return o;
 }
 function slab(ctx: ArrivalCtx) {
-  const geo = new THREE.IcosahedronGeometry(0.62, 1); const p = geo.getAttribute('position');
+  const geo = new THREE.IcosahedronGeometry(0.34, 1); const p = geo.getAttribute('position');
   for (let i = 0; i < p.count; i++) { p.setY(i, p.getY(i) * 0.45); p.setX(i, p.getX(i) * 1.35); }
   const f = geo.toNonIndexed(); f.computeVertexNormals();
   const m = new THREE.Mesh(f, new THREE.MeshStandardMaterial({ color: 0x6a645c, roughness: 1, flatShading: true })); m.castShadow = m.receiveShadow = true;
@@ -118,9 +118,9 @@ const explorer: ArrivalDef = {
     // the slab she knocks loose: weightless, all its mass; it drifts down onto her shin
     { mesh: slab, stays: false, keys: [
       { t: 0, at: [0.9, 0.5, -1.9], rot: [0.1, 0.4, 0.05] }, { t: 7.6, at: [0.9, 0.5, -1.9], rot: [0.1, 0.4, 0.05] }, { t: 8.4, at: [0.6, 1.5, -1.7], rot: [0.5, 0.6, 0.3], ease: 'out' },
-      { t: 10.6, at: [-0.18, 0.3, -1.55], rot: [0.25, 0.9, 0.12], ease: 'io' }, { t: 21, at: [-0.18, 0.3, -1.55], rot: [0.25, 0.9, 0.12] },
+      { t: 10.6, at: [-0.12, 0.2, -1.45], rot: [0.25, 0.9, 0.12], ease: 'io' }, { t: 21, at: [-0.12, 0.2, -1.45], rot: [0.25, 0.9, 0.12] },
       // she shoves it off: it rises, turning, and settles a body length away, slowly
-      { t: 22.5, at: [-0.9, 0.9, -1.8], rot: [0.9, 1.4, 0.6], ease: 'out' }, { t: 27, at: [-1.9, 0.32, -1.9], rot: [0.3, 1.9, 0.15], ease: 'io' }] },
+      { t: 22.5, at: [-0.9, 0.9, -1.8], rot: [0.9, 1.4, 0.6], ease: 'out' }, { t: 27, at: [-1.5, 0.16, -1.8], rot: [0.3, 1.9, 0.15], ease: 'io' }] },
   ],
   dust: { n: 160, speed: 1.6, color: 0x8a847c, size: 0.05, up: 0.8 },
   body: [
@@ -141,8 +141,8 @@ const explorer: ArrivalDef = {
     key(15.4, PUSH, { at: [0, 0.2, -0.5], face: { squint: 1, frown: 1, open: 0.7 }, look: [0, -0.2], limbs: { legL: [-0.06, -0.12, -1], shinL: [-0.04, -0.1, -1] } }),
     key(16.6, PRONE, { at: [0, 0.14, -0.62], face: { squint: 0.9, frown: 0.8, open: 0.5 }, look: [-0.6, 0.15], limbs: { armL: [-0.6, -0.4, 0.7], foreL: [-0.1, -0.9, 0.4], armR: [0.6, -0.4, 0.7], foreR: [0.1, -0.9, 0.4], legL: [-0.06, -0.08, -1], shinL: [-0.04, -0.08, -1] } }),
     // she looks back at the slab, then at the sky: a laugh with no air in it, shoulders only
-    key(18.4, PUSH, { at: [0, 0.18, -0.55], head: [-0.2, 0.35, 0.9], twist: -0.5, look: [-1.0, -0.3], face: { smile: 0.4, squint: 0.6 }, limbs: { legL: [-0.06, -0.12, -1], shinL: [-0.04, -0.1, -1] } }),
-    key(19.4, PUSH, { at: [0, 0.2, -0.55], head: [-0.1, 0.42, 0.9], twist: -0.3, look: [-0.4, 0.4], face: { smile: 0.7, squint: 0.7, open: 0.2 }, limbs: { legL: [-0.06, -0.12, -1], shinL: [-0.04, -0.1, -1] } }),
+    key(18.4, PUSH, { at: [0, 0.18, -0.55], head: [-0.1, 0.35, 0.93], twist: -0.2, look: [-0.8, -0.2], face: { smile: 0.4, squint: 0.6 }, limbs: { legL: [-0.06, -0.12, -1], shinL: [-0.04, -0.1, -1] } }),
+    key(19.4, PUSH, { at: [0, 0.2, -0.55], head: [-0.05, 0.42, 0.9], twist: -0.1, look: [-0.3, 0.35], face: { smile: 0.7, squint: 0.7, open: 0.2 }, limbs: { legL: [-0.06, -0.12, -1], shinL: [-0.04, -0.1, -1] } }),
     // the shove: her free foot and both hands on the slab; it lifts away, slowly
     key(21.2, SITUP, { at: [0, 0.14, -0.6], head: [-0.25, 0.8, -0.55], chest: [-0.4, 0.5, -0.75], twist: 0.2, face: { frown: 0.9, squint: 0.9, open: 0.3 }, gaze: [-0.4, 0.2, -1.6],
       limbs: { armL: [-0.25, -0.4, -0.88], foreL: [-0.2, -0.3, -0.93], armR: [-0.05, -0.45, -0.9], foreR: [-0.1, -0.3, -0.95], legL: [-0.05, -0.1, -1], shinL: [-0.04, -0.1, -1], legR: [0.15, 0.5, -0.85], shinR: [0, -0.4, -0.9] } }),
@@ -162,11 +162,11 @@ const explorer: ArrivalDef = {
     // the slab drifting onto her; locked
     { t0: 8.6, t1: 11.6, from: [2.6, 0.9, -3.4], to: [0, 0.25, -1.1], fov: 40 },
     // her eyes: a face on the rock, no breath fogging anything
-    { t0: 11.6, t1: 14.4, from: [1.25, 0.32, 0.25], to: [0, 0.14, 0.1], fov: 30, hand: 0.006 },
+    { t0: 11.6, t1: 14.4, onHead: true, from: [0.75, 0.12, 0.45], to: [0, -0.02, 0], fov: 32, hand: 0.006 },
     // she pulls; the leg stays: from behind the slab
-    { t0: 14.4, t1: 17.4, from: [-1.6, 0.55, -2.8], to: [0, 0.3, -0.6], fov: 36, hand: 0.01 },
+    { t0: 14.4, t1: 17.4, from: [-2.0, 0.6, -0.9], to: [0, 0.25, -0.9], fov: 38, hand: 0.01 },
     // the look back, the airless laugh: close
-    { t0: 17.4, t1: 20.6, from: [0.9, 0.55, 0.9], to: [0, 0.45, -0.3], fov: 32, hand: 0.008 },
+    { t0: 17.4, t1: 20.6, onHead: true, from: [0.8, 0.15, 0.6], to: [0, -0.03, 0], fov: 32, hand: 0.008 },
     // the shove: wide enough to see the slab lift away in no gravity at all
     { t0: 20.6, t1: 24.2, from: [3.4, 1.0, 0.8], to: [-0.6, 0.5, -1.4], fov: 40, hand: 0.01 },
     // up on one knee: the camera comes round behind her into play
@@ -232,7 +232,7 @@ const strong: ArrivalDef = {
     // his eyes: haze, the shimmer where he came through
     { t0: 10.4, t1: 12.2, pov: true, from: [0, 0, 0], to: [0.6, 14, 2], fov: 50 },
     // the arm: close on it and his face
-    { t0: 12.2, t1: 15.0, from: [-1.15, 0.7, 0.55], to: [-0.3, 0.2, -0.6], fov: 34, hand: 0.01 },
+    { t0: 12.2, t1: 15.0, onHead: true, from: [-0.7, 0.35, 0.9], to: [-0.15, -0.15, 0.25], fov: 36, hand: 0.01 },
     // onto his knees: wide, the lake behind
     { t0: 15.0, t1: 18.0, from: [3.0, 0.9, 1.6], to: [0, 0.45, -0.4], fov: 40, hand: 0.015 },
     // the call into the haze: low, his breath falling instead of rising
@@ -281,10 +281,10 @@ const medic: ArrivalDef = {
     key(12.0, BACK, { face: { blink: 0.5, squint: 0.3 }, look: [0.2, 0], limbs: { armR: [-0.2, 0.7, -0.68], foreR: [-0.55, 0.3, -0.78] } }),
     // the arm: she lifts the right forearm and looks at it the way she looks at anyone's
     key(14.0, BACK, { look: [0.3, 0.3], face: { squint: 0.5, frown: 0.4 }, gaze: [0.3, 0.6, -0.4],
-      limbs: { armR: [0.4, 0.75, -0.5], foreR: [0.1, 0.95, 0.1], armL: [-0.5, -0.3, -0.8], foreL: [-0.4, -0.2, -0.9] } }),
+      limbs: { armR: [0.35, 0.35, -0.85], foreR: [-0.2, 0.75, 0.6], armL: [-0.5, -0.3, -0.8], foreL: [-0.4, -0.2, -0.9] } }),
     // pressure: the left hand clamps over the cut
     key(15.4, BACK, { look: [0.3, 0.3], face: { squint: 0.8, frown: 0.7, open: 0.2 }, gaze: [0.3, 0.5, -0.4],
-      limbs: { armR: [0.4, 0.75, -0.5], foreR: [0.1, 0.95, 0.1], armL: [0.55, 0.6, -0.55], foreL: [0.55, 0.55, 0.6] } }),
+      limbs: { armR: [0.35, 0.35, -0.85], foreR: [-0.2, 0.75, 0.6], armL: [0.2, 0.5, -0.85], foreL: [0.6, 0.6, 0.5] } }),
     // sitting up still pressing it; counting her breaths
     key(18.0, SITUP, { at: [0, 0.14, -0.15], face: { squint: 0.6, frown: 0.6 }, limbs: { armR: [0.2, -0.6, 0.78], foreR: [-0.3, 0.3, 0.9], armL: [0.2, -0.55, 0.8], foreL: [0.85, 0.1, 0.5], legR: [0.12, 0.45, 0.88], shinR: [0.05, -0.6, 0.8] } }),
     // only then the sky through the tear: Sagittarius A* huge and close
@@ -302,9 +302,9 @@ const medic: ArrivalDef = {
     // still, on her back
     { t0: 8.4, t1: 11.2, from: [1.9, 1.05, 0.9], to: [0, 0.2, -0.6], fov: 38 },
     // close: the fingers at her neck before the eyes
-    { t0: 11.2, t1: 13.4, from: [0.65, 0.42, -0.6], to: [0, 0.16, -0.95], fov: 30, hand: 0.005 },
+    { t0: 11.2, t1: 13.4, onHead: true, from: [0.35, 0.85, 0.2], to: [0, 0, 0.05], fov: 34, hand: 0.005 },
     // the arm, as she sees it
-    { t0: 13.4, t1: 16.4, from: [-0.5, 0.75, -1.3], to: [0.25, 0.45, -0.6], fov: 34, hand: 0.006 },
+    { t0: 13.4, t1: 16.4, onHead: true, from: [-0.9, 0.45, 0.6], to: [0.15, 0.0, 0.2], fov: 36, hand: 0.006 },
     // sitting up, wide: the trench, the section at its end
     { t0: 16.4, t1: 19.4, from: [3.2, 1.1, 2.2], to: [-1.6, 0.4, -2.6], fov: 42, hand: 0.01 },
     // her eyes on the sky
@@ -367,9 +367,9 @@ const builder: ArrivalDef = {
     { t0: 3.4, t1: 7.4, from: [-5.5, 0.7, 2.5], to: [2.2, 0.6, 9], to2: [0.2, 0.4, -0.3], fov: 40, hand: 0.02, ease: 'out' },
     { t0: 7.4, t1: 10.0, from: [1.9, 1.3, 1.3], to: [0.2, 0.4, -0.4], fov: 38 },
     // the hand on the plate
-    { t0: 10.0, t1: 12.2, from: [1.1, 0.75, 0.7], to: [0.55, 0.4, -0.1], fov: 30, hand: 0.006 },
+    { t0: 10.0, t1: 12.2, from: [1.8, 0.9, 0.9], to: [0.5, 0.35, -0.3], fov: 34, hand: 0.006 },
     // his eyes: the black hole overhead, the stars bent round it
-    { t0: 12.2, t1: 14.4, pov: true, from: [0, 0, 0], to: [0, 30, 4], fov: 56 },
+    { t0: 12.2, t1: 14.4, pov: true, from: [0, 0, 0], to: [8, 9, 30], fov: 56 },
     // the ankle
     { t0: 14.4, t1: 19.6, from: [1.3, 0.75, 1.6], to: [0.2, 0.45, 0], fov: 36, hand: 0.01 },
     // up and into play
@@ -404,7 +404,7 @@ const social: ArrivalDef = {
       { t: 5.3, at: [0.95, 0.03, 0.15], rot: [0, 0.6, 0], ease: 'fall' }, { t: 11.2, at: [0.95, 0.03, 0.15], rot: [0, 0.6, 0] },
       { t: 12.4, at: [0.4, 0.55, -0.1], rot: [-1.0, 0.2, 0], ease: 'io' }, { t: 17, at: [0.45, 0.5, 0.0], rot: [-1.0, 0.2, 0] }, { t: 18, at: [0.9, -5, 0.1], rot: ROT }, { t: 26, at: [0.9, -5, 0.1], rot: ROT }] },
   ],
-  dust: { n: 90, speed: 2.0, color: 0xf0d8a0, size: 0.12, up: 0.4 },
+  dust: { n: 50, speed: 1.6, color: 0xd8c890, size: 0.1, up: 0.4 },
   streak: { t0: 0, t1: 4.4, color: 0xffa040 },
   body: [
     // the jolt as the section stops falling: she is thrown off the frame onto the deck, on her right side
@@ -431,13 +431,13 @@ const social: ArrivalDef = {
   ],
   shots: [
     // gold cloud to every horizon; a burning streak coming down through it
-    { t0: 0, t1: 4.2, from: [6, 1.8, 6], to: [-40, 60, 160], to2: [-16, 8, 40], fov: 44, ease: 'lin' },
+    { t0: 0, t1: 4.2, from: [6, 1.4, 6], to: [-40, 40, 160], to2: [-16, 6, 40], fov: 52, ease: 'lin' },
     // the deck jolts; she comes down on it
     { t0: 4.2, t1: 7.6, from: [2.6, 1.5, 1.8], to: [0.2, 0.6, -0.6], to2: [0.1, 0.25, -0.5], fov: 40, hand: 0.03 },
     // still; the deck bobbing under her
     { t0: 7.6, t1: 9.0, from: [-1.6, 0.9, 1.4], to: [0.1, 0.2, -0.4], fov: 38, hand: 0.015 },
     // the phone's light on her face
-    { t0: 9.0, t1: 12.8, from: [1.2, 0.38, 0.6], to: [0.2, 0.2, -0.4], fov: 30, hand: 0.006 },
+    { t0: 9.0, t1: 12.8, onHead: true, from: [0.75, 0.1, 0.5], to: [0.05, -0.05, 0.1], fov: 32, hand: 0.006 },
     // her eyes: one per cent
     { t0: 12.8, t1: 14.4, pov: true, from: [0, 0, 0], to: [0.45, 0.4, 0.05], fov: 46 },
     // the side, the cough, the sweater over the mouth

@@ -46,6 +46,8 @@ export interface Shot {
   pov?: boolean;
   /** Aim follows the body: `to` is added to where the hips are now. */
   track?: boolean;
+  /** A close-up that stays on the face: `from` and `to` are offsets (landing frame) from the head as it moves. */
+  onHead?: boolean;
   /** Ease over the shot's move. */
   ease?: 'io' | 'lin' | 'out';
 }
@@ -240,11 +242,15 @@ export class Arrival {
     let to = this.ctx.P(lerp3(s.to, s.to2));
     const hips = this.ctx.body.root.position.clone().addScaledVector(new THREE.Vector3(0, this.hipsH, 0).applyQuaternion(this.ctx.body.root.quaternion), 1);
     if (s.track) to = hips.clone().add(this.ctx.D(lerp3(s.to, s.to2)).multiplyScalar(new THREE.Vector3(...lerp3(s.to, s.to2)).length()));
-    if (s.pov) {
-      // their eyes: the head's own position, a few centimetres in front of it, dazed
+    if (s.onHead) {
       const head = this.ctx.body.head.getWorldPosition(new THREE.Vector3());
-      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.ctx.body.head.getWorldQuaternion(new THREE.Quaternion()));
-      from = head.addScaledVector(fwd, 0.12).add(new THREE.Vector3(0, 0.02, 0));
+      const off = (v: V3) => new THREE.Vector3().addScaledVector(this.r, v[0]).addScaledVector(this.u, v[1]).addScaledVector(this.f, v[2]);
+      from = head.clone().add(off(lerp3(s.from, s.from2))); to = head.clone().add(off(lerp3(s.to, s.to2)));
+    }
+    if (s.pov) {
+      // their eyes: just in front of the face, on the line to what they look at (never inside the hair), dazed
+      const head = this.ctx.body.head.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 0.06, 0));
+      from = head.clone().addScaledVector(to.clone().sub(head).normalize(), 0.32);
       to.add(new THREE.Vector3(wob(t * 0.6, 1), wob(t * 0.5, 2) * 0.6, wob(t * 0.55, 3)).multiplyScalar(0.35));
     }
     // a hand-held camera breathes; the hit shakes it once and the shake dies
@@ -289,7 +295,8 @@ export class Arrival {
         p.set([c.x, c.y, c.z], i * 3); v.set([Math.cos(a) * s, up * s, Math.sin(a) * s], i * 3);
       }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
-      const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: D.color, size: D.size, transparent: true, opacity: 0.8, depthWrite: false, sizeAttenuation: true }));
+      const c2 = document.createElement('canvas'); c2.width = c2.height = 32; const x2 = c2.getContext('2d')!; const gr = x2.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x2.fillStyle = gr; x2.fillRect(0, 0, 32, 32);
+      const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: D.color, size: D.size, map: new THREE.CanvasTexture(c2), transparent: true, opacity: 0.8, depthWrite: false, sizeAttenuation: true }));
       pts.frustumCulled = false; this.ctx.add(pts);
       this.dust = { pts, v, p, born: t };
     }
