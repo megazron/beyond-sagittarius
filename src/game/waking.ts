@@ -188,7 +188,12 @@ export class Waking {
         this.after(0.5, () => audio.sample('splash', 0.08, { rate: 2.6 }));
         this.after(1.2, () => audio.sample('splash', 0.06, { rate: 2.9 }));
       } },
-      { key: 'e1.w.leaf', who: 'scientist', shot: () => cover.close(z, 0.35, 0.95), run: () => { z.setFace({ squint: 0.3 }); }, after: 0.5 },
+      // he looks up from the empty leaf to say it (still on the hands, the camera saw only his hair: GPU take e11v7)
+      { key: 'e1.w.leaf', who: 'scientist', shot: () => cover.close(z, 0.35, 0.95), run: () => {
+        z.setFace({ squint: 0.3 }); z.setLimbs({ bend: 0.04 });
+        const head = new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld);
+        z.setLookTarget(head.addScaledVector(this.fwd(), 2).add(new THREE.Vector3(0, 0.15, 0))); z.setGazeRate(3);
+      }, after: 0.5 },
     ], () => { this.release(); z.setProp(null); z.setKneel(false); s.flags.drank = true; }));
   }
 
