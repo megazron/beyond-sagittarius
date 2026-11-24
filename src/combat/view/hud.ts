@@ -95,8 +95,8 @@ export class CombatHud {
       (d.firstElementChild as HTMLElement).style.width = `${Math.round((dur ?? 0) * 100)}%`;
     });
   }
-  objective(text: string | null, sub: string | null = null) {
-    this.set('obj', `${text}|${sub}`, () => { this.obj.classList.toggle('on', !!text); this.obj.firstElementChild!.textContent = text ?? ''; this.obj.querySelector('small')!.textContent = sub ?? ''; });
+  objective(text: string | null, sub: string | null = null, warn = false) {
+    this.set('obj', `${text}|${sub}|${warn}`, () => { this.obj.classList.toggle('on', !!text); this.obj.classList.toggle('warn', warn); this.obj.firstElementChild!.textContent = text ?? ''; this.obj.querySelector('small')!.textContent = sub ?? ''; });
   }
   /** How close something is to knowing you are there (0 to 1), or that it does. */
   awareness(k: number | null, seen = false) {

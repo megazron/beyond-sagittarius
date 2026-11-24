@@ -17,6 +17,9 @@
 body.device-touch #cb-hud .chip { bottom: auto; top: 92px; right: max(10px, env(safe-area-inset-right)); }
 #cb-hud .obj { position: absolute; left: 50%; top: max(64px, env(safe-area-inset-top)); transform: translateX(-50%); max-width: min(74vw, 560px); padding: 5px 14px; background: rgba(12,14,18,.5); border-radius: 16px; font-size: 15px; text-align: center; text-shadow: 0 1px 2px #000; opacity: 0; transition: opacity .3s; }
 #cb-hud .obj.on { opacity: 1; }
+#cb-hud .obj.warn { background: rgba(90,22,10,.72); animation: cb-warn 1.1s ease-in-out infinite; }
+#cb-hud .obj.warn small { color: #ffd08a; }
+@keyframes cb-warn { 50% { background: rgba(150,40,14,.78); } }
 #cb-hud .obj small { display: block; color: #e8a33d; font-size: 13px; font-variant-numeric: tabular-nums; }
 #cb-hud .eye { position: absolute; left: 50%; top: 22%; width: 54px; height: 30px; margin-left: -27px; opacity: 0; transition: opacity .2s; }
 #cb-hud .eye.on { opacity: .95; }
