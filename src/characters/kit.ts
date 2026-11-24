@@ -16,6 +16,9 @@ export interface Kit {
   /** Nuvexa's own phone to her left hand (true) or back to her right: her right hand takes the stone, the cup, the bread */
   /** Nuvexa's own phone into her pocket (true) or back into her right hand (false), over a quarter second. */
   phoneLeft(on: boolean): void;
+  /** While the phone goes into the pocket or comes out: how much the right hand reaches down to the pocket (0 to 1, the
+   *  most halfway) and the pocket's place (world, last frame); null when the hand need not go there. */
+  pocketReach(): { w: number; at: THREE.Vector3 } | null;
 }
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -124,6 +127,7 @@ export function addKit(k: KitInput): Kit {
   };
   let scarfEnds: THREE.Mesh[] = [];
   let phone: THREE.Object3D | null = null, phoneTo: ((left: boolean) => void) | null = null, phoneStep: ((t: number) => void) | null = null;
+  const reach = { w: 0, at: new THREE.Vector3() };
   switch (outfit) {
     case 'scientist': {
       if (!custom) { glasses(); earGlow(); }
@@ -208,28 +212,26 @@ export function addKit(k: KitInput): Kit {
       // While her right hand holds something else (a stone to throw, a cup) the phone goes into her right front pocket and
       // comes back out after. It used to jump to the left hand in one frame (GPU take tasksD); now it travels from the
       // palm to the pocket in a quarter second, sinks into the trousers and is hidden there, and back the same way.
-      const leg = B.get('upperlegR'), handR = B.get('handR')!;
+      const leg = B.get('upperlegR');
       if (leg) {
         const hp = piv('upperlegR'), side = Math.sign(hp.x) || -1;
         const pocket = local('upperlegR', hp.clone().add(V(side * 0.05, -0.12, 0.085)));
         // upright in the pocket, its screen to the thigh's outside
         const pocketQ = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(V(0, 0, side), V(0, -1, 0), V(side, 0, 0)));
         let want = false, k = 0, lastT = -1;
-        const mHand = new THREE.Matrix4(), mPock = new THREE.Matrix4(), pa = new THREE.Vector3(), pb = new THREE.Vector3(), qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), sc = new THREE.Vector3(), inv = new THREE.Matrix4();
+        const mPock = new THREE.Matrix4(), qb = new THREE.Quaternion(), sc = new THREE.Vector3();
         phoneTo = (on) => { want = on; };
+        // The hand carries it (it slid on its own from the palm to the pocket beside a still hand, GPU take tasksE): over
+        // half a second the right hand goes down to the pocket with the phone in the palm and comes back empty; the
+        // phone is in the pocket (hidden) from the halfway mark. Coming out, the same the other way.
         phoneStep = (t) => {
           const dt = lastT < 0 ? 0 : Math.min(Math.max(t - lastT, 0), 0.1); lastT = t;
-          k = want ? Math.min(1, k + dt / 0.28) : Math.max(0, k - dt / 0.28);
-          ph.visible = k < 0.999;
-          if (k <= 0) { ph.position.copy(seats.R.p); ph.quaternion.copy(seats.R.q); return; }
-          if (!ph.visible) return;
-          handR.updateWorldMatrix(true, false); leg.updateWorldMatrix(true, false);
-          mHand.compose(seats.R.p, seats.R.q, sc.set(1, 1, 1)).premultiply(handR.matrixWorld).decompose(pa, qa, sc);
-          mPock.compose(pocket, pocketQ, sc.set(1, 1, 1)).premultiply(leg.matrixWorld).decompose(pb, qb, sc);
-          const e = k * k * (3 - 2 * k);
-          pa.lerp(pb, e); qa.slerp(qb, e);
-          inv.copy(handR.matrixWorld).invert();
-          mHand.compose(pa, qa, sc).premultiply(inv).decompose(ph.position, ph.quaternion, sc);
+          k = want ? Math.min(1, k + dt / 0.5) : Math.max(0, k - dt / 0.5);
+          const x = 1 - Math.abs(2 * k - 1); reach.w = k > 0 && k < 1 ? x * x * (3 - 2 * x) : 0;
+          leg.updateWorldMatrix(true, false);
+          mPock.compose(pocket, pocketQ, sc.set(1, 1, 1)).premultiply(leg.matrixWorld).decompose(reach.at, qb, sc);
+          ph.visible = k < 0.5;
+          if (ph.visible) { ph.position.copy(seats.R.p); ph.quaternion.copy(seats.R.q); }
         };
       }
       if (!custom) for (const s of [-1, 1]) { const r = add(new THREE.TorusGeometry(0.021, 0.0016, 8, 28), metal(0xffd66a, 0.2), head, s * (eye.x + 0.073), eye.y - 0.075, eye.z - 0.075, false); r.rotation.y = Math.PI / 2; }
@@ -300,7 +302,7 @@ export function addKit(k: KitInput): Kit {
   shin.add(splint);
 
   return {
-    splint, footH: piv('footL').y, phoneLeft: (on) => phoneTo?.(on),
+    splint, footH: piv('footL').y, phoneLeft: (on) => phoneTo?.(on), pocketReach: () => (reach.w > 0.005 ? reach : null),
     // what moves or hides on its own: never merged into the body (rigid.ts)
     live: [splint, ...(phone ? [phone] : []), ...(halo ? [halo] : []), ...scarfEnds, ...(tailBones.length ? [tailBones[0].parent!] : [])],
     update(t, amount) {

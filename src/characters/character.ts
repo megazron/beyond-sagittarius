@@ -133,7 +133,7 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
 /** Rig switches for A/B tests (dev/animqa.ts): reach, the chest and collarbone helping a held hand get there. */
 /** lipsLetGo: how much of the fingers' torso guard lets go with the hand at the lips (eating, drinking). */
 /** throwTame: how much of the throw clip's lunge (legs and hips) is taken back towards the stance it began from. */
-export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9, sipYaw: -0.5 };
+export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9, sipYaw: -0.5, cupPalm: 0.062, cupMax: 1.6 };
 /** How far a strand's tip falls towards the ground as the head turns from upright, per metre of strand and per unit of
  *  change in the ground's direction seen from the head (hair.ts uDrop; times the strand's sway squared, at most 1.6) */
 const HAIR_DROP = 0.15;
@@ -364,14 +364,27 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // the cup's axis (+y) along the thumb's side, its middle out from the palm by its radius and the hand's half thickness
       M.makeBasis(new THREE.Vector3().crossVectors(th, nl), th, nl);
       m.quaternion.setFromRotationMatrix(M);
+      // as big as the hand that holds it (cupScale): a big fist swallowed the small cup, and at the lips one saw a fist
+      // over his face and no cup (Draxum, GPU take tasksE); it stands out above and below the fingers now
+      const k = cupScale(bs); m.scale.setScalar(k);
       // held round its lower half (round its middle, tipped to sip, the hand sat at the rim over his nose)
-      m.position.copy(fl).multiplyScalar(palmLen * 0.6).addScaledVector(nl, (0.031 + 0.014) * s).addScaledVector(th, 0.018 * s);
+      m.position.copy(fl).multiplyScalar(palmLen * 0.6).addScaledVector(nl, (0.031 * k + 0.014) * s).addScaledVector(th, 0.018 * k * s);
     } else {
       // the bread flat in the fingers' plane (its +y out of the palm), its middle past the fingers' roots
       M.makeBasis(fl, nl, new THREE.Vector3().crossVectors(fl, nl));
       m.quaternion.setFromRotationMatrix(M);
       m.position.copy(fl).multiplyScalar(palmLen + 0.07 * s).addScaledVector(nl, 0.012 * s).addScaledVector(th, 0.01 * s);
     }
+  }
+  /** The cup's size for this hand: the palm's length (wrist to the middle finger's root, world) over RIG_OPTS.cupPalm,
+   *  1 to RIG_OPTS.cupMax. */
+  let cupK = 0;
+  function cupScale(bs: Map<string, THREE.Bone>) {
+    if (cupK) return cupK;
+    const hd = bs.get('handR')!, f3 = bs.get('finger3_1R')!;
+    const palm = f3.position.length() * hd.getWorldScale(new THREE.Vector3()).x;
+    cupK = clamp(palm / RIG_OPTS.cupPalm, 1, RIG_OPTS.cupMax);
+    return cupK;
   }
   /** Where a prop's contact lies in the hand bone's space, for the mouth: the bread's rim or the cup's top rim (its middle
    *  here; the side of the rim towards the face is picked once the hand's turn is known). Returns the rim's middle, its
@@ -410,7 +423,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     return clamp(d, 0, JOINT_MAX[fi][j]);
   };
   const gripSet: { L?: Grip; R?: Grip } = {};
-  const CUP_GRIP: Grip = { shape: 'grip', radius: 0.034 }, PINCH_GRIP: Grip = { shape: 'pinch' }, STICK_GRIP: Grip = { shape: 'grip', radius: 0.02 };
+  const CUP_GRIP: Grip = { shape: 'grip', radius: 0.034 }, cupGrip: Grip = { ...CUP_GRIP }, PINCH_GRIP: Grip = { shape: 'pinch' }, STICK_GRIP: Grip = { shape: 'grip', radius: 0.02 };
   const gripQ = new THREE.Quaternion();
   let handOpen = false, handsSet = false;
   let selfieT = 0, selfieHeld = false; const V4s = new THREE.Vector3();
@@ -1373,7 +1386,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     let rl = rimLocal.get(kind);
     if (!rl) {
       const o = new THREE.Object3D(); placeOnPalm(bs, o, kind === 'cup' ? 'cup' : 'food'); const rim = PROP_RIM[kind] ?? { y: 0, r: 0.05 };
-      rl = { c: new THREE.Vector3(0, rim.y, 0).applyQuaternion(o.quaternion).add(o.position), n: new THREE.Vector3(0, 1, 0).applyQuaternion(o.quaternion), r: rim.r };
+      const ck = kind === 'cup' ? o.scale.x : 1;
+      rl = { c: new THREE.Vector3(0, rim.y * ck, 0).applyQuaternion(o.quaternion).add(o.position), n: new THREE.Vector3(0, 1, 0).applyQuaternion(o.quaternion), r: rim.r * ck };
       rimLocal.set(kind, rl);
     }
     root.updateWorldMatrix(true, false);
@@ -1660,6 +1674,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     // (planting too: its seed is not a prop, and the phone rode in her hand into the soil, GPU take tasksE)
     const handTask = !!task && (task.kind === 'plant' || task.kind === 'pickup' || task.kind === 'putdown' || task.kind === 'throw' || task.kind === 'fix');
     kit?.phoneLeft(busyR(task?.prop) || (handTask && task!.prop !== 'phone') || (!task && busyR(heldProp)) || !!hold?.R);
+    // the right hand down to her pocket and back while the phone goes in or comes out (kit.ts pocketReach)
+    const pr = kit?.pocketReach();
+    if (pr && !(limbs?.ownArms ?? armOwner)) {
+      const upR = bs.get('upperarmR')!, loR = bs.get('lowerarmR')!, hdR = bs.get('handR')!;
+      armTo(bs, 'R', upR, loR, hdR, V4s.copy(pr.at).add(V1.set(0, 0.075, 0)), pr.w, dt);
+    }
     if (task) taskArms(bs, kind, t, dt);
     else if (kind === 'idle' && !gaze && speak <= 0 && !moving) idleLife(bs, t, dt);
     else { idleLook *= Math.exp(-dt * 3); }
@@ -1834,7 +1854,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const shapeR: HandShape = holdW.R > 0.5 ? 'grip' : handOpen ? 'open' : (propOn && propOn.parent === bs.get('handR')) || kind === 'selfie' || kind === 'write' ? 'grip' : kind === 'point' ? 'point' : 'relaxed';
       const shapeL: HandShape = holdW.L > 0.5 ? 'grip' : handOpen ? 'open' : 'relaxed';
       // round a cup's side; the bread pinched between the thumb and the fingers
-      const inR = !!propOn && propOn.parent === bs.get('handR'), propGrip = inR && propOn === props.get('cup') ? CUP_GRIP : inR && propOn === props.get('food') ? PINCH_GRIP : inR && propOn === props.get('throwstick') ? STICK_GRIP : undefined;
+      const inR = !!propOn && propOn.parent === bs.get('handR'), propGrip = inR && propOn === props.get('cup') ? (cupGrip.radius = 0.034 * (cupK || 1), cupGrip) : inR && propOn === props.get('food') ? PINCH_GRIP : inR && propOn === props.get('throwstick') ? STICK_GRIP : undefined;
       const a = handsSet ? 1 - Math.exp(-dt * 6) : 1;
       let worst = 0, step = 0;
       for (const f of fingers) {
