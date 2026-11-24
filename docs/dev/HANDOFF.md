@@ -1659,7 +1659,9 @@ Why: the release pass found the set pieces reachable only from Pause, Action or 
   phones' queue is one (queue2 not built on phones).
 - WHO HELD THE BODIES (new diag in pedProbe: `folk` = townsfolk drawn as bodies in view within 34 m, `cut`, `view`):
   p29a Mobile gate: used 11 with only kid1/kid2 in view, so the bodies sat with townsfolk out of the view and the
-  painted crowd got none. Now townsfolk out of the view beyond 14 m are cards (OUT_CARD, ?outcard=0 off).
+  painted crowd got none. Now, on phones, townsfolk out of the WIDE view (6 m margin) beyond 12 m are cards
+  (OUT_CARD, ?outcard=0 off; with the plain view at 14 m an about-turn brought them in as cards, p29c; at 28 m the gate
+  start still held the bodies, p29d). Phones also never draw more than BODY_CAP + 2 with the crowd's bodies counted.
 - SLIDES: the crowd bodies' sideways speed is capped as a whole (the card's lane easing at 0.45 m/s plus the body's own
   step aside made 0.8 m/s while facing ahead); stood waiting or walking under 0.3 m/s (the gate's throng never turned
   into a step) 0.35 m/s; walking, at most 0.75 x their pace. Story walkers face the way they actually moved (stood,
@@ -1686,6 +1688,27 @@ Why: the release pass found the set pieces reachable only from Pause, Action or 
   footprint (b10e260) did NOT remove it (p29/ne_g frame 470): reverted. NOT FIXED. Left in the shader to try, one at a
   time on that mesh in a probe: glass roughness 0.04 + metalness up to 0.95 at grazing (specular aliasing against the
   environment), the reveal `g` branch, `fFar` averaging (px threshold), the ledge lines; then the fix.
+- STATE (branch ped29-land, rebased on main 26f8579; head 93ff6d8 + an uncommitted perf_gate --query/--spots option):
+  NOT LANDED. CI on 93ff6d8: perf_gate FAILS at the gate, deterministic (the same to the triangle on 376062b and
+  93ff6d8): Mobile gate 15 bodies (budget 14; main 13), Web gate 1 397 602 triangles (budget 1.3 M; main 1 137 612,
+  24 bodies vs 25, 339 draws vs 269). Making the out-of-view rule phones-only did NOT change it, so the cause is in
+  something both commits share (fewer painted cards, BERTH, threes, the thinning's two-frame rule, the phone cap...).
+  p29/pgbisect.sh runs perf_gate's gate spot locally (SwiftShader, through heavy) with ?berth=1.7, ?outcard=0, ?thin=0,
+  ?folkview=0 on dist-p29i: read p29/pgbisect.log, then bisect by commit if no switch explains it. Also on that run:
+  smoke timed out in the planet wake-up (tools/smoke.py:129, outside the city; it passed on 376062b: rerun) and the
+  known combat bow-arm flake.
+- DETECTOR (7-minute walk; before this work, p28e: Mobile cardClose 27, overlap 3, slide 0; Web 72 / 33 / 19):
+  Mobile a 23/2/2, c 16/1/0, d 22/1/2, f 13/0/0, i 14/1/0 (i = the landing code's city.ts). Web a 26/13/4, c 26/17/7,
+  d 23/27/8, f 12/21/3 (f had the out-of-view rule on Web too; it is phones-only from 839de72, Web not re-run on that).
+  No swaps, vanishes or identity changes in any run but one Web identity (c) and one Web appear (a, f). The p28
+  chai_tram burst did not recur. NOT 0 anywhere. What is left:
+  * Mobile: with bodies free (tram square: 8 left, 5 wanted, 4 held) a card in view stays a card because the phones'
+    crowd pool has ONE body per look (POOL 8 = NLOOK 8) and in view a card only takes a body of its own look. Next:
+    POOL 16 on phones (two per look; the cap still holds the total), measure memory and the load.
+  * Web: the out-of-view rule halved Web's flat cards (f: 12 vs 23-26) but went with the gate triangles above. Decide:
+    a bigger Web triangle budget at the gate, or not.
+  * Overlaps Web 13-27: bodies of the painted crowd stepping aside (b.dx) are not checked against each other's forward
+    steps (the card's clash test uses card x, not body x); story walkers vs cards standing.
 - RELAY TO THE CHARACTER AGENT (their files; I did not touch them):
   1. bodymerge.ts / character.ts mergeCrowd: a crowd body draws 3 times a frame (p28 draws_a, Mobile crowd, 6 bodies
      over 2 frames: skin_body 12, `kit` skinned 16, hair `Mesh<head<neck` 16). Wanted: fold the rigid kit+hair mesh
