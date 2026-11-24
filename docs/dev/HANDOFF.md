@@ -1612,3 +1612,22 @@ Owns: mirrored text, touch hints, night readability, fire base, the Android buil
   locally (0 failed on my build); never seen on other branches. I could not find a cause in my input change (a finger
   anywhere now switches to touch, which should only make it pass more). Combat agent: worth a look at that check's
   timing (0.5 s after the tap under SwiftShader).
+
+## 2026-11-24 combat agent: fights in the story (branch combat-flow2 from main 26f8579; NOT landed yet)
+Why: the release pass found the set pieces reachable only from Pause, Action or `?combat=`. Now the levels call them.
+- `src/game/fights.ts` (new, mine): level 7's night is `night.defence` (via story.ts `hooks.night`, the same hook and the
+  same story.ts lines as life-wip's FirstNight, so life-wip's own night takes over when it lands); level 8 opens with
+  breakfast at a fishing station (`fish.spear`) or a hunt station (`hunt.first`) before the ridge (story.ts
+  `fights` object: actions, progress, marker, blocks). Placements and defaults listed in ~/bs-story/DECISIONS.md F1-F7.
+- combat.ts: difficulty asked before the first story fight (`settings.combat.asked`); a lost story fight shows a card
+  (try again from the start / easier / go on) and `startEncounter` resolves once; `checkpoint(save)` (game.persist uses it)
+  writes the moment before a fight; `teachWeapon`: the first time each weapon is in the hand a controls card (keys, pad
+  glyphs or the touch buttons' own icons; `__bs.combat.teaching`); `nightTune` = { fill 1.55, chase 0.8, rim 1.0,
+  stop 0.22 } (the old values, now tunable from the console for the re-tune on top of fix4's brighter base night).
+- Tests: levels_smoke now meets the night and breakfast through the story (answers the difficulty question, "ready",
+  steps to the end, "go on" if lost; fails if either fight did not start); play_test has a "story:" section (level 7 at
+  night starts the night by itself, asked once, spear controls card, mid-fight save = moment before, loss card, retry
+  gives the bag back, reload mid-night meets the night again) and the phone check taps a point that is really the
+  canvas (the start banner/toasts sit over (300,150) for seconds) and prints the device and engaged state.
+- GPU plan: ~/bs-cap/combat/mkplan_flow.py (new game, levels 1-6 by the test driver off camera, then the night, fishing
+  and the hunt from their stations, on camera); run with `cap3.sh flow1 plan_flow.json ""`.

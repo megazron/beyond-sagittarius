@@ -200,10 +200,12 @@ story calls it: `docs/COMBAT_API.md`. Code: `src/combat/`.
 | Creatures | Skritch (pack scavenger), Duskhound (night hunter), Mossback (charging grazer), Lashbloom (trap plant), Nibbet (prey), with sight, hearing and smell, and a pose and a sound for every state | built |
 | Machines and bosses | Phases, armour, weak points and a boss bar in the framework; one guardian in the proving ground | prototype |
 | Traps | Snare, stakes, fire line, rattle, bait, each from what the first days give you | built |
-| Set pieces | The first hunt, the night at the fire (three waves), the run to the fire, past the sleeper | built, playable from Pause, Action; not yet called by the story |
+| Set pieces | The first hunt, the night at the fire (three waves), the run to the fire, past the sleeper, spear fishing | built, playable from Pause, Action; the night, the fishing and the hunt are called by levels 7 and 8 (src/game/fights.ts) |
 | Tension moments | Quick press, hold steady, breath, aim | built |
 | Difficulty and access | Story, Normal, Hard; aim assist, hold instead of timing, slow motion, damage numbers, shake off | built |
-| Level 7 | Still the older scripted night. The night at the fire replaces it when Episode One's scenes call it | open |
+| Level 7 | The night at the fire, started by the level when night falls (the brace; Episode One's hide or run choice is on life-wip) | built, owner to confirm |
+| Level 8 | Breakfast first: spear fishing in the shallows or the first hunt in the meadow, then the ridge | built, owner to confirm |
+| Around a story fight | Difficulty asked once; a loss offers try again, easier, or go on; a save in a fight keeps the moment before it; each weapon's controls shown the first time | built |
 
 Original designs only: no characters, techniques, names or lines from any series. Violence stays teen-safe: no blood,
 nothing comes apart, animals fall and fade or run, machines shut down.
