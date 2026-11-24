@@ -510,17 +510,26 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // the camera's view this frame (set in update before anyone is placed): who may change how they are drawn (SWAP_FAR)
   const VIEW = new THREE.Frustum(), VIEW_M = new THREE.Matrix4(), VS = new THREE.Sphere(new THREE.Vector3(), 2.5), VIEW_C = new THREE.Vector3();
   let viewOn = false, cut = 0; const YOU_C = new THREE.Vector3(NaN, 0, 0);
+  // and where it will be after it moves, if it moves as it did last frame (VIEW2): the frustum lagged a frame behind what is
+  // drawn, so a body could change into a card at the edge of a turning view (a swap at 17 m in a Web clip)
+  const VIEW2 = new THREE.Frustum(), CAM_P = new THREE.Matrix4(), CAM_D = new THREE.Matrix4(), CAM_F = new THREE.Vector3(), CAM_F0 = new THREE.Vector3(NaN, 0, 0);
   const setView = (cam: THREE.Camera) => {
     cam.updateMatrixWorld(); VIEW_M.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse); VIEW.setFromProjectionMatrix(VIEW_M);
-    // a cut (a teleport, arriving): the view is new, so anyone may change how they are drawn for a couple of frames
-    // (the player's jump counts too: the follow camera may glide after a teleport, a few metres a frame)
+    if (viewOn) { CAM_D.copy(CAM_P).invert().premultiply(cam.matrixWorld).multiply(cam.matrixWorld); VIEW_M.copy(CAM_D).invert().premultiply(cam.projectionMatrix); VIEW2.setFromProjectionMatrix(VIEW_M); }
+    else VIEW2.copy(VIEW);
+    CAM_P.copy(cam.matrixWorld);
+    // a cut (a teleport, arriving, the camera jumping to another view): the view is new, so anyone may change how they
+    // are drawn for a couple of frames (the player's jump counts too: the follow camera may glide after a teleport, a
+    // few metres a frame). The camera pulled in by a wall or a body looks the same way: not a cut (it let a walker in
+    // view change between a card and a body)
     const jumped = !!you && Number.isFinite(YOU_C.x) && Math.hypot(you.position.x - YOU_C.x, you.position.z - YOU_C.z) > 3;
-    cut = !viewOn || jumped || VIEW_C.distanceTo(cam.position) > 3 ? 20 : Math.max(0, cut - 1);
+    cam.getWorldDirection(CAM_F); const turned = !Number.isFinite(CAM_F0.x) || CAM_F.dot(CAM_F0) < 0.8; CAM_F0.copy(CAM_F);
+    cut = !viewOn || jumped || (VIEW_C.distanceTo(cam.position) > 3 && turned) ? 20 : Math.max(0, cut - 1);
     VIEW_C.copy(cam.position); viewOn = true; if (you) YOU_C.copy(you.position);
   };
   /** In the view, with 2.5 m of margin (the frustum is this frame's camera before it moves, the screen is widened for
    * portrait phones at draw time, and a body's arms and hair reach past its middle)? */
-  const inView = (x: number, y: number, z: number) => viewOn && (VS.center.set(x, y + 0.9, z), VIEW.intersectsSphere(VS));
+  const inView = (x: number, y: number, z: number) => viewOn && (VS.center.set(x, y + 0.9, z), VIEW.intersectsSphere(VS) || VIEW2.intersectsSphere(VS));
   /** May someone here change how they are drawn now: out of the view, or far enough off that nobody can tell. */
   const swapOK = (x: number, y: number, z: number) => SWAP_FREE || !viewOn || cut > 0 || Math.hypot(x - VIEW_C.x, z - VIEW_C.z) > SWAP_FAR || !inView(x, y, z);
   /** Out of the view or past where the far cards thin out (a shop door: someone going in or coming out is never seen to blink). */
