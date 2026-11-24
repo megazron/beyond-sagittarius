@@ -1543,7 +1543,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       // a body of the card's own look; out of the view, any free body, and the card takes its look (nobody sees it change)
       const q = cards[i];
       // the body that walked them last, if it is free (taken again after a cut, they are the same body), else one of their look
-      let b = crowdPool.find((x) => x.card < 0 && x.last === i) ?? crowdPool.find((x) => x.card < 0 && x.look === q.who % NLOOK);
+      let b = crowdPool.find((x) => x.card < 0 && x.last === i && x.look === q.who % NLOOK) ?? crowdPool.find((x) => x.card < 0 && x.look === q.who % NLOOK); // (the last one only if the card still wears its look: LOOK_SPREAD may have changed it since)
       if (!b && !inView(q.x, FLOOR, q.z)) { b = crowdPool.find((x) => x.card < 0); if (b) q.who = b.look; }
       if (!b) continue;
       b.card = i; b.last = i; b.dx = 0; b.lastX = NaN; b.yaw = q.v > 0 ? 0 : Math.PI; byCard.set(i, b); taken[i] = 1; b.fig.root.visible = true;
