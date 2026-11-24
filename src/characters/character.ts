@@ -133,10 +133,10 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
 /** Rig switches for A/B tests (dev/animqa.ts): reach, the chest and collarbone helping a held hand get there. */
 /** lipsLetGo: how much of the fingers' torso guard lets go with the hand at the lips (eating, drinking). */
 /** throwTame: how much of the throw clip's lunge (legs and hips) is taken back towards the stance it began from. */
-export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65 };
+export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1 };
 /** How far a strand's tip falls towards the ground as the head turns from upright, per metre of strand and per unit of
  *  change in the ground's direction seen from the head (hair.ts uDrop; times the strand's sway squared, at most 1.6) */
-const HAIR_DROP = 0.5;
+const HAIR_DROP = 0.15;
 export const CLOTH_PULL = 0.007;
 /**
  * And every garment this much more on top of that, over the skin: a raised arm stretches a sweater thinner than the
@@ -1947,10 +1947,21 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (hb) {
       hb.getWorldQuaternion(dropQ).invert();
       const sc = hb.getWorldScale(V1).y || 1;
-      tmp.set(0, -1, 0).applyQuaternion(dropQ); tmp.y += 1; tmp.multiplyScalar(HAIR_DROP / sc);
+      // drop: the change in the ground's direction seen from the head, sprung (unscaled)
+      tmp.set(0, -1, 0).applyQuaternion(dropQ); tmp.y += 1;
       dropV.addScaledVector(tmp.sub(drop), 70 * sdt2); dropV.multiplyScalar(Math.exp(-sdt2 * 11));
       drop.addScaledVector(dropV, sdt2);
-      sway.uDrop.value.copy(drop);
+      sway.uDrop.value.copy(drop).multiplyScalar(HAIR_DROP / sc);
+      // the turn from the upright head's down (0,-1,0) to the sprung down, about the axis between them
+      tmp.copy(drop); tmp.y -= 1;
+      const gl = tmp.length();
+      if (gl > 1e-4) {
+        tmp.divideScalar(gl);
+        const ang = Math.acos(Math.max(-1, Math.min(1, -tmp.y)));
+        V1.set(0, -1, 0).cross(tmp);
+        const al = V1.length();
+        if (al > 1e-5) sway.uTilt.value.set(V1.x / al, V1.y / al, V1.z / al, ang * RIG_OPTS.hairTurn); else sway.uTilt.value.set(1, 0, 0, 0);
+      }
     }
     sway.uTime.value = t;
     sway.uFlutter.value = 0.003 + Math.min(amount, 1) * 0.007;

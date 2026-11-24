@@ -7,10 +7,13 @@ export interface SwayUniforms {
   uFlutter: { value: number };
   /** Hair only: how far a strand's tip falls towards the ground as the head bends, in the head's own space (metres). */
   uDrop: { value: THREE.Vector3 };
+  /** Hair only: the turn (axis xyz, angle w, head space) from the ground's direction with the head upright to where it is now:
+   *  long strands turn about their roots by most of it, so they keep hanging down whichever way the head bends or tilts */
+  uTilt: { value: THREE.Vector4 };
 }
 
 export function swayUniforms(): SwayUniforms {
-  return { uTime: { value: 0 }, uSwing: { value: new THREE.Vector3() }, uFlutter: { value: 0.012 }, uDrop: { value: new THREE.Vector3() } };
+  return { uTime: { value: 0 }, uSwing: { value: new THREE.Vector3() }, uFlutter: { value: 0.012 }, uDrop: { value: new THREE.Vector3() }, uTilt: { value: new THREE.Vector4() } };
 }
 
 const VERT_HEAD = /* glsl */ `
