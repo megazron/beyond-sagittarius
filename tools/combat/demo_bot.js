@@ -1,6 +1,6 @@
 // A stand-in player for recordings: it plays the fight through the game's own controls (keys, mouse buttons, mouse
 // look), never by reaching into the simulation to change it. tools/gpu_capture.py evals this file, then calls
-// __cbBot('<mode>'). Modes: melee, ranged, guardian, hunt, night, chase, stealth, tour, fish (log in window.__cbFishLog). __cbStop = true ends it.
+// __cbBot('<mode>'). Modes: melee, ranged, stones, guardian, hunt, night, chase, stealth, tour, fish (log in window.__cbFishLog). __cbStop = true ends it.
 window.__cbBot = (mode) => {
   const C = __bs.combat, held = {};
   window.__cbStop = false;
@@ -74,6 +74,12 @@ window.__cbBot = (mode) => {
       else if (st === 1) { fight(living('skritch'), { roll: Math.floor(T / 6) % 2 === 1 }); if ((!living('skritch').length && since() > 2) || since() > 24) next(); }
       else if (st === 2) { if (equip('club')) { run.summon('hound', 1); next(); } }
       else if (st === 3) fight(living('hound').length ? living('hound') : living('skritch'), { roll: true });
+    } else if (mode === 'stones') {
+      // a story night's thrown stones: stones from the bag at the nearest scavenger in reach (the clip per weapon)
+      if (equip('rock')) {
+        const t = nearest(living().filter((e) => e.kind !== 'hound' && !e.routed && dist(e, p) < 20));
+        if (t) shoot(t, { loft: 0.015 }); else { hold('Mouse2', 0); hold('Mouse0', 0); }
+      }
     } else if (mode === 'ranged') {
       if (st === 0) { if (equip('sling')) { run.summon('skritch', 3); next(); } }
       else if (st === 1) { const t = nearest(living('skritch')); if (t && since() < 22) shoot(t, { loft: 0.02 }); else { hold('Mouse2', 0); hold('Mouse0', 0); next(); } }

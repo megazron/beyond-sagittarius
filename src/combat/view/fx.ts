@@ -210,14 +210,14 @@ export class CombatFx {
     let pile = o.getObjectByName('woodPile') as THREE.Group | undefined;
     if (!pile) {
       pile = new THREE.Group(); pile.name = 'woodPile';
-      const bark = new THREE.MeshStandardMaterial({ color: 0x5a4130, roughness: 0.95 }), cut = new THREE.MeshStandardMaterial({ color: 0xc89a62, roughness: 0.8 });
+      const bark = new THREE.MeshStandardMaterial({ color: 0x8a6646, roughness: 0.9 }), cut = new THREE.MeshStandardMaterial({ color: 0xc89a62, roughness: 0.8 });
       const geo = new THREE.CylinderGeometry(0.06, 0.07, 1.0, 6), end = new THREE.CircleGeometry(0.06, 6);
       for (let i = 0; i < 10; i++) {
         const layer = Math.floor(i / 3), j = i % 3, l = new THREE.Group();
         const m = new THREE.Mesh(geo, bark); m.castShadow = true; l.add(m);
         const c = new THREE.Mesh(end, cut); c.position.y = 0.501; c.rotation.x = -Math.PI / 2; l.add(c);
         // layers alternate direction, like a stacked pile
-        l.rotation.set(Math.PI / 2, layer % 2 ? Math.PI / 2 : 0, 0);
+        if (layer % 2) l.rotation.set(0, 0, Math.PI / 2); else l.rotation.set(Math.PI / 2, 0, 0);
         const off = (j - 1) * 0.15;
         l.position.set(layer % 2 ? 0 : off, 0.07 + layer * 0.12, layer % 2 ? off : 0);
         pile.add(l);
