@@ -1536,14 +1536,18 @@ unlanded except this handoff commit and any recording in progress.
 - Web CROWD_MIN 12 put perf_gate's Web gate at 1.36 M triangles (budget 1.3 M): 10 now (63a4f85).
 - perf_gate SETTLE (ped27) never settled on CI (1 to 3 frames a second) and the job hit its 30 minutes: 20 frames,
   10-frame windows, at most 15 s.
-- NE STREET NOISE (task 4): not the near fade. A GPU clip with ?nearfade=0 (new switch, main.ts) shows the same speckle:
-  two building boxes whose lots meet had walls in one plane, z-fighting (the shopfront and the next building's purple
-  wall interleaved, a new pattern each frame). facade.ts facadeBox now insets every box 1.5 to 6 cm, in four steps in
-  turn. The phone shopfront's goods (14 by 42 cm cells) are also averaged where a cell is under two pixels.
+- NE STREET NOISE (task 4): not the near fade. A GPU clip with ?nearfade=0 (new switch, main.ts) shows the same speckle
+  (p28/ne_a_nf0). Nor two walls in one plane: insetting every facade box (927d3b7) left it as it was (ne_d), reverted.
+  What it is: the shopfront seen along the wall; the window reveal's offset (rec / into, into small at a grazing angle)
+  moved g by more than a window from one pixel to the next (d5cf211 softens the reveal by fwidth(g)), and the phone
+  shopfront's goods (14 by 42 cm cells) are averaged under two pixels. NEITHER REMOVED IT: the final clip (p28e,
+  mobile_ne_street_far 8 s, p28/clips_mobile) still speckles. Cause NOT found. Next: raycast from the clip's camera at
+  8 s to name the mesh and material, then switch it off (?) to confirm.
 - MEMORY census (p28/census_a, Mobile, in the city): GPU estimate 716 MB (textures 524, buffers 183). What is booked to
   the planet: world.scene.children[19..23] and world.explorer (the five crew at 1024: the same textures the city's
   story people use, kept by releaseGpu's keep list, so in use, not waste) and combat.d.player.model (your planet body,
-  two 2048 maps, 45 MB, out of world.scene while away so never released): now released (a295b1c). Other big ones: the
+  two 2048 maps, 45 MB): releasing player.model.root too (a295b1c) changed nothing in the census after it (726 MB,
+  the same maps held), so they are kept as the city's own body uses them: reverted (c2cead8). Other big ones: the
   city player body's 2048 map + normal (45 MB; 1024 on phones would save about 34 MB, characters area), morph textures
   16384x2 RGBA32F x51 (27 MB) and x13/x11 (crowd bodies).
 - PHONES (task 2): 4x proxy draw census (p28/draws_a, Mobile gate, 13 bodies, 148 draws over 2 frames = 74 a frame
@@ -1551,3 +1555,16 @@ unlanded except this handoff commit and any recording in progress.
   CPU profile at the gate: updateMatrixWorld + multiplyMatrices about 15%, the renderer's per-draw uniform uploads about
   30%. Merging kit and hair into bodymerge.ts's one mesh would take 2 draws a body off; that is the character agent's
   file, not touched. Proxy fps varies run to run (crowd 34 in p27, 49.7 to 52.9 here with 6 bodies).
+- LANDED: 0e542db on main (CI 45325173603 fully green first try on that exact commit, combat and soak included);
+  `git push origin 0e542db:main` fast-forwarded 660c638..0e542db. On top on ped27 (not landed unless CI is green):
+  c2cead8 (revert of a295b1c) and this handoff.
+- FINAL GPU (p28e = 0e542db, p28/final.sh): clips to Downloads/BS_Game_v1.1/mobile_v8_GPU (README.txt, no sound).
+  4x proxy (Mobile): flat 58.4, bazaar 47.4, crowd 40.7 (9 bodies, 169 draws), gate 37.1 (14 bodies, 156 draws),
+  square 45.8, market 56.0 fps: above 45 at the crowd NOT reached (task 2 open: kit and hair into the merged body).
+- Watched frame by frame: Mobile road_walk_cars (camera keeps off the cars; one drives ahead in your lane), gate (the
+  script walks into parked cars, a car fills the lower half), crowd_walk_through 4-5 s (a walker's head at the bottom of
+  the view for a frame, then hidden at the lens: phones hide, the store take t02 kind, shorter), Web road_walk_cars.
+- OPEN: flat cards close by (Mobile 32, Web ~62): more people in view than bodies; on phones the townsfolk take all 11
+  in the bazaar and at the gate. Decide: fewer standing townsfolk/painted crowd near the routes on phones, or a bigger
+  phone budget once draws per body come down. Web slides 13-17 (story walkers stepping round the threes). The
+  detector's Web numbers vary by about 20 between runs of one build: compare two runs before believing a change.
