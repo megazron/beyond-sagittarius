@@ -161,17 +161,24 @@ def main():
         # held over 200 ms), to tell a slow page from a modal opened again over the one being closed
         page.add_init_script("window.__longT = []; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) if (e.duration > 200) { window.__longT.push([Math.round(e.startTime), Math.round(e.duration)]); if (window.__longT.length > 30) window.__longT.shift(); } }).observe({ type: 'longtask', buffered: true }); } catch (e) {}")
         _wfs = page.wait_for_selector
+        # (p32, modal-land CI 45454504900: the codex opened at 65.32 s in the 2 ms between a 15.6 s and a 7.2 s task of the
+        # world's first frames after Continue under SwiftShader, and the 5 s wait for it ran out inside the 7.2 s one. So a
+        # wait that runs out waits for the page to draw two frames, however long, and is tried once more: 5 s of a page
+        # that is drawing, not 5 s of a page held by the software renderer)
         def _wfs_logged(sel, **kw):
             try:
                 return _wfs(sel, **kw)
             except Exception:
                 try:
-                    log("wait_for_selector failed:", sel, kw, "now", page.evaluate("Math.round(performance.now())"))
+                    log("wait_for_selector ran out:", sel, kw, "now", page.evaluate("Math.round(performance.now())"))
                     log("  modal log:", page.evaluate("window.__modalLog || null"))
                     log("  long tasks:", page.evaluate("window.__longT || null"))
                 except Exception as e2:
                     log("  (could not read the page:", e2, ")")
-                raise
+                page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(1))))")
+                r = _wfs(sel, **kw)
+                log("  ...found after the page drew again:", sel, "now", page.evaluate("Math.round(performance.now())"), "long tasks:", page.evaluate("(window.__longT || []).slice(-4)"))
+                return r
         page.wait_for_selector = _wfs_logged
         page.goto(url, wait_until="domcontentloaded", timeout=120000)
         page.evaluate("localStorage.removeItem('bs-save-v1')")
