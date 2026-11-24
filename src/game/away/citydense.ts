@@ -186,7 +186,9 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     const mat = new THREE.MeshBasicMaterial({ map: sheet, transparent: true, alphaTest: 0.22, color: new THREE.Color(0.55, 0.52, 0.6) });
     // a busy street, not a packed one (the owner: "too many people, too crowded"); halved again with the pedestrian
     // fixes: near the camera every one of them is a body now, and the bodies have to cover them all
-    const n = rich ? 64 : 22, gateN = rich ? 8 : 4;
+    // (thinned again, p29: with 64 on Web and 22 on phones more of them came into the view within 27 m than there were
+    // bodies, and the rest stayed flat cards up to you: the detector's cardClose, most of them these cards)
+    const n = rich ? 36 : 12, gateN = rich ? 4 : 2;
     const geo = new THREE.PlaneGeometry(1, 1); geo.translate(0, 0.5, 0);
     const offs = new Float32Array(n + gateN); for (let i = 0; i < n + gateN; i++) offs[i] = Math.floor(rnd() * 8) / 8; // every card its own figure, gate crowd included
     const tiles = new Float32Array((n + gateN) * 2); for (let i = 0; i < n + gateN; i++) tiles[i * 2] = offs[i];

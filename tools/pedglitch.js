@@ -20,7 +20,7 @@
   // samples kept per type (was 40: the Web overlaps of a 7-minute walk ran to 170 and only the first 40 could be read)
   const CAP = 400;
   const TYPES = ['vanish', 'appear', 'vanishFar', 'appearFar', 'swap', 'identity', 'lod', 'teleport', 'road', 'carHit', 'overlap', 'slide', 'cardClose'];
-  const S = { on: false, counts: {}, samples: {}, frames: 0, prev: new Map(), hold: new Map(), lastOn: new Map(), quiet: 0, t0: 0, walk: null, stuck: 0, fpsN: 0, fpsT: 0, worst: 0, last: 0, maxPeds: 0, zone: '', enter: new Map() };
+  const S = { on: false, counts: {}, samples: {}, frames: 0, prev: new Map(), hold: new Map(), lastOn: new Map(), quiet: 0, t0: 0, walk: null, stuck: 0, fpsN: 0, fpsT: 0, worst: 0, last: 0, maxPeds: 0, zone: '', enter: new Map(), camH: [] };
   const reset = () => { for (const k of TYPES) { S.counts[k] = 0; S.samples[k] = []; } S.byZone = {}; S.frames = 0; S.near27 = 0; S.maxBodies = 0; S.maxCalls = 0; S.maxTris = 0; S.prev.clear(); S.hold.clear(); S.lastOn.clear(); S.enter.clear(); };
   reset();
   const ev = (type, o) => {
@@ -51,6 +51,8 @@
     const H = (__bs.gl && __bs.gl.domElement.clientHeight) || 390;
     const inView = (x, y, z) => { for (const yy of [y + 0.1, y + 1.0, y + 1.7]) { const p = proj(VP, x, y + (yy - y), z); if (p[2] > 0.05 && Math.abs(p[0]) < 1.02 && Math.abs(p[1]) < 1.02) return true; } return false; };
     const px = (x, y, z) => { const a = proj(VP, x, y, z), b = proj(VP, x, y + 1.7, z); return a[2] > 0 && b[2] > 0 ? Math.round(Math.abs(b[1] - a[1]) / 2 * H) : 0; };
+    // the drawn camera for the last few frames (with each teleport: what jumped), [t, x, y, z, forward x, forward z, you x, z]
+    { const e = cam.matrixWorld.elements, ac = __bs.awayCam || {}; S.camH.push([+((now - S.t0) / 1000).toFixed(3), +cx.toFixed(2), +e[13].toFixed(2), +cz.toFixed(2), +(-e[8]).toFixed(3), +(-e[10]).toFixed(3), +(ac.x ?? 0).toFixed(2), +(ac.z ?? 0).toFixed(2)]); if (S.camH.length > 6) S.camH.shift(); }
     const thin = st.far * 0.83, cur = new Map(), dtS = S.prevT ? Math.max(1e-3, (now - S.prevT) / 1000) : 1 / 60; S.prevT = now;
     for (const r of st.peds) {
       const [id, rep, look, x, y, z, yaw, lod] = r; const d = Math.hypot(x - cx, z - cz);
@@ -69,7 +71,7 @@
         if (vis && a.look !== b.look) ev('identity', { id, from: a.look, to: b.look, rep: [a.rep, b.rep], d: +b.d.toFixed(1), px: px(b.x, b.y, b.z) });
         if (vis && a.rep === 'b' && b.rep === 'b' && a.lod !== b.lod && b.d < 25) ev('lod', { id, from: a.lod, to: b.lod, d: +b.d.toFixed(1), px: px(b.x, b.y, b.z) });
         const mv = Math.hypot(b.x - a.x, b.z - a.z);
-        if (vis && mv > 0.5) ev('teleport', { id, m: +mv.toFixed(2), rep: [a.rep, b.rep], d: +b.d.toFixed(1), from: [+a.x.toFixed(1), +a.z.toFixed(1)], to: [+b.x.toFixed(1), +b.z.toFixed(1)] });
+        if (vis && mv > 0.5) ev('teleport', { id, m: +mv.toFixed(2), rep: [a.rep, b.rep], d: +b.d.toFixed(1), from: [+a.x.toFixed(1), +a.z.toFixed(1)], to: [+b.x.toFixed(1), +b.z.toFixed(1)], cams: S.camH.slice(), view: st.diag ? st.diag.view : null, cut: st.diag ? st.diag.cut : null });
         if (b.rep === 'b' && b.v && b.d < 25 && mv < 0.5) {
           // sideways speed against the way the body faces (three's yaw: facing +z at 0, +x at pi/2)
           const vx = (b.x - a.x) / dtS, vz = (b.z - a.z) / dtS, fx = Math.sin(b.yaw), fz = Math.cos(b.yaw), side = Math.abs(vx * fz - vz * fx);
