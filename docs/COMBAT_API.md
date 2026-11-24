@@ -8,6 +8,7 @@ exported from `src/combat/index.ts`). The story never needs to import anything e
 ```ts
 const out = await game.combat.startEncounter('night.defence', {
   companion: 'explorer',            // optional: someone beside the player who cannot fight
+  hour: save.timeOfDay,             // optional: start at the world's hour and keep the clock running (see below)
   story: { cubKilled: true },       // optional: what the story knows that changes the fight
 });
 // out.result: 'won' | 'lost' | 'spared' | 'left'
@@ -33,7 +34,13 @@ until treated. `out.stats` has the counts (damage dealt and taken, rolls, parrie
 
 ## Called by the levels on main (src/game/fights.ts)
 - Level 7, the first night: the night at the fire (`night.defence`) starts by itself when night falls with the spear
-  made. The day's wood is stacked by the fire first (the bag is topped up to 8 branches, 2 vines, 4 stones, 1 fruit).
+  made. The bag is topped up first (8 branches, 2 vines, 4 stones, 1 fruit) and a wood pile lies beside the fire for
+  the fire alone (Story 7, Normal 6, Hard 4 branches; fed before the bag's). The HUD shows the fire, the wood and the
+  food; below 35 % the objective line says to feed the fire and the compass points at it. Story burns slower and brings
+  fewer scavengers (`NIGHT` in encounters.ts; `tools/combat/night_probe.ts` prints how a few kinds of player fare).
+- The story's fights keep the world's clock (`startEncounter(id, { hour: save.timeOfDay })`): the fight starts at the
+  world's hour, its clock runs on at the game's rate, and the world keeps the hour it ends at. The night uses it as the
+  start of its dusk. Waking after the first night is at 6:36 (early morning), so breakfast is in the morning sun.
 - Level 8, the morning after: breakfast first, at one of two stations: spear fishing (`fish.spear`) or the first hunt
   (`hunt.first`). Either opens the ridge; the other stays open until the beacon. What is caught is eaten at once.
 - Outcome facts are kept on the save as `flags['cb.<fact>']` (`cb.night.held`, `cb.fish.lesson`, `cb.hunt.kill`...).

@@ -73,7 +73,7 @@ export const SPECIES: Record<SpeciesId, SpeciesDef> = {
       { id: 'beam', min: 4, max: 24, windup: 1.25, active: 0.5, recover: 2.1, dmg: 24, knock: 4, speed: 0, reach: 24, cooldown: 3, open: 2.1 },
     ] },
   // Nibbet: a small grazer with ears like leaves. It is food, and it knows it.
-  nibbet: { id: 'nibbet', temperament: 'prey', hp: 12, radius: 0.3, height: 0.45, mass: 0.4, walk: 1.2, run: 8.2, turn: 10,
+  nibbet: { id: 'nibbet', temperament: 'prey', hp: 12, radius: 0.34, height: 0.54, mass: 0.4, walk: 1.2, run: 8.2, turn: 10,
     sightDay: 20, sightNight: 10, fov: 4.6, hear: 1.6, smell: 9, fireFear: 6, active: 'day', poise: 6, weak: 1, armor: 1, fleeAt: 0, attacks: [] },
   // Darter: a stream and lake-shallows fish of Verdaxis, about half a metre (35 cm read as a pale sliver from the bank), a dark back over a pale belly. It holds still
   // near the bottom facing into the current and is gone in a flick when a shadow moves fast over it or something hits

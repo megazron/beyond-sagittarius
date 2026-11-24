@@ -174,7 +174,7 @@ window.__cbBot = (mode) => {
         // business before the next small sound turns the head; a growl always does)
         flag.fedAt ||= now;
         const low = fire.fuel < fire.max * (o.hold1 ? 0.45 : 0.66), due = !o.hold1 && now - flag.fedAt > 30000 && fire.fuel < fire.max * 0.92;
-        const wood = (sim.inv.branch || 0) > 0, busy = flag.feeding || (wood && low);
+        const wood = (sim.inv.branch || 0) + (fire.pile || 0) > 0, busy = flag.feeding || (wood && low);
         const H = (C.heard || []).filter((h) => h.t > (flag.heardT || 0) && h.t <= now && /chitter|squeak|growl|snarl|howl|rustle|twig|snort/.test(h.name) && dist(h, p) > 2.5 && dist(h, p) < 24);
         if (H.length) {
           const h = H[H.length - 1], hound = /growl|snarl|howl/.test(h.name); flag.heardT = h.t;
@@ -213,7 +213,7 @@ window.__cbBot = (mode) => {
       hold('KeyQ', 0);
       const close = living('skritch').filter((e) => !e.routed && e.heldT <= 0 && dist(e, p) < 2.2);
       // a fire near out comes first, whatever is at the heels (they follow him to the light and are fought there)
-      const dying = fire.fuel < fire.max * 0.3 && (sim.inv.branch || 0) > 0;
+      const dying = fire.fuel < fire.max * 0.3 && (sim.inv.branch || 0) + (fire.pile || 0) > 0;
       if (close.length && !(dying && dist(p, fire) > 2.2)) { if (dying && dist(p, fire) <= 2.2 && since() > 0.8) { tapE(); stT = performance.now(); } fight(close, { level: true }); return; }
       if (dying) { const d = go(fire.x, fire.z); if (d < 2.2) { stop(); look(fire.x, fire.z, C.cam.y + 0.3); if (since() > 0.8) { tapE(); stT = performance.now(); } } return; }
       if (!hold1) {
