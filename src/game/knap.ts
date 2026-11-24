@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import { audio } from '../core/audio';
 import { t } from '../i18n';
-import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { Simplex } from '../core/noise';
+import { cobble, type CobbleKind as Kind } from '../world/cobble';
 import type { SaveData } from '../core/save';
 import type { World } from '../world/world';
 import type { UI } from '../ui/ui';
@@ -12,7 +11,6 @@ import { cover, type Beat, type Shot } from '../cinematic/cutscene';
 import type { TensionResult, TensionSpec } from '../combat/sim/tension';
 import type { Cond } from './branch';
 
-type Kind = 'granite' | 'flint' | 'sand';
 const KINDS: Kind[] = ['granite', 'flint', 'sand'];
 const CHOSE = (k: Kind): Cond => ({ chose: ['e1.stone', k] });
 const WRONG: Cond = { any: [CHOSE('granite'), CHOSE('sand')] };
@@ -99,47 +97,93 @@ export class Stones {
     return Math.hypot(p.x - site.kneel.x, p.z - site.kneel.z) < 2.6;
   }
 
-  /** Stand him at the spot facing the water, kneeling (a cut hides it). */
+  /** Kneel him at the spot facing the water, sitting back on his heels and leant over his hands (a cut hides it).
+   * Sitting back is what lets his hands work low in front of his knees (measured in the studio: kneeling upright the
+   * wrist cannot go below 33 cm, and the stones on the ground were out of reach: his hands stopped at his knees). */
   private settle() {
     const site = this.site!, p = this.player;
     p.pos.copy(site.kneel); p.vel.set(0, 0, 0); p.facing = site.facing;
     p.model.root.position.copy(site.kneel); p.model.root.rotation.y = site.facing + Math.PI; p.model.root.updateMatrixWorld(true);
-    this.z.setKneel(true);
+    this.z.setKneel(true, true);
+    this.z.setLimbs({ bend: 0.5 });
   }
 
   private fwd() { const r = this.z.root.rotation.y; return new THREE.Vector3(Math.sin(r), 0, Math.cos(r)); }
+  /** His forward and his left, on the ground. */
+  private axes() { const f = this.fwd(); return { f, l: new THREE.Vector3(f.z, 0, -f.x) }; }
+  private headAt() { return new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld); }
 
-  /** Low and close on the stones and his hands, from his right, his face at the top of frame. */
-  private stoneShot(at: THREE.Vector3, dist = 0.95): Shot {
-    // from the water's side of the stones, looking back up the bank at them and at his face (built from the site, not
-    // from the model's heading: the first cut of this framed his back)
-    const site = this.site!, w = at.clone().sub(site.kneel).setY(0).normalize(), r = new THREE.Vector3(w.z, 0, -w.x);
-    const head = new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld);
-    // far and high enough that the stones sit low in frame and his face (looking down at them) at the top
-    const to = at.clone().lerp(head, 0.5);
-    return { from: at.clone().addScaledVector(w, dist * 1.15).addScaledVector(r, dist * 0.55).add(new THREE.Vector3(0, 0.55 + dist * 0.2, 0)), to, push: 0.03 };
+  /** Where the stone sits in his left hand while he works it: in front of his knees, low, a little to his left. */
+  private work() {
+    const { f, l } = this.axes();
+    return this.site!.kneel.clone().addScaledVector(f, 0.3).addScaledVector(l, 0.035).add(new THREE.Vector3(0, 0.27, 0));
   }
 
-  /** The hammerstone in his right hand comes down on `at` twice (a tap) with the sound of what it hits. */
-  private tap(at: THREE.Vector3, k: Kind | 'strike', hard = false) {
-    const z = this.z, f = this.fwd();
-    const up = at.clone().add(new THREE.Vector3(0, 0.12, 0)).addScaledVector(f, -0.04), hit = at.clone().add(new THREE.Vector3(0, 0.045, 0));
-    // grasp: `p` is where the hammerstone's middle goes (it sat 8 cm off when the wrist was sent there)
-    const pose = (p: THREE.Vector3) => z.setHold({ R: { at: p, fingers: f.clone().add(new THREE.Vector3(0, -0.6, 0)).normalize(), palm: new THREE.Vector3(0, -1, 0), radius: 0.035, grasp: true }, L: { at: at.clone().add(new THREE.Vector3(0, 0.06, 0)).addScaledVector(f, -0.07).addScaledVector(new THREE.Vector3(f.z, 0, -f.x), 0.08), fingers: f.clone(), palm: new THREE.Vector3(0, -1, 0) } });
-    pose(up);
+  /** The hands and the stone: from in front of him, a little to his right and above the hands. `dist` 0.45 is the
+   * insert (the stone and both hands fill the frame), 1.1 the medium (his face, looking down at them, at the top). */
+  private handShot(dist = 0.8): Shot {
+    const W = this.work(), { f, l } = this.axes();
+    const up = dist < 0.6 ? 0.05 : 0.08 + (dist - 0.6) * 0.35;
+    return { from: W.clone().addScaledVector(f, dist * 0.82).addScaledVector(l, -dist * 0.5).add(new THREE.Vector3(0, dist * 0.32, 0)), to: W.clone().add(new THREE.Vector3(0, up, 0)), push: 0.02 };
+  }
+  /** His face from below and in front: he is looking down at his hands, so the lens goes under his brow (a lens at
+   * head height framed the top of his hair: owner, life_landed L3). The hands come into the bottom of frame. */
+  private faceShot(side = -0.3): Shot {
+    const h = this.headAt(), { f, l } = this.axes();
+    return { from: h.clone().addScaledVector(f, 0.72).addScaledVector(l, side).add(new THREE.Vector3(0, -0.36, 0)), to: h.clone().addScaledVector(f, 0.06).add(new THREE.Vector3(0, -0.1, 0)), push: 0.03 };
+  }
+
+  /** The cobble `k` (or none) in his left hand at the work spot; the one there before goes back to its place. */
+  private inHand: Kind | null = null;
+  private takeUp(k: Kind | null) {
+    const site = this.site!, z = this.z;
+    if (this.inHand && this.inHand !== k) { const m = this.meshes.get(this.inHand); if (m) m.position.copy(site.at[this.inHand]); }
+    this.inHand = k;
+    if (!k) { z.setHold(null); return; }
+    const m = this.meshes.get(k)!, W = this.work(), { f, l } = this.axes();
+    m.position.copy(W); m.rotation.set(0, z.root.rotation.y + 0.4, 0.25);
+    this.holdL = { at: W.clone(), fingers: f.clone().addScaledVector(l, -0.45).add(new THREE.Vector3(0, 0.15, 0)).normalize(), palm: new THREE.Vector3(0, 1, 0).addScaledVector(l, -0.35).normalize(), radius: 0.05, grasp: true };
+    z.setHold({ L: this.holdL, R: this.holdR ?? undefined });
+  }
+  private holdL: { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius: number; grasp: boolean } | null = null;
+  private holdR: { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius: number; grasp: boolean } | null = null;
+
+  /**
+   * The hammerstone in his right hand: a lift (anticipation), a fast swing down onto the stone in his left hand
+   * (`spot` -1 the edge near him, 0 the middle), the contact with the sound of what it hits, a small rebound and a
+   * settle. Twice for a ring test, once for a strike. The hand is driven every frame (eased holds read soft).
+   */
+  private tap(k: Kind | 'strike', spot = -1, hard = false, n = k === 'strike' ? 1 : 2) {
+    const z = this.z, W = this.work(), { f, l } = this.axes();
+    z.setProp('stone');
+    const hit = W.clone().add(new THREE.Vector3(0, 0.095, 0)).addScaledVector(f, spot * 0.035).addScaledVector(l, -0.03);
+    const rest = hit.clone().add(new THREE.Vector3(0, 0.1, 0)).addScaledVector(l, -0.05).addScaledVector(f, 0.02);
+    const top = hit.clone().add(new THREE.Vector3(0, 0.2, 0)).addScaledVector(l, -0.07).addScaledVector(f, 0.04);
+    this.holdR = { at: rest.clone(), fingers: f.clone().add(new THREE.Vector3(0, -0.5, 0)).normalize(), palm: new THREE.Vector3(0, -1, 0).addScaledVector(l, 0.3).normalize(), radius: 0.035, grasp: true };
+    z.setHold({ L: this.holdL ?? undefined, R: this.holdR });
     const sound = () => {
       if (k === 'flint') { audio.sample('flint', 0.5); audio.tone(2350, 0.4, 'sine', 0.07); audio.tone(3520, 0.28, 'sine', 0.035, 0.01); }
       else if (k === 'granite') { audio.sample('stone', 0.6, { rate: 1.05 }); }
       else if (k === 'sand') { audio.sample('stone', 0.45, { rate: 0.62 }); audio.tone(110, 0.14, 'sine', 0.12); }
       else { audio.sample(hard ? 'cb_crack' : 'flint', hard ? 0.5 : 0.6); }
     };
-    const n = k === 'strike' ? 1 : 2;
-    for (let i = 0; i < n; i++) {
-      this.after(0.25 + i * 0.45, () => pose(hit));
-      this.after(0.3 + i * 0.45, sound);
-      this.after(0.42 + i * 0.45, () => pose(up));
-    }
+    // one blow: 0-0.22 s up to the top, 0.22-0.3 down fast, contact, 0.3-0.42 a small bounce, then back to rest
+    const P = 0.62, t0 = performance.now(), R = this.holdR, run = ++this.tapN;
+    let hits = 0;
+    const step = () => {
+      if (run !== this.tapN) return;
+      const s = (performance.now() - t0) / 1000, i = Math.floor(s / P), u = s - i * P;
+      if (i >= n) { R.at.copy(rest); return; }
+      if (u < 0.22) R.at.copy(rest).lerp(top, Math.sin((u / 0.22) * Math.PI / 2));
+      else if (u < 0.3) R.at.copy(top).lerp(hit, ((u - 0.22) / 0.08) ** 2);
+      else if (u < 0.42) R.at.copy(hit).lerp(rest, Math.sin(((u - 0.3) / 0.12) * Math.PI / 2) * 0.35);
+      else R.at.copy(hit).lerp(rest, 0.35 + 0.65 * Math.min(1, (u - 0.42) / 0.2));
+      if (u >= 0.3 && hits <= i) { hits = i + 1; sound(); }
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
+  private tapN = 0;
 
   /** The scene at the cobbles. */
   start() {
@@ -149,24 +193,25 @@ export class Stones {
     this.playScene([
       // he kneels at the bank and looks over the stones; Draxum's voice comes back to him
       { hold: 2.0, shot: () => cover.mid(z, 0.8, 2.2), run: () => {
-        this.settle(); z.setLookTarget(mid()); z.setLimbs({ bend: 0.35 });
+        this.settle(); z.setLookTarget(mid());
         z.setProp('stone');
         this.ui.memory('e1.st.drax', 8);
       } },
-      // he taps each one with the stone in his hand: the grey one clacks, the dark one rings, the brown one thunks
-      ...KINDS.map((k): Beat => ({ hold: 1.4, shot: () => this.stoneShot(site.at[k]), run: () => { z.setLookTarget(site.at[k]); this.tap(site.at[k], k); } })),
-      { choice: 'e1.stone', shot: () => this.stoneShot(mid(), 1.2) },
+      // he takes up each one in his left hand and taps it with the stone in his right: the grey one clacks, the dark
+      // one rings, the brown one thunks (the ring test is done in the hand, not on the ground)
+      ...KINDS.map((k, i): Beat => ({ hold: 1.6, shot: () => this.handShot(i === 1 ? 0.5 : 0.9), run: () => { this.takeUp(k); z.setLookTarget(this.work()); this.tap(k, 0); } })),
+      { choice: 'e1.stone', shot: () => this.handShot(1.15), run: () => this.takeUp(null) },
       // a wrong stone: the first real strike and it falls apart (granite crumbles at a crack, sandstone into grit)
-      { hold: 1.5, if: WRONG, shot: () => this.stoneShot(this.chosenAt(), 0.85), run: () => {
-        const k = this.chosen(), at = site.at[k];
-        z.setLookTarget(at); this.tap(at, 'strike', true);
-        this.after(0.32, () => this.crumble(k));
+      { hold: 1.5, if: WRONG, shot: () => this.handShot(0.6), run: () => {
+        const k = this.chosen();
+        this.takeUp(k); z.setLookTarget(this.work()); this.tap('strike', -1, true);
+        this.after(0.32, () => { this.inHand = null; this.crumble(k); });
       } },
-      { key: 'e1.st.fail', who: 'scientist', if: WRONG, shot: () => cover.close(z, 0.4, 0.95), run: () => z.setFace({ squint: 0.3, frown: 0.25 }), after: 0.3 },
-      // the dark one: he takes it in his left hand and turns it, the glassy edge to the light
-      { hold: 1.6, shot: () => this.stoneShot(site.at.flint, 0.9), run: () => {
-        z.setFace(null); z.setLookTarget(site.at.flint);
-        this.tap(site.at.flint, 'flint');
+      { key: 'e1.st.fail', who: 'scientist', if: WRONG, shot: () => this.faceShot(), run: () => { z.setHold(null); z.setFace({ squint: 0.3, frown: 0.25 }); }, after: 0.3 },
+      // the dark one: in his left hand, turned, one ringing tap
+      { hold: 1.6, shot: () => this.handShot(0.55), run: () => {
+        z.setFace(null); this.takeUp('flint'); z.setLookTarget(this.work());
+        this.tap('flint', 0, false, 1);
       } },
     ], () => {
       s.flags['inv.goodStone'] = true;
@@ -180,26 +225,26 @@ export class Stones {
     const e = this.s.branch?.log?.find((x) => x.id === 'e1.stone');
     return (e?.pick as Kind) ?? 'flint';
   }
-  private chosenAt() { return this.site!.at[this.chosen()]; }
 
-  /** A wrong stone breaks: it goes, three pieces roll off it, a puff of grit. */
+  /** A wrong stone breaks in his hand: it goes, the pieces drop to the ground, a puff of grit. */
   private crumble(k: Kind) {
     const m = this.meshes.get(k); if (!m) return;
     m.visible = false;
+    if (this.holdL) this.z.setHold({ R: this.holdR ?? undefined });
     const bits: THREE.Mesh[] = [];
     for (let i = 0; i < 4; i++) {
       const b = cobble(k, 200 + i, 0.45);
       b.position.copy(m.position); this.site!.group.add(b); bits.push(b);
     }
-    const t0 = performance.now(), ground = m.position.y - 0.03;
+    const t0 = performance.now(), from = m.position.clone(), ground = this.world.terrain.height(from.x, from.z) + 0.02;
     const tick = () => {
       const s = (performance.now() - t0) / 1000;
       bits.forEach((b, i) => {
-        const a = i * 1.7 + 0.4, v = 0.35 + (i % 2) * 0.2, tt = Math.min(s, 0.5);
-        b.position.set(m.position.x + Math.cos(a) * v * tt, Math.max(ground, m.position.y + 0.9 * tt - 4.9 * tt * tt), m.position.z + Math.sin(a) * v * tt);
+        const a = i * 1.7 + 0.4, v = 0.25 + (i % 2) * 0.15, tt = Math.min(s, 0.7);
+        b.position.set(from.x + Math.cos(a) * v * tt, Math.max(ground, from.y + 0.4 * tt - 4.9 * tt * tt), from.z + Math.sin(a) * v * tt);
         b.rotation.set(s * 4 + i, s * 3, 0);
       });
-      if (s < 0.6) requestAnimationFrame(tick);
+      if (s < 0.8) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
     audio.sample('stone', 0.35, { rate: 0.5, delay: 0.15 });
@@ -207,14 +252,15 @@ export class Stones {
 
   /** One knapping attempt: where on the core (near the edge), then the strike (low angle, followed through). */
   private async knap() {
-    const z = this.z, site = this.site!, f = this.fwd();
-    // the core lies at his knees now, the edge towards him
-    const core = site.at.flint, edge = core.clone().addScaledVector(f, -0.03);
+    const z = this.z, site = this.site!, { f, l } = this.axes();
+    // the flint core in his left hand at the work spot, the edge towards him
+    this.takeUp('flint');
+    const W = this.work(), edge = W.clone().addScaledVector(f, -0.06).add(new THREE.Vector3(0, 0.03, 0));
     if (this.fails === 0) this.ui.toast(t('e1.fl.hint'));
-    z.setLookTarget(core);
+    z.setLookTarget(W);
     const q = (window as unknown as { __e1knap?: Strike[] }).__e1knap;
-    // the follow camera would show his back while the moment is open: hold the stone shot instead
-    const sh = this.stoneShot(core, 0.85); this.player.workShot = { from: sh.from.clone(), to: sh.to.clone() };
+    // the follow camera would show his back while the moment is open: hold on the hands and the stone instead
+    const sh = this.handShot(0.85); this.player.workShot = { from: sh.from.clone(), to: sh.to.clone() };
     let res: Strike;
     if (q && q.length) { res = q.shift()!; await new Promise((r) => setTimeout(r, 1600)); }
     else {
@@ -233,42 +279,73 @@ export class Stones {
     if (res !== 'ok') {
       this.fails++;
       this.playScene([
-        { hold: 1.1, shot: () => this.stoneShot(core, 0.8), run: () => {
-          this.tap(res === 'mid' ? core.clone().addScaledVector(f, 0.02) : edge, 'strike', res === 'snap');
+        { hold: 1.2, shot: () => this.handShot(0.55), run: () => {
+          this.takeUp('flint');
+          this.tap('strike', res === 'mid' ? 0 : -1, res === 'snap');
           if (res === 'steep') this.after(0.32, () => this.grit(edge));
-          if (res === 'mid') this.after(0.4, () => { audio.human('grunt', 0.4); z.setFace({ squint: 0.6, frown: 0.5 }); });
+          if (res === 'snap') this.after(0.32, () => this.dropFlake(edge, true));
+          if (res === 'mid') this.after(0.4, () => { audio.human('grunt', 0.4); z.setFace({ squint: 0.6, frown: 0.5 }); this.holdR?.at.addScaledVector(l, -0.06).add(new THREE.Vector3(0, 0.05, 0)); });
         } },
-        { key: line[res], who: 'scientist', shot: () => cover.close(z, 0.4, 0.95), run: () => z.setFace({ squint: 0.3, frown: 0.3 }), after: 0.2 },
+        { key: line[res], who: 'scientist', shot: () => this.faceShot(res === 'mid' ? 0.3 : -0.3), run: () => z.setFace({ squint: 0.3, frown: 0.3 }), after: 0.2 },
       ], () => { z.setFace(null); this.after(0.4, () => this.knap()); });
       return;
     }
-    // it works: a long thin flake peels off the edge; he picks it up, tests it on his thumb, it cuts him
+    // it works: a long thin flake peels off the edge and drops in front of his knees; an insert on it; he picks it
+    // up and turns it to the light, tests the edge on his thumb, it cuts him, he sucks the thumb
     let flake: THREE.Mesh | null = null;
+    const lie = site.kneel.clone().addScaledVector(f, 0.42).addScaledVector(l, 0.02);
+    lie.y = this.world.terrain.height(lie.x, lie.z) + 0.006;
+    const hold = this.work().add(new THREE.Vector3(0, 0.2, 0)).addScaledVector(l, -0.06);
     this.playScene([
-      { hold: 1.4, shot: () => this.stoneShot(core, 0.75), run: () => {
-        this.tap(edge, 'strike');
-        this.after(0.33, () => { flake = flakeMesh(); flake.position.copy(edge).addScaledVector(f, -0.1).add(new THREE.Vector3(0, 0.012, 0)); flake.rotation.y = z.root.rotation.y; site.group.add(flake); });
+      { hold: 1.5, shot: () => this.handShot(0.5), run: () => {
+        this.takeUp('flint');
+        this.tap('strike', -1);
+        this.after(0.31, () => { flake = this.dropFlake(edge, false, lie); });
       } },
-      { hold: 2.2, shot: () => cover.close(z, 0.5, 0.8, 0.12), run: () => {
-        flake?.removeFromParent(); z.setProp('flake');
-        const m = new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld);
-        const hand = m.clone().addScaledVector(f, 0.3).add(new THREE.Vector3(0, -0.3, 0));
-        z.setHold({ R: { at: hand, fingers: f.clone(), palm: new THREE.Vector3(0, 1, 0) }, L: { at: hand.clone().add(new THREE.Vector3(0, -0.02, 0)).addScaledVector(new THREE.Vector3(f.z, 0, -f.x), 0.05), fingers: f.clone(), palm: new THREE.Vector3(0, 1, 0) } });
-        z.setLookTarget(hand);
-        this.after(1.3, () => { audio.human('breath', 0.5); z.setFace({ squint: 0.5, open: 0.2 }); });
+      // the insert: the flake on the ground, its edge catching the light
+      { hold: 1.7, shot: () => ({ from: lie.clone().addScaledVector(f, 0.26).addScaledVector(l, -0.14).add(new THREE.Vector3(0, 0.13, 0)), to: lie.clone().add(new THREE.Vector3(0, 0.01, 0)), push: 0.015 }), run: () => { z.setLookTarget(lie); } },
+      // picked up and turned to the light between finger and thumb
+      { hold: 2.2, shot: () => this.faceShot(-0.25), run: () => {
+        flake?.removeFromParent(); this.takeUp(null); z.setProp('flake');
+        z.setHold({ R: { at: hold, fingers: f.clone().addScaledVector(l, 0.4).add(new THREE.Vector3(0, 0.4, 0)).normalize(), palm: l.clone().add(new THREE.Vector3(0, 0.3, 0)).normalize() }, L: { at: hold.clone().addScaledVector(l, 0.09).add(new THREE.Vector3(0, -0.02, 0)), fingers: f.clone().addScaledVector(l, -0.3).normalize(), palm: new THREE.Vector3(0, 1, 0) } });
+        z.setLookTarget(hold); z.setFace({ open: 0.15 });
+        // the thumb along the edge: a hiss, a wince
+        this.after(1.4, () => { audio.human('breath', 0.5); z.setFace({ squint: 0.6, frown: 0.35, open: 0.25 }); });
       } },
-      // the thumb to his mouth (no line), then the line
-      { hold: 1.4, shot: () => cover.close(z, 0.35, 0.85), run: () => {
-        const mouth = new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld).addScaledVector(f, 0.11).add(new THREE.Vector3(0, -0.08, 0));
-        z.setHold({ L: { at: mouth, fingers: new THREE.Vector3(0, 1, 0).addScaledVector(f, -0.5).normalize(), palm: f.clone().negate() } });
-        z.setLookTarget(null); z.setFace({ squint: 0.2 });
+      // the cut thumb up to his mouth (no line)
+      { hold: 1.5, shot: () => this.faceShot(0.3), run: () => {
+        const mouth = z.lipsAt(new THREE.Vector3()).addScaledVector(f, 0.05).add(new THREE.Vector3(0, -0.03, 0));
+        z.setHold({ R: { at: hold.clone().add(new THREE.Vector3(0, -0.08, 0)), fingers: f.clone(), palm: l.clone() }, L: { at: mouth, fingers: new THREE.Vector3(0, 1, 0).addScaledVector(f, -0.5).normalize(), palm: f.clone().negate() } });
+        z.setLookTarget(hold); z.setFace({ squint: 0.3, frown: 0.2 });
       } },
-      { key: line.ok, who: 'scientist', shot: () => cover.close(z, 0.3, 0.95), run: () => { z.setHold(null); z.setFace({ smile: 0.35 }); }, after: 0.5 },
+      { key: line.ok, who: 'scientist', shot: () => this.faceShot(-0.3), run: () => { z.setHold({ R: { at: hold.clone().add(new THREE.Vector3(0, -0.05, 0)), fingers: f.clone(), palm: l.clone() } }); z.setLookTarget(hold); z.setFace({ smile: 0.35 }); }, after: 0.5 },
     ], () => {
       this.s.flags['inv.flake'] = true;
       this.ui.toast(t('e1.learn.flake'));
+      const m = this.meshes.get('flint'); if (m) m.position.copy(site.at.flint);
+      this.inHand = null; this.holdL = this.holdR = null; this.tapN++;
       z.setProp(null); z.setHold(null); z.setFace(null); z.setLimbs(null); z.setLookTarget(null); z.setKneel(false);
     });
+  }
+
+  /** A flake comes off the edge and drops (to `lie`, or in front of him): a small arc and a turn, a click on landing.
+   * A snapped one breaks in two on the ground. */
+  private dropFlake(from: THREE.Vector3, snapped: boolean, lie?: THREE.Vector3): THREE.Mesh {
+    const { f, l } = this.axes(), fl = flakeMesh();
+    const to = lie ?? this.site!.kneel.clone().addScaledVector(f, 0.4).addScaledVector(l, -0.06);
+    if (!lie) to.y = this.world.terrain.height(to.x, to.z) + 0.006;
+    if (snapped) fl.scale.set(0.55, 1, 1);
+    fl.position.copy(from); this.site!.group.add(fl);
+    const t0 = performance.now(), yaw = this.z.root.rotation.y + 0.6;
+    const tick = () => {
+      const s = Math.min(1, (performance.now() - t0) / 1000 / 0.42);
+      fl.position.copy(from).lerp(to, s); fl.position.y += Math.sin(s * Math.PI) * 0.05 * (1 - s);
+      fl.rotation.set((1 - s) * 2.4, yaw, (1 - s) * 1.1);
+      if (s < 1) requestAnimationFrame(tick); else audio.sample('flint', 0.12, { rate: 2.2 });
+    };
+    requestAnimationFrame(tick);
+    if (snapped) this.after(2.5, () => { fl.removeFromParent(); });
+    return fl;
   }
 
   /** Crumbs off a strike that came down too steep. */
@@ -287,30 +364,6 @@ export class Stones {
     this.site!.group.add(bits);
     this.after(2.5, () => { bits.removeFromParent(); g.dispose(); mat.dispose(); bits.dispose(); });
   }
-}
-
-/** A river cobble of a kind: a rounded, slightly flattened stone about 13 cm long (`k` scales it). */
-function cobble(kind: Kind, seed: number, k = 1): THREE.Mesh {
-  const raw = new THREE.IcosahedronGeometry(1, 3); raw.deleteAttribute('normal'); raw.deleteAttribute('uv');
-  const g = mergeVertices(raw), p = g.getAttribute('position'), n = new Simplex(seed);
-  const col = new Float32Array(p.count * 3), c = new THREE.Color();
-  const base = kind === 'flint' ? 0x24262c : kind === 'granite' ? 0x6f7073 : 0x7a5f45;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const m = 1 + 0.12 * n.noise2(x * 1.6 + y, z * 1.6) + (kind === 'flint' ? 0.06 * Math.abs(n.noise2(x * 4, y * 4 + z)) : 0);
-    p.setXYZ(i, x * 0.065 * m * k, y * 0.04 * m * k, z * 0.05 * m * k);
-    c.set(base);
-    // granite: black and white specks; sandstone: bands; flint: a pale chalky skin on part of it
-    if (kind === 'granite') { const h = n.noise2(x * 18, z * 18 + y * 9); c.multiplyScalar(h > 0.55 ? 0.35 : h < -0.6 ? 1.3 : 1); }
-    else if (kind === 'sand') c.multiplyScalar(0.85 + 0.2 * Math.sin(y * 14 + n.noise2(x * 3, z * 3) * 2));
-    else if (x + 0.3 * n.noise2(y * 2, z * 2) > 0.55) c.set(0xc9c2b0);
-    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  g.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: kind === 'flint' ? 0.22 : kind === 'granite' ? 0.75 : 0.95, metalness: kind === 'flint' ? 0.08 : 0 });
-  const mesh = new THREE.Mesh(g, mat); mesh.castShadow = true; mesh.receiveShadow = true;
-  return mesh;
 }
 
 /** A flint flake: long, thin, sharp-edged, dark and glassy, a little curved. */

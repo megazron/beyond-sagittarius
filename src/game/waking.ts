@@ -181,7 +181,14 @@ export class Waking {
         z.setProp('leaf'); this.dipLeaf(dip, 1.8);
         this.after(0.75, () => audio.sample('splash', 0.14, { rate: 1.8 }));
       } },
-      // and it runs out through his fingers while he watches
+      // up to his mouth: one sip off the rim, the leaf tipped to his lips (it stayed at his waist: owner, L1 stream)
+      { hold: 2.0, shot: () => this.profile(0.85), run: () => {
+        z.setProp('leaf'); this.sipLeaf(1.9);
+        this.after(0.85, () => audio.sample('drink', 0.4));
+        this.after(0.7, () => z.setFace({ open: 0.25, squint: 0.2 }));
+        this.after(1.5, () => z.setFace(null));
+      } },
+      // and the rest runs out through his fingers while he watches
       { hold: 2.8, shot: () => this.handsShot(this.chest(0.3, 0, 0.62), 0.78), run: () => {
         z.setProp('leaf'); this.cupHands(0.3);
         this.leak(2.6);
@@ -269,6 +276,29 @@ export class Waking {
     requestAnimationFrame(step);
   }
 
+  /** The full leaf up to his lips and tipped (the rim at his mouth), held while he drinks, then down again. */
+  private sipLeaf(sec: number) {
+    const m = this.z, t0 = performance.now(), f = this.fwd(), r = new THREE.Vector3(f.z, 0, -f.x);
+    const low = this.chest(0.32, 0, 0.5), up = new THREE.Vector3(0, 1, 0);
+    const step = () => {
+      const k = (performance.now() - t0) / 1000 / sec; if (k > 1) { this.cupHands(0.3); return; }
+      // up (0 to 0.35), at the lips (0.35 to 0.75), down (0.75 to 1)
+      const d = k < 0.35 ? Math.sin((k / 0.35) * Math.PI / 2) : k < 0.75 ? 1 : Math.cos(((k - 0.75) / 0.25) * Math.PI / 2);
+      // the leaf's middle a little below and in front of his lips, so its rim is at his mouth
+      const top = m.lipsAt(new THREE.Vector3()).addScaledVector(f, 0.07).add(new THREE.Vector3(0, -0.075, 0));
+      const c = low.clone().lerp(top, d);
+      // tipped towards him as it comes up: the fingers turn from forwards to up
+      const fingers = f.clone().multiplyScalar(0.8 - d * 0.55).addScaledVector(up, 0.4 + d * 0.6).normalize();
+      m.setHold({
+        R: { at: c.clone().addScaledVector(r, -0.01), fingers, palm: new THREE.Vector3(-0.3, 1, 0).addScaledVector(f, -d * 0.6).normalize(), grasp: true },
+        L: { at: c.clone().addScaledVector(r, 0.025).add(new THREE.Vector3(0, -0.015, 0)), fingers, palm: new THREE.Vector3(0.3, 1, 0).addScaledVector(f, -d * 0.6).normalize(), radius: 0.03, grasp: true },
+      });
+      m.setLookTarget(c.clone().addScaledVector(f, 0.6).add(new THREE.Vector3(0, -0.1 * (1 - d), 0)));
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
   /** Water dripping and trickling out from under his hands for `sec` seconds, then gone. */
   private leak(sec: number) {
     // big enough to read at a game frame rate: drops about a centimetre, lit a little from inside so they catch light
@@ -329,10 +359,17 @@ export class Waking {
         z.doTask('pickup', { at: at.clone(), seconds: 1.3, hands: 'R', prop: 'berry' });
         this.after(1.25, () => z.setProp('berry'));
       } },
+      // smell first: up under his nose, a slow breath in
+      { hold: 1.9, if: TESTED, shot: () => this.profile(0.8), run: () => {
+        z.setProp('berry'); this.ui.memory('e1.fr.lyrra', 9);
+        const f = this.fwd(), nose = mouth().addScaledVector(f, 0.03).add(new THREE.Vector3(0, 0.045, 0));
+        z.setHold({ R: { at: nose, fingers: f.clone().negate().add(new THREE.Vector3(0, 0.3, 0)).normalize(), palm: f.clone().negate(), grasp: true } });
+        z.setLookTarget(nose.clone().addScaledVector(f, 0.3).add(new THREE.Vector3(0, -0.15, 0)));
+        this.after(0.5, () => { audio.human('breath', 0.4); z.setFace({ squint: 0.35, blink: 0.4 }); });
+      } },
       { hold: 3.2, if: TESTED, shot: () => this.handsShot(this.chest(0.3, 0, 0.5), 0.8), run: () => {
         z.setProp('berry');
-        this.ui.memory('e1.fr.lyrra', 9);
-        // skin first: rubbed on the inside of his left wrist
+        // then the skin: rubbed on the inside of his left wrist
         const w = wrist(), r = w.clone().add(new THREE.Vector3(0, 0.035, 0));
         const f = this.fwd(), side = new THREE.Vector3(f.z, 0, -f.x);
         z.setHold({
@@ -351,6 +388,14 @@ export class Waking {
         z.setHold({ R: { at: m.clone().addScaledVector(f, 0.035).add(new THREE.Vector3(0, -0.02, 0)), fingers: f.clone().negate().add(new THREE.Vector3(0, 0.3, 0)).normalize(), palm: new THREE.Vector3(0, 0, 0).sub(f).normalize(), grasp: true } }); // the berry's middle at his lower lip
         z.setLookTarget(m.clone().addScaledVector(f, 0.4).add(new THREE.Vector3(0, -0.25, 0)));
         z.setFace({ squint: 0.15 });
+      } },
+      // a tiny bite off the end with his front teeth; he holds it on his tongue, does not swallow
+      { hold: 1.8, if: TESTED, shot: () => this.profile(0.75), run: () => {
+        const f = this.fwd(), m = mouth();
+        z.setHold({ R: { at: m.clone().addScaledVector(f, 0.03).add(new THREE.Vector3(0, -0.005, 0)), fingers: f.clone().negate().add(new THREE.Vector3(0, 0.3, 0)).normalize(), palm: f.clone().negate(), grasp: true } });
+        z.setFace({ open: 0.35 });
+        this.after(0.45, () => { z.setFace({ open: 0.02, squint: 0.2 }); audio.sample('wood', 0.08, { rate: 2.8 }); });
+        this.after(0.9, () => z.setHold({ R: { at: this.chest(0.32, -0.06, 0.42), fingers: f.clone(), palm: new THREE.Vector3(0, 1, 0), grasp: true } }));
       } },
       // and waits: the hand comes down, he is very still
       { hold: 2.6, if: TESTED, shot: () => cover.close(z, -0.4, 0.85), run: () => {

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { redFruitMesh } from '../world/fruit';
 import { fillSmallHoles, fixOpposedNormals } from './holes';
 import { underCloth, overCloth } from './under';
 import { DECREEP } from './decreep';
@@ -81,7 +82,8 @@ const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
     g.rotateX(Math.PI); g.computeVertexNormals();
     return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.6, side: THREE.DoubleSide }));
   },
-  berry: () => new THREE.Mesh(new THREE.SphereGeometry(0.036, 16, 12), new THREE.MeshStandardMaterial({ color: 0xc3172a, roughness: 0.28 })),
+  // the red fruit of 1.1, the same pod as on the bush (world/fruit.ts), held between finger and thumb
+  berry: () => redFruitMesh(),
   // a fist-sized hammerstone (1.3) and the flint flake it knocks off
   stone: () => { const g = new THREE.IcosahedronGeometry(0.042, 2); g.scale(1.2, 0.85, 1); return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x8d8c88, roughness: 0.8 })); },
   // the hand drill's spindle: a straight stem, finger thick, about half a metre (1.6)
