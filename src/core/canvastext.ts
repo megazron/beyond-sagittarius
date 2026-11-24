@@ -76,3 +76,7 @@ export function fitCanvasText<T>(g: CanvasRenderingContext2D, draw: (g: CanvasRe
   depth++;
   try { return draw(g); } finally { depth--; }
 }
+
+// marking starts with the page, so every canvas with words is known (the sign test reads them), not only those drawn
+// after the first fitCanvasText
+install();
