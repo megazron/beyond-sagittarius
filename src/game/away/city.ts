@@ -1530,6 +1530,22 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // and the body caches (assets.ts releaseCrew): the textures of looks no body here wears leave the GPU, and the loaded
   // builds are forgotten once every body of the city is made (509 MB of decoded body textures and 118 MB of builds sat
   // outside the stage on the Mobile preset)
+  // every pooled body's textures (maps and the skeleton's bone texture) go to the GPU once it has loaded, not the first
+  // time it is shown: with the bigger pools a body first shown later uploaded then (a hitch in view, and soak_smoke saw
+  // the texture count climb lap after lap towards the pool's size)
+  void Promise.all([...people.map((q) => q.fig.whenReady), ...crowdPool.map((b) => b.fig.whenReady), ...dpool.map((b) => b.fig.whenReady)]).then(() => {
+    const r = Renderer.current?.renderer; if (!r) return;
+    for (const f of [...people.map((q) => q.fig), ...crowdPool.map((b) => b.fig), ...dpool.map((b) => b.fig)]) f.root.traverse((o) => {
+      const m = o as THREE.SkinnedMesh;
+      if (m.isSkinnedMesh && m.skeleton) { if (!m.skeleton.boneTexture) m.skeleton.computeBoneTexture(); if (m.skeleton.boneTexture) r.initTexture(m.skeleton.boneTexture); }
+      const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
+      const up = (v: unknown) => { if ((v as THREE.Texture)?.isTexture && (v as THREE.Texture).image) r.initTexture(v as THREE.Texture); };
+      for (const mt of mats) {
+        for (const v of Object.values(mt as unknown as Record<string, unknown>)) up(v);
+        for (const u of [(mt as THREE.ShaderMaterial).uniforms, (mt.userData as { u?: Record<string, { value?: unknown }> }).u]) if (u) for (const k in u) up(u[k]?.value);
+      }
+    });
+  }).catch(() => undefined);
   if (tier === 0) void Promise.all([...propsBuilt, ...people.map((q) => q.fig.whenReady), ...crowdPool.map((b) => b.fig.whenReady), ...dpool.map((b) => b.fig.whenReady)]).then(() => releaseCrew(scene)).catch(() => undefined);
   const dnear: [number, number][] = [], pk: [number, number][] = [];
   /** Each district walker's look (their card's and their body's): look i mod NLOOK until a body of another look walks them out of view. */
