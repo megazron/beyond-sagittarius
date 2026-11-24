@@ -137,9 +137,9 @@ with sync_playwright() as pw:
                 for _ in range(10): step(0.3, dl)  # 3 s of play after the teleport
                 # frozen: draws without a tick until two in a row are the same (anything still arriving changes them)
                 prev, still = None, 0
-                for k in range(40):
+                for nf in range(40):
                     p = step(1e-9, dl); cur = (p['calls'], p['tris'], p['bodies'], p['skinned'])
-                    if cur == prev and k >= 1: still = 1; break
+                    if cur == prev and nf >= 1: still = 1; break
                     prev = cur
                 if not still: raise NotSettled(f'a frozen frame still changed after 40 draws: {prev} then {cur}')
                 pending = [w for w in page.evaluate('__bs.settled()')]
@@ -152,7 +152,7 @@ with sync_playwright() as pw:
                 page.evaluate(TOP_OFF)
             except NotSettled as e:
                 fails.append(f"{q} {name}: did not settle in {a.settle:.0f} s ({e})"); print(fails[-1], flush=True); continue
-            st = {'clock': round(page.evaluate('__bs.clock'), 3), 'secs': round(time.time() - t0, 1), 'frozen': k + 1}
+            st = {'clock': round(page.evaluate('__bs.clock'), 3), 'secs': round(time.time() - t0, 1), 'frozen': nf + 1}
             print(q, name, 'settled', st, flush=True)
             rows[name] = r
             print(q, name, r, flush=True)
