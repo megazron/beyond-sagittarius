@@ -252,7 +252,7 @@ body.touch .prompt { pointer-events: none; }
 .modal { position: fixed; inset: 0; z-index: 40; background: rgba(8, 7, 5, 0.86); animation: menuin 0.16s ease; }
 .modal.leaving { animation: menuout 0.13s ease forwards; pointer-events: none; }
 @keyframes menuin { from { opacity: 0; } to { opacity: 1; } }
-@keyframes menuout { to { opacity: 0; } }
+@keyframes menuout { to { opacity: 0; visibility: hidden; } } /* (hidden on the animation's own clock, not the 130 ms timer: a busy page ran the timer late, CI levels_smoke and combat, p32) */
 .modal-card { position: absolute; inset: 0; display: flex; flex-direction: column; padding: calc(var(--safe-t) + 20px) calc(var(--safe-r) + 5vw) calc(var(--safe-b) + 12px) calc(var(--safe-l) + 5vw); overflow: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--faint) transparent; }
 .modal-card > h2, .menu-top h2 { font: 600 28px/1.2 var(--font-ui); letter-spacing: var(--track); margin: 0 0 14px; }
 .menu-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; flex: none; padding-bottom: 12px; border-bottom: 1px solid var(--faint); margin-bottom: 18px; }
