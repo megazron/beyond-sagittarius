@@ -137,7 +137,12 @@ export class RangedRig {
       // A x up flipped to the front, which is sideways when the aim lies along the body's forward (the first frames of
       // the bow after another weapon, before the body has turned): F pointed to his right and the lowered bow arm
       // reached across the chest (CI on 760e0b1: 9.8 cm). Now it tends to the body's forward as the aim does.
+      // (square to the aim only as far as the aim lies to the side: with the aim still along the body's forward, the
+      // first frames of a raise and a draw clicked together, the square was his right and the lowered bow arm reached
+      // straight across the chest, CI on life-wip 1.8 and 3.8 cm at charge, up 0.65 to 0.75)
       const A = V().set(aim.x, 0, aim.z).normalize(), F = V().set(0, 0, 1).addScaledVector(A, -A.z);
+      const sideK = Math.min(1, Math.abs(A.x) * 1.15);
+      F.multiplyScalar(sideK).add(V().set(0, 0, 1 - sideK));
       F.z += Math.max(0, 0.35 - F.length()); F.normalize();
       const low = V().set(aim.x * 0.6, -0.75, aim.z * 0.6).normalize();
       // Between shots the bow is held low and canted out in front, the string hand on the string at the nock (an
@@ -357,15 +362,22 @@ export class RangedRig {
    * where the solve put them, the elbows keep its way out of the body. Then how deep the arms drawn this frame are in
    * the body's shapes (which turn with the chest), for the play test's gate.
    */
-  private fixArms(model: Character) {
+  private lateMem: ArmMem = { L: 0, R: 0 };
+  private fixArms(model: Character, dt: number) {
     const R = this.rig!, s = this.sol!, root = model.root;
     const W = (v: THREE.Vector3) => root.localToWorld(v.clone()), wp = (o: THREE.Object3D) => o.getWorldPosition(V());
-    const one = (up: THREE.Object3D, lo: THREE.Object3D, hand: THREE.Object3D, sh: THREE.Vector3, el: THREE.Vector3, wr: THREE.Vector3) => {
+    const one = (up: THREE.Object3D, lo: THREE.Object3D, hand: THREE.Object3D, sh: THREE.Vector3, el: THREE.Vector3, wr: THREE.Vector3, k: 'L' | 'R') => {
       const s0 = wp(up), a = s0.distanceTo(wp(lo)), b = wp(lo).distanceTo(wp(hand)), e = V(), w = V();
       reach2(s0, W(wr), a, b, W(el).sub(W(sh)), e, w);
+      // the elbow swung out of the body again round the shoulder-to-wrist line as the body really stands this frame
+      // (the solve's shoulders are last frame's: the clip, the idle sway and the chest's turn move them, and the same
+      // elbow way out could come back in by a few centimetres, CI 2.1 cm with the solve at 0.9)
+      const sl = root.worldToLocal(s0.clone()), elL = root.worldToLocal(e.clone()), wlL = root.worldToLocal(w.clone());
+      swingOut(sl, elL, wlL, 0, this.lateMem, k, dt, 0.6);
+      e.copy(W(elL));
       aimBone(up, lo, e, 1); aimBone(lo, hand, w, 1);
     };
-    one(R.upL, R.loL, R.hL, s.sL, s.eL, s.wL); one(R.upR, R.loR, R.hR, s.sR, s.eR, s.wR);
+    one(R.upL, R.loL, R.hL, s.sL, s.eL, s.wL, 'L'); one(R.upR, R.loR, R.hR, s.sR, s.eR, s.wR, 'R');
     // measured on what is drawn: the upper arm past the shoulder's own ball and the forearm to its middle (the hand's
     // end is left out on purpose: a string hand anchors at the jaw, the sling's pouch rests against the belly)
     const loc = (o: THREE.Object3D) => root.worldToLocal(wp(o));
@@ -387,7 +399,7 @@ export class RangedRig {
     const R = this.rig, S = this.st;
     model.root.updateWorldMatrix(true, true);
     // (only for a frame that pose() solved: a roll or a stagger in between leaves the arms to the body)
-    if (this.sol) { this.fixArms(model); model.root.updateWorldMatrix(true, true); this.sol = null; }
+    if (this.sol) { this.fixArms(model, dt); model.root.updateWorldMatrix(true, true); this.sol = null; }
     const hL = model.handL.localToWorld(V().set(0, -0.05, 0)), hR = model.handR.localToWorld(V().set(0, -0.06, 0));
     const rq = model.root.getWorldQuaternion(new THREE.Quaternion());
     const aim = V().copy(this.aimL).applyQuaternion(rq).normalize();
