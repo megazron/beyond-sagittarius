@@ -391,9 +391,9 @@ export function createInterior(detail = 1): Interior {
   put(new THREE.CylinderGeometry(0.04, 0.034, 0.09, 16), new THREE.MeshStandardMaterial({ color: 0xb5563a, roughness: 0.7 }), lounge, 0.75, -1.71, 0.68);
   put(new THREE.CylinderGeometry(0.04, 0.034, 0.09, 16), new THREE.MeshStandardMaterial({ color: 0x3d7f8f, roughness: 0.7 }), lounge, 1.12, -1.71, 0.85);
   const bagM = new THREE.MeshStandardMaterial({ color: 0x41546b, roughness: 0.85 });
-  put(rb(0.62, 0.3, 0.38, 0.08), bagM, lounge, -0.25, -2.05, 1.25).rotation.y = 0.4;
-  put(rb(0.6, 0.03, 0.36, 0.015), bagM, lounge, -0.18, -1.86, 1.47).rotation.set(-1.1, 0.4, 0);
-  put(rb(0.3, 0.05, 0.22, 0.02), new THREE.MeshStandardMaterial({ color: 0xc9b48a, roughness: 0.9 }), lounge, -0.22, -1.88, 1.2).rotation.y = 0.9; // a jumper on top
+  put(rb(0.62, 0.3, 0.38, 0.08), bagM, lounge, -0.6, -2.05, 0.85).rotation.y = 0.4;
+  put(rb(0.6, 0.03, 0.36, 0.015), bagM, lounge, -0.53, -1.86, 1.07).rotation.set(-1.1, 0.4, 0);
+  put(rb(0.3, 0.05, 0.22, 0.02), new THREE.MeshStandardMaterial({ color: 0xc9b48a, roughness: 0.9 }), lounge, -0.57, -1.88, 0.8).rotation.y = 0.9; // a jumper on top
   // a runner down the middle of the floor
   put(new THREE.PlaneGeometry(9, 1.5), new THREE.MeshStandardMaterial({ color: 0x3a3f4a, roughness: 0.97 }), lounge, 0, -2.195, 0.9).rotation.x = -Math.PI / 2;
   // end bulkheads close the shell; aft (+x) has the hatch to the passage to the habitat ring, its frame lit
@@ -430,7 +430,7 @@ export function createInterior(detail = 1): Interior {
   // her phone up (the group behind her, in her phone's frame and ours)
   const seats: Interior['seats'] = {
     builder: onSofa(0, -0.7), strong: onSofa(0, 0.6), medic: onSofa(1, -0.6), scientist: onSofa(1, 0.7),
-    explorer: { x: -0.75, z: 1.0, yaw: 1.35 }, social: { x: -0.35, z: 1.5, yaw: 0.1 },
+    explorer: { x: -0.95, z: 0.4, yaw: 1.3 }, social: { x: 0.25, z: 1.65, yaw: 0.05 },
   };
 
   const mainLight = new THREE.PointLight(0xcfe6ff, 9, 18, 1.6);
