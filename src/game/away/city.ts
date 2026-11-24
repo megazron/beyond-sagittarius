@@ -1420,11 +1420,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // ---- the crowd crowdPool: real bodies that take over the painted crowd near the camera. A card closer than TAKE metres
   // is walked by a body from the crowd pool (the nearest first) and hidden; the body goes back when the card is far again.
   // Before this, the cards simply vanished within 9 m and the street emptied as you walked into it.
-  const POOL = [8, 20, 20][tier], TAKE = 36;
+  const POOL = [8, 20, 20][tier], TAKE = 36; // bodies are given out from 36 m, so whoever walks into the view is one before SWAP_FAR
   // Web, Ultra: the painted crowd's own bodies whatever the townsfolk use (it was 8: with the townsfolk near the flat and
   // in the bazaar using 20 to 24 of 26, the crowd had its 8 held and every card that came into the view after them at
   // 27 m stayed a card up to you, the most of the detector's flat cards close by; the pool has 24)
-  const CROWD_MIN = 12; // bodies are given out from 36 m, so whoever walks into the view is one before SWAP_FAR
+  const CROWD_MIN = 10; // (12 put the Web gate at 1.36 M triangles, over perf_gate's 1.3 M)
   // a body of every look (two of each on Ultra): card i is only ever walked by a body of look i mod NLOOK
   const crowdPool: { fig: Character; card: number; last: number; phase: number; dx: number; yaw: number; lastX: number; look: number }[] = [];
   for (let i = 0; i < Math.ceil(POOL / NLOOK) * NLOOK; i++) { // every look, twice where the pool is bigger than the looks
