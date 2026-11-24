@@ -1567,9 +1567,11 @@ Owns: mirrored text, touch hints, night readability, fire base, the Android buil
   a key press once left "Enter Select / Esc Close" on a phone). Keys without a code do not switch to keys. Test:
   `python tools/touch_hints.py` (same CI job). Note for capture bots: pressing keys in a phone take switches the
   game to key hints, as a paired keyboard would; tap instead (~/bs-cap/fix/cap.py has a "tap" step).
-- Fire (src/world/flame.ts): the lower 40 % of every tongue is dimmer and capped at orange (an ember bed among the
+- Fire (src/world/flame.ts, FIRE_BASE, `__bs.fireBase` to tune): the lower 25-80 % of every tongue is dimmer and capped at orange (an ember bed among the
   sticks); the glow layers are redder. Brightest flame above the wood.
-- Night (src/world/world.ts `world.night`, sky.ts night keys): moon 0.55 -> 1.05, night sky fill 0.4 -> 0.62 with a
-  cold blue colour, image light 0.42 -> 0.55, night horizon glow raised. The fight's planet fill (1.55) and the eye
+- Night (src/world/world.ts `world.night`, sky.ts night keys): moon 0.55 -> 3.6, night sky fill 0.4 -> 1.7 with a
+  cold blue colour, image light 0.42 -> 1.2, night exposure unchanged (+0.6: at +0.9 a white coat by the fight's
+  fire burned out), night horizon glow raised. Chosen from GPU
+  stills of four sets (~/bs-cap/fix/tune): the frame's mean brightness 12/255 before, 26-30 now. The fight's planet fill (1.55) and the eye
   stopping down by the fire (0.78) sit on top, so fight nights are a little brighter too.
 - Captures: ~/bs-cap/fix (mkplan.py desktop|phone, run.sh NAME PLAN QUERY: one exclusive heavy step, Chrome 9352).
