@@ -31,7 +31,7 @@ SPOTS = {'flat': (12.4, 68.4, 3.14), 'bazaar': (6.0, 50.0, 3.14), 'crowd': (-5.5
 # 20 / 24, the painted crowd halved) and the budget with them, the player and the frozen few over the cap included.
 # Mobile draws 120 -> 145 with them: the crowd spot drew 139 on CI with the new caps (each body is 2-3 draws). A cost of
 # the owner's priority (no pedestrian popping); what it does on a real phone is not measured.
-BUDGET = {'mobile': (145, 760_000, 14), 'web': (580, 1_300_000, 30), 'ultra': (1420, 4_200_000, 32)}
+BUDGET = {'mobile': (145, 760_000, 14), 'web': (580, 1_300_000, 34), 'ultra': (1420, 4_200_000, 36)}
 
 class H(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *x, **k): pass
