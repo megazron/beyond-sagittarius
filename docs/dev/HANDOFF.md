@@ -1865,7 +1865,7 @@ Fixing the owner's list from the flow4 GPU takes, in order.
   flake list, so not rerun.
 - Disk: keep at most 3 dist-* in ~/bs-perf and delete raw capture frames once joined and watched (coordinator, C: hit
   22 MB free). I removed the old dist-* and p30's clip_* frame folders (mp4s and sheets kept).
-## 2026-11-24 boarding agent (worktree ~/bs-board, branch board1 from main e319621; NOT landed yet)
+## 2026-11-24 boarding agent (worktree ~/bs-board; branch board1, rebased on main a98ead4 as board1-land1)
 Owner: "The time when all of them onboard it glitches completely. The ship is diff in the cutscene and that scene."
 - Measured on main e319621 (A500, web + mobile, `~/bs-cap/board/r0web`, `r0mob`): the six walked off down the road
   from the gate, a car drove through them, nobody ever boarded (they walked out of the shot); the second shot's camera
@@ -1889,3 +1889,11 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   `__bs.shipDesigns()` (the pad liner's mesh list equals the films' ship's).
 - GPU capture kit: `~/bs-cap/board/run.sh NAME PLAN DIST QUERY` (one exclusive heavy step, Chrome 9371, preview 4691),
   `mkplan.py web|mobile NAME [fast]`, `probe.py` (headless checks). Delete rec_* frames after joining (C: space).
+- State at 28e129b (before rebase 8359db8): headless check 0 problems, all six in; climb worst gap 14.6 m (to the apron,
+  1.6 s after lift), camera clear; the pad liner's mesh list equals the films' ship. GPU takes r4web/r4mob (A500): the
+  roar's onset lands on the lift shot's first frame; the ship rises from about 0.6 s after. Still below the bar: the
+  wide shots are dominated by the big white radiator panels and the sky's white floating things; three of the six bunch
+  at the hatch in the climb shot; the turn on the platform slides his feet a little; the hull's panel texture is the
+  films' canvas texture, coarse up close. CI on 8359db8: every gate green but combat's bow arms (2.9 cm vs 2 cm), which
+  my change does not touch (that gate has read 0.1 to 5.5 cm across runs, see the life notes).
+
