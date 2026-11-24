@@ -79,6 +79,8 @@ const LOOK_SPREAD = new URLSearchParams(globalThis.location?.search ?? '').get('
 const FOLK_VIEW = new URLSearchParams(globalThis.location?.search ?? '').get('folkview') !== '0';
 /** How far aside walkers pass you and the low camera behind you (was 1.7 and 1.2 m; ?berth=1.7 the old). */
 const BERTH = Number(new URLSearchParams(globalThis.location?.search ?? '').get('berth') ?? 2.0) || 2.0;
+/** How near the lens (metres ahead of the camera) a walker on its line steps aside at up to 1.1 m/s, not 0.7 (p32). */
+const LENS_RUSH = 4.5;
 /** Townsfolk out of the (wide) view beyond 12 m are cards, not bodies (?outcard=0: off). */
 const OUT_CARD = new URLSearchParams(globalThis.location?.search ?? '').get('outcard') !== '0';
 const TURN_CLEAR = new URLSearchParams(globalThis.location?.search ?? '').get('turnclear') !== '0';
@@ -1590,9 +1592,18 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         }
       }
       // and round the camera (a low camera on the pavement behind you): nobody walks into the lens
-      if (!want) {
+      // (p32: also while stepping round you, and from further off: the camera follows a few metres behind you, and a
+      // walker who had only stepped part of the way round you when they passed you walked on into the lens, a face
+      // filling a Web clip, crowd_bump_west 17 s. Within LENS_RUSH of the lens they step aside faster, still turning
+      // into the way they go)
+      let camNear = false;
+      {
         const ahead = (c.z - q.z) * Math.sign(q.v || 1), ax = c.x - (q.x + b.dx);
-        if (c.y < 2.4 && ahead > -0.8 && ahead < 4.0 && Math.abs(ax) < BERTH) { let sg = -Math.sign(ax || 1); const ok = (x: number) => Math.abs(x) > 4.6 && Math.abs(x) < 9.1; if (!ok(q.x + sg * BERTH) && ok(q.x - sg * BERTH)) sg = -sg; want = sg * BERTH; }
+        if (c.y < 2.4 && ahead > -0.8 && ahead < 6.5 && Math.abs(ax) < BERTH) {
+          let sg = -Math.sign(ax || 1); const ok = (x: number) => Math.abs(x) > 4.6 && Math.abs(x) < 9.1; if (!ok(q.x + sg * BERTH) && ok(q.x - sg * BERTH)) sg = -sg;
+          if (!want || Math.sign(want) === sg) want = sg * BERTH; // (a step round you the other way is kept: the two lines are nearly one)
+          camNear = ahead < LENS_RUSH && Math.abs(ax) < 1.2;
+        }
       }
       for (const o of crowdPool) {
         if (o === b || o.card < 0) continue;
@@ -1604,7 +1615,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       // (p29: the limit is on the body's own speed across, the card's lane easing included: the card eased aside at up
       // to 0.45 m/s under a body stepping aside at 0.5, and a body stood waiting, facing ahead, slid 0.8 m/s sideways:
       // the detector's slides of the painted crowd's bodies. Stood waiting: 0.35 m/s, facing ahead)
-      const latV = q.wait || q.holdT || sp < 0.3 ? 0.35 : Math.max(0.35, Math.min(0.7, sp * 0.55)); // (0.75 x pace, up to 0.9, still slid at 0.66 m/s in p29c Web while the body turned into it) // (the gate's slow ones, under 0.3 m/s, never turned into it: 0.35 too)
+      const latV = camNear && sp >= 0.3 ? 1.1 : q.wait || q.holdT || sp < 0.3 ? 0.35 : Math.max(0.35, Math.min(0.7, sp * 0.55)); // (0.75 x pace, up to 0.9, still slid at 0.66 m/s in p29c Web while the body turned into it) // (the gate's slow ones, under 0.3 m/s, never turned into it: 0.35 too)
       const bx0 = Number.isFinite(b.lastX) ? b.lastX : q.x + b.dx;
       let bx = bx0 + THREE.MathUtils.clamp((q.x + want - bx0) * (1 - Math.exp(-dt * 3)), -latV * dt, latV * dt);
       // (and never into someone: a step aside within half a metre of a townsperson, a card or another body, nearer than

@@ -14,12 +14,13 @@
 //   overlap             two walkers closer than 0.45 m, in view within 25 m
 //   slide               a body moving sideways (more than 0.6 m/s across the way it faces) for a quarter second, in view within 25 m
 //   cardClose           someone drawn as a flat card in view within 12 m (not a change, but what reads as cardboard)
+//   lens                someone drawn in view within 1.3 m of the camera (a body or face filling the screen)
 // and the most walkers in view within 27 m at once (near27), what a body budget has to cover.
 // Conditions that last (road, carHit, overlap, slide) count once when they start (and again only after 0.5 s clear).
 (() => {
   // samples kept per type (was 40: the Web overlaps of a 7-minute walk ran to 170 and only the first 40 could be read)
   const CAP = 400;
-  const TYPES = ['vanish', 'appear', 'vanishFar', 'appearFar', 'swap', 'identity', 'lod', 'teleport', 'road', 'carHit', 'overlap', 'slide', 'cardClose'];
+  const TYPES = ['vanish', 'appear', 'vanishFar', 'appearFar', 'swap', 'identity', 'lod', 'teleport', 'road', 'carHit', 'overlap', 'slide', 'cardClose', 'lens'];
   const S = { on: false, counts: {}, samples: {}, frames: 0, prev: new Map(), hold: new Map(), lastOn: new Map(), quiet: 0, t0: 0, walk: null, stuck: 0, fpsN: 0, fpsT: 0, worst: 0, last: 0, maxPeds: 0, zone: '', enter: new Map(), camH: [] };
   const reset = () => { for (const k of TYPES) { S.counts[k] = 0; S.samples[k] = []; } S.byZone = {}; S.frames = 0; S.near27 = 0; S.maxBodies = 0; S.maxCalls = 0; S.maxTris = 0; S.prev.clear(); S.hold.clear(); S.lastOn.clear(); S.enter.clear(); };
   reset();
@@ -90,6 +91,7 @@
       // the body budget; one first seen nearer came into the view by a turn of the camera)
       if (b.d < 27 && !S.enter.has(id)) S.enter.set(id, [+b.d.toFixed(1), b.rep]);
       onset(id + ':card', 'cardClose', b.rep === 'c' && b.d < 12, { id, d: +b.d.toFixed(1), look: b.look, why: st.diag || null, entered: S.enter.get(id) || null });
+      onset(id + ':lens', 'lens', b.d < 1.3, { id, rep: b.rep, d: +b.d.toFixed(2), px: px(b.x, b.y, b.z), cams: S.camH.slice(-2) });
       let carNear = false, hit = false;
       for (const c of st.cars) {
         const dx = b.x - c[0], dz = b.z - c[1], dd = Math.hypot(dx, dz); if (dd < 12) carNear = true;
