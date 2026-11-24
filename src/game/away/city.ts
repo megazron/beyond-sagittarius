@@ -586,7 +586,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   let shadowFrame = 0, shadowStale = true, bodiesLeft = 0, cardsNear = 0;
   /** Real bodies drawn at once, the player aside. */
   const BODY_CAP = [11, 26, 28][tier], OLD_FAR = [50, 80, 130][tier];
-  const candK = new Float64Array(256), candI = new Int32Array(256);
+  const candK = new Float64Array(256), candI = new Int32Array(256), farStory: [number, number][] = [];
   if (tier === 0) CHAR_BUDGET.shadowFar = 0; // phones: no body casts a shadow in the city (contact shadows instead)
   else if (tier === 1) CHAR_BUDGET.shadowFar = 10; // Web: only the bodies close by cast one
   // the crowd's bodies take their near build from 32 m (it was 6 m, in front of you) and change it only off the
@@ -1674,6 +1674,18 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         for (const u of [(mt as THREE.ShaderMaterial).uniforms, (mt.userData as { u?: Record<string, { value?: unknown }> }).u]) if (u) for (const k in u) up(u[k]?.value);
       }
     });
+    // and every pooled body and townsperson starts in its far build, as one handed back from far off is: a body takes its build from
+    // where it was last drawn (character.ts pickLod, camD), and in view within SWAP_FAR it keeps it. A pooled body never
+    // drawn yet had the near build (camD 0) wherever it was first handed out: at the Web gate after a teleport, nine
+    // bodies 8 to 34 m off with the near build's hair (16 to 22 k triangles each, the far build's 2 to 5 k), perf_gate
+    // 1.40 M triangles where main, whose pool had been round the street already, drew them all far, p30
+    const far = new THREE.PerspectiveCamera(); far.position.set(0, 1e4, 0); far.updateMatrixWorld();
+    // (the townsfolk too: they were the nine, never drawn before the teleport, p30)
+    for (const f of [...people.map((q) => q.fig).filter((g) => crowd.has(g)), ...crowdPool.map((b) => b.fig), ...dpool.map((b) => b.fig)]) {
+      let hook: THREE.Object3D | null = null; f.root.updateMatrixWorld(true);
+      f.root.traverse((o) => { if (!hook && (o as THREE.Mesh).isMesh && o.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender) hook = o; });
+      const h = hook as THREE.Object3D | null; if (h) h.onBeforeRender(r, scene, far, (h as THREE.Mesh).geometry, (h as THREE.Mesh).material as THREE.Material, null as unknown as THREE.Group);
+    }
   }).catch(() => undefined);
   if (tier === 0) void Promise.all([...propsBuilt, ...people.map((q) => q.fig.whenReady), ...crowdPool.map((b) => b.fig.whenReady), ...dpool.map((b) => b.fig.whenReady)]).then(() => releaseCrew(scene)).catch(() => undefined);
   const dnear: [number, number][] = [], pk: [number, number][] = [];
@@ -2223,7 +2235,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (cam) {
         stand.length = 0;
         // a hard cap on real bodies (BODY_CAP): the friends and whoever is nearest are bodies, everyone else a card
-        const cp = cam.position; let used = 0, nc = 0;
+        const cp = cam.position; let used = 0, nc = 0; farStory.length = 0;
         lens.on = !!you && outroT < 0; lens.cx = cp.x; lens.cz = cp.z; if (you) { lens.px = you.position.x; lens.pz = you.position.z; }
         // how many bodies are within a few steps of you (the follow camera rises over a thick crowd: crowdNear)
         if (you) {
@@ -2247,7 +2259,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // the six of the story and Mir have no card of their own look: they stay themselves (a body) out to 48 m
           // (a body until the far cards thin out, on every preset: they have no card of their own look, and blinking
           // out at 48 m, at 34 m on phones, was someone vanishing down the street)
-          if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = d < CARD_FAR * 0.85; /* until the cards thin out (popping in at 60 m was someone appearing down the street) */ if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; } // (far off they do not count against the cap)
+          // (phones: they count against the phone's total, after everyone nearer, below: perf_gate's phone gate drew 15
+          // bodies, budget 14, four of them the story's people 50 to 83 m off, p30)
+          if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = d < CARD_FAR * 0.85; /* until the cards thin out (popping in at 60 m was someone appearing down the street) */ if (v && tier === 0 && outroT < 0) { farStory.push([d, i]); continue; } if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; } // (far off they do not count against the cap)
           if (d >= CROWD_FAR) { if (q.fig.root.visible) q.fig.root.visible = false; stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: i, v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk }); continue; }
           // the six of the story (and Mir) are never a card within speaking distance, whatever the cap
           const dy = you ? Math.hypot(q.pos.x - you.position.x, q.pos.z - you.position.z) : 99;
@@ -2296,6 +2310,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           const q = people[candI[j]], show = used < cap || (j < 2 && candK[j] < -20 && tier > 0);
           if (show) used++; else stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: candI[j], v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
           if (show !== q.fig.root.visible) q.fig.root.visible = show;
+        }
+        // phones: the story's people far off are drawn, nearest first, only while the phone's total (BODY_CAP + 2, the
+        // painted crowd's held bodies counted) has room; past it they wait out of sight, 50 m and more down the street
+        if (farStory.length) {
+          farStory.sort((a, b) => a[0] - b[0]);
+          let room = BODY_CAP + 2 - used - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0) - dpool.reduce((n, b) => n + (b.ped >= 0 ? 1 : 0), 0); // (the district walkers' as last frame)
+          for (const [, k] of farStory) { const f = people[k].fig, v = room > 0; if (v) room--; if (f.root.visible !== v) f.root.visible = v; }
         }
         bodiesLeft = Math.max(0, (outroT >= 0 ? 99 : BODY_CAP) - used); usedLog = used;
         if (!deep) drawPeds(dt, time, cam, Math.max(0, bodiesLeft - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0))); else for (const b of dpool) if (b.ped >= 0) { b.ped = -1; b.fig.root.visible = false; }
