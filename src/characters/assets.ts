@@ -66,9 +66,21 @@ export const texturesReady = async () => { await Promise.all([...pending]); };
 /** Web or phone: decides mesh LOD and texture size for everything loaded afterwards. */
 export const lodOf = (detail: number) => (detail < 0.8 ? 1 : 0);
 
+/** How many keys of each clip had their rotation's sign turned to match the key before (read by the checks). */
+export const CLIP_FLIPS: Record<string, number> = {};
 export function loadAnim() {
   animP ??= (async () => {
     const [g, j] = await Promise.all([gltf.loadAsync(`${BASE}anim.glb`), fetch(`${BASE}anim.json`).then((r) => r.json())]);
+    // a rotation and its negative are the same pose, but blending from one key to the next goes the long way round
+    // when their signs differ: the hand swung through a half turn between two keys of a held pose (the selfie's phone
+    // went flat and upside down). Every rotation track is made to run on one side.
+    for (const c of g.animations) for (const t of c.tracks) {
+      if (!t.name.endsWith('.quaternion')) continue;
+      const v = t.values;
+      for (let i = 4; i < v.length; i += 4) {
+        if (v[i] * v[i - 4] + v[i + 1] * v[i - 3] + v[i + 2] * v[i - 2] + v[i + 3] * v[i - 1] < 0) { v[i] = -v[i]; v[i + 1] = -v[i + 1]; v[i + 2] = -v[i + 2]; v[i + 3] = -v[i + 3]; CLIP_FLIPS[c.name] = (CLIP_FLIPS[c.name] ?? 0) + 1; }
+      }
+    }
     anim = { refLeg: j.refLeg, refHip: j.refHip, meta: j.clips, clips: new Map(g.animations.map((c) => [c.name, c])) };
     return anim;
   })();

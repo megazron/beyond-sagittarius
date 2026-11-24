@@ -189,8 +189,11 @@ export function addKit(k: KitInput): Kit {
       const hand = B.get('handR')!;
       const d = local('handR', piv('finger3_2R')), up = d.clone().normalize();
       const ph = add(rbox(0.074, 0.15, 0.009, 0.008), metal(0xe6d7f0, 0.25), hand);
-      ph.position.copy(d.multiplyScalar(0.55).add(V(0, -0.02, 0)));
-      ph.quaternion.setFromUnitVectors(V(0, 1, 0), up);
+      // it lies in her palm with its screen facing out of the palm (the palm is the hand's -y at rest), so that when
+      // she lifts it for a selfie the screen is towards her face and her fingers are behind it
+      const pn = V(0, -1, 0); pn.addScaledVector(up, -pn.dot(up)).normalize();
+      ph.position.copy(d.multiplyScalar(0.55).addScaledVector(pn, 0.022));
+      ph.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(up, pn), up, pn));
       add(new THREE.BoxGeometry(0.066, 0.138, 0.001), glowMat(0x8fd8ff, 0.8), ph, 0, 0, 0.005, false);
       if (!custom) for (const s of [-1, 1]) { const r = add(new THREE.TorusGeometry(0.021, 0.0016, 8, 28), metal(0xffd66a, 0.2), head, s * (eye.x + 0.073), eye.y - 0.075, eye.z - 0.075, false); r.rotation.y = Math.PI / 2; }
       break;
