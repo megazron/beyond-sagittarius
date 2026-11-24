@@ -1438,7 +1438,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // Before this, the cards simply vanished within 9 m and the street emptied as you walked into it.
   // (phones 16, two bodies of each of the 8 looks, p30: with one per look a card in view whose look's body was out
   // stayed a card with bodies free, the tram square in p29i; the phone total, BODY_CAP + 2, still holds what is drawn)
-  const POOL = [16, 20, 20][tier], TAKE = 36; // bodies are given out from 36 m, so whoever walks into the view is one before SWAP_FAR
+  // (Web 24, p31: with 20 the tram square's cards stayed cards with the pool full, want 20 held 19-20; 24 bodies are
+  // built either way, ceil(20/12)*12)
+  const POOL = [16, 24, 20][tier], TAKE = 36; // bodies are given out from 36 m, so whoever walks into the view is one before SWAP_FAR
   // Web, Ultra: the painted crowd's own bodies whatever the townsfolk use (it was 8: with the townsfolk near the flat and
   // in the bazaar using 20 to 24 of 26, the crowd had its 8 held and every card that came into the view after them at
   // 27 m stayed a card up to you, the most of the detector's flat cards close by; the pool has 24)
