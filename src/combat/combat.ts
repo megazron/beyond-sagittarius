@@ -227,6 +227,7 @@ export class Combat {
       void L;
       requestAnimationFrame(() => requestAnimationFrame(() => D.ui.fade('black', 0, 0.7)));
       D.ui.banner(t('cb.menu'), t(`cb.enc.${id}`));
+      D.ui.deviceLines(null); // the story's device readout (level 8's signal) does not sit over a fight
       this.sneakOn = false; this.hud.touch.sneak = false;
       this.hint(id === 'stealth.pass' ? 'sneak' : id === 'night.defence' ? 'trap' : id === 'hunt.first' ? 'sneak' : 'dodge');
       this.taught = null;
@@ -952,7 +953,10 @@ export class Combat {
   private exposure = 1;
   /** The fight's night on top of the world's own (world.night): its planet fill, the chase's, the animals' cold edge, how
    * far the eye stops down at the fire. Tunable from the console (`__bs.combat.nightTune`) for GPU stills. */
-  nightTune = { fill: 1.55, chase: 0.8, rim: 1.0, stop: 0.22 };
+  // (on fix4's brighter base night, moon 3.6, sky fill 1.7, image light 1.2, the fill 1.55 at 34 deg stacked on top: GPU
+  // stills of the wave, flow3/tune_*: frame mean 37 by the fire / 30 across the camp at 1.55, 34/27 at 1.0, 32/26 at 0.6,
+  // 32/24 at 0.3; at 0.6 the Skritch still read by the cold edge, which no longer follows the fill. The chase scaled alike)
+  nightTune = { fill: 0.6, chase: 0.3, rim: 1.0, stop: 0.22 };
   get exposureScale() { if (!this.encounter) this.exposure = 1; return this.exposure; }
   private present(dt: number, time: number) {
     {
@@ -1154,8 +1158,9 @@ export class Combat {
       rows.push(row(['block'], w === 'spear' || w === 'hafted' ? 'cb.t.brace' : 'cb.t.guard'));
     }
     rows.push(row(['dodge'], 'cb.t.roll'));
-    const tip = t(`cb.t.tip.${w}`);
-    return `<b>${t(`cb.w.${w}`)}</b>${rows.join('')}${tip !== `cb.t.tip.${w}` ? `<i>${tip}</i>` : ''}`;
+    // the tip for this moment: spear fishing has its own (aim below the fish), elsewhere the weapon's own
+    const tk = w === 'spear' && this.encounter?.id === 'fish.spear' ? 'cb.t.tip.spearFish' : `cb.t.tip.${w}`, tip = t(tk);
+    return `<b>${t(`cb.w.${w}`)}</b>${rows.join('')}${tip !== tk ? `<i>${tip}</i>` : ''}`;
   }
   /** Tests: the weapon whose controls are showing, and what they say. */
   /** Tests: the input device the hints are drawn for. */

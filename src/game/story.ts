@@ -789,7 +789,7 @@ export class Story {
       this.player.model.armR.rotation.x = -0.3 - k * 1.3;
     }
     // signal meter while looking for high ground
-    if (s.level === 8 && !this.flag('signal') && !this.sequence) {
+    if (s.level === 8 && !this.flag('signal') && !this.sequence && !this.fights?.blocks(8)) {
       this.signalClock -= dt;
       if (this.signalClock <= 0) {
         this.signalClock = 0.4;
