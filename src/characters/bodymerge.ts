@@ -436,7 +436,7 @@ uniform vec3 uRoot, uMid, uTip, uShine; uniform float uHairRough; varying vec3 v
     totalEmissiveRadiance += uGlow * mk.r * uGlowK;
     float rimS = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0);
     totalEmissiveRadiance += mix(sc, uSkin, 0.5) * rimS * 0.1;
-  } else if (vPart > 1.5) {
+  } else if (vPart > 1.5 && vPart < 2.5) {
     totalEmissiveRadiance += uIris * ey.g * (1.0 - ey.b) * uEyeGlow * (0.3 + ey.r) * ${DECREEP ? '0.08' : '1.0'};
     ${DECREEP ? `{ vec3 Nn = normalize(vNormal), Vv = normalize(vViewPosition);
       float h1 = pow(max(dot(reflect(-normalize(vec3(-0.35, 0.55, 0.75)), Nn), Vv), 0.0), 420.0);
