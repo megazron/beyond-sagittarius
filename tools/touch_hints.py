@@ -39,7 +39,14 @@ with sync_playwright() as pw:
         if got: fails.append(f'{where}: {got[:4]}')
 
     def tap(sel):
-        page.locator(sel).first.tap(timeout=20000); time.sleep(0.4)
+        # a real touch at the element's middle (Playwright's own tap waits for the element to be "stable", which the
+        # software renderer's slow frames and the menus' fades can hold off for tens of seconds)
+        for _ in range(40):
+            r = page.evaluate("(s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return b.width && b.height ? [b.x + b.width / 2, b.y + b.height / 2] : null; }", sel)
+            if r: break
+            time.sleep(0.5)
+        if not r: fails.append(f'{sel}: not on the screen to tap'); return
+        page.touchscreen.tap(r[0], r[1]); time.sleep(0.5)
 
     def close_modal():
         if page.locator('#m-close').count() and page.locator('#m-close').first.is_visible(): tap('#m-close')
@@ -75,9 +82,8 @@ with sync_playwright() as pw:
         check(f'{lang} pause')
         n = page.locator('#modal-card .main-tabs .tab').count()
         for i in range(n):
-            tab = page.locator('#modal-card .main-tabs .tab').nth(i)
-            name = tab.get_attribute('data-tab')
-            tab.tap(timeout=20000); time.sleep(0.6)
+            name = page.locator('#modal-card .main-tabs .tab').nth(i).get_attribute('data-tab')
+            tap(f'#tab-{name}'); time.sleep(0.4)
             check(f'{lang} pause/{name}')
         close_modal()
     b.close()

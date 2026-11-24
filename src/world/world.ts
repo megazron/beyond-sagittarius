@@ -53,10 +53,10 @@ export class World {
    * set). A full night is still dark and blue, but the ground under the moon and the giant planet reads, the sky glows
    * at the horizon so trees and hills stand out against it, and the near ground has a cold fill. moon: the moonlight's
    * intensity (was 0.55); fill: the sky light's intensity at night (was 0.4); sky/ground: its colours at night; env: the
-   * image light at night (was 0.42). The fight's own planet fill (combat.ts, 1.55 at 34 degrees) and the eye stopping
+   * image light at night (was 0.42); exposure: how far the eye opens up at night (was 0.6). The fight's own planet fill (combat.ts, 1.55 at 34 degrees) and the eye stopping
    * down near a fire (0.78) sit on top of these; the story's camp fire light is 3.5.
    */
-  night = { moon: 1.05, fill: 0.62, sky: new THREE.Color(0x5d6f9c), ground: new THREE.Color(0x1f2a33), env: 0.55 };
+  night = { moon: 1.05, fill: 0.62, sky: new THREE.Color(0x5d6f9c), ground: new THREE.Color(0x1f2a33), env: 0.55, exposure: 0.6 };
   fog: THREE.FogExp2;
   ready = false;
   onCreatureStep: (p: THREE.Vector3) => void = () => {};
@@ -208,7 +208,7 @@ export class World {
     // a low sun already glows through the haze: keep the shafts from washing the frame out
     this.post.strength = sunUp > 0.5 ? 0.15 + 0.85 * smoothstep(0.05, 0.3, e) : 0.25;
     this.post.density = 0.0016 * (1 + dawn * 0.5);
-    renderer.toneMappingExposure = 0.82 + (1 - day) * 0.6;
+    renderer.toneMappingExposure = 0.82 + (1 - day) * N.exposure;
     this.forest.setGlow(0.9 + (1 - day) * 2.2);
     this.forest.setSun(this.lightDir, this.sun.color);
 
