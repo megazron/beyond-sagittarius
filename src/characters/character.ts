@@ -1884,7 +1884,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       hd.parent!.getWorldQuaternion(Q).invert(); selfM.q.premultiply(Q);
       hd.quaternion.slerp(selfM.q, sw);
       if (!gaze) headLook(bs, V4s, sw * 0.7);
-      if (id !== 'social') showProp(bs, 'phone', sw); // Nuvexa's own phone is part of her
+      // Nuvexa's own phone is part of her; a crowd body (one merged draw) keeps its hands empty rather than add a draw
+      if (id !== 'social' && !crowd) showProp(bs, 'phone', sw);
     } else if (selfieHeld && !task) showProp(bs, null, 0);
     if (!task && kind !== 'selfie' && (heldProp || heldShown)) { showProp(bs, heldProp, 1); heldShown = !!heldProp; }
     selfieHeld = sw > 0.004;
