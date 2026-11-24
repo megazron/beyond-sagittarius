@@ -2217,7 +2217,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // the six of the story (and Mir) are never a card within speaking distance, whatever the cap
           const dy = you ? Math.hypot(q.pos.x - you.position.x, q.pos.z - you.position.z) : 99;
           // the six of the story and Mir have no card of their own look, so they are never a card: a body out to the card range
-          if (!crowd.has(q.fig)) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
+          // (counted against the cap only in view or within 8 m: out of the view they are not drawn, and on phones the
+          // six behind the camera used most of the 11 bodies, so the painted crowd and the townsfolk you walked up to got
+          // none and stayed flat cards up to you)
+          if (!crowd.has(q.fig)) { if (!q.fig.root.visible) q.fig.root.visible = true; if (!FOLK_VIEW || d < 8 || inView(q.pos.x, q.pos.y, q.pos.z)) used++; continue; }
           // in view and near: whoever is a body stays one and a card stays a card (SWAP_FAR)
           if (!swapOK(q.pos.x, q.pos.y, q.pos.z)) {
             if (q.fig.root.visible) used++;
