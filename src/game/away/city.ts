@@ -1523,10 +1523,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       else if (CONTACT > 0 && du < CONTACT) { const e = elbow; if (e.length < 2 || du < e[e.length - 1][0]) { e.push([du, i]); e.sort((a, b) => a[0] - b[0]); if (e.length > 2) e.pop(); } }
       // nearest first: all round within 8 m (the camera turns), then those in the view (they must be bodies before they
       // come within SWAP_FAR), then the rest
-      // (a holder out of view keeps its place before the rest, but after whoever is in view within 10 m of as near: a body
-      // held by someone walking away behind the camera left a card coming into the view at 30 m without one, and it
-      // stayed a card as it came within SWAP_FAR, all the way up to you)
-      const dk = d < 8 || inView(cards[i].x, FLOOR, cards[i].z) ? d : mine ? d + (FOLK_VIEW ? 10 : 0) : d + 30;
+      // (a holder keeps its place out of view too: letting it go 10 m later than one in view churned bodies at the view's
+      // edge, and the detector saw a few change look there, p28c)
+      const dk = d < 8 || mine || inView(cards[i].x, FLOOR, cards[i].z) ? d : d + 30;
       near.push([dk - (mine && CONTACT > 0 ? 2 : 0) - (pin ? 1000 : 0), i]);
     }
     near.sort((a, b) => a[0] - b[0]);
