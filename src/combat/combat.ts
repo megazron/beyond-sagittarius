@@ -290,6 +290,8 @@ export class Combat {
     this.begin(run.id, { ...e.opts, difficulty: undefined }, e.resolve);
   }
   private lowSaid = false;
+  /** When each creature was last struck (the controller's clock): its health shows over it for a moment. */
+  private struck = new Map<number, number>();
   /** How many times a fight has been tried again since the game started (tests). */
   retries = 0;
 
@@ -426,7 +428,7 @@ export class Combat {
     this.sim = this.ambient;
     if (this.ambient) { this.ambient.inv = s.inventory; this.loadPlayer(this.ambient); }
     D.ui.setInventory(s.inventory, s.flags.spear ? ['spear'] : []);
-    this.hud.show(false); this.hud.showTouch(false); this.hud.objective(null); this.hud.boss(null); this.hud.awareness(null); this.hud.arrows([]); this.hud.tags([]); this.hud.analysis(null); this.hud.vignette(false);
+    this.hud.show(false); this.hud.showTouch(false); this.hud.objective(null); this.hud.boss(null); this.hud.awareness(null); this.hud.arrows([]); this.hud.tags([]); this.hud.bars([]); this.hud.analysis(null); this.hud.vignette(false);
     this.engagedT = 0; this.kitOpen = false; this.hud.picker(null);
   }
 
@@ -885,7 +887,13 @@ export class Combat {
           const k = this.vol(e.x, e.z);
           if (e.deflect) this.sfx('clang', 0.7, e.x, e.z); else this.sfx('hit', 0.9, e.x, e.z, e.what?.includes('blunt') ? 0.85 : 1.15);
           if (e.weak) audio.tone(880, 0.1, 'triangle', 0.1 * k, 0, 300);
-          if (!e.what?.startsWith('trap')) { this.hitStop(Math.min(0.11, 0.04 + (e.n ?? 0) * 0.0022)); D.input.rumble(70, 0.4); }
+          if (!e.what?.startsWith('trap')) {
+            // the blow lands: a stop, a small kick of the camera along it, harder for a kill (felt, not watched)
+            this.hitStop(e.killed ? 0.13 : Math.min(0.11, 0.04 + (e.n ?? 0) * 0.0022)); D.input.rumble(e.killed ? 140 : 70, e.killed ? 0.7 : 0.4);
+            this.kickCam(e.killed ? 0.09 : 0.035 + Math.min(0.05, (e.n ?? 0) * 0.0018));
+            if (e.killed) this.fx.puff('dust', e.x!, e.y! - 0.3, e.z!, e.dx, e.dz, 1.2);
+          }
+          if (e.id !== undefined && e.id >= 0) this.struck.set(e.id, this.clock);
           break;
         }
         case 'telegraph': {
@@ -1028,6 +1036,13 @@ export class Combat {
       const vw = q ?? this.viewFor(e);
       if (e.state === 'windup') vw.tele += dt; else vw.tele = 0;
       vw.v.update(e, this.clock, dt, vw.teleDur > 0 ? Math.min(1, vw.tele / vw.teleDur) : 0);
+      // small prey in long grass: it moves the grass, and the grass is heard and seen moving (a hop: a rustle and a
+      // flick of grass); a player finds a Nibbet by that before seeing it
+      if (e.kind === 'nibbet' && !e.dead && d < 40) {
+        const sp = Math.hypot(e.vx, e.vz), vr = vw as unknown as { rusT?: number };
+        vr.rusT = (vr.rusT ?? Math.random() * 2) - dt * (sp > 0.3 ? 1 + sp * 0.4 : 0.15);
+        if (vr.rusT <= 0) { vr.rusT = 1.6 + Math.random() * 1.8; this.sfx('rustle', sp > 3 ? 0.55 : 0.3, e.x, e.z, 1.3, 0, 6); this.fx.puff('leaf', e.x, e.y + 0.25, e.z, e.vx * 0.2, e.vz * 0.2, 0.5); }
+      }
       // a fish is drawn where it is SEEN from this camera: light from it bends at the surface, so it shows higher
       // than it is (the sim keeps where it really is, and that is what a spear has to reach). Taken, it floats up.
       if (e.def.temperament === 'fish') {
@@ -1146,13 +1161,26 @@ export class Combat {
     const tags: { x: number; y: number; warm: boolean }[] = [];
     if (run && (run.id === 'hunt.first' || run.id === 'stealth.pass')) {
       for (const e of sim.enemies) {
-        if (tags.length >= 6 || e.dead || e.gone || !this.cs.studied.includes(e.kind) || Math.hypot(e.x - p.x, e.z - p.z) > 45) continue;
+        // on Story the suit also marks prey it has not studied, briefly: at the start and for a while after one stirs
+        const brief = sim.difficulty === 'story' && e.def.temperament === 'prey' && (run.t < 9 || (e.aware && !e.routed));
+        if (tags.length >= 6 || e.dead || e.gone || (!this.cs.studied.includes(e.kind) && !brief) || Math.hypot(e.x - p.x, e.z - p.z) > 45) continue;
         v2.set(e.x, e.y + e.def.height + 0.35, e.z).project(cam);
         if (v2.z > 1 || Math.abs(v2.x) > 1 || Math.abs(v2.y) > 1) continue;
         tags.push({ x: ((v2.x + 1) / 2) * window.innerWidth, y: ((1 - v2.y) / 2) * window.innerHeight, warm: !e.aware });
       }
     }
     this.hud.tags(tags);
+    // a creature just struck shows how much is left in it, for a moment, over its head (readable damage without the
+    // numbers, which stay a setting)
+    const bars: { x: number; y: number; k: number }[] = [];
+    for (const [id, at] of this.struck) {
+      const e = sim.enemies.find((q) => q.id === id);
+      if (!e || e.dead || e.gone || this.clock - at > 2.4 || e.def.boss) { if (!e || this.clock - at > 2.4) this.struck.delete(id); continue; }
+      v2.set(e.x, e.y + e.def.height + 0.25, e.z).project(cam);
+      if (v2.z > 1 || Math.abs(v2.x) > 1 || Math.abs(v2.y) > 1 || bars.length >= 4) continue;
+      bars.push({ x: ((v2.x + 1) / 2) * window.innerWidth, y: ((1 - v2.y) / 2) * window.innerHeight, k: Math.max(0, e.hp / e.maxHp) });
+    }
+    this.hud.bars(bars);
     const boss = sim.enemies.find((e) => e.def.boss && !e.gone && e.state !== 'dormant' && Math.hypot(e.x - p.x, e.z - p.z) < 40);
     this.hud.boss(boss && !boss.dead ? t(`cb.c.${boss.kind}`) : null, boss ? boss.hp / boss.maxHp : 0, !!boss && boss.phase > 0);
     // Field Analysis: keep a creature in the middle of the view for a few seconds and you learn what it is

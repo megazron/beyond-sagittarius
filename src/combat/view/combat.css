@@ -115,6 +115,10 @@ body:not(.device-touch) #cb-tension button.tap { display: none; }
 body.cb-encounter #tutorial { display: none !important; }
 #cb-hud .tag { position: absolute; left: -5px; top: -14px; width: 0; height: 0; border: 5px solid transparent; border-top: 8px solid rgba(242,235,221,.85); opacity: 0; transition: opacity .3s; filter: drop-shadow(0 0 2px #000); pointer-events: none; }
 #cb-hud .tag.on { opacity: .9; }
+#cb-hud .hp { position: absolute; left: -22px; top: -6px; width: 44px; height: 5px; background: rgba(10,10,12,.65); border: 1px solid rgba(255,255,255,.35); border-radius: 3px; opacity: 0; transition: opacity .25s; pointer-events: none; }
+#cb-hud .hp.on { opacity: 1; }
+#cb-hud .hp i { display: block; height: 100%; background: #e8c34d; border-radius: 2px; transition: width .15s; }
+#cb-hud .hp.low i { background: #e2553a; }
 #cb-hud .tag.warm { border-top-color: rgba(120,220,170,.9); }
 
 /* the first time a weapon is in the hand: how to use it, with the keys, buttons or touch buttons in use */
