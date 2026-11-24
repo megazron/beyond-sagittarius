@@ -98,7 +98,7 @@ def main():
                 page.wait_for_function(f"__bs.frameReport.length > {seen}", timeout=4000)
             except Exception:
                 pass
-            if page.evaluate("__bs.frameReport.length") >= 20:
+            if page.evaluate("__bs.frameReport.length") >= 12:  # the departure frames 14 spoken shots: stop inside it, so the skip below leaves the scene, not the opening
                 break
         report = page.evaluate("__bs.frameReport")
         bad = [r for r in report if abs(r["x"]) > 0.9 or abs(r["y"]) > 0.9]
