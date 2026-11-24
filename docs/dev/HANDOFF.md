@@ -6,6 +6,13 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## Cinema mode for trailers and screenshots (2026-11-24, trailer agent)
+- `?cinema=1` or `__bs.cinema(true)`: every page element but the 3D canvas is hidden (HUD, minimap, hints, prompts,
+  subtitles, menus, letterbox bars, fades, toasts, the fight HUD) and so is the cursor. `__bs.cinemaOn` reads it.
+- `__bs.photo(from, to, fov?)`: the free camera now takes a vertical field of view in degrees. Called on every stepped
+  frame (`__bs.hold(true)`, `__bs.advance(1/60)`) it gives scripted dolly, crane and orbit moves.
+- `__bs.dof(focus, aperture)`: depth of field for a capture (presets with `dofStep` > 0; 0 turns it off).
+
 ## Layout
 - `src/combat/sim/`: the simulation. No DOM, no three.js. `core.ts` (types, difficulty), `weapons.ts`, `species.ts`,
   `ai.ts`, `sim.ts`, `encounters.ts`, `tension.ts`. Runs under Node.

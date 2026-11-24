@@ -597,3 +597,7 @@ body.touch .minimap { top: calc(var(--safe-t) + 120px); inset-inline-end: calc(v
 .map-ctl button { min-width: 38px; height: 38px; padding: 0 10px; border: 0; border-radius: 6px; background: rgba(20, 18, 14, 0.78); color: #f2ebdd; font: 600 16px var(--font-ui); cursor: pointer; }
 .pin.way { color: #c2187a; }
 #map-chart { touch-action: none; cursor: crosshair; }
+
+/* Cinema mode (?cinema=1, __bs.cinema): only the 3D view, for trailers and screenshots */
+body.cinema > :not(#c) { visibility: hidden !important; }
+body.cinema, body.cinema * { cursor: none !important; }
