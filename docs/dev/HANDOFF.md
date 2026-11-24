@@ -1736,7 +1736,7 @@ Why: the release pass found the set pieces reachable only from Pause, Action or 
      (13.6 + 5.8 MB, crowd looks): bake the constant build/body shapes into the positions at creation and drop those
      targets (they never change in play), keep only face shapes; on phones drop the player's correctives as the crowd's.
 
-## 2026-11-24 combat agent: the story fights, second pass (branch combat-flow4 from main beb0ee3; NOT landed yet)
+## 2026-11-24 combat agent: the story fights, second pass (branch combat-flow4, landing branch combat-flow4-land1 on main 3b1eef8)
 Fixing the owner's list from the flow4 GPU takes, in order.
 - Time: story fights keep the world's clock (`startEncounter(id, { hour })`, combat.ts `fightHour`/`nightHour`): the
   breakfast fights start at the world's hour and the world keeps the hour they end at; the night's prep runs from the
