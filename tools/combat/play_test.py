@@ -257,11 +257,13 @@ with sync_playwright() as pw:
     # a second caller while it is open waits for the same answer: one modal, one answer closes it, both go on
     page.evaluate("window.__q2 = 0; __bs.combat.ensureAsked(() => { window.__q2 = 1; }); 1")
     ok(page.evaluate("document.querySelectorAll('#modal [data-diff]').length") == 3 and page.evaluate("window.__q2") == 0, 'story: asking again while the question is open opens nothing new')
-    page.evaluate("""document.querySelector('#modal [data-diff="normal"]').click()"""); step(page, 0.5); time.sleep(0.4)  # (the modal hides 130 ms after it is closed)
-    for i in range(20):  # (a loaded runner can take longer than the 130 ms)
-        if page.evaluate("document.getElementById('modal').classList.contains('hidden') && window.__q2 === 1"): break
-        time.sleep(0.15)
-    ok(page.evaluate("document.getElementById('modal').classList.contains('hidden') && window.__q2 === 1"), 'story: one answer closes it and every caller goes on')
+    page.evaluate("""document.querySelector('#modal [data-diff="normal"]').click()"""); step(page, 0.5)
+    # (the modal fades out over 130 ms and is then not drawn; a fight just begun can hold the software renderer's page for
+    # longer than the 0.4 s this waited, so it waits up to 10 s for the modal to be gone from the screen, p32)
+    gone = "(() => { const m = document.getElementById('modal'); return m.classList.contains('hidden') || getComputedStyle(m).visibility === 'hidden'; })()"
+    try: page.wait_for_function(gone, timeout=10000)
+    except Exception: pass
+    ok(page.evaluate(gone + " && window.__q2 === 1"), 'story: one answer closes it and every caller goes on', page.evaluate("window.__modalLog || null"))
     # then the night's own scene (night.ts FirstNight): noises beyond the light and the choice; brace is the fight at the fire
     for i in range(60):
         if page.evaluate("!!document.querySelector('#dlg-choices button[data-c=\"e1.night.o.brace\"]') && __bs.branch.open"): break
