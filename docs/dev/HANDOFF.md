@@ -1902,3 +1902,8 @@ Fixing the owner's list from the flow4 GPU takes, in order.
 - DETECTOR p31/ped_a1_mobile (dist-p31a = 52e8e7c): cardClose 11, overlap 1, slide 0, 60 fps, 16 bodies at most. The
   cardClose diag: want 2-5 with bodies left 1-5 (the phone cap, story people first), free bodies of the card's look
   existed in all but one; tram_square c:4 twice with 8 left and want 5 (not explained yet).
+- STEAL LOOK, 4e1728a (?steallook=0 the old way): a card in view with no free body of its look takes that look's body
+  from a walker over 12 m off (4 m further than the card), out of the wide view and not at your elbow. CORRECTION to
+  that commit's message: at the 12 m events the diag shows a free body of the card's look in most cases; my guess
+  (not measured) is that none was free while the card came from 36 to 27 m, and within 27 m in view it is then held
+  as a card. Detector runs p32/ped_b1_*, ped_b2_* on dist-p32b (p32/run_p32b.sh, after run_c and run_p32) will tell.
