@@ -287,7 +287,12 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', after: () => void)
   input.enabled = false; input.resetTouch(); touch.show(false); suppressPauseOnUnlock = true; input.releasePointer();
   ui.fade('black', 1, 0.5);
   ui.show('hud', false);
-  setTimeout(() => {
+  // under the black: the voices' index and the first line's take are in before the scene starts (a fresh profile asked
+  // for them only as the first subtitle showed, so the first line came late or not at all)
+  const voiced = voice.ready(lines.map((l) => l.key).filter(Boolean));
+  setTimeout(() => void voiced.then(() => {
+    // Begin in the creator leaves its stage up under the fade; the black is complete now
+    if (stage.active) showStage(false);
     renderer.setScene(vault.scene, vault.camera, false);
     renderer.renderer.toneMappingExposure = 1;
     ui.show('cine', true);
@@ -298,7 +303,7 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', after: () => void)
     });
     // lift the black only once the Vault is really on screen
     requestAnimationFrame(() => requestAnimationFrame(() => ui.fade('black', 0, 1.0)));
-  }, 520);
+  }), 520);
 }
 
 /** Return from a scene to the running game. */
@@ -428,6 +433,9 @@ function playOpening(withCity: boolean, replay: boolean) {
     renderer.setScene(cine.scene, cine.camera, false);
     cine.start(() => playFilm(replay));
   };
+  // ?earlycity=1 (trial): Zenvora is built under the black before MegaZroN and its programs compile in the background
+  // while he speaks, so less of it is left for the black after the title card
+  if (withCity && new URLSearchParams(location.search).get('earlycity') === '1') setTimeout(() => { if (!game?.away) return; const st = game.away.prepare('city'); void renderer.compileFor(st.scene, camera); }, 600);
   playVault('intro', () => (withCity ? playPrologue(() => titleCard(films, 'takeoff.card')) : films()));
 }
 
@@ -1048,7 +1056,8 @@ window.addEventListener('resize', () => {
   sayTest(k: string) { ui.subtitle(k, 'mz.name', true); },
   get voice() { return { last: voice.lastKey, played: voice.played, cuts: voice.cuts, remaining: voice.remaining() }; },
   voiceDuration(k: string) { return voice.duration(k); },
-  get vault() { return { playing: vault.playing, line: vault.lineIndex }; },
+  get vault() { return { playing: vault.playing, line: vault.lineIndex, said: [...vault.said] }; },
+  get vaultScript() { return vault.keys; },
   skip() { skipCurrent(); },
   get tutorial() { const tu = game?.tutorial; return tu?.active ? { step: tu.step, index: tu.index } : null; },
   get device() { return input.device; },
