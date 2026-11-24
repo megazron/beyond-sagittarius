@@ -1865,3 +1865,27 @@ Fixing the owner's list from the flow4 GPU takes, in order.
   flake list, so not rerun.
 - Disk: keep at most 3 dist-* in ~/bs-perf and delete raw capture frames once joined and watched (coordinator, C: hit
   22 MB free). I removed the old dist-* and p30's clip_* frame folders (mp4s and sheets kept).
+## 2026-11-24 boarding agent (worktree ~/bs-board, branch board1 from main e319621; NOT landed yet)
+Owner: "The time when all of them onboard it glitches completely. The ship is diff in the cutscene and that scene."
+- Measured on main e319621 (A500, web + mobile, `~/bs-cap/board/r0web`, `r0mob`): the six walked off down the road
+  from the gate, a car drove through them, nobody ever boarded (they walked out of the shot); the second shot's camera
+  sat in the spaceport's white tubes and the capsule liner rose through them; the third shot never showed the liner; the
+  launch sound never played (audio.sample() only starts loading on a first call; the cue was also 3 s before the lift);
+  the pad liner was a capsule with fins while the films' liner (cinematic/ship.ts) has a spine, ring, wings and bells.
+- New: `src/game/away/boarding.ts` builds the liner on its pad (the films' ship via createShip({ landed: true }), x3,
+  standing on its tail, hatch towards the terminal), a gantry (ramp, platform, access arm), and plays the scene on its
+  own clock T: nine shots (wide, side, ramp foot, his look back close, his eyes, he goes in and the hatch shuts, the arm
+  swings away and the jets light, the lift, flying with it). Sounds on the same clock (steps on the gantry's metal at
+  each body, hatch, arm, thrusters, the first 7.5 s of launch.ogg, rumble). audio.sample() gained { dur, tag } and
+  stopTag() (Skip fades the roar). Away.closing() dips through black before the scene.
+- Ship: createShip has a real hatch now (a hole in the lathe, a sliding panel, a lit T-shaped vestibule inside the
+  hull), optional legs, `LINER` measurements and `bakeStatic()` (the pad liner and the hero ship draw ~12 meshes, not 40).
+  cityfuture's hero ship is the same make (x7) at (20, 140, S - 200); its shuttles moved to life-wip's pads; citymega's
+  plaza 3 to z -330 (life-wip's numbers).
+- Checks (all headless, in tools/prologue_smoke.py before the tasks): `__bs.boardingCheck()` (bodies vs the hull's
+  solid shape, feet on the walking surface, no overlaps, no jumps faster than 2.6 m/s, nobody let go where the camera
+  can see them), `__bs.takeoffClearance()` (points over hull, ring, wings, legs, bells vs everything solid above or
+  below along the climb; the camera's line to its subject; `frame`: floating things that share the liner's frame),
+  `__bs.shipDesigns()` (the pad liner's mesh list equals the films' ship's).
+- GPU capture kit: `~/bs-cap/board/run.sh NAME PLAN DIST QUERY` (one exclusive heavy step, Chrome 9371, preview 4691),
+  `mkplan.py web|mobile NAME [fast]`, `probe.py` (headless checks). Delete rec_* frames after joining (C: space).
