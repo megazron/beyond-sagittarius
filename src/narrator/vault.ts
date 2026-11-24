@@ -136,7 +136,8 @@ export class Vault {
     const pages = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.53).rotateX(-Math.PI / 2), this.page);
     pages.position.y = 0.036; book.add(pages);
     // quill that keeps writing without a hand
-    const feather = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.34, 8).rotateZ(Math.PI).scale(0.5, 1, 1.4), new THREE.MeshStandardMaterial({ color: 0xf0ece0, emissive: 0xffc36a, emissiveIntensity: 0.15, roughness: 0.6 }));
+    // a cream quill, not a white one: under the desk light the white one bloomed into a glowing blade
+    const feather = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.34, 8).rotateZ(Math.PI).scale(0.5, 1, 1.4), new THREE.MeshStandardMaterial({ color: 0x8a7f6a, emissive: 0xffc36a, emissiveIntensity: 0.04, roughness: 0.75 }));
     feather.position.y = 0.17; this.quill.add(feather); this.quill.position.set(0.3, 1.26, 0.86); this.quill.rotation.z = -0.5; s.add(this.quill);
 
     // the six-world orrery on the host's right
@@ -273,13 +274,14 @@ export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', s: { ateR
   const said = (s.comments ?? []).map((key, i): VaultLine => ({ key, shot: i % 2 ? 'profile' : 'hands', pose: i % 2 ? 'present' : 'write' }));
   switch (id) {
     // the cold open: the room in silence, who he is, the hook over the black hole (the dark he means), the Ledger he
-    // means by "in here", and the quill still writing as it fades
+    // means by "in here", and the quill still writing as it fades. He stands still over the book: the writing pose
+    // raised his free hand into the phone's taller frame
     case 'intro': return [
       { key: '', shot: 'wide', pose: 'stand', after: 1.6 },
       { key: 'mz.intro.1', shot: 'push', pose: 'present', after: 0.6 },
       { key: 'mz.intro.2', shot: 'window', pose: 'idle', after: 0.7 },
-      { key: 'mz.intro.3', shot: 'hands', pose: 'write', after: 0.4 },
-      { key: '', shot: 'hands', pose: 'write', after: 1.2 },
+      { key: 'mz.intro.3', shot: 'hands', pose: 'stand', after: 0.4 },
+      { key: '', shot: 'hands', pose: 'stand', after: 1.2 },
     ];
     case 'l3': return [
       { key: 'mz.l3.1', shot: 'wide', pose: 'stand' },
