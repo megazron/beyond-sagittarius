@@ -245,13 +245,7 @@ ${ROOM}
  * wanted window spacing (fitted to each wall so no window is cut at a corner), `floor` the storey height; `base` is the
  * street under it (floor 0 starts there, so an upper block of a tower carries on the count).
  */
-let insetN = 0;
 export function facadeBox(x: number, z: number, w: number, d: number, y0: number, h: number, floor: number, bay: number, seed: number, style: number, tint: THREE.Color, base = y0, org?: [number, number]) {
-  // each box a few centimetres in from its lot, by one of four steps in turn: two buildings whose lots meet had walls in
-  // the same plane, and the two fought in the depth buffer (the NE street's shopfront speckled with the next building's
-  // purple wall on every frame, with the near fade off too, Mobile GPU clip p28)
-  const inset = 0.015 * (1 + (insetN++ % 4));
-  w = Math.max(0.5, w - 2 * inset); d = Math.max(0.5, d - 2 * inset);
   const g = new THREE.BoxGeometry(w, h, d).toNonIndexed();
   g.translate(x, y0 + h / 2, z);
   g.deleteAttribute('uv');
