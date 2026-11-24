@@ -247,18 +247,22 @@ export class Combat {
   groundAt(x: number, z: number) { return this.env.height(x, z); }
   get playerPos() { return this.d.player.pos; }
 
-  /** How hard should fights be: asked once, before the first fight of the story. */
   /**
    * Asks how hard fights should be, once (settings.combat.asked), then calls `go`; already asked, calls it at once.
    * The world stands still while the question is open. Every first-night flow calls it at its start (main's
    * fights.ts night; the life branch's FirstNight), so the question comes before any of the night.
    */
   ensureAsked(go: () => void) {
-    if (this.d.settings().asked) go(); else this.askDifficulty(go);
+    if (this.d.settings().asked) { go(); return; }
+    // one question at a time: a caller that asks while it is open waits for the same answer (re-entrant asks each
+    // opened the modal again over the first, and the first caller's buttons were gone, so it never went on)
+    this.askWaiting.push(go);
+    if (this.askWaiting.length === 1) this.askDifficulty();
   }
+  private askWaiting: (() => void)[] = [];
   /** The difficulty question or the lost-fight card is open: the game stands still (scaleTime). */
   private carding = false;
-  private askDifficulty(go: () => void) {
+  private askDifficulty() {
     const D = this.d, S = D.settings(), ui = D.ui;
     this.carding = true;
     D.input.enabled = false; D.input.releasePointer();
@@ -267,10 +271,13 @@ export class Combat {
       <p class="facts">${t('cb.ask.later')}</p></div>`);
     // once: a closed modal keeps its buttons in the page until the next one replaces them
     let done = false;
-    document.querySelectorAll<HTMLButtonElement>('[data-diff]').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll<HTMLButtonElement>('#modal [data-diff]').forEach((b) => b.addEventListener('click', () => {
       if (done) return; done = true; this.carding = false;
       S.difficulty = b.dataset.diff as Difficulty; S.asked = true; D.saveSettings(); this.applySettings();
-      ui.closeModal(); D.input.enabled = true; go();
+      ui.closeModal(); D.input.enabled = true;
+      // everyone who was waiting on the answer goes on, in the order they asked
+      const all = this.askWaiting; this.askWaiting = [];
+      for (const go of all) go();
     }));
   }
 
