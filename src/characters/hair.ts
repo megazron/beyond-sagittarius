@@ -300,7 +300,7 @@ function hairMesh(geo: THREE.BufferGeometry, colors: HairColors, sway: SwayUnifo
     // direction and stood out sideways (GPU take tasksD). So each strand also turns about its root (uTilt) by a share of
     // the head's turn from upright that grows with its length (a 0.7 m tail keeps hanging down, a fringe barely moves)
     // and along it (the root stays on the scalp); its normal and tangent turn with it.
-    sh.vertexShader = `attribute float aT; attribute float aLen; attribute vec3 aTan; attribute vec3 aRoot; attribute vec3 aDir; varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uDrop; uniform vec4 uTilt; uniform vec4 uCap[12];
+    sh.vertexShader = `attribute float aT; attribute float aLen; attribute vec3 aTan; attribute vec3 aRoot; attribute vec3 aDir; varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uDrop; uniform vec4 uTilt; uniform vec4 uCap[12]; uniform vec4 uGround;
       vec3 hairTurn(vec3 v, float a) { vec3 k = uTilt.xyz; float c = cos(a), s = sin(a); return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c); }
       float hairTurnA() { return uTilt.w * min(aLen * 1.4, 1.0) * min(aT * 3.0, 1.0); }
       // then a long strand gives in to gravity: it turns from where it now runs towards the ground, more the further the
@@ -323,7 +323,9 @@ function hairMesh(geo: THREE.BufferGeometry, colors: HairColors, sway: SwayUnifo
     vec3 ab = cb - ca.xyz; float ct = clamp(dot(transformed - ca.xyz, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
     vec3 cd = transformed - (ca.xyz + ab * ct); float cl = length(cd);
     if (cl < ca.w && cl > 1e-5) transformed += cd * ((ca.w - cl) / cl) * min(aT * 2.5, 1.0);
-  }`);
+  }
+  // and never into the ground (uGround, a plane a little above it): the free part of a strand rests on it
+  { float gd = dot(uGround.xyz, transformed) + uGround.w; if (gd < 0.0) transformed -= uGround.xyz * gd * min(aT * 2.5, 1.0); }`);
     sh.fragmentShader = `varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uRoot, uMid, uTip, uShine;\n` + sh.fragmentShader
       .replace('#include <color_fragment>', /* glsl */ `#include <color_fragment>
         diffuseColor.rgb = mix(mix(uRoot, uMid, smoothstep(0.0, 0.35, vT)), uTip, smoothstep(0.45, 1.0, vT));`)
