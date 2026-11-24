@@ -198,7 +198,7 @@ export class Combat {
   startEncounter(id: EncounterId, opts: StartOpts = {}): Promise<Outcome> {
     return new Promise((resolve) => {
       // the first fight the story starts asks how hard fights should be (Pause, Action changes it later)
-      if (!opts.trial && !this.d.settings().asked) this.askDifficulty(() => this.begin(id, opts, resolve));
+      if (!opts.trial) this.ensureAsked(() => this.begin(id, opts, resolve));
       else this.begin(id, opts, resolve);
     });
   }
@@ -248,6 +248,14 @@ export class Combat {
   get playerPos() { return this.d.player.pos; }
 
   /** How hard should fights be: asked once, before the first fight of the story. */
+  /**
+   * Asks how hard fights should be, once (settings.combat.asked), then calls `go`; already asked, calls it at once.
+   * The world stands still while the question is open. Every first-night flow calls it at its start (main's
+   * fights.ts night; the life branch's FirstNight), so the question comes before any of the night.
+   */
+  ensureAsked(go: () => void) {
+    if (this.d.settings().asked) go(); else this.askDifficulty(go);
+  }
   /** The difficulty question or the lost-fight card is open: the game stands still (scaleTime). */
   private carding = false;
   private askDifficulty(go: () => void) {

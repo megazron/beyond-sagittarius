@@ -46,7 +46,10 @@ until treated. `out.stats` has the counts (damage dealt and taken, rolls, parrie
 - Outcome facts are kept on the save as `flags['cb.<fact>']` (`cb.night.held`, `cb.fish.lesson`, `cb.hunt.kill`...).
 
 ## Around every story fight (not trials)
-- The first one asks how hard fights should be (Story, Normal, Hard; `settings.combat.asked`).
+- The first one asks how hard fights should be (Story, Normal, Hard; `settings.combat.asked`). A first night asks it
+  at its very start, before anything of the night: `game.combat.ensureAsked(go)` asks once (the world stands still until
+  it is answered) and then calls `go`, or calls `go` at once if it was asked before. main's fights.ts night calls it;
+  the life branch's FirstNight is to call it at its start.
 - A loss shows a card: try again from the start (the bag, body, place and hour from before it come back), try again on
   Story, or go on as it is (the promise then resolves with `result: 'lost'`). `startEncounter` resolves only once.
 - A save made in the middle of one keeps the moment before it began (`combat.checkpoint`), so loading it meets the fight

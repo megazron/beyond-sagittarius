@@ -1651,3 +1651,42 @@ Why: the release pass found the set pieces reachable only from Pause, Action or 
   dawn (dark red) while the fights run at 9:00 and 14:00 (a jump in light both ways); the hunt's Nibbets are small in the
   grass; the night is lost by a player who stands still (fair, but the first night's card is then the first thing a
   passive player sees).
+
+## 2026-11-24 combat agent: the story fights, second pass (branch combat-flow4 from main beb0ee3; NOT landed yet)
+Fixing the owner's list from the flow4 GPU takes, in order.
+- Time: story fights keep the world's clock (`startEncounter(id, { hour })`, combat.ts `fightHour`/`nightHour`): the
+  breakfast fights start at the world's hour and the world keeps the hour they end at; the night's prep runs from the
+  world's dusk (19:54 after "Rest until nightfall") to 21:30 instead of jumping to 20:36. Waking after the first night
+  is 6:36 (story.ts `WAKE`; 6:00 was the dark red dawn). Trials keep their own set hours.
+- Night: a wood pile beside the fire for the fire alone (`Fire.pile`, fed before the bag; Story 7, Normal 6, Hard 4;
+  drawn as stacked logs in fx.ts `syncPile`); the HUD line shows wave, fire %, wood, food; below 35 % the objective
+  line turns red and says to feed the fire (E / X / tap the prompt), the compass points at the fire, one toast. Story
+  burns at 0.65 and brings 3/4/2 scavengers, Hard 1.1 and 5/6/4 (`NIGHT` in encounters.ts). `tools/combat/night_probe.ts`
+  (flat ground, 4 seeds): only feeding the fire holds the night on every level at full health; never feeding loses on
+  Normal (151 s) and Hard (135 s) and holds on Story at 92 hp.
+- Text: level.7.desc/hint and level.8.desc (en/hi/ur) describe the night at the fire and breakfast; cb.obj.night and
+  cb.story.night say to feed the fire.
+- Nibbets: body 0.6 m (was 0.5), sim radius/height 0.34/0.54, warmer hide 0x9a5f38 with a pale belly; a rustle and a
+  flick of grass as they move; on Story the suit tags prey for the first 9 s of the hunt and while one is alarmed.
+- Feel: landed blows kick the camera a little (kills more, with a longer stop and dust); a struck creature shows a
+  small health bar over it for 2.4 s (hud.ts `bars`).
+- chase.escape: NOT placed. On main the only beat for it is decision 19's third option (run for the fire), which is
+  the held choice data (episode1.json / life-wip); 1.10's ridge chase is Draxum's, on another world. stealth.pass has
+  no beat. Both stay in Pause, Action.
+- Spear outside fights: story.ts `carrySpear` aligns the held spear each frame like a staff (near upright at his right,
+  butt by his feet); back to the hand's angle while player.combat is set or the old thrust runs. GPU stills
+  ~/bs-cap/combat/check6/carry_*.jpg and the walk clip c6_walk_spear.mp4.
+- Night light: the fight's planetshine and cold edge fade out 03:36 to 05:00, so the night ends in the world's red dawn.
+- Stones: story fights put `rock` in the hand list (thrown stones from the bag; it was missing, the bot's stones
+  segment in flow7 only cycled spear and hands). Fishing no longer shows the dodge line.
+- The difficulty question: `combat.ensureAsked(go)` (public) asks once and holds the game still until answered
+  (`scaleTime` returns 0 while the question or the lost-fight card is open; main.ts ran game.update behind a modal).
+  main's fights.ts night calls it first, before the toast and the encounter. The life branch's FirstNight is to call it
+  at its start (coordinator's decision). play_test: the question is open at night start with no encounter yet, and the
+  clock does not move on real frames while it is open.
+- GPU takes: ~/bs-cap/combat/flow5 (50-53, before the spear/pile/dawn fixes) and flow7 (54-57, new game, levels 1-6 by
+  the driver off camera): hours logged 5.36 after the night, 6.88 at the breakfast station, 7.58 after fishing, 8.37
+  after the hunt. Plans: mkplan_flow5.py, mkplan_flow7.py, mkplan_check6.py, plan_stones8.json (all `cap4.sh`).
+- Still wrong, as I see it: after the fight the world outside is a little brighter than the fight's last frame at dawn;
+  the bot stands out in the dark grass a lot (a player may not); the Nibbets read as orange-brown dots at 15-25 m, but in
+  the long grass by the hunt station they are still small; the free-play reticle ring stays on screen after fishing.
