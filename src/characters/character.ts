@@ -2250,6 +2250,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     },
     /** Something held in the right hand outside any task (a leaf cup, a berry); null puts it away. */
     setProp(k: PropKind | null) { heldProp = k; },
+    /** The hand-set pose in force (null: the clip alone). */
+    get limbsNow() { return limbs; },
     /** One of a crowd (CHAR_BUDGET): no corrective shapes, the light build and no shadow from closer in. */
     setCrowd(on: boolean) { crowd = on; prepFade(); },
     /** Draw skin, clothes and eyes as one mesh (bodymerge.ts; crowd bodies always do). For the stages, not the films. */

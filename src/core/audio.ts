@@ -95,7 +95,8 @@ export class Audio {
   }
 
   /** Play a recorded human sound (random take, never the same one twice running). */
-  human(name: HumanSound, vol = 0.8) {
+  human(name: HumanSound, vol = 0.8) { this.humanTo(name, vol, null); }
+  private humanTo(name: HumanSound, vol: number, to: AudioNode | null, rate = 1) {
     if (!this.ctx) return;
     void this.loadHumans().then((all) => {
       const takes = all.get(name), ctx = this.ctx;
@@ -104,8 +105,8 @@ export class Audio {
       const buf = fresh[Math.floor(Math.random() * fresh.length)];
       this.lastHuman.set(name, buf);
       const src = ctx.createBufferSource(), g = ctx.createGain();
-      src.buffer = buf; src.playbackRate.value = 0.96 + Math.random() * 0.08; g.gain.value = vol;
-      src.connect(g).connect(this.sfxOut); src.start();
+      src.buffer = buf; src.playbackRate.value = (0.96 + Math.random() * 0.08) * rate; g.gain.value = vol;
+      src.connect(g).connect(to ?? this.sfxOut); src.start();
     });
   }
 
@@ -196,13 +197,15 @@ export class Audio {
   private vac: BiquadFilterNode | null = null;
   private vacTimer = 0;
   /** No air: the world is heard as from inside your own head (everything muffled), over your own heartbeat. */
+  private vacOn = false;
   vacuum(on: boolean) {
     const ctx = this.ctx;
     if (!ctx || !this.vac) return;
-    this.vac.frequency.setTargetAtTime(on ? 380 : 20000, ctx.currentTime, on ? 0.04 : 0.25);
+    this.vacOn = on;
+    this.vac.frequency.setTargetAtTime(on ? 380 : 20000 * Math.pow(0.016, this.earsK), ctx.currentTime, on ? 0.04 : 0.25);
     clearInterval(this.vacTimer);
     if (!on) return;
-    const beat = () => { if (!this.ctx) return; const t = this.ctx.currentTime; for (const [dt, v] of [[0, 0.5], [0.16, 0.32]] as [number, number][]) { const o = this.ctx.createOscillator(), g = this.ctx.createGain(); o.frequency.setValueAtTime(62, t + dt); o.frequency.exponentialRampToValueAtTime(38, t + dt + 0.12); g.gain.setValueAtTime(0, t + dt); g.gain.linearRampToValueAtTime(v, t + dt + 0.015); g.gain.exponentialRampToValueAtTime(0.001, t + dt + 0.2); o.connect(g).connect(this.post ?? this.ctx.destination); o.start(t + dt); o.stop(t + dt + 0.25); } };
+    const beat = () => { if (!this.ctx) return; const t = this.ctx.currentTime; for (const [dt, v] of [[0, 0.5], [0.16, 0.32]] as [number, number][]) { const o = this.ctx.createOscillator(), g = this.ctx.createGain(); o.frequency.setValueAtTime(62, t + dt); o.frequency.exponentialRampToValueAtTime(38, t + dt + 0.12); g.gain.setValueAtTime(0, t + dt); g.gain.linearRampToValueAtTime(v, t + dt + 0.015); g.gain.exponentialRampToValueAtTime(0.001, t + dt + 0.2); o.connect(g).connect(this.inner ?? this.post ?? this.ctx.destination); o.start(t + dt); o.stop(t + dt + 0.25); } };
     beat(); this.vacTimer = window.setInterval(beat, 860);
   }
   private post: GainNode | null = null;
@@ -245,6 +248,80 @@ export class Audio {
   setVolume(v: number) {
     this.volume = v;
     if (this.ctx) this.master.gain.setTargetAtTime(this.mix.muted ? 0 : v, this.ctx.currentTime, 0.1);
+    if (this.ctx && this.innerG) this.innerG.gain.setTargetAtTime(this.mix.muted ? 0 : v * this.mix.sfx, this.ctx.currentTime, 0.1);
+  }
+
+  // ---------------------------------------------------------------- inside your own head
+  // A body that has just hit the ground hears the world through a wall (the ears ring, everything is muffled) and hears
+  // itself clearly: its heart and its breath do not go through the muffle. They go to the speakers and the recording
+  // tap both (tools/gpu_capture.py records what the player hears).
+  private innerG: GainNode | null = null;
+  private get inner(): AudioNode | null {
+    if (!this.ctx) return null;
+    if (!this.innerG) {
+      this.innerG = this.ctx.createGain(); this.innerG.gain.value = this.mix.muted ? 0 : this.volume * this.mix.sfx;
+      // after the muffle, onto the last node (it feeds the speakers and the recording tap)
+      this.innerG.connect(this.post ?? this.ctx.destination);
+    }
+    return this.innerG;
+  }
+  private earsK = 0;
+  private ringNode: { o: OscillatorNode; g: GainNode } | null = null;
+  /** 0: ears clear; 1: the world through a wall (low-passed to a few hundred Hz). `ring` 0..1: the high whine of a
+   * concussion, heard in the head. Vacuum, when on, wins over a clearer setting. */
+  ears(muffle: number, ring = 0) {
+    const ctx = this.ctx;
+    if (!ctx || !this.vac) return;
+    const m = Math.max(0, Math.min(1, muffle));
+    if (Math.abs(m - this.earsK) > 0.01 && !this.vacOn) this.vac.frequency.setTargetAtTime(20000 * Math.pow(0.016, m), ctx.currentTime, 0.12);
+    this.earsK = m;
+    const want = Math.max(0, Math.min(1, ring)) * 0.035;
+    if (want > 0 && !this.ringNode && this.inner) {
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = 6100; g.gain.value = 0;
+      // a slow wobble, as a real ringing beats against itself
+      const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 0.7; lg.gain.value = 18; lfo.connect(lg).connect(o.frequency); lfo.start();
+      o.connect(g).connect(this.inner); o.start(); this.ringNode = { o, g };
+    }
+    if (this.ringNode) {
+      this.ringNode.g.gain.setTargetAtTime(want, ctx.currentTime, 0.25);
+      if (want === 0) { const n = this.ringNode; this.ringNode = null; setTimeout(() => { try { n.o.stop(); } catch { /* gone */ } n.o.disconnect(); }, 1500); }
+    }
+  }
+  private heartTimer = 0;
+  private heartBpm = 0; private heartVol = 0;
+  /** The body's own heart, heard: bpm 0 stops it. Changes take effect on the next beat. */
+  heart(bpm: number, vol = 0.5) {
+    if (!this.ctx) return;
+    this.heartBpm = bpm; this.heartVol = vol;
+    if (bpm <= 0) { clearTimeout(this.heartTimer); this.heartTimer = 0; return; }
+    if (this.heartTimer) return;
+    const beat = () => {
+      const ctx = this.ctx, out = this.inner;
+      if (!ctx || !out || this.heartBpm <= 0) { this.heartTimer = 0; return; }
+      const t = ctx.currentTime, v = this.heartVol;
+      for (const [dt, k] of [[0, 1], [0.15, 0.62]] as [number, number][]) {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.setValueAtTime(64, t + dt); o.frequency.exponentialRampToValueAtTime(36, t + dt + 0.13);
+        g.gain.setValueAtTime(0, t + dt); g.gain.linearRampToValueAtTime(v * k, t + dt + 0.014); g.gain.exponentialRampToValueAtTime(0.001, t + dt + 0.22);
+        o.connect(g).connect(out); o.start(t + dt); o.stop(t + dt + 0.26);
+      }
+      this.heartTimer = window.setTimeout(beat, 60000 / this.heartBpm);
+    };
+    beat();
+  }
+  /** A sound heard inside the head (a breath, a gasp, a grunt), not through the muffle of the ears. */
+  humanInner(name: HumanSound, vol = 0.8, rate = 1) { this.humanTo(name, vol, this.inner, rate); }
+  /** A dull hit felt through the body: low, short, and heard however muffled the ears are. */
+  thump(vol = 0.7) {
+    const ctx = this.ctx, out = this.inner;
+    if (!ctx || !out) return;
+    const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(28, t + 0.5);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+    o.connect(g).connect(out); o.start(t); o.stop(t + 1);
+    const n = ctx.createBufferSource(), f = ctx.createBiquadFilter(), ng = ctx.createGain();
+    n.buffer = this.noiseBuffer(); f.type = 'lowpass'; f.frequency.value = 260; ng.gain.setValueAtTime(vol * 0.9, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+    n.connect(f).connect(ng).connect(out); n.start(t); n.stop(t + 0.7);
   }
 
   private noiseBuffer(): AudioBuffer {
