@@ -1241,6 +1241,8 @@ window.addEventListener('resize', () => {
   /** Finger joints since load: largest bend from rest (rad) and fastest turn (rad/s), over every character drawn. */
   get hands() { return { ...HANDS }; },
   audioTap() { audio.start(); return audio.tap(); },
+  /** Sync marks for a capture: n 2 kHz beeps 0.6 s apart, each with a white square in the top-left corner. */
+  syncMark(n = 3) { return syncFlash(n, 0.6, 'position:fixed;left:0;top:0;width:48px;height:48px;background:#fff;outline:6px solid #000', 2000); },
   openMenu(which: 'settings' | 'legal' | 'chapters') { if (which === 'settings') document.getElementById('btn-settings')?.click(); else if (which === 'legal') document.getElementById('btn-legal')?.click(); else document.getElementById('btn-chapters')?.click(); },
   quality: quality.name,
   get world() { return world; },
@@ -1248,5 +1250,20 @@ window.addEventListener('resize', () => {
     return { frames: frameCount, t: elapsed, mode: game?.mode, player: player?.pos.toArray(), cam: camera.position.toArray(), yaw: player?.yaw, creature: world.creature?.position.toArray() };
   },
 };
+
+function syncFlash(n: number, gap: number, css: string, freq: number): number {
+  audio.start(); const ctx = audio.ctx; if (!ctx) return 0;
+  const el = document.createElement('div'); el.style.cssText = css + ';z-index:99999;pointer-events:none;opacity:0';
+  document.body.appendChild(el);
+  const t0 = ctx.currentTime + 0.25; let k = 0, on = -1;
+  const tick = () => {
+    const t = ctx.currentTime;
+    if (on >= 0 && t - on >= 0.15) { el.style.opacity = '0'; on = -1; }
+    if (on < 0 && k < n && t >= t0 + k * gap) { audio.mark(0.06, freq); el.style.opacity = '1'; on = t; k++; }
+    if (k >= n && on < 0) { el.remove(); return; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick); return t0;
+}
 
 boot();
