@@ -1677,13 +1677,13 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     kit?.phoneLeft(busyR(task?.prop) || (handTask && task!.prop !== 'phone') || (!task && busyR(heldProp)) || !!hold?.R);
     // the right hand down to her pocket and back while the phone goes in or comes out (kit.ts pocketReach)
     // (standing still only: seated or kneeling the hand is by the pocket already, and the reach down put it into her thigh and
-    // belly, anim_qa meshIn 2.9 to 3.5 cm; a task takes the hand over once the phone is in, a quarter second on)
+    // belly, anim_qa meshIn 2.9 to 3.5 cm; a task takes the hand over from 0.15 s, reach_across meshIn 5.9 cm otherwise)
     const pr = kit?.pocketReach();
     if (!pr) pocketGate = moving || (hold?.R && holdW.R > 0.01) ? 0 : 1;
     if (pr && !(limbs?.ownArms ?? armOwner)) {
       const lA = bs.get('upperlegR')!.getWorldPosition(V5), lB = bs.get('lowerlegR')!.getWorldPosition(V1);
       const ax = V2.copy(lB).sub(lA), al = ax.length(), upright = clamp((-ax.y / Math.max(al, 1e-5) - 0.8) / 0.15, 0, 1);
-      const taskW = task && (task.hands === 'R' || task.hands === 'both') ? smooth01((task.t - 0.25) / 0.25) : 0;
+      const taskW = task && (task.hands === 'R' || task.hands === 'both') ? smooth01((task.t - 0.15) / 0.2) : 0;
       // (nor walking or with a hold on the hand: walking with the leaf cup the reach jerked the hand, anim_qa 3.7 cm, and
       // running with the spear it took the spear's hand into her body, 6.8 cm; there the phone goes in at the hand)
       pocketGate += ((moving || (hold?.R && holdW.R > 0.01) ? 0 : 1) - pocketGate) * (1 - Math.exp(-dt * 10));

@@ -363,6 +363,8 @@ export class RangedRig {
    * the body's shapes (which turn with the chest), for the play test's gate.
    */
   private lateMem: ArmMem = { L: 0, R: 0 };
+  /** How far along its shoulder-to-hand line each hand is let go this frame (fixArms: 1, all the way). */
+  private pull = { L: 1, R: 1 };
   private fixArms(model: Character, dt: number) {
     const R = this.rig!, s = this.sol!, root = model.root;
     const W = (v: THREE.Vector3) => root.localToWorld(v.clone()), wp = (o: THREE.Object3D) => o.getWorldPosition(V());
@@ -375,7 +377,27 @@ export class RangedRig {
       const sl = root.worldToLocal(s0.clone()), elL = root.worldToLocal(e.clone()), wlL = root.worldToLocal(w.clone());
       // (three times the solve's swing rate: a correction of a few centimetres, it lagged a frame or two behind a raise,
       // CI 1.4 cm on the forearm at up 0.65)
-      swingOut(sl, elL, wlL, 0, this.lateMem, k, dt * 3, 0.6);
+      const left = swingOut(sl, elL, wlL, 0, this.lateMem, k, dt * 3, 0.6);
+      // Still in: the arm is near straight across the chest (a hand at the edge of its reach, the string hand going from
+      // the nock to the hip as the bow comes down on a chest still turned: CI 5.5 cm, solve 6.1), and no swing of the
+      // elbow clears it. The hand comes in towards the shoulder until the bent arm clears (a few centimetres a frame):
+      // for a frame or two it is a few centimetres off the string, never through the body.
+      let want = 1;
+      if (left > 0.012) {
+        const pole = V().subVectors(elL, sl), e2 = V(), w2 = V(), q = V(), tgt = V();
+        for (let f = 0.95; f >= 0.7; f -= 0.05) {
+          tgt.copy(sl).lerp(wlL, f); reach2(sl, tgt, a, b, pole, e2, w2);
+          let worst = 0;
+          for (let i = 1; i <= 6; i++) { if (i <= 3) q.copy(sl).lerp(e2, 0.35 + i * 0.2); else q.copy(e2).lerp(w2, (i - 3) / 3 * 0.6); worst = Math.max(worst, depth(q, 0, 0.04)); }
+          want = f; if (worst <= 0.012) break;
+        }
+      }
+      // (in by at most 8 per cent of the arm's line a 30th of a second, about 3.5 cm; out again eased)
+      this.pull[k] = want < this.pull[k] ? Math.max(want, this.pull[k] - 0.08 * Math.max(1, dt * 30)) : this.pull[k] + (want - this.pull[k]) * (1 - Math.exp(-dt * 10));
+      if (this.pull[k] < 0.999) {
+        const tgt = V().copy(sl).lerp(wlL, this.pull[k]); reach2(sl, tgt, a, b, V().subVectors(elL, sl), elL, wlL);
+        w.copy(W(wlL));
+      }
       e.copy(W(elL));
       aimBone(up, lo, e, 1); aimBone(lo, hand, w, 1);
     };
