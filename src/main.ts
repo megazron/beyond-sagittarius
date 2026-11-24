@@ -290,6 +290,7 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', after: () => void)
   // under the black: the voices' index and the first line's take are in before the scene starts (a fresh profile asked
   // for them only as the first subtitle showed, so the first line came late or not at all)
   const voiced = voice.ready(lines.map((l) => l.key).filter(Boolean));
+  vault.skipNext = false;
   setTimeout(() => void voiced.then(() => {
     // Begin in the creator leaves its stage up under the fade; the black is complete now
     if (stage.active) showStage(false);
@@ -301,8 +302,8 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', after: () => void)
       ui.fade('black', 1, 0.45);
       setTimeout(() => { ui.show('cine', false); after(); }, 480);
     });
-    // lift the black only once the Vault is really on screen
-    requestAnimationFrame(() => requestAnimationFrame(() => ui.fade('black', 0, 1.0)));
+    // lift the black only once the Vault is really on screen (and not if it was skipped while loading)
+    if (vault.playing) requestAnimationFrame(() => requestAnimationFrame(() => { if (vault.playing) ui.fade('black', 0, 1.0); }));
   }), 520);
 }
 
