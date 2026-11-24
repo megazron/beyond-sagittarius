@@ -1434,7 +1434,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     // your elbow can still be a card on a phone (perf_gate's phone budget). Web and Ultra: the held and the two within
     // reach always (their own cap is POOL + 2)
     const room = outroT >= 0 || tier > 0 ? 99 : BODY_CAP + 2 - usedLog;
-    const want = new Set<number>(); { const n = Math.min(POOL, budget); for (const [k, i] of near) { if (k < -2500) { want.add(i); continue; } if ((want.size >= n && k > -500) || want.size >= room) break; want.add(i); } }
+    const want = new Set<number>(); { const n = tier > 0 ? Math.max(8, Math.min(POOL, budget)) : Math.min(POOL, budget); /* Web, Ultra: at least eight for the painted crowd, whatever the townsfolk use (soak's bump test: they used 24 of 26 and a card reached your elbow) */ for (const [k, i] of near) { if (k < -2500) { want.add(i); continue; } if ((want.size >= n && k > -500) || want.size >= room) break; want.add(i); } }
     for (const [, i] of elbow) if (want.size < Math.min(room, POOL + 2)) want.add(i);
     elbow.length = 0;
     wantLog = [...want];
