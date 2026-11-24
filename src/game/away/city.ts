@@ -2274,7 +2274,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // (out of the WIDE view, 6 m of margin: tested against the view itself at 14 m, the bazaar's about-turn brought
           // them into it as cards within 27 m, where nobody changes, and they stayed cards up to you, p29c; beyond 28 m
           // only, the phone gate's start still had the townsfolk behind you holding the bodies, p29d)
-          if (OUT_CARD && d > 12 && !inViewWide(q.pos.x, q.pos.z)) {
+          if (OUT_CARD && tier === 0 && d > 12 && !inViewWide(q.pos.x, q.pos.z)) { // (phones: on Web it moved bodies from out of view, drawn as nothing, into the view, and perf_gate's Web gate went to 1.40 M triangles, budget 1.3 M, with no fewer flat cards)
             if (q.fig.root.visible) q.fig.root.visible = false;
             stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: i, v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
             continue;
@@ -2293,7 +2293,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         if (tier === 0 && outroT < 0) cap = Math.min(cap, BODY_CAP + 2 - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0));
         for (let j = 0; j < nc; j++) {
           // whoever is at your elbow is a body even when the cap is spent (two over it at most)
-          const q = people[candI[j]], show = used < cap || (j < 2 && candK[j] < -20 && (tier > 0 || used < cap + 1));
+          const q = people[candI[j]], show = used < cap || (j < 2 && candK[j] < -20 && tier > 0);
           if (show) used++; else stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: candI[j], v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
           if (show !== q.fig.root.visible) q.fig.root.visible = show;
         }
