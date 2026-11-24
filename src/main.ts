@@ -43,6 +43,7 @@ import { voice } from './core/voice';
 import { frameReport } from './cinematic/cutscene';
 import { Vault, vaultScript } from './narrator/vault';
 import { Montage } from './cinematic/montage';
+import { designOf } from './game/away/boarding';
 import { onLangChange } from './i18n';
 import { fitFov, lockViewport, tryFullscreen } from './core/viewport';
 import { startFit, auditFit, fitState, refitAll } from './ui/fit';
@@ -139,7 +140,21 @@ let pendingNames: CrewNames = {};
 /** Chapter being replayed by the next world start. */
 let replaying: number | null = null;
 /** Debug camera override used for documentation screenshots. */
-let photo: { from: THREE.Vector3; to: THREE.Vector3 } | null = null;
+let photo: { from: THREE.Vector3; to: THREE.Vector3; fov?: number } | null = null;
+/** Cinema mode (?cinema=1 or __bs.cinema(true)) for trailers and screenshots: everything on the page but the 3D view is
+ * hidden (HUD, hints, minimap, prompts, subtitles, menus, letterbox bars, fades) and so is the cursor. */
+const setCinema = (on: boolean) => { document.documentElement.classList.toggle('cinema', on); hintSweep = 0; };
+/** World hints (the glowing rings on items and build sites, all named 'ring') go with the UI in cinema mode. */
+let hintSweep = 0;
+function sweepHints() {
+  const show = !document.documentElement.classList.contains('cinema');
+  world?.scene.traverse((o) => {
+    if (o.name !== 'ring' || !(o as THREE.Mesh).isMesh) return;
+    const m = (o as THREE.Mesh).material as THREE.Material;
+    if (m.visible !== show) m.visible = show;
+  });
+}
+if (new URLSearchParams(location.search).get('cinema') === '1') setCinema(true);
 
 document.getElementById('quality-badge')!.textContent = quality.name.toUpperCase();
 document.getElementById('version-badge')!.textContent = `v${__APP_VERSION__}`;
@@ -827,7 +842,10 @@ function tick(step: number) {
     // after the update: a prompt set this frame is placed this frame, never drawn once in the corner
     if (state === 'game') ui.track(camera);
     const focus = player.pos;
-    if (photo) { camera.position.copy(photo.from); camera.lookAt(photo.to); }
+    if (photo) {
+      camera.position.copy(photo.from); camera.lookAt(photo.to);
+      if (photo.fov && camera.fov !== photo.fov) { camera.fov = photo.fov; camera.updateProjectionMatrix(); }
+    }
     world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer, renderer.stageInfo().scene === world.scene);
     // the eye adapting to a camp fire close by in a fight (combat.ts exposure; 1 elsewhere)
     if (combat) renderer.renderer.toneMappingExposure *= combat.exposureScale;
@@ -848,6 +866,13 @@ const earFwd = new THREE.Vector3();
 function draw(dt: number) {
   // portrait screens: widen the vertical FOV so the horizontal view stays usable
   const activeCam = stage.active ? stage.camera : state === 'game' ? camera : state === 'narrator' ? vault.camera : state === 'film' && film.inWorld ? film.wcam : cine.camera;
+  // the photo camera frames cutscenes, films and the narrator's room too (games set it in tick, before the world update)
+  if (photo && state !== 'game') {
+    activeCam.position.copy(photo.from); activeCam.lookAt(photo.to);
+    if (photo.fov && activeCam.fov !== photo.fov) { activeCam.fov = photo.fov; activeCam.updateProjectionMatrix(); }
+  }
+  // cinema mode: hide the world's hint rings (again every second, for items placed since), show them after
+  if (hintSweep-- <= 0) { hintSweep = document.documentElement.classList.contains('cinema') ? 60 : 1e9; sweepHints(); }
   const designFov = activeCam.fov;
   activeCam.getWorldDirection(earFwd);
   audio.listen(activeCam.position, earFwd);
@@ -946,8 +971,7 @@ async function boot() {
   game.away.skins = lastSkins;
   // the take-off from Zenvora is a scene like any other: letterboxed, with its Skip
   game.away.onOutro = (on) => {
-    // the liner lifts off: engines, then the long roar of the climb
-    if (on) { audio.sample('launch', 0.85, { delay: 1.2 }); audio.sample('thruster', 0.5, { delay: 0.6 }); }
+    // (its sounds are the scene's own, on its clock: boarding.ts)
     ui.show('cine', on); ui.show('hud', !on);
     document.getElementById('btn-skip')!.classList.toggle('hidden', !on);
   };
@@ -1146,11 +1170,17 @@ window.addEventListener('resize', () => {
   awayLeave() { game?.away?.leave(); },
   /** Test hook: every Zenvora task done at once, so the take-off plays now. */
   awayOutro() { game?.away?.debugOutro(); },
-  /** Test hook: the take-off path's least clearance over the city (m; negative = the liner passes through something). */
-  takeoffMap() { return JSON.stringify((game?.away?.stage as { takeoffMap?: () => unknown } | null)?.takeoffMap?.() ?? null); },
-  takeoffFindPad() { return (game?.away?.stage as { takeoffFindPad?: () => unknown } | null)?.takeoffFindPad?.() ?? null; },
-  takeoffFrame() { return (game?.away?.stage as { takeoffFrame?: (f?: number, a?: number) => unknown } | null)?.takeoffFrame?.(camera.fov, camera.aspect) ?? null; },
+  /** The boarding and take-off (boarding.ts): played on its own clock and checked, without drawing (needs the city). */
+  boardingCheck() { return (game?.away?.stage as { boardingCheck?: () => unknown } | null)?.boardingCheck?.() ?? null; },
   takeoffClearance() { return (game?.away?.stage as { takeoffClearance?: () => unknown } | null)?.takeoffClearance?.() ?? null; },
+  takeoffMap(x: number, z: number, span?: number, G?: number) { return JSON.stringify((game?.away?.stage as { takeoffMap?: (...a: unknown[]) => unknown } | null)?.takeoffMap?.(x, z, span, G) ?? null); },
+  /** One ship everywhere: the liner on Zenvora's pad against the ship in the films, mesh by mesh. */
+  shipDesigns() {
+    let film: string[] | null = null;
+    cine.scene.traverse((o) => { if (!film && o.userData.design === 'liner') film = designOf(o); });
+    const pad = (game?.away?.stage as { linerDesign?: () => string[] | null } | null)?.linerDesign?.() ?? null;
+    return { film, pad, same: !!film && !!pad && JSON.stringify(film) === JSON.stringify(pad) };
+  },
   get awayOutroOn() { return !!game?.away?.outroOn; },
   /** Test hook (recordings): these tasks count as done (the hero views that wait for one). */
   awayMarkDone(...ids: string[]) { for (const id of ids) game?.away?.done.add(id); },
@@ -1181,8 +1211,15 @@ window.addEventListener('resize', () => {
     return [m.x, m.z];
   },
   act() { return game?.debugAct() ?? null; },
-  /** Freeze the camera at `from` looking at `to` (null releases it). */
-  photo(from: number[] | null, to?: number[]) { photo = from && to ? { from: new THREE.Vector3(...from), to: new THREE.Vector3(...to) } : null; },
+  /** Freeze the camera at `from` looking at `to` (null releases it), with a vertical field of view in degrees if given.
+   * A capture that calls it every stepped frame moves the camera along its own path (dolly, crane, orbit). Outside
+   * play it takes over the cutscene's, film's or narrator's camera while it is set. */
+  photo(from: number[] | null, to?: number[], fov?: number) { photo = from && to ? { from: new THREE.Vector3(...from), to: new THREE.Vector3(...to), fov } : null; },
+  /** Cinema mode: hide every bit of UI and the cursor, leaving only the 3D view (also `?cinema=1`). */
+  cinema(on: boolean) { setCinema(on); return on; },
+  get cinemaOn() { return document.documentElement.classList.contains('cinema'); },
+  /** Depth of field for a capture: focus distance in metres and aperture (0 turns it off). Only on presets with DoF. */
+  dof(focus: number, aperture: number) { renderer.setDof(focus, aperture); },
   step(sec: number) { game?.debugStep(sec, elapsed); },
   get save() { return game?.save; },
   get wheelOpen() { return wheel.open; },

@@ -6,6 +6,15 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## Cinema mode for trailers and screenshots (2026-11-24, trailer agent)
+- `?cinema=1` or `__bs.cinema(true)`: every page element but the 3D canvas is hidden (HUD, minimap, hints, prompts,
+  subtitles, menus, letterbox bars, fades, toasts, the fight HUD) and so is the cursor. `__bs.cinemaOn` reads it. The world's hint rings (meshes named `ring`: items and build
+  sites) are hidden with it.
+- `__bs.photo(from, to, fov?)`: the free camera now takes a vertical field of view in degrees. Called on every stepped
+  frame (`__bs.hold(true)`, `__bs.advance(1/60)`) it gives scripted dolly, crane and orbit moves. Outside play it takes
+  over the cutscene's, film's or narrator's camera while it is set (`__bs.photo(null)` gives it back).
+- `__bs.dof(focus, aperture)`: depth of field for a capture (presets with `dofStep` > 0; 0 turns it off).
+
 ## Layout
 - `src/combat/sim/`: the simulation. No DOM, no three.js. `core.ts` (types, difficulty), `weapons.ts`, `species.ts`,
   `ai.ts`, `sim.ts`, `encounters.ts`, `tension.ts`. Runs under Node.
@@ -1778,3 +1787,113 @@ Fixing the owner's list from the flow4 GPU takes, in order.
   .asked), not in the save, so setting anything on the save does nothing. Use `?diff=story|normal|hard` in the address,
   or `__bs.combat.setDifficulty('normal')` (answers it if it is open, and it is never asked after). `ensureAsked` is
   one question at a time: callers that ask while it is open all go on after the one answer.
+
+## 2026-11-24 perf agent 30 (worktree ~/bs-perf, branch ped30-land = ped29-land rebased on main beb0ee3; GPU and probes ~/bs-assets/gpu/p30)
+- PERF_GATE GATE OVERRUN, cause (p30/who.py: perf_gate's setup, then triangles per drawn body; who2.py adds every
+  character's build before and after the teleport). p29/pgbisect.log: ?berth=1.7 changed nothing (same to the triangle);
+  the outcard/thin/folkview lines printed nothing (the runs died, not re-run). By commit: 99b45e4 (the first of the
+  branch) already 1 398 624 at the Web gate, so it is in the "fewer people" commit.
+  * Web: NOT more people (24 bodies vs main's 25). The build: a body takes its build from where it was last drawn
+    (character.ts pickLod; camD is set only in the draw hook) and keeps it in view within SWAP_FAR 27 m. On main the
+    gate's six threes (townsfolk) were last drawn at the start ~120 m off and showed at 7-10 m in their FAR build
+    (18-25 k triangles, hair 2-5 k); on the branch the threes are gone and the bodies there are pooled ones never drawn
+    before, in the NEAR build (40-50 k, hair 16-22 k), which is the design within 32 m on Web (dfd45fe). So main's
+    1.14 M undercounted what a walk-up shows. I raised the Web triangle budget 1.3 M -> 1.45 M (perf_gate.py comment).
+    A priming of pooled bodies to the far build (e7feb4c) changed nothing measurable and is taken out (3b1eef8).
+    RELAY (character agent, character.ts): pickLod uses a stale camD for a body shown after being hidden (its last drawn
+    distance, or 0 if never drawn); the light build/hair switch could use the real distance on the first frame shown.
+  * Mobile: 15 bodies (budget 14 = cap 11 + player + 2): four of them the story's people 50-83 m off (drawn to the card
+    range and outside the cap). Now on phones they are drawn, nearest first, only while the phone total (BODY_CAP + 2,
+    the crowd's and district walkers' bodies counted) has room. Local gate spot: 13 bodies, 588 011 triangles. A story
+    person 50 m+ down the street can now wait out of sight on phones when the near bodies fill the total.
+- LANDED: 3b1eef8 (ped30-land, CI all green on that sha, no reruns): the phones' far story people and the Web budget.
+  The far-story rule then showed popping in the detector (p30/ped_e1_mobile: the story's people blinking out and back
+  46-82 m off, 9 vanishFar + 9 appearFar, none before): taken out on ped30b; perf_gate's Mobile body budget 14 -> 16
+  counts them instead (they are drawn outside the cap by design; comment in perf_gate.py).
+- DETECTOR p30/ped_e1 (dist-p30e = ped30b with the far-story rule, Web out-of-view cards, phone pool 16): Mobile cardClose
+  9 (p29 best 13), overlap 0, slide 0, plus the 9/9 far blinks above. Web cardClose 22 (p29f 12, a-d 23-26), overlap 18,
+  slide 3, identity 1, appear 1. Web tram square: 11 of the 22, each with the crowd pool full (want 20, held 19-20:
+  POOL 20 on Web while 24 bodies are built, ceil(20/12)*12); next to try: Web POOL 24 (watch the gate's 1.45 M).
+- DETECTOR p30/ped_f1 (dist-p30f = ped30b 6c886be, the far-story rule out): Mobile cardClose 13, overlap 0, slide 0,
+  no vanish/appear (far or near), max bodies 16. Web cardClose 22 (tram square 9), overlap 18, slide 3. So the Web
+  out-of-view rule did NOT halve Web's flat cards this time (22 and 22 in e1/f1 vs 12 in p29f); phone pool 16 did not
+  bring Mobile under p29's 13-14 in f1 (9 in e1 was with the far-story rule giving the near bodies room). NOT 0.
+- LANDED 888c558 (ped30c, CI all green on that sha, no reruns): facx switch (fixed), perf_gate shader check, Web
+  out-of-view cards, phone pool 16, far-story rule out, Mobile body budget 16. perf_gate there: Mobile gate 16 bodies
+  (AT the budget, no margin), 668 535 triangles; Web gate 1 397 602 (budget 1.45 M), 339 draws.
+- CLIPS: p30/final.sh (dist-p30g = ped30c 888c558) was recording when I stopped: p30/clips_mobile/*.mp4 done, Web and
+  the proxy after it (p30/final.out says finaldone at the end). NOT WATCHED, NOT SENT. Watch every clip frame by frame
+  first (no sound in these captures).
+- NOT DONE: watching/sending the GPU clips and the proxy fps, the walker-at-the-lens re-check, phone memory/load for pool 16
+  (CI mobile_memory passes; not measured on the proxy).
+- INCIDENT (mine): 3b1eef8 also carried 1258b70, my first facade probe switch, which put the reveal block's
+  `float fReveal` under an if/else: the facade shader did not compile and the facade buildings were NOT DRAWN on main
+  for about an hour (every gate green: three does not report shader errors unless ?shadercheck=1). Reverted by
+  56e639b (facade-hotfix, CI green after one rerun of the known levels_smoke "inventory did not open" flake), landed.
+  perf_gate now loads with ?shadercheck=1 and fails on a shader error (ped30b). Check any shader edit with
+  p30/shcheck.py DIST QUALITY "shadercheck=1" before pushing.
+- NE WALL: ?facx=bits (facade.ts, fixed form on ped30b; live as window.__facx.value) turns facade shader parts off:
+  1 glass shine, 2 reveal, 4 far averaging, 8 ledge lines, 16 room/goods, 32 glass normal map. GPU probe p30/ne_facx
+  (Mobile, plan p30/plan_ne_facx.json, the ne_street_far frame, one shot per bit): the speckle is there with EVERY bit
+  and with all six off (f63): it is not the glass shine, reveal, far averaging, ledges, room or the normal map. p30/
+  ne_depth: hiding the facade meshes takes the purple wall AND the shopfront away (both facade); drawing the facade
+  meshes last (renderOrder 9999) clears the speckle in one triangle of the panel and not the other (a diagonal split),
+  so it is a depth race with something drawn before, not the shader's colour. p30/geo.py: only ONE facade quad lies
+  in z = 220 there (tris 980/981 of static:MeshStandardMaterial, x 260-320). p30/geo2.py/geo3.py (every visible mesh's
+  triangles near that corner): besides that quad only a 96-triangle MeshBasicMaterial (white, transparent, depthWrite
+  off, BackSide, no map; tris 8/9 run x 260-316.6, y -5..115, z 250.3 -> 212.5, a diagonal vertical face across the
+  street) and a ShaderMaterial far overhead (y 1768+, sky). NOT FIXED. What I would try next, one at a time in a GPU
+  probe on that frame: hide that 96-triangle basic mesh (find what builds it: a BackSide white box, haze or light
+  volume); set the facade quad's material depthFunc to LessEqual vs Less explicitly; split the 60 m quad into bay-wide
+  strips (facadeBox: the far end of one huge grazing triangle is where it fails, and the renderOrder probe split it
+  along the diagonal); log depth on the facade material.
+
+## 2026-11-24 perf agent 31 (worktree ~/bs-perf, branch p31 from ped30-handoff 7c841b3; GPU and probes ~/bs-assets/gpu/p31)
+- CLIPS SENT: p30/final.sh's clips (dist-p30g = 888c558), all watched (contact sheets of every 12th frame plus a
+  frame-difference scan, flagged frames at full size; p31/sheets.py, notes p31/clip_notes.md), copied with a README to
+  Downloads/BS_Game_v1.1/mobile_v9_GPU (no sound). Seen wrong: Mobile NE wall speckle (ne_street_far 8-10 s); Web
+  walker at the lens (bump_west about 17 s, bump_east about 3 s); Web tram_pavement_south 23-27 fps for its first 4 s
+  (20 bodies, 1.34 M triangles, 325 draws). Mobile 58-60 fps everywhere on this GPU.
+- final.sh trap: its ffmpeg joins ran in the background and stopped on a tty read (state T); kill -CONT resumes it
+  (p31/cont.sh did that in a loop). Run ffmpeg with -nostdin or `< /dev/null` in background scripts.
+- CHARACTER RELAY (character.ts, shared; for the character and draw1 agents): pickLod now, for a body not drawn last
+  frame (hidden, off screen, or never drawn), sets camD from the last game camera's position (LENS) to where the body
+  is now, before choosing shadow/face/hair/build. Six lines at the top of pickLod; nothing else in the file changed.
+- city.ts: Web crowd POOL 20 -> 24 (24 bodies were already built: ceil(20/12)*12). Not yet measured.
+- CI note: levels_smoke failed on main's own run of 888c558 (45414153299) and on p31's first run at the path tree
+  (".pt-cols" not hidden 5 s after #m-close), while ped30c and ped30-handoff (same code) passed it. Not on the known
+  flake list, so not rerun.
+- Disk: keep at most 3 dist-* in ~/bs-perf and delete raw capture frames once joined and watched (coordinator, C: hit
+  22 MB free). I removed the old dist-* and p30's clip_* frame folders (mp4s and sheets kept).
+## 2026-11-24 boarding agent (worktree ~/bs-board; branch board1, rebased on main a98ead4 as board1-land1)
+Owner: "The time when all of them onboard it glitches completely. The ship is diff in the cutscene and that scene."
+- Measured on main e319621 (A500, web + mobile, `~/bs-cap/board/r0web`, `r0mob`): the six walked off down the road
+  from the gate, a car drove through them, nobody ever boarded (they walked out of the shot); the second shot's camera
+  sat in the spaceport's white tubes and the capsule liner rose through them; the third shot never showed the liner; the
+  launch sound never played (audio.sample() only starts loading on a first call; the cue was also 3 s before the lift);
+  the pad liner was a capsule with fins while the films' liner (cinematic/ship.ts) has a spine, ring, wings and bells.
+- New: `src/game/away/boarding.ts` builds the liner on its pad (the films' ship via createShip({ landed: true }), x3,
+  standing on its tail, hatch towards the terminal), a gantry (ramp, platform, access arm), and plays the scene on its
+  own clock T: nine shots (wide, side, ramp foot, his look back close, his eyes, he goes in and the hatch shuts, the arm
+  swings away and the jets light, the lift, flying with it). Sounds on the same clock (steps on the gantry's metal at
+  each body, hatch, arm, thrusters, the first 7.5 s of launch.ogg, rumble). audio.sample() gained { dur, tag } and
+  stopTag() (Skip fades the roar). Away.closing() dips through black before the scene.
+- Ship: createShip has a real hatch now (a hole in the lathe, a sliding panel, a lit T-shaped vestibule inside the
+  hull), optional legs, `LINER` measurements and `bakeStatic()` (the pad liner and the hero ship draw ~12 meshes, not 40).
+  cityfuture's hero ship is the same make (x7) at (20, 140, S - 200); its shuttles moved to life-wip's pads; citymega's
+  plaza 3 to z -330 (life-wip's numbers).
+- Checks (all headless, in tools/prologue_smoke.py before the tasks): `__bs.boardingCheck()` (bodies vs the hull's
+  solid shape, feet on the walking surface, no overlaps, no jumps faster than 2.6 m/s, nobody let go where the camera
+  can see them), `__bs.takeoffClearance()` (points over hull, ring, wings, legs, bells vs everything solid above or
+  below along the climb; the camera's line to its subject; `frame`: floating things that share the liner's frame),
+  `__bs.shipDesigns()` (the pad liner's mesh list equals the films' ship's).
+- GPU capture kit: `~/bs-cap/board/run.sh NAME PLAN DIST QUERY` (one exclusive heavy step, Chrome 9371, preview 4691),
+  `mkplan.py web|mobile NAME [fast]`, `probe.py` (headless checks). Delete rec_* frames after joining (C: space).
+- State at 28e129b (before rebase 8359db8): headless check 0 problems, all six in; climb worst gap 14.6 m (to the apron,
+  1.6 s after lift), camera clear; the pad liner's mesh list equals the films' ship. GPU takes r4web/r4mob (A500): the
+  roar's onset lands on the lift shot's first frame; the ship rises from about 0.6 s after. Still below the bar: the
+  wide shots are dominated by the big white radiator panels and the sky's white floating things; three of the six bunch
+  at the hatch in the climb shot; the turn on the platform slides his feet a little; the hull's panel texture is the
+  films' canvas texture, coarse up close. CI on 8359db8: every gate green but combat's bow arms (2.9 cm vs 2 cm), which
+  my change does not touch (that gate has read 0.1 to 5.5 cm across runs, see the life notes).
+

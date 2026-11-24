@@ -800,6 +800,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const castable = new Set<THREE.Object3D>(); // the meshes that cast a shadow when near
   let shadowsOn = true;
   function pickLod() {
+    // not drawn last frame (hidden, off the screen, or never drawn yet): camD is from its last draw (0 if never), so a
+    // body shown again took the build of where it was last seen; use the last camera's distance to where it is now
+    if (sinceDrawn >= 1 && LENS.y > -1e5) {
+      V5.copy(root.position); if (root.parent) V5.applyMatrix4(root.parent.matrixWorld);
+      camD = V5.distanceTo(LENS);
+    }
     // a far body's shadow is a few pixels: it is left out of the shadow map
     const sh = camD < (crowd ? CHAR_BUDGET.crowdShadowFar : CHAR_BUDGET.shadowFar) * (shadowsOn ? 1.1 : 0.9);
     if (sh !== shadowsOn) { shadowsOn = sh; for (const set of [...lodSets, rigid]) for (const m of set) m.castShadow = sh && castable.has(m); }

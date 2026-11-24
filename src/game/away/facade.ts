@@ -20,6 +20,13 @@ export const FACADE = {
   wet: { value: 0 },
 };
 
+/** Probe switch (?facx=bits, the NE street speckle, p30; live as window.__facx.value): 1 no glass shine (roughness, metalness), 2 no reveal, 4 no far
+ * averaging, 8 no ledge lines, 16 no room or goods (inside dark), 32 no normal map on the glass. 0: all on. */
+const FACX_Q = new URLSearchParams(globalThis.location?.search ?? '').get('facx');
+const FACX = { value: Number(FACX_Q ?? 0) || 0 };
+// (with ?facx in the URL, a probe can change it live: window.__facx.value = bits)
+if (FACX_Q !== null) (globalThis as unknown as { __facx?: { value: number } }).__facx = FACX;
+
 const GLSL_HASH = /* glsl */ `
   float fHash(vec3 p) { p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 `;
@@ -126,7 +133,7 @@ export function facadeMaterial(o: FacadeOpts = {}) {
           }
 `;
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uNight = FACADE.night; sh.uniforms.uWet = FACADE.wet;
+    sh.uniforms.uNight = FACADE.night; sh.uniforms.uWet = FACADE.wet; sh.uniforms.uFacx = FACX;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>
         attribute vec4 aFac; attribute vec4 aOrg;
@@ -149,7 +156,9 @@ export function facadeMaterial(o: FacadeOpts = {}) {
         uniform float uNight; uniform float uWet;
         varying vec3 vWp; varying vec3 vWn; varying vec4 vFac; varying vec4 vOrg;
         ${GLSL_HASH}
-        float fWin; float fFrame; vec3 fGlow; float fLedge; float fFar;`)
+        float fWin; float fFrame; vec3 fGlow; float fLedge; float fFar;
+        uniform float uFacx;
+        bool facx(float b) { return mod(floor(uFacx / b), 2.0) > 0.5; }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         fWin = 0.0; fFrame = 0.0; fGlow = vec3(0.0); fLedge = 0.0; fFar = 0.0;
         if (abs(vWn.y) < 0.5) {
@@ -161,7 +170,7 @@ export function facadeMaterial(o: FacadeOpts = {}) {
           float h = fHash(vec3(bay, fl, seed));
           bool street = fl < 0.5;
           // a soft line at every floor slab (a band of the wall a shade darker)
-          fLedge = smoothstep(0.04, 0.0, fy) + smoothstep(0.955, 1.0, fy);
+          fLedge = facx(8.0) ? 0.0 : smoothstep(0.04, 0.0, fy) + smoothstep(0.955, 1.0, fy);
           vec2 lo, hi;
           float shop = 0.0;
           if (street) {
@@ -184,7 +193,7 @@ export function facadeMaterial(o: FacadeOpts = {}) {
           // the glass sits back in the wall: seen at an angle, the near side of the opening shows its reveal (the jamb,
           // the head) in shade instead of glass, so windows read as holes, not paint
           float fReveal = 0.0;
-          {
+          if (!facx(2.0)) {
             vec3 Vr = normalize(vWp - cameraPosition);
             vec3 Tr = alongX ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
             float into = max(-dot(Vr, vWn), 0.08), rec = street ? 0.12 : (style > 0.5 ? 0.06 : 0.22);
@@ -204,13 +213,14 @@ export function facadeMaterial(o: FacadeOpts = {}) {
           fFrame = clamp(fx2 * fy2 - fWin - fReveal, 0.0, 1.0) * (style > 0.5 ? 0.6 : 1.0);
           // far off, a window is smaller than a pixel: its hard edge would shimmer as the camera moves, so the pane
           // becomes its share of the bay (the wall reads as a tone of glass and lit rooms, not as noise)
-          { float px = fwidth(u / bw) + fwidth(v / fh), far = smoothstep(0.12, 0.4, px); fFar = far;
+          { float px = fwidth(u / bw) + fwidth(v / fh), far = facx(4.0) ? 0.0 : smoothstep(0.12, 0.4, px); fFar = far;
             float cov = clamp((hi.x - lo.x) * (hi.y - lo.y), 0.0, 1.0);
             fWin = mix(fWin, cov, far); fReveal *= 1.0 - far; fFrame *= 1.0 - far; }
           // a mullion down the middle of the punched windows
           float mull = (style < 0.5 && !street) ? (1.0 - smoothstep(0.012, 0.012 + aa, abs(fx - 0.5))) * fWin : 0.0;
           // ---- the room behind the glass (interior mapping): a box as deep as the bay is wide, seen through the pane ----
 ${ROOM}
+          if (facx(16.0)) { inside = vec3(0.03); glow = vec3(0.0); }
           float reveal = fWin * smoothstep(hi.y - 0.1, hi.y, fy);
           diffuseColor.rgb = mix(diffuseColor.rgb, inside + vec3(0.02, 0.025, 0.03), fWin);
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.5 + vec3(0.07), max(fFrame, mull));
@@ -224,7 +234,10 @@ ${ROOM}
           diffuseColor.rgb *= 0.55; // roofs: tar and gravel
         }
         diffuseColor.rgb *= 1.0 - 0.35 * uWet * (1.0 - fWin);`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        if (facx(32.0)) normal = mix(normal, nonPerturbedNormal, fWin);`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        if (facx(1.0)) fWin *= 0.0; // (probe: glass shine off; fWin is read again only by the shine below)
         roughnessFactor = mix(roughnessFactor, 0.04, fWin);
         roughnessFactor = mix(roughnessFactor, 0.45, fFrame);
         roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.45, uWet);`)

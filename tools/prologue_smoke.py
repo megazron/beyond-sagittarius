@@ -41,6 +41,19 @@ with sync_playwright() as pw:
         cf = page.evaluate('__bs.canvasFit')
         print(f"Zenvora's painted signs: {cf['drawn']} texts, {cf['shrunk']} drawn smaller to stay on their sign, {cf['squeezed']} squeezed", flush=True)
         if cf['drawn'] == 0: fails.append('no painted sign text went through the fitter')
+        # the boarding and the take-off, played on their own clock (the owner saw them glitch: people sliding into the
+        # ship, the ship going through things, a different ship from the films'): nobody inside the hull, the gantry or
+        # anybody else, nobody jumping, nobody let go in view; the liner's climb and the camera clear of the city; the
+        # liner on the pad the same make as the films' ship
+        bc = page.evaluate('__bs.boardingCheck()')
+        print('boarding', {k: bc[k] for k in ('problems', 'seconds', 'allIn', 'kinds')} if bc else bc, flush=True)
+        if not bc or bc['problems'] or not bc['allIn']: fails.append(f'boarding: {bc and bc["first"]}')
+        tc = page.evaluate('__bs.takeoffClearance()')
+        print('take-off clearance', tc, flush=True)
+        if not tc or tc['worst'] < 1 or tc['camera'] != 'clear': fails.append(f'take-off goes through the city or the camera is blocked: {tc}')
+        sd = page.evaluate('__bs.shipDesigns()')
+        print('one ship: pad liner and films ship', 'the same make' if sd and sd['same'] else sd, flush=True)
+        if not sd or not sd['same']: fails.append(f'the liner on the pad is not the films ship: {sd}')
         done = 0
         for _ in range(30):
             s = page.evaluate('__bs.away')
@@ -53,12 +66,6 @@ with sync_playwright() as pw:
             if n and n['next'] == s['next']: fails.append(f"task {s['next']} did not complete"); break
             done += 1
         print('prologue tasks done', done, flush=True)
-        # the take-off path: the liner must keep clear of everything in the city, and the camera must have open sky
-        # and a clear view of it (the owner saw the ship going through things)
-        tc = page.evaluate('__bs.takeoffClearance()')
-        print('take-off clearance', tc, flush=True)
-        if not tc or tc['worst'] < 1 or tc['camera'] != 'clear':
-            fails.append(f'take-off goes through the city or the camera is blocked: {tc}')
         try:
             # the take-off: letterboxed, with its Skip
             page.wait_for_function('__bs.awayOutroOn', timeout=60000)

@@ -25,6 +25,7 @@ import { cityProbe } from './probe';
 import { carKit } from './cars';
 import { dayCycle, skyMaterial, wetify } from './daycycle';
 import { Renderer } from '../../core/renderer';
+import { buildBoarding, PAD } from './boarding';
 
 /**
  * Zenvora, Taravel, 2189: the last normal afternoon. One long bazaar street from the flat (north-east corner)
@@ -454,7 +455,7 @@ function model(name: string) {
   return p;
 }
 
-export function buildCity(label: (k: string) => string, detail = 1): AwayStage & { bind(b: StageBody): void; people: CityPerson[]; mapLayer: import('../../ui/minimap').MapLayer; drawnAs(id: string): string; readonly perfState: Record<string, unknown>; crowdState(): { near: number; bodies: number; lost: number; room?: number }; trafficState(): unknown; takeoffClearance(): { worst: number; at: number; what: string; camera: string } | null; takeoffFrame(fov?: number, aspect?: number): string[] | null; takeoffFindPad(step?: number, span?: number): { x: number; z: number; d: number; top: number; flat: number } | null; takeoffMap(span?: number, G?: number): unknown; pedProbe(): unknown } {
+export function buildCity(label: (k: string) => string, detail = 1): AwayStage & { bind(b: StageBody): void; people: CityPerson[]; mapLayer: import('../../ui/minimap').MapLayer; drawnAs(id: string): string; readonly perfState: Record<string, unknown>; crowdState(): { near: number; bodies: number; lost: number; room?: number }; trafficState(): unknown; pedProbe(): unknown; boardingCheck(): unknown; linerDesign(): string[] | null; takeoffClearance(): unknown; takeoffMap(x: number, z: number, span?: number, G?: number): unknown } {
   seed = 1234567; // the same city every time
   const rich = detail >= 1; // phones get fewer props, people and lights
   const scene = new THREE.Scene();
@@ -586,7 +587,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   let shadowFrame = 0, shadowStale = true, bodiesLeft = 0, cardsNear = 0;
   /** Real bodies drawn at once, the player aside. */
   const BODY_CAP = [11, 26, 28][tier], OLD_FAR = [50, 80, 130][tier];
-  const candK = new Float64Array(256), candI = new Int32Array(256), farStory: [number, number][] = [];
+  const candK = new Float64Array(256), candI = new Int32Array(256);
   if (tier === 0) CHAR_BUDGET.shadowFar = 0; // phones: no body casts a shadow in the city (contact shadows instead)
   else if (tier === 1) CHAR_BUDGET.shadowFar = 10; // Web: only the bodies close by cast one
   // the crowd's bodies take their near build from 32 m (it was 6 m, in front of you) and change it only off the
@@ -1201,7 +1202,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   });
   plane(10, 2.5, new THREE.MeshBasicMaterial({ map: board, color: new THREE.Color(1.4, 1.4, 1.4), toneMapped: false }), 0, 9.2, S + 1.2, 0);
 
-  let linerG: THREE.Group | null = null;
+  let linerG: THREE.Group | null = null, boardingKit: ReturnType<typeof buildBoarding> | null = null;
   // ---- the spaceport: the apron, pads with light rings, the terminal's long canopy, the liner docked with its bridge ----
   {
     const apronM = over(new THREE.MeshStandardMaterial({ color: 0xc9ccd0, roughness: 0.8 }), 1); tex('road', [apronM], [30, 24]);
@@ -1212,22 +1213,18 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       ringP.rotation.x = -Math.PI / 2; ringP.position.set(x, 0.02, z);
       const disc = add(new THREE.Mesh(new THREE.CircleGeometry(r - 0.4, 64), over(new THREE.MeshStandardMaterial({ color: 0x5c6670, roughness: 0.6 }), 2))); disc.rotation.x = -Math.PI / 2; disc.position.set(x, 0.01, z);
     };
-    pad(16, S - 66, 22); pad(-44, S - 90, 14); pad(44, S - 104, 14);
+    pad(PAD.x, PAD.z, 20); pad(16, S - 66, 14); pad(44, S - 104, 14);
     // the terminal: a long glass hall under a curved canopy, warm inside, with people-sized detail at the front
     const canopy = add(new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 60, 32, 1, true, -Math.PI / 2, Math.PI), hull));
     canopy.rotation.z = Math.PI / 2; canopy.position.set(-38, 2, S - 26); canopy.castShadow = true;
     box(60, 9, 0.2, new THREE.MeshStandardMaterial({ color: 0x9fbfd6, roughness: 0.05, metalness: 0.5, emissive: 0xffd6a0, emissiveIntensity: 0.45, transparent: true, opacity: 0.85 }), -38, 4.5, S - 13);
     for (let i = 0; i < 9; i++) box(0.4, 10, 0.4, gateM, -66 + i * 7, 5, S - 12.8);
     plane(14, 2, lit(sign('TERMINAL 2 · TARAVEL', '#10233d', '#9fd8ff'), 0.9), -38, 11.5, S - 12.6, 0);
-    // the liner on its pad, and the boarding bridge reaching out to it
-    // its pad is out on the apron behind the terminal, where nothing stands above it (the old spot was under the
-    // spaceport's tubes and the take-off flew through them); found by takeoffFindPad()
-    const liner = add(new THREE.Group()); liner.position.set(-44, 9, -208); liner.rotation.y = 1.5; linerG = liner;
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(7.5, 52, 8, 32), hull); body.rotation.x = Math.PI / 2; body.castShadow = true; liner.add(body);
-    const stripe = new THREE.Mesh(new THREE.CylinderGeometry(7.58, 7.58, 52, 32, 1, true, -0.25, 0.5), cyan); stripe.rotation.x = Math.PI / 2; liner.add(stripe);
-    for (const sx of [-1, 1]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(12, 0.7, 14), hull); fin.position.set(sx * 11, -2.5, 16); fin.rotation.z = sx * -0.18; fin.castShadow = true; liner.add(fin); }
-    for (let i = 0; i < 14; i++) { const w = new THREE.Mesh(new THREE.CircleGeometry(0.6, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe2b0).multiplyScalar(1.5), toneMapped: false })); w.position.set(-7.55, 1.5, -22 + i * 3.2); w.rotation.y = -Math.PI / 2; liner.add(w); }
-    for (const [lx, lz] of [[-5, -16], [5, -16], [-5, 16], [5, 16]]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 9), gateM); leg.position.set(lx, -4.5, lz); liner.add(leg); }
+    // the liner on its pad: the films' ship (cinematic/ship.ts), standing on its tail on its legs, its hatch open towards
+    // the terminal, the boarding gantry up to it (boarding.ts, which also plays the boarding and the take-off). The pad
+    // is out on the apron where nothing stands above it, so it lifts straight up through nothing
+    boardingKit = buildBoarding({ add, gateM, glowM: cyan, scene, hide: [] });
+    linerG = boardingKit.liner;
     // light masts and a few ground vehicles
     for (const [mx, mz] of [[-20, -30], [36, -40], [-10, -110], [60, -80]]) {
       box(0.5, 18, 0.5, gateM, mx, 9, S + mz);
@@ -1430,13 +1427,18 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   };
   const propsBuilt: Promise<unknown>[] = [buildProps(placed, oldTown, true)];
   const future = buildFuture(oldTown as unknown as THREE.Scene, { rich, N, S, FRONT, FLOOR, shops: SHOPS });
+  boardingKit?.hideDuring(future.hero);
   blocks.push(...future.solids);
   const mega = buildMega(scene, { rich, N, S, FRONT, haze: HAZE });
   const dense = buildDense(oldTown as unknown as THREE.Scene, { top: scene, rich, FRONT, S, N, facades: facadesOut });
   // ---- the crowd crowdPool: real bodies that take over the painted crowd near the camera. A card closer than TAKE metres
   // is walked by a body from the crowd pool (the nearest first) and hidden; the body goes back when the card is far again.
   // Before this, the cards simply vanished within 9 m and the street emptied as you walked into it.
-  const POOL = [8, 20, 20][tier], TAKE = 36; // bodies are given out from 36 m, so whoever walks into the view is one before SWAP_FAR
+  // (phones 16, two bodies of each of the 8 looks, p30: with one per look a card in view whose look's body was out
+  // stayed a card with bodies free, the tram square in p29i; the phone total, BODY_CAP + 2, still holds what is drawn)
+  // (Web 24, p31: with 20 the tram square's cards stayed cards with the pool full, want 20 held 19-20; 24 bodies are
+  // built either way, ceil(20/12)*12)
+  const POOL = [16, 24, 20][tier], TAKE = 36; // bodies are given out from 36 m, so whoever walks into the view is one before SWAP_FAR
   // Web, Ultra: the painted crowd's own bodies whatever the townsfolk use (it was 8: with the townsfolk near the flat and
   // in the bazaar using 20 to 24 of 26, the crowd had its 8 held and every card that came into the view after them at
   // 27 m stayed a card up to you, the most of the detector's flat cards close by; the pool has 24)
@@ -1618,7 +1620,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     }
   };
 
-  const { moved, recoloured } = mergeStatic(scene, new Set<THREE.Object3D>([ground, skyMesh, ringLight, sun, sun.target, ...(linerG ? [linerG] : [])]), tier === 2 ? 39 : tier === 1 ? 117 : 400, (t) => { future.update(0.05, t); mega.update(0.05, t); dense.update(0.05, t, null); }, tier === 0);
+  const { moved, recoloured } = mergeStatic(scene, new Set<THREE.Object3D>([ground, skyMesh, ringLight, sun, sun.target, ...(linerG ? [linerG] : []), ...(boardingKit ? [boardingKit.gantry] : [])]), tier === 2 ? 39 : tier === 1 ? 117 : 400, (t) => { future.update(0.05, t); mega.update(0.05, t); dense.update(0.05, t, null); }, tier === 0);
   // ---- the rest of Zenvora: districts, traffic and people round the old town (districts.ts) ----
   const placedD = new Map<string, { name: string; at: THREE.Matrix4[] }>(), DCELL = tier === 0 ? 104 : 52;
   const placeD = (name: string, x: number, y: number, z: number, yaw: number, scale = 1) => {
@@ -1893,236 +1895,45 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     return best;
   };
 
-  // ---- the take-off: the six walk out through the gate to the terminal, the liner lifts off its pad and climbs over the
-  // city towards the one in orbit. Three shots, about fourteen seconds; the camera is the game's own ----
-  const OUTRO = 14;
-  /** Light, not matter: searchlight beams, glows and haze (see-through, drawn without depth). Nothing can hit them. */
-  const ghost = (m: THREE.Mesh) => { const mt = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.Material | undefined; return !!mt && mt.transparent && (!mt.depthWrite || mt.blending === THREE.AdditiveBlending); };
-  // where the second shot's camera stands, from the pad (checked clear by takeoffClearance)
-  const CAM2 = new THREE.Vector3(-55, 6, -95);
-  const lerpN = (a: number, b: number, t: number) => a + (b - a) * t;
-  let outroT = -1, outroDone: (() => void) | null = null;
-  const boarding = new Map<CityPerson, THREE.Vector3>();
-  const plumes: THREE.Mesh[] = [];
-  const eyeP = new THREE.Vector3(), aimP = new THREE.Vector3(), linerHome = new THREE.Vector3();
-  const smooth = (a: number, b: number, x: number) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+  // ---- the boarding and the take-off (boarding.ts): the six walk up the gantry into the liner one after another, its
+  // hatch shuts and it lifts off over the city. The camera is the game's own ----
+  /** board in this order; he (the player) goes last and looks back */
+  const ORDER: CrewId[] = ['explorer', 'strong', 'social', 'builder', 'medic'];
+  let outroT = -1, outroDone: (() => void) | null = null, outroCam: THREE.PerspectiveCamera | null = null;
+  const boarding = new Set<CityPerson>();
   function startOutro(playerFig: Character | null, done: () => void) {
+    if (!boardingKit) { done(); return; }
     outroT = 0; outroDone = done;
-    const crew = people.filter((q) => FRIENDS.some((f) => f.id === q.id));
+    const crew = ORDER.map((id) => people.find((q) => q.id === id)).filter((q): q is CityPerson => !!q);
     const all: CityPerson[] = [...crew];
-    if (playerFig) all.unshift({ id: 'player', fig: playerFig, pos: playerFig.root.position, yaw: 0, pose: 'idle', phase: 0 });
-    // in a loose group at the gate, facing the spaceport (south, -z)
-    all.forEach((q, i) => {
-      q.pos.set(-2.6 + (i % 3) * 2.1 + (i > 2 ? 0.9 : 0), hx(0), S + 6.5 + Math.floor(i / 3) * 1.6);
-      q.yaw = Math.PI; q.fig.root.rotation.y = Math.PI; q.fig.root.visible = true; q.fig.setLookTarget(null);
-      boarding.set(q, new THREE.Vector3(q.pos.x * 0.6, 0, S - 16 - i * 0.8));
-    });
-    if (linerG) {
-      linerHome.copy(linerG.position);
-      if (!plumes.length) {
-        const pm = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9fdcff).multiplyScalar(1.8), transparent: true, opacity: 0, toneMapped: false, depthWrite: false });
-        // lift jets under the fins, and the main drive at the stern
-        for (const [px, py, pz, rx] of [[-11, -4, 16, Math.PI], [11, -4, 16, Math.PI], [-6, -6, -16, Math.PI], [6, -6, -16, Math.PI], [0, 0, -34, -Math.PI / 2]] as number[][]) {
-          const c = new THREE.Mesh(new THREE.ConeGeometry(rx < 0 ? 4 : 1.8, rx < 0 ? 22 : 9, 16, 1, true), pm); c.position.set(px, py - (rx < 0 ? 0 : 4.5), pz + (rx < 0 ? -11 : 0)); c.rotation.x = rx; linerG.add(c); plumes.push(c);
-        }
-      }
-    }
-  }
-  /** Where the liner is at time T of the take-off (it starts at its pad, `linerHome`). */
-  function linerPose(T: number, g: THREE.Object3D) {
-    // straight up through the empty column above its pad, well over the tallest tower (about 240 m), and only then
-    // nose up and away: nothing in the city is ever in its path
-    const lift = smooth(4.2, 10, T), climb = Math.max(0, T - 9.5);
-    g.position.set(linerHome.x - climb * climb * 0.8, linerHome.y + lift * 300 + climb * climb * 3, linerHome.z - climb * climb * 3.2);
-    g.rotation.set(-smooth(9, 12, T) * 0.32, g.rotation.y, g.rotation.z);
-  }
-  /** Test: fly the take-off path and measure, under a grid of points over the liner's whole underside and nose, how far
-   *  it stays above anything in the city (towers, cables, the gate, the ground). Negative = it passes through. */
-  function takeoffClearance() {
-    if (!linerG) return null;
-    const g = linerG, home = linerHome.lengthSq() ? linerHome.clone() : g.position.clone(), keepP = g.position.clone(), keepR = g.rotation.clone();
-    if (!linerHome.lengthSq()) linerHome.copy(g.position);
-    const box = new THREE.Box3(); g.updateMatrixWorld(true);
-    const inv = new THREE.Matrix4().copy(g.matrixWorld).invert();
-    g.traverse((o) => { const m = o as THREE.Mesh; if (!m.isMesh || plumes.includes(m)) return; m.geometry.computeBoundingBox(); const bb = m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld)); box.union(bb); });
-    const pts: THREE.Vector3[] = [];
-    for (let i = 0; i <= 6; i++) for (let j = 0; j <= 4; j++) pts.push(new THREE.Vector3(lerpN(box.min.x, box.max.x, j / 4), box.min.y, lerpN(box.min.z, box.max.z, i / 6)));
-    // everything solid in the city: not the sky, the sun's disc, the far ring of light or other things a thousand metres wide
-    const targets: THREE.Object3D[] = []; scene.traverse((o) => {
-      const m = o as THREE.Mesh; if (!(m.isMesh || (o as THREE.Line).isLine) || !o.visible || o === skyMesh) return;
-      let p: THREE.Object3D | null = o; while (p && p !== g) p = p.parent; if (p) return;
-      if (ghost(m)) return;
-      m.geometry.computeBoundingSphere(); const r = m.geometry.boundingSphere!.radius * o.getWorldScale(new THREE.Vector3()).x; if (r > 900 && !(m as THREE.InstancedMesh).isInstancedMesh) return;
-      targets.push(o);
-    });
-    const rc = new THREE.Raycaster(); rc.params.Line = { threshold: 0.3 };
-    const w = new THREE.Vector3(); let worst = Infinity, at = 0, what = '';
-    for (let T = 0; T <= OUTRO; T += 0.1) {
-      linerPose(T, g); g.updateMatrixWorld(true);
-      for (const p of pts) {
-        w.copy(p).applyMatrix4(g.matrixWorld);
-        rc.set(new THREE.Vector3(w.x, 2000, w.z), new THREE.Vector3(0, -1, 0)); rc.far = 4000;
-        const h = rc.intersectObjects(targets, false).find((x) => x.point.y <= w.y + 400);
-        if (!h) continue;
-        // the highest thing under this point; the liner's own pad and its gantry it rests on at T = 0 are allowed
-        const m = w.y - h.point.y;
-        if (T > 4.4 && m < worst) { worst = m; at = T; const bb = new THREE.Box3().setFromObject(h.object); const chain: string[] = []; for (let q: THREE.Object3D | null = h.object; q && chain.length < 5; q = q.parent) chain.push(`${q.name || q.type}${(q as THREE.InstancedMesh).isInstancedMesh ? '[inst ' + h.instanceId + ']' : ''}${q.userData.cells ? '[cells]' : ''}`); const mat = (h.object as THREE.Mesh).material as THREE.Material & { color?: THREE.Color }; what = `${chain.join(' < ')} mat ${mat?.type} ${mat?.color?.getHexString?.() ?? ''} x ${bb.min.x.toFixed(0)}..${bb.max.x.toFixed(0)} z ${bb.min.z.toFixed(0)}..${bb.max.z.toFixed(0)}; top ${h.point.y.toFixed(0)} m at ${h.point.x.toFixed(0)},${h.point.z.toFixed(0)}; object ${bb.min.y.toFixed(0)} to ${bb.max.y.toFixed(0)} m high`; }
-      }
-    }
-    // the camera: open sky above its eye, and nothing between it and the liner
-    const e = new THREE.Vector3(), a2 = new THREE.Vector3(); let camBad = '';
-    for (let T = 0; T <= OUTRO && !camBad; T += 0.25) {
-      linerPose(T, g); g.updateMatrixWorld(true); outroCam(T, g.position, e, a2);
-      rc.set(new THREE.Vector3(e.x, 2000, e.z), new THREE.Vector3(0, -1, 0)); rc.far = 4000;
-      const over = rc.intersectObjects(targets, false)[0];
-      if (T >= 4.4 && over && over.point.y > e.y + 1) { camBad = `T ${T.toFixed(1)}: something over the camera at ${over.point.y.toFixed(0)} m`; break; }
-      const to = g.position.clone().sub(e), dd = to.length(); rc.set(e.clone(), to.normalize()); rc.far = dd - 35;
-      const blk = rc.intersectObjects(targets, false)[0];
-      if (T >= 4.4 && blk) camBad = `T ${T.toFixed(1)}: view of the liner blocked at ${blk.distance.toFixed(0)} m`;
-    }
-    g.position.copy(keepP); g.rotation.copy(keepR); linerHome.copy(home);
-    return { worst: Math.round(worst * 10) / 10, at: Math.round(at * 10) / 10, what, camera: camBad || 'clear' };
-  }
-  /** Test: what else shares the frame with the liner in the take-off's open-sky shots (5 to 14 s): every solid thing
-   *  whose screen box overlaps the liner's, with when, where and how big. A liner overlapping another ship on screen
-   *  reads as one passing through the other even when they never touch. */
-  function takeoffFrame(fov = 55, aspect = 16 / 9) {
-    if (!linerG) return null;
-    const g = linerG, keepP = g.position.clone(), keepR = g.rotation.clone(), home = linerHome.lengthSq() ? linerHome.clone() : g.position.clone();
-    if (!linerHome.lengthSq()) linerHome.copy(g.position);
-    const cam = new THREE.PerspectiveCamera(fov, aspect, 0.5, 6000);
-    const targets: THREE.Object3D[] = []; scene.traverse((o) => {
-      const m = o as THREE.Mesh; if (!m.isMesh || !o.visible || o === skyMesh || ghost(m)) return;
-      let p: THREE.Object3D | null = o; while (p && p !== g) p = p.parent; if (p) return;
-      if ((m as THREE.InstancedMesh).isInstancedMesh) return;
-      m.geometry.computeBoundingSphere(); const r = m.geometry.boundingSphere!.radius * o.getWorldScale(new THREE.Vector3()).x; if (r > 300 || r < 2) return;
-      targets.push(o);
-    });
-    const sbox = (b: THREE.Box3) => { const r = new THREE.Box2(); let front = false; for (let i = 0; i < 8; i++) { const v = new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).project(cam); if (v.z < 1) front = true; r.expandByPoint(new THREE.Vector2(v.x, v.y)); } return front ? r : null; };
-    const view = new THREE.Box2(new THREE.Vector2(-1, -1), new THREE.Vector2(1, 1));
-    const e = new THREE.Vector3(), a = new THREE.Vector3(), hits = new Map<THREE.Object3D, string>();
-    for (let T = 4.5; T <= OUTRO; T += 0.25) {
-      linerPose(T, g); g.updateMatrixWorld(true); outroCam(T, g.position, e, a);
-      cam.position.copy(e); cam.lookAt(a); cam.updateMatrixWorld(true);
-      const lb = sbox(new THREE.Box3().setFromObject(g)); if (!lb || !lb.intersectsBox(view)) continue;
-      for (const o of targets) {
-        if (hits.has(o)) continue;
-        const wb = new THREE.Box3().setFromObject(o), ob = sbox(wb); if (!ob || !ob.intersectsBox(lb)) continue;
-        const c = wb.getCenter(new THREE.Vector3()), sz = wb.getSize(new THREE.Vector3()), chain: string[] = [];
-        for (let q: THREE.Object3D | null = o; q && chain.length < 4; q = q.parent) chain.push(q.name || q.type);
-        const mat = (o as THREE.Mesh).material as THREE.Material & { color?: THREE.Color };
-        hits.set(o, `T ${T.toFixed(2)} ${chain.join(' < ')} ${mat?.type} ${mat?.color?.getHexString?.() ?? ''} at ${c.x.toFixed(0)},${c.y.toFixed(0)},${c.z.toFixed(0)} size ${sz.x.toFixed(0)}x${sz.y.toFixed(0)}x${sz.z.toFixed(0)} cam ${e.distanceTo(c).toFixed(0)} m vs liner ${e.distanceTo(g.position).toFixed(0)} m`);
-      }
-    }
-    g.position.copy(keepP); g.rotation.copy(keepR); linerHome.copy(home);
-    return [...hits.values()];
-  }
-  /** Test: the nearest place to the pad where the column above the liner's whole footprint is empty up to the sky, so
-   *  it can lift straight up through nothing. Returns the centre and the highest thing under the footprint there. */
-  function takeoffFindPad(step = 12, span = 180) {
-    if (!linerG) return null;
-    const g = linerG, home = g.position.clone();
-    const targets: THREE.Object3D[] = []; scene.traverse((o) => {
-      const m = o as THREE.Mesh; if (!(m.isMesh || (o as THREE.Line).isLine) || !o.visible || o === skyMesh) return;
-      let p: THREE.Object3D | null = o; while (p && p !== g) p = p.parent; if (p) return;
-      if (ghost(m)) return;
-      m.geometry.computeBoundingSphere(); if (m.geometry.boundingSphere!.radius > 900 && !(m as THREE.InstancedMesh).isInstancedMesh) return;
-      targets.push(o);
-    });
-    const rc = new THREE.Raycaster(); rc.far = 4000; const down = new THREE.Vector3(0, -1, 0), o3 = new THREE.Vector3();
-    const top = (x: number, z: number) => { rc.set(o3.set(x, 2000, z), down); const h = rc.intersectObjects(targets, false)[0]; return h ? h.point.y : -99; };
-    // a height field of the tallest thing at every 3 m over the search area, then every pad position is judged on all
-    // of it under the liner's footprint plus a 10 m margin (a sparse test missed thin towers between its points)
-    const G = 3, n = Math.ceil((2 * span + 120) / G), x0 = home.x - span - 60, z0 = home.z - span - 60, hf = new Float32Array(n * n);
-    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) hf[i * n + j] = top(x0 + i * G, z0 + j * G);
-    const c = Math.cos(g.rotation.y), sn = Math.sin(g.rotation.y);
-    let best: { x: number; z: number; d: number; top: number; flat: number } | null = null;
-    for (let dx = -span; dx <= span; dx += step) for (let dz = -span; dz <= span; dz += step) {
-      const x = home.x + dx, z = home.z + dz, d = Math.hypot(dx, dz);
-      if (best && d >= best.d) continue;
-      let hi = -1e9, lo = 1e9;
-      for (let lz = -45; lz <= 45; lz += G) for (let lx = -25; lx <= 25; lx += G) {
-        const wx = x + lx * c + lz * sn, wz = z - lx * sn + lz * c;
-        const i = Math.round((wx - x0) / G), j = Math.round((wz - z0) / G); if (i < 0 || j < 0 || i >= n || j >= n) { hi = 1e9; continue; }
-        const y = hf[i * n + j]; hi = Math.max(hi, y); lo = Math.min(lo, y);
-      }
-      if (hi - lo < 2.5 && hi < 12 && lo > -20) best = { x, z, d, top: hi, flat: hi - lo };
-    }
-    return best;
-  }
-  /** Test: a top-down map of the tallest thing every G metres around the pad (for planning the take-off). */
-  function takeoffMap(span = 400, G = 8) {
-    if (!linerG) return null;
-    const g = linerG, home = g.position.clone();
-    const targets: THREE.Object3D[] = []; scene.traverse((o) => {
-      const m = o as THREE.Mesh; if (!(m.isMesh || (o as THREE.Line).isLine) || !o.visible || o === skyMesh) return;
-      let p: THREE.Object3D | null = o; while (p && p !== g) p = p.parent; if (p) return;
-      if (ghost(m)) return;
-      m.geometry.computeBoundingSphere(); if (m.geometry.boundingSphere!.radius > 900 && !(m as THREE.InstancedMesh).isInstancedMesh) return;
-      targets.push(o);
-    });
-    const rc = new THREE.Raycaster(); rc.far = 4000; const down = new THREE.Vector3(0, -1, 0), o3 = new THREE.Vector3();
-    const n = Math.round(2 * span / G) + 1, out: number[] = [];
-    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { rc.set(o3.set(home.x - span + i * G, 2000, home.z - span + j * G), down); const h = rc.intersectObjects(targets, false)[0]; out.push(h ? Math.round(h.point.y) : -99); }
-    return { x0: home.x - span, z0: home.z - span, G, n, h: out.join(',') };
+    if (playerFig) all.push({ id: 'player', fig: playerFig, pos: playerFig.root.position, yaw: 0, pose: 'idle', phase: 0 });
+    for (const q of all) boarding.add(q);
+    boardingKit.start(all, endOutro);
   }
   function endOutro() {
     if (outroT < 0) return;
     outroT = -1;
+    if (outroCam) boardingKit?.restoreFov(outroCam);
     const d = outroDone; outroDone = null; d?.();
   }
+  function skipOutro() { if (outroT >= 0) boardingKit?.skip(); }
   function outro(dt: number, time: number, cam?: THREE.PerspectiveCamera) {
-    outroT += dt;
-    const T = outroT;
-    // the six walk out through the gate and are gone into the terminal
-    for (const [q, to] of boarding) {
-      const dx = to.x - q.pos.x, dz = to.z - q.pos.z, d = Math.hypot(dx, dz);
-      const v = T < 0.6 ? 0 : Math.min(1.35, d / Math.max(dt, 1e-3));
-      if (d > 0.05) { q.pos.x += dx / d * v * dt; q.pos.z += dz / d * v * dt; }
-      q.pos.y = hx(q.pos.x); q.phase += dt * v * 2.2;
-      q.fig.root.rotation.y = Math.atan2(dx, dz);
-      q.fig.animate(v > 0.1 ? 'walk' : 'idle', q.phase, v / 3, time, dt);
-      if (q.pos.z < S - 8) q.fig.root.visible = false;
-    }
-    // the liner: the lift jets light, it rises off its pad, noses up and climbs away towards the one in orbit
-    if (linerG) {
-      linerPose(T, linerG);
-      const jets = smooth(3.6, 4.6, T) * (1 + Math.sin(time * 40) * 0.08);
-      for (let i = 0; i < plumes.length; i++) { const m = plumes[i]; (m.material as THREE.MeshBasicMaterial).opacity = (i === plumes.length - 1 ? smooth(6.8, 8, T) : jets * (1 - smooth(10, 12, T))) * 0.6; }
-    }
-    if (cam) {
-      outroCam(T, linerG ? linerG.position : linerHome, eyeP, aimP);
-      cam.position.copy(eyeP); cam.lookAt(aimP);
-    }
-    if (T >= OUTRO) endOutro();
-  }
-  /** The take-off's camera at time T (L = where the liner is). */
-  function outroCam(T: number, L: THREE.Vector3, eyeP: THREE.Vector3, aimP: THREE.Vector3) {
-    {
-      if (T < 4.4) {
-        // behind the group at the gate, the docked liner beyond them
-        const k = smooth(0, 4.4, T);
-        eyeP.set(4.5 - k * 2, 2.1 + k * 0.6, S + 13 - k * 3); aimP.set(4, 4 + k * 2, S - 40);
-      } else if (T < 9.4) {
-        // out on the open apron, low, the whole liner on its pad as it lifts and rises past the frame
-        const k = smooth(4.4, 9.4, T);
-        eyeP.copy(linerHome).add(CAM2).setY(linerHome.y - 4 + CAM2.y + k * 4); aimP.set(L.x, L.y + 4, L.z);
-      } else {
-        const k = smooth(9.4, OUTRO, T);
-        // by now it is above every tower: the camera flies with it, behind and below, the city far beneath
-        eyeP.set(L.x + 40 - k * 10, L.y - 25 + k * 5, L.z + 90 - k * 20); aimP.set(L.x, L.y + 4, L.z - 20);
-      }
-    }
+    outroT += dt; if (cam) outroCam = cam;
+    boardingKit?.update(dt, time, cam);
   }
 
   // phones: the big painted canvases at half size (a quarter of their memory)
   if (tier === 0 && CANVAS_HALF) CANVAS_SAVED.mb = Math.round(halveCanvases(scene) / 1e6);
   return {
-    takeoffClearance,
-    takeoffFrame,
-    takeoffFindPad,
-    takeoffMap,
-    outro: { start: startOutro, skip: endOutro, get active() { return outroT >= 0; }, get remaining() { return outroT >= 0 ? OUTRO - outroT : 0; } },
+    outro: { start: startOutro, skip: skipOutro, get active() { return outroT >= 0; }, get remaining() { return outroT >= 0 ? boardingKit?.remaining ?? 0 : 0; } },
+    /** Test: the boarding played on its own clock, checked every 1/30 s (boarding.ts check()). */
+    boardingCheck: () => boardingKit?.check() ?? null,
+    /** Test: the liner's make-up, mesh by mesh (the same list as the films' ship). */
+    linerDesign: () => boardingKit?.design() ?? null,
+    /** Test: the take-off's swept path and its camera against the city (boarding.ts clearance()). */
+    takeoffClearance: () => boardingKit?.clearance() ?? null,
+    /** Test: the tallest thing every G m round a point (choosing the pad). */
+    takeoffMap: (x: number, z: number, span?: number, G?: number) => boardingKit?.heightMap(x, z, span, G) ?? null,
     // what the sky is doing, for the ears (soundscape.ts lays the rain bed under the street)
     get weather() { return { rain: day.state.rain, night: day.state.night }; },
     mapLayer: {
@@ -2373,7 +2184,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (cam) {
         stand.length = 0;
         // a hard cap on real bodies (BODY_CAP): the friends and whoever is nearest are bodies, everyone else a card
-        const cp = cam.position; let used = 0, nc = 0; farStory.length = 0;
+        const cp = cam.position; let used = 0, nc = 0;
         lens.on = !!you && outroT < 0; lens.cx = cp.x; lens.cz = cp.z; if (you) { lens.px = you.position.x; lens.pz = you.position.z; }
         // how many bodies are within a few steps of you (the follow camera rises over a thick crowd: crowdNear)
         if (you) {
@@ -2389,7 +2200,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         }
         if (oldOn) for (let i = 0; i < people.length; i++) {
           const q = people[i];
-          if (boarding.has(q) || talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
+          if (boarding.has(q)) { if (q.fig.root.visible) used++; continue; } // (boarding.ts shows them and lets them go)
+          if (talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
           if (q.walk?.shop?.stage === 'inside') { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           const d = Math.hypot(q.pos.x - cp.x, q.pos.z - cp.z);
           const lensHit = ((LENS_OLD || (LENS_LINE && crowd.has(q.fig))) && d < 9 && inLens(q.pos.x, q.pos.z)) || (LENS_LINE && d < 1.2); // the story's people too, right at the lens (their hair filled the bottom of a phone's view)
@@ -2397,9 +2209,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // the six of the story and Mir have no card of their own look: they stay themselves (a body) out to 48 m
           // (a body until the far cards thin out, on every preset: they have no card of their own look, and blinking
           // out at 48 m, at 34 m on phones, was someone vanishing down the street)
-          // (phones: they count against the phone's total, after everyone nearer, below: perf_gate's phone gate drew 15
-          // bodies, budget 14, four of them the story's people 50 to 83 m off, p30)
-          if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = d < CARD_FAR * 0.85; /* until the cards thin out (popping in at 60 m was someone appearing down the street) */ if (v && tier === 0 && outroT < 0) { farStory.push([d, i]); continue; } if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; } // (far off they do not count against the cap)
+          // (p30: on phones they once counted against the phone's total, nearest first, and the detector saw them blink out
+          // and back 46 to 82 m off as the near bodies came and went: 9 vanishFar, 9 appearFar in a 7-minute walk. Not again)
+          if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = d < CARD_FAR * 0.85; /* until the cards thin out (popping in at 60 m was someone appearing down the street) */ if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; } // (far off they do not count against the cap)
           if (d >= CROWD_FAR) { if (q.fig.root.visible) q.fig.root.visible = false; stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: i, v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk }); continue; }
           // the six of the story (and Mir) are never a card within speaking distance, whatever the cap
           const dy = you ? Math.hypot(q.pos.x - you.position.x, q.pos.z - you.position.z) : 99;
@@ -2426,7 +2238,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // (out of the WIDE view, 6 m of margin: tested against the view itself at 14 m, the bazaar's about-turn brought
           // them into it as cards within 27 m, where nobody changes, and they stayed cards up to you, p29c; beyond 28 m
           // only, the phone gate's start still had the townsfolk behind you holding the bodies, p29d)
-          if (OUT_CARD && tier === 0 && d > 12 && !inViewWide(q.pos.x, q.pos.z)) { // (phones: on Web it moved bodies from out of view, drawn as nothing, into the view, and perf_gate's Web gate went to 1.40 M triangles, budget 1.3 M, with no fewer flat cards)
+          // (Web too again, p30: it halved Web's flat cards close by in p29f; phones-only from 839de72 because perf_gate's
+          // Web gate went to 1.40 M triangles, which was the near build of bodies never drawn before, not this rule, p30)
+          if (OUT_CARD && d > 12 && !inViewWide(q.pos.x, q.pos.z)) {
             if (q.fig.root.visible) q.fig.root.visible = false;
             stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: i, v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
             continue;
@@ -2448,13 +2262,6 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           const q = people[candI[j]], show = used < cap || (j < 2 && candK[j] < -20 && tier > 0);
           if (show) used++; else stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: candI[j], v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
           if (show !== q.fig.root.visible) q.fig.root.visible = show;
-        }
-        // phones: the story's people far off are drawn, nearest first, only while the phone's total (BODY_CAP + 2, the
-        // painted crowd's held bodies counted) has room; past it they wait out of sight, 50 m and more down the street
-        if (farStory.length) {
-          farStory.sort((a, b) => a[0] - b[0]);
-          let room = BODY_CAP + 2 - used - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0) - dpool.reduce((n, b) => n + (b.ped >= 0 ? 1 : 0), 0); // (the district walkers' as last frame)
-          for (const [, k] of farStory) { const f = people[k].fig, v = room > 0; if (v) room--; if (f.root.visible !== v) f.root.visible = v; }
         }
         bodiesLeft = Math.max(0, (outroT >= 0 ? 99 : BODY_CAP) - used); usedLog = used;
         if (!deep) drawPeds(dt, time, cam, Math.max(0, bodiesLeft - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0))); else for (const b of dpool) if (b.ped >= 0) { b.ped = -1; b.fig.root.visible = false; }
