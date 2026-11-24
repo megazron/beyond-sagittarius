@@ -210,7 +210,9 @@ with sync_playwright() as pw:
         ok(abs(A['pos'][0] - B['pos'][0]) < 1 and abs(A['pos'][2] - B['pos'][2]) < 1 and abs(A['hour'] - B['hour']) < 0.2, f'{enc}: and puts you back where and when you were')
         ok(page.evaluate("__bs.mode") == 'play' and not page.evaluate(D)['engaged'], f'{enc}: free play goes on')
     # an outcome reaches whoever asked (the story's side of the API)
-    page.evaluate("window.__out = null; __bs.combat.startEncounter('hunt.first', { story: { poisoned: true } }).then((o) => { window.__out = o; }); 0"); step(page, 1)
+    page.evaluate("window.__out = null; __bs.combat.startEncounter('hunt.first', { story: { poisoned: true } }).then((o) => { window.__out = o; }); 0"); step(page, 0.3)
+    # (the first fight the story starts asks how hard fights should be: answered here, checked in the story section)
+    page.evaluate("(() => { const b = document.querySelector('[data-diff=\"normal\"]'); b && b.click(); return 1; })()"); step(page, 1)
     page.evaluate("__bs.combat.leaveEncounter()")
     for i in range(60):
         step(page, 0.2); time.sleep(0.1)

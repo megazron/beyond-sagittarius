@@ -106,6 +106,8 @@ export class Game {
   story: Story;
   /** The fights the levels call: the first night, the morning's food. */
   fights: Fights;
+  /** main.ts: the game is in plain play (no flashback, Vault, film, pause or panel over it). */
+  canFight: () => boolean = () => true;
   private cues: { at: number; fn: () => void }[] = [];
   private clock = 0;
   private lastThirstWarn = 0;
@@ -134,7 +136,7 @@ export class Game {
     onLangChange(() => this.tutorial.refresh());
     this.story = new Story(world, player, ui, () => this.save, (sec, fn) => this.after(sec, fn), (amount) => this.hurt(amount), (beats, then) => this.playScene(beats, then));
     this.dialogue.onLine = (who, sec) => this.story.npcs.speak(who, sec);
-    this.fights = new Fights(() => this.save, ui, () => this.combat ?? null, () => this.mode === 'play');
+    this.fights = new Fights(() => this.save, ui, () => this.combat ?? null, () => this.mode === 'play' && !this.story.busy && this.canFight());
     this.story.fights = this.fights;
     this.story.hooks = { away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play',
       // the first night is the night at the fire (src/game/fights.ts)
