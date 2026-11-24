@@ -12,6 +12,7 @@ from playwright.sync_api import sync_playwright
 ap = argparse.ArgumentParser()
 ap.add_argument('--dist', default=str(pathlib.Path(__file__).resolve().parent.parent / 'dist'))
 ap.add_argument('--quality', default='mobile,web,ultra'); ap.add_argument('--port', type=int, default=4387); ap.add_argument('--out', default='')
+ap.add_argument('--query', default='', help='extra URL query (e.g. berth=1.7), for bisecting'); ap.add_argument('--spots', default='', help='only these spots, comma separated')
 a = ap.parse_args()
 
 # x, z, yaw
@@ -65,7 +66,7 @@ with sync_playwright() as pw:
         page = b.new_page(viewport={'width': 844, 'height': 390} if q == 'mobile' else {'width': 960, 'height': 540})
         errs = []; page.on('pageerror', lambda e: errs.append(str(e)[:200]))
         page.add_init_script("localStorage.setItem('bs-consent-v1', '1')")
-        page.goto(f'http://127.0.0.1:{a.port}/index.html?quality={q}&tod=17.5')
+        page.goto(f'http://127.0.0.1:{a.port}/index.html?quality={q}&tod=17.5' + (f'&{a.query}' if a.query else ''))
         page.wait_for_function("window.__bs && __bs.state === 'title' && __bs.ready", timeout=600000)
         page.click('#btn-new'); page.wait_for_selector('#nm-ok', timeout=30000); page.click('#nm-ok')
         for i in range(300):
@@ -75,6 +76,7 @@ with sync_playwright() as pw:
         time.sleep(25)  # every model and its light build in
         D, T, B = BUDGET[q]; rows = {}
         for name, (x, z, yaw) in SPOTS.items():
+            if a.spots and name not in a.spots.split(','): continue
             page.evaluate(f"__bs.awayTeleport({x}, {z}, {yaw})"); st = page.evaluate(SETTLE, [20, 15000])
             print(q, name, 'settled', st, flush=True)
             r = page.evaluate(WORST, 1500); top = r.pop('top'); rows[name] = r
