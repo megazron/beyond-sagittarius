@@ -210,7 +210,9 @@ with sync_playwright() as pw:
         ok(abs(A['pos'][0] - B['pos'][0]) < 1 and abs(A['pos'][2] - B['pos'][2]) < 1 and abs(A['hour'] - B['hour']) < 0.2, f'{enc}: and puts you back where and when you were')
         ok(page.evaluate("__bs.mode") == 'play' and not page.evaluate(D)['engaged'], f'{enc}: free play goes on')
     # an outcome reaches whoever asked (the story's side of the API)
-    page.evaluate("window.__out = null; __bs.combat.startEncounter('hunt.first', { story: { poisoned: true } }).then((o) => { window.__out = o; }); 0"); step(page, 1)
+    page.evaluate("window.__out = null; __bs.combat.startEncounter('hunt.first', { story: { poisoned: true } }).then((o) => { window.__out = o; }); 0"); step(page, 0.3)
+    # (the first fight the story starts asks how hard fights should be: answered here, checked in the story section)
+    page.evaluate("(() => { const b = document.querySelector('[data-diff=\"normal\"]'); b && b.click(); return 1; })()"); step(page, 1)
     page.evaluate("__bs.combat.leaveEncounter()")
     for i in range(60):
         step(page, 0.2); time.sleep(0.1)
@@ -241,10 +243,73 @@ with sync_playwright() as pw:
     shot(page, 'menu')
     ok(not errs, 'no page errors', errs[:3])
     page.context.close()
+    # ---- the story's own night: started by the level, not the menu or the address (src/game/fights.ts)
+    page, errs = boot(b, a.quality)
+    page.evaluate("""(() => { const s = __bs.save; s.level = 7; s.flags.spear = true; s.flags.fire = true; s.flags.shelter = true; s.flags.houndGone = false;
+      s.flags.slept = false; s.timeOfDay = 20.2; })()""")
+    for i in range(80):
+        if page.evaluate("!document.getElementById('modal').classList.contains('hidden') && !!document.querySelector('[data-diff]') || !!(__bs.combat.run)"): break
+        step(page, 0.5); time.sleep(0.1)
+    ok(page.evaluate("!document.getElementById('modal').classList.contains('hidden') && !!document.querySelector('[data-diff]')"), 'story: the first story fight asks how hard fights should be')
+    page.evaluate("""document.querySelector('[data-diff="normal"]').click()"""); step(page, 0.5)
+    d = page.evaluate(D)
+    ok(d['encounter'] == 'night.defence', 'story: level 7 at night starts the night at the fire by itself', d['encounter'])
+    ok(page.evaluate("JSON.parse(localStorage.getItem('bs-settings-v1')).combat.asked") is True, 'story: the answer is kept (asked once)')
+    for i in range(12):
+        step(page, 0.25); time.sleep(0.1)
+        if page.evaluate("!!__bs.combat.teaching"): break
+    tw = page.evaluate("__bs.combat.teaching")
+    if not tw: print('teaching', page.evaluate("JSON.stringify({hints: __bs.save.combat && __bs.save.combat.hints, d: __bs.combat.debug().player, eng: __bs.combat.engaged})"), flush=True)
+    ok(bool(tw) and tw['w'] == 'spear' and '<kbd>' in tw['html'], 'story: the spear in the hand for the first time shows its controls (keys)', tw)
+    ok(page.evaluate("document.querySelector('#cb-hud .teach').classList.contains('on')"), 'story: the controls card is on the screen')
+    shot(page, 'story_night_teach')
+    inv0 = page.evaluate("JSON.stringify(__bs.save.inventory)")
+    # spend the bag, then save in the middle of the fight: the save keeps the moment before it began
+    page.evaluate("__bs.save.inventory.branch = 0; __bs.save.stats.health = 40"); step(page, 0.2)
+    page.evaluate("window.dispatchEvent(new Event('beforeunload'))"); time.sleep(0.3)
+    sv = page.evaluate("JSON.parse(localStorage.getItem('bs-save-v1'))")
+    ok(json.dumps(sv['inventory'], sort_keys=True) == json.dumps(json.loads(inv0), sort_keys=True) and sv['timeOfDay'] < 21 and not sv['flags'].get('e1.night'),
+       'story: a save in the middle of the fight is the moment before it', [sv['inventory'], sv['timeOfDay'], sv['flags'].get('e1.night')])
+    # go down: the fight offers to try again
+    page.evaluate("__bs.combat.activeSim.player.down = true"); step(page, 3.0); time.sleep(0.3); step(page, 2.0)
+    ok(page.evaluate("!document.getElementById('modal').classList.contains('hidden') && !!document.getElementById('cb-retry')"), 'story: a lost fight offers to try again from its start')
+    ok(page.evaluate("!!document.getElementById('cb-easier') && !!document.getElementById('cb-goon')"), 'story: and easier, or go on as it is')
+    shot(page, 'story_night_lost')
+    page.evaluate("document.getElementById('cb-retry').click()"); step(page, 0.5)
+    d = page.evaluate(D)
+    ok(d['encounter'] == 'night.defence' and d['phase'] == 'prep' and not d['player']['down'], 'story: trying again starts the night over', [d['encounter'], d['phase']])
+    ok(page.evaluate("JSON.stringify(__bs.save.inventory)") == inv0 and page.evaluate("__bs.save.level") == 7, 'story: trying again gives the bag back and keeps the story where it was')
+    # load the save made in the middle of the night: the night comes again by itself
+    page.evaluate("window.dispatchEvent(new Event('beforeunload'))"); time.sleep(0.3)
+    page.reload(timeout=180000, wait_until='commit'); page.wait_for_function("window.__bs && __bs.state === 'title' && __bs.ready", timeout=600000)
+    page.wait_for_function("(() => { const b = document.getElementById('btn-continue'); return b && !b.classList.contains('hidden'); })()", timeout=60000)
+    page.evaluate("document.getElementById('btn-continue').click()")
+    for i in range(240):
+        if page.evaluate("!!(__bs.combat && __bs.combat.run)"): break
+        st = page.evaluate("[__bs.state, __bs.mode, !!__bs.save]")
+        if st[0] == 'game' and st[2]:
+            if st[1] != 'play': page.evaluate('__bs.skip()')
+            step(page, 0.5)
+        elif st[0] not in ('title', 'loading'): page.evaluate('__bs.skip()')
+        time.sleep(0.25)
+    ok(page.evaluate("__bs.combat.run && __bs.combat.run.id") == 'night.defence', 'story: loading a save from the middle of the night meets the night again')
+    page.evaluate("__bs.combat.leaveEncounter()"); step(page, 2.0); time.sleep(1.0); step(page, 0.5)
+    ok(page.evaluate("!__bs.combat.run && __bs.save.flags.houndGone"), 'story: the night over, the level goes on (sleep)', page.evaluate("[!!__bs.combat.run, __bs.save.flags.houndGone]"))
+    ok(not errs, 'story: no page errors', errs[:3])
+    page.context.close()
     # ---- a phone: the buttons
     page, errs = boot(b, 'mobile', mobile=True)
     page.evaluate("__bs.combat.trial('arena')"); time.sleep(0.3); step(page, 1.0)
-    page.touchscreen.tap(300, 150); time.sleep(0.5); step(page, 0.2); time.sleep(0.5)
+    # a finger on the world itself (the 3D view): the start banner and the toasts sit over the middle of the screen
+    # for a few seconds, and a tap that lands on one of them may not count as a finger on the view
+    pt = page.evaluate("""(() => { const c = document.querySelector('canvas'); for (const [x, y] of [[300, 150], [420, 300], [200, 320], [600, 250], [120, 200]]) { const e = document.elementFromPoint(x, y); if (e === c) return [x, y]; } return [420, 300]; })()""")
+    page.touchscreen.tap(pt[0], pt[1]); time.sleep(0.5); step(page, 0.2); time.sleep(0.5)
+    for i in range(10):
+        if page.evaluate("[...document.querySelectorAll('#cb-touch button')].filter((b) => b.offsetParent).length") >= 5: break
+        step(page, 0.2); time.sleep(0.3)
+    print('phone: after the tap', page.evaluate("({device: __bs.combat.device, free: __bs.combat.debug().engaged, touch: document.getElementById('cb-touch').className, paused: __bs.paused, modal: !document.getElementById('modal').classList.contains('hidden')})"), flush=True)
+    tw = page.evaluate("__bs.combat.teaching")
+    ok(bool(tw) and '<svg' in tw['html'], 'phone: a weapon\'s first controls card shows the touch buttons', tw)
     sizes = page.evaluate("[...document.querySelectorAll('#cb-touch button')].filter((b) => b.offsetParent).map((b) => { const r = b.getBoundingClientRect(); return [b.className, Math.round(r.width), Math.round(r.height), Math.round(r.left), Math.round(r.top)]; })")
     ok(len(sizes) >= 5, 'phone: the fight buttons are on the screen', sizes)
     ok(all(w >= 48 and h >= 48 for _, w, h, _, _ in sizes), 'phone: every button is at least 48 px', sizes)

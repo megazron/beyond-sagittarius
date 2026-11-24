@@ -64,6 +64,8 @@ export class Story {
   ch2: Chapter2;
   /** Set by the game: open the crafting and dialogue panels. */
   hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean; away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void; quick: (id: string, done: () => void) => void; drill?: (lit: () => void) => boolean; spear?: (made: () => void) => boolean; lean?: (built: () => void) => boolean; night?: (done: (held: boolean) => void) => boolean } = { away: () => {}, quick: () => {}, craft: () => {}, talk: () => {}, free: () => true };
+  /** The fights the levels call (src/game/fights.ts): the morning's food after the first night. */
+  fights: { actions(): Action[]; progress(n: number): string | null; marker(n: number): THREE.Vector3 | null; blocks(n: number): boolean } | null = null;
   private strikes = 0;
   private thrustT = 0;
   private spear: THREE.Group;
@@ -151,7 +153,7 @@ export class Story {
         if (this.flag('houndGone')) return t('progress.sleep');
         if (this.hound.state !== 'hidden') return t('progress.hound', { k: this.s.houndHits ?? 0, n: 3 });
         return isNight(this.s.timeOfDay) ? t('progress.waitNight') : t('progress.restDusk');
-      case 8: return this.flag('signal') ? null : t('progress.highGround');
+      case 8: if (this.fights?.blocks(8)) return this.fights.progress(8); return this.flag('signal') ? null : t('progress.highGround');
       case 9:
         return t(this.flag('metCrew') ? 'progress.leadCrew' : 'progress.findCrew');
       case 10:
@@ -191,7 +193,7 @@ export class Story {
       case 5: { const m = needFor(R.shelter); return m.length ? nearest(m) : L.shelter; }
       case 6: { const m = needFor(R.spear); return m.length ? nearest(m) : L.camp; }
       case 7: return this.hound.state !== 'hidden' && this.hound.state !== 'flee' ? null : L.shelter;
-      case 8: return L.ridge;
+      case 8: return this.fights?.blocks(8) ? this.fights.marker(8) : L.ridge;
       case 9: return this.flag('metCrew') ? L.camp : L.ridge;
       case 10: {
         if (!this.flag('transmitter')) return L.pod;
@@ -265,7 +267,8 @@ export class Story {
     if (n === 7 && this.flag('houndGone') && !this.flag('slept')) {
       out.push({ id: 'sleep', pos: L.shelter, radius: 3.2, label: t('action.sleep'), run: () => this.sleep() });
     }
-    if (n === 8 && !this.flag('signal')) {
+    if (this.fights) out.push(...this.fights.actions());
+    if (n === 8 && !this.flag('signal') && !this.fights?.blocks(8)) {
       out.push({ id: 'tune', pos: L.ridge, radius: 5, label: t('action.tune'), run: () => this.tune() });
     }
     if (n === 9 && !this.flag('metCrew')) out.push({ id: 'answer', pos: L.ridge, radius: 6, label: t('action.answer'), run: () => this.answerSignal() });
@@ -801,7 +804,7 @@ export class Story {
       this.player.model.armR.rotation.x = -0.3 - k * 1.3;
     }
     // signal meter while looking for high ground
-    if (s.level === 8 && !this.flag('signal') && !this.sequence) {
+    if (s.level === 8 && !this.flag('signal') && !this.sequence && !this.fights?.blocks(8)) {
       this.signalClock -= dt;
       if (this.signalClock <= 0) {
         this.signalClock = 0.4;

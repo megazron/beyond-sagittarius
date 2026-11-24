@@ -7,6 +7,7 @@ import { t, onLangChange } from '../i18n';
 import { clamp, smoothstep, lerp, easeInOut } from '../core/noise';
 import { audio } from '../core/audio';
 import { SaveData, writeSave } from '../core/save';
+import { Fights } from './fights';
 import type { World } from '../world/world';
 import { LAKE } from '../world/terrain';
 import { PICKABLE, Item } from '../world/props';
@@ -108,6 +109,10 @@ export class Game {
   private hudClock = 0;
   private interactTarget: { kind: 'water'; src?: 'stream' | 'pool' } | { kind: 'item'; item: Item } | { kind: 'action'; action: Action } | { kind: 'strike' } | null = null;
   story: Story;
+  /** The fights the levels call: the first night, the morning's food. */
+  fights: Fights;
+  /** main.ts: the game is in plain play (no flashback, Vault, film, pause or panel over it). */
+  canFight: () => boolean = () => true;
   private cues: { at: number; fn: () => void }[] = [];
   private clock = 0;
   private lastThirstWarn = 0;
@@ -141,6 +146,10 @@ export class Game {
     this.lean = new LeanTo(world, player, ui, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn), (spec) => this.combat?.tension(spec) ?? null);
     this.night = new FirstNight(world, player, ui, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn), (spec) => this.combat?.tension(spec) ?? null, () => this.combat);
     this.dialogue.onLine = (who, sec) => this.story.npcs.speak(who, sec);
+    this.fights = new Fights(() => this.save, ui, () => this.combat ?? null, () => this.mode === 'play' && !this.story.busy && this.canFight());
+    this.story.fights = this.fights;
+    // the first night is FirstNight's (night.ts), the night at the fire; main's fights.ts night stands in only where
+    // life's work is not on the branch
     this.story.hooks = {
       drill: (lit) => { if (this.debugActing) return false; this.drill.start(lit); return true; },
       spear: (made) => { if (this.debugActing) return false; this.night.spear(made); return true; },
@@ -1001,6 +1010,10 @@ export class Game {
       s.pos = [this.player.pos.x, this.player.pos.y, this.player.pos.z];
       s.yaw = this.player.yaw;
     }
-    writeSave(s);
+    // in the middle of a fight the save keeps the moment before it began (combat.ts checkpoint); the night's start is
+    // the story's own (it marks the night as begun when it starts it), so that mark is not kept either
+    const out = this.combat?.checkpoint(s) ?? s;
+    if (out !== s && this.combat?.encounter?.id === 'night.defence' && !s.flags.houndGone) out.flags = { ...s.flags, 'e1.night': false };
+    writeSave(out);
   }
 }

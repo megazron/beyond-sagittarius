@@ -1612,3 +1612,42 @@ Owns: mirrored text, touch hints, night readability, fire base, the Android buil
   locally (0 failed on my build); never seen on other branches. I could not find a cause in my input change (a finger
   anywhere now switches to touch, which should only make it pass more). Combat agent: worth a look at that check's
   timing (0.5 s after the tap under SwiftShader).
+
+## 2026-11-24 combat agent: fights in the story (branch combat-flow2 from main 26f8579; LANDED dca1f88)
+Why: the release pass found the set pieces reachable only from Pause, Action or `?combat=`. Now the levels call them.
+- `src/game/fights.ts` (new, mine): level 7's night is `night.defence` (via story.ts `hooks.night`, the same hook and the
+  same story.ts lines as life-wip's FirstNight, so life-wip's own night takes over when it lands); level 8 opens with
+  breakfast at a fishing station (`fish.spear`) or a hunt station (`hunt.first`) before the ridge (story.ts
+  `fights` object: actions, progress, marker, blocks). Placements and defaults listed in ~/bs-story/DECISIONS.md F1-F7.
+- combat.ts: difficulty asked before the first story fight (`settings.combat.asked`); a lost story fight shows a card
+  (try again from the start / easier / go on) and `startEncounter` resolves once; `checkpoint(save)` (game.persist uses it)
+  writes the moment before a fight; `teachWeapon`: the first time each weapon is in the hand a controls card (keys, pad
+  glyphs or the touch buttons' own icons; `__bs.combat.teaching`); `nightTune` = { fill 1.55, chase 0.8, rim 1.0,
+  stop 0.22 } (the old values, now tunable from the console for the re-tune on top of fix4's brighter base night).
+- Tests: levels_smoke now meets the night and breakfast through the story (answers the difficulty question, "ready",
+  steps to the end, "go on" if lost; fails if either fight did not start); play_test has a "story:" section (level 7 at
+  night starts the night by itself, asked once, spear controls card, mid-fight save = moment before, loss card, retry
+  gives the bag back, reload mid-night meets the night again) and the phone check taps a point that is really the
+  canvas (the start banner/toasts sit over (300,150) for seconds) and prints the device and engaged state.
+- GPU plan: ~/bs-cap/combat/mkplan_flow.py (new game, levels 1-6 by the test driver off camera, then the night, fishing
+  and the hunt from their stations, on camera); run with `cap3.sh flow1 plan_flow.json ""`.
+- Lessons (combat-flow2): a closed modal keeps its buttons in the page (ui.closeModal only hides it), so a test or a
+  handler that looks for `[data-diff]` / `#cb-retry` must also check `#modal` is not `.hidden`; clicking the stale
+  answer again started the night over each loop. `__bs.step` runs game.update whatever main's state is (it ran the level
+  7 night under the flashback); story fights now also need `game.canFight()` (main.ts: state game, not paused, no modal).
+  cap3.sh's `Q` variable is overwritten by ~/bin/heavy's own `Q` (its queue dir), so its URL ended in
+  `prologue=0/home/gausms/.heavy.q`; use ~/bs-cap/combat/cap4.sh (same, `QS`). The bow-arm play-test check (2.5 cm vs
+  2 cm) fails on main 26f8579 too (the known noisy one).
+- LANDED dca1f88 on main (CI 45359463873 on that sha: all 15 jobs green first try, no reruns; levels_smoke played the night
+  (lost, "go on") and fishing (left) from the story and finished the arc at level 22).
+- Also in it: the life branch's ranged.ts (its bow fixes up to f029787; main's bow-arm check failed at 2.5 cm on every
+  run before) and creatures.ts (951b29b, the night edge tinted by the hide), each the whole file, nothing else of that
+  branch; story.ts names the spear group `heldSpear` (the same line as life-wip) and combat.ts hides it while the fight
+  draws a spear (he held two shafts in the GPU take). Fight night: `nightTune.fill` 1.55 -> 0.6, chase 0.8 -> 0.3, rim
+  kept (GPU stills ~/bs-cap/combat/flow3/tune_*.jpg: frame mean 37/30 at 1.55, 32/26 at 0.6).
+- GPU takes: ~/bs-cap/combat/flow3 (before the spear/card/night fixes) and flow4 (dca1f88): 40 new game, 41 the first
+  night from the rest station, 42 breakfast fishing, 43 the hunt. Notes in Downloads/BS_Game_v1.1/combat/README_review.txt.
+- Open: chase.escape and stealth.pass are still not placed (DECISIONS F4); the world outside the breakfast fights is at
+  dawn (dark red) while the fights run at 9:00 and 14:00 (a jump in light both ways); the hunt's Nibbets are small in the
+  grass; the night is lost by a player who stands still (fair, but the first night's card is then the first thing a
+  passive player sees).

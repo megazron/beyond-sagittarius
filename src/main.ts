@@ -954,6 +954,8 @@ async function boot() {
   combat = new Combat({ world, player, input, ui, save: () => game.save, settings: () => (settings.combat ??= defaultCombatSettings()), saveSettings: persistSettings,
     free: () => state === 'game' && game.mode === 'play' && !paused && !ui.modalOpen(), persist: () => game.persist(), home: () => game.mode !== 'away' });
   game.combat = combat;
+  // a story fight starts only in plain play: not under a flashback, the Vault, a film, the pause menu or a panel
+  game.canFight = () => state === 'game' && !paused && !ui.modalOpen();
   game.onLevelComplete = onLevelDone;
   game.timersOff = !!settings.noTimers;
   // warm up shaders so the first in-game frame doesn't hitch
