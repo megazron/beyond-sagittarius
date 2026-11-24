@@ -1480,3 +1480,17 @@ unlanded except this handoff commit and any recording in progress.
   glmem census walks the on-screen stage first (shared body textures were booked to world.* / combat.d.player).
 - GPU scripts: ~/bs-assets/gpu/p27 (pedrun.sh DIST TAG; proxy_ab.sh = 4x CPU proxy main 5155be8 vs c4c894d in the
   ~/bs-p27-ab worktree).
+- LANDED: CI 45302909399 on 660c638 green (combat's bow-arm check failed once at 2.6 cm vs 2 cm, the flake perf agent 26
+  saw; re-run of the failed job green); `git push origin 660c638:main` fast-forwarded 393e094..660c638. The run on the
+  pre-rebase c4c894d (45300944851) was fully green first try, soak_smoke included.
+- 4x CPU PROXY (p27/proxy_ab.sh, Mobile 844x390, laptop A500 GPU, so not a phone): main 5155be8 vs landed code
+  (raised Mobile body budget). fps / draws / bodies: flat 57.8/77/2 -> 53.7/81/1, bazaar 57.0/74/1 -> 51.9/64/2,
+  crowd 46.7/133/3 -> 34.0/165/10 (draw 11.9 -> 21.4 ms, update 4.6 -> 11 ms), gate 47.6/88/2 -> 41.4/147/13,
+  square 60.3/87/2 -> 52.1/119/6, market 59.9/76/3 -> 54.6/113/3. The bodies cost ~12 fps at the crowd: still over 30
+  everywhere on this proxy; on a real phone not measured. If phones need it back: BODY_CAP/POOL for tier 0.
+- PEDGLITCH b1 (dc7f180 thinning only; same 7 routes): Mobile cardClose 64 -> 39, overlap 13 -> 12, slide 3 -> 0,
+  teleport 0 -> 3 (three cards moved 64-77 m in sight at a camera swing: fixed after, 6 m margin + VIEW2), all pops 0.
+  Web cardClose 135 -> 53, overlap 97 -> 88, slide 7 -> 15 (worse or noise: check b2), all pops/swaps 0, maxTris 1.70 M.
+  What is left of cardClose: cards at exactly 12 m that the camera walks up to in view (the painted crowd and the
+  story's townsfolk, queue/group/aunty, beyond the cap). Next lever: fewer painted people on Web (64) so the ones in
+  view within 30 m never outnumber the bodies, or a cap on the story's townsfolk drawn as cards near you.
