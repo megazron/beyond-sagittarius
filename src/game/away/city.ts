@@ -1416,6 +1416,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   }
   const byCard = new Map<number, (typeof crowdPool)[number]>(), near: [number, number][] = [], elbow: [number, number][] = [];
   const thinK: [number, number][] = [], thinF = new THREE.Vector3();
+  // a card is moved only from and to where no camera swing could show it: 6 m of margin, not inView's 2.5
+  const VSW = new THREE.Sphere(new THREE.Vector3(), 6);
+  const inViewWide = (x: number, z: number) => (VSW.center.set(x, FLOOR + 0.9, z), VIEW.intersectsSphere(VSW) || VIEW2.intersectsSphere(VSW));
   let lastCam: THREE.Vector3 | null = null, lineLog = false, crowdPinned = 0, pedPinned = 0, wantLog: number[] = [], usedLog = 0;
   const walkCrowd = (dt: number, time: number, cam: THREE.Camera, budget: number) => {
     lastCam = cam.position;
@@ -1429,7 +1432,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       thinK.length = 0;
       for (let i = 0; i < cards.length; i++) {
         const q = cards[i], d = Math.hypot(q.x - c.x, q.z - c.z); if (d > THIN_R) continue;
-        const seen = inView(q.x, FLOOR, q.z);
+        const seen = inViewWide(q.x, q.z);
         thinK.push([(taken[i] ? -1000 : 0) + (seen ? 0 : 100) + d, i]);
       }
       if (thinK.length > nB) {
@@ -1447,7 +1450,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           for (const sg of [back, -back]) {
             let done = false;
             for (const dz of [THIN_R + 8, THIN_R + 16, THIN_R + 26, THIN_R + 40]) {
-              const z = c.z + sg * dz; if (z < z0 || z > z1 || inView(q.x, FLOOR, z) || Math.hypot(q.x - c.x, z - c.z) < THIN_R + 4) continue;
+              const z = c.z + sg * dz; if (z < z0 || z > z1 || inViewWide(q.x, z) || Math.hypot(q.x - c.x, z - c.z) < THIN_R + 4) continue;
               if (cards.some((o, k) => k !== i && Math.abs(o.z - z) < 1.2 && Math.abs(o.x - q.x) < 0.8)) continue;
               q.z = z; done = true; break;
             }
