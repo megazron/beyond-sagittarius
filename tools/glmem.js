@@ -60,9 +60,13 @@
     const geoSeen = new Set(); const geoBy = new Map(); const imgBy = new Map(); const seenImg = new Set();
     const q = [], seen = new WeakSet(); let n = 0, qi = 0;
     const push = (o, p) => { if (o && (typeof o === 'object' || typeof o === 'function') && !seen.has(o)) { seen.add(o); q.push([o, p]); } };
-    const roots = { __bs: bs };
+    // the stage on screen first (opts.stageFirst, the default): a texture both it and the planet use (a body's maps from
+    // the asset cache) is named by the stage, so what is still named world.* is the planet's alone
+    const roots = {};
+    if (opts.stageFirst !== false) { try { roots.stage = bs.rnd.stageInfo && bs.rnd.stageInfo(); } catch (e) { } }
+    roots.__bs = bs;
     for (const k of ['world', 'rnd', 'gl', 'combat']) { try { roots[k] = bs[k]; } catch (e) { } }
-    try { roots.stage = bs.rnd.stageInfo && bs.rnd.stageInfo(); } catch (e) { }
+    if (opts.stageFirst === false) { try { roots.stage = bs.rnd.stageInfo && bs.rnd.stageInfo(); } catch (e) { } }
     for (const k in roots) push(roots[k], k);
     const group = (p) => p.split('.').slice(0, opts.depth || 4).join('.').replace(/\[\d+\]/g, '[]');
     while (qi < q.length && n < maxNodes) {
