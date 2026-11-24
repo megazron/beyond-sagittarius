@@ -71,6 +71,12 @@ const SWAP_FAR = 27;
 /** The painted crowd near the camera is thinned to the bodies there are for it (walkCrowd): within THIN_R metres, at most
  * as many as there are bodies; a card in view coming towards the camera turns back within THIN_TURN. ?thin=0: off. */
 const THIN = new URLSearchParams(globalThis.location?.search ?? '').get('thin') !== '0', THIN_R = 32, THIN_TURN = 18;
+/** The painted crowd near the camera wears looks the crowd pool has free bodies of (walkCrowd): a card in view is only
+ * ever walked by a body of its own look, so with one body a look (phones) a second card of a look held nearby stayed
+ * a card all the way up to you. Out of view a card takes a look that has a body to spare. ?looks=0: off. */
+const LOOK_SPREAD = new URLSearchParams(globalThis.location?.search ?? '').get('looks') !== '0';
+const FOLK_VIEW = new URLSearchParams(globalThis.location?.search ?? '').get('folkview') !== '0';
+const TURN_CLEAR = new URLSearchParams(globalThis.location?.search ?? '').get('turnclear') !== '0';
 const SWAP_FREE = typeof location !== 'undefined' && new URLSearchParams(location.search).get('swapfree') === '1';
 /** Whoever is drawn as a body within CONTACT metres of you stays that body, whatever the budget or the ranking does
  * (?contact=0: the old way). Bumping into somebody pulls them out of the nearest-first order, so they used to be let go. */
@@ -1416,6 +1422,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   }
   const byCard = new Map<number, (typeof crowdPool)[number]>(), near: [number, number][] = [], elbow: [number, number][] = [];
   const thinK: [number, number][] = [], thinF = new THREE.Vector3();
+  const lookN = new Int32Array(NLOOK), lookQ: [number, number][] = [], perLook = new Int32Array(NLOOK); for (const b of crowdPool) perLook[b.look]++;
   // a card is moved only from and to where no camera swing could show it: 6 m of margin, not inView's 2.5
   const VSW = new THREE.Sphere(new THREE.Vector3(), 6);
   const inViewWide = (x: number, z: number) => (VSW.center.set(x, FLOOR + 0.9, z), VIEW.intersectsSphere(VSW) || VIEW2.intersectsSphere(VSW));
@@ -1442,7 +1449,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           const i = thinK[j][1], q = cards[i]; if (taken[i]) continue;
           const d = thinK[j][0] % 100;
           if (thinK[j][0] < 100) { // in view: a card coming towards the camera turns back near it
-            if (d < THIN_TURN && Math.sign(q.v) === Math.sign(c.z - q.z) && Math.abs(q.v) > 0.05) q.v = -q.v;
+            // (only with the way back clear: turned into whoever walked behind them, two cards met head on and passed
+            // through each other, too close to step aside in time)
+            if (d < THIN_TURN && Math.sign(q.v) === Math.sign(c.z - q.z) && Math.abs(q.v) > 0.05 && (!TURN_CLEAR || !cards.some((o, k) => k !== i && Math.abs(o.x - q.x) < 1.0 && (o.z - q.z) * -Math.sign(q.v) > -0.6 && (o.z - q.z) * -Math.sign(q.v) < 4.5))) q.v = -q.v;
             continue;
           }
           if (q.gate) continue; // the plaza is too small to walk them out of sight
@@ -1457,6 +1466,22 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
             if (done) break;
           }
         }
+      }
+    }
+    // looks: within TAKE + 10 m of the camera, the cards that hold a body or may be seen keep their look; the others,
+    // nearest first, keep theirs while the pool has a body of it to spare, else take the look with the most to spare
+    if (LOOK_SPREAD && viewOn) {
+      lookN.fill(0); lookQ.length = 0;
+      for (let i = 0; i < cards.length; i++) {
+        const q = cards[i], d = Math.hypot(q.x - c.x, q.z - c.z); if (d > TAKE + 10) continue;
+        if (taken[i] || inViewWide(q.x, q.z)) lookN[q.who % NLOOK]++; else lookQ.push([d, i]);
+      }
+      lookQ.sort((a, b) => a[0] - b[0]);
+      for (const [, i] of lookQ) {
+        const q = cards[i], L = q.who % NLOOK;
+        if (lookN[L] < perLook[L]) { lookN[L]++; continue; }
+        let best = L; for (let k = 0; k < NLOOK; k++) if (perLook[k] - lookN[k] > perLook[best] - lookN[best]) best = k;
+        q.who = best; lookN[best]++;
       }
     }
     // a card in the lens (on the line from the camera to you) would be hidden as a body too: the body goes to the next one
@@ -1483,7 +1508,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       else if (CONTACT > 0 && du < CONTACT) { const e = elbow; if (e.length < 2 || du < e[e.length - 1][0]) { e.push([du, i]); e.sort((a, b) => a[0] - b[0]); if (e.length > 2) e.pop(); } }
       // nearest first: all round within 8 m (the camera turns), then those in the view (they must be bodies before they
       // come within SWAP_FAR), then the rest
-      const dk = d < 8 || mine || inView(cards[i].x, FLOOR, cards[i].z) ? d : d + 30; // (a holder keeps its place out of view too: no churn)
+      // (a holder out of view keeps its place before the rest, but after whoever is in view within 10 m of as near: a body
+      // held by someone walking away behind the camera left a card coming into the view at 30 m without one, and it
+      // stayed a card as it came within SWAP_FAR, all the way up to you)
+      const dk = d < 8 || inView(cards[i].x, FLOOR, cards[i].z) ? d : mine ? d + (FOLK_VIEW ? 10 : 0) : d + 30;
       near.push([dk - (mine && CONTACT > 0 ? 2 : 0) - (pin ? 1000 : 0), i]);
     }
     near.sort((a, b) => a[0] - b[0]);
@@ -1508,7 +1536,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     }
     for (const b of crowdPool) {
       if (b.card < 0) continue;
-      const q = cards[b.card], sp = Math.abs(q.v), yaw = q.v > 0 ? 0 : Math.PI;
+      const q = cards[b.card], sp = q.wait || q.holdT ? 0 : Math.abs(q.v), yaw = q.v > 0 ? 0 : Math.PI; // (waiting for someone ahead: they stand, not walk on the spot)
       // nobody walks through you: a body about to reach you steps round (a card has no idea where you are)
       // A wider berth than before (the v4 Web clip lost you in a knot of bodies at the kerb): from 3.4 m ahead to 1 m
       // past, anyone within 1.5 m of your line steps 1.7 m aside, away from you, unless that puts them in the road or the
@@ -1734,7 +1762,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // people stood in threes, talking, on the pavements
   // (the gate's threes stand on the pavements either side, not in the road: at (-3, -66) and (-5.5, -71) they filled
   // the left of the gate's hero view)
-  const groups: [number, number][] = rich ? [[6.6, 38], [-6.4, 12], [6.4, -8], [-6.6, -36], [6.2, -58], [-7.4, -63], [7.4, -67], [-7.6, -71.5], [7.6, -73]] : [[6.6, 38], [-6.6, -36], [-7.4, -63]];
+  // (Web, Ultra: two threes at the gate, not five: with the gate's own throng they were more people in view than bodies, and
+  // the rest stood there as flat cards as you walked up)
+  const groups: [number, number][] = rich ? [[6.6, 38], [-6.4, 12], [6.4, -8], [-6.6, -36], [6.2, -58], [-7.4, -63]] : [[6.6, 38], [-6.6, -36], [-7.4, -63]];
   // no stock emotes on a loop: they stand easy, look at whoever in the three is talking, and the talker's mouth moves
   const chats: { members: CityPerson[]; next: number; who: number }[] = [];
   groups.forEach(([x, z], gi) => {
@@ -1963,7 +1993,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         else { const s = st.get(1e6 + i); if (s) card('d:' + i, s); }
       });
       const d = dist.traffic();
-      return { peds: out, cars: [...d.cars, ...(oldTown.visible ? traffic.map((c) => [c.x, c.z, c.v > 0 ? 0 : Math.PI]) : [])], far: dense.far, old: oldTown.visible, crossing: dist.peds.flatMap((q, i) => (q.mode === 'cross' ? ['d:' + i] : [])) };
+      // why someone near is a card (tools/pedglitch.js logs it with each cardClose): the townsfolk's bodies used and the
+      // cap left, the painted crowd's bodies wanted, and the looks of the pool's free bodies
+      const diag = { used: usedLog, left: bodiesLeft, cardsNear, pinned: crowdPinned + pedPinned, want: wantLog.length, held: byCard.size, free: crowdPool.filter((b) => b.card < 0).map((b) => b.look) };
+      return { diag, peds: out, cars: [...d.cars, ...(oldTown.visible ? traffic.map((c) => [c.x, c.z, c.v > 0 ? 0 : Math.PI]) : [])], far: dense.far, old: oldTown.visible, crossing: dist.peds.flatMap((q, i) => (q.mode === 'cross' ? ['d:' + i] : [])) };
     },
     /** Test hook (tools/traffic_smoke.py): the cars and the people, old town and districts, this frame. */
     trafficState() {
@@ -2180,7 +2213,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // whoever is drawn now holds on a little, the six of the story come first, and then anyone at your elbow (a
           // card reads as cardboard at arm's length), all within the cap
           // (phones too, once they are a body: a body you bump into is not turned into a card at your elbow)
-          const key = d - (q.fig.root.visible ? 1.5 : 0) - (crowd.has(q.fig) ? 0 : 5) - ((tier > 0 || (CONTACT > 0 && q.fig.root.visible)) && dy < 4 ? 30 : 0);
+          // and whoever is in the view comes before whoever is out of it beyond 8 m (as the painted crowd): a townsperson
+          // in view at 27 m was left a card while the bodies went to people behind the camera, and stayed a card as you
+          // walked up to them (the queue, the groups, the aunty)
+          const key = d - (q.fig.root.visible ? 1.5 : 0) - (crowd.has(q.fig) ? 0 : 5) - ((tier > 0 || (CONTACT > 0 && q.fig.root.visible)) && dy < 4 ? 30 : 0) + (FOLK_VIEW && d > 8 && !inView(q.pos.x, q.pos.y, q.pos.z) ? 12 : 0);
           let j = nc++; while (j > 0 && candK[j - 1] > key) { candK[j] = candK[j - 1]; candI[j] = candI[j - 1]; j--; }
           candK[j] = key; candI[j] = i;
         }

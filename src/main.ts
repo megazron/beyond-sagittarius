@@ -55,6 +55,7 @@ import { openCodex, showSafetyCard, consentGiven, stopSpeech } from './ui/scienc
 type State = 'loading' | 'title' | 'cinematic' | 'game' | 'narrator' | 'film' | 'flashback';
 // the playable prologue opens every new game; ?prologue=0 (tests) or the settings switch (replays) skip it
 const PROLOGUE_PARAM = new URLSearchParams(location.search).get('prologue');
+const NEAR_FADE_OFF = new URLSearchParams(location.search).get('nearfade') === '0';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 lockViewport();
@@ -849,7 +850,8 @@ function draw(dt: number) {
   audio.listen(activeCam.position, earFwd);
   fitFov(activeCam);
   // props that pass right by the follow camera dissolve; cutscenes and films are framed by hand
-  NEAR_FADE.value = state === 'game' && game && (game.mode === 'play' || game.mode === 'away' || game.mode === 'dead') && !photo ? 1 : 0;
+  // (?nearfade=0: never, to tell the fade's dither from other noise in a GPU capture)
+  NEAR_FADE.value = !NEAR_FADE_OFF && state === 'game' && game && (game.mode === 'play' || game.mode === 'away' || game.mode === 'dead') && !photo ? 1 : 0;
   portraitFrame();
   if (!(state === 'film' && film.videoOn) && !warmHold) renderer.render(dt, elapsed);
   if (activeCam.fov !== designFov) { activeCam.fov = designFov; activeCam.updateProjectionMatrix(); }

@@ -17,14 +17,16 @@
 // and the most walkers in view within 27 m at once (near27), what a body budget has to cover.
 // Conditions that last (road, carHit, overlap, slide) count once when they start (and again only after 0.5 s clear).
 (() => {
+  // samples kept per type (was 40: the Web overlaps of a 7-minute walk ran to 170 and only the first 40 could be read)
+  const CAP = 400;
   const TYPES = ['vanish', 'appear', 'vanishFar', 'appearFar', 'swap', 'identity', 'lod', 'teleport', 'road', 'carHit', 'overlap', 'slide', 'cardClose'];
-  const S = { on: false, counts: {}, samples: {}, frames: 0, prev: new Map(), hold: new Map(), lastOn: new Map(), quiet: 0, t0: 0, walk: null, stuck: 0, fpsN: 0, fpsT: 0, worst: 0, last: 0, maxPeds: 0, zone: '' };
-  const reset = () => { for (const k of TYPES) { S.counts[k] = 0; S.samples[k] = []; } S.byZone = {}; S.frames = 0; S.near27 = 0; S.maxBodies = 0; S.maxCalls = 0; S.maxTris = 0; S.prev.clear(); S.hold.clear(); S.lastOn.clear(); };
+  const S = { on: false, counts: {}, samples: {}, frames: 0, prev: new Map(), hold: new Map(), lastOn: new Map(), quiet: 0, t0: 0, walk: null, stuck: 0, fpsN: 0, fpsT: 0, worst: 0, last: 0, maxPeds: 0, zone: '', enter: new Map() };
+  const reset = () => { for (const k of TYPES) { S.counts[k] = 0; S.samples[k] = []; } S.byZone = {}; S.frames = 0; S.near27 = 0; S.maxBodies = 0; S.maxCalls = 0; S.maxTris = 0; S.prev.clear(); S.hold.clear(); S.lastOn.clear(); S.enter.clear(); };
   reset();
   const ev = (type, o) => {
     S.counts[type]++;
     const z = S.zone || '?'; const zb = S.byZone[z] || (S.byZone[z] = {}); zb[type] = (zb[type] || 0) + 1;
-    if (S.samples[type].length < 40) S.samples[type].push({ t: +((performance.now() - S.t0) / 1000).toFixed(2), zone: z, ...o });
+    if (S.samples[type].length < CAP) S.samples[type].push({ t: +((performance.now() - S.t0) / 1000).toFixed(2), zone: z, ...o });
   };
   const onset = (key, type, cond, o, needFrames = 1) => {
     // a lasting condition counts once when it has held needFrames frames, and again only after 0.5 s without it
@@ -78,10 +80,14 @@
     // roads, cars, overlaps (in view only)
     const near = []; let n27 = 0;
     for (const [id, b] of cur) {
+      if (!b.v || b.d >= 27) S.enter.delete(id);
       if (!b.v || b.d > 40) continue;
       if (b.d < 25) near.push([id, b]);
       if (b.d < 27) n27++;
-      onset(id + ':card', 'cardClose', b.rep === 'c' && b.d < 12, { id, d: +b.d.toFixed(1), look: b.look });
+      // how they came within 27 m in view: at what distance and drawn as what (a card that came in at 27 m was missed by
+      // the body budget; one first seen nearer came into the view by a turn of the camera)
+      if (b.d < 27 && !S.enter.has(id)) S.enter.set(id, [+b.d.toFixed(1), b.rep]);
+      onset(id + ':card', 'cardClose', b.rep === 'c' && b.d < 12, { id, d: +b.d.toFixed(1), look: b.look, why: st.diag || null, entered: S.enter.get(id) || null });
       let carNear = false, hit = false;
       for (const c of st.cars) {
         const dx = b.x - c[0], dz = b.z - c[1], dd = Math.hypot(dx, dz); if (dd < 12) carNear = true;
@@ -94,7 +100,9 @@
     }
     for (let i = 0; i < near.length; i++) for (let j = i + 1; j < near.length; j++) {
       const [ia, a] = near[i], [ib, b] = near[j];
-      onset(ia + '|' + ib, 'overlap', Math.hypot(a.x - b.x, a.z - b.z) < 0.45, { ids: [ia, ib], reps: [a.rep, b.rep], d: +a.d.toFixed(1), at: [+a.x.toFixed(1), +a.z.toFixed(1)] });
+      // how each moved since the last frame (m/s along z, across x): head-on, catching up, or one standing
+      const pa = P.get(ia), pb = P.get(ib), vz = (q, p) => (p ? +((q.z - p.z) / dtS).toFixed(2) : null), vx = (q, p) => (p ? +((q.x - p.x) / dtS).toFixed(2) : null);
+      onset(ia + '|' + ib, 'overlap', Math.hypot(a.x - b.x, a.z - b.z) < 0.45, { ids: [ia, ib], reps: [a.rep, b.rep], d: +a.d.toFixed(1), at: [+a.x.toFixed(1), +a.z.toFixed(1)], vz: [vz(a, pa), vz(b, pb)], vx: [vx(a, pa), vx(b, pb)] });
     }
     S.near27 = Math.max(S.near27 || 0, n27);
     S.prev = cur;

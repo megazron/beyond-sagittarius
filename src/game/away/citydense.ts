@@ -72,7 +72,10 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   const { rich, FRONT, S, N } = o;
   const updates: ((dt: number, t: number, cam: THREE.Camera | null) => void)[] = [];
   /** The painted crowd: where each card is and which way it walks; `taken` cards are hidden (a real body walks them). */
-  let cards: { x: number; z: number; v: number; gate: boolean; who: number; lane: number; wait?: boolean; waitT?: number }[] = [], taken = new Uint8Array(0);
+  // the street's walkers turn back 12 m into the gate's plaza (at 4 m they all ended in the plaza's throng: a knot of
+  // cards walking through each other and through the groups there, most of the detector's overlaps)
+  const S0 = S + 12;
+  let cards: { x: number; z: number; v: number; gate: boolean; who: number; lane: number; wait?: boolean; waitT?: number; holdT?: number }[] = [], taken = new Uint8Array(0);
   /** Stand-ins: a card where a far body is not drawn (city.ts fills it each frame). */
   let standIns: (list: StandIn[], cam: THREE.Camera | null) => void = () => undefined;
   /** Where people stand or walk in the street this frame, [x, z, x, z, ...]: the cards walk round them. */
@@ -198,11 +201,11 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     taken = new Uint8Array(n + gateN);
     const ppl = Array.from({ length: n }, (_, i) => {
       const side = i % 2 ? 1 : -1, x = side * (4.7 + rnd() * 3.8);
-      return { x, z: S + 4 + rnd() * (N - S - 14), v: (rnd() < 0.5 ? 1 : -1) * (0.8 + rnd() * 0.7), h: (offs[i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: false, who: i, lane: x, wait: false, waitT: 0 };
+      return { x, z: S0 + rnd() * (N - 10 - S0), v: (rnd() < 0.5 ? 1 : -1) * (0.8 + rnd() * 0.7), h: (offs[i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: false, who: i, lane: x, wait: false, waitT: 0, holdT: 0 };
     });
     // travellers thronging the gate plaza: across the whole width, milling slowly, life-size
     cards = ppl;
-    for (let i = 0, tries = 0; i < gateN && tries < 400; tries++) { const gx = (rnd() < 0.5 ? -1 : 1) * (4.8 + rnd() * 3.6), gz = S + 2 + rnd() * 18; if (ppl.some((o) => o.gate && Math.hypot(o.x - gx, o.z - gz) < 1.6)) continue; ppl.push({ x: gx /* on the pavements, a step apart: the road through the gate is for the cars */, z: gz, v: (rnd() - 0.5) * 0.5, h: (offs[n + i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: true, who: n + i, lane: gx, wait: false, waitT: 0 }); i++; }
+    for (let i = 0, tries = 0; i < gateN && tries < 400; tries++) { const gx = (rnd() < 0.5 ? -1 : 1) * (4.8 + rnd() * 3.6), gz = S + 2 + rnd() * 18; if (ppl.some((o) => o.gate && Math.hypot(o.x - gx, o.z - gz) < 1.6)) continue; ppl.push({ x: gx /* on the pavements, a step apart: the road through the gate is for the cars */, z: gz, v: (rnd() - 0.5) * 0.5, h: (offs[n + i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: true, who: n + i, lane: gx, wait: false, waitT: 0, holdT: 0 }); i++; }
     // each card its own shade: a little warmer or cooler, lighter or darker, so no two neighbours match
     const TC = new THREE.Color();
     for (let i = 0; i < n + gateN; i++) { const k = 0.78 + rnd() * 0.42; im.setColorAt(i, TC.setRGB(k * (0.94 + rnd() * 0.12), k * (0.94 + rnd() * 0.1), k * (0.94 + rnd() * 0.12))); }
@@ -265,10 +268,23 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
         q.x = side * Math.min(hi, Math.max(lo, q.x * side + Math.max(-0.45 * dt, Math.min(0.45 * dt, (L.tx - q.x * side) * 2 * dt))));
       }
       ppl.forEach((q, i) => {
-        if (!q.wait) q.z += q.v * dt;
+        // a step that would take them within half a metre of someone ahead of them is not taken (they keep easing
+        // aside meanwhile): the aside alone, at 0.45 m/s, was too slow for two meeting head on, and they walked through
+        // each other (the detector's overlaps; most at the gate end of the street). Held for 3 s, they turn back
+        if (!q.wait) {
+          const nz = q.z + q.v * dt, sv = q.v >= 0 ? 1 : -1;
+          let clash = false;
+          for (let k = 0; k + 1 < all.length && !clash; k += 2) {
+            if (k / 2 === i) continue;
+            const ox = all[k], oz = all[k + 1];
+            if (Math.abs(ox - q.x) < 0.5 && Math.abs(oz - nz) < 0.5 && (oz - q.z) * sv > 0) clash = true;
+          }
+          if (!clash) { q.z = nz; q.holdT = 0; }
+          else if ((q.holdT = (q.holdT ?? 0) + dt) > 3) { q.v = -q.v; q.holdT = 0; }
+        }
         // at the ends of their stretch they turn round (they used to jump to the other end: a walker blinking out at the
         // gate and in at the bazaar, in plain view)
-        const z0 = q.gate ? S + 2 : S + 4, z1 = q.gate ? S + 20 : N - 10;
+        const z0 = q.gate ? S + 2 : S0, z1 = q.gate ? S + 20 : N - 10;
         if ((q.z > z1 && q.v > 0) || (q.z < z0 && q.v < 0)) q.v = -q.v;
         // near the camera a real body takes a card's place (city.ts: the crowd pool walks it); a card nobody took stays
         // drawn, so nobody vanishes as you walk up
@@ -276,7 +292,7 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
         const bob = Math.abs(Math.sin(t * 6 * Math.abs(q.v) + q.p)) * 0.04;
         const a = cp ? Math.atan2(cp.x - q.x, cp.z - q.z) : 0;
         E.set(0, a, 0); Q.setFromEuler(E);
-        if (imp) { const k = q.h / 1.72; P.set(q.x, 0.14, q.z); SC.set(1.1 * k * vis, 2.0 * k * vis, 1); tileOf(tiles, i, q.who, a - (q.v > 0 ? 0 : Math.PI), Math.abs(q.v) > 0.3 ? t * Math.abs(q.v) * 1.3 + q.p : -1); }
+        if (imp) { const k = q.h / 1.72; P.set(q.x, 0.14, q.z); SC.set(1.1 * k * vis, 2.0 * k * vis, 1); tileOf(tiles, i, q.who, a - (q.v > 0 ? 0 : Math.PI), Math.abs(q.v) > 0.3 && !q.wait && !q.holdT ? t * Math.abs(q.v) * 1.3 + q.p : -1); }
         else { P.set(q.x, 0.14 + bob, q.z); SC.set(q.h * q.wd * vis, q.h * vis, 1); }
         im.setMatrixAt(i, M.compose(P, Q, SC));
       });
@@ -288,7 +304,7 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     standIns: (list: StandIn[], cam: THREE.Camera | null) => standIns(list, cam), setObstacles: (o: number[]) => { obstacles = o; }, setFar: (m: number) => { cardFar.value = m; },
     setAtlas: (t: THREE.Texture, cols: number, rows: number, variants: number, views = 4) => setAtlas(t, cols, rows, variants, views), setLight: (c: THREE.Color) => setLight(c),
     /** Where card i walks to and fro (z from, to): the gate's plaza or the street. */
-    stretch: (i: number): [number, number] => (cards[i].gate ? [S + 2, S + 20] : [S + 4, N - 10]),
+    stretch: (i: number): [number, number] => (cards[i].gate ? [S + 2, S + 20] : [S0, N - 10]),
     /** Test hook (tools/pedglitch.js): which look a crowd card and a stand-in card wear (-1: a painted figure, before the bake) and where cards stop. */
     cardLook: (i: number) => (imp ? ((cards[i].who % imp.variants) + imp.variants) % imp.variants : -1), standLook: (s: StandIn) => (imp ? (((s.v ?? s.k) % imp.variants) + imp.variants) % imp.variants : -1), get far() { return cardFar.value; } };
 }
