@@ -8,6 +8,8 @@ import { Renderer } from '../core/renderer';
 import type { Character, CrewId, CrewPose, Dir, Face, Limbs } from '../characters/character';
 import type { Cinematic } from './cinematic';
 import { FilmVideo } from './filmvideo';
+import { TITLE_STILL } from '../game/arrivals';
+import { holdPose } from '../game/arrival';
 import type { World } from '../world/world';
 import { LAKE } from '../world/heightfield';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -877,31 +879,30 @@ export class Montage {
     const ph = b - imp, sky0 = SKYDIR[id];
     // Nuvexa stands on her raft of hull, whose deck is 0.3 m up
     const lift = id === 'social' ? 0.3 : 0;
-    const head = o.clone().add(V(0, (id === 'explorer' || id === 'builder' ? 0.95 : id === 'strong' ? 1.0 : 1.55) + lift, 0));
+    // they lie where the hit left them (arrivals.ts TITLE_STILL): the shots find the head where it is on the ground
+    const headBone = this.cast[id]?.head, head = headBone && this.seen.has(id) ? headBone.getWorldPosition(new THREE.Vector3()) : o.clone().add(V(0, 0.2 + lift, 0));
     let cam: THREE.Camera;
     if (ph < 0) cam = this.lens(o.clone().add(V(9, 1.4, 16)), o.clone().add(V(-6, 5 + 2 * clamp((ph + 5) / 5, 0, 1), -40)), 53, 30, 0.001); // I1 extreme wide, low: the world
     else if (ph < 4) cam = this.lens(o.clone().add(V(3.6, 0.7, 6.2)).add(shakeAt(b, 0.5 * after(b, imp, 1.0), this.tmp2)), o.clone().add(V(0, 0.8, 0)), 38, 7, 0.003); // I2 wide, low: the hit
-    else if (ph < 9) cam = this.lens(o.clone().add(V(1.5, 1.05, 2.7)), o.clone().add(V(0, 0.7, 0)), 27, 3.1, 0.006); // I3 medium, held: still, then a breath
-    else if (ph < 14) cam = this.lens(head.clone().add(V(0.4, -0.38, 1.05)), head.clone().add(V(0, -0.1, 0)), 20, 1.2, 0.01); // I4 close-up from a little below: they look down at themselves, and we still see the face
+    else if (ph < 9) cam = this.lens(o.clone().add(V(1.7, 1.0, 2.6)), o.clone().add(V(0, 0.2 + lift, 0)), 30, 3.1, 0.006); // I3 medium, held: still, then a breath
+    else if (ph < 14) cam = this.lens(head.clone().add(V(0.45, 0.55, 0.85)), head.clone().add(V(0, -0.03, 0)), 24, 1.1, 0.01); // I4 close-up from above the face on the ground: eyes, then the check
     else if (ph < 19) { const u = easeInOut(clamp((ph - 14) / 5, 0, 1)); cam = this.lens(head.clone().add(V(sky0.x * 0.35, 0.12, sky0.z * 0.35 + 0.2)), head.clone().add(V(sky0.x * 10, lerp(0.5, sky0.y * 10, u), sky0.z * 10)), 53, 40, 0.001); } // I5 their eyeline up to the sky, from just in front of their eyes
-    else cam = this.lens(head.clone().add(V(0.8, -0.08, 1.55)), head.clone().add(V(0, -0.1, 0)), 27, 1.8, 0.006); // I6 medium close: the look, then the line
+    else cam = this.lens(head.clone().add(V(0.9, 0.5, 1.4)), head.clone().add(V(0, -0.05, 0)), 28, 1.8, 0.006); // I6 medium close: the look, then the line
     // the light comes down the sky to where they will be
     const tr = this.trails[i]; tr.color = col;
     if (!hit && ph > -2.5) { const h = clamp((b - (imp - 2)) / 2, 0, 1); const from = o.clone().add(V(-40, 60, -70)), to = o.clone().add(V(0, 0.4, 0)); tr.draw((s, out) => out.lerpVectors(from, to, Math.max(0, h - s * 0.35)), cam, 0.9, b, 2); }
     else tr.mesh.visible = false;
     if (hit) {
-      const q = (x: number, y: number) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, 0, 'YXZ'));
-      // one held pose each, for who they are: no stock gesture on a loop
-      const POSE: Record<string, [CrewPose, number, Face]> = { strong: ['injured', 0.25, { frown: 0.5, squint: 0.3 }], medic: ['stand', -0.2, { squint: 0.2 }], explorer: ['sit', 0.3, { frown: 0.6 }], builder: ['sit', -0.25, { smile: 0.2 }], social: ['selfie', 0.15, { smile: 0.3 }] };
-      const [pose, yaw, face] = POSE[id];
-      const breath = ph >= 4 ? 0 : 1, eyes = ph < 9 ? 1 : 0;
-      const c = this.act(id, o.clone().add(V(0, 0.02 + lift, 0)), q(0, yaw), pose, null, ph < 9 ? { blink: eyes, frown: 0.3 * (1 - breath) } : face);
-      if (ph < 9) c.look2(0, 0.35); // still, head down
-      else if (ph < 14) c.look2(-yaw * 0.6, 0.45); // looking at themself: the check
-      // their sky: it is behind them as we see them (the camera is in front), out of the neck's reach for a look-at, so
-      // the head tips up by the sky's own height; the check's head-down (look2 0.45) used to stay on and Bolzar looked
-      // at his feet in I6
-      else { c.setLookTarget(null); c.look2(0, -clamp(Math.asin(sky0.y) + 0.12, 0.15, 0.5)); }
+      // where the hit left them: crumpled on the ground, never sat or stood (LANDINGS.md; arrivals.ts TITLE_STILL). Still,
+      // then a breath (+4), the eyes and a hand that checks the body (+9), the head turned up to their sky (+14), then
+      // the line, said lying down. Getting up is their own arrival, the first time you play them
+      const YAW: Record<string, number> = { strong: 2.2, medic: 2.6, explorer: 1.9, builder: 2.4, social: 2.0 };
+      const hp = holdPose(TITLE_STILL[id]!, o.clone().add(V(0, lift, 0)), YAW[id] ?? 2);
+      hp.limbs.bend = (hp.limbs.bend ?? 0) + (ph >= 4 ? Math.max(0, Math.sin((ph - 4) * BEAT * 1.9)) * 0.05 : 0);
+      const eyes = ph < 9 ? 0 : 1;
+      const face: Face = { blink: 1 - eyes * 0.6, frown: 0.25 + eyes * 0.35, squint: eyes * 0.5, open: 0.15 };
+      const c = this.act(id, hp.pos, hp.quat, 'lie', hp.limbs, face);
+      if (ph < 14) c.look2(0, 0); else { c.setLookTarget(null); c.look2(0, -0.35); }
       if (ph >= 9 && ph < 9.2 && !c.task) c.doTask(CHECK[id], { seconds: 5 * BEAT * 0.9, hands: 'R', prop: id === 'social' ? 'phone' : null });
       this.embers.set({ at: o.clone().add(V(0, 0.3, 0)), c0: col, c1: 0x202020, life: 1.6, speed: 5, drag: 1.4, grav: id === 'explorer' ? 0 : -2, size: 0.06, grow: 0.4, stagger: 0.1 }).play(tt);
     }
