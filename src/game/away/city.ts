@@ -553,6 +553,14 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     return ex * ex + ez * ez < 0.5 * 0.5;
   };
   const obs: number[] = []; // where people are in the old town's street, for the painted crowd to walk round (citydense.ts)
+  /** Would a walker stepping to x, z come within half a metre of someone (a townsperson drawn, a card of the painted
+   * crowd), nearer than they are now? */
+  const stepBlocked = (q: CityPerson, x: number, z: number) => {
+    const near = (ox: number, oz: number) => Math.abs(ox - x) < 0.5 && Math.abs(oz - z) < 0.5 && Math.hypot(ox - x, oz - z) < Math.hypot(ox - q.pos.x, oz - q.pos.z) - 1e-4;
+    for (const o of people) if (o !== q && o.walk?.shop?.stage !== 'inside' && near(o.pos.x, o.pos.z)) return true; // (a card or a body)
+    for (const o of dense.cards) if (near(o.x, o.z)) return true;
+    return false;
+  };
   const wob: number[] = [], wmir: number[] = []; // the same for the walkers (people, then the painted crowd), filled once a frame
   const BLOBS = 80, BM = new THREE.Matrix4();
   const blobs = new THREE.InstancedMesh((() => { const g = new THREE.PlaneGeometry(1.1, 1.1); g.rotateX(-Math.PI / 2); return g; })(), new THREE.MeshBasicMaterial({
@@ -1412,7 +1420,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // ---- the crowd crowdPool: real bodies that take over the painted crowd near the camera. A card closer than TAKE metres
   // is walked by a body from the crowd pool (the nearest first) and hidden; the body goes back when the card is far again.
   // Before this, the cards simply vanished within 9 m and the street emptied as you walked into it.
-  const POOL = [8, 20, 20][tier], TAKE = 36; // bodies are given out from 36 m, so whoever walks into the view is one before SWAP_FAR
+  const POOL = [8, 20, 20][tier], TAKE = 36;
+  // Web, Ultra: the painted crowd's own bodies whatever the townsfolk use (it was 8: with the townsfolk near the flat and
+  // in the bazaar using 20 to 24 of 26, the crowd had its 8 held and every card that came into the view after them at
+  // 27 m stayed a card up to you, the most of the detector's flat cards close by; the pool has 24)
+  const CROWD_MIN = 12; // bodies are given out from 36 m, so whoever walks into the view is one before SWAP_FAR
   // a body of every look (two of each on Ultra): card i is only ever walked by a body of look i mod NLOOK
   const crowdPool: { fig: Character; card: number; last: number; phase: number; dx: number; yaw: number; lastX: number; look: number }[] = [];
   for (let i = 0; i < Math.ceil(POOL / NLOOK) * NLOOK; i++) { // every look, twice where the pool is bigger than the looks
@@ -1422,7 +1434,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   }
   const byCard = new Map<number, (typeof crowdPool)[number]>(), near: [number, number][] = [], elbow: [number, number][] = [];
   const thinK: [number, number][] = [], thinF = new THREE.Vector3();
-  const lookN = new Int32Array(NLOOK), lookQ: [number, number][] = [], perLook = new Int32Array(NLOOK); for (const b of crowdPool) perLook[b.look]++;
+  const lookN = new Int32Array(NLOOK), lookQ: [number, number][] = [], perLook = new Int32Array(NLOOK); let lookSeen = new Uint8Array(0); for (const b of crowdPool) perLook[b.look]++;
   // a card is moved only from and to where no camera swing could show it: 6 m of margin, not inView's 2.5
   const VSW = new THREE.Sphere(new THREE.Vector3(), 6);
   const inViewWide = (x: number, z: number) => (VSW.center.set(x, FLOOR + 0.9, z), VIEW.intersectsSphere(VSW) || VIEW2.intersectsSphere(VSW));
@@ -1435,7 +1447,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     // up close when more people were in view than bodies): whoever is over that and out of view goes on further off,
     // out of view; a card nobody walks coming towards the camera in view within THIN_TURN turns back
     if (THIN && viewOn && cut <= 0) {
-      const nB = Math.max(0, Math.min(tier > 0 ? Math.max(8, Math.min(POOL, budget)) : Math.min(POOL, budget), outroT >= 0 || tier > 0 ? 99 : BODY_CAP + 2 - usedLog));
+      const nB = Math.max(0, Math.min(tier > 0 ? Math.max(CROWD_MIN, Math.min(POOL, budget)) : Math.min(POOL, budget), outroT >= 0 || tier > 0 ? 99 : BODY_CAP + 2 - usedLog));
       thinK.length = 0;
       for (let i = 0; i < cards.length; i++) {
         const q = cards[i], d = Math.hypot(q.x - c.x, q.z - c.z); if (d > THIN_R) continue;
@@ -1471,10 +1483,12 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     // looks: within TAKE + 10 m of the camera, the cards that hold a body or may be seen keep their look; the others,
     // nearest first, keep theirs while the pool has a body of it to spare, else take the look with the most to spare
     if (LOOK_SPREAD && viewOn) {
-      lookN.fill(0); lookQ.length = 0;
+      lookN.fill(0); lookQ.length = 0; if (lookSeen.length !== cards.length) lookSeen = new Uint8Array(cards.length).fill(1);
       for (let i = 0; i < cards.length; i++) {
-        const q = cards[i], d = Math.hypot(q.x - c.x, q.z - c.z); if (d > TAKE + 10) continue;
-        if (taken[i] || inViewWide(q.x, q.z)) lookN[q.who % NLOOK]++; else lookQ.push([d, i]);
+        const q = cards[i], d = Math.hypot(q.x - c.x, q.z - c.z); if (d > TAKE + 10) { lookSeen[i] = 1; continue; }
+        // (seen this frame or the last: a card that left the view this frame was still on the screen the frame before)
+        const seen = inViewWide(q.x, q.z), was = lookSeen[i]; lookSeen[i] = seen ? 1 : 0;
+        if (taken[i] || seen || was) lookN[q.who % NLOOK]++; else lookQ.push([d, i]);
       }
       lookQ.sort((a, b) => a[0] - b[0]);
       for (const [, i] of lookQ) {
@@ -1520,7 +1534,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     // your elbow can still be a card on a phone (perf_gate's phone budget). Web and Ultra: the held and the two within
     // reach always (their own cap is POOL + 2)
     const room = outroT >= 0 || tier > 0 ? 99 : BODY_CAP + 2 - usedLog;
-    const want = new Set<number>(); { const n = tier > 0 ? Math.max(8, Math.min(POOL, budget)) : Math.min(POOL, budget); /* Web, Ultra: at least eight for the painted crowd, whatever the townsfolk use (soak's bump test: they used 24 of 26 and a card reached your elbow) */ for (const [k, i] of near) { if (k < -2500) { want.add(i); continue; } if ((want.size >= n && k > -500) || want.size >= room) break; want.add(i); } }
+    const want = new Set<number>(); { const n = tier > 0 ? Math.max(CROWD_MIN, Math.min(POOL, budget)) : Math.min(POOL, budget); /* Web, Ultra: at least eight for the painted crowd, whatever the townsfolk use (soak's bump test: they used 24 of 26 and a card reached your elbow) */ for (const [k, i] of near) { if (k < -2500) { want.add(i); continue; } if ((want.size >= n && k > -500) || want.size >= room) break; want.add(i); } }
     for (const [, i] of elbow) if (want.size < Math.min(room, POOL + 2)) want.add(i);
     elbow.length = 0;
     wantLog = [...want];
@@ -2293,7 +2307,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           let lat = 0;
           // at the end of their stretch they stop and turn round before walking back (an instant about-turn was a body
           // walking backwards for a moment)
-          if (w.pause && w.pause > 0) w.pause -= dt; else q.pos.z += w.dir * w.speed * dt;
+          // (a step that would take them within half a metre of anyone, nearer than they are now, is not taken: they
+          // wait a moment. Easing aside alone, they walked through the threes standing on the pavement)
+          if (w.pause && w.pause > 0) w.pause -= dt; else { const nz = q.pos.z + w.dir * w.speed * dt; if (!stepBlocked(q, q.pos.x, nz)) q.pos.z = nz; else w.pause = 0.15; }
           if ((q.pos.z > w.z1 && w.dir > 0) || (q.pos.z < w.z0 && w.dir < 0)) { w.dir = -w.dir; w.pause = 0.8; }
           // someone in the way: step aside (towards the wall or the kerb, away from you), and back once past
           if (you) {
@@ -2315,6 +2331,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
             // on the pavement, never into the road (|x| < 4.35 is the kerb) or the shopfronts
             const sg = Math.sign(side) || 1; want = sg * THREE.MathUtils.clamp(want * sg, 4.7, FRONT - 0.6);
             lat = THREE.MathUtils.clamp((want - q.pos.x) * (1 - Math.exp(-dt * 3)), -0.9 * dt, 0.9 * dt); // walked, not slid
+            if (stepBlocked(q, q.pos.x + lat, q.pos.z)) lat = 0;
             q.pos.x += lat;
           }
           // facing the way they walk, the step aside included
