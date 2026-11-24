@@ -272,12 +272,14 @@ export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', s: { ateR
   // what the record earned: the Ledger, read back
   const said = (s.comments ?? []).map((key, i): VaultLine => ({ key, shot: i % 2 ? 'profile' : 'hands', pose: i % 2 ? 'present' : 'write' }));
   switch (id) {
+    // the cold open: the room in silence, who he is, the hook over the black hole (the dark he means), the Ledger he
+    // means by "in here", and the quill still writing as it fades
     case 'intro': return [
-      { key: 'mz.intro.1', shot: 'wide', pose: 'stand' },
-      { key: 'mz.intro.2', shot: 'push', pose: 'present' },
-      { key: 'mz.intro.3', shot: 'orrery', pose: 'point' },
-      { key: 'mz.intro.4', shot: 'hands', pose: 'write' },
-      { key: 'mz.intro.5', shot: 'close', pose: 'idle' },
+      { key: '', shot: 'wide', pose: 'stand', after: 1.6 },
+      { key: 'mz.intro.1', shot: 'push', pose: 'present', after: 0.6 },
+      { key: 'mz.intro.2', shot: 'window', pose: 'idle', after: 0.7 },
+      { key: 'mz.intro.3', shot: 'hands', pose: 'write', after: 0.4 },
+      { key: '', shot: 'hands', pose: 'write', after: 1.2 },
     ];
     case 'l3': return [
       { key: 'mz.l3.1', shot: 'wide', pose: 'stand' },
