@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { twoFaced } from '../../core/textfaces';
 import { cycleAtlas, cycleMaterial, stamp } from '../../core/cycle';
 import { fitCanvasText } from '../../core/canvastext';
 import { nearFade } from '../../core/nearfade';
@@ -107,8 +108,9 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   const tile = new Float32Array(slots.length * 2);
   // the canvas is flipped on upload: its top row of tiles is the top of the texture
   slots.forEach((s, i) => { tile[i * 2] = (s.k % COLS) / COLS; tile[i * 2 + 1] = 1 - (Math.floor(s.k / COLS) + 1) / ROWS; });
-  const geo = plane.clone(); geo.setAttribute('aTile', new THREE.InstancedBufferAttribute(tile, 2));
-  const bm = new THREE.MeshBasicMaterial({ map: atlas, color: new THREE.Color(2.1, 2.1, 2.1), toneMapped: false, side: THREE.DoubleSide });
+  // two faces back to back: each blade reads from up and down the street (two-sided, one way read mirrored)
+  const geo = twoFaced(plane); geo.setAttribute('aTile', new THREE.InstancedBufferAttribute(tile, 2));
+  const bm = new THREE.MeshBasicMaterial({ map: atlas, color: new THREE.Color(2.1, 2.1, 2.1), toneMapped: false });
   bm.onBeforeCompile = (sh) => {
     sh.vertexShader = `attribute vec2 aTile;\n${sh.vertexShader}`.replace('#include <uv_vertex>', `#include <uv_vertex>\n  vMapUv = aTile + vMapUv * vec2(${1 / COLS}, ${1 / ROWS});`);
     nearFade(bm, sh); // a blade passing the lens dissolves, as before

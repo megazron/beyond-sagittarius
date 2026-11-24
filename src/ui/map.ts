@@ -1,7 +1,7 @@
 import { t } from '../i18n';
 import { WORLD_SIZE, HALF } from '../world/terrain';
 import { icon } from './icons';
-import { layerCanvas as layerCanvasOf } from './minimap';
+import { layerCanvas as layerCanvasOf, drawLabels } from './minimap';
 
 type Height = (x: number, z: number) => number;
 let base: HTMLCanvasElement | null = null;
@@ -86,6 +86,7 @@ export function interactiveMap(L: import('./minimap').MapLayer, player: { x: num
     g.fillStyle = '#c9bfa6'; g.fillRect(0, 0, canvas.width, canvas.height);
     const a = sg > 0 ? toPx(x0, z0) : toPx(x1, z1), b = sg > 0 ? toPx(x1, z1) : toPx(x0, z0);
     g.imageSmoothingEnabled = true; g.drawImage(src, a.x, a.y, b.x - a.x, b.y - a.y);
+    { const kx = (b.x - a.x) / src.width; drawLabels(g, L, (x, y) => [a.x + x * kx, a.y + y * kx], kx); }
     const w = way.get(), out = document.getElementById('map-pins')!;
     const all = [...pins, ...(w ? [{ x: w.x, z: w.z, icon: 'marker', cls: 'way', label: t('map.waypoint') }] : [])];
     out.innerHTML = all.map((p) => { const q = toPx(p.x, p.z); return `<span class="pin ${p.cls ?? ''}" style="left:${q.x}px;top:${q.y}px">${icon(p.icon)}${p.label ? `<em>${p.label.replace(/</g, '')}</em>` : ''}</span>`; }).join('')

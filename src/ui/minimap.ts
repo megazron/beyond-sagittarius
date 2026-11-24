@@ -22,18 +22,41 @@ export interface MapLayer {
 }
 export interface MapPoint { x: number; z: number; kind: 'goal' | 'person' | 'place' | 'way'; label?: string }
 
-const painted = new Map<string, HTMLCanvasElement>();
-/** The layer painted once, top-down, north (-z) up. */
+/** A name on the map (a shop, a district): kept apart from the painted layer so it can be drawn upright. */
+export interface MapLabel { text: string; x: number; y: number; px: number; font: string; fill: string; align: CanvasTextAlign; baseline: CanvasTextBaseline }
+const painted = new Map<string, HTMLCanvasElement>(), labelsOf = new Map<string, MapLabel[]>();
+/**
+ * The layer painted once, top-down, north (-z) up. The words the layer writes are not painted into it: they are
+ * kept (layerLabels) and drawn upright over it, so they still read when the minimap turns with the camera.
+ */
 export function layerCanvas(L: MapLayer) {
   let c = painted.get(L.id);
   if (c) return c;
   const [x0, z0, x1, z1] = L.bounds;
   c = document.createElement('canvas');
   c.width = Math.max(2, Math.round((x1 - x0) * L.pxPerM)); c.height = Math.max(2, Math.round((z1 - z0) * L.pxPerM));
-  if (L.northPlusZ) L.paint(c.getContext('2d')!, (x) => (x1 - x) * L.pxPerM, (z) => (z1 - z) * L.pxPerM);
-  else L.paint(c.getContext('2d')!, (x) => (x - x0) * L.pxPerM, (z) => (z - z0) * L.pxPerM);
-  painted.set(L.id, c);
+  const g = c.getContext('2d')!, labels: MapLabel[] = [];
+  g.fillText = (text: string, x: number, y: number) => {
+    const m = g.getTransform(), px = parseFloat(/(\d+(?:\.\d+)?)px/.exec(g.font)?.[1] ?? '13') * Math.hypot(m.a, m.b);
+    labels.push({ text, x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f, px, font: g.font, fill: String(g.fillStyle), align: g.textAlign, baseline: g.textBaseline });
+  };
+  if (L.northPlusZ) L.paint(g, (x) => (x1 - x) * L.pxPerM, (z) => (z1 - z) * L.pxPerM);
+  else L.paint(g, (x) => (x - x0) * L.pxPerM, (z) => (z - z0) * L.pxPerM);
+  painted.set(L.id, c); labelsOf.set(L.id, labels);
   return c;
+}
+export const layerLabels = (L: MapLayer) => { layerCanvas(L); return labelsOf.get(L.id) ?? []; };
+
+/** The layer's names drawn upright at their places: `at` maps a layer pixel to the canvas, `k` is canvas px per layer px. */
+export function drawLabels(g: CanvasRenderingContext2D, L: MapLayer, at: (x: number, y: number) => [number, number], k: number, turn = 0, keep?: (u: number, v: number) => boolean) {
+  for (const l of layerLabels(L)) {
+    const [u, v] = at(l.x, l.y);
+    if (keep && !keep(u, v)) continue;
+    const px = l.px * k; if (px < 5) continue; // too small to read
+    g.save(); g.translate(u, v); if (turn) g.rotate(turn);
+    g.font = l.font.replace(/(\d+(?:\.\d+)?)px/, `${px.toFixed(1)}px`); g.textAlign = l.align; g.textBaseline = l.baseline; g.fillStyle = l.fill;
+    g.fillText(l.text, 0, 0); g.restore();
+  }
 }
 
 export const routeOf = (L: MapLayer | null, ax: number, az: number, bx: number, bz: number): [number, number][] =>
@@ -86,8 +109,11 @@ export class Minimap {
     g.translate(r, r); g.rotate(-heading);
     const s = k / L.pxPerM;
     g.globalAlpha = 0.92;
-    g.drawImage(src, ((L.northPlusZ ? x1 : x0) - px) * k * sg, ((L.northPlusZ ? z1 : z0) - pz) * k * sg, src.width * s, src.height * s);
+    const ox = ((L.northPlusZ ? x1 : x0) - px) * k * sg, oy = ((L.northPlusZ ? z1 : z0) - pz) * k * sg;
+    g.drawImage(src, ox, oy, src.width * s, src.height * s);
     g.globalAlpha = 1;
+    // the names, turned back so they stay upright as the map turns under them
+    drawLabels(g, L, (x, y) => [ox + x * s, oy + y * s], s, heading, (u, v) => Math.hypot(u, v) < r + size / 4);
     const P = (x: number, z: number): [number, number] => [(x - px) * k * sg, (z - pz) * k * sg];
     if (route && route.length > 1) {
       g.strokeStyle = COL.goal; g.lineWidth = Math.max(2, size / 45); g.lineJoin = g.lineCap = 'round';

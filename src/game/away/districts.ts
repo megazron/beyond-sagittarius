@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { twoFaced } from '../../core/textfaces';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { facadeMaterial, facadeBox, FACADE } from './facade';
 import { broadCrown, CROWN_LODS } from '../../world/foliage';
@@ -654,7 +655,7 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     const w = Math.min(14, f.x1 - f.x0 - 2), side = rnd() < 0.5 ? -1 : 1;
     return { x: (f.x0 + f.x1) / 2, y: f.h + 1.5 + w * 0.25, z: side < 0 ? f.z0 + 0.6 : f.z1 - 0.6, w, h: w * 0.5, yaw: side < 0 ? Math.PI : 0, tile: Math.floor(rnd() * ADS.length) };
   });
-  const ads = atlasPlanes(adAtlas, 1, ADS.length, bill); add(ads.mesh);
+  const ads = atlasPlanes(adAtlas, 1, ADS.length, bill, true); add(ads.mesh);
   for (const b of bill) kitBox('metal', b.x, b.y - b.h / 2 - 1.5, b.z, 0.3, 1.5, 0.3, 0x30343a, b.x, b.z);
 
   // ---- traffic signals at every junction where three or more roads meet ----
@@ -1081,11 +1082,13 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
 let waterTex: THREE.Texture | null = null;
 
 /** Planes that each show one tile of an atlas: one instanced draw. */
-function atlasPlanes(t: THREE.Texture, cols: number, rows: number, list: { x: number; y: number; z: number; w: number; h: number; yaw: number; tile: number }[]) {
-  const geo = new THREE.PlaneGeometry(1, 1), tile = new Float32Array(Math.max(1, list.length) * 2);
+function atlasPlanes(t: THREE.Texture, cols: number, rows: number, list: { x: number; y: number; z: number; w: number; h: number; yaw: number; tile: number }[], both = false) {
+  // drawn from the front only (two-sided, the words read mirrored from behind); `both`: two faces back to back, each
+  // read from its own side (the roof billboards, seen from the streets on both sides)
+  const geo = both ? twoFaced(new THREE.PlaneGeometry(1, 1)) : new THREE.PlaneGeometry(1, 1), tile = new Float32Array(Math.max(1, list.length) * 2);
   list.forEach((s, i) => { tile[i * 2] = (s.tile % cols) / cols; tile[i * 2 + 1] = 1 - (Math.floor(s.tile / cols) + 1) / rows; });
   geo.setAttribute('aTile', new THREE.InstancedBufferAttribute(tile, 2));
-  const m = new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.4, side: THREE.DoubleSide });
+  const m = new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.4 });
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uNight = FACADE.night;
     sh.vertexShader = `attribute vec2 aTile;\n${sh.vertexShader}`.replace('#include <uv_vertex>', `#include <uv_vertex>\n  vMapUv = aTile + vMapUv * vec2(${(1 / cols).toFixed(5)}, ${(1 / rows).toFixed(5)});\n  vEmissiveMapUv = vMapUv;`);

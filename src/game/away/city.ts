@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { twoFaced } from '../../core/textfaces';
 import { fitCanvasText } from '../../core/canvastext';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -979,12 +980,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     const names = ['Sharma Nano-Tailors', 'Noor Holo-Opticals', 'Nebula Bytes', 'Lunar Lassi', 'Qmail Repairs', 'Gupta Hover Parts', 'Meera Laser Mehndi', 'Haji Orbital Dry Fruits', 'Zaika Zero-G Rolls', 'Raju Neural SIMs', 'Pyaar Holo-Photos', 'Saturn Sweets'];
     const cols = ['#ffd36e', '#7fd8ff', '#ff6ec7', '#b6ff6e', '#ffffff', '#ff9f6e'];
     // one material for all of them: their canvases are stacked once the loop has drawn them
-    const hangM = new THREE.MeshStandardMaterial({ emissive: 0xffffff, emissiveIntensity: 0.9, side: THREE.DoubleSide });
+    // two faces back to back, each read from its own side (a two-sided material showed the name mirrored from behind)
+    const hangM = new THREE.MeshStandardMaterial({ emissive: 0xffffff, emissiveIntensity: 0.9 }), hangG = twoFaced(new THREE.PlaneGeometry(1.6, 0.6));
     const hung: [THREE.Mesh, HTMLCanvasElement][] = [];
     for (let i = 0, n = rich ? 22 : 10; i < n; i++) {
       const side = i % 2 ? 1 : -1, z = N - 6 - (i / n) * (N - S - 14) + (rnd() - 0.5) * 3, y = 3.0 + rnd() * 4.5;
       const t = canvasTex(256, 96, (g) => { const c = cols[i % cols.length]; g.fillStyle = '#1b1b24'; g.fillRect(0, 0, 256, 96); g.strokeStyle = c; g.lineWidth = 5; g.strokeRect(4, 4, 248, 88); g.fillStyle = c; g.font = '700 30px Rajdhani, sans-serif'; g.textAlign = 'center'; g.fillText(names[i % names.length], 128, 58, 236); });
-      const sg = add(new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.6), hangM)); hung.push([sg, canvasOf(t)]);
+      const sg = add(new THREE.Mesh(hangG.clone(), hangM)); hung.push([sg, canvasOf(t)]);
       sg.position.set(side * (FRONT - 0.9), y, z); sg.userData.ground = false;
       box(0.9, 0.04, 0.04, railM, side * (FRONT - 0.45), y + 0.32, z).castShadow = false;
     }
