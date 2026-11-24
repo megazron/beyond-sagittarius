@@ -1461,3 +1461,25 @@ unlanded except this handoff commit and any recording in progress.
 - COLD LOAD after c30f92d (hitch_p26_cold3.json): loaded in 16.8 s (main 20.7 s), worst frame 1567 ms (was 2950-3366),
   stalls over 0.9 s: 1.57 s at t 8.3, 0.98 s at t 10.8 (33 programs). (The log also shows a "loaded in 19.2 s" line I
   could not place.)
+
+
+## 2026-11-24 release fixes agent (worktree ~/bs-fix, branch fix1)
+Owns: mirrored text, touch hints, night readability, fire base, the Android build check. Not landed yet unless noted.
+- Signs: hanging signs (city.ts), neon blades (cityfuture.ts, citydense.ts) and roof billboards (districts.ts) were one
+  plane with a two-sided material: from behind the words read mirrored. Now two faces back to back (`twoFaced` in
+  src/core/textfaces.ts), each drawn from its front only. Wall signs and district shop signs are front-only.
+- Test: `python tools/sign_faces.py` (CI job `signs_touch`). canvastext.ts marks every canvas that gets words (and
+  canvases copied from one); `__bs.textFaces()` checks every worded mesh triangle by triangle in world space: not
+  mirrored, not upside down, not two-sided. `__bs.textFacesProbe()` proves the check on probe signs first.
+- Minimap: the layer's names (shops, districts) are no longer painted into the layer canvas; they are recorded and drawn
+  upright over it (`drawLabels` in src/ui/minimap.ts), also on the full map.
+- Touch hints: a touch pointerdown anywhere (menus, HUD) switches the hints to touch (before: only on the 3D canvas, so
+  a key press once left "Enter Select / Esc Close" on a phone). Keys without a code do not switch to keys. Test:
+  `python tools/touch_hints.py` (same CI job). Note for capture bots: pressing keys in a phone take switches the
+  game to key hints, as a paired keyboard would; tap instead (~/bs-cap/fix/cap.py has a "tap" step).
+- Fire (src/world/flame.ts): the lower 40 % of every tongue is dimmer and capped at orange (an ember bed among the
+  sticks); the glow layers are redder. Brightest flame above the wood.
+- Night (src/world/world.ts `world.night`, sky.ts night keys): moon 0.55 -> 1.05, night sky fill 0.4 -> 0.62 with a
+  cold blue colour, image light 0.42 -> 0.55, night horizon glow raised. The fight's planet fill (1.55) and the eye
+  stopping down by the fire (0.78) sit on top, so fight nights are a little brighter too.
+- Captures: ~/bs-cap/fix (mkplan.py desktop|phone, run.sh NAME PLAN QUERY: one exclusive heavy step, Chrome 9352).
