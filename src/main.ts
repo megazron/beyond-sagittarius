@@ -141,7 +141,7 @@ let replaying: number | null = null;
 let photo: { from: THREE.Vector3; to: THREE.Vector3; fov?: number } | null = null;
 /** Cinema mode (?cinema=1 or __bs.cinema(true)) for trailers and screenshots: everything on the page but the 3D view is
  * hidden (HUD, hints, minimap, prompts, subtitles, menus, letterbox bars, fades) and so is the cursor. */
-const setCinema = (on: boolean) => document.body.classList.toggle('cinema', on);
+const setCinema = (on: boolean) => document.documentElement.classList.toggle('cinema', on);
 if (new URLSearchParams(location.search).get('cinema') === '1') setCinema(true);
 
 document.getElementById('quality-badge')!.textContent = quality.name.toUpperCase();
@@ -1189,7 +1189,7 @@ window.addEventListener('resize', () => {
   photo(from: number[] | null, to?: number[], fov?: number) { photo = from && to ? { from: new THREE.Vector3(...from), to: new THREE.Vector3(...to), fov } : null; },
   /** Cinema mode: hide every bit of UI and the cursor, leaving only the 3D view (also `?cinema=1`). */
   cinema(on: boolean) { setCinema(on); return on; },
-  get cinemaOn() { return document.body.classList.contains('cinema'); },
+  get cinemaOn() { return document.documentElement.classList.contains('cinema'); },
   /** Depth of field for a capture: focus distance in metres and aperture (0 turns it off). Only on presets with DoF. */
   dof(focus: number, aperture: number) { renderer.setDof(focus, aperture); },
   step(sec: number) { game?.debugStep(sec, elapsed); },
