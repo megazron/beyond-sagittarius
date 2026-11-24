@@ -19,6 +19,8 @@ export interface Kit {
   /** While the phone goes into the pocket or comes out: how much the right hand reaches down to the pocket (0 to 1, the
    *  most halfway) and the pocket's place (world, last frame); null when the hand need not go there. */
   pocketReach(): { w: number; at: THREE.Vector3 } | null;
+  /** False while her own phone is still in her right hand on its way to the pocket (what the hand takes waits for it). */
+  handFree(): boolean;
 }
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -128,6 +130,7 @@ export function addKit(k: KitInput): Kit {
   let scarfEnds: THREE.Mesh[] = [];
   let phone: THREE.Object3D | null = null, phoneTo: ((left: boolean) => void) | null = null, phoneStep: ((t: number) => void) | null = null;
   const reach = { w: 0, at: new THREE.Vector3() };
+  let phoneK = () => 0;
   switch (outfit) {
     case 'scientist': {
       if (!custom) { glasses(); earGlow(); }
@@ -221,6 +224,7 @@ export function addKit(k: KitInput): Kit {
         let want = false, k = 0, lastT = -1;
         const mPock = new THREE.Matrix4(), qb = new THREE.Quaternion(), sc = new THREE.Vector3();
         phoneTo = (on) => { want = on; };
+        phoneK = () => (want ? k : 0);
         // The hand carries it (it slid on its own from the palm to the pocket beside a still hand, GPU take tasksE): over
         // half a second the right hand goes down to the pocket with the phone in the palm and comes back empty; the
         // phone is in the pocket (hidden) from the halfway mark. Coming out, the same the other way.
@@ -302,7 +306,7 @@ export function addKit(k: KitInput): Kit {
   shin.add(splint);
 
   return {
-    splint, footH: piv('footL').y, phoneLeft: (on) => phoneTo?.(on), pocketReach: () => (reach.w > 0.005 ? reach : null),
+    splint, footH: piv('footL').y, phoneLeft: (on) => phoneTo?.(on), pocketReach: () => (reach.w > 0.005 ? reach : null), handFree: () => !phone || !phone.visible || phoneK() <= 0,
     // what moves or hides on its own: never merged into the body (rigid.ts)
     live: [splint, ...(phone ? [phone] : []), ...(halo ? [halo] : []), ...scarfEnds, ...(tailBones.length ? [tailBones[0].parent!] : [])],
     update(t, amount) {

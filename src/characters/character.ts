@@ -1463,7 +1463,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (past && T.onContact) { const cb = T.onContact; T.onContact = null; cb(); }
     if (T.t >= T.dur) { task = null; showProp(bs, null, 0); return; }
     const after = tcp ? tcp.prop === 'after' : T.kind === 'pickup';
-    showProp(bs, T.prop, at < 0 || tcp?.prop === 'all' ? w : after === past ? 1 : 0);
+    // (not while her own phone is still in that hand on its way to the pocket: the stone and the phone were in her hand
+    // together for a quarter second, GPU take tasks9)
+    showProp(bs, T.prop, kit && !kit.handFree() ? 0 : at < 0 || tcp?.prop === 'all' ? w : after === past ? 1 : 0);
     if (w <= 0.001) return;
     const sides: ('L' | 'R')[] = T.hands === 'both' || (taskClipName && TASK_CLIPS[T.kind]) ? ['L', 'R'] : [T.hands];
     root.updateWorldMatrix(true, true);
