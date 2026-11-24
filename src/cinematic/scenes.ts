@@ -77,7 +77,7 @@ export function departScene(a: Cast, origin: THREE.Vector3, seats: Record<string
     { key: 'dep.4', who: 'explorer', shot: () => aim(a.explorer, 1.2, 2.0, LENS.m50, 0.05, 0.25), poses: { social: 'stand' },
       run: () => { look(a.explorer, bag); look(a.social, a.explorer); }, tick: (t) => { if (t > 0.5) look(a.explorer, a.scientist); } },
     // L6 reverse: Zenvik, calm, a little smug
-    { key: 'dep.5', who: 'scientist', shot: () => aim(a.scientist, -0.55, 1.6, LENS.c85), run: () => look(a.scientist, a.explorer) },
+    { key: 'dep.5', who: 'scientist', shot: () => aim(a.scientist, -0.95, 1.6, LENS.c85), run: () => look(a.scientist, a.explorer) },
     // L7 reverse: her excuse, with a grin she cannot hold back
     { key: 'dep.6', who: 'explorer', shot: () => aim(a.explorer, 1.25, 1.6, LENS.c85), run: () => { look(a.explorer, a.scientist); a.explorer.setFace({ smile: 0.6 }); }, after: 0.4 },
     // L8 Lyrra, not looking up from her list
@@ -86,12 +86,12 @@ export function departScene(a: Cast, origin: THREE.Vector3, seats: Record<string
     { key: 'dep.8', who: 'social', shot: () => aim(a.social, 1.15, 1.75, LENS.m35, -0.05, 0.18), poses: { social: 'selfie' }, faces: { social: 'scientist' },
       run: () => { look(a.social, a.scientist); look(a.scientist, phone()); look(a.strong, a.scientist); } },
     // L10 his answer: the first hint, said as a boast; his eyes slide off her lens on "closer"
-    { key: 'op.13', who: 'scientist', shot: () => ({ ...aim(a.scientist, -0.5, 1.6, LENS.c85), push: 0.1 }),
+    { key: 'op.13', who: 'scientist', shot: () => ({ ...aim(a.scientist, -0.95, 1.6, LENS.c85), push: 0.1 }),
       run: () => look(a.scientist, phone()), tick: (t) => { if (t > 2.6) look(a.scientist, o(0.2, -0.9, -1.6)); } },
     // L11 Draxum sits up to tease him
     { key: 'op.14', who: 'strong', shot: () => aim(a.strong, -0.15, 2.1, LENS.m50, 0.05, 0.2), run: () => look(a.strong, a.scientist) },
     // L12 Zenvik closes the subject, too quick
-    { key: 'op.15', who: 'scientist', shot: () => aim(a.scientist, -0.5, 1.6, LENS.c85), run: () => look(a.scientist, a.strong) },
+    { key: 'op.15', who: 'scientist', shot: () => aim(a.scientist, -0.95, 1.6, LENS.c85), run: () => look(a.scientist, a.strong) },
     // L13 Lyrra: the pen stops, she looks up at him
     { key: 'op.16', who: 'medic', shot: () => aim(a.medic, 0.35, 1.6, LENS.c85, -0.12, 0.06),
       run: () => look(a.medic, lap(a.medic)), tick: (t) => { if (t > 0.35) look(a.medic, a.scientist); }, after: 0.8 },
@@ -108,7 +108,7 @@ export function departScene(a: Cast, origin: THREE.Vector3, seats: Record<string
     // L16 the reply, word for word, into Nuvexa's phone
     { key: 'dep.10', who: 'strong', shot: () => aim(a.strong, -0.15, 2.1, LENS.m50, 0.05, 0.2), run: () => { look(a.strong, phone()); look(a.social, a.strong); }, after: 0.3 },
     // L17 you laugh
-    { hold: 1.7, shot: () => aim(a.scientist, -0.5, 1.6, LENS.c85), run: () => { a.scientist.setFace({ smile: 1, squint: 0.6, open: 0.35 }); look(a.scientist, phone()); fx.laugh(); } },
+    { hold: 1.7, shot: () => aim(a.scientist, -0.95, 1.6, LENS.c85), run: () => { a.scientist.setFace({ smile: 1, squint: 0.6, open: 0.35 }); look(a.scientist, phone()); fx.laugh(); } },
     // L18 all six laughing: the last time; Bolzar stirs
     { hold: 2.8, shot: () => ({ from: o(2.6, -0.6, 2.9), to: o(-0.8, -1.4, -0.9), push: -0.05, fov: LENS.w24 }),
       run: () => {
