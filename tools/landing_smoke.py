@@ -38,7 +38,9 @@ with sync_playwright() as pw:
         # the wake is stretched so no line is cut off (game.ts wakeRate): with the English takes loaded its 22.2 s of cues
         # take about 46 s of game time (wake.line3 is 6.7 s in a 3.4 s slot), so 40 held seconds ended inside it and
         # the 30 s on the free clock after that are only a few seconds of game time on CI's software GL
-        while ev("__bs.mode") == 'wake' and t < 90:
+        # played to its end (not skipped) the wake hands to 1.1's acted thirst scene (waking.ts thirst: mode 'scene', about
+        # 6 s and a line), then play: held through that too, as the free clock is a few frames a second on CI
+        while ev("__bs.mode") in ('wake', 'scene') and t < 90:
             n = ev('__bs.frames'); ev('__bs.advance(1)'); page.wait_for_function(f'__bs.frames > {n}', timeout=120000); t += 1
             if shots and int(t) % 4 == 0: page.screenshot(path=str(shots / f'wake_{int(t):02d}.jpg'), type='jpeg', quality=70)
         ev('__bs.hold(false)')
