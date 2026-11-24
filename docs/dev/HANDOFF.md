@@ -1641,9 +1641,12 @@ Owns: mirrored text, touch hints, night readability, fire base, the Android buil
   same at all four corners (not an interpolation of seed/origin). No other triangle lies in z = 220 there, no polygon
   offset; the frame's depth is 24-bit, near 0.1 far 2400, no log or reversed depth. Hiding the 182806-triangle block
   changes WHAT shows through (ne_B_hidden.jpg: the street beyond) but not the holes: the purple wall's own pixels drop
-  out, in the far, grazing end of that one huge quad only. NOT FIXED. Next probe: on that mesh swap the material for a
-  plain MeshStandardMaterial (facade shader or not?), then split the quad into 3 m pieces (a 60 m triangle reaching
-  past the camera: clipping/interpolation?), each a screenshot at the same 8 s.
+  out, in the far, grazing end of that one huge quad (and the top floors of the next block). ne_pick5: swapping that
+  merged mesh's facade material for a plain MeshStandardMaterial REMOVES it (ne_C_plain.jpg), so it is the facade
+  shader's own output (with ?nearfade=0 too, p28, so not the dither). Averaging the room behind the glass by its pixel
+  footprint (b10e260) did NOT remove it (p29/ne_g frame 470): reverted. NOT FIXED. Left in the shader to try, one at a
+  time on that mesh in a probe: glass roughness 0.04 + metalness up to 0.95 at grazing (specular aliasing against the
+  environment), the reveal `g` branch, `fFar` averaging (px threshold), the ledge lines; then the fix.
 - RELAY TO THE CHARACTER AGENT (their files; I did not touch them):
   1. bodymerge.ts / character.ts mergeCrowd: a crowd body draws 3 times a frame (p28 draws_a, Mobile crowd, 6 bodies
      over 2 frames: skin_body 12, `kit` skinned 16, hair `Mesh<head<neck` 16). Wanted: fold the rigid kit+hair mesh

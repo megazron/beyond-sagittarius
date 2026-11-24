@@ -50,8 +50,6 @@ export function facadeMaterial(o: FacadeOpts = {}) {
             float goodsK = mix(step(0.12, fract(sy / 0.42)) * step(0.3, fHash(vec3(floor(fx * bw * 7.0), floor(sy / 0.42), seed))), 0.616, cellAvg);
             glow *= street ? (0.45 + 0.75 * goodsK) : (0.55 + 0.6 * smoothstep(0.3, 0.85, fy));
             inside += vec3(0.02, 0.025, 0.03) * smoothstep(0.2, 0.9, fy); }` : `          vec3 inside = vec3(0.0), glow = vec3(0.0);
-          // (how far a pixel spans along the wall, taken here, outside the branch, where derivatives are defined)
-          float roomPx = fwidth(u) + fwidth(v);
           if (fWin > 0.001) {
           vec3 V = normalize(vWp - cameraPosition);
           vec3 T = alongX ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
@@ -116,13 +114,6 @@ export function facadeMaterial(o: FacadeOpts = {}) {
                                : (street ? vec3(0.2, 0.19, 0.18) * (0.7 + 0.3 * step(0.5, fract(q.x * 1.6) + fract(q.z * 1.6) - 0.5)) : vec3(0.32, 0.22, 0.16) * (0.6 + 0.4 * fract(q.x * 1.3)));
           }
           else room = wallC * 0.8;
-          // seen along the wall the point in the room moves (depth / how square-on) times faster than the pane from one
-          // pixel to the next: past about a goods cell (14 cm) a pixel, each pixel was a different shelf, glow or gap,
-          // a speckle that changed every frame (the NE street's shopfront on Mobile, mobile_ne_street_far 8 s; a plain
-          // material on that wall removed it, p29/ne_pick5). There the room becomes its average tone
-          { float roomFoot = roomPx / max(dir.z, 0.08) * (1.0 + Dp / W);
-            vec3 roomAvg = street ? mix(wallC * 0.34, vec3(0.3), 0.4) * 0.8 : wallC * 0.9;
-            room = mix(room, roomAvg, smoothstep(0.06, 0.16, roomFoot)); }
           float depthK = 1.0 - 0.5 * clamp(q.z / Dp, 0.0, 1.0);
           // a shop that is shut: its roller shutter is down behind the glass, ribbed and dull
           float shut = (street && abs(shopKind - 1.0) > 0.5) ? step(0.84, fHash(vec3(floor(bay / 3.0), 13.0, seed))) : 0.0; // food places stay open
