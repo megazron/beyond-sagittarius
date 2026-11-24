@@ -248,10 +248,13 @@ export class LeanTo {
         p.pos.copy(stand); p.vel.set(0, 0, 0); p.model.root.position.copy(stand);
         const facing = Math.atan2(-d.x, -d.z); p.facing = facing; p.model.root.rotation.y = facing + Math.PI; p.model.root.updateMatrixWorld(true);
         z.setLookTarget(stumpP.clone().add(new THREE.Vector3(0, 0.5, 0)));
-        // the stick in his fist (it was not in his hand at all until it flew: GPU take e13v4), the palm up so it lies out
-        // to his side past the thumb (stood up out of a fist turned in, it ran up his chest to the chin: e13v5)
+        // the stick in his fist (it was not in his hand at all until it flew: GPU take e13v4), the palm turned out to his
+        // right and the fingers forward and a little down, so the stick hangs down from the fist past the thumb, the way a
+        // stick is carried (stood up out of a fist turned in, it ran up his chest to the chin: e13v5; lying out level on a
+        // palm turned up it read as resting on an open hand at game distance: e13v6)
         z.setProp('throwstick');
-        z.setHold({ R: { at: new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld).addScaledVector(d, 0.35).add(new THREE.Vector3(0, -0.45, 0)), fingers: d.clone(), palm: new THREE.Vector3(0, 1, 0), radius: 0.02 } });
+        const rt = new THREE.Vector3(-d.z, 0, d.x);
+        z.setHold({ R: { at: new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld).addScaledVector(d, 0.35).add(new THREE.Vector3(0, -0.45, 0)), fingers: d.clone().add(new THREE.Vector3(0, -0.3, 0)).normalize(), palm: rt, radius: 0.02 } });
       }, after: 0.2 },
     ], () => this.throwIt(d, stumpP, side, built));
   }
