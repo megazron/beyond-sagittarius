@@ -51,7 +51,7 @@ export class Away {
     this.pace = 1;
     this.stage = stage; this.who = id; this.onDone = done; this.location = location; this.done.clear(); this.busy = false; this.seen.clear(); this.vista = null;
     // the body you play is drawn with its full build, phones too (see PLAYER_DETAIL in main.ts)
-    const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: (fx, fz, cx, cz) => stage.clearance?.(fx, fz, cx, cz) ?? 1, ceiling: stage.ceiling ? (fx, fz, fy, cx, cz) => stage.ceiling!(fx, fz, fy, cx, cz) : undefined, keepOff: stage.keepOff ? (v) => stage.keepOff!(v) : undefined }, this.camera, Math.max(this.detail, 0.8), id, id === 'strong' && this.skins.strong === 'suit' ? 'suit' : undefined); // the crew's chosen skin, on their own stage too
+    const p = new Player({ height: (x, z) => stage.height(x, z) }, { collide: (v, r) => stage.collide(v, r), blocks: () => false, clearance: (fx, fz, cx, cz) => stage.clearance?.(fx, fz, cx, cz) ?? 1, ceiling: stage.ceiling ? (fx, fz, fy, cx, cz) => stage.ceiling!(fx, fz, fy, cx, cz) : undefined, keepOff: stage.keepOff ? (v) => stage.keepOff!(v) : undefined }, this.camera, Math.max(this.detail, 0.8), id, id === 'strong' && this.skins.strong === 'suit' ? 'suit' : undefined, this.detail); // the crew's chosen skin, on their own stage too; on phones its maps at the phone's 1024
     p.physics = { gravity: stage.gravity, jump: stage.jump, gaps: true };
     p.model.mergeParts(); // skin, clothes and eyes in one draw (bodymerge.ts)
     // the camera comes in a little closer in a thick crowd (?crowdcam=0 turns it off, ?crowdcam=rise: it rises and looks
