@@ -30,6 +30,13 @@ python3 tools/city_tour.py --out DIR [--clips] # pictures (and short MP4s) of Ze
 npm run smoke:desktop                         # boots the Electron app under Xvfb, drives it over CDP
 ```
 
+Story data is sealed, not plain text: the Episode One choice data is `src/game/branch/episode1.sealed` (compressed,
+XORed, base64; `src/game/branch/sealed.ts` is the game's run-time decoder for when its scenes read it, `tools/story_seal.py` the tools'). Edit it with
+`python3 tools/story_seal.py open OUT.json` (keep OUT.json outside the repo), then `seal OUT.json`. `tools/spoiler_check.py
+dist` fails if a known spoiler shows in plain text in a tracked file or the build; it holds only hashes of the phrases,
+and the phrase list itself is kept outside the repo. `tools/story_check.py` checks the data's logic (locally: its notes
+name story outcomes, so it is not run in the public CI logs).
+
 A new game opens on MegaZroN in the Vault, then the title card and the playable Zenvora prologue, the six boarding
 and the liner lifting off over the city (the city stage's `outro`, letterboxed, with its Skip), a card for orbit, and
 then the deck, the title sequence and the wake-up. Continue skips all of it; Chapters has "The opening" to watch it

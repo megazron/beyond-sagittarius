@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Checks Episode One's story data (src/game/branch/episode1.json) for logic holes.
+"""Checks Episode One's story data (src/game/branch/episode1.sealed, through tools/story_seal.py) for logic holes.
 
   - every flag a scene reads, or a condition tests, is set by an earlier scene
   - nobody plays a scene on a path where they are already dead
@@ -16,7 +16,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = json.loads((ROOT / 'src/game/branch/episode1.json').read_text())
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from story_seal import load  # noqa: E402
+
+DATA = load()
 SCENES = DATA['scenes']
 
 
