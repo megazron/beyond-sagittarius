@@ -1444,3 +1444,15 @@ unlanded except this handoff commit and any recording in progress.
 - NOT DONE: task 3 (draws/uniform uploads for phones); memory targets (GPU < 500 MB, renderer < 700 MB): find what
   re-uploads the planet while away, then the city's 175 MB of textures (atlases, canvases), morph textures, the 622 MB
   of typed arrays (use a heap snapshot).
+- 2026-11-24 01:10 LANDING STATE (perf agent 26): NOT LANDED. Branch `ped26-land` = everything rebased on main 5155be8,
+  head ee3229e (do not use `ped26`: it is the pre-rebase branch at 13d8403). CI 45296820153 on ee3229e: all green but
+  soak_smoke: "after two more laps: geometries 1003 -> 1104" (limit 1098). Textures now hold (647 -> 660) since ee3229e
+  uploads every pooled body's textures and bone texture once loaded. The geometry climb has the same cause: the bigger
+  pools' bodies (and their near/far builds, chosen off screen now) upload their meshes the first time each is drawn, on
+  a later lap. Next: draw every pooled body once at load (e.g. in city.ts scene.userData.prebake, all pool roots visible
+  in a throwaway scene rendered to a 1x1 target, both builds), then rerun CI; or show soak_smoke that the count
+  plateaus at the pool size. Earlier runs on the branch: bump test now passes; combat's bow-arm check failed once on the
+  old base (combat code).
+- COLD LOAD after c30f92d (hitch_p26_cold3.json): loaded in 16.8 s (main 20.7 s), worst frame 1567 ms (was 2950-3366),
+  stalls over 0.9 s: 1.57 s at t 8.3, 0.98 s at t 10.8 (33 programs). (The log also shows a "loaded in 19.2 s" line I
+  could not place.)
