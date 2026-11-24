@@ -279,5 +279,5 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     (s.g.children[s.g.children.length - 1] as THREE.Mesh).scale.setScalar(0.7 + Math.sin(t * 30) * 0.1);
   }));
 
-  return { solids, update: (dt: number, t: number) => { for (const u of updates) u(dt, t); } };
+  return { solids, hero, update: (dt: number, t: number) => { for (const u of updates) u(dt, t); } };
 }

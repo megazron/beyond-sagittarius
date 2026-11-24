@@ -1223,7 +1223,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     // the liner on its pad: the films' ship (cinematic/ship.ts), standing on its tail on its legs, its hatch open towards
     // the terminal, the boarding gantry up to it (boarding.ts, which also plays the boarding and the take-off). The pad
     // is out on the apron where nothing stands above it, so it lifts straight up through nothing
-    boardingKit = buildBoarding({ add, gateM, glowM: cyan, scene });
+    boardingKit = buildBoarding({ add, gateM, glowM: cyan, scene, hide: [] });
     linerG = boardingKit.liner;
     // light masts and a few ground vehicles
     for (const [mx, mz] of [[-20, -30], [36, -40], [-10, -110], [60, -80]]) {
@@ -1427,6 +1427,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   };
   const propsBuilt: Promise<unknown>[] = [buildProps(placed, oldTown, true)];
   const future = buildFuture(oldTown as unknown as THREE.Scene, { rich, N, S, FRONT, FLOOR, shops: SHOPS });
+  boardingKit?.hideDuring(future.hero);
   blocks.push(...future.solids);
   const mega = buildMega(scene, { rich, N, S, FRONT, haze: HAZE });
   const dense = buildDense(oldTown as unknown as THREE.Scene, { top: scene, rich, FRONT, S, N, facades: facadesOut });
