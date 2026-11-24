@@ -8,7 +8,8 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
 
 ## Cinema mode for trailers and screenshots (2026-11-24, trailer agent)
 - `?cinema=1` or `__bs.cinema(true)`: every page element but the 3D canvas is hidden (HUD, minimap, hints, prompts,
-  subtitles, menus, letterbox bars, fades, toasts, the fight HUD) and so is the cursor. `__bs.cinemaOn` reads it.
+  subtitles, menus, letterbox bars, fades, toasts, the fight HUD) and so is the cursor. `__bs.cinemaOn` reads it. The world's hint rings (meshes named `ring`: items and build
+  sites) are hidden with it.
 - `__bs.photo(from, to, fov?)`: the free camera now takes a vertical field of view in degrees. Called on every stepped
   frame (`__bs.hold(true)`, `__bs.advance(1/60)`) it gives scripted dolly, crane and orbit moves. Outside play it takes
   over the cutscene's, film's or narrator's camera while it is set (`__bs.photo(null)` gives it back).

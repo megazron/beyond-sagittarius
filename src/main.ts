@@ -141,7 +141,17 @@ let replaying: number | null = null;
 let photo: { from: THREE.Vector3; to: THREE.Vector3; fov?: number } | null = null;
 /** Cinema mode (?cinema=1 or __bs.cinema(true)) for trailers and screenshots: everything on the page but the 3D view is
  * hidden (HUD, hints, minimap, prompts, subtitles, menus, letterbox bars, fades) and so is the cursor. */
-const setCinema = (on: boolean) => document.documentElement.classList.toggle('cinema', on);
+const setCinema = (on: boolean) => { document.documentElement.classList.toggle('cinema', on); hintSweep = 0; };
+/** World hints (the glowing rings on items and build sites, all named 'ring') go with the UI in cinema mode. */
+let hintSweep = 0;
+function sweepHints() {
+  const show = !document.documentElement.classList.contains('cinema');
+  world?.scene.traverse((o) => {
+    if (o.name !== 'ring' || !(o as THREE.Mesh).isMesh) return;
+    const m = (o as THREE.Mesh).material as THREE.Material;
+    if (m.visible !== show) m.visible = show;
+  });
+}
 if (new URLSearchParams(location.search).get('cinema') === '1') setCinema(true);
 
 document.getElementById('quality-badge')!.textContent = quality.name.toUpperCase();
@@ -859,6 +869,8 @@ function draw(dt: number) {
     activeCam.position.copy(photo.from); activeCam.lookAt(photo.to);
     if (photo.fov && activeCam.fov !== photo.fov) { activeCam.fov = photo.fov; activeCam.updateProjectionMatrix(); }
   }
+  // cinema mode: hide the world's hint rings (again every second, for items placed since), show them after
+  if (hintSweep-- <= 0) { hintSweep = document.documentElement.classList.contains('cinema') ? 60 : 1e9; sweepHints(); }
   const designFov = activeCam.fov;
   activeCam.getWorldDirection(earFwd);
   audio.listen(activeCam.position, earFwd);

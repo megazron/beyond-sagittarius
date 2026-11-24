@@ -98,7 +98,7 @@ function siteRing(radius: number) {
   const g = new THREE.RingGeometry(radius - 0.08, radius, 40);
   g.rotateX(-Math.PI / 2);
   const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.5, 0.5), transparent: true, opacity: 0.6, depthWrite: false }));
-  m.position.y = 0.06;
+  m.position.y = 0.06; m.name = 'ring'; // a hint: cinema mode hides it
   return m;
 }
 
