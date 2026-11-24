@@ -133,7 +133,7 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
 /** Rig switches for A/B tests (dev/animqa.ts): reach, the chest and collarbone helping a held hand get there. */
 /** lipsLetGo: how much of the fingers' torso guard lets go with the hand at the lips (eating, drinking). */
 /** throwTame: how much of the throw clip's lunge (legs and hips) is taken back towards the stance it began from. */
-export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9 };
+export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9, sipYaw: -0.5 };
 /** How far a strand's tip falls towards the ground as the head turns from upright, per metre of strand and per unit of
  *  change in the ground's direction seen from the head (hair.ts uDrop; times the strand's sway squared, at most 1.6) */
 const HAIR_DROP = 0.15;
@@ -1386,6 +1386,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     // hand), its top tipped to the face to sip; the bread in the fingers, pointing up and in to the mouth for the bite
     if (cup) {
       handTurnTo(rq, [0.35, 0, 1], [1, 0, -0.3], ax, MA.qh);
+      // the hand turned out round the cup (RIG_OPTS.sipYaw, about the vertical): at the sip it holds the cup from the side,
+      // not over the nose and eyes (Draxum's big hand covered his face from the front: GPU take tasksD). -0.5 rad: one eye
+      // clear; further (-0.7 to -1.1, both eyes clear) put his forearm 4.7 to 6.2 cm into his chest
+      if (RIG_OPTS.sipYaw) MA.qh.premultiply(MA.qb.setFromAxisAngle(MA.x.set(0, 1, 0), RIG_OPTS.sipYaw));
       // tipped 1.65 rad (RIG_OPTS.sipTip) with the face lifted 0.22, past level, so what is in it would pour (at 1.0 the bottom stayed below the rim)
       MA.qb.setFromAxisAngle(MA.x.set(1, 0, 0).applyQuaternion(rq), -RIG_OPTS.sipTip).multiply(MA.qh);
     } else {
