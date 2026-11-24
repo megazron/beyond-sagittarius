@@ -236,7 +236,8 @@ export class Combat {
       D.ui.banner(t('cb.menu'), t(`cb.enc.${id}`));
       D.ui.deviceLines(null); // the story's device readout (level 8's signal) does not sit over a fight
       this.sneakOn = false; this.hud.touch.sneak = false;
-      this.hint(id === 'stealth.pass' ? 'sneak' : id === 'night.defence' ? 'trap' : id === 'hunt.first' ? 'sneak' : 'dodge');
+      // (fishing has nothing to roll from: the dodge line there sat over the first throw, GPU take flow5)
+      if (id !== 'fish.spear') this.hint(id === 'stealth.pass' ? 'sneak' : id === 'night.defence' ? 'trap' : id === 'hunt.first' ? 'sneak' : 'dodge');
       this.taught = null;
     }
   }
@@ -1023,10 +1024,13 @@ export class Combat {
     // was black, s5 GPU take; then 1.35 -> 1.55 and the planet lower in the sky, 34 deg up instead of 58: from high
     // overhead it lit the tops of the grass and left every animal a dark lump with glowing marks (s5 night v2). Low, it
     // lights their sides and backs, and the side away from it stays dark, so a shape reads as a body)
-    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? this.nightTune.chase : this.nightTune.fill) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 46, P0.y + 38, P0.z + 34); this.shine.target.position.copy(P0); } }
+    // towards first light the fight's own planetshine and cold edge give way to the world's dawn, so the night ends in
+    // the same red light the world outside is in (GPU take flow5: blue-lit at 05:06 in the fight, red at 05:21 after)
+    const h = this.d.save().timeOfDay, dawnK = nightRun && h < 12 ? THREE.MathUtils.smoothstep(h, 3.6, 5.0) : 0;
+    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? this.nightTune.chase : this.nightTune.fill) * (1 - dawnK) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 46, P0.y + 38, P0.z + 34); this.shine.target.position.copy(P0); } }
     // the same cold light catches the animals' edges, so a shape beyond the fire reads as an animal, not a shadow
     // (0.55 and a thin edge: they still read only by their marks; 0.8 and pow 1.8 made them glassy, like lit ghosts, s6 take; now 0.65, pow 2)
-    NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine && nightRun ? this.nightTune.rim * Math.min(1, this.shine.intensity / Math.max(0.05, this.nightTune.fill)) : 0);
+    NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine && nightRun ? this.nightTune.rim * (1 - dawnK) * Math.min(1, this.shine.intensity / Math.max(0.05, this.nightTune.fill)) : 0);
     const D = this.d, sim = this.sim!, P = D.player, p = sim.player, run = this.encounter, cam = P.camera;
     // creatures: a body for each within sight, none for those far off or gone
     NIGHT.on = sim.night;
