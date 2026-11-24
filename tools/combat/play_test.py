@@ -255,8 +255,11 @@ with sync_playwright() as pw:
     d = page.evaluate(D)
     ok(d['encounter'] == 'night.defence', 'story: level 7 at night starts the night at the fire by itself', d['encounter'])
     ok(page.evaluate("JSON.parse(localStorage.getItem('bs-settings-v1')).combat.asked") is True, 'story: the answer is kept (asked once)')
-    step(page, 0.6)
+    for i in range(12):
+        step(page, 0.25); time.sleep(0.1)
+        if page.evaluate("!!__bs.combat.teaching"): break
     tw = page.evaluate("__bs.combat.teaching")
+    if not tw: print('teaching', page.evaluate("JSON.stringify({hints: __bs.save.combat && __bs.save.combat.hints, d: __bs.combat.debug().player, eng: __bs.combat.engaged})"), flush=True)
     ok(bool(tw) and tw['w'] == 'spear' and '<kbd>' in tw['html'], 'story: the spear in the hand for the first time shows its controls (keys)', tw)
     ok(page.evaluate("document.querySelector('#cb-hud .teach').classList.contains('on')"), 'story: the controls card is on the screen')
     shot(page, 'story_night_teach')
@@ -278,7 +281,7 @@ with sync_playwright() as pw:
     ok(page.evaluate("JSON.stringify(__bs.save.inventory)") == inv0 and page.evaluate("__bs.save.level") == 7, 'story: trying again gives the bag back and keeps the story where it was')
     # load the save made in the middle of the night: the night comes again by itself
     page.evaluate("window.dispatchEvent(new Event('beforeunload'))"); time.sleep(0.3)
-    page.reload(); page.wait_for_function("window.__bs && __bs.state === 'title' && __bs.ready", timeout=600000)
+    page.reload(timeout=180000, wait_until='commit'); page.wait_for_function("window.__bs && __bs.state === 'title' && __bs.ready", timeout=600000)
     page.evaluate("document.getElementById('btn-continue').click()")
     for i in range(240):
         if page.evaluate("!!(__bs.combat && __bs.combat.run)"): break
