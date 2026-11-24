@@ -44,7 +44,7 @@ const DT = 1 / 60;
 const smooth = (a: number, b: number, x: number) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; gateM: THREE.Material; glowM: THREE.Material; scene: THREE.Scene }) {
+export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; gateM: THREE.Material; glowM: THREE.Material; scene: THREE.Scene; hide?: THREE.Object3D[] }) {
   // ---- the liner: the films' ship, standing on its tail ----
   const ship: Ship = createShip({ landed: true });
   const liner = o.add(new THREE.Group()); liner.name = 'liner';
@@ -53,6 +53,8 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
   ship.hatch.open(1);
   // its make-up as the films have it, then what never moves merged by material (40 draws down to about 12)
   const designList = designOf(sg);
+  // the same panels as the films' hull, at the same size on the metal: three times as many over a ship three times as big
+  const tiled = new Set<THREE.Texture>(); sg.traverse((x) => { const m = (x as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined; if (m?.map && !tiled.has(m.map)) { m.map = m.map.clone(); m.map.repeat.multiplyScalar(SC); m.map.needsUpdate = true; tiled.add(m.map); } });
   const vestMats = new Set<THREE.Material>(); sg.traverse((x) => { if (x.userData.vest) x.traverse((y) => { const m = y as THREE.Mesh; if (m.isMesh) vestMats.add(m.material as THREE.Material); }); });
   bakeStatic(sg, [ship.hatch.panel, ship.plume, ...(ship.legs ? [ship.legs.group] : [])]);
 
@@ -177,7 +179,8 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
     shots = [
       { t0: 0, t1: 4.2, fov: 50, cam: (_T, k, e, a) => { F(lerp(30, 25, k), lerp(1.7, 2.3, k), lerp(-34, -29, k), e); F(0, 13, -6, a); } },
       { t0: 4.2, t1: 8.4, fov: 42, cam: (_T, k, e, a) => { F(8.2, 2.6, lerp(-13.5, -12, k), e); F(0, lerp(3.6, 4.6, k), lerp(-10, -8, k), a); } },
-      { t0: 8.4, t1: s, fov: 46, cam: (T, k, e, a) => { F(2.4, 0.9, FOOT - 3.2, e); headOf(N - 1, T, tmpA); F(0, 6.2, HULL_Z, tmpB); a.lerpVectors(tmpA, tmpB, 0.25 + k * 0.5); } },
+      // behind him and to the side as he climbs: his back, the ramp, the one in front, the lit hatch ahead
+      { t0: 8.4, t1: s, fov: 48, cam: (T, _k, e, a) => { headOf(N - 1, T, tmpA); F(1.7, 0, -3.4, tmpB); e.copy(tmpA).add(tmpB.sub(frame.position)); e.y -= 0.15; F(0, SILL + 1.3, HULL_Z, a); a.lerp(tmpA, 0.35); } },
       { t0: s, t1: s + 2.2, fov: 34, cam: (_T, k, e, a) => { F(1.2, SILL + 1.55, PLAT0 - 3.1 + k * 0.3, e); at(plans[N - 1], sStop, a); a.y += 1.5; } },
       { t0: s + 2.2, t1: s + 3.9, fov: 44, cam: (_T, k, e, a) => { F(0.5, SILL + 1.68, STOP_Z + 0.6, e); F(lerp(-8, 8, k), 30, -420, a); } },
       { t0: s + 3.9, t1: ev.arm, fov: 40, cam: (_T, k, e, a) => { F(5.6, SILL + 0.9, PLAT0 - 5.2, e); F(0, SILL + 1.2 + k * 0.4, HULL_Z - 0.6, a); } },
@@ -229,6 +232,8 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
   function start(people: Boarder[], fin: () => void) {
     plan(); cut();
     T = 0; done = fin; who = people.slice(0, N); gone = who.map(() => false); cueDone.clear();
+    // the sister ship over the spaceport sits out the scene (from below it shared the climb's frames: two of one ship)
+    for (const h of o.hide ?? []) h.visible = false;
     who.forEach((q, k) => { q.fig.setGround(ground); q.fig.setLookTarget(null); q.fig.root.visible = true; lastS[k] = sOf(k, 0); stepAcc[k] = (k * 0.37) % 0.7; place(k, 0, 0); });
     ship.hatch.open(1); ship.legs?.deploy(1); arm.rotation.y = 0; linerPose(0, liner);
     (ship.plume.material as THREE.ShaderMaterial).uniforms.uPower.value = 0;
@@ -294,6 +299,7 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
   }
   function finish() {
     if (T < 0) return;
+    for (const h of o.hide ?? []) h.visible = true;
     T = -1;
     const d = done; done = null; d?.();
   }
@@ -437,6 +443,8 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
 
   return {
     clearance, heightMap,
+    /** Something that sits out the scene (hidden while it plays). */
+    hideDuring(x: THREE.Object3D) { (o.hide ??= []).push(x); },
     liner, gantry, ship, frame, start, update, skip, restoreFov, design, check, linerPose, camAt,
     get active() { return T >= 0; },
     get remaining() { return T >= 0 ? ev.end - T : 0; },

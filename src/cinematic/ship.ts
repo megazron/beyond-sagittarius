@@ -76,7 +76,8 @@ export function createShip(o: { landed?: boolean } = {}): Ship {
   const dark = new THREE.MeshStandardMaterial({ color: 0x23272f, metalness: 0.8, roughness: 0.4 });
   const gold = new THREE.MeshStandardMaterial({ color: 0xd4a14a, metalness: 1, roughness: 0.25 });
   const glass = new THREE.MeshPhysicalMaterial({ color: 0x2a5d8a, metalness: 0.2, roughness: 0.05, transmission: 0, emissive: 0x2a77aa, emissiveIntensity: 0.6 });
-  const solar = new THREE.MeshStandardMaterial({ color: 0x0f2350, metalness: 0.9, roughness: 0.2, emissive: 0x050a20 });
+  // (cells, not a mirror: at 0.9 metal and 0.2 rough they showed the sky, white over a city and dark in space)
+  const solar = new THREE.MeshStandardMaterial({ color: 0x0f2350, metalness: 0.5, roughness: 0.45, emissive: 0x050a20 });
 
   // Spine (lathe profile), nose along +Z
   const prof = PROFILE;
@@ -380,7 +381,7 @@ function vestibule(D: typeof LINER) {
   }
   wall(lit, -V.passX, V.hallY0, V.passX, V.hallY0);              // the back of the hall and the passages
   const mk = (pos: number[], mat: THREE.Material) => { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals(); const m = new THREE.Mesh(geo, mat); g.add(m); return m; };
-  mk(lit, new THREE.MeshStandardMaterial({ color: 0x6e6458, roughness: 0.8, metalness: 0.15, emissive: 0xffb070, emissiveIntensity: 0.12, side: THREE.DoubleSide }));
+  mk(lit, new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: 0.85, metalness: 0.1, emissive: 0xffb070, emissiveIntensity: 0.08, side: THREE.DoubleSide }));
   mk(dark, new THREE.MeshBasicMaterial({ color: 0x050505, side: THREE.DoubleSide }));
   // a light strip along the hall's ceiling
   const strip = new THREE.Mesh(new THREE.PlaneGeometry(V.hallX * 1.8, 0.05), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.9, 1.3), side: THREE.DoubleSide }));
