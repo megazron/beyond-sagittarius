@@ -1215,6 +1215,8 @@
   "e1.night.o.run": "Run for the fire",
   "e1.ni.held": "It went away. It went away because of a stick I cooked.",
   "e1.ni.scar": "Pressure, then clean, then cover. Okay, {f:medic}. Okay.",
+  "e1.ni.hid": "It walked right past me. Close enough to hear it breathe. I didn't.",
+  "e1.ni.ran": "It stopped where the light starts. So the fire is the wall. Noted.",
   "vo.anon.e1.fr.test": "You nerd. You just saved my life.",
   "vo.anon.e1.ni.scar": "Pressure, then clean, then cover. Okay. Okay.",
   "msg.gfxLost": "The graphics reset. Getting the picture back...",

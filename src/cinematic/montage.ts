@@ -616,6 +616,7 @@ export class Montage {
   private mend() {
     const b = this.set.ship.broken;
     b.spine.visible = true; b.front.visible = false; b.rear.visible = false;
+    this.set.ship.group.children.forEach((c) => { if (c.userData.hatchPart) c.visible = true; });
     this.set.ship.ring.position.set(0, 0, 1.2); this.set.ship.ring.rotation.set(0, 0, 0);
     this.set.ship.group.children.forEach((c) => { const u = c.userData.film as { p: THREE.Vector3; q: THREE.Quaternion } | undefined; if (u) { c.position.copy(u.p); c.quaternion.copy(u.q); } });
   }
@@ -1008,6 +1009,7 @@ export class Montage {
     const breakShip = () => {
       const b = ship.broken;
       b.spine.visible = false; b.front.visible = true; b.rear.visible = true;
+      ship.group.children.forEach((c) => { if (c.userData.hatchPart) c.visible = false; });
       ship.group.children.forEach((c) => { if (!c.userData.film) c.userData.film = { p: c.position.clone(), q: c.quaternion.clone() }; });
     };
     P(0, 8, 'deep', (k, b) => {
@@ -1041,7 +1043,8 @@ export class Montage {
       const a = lerp(2.5, 1.7, e);
       const cam = V(Math.sin(a) * 15, 3.4 - k * 1.2, Math.cos(a) * 15 + 2);
       this.hole(-3, -2, -30, 0.1);
-      this.sun(V(0.1, 0.2, -1), 0xffa060, 4.5);
+      // a whiter sun than the old 0xffa060: under it the white hull read as brown wood (owner)
+      this.sun(V(0.1, 0.2, -1), 0xffe2c4, 3.6);
       this.lens(cam.add(shakeAt(b, 0.03 + k * 0.05, tmp)), V(0, 0, 1.5), 30, 15, 0.002, Math.sin(b * 0.5) * 0.02);
       this.fx = { exposure: 0.8 };
     }, breakShip);
