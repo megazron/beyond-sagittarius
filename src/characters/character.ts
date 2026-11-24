@@ -538,10 +538,19 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (sep && BODY_MERGE.separateBody && !ref.visible && m.visible) { ref.visible = true; m.visible = false; }
       else if (!sep && ref.visible) { ref.visible = false; m.visible = true; }
     }
-    for (const m of rigid) m.visible = kitShown && (sep || !kitIn[lodOn].has(m));
+    for (const m of rigid) park(m, kitShown && (sep || !kitIn[lodOn].has(m)), kitIn[0].has(m) || kitIn[1].has(m));
     if (u?.uKitOn) u.uKitOn.value = kitShown && !sep ? 1 : 0;
     if (u?.uHairOn) u.uHairOn.value = sep ? 0 : 1;
-    hairs.forEach((h, i) => { if (h) h.visible = (hairs[1] ? hairOn === i : i === 0) && (sep || !hairIn[lodOn]); });
+    hairs.forEach((h, i) => { if (h) park(h, (hairs[1] ? hairOn === i : i === 0) && (sep || !hairIn[lodOn]), hairIn[0] === h || hairIn[1] === h); });
+  }
+  // kit and hair a merged set holds are taken out of the scene graph while they are not drawn on their own (three.js's
+  // matrix pass walked them every frame); they go back on their bone when they are
+  const parkedOn = new Map<THREE.Object3D, THREE.Object3D>();
+  function park(o: THREE.Object3D, show: boolean, merged: boolean) {
+    o.visible = show;
+    const at = parkedOn.get(o);
+    if (show && at) { at.add(o); parkedOn.delete(o); }
+    else if (!show && merged && !at && o.parent) { parkedOn.set(o, o.parent); o.removeFromParent(); }
   }
   function mergeCrowd() {
     if (!(crowd || mergeWanted) || !bodyMats || !BODY_MERGE.on) return;
@@ -561,14 +570,15 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // build is in, a far body keeps its near hair (showKitHair)
       const extra: Parameters<typeof mergeBodyGeometry>[2] = [];
       let kitHere: THREE.SkinnedMesh[] = [], hairHere: THREE.Object3D | null = null;
-      const bound = rigid.length && rigid.every((r) => sameSkeleton(r.skeleton, sk.skeleton) && r.bindMatrix.equals(sk.bindMatrix) && r.parent === sk.parent && r.matrix.equals(sk.matrix));
+      const bound = rigid.length && rigid.every((r) => sameSkeleton(r.skeleton, sk.skeleton) && r.bindMatrix.equals(sk.bindMatrix) && (r.parent ?? parkedOn.get(r)) === sk.parent && r.matrix.equals(sk.matrix));
       if (BODY_MERGE.extras && bound) {
         const k = kitParts(rigid, kitSlots);
         if (k.parts.length) { extra.push(...k.parts); kitHere = k.parts.map((p) => p.from); kitCull ||= k.cull; }
       }
       const hs = (s === 1 ? hairs[1] : null) ?? hairs[0];
-      if (BODY_MERGE.extras && hs && (hs as THREE.Mesh).isMesh && hs.parent) {
-        const bi = sk.skeleton.bones.indexOf(hs.parent as THREE.Bone);
+      const hsAt = hs ? hs.parent ?? parkedOn.get(hs) ?? null : null;
+      if (BODY_MERGE.extras && hs && (hs as THREE.Mesh).isMesh && hsAt) {
+        const bi = sk.skeleton.bones.indexOf(hsAt as THREE.Bone);
         if (bi >= 0) {
           hs.updateMatrix();
           const hm = sk.bindMatrix.clone().invert().multiply(sk.skeleton.boneInverses[bi].clone().invert()).multiply(hs.matrix);
@@ -692,7 +702,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   function setMorph(k: string, v: number) { morph[k] = v; for (const f of faces) { const i = f.dict[k]; if (i !== undefined) f.infl[i] = v; } }
   const easeMorph = (k: string, v: number, r: number) => setMorph(k, (morph[k] ?? 0) + (v - (morph[k] ?? 0)) * r);
 
-  let limpOn = false;
+  let limpOn = false, feetFar = false;
 
   /** Hands and forearms never sink into the torso: the upper arm swings out just enough to clear it. */
   function keepArmsOut(bs: Map<string, THREE.Bone>) {
@@ -1136,8 +1146,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     }
 
     // ---- feet: planted where they land, on the real ground ----
-    if (ground && standing && root.visible) {
-      root.updateWorldMatrix(true, true);
+    // a crowd body more than 10 m off keeps its clip's feet: the planting is a centimetre or two at that distance, and
+    // its matrix walks were a twentieth of the phone's frame (perf agent 28/29 profiles)
+    if (crowd) feetFar = camD > (feetFar ? 10 : 11);
+    if (ground && standing && root.visible && !(crowd && feetFar && CHAR_BUDGET.throttle)) {
+      // only the root's own matrix: each foot's getWorldPosition brings its own chain up to date
+      root.updateWorldMatrix(true, false);
       const baseY = root.getWorldPosition(tmp).y;
       const rest = (kit?.footH ?? 0.09) + soleLift;
       let drop = 0, busy = false;
@@ -1169,7 +1183,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       hipDrop += (drop - hipDrop) * (1 - Math.exp(-dt * 6));
       if (busy || Math.abs(hipDrop) > 0.002) {
         hipsB.position.y += hipDrop / fig.scale.y;
-        fig.updateWorldMatrix(true, true);
+        // the hips and the legs only (the rest of the body is brought up to date when it is drawn)
+        for (const l of legs) l.h.updateWorldMatrix(true, true);
         for (const l of legs) {
           solveLeg(l.h, l.k, l.f, l.p);
           l.h.updateWorldMatrix(true, true);
