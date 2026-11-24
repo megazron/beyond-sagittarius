@@ -185,6 +185,15 @@ export class Audio {
     const beat = () => { if (!this.ctx) return; const t = this.ctx.currentTime; for (const [dt, v] of [[0, 0.5], [0.16, 0.32]] as [number, number][]) { const o = this.ctx.createOscillator(), g = this.ctx.createGain(); o.frequency.setValueAtTime(62, t + dt); o.frequency.exponentialRampToValueAtTime(38, t + dt + 0.12); g.gain.setValueAtTime(0, t + dt); g.gain.linearRampToValueAtTime(v, t + dt + 0.015); g.gain.exponentialRampToValueAtTime(0.001, t + dt + 0.2); o.connect(g).connect(this.ctx.destination); o.start(t + dt); o.stop(t + dt + 0.25); } };
     beat(); this.vacTimer = window.setInterval(beat, 860);
   }
+  /** A short sine beep straight into the master bus, for the capture sync marks; returns its start on the audio clock. */
+  mark(dur = 0.06, freq = 2000): number {
+    const ctx = this.ctx; if (!ctx) return 0;
+    const t0 = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.5, t0 + 0.003); g.gain.setValueAtTime(0.5, t0 + dur); g.gain.linearRampToValueAtTime(0, t0 + dur + 0.005);
+    o.connect(g).connect(this.master); o.start(t0); o.stop(t0 + dur + 0.02);
+    return t0;
+  }
   private tapNode: MediaStreamAudioDestinationNode | null = null;
   /** What the speakers get, as a stream (recordings of real play: tools/gpu_capture.py). */
   tap(): MediaStream | null {

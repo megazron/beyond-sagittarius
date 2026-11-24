@@ -5,7 +5,8 @@ import { easeInOut, clamp, smoothstep, lerp } from '../core/noise';
 import { audio } from '../core/audio';
 import { voice } from '../core/voice';
 import { Cutscene, Beat, addCutsceneRig } from './cutscene';
-import { deckScene, fightScene, stageDeck } from './scenes';
+import { departScene, readingScene, fightScene, stageDeck } from './scenes';
+import { t } from '../i18n';
 import { createCharacter, Character, CrewId } from '../characters/character';
 import { flail, mixLimbs, FALL, STANDING } from './montage';
 import type { PlayerLook, CrewSkins } from '../characters/custom';
@@ -26,6 +27,9 @@ const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 /** Seconds of black before the first shot, for the chapter card. */
 const PRE = -4.4;
+/** Where Earth sits from the deck while the liner is docked: as far as the docked liner is from it outside (Earth's
+ * radius 100, the liner at ~171), below and ahead of the window, so it fills the lower window and the ring arcs past. */
+const DOCKED_EARTH = new THREE.Vector3(-70, -105, -112);
 
 export class Cinematic {
   scene = new THREE.Scene();
@@ -152,9 +156,33 @@ export class Cinematic {
     const ids: CrewId[] = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social'];
     return Object.fromEntries(ids.map((id, i) => [id, this.interior.crew[i]])) as Record<CrewId, Character>;
   }
-  /** Freeze the timeline for the character scene on the observation deck. */
+  /**
+   * Scene 1, Departure: the lounge while the liner is still docked at Earth's orbital ring (Earth and the ring are set
+   * below and ahead of the deck so they fill the window), then the timeline goes on with the liner leaving.
+   */
+  private holdDepart() {
+    const i = this.interior, d = this.dome.uniforms;
+    this.setVisible('interior');
+    this.earth.group.visible = this.ring.visible = true;
+    this.earth.group.position.copy(DOCKED_EARTH); this.ring.position.copy(DOCKED_EARTH);
+    d.uBH.value = 0; d.uWarp.value = 0; d.uNebula.value = 0.5;
+    i.holo.uniforms.uAlarm.value = 0; i.holo.uniforms.uSpike.value = 0; i.alarmLight.intensity = 0;
+    i.mainLight.intensity = 3.2; i.consoleLight.intensity = 1.0; i.earthLight.intensity = 11; i.stripLight.intensity = 5;
+    this.runStage(departScene(this.cast, i.group.position, i.seats, {
+      display: (on) => i.display(on ? ['cine.mission1', 'cine.mission2', 'cine.mission3', 'cine.mission4'].map((k) => t(k)) : null),
+      laugh: () => audio.human('laugh', 0.75),
+    }), () => {
+      this.time = Math.max(this.time, this.warp(15.2));
+      this.earth.group.position.set(0, 0, 0); this.ring.position.set(0, 0, 0);
+      i.display(null); i.earthLight.intensity = 0; i.stripLight.intensity = 2.2; i.mainLight.intensity = 9; i.consoleLight.intensity = 2.2;
+      i.crew.forEach((c) => { c.setLookTarget(null); c.setFace(null); c.root.rotation.set(0, Math.PI, 0); });
+      this.setVisible('earth');
+    });
+  }
+
+  /** Freeze the timeline for the reading on the observation deck, at the end of the journey. */
   private holdDeck() {
-    this.runStage(deckScene(this.cast, this.interior.group.position), () => {
+    this.runStage(readingScene(this.cast, this.interior.group.position), () => {
       this.time = Math.max(this.time, this.warp(38.8));
       this.interior.crew.forEach((c) => c.root.rotation.set(0, Math.PI, 0));
     });
@@ -310,12 +338,9 @@ export class Cinematic {
     this.cue(-0.02, () => { ui.fade('black', 1, 0); ui.chapter(null); });
     this.vcue(5.4, 'cine.caption1', () => ui.caption('cine.caption1'));
     this.cues.push({ t: 14.0, voiced: true, fn: () => ui.caption(null) });
-    this.vcue(14.2, 'cine.line1', () => ui.subtitle('cine.line1', 'crew.explorer.name'));
-    this.vcue(16.0, 'cine.line2', () => ui.subtitle('cine.line2', 'crew.strong.name'));
-    this.vcue(18.0, 'cine.line3', () => ui.subtitle('cine.line3', 'crew.social.name'));
+    // inside: the six in the lounge, the mission on the display, the owner's two lines (scenes.ts departScene)
+    this.cue(14.2, () => this.holdDepart());
     this.cue(22.2, () => ui.subtitle(null));
-    this.cue(15.4, () => { ui.mission(['cine.mission1', 'cine.mission2', 'cine.mission3', 'cine.mission4']); audio.beep(); });
-    this.cue(21.6, () => ui.mission(null));
     this.cue(17.5, () => audio.whoosh());
 
     this.shots.push({
@@ -459,6 +484,7 @@ export class Cinematic {
         intr.alarmLight.intensity = (Math.sin(local * 9) * 0.5 + 0.5) * 20;
         intr.consoleLight.intensity = 0.6;
         intr.mainLight.intensity = 4 * (0.35 + 0.65 * (Math.sin(local * 37) > -0.6 ? 1 : 0.1)) * (1 - k * 0.5);
+        intr.stripLight.intensity = intr.mainLight.intensity * 0.5;
         intr.holo.uniforms.uAlarm.value = 1;
         intr.holo.uniforms.uSpike.value = 2;
         const g = smoothstep(0.3, 2.2, local);
@@ -474,6 +500,9 @@ export class Cinematic {
           if (!c.root.userData.mark) c.root.userData.mark = c.root.position.clone();
           const m = c.root.userData.mark as THREE.Vector3;
           c.root.position.set(m.x + side * hit * 0.5 + Math.sin(local * 3.1 + i) * 0.1 * hit, -2.2 + up * (0.5 + (i % 3) * 0.28) + Math.sin(local * 2.3 + i * 2) * 0.06 * up, m.z - hit * 0.7 - up * up * 0.9);
+          // the lounge's sofas, table and console stay where they are: a body thrown at one stops against it
+          const [kx, kz] = intr.keepOut(c.root.position.x - intr.group.position.x, c.root.position.z - intr.group.position.z, 0.32);
+          c.root.position.x = kx + intr.group.position.x; c.root.position.z = kz + intr.group.position.z;
           c.root.rotation.x = -hit * 0.28 - up * (0.7 + (i % 3) * 0.3) + Math.sin(local * 2.6 + i) * 0.1 * hit;
           c.root.rotation.z = side * hit * 0.24 + side * up * 0.7 + Math.sin(local * 3.3 + i * 3) * 0.1 * hit;
           c.setLimbs(mixLimbs(STANDING, flail({ ...FALL.spread, openHands: true }, local, i * 2.9, 0.35 + 0.45 * up), smoothstep(0, 1, hit)));

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { createCharacter, Character, CrewId } from '../characters/character';
 import { NOISE_GLSL } from '../core/glsl';
 
@@ -181,6 +182,25 @@ export interface Interior {
   holo: THREE.ShaderMaterial;
   consoleLight: THREE.PointLight;
   mainLight: THREE.PointLight;
+  /** Earth's light through the window while the liner is docked (0 once it has left). */
+  earthLight: THREE.PointLight;
+  /** The lounge's ceiling strips, warm: the room's own light. */
+  stripLight: THREE.PointLight;
+  /** The mission text on the console's display (null hides it). */
+  display(lines: string[] | null): void;
+  /** Where each of the six sits or stands in the lounge for the departure (deck units, root on the floor). */
+  seats: Record<string, { x: number; z: number; yaw: number }>;
+  /** A body's place (deck units, x and z) moved out of the furniture (the sofas, the table, the console) by r. */
+  keepOut(x: number, z: number, r?: number): [number, number];
+}
+
+/** The lounge's furniture, in deck units: two low sofas either side of the console, backs to the window. */
+const SOFA = { w: 1.9, d: 0.78, seat: 0.44, back: 0.86 } as const;
+const SOFAS = [{ x: -2.35, z: -0.55, yaw: 0.5 }, { x: 2.35, z: -0.55, yaw: -0.5 }] as const;
+/** A point on a sofa's seat: along its width (-1 one arm .. 1 the other) and out from the back cushion. */
+function onSofa(i: 0 | 1, along: number, out = 0.12) {
+  const s = SOFAS[i], c = Math.cos(s.yaw), n = Math.sin(s.yaw), lx = along * (SOFA.w / 2 - 0.35), lz = out;
+  return { x: s.x + lx * c + lz * n, z: s.z - lx * n + lz * c, yaw: s.yaw };
 }
 
 /** Observation deck with a panoramic window, a holo console and the crew. */
@@ -270,8 +290,75 @@ export function createInterior(detail = 1): Interior {
     group.add(f); floaters.push(f);
   }
 
+  // ---- the lounge: sofas, a low table, a bag, end bulkheads with the hatch aft, ceiling strips, a runner ----
+  const fabric = new THREE.MeshStandardMaterial({ color: 0x7d7268, roughness: 0.92 });
+  const cushion = new THREE.MeshStandardMaterial({ color: 0x9a8c7e, roughness: 0.95 });
+  const base = new THREE.MeshStandardMaterial({ color: 0x2b2f36, metalness: 0.6, roughness: 0.45 });
+  const rb = (w: number, h: number, d: number, r = 0.05) => new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2.2, h / 2.2, d / 2.2));
+  const lounge = new THREE.Group(); lounge.name = 'lounge'; group.add(lounge);
+  const put = (g: THREE.BufferGeometry, m: THREE.Material, p: THREE.Object3D, x: number, y: number, z: number) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; p.add(o); return o; };
+  for (const s of SOFAS) {
+    const so = new THREE.Group(); so.position.set(s.x, -2.2, s.z); so.rotation.y = s.yaw; lounge.add(so);
+    put(rb(SOFA.w, 0.08, SOFA.d - 0.04, 0.02), base, so, 0, 0.04, 0);
+    put(rb(SOFA.w - 0.26, 0.14, SOFA.d - 0.22, 0.06), cushion, so, 0, SOFA.seat - 0.07, 0.05);
+    put(rb(SOFA.w, 0.3, SOFA.d, 0.05), fabric, so, 0, 0.23, 0);
+    put(rb(SOFA.w, SOFA.back - 0.32, 0.2, 0.07), fabric, so, 0, 0.32 + (SOFA.back - 0.32) / 2, -SOFA.d / 2 + 0.1);
+    for (const sx of [-1, 1]) put(rb(0.14, 0.62, SOFA.d, 0.05), fabric, so, sx * (SOFA.w / 2 - 0.07), 0.31, 0);
+  }
+  // a low table with two cups, and Skyvra's bag open on the floor beside it
+  put(rb(0.9, 0.05, 0.5, 0.02), new THREE.MeshStandardMaterial({ color: 0xd9d4cc, roughness: 0.35, metalness: 0.1 }), lounge, 0.95, -1.78, 0.75);
+  put(new THREE.CylinderGeometry(0.05, 0.05, 0.37, 12), base, lounge, 0.95, -2.0, 0.75);
+  put(new THREE.CylinderGeometry(0.04, 0.034, 0.09, 16), new THREE.MeshStandardMaterial({ color: 0xb5563a, roughness: 0.7 }), lounge, 0.75, -1.71, 0.68);
+  put(new THREE.CylinderGeometry(0.04, 0.034, 0.09, 16), new THREE.MeshStandardMaterial({ color: 0x3d7f8f, roughness: 0.7 }), lounge, 1.12, -1.71, 0.85);
+  const bagM = new THREE.MeshStandardMaterial({ color: 0x41546b, roughness: 0.85 });
+  put(rb(0.62, 0.3, 0.38, 0.08), bagM, lounge, 1.75, -2.05, 1.05).rotation.y = 0.4;
+  put(rb(0.6, 0.03, 0.36, 0.015), bagM, lounge, 1.82, -1.86, 1.27).rotation.set(-1.1, 0.4, 0);
+  put(rb(0.3, 0.05, 0.22, 0.02), new THREE.MeshStandardMaterial({ color: 0xc9b48a, roughness: 0.9 }), lounge, 1.78, -1.88, 1.0).rotation.y = 0.9; // a jumper on top
+  // a runner down the middle of the floor
+  put(new THREE.PlaneGeometry(9, 1.5), new THREE.MeshStandardMaterial({ color: 0x3a3f4a, roughness: 0.97 }), lounge, 0, -2.195, 0.9).rotation.x = -Math.PI / 2;
+  // end bulkheads close the shell; aft (+x) has the hatch to the passage to the habitat ring, its frame lit
+  const bulk = new THREE.MeshStandardMaterial({ color: 0x8a929d, metalness: 0.45, roughness: 0.5 });
+  for (const ex of [-5.95, 5.95]) { const w = new THREE.Mesh(new THREE.CircleGeometry(4, 48), bulk); w.position.x = ex; w.rotation.y = ex < 0 ? Math.PI / 2 : -Math.PI / 2; w.receiveShadow = true; group.add(w); }
+  const hatchF = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.2, 0.8) });
+  put(rb(0.06, 2.1, 1.1, 0.02), new THREE.MeshStandardMaterial({ color: 0x3a4049, metalness: 0.7, roughness: 0.35 }), group, 5.9, -1.15, 0.9);
+  for (const [y, h, z, d] of [[-0.07, 0.05, 0.9, 1.22], [-1.15, 2.18, 0.31, 0.05], [-1.15, 2.18, 1.49, 0.05]] as const) put(new THREE.BoxGeometry(0.03, h, d), hatchF, group, 5.88, y, z);
+  // warm ceiling strips along the room (stripLight is the light they give)
+  const stripM = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.9, 1.3) });
+  for (const z of [-0.6, 1.6]) { const st = new THREE.Mesh(new THREE.BoxGeometry(10, 0.03, 0.12), stripM); st.position.set(0, Math.sqrt(16 - z * z) - 0.14, z); group.add(st); }
+
+  // the mission text on the console's display: a canvas over the holo, drawn when it is shown (the language may change)
+  const dc = document.createElement('canvas'); dc.width = 1024; dc.height = 512;
+  const dTex = new THREE.CanvasTexture(dc); dTex.colorSpace = THREE.SRGBColorSpace;
+  const dMat = new THREE.MeshBasicMaterial({ map: dTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const dMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.0), dMat); dMesh.position.set(0, -0.55, -1.43); dMesh.visible = false; group.add(dMesh);
+  const FONT = (px: number) => `700 ${px}px Rajdhani, "Noto Sans Devanagari", "Noto Nastaliq Urdu", sans-serif`;
+  const display = (lines: string[] | null) => {
+    dMesh.visible = !!lines;
+    if (!lines) return;
+    const g = dc.getContext('2d')!; g.clearRect(0, 0, 1024, 512);
+    g.strokeStyle = 'rgba(120,220,255,0.6)'; g.lineWidth = 3; g.strokeRect(24, 24, 976, 464);
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    lines.forEach((l, i) => {
+      let px = 46; g.font = FONT(px);
+      while (g.measureText(l).width > 920 && px > 18) g.font = FONT(px -= 2);
+      g.fillStyle = i === lines.length - 1 ? '#8dffb0' : '#a8e8ff'; g.fillText(l, 512, 112 + i * 96);
+    });
+    dTex.needsUpdate = true;
+  };
+  // the departure's marks: Bolzar asleep and Draxum on the sofa screen left, Lyrra and Zenvik on the one screen right,
+  // Skyvra at her open bag, Nuvexa standing in the room with her phone up, her back to the camera side's wall
+  const seats: Interior['seats'] = {
+    builder: onSofa(0, -0.7), strong: onSofa(0, 0.6), medic: onSofa(1, -0.6), scientist: onSofa(1, 0.7),
+    explorer: { x: 1.55, z: 1.45, yaw: -2.3 }, social: { x: -0.4, z: 1.9, yaw: Math.PI },
+  };
+
   const mainLight = new THREE.PointLight(0xcfe6ff, 9, 18, 1.6);
   mainLight.position.set(0, 2.5, 0.5); group.add(mainLight);
+  // Earth's light through the window while docked (off once the liner has left), and the warm ceiling strips
+  const earthLight = new THREE.PointLight(0x9cc4ff, 0, 16, 1.2);
+  earthLight.position.set(0.5, -1.4, -3.4); group.add(earthLight);
+  const stripLight = new THREE.PointLight(0xffd6a8, 2.2, 12, 1.5);
+  stripLight.position.set(0, 2.6, 0.7); group.add(stripLight);
   const consoleLight = new THREE.PointLight(0x55ccff, 2.2, 6, 2);
   consoleLight.position.set(0, -0.6, -0.8); group.add(consoleLight);
   const alarmLight = new THREE.PointLight(0xff2a1a, 0, 20, 1.5);
@@ -279,5 +366,18 @@ export function createInterior(detail = 1): Interior {
   const amb = new THREE.HemisphereLight(0x8899bb, 0x111118, 0.6);
   group.add(amb);
 
-  return { group, crew, floaters, alarmLight, holo, consoleLight, mainLight };
+  // the furniture as boxes on the floor (centre, half sizes, turn): a body thrown about in the event stops against them
+  const boxes = [...SOFAS.map((q) => ({ x: q.x, z: q.z, hx: SOFA.w / 2, hz: SOFA.d / 2, yaw: q.yaw })), { x: 0, z: -1.4, hx: 1.2, hz: 0.45, yaw: 0 }, { x: 0.95, z: 0.75, hx: 0.45, hz: 0.25, yaw: 0 }];
+  const keepOut = (x: number, z: number, r = 0.3): [number, number] => {
+    for (const b of boxes) {
+      const c = Math.cos(b.yaw), n = Math.sin(b.yaw), dx = x - b.x, dz = z - b.z;
+      const lx = dx * c - dz * n, lz = dx * n + dz * c, ex = b.hx + r - Math.abs(lx), ez = b.hz + r - Math.abs(lz);
+      if (ex <= 0 || ez <= 0) continue;
+      const ox = ex < ez ? Math.sign(lx) * ex : 0, oz = ex < ez ? 0 : Math.sign(lz) * ez;
+      x += ox * c + oz * n; z += -ox * n + oz * c;
+    }
+    return [x, z];
+  };
+
+  return { group, crew, floaters, alarmLight, holo, consoleLight, mainLight, earthLight, stripLight, display, seats, keepOut };
 }
