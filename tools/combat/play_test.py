@@ -282,11 +282,16 @@ with sync_playwright() as pw:
     # load the save made in the middle of the night: the night comes again by itself
     page.evaluate("window.dispatchEvent(new Event('beforeunload'))"); time.sleep(0.3)
     page.reload(timeout=180000, wait_until='commit'); page.wait_for_function("window.__bs && __bs.state === 'title' && __bs.ready", timeout=600000)
+    page.wait_for_function("(() => { const b = document.getElementById('btn-continue'); return b && !b.classList.contains('hidden'); })()", timeout=60000)
     page.evaluate("document.getElementById('btn-continue').click()")
     for i in range(240):
         if page.evaluate("!!(__bs.combat && __bs.combat.run)"): break
-        if page.evaluate("__bs.state") != 'game' or page.evaluate("__bs.mode") != 'play': page.evaluate('__bs.skip()')
-        step(page, 0.5); time.sleep(0.25)
+        st = page.evaluate("[__bs.state, __bs.mode, !!__bs.save]")
+        if st[0] == 'game' and st[2]:
+            if st[1] != 'play': page.evaluate('__bs.skip()')
+            step(page, 0.5)
+        elif st[0] not in ('title', 'loading'): page.evaluate('__bs.skip()')
+        time.sleep(0.25)
     ok(page.evaluate("__bs.combat.run && __bs.combat.run.id") == 'night.defence', 'story: loading a save from the middle of the night meets the night again')
     page.evaluate("__bs.combat.leaveEncounter()"); step(page, 2.0); time.sleep(1.0); step(page, 0.5)
     ok(page.evaluate("!__bs.combat.run && __bs.save.flags.houndGone"), 'story: the night over, the level goes on (sleep)', page.evaluate("[!!__bs.combat.run, __bs.save.flags.houndGone]"))
