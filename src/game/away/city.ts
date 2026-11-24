@@ -1073,7 +1073,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     const tramM = {
       liv: new THREE.MeshStandardMaterial({ color: 0x0f7d74, roughness: 0.45, metalness: 0.3 }),
       cream: new THREE.MeshStandardMaterial({ color: 0xe9dfc6, roughness: 0.55, metalness: 0.1 }),
-      glass: new THREE.MeshStandardMaterial({ color: 0x0c141b, emissive: 0xffd9a0, emissiveIntensity: 0.1, roughness: 0.06, metalness: 0.6 }), // dark glass with a faint warm inside (at 0.32 the Web clips read them as beige panels)
+      // dark glass with a faint warm inside (at 0.32 the Web clips read them as beige panels). Still beige at 0.1 on Web:
+      // a sharp, metal-like pane mirrored the hazy bright horizon of the sky map, the same flat colour in every window.
+      // Now it mirrors a quarter as much, so the dark of the car shows and the street's lights still glint
+      glass: new THREE.MeshStandardMaterial({ color: 0x0a1218, emissive: 0xffd9a0, emissiveIntensity: 0.06, roughness: 0.12, metalness: 0.35, envMapIntensity: 0.25 }),
       trim: new THREE.MeshStandardMaterial({ color: 0x2b3036, roughness: 0.6, metalness: 0.4 }),
       roof: new THREE.MeshStandardMaterial({ color: 0x8e979f, roughness: 0.5, metalness: 0.5 }),
       gold: new THREE.MeshStandardMaterial({ color: 0xd9a441, roughness: 0.35, metalness: 0.7 }),
