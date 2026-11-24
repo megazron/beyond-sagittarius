@@ -42,6 +42,7 @@ import { voice } from './core/voice';
 import { frameReport } from './cinematic/cutscene';
 import { Vault, vaultScript } from './narrator/vault';
 import { Montage } from './cinematic/montage';
+import { designOf } from './game/away/boarding';
 import { onLangChange } from './i18n';
 import { fitFov, lockViewport, tryFullscreen } from './core/viewport';
 import { startFit, auditFit, fitState, refitAll } from './ui/fit';
@@ -943,8 +944,7 @@ async function boot() {
   game.away.skins = lastSkins;
   // the take-off from Zenvora is a scene like any other: letterboxed, with its Skip
   game.away.onOutro = (on) => {
-    // the liner lifts off: engines, then the long roar of the climb
-    if (on) { audio.sample('launch', 0.85, { delay: 1.2 }); audio.sample('thruster', 0.5, { delay: 0.6 }); }
+    // (its sounds are the scene's own, on its clock: boarding.ts)
     ui.show('cine', on); ui.show('hud', !on);
     document.getElementById('btn-skip')!.classList.toggle('hidden', !on);
   };
@@ -1141,6 +1141,17 @@ window.addEventListener('resize', () => {
   awayLeave() { game?.away?.leave(); },
   /** Test hook: every Zenvora task done at once, so the take-off plays now. */
   awayOutro() { game?.away?.debugOutro(); },
+  /** The boarding and take-off (boarding.ts): played on its own clock and checked, without drawing (needs the city). */
+  boardingCheck() { return (game?.away?.stage as { boardingCheck?: () => unknown } | null)?.boardingCheck?.() ?? null; },
+  takeoffClearance() { return (game?.away?.stage as { takeoffClearance?: () => unknown } | null)?.takeoffClearance?.() ?? null; },
+  takeoffMap(x: number, z: number, span?: number, G?: number) { return JSON.stringify((game?.away?.stage as { takeoffMap?: (...a: unknown[]) => unknown } | null)?.takeoffMap?.(x, z, span, G) ?? null); },
+  /** One ship everywhere: the liner on Zenvora's pad against the ship in the films, mesh by mesh. */
+  shipDesigns() {
+    let film: string[] | null = null;
+    cine.scene.traverse((o) => { if (!film && o.userData.design === 'liner') film = designOf(o); });
+    const pad = (game?.away?.stage as { linerDesign?: () => string[] | null } | null)?.linerDesign?.() ?? null;
+    return { film, pad, same: !!film && !!pad && JSON.stringify(film) === JSON.stringify(pad) };
+  },
   get awayOutroOn() { return !!game?.away?.outroOn; },
   /** Test hook (recordings): these tasks count as done (the hero views that wait for one). */
   awayMarkDone(...ids: string[]) { for (const id of ids) game?.away?.done.add(id); },

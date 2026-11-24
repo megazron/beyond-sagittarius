@@ -36,11 +36,40 @@ export interface Ship {
   pods: THREE.Group[];
   /** The hull in two torn halves, shown instead of `spine` when the ship breaks. */
   broken: { spine: THREE.Mesh; front: THREE.Mesh; rear: THREE.Mesh; hull: THREE.Material };
+  /** The boarding hatch on the drive section (+y side): `open(k)` slides it round the hull, 0 shut, 1 open. */
+  hatch: { panel: THREE.Mesh; open(k: number): void };
+  /** Landing legs (only with `landed`): `deploy(k)`, 1 down (standing on them), 0 folded up against the drive. */
+  legs: { group: THREE.Group; deploy(k: number): void } | null;
 }
 
-/** Interstellar tourist liner: spine, habitat ring, observation dome, drive. */
-export function createShip(): Ship {
+// (r, y) with y = 6 - z: nose at z 6, the drive's flare at z -4 to -5
+const PROFILE = [[0, 0], [0.5, 0.2], [0.9, 1.2], [1.0, 3], [0.8, 4], [0.85, 6], [0.6, 7.5], [0.7, 9], [1.1, 10], [1.1, 11], [0.5, 11.6]];
+/**
+ * The liner's measurements in its own units (the films draw it at scale 1, Zenvora's pad at LINER_SCALE). Nose along
+ * +z. The hatch is a hole in the hull on the +y side of the drive section with a lit vestibule behind it.
+ */
+export const LINER = {
+  /** the hatch: its half-angle each side of +y (rad), its sill and lintel along z, the hull's radius there */
+  doorHalf: Math.PI / 16, doorZ0: -4.95, doorZ1: -4.02, doorR: 1.1,
+  /** the vestibule behind the hatch (x across, y in from the hull): the entry to hallY1, a hall across the ship from
+   *  hallY1 down to hallY0 and out to +-hallX, then a dark passage each side out to +-passX (as far as hallY0..passY1) */
+  vest: { hallY0: 0.35, hallY1: 0.8, hallX: 0.62, passX: 0.85, passY1: 0.65 },
+  /** the soles of the landing legs when it stands on its tail */
+  groundZ: -6.9,
+  /** the habitat ring and the radiator wings */
+  ringZ: 1.2, ringR: 3.2, ringTube: 0.32, wingZ: -2.6, wingX0: 1.15, wingX1: 5.65, wingHalfZ: 0.7, wingHalfY: 0.02,
+  /** the engine bells: z of their mouths and their outer radius */
+  bellZ0: -6.45, bellZ1: -5.55, bellR: 0.5, bellAt: 0.65,
+  /** the hull's radius at z (the spine's lathe profile), 0 off its ends */
+  radius(z: number) { const y = 6 - z, p = PROFILE; if (y <= p[0][1] || y >= p[p.length - 1][1]) return 0; for (let i = 1; i < p.length; i++) if (y <= p[i][1]) { const [r0, y0] = p[i - 1], [r1, y1] = p[i]; return r0 + (r1 - r0) * (y - y0) / (y1 - y0); } return 0; },
+};
+/** Zenvora's liner on its pad is the films' ship at this size: a 35 m tourist liner, its hatch 2.8 m high. */
+export const LINER_SCALE = 3;
+
+/** Interstellar tourist liner: spine, habitat ring, observation dome, drive, boarding hatch. `landed`: on its legs. */
+export function createShip(o: { landed?: boolean } = {}): Ship {
   const group = new THREE.Group();
+  group.userData.design = 'liner'; // one ship everywhere: the films' and Zenvora's pad's are this same make (__bs.shipDesigns)
   const tex = hullTexture();
   tex.repeat.set(4, 2);
   const hull = new THREE.MeshStandardMaterial({ color: 0xe6e8ec, map: tex, metalness: 0.45, roughness: 0.5 });
@@ -50,10 +79,17 @@ export function createShip(): Ship {
   const solar = new THREE.MeshStandardMaterial({ color: 0x0f2350, metalness: 0.9, roughness: 0.2, emissive: 0x050a20 });
 
   // Spine (lathe profile), nose along +Z
-  const pts: THREE.Vector2[] = [];
-  const prof = [[0, 0], [0.5, 0.2], [0.9, 1.2], [1.0, 3], [0.8, 4], [0.85, 6], [0.6, 7.5], [0.7, 9], [1.1, 10], [1.1, 11], [0.5, 11.6]];
-  for (const [r, y] of prof) pts.push(new THREE.Vector2(r, y));
-  const spineGeo = new THREE.LatheGeometry(pts, 32);
+  const prof = PROFILE;
+  // the same profile with two more rings at the hatch's sill and lintel, and the hatch's three segments left out of
+  // the hull: a real opening (the vestibule is behind it), so whoever walks in goes through a door, not a wall
+  const D = LINER, SEG = 48, pts: THREE.Vector2[] = [];
+  for (const [r, y] of prof) { if (y === 11) pts.push(new THREE.Vector2(D.doorR, 6 - D.doorZ1), new THREE.Vector2(D.doorR, 6 - D.doorZ0)); pts.push(new THREE.Vector2(r, y)); }
+  const spineGeo = new THREE.LatheGeometry(pts, SEG, -D.doorHalf);
+  {
+    const idx = spineGeo.getIndex()!, keep: number[] = [], P = pts.length, jDoor = pts.findIndex((v) => Math.abs(v.y - (6 - D.doorZ1)) < 1e-6), nDoor = Math.round(2 * D.doorHalf / (Math.PI * 2 / SEG));
+    for (let i = 0; i < SEG; i++) for (let j = 0; j < P - 1; j++) { if (j === jDoor && i < nDoor) continue; const q = (i * (P - 1) + j) * 6; for (let k = 0; k < 6; k++) keep.push(idx.getX(q + k)); }
+    spineGeo.setIndex(keep);
+  }
   spineGeo.rotateX(-Math.PI / 2);
   spineGeo.translate(0, 0, 6);
   const spine = new THREE.Mesh(spineGeo, hull);
@@ -169,8 +205,50 @@ export function createShip(): Ship {
   band.rotation.x = Math.PI / 2; band.position.z = 3;
   group.add(band);
 
+  // ---- the boarding hatch: the panel that fills the opening, slid round the hull to open; a frame; a lamp over it ----
+  const dz = D.doorZ1 - D.doorZ0, zc = (D.doorZ0 + D.doorZ1) / 2;
+  const arc = (r: number, h: number, half: number, z: number, mat: THREE.Material, segs = 6) => {
+    const g = new THREE.CylinderGeometry(r, r, h, segs, 1, true, -half, half * 2); g.rotateX(-Math.PI / 2); g.translate(0, 0, z);
+    const m = new THREE.Mesh(g, mat); group.add(m); return m;
+  };
+  const panel = arc(D.doorR + 0.004, dz, D.doorHalf, zc, hull);
+  for (const z of [D.doorZ0, D.doorZ1]) arc(D.doorR + 0.012, 0.03, D.doorHalf + 0.012, z, dark, 8);
+  for (const sx of [-1, 1]) {
+    const j = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, dz + 0.03), dark);
+    j.position.set(sx * Math.sin(D.doorHalf + 0.012) * (D.doorR + 0.012), Math.cos(D.doorHalf + 0.012) * (D.doorR + 0.012), zc); group.add(j);
+  }
+  // the vestibule behind the opening, warm and lit: a short entry, then a hall across the ship with a dark passage at
+  // each end, all inside the hull (seen from outside only through the hatch). Whoever boards walks in, turns along the
+  // hall and is gone round the corner, behind the hull, never through a wall.
+  const vest = vestibule(D);
+  group.add(vest);
+  const lampM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 2.6, 0.9) });
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.03), lampM); lamp.position.set(0, D.doorR + 0.02, D.doorZ1 + 0.06); group.add(lamp);
+  const hatch = {
+    panel,
+    /** 0 shut, 1 open: the panel slides round the hull to one side; the lamp is green while it is open */
+    open(k: number) { panel.rotation.z = -Math.min(1, Math.max(0, k)) * (D.doorHalf * 2 + 0.03); lampM.color.setRGB(k > 0.02 ? 0.4 : 2.6, k > 0.02 ? 2.6 : 1.2, k > 0.02 ? 0.9 : 0.2); },
+  };
+  hatch.open(0);
+
+  // ---- landing legs: four struts from the drive section out to pads on the ground, between the hatch and the wings ----
+  let legs: Ship['legs'] = null;
+  if (o.landed) {
+    const lg = new THREE.Group(); lg.userData.landing = true; group.add(lg);
+    const hinges: THREE.Group[] = [], az = -4.6, ar = 0.95, footR = 2.0, dr = footR - ar, dzl = D.groundZ + 0.05 - az, L = Math.hypot(dr, dzl), down = Math.atan2(dzl, dr);
+    for (const a of [Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4]) {
+      const pivot = new THREE.Group(); pivot.position.set(Math.sin(a) * ar, Math.cos(a) * ar, az); pivot.rotation.z = -a; lg.add(pivot);
+      const hinge = new THREE.Group(); pivot.add(hinge); hinges.push(hinge);
+      const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, L, 10).translate(0, L / 2, 0), dark); hinge.add(strut);
+      const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.05, 16), dark); foot.position.set(0, L, 0); foot.rotation.x = -down; hinge.add(foot);
+    }
+    legs = { group: lg, deploy(k: number) { const c = Math.min(1, Math.max(0, k)); for (const h of hinges) h.rotation.x = down + (1 - c) * (Math.PI / 2 - 0.12 - down); } };
+    legs.deploy(1);
+  }
+
   group.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  return { group, engineGlow, plume, ring, lights, pods, broken };
+  vest.traverse((o) => { o.castShadow = false; }); lamp.castShadow = false;
+  return { group, engineGlow, plume, ring, lights, pods, broken, hatch, legs };
 }
 
 export interface Interior {
@@ -280,4 +358,62 @@ export function createInterior(detail = 1): Interior {
   group.add(amb);
 
   return { group, crew, floaters, alarmLight, holo, consoleLight, mainLight };
+}
+
+/** The liner's vestibule (ship units): floor, ceiling and walls as one lit mesh and the passages' dark ends as another. */
+function vestibule(D: typeof LINER) {
+  const g = new THREE.Group(); g.userData.vest = true;
+  const z0 = D.doorZ0, z1 = D.doorZ1, hw = D.doorR * Math.sin(D.doorHalf) - 0.004, yo = D.doorR * Math.cos(D.doorHalf) - 0.004;
+  const V = D.vest;
+  const lit: number[] = [], dark: number[] = [];
+  const quad = (out: number[], a: number[], b: number[], c: number[], d: number[]) => out.push(...a, ...b, ...c, ...a, ...c, ...d);
+  // floor and ceiling: the entry, the hall, the two passages
+  const rects: [number, number, number, number][] = [[-hw, hw, V.hallY1, yo], [-V.hallX, V.hallX, V.hallY0, V.hallY1], [-V.passX, -V.hallX, V.hallY0, V.passY1], [V.hallX, V.passX, V.hallY0, V.passY1]];
+  for (const [x0, x1, y0, y1] of rects) for (const z of [z0, z1]) quad(lit, [x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]);
+  const wall = (out: number[], x0: number, y0: number, x1: number, y1: number) => quad(out, [x0, y0, z0], [x1, y1, z0], [x1, y1, z1], [x0, y0, z1]);
+  for (const s of [-1, 1]) {
+    wall(lit, s * hw, V.hallY1, s * hw, yo);                     // the entry's sides
+    wall(lit, s * hw, V.hallY1, s * V.hallX, V.hallY1);          // the hall's front, each side of the entry
+    wall(lit, s * V.hallX, V.passY1, s * V.hallX, V.hallY1);     // the hall's ends, above the passages
+    wall(lit, s * V.hallX, V.passY1, s * V.passX, V.passY1);     // the passages' fronts
+    wall(dark, s * V.passX, V.hallY0, s * V.passX, V.passY1);    // the passages' far ends, dark
+  }
+  wall(lit, -V.passX, V.hallY0, V.passX, V.hallY0);              // the back of the hall and the passages
+  const mk = (pos: number[], mat: THREE.Material) => { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals(); const m = new THREE.Mesh(geo, mat); g.add(m); return m; };
+  mk(lit, new THREE.MeshStandardMaterial({ color: 0x9a8a76, roughness: 0.75, metalness: 0.15, emissive: 0xffb070, emissiveIntensity: 0.3, side: THREE.DoubleSide }));
+  mk(dark, new THREE.MeshBasicMaterial({ color: 0x050505, side: THREE.DoubleSide }));
+  // a light strip along the hall's ceiling
+  const strip = new THREE.Mesh(new THREE.PlaneGeometry(V.hallX * 1.8, 0.05), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.9, 1.3), side: THREE.DoubleSide }));
+  strip.position.set(0, (V.hallY0 + V.hallY1) / 2, z1 - 0.004); g.add(strip);
+  return g;
+}
+
+/**
+ * For a stage that draws the ship from afar and never breaks it: every mesh under `root` that does not move is merged
+ * with the others of its material into one (about 10 draws instead of 40). `keep`: subtrees left as they are (the
+ * hatch, the legs, the plume). Instanced meshes and hidden ones are left too.
+ */
+export function bakeStatic(root: THREE.Object3D, keep: THREE.Object3D[]) {
+  root.updateMatrixWorld(true);
+  const inv = root.matrixWorld.clone().invert(), byMat = new Map<THREE.Material, THREE.BufferGeometry[]>(), drop: THREE.Mesh[] = [];
+  const kept = (o: THREE.Object3D) => { for (let p: THREE.Object3D | null = o; p && p !== root; p = p.parent) if (keep.includes(p) || !p.visible) return true; return false; };
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || (m as unknown as THREE.InstancedMesh).isInstancedMesh || kept(m) || Array.isArray(m.material)) return;
+    let g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+    if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.getAttribute('position').count * 2), 2));
+    if (!g.getAttribute('normal')) g.computeVertexNormals();
+    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k);
+    g = g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
+    const l = byMat.get(m.material) ?? byMat.set(m.material, []).get(m.material)!; l.push(g); drop.push(m);
+  });
+  for (const m of drop) m.parent?.remove(m);
+  for (const [mat, list] of byMat) {
+    let n = 0; for (const g of list) n += g.getAttribute('position').count;
+    const out = new THREE.BufferGeometry(), P = new Float32Array(n * 3), N = new Float32Array(n * 3), U = new Float32Array(n * 2);
+    let o = 0; for (const g of list) { const c = g.getAttribute('position').count; P.set(g.getAttribute('position').array as Float32Array, o * 3); N.set(g.getAttribute('normal').array as Float32Array, o * 3); U.set(g.getAttribute('uv').array as Float32Array, o * 2); o += c; }
+    out.setAttribute('position', new THREE.BufferAttribute(P, 3)); out.setAttribute('normal', new THREE.BufferAttribute(N, 3)); out.setAttribute('uv', new THREE.BufferAttribute(U, 2));
+    const mesh = new THREE.Mesh(out, mat); mesh.castShadow = mesh.receiveShadow = !(mat as THREE.MeshBasicMaterial).isMeshBasicMaterial; root.add(mesh);
+  }
+  return byMat.size;
 }

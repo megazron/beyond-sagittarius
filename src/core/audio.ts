@@ -455,7 +455,7 @@ export class Audio {
    * A one-shot recorded sound. With `at` it sits in the world (HRTF, fading with distance from `near` to `far` m).
    * Returns false when it is not loaded yet (it starts loading), so callers can fall back to a synthesised one.
    */
-  sample(name: string, vol = 0.8, o: { at?: { x: number; y: number; z: number }; near?: number; far?: number; rate?: number; delay?: number; outside?: boolean } = {}): boolean {
+  sample(name: string, vol = 0.8, o: { at?: { x: number; y: number; z: number }; near?: number; far?: number; rate?: number; delay?: number; outside?: boolean; dur?: number; tag?: string } = {}): boolean {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== 'running') return false;
     if (!this.sfxIdx) { void this.loadSfx(); return false; }
@@ -474,8 +474,21 @@ export class Audio {
     if (o.at) node = node.connect(this.panner(o.at, o.near ?? 2, o.far ?? 60));
     // a sound placed outside while you are in: through the walls (muffled), like the street beds
     node.connect(o.at && o.outside ? this.outdoorOut : this.sfxOut);
-    src.start(ctx.currentTime + (o.delay ?? 0));
+    const t0 = ctx.currentTime + (o.delay ?? 0);
+    src.start(t0);
+    // `dur`: only the first seconds of the file, faded out over the last half second of them
+    if (o.dur) { g.gain.setValueAtTime(vol, t0 + Math.max(0, o.dur - 0.6)); g.gain.linearRampToValueAtTime(0, t0 + o.dur); src.stop(t0 + o.dur + 0.05); }
+    // `tag`: stopTag() can fade it out early (a skipped scene's sounds)
+    if (o.tag) { const set = this.tagged.get(o.tag) ?? this.tagged.set(o.tag, new Set()).get(o.tag)!; const h = { src, g }; set.add(h); src.onended = () => set.delete(h); }
     return true;
+  }
+  private tagged = new Map<string, Set<{ src: AudioBufferSourceNode; g: GainNode }>>();
+  /** Fades out (over `fade` s) and stops every sound started with this tag. */
+  stopTag(tag: string, fade = 0.3) {
+    const ctx = this.ctx, set = this.tagged.get(tag);
+    if (!ctx || !set) return;
+    for (const { src, g } of set) { g.gain.cancelScheduledValues(ctx.currentTime); g.gain.setValueAtTime(g.gain.value, ctx.currentTime); g.gain.linearRampToValueAtTime(0, ctx.currentTime + fade); try { src.stop(ctx.currentTime + fade + 0.05); } catch { /* already stopped */ } }
+    set.clear();
   }
 
   /** A footstep on a surface: stone, grass, wood, carpet, snow, metal. */

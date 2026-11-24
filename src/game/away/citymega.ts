@@ -108,7 +108,8 @@ export function buildMega(scene: THREE.Scene, o: MegaOpts) {
   if (rich) { // phones: left out (each is a handful of draw calls a frame for a detail in the sky)
     const deck = new THREE.MeshStandardMaterial({ color: 0xd8dde4, roughness: 0.4, metalness: 0.5 });
     const plats: { g: THREE.Group; y: number; p: number }[] = [];
-    for (const [x, y, z, r] of (rich ? [[-70, 95, -40, 22], [90, 140, -120, 30], [-40, 180, -260, 26], [60, 75, 60, 16]] : [[-70, 95, -40, 22], [90, 140, -120, 30]]) as [number, number, number, number][]) {
+    for (const [x, y, z, r] of (rich ? [[-70, 95, -40, 22], [90, 140, -120, 30], [-40, 180, -330, 26], [60, 75, 60, 16]] : [[-70, 95, -40, 22], [90, 140, -120, 30]]) as [number, number, number, number][]) {
+      // (the third was at z -260, a metre from the column the boarded liner climbs at the end of the prologue)
       const g = add(new THREE.Group()); g.position.set(x, y, z);
       const d = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.7, 4, 32), deck); g.add(d);
       const under = new THREE.Mesh(new THREE.CircleGeometry(r * 0.6, 32), glowMat(0x7fe9ff, 2.2)); under.rotation.x = Math.PI / 2; under.position.y = -2.1; g.add(under);

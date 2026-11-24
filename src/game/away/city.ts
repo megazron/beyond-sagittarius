@@ -25,6 +25,7 @@ import { cityProbe } from './probe';
 import { carKit } from './cars';
 import { dayCycle, skyMaterial, wetify } from './daycycle';
 import { Renderer } from '../../core/renderer';
+import { buildBoarding, PAD } from './boarding';
 
 /**
  * Zenvora, Taravel, 2189: the last normal afternoon. One long bazaar street from the flat (north-east corner)
@@ -454,7 +455,7 @@ function model(name: string) {
   return p;
 }
 
-export function buildCity(label: (k: string) => string, detail = 1): AwayStage & { bind(b: StageBody): void; people: CityPerson[]; mapLayer: import('../../ui/minimap').MapLayer; drawnAs(id: string): string; readonly perfState: Record<string, unknown>; crowdState(): { near: number; bodies: number; lost: number; room?: number }; trafficState(): unknown; pedProbe(): unknown } {
+export function buildCity(label: (k: string) => string, detail = 1): AwayStage & { bind(b: StageBody): void; people: CityPerson[]; mapLayer: import('../../ui/minimap').MapLayer; drawnAs(id: string): string; readonly perfState: Record<string, unknown>; crowdState(): { near: number; bodies: number; lost: number; room?: number }; trafficState(): unknown; pedProbe(): unknown; boardingCheck(): unknown; linerDesign(): string[] | null; takeoffClearance(): unknown; takeoffMap(x: number, z: number, span?: number, G?: number): unknown } {
   seed = 1234567; // the same city every time
   const rich = detail >= 1; // phones get fewer props, people and lights
   const scene = new THREE.Scene();
@@ -1201,7 +1202,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   });
   plane(10, 2.5, new THREE.MeshBasicMaterial({ map: board, color: new THREE.Color(1.4, 1.4, 1.4), toneMapped: false }), 0, 9.2, S + 1.2, 0);
 
-  let linerG: THREE.Group | null = null;
+  let linerG: THREE.Group | null = null, boardingKit: ReturnType<typeof buildBoarding> | null = null;
   // ---- the spaceport: the apron, pads with light rings, the terminal's long canopy, the liner docked with its bridge ----
   {
     const apronM = over(new THREE.MeshStandardMaterial({ color: 0xc9ccd0, roughness: 0.8 }), 1); tex('road', [apronM], [30, 24]);
@@ -1212,22 +1213,18 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       ringP.rotation.x = -Math.PI / 2; ringP.position.set(x, 0.02, z);
       const disc = add(new THREE.Mesh(new THREE.CircleGeometry(r - 0.4, 64), over(new THREE.MeshStandardMaterial({ color: 0x5c6670, roughness: 0.6 }), 2))); disc.rotation.x = -Math.PI / 2; disc.position.set(x, 0.01, z);
     };
-    pad(16, S - 66, 22); pad(-44, S - 90, 14); pad(44, S - 104, 14);
+    pad(PAD.x, PAD.z, 20); pad(16, S - 66, 14); pad(44, S - 104, 14);
     // the terminal: a long glass hall under a curved canopy, warm inside, with people-sized detail at the front
     const canopy = add(new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 60, 32, 1, true, -Math.PI / 2, Math.PI), hull));
     canopy.rotation.z = Math.PI / 2; canopy.position.set(-38, 2, S - 26); canopy.castShadow = true;
     box(60, 9, 0.2, new THREE.MeshStandardMaterial({ color: 0x9fbfd6, roughness: 0.05, metalness: 0.5, emissive: 0xffd6a0, emissiveIntensity: 0.45, transparent: true, opacity: 0.85 }), -38, 4.5, S - 13);
     for (let i = 0; i < 9; i++) box(0.4, 10, 0.4, gateM, -66 + i * 7, 5, S - 12.8);
     plane(14, 2, lit(sign('TERMINAL 2 · TARAVEL', '#10233d', '#9fd8ff'), 0.9), -38, 11.5, S - 12.6, 0);
-    // the liner on its pad, and the boarding bridge reaching out to it
-    const liner = add(new THREE.Group()); liner.position.set(16, 9, S - 66); liner.rotation.y = 0.5; linerG = liner;
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(7.5, 52, 8, 32), hull); body.rotation.x = Math.PI / 2; body.castShadow = true; liner.add(body);
-    const stripe = new THREE.Mesh(new THREE.CylinderGeometry(7.58, 7.58, 52, 32, 1, true, -0.25, 0.5), cyan); stripe.rotation.x = Math.PI / 2; liner.add(stripe);
-    for (const sx of [-1, 1]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(12, 0.7, 14), hull); fin.position.set(sx * 11, -2.5, 16); fin.rotation.z = sx * -0.18; fin.castShadow = true; liner.add(fin); }
-    for (let i = 0; i < 14; i++) { const w = new THREE.Mesh(new THREE.CircleGeometry(0.6, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe2b0).multiplyScalar(1.5), toneMapped: false })); w.position.set(-7.55, 1.5, -22 + i * 3.2); w.rotation.y = -Math.PI / 2; liner.add(w); }
-    for (const [lx, lz] of [[-5, -16], [5, -16], [-5, 16], [5, 16]]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 9), gateM); leg.position.set(lx, -4.5, lz); liner.add(leg); }
-    const bridge = add(new THREE.Mesh(new THREE.BoxGeometry(3, 3, 26), hull)); bridge.position.set(-6, 8, S - 40); bridge.rotation.y = 0.9; bridge.castShadow = true;
-    const bridgeGlow = add(new THREE.Mesh(new THREE.BoxGeometry(3.05, 0.2, 26), cyan)); bridgeGlow.position.set(-6, 6.6, S - 40); bridgeGlow.rotation.y = 0.9;
+    // the liner on its pad: the films' ship (cinematic/ship.ts), standing on its tail on its legs, its hatch open towards
+    // the terminal, the boarding gantry up to it (boarding.ts, which also plays the boarding and the take-off). The pad
+    // is out on the apron where nothing stands above it, so it lifts straight up through nothing
+    boardingKit = buildBoarding({ add, gateM, glowM: cyan, scene });
+    linerG = boardingKit.liner;
     // light masts and a few ground vehicles
     for (const [mx, mz] of [[-20, -30], [36, -40], [-10, -110], [60, -80]]) {
       box(0.5, 18, 0.5, gateM, mx, 9, S + mz);
@@ -1618,7 +1615,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     }
   };
 
-  const { moved, recoloured } = mergeStatic(scene, new Set<THREE.Object3D>([ground, skyMesh, ringLight, sun, sun.target, ...(linerG ? [linerG] : [])]), tier === 2 ? 39 : tier === 1 ? 117 : 400, (t) => { future.update(0.05, t); mega.update(0.05, t); dense.update(0.05, t, null); }, tier === 0);
+  const { moved, recoloured } = mergeStatic(scene, new Set<THREE.Object3D>([ground, skyMesh, ringLight, sun, sun.target, ...(linerG ? [linerG] : []), ...(boardingKit ? [boardingKit.gantry] : [])]), tier === 2 ? 39 : tier === 1 ? 117 : 400, (t) => { future.update(0.05, t); mega.update(0.05, t); dense.update(0.05, t, null); }, tier === 0);
   // ---- the rest of Zenvora: districts, traffic and people round the old town (districts.ts) ----
   const placedD = new Map<string, { name: string; at: THREE.Matrix4[] }>(), DCELL = tier === 0 ? 104 : 52;
   const placeD = (name: string, x: number, y: number, z: number, yaw: number, scale = 1) => {
@@ -1893,86 +1890,45 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     return best;
   };
 
-  // ---- the take-off: the six walk out through the gate to the terminal, the liner lifts off its pad and climbs over the
-  // city towards the one in orbit. Three shots, about fourteen seconds; the camera is the game's own ----
-  const OUTRO = 14;
-  let outroT = -1, outroDone: (() => void) | null = null;
-  const boarding = new Map<CityPerson, THREE.Vector3>();
-  const plumes: THREE.Mesh[] = [];
-  const eyeP = new THREE.Vector3(), aimP = new THREE.Vector3(), linerHome = new THREE.Vector3();
-  const smooth = (a: number, b: number, x: number) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+  // ---- the boarding and the take-off (boarding.ts): the six walk up the gantry into the liner one after another, its
+  // hatch shuts and it lifts off over the city. The camera is the game's own ----
+  /** board in this order; he (the player) goes last and looks back */
+  const ORDER: CrewId[] = ['explorer', 'strong', 'social', 'builder', 'medic'];
+  let outroT = -1, outroDone: (() => void) | null = null, outroCam: THREE.PerspectiveCamera | null = null;
+  const boarding = new Set<CityPerson>();
   function startOutro(playerFig: Character | null, done: () => void) {
+    if (!boardingKit) { done(); return; }
     outroT = 0; outroDone = done;
-    const crew = people.filter((q) => FRIENDS.some((f) => f.id === q.id));
+    const crew = ORDER.map((id) => people.find((q) => q.id === id)).filter((q): q is CityPerson => !!q);
     const all: CityPerson[] = [...crew];
-    if (playerFig) all.unshift({ id: 'player', fig: playerFig, pos: playerFig.root.position, yaw: 0, pose: 'idle', phase: 0 });
-    // in a loose group at the gate, facing the spaceport (south, -z)
-    all.forEach((q, i) => {
-      q.pos.set(-2.6 + (i % 3) * 2.1 + (i > 2 ? 0.9 : 0), hx(0), S + 6.5 + Math.floor(i / 3) * 1.6);
-      q.yaw = Math.PI; q.fig.root.rotation.y = Math.PI; q.fig.root.visible = true; q.fig.setLookTarget(null);
-      boarding.set(q, new THREE.Vector3(q.pos.x * 0.6, 0, S - 16 - i * 0.8));
-    });
-    if (linerG) {
-      linerHome.copy(linerG.position);
-      if (!plumes.length) {
-        const pm = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9fdcff).multiplyScalar(1.8), transparent: true, opacity: 0, toneMapped: false, depthWrite: false });
-        // lift jets under the fins, and the main drive at the stern
-        for (const [px, py, pz, rx] of [[-11, -4, 16, Math.PI], [11, -4, 16, Math.PI], [-6, -6, -16, Math.PI], [6, -6, -16, Math.PI], [0, 0, -34, -Math.PI / 2]] as number[][]) {
-          const c = new THREE.Mesh(new THREE.ConeGeometry(rx < 0 ? 4 : 1.8, rx < 0 ? 22 : 9, 16, 1, true), pm); c.position.set(px, py - (rx < 0 ? 0 : 4.5), pz + (rx < 0 ? -11 : 0)); c.rotation.x = rx; linerG.add(c); plumes.push(c);
-        }
-      }
-    }
+    if (playerFig) all.push({ id: 'player', fig: playerFig, pos: playerFig.root.position, yaw: 0, pose: 'idle', phase: 0 });
+    for (const q of all) boarding.add(q);
+    boardingKit.start(all, endOutro);
   }
   function endOutro() {
     if (outroT < 0) return;
     outroT = -1;
+    if (outroCam) boardingKit?.restoreFov(outroCam);
     const d = outroDone; outroDone = null; d?.();
   }
+  function skipOutro() { if (outroT >= 0) boardingKit?.skip(); }
   function outro(dt: number, time: number, cam?: THREE.PerspectiveCamera) {
-    outroT += dt;
-    const T = outroT;
-    // the six walk out through the gate and are gone into the terminal
-    for (const [q, to] of boarding) {
-      const dx = to.x - q.pos.x, dz = to.z - q.pos.z, d = Math.hypot(dx, dz);
-      const v = T < 0.6 ? 0 : Math.min(1.35, d / Math.max(dt, 1e-3));
-      if (d > 0.05) { q.pos.x += dx / d * v * dt; q.pos.z += dz / d * v * dt; }
-      q.pos.y = hx(q.pos.x); q.phase += dt * v * 2.2;
-      q.fig.root.rotation.y = Math.atan2(dx, dz);
-      q.fig.animate(v > 0.1 ? 'walk' : 'idle', q.phase, v / 3, time, dt);
-      if (q.pos.z < S - 8) q.fig.root.visible = false;
-    }
-    // the liner: the lift jets light, it rises off its pad, noses up and climbs away towards the one in orbit
-    if (linerG) {
-      const lift = smooth(4.2, 7, T), climb = Math.max(0, T - 7);
-      linerG.position.set(linerHome.x - climb * climb * 0.8, linerHome.y + lift * 22 + climb * climb * 2.6, linerHome.z - climb * climb * 3.2);
-      linerG.rotation.x = -smooth(6.5, 9.5, T) * 0.32;
-      const jets = smooth(3.6, 4.6, T) * (1 + Math.sin(time * 40) * 0.08);
-      for (let i = 0; i < plumes.length; i++) { const m = plumes[i]; (m.material as THREE.MeshBasicMaterial).opacity = (i === plumes.length - 1 ? smooth(6.8, 8, T) : jets * (1 - smooth(10, 12, T))) * 0.6; }
-    }
-    if (cam) {
-      const L = linerG ? linerG.position : linerHome;
-      if (T < 4.4) {
-        // behind the group at the gate, the docked liner beyond them
-        const k = smooth(0, 4.4, T);
-        eyeP.set(4.5 - k * 2, 2.1 + k * 0.6, S + 13 - k * 3); aimP.set(4, 4 + k * 2, S - 40);
-      } else if (T < 9.4) {
-        // high over the apron, clear of the terminal's canopy: the whole liner on its pad as it lifts
-        const k = smooth(4.4, 9.4, T);
-        eyeP.set(linerHome.x - 38 + k * 3, linerHome.y + 22 + k * 2, linerHome.z + 30); aimP.set(L.x, L.y, L.z);
-      } else {
-        // over the street, the city lights below, the liner climbing away
-        const k = smooth(9.4, OUTRO, T);
-        eyeP.set(3, 26 + k * 10, 30 - k * 20); aimP.set(L.x * 0.7, L.y * 0.8, L.z * 0.85);
-      }
-      cam.position.copy(eyeP); cam.lookAt(aimP);
-    }
-    if (T >= OUTRO) endOutro();
+    outroT += dt; if (cam) outroCam = cam;
+    boardingKit?.update(dt, time, cam);
   }
 
   // phones: the big painted canvases at half size (a quarter of their memory)
   if (tier === 0 && CANVAS_HALF) CANVAS_SAVED.mb = Math.round(halveCanvases(scene) / 1e6);
   return {
-    outro: { start: startOutro, skip: endOutro, get active() { return outroT >= 0; }, get remaining() { return outroT >= 0 ? OUTRO - outroT : 0; } },
+    outro: { start: startOutro, skip: skipOutro, get active() { return outroT >= 0; }, get remaining() { return outroT >= 0 ? boardingKit?.remaining ?? 0 : 0; } },
+    /** Test: the boarding played on its own clock, checked every 1/30 s (boarding.ts check()). */
+    boardingCheck: () => boardingKit?.check() ?? null,
+    /** Test: the liner's make-up, mesh by mesh (the same list as the films' ship). */
+    linerDesign: () => boardingKit?.design() ?? null,
+    /** Test: the take-off's swept path and its camera against the city (boarding.ts clearance()). */
+    takeoffClearance: () => boardingKit?.clearance() ?? null,
+    /** Test: the tallest thing every G m round a point (choosing the pad). */
+    takeoffMap: (x: number, z: number, span?: number, G?: number) => boardingKit?.heightMap(x, z, span, G) ?? null,
     // what the sky is doing, for the ears (soundscape.ts lays the rain bed under the street)
     get weather() { return { rain: day.state.rain, night: day.state.night }; },
     mapLayer: {
@@ -2239,7 +2195,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         }
         if (oldOn) for (let i = 0; i < people.length; i++) {
           const q = people[i];
-          if (boarding.has(q) || talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
+          if (boarding.has(q)) { if (q.fig.root.visible) used++; continue; } // (boarding.ts shows them and lets them go)
+          if (talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
           if (q.walk?.shop?.stage === 'inside') { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           const d = Math.hypot(q.pos.x - cp.x, q.pos.z - cp.z);
           const lensHit = ((LENS_OLD || (LENS_LINE && crowd.has(q.fig))) && d < 9 && inLens(q.pos.x, q.pos.z)) || (LENS_LINE && d < 1.2); // the story's people too, right at the lens (their hair filled the bottom of a phone's view)
