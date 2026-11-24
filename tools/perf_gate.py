@@ -48,6 +48,15 @@ WORST = """(ms) => new Promise((res) => { let calls = 0, tris = 0, bodies = 0, s
     if (performance.now() - t0 < ms) requestAnimationFrame(f); else { r.renderBufferDirect = orig;
       res({ calls, tris, bodies, skinned: sk, top: Object.entries(top || {}).sort((x, y) => y[1] - x[1]).slice(0, 12).map(([k, v]) => k + ' ' + Math.round(v)) }); } };
   requestAnimationFrame(f); })"""
+# after a teleport: at least `n` drawn frames, then until the triangles drawn per frame stop climbing (the highest of
+# each 60 frames within 2% of the one before, twice running), at most `ms`. A fixed 4 s of wall clock under SwiftShader
+# measured "mobile flat" anywhere from 550k to 739k triangles on the same code: how many batches had streamed in by then
+# depended on how fast the runner was
+SETTLE = """([n, ms]) => new Promise((res) => { let k = 0, hi = 0, prev = -1, calm = 0; const t0 = performance.now();
+  const f = () => { k++; hi = Math.max(hi, __bs.perf.tris || 0);
+    if (k >= n && k % 60 === 0) { if (prev >= 0 && hi <= prev * 1.02) calm++; else calm = 0; prev = hi; hi = 0; }
+    if (calm >= 2 || performance.now() - t0 > ms) res({ frames: k, secs: +((performance.now() - t0) / 1000).toFixed(1), settled: calm >= 2 }); else requestAnimationFrame(f); };
+  requestAnimationFrame(f); })"""
 fails, report = [], {}
 with sync_playwright() as pw:
     b = pw.chromium.launch(headless=True, args=['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-background-timer-throttling', '--disable-renderer-backgrounding'])
@@ -65,7 +74,8 @@ with sync_playwright() as pw:
         time.sleep(25)  # every model and its light build in
         D, T, B = BUDGET[q]; rows = {}
         for name, (x, z, yaw) in SPOTS.items():
-            page.evaluate(f"__bs.awayTeleport({x}, {z}, {yaw})"); time.sleep(4)
+            page.evaluate(f"__bs.awayTeleport({x}, {z}, {yaw})"); st = page.evaluate(SETTLE, [120, 40000])
+            print(q, name, 'settled', st, flush=True)
             r = page.evaluate(WORST, 1500); top = r.pop('top'); rows[name] = r
             print(q, name, r, flush=True)
             if r['calls'] > D: fails.append(f"{q} {name}: {r['calls']} draw calls (budget {D})")
