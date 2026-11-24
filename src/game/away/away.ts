@@ -186,9 +186,15 @@ export class Away {
     if (!s?.outro || !this.player) { this.leave(); return; }
     this.busy = true; this.outroFade = false;
     this.input.enabled = false;
-    this.onOutro?.(true);
-    // whoever takes over after it fades in on their own (the prologue keeps the black for the orbit card)
-    s.outro.start(this.player.model, () => { this.onOutro?.(false); this.input.enabled = true; this.busy = false; if (!this.keepBlack) this.ui.fade('black', 0, 0.6); this.leave(); });
+    // the closing scene opens on a new place: a short dip through black, never a jump cut out of play
+    this.ui.fade('black', 1, 0.35);
+    setTimeout(() => {
+      if (this.stage !== s || !this.player) return;
+      this.onOutro?.(true);
+      // whoever takes over after it fades in on their own (the prologue keeps the black for the orbit card)
+      s.outro!.start(this.player.model, () => { this.onOutro?.(false); this.input.enabled = true; this.busy = false; if (!this.keepBlack) this.ui.fade('black', 0, 0.6); this.leave(); });
+      this.ui.fade('black', 0, 0.7);
+    }, 400);
   }
   /** Main shows the letterbox and the Skip button while a closing scene plays. */
   onOutro: ((on: boolean) => void) | null = null;
