@@ -1635,7 +1635,15 @@ Owns: mirrored text, touch hints, night readability, fire base, the Android buil
 - NE WALL (task 4): pickProbe(ndcX, ndcY) hook in main.ts. At 8 s of mobile_ne_street_far (you 264.8, 220.4; camera
   268.39, 2.72, 223.95) the speckled panel is a merged static mesh (4236 triangles, MeshStandardMaterial white) in the
   plane z = 220 at x 260.5-262, 8 m off; the next surface behind is 0.6 m further (the face x = 260 of a 182806-triangle
-  merged block).
+  merged block). Probes p29/ne_pick2..4 (plans p29/plan_ne_pick*.json, build dist-p29b): the purple wall is ONE quad (2
+  triangles, x 260-320, y 0.14-12.74) of building aFac (4.2, 2.7273, seed 3, style 2) aOrg (260, 0.14, 160): the box
+  x 260-320, z 160-220, facade material (vertexColors, noMerge, ibatch-patched onBeforeCompile). Its attributes are the
+  same at all four corners (not an interpolation of seed/origin). No other triangle lies in z = 220 there, no polygon
+  offset; the frame's depth is 24-bit, near 0.1 far 2400, no log or reversed depth. Hiding the 182806-triangle block
+  changes WHAT shows through (ne_B_hidden.jpg: the street beyond) but not the holes: the purple wall's own pixels drop
+  out, in the far, grazing end of that one huge quad only. NOT FIXED. Next probe: on that mesh swap the material for a
+  plain MeshStandardMaterial (facade shader or not?), then split the quad into 3 m pieces (a 60 m triangle reaching
+  past the camera: clipping/interpolation?), each a screenshot at the same 8 s.
 - RELAY TO THE CHARACTER AGENT (their files; I did not touch them):
   1. bodymerge.ts / character.ts mergeCrowd: a crowd body draws 3 times a frame (p28 draws_a, Mobile crowd, 6 bodies
      over 2 frames: skin_body 12, `kit` skinned 16, hair `Mesh<head<neck` 16). Wanted: fold the rigid kit+hair mesh
