@@ -1529,3 +1529,25 @@ unlanded except this handoff commit and any recording in progress.
   the story people count against the cap only in view or within 8 m; townsfolk out of view beyond 8 m rank 12 m later
   (FOLK_VIEW, ?folkview=0 off); a body held out of view ranks 10 m later than one in view; cards out of view for two
   frames take a look the pool has a free body of (LOOK_SPREAD, ?looks=0 off).
+- p28c (ca3e8c0) Mobile: cardClose 43 -> 32, overlap 13 -> 0, slide 2 -> 0, identity 3 (look changes at 27 m in the
+  bazaar; the out-of-view holder rank change was reverted after it, e81e7d8). Mobile's townsfolk still use all 11 bodies
+  in the bazaar and at the gate (diag left 0, painted crowd 0): with 11 bodies and 24 people in view within 27 m, flat
+  cards close by on phones need fewer people there or more bodies; not decided.
+- Web CROWD_MIN 12 put perf_gate's Web gate at 1.36 M triangles (budget 1.3 M): 10 now (63a4f85).
+- perf_gate SETTLE (ped27) never settled on CI (1 to 3 frames a second) and the job hit its 30 minutes: 20 frames,
+  10-frame windows, at most 15 s.
+- NE STREET NOISE (task 4): not the near fade. A GPU clip with ?nearfade=0 (new switch, main.ts) shows the same speckle:
+  two building boxes whose lots meet had walls in one plane, z-fighting (the shopfront and the next building's purple
+  wall interleaved, a new pattern each frame). facade.ts facadeBox now insets every box 1.5 to 6 cm, in four steps in
+  turn. The phone shopfront's goods (14 by 42 cm cells) are also averaged where a cell is under two pixels.
+- MEMORY census (p28/census_a, Mobile, in the city): GPU estimate 716 MB (textures 524, buffers 183). What is booked to
+  the planet: world.scene.children[19..23] and world.explorer (the five crew at 1024: the same textures the city's
+  story people use, kept by releaseGpu's keep list, so in use, not waste) and combat.d.player.model (your planet body,
+  two 2048 maps, 45 MB, out of world.scene while away so never released): now released (a295b1c). Other big ones: the
+  city player body's 2048 map + normal (45 MB; 1024 on phones would save about 34 MB, characters area), morph textures
+  16384x2 RGBA32F x51 (27 MB) and x13/x11 (crowd bodies).
+- PHONES (task 2): 4x proxy draw census (p28/draws_a, Mobile gate, 13 bodies, 148 draws over 2 frames = 74 a frame
+  of which about 3 per body: the merged body, its kit (skinned, separate) and its hair (rigid on the head bone)).
+  CPU profile at the gate: updateMatrixWorld + multiplyMatrices about 15%, the renderer's per-draw uniform uploads about
+  30%. Merging kit and hair into bodymerge.ts's one mesh would take 2 draws a body off; that is the character agent's
+  file, not touched. Proxy fps varies run to run (crowd 34 in p27, 49.7 to 52.9 here with 6 bodies).
