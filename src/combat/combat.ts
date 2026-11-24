@@ -260,6 +260,14 @@ export class Combat {
     if (this.askWaiting.length === 1) this.askDifficulty();
   }
   private askWaiting: (() => void)[] = [];
+  /**
+   * Captures and tests: answer the difficulty question ahead of time (settings, not the save: `bs-settings-v1`), so it
+   * is never asked. Also `?diff=story|normal|hard` in the address. Anyone already waiting on it goes on.
+   */
+  setDifficulty(d: Difficulty) {
+    const S = this.d.settings(); S.difficulty = d; S.asked = true; this.d.saveSettings(); this.applySettings();
+    if (this.askWaiting.length) document.querySelector<HTMLButtonElement>(`#modal [data-diff="${d}"]`)?.click();
+  }
   /** The difficulty question or the lost-fight card is open: the game stands still (scaleTime). */
   private carding = false;
   private askDifficulty() {

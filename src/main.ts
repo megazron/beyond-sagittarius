@@ -951,6 +951,7 @@ async function boot() {
   combat = new Combat({ world, player, input, ui, save: () => game.save, settings: () => (settings.combat ??= defaultCombatSettings()), saveSettings: persistSettings,
     free: () => state === 'game' && game.mode === 'play' && !paused && !ui.modalOpen(), persist: () => game.persist(), home: () => game.mode !== 'away' });
   game.combat = combat;
+  { const d = new URLSearchParams(location.search).get('diff'); if (d === 'story' || d === 'normal' || d === 'hard') combat.setDifficulty(d); }
   // a story fight starts only in plain play: not under a flashback, the Vault, a film, the pause menu or a panel
   game.canFight = () => state === 'game' && !paused && !ui.modalOpen();
   game.onLevelComplete = onLevelDone;
