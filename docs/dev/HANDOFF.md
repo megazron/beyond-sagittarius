@@ -1907,3 +1907,43 @@ Fixing the owner's list from the flow4 GPU takes, in order.
   that commit's message: at the 12 m events the diag shows a free body of the card's look in most cases; my guess
   (not measured) is that none was free while the card came from 36 to 27 m, and within 27 m in view it is then held
   as a card. Detector runs p32/ped_b1_*, ped_b2_* on dist-p32b (p32/run_p32b.sh, after run_c and run_p32) will tell.
+- CI ITEM 7 RESOLVED IN CAUSE (branch modal-land 6d8aabe on main a98ead4; the coordinator reran its perf_gate and
+  lands it, not me; p31 carries the same two commits as 96ee1d6 + 729ee2a): the modal's fade-out keyframes end at
+  visibility hidden (time-based, not the 130 ms setTimeout); window.__modalLog; levels_smoke logs modal opens/closes
+  and long tasks when a wait runs out, then waits for two drawn frames and retries once; combat's "one answer closes
+  it" reads whether the modal is drawn, up to 10 s. EVIDENCE (modal-land run 45454504900, .cx-ages): one modal open at
+  65.32 s, between a 15.6 s and a 7.2 s single main-thread task right after Continue under SwiftShader; no second
+  modal. OPEN ISSUE: 5-15 s single main-thread tasks right after Continue / entering a world (CI SwiftShader). Check on
+  the real GPU and on a phone what they are (shader compiles? texture uploads?) with a CPU profile of the load.
+  modal-land's first perf_gate run failed "mobile gate: 167 draw calls (budget 145)", gate spot unsettled (19 frames
+  in 15.7 s, 16 bodies); main's own a98ead4 run passed it.
+- RESULTS p31 (dist-p31a = 52e8e7c, old crowd code, detector with `lens`): ped a1/a2 Mobile cardClose 11/12, overlap
+  1/0, slide 0/0, lens -/13; Web cardClose 17/13, overlap 34/19, slide 7/8, lens 33/34 (most overlaps and slides are
+  the townsfolk walkers p:walker*, not the painted crowd). mem_a (Mobile, Windows counters at the end): renderer 1371 MB
+  private, gpu-process 2056 MB, GPU dedicated 1182 MB; glmem census 713 MB (textures 526, buffers 177). proxy_a (4x
+  CPU): flat 47.7, bazaar 55.1, crowd 38.1, gate 29.6, square 36.7, market 50.8 fps: against p30's run of the same
+  kind of build (crowd 30.7, gate 41.6, bazaar 37.4, square 56.1) the 4x proxy swings 10-20 fps run to run; one run
+  cannot judge item 2. run_c failed (`python3` there has no playwright: use ~/.venvs/bs-test/bin/python).
+- RESULTS p32 (dist-p32a = 4e1728a src: lens berth + steal-look):
+  - who (Mobile gate, SwiftShader, p32/who_mobile_gate.json): 16 bodies, 667 819 triangles: you 5.1 m (50 k), three
+    at 7.6-9.1 m (18-21 k), NINE at 25-35 m on the gate's far side (z -30..-47, 16-24 k), FOUR story people 52-83 m north
+    (z +2..+17, 22-34 k; drawn outside the cap by design). Margin (item 1) has to come from those four (a far build
+    under ~10 k, or not drawn past ~60 m out of the street's line) or the nine at 25-35 m (TAKE 36 on phones), not the
+    near three. Not done.
+  - web_a (Web, GPU): tram_pavement_south twice: 59.7 and 59.9 fps over the clip (screencast 48.7, 50.1; worst 53 / 45
+    ms). The p30 slowness (16 fps screencast, update AND draw doubled at the same triangles) did not come back: I did
+    not change anything for item 3. crowd_bump_west / east watched as sheets at 5 fps: no face fills the screen now;
+    a walker still passes beside the lens (west 15-17 s at the right edge, a third of the frame; east 2-3 s right edge,
+    and two at the bottom corners later). `lens` (within 1.3 m) counted 8 / 5 there; the threshold is too loose to
+    tell beside-the-lens from in-it (most at 1.23-1.30 m). Item 4: reduced, not solved.
+  - ne_fac / ne_nob (Mobile NE frame): ONE facade draw there (static:MeshStandardMaterial, 12 708 vertices); hiding
+    it removes the whole wall. ?batch=0: the speckle strip is still there. So it is NOT ibatch. Still unknown. Not fixed.
+  - proxy_prof (4x, 5 s CPU profiles): crowd 47.7 / 41.1 fps, gate 38.4 / 38.4. Self time top: three projectObject
+    6-7 %, updateMatrixWorld + updateWorldMatrix + multiplyMatrices ~15 %, setProgram 3-4 %, uniform setValue/upload
+    ~5 %, character.ts animate 2.5 %; walkCrowd is not near the top. Next for item 2: fewer nodes walked per frame
+    (bones and hidden pool bodies under matrixAutoUpdate, static groups with matrixWorldAutoUpdate off), in
+    character.ts/bodymerge.ts (draw1's) or with them.
+  - DETECTOR b1/b2 on dist-p32a: p32/ped_b1_*, ped_b2_* (summaries with python3 p29/cc.py <dir>/report.json).
+- NEXT: items 1, 2, 5, 6 are open; 3 did not reproduce; 4 reduced; 7 in the coordinator's hands. Builds kept:
+  dist, dist-p31a, dist-p32a (delete dist-p31a and dist-p32a when no longer needed).
+
