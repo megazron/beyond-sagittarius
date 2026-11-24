@@ -1494,3 +1494,19 @@ unlanded except this handoff commit and any recording in progress.
   What is left of cardClose: cards at exactly 12 m that the camera walks up to in view (the painted crowd and the
   story's townsfolk, queue/group/aunty, beyond the cap). Next lever: fewer painted people on Web (64) so the ones in
   view within 30 m never outnumber the bodies, or a cap on the story's townsfolk drawn as cards near you.
+- PEDGLITCH b2 (e3ed385: thinning + VIEW2 + 6 m relocation margin + facade/tram/car fixes): Mobile cardClose 43,
+  overlap 13, slide 2, teleport 0, all pops 0 (fps 60, 16 bodies, 176 draws). Web cardClose 64, overlap 170 (86 of them
+  tram_square; b1 had 88 in all: NOT explained, the detector keeps only the first 40 samples, raise that and look),
+  slide 14, appear 1 (a body back 0.6 m from the lens), swaps 0, near27 51, 28 bodies, 1.74 M triangles max.
+- CLIPS (Downloads/BS_Game_v1.1/mobile_v7_GPU, README.txt; GPU, no sound): swaps only in the first 0.05 s after each
+  teleport. Watched frame by frame: NE street (Mobile 8-10 s) and the Web tram door (last 3 s). The seam dots on the
+  purple wall are gone; a second noise remains: the wall within 0.6 m of the lens dithers (nearfade.ts) and shows the
+  lit shop front behind it, changing every frame. That wall is not in `blocks` (keepOff's WALL_M does not see it):
+  find which mesh it is (raycast from the clip's camera) and add it to the walls the camera keeps off, or opt that
+  material out of the near fade. Tram windows are dark panes now (flat, no interior). The Web door group: in this take
+  they walk past with a cart.
+- NOT DONE: memory (task 3): rerun the census with glmem's stage-first walk (p26/plan_census.json on a ped27 build) to
+  see what is truly the planet's; then the plan above. Phones' draws/uniform uploads and the ~2.5 s cold texture
+  uploads: not touched. Coordinator notes: the store take's hair-at-the-lens (t02) should be better with the landed
+  body keepOff (0.9 m), not re-checked on the GPU; t03 car grille: keepOff off cars on ped27, not clipped.
+  ped27 needs CI (pushed; perf_gate now settles by frames, so its budgets may need a look) before it can land.
