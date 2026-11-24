@@ -1862,3 +1862,16 @@ Fixing the owner's list from the flow4 GPU takes, in order.
   flake list, so not rerun.
 - Disk: keep at most 3 dist-* in ~/bs-perf and delete raw capture frames once joined and watched (coordinator, C: hit
   22 MB free). I removed the old dist-* and p30's clip_* frame folders (mp4s and sheets kept).
+- NE WALL probe p31/ne_veil (dist-p30g, Mobile, plan p31/plan_ne_veil.json, sheet p31/ne_veil_sheet.jpg): the speckle
+  strip at the corner stays with: the 520 m haze veil (the finder matched 0 meshes there, so the 96-triangle white
+  BackSide mesh is NOT citymega's veil: still unidentified), EVERY non-facade mesh hidden (485 hidden, only facades
+  drawn: still speckled), facade depthFunc Less, sun normalBias 0.08, bias -0.002, sun shadows off, facades not
+  casting. So it is NOT shadow acne, NOT that white mesh, NOT a fight with any non-facade mesh: it is facade vs facade
+  (two facade boxes sharing that corner face: a wall_glass upper block or a districts.ts:394 side box against the main
+  box) or inside the facade draw. Next: in a probe, hide facade meshes one at a time (or by geometry group/draw range)
+  at that frame and see which one takes the strip away; then move that box in by a few cm or drop its coplanar face.
+  NOT FIXED.
+- QUEUED (behind other agents' GPU jobs, each waits for the one before): p31/run_a.sh (detector twice on dist-p31a =
+  52e8e7c: p31/ped_a1_*, ped_a2_*), p31/run_b.sh (Mobile memory with Windows counters p31/mem_a.mem.txt + glmem
+  census, then the 4x proxy p31/proxy_a), p31/run_c.sh (who.py Mobile gate: which 16 bodies, for the margin).
+  Summaries: python3 p29/cc.py p31/ped_a1_web/report.json. Delete dist-p31a and dist-p30g when they are done.
