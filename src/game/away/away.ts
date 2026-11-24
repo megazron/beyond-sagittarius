@@ -56,6 +56,7 @@ export class Away {
   onIntro: ((on: boolean) => void) | null = null;
   private stamina = 100;
   private breathAt = 0;
+  private lope = 0;
 
   enter(id: CrewId, location: string, done: () => void, job = 0, arrive = false) {
     const pre = this.prepared;
@@ -166,6 +167,12 @@ export class Away {
     this.air(dt, p);
     p.update(dt, this.input, canMove && !this.busy, this.stamina, this.pace);
     inj?.update(dt, dt / 50, { resting: p.speedNow < 0.2 });
+    // low gravity: every step leaves the ground for a moment and comes down slowly (a lope, the way Apollo crews moved);
+    // on Verdaxis' 14 there is none
+    if (p.onGround && p.speedNow > 0.4 && s.gravity < 6) {
+      this.lope += p.speedNow * dt / (1.1 + 2.4 * (1 - s.gravity / 14));
+      p.model.root.position.y += Math.abs(Math.sin(this.lope * Math.PI)) * 0.09 * (1 - s.gravity / 14) * Math.min(1, p.speedNow / 2.5);
+    }
     // a hero view: the camera turns to it once, eases back, and the player can always look away; one with `after` waits
     // until that task is done (the square's fired on the walk past the tram, before you had held its door)
     const v = s.vistas?.find((b, i) => !this.seen.has(i) && (!b.after || this.done.has(b.after)) && p.pos.x > b.x0 && p.pos.x < b.x1 && p.pos.z > b.z0 && p.pos.z < b.z1);

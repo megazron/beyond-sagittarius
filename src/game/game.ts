@@ -359,6 +359,7 @@ export class Game {
   injuries: Injuries | null = null;
   private wakeBody: Arrival | null = null;
   private sprintSore = 0;
+  private heldLimbs: import('../characters/character').Limbs | null = null;
 
   start(save: SaveData, fresh: boolean) {
     this.save = save;
@@ -567,9 +568,10 @@ export class Game {
     // he can run on cracked ribs: it costs him (the picture tightens, he grunts) and his breath
     p.hurt = eff ? { speed: 1, jump: eff.jump, sprint: true } : null;
     p.model.setLimp(s.level <= 1 || !!eff?.limp);
-    if (!this.combat?.encounter) p.model.setLimbs(p.busy ? null : eff?.limbs ?? null);
     if (inj && p.sprinting && inj.sev('ribsL') > 0.3 && (this.sprintSore -= dt) <= 0) { this.sprintSore = 2.6; audio.human('grunt', 0.35); st.stamina = Math.max(0, st.stamina - 6); }
     this.combat?.before(dt, time);
+    // the hand on the ribs, unless a weapon or a fight has the arms (combat sets them first, every frame)
+    { const cur = p.model.limbsNow; if (!cur || cur === this.heldLimbs) { const want = p.busy || p.combat ? null : eff?.limbs ?? null; p.model.setLimbs(want); this.heldLimbs = want; } }
     p.update(dt, this.input, true, st.stamina, (st.health < 25 ? 0.75 : 1) * hurt);
     this.combat?.after(dt, time);
     if (this.camShake > 0) {

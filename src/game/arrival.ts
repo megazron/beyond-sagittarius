@@ -345,7 +345,7 @@ export class Arrival {
   }
 
   /** Skip to the hand-over: the body where it ends, the stage props that stay, the sound and picture back to normal. */
-  skip() { if (!this.active) return; while (this.cueI < this.def.cues.length) { const c = this.def.cues[this.cueI++]; if (c.t <= this.def.dur) c.run(this.ctx); } this.t = this.def.dur - 1e-3; this.flyFallers(this.def.dur); this.finish(); }
+  skip() { if (!this.active) return; while (this.cueI < this.def.cues.length) { const c = this.def.cues[this.cueI++]; if (c.t <= this.def.dur) c.run(this.ctx); } this.t = this.def.dur - 1e-3; this.flyFallers(this.def.dur); this.poseBody(this.def.dur, 1 / 60); this.finish(); }
 
   private finish() {
     if (!this.active) return;
@@ -353,6 +353,10 @@ export class Arrival {
     clearHurt('film');
     audio.ears(0, 0); audio.heart(0);
     const b = this.ctx.body; b.setLimbs(null); b.setFace(null); b.setLookTarget(null); b.look2(0, 0);
+    // upright again for whoever moves it next (player.ts turns it about y only)
+    { const e = new THREE.Euler().setFromQuaternion(b.root.quaternion, 'YXZ'); b.root.rotation.set(0, e.y, 0); }
+    // the airless stages keep their own sound in play
+    if (!this.def.air) audio.vacuum(false);
     for (const o of this.temp) { o.parent?.remove(o); o.traverse((c) => { const m = c as THREE.Mesh; m.geometry?.dispose?.(); const mat = m.material as THREE.Material | THREE.Material[] | undefined; if (Array.isArray(mat)) mat.forEach((x) => x.dispose()); else mat?.dispose?.(); }); }
     this.temp = [];
     for (const { o, d } of this.fallers) if (d.stays) { o.visible = true; o.traverse((c) => { const m = (c as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined; if (m?.userData?.hot) m.emissiveIntensity = 0; }); }
