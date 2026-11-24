@@ -14,7 +14,9 @@ import type { Quality } from './quality';
 import { setMaxAnisotropy } from './assets';
 import { installSoftShadows } from './softShadows';
 import { heatSources } from './heat';
+import { hurtNow, hurtZero } from './hurtfx';
 
+const HURT_TMP = hurtZero();
 const QUAD_VS = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
 /** Display-referred grade: film curve, split tone, vignette, aberration, grain. */
@@ -36,10 +38,13 @@ const FinalShader = {
     uLines: { value: 0 },
     // phones draw below the screen's own resolution: a light contrast-adaptive sharpen before the upscale
     uSharpen: { value: 0 },
+    // a hurt body's eyes (core/hurtfx.ts): blur, double vision, tunnel, colour loss; uHurtB: the lids' warm wash, a white flash, closed eyes
+    uHurt: { value: new THREE.Vector4(0, 0, 0, 0) },
+    uHurtB: { value: new THREE.Vector3(0, 0, 0) },
   },
   vertexShader: QUAD_VS,
   fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; uniform float uTime, uVignette, uGrain, uAberration, uZoom, uInk, uLines, uSharpen; uniform vec3 uTint, uFlash, uInkDark, uInkLight; uniform vec2 uZoomAt;
+    uniform sampler2D tDiffuse; uniform float uTime, uVignette, uGrain, uAberration, uZoom, uInk, uLines, uSharpen; uniform vec3 uTint, uHurtB, uFlash, uInkDark, uInkLight; uniform vec2 uZoomAt; uniform vec4 uHurt;
     varying vec2 vUv;
     float ign(vec2 p){ return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
     // Print-film response, per channel: lifted toe, soft shoulder (what a 3D LUT would bake in).
@@ -73,6 +78,15 @@ const FinalShader = {
         for (int i = 1; i <= 9; i++) acc += texture2D(tDiffuse, vUv - dz * ((float(i) - j) / 9.0)).rgb;
         col = acc / 10.0;
       }
+      if (uHurt.x + uHurt.y > 0.0) {
+        // eyes that will not focus: a soft ring of taps (the blur) and a second image drifting off to one side (double)
+        vec2 px = 1.0 / vec2(textureSize(tDiffuse, 0));
+        float rad = uHurt.x * 9.0, j = ign(gl_FragCoord.xy) * 6.283;
+        vec3 acc = col;
+        for (int i = 0; i < 8; i++) { float a = float(i) * 0.785 + j; acc += texture2D(tDiffuse, vUv + vec2(cos(a), sin(a)) * px * rad * (0.5 + 0.5 * fract(float(i) * 0.618))).rgb; }
+        col = acc / 9.0;
+        if (uHurt.y > 0.0) { vec2 o = vec2(uHurt.y, uHurt.y * 0.35); col = mix(col, texture2D(tDiffuse, vUv + o).rgb, 0.42); }
+      }
       col *= uTint;
       col = clamp(col, 0.0, 1.0);
       float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
@@ -99,6 +113,16 @@ const FinalShader = {
         float ink = smoothstep(0.26, 0.34, dot(col, vec3(0.2126, 0.7152, 0.0722)));
         col = mix(col, mix(uInkDark, uInkLight, ink), uInk);
       }
+      if (uHurt.z + uHurt.w + uHurtB.x + uHurtB.z > 0.0) {
+        float l2 = dot(col, vec3(0.2126, 0.7152, 0.0722));
+        col = mix(col, vec3(l2), uHurt.w);
+        // the tunnel: only a hole of the picture is seen, the rest falls to black
+        float tv = smoothstep(0.15 + 0.55 * (1.0 - uHurt.z), 0.75, length(d * vec2(1.25, 1.0)) + 0.25 * uHurt.z);
+        col *= 1.0 - tv * uHurt.z;
+        col = mix(col, col * vec3(1.0, 0.42, 0.34) + vec3(0.06, 0.0, 0.0), uHurtB.x);
+        col *= 1.0 - uHurtB.z;
+      }
+      col += vec3(uHurtB.y);
       col += uFlash;
       gl_FragColor = vec4(col, 1.0);
     }
@@ -962,6 +986,7 @@ export class Renderer {
       installGpuTimer(this.renderer, this.composer.passes.map((p, i) => ({ pass: p as unknown as { render: (...a: unknown[]) => void }, name: named.get(p) ?? `pass${i}` })));
     }
     this.final.uniforms.uTime.value = time;
+    { const h = hurtNow(HURT_TMP); (this.final.uniforms.uHurt.value as THREE.Vector4).set(h.blur, h.double, h.tunnel, h.desat); (this.final.uniforms.uHurtB.value as THREE.Vector3).set(h.red, h.flash, h.black); }
     if (this.volumetric) this.volumetric.source = (this.renderPass.scene.userData.post as PostSource | undefined) ?? null;
     if (this.ssr) { const k = (this.renderPass.scene.userData.ssr as number | undefined) ?? 0; this.ssr.strength = k; this.ssr.enabled = k > 0.01 && this.shed < 2; }
     const cam = this.renderPass.camera as THREE.PerspectiveCamera;
@@ -974,7 +999,8 @@ export class Renderer {
     // phones in a scene that asks for it (Zenvora): straight to the screen, no post chain at all. Bloom and the grade
     // are a dozen full-screen passes; on a phone they cost more than the street. The title lens still gets the chain.
     const u = this.final.uniforms, fv = u.uFlash.value as THREE.Vector3;
-    if (!this.quality.post && this.renderPass.scene.userData.direct && !u.uZoom.value && !u.uInk.value && !u.uLines.value && fv.x + fv.y + fv.z === 0) {
+    const hv = u.uHurt.value as THREE.Vector4;
+    if (!this.quality.post && this.renderPass.scene.userData.direct && !u.uZoom.value && !u.uInk.value && !u.uLines.value && fv.x + fv.y + fv.z === 0 && hv.x + hv.y + hv.z + hv.w === 0 && (u.uHurtB.value as THREE.Vector3).lengthSq() === 0) {
       this.renderer.setRenderTarget(null); this.renderer.render(this.renderPass.scene, cam);
     } else this.composer.render(dt);
     if (jittered) cam.clearViewOffset();

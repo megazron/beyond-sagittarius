@@ -153,9 +153,8 @@ export function buildStage(name: string, d: StageDef, label: (k: string) => stri
       else if (d.trait === 'plates') body.glow(.6 + .5 * Math.max(0, Math.sin(time * 1.3)));    // plates sealing on each held breath
       else if (d.trait === 'ember') body.glow(1.1 + .35 * Math.sin(time * 3.1) * Math.sin(time * 1.7));
       else if (d.trait === 'frost') {
-        // breath that freezes as it leaves her
+        // no breath out here: she is holding the one she has
         body.root.getWorldPosition(head); head.y += 1.6;
-        if (time > nextPuff) { nextPuff = time + 2.6; const p = puffs.find((x) => x.t > 1.6); if (p) { p.t = 0; p.m.position.copy(head); p.m.visible = true; } }
       }
       for (const p of puffs) { if (p.t > 1.6) { p.m.visible = false; continue; } p.t += dt; p.m.position.y += dt * .25; p.m.scale.setScalar(1 + p.t * 2.2); (p.m.material as THREE.MeshBasicMaterial).opacity = .35 * (1 - p.t / 1.6); }
     },
@@ -164,34 +163,36 @@ export function buildStage(name: string, d: StageDef, label: (k: string) => stri
 
 const P = (...a: [number, number, number, number][]) => a;
 export const STAGES: Record<string, StageDef> = {
-  // Skyvra: the giant's ring, a river of ice; the giant fills half the sky
-  ring: { sky: 0x02030a, gravity: 3.4, jump: 3.6, tex: 'ice', tint: 0xdcecf8, rough: .35, metal: 0, repeat: 1, relief: .7, scale: 9, sun: 0xfff1dc, sunI: 3.6, ambient: .35, ambientG: 0x1c2a40,
-    pads: P([0, 0, 10, 0], [15, -6, 6, 1.2], [26, 5, 5.5, 3], [38, 1, 6.5, 4.5], [-13, 9, 5.5, -.6], [-23, -3, 5.5, 1.4]), debris: { n: 900, color: 0xbcd0e2, near: 60, far: 700, size: 9 },
+  // Skyvra: a bare asteroid in the rubble by the giant's ring. No air, and she needs none; pockets of ice are her water
+  ring: { sky: 0x02030a, gravity: 1.6, jump: 3.0, tex: 'regolith', tint: 0x8c8882, rough: .95, metal: 0, repeat: 1, relief: .7, scale: 9, sun: 0xfff1dc, sunI: 3.6, ambient: .35, ambientG: 0x1c2a40,
+    pads: P([0, 0, 10, 0], [15, -6, 6, 1.2], [26, 5, 5.5, 3], [38, 1, 6.5, 4.5], [-13, 9, 5.5, -.6], [-23, -3, 5.5, 1.4]), debris: { n: 900, color: 0x6c6862, near: 60, far: 700, size: 9 },
     body: { color: 0xc89a6a, r: 900, at: [-1500, 260, -1400], ring: 2.1 }, trait: 'frost', first: { id: 'splint', at: [1.5, 1.5] },
     props(scene, h) {
-      // pod 2, wedged in the ice, and the dish she rigs from it
-      const pod = new THREE.Mesh(new THREE.CapsuleGeometry(1, 1.8, 8, 18), new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: .45, metalness: .35 }));
-      pod.rotation.z = 1.2; pod.position.set(-3, h(-3, -3.5) + .7, -3.5); pod.castShadow = pod.receiveShadow = true; scene.add(pod);
-      const scorch = new THREE.Mesh(new THREE.CircleGeometry(2.6, 32), new THREE.MeshStandardMaterial({ color: 0x3a4250, roughness: .9, transparent: true, opacity: .55, depthWrite: false })); scorch.rotation.x = -Math.PI / 2; scorch.position.set(-3, h(-3, -3.5) + .03, -3.5); scene.add(scorch);
+      // the hull plate she fell with, propped to the sun: ice melts on it. No pod: nobody reached one
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(2.6, .08, 1.8), new THREE.MeshStandardMaterial({ color: 0xc8ccd2, roughness: .35, metalness: .75 }));
+      plate.rotation.set(.5, .6, .12); plate.position.set(-3, h(-3, -3.5) + .55, -3.5); plate.castShadow = plate.receiveShadow = true; scene.add(plate);
+      for (const [x, z] of [[6, 4], [15, -6], [-13, 9]]) { const ice = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1, 1), new THREE.MeshStandardMaterial({ color: 0xcfe8f6, roughness: .2, flatShading: true })); ice.scale.y = .35; ice.position.set(x + .8, h(x + .8, z) + .1, z + .6); scene.add(ice); }
       const dish = new THREE.Mesh(new THREE.SphereGeometry(.9, 24, 12, 0, 6.283, 0, 1.1), new THREE.MeshStandardMaterial({ color: 0xd8d8d8, metalness: .75, roughness: .3, side: THREE.DoubleSide }));
       dish.position.set(38, h(38, 1) + 1.1, 1); dish.rotation.x = -.7; dish.castShadow = true; scene.add(dish);
     },
     gather: { id: 'ice', color: 0xa6e4ff, spots: [[6, 4], [15, -6], [-13, 9]] }, steps: [{ id: 'cracker', at: [-3, -3.5] }, { id: 'dish', at: [38, 1] }] },
-  // Bolzar: a rubble pile, airless, barely holding itself together
+  // Bolzar: Shardrift, the broken half of a small moon, airless
   scree: { sky: 0x03040a, gravity: 1.6, jump: 2.6, tex: 'regolith', tint: 0x8a847a, rough: .95, metal: 0, repeat: 1, relief: 1.4, scale: 6, sun: 0xfff2e0, sunI: 4.2, ambient: .12, ambientG: 0x0a0a10,
-    pads: P([0, 0, 10, 0], [16, 5, 6, 1.4], [27, -3, 6, 3], [-15, -6, 6.5, .6]), debris: { n: 700, color: 0x4a4640, near: 45, far: 480, size: 7 }, trait: 'plates',
+    pads: P([0, 0, 10, 0], [16, 5, 6, 1.4], [27, -3, 6, 3], [-15, -6, 6.5, .6]), debris: { n: 700, color: 0x4a4640, near: 45, far: 480, size: 7 }, trait: 'plates', first: { id: 'strap', at: [0.14, 2.33] },
     gather: { id: 'plate', color: 0xc8d4dc, spots: [[6, -3], [16, 5], [-15, -6]] }, steps: [{ id: 'weld', at: [27, -3] }] },
-  // Lyrra: no ground at all, a piece of the ship turning slowly through light and dark
-  wreck: { sky: 0x000208, gravity: .9, jump: 2, tex: 'hull', tint: 0xb4bcc4, rough: .5, metal: .35, repeat: 1, relief: .08, scale: 20, sun: 0xffffff, sunI: 5, ambient: .22, ambientG: 0x10141c, sunSwing: 40,
-    pads: P([0, 0, 8, 0], [12, 2, 4.5, 0], [21, -2, 4.5, 0], [-12, 3, 4.5, 0]), debris: { n: 320, color: 0x7a8288, near: 24, far: 320, size: 4 }, trait: 'lichen',
+  // Lyrra: Thalwen, a grey dust moon; the sun comes over the rim for eleven minutes at a time
+  wreck: { sky: 0x000208, gravity: 1.5, jump: 2.6, tex: 'regolith', tint: 0xa0a0a8, rough: .95, metal: 0, repeat: 1, relief: .5, scale: 9, sun: 0xffffff, sunI: 5, ambient: .22, ambientG: 0x10141c, sunSwing: 40,
+    pads: P([0, 0, 8, 0], [12, 2, 4.5, 0], [21, -2, 4.5, 0], [-12, 3, 4.5, 0]), debris: { n: 320, color: 0x7a8288, near: 24, far: 320, size: 4 }, trait: 'lichen', first: { id: 'bind', at: [-0.3, 1.2] },
     gather: { id: 'lichen', color: 0xb58cff, spots: [[3, 3], [12, 2], [-12, 3]] }, steps: [{ id: 'suture', at: [0, -3] }, { id: 'burst', at: [21, -2] }] },
   // Draxum: a methane moon: thick orange air, black lakes, the giant overhead
   moon: { sky: 0xa8642a, fog: .016, gravity: 2.4, jump: 3.4, tex: 'frozen', tint: 0x9a6a48, rough: .85, metal: 0, repeat: 1, relief: 1.1, scale: 11, sun: 0xffb060, sunI: 1.4, ambient: 1, ambientG: 0x3a1e10, lakes: -1.2,
     pads: P([0, 0, 13, 0], [21, 4, 7.5, 1.2], [-19, -5, 7.5, .8], [35, -4, 6.5, 2.8]), debris: { n: 260, color: 0x5a3e2c, near: 40, far: 260, size: 9 },
-    body: { color: 0xd8a870, r: 900, at: [-500, 620, -1500] }, trait: 'ember',
+    body: { color: 0xd8a870, r: 900, at: [-500, 620, -1500] }, trait: 'ember', first: { id: 'shoulder', at: [1.1, -0.6] },
+    // the boulder he puts his shoulder back against
+    props(scene, h) { const g = new THREE.IcosahedronGeometry(0.9, 1); const p = g.getAttribute('position'); for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) * 1.15); const m = new THREE.Mesh(g.toNonIndexed(), new THREE.MeshStandardMaterial({ color: 0x2a211a, roughness: 0.9, flatShading: true })); m.geometry.computeVertexNormals(); m.position.set(1.4, h(1.4, -1.1) + 0.55, -1.1); m.rotation.set(0.3, 0.8, 0.1); m.castShadow = m.receiveShadow = true; scene.add(m); },
     gather: { id: 'ice', color: 0xe8e0d0, spots: [[8, 5], [21, 4], [-19, -5]] }, steps: [{ id: 'break', at: [35, -4] }, { id: 'ember', at: [0, -6] }] },
   // Nuvexa: drifting in the one layer of a hot planet's clouds where the pressure is sane
-  clouds: { sky: 0xd8b860, fog: .02, gravity: 3.2, jump: 4, tex: 'hull', tint: 0xe0d0a0, rough: .5, metal: .3, repeat: 1, relief: .05, scale: 20, sun: 0xfff0c8, sunI: 2, ambient: 1.1, ambientG: 0x8a6a30,
-    pads: P([0, 0, 7, 0], [13, 2, 4, .8], [22, -3, 4, 1.8], [-12, 4, 4, .5]), debris: { n: 0, color: 0xe8d8a0, near: 30, far: 200, size: 6 }, trait: 'float', // no rocks in a sky: the art pass draws its clouds
+  clouds: { sky: 0xd8b860, fog: .02, gravity: 9, jump: 5.6, tex: 'hull', tint: 0xe0d0a0, rough: .5, metal: .3, repeat: 1, relief: .05, scale: 20, sun: 0xfff0c8, sunI: 2, ambient: 1.1, ambientG: 0x8a6a30,
+    pads: P([0, 0, 7, 0], [13, 2, 4, .8], [22, -3, 4, 1.8], [-12, 4, 4, .5]), debris: { n: 0, color: 0xe8d8a0, near: 30, far: 200, size: 6 }, trait: 'float', first: { id: 'ribs', at: [0, 1.5] }, // no rocks in a sky: the art pass draws its clouds
     gather: { id: 'patch', color: 0xffd23c, spots: [[3, -3], [13, 2], [-12, 4]] }, steps: [{ id: 'relay', at: [22, -3] }] },
 };

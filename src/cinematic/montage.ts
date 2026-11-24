@@ -8,6 +8,8 @@ import { Renderer } from '../core/renderer';
 import type { Character, CrewId, CrewPose, Dir, Face, Limbs } from '../characters/character';
 import type { Cinematic } from './cinematic';
 import { FilmVideo } from './filmvideo';
+import { TITLE_STILL } from '../game/arrivals';
+import { holdPose } from '../game/arrival';
 import type { World } from '../world/world';
 import { LAKE } from '../world/heightfield';
 
@@ -663,18 +665,22 @@ export class Montage {
     const [neb, other, exposure] = SKY[id];
     u.uNebula.value = neb; u.uOther.value = other;
     const k = clamp((b - (imp - 2)) / 8, 0, 1), drift = easeInOut(k);
-    const cam = this.lens(this.tmp.copy(o).add(V(1.6 - drift * 0.5, 1.35, 4.6 - drift * 0.6)).add(hit ? shakeAt(b, 0.5 * after(b, imp, 1.0), this.tmp2) : V(0, 0, 0)).clone(), this.tmp3.copy(o).add(V(0, 1.05, 0)).clone(), 34, 4.6, 0.004);
+    // low over where they will lie: the body is on the ground, not standing in the frame
+    const cam = this.lens(this.tmp.copy(o).add(V(1.7 - drift * 0.5, 0.95, 3.6 - drift * 0.7)).add(hit ? shakeAt(b, 0.5 * after(b, imp, 1.0), this.tmp2) : V(0, 0, 0)).clone(), this.tmp3.copy(o).add(V(0, 0.35, 0)).clone(), 34, 3.8, 0.004);
     // the light comes down the sky to where they will be
     const tr = this.trails[i]; tr.color = col;
     if (!hit) { const h = clamp((b - (imp - 2)) / 2, 0, 1); const from = o.clone().add(V(-40, 60, -70)), to = o.clone().add(V(0, 0.4, 0)); tr.draw((s, out) => out.lerpVectors(from, to, Math.max(0, h - s * 0.35)), cam, 0.9, b, 2); }
     else tr.mesh.visible = false;
     if (hit) {
-      const q = (x: number, y: number) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, 0, 'YXZ'));
-      // one held pose each, for who they are: no stock gesture on a loop
-      const POSE: Record<string, [CrewPose, number, Face]> = { strong: ['injured', 0.25, { frown: 0.5, squint: 0.3 }], medic: ['stand', -0.2, { squint: 0.2 }], explorer: ['sit', 0.3, { frown: 0.6 }], builder: ['sit', -0.25, { smile: 0.2 }], social: ['selfie', 0.15, { smile: 0.3 }] };
-      const [pose, yaw, face] = POSE[id];
-      const c = this.act(id, o.clone().add(V(0, 0.02, 0)), q(0, yaw), pose, null, face);
-      c.look2(-yaw * 0.6, 0);
+      // where the hit left them: crumpled, still; then one breath, then the eyes (LANDINGS.md; arrivals.ts TITLE_STILL).
+      // Nobody sits or stands up here: that is their own arrival, the first time you play them
+      const YAW: Record<string, number> = { strong: 2.2, medic: 2.6, explorer: 1.9, builder: 2.4, social: 2.0 };
+      const k0 = TITLE_STILL[id]!, hp = holdPose(k0, o.clone(), YAW[id] ?? 2);
+      const breath = tt > 1.6 ? Math.max(0, Math.sin((tt - 1.6) * 1.9)) * 0.06 : 0;
+      hp.limbs.bend = (hp.limbs.bend ?? 0) + breath;
+      const eyes = smoothstep(2.6, 3.4, tt);
+      const face: Face = { blink: 1 - eyes * 0.6, frown: 0.25 + eyes * 0.35, squint: eyes * 0.5, open: 0.15 };
+      this.act(id, hp.pos, hp.quat, 'lie', hp.limbs, face);
       this.embers.set({ at: o.clone().add(V(0, 0.3, 0)), c0: col, c1: 0x202020, life: 1.6, speed: 5, drag: 1.4, grav: id === 'explorer' ? 0 : -2, size: 0.06, grow: 0.4, stagger: 0.1 }).play(tt);
     }
     // key light per world, and the colour of their own trail from behind

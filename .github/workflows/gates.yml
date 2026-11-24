@@ -41,6 +41,8 @@ jobs:
           # words on 3D surfaces read the right way round (signs, boards, neon); no key hints on a touch screen
           - { name: signs_touch, run: 'python tools/sign_faces.py && python tools/touch_hints.py' }
           - { name: cutscene_qa, run: 'python tools/cutscene_qa.py --out "$RUNNER_TEMP/cutscene"' }
+          # each of the six arrivals plays from its first frame to control (game/arrival.ts), and leaves them hurt
+          - { name: landing_smoke, run: 'python tools/landing_smoke.py --quality web' }
           - { name: combat, run: 'node --experimental-strip-types tools/combat/sim_test.ts && node --experimental-strip-types tools/combat/pose_test.ts && python tools/combat/play_test.py' }
           - { name: app_smoke, cap: true, run: 'python tools/android/app_smoke.py --shots "$RUNNER_TEMP/shots"' }
     steps:

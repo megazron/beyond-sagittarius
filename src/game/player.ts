@@ -96,6 +96,10 @@ export class Player {
   private zoomS = 0;
   /** Stages other than Verdaxis set their own gravity, and let you jump across open gaps. */
   physics = { gravity: 14, jump: 5.2, gaps: false };
+  /** What the body's wounds allow (game/injury.ts): a share of the speed and the jump, and whether it can sprint. */
+  hurt: { speed: number; jump: number; sprint: boolean } | null = null;
+  /** The body is posed by someone else this frame (an arrival): the player only moves the camera. */
+  skipAnimate = false;
 
   constructor(private terrain: Pick<Terrain, 'height'>, private forest: Pick<Forest, 'collide' | 'blocks' | 'clearance'> & Partial<Pick<Forest, 'inFoliage'>> & { ceiling?: (fx: number, fz: number, fy: number, cx: number, cz: number) => number; keepOff?: (p: THREE.Vector3) => void }, public camera: THREE.PerspectiveCamera, detail = 1, id: CrewId = 'scientist', skin?: string) {
     this.model = createCharacter(id, detail, undefined, skin);
@@ -165,8 +169,8 @@ export class Player {
     if (len > 1) { mx /= len; mz /= len; }
     const moving = len > 0.05;
     const cb = this.combat;
-    this.sprinting = moving && canMove && (cb?.sprint ?? input.held('sprint')) && stamina > 2 && mz > 0 && !(cb && (cb.scale < 0.9 || cb.sneak));
-    let speed = (this.sprinting ? 7.2 : 4.0) * slow * (cb ? cb.scale : 1);
+    this.sprinting = moving && canMove && (cb?.sprint ?? input.held('sprint')) && stamina > 2 && mz > 0 && !(cb && (cb.scale < 0.9 || cb.sneak)) && (this.hurt?.sprint ?? true);
+    let speed = (this.sprinting ? 7.2 : 4.0) * slow * (cb ? cb.scale : 1) * (cb ? 1 : this.hurt?.speed ?? 1);
     if (cb?.sneak) speed = Math.min(speed, 1.9);
     if (this.swimming) speed = (this.sprinting ? 2.6 : 1.7) * slow;
     else if (this.inWater) speed *= 0.55;
@@ -181,7 +185,7 @@ export class Player {
     this.vel.z += (wz - this.vel.z) * k;
     if (cb?.force) { this.vel.x = cb.force.x; this.vel.z = cb.force.z; }
 
-    if (canMove && this.onGround && !this.swimming && input.act('jump') && (!cb || cb.jump)) { this.vel.y = this.physics.jump; this.onGround = false; }
+    if (canMove && this.onGround && !this.swimming && input.act('jump') && (!cb || cb.jump)) { this.vel.y = this.physics.jump * (cb ? 1 : Math.sqrt(this.hurt?.jump ?? 1)); this.onGround = false; }
     this.vel.y -= this.physics.gravity * dt;
 
     const next = this.pos.clone();
@@ -254,7 +258,7 @@ export class Player {
     if (this.swimming) { this.swimLift += (clamp(hs / 1.4, 0, 1) - this.swimLift) * (1 - Math.exp(-dt * 3)); this.model.root.position.y = WATER_Y - FLOAT + this.swimLift * 0.85; }
     this.model.root.rotation.y = this.facing + Math.PI;
     this.model.root.updateMatrixWorld();
-    this.model.animate(this.swimming && this.pose === 'idle' ? 'swim' : this.onGround || this.pose !== 'idle' ? this.pose : 'jump', this.walkPhase, clamp(hs / 4, 0, 1.3), performance.now() / 1000, dt);
+    if (!this.skipAnimate) this.model.animate(this.swimming && this.pose === 'idle' ? 'swim' : this.onGround || this.pose !== 'idle' ? this.pose : 'jump', this.walkPhase, clamp(hs / 4, 0, 1.3), performance.now() / 1000, dt);
 
     this.updateCamera(dt);
   }

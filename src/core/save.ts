@@ -18,6 +18,8 @@ export interface SaveData {
   timeOfDay: number; // hours 0-24
   day: number;
   flags: Record<string, boolean>;
+  /** What the arrivals did to each of the six and how far it has healed (game/injury.ts): `<crew>.<part>` = 0..1. */
+  wounds?: Record<string, number>;
   collected: string[]; // ids of picked-up world items
   /** Custom crew names chosen on the pre-game screen (missing = default). */
   names?: Partial<Record<string, string>>;

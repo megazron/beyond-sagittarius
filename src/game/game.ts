@@ -22,6 +22,8 @@ import type { Player } from './player';
 import type { Input } from './input';
 import { UI, PLAYABLE_LEVELS } from '../ui/ui';
 import { Tutorial } from './tutorial';
+import { Arrival } from './arrival';
+import { Injuries } from './injury';
 import { Cutscene, Beat, SceneBranch } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
 import type { Combat } from '../combat/combat';
@@ -60,6 +62,8 @@ export class Game {
     this.away.level = this.save.level;
     const first = !this.save.flags[`played.${id}`];
     const jobKey = `job.${id}.${this.save.level}`, job = !first && !this.save.flags[jobKey] ? this.save.level : 0;
+    this.away.wounds = (this.save.wounds ??= {});
+    this.injuries?.quiet();
     this.away.enter(id, location, () => {
       this.mode = 'play';
       this.save.flags[`played.${id}`] = true;
@@ -67,7 +71,7 @@ export class Game {
       else if (job) { this.save.flags[jobKey] = true; this.favour(id); }
       this.persist();
       done?.();
-    }, job);
+    }, job, first && !job);
   }
 
   private mirTurn = 1;
@@ -351,8 +355,15 @@ export class Game {
     this.camShake = Math.max(this.camShake, 0.14);
   }
 
+  /** Zenvik's own wounds from the fall (game/injury.ts), healing as the day goes. */
+  injuries: Injuries | null = null;
+  private wakeBody: Arrival | null = null;
+  private sprintSore = 0;
+
   start(save: SaveData, fresh: boolean) {
     this.save = save;
+    this.injuries?.quiet();
+    this.injuries = new Injuries('scientist', fresh ? undefined : save.wounds);
     this.cues = [];
     this.lastObjKey = '';
     this.syncItems();
@@ -435,6 +446,10 @@ export class Game {
       { t: 22.0, fn: () => ui.chapter(null) },
       { t: 22.2, fn: () => this.skipWake() }, // through black, like the skip: entering play is never seen
     ];
+    // the body: out cold on its back, then finding its hurts and getting up (arrivals.ts, scientist); the camera stays
+    // the wake's own
+    this.wakeBody?.skip();
+    this.wakeBody = new Arrival('scientist', { scene: this.world.scene, camera: new THREE.PerspectiveCamera(), body: this.player.model, ground: (x, z) => this.world.terrain.height(x, z), say: () => undefined }, () => undefined, undefined, { at: [this.player.pos.x, this.player.pos.z], yaw: this.player.yaw, camera: false });
     this.ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden'); // tap to skip on phones
     document.getElementById('cine-bars')!.classList.remove('hidden');
@@ -454,6 +469,7 @@ export class Game {
     this.wakeSkipped = true;
     for (const c of this.wakeCues) if (!c.done) { c.done = true; }
     this.ui.device(null); this.ui.subtitle(null); this.ui.chapter(null);
+    this.wakeBody?.skip(); this.wakeBody = null;
     // through black: whatever entering play costs happens where nobody can see it
     this.ui.fade('black', 1, 0.2);
     setTimeout(() => {
@@ -478,32 +494,33 @@ export class Game {
     for (const c of this.wakeCues) if (!c.done && w >= c.t) { c.done = true; c.fn(); }
     if (this.mode !== 'wake') { this.finishWakeVisuals(); return; }
     // let the player rig compute its normal third-person pose, then blend
+    this.player.skipAnimate = true;
     this.player.update(dt, this.input, false, 100, 1);
+    this.player.skipAnimate = false;
     const cam = this.player.camera;
     const tpPos = cam.position.clone();
     const tpQuat = cam.quaternion.clone();
-    const p = this.player.pos;
-    const head = new THREE.Vector3(p.x, p.y + 1.0, p.z);
+    // the body is posed by its arrival: on its back, the ribs, the brow, over onto its side, a try, a fall back, then up
+    this.wakeBody?.update(dt);
     const sky = this.world.sky;
+    // the eyes are where the head really is
+    const head = this.player.model.head.getWorldPosition(new THREE.Vector3());
+    if (head.y < this.player.pos.y - 0.5 || head.y > this.player.pos.y + 2.2) head.set(this.player.pos.x, this.player.pos.y + 0.25, this.player.pos.z);
     // "two worlds in the sky": the giant sits in the lower middle of the frame (the old aim, a third of the way to
     // the moon, far across the sky, left both at the edges or behind the pines)
     const lookSky = head.clone().addScaledVector(sky.giantDir.clone().add(WAKE_UP).normalize(), 50);
     const lookCreature = this.world.creature.position.clone();
     const lookA = lookSky.clone().lerp(lookCreature, smoothstep(11.5, 14.5, w));
     const scripted = new THREE.PerspectiveCamera();
-    scripted.position.copy(head).add(new THREE.Vector3(Math.sin(w * 0.3) * 0.05, smoothstep(12, 16, w) * 1.2, 0));
-    scripted.lookAt(lookA);
+    // a dazed head: it drifts and rolls a little, more at first
+    const daze = 1 - smoothstep(4, 14, w);
+    scripted.position.copy(head).add(new THREE.Vector3(Math.sin(w * 0.3) * 0.05, 0.08 + smoothstep(12, 16, w) * 0.6, 0));
+    scripted.lookAt(lookA.clone().add(new THREE.Vector3(Math.sin(w * 0.53) * 2.5, Math.sin(w * 0.41 + 1) * 1.5, 0).multiplyScalar(daze)));
+    scripted.rotateZ(Math.sin(w * 0.37) * 0.1 * daze);
     const blend = easeInOut(smoothstep(16, 20.5, w));
     cam.position.lerpVectors(scripted.position, tpPos, blend);
     cam.quaternion.slerpQuaternions(scripted.quaternion, tpQuat, blend);
-    // the survivor lies still, comes round, pushes up, doesn't make it, and only then gets up
-    const lift = smoothstep(13.5, 15.2, w) * .42 - smoothstep(15.2, 15.7, w) * .24 + smoothstep(16.1, 18.6, w) * .82;
-    const up = clamp(lift, 0, 1);
-    const shake = up > .05 && up < .97 ? Math.sin(w * 31) * .012 : 0;
-    this.player.model.root.rotation.x = lerp(-Math.PI / 2 + 0.1, 0, easeInOut(up)) + shake;
-    this.player.model.root.rotation.z = (1 - up) * .16 * Math.sin(w * 1.3);
-    this.player.model.root.position.y = this.player.pos.y + (1 - up) * 0.25;
-    this.player.model.root.visible = blend > 0.05 || up > 0.5;
+    this.player.model.root.visible = blend > 0.05;
   }
 
   update(dt: number, time: number) {
@@ -543,9 +560,15 @@ export class Game {
     this.sinceLevel += dt;
     const who = this.revealDue;
     if (who && this.sinceLevel > 15 && !this.story.busy && !this.ui.modalOpen()) { this.goAway(who.id, who.location!); return; }
-    // the crash isn't forgotten by the next cutscene: hurt on day one, better by the time there's food
-    const hurt = s.level <= 1 ? 0.45 : s.level === 2 ? 0.72 : 1;
-    p.model.setLimp(s.level <= 1);
+    // the crash isn't forgotten by the next cutscene: the fall's wounds (game/injury.ts) heal by the hour; never slower
+    // than the old day-one pace (0.45 on day one, 0.72 on day two)
+    const inj = this.injuries, eff = inj?.effects();
+    const hurt = Math.max(s.level <= 1 ? 0.45 : s.level === 2 ? 0.72 : 1, eff?.speed ?? 1);
+    // he can run on cracked ribs: it costs him (the picture tightens, he grunts) and his breath
+    p.hurt = eff ? { speed: 1, jump: eff.jump, sprint: true } : null;
+    p.model.setLimp(s.level <= 1 || !!eff?.limp);
+    if (!this.combat?.encounter) p.model.setLimbs(p.busy ? null : eff?.limbs ?? null);
+    if (inj && p.sprinting && inj.sev('ribsL') > 0.3 && (this.sprintSore -= dt) <= 0) { this.sprintSore = 2.6; audio.human('grunt', 0.35); st.stamina = Math.max(0, st.stamina - 6); }
     this.combat?.before(dt, time);
     p.update(dt, this.input, true, st.stamina, (st.health < 25 ? 0.75 : 1) * hurt);
     this.combat?.after(dt, time);
@@ -573,6 +596,8 @@ export class Game {
     if (st.hunger < 15 && time - this.lastHungerWarn > 50) { this.lastHungerWarn = time; this.ui.toast(t('msg.hungry')); }
     if (p.blockedDeep && !s.flags.deepWarn) { s.flags.deepWarn = true; this.ui.toast(t('msg.deep')); setTimeout(() => (s.flags.deepWarn = false), 8000); }
     if (st.health <= 0) { this.die(); return; }
+    inj?.update(dt, dt / 50, { resting: p.speedNow < 0.2, health: st.health });
+    if (inj) inj.write((s.wounds ??= {}));
 
     this.story.update(dt, time);
     if (this.mode !== 'play') return; // the story can kill the player (predator)
