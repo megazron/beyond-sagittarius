@@ -373,7 +373,9 @@ export class RangedRig {
       // (the solve's shoulders are last frame's: the clip, the idle sway and the chest's turn move them, and the same
       // elbow way out could come back in by a few centimetres, CI 2.1 cm with the solve at 0.9)
       const sl = root.worldToLocal(s0.clone()), elL = root.worldToLocal(e.clone()), wlL = root.worldToLocal(w.clone());
-      swingOut(sl, elL, wlL, 0, this.lateMem, k, dt, 0.6);
+      // (three times the solve's swing rate: a correction of a few centimetres, it lagged a frame or two behind a raise,
+      // CI 1.4 cm on the forearm at up 0.65)
+      swingOut(sl, elL, wlL, 0, this.lateMem, k, dt * 3, 0.6);
       e.copy(W(elL));
       aimBone(up, lo, e, 1); aimBone(lo, hand, w, 1);
     };
