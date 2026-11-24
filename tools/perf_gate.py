@@ -41,7 +41,12 @@ SPOTS = {'flat': (12.4, 68.4, 3.14), 'bazaar': (6.0, 50.0, 3.14), 'crowd': (-5.5
 # branch the threes are gone (fewer near the routes) and the bodies there are pooled ones never drawn before, in the
 # near build (40 to 50 k, hair 16 to 22 k) the design gives anyone within 27 m. Walked up to, main's would be the near
 # build too. So the budget follows the near build at the gate, about 4 % over this count; not a licence for more people.
-BUDGET = {'mobile': (145, 760_000, 14), 'web': (580, 1_450_000, 34), 'ultra': (1420, 4_200_000, 36)}
+# Mobile bodies 14 -> 16 (2026-11-24, perf agent 30): the story's people past 34 m are drawn outside the cap by design
+# (city.ts: blinking them out was someone vanishing down the street). At the phone gate four of them (50-83 m) are in
+# view: main drew 13 (8 near + 4 far + you), ped29 15 (10 near, the cap 11 holds). Counting them against the phone
+# total instead made them blink out and back 46-82 m off as the near bodies came and went (detector p30/ped_e1_mobile:
+# 9 vanishFar, 9 appearFar), so the budget counts them: cap 11 + you + 4 far, the two at your elbow aside.
+BUDGET = {'mobile': (145, 760_000, 16), 'web': (580, 1_450_000, 34), 'ultra': (1420, 4_200_000, 36)}
 
 class H(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *x, **k): pass
