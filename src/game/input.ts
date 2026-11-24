@@ -83,7 +83,8 @@ export class Input {
       if ((e.target as HTMLElement)?.tagName === 'INPUT' && (e.target as HTMLInputElement).type !== 'range') return;
       if (!this.keys.has(e.code)) this.pressed.add(e.code);
       this.keys.add(e.code);
-      this.setDevice('kbm');
+      // a real key on a real keyboard: phones' on-screen keyboards and remote controls send keys without a code
+      if (e.isTrusted && e.code && e.code !== 'Unidentified') this.setDevice('kbm');
       if (this.enabled && ['Space', 'Tab'].includes(e.code)) e.preventDefault();
     }, true);
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -93,6 +94,8 @@ export class Input {
       if (!this.pad) { this.padConnected = false; this.padDown.clear(); this.padMove.x = this.padMove.y = 0; this.disconnectListeners.forEach((f) => f()); }
     });
 
+    // a finger anywhere (a menu, a HUD button, the world) means touch hints from now on, not only on the 3D view
+    window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch' || e.pointerType === 'pen') this.setDevice('touch'); }, true);
     canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch' || e.pointerType === 'pen') {
         this.setDevice('touch');
