@@ -6,6 +6,31 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## Episode One scene polish (2026-11-24 night, ep1 agent: worktree ~/bs-ep1, branch ep1polish)
+- Fixes for the owner's notes on the life_landed clips, in his order. Knapping (game/knap.ts): he sits back on his
+  heels (setKneel(true, true), bend 0.5); each cobble is taken into his left hand at a work spot 30 cm in front of his
+  knees and 27 cm up, struck by the hammerstone in his right hand (driven every frame: lift, fast swing, contact,
+  bounce); shots `handShot` (hands and stone, 0.45 m insert to 1.1 m medium) and `faceShot` (from below his brow). The
+  flake drops in front of his knees with an insert on it. Studio probe (~/bs-cap/ep1/probe/reach.js): kneeling upright
+  the wrist cannot go below 33 cm; sat back with bend 0.7 it reaches 14 cm at 25 cm out.
+- Hand drill (game/drill.ts): the board 30 cm in front of his knees (was 55 cm, out of reach), faster rub (22 rad/s,
+  4.5 cm each way) with a flick back to the top, a banded spindle so the turn reads, smoke that builds (soft sprites)
+  and black dust in the notch, a notch insert with the ember, face shots from below. Work light mostly warm white.
+- Night (game/night.ts): `hide()` acts the hide (cut to him down behind the lean-to, a hound walks past 3.4 m out
+  while the breath moment plays; a failed breath: it turns and comes, black on the hit, he is down holding his arm).
+  The line after the night is `e1.ni.held` for brace, `e1.ni.ran` for run, `e1.ni.hid` for hide (en/hi/ur, voiced).
+  The chase gets `hour: s.timeOfDay` (it started at its own 18.7, a sunset sky in the middle of the night). Dawn at
+  06:36 (06:09 was black on the GPU), the held spear hidden while the one across his knees shows.
+- world/cobble.ts (river cobbles, shared with knap.ts) makes the fire ring (the lavender dodecahedra read as gems);
+  world/fruit.ts is the red fruit (a 7 cm ribbed pod, on the bush and in his hand; it was an 18 cm glowing ball).
+- Leaf cup sip (waking.ts sipLeaf), fruit test: smell, skin, lip, a tiny bite, wait, spit. Planting (character.ts
+  doTask 'plant') kneels for the task when standing. Lean-to (lean.ts): thin-thatch shot from above looking down
+  through the row (was blown-out sky), he stands clear of the frame when it is turned the wrong way, the frame's
+  back blocks from the pole stage on. The pull's break-up hides the ship's hatch parts (userData.hatchPart) and the
+  sun there is whiter.
+- Captures: ~/bs-cap/ep1/round.sh PLAN... (build dist-ep1, preview 4621, cap1.sh per plan, join). Plans
+  ~/bs-cap/plan_ep1A/B/C.json.
+
 ## Cinema mode for trailers and screenshots (2026-11-24, trailer agent)
 - `?cinema=1` or `__bs.cinema(true)`: every page element but the 3D canvas is hidden (HUD, minimap, hints, prompts,
   subtitles, menus, letterbox bars, fades, toasts, the fight HUD) and so is the cursor. `__bs.cinemaOn` reads it. The world's hint rings (meshes named `ring`: items and build
