@@ -264,7 +264,9 @@ with sync_playwright() as pw:
         if page.evaluate("!!document.querySelector('#dlg-choices button[data-c=\"e1.night.o.brace\"]') && __bs.branch.open"): break
         step(page, 0.25); time.sleep(0.1)
     ok(page.evaluate("!!document.querySelector('#dlg-choices button[data-c=\"e1.night.o.brace\"]') && __bs.branch.open"), 'story: the night asks hide, brace or run', page.evaluate("[__bs.mode, __bs.branch.open, __bs.save.flags['e1.night']]"))
+    time.sleep(0.6)  # (a decision ignores clicks for its first 320 ms: dialogue.ts GUARD_MS)
     page.evaluate("document.querySelector('#dlg-choices button[data-c=\"e1.night.o.brace\"]').click()")
+    ok(page.evaluate("(__bs.save.branch.log.find((e) => e.id === 'e1.night') || {}).pick") == 'brace', 'story: the brace is his answer', page.evaluate("__bs.save.branch.log.slice(-2)"))
     for i in range(40):
         if page.evaluate("!!(__bs.combat && __bs.combat.run)"): break
         step(page, 0.25); time.sleep(0.1)
