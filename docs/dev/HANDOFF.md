@@ -1897,3 +1897,18 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   films' canvas texture, coarse up close. CI on 8359db8: every gate green but combat's bow arms (2.9 cm vs 2 cm), which
   my change does not touch (that gate has read 0.1 to 5.5 cm across runs, see the life notes).
 
+
+## Arrivals on each world (landings agent, 2026-11-24, branch land2)
+- `src/game/arrival.ts` plays an authored arrival: body keys in a landing frame (x right, y up, z forward = the way they
+  face once up), shots (`pov` their eyes, `onHead` close-ups that follow the face, handheld, the hit's shake), picture
+  keys (`core/hurtfx.ts`: blur, double vision, tunnel, desat, red, flash, black, read by the grade shader) and ear keys
+  (`audio.ears(muffle, ring)`, `audio.heart(bpm)`, `audio.thump()`, `audio.humanInner()`: an inner bus after the muffle
+  onto `post`, so the tap records it). `src/game/arrivals.ts` holds the six and `TITLE_STILL` for the title sequence.
+- Friends: the arrival plays the first time they are taken to their own stage (`game.goAway` -> `away.enter(...,
+  arrive)`); `away.outroOn` is true while it plays, so Skip and the letterbox work as for the take-off (`onIntro`).
+  Zenvik: `game.ts updateWake` poses his body with the `scientist` arrival (camera stays the wake's own; from 12.4 s an
+  outside shot of the struggle, then the play camera).
+- `src/game/injury.ts`: wounds per crew (`save.wounds`), healing per game hour, play effects (`player.hurt`: speed,
+  jump, sprint; limp; held arms as Limbs, which give way to combat's every frame), first-aid `first` tasks in kit.ts.
+- Test: `tools/landing_smoke.py` (CI job landing_smoke). Dev page: `dev/arrival.html?id=explorer` (vite), seekable.
+- GPU takes: `~/bs-cap/land1/` (`capture.sh`, `plan.json`); clips in `Downloads/BS_Game_v1.1/landings_v1/` with notes.
