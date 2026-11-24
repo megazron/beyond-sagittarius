@@ -1436,7 +1436,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // ---- the crowd crowdPool: real bodies that take over the painted crowd near the camera. A card closer than TAKE metres
   // is walked by a body from the crowd pool (the nearest first) and hidden; the body goes back when the card is far again.
   // Before this, the cards simply vanished within 9 m and the street emptied as you walked into it.
-  const POOL = [8, 20, 20][tier], TAKE = 36; // bodies are given out from 36 m, so whoever walks into the view is one before SWAP_FAR
+  // (phones 16, two bodies of each of the 8 looks, p30: with one per look a card in view whose look's body was out
+  // stayed a card with bodies free, the tram square in p29i; the phone total, BODY_CAP + 2, still holds what is drawn)
+  const POOL = [16, 20, 20][tier], TAKE = 36; // bodies are given out from 36 m, so whoever walks into the view is one before SWAP_FAR
   // Web, Ultra: the painted crowd's own bodies whatever the townsfolk use (it was 8: with the townsfolk near the flat and
   // in the bazaar using 20 to 24 of 26, the crowd had its 8 held and every card that came into the view after them at
   // 27 m stayed a card up to you, the most of the detector's flat cards close by; the pool has 24)
@@ -2276,7 +2278,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // (out of the WIDE view, 6 m of margin: tested against the view itself at 14 m, the bazaar's about-turn brought
           // them into it as cards within 27 m, where nobody changes, and they stayed cards up to you, p29c; beyond 28 m
           // only, the phone gate's start still had the townsfolk behind you holding the bodies, p29d)
-          if (OUT_CARD && tier === 0 && d > 12 && !inViewWide(q.pos.x, q.pos.z)) { // (phones: on Web it moved bodies from out of view, drawn as nothing, into the view, and perf_gate's Web gate went to 1.40 M triangles, budget 1.3 M, with no fewer flat cards)
+          // (Web too again, p30: it halved Web's flat cards close by in p29f; phones-only from 839de72 because perf_gate's
+          // Web gate went to 1.40 M triangles, which was the near build of bodies never drawn before, not this rule, p30)
+          if (OUT_CARD && d > 12 && !inViewWide(q.pos.x, q.pos.z)) {
             if (q.fig.root.visible) q.fig.root.visible = false;
             stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: i, v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
             continue;

@@ -1735,3 +1735,25 @@ Why: the release pass found the set pieces reachable only from Pause, Action or 
      1024 on phones saves ~34 MB); morph textures RGBA32F 16384x2 x51 (26.7 MB, the player's 51 shapes) and x13 / x11
      (13.6 + 5.8 MB, crowd looks): bake the constant build/body shapes into the positions at creation and drop those
      targets (they never change in play), keep only face shapes; on phones drop the player's correctives as the crowd's.
+
+## 2026-11-24 perf agent 30 (worktree ~/bs-perf, branch ped30-land = ped29-land rebased on main beb0ee3; GPU and probes ~/bs-assets/gpu/p30)
+- PERF_GATE GATE OVERRUN, cause (p30/who.py: perf_gate's setup, then triangles per drawn body; who2.py adds every
+  character's build before and after the teleport). p29/pgbisect.log: ?berth=1.7 changed nothing (same to the triangle);
+  the outcard/thin/folkview lines printed nothing (the runs died, not re-run). By commit: 99b45e4 (the first of the
+  branch) already 1 398 624 at the Web gate, so it is in the "fewer people" commit.
+  * Web: NOT more people (24 bodies vs main's 25). The build: a body takes its build from where it was last drawn
+    (character.ts pickLod; camD is set only in the draw hook) and keeps it in view within SWAP_FAR 27 m. On main the
+    gate's six threes (townsfolk) were last drawn at the start ~120 m off and showed at 7-10 m in their FAR build
+    (18-25 k triangles, hair 2-5 k); on the branch the threes are gone and the bodies there are pooled ones never drawn
+    before, in the NEAR build (40-50 k, hair 16-22 k), which is the design within 32 m on Web (dfd45fe). So main's
+    1.14 M undercounted what a walk-up shows. I raised the Web triangle budget 1.3 M -> 1.45 M (perf_gate.py comment).
+    A priming of pooled bodies to the far build (e7feb4c) changed nothing measurable and is taken out (3b1eef8).
+    RELAY (character agent, character.ts): pickLod uses a stale camD for a body shown after being hidden (its last drawn
+    distance, or 0 if never drawn); the light build/hair switch could use the real distance on the first frame shown.
+  * Mobile: 15 bodies (budget 14 = cap 11 + player + 2): four of them the story's people 50-83 m off (drawn to the card
+    range and outside the cap). Now on phones they are drawn, nearest first, only while the phone total (BODY_CAP + 2,
+    the crowd's and district walkers' bodies counted) has room. Local gate spot: 13 bodies, 588 011 triangles. A story
+    person 50 m+ down the street can now wait out of sight on phones when the near bodies fill the total.
+- NE WALL: ?facx=bits (facade.ts; live as window.__facx.value) turns facade shader parts off: 1 glass shine, 2 reveal,
+  4 far averaging, 8 ledge lines, 16 room/goods, 32 glass normal map. Probe plan p30/plan_ne_facx.json (Mobile, the p29
+  ne_street_far frame, one shot per bit).
