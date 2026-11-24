@@ -57,7 +57,8 @@ export class Fights {
   private async go(id: EncounterId) {
     const cb = this.combat();
     if (!cb || cb.encounter || !this.playing()) return;
-    const o = await cb.startEncounter(id, { story: this.story() });
+    // the morning goes on through it: the fight starts at the world's hour and the world keeps the hour it ends at
+    const o = await cb.startEncounter(id, { story: this.story(), hour: this.s.timeOfDay });
     this.keep(o);
     const s = this.s, inv = s.inventory;
     // what was caught is cooked at the fire and eaten (it is not carried: the bag has no names for raw meat or fish)
@@ -93,13 +94,18 @@ export class Fights {
     // the real bag, and a player who carried everything into the spear would otherwise meet the night with nothing)
     const inv = s.inventory;
     for (const [k, n] of Object.entries({ branch: 8, vine: 2, stone: 4, fruit: 1 })) inv[k] = Math.max(inv[k] ?? 0, n);
-    this.ui.toast(t('cb.story.night'));
-    void cb.startEncounter('night.defence', { story: this.story() }).then((o) => {
-      this.keep(o);
-      // the night is over: the last dark before dawn, so sleeping takes him to the morning of day two
-      s.timeOfDay = 5.2;
-      done(o.result !== 'lost');
-      this.ui.toast(t(o.result === 'lost' ? 'cb.story.nightLost' : 'cb.story.nightHeld'));
+    // the difficulty question first, at the start of the night, before anything of it (combat.ensureAsked)
+    cb.ensureAsked(() => {
+      this.ui.toast(t('cb.story.night'));
+      void cb.startEncounter('night.defence', { story: this.story(), hour: s.timeOfDay }).then((o) => {
+        this.keep(o);
+        // the narrator's look back at level 7 reads the bites (the older scripted night counted them)
+        s.bites = (s.bites ?? 0) + (o.stats.taken > 0 ? 1 : 0);
+        // the night is over: the last dark before dawn, so sleeping takes him to the morning of day two
+        s.timeOfDay = 5.2;
+        done(o.result !== 'lost');
+        this.ui.toast(t(o.result === 'lost' ? 'cb.story.nightLost' : 'cb.story.nightHeld'));
+      });
     });
     return true;
   }

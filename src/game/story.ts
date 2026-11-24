@@ -34,7 +34,9 @@ type Req = Record<string, number>;
 type HoundState = 'hidden' | 'approach' | 'circle' | 'windup' | 'lunge' | 'recoil' | 'flee';
 
 export const LAST_LEVEL = 10;
-const DAWN = 6.0;
+/** Waking after the first night: early morning, the sun just up (at 6:00 the world is still dark red, and level 8's
+ * breakfast fights run on from the world's hour). */
+const WAKE = 6.6;
 const DUSK = 19.4;
 const isNight = (h: number) => h >= DUSK || h < 5.5;
 
@@ -443,7 +445,7 @@ export class Story {
   }
 
   private sleep() {
-    this.skipTime(DAWN, 'msg.sleeping', true, () => {
+    this.skipTime(WAKE, 'msg.sleeping', true, () => {
       const st = this.s.stats;
       st.stamina = 100;
       st.health = clamp(st.health + 25, 0, 100);
@@ -751,6 +753,33 @@ export class Story {
   /** A line is being said; the night does not start over it. */
   private quietUntil = 0;
 
+  /**
+   * Outside a fight the spear is carried like a staff: near upright beside him, the point a little forward and out,
+   * the butt by his feet, whatever the hand is doing as he walks (the wrist keeps it). Fixed to the hand at one angle it
+   * swung with the arm and its point passed by his face (owner, GPU take of the hunt station). A fight (player.combat)
+   * or the old thrust poses it themselves; it goes back to the hand's own angle for them.
+   */
+  private carried = false;
+  private carryM = { m: new THREE.Matrix4(), q: new THREE.Quaternion(), d: new THREE.Vector3(), p: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0), inv: new THREE.Matrix4() };
+  private carrySpear() {
+    const sp = this.spear, model = this.player.model;
+    if (!sp.visible || this.thrustT > 0 || this.player.combat || sp.parent !== model.handR) {
+      if (this.carried) { sp.position.set(0, -0.06, 0.01); sp.rotation.set(1.15, 0, 0); sp.scale.set(1, 1, 1); this.carried = false; }
+      return;
+    }
+    const M = this.carryM;
+    model.root.updateWorldMatrix(true, false); model.handR.updateWorldMatrix(true, false);
+    // root space: +z is where he faces, +x his left; up, a little forward and out to his right
+    M.d.set(-0.12, 1, 0.16).normalize().transformDirection(model.root.matrixWorld);
+    M.q.setFromUnitVectors(M.up, M.d);
+    // held a little below the middle of the shaft: the butt about 0.8 m under the hand
+    M.p.setFromMatrixPosition(model.handR.matrixWorld).addScaledVector(M.d, 0.15);
+    M.m.makeRotationFromQuaternion(M.q).setPosition(M.p);
+    M.m.premultiply(M.inv.copy(model.handR.matrixWorld).invert());
+    M.m.decompose(sp.position, sp.quaternion, sp.scale);
+    this.carried = true;
+  }
+
   private syncSpear() {
     this.spear.visible = this.flag('spear');
     // the fire-hardened point of 1.9 until a stone head is hafted on
@@ -803,6 +832,7 @@ export class Story {
       const k = Math.sin((1 - this.thrustT / 0.4) * Math.PI);
       this.player.model.armR.rotation.x = -0.3 - k * 1.3;
     }
+    this.carrySpear();
     // signal meter while looking for high ground
     if (s.level === 8 && !this.flag('signal') && !this.sequence && !this.fights?.blocks(8)) {
       this.signalClock -= dt;

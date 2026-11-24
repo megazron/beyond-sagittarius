@@ -41,6 +41,12 @@ export interface StartOpts extends Pick<EncounterOpts, 'companion' | 'story' | '
   /** A trial from the menu: a standard kit, and nothing it does is kept. The story leaves this off. */
   trial?: boolean;
   difficulty?: Difficulty;
+  /**
+   * The world's hour (the story passes `save.timeOfDay`): the fight starts at it instead of its own set hour, its clock
+   * runs on at the game's rate (an hour is 50 s), and the world keeps the hour it ends at, so the light outside and in
+   * the fight is one continuous day. The night at the fire uses it as the start of its dusk. Left off: the set hour.
+   */
+  hour?: number;
 }
 
 interface Deps {
@@ -192,7 +198,7 @@ export class Combat {
   startEncounter(id: EncounterId, opts: StartOpts = {}): Promise<Outcome> {
     return new Promise((resolve) => {
       // the first fight the story starts asks how hard fights should be (Pause, Action changes it later)
-      if (!opts.trial && !this.d.settings().asked) this.askDifficulty(() => this.begin(id, opts, resolve));
+      if (!opts.trial) this.ensureAsked(() => this.begin(id, opts, resolve));
       else this.begin(id, opts, resolve);
     });
   }
@@ -209,7 +215,7 @@ export class Combat {
       const run = new EncounterRun(id, {
         site, env: this.env, seed: opts.seed ?? 11, difficulty: opts.difficulty ?? S.difficulty,
         assist: { aim: S.aim, hold: S.hold, slowMo: S.slowMo, noTimers: false, damageNumbers: S.numbers },
-        companion: opts.companion, story: opts.story, inv: s.inventory, has: trial ? { fists: true } : { ...this.cs.has, fists: true, ...(s.flags.spear ? { spear: true } : {}) }, kit: trial || id === 'arena',
+        companion: opts.companion, story: opts.story, inv: s.inventory, has: trial ? { fists: true } : { ...this.cs.has, fists: true, rock: true, ...(s.flags.spear ? { spear: true } : {}) }, kit: trial || id === 'arena',
       });
       run.sim.regen = false; run.sim.ownsBody = false;
       if (!trial) { run.sim.player.dur = { ...this.cs.dur }; run.sim.player.injuries = this.cs.injuries.map((i) => ({ ...i })); }
@@ -221,7 +227,8 @@ export class Combat {
       const p = run.sim.player;
       P.spawn(p.x, p.z, Math.atan2(-Math.sin(site.yaw), -Math.cos(site.yaw)));
       P.pitch = -0.12; P.snapCamera();
-      s.timeOfDay = run.hour;
+      if (opts.hour != null && id !== 'night.defence') { run.hour = ((opts.hour % 24) + 24) % 24; run.sim.night = run.hour >= 19.5 || run.hour < 5.5; }
+      s.timeOfDay = id === 'night.defence' ? this.nightHour(run) : run.hour;
       const camp = D.world.camp, L = D.world.layout;
       if (id === 'night.defence' || id === 'chase.escape') { camp.setFire(1); if (id === 'night.defence') camp.setShelter(true); }
       void L;
@@ -229,7 +236,8 @@ export class Combat {
       D.ui.banner(t('cb.menu'), t(`cb.enc.${id}`));
       D.ui.deviceLines(null); // the story's device readout (level 8's signal) does not sit over a fight
       this.sneakOn = false; this.hud.touch.sneak = false;
-      this.hint(id === 'stealth.pass' ? 'sneak' : id === 'night.defence' ? 'trap' : id === 'hunt.first' ? 'sneak' : 'dodge');
+      // (fishing has nothing to roll from: the dodge line there sat over the first throw, GPU take flow5)
+      if (id !== 'fish.spear') this.hint(id === 'stealth.pass' ? 'sneak' : id === 'night.defence' ? 'trap' : id === 'hunt.first' ? 'sneak' : 'dodge');
       this.taught = null;
     }
   }
@@ -239,19 +247,45 @@ export class Combat {
   groundAt(x: number, z: number) { return this.env.height(x, z); }
   get playerPos() { return this.d.player.pos; }
 
-  /** How hard should fights be: asked once, before the first fight of the story. */
-  private askDifficulty(go: () => void) {
+  /**
+   * Asks how hard fights should be, once (settings.combat.asked), then calls `go`; already asked, calls it at once.
+   * The world stands still while the question is open. Every first-night flow calls it at its start (main's
+   * fights.ts night; the life branch's FirstNight), so the question comes before any of the night.
+   */
+  ensureAsked(go: () => void) {
+    if (this.d.settings().asked) { go(); return; }
+    // one question at a time: a caller that asks while it is open waits for the same answer (re-entrant asks each
+    // opened the modal again over the first, and the first caller's buttons were gone, so it never went on)
+    this.askWaiting.push(go);
+    if (this.askWaiting.length === 1) this.askDifficulty();
+  }
+  private askWaiting: (() => void)[] = [];
+  /**
+   * Captures and tests: answer the difficulty question ahead of time (settings, not the save: `bs-settings-v1`), so it
+   * is never asked. Also `?diff=story|normal|hard` in the address. Anyone already waiting on it goes on.
+   */
+  setDifficulty(d: Difficulty) {
+    const S = this.d.settings(); S.difficulty = d; S.asked = true; this.d.saveSettings(); this.applySettings();
+    if (this.askWaiting.length) document.querySelector<HTMLButtonElement>(`#modal [data-diff="${d}"]`)?.click();
+  }
+  /** The difficulty question or the lost-fight card is open: the game stands still (scaleTime). */
+  private carding = false;
+  private askDifficulty() {
     const D = this.d, S = D.settings(), ui = D.ui;
+    this.carding = true;
     D.input.enabled = false; D.input.releasePointer();
     ui.openModal(`<div class="center-msg cb-end cb-ask"><h2>${t('cb.ask.title')}</h2><p>${t('cb.ask.body')}</p>
       <div class="actions">${(['story', 'normal', 'hard'] as Difficulty[]).map((d) => `<button class="btn${d === S.difficulty ? ' primary' : ''}" data-diff="${d}"><span>${t(`cb.set.${d}`)}<small>${t(`cb.ask.${d}`)}</small></span></button>`).join('')}</div>
       <p class="facts">${t('cb.ask.later')}</p></div>`);
     // once: a closed modal keeps its buttons in the page until the next one replaces them
     let done = false;
-    document.querySelectorAll<HTMLButtonElement>('[data-diff]').forEach((b) => b.addEventListener('click', () => {
-      if (done) return; done = true;
+    document.querySelectorAll<HTMLButtonElement>('#modal [data-diff]').forEach((b) => b.addEventListener('click', () => {
+      if (done) return; done = true; this.carding = false;
       S.difficulty = b.dataset.diff as Difficulty; S.asked = true; D.saveSettings(); this.applySettings();
-      ui.closeModal(); D.input.enabled = true; go();
+      ui.closeModal(); D.input.enabled = true;
+      // everyone who was waiting on the answer goes on, in the order they asked
+      const all = this.askWaiting; this.askWaiting = [];
+      for (const go of all) go();
     }));
   }
 
@@ -264,10 +298,11 @@ export class Combat {
     const D = this.d, S = D.settings(), ui = D.ui, run = this.encounter!;
     D.input.enabled = false; D.input.releasePointer();
     const easier = S.difficulty !== 'story';
+    this.carding = true;
     ui.openModal(`<div class="center-msg cb-end cb-lost"><h2>${t(`cb.enc.${run.id}`)}</h2><p>${t('cb.lost.body')}</p>
       <div class="actions"><button class="btn primary" id="cb-retry">${t('cb.lost.retry')}</button>${easier ? `<button class="btn" id="cb-easier">${t('cb.lost.easier')}</button>` : ''}<button class="btn" id="cb-goon">${t('cb.lost.goon')}</button></div></div>`);
     let used = false;
-    const close = () => { if (used) return false; used = true; ui.closeModal(); D.input.enabled = true; return true; };
+    const close = () => { if (used) return false; used = true; this.carding = false; ui.closeModal(); D.input.enabled = true; return true; };
     document.getElementById('cb-retry')!.addEventListener('click', () => { if (close()) this.retry(false); });
     document.getElementById('cb-easier')?.addEventListener('click', () => { if (close()) this.retry(true); });
     document.getElementById('cb-goon')!.addEventListener('click', () => { if (!close()) return; this.slow = 1; this.endEncounterNow(); D.ui.fade('black', 0, 0.6); D.persist(); });
@@ -282,6 +317,9 @@ export class Combat {
     this.slow = 1;
     this.begin(run.id, { ...e.opts, difficulty: undefined }, e.resolve);
   }
+  private lowSaid = false;
+  /** When each creature was last struck (the controller's clock): its health shows over it for a moment. */
+  private struck = new Map<number, number>();
   /** How many times a fight has been tried again since the game started (tests). */
   retries = 0;
 
@@ -298,7 +336,12 @@ export class Combat {
   private goalV = new THREE.Vector3();
   /** Where the set piece wants the player to go, for the compass and the line on the ground. */
   goalPoint(): THREE.Vector3 | null {
-    const run = this.encounter, m = run?.markers.find((q) => q.kind === 'goal' || q.kind === 'prey');
+    const run = this.encounter;
+    if (run?.id === 'night.defence' && (run.objN.fuel ?? 100) < 35 && (run.objN.pile ?? 0) + (run.objN.wood ?? 0) > 0) {
+      const f = run.sim.fires.find((q) => !q.torch && !q.burnsOut);
+      if (f) return this.goalV.set(f.x, this.env.height(f.x, f.z), f.z);
+    }
+    const m = run?.markers.find((q) => q.kind === 'goal' || q.kind === 'prey');
     if (!m || run!.id === 'hunt.first' && run!.phase === 'stalk') return null;
     return this.goalV.set(m.x, this.env.height(m.x, m.z), m.z);
   }
@@ -402,13 +445,18 @@ export class Combat {
       if (run.sim.player.down) s.stats.health = Math.max(s.stats.health, 30);
     }
     s.timeOfDay = e.hour; s.day = e.day;
+    if (!revert && !e.opts.trial && e.opts.hour != null && run.id !== 'night.defence') {
+      // the story's day went on while it was fought: the world keeps the fight's hour (and the fade out, about 2 s)
+      const h = run.hour + (run.t + 2) / 50;
+      s.timeOfDay = h % 24; if (h >= 24 && run.hour < 24) s.day = e.day + 1;
+    }
     D.player.spawn(e.pos[0], e.pos[2], e.yaw);
     const camp = D.world.camp;
     camp.setFire(s.flags.fire ? 2 : s.flags.pitBuilt ? 1 : 0); camp.setShelter(!!s.flags.shelter);
     this.sim = this.ambient;
     if (this.ambient) { this.ambient.inv = s.inventory; this.loadPlayer(this.ambient); }
     D.ui.setInventory(s.inventory, s.flags.spear ? ['spear'] : []);
-    this.hud.show(false); this.hud.showTouch(false); this.hud.objective(null); this.hud.boss(null); this.hud.awareness(null); this.hud.arrows([]); this.hud.tags([]); this.hud.analysis(null); this.hud.vignette(false);
+    this.hud.show(false); this.hud.showTouch(false); this.hud.objective(null); this.hud.boss(null); this.hud.awareness(null); this.hud.arrows([]); this.hud.tags([]); this.hud.bars([]); this.hud.analysis(null); this.hud.vignette(false);
     this.engagedT = 0; this.kitOpen = false; this.hud.picker(null);
   }
 
@@ -453,6 +501,9 @@ export class Combat {
   // ---------------- time ----------------
   /** Called with real frame time before the game steps: hit-stop and slow motion happen here. */
   scaleTime(dt: number): number {
+    // the difficulty question and the lost-fight card hold the whole game still until answered (the world's clock,
+    // hunger and the animals ran on behind them: main.ts only stops game.update for the pause menu)
+    if (this.carding && document.querySelector("#modal:not(.hidden) .cb-ask, #modal:not(.hidden) .cb-lost")) return 0;
     if (this.stopT > 0) { this.stopT -= dt; return dt * 0.04 * this.testSlow; }
     return dt * this.slow * this.testSlow;
   }
@@ -579,6 +630,8 @@ export class Combat {
     const dev = this.d.input.device === 'pad' ? 1 : this.d.input.device === 'touch' ? 2 : 0;
     this.d.ui.toast(t(`cb.hint.${id}`, { k: GLYPH[key]?.[dev] ?? '' }));
   }
+  /** What to press for the game's own interact (E) on the device in use. */
+  private keyName(_a: 'interact') { const dev = this.d.input.device; return dev === 'pad' ? 'X' : dev === 'touch' ? t('cb.tapPrompt') : 'E'; }
   private toastOnce(key: string, text: string, gap = 4) { if ((this.toastT[key] ?? -99) + gap > this.clock) return; this.toastT[key] = this.clock; this.d.ui.toast(text); }
 
   /** Free play: before the player controller runs. */
@@ -616,7 +669,7 @@ export class Combat {
       return;
     }
     // the hour the encounter is in: the night runs from dusk to first light
-    s.timeOfDay = run.id === 'night.defence' ? (run.phase === 'prep' ? 20.6 + Math.min(1, run.phaseT / 70) * 0.9 : run.phase === 'hush' ? 21.5 : 21.5 + Math.min(1, (run.wave - 1 + Math.min(1, run.phaseT / 80)) / 3) * 7.6) % 24 : run.hour;
+    s.timeOfDay = run.id === 'night.defence' ? this.nightHour(run) : this.fightHour(run);
     this.stepSim(dt, time, false);
     // stamina in a fight: running spends it, standing gives it back, and the body's state decides how fast
     const p = run.sim.player;
@@ -630,13 +683,24 @@ export class Combat {
     D.ui.setStats(st);
   }
 
+  /** The hour inside a fight: its set hour, or (the story's fights, `opts.hour`) the world's hour running on. */
+  private fightHour(run: EncounterRun) { return this.enc?.opts.hour != null ? (run.hour + run.t / 50) % 24 : run.hour; }
+  /**
+   * The night at the fire runs from dusk to first light: the prep from the hour it began (the world's dusk, so the
+   * light does not jump as it starts) to 21:30, then the three waves to about 05:00.
+   */
+  private nightHour(run: EncounterRun) {
+    const h = this.enc?.hour ?? 20.6, h0 = h >= 19 && h < 21.5 ? h : 20.6;
+    return (run.phase === 'prep' ? h0 + Math.min(1, run.phaseT / 70) * (21.5 - h0) : run.phase === 'hush' ? 21.5 : 21.5 + Math.min(1, (run.wave - 1 + Math.min(1, run.phaseT / 80)) / 3) * 7.6) % 24;
+  }
+
   private encounterPrompt(run: EncounterRun) {
     const D = this.d, sim = run.sim, p = sim.player, ui = D.ui;
     let label: string | null = null, at: THREE.Vector3 | null = null, act: (() => void) | null = null;
     const fire = sim.fires.find((f) => !f.torch && !f.burnsOut);
     if (fire && Math.hypot(fire.x - p.x, fire.z - p.z) < 3 && fire.fuel < fire.max * 0.95 && run.id === 'night.defence') {
-      const ok = (sim.inv.branch ?? 0) > 0;
-      label = ok ? t('cb.p.feed') : t('cb.need', { list: t('item.branch') }); at = v2.set(fire.x, p.y + 0.8, fire.z);
+      const n = (fire.pile ?? 0) + (sim.inv.branch ?? 0);
+      label = n > 0 ? t('cb.p.feedN', { n }) : t('cb.need', { list: t('item.branch') }); at = v2.set(fire.x, p.y + 0.8, fire.z);
       act = () => { if (sim.feedFire(fire)) { D.player.act('give', new THREE.Vector3(fire.x, p.y + 0.4, fire.z), 0.9, null); audio.sample('wood', 0.6, { delay: 0.3 }); this.fx.puff('ember', fire.x, p.y + 0.6, fire.z, 0, 0, 4); } };
     } else if (run.phase === 'prep') { label = t('cb.p.ready'); act = () => run.ready(); }
     if (run.id === 'arena' || run.id === 'hunt.first') {
@@ -854,7 +918,13 @@ export class Combat {
           const k = this.vol(e.x, e.z);
           if (e.deflect) this.sfx('clang', 0.7, e.x, e.z); else this.sfx('hit', 0.9, e.x, e.z, e.what?.includes('blunt') ? 0.85 : 1.15);
           if (e.weak) audio.tone(880, 0.1, 'triangle', 0.1 * k, 0, 300);
-          if (!e.what?.startsWith('trap')) { this.hitStop(Math.min(0.11, 0.04 + (e.n ?? 0) * 0.0022)); D.input.rumble(70, 0.4); }
+          if (!e.what?.startsWith('trap')) {
+            // the blow lands: a stop, a small kick of the camera along it, harder for a kill (felt, not watched)
+            this.hitStop(e.killed ? 0.13 : Math.min(0.11, 0.04 + (e.n ?? 0) * 0.0022)); D.input.rumble(e.killed ? 140 : 70, e.killed ? 0.7 : 0.4);
+            this.kickCam(e.killed ? 0.09 : 0.035 + Math.min(0.05, (e.n ?? 0) * 0.0018));
+            if (e.killed) this.fx.puff('dust', e.x!, e.y! - 0.3, e.z!, e.dx, e.dz, 1.2);
+          }
+          if (e.id !== undefined && e.id >= 0) this.struck.set(e.id, this.clock);
           break;
         }
         case 'telegraph': {
@@ -984,10 +1054,13 @@ export class Combat {
     // was black, s5 GPU take; then 1.35 -> 1.55 and the planet lower in the sky, 34 deg up instead of 58: from high
     // overhead it lit the tops of the grass and left every animal a dark lump with glowing marks (s5 night v2). Low, it
     // lights their sides and backs, and the side away from it stays dark, so a shape reads as a body)
-    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? this.nightTune.chase : this.nightTune.fill) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 46, P0.y + 38, P0.z + 34); this.shine.target.position.copy(P0); } }
+    // towards first light the fight's own planetshine and cold edge give way to the world's dawn, so the night ends in
+    // the same red light the world outside is in (GPU take flow5: blue-lit at 05:06 in the fight, red at 05:21 after)
+    const h = this.d.save().timeOfDay, dawnK = nightRun && h < 12 ? THREE.MathUtils.smoothstep(h, 3.6, 5.0) : 0;
+    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? this.nightTune.chase : this.nightTune.fill) * (1 - dawnK) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 46, P0.y + 38, P0.z + 34); this.shine.target.position.copy(P0); } }
     // the same cold light catches the animals' edges, so a shape beyond the fire reads as an animal, not a shadow
     // (0.55 and a thin edge: they still read only by their marks; 0.8 and pow 1.8 made them glassy, like lit ghosts, s6 take; now 0.65, pow 2)
-    NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine && nightRun ? this.nightTune.rim * Math.min(1, this.shine.intensity / Math.max(0.05, this.nightTune.fill)) : 0);
+    NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine && nightRun ? this.nightTune.rim * (1 - dawnK) * Math.min(1, this.shine.intensity / Math.max(0.05, this.nightTune.fill)) : 0);
     const D = this.d, sim = this.sim!, P = D.player, p = sim.player, run = this.encounter, cam = P.camera;
     // creatures: a body for each within sight, none for those far off or gone
     NIGHT.on = sim.night;
@@ -997,6 +1070,13 @@ export class Combat {
       const vw = q ?? this.viewFor(e);
       if (e.state === 'windup') vw.tele += dt; else vw.tele = 0;
       vw.v.update(e, this.clock, dt, vw.teleDur > 0 ? Math.min(1, vw.tele / vw.teleDur) : 0);
+      // small prey in long grass: it moves the grass, and the grass is heard and seen moving (a hop: a rustle and a
+      // flick of grass); a player finds a Nibbet by that before seeing it
+      if (e.kind === 'nibbet' && !e.dead && d < 40) {
+        const sp = Math.hypot(e.vx, e.vz), vr = vw as unknown as { rusT?: number };
+        vr.rusT = (vr.rusT ?? Math.random() * 2) - dt * (sp > 0.3 ? 1 + sp * 0.4 : 0.15);
+        if (vr.rusT <= 0) { vr.rusT = 1.6 + Math.random() * 1.8; this.sfx('rustle', sp > 3 ? 0.55 : 0.3, e.x, e.z, 1.3, 0, 6); this.fx.puff('leaf', e.x, e.y + 0.25, e.z, e.vx * 0.2, e.vz * 0.2, 0.5); }
+      }
       // a fish is drawn where it is SEEN from this camera: light from it bends at the surface, so it shows higher
       // than it is (the sim keeps where it really is, and that is what a spear has to reach). Taken, it floats up.
       if (e.def.temperament === 'fish') {
@@ -1080,7 +1160,13 @@ export class Combat {
     this.hud.injuries(p.injuries.map((i) => ({ id: i.id, bad: !!i.infected })));
     if (run) {
       const N = run.objN;
-      this.hud.objective(t(run.objective), run.id === 'night.defence' && run.phase !== 'prep' && run.phase !== 'hush' ? `${t('cb.wave', { n: Math.max(1, N.wave ?? 1) })} · ${t('cb.fire', { n: N.fuel ?? 0 })} · ${t('cb.food', { n: N.food ?? 0 })}` : run.phase === 'prep' ? `${Math.max(0, Math.ceil(70 - run.phaseT))}` : null);
+      const night = run.id === 'night.defence', fighting = night && run.phase !== 'prep' && run.phase !== 'hush';
+      const wood = (N.pile ?? 0) + (N.wood ?? 0), low = fighting && (N.fuel ?? 100) < 35;
+      // the night's one rule, said when it matters: a low fire takes over the line (and the compass points at it)
+      const text = low ? t(wood > 0 ? 'cb.obj.fireLow' : 'cb.obj.fireOut', { k: this.keyName('interact') }) : t(run.objective);
+      this.hud.objective(text, fighting ? `${t('cb.wave', { n: Math.max(1, N.wave ?? 1) })} · ${t('cb.fire', { n: N.fuel ?? 0 })} · ${t('cb.wood', { n: wood })} · ${t('cb.food', { n: N.food ?? 0 })}` : night && run.phase === 'prep' ? t('cb.prep.wood', { s: Math.max(0, Math.ceil(70 - run.phaseT)), n: N.pile ?? 0 }) : run.phase === 'prep' ? `${Math.max(0, Math.ceil(70 - run.phaseT))}` : null, low && wood > 0);
+      if (low && !this.lowSaid && wood > 0) { this.lowSaid = true; audio.sample('wood', 0.25); D.ui.toast(t('cb.obj.fireLow', { k: this.keyName('interact') })); }
+      if (!low && (N.fuel ?? 0) > 50) this.lowSaid = false;
     } else this.hud.objective(null);
     // the eye: how near the most suspicious thing is to knowing
     let top = 0, seen = false;
@@ -1109,13 +1195,26 @@ export class Combat {
     const tags: { x: number; y: number; warm: boolean }[] = [];
     if (run && (run.id === 'hunt.first' || run.id === 'stealth.pass')) {
       for (const e of sim.enemies) {
-        if (tags.length >= 6 || e.dead || e.gone || !this.cs.studied.includes(e.kind) || Math.hypot(e.x - p.x, e.z - p.z) > 45) continue;
+        // on Story the suit also marks prey it has not studied, briefly: at the start and for a while after one stirs
+        const brief = sim.difficulty === 'story' && e.def.temperament === 'prey' && (run.t < 9 || (e.aware && !e.routed));
+        if (tags.length >= 6 || e.dead || e.gone || (!this.cs.studied.includes(e.kind) && !brief) || Math.hypot(e.x - p.x, e.z - p.z) > 45) continue;
         v2.set(e.x, e.y + e.def.height + 0.35, e.z).project(cam);
         if (v2.z > 1 || Math.abs(v2.x) > 1 || Math.abs(v2.y) > 1) continue;
         tags.push({ x: ((v2.x + 1) / 2) * window.innerWidth, y: ((1 - v2.y) / 2) * window.innerHeight, warm: !e.aware });
       }
     }
     this.hud.tags(tags);
+    // a creature just struck shows how much is left in it, for a moment, over its head (readable damage without the
+    // numbers, which stay a setting)
+    const bars: { x: number; y: number; k: number }[] = [];
+    for (const [id, at] of this.struck) {
+      const e = sim.enemies.find((q) => q.id === id);
+      if (!e || e.dead || e.gone || this.clock - at > 2.4 || e.def.boss) { if (!e || this.clock - at > 2.4) this.struck.delete(id); continue; }
+      v2.set(e.x, e.y + e.def.height + 0.25, e.z).project(cam);
+      if (v2.z > 1 || Math.abs(v2.x) > 1 || Math.abs(v2.y) > 1 || bars.length >= 4) continue;
+      bars.push({ x: ((v2.x + 1) / 2) * window.innerWidth, y: ((1 - v2.y) / 2) * window.innerHeight, k: Math.max(0, e.hp / e.maxHp) });
+    }
+    this.hud.bars(bars);
     const boss = sim.enemies.find((e) => e.def.boss && !e.gone && e.state !== 'dormant' && Math.hypot(e.x - p.x, e.z - p.z) < 40);
     this.hud.boss(boss && !boss.dead ? t(`cb.c.${boss.kind}`) : null, boss ? boss.hp / boss.maxHp : 0, !!boss && boss.phase > 0);
     // Field Analysis: keep a creature in the middle of the view for a few seconds and you learn what it is

@@ -172,10 +172,11 @@ export class CombatSim {
     return f;
   }
   fireRadius(f: Fire) { return f.torch ? 3 : f.fuel <= 0 ? 0 : 2.5 + 5.5 * Math.sqrt(clamp(f.fuel / f.max, 0, 1)); }
-  /** Feed a fire from the bag: a branch is a good while of light. */
+  /** Feed a fire from the pile beside it, then from the bag: a branch is a good while of light. */
   feedFire(f: Fire): boolean {
-    if ((this.inv.branch ?? 0) < 1 || f.fuel >= f.max * 0.97) return false;
-    this.inv.branch--; f.fuel = Math.min(f.max, f.fuel + 28);
+    if (((f.pile ?? 0) < 1 && (this.inv.branch ?? 0) < 1) || f.fuel >= f.max * 0.97) return false;
+    if ((f.pile ?? 0) >= 1) f.pile!--; else this.inv.branch--;
+    f.fuel = Math.min(f.max, f.fuel + 28);
     this.emit({ t: 'fire', what: 'fed', x: f.x, z: f.z, n: f.fuel / f.max });
     return true;
   }

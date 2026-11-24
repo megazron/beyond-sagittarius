@@ -41,6 +41,17 @@ export interface Outcome {
 
 export interface Marker { x: number; z: number; kind: 'goal' | 'fire' | 'food' | 'log' | 'den' | 'prey'; r: number }
 
+/**
+ * The night at the fire by difficulty: the wood stacked beside it, how fast it burns once the night presses, and how
+ * many scavengers each wave brings. Measured with tools/combat/night_probe.ts (a player who only keeps the fire fed
+ * holds it on every level; one who never feeds it loses it on every level, Story about 40 s later).
+ */
+export const NIGHT: Record<Difficulty, { pile: number; burn: number; waves: [number, number, number] }> = {
+  story: { pile: 7, burn: 0.65, waves: [3, 4, 2] },
+  normal: { pile: 6, burn: 1, waves: [4, 5, 3] },
+  hard: { pile: 4, burn: 1.1, waves: [5, 6, 4] },
+};
+
 export class EncounterRun {
   id: EncounterId;
   sim: CombatSim;
@@ -119,7 +130,9 @@ export class EncounterRun {
     } else if (id === 'night.defence') {
       this.hour = 21.5; s.night = true;
       arm('spear', 'club'); give({ branch: 9, vine: 3, tinder: 2, stone: 6, fruit: 1 });
-      const f = this.at(2.5, 0); s.addFire(f.x, f.z, this.story.fireHigh ? 100 : 72); this.markers.push({ x: f.x, z: f.z, kind: 'fire', r: 2 });
+      // the day's wood stacked beside the fire, for the fire alone (the bag's branches go on traps or on the fire):
+      // enough, fed when it is low, to see the night through; fewer on Hard (a fire left alone still goes out)
+      const f = this.at(2.5, 0); s.addFire(f.x, f.z, this.story.fireHigh ? 100 : 72, { pile: NIGHT[s.difficulty].pile }); this.markers.push({ x: f.x, z: f.z, kind: 'fire', r: 2 });
       const food = this.at(0.5, 2.2); s.addScent(food.x, food.z, 4, 60); this.markers.push({ x: food.x, z: food.z, kind: 'food', r: 1 });
       // a steady night breeze from the fire across the food and out into the dark: the smoke leans the way the smell goes
       const wa = Math.atan2(food.z - f.z, food.x - f.x) + (s.rand() - 0.5) * 0.6; s.windX = Math.cos(wa); s.windZ = Math.sin(wa);
@@ -248,7 +261,7 @@ export class EncounterRun {
 
   // ---- the night at the fire ----
   private night(dt: number) {
-    const s = this.sim, fire = s.fires.find((f) => !f.torch && !f.burnsOut)!, straight = !!this.story.cubKilled;
+    const s = this.sim, fire = s.fires.find((f) => !f.torch && !f.burnsOut)!, straight = !!this.story.cubKilled, N = NIGHT[s.difficulty];
     // they come out of the dark to the edge of the light, where the food can be smelt (a home far out had them
     // wander beyond their noses all night in the real world's terrain, and nothing ever came)
     const fromDark = (kind: SpeciesId, n: number, pack: number, spread = 1.2) => {
@@ -257,7 +270,7 @@ export class EncounterRun {
       for (let i = 0; i < n; i++) { const a = a0 + (i - (n - 1) / 2) * 0.22 * spread, r = 30 + s.rand() * 6; s.spawn(kind, fire.x + Math.cos(a) * r, fire.z + Math.sin(a) * r, { pack, homeX: fire.x + Math.cos(a) * 21, homeZ: fire.z + Math.sin(a) * 21 }); }
     };
     const food = s.scents.reduce((n, sc) => n + Math.max(0, sc.food), 0);
-    this.objN = { food, fuel: Math.round((fire.fuel / fire.max) * 100), wave: this.wave };
+    this.objN = { food, fuel: Math.round((fire.fuel / fire.max) * 100), wave: this.wave, pile: fire.pile ?? 0, wood: s.inv.branch ?? 0 };
     const packLeft = (pack: number) => s.enemies.filter((e) => e.pack === pack && !e.dead && !e.routed && !e.gone).length;
     if (this.phase === 'prep') {
       // time to think: what you set now is what the night meets
@@ -267,21 +280,21 @@ export class EncounterRun {
     } else if (this.phase === 'hush') {
       // the work is done and the camp goes quiet: a few seconds to stand and look at what is set before anything comes
       fire.slow = 0.6;
-      if (this.phaseT > 10) { fire.slow = 1; this.wave = 1; fromDark('skritch', 4, 1); this.objective = 'cb.obj.night'; this.go('wave1'); }
+      if (this.phaseT > 10) { fire.slow = N.burn; this.wave = 1; fromDark('skritch', N.waves[0], 1); this.objective = 'cb.obj.night'; this.go('wave1'); }
     } else if (this.phase === 'wave1') {
       if (packLeft(1) === 0 || this.phaseT > 75) { for (const e of s.enemies) if (e.pack === 1) s.rout(e); this.go('lull'); }
     } else if (this.phase === 'lull') {
       if (this.phaseT > 12) {
-        this.wave = 2; fromDark('skritch', 5, 2, 1.7);
+        this.wave = 2; fromDark('skritch', N.waves[1], 2, 1.7);
         const a = s.rand() * 6.283; this.hound = s.spawn('hound', fire.x + Math.cos(a) * 34, fire.z + Math.sin(a) * 34, { alert: 1.2, aware: true });
         if (straight) this.hound.cd = 0;
         this.go('wave2');
       }
     } else if (this.phase === 'wave2') {
-      if ((packLeft(2) === 0 && this.phaseT > 30) || this.phaseT > 80 || this.hound?.routed) { this.wave = 3; if (!this.hound?.routed) fromDark('skritch', 3, 3); this.go('wave3'); }
+      if ((packLeft(2) === 0 && this.phaseT > 30) || this.phaseT > 80 || this.hound?.routed) { this.wave = 3; if (!this.hound?.routed) fromDark('skritch', N.waves[2], 3); this.go('wave3'); }
     } else if (this.phase === 'wave3') {
       // the last hour before dawn: the fire burns down faster and the hunter stops waiting
-      if (fire.fuel > 0) fire.fuel = Math.max(0, fire.fuel - dt * 0.35);
+      if (fire.fuel > 0) fire.fuel = Math.max(0, fire.fuel - dt * 0.35 * N.burn);
       if (this.hound && !this.hound.routed && !this.hound.dead) this.hound.atkGone += dt * (straight ? 1.2 : 0.5);
       const clear = s.enemies.every((e) => e.dead || e.routed || e.gone || e.def.temperament === 'ambush');
       if (this.phaseT > 85 || clear) {

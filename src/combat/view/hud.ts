@@ -95,8 +95,8 @@ export class CombatHud {
       (d.firstElementChild as HTMLElement).style.width = `${Math.round((dur ?? 0) * 100)}%`;
     });
   }
-  objective(text: string | null, sub: string | null = null) {
-    this.set('obj', `${text}|${sub}`, () => { this.obj.classList.toggle('on', !!text); this.obj.firstElementChild!.textContent = text ?? ''; this.obj.querySelector('small')!.textContent = sub ?? ''; });
+  objective(text: string | null, sub: string | null = null, warn = false) {
+    this.set('obj', `${text}|${sub}|${warn}`, () => { this.obj.classList.toggle('on', !!text); this.obj.classList.toggle('warn', warn); this.obj.firstElementChild!.textContent = text ?? ''; this.obj.querySelector('small')!.textContent = sub ?? ''; });
   }
   /** How close something is to knowing you are there (0 to 1), or that it does. */
   awareness(k: number | null, seen = false) {
@@ -120,6 +120,18 @@ export class CombatHud {
       if (!q) { if (e.classList.contains('on')) e.classList.remove('on'); return; }
       e.classList.add('on'); e.classList.toggle('warm', q.warm);
       e.style.transform = `translate(${q.x.toFixed(0)}px, ${q.y.toFixed(0)}px)`;
+    });
+  }
+  private barEls: HTMLElement[] = [];
+  /** Small health bars over creatures just struck. */
+  bars(list: { x: number; y: number; k: number }[]) {
+    while (this.barEls.length < list.length) { const b = el('div', 'hp', '<i></i>'); this.root.append(b); this.barEls.push(b); }
+    this.barEls.forEach((e, i) => {
+      const q = list[i];
+      if (!q) { if (e.classList.contains('on')) e.classList.remove('on'); return; }
+      e.classList.add('on'); e.classList.toggle('low', q.k < 0.34);
+      e.style.transform = `translate(${q.x.toFixed(0)}px, ${q.y.toFixed(0)}px)`;
+      (e.firstElementChild as HTMLElement).style.width = `${(q.k * 100).toFixed(0)}%`;
     });
   }
   boss(name: string | null, k = 0, p2 = false) {

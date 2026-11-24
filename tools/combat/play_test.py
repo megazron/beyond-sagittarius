@@ -250,8 +250,15 @@ with sync_playwright() as pw:
     for i in range(80):
         if page.evaluate("!document.getElementById('modal').classList.contains('hidden') && !!document.querySelector('[data-diff]') || !!(__bs.combat.run)"): break
         step(page, 0.5); time.sleep(0.1)
-    ok(page.evaluate("!document.getElementById('modal').classList.contains('hidden') && !!document.querySelector('[data-diff]')"), 'story: the first story fight asks how hard fights should be')
-    page.evaluate("""document.querySelector('[data-diff="normal"]').click()"""); step(page, 0.5)
+    ok(page.evaluate("!document.getElementById('modal').classList.contains('hidden') && !!document.querySelector('[data-diff]') && !__bs.combat.run"), 'story: the first story fight asks how hard fights should be (at the start of the night, before any of it)')
+    # the question holds the game still on real frames (the main loop, not the test's step): the clock does not move
+    h0 = page.evaluate("__bs.save.timeOfDay"); time.sleep(2.5); h1 = page.evaluate("__bs.save.timeOfDay")
+    ok(abs(h1 - h0) < 1e-6, 'story: the world waits while the difficulty question is open', [h0, h1])
+    # a second caller while it is open waits for the same answer: one modal, one answer closes it, both go on
+    page.evaluate("window.__q2 = 0; __bs.combat.ensureAsked(() => { window.__q2 = 1; }); 1")
+    ok(page.evaluate("document.querySelectorAll('#modal [data-diff]').length") == 3 and page.evaluate("window.__q2") == 0, 'story: asking again while the question is open opens nothing new')
+    page.evaluate("""document.querySelector('#modal [data-diff="normal"]').click()"""); step(page, 0.5); time.sleep(0.4)  # (the modal hides 130 ms after it is closed)
+    ok(page.evaluate("document.getElementById('modal').classList.contains('hidden') && window.__q2 === 1"), 'story: one answer closes it and every caller goes on')
     d = page.evaluate(D)
     ok(d['encounter'] == 'night.defence', 'story: level 7 at night starts the night at the fire by itself', d['encounter'])
     ok(page.evaluate("JSON.parse(localStorage.getItem('bs-settings-v1')).combat.asked") is True, 'story: the answer is kept (asked once)')

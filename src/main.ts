@@ -954,6 +954,7 @@ async function boot() {
   combat = new Combat({ world, player, input, ui, save: () => game.save, settings: () => (settings.combat ??= defaultCombatSettings()), saveSettings: persistSettings,
     free: () => state === 'game' && game.mode === 'play' && !paused && !ui.modalOpen(), persist: () => game.persist(), home: () => game.mode !== 'away' });
   game.combat = combat;
+  { const d = new URLSearchParams(location.search).get('diff'); if (d === 'story' || d === 'normal' || d === 'hard') combat.setDifficulty(d); }
   // a story fight starts only in plain play: not under a flashback, the Vault, a film, the pause menu or a panel
   game.canFight = () => state === 'game' && !paused && !ui.modalOpen();
   game.onLevelComplete = onLevelDone;
@@ -1061,6 +1062,20 @@ window.addEventListener('resize', () => {
     const cam = camera.position;
     const grounded = on ? a.grounded : player.onGround;
     return { x: body.x, z: body.z, feet: body.y, drawn: down(body.x, body.z), cam: cam.y, camDrawn: down(cam.x, cam.z), mode: game?.mode, grounded };
+  },
+  /** Test hook: every surface the drawn camera's ray through screen point (ndc x, y) passes, nearest first: what is it,
+   * which material, how far (two hits within a few mm of each other on different meshes would fight in depth). */
+  pickProbe(nx: number, ny: number, max = 8) {
+    const info = renderer.stageInfo(), cam = info.camera; if (!cam) return null;
+    cam.updateMatrixWorld();
+    const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(nx, ny), cam);
+    const path = (o: THREE.Object3D) => { const n: string[] = []; for (let p: THREE.Object3D | null = o; p && n.length < 5; p = p.parent) n.push(p.name || p.type); return n.join('<'); };
+    const vis = (o: THREE.Object3D) => { for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false; return true; };
+    const hits = ray.intersectObject(info.scene, true).filter((h) => vis(h.object)).slice(0, max);
+    return { cam: cam.position.toArray().map((v) => +v.toFixed(2)), near: cam.near, far: cam.far, hits: hits.map((h) => {
+      const m = h.object as THREE.Mesh, mt = (Array.isArray(m.material) ? m.material[h.face?.materialIndex ?? 0] : m.material) as THREE.Material & { color?: THREE.Color };
+      return { d: +h.distance.toFixed(4), path: path(m), type: m.type, geo: m.geometry?.type, tris: m.geometry ? (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3 : 0, mat: mt ? `${mt.type}:${mt.name}:${mt.color?.getHexString() ?? ''}:${mt.polygonOffset ? 'po' : ''}${mt.transparent ? 't' : ''}` : null, n: h.face ? h.face.normal.toArray().map((v) => +v.toFixed(2)) : null, p: h.point.toArray().map((v) => +v.toFixed(3)), inst: h.instanceId ?? null, ud: Object.keys(m.userData) };
+    }) };
   },
   swimProbe() { return { x: player.pos.x, y: player.pos.y, depth: -world.terrain.height(player.pos.x, player.pos.z), swimming: player.swimming }; },
   /** Test hook: where a person on the away stage is (their head, in the world) and which way they face. */

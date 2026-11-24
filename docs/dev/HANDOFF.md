@@ -1651,3 +1651,130 @@ Why: the release pass found the set pieces reachable only from Pause, Action or 
   dawn (dark red) while the fights run at 9:00 and 14:00 (a jump in light both ways); the hunt's Nibbets are small in the
   grass; the night is lost by a player who stands still (fair, but the first night's card is then the first thing a
   passive player sees).
+
+## 2026-11-24 perf agent 29 (worktree ~/bs-perf, branch ped29; GPU scripts and results ~/bs-assets/gpu/p29)
+- DECISION applied (coordinator, from the owner's "too crowded"): fewer people near the walking routes, not more bodies.
+  citydense painted crowd 64/22 -> 36/12 (Web+Ultra / phones), gate throng 8/4 -> 4/2; story walkers 14/6 -> 10/4;
+  threes 6/3 -> 4/1 (Web keeps one at the gate, phones only the tram-square one); phone side streets 3 a side (6);
+  phones' queue is one (queue2 not built on phones).
+- WHO HELD THE BODIES (new diag in pedProbe: `folk` = townsfolk drawn as bodies in view within 34 m, `cut`, `view`):
+  p29a Mobile gate: used 11 with only kid1/kid2 in view, so the bodies sat with townsfolk out of the view and the
+  painted crowd got none. Now, on phones, townsfolk out of the WIDE view (6 m margin) beyond 12 m are cards
+  (OUT_CARD, ?outcard=0 off; with the plain view at 14 m an about-turn brought them in as cards, p29c; at 28 m the gate
+  start still held the bodies, p29d). Phones also never draw more than BODY_CAP + 2 with the crowd's bodies counted.
+- SLIDES: the crowd bodies' sideways speed is capped as a whole (the card's lane easing at 0.45 m/s plus the body's own
+  step aside made 0.8 m/s while facing ahead); stood waiting or walking under 0.3 m/s (the gate's throng never turned
+  into a step) 0.35 m/s; walking, at most 0.75 x their pace. Story walkers face the way they actually moved (stood,
+  the forward speed in the yaw turned them half sideways). A crowd body's step aside never takes it within 0.5 m of
+  anyone (asideBlocked). District walkers in view get bodies first (as walkCrowd).
+- LENS (Mobile crowd_walk_through ~4.5 s, p28 frames 284-292): she passed beside the camera inside the 1.7 m a phone
+  hides a body within; walkers now pass you and the low camera 2 m off (BERTH, ?berth=1.7 the old).
+- CAMERA SNAP (pedglitch now keeps the drawn camera's last 6 frames with each teleport sample): p29a Web bazaar
+  t 60.75 the camera moved 1.2 m and turned 37 deg in ONE frame while you moved 7 cm: keepOff's instant push off a
+  body. player.ts now eases the push (rate 14/s); the thinning moves a card only if unseen this frame and the last.
+  The p28 chai_tram burst (9 cards 48-88 m) did not recur in p29a; the same mechanism is the likely cause (not proven).
+- NE WALL (task 4): pickProbe(ndcX, ndcY) hook in main.ts. At 8 s of mobile_ne_street_far (you 264.8, 220.4; camera
+  268.39, 2.72, 223.95) the speckled panel is a merged static mesh (4236 triangles, MeshStandardMaterial white) in the
+  plane z = 220 at x 260.5-262, 8 m off; the next surface behind is 0.6 m further (the face x = 260 of a 182806-triangle
+  merged block). Probes p29/ne_pick2..4 (plans p29/plan_ne_pick*.json, build dist-p29b): the purple wall is ONE quad (2
+  triangles, x 260-320, y 0.14-12.74) of building aFac (4.2, 2.7273, seed 3, style 2) aOrg (260, 0.14, 160): the box
+  x 260-320, z 160-220, facade material (vertexColors, noMerge, ibatch-patched onBeforeCompile). Its attributes are the
+  same at all four corners (not an interpolation of seed/origin). No other triangle lies in z = 220 there, no polygon
+  offset; the frame's depth is 24-bit, near 0.1 far 2400, no log or reversed depth. Hiding the 182806-triangle block
+  changes WHAT shows through (ne_B_hidden.jpg: the street beyond) but not the holes: the purple wall's own pixels drop
+  out, in the far, grazing end of that one huge quad (and the top floors of the next block). ne_pick5: swapping that
+  merged mesh's facade material for a plain MeshStandardMaterial REMOVES it (ne_C_plain.jpg), so it is the facade
+  shader's own output (with ?nearfade=0 too, p28, so not the dither). Averaging the room behind the glass by its pixel
+  footprint (b10e260) did NOT remove it (p29/ne_g frame 470): reverted. NOT FIXED. Left in the shader to try, one at a
+  time on that mesh in a probe: glass roughness 0.04 + metalness up to 0.95 at grazing (specular aliasing against the
+  environment), the reveal `g` branch, `fFar` averaging (px threshold), the ledge lines; then the fix.
+- STATE (branch ped29-land, rebased on main 26f8579; head 93ff6d8 + an uncommitted perf_gate --query/--spots option):
+  NOT LANDED. CI on 93ff6d8: perf_gate FAILS at the gate, deterministic (the same to the triangle on 376062b and
+  93ff6d8): Mobile gate 15 bodies (budget 14; main 13), Web gate 1 397 602 triangles (budget 1.3 M; main 1 137 612,
+  24 bodies vs 25, 339 draws vs 269). Making the out-of-view rule phones-only did NOT change it, so the cause is in
+  something both commits share (fewer painted cards, BERTH, threes, the thinning's two-frame rule, the phone cap...).
+  p29/pgbisect.sh runs perf_gate's gate spot locally (SwiftShader, through heavy) with ?berth=1.7, ?outcard=0, ?thin=0,
+  ?folkview=0 on dist-p29i: read p29/pgbisect.log, then bisect by commit if no switch explains it. Also on that run:
+  smoke timed out in the planet wake-up (tools/smoke.py:129, outside the city; it passed on 376062b: rerun) and the
+  known combat bow-arm flake.
+- STILL RUNNING when I stopped: p29/pgbisect.sh (log p29/pgbisect.log; first line, no switch, reproduces CI exactly).
+  The Web detector on dist-p29i was stopped part way (no report; capture Chrome checked closed): rerun
+  `p29/ped.sh dist-p29i i` for Web (p28/an.py, p29/cc.py read the report). NO GPU CLIPS were made for this branch and nothing was sent to
+  mobile_v9_GPU: p29/final.sh builds dist-p29j from the worktree HEAD and records the Mobile and Web clips (p28 plans)
+  plus the 4x proxy; run it once perf_gate is fixed, watch every clip frame by frame before sending (no sound).
+- PHONES (task 2): not measured on the proxy in this session; draws per body unchanged (bodymerge relay below).
+- DETECTOR (7-minute walk; before this work, p28e: Mobile cardClose 27, overlap 3, slide 0; Web 72 / 33 / 19):
+  Mobile a 23/2/2, c 16/1/0, d 22/1/2, f 13/0/0, i 14/1/0 (i = the landing code's city.ts). Web a 26/13/4, c 26/17/7,
+  d 23/27/8, f 12/21/3 (f had the out-of-view rule on Web too; it is phones-only from 839de72, Web not re-run on that).
+  No swaps, vanishes or identity changes in any run but one Web identity (c) and one Web appear (a, f). The p28
+  chai_tram burst did not recur. NOT 0 anywhere. What is left:
+  * Mobile: with bodies free (tram square: 8 left, 5 wanted, 4 held) a card in view stays a card because the phones'
+    crowd pool has ONE body per look (POOL 8 = NLOOK 8) and in view a card only takes a body of its own look. Next:
+    POOL 16 on phones (two per look; the cap still holds the total), measure memory and the load.
+  * Web: the out-of-view rule halved Web's flat cards (f: 12 vs 23-26) but went with the gate triangles above. Decide:
+    a bigger Web triangle budget at the gate, or not.
+  * Overlaps Web 13-27: bodies of the painted crowd stepping aside (b.dx) are not checked against each other's forward
+    steps (the card's clash test uses card x, not body x); story walkers vs cards standing.
+- RELAY TO THE CHARACTER AGENT (their files; I did not touch them):
+  1. bodymerge.ts / character.ts mergeCrowd: a crowd body draws 3 times a frame (p28 draws_a, Mobile crowd, 6 bodies
+     over 2 frames: skin_body 12, `kit` skinned 16, hair `Mesh<head<neck` 16). Wanted: fold the rigid kit+hair mesh
+     (character.ts mergeRigid's output, and the head hair) into mergeBodyGeometry as two more parts (aPart 3 kit, 4
+     hair): kit keeps its skinIndex/skinWeight; hair gets skinIndex = the head bone's index, weight 1, positions
+     pre-multiplied by (head bone bind inverse x hair.matrixWorld at bind); bodyMaterial samples uKitMap / uHairMap and
+     their roughness/metalness for parts 3 and 4 (hair with HAIR_CARDS: discard below its alphaTest in the part-4 branch).
+     Phones only first (tier 0, crowd bodies). Expected: 3 -> 1 draw a body; at the gate (14 bodies) 156 -> ~128 draws a
+     frame, and the per-draw uniform uploads (setValue/upload 8-11% of the 4x proxy CPU profile) drop with them.
+  2. character.ts animate, foot IK (line ~1081): `root.updateWorldMatrix(true, true)` updates every bone, the kit and
+     the hair of every posed body each frame, and the render's own matrix pass does it again (updateWorldMatrix self
+     309 ms of 6.9 s in the p27b m_crowd profile, plus most of multiplyMatrices' 254 ms). The feet only need their own
+     chain: getWorldPosition(foot) already updates foot <- hips <- root (updateWorldMatrix(true, false)), so the line
+     can go; at ~1113 replace `fig.updateWorldMatrix(true, true)` with hipsB.updateWorldMatrix(true, false) and each
+     upperleg.updateWorldMatrix(false, true) (already done per leg after solveLeg). And skip foot IK for crowd bodies
+     more than ~10 m from the camera (camD). The same pattern at ~641/713/825 (corrective shapes `en`, tasks): 72+31 ms.
+  3. Memory (p28 census_e, Mobile, in the city: 726 MB GPU estimate): the city player body's 2048 map + normal (45 MB;
+     1024 on phones saves ~34 MB); morph textures RGBA32F 16384x2 x51 (26.7 MB, the player's 51 shapes) and x13 / x11
+     (13.6 + 5.8 MB, crowd looks): bake the constant build/body shapes into the positions at creation and drop those
+     targets (they never change in play), keep only face shapes; on phones drop the player's correctives as the crowd's.
+
+## 2026-11-24 combat agent: the story fights, second pass (branch combat-flow4, landing branch combat-flow4-land2 on main 56e639b; land1 was green on 017ce9b but main moved)
+Fixing the owner's list from the flow4 GPU takes, in order.
+- Time: story fights keep the world's clock (`startEncounter(id, { hour })`, combat.ts `fightHour`/`nightHour`): the
+  breakfast fights start at the world's hour and the world keeps the hour they end at; the night's prep runs from the
+  world's dusk (19:54 after "Rest until nightfall") to 21:30 instead of jumping to 20:36. Waking after the first night
+  is 6:36 (story.ts `WAKE`; 6:00 was the dark red dawn). Trials keep their own set hours.
+- Night: a wood pile beside the fire for the fire alone (`Fire.pile`, fed before the bag; Story 7, Normal 6, Hard 4;
+  drawn as stacked logs in fx.ts `syncPile`); the HUD line shows wave, fire %, wood, food; below 35 % the objective
+  line turns red and says to feed the fire (E / X / tap the prompt), the compass points at the fire, one toast. Story
+  burns at 0.65 and brings 3/4/2 scavengers, Hard 1.1 and 5/6/4 (`NIGHT` in encounters.ts). `tools/combat/night_probe.ts`
+  (flat ground, 4 seeds): only feeding the fire holds the night on every level at full health; never feeding loses on
+  Normal (151 s) and Hard (135 s) and holds on Story at 92 hp.
+- Text: level.7.desc/hint and level.8.desc (en/hi/ur) describe the night at the fire and breakfast; cb.obj.night and
+  cb.story.night say to feed the fire.
+- Nibbets: body 0.6 m (was 0.5), sim radius/height 0.34/0.54, warmer hide 0x9a5f38 with a pale belly; a rustle and a
+  flick of grass as they move; on Story the suit tags prey for the first 9 s of the hunt and while one is alarmed.
+- Feel: landed blows kick the camera a little (kills more, with a longer stop and dust); a struck creature shows a
+  small health bar over it for 2.4 s (hud.ts `bars`).
+- chase.escape: NOT placed. On main the only beat for it is decision 19's third option (run for the fire), which is
+  the held choice data (episode1.json / life-wip); 1.10's ridge chase is Draxum's, on another world. stealth.pass has
+  no beat. Both stay in Pause, Action.
+- Spear outside fights: story.ts `carrySpear` aligns the held spear each frame like a staff (near upright at his right,
+  butt by his feet); back to the hand's angle while player.combat is set or the old thrust runs. GPU stills
+  ~/bs-cap/combat/check6/carry_*.jpg and the walk clip c6_walk_spear.mp4.
+- Night light: the fight's planetshine and cold edge fade out 03:36 to 05:00, so the night ends in the world's red dawn.
+- Stones: story fights put `rock` in the hand list (thrown stones from the bag; it was missing, the bot's stones
+  segment in flow7 only cycled spear and hands). Fishing no longer shows the dodge line.
+- The difficulty question: `combat.ensureAsked(go)` (public) asks once and holds the game still until answered
+  (`scaleTime` returns 0 while the question or the lost-fight card is open; main.ts ran game.update behind a modal).
+  main's fights.ts night calls it first, before the toast and the encounter. The life branch's FirstNight is to call it
+  at its start (coordinator's decision). play_test: the question is open at night start with no encounter yet, and the
+  clock does not move on real frames while it is open.
+- GPU takes: ~/bs-cap/combat/flow5 (50-53, before the spear/pile/dawn fixes) and flow7 (54-57, new game, levels 1-6 by
+  the driver off camera): hours logged 5.36 after the night, 6.88 at the breakfast station, 7.58 after fishing, 8.37
+  after the hunt. Plans: mkplan_flow5.py, mkplan_flow7.py, mkplan_check6.py, plan_stones8.json (all `cap4.sh`).
+- Still wrong, as I see it: after the fight the world outside is a little brighter than the fight's last frame at dawn;
+  the bot stands out in the dark grass a lot (a player may not); the Nibbets read as orange-brown dots at 15-25 m, but in
+  the long grass by the hunt station they are still small; the free-play reticle ring stays on screen after fishing.
+- Skipping the difficulty question in captures and tests: it is stored in localStorage `bs-settings-v1` (settings.combat
+  .asked), not in the save, so setting anything on the save does nothing. Use `?diff=story|normal|hard` in the address,
+  or `__bs.combat.setDifficulty('normal')` (answers it if it is open, and it is never asked after). `ensureAsked` is
+  one question at a time: callers that ask while it is open all go on after the one answer.
