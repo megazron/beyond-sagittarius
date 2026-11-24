@@ -13,10 +13,13 @@ export interface SwayUniforms {
   /** Hair only: up to six capsules the strands are pushed out of (the arms and thighs, head space): a, b per capsule,
    *  the radius in a's w (0: off). Kneeling with the head down, the hanging tails passed through her arm and thigh. */
   uCap: { value: THREE.Vector4[] };
+  /** Hair only: the ground as a plane in head space (normal xyz, offset w: a point p is above it when dot(n, p) + w > 0;
+   *  0, 0, 0, 0 is off). Kneeling with the head down, Nuvexa's long tails reached the ground and went into it. */
+  uGround: { value: THREE.Vector4 };
 }
 
 export function swayUniforms(): SwayUniforms {
-  return { uTime: { value: 0 }, uSwing: { value: new THREE.Vector3() }, uFlutter: { value: 0.012 }, uDrop: { value: new THREE.Vector3() }, uTilt: { value: new THREE.Vector4() }, uCap: { value: Array.from({ length: 12 }, () => new THREE.Vector4()) } };
+  return { uTime: { value: 0 }, uSwing: { value: new THREE.Vector3() }, uFlutter: { value: 0.012 }, uDrop: { value: new THREE.Vector3() }, uTilt: { value: new THREE.Vector4() }, uCap: { value: Array.from({ length: 12 }, () => new THREE.Vector4()) }, uGround: { value: new THREE.Vector4() } };
 }
 
 const VERT_HEAD = /* glsl */ `

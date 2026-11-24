@@ -133,7 +133,10 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
 /** Rig switches for A/B tests (dev/animqa.ts): reach, the chest and collarbone helping a held hand get there. */
 /** lipsLetGo: how much of the fingers' torso guard lets go with the hand at the lips (eating, drinking). */
 /** throwTame: how much of the throw clip's lunge (legs and hips) is taken back towards the stance it began from. */
-export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9, sipYaw: -0.5, cupPalm: 0.08, cupMax: 1.5, pocketReach: 1 };
+/** sipElbow, sipHead: an elbow way at the lips and a turn of the face away from the cup's hand (both off: they cleared the
+ *  eyes on one body and not the next). hairGround 0 lets the tails into the ground (A/B). plantBend, plantReach, plantWin,
+ *  plantHold: planting's back bend (rad), its IK reach (m), the touch window and the time held at the soil (task k). */
+export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9, sipYaw: -0.5, sipElbow: null as Dir | null, sipHead: 0, cupAlongSip: 1.25, cupFootSip: 0.035, cupPalm: 0.08, cupMax: 1.5, pocketReach: 1, hairGround: 1, plantBend: 0.5, plantReach: 0.6, plantWin: 0.24, plantHold: 0.08 };
 /** How far a strand's tip falls towards the ground as the head turns from upright, per metre of strand and per unit of
  *  change in the ground's direction seen from the head (hair.ts uDrop; times the strand's sway squared, at most 1.6) */
 const HAIR_DROP = 0.15;
@@ -353,7 +356,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   }
   /** A cup in the hand as one holds a cup: upright along the thumb's side, its side in the palm, the fingers round it;
    *  a flatbread pinched flat between the thumb and the fingers, most of it out past the fingertips. */
-  function placeOnPalm(bs: Map<string, THREE.Bone>, m: THREE.Object3D, kind: 'cup' | 'food' | 'throwstick') {
+  function placeOnPalm(bs: Map<string, THREE.Bone>, m: THREE.Object3D, kind: 'cup' | 'food' | 'throwstick', sip = 0) {
     const { fl, nl, th, palmLen } = handAxes(bs);
     const s = 1 / Math.max(1e-3, bs.get('handR')!.getWorldScale(new THREE.Vector3()).x);
     const M = new THREE.Matrix4();
@@ -371,7 +374,13 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // over his face and no cup (Draxum, GPU take tasksE); it stands out above and below the fingers now
       const k = cupScale(bs); m.scale.setScalar(k);
       // held round its lower half (round its middle, tipped to sip, the hand sat at the rim over his nose)
-      m.position.copy(fl).multiplyScalar(palmLen * 0.6).addScaledVector(nl, (0.031 * k + 0.014) * s).addScaledVector(th, 0.018 * k * s);
+      // at the lips (sip 1) the hand slides down the cup and towards its foot (RIG_OPTS.cupAlongSip, cupFootSip): the
+      // fingertips hold it round its foot, the palm under it. Held round its lower half with the palm on its side, the
+      // fingers rose in front of the eyes for the whole sip (GPU take tasks9: Draxum most, Zenvik too); 1.25 and 0.035:
+      // no frame with a finger joint within 1.5 cm of the line from the camera to an eye, from the front, 3/4 or side,
+      // standing or seated, on Zenvik, Draxum and Nuvexa (the old grip: 26 to 30 frames of 90 from the front)
+      const along = 0.6 + (RIG_OPTS.cupAlongSip - 0.6) * sip, foot = 0.018 + (RIG_OPTS.cupFootSip - 0.018) * sip;
+      m.position.copy(fl).multiplyScalar(palmLen * along).addScaledVector(nl, (0.031 * k + 0.014) * s).addScaledVector(th, foot * k * s);
     } else {
       // the bread flat in the fingers' plane (its +y out of the palm), its middle past the fingers' roots
       M.makeBasis(fl, nl, new THREE.Vector3().crossVectors(fl, nl));
@@ -1355,7 +1364,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const ELBOW_MOUTH: Dir = [0.6, -1, 0.3];
   const rimLocal = new Map<PropKind, { c: THREE.Vector3; n: THREE.Vector3; r: number }>();
   const MA = { qh: new THREE.Quaternion(), qb: new THREE.Quaternion(), q: new THREE.Quaternion(), r: new THREE.Quaternion(), t: new THREE.Quaternion(), m: new THREE.Matrix4(), l: new THREE.Matrix4(),
-    a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(), d: new THREE.Vector3(), n: new THREE.Vector3(), x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), h: new THREE.Vector3(), fresh: true };
+    a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(), d: new THREE.Vector3(), n: new THREE.Vector3(), x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), h: new THREE.Vector3(), o: new THREE.Object3D(), fresh: true };
   /** The right hand's world turn with its fingers along fw and its palm facing pw (body-space directions). */
   function handTurnTo(rq: THREE.Quaternion, fwB: Dir, pwB: Dir, ax: ReturnType<typeof handAxes>, out: THREE.Quaternion) {
     const fw = MA.x.set(fwB[0], fwB[1], fwB[2]).normalize().applyQuaternion(rq), pw = MA.y.set(pwB[0], pwB[1], pwB[2]).applyQuaternion(rq);
@@ -1389,14 +1398,29 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     }
     head.updateWorldMatrix(true, false);
   }
+  /** Turn the face about the body's vertical by a (radians, + to his left): the neck takes 40 per cent, the head the rest. */
+  function headYaw(bs: Map<string, THREE.Bone>, rq: THREE.Quaternion, a: number) {
+    if (Math.abs(a) < 1e-4) return;
+    const head = bs.get('head')!, neck = bs.get('neck');
+    for (const [b, share] of (neck ? [[neck, 0.4], [head, 0.6]] : [[head, 1]]) as [THREE.Bone, number][]) {
+      const R = FU.q.setFromAxisAngle(FU.a.set(0, 1, 0).applyQuaternion(rq), a * share);
+      const pw = b.parent!.getWorldQuaternion(FU.p);
+      b.quaternion.premultiply(R.premultiply(FU.i.copy(pw).invert()).multiply(pw));
+    }
+    head.updateWorldMatrix(true, false);
+  }
   function mouthArm(bs: Map<string, THREE.Bone>, T: NonNullable<typeof task>, k: number, w: number, dt: number, up: THREE.Bone, lo: THREE.Bone, hd: THREE.Bone) {
     const ax = axesR ??= handAxes(bs), kind = T.prop as PropKind;
+    const at0 = mouthAmount(T.kind, k), slide = kind === 'cup' && (RIG_OPTS.cupAlongSip !== 0.6 || RIG_OPTS.cupFootSip !== 0.018);
     let rl = rimLocal.get(kind);
-    if (!rl) {
-      const o = new THREE.Object3D(); placeOnPalm(bs, o, kind === 'cup' ? 'cup' : 'food'); const rim = PROP_RIM[kind] ?? { y: 0, r: 0.05 };
+    if (!rl || slide) {
+      const o = MA.o; placeOnPalm(bs, o, kind === 'cup' ? 'cup' : 'food', slide ? at0 : 0); const rim = PROP_RIM[kind] ?? { y: 0, r: 0.05 };
       const ck = kind === 'cup' ? o.scale.x : 1;
-      rl = { c: new THREE.Vector3(0, rim.y * ck, 0).applyQuaternion(o.quaternion).add(o.position), n: new THREE.Vector3(0, 1, 0).applyQuaternion(o.quaternion), r: rim.r * ck };
+      rl = rl ?? { c: new THREE.Vector3(), n: new THREE.Vector3(), r: 0 };
+      rl.c.set(0, rim.y * ck, 0).applyQuaternion(o.quaternion).add(o.position); rl.n.set(0, 1, 0).applyQuaternion(o.quaternion); rl.r = rim.r * ck;
       rimLocal.set(kind, rl);
+      // the cup in the hand slides with it
+      if (slide && propOn && propOn === props.get('cup')) { propOn.position.copy(o.position); propOn.quaternion.copy(o.quaternion); }
     }
     root.updateWorldMatrix(true, false);
     const rq = root.getWorldQuaternion(MA.r), cup = T.kind === 'drink';
@@ -1424,6 +1448,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     // the hand that holds the cup ended over his nose. At the lips the face is turned to look a little up (the cup's
     // tip past level then pours into the mouth), eating a little less
     faceUp(bs, rq, cup ? 0.22 : 0.08, at * w * RIG_OPTS.faceUp);
+    if (cup && RIG_OPTS.sipHead) headYaw(bs, rq, RIG_OPTS.sipHead * at * w);
     // what touches the lips, from the wrist, with the hand turned so: the bread's edge past the fingertips, the cup's rim
     const sc = hd.getWorldScale(MA.h).x;
     const off = MA.c.copy(rl.c).multiplyScalar(sc).applyQuaternion(MA.q), n = MA.n.copy(rl.n).applyQuaternion(MA.q);
@@ -1446,7 +1471,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     fp.lerp(goal.sub(g0).multiplyScalar(1 - at * RIG_OPTS.lipsLetGo), 1 - Math.exp(-dt * 18)); goal.copy(g0).add(fp);
     // the wrist's own guard lets go at the lips too: under a big chin (Draxum) the wrist is inside the chest's round shape
     // and its margin, and it held the cup 6 cm off the mouth with nothing touching (the body's surface: 0)
-    armTo(bs, 'R', up, lo, hd, goal, w, dt, undefined, 0, 1 - at * RIG_OPTS.lipsLetGo, ELBOW_MOUTH);
+    const se = cup ? RIG_OPTS.sipElbow : null;
+    const hint: Dir = se ? [ELBOW_MOUTH[0] + (se[0] - ELBOW_MOUTH[0]) * at, ELBOW_MOUTH[1] + (se[1] - ELBOW_MOUTH[1]) * at, ELBOW_MOUTH[2] + (se[2] - ELBOW_MOUTH[2]) * at] : ELBOW_MOUTH;
+    armTo(bs, 'R', up, lo, hd, goal, w, dt, undefined, 0, 1 - at * RIG_OPTS.lipsLetGo, hint);
     // the hand turned to it, by the task's weight, its way round kept from frame to frame
     hd.parent!.getWorldQuaternion(MA.t).invert().multiply(MA.q);
     const dq = HT.d.copy(MA.t).multiply(HT.i.copy(hd.quaternion).invert()), pd = handTurn.R;
@@ -1456,6 +1483,24 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (sn > 1e-6) hd.quaternion.premultiply(HT.d.setFromAxisAngle(HT.ax.set(dq.x / sn, dq.y / sn, dq.z / sn), ang * w));
   }
 
+  const RB = { p: new THREE.Vector3(), s: new THREE.Vector3(), e: new THREE.Vector3(), h: new THREE.Vector3(), b: new THREE.Vector3(), x: new THREE.Vector3(), q: new THREE.Quaternion() };
+  /** Bend the back forward about the waist (spine1, then the chest a share) by as much as brings the shoulder within 0.9 of
+   *  the arm's length of the goal, at most RIG_OPTS.plantBend rad, times w. */
+  function reachBend(bs: Map<string, THREE.Bone>, up: THREE.Bone, lo: THREE.Bone, hd: THREE.Bone, goal: THREE.Vector3, w: number) {
+    const sp = bs.get('spine1'), ch = bs.get('chest'); if (!sp || w <= 0.001) return;
+    const len = up.getWorldPosition(RB.s).distanceTo(lo.getWorldPosition(RB.e)) + RB.e.distanceTo(hd.getWorldPosition(RB.h));
+    const want = 0.9 * len;
+    const a = RB.s.sub(sp.getWorldPosition(RB.p)), b = RB.b.copy(goal).sub(RB.p), la = a.length(), lb = b.length();
+    if (la < 1e-4 || lb < 1e-4 || RB.p.distanceTo(goal) < 1e-4) return;
+    const ax = RB.x.crossVectors(a, b); if (ax.lengthSq() < 1e-10) return; ax.normalize();
+    const phi = Math.acos(clamp(a.dot(b) / (la * lb), -1, 1));
+    const c = (la * la + lb * lb - want * want) / (2 * la * lb);
+    const th = Math.min(RIG_OPTS.plantBend, c >= 1 ? phi : Math.max(0, phi - Math.acos(clamp(c, -1, 1)))) * w;
+    if (th < 1e-4) return;
+    // two thirds at the waist, a third at the chest (one bend at the waist folded him like a hinge)
+    worldRotate(sp, RB.q.setFromAxisAngle(ax, th * 0.67)); sp.updateWorldMatrix(false, true);
+    if (ch) { worldRotate(ch, RB.q.setFromAxisAngle(ax, th * 0.33)); ch.updateWorldMatrix(false, true); }
+  }
   /** The hands go to the task's goal by two-bone IK, blended in and out with the task. */
   function taskArms(bs: Map<string, THREE.Bone>, kind: CrewPose, t: number, dt: number) {
     const T = task!;
@@ -1486,14 +1531,22 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         // 12 cm, and none for a clip with no contact (eating: the hand to the mouth is the clip's)
         // the clip's fingers are kept out of the torso (planting's seed held at the chest put them 3 to 4 cm in), the
         // push eased as a hold's is
+        const pk = T.kind === 'plant', near = tcd.touch < 0 || !T.at || sd !== 'R' ? 0 : 1 - smooth01(Math.max(0, Math.abs(k - tcd.touch) - (pk ? RIG_OPTS.plantHold : 0)) / (pk ? RIG_OPTS.plantWin : 0.18));
+        // planting: the clip kneels and its hand stops at knee height (GPU take tasks9: the middle finger's root 36 to 44
+        // cm over the soil at its lowest); round the touch the back bends forward as far as the hand needs (at most
+        // RIG_OPTS.plantBend, weighted by near squared: by near alone the chest bent onto the seed hand still at the chest,
+        // 2.8 cm in), IK takes the rest (RIG_OPTS.plantReach, not 12 cm) and holds it there a moment (plantHold). Bent 1.2
+        // rad the hand reached the soil (finger root 0.5 to 5 cm) but the body folded with the head under the chest
+        // (renders ~/bs-cap/holds/lk_p); at 0.5 the finger root is 17 / 20 / 21 cm over the soil (Zenvik, Draxum, Nuvexa),
+        // arm in torso 0 / 1.2 / 0 cm. The rest needs a deeper kneel (the hips lower), not more back
+        if (T.kind === 'plant' && near > 0 && RIG_OPTS.plantBend > 0) reachBend(bs, up, lo, hd, goal, near * near * w);
         const f3 = bs.get(`finger3_1${sd}`), cur = hd.getWorldPosition(V2).clone(), fp = fingerPush[sd];
         const fd = f3 ? f3.getWorldPosition(V3).sub(cur) : null, pl = fd ? fd.length() : 0;
         const pg = cur.clone(); if (fd && pl > 1e-4) holdOut(bs, pg, fd.normalize(), pl * 2);
         fp.lerp(pg.sub(cur), 1 - Math.exp(-dt * 18));
         const push = fp.length();
-        const near = tcd.touch < 0 || !T.at || sd !== 'R' ? 0 : 1 - smooth01(Math.abs(k - tcd.touch) / 0.18);
-        const d = near > 0 ? V3.copy(goal).sub(cur) : V3.set(0, 0, 0);
-        if (d.length() > 0.12) d.setLength(0.12);
+        const d = near > 0 ? V3.copy(goal).sub(cur) : V3.set(0, 0, 0), dmax = T.kind === 'plant' ? RIG_OPTS.plantReach : 0.12;
+        if (d.length() > dmax) d.setLength(dmax);
         // the guard's own weight eased in time (taken from the push each frame it switched the arm from the clip's elbow to
         // the solve's in a frame or two: picking up jerked 10.7 cm on Lyrra)
         const pw = taskPushW[sd] += (clamp(push / 0.02, 0, 1) - taskPushW[sd]) * (1 - Math.exp(-dt * 5));
@@ -2034,6 +2087,15 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         hb.worldToLocal(ba.getWorldPosition(tmp)); A.set(tmp.x, tmp.y, tmp.z, (r + 0.012) / sc * on);
         hb.worldToLocal(bb.getWorldPosition(tmp)); Bv.set(tmp.x, tmp.y, tmp.z, 0);
       });
+    }
+    // the ground under the body as a plane in the head's space, 1.5 cm up (hair.ts uGround): the long tails rest on it
+    if (hb && !RIG_OPTS.hairGround) sway.uGround.value.set(0, 0, 0, 0);
+    else if (hb) {
+      root.getWorldPosition(V2); const gy = ground ? ground(V2.x, V2.z) : V2.y;
+      hb.getWorldQuaternion(dropQ).invert();
+      V1.set(0, 1, 0).applyQuaternion(dropQ);
+      hb.worldToLocal(V2.setY(gy + 0.015));
+      sway.uGround.value.set(V1.x, V1.y, V1.z, -V1.dot(V2));
     }
     sway.uTime.value = t;
     sway.uFlutter.value = 0.003 + Math.min(amount, 1) * 0.007;
