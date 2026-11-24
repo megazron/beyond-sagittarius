@@ -197,9 +197,12 @@ export class Vault {
     voice.preload(lines.map((l) => l.key).filter(Boolean));
     this.said = [];
     audio.startDrone();
+    if (this.skipNext) { this.skipNext = false; this.finish(); }
   }
 
-  skip() { if (this.playing) this.finish(); }
+  /** Skip pressed while the scene was still loading under the black: it ends as soon as it starts. */
+  skipNext = false;
+  skip() { if (this.playing) this.finish(); else this.skipNext = true; }
 
   private finish() {
     this.playing = false;
