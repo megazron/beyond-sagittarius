@@ -133,7 +133,7 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
 /** Rig switches for A/B tests (dev/animqa.ts): reach, the chest and collarbone helping a held hand get there. */
 /** lipsLetGo: how much of the fingers' torso guard lets go with the hand at the lips (eating, drinking). */
 /** throwTame: how much of the throw clip's lunge (legs and hips) is taken back towards the stance it began from. */
-export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1 };
+export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9 };
 /** How far a strand's tip falls towards the ground as the head turns from upright, per metre of strand and per unit of
  *  change in the ground's direction seen from the head (hair.ts uDrop; times the strand's sway squared, at most 1.6) */
 const HAIR_DROP = 0.15;
@@ -977,6 +977,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
    *  ran the fingertips 3 to 5 cm into the chest (the wrist alone was guarded). */
   const fingerPush = { L: new THREE.Vector3(), R: new THREE.Vector3() };
   const taskPushW = { L: 0, R: 0 };
+  // a clip task's IK goal, followed with a lag so the hand eases into the contact (RIG_OPTS.contactEase per second)
+  const taskTgt = { L: new THREE.Vector3(), R: new THREE.Vector3() }, taskTgtOn = { L: false, R: false };
   // at most this far per test point: a target given inside the chest with the fingers across it (reach_inside) pushed
   // the goal 10 cm and more sideways, the arm folded through the body (22.7 cm) and the hand jumped 30 cm
   const FINGER_PUSH_MAX = 0.04;
@@ -1468,7 +1470,13 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         // the solve's in a frame or two: picking up jerked 10.7 cm on Lyrra)
         const pw = taskPushW[sd] += (clamp(push / 0.02, 0, 1) - taskPushW[sd]) * (1 - Math.exp(-dt * 5));
         const wt = Math.max(near, pw);
-        if (wt > 0.001) armTo(bs, sd, up, lo, hd, cur.add(d.multiplyScalar(near / wt)).add(fp), w * wt, dt);
+        // the goal is followed, not jumped to: planting ran the elbow forward 5 cm a frame and stopped it dead in one at
+        // the touch (task_plant f36); a first order follow keeps the hand's speed continuous as it settles on the thing
+        // (planting only: jerk 7.1 to 2.1 cm on Draxum, 6.9 to 2.0 on Nuvexa; on picking up it moved the jerk about, mixed)
+        const tg = cur.add(d.multiplyScalar(wt > 0.001 ? near / wt : 0)).add(fp), ce = T.kind === 'plant' ? RIG_OPTS.contactEase : 0;
+        if (!taskTgtOn[sd] || wt <= 0.001 || ce <= 0) { taskTgt[sd].copy(tg); taskTgtOn[sd] = wt > 0.001; }
+        else taskTgt[sd].lerp(tg, 1 - Math.exp(-dt * ce));
+        if (wt > 0.001) armTo(bs, sd, up, lo, hd, taskTgt[sd], w * wt, dt);
         continue;
       }
       if (sd === 'R' && T.prop && (T.kind === 'eat' || (T.kind === 'drink' && T.prop === 'cup'))) { mouthArm(bs, T, k, w, dt, up, lo, hd); continue; }
@@ -1643,9 +1651,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     // a few per cent of the frame)
     if (!CHAR_BUDGET.throttle || camD < (crowd ? 8 : 16)) keepArmsOut(bs);
     if (!CHAR_BUDGET.throttle || camD < (crowd ? 8 : 16)) thighsOut(bs, dt);
-    // Nuvexa's own phone goes to her left hand while her right one holds something else (a stone to throw, a cup)
+    // Nuvexa's own phone goes into her pocket while her right hand holds something else (a stone to throw, a cup)
     const busyR = (p: PropKind | null | undefined) => !!p && p !== 'phone' && p !== 'paper' && p !== 'box';
-    kit?.phoneLeft((busyR(task?.prop) || (!task && busyR(heldProp)) || !!hold?.R) && !hold?.L);
+    kit?.phoneLeft(busyR(task?.prop) || (!task && busyR(heldProp)) || !!hold?.R);
     if (task) taskArms(bs, kind, t, dt);
     else if (kind === 'idle' && !gaze && speak <= 0 && !moving) idleLife(bs, t, dt);
     else { idleLook *= Math.exp(-dt * 3); }

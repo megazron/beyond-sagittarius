@@ -14,6 +14,7 @@ export interface KitInput {
 export interface Kit {
   splint: THREE.Group; footH: number; live: THREE.Object3D[]; update(t: number, amount: number): void;
   /** Nuvexa's own phone to her left hand (true) or back to her right: her right hand takes the stone, the cup, the bread */
+  /** Nuvexa's own phone into her pocket (true) or back into her right hand (false), over a quarter second. */
   phoneLeft(on: boolean): void;
 }
 
@@ -122,7 +123,7 @@ export function addKit(k: KitInput): Kit {
     return { rx: rx * grow, rz: rz * grow, y: y - piv('hips').y, z: z - piv('hips').z };
   };
   let scarfEnds: THREE.Mesh[] = [];
-  let phone: THREE.Object3D | null = null, phoneTo: ((left: boolean) => void) | null = null;
+  let phone: THREE.Object3D | null = null, phoneTo: ((left: boolean) => void) | null = null, phoneStep: ((t: number) => void) | null = null;
   switch (outfit) {
     case 'scientist': {
       if (!custom) { glasses(); earGlow(); }
@@ -204,7 +205,33 @@ export function addKit(k: KitInput): Kit {
       ph.position.copy(seats.R.p); ph.quaternion.copy(seats.R.q);
       add(new THREE.BoxGeometry(0.066, 0.138, 0.001), glowMat(0x8fd8ff, 0.8), ph, 0, 0, 0.005, false);
       ph.name = 'ownPhone'; phone = ph;
-      phoneTo = (left) => { const sd = left ? 'L' : 'R', h = B.get(`hand${sd}`); if (!h || ph.parent === h) return; h.add(ph); ph.position.copy(seats[sd].p); ph.quaternion.copy(seats[sd].q); };
+      // While her right hand holds something else (a stone to throw, a cup) the phone goes into her right front pocket and
+      // comes back out after. It used to jump to the left hand in one frame (GPU take tasksD); now it travels from the
+      // palm to the pocket in a quarter second, sinks into the trousers and is hidden there, and back the same way.
+      const leg = B.get('upperlegR'), handR = B.get('handR')!;
+      if (leg) {
+        const hp = piv('upperlegR'), side = Math.sign(hp.x) || -1;
+        const pocket = local('upperlegR', hp.clone().add(V(side * 0.05, -0.12, 0.085)));
+        // upright in the pocket, its screen to the thigh's outside
+        const pocketQ = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(V(0, 0, side), V(0, -1, 0), V(side, 0, 0)));
+        let want = false, k = 0, lastT = -1;
+        const mHand = new THREE.Matrix4(), mPock = new THREE.Matrix4(), pa = new THREE.Vector3(), pb = new THREE.Vector3(), qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), sc = new THREE.Vector3(), inv = new THREE.Matrix4();
+        phoneTo = (on) => { want = on; };
+        phoneStep = (t) => {
+          const dt = lastT < 0 ? 0 : Math.min(Math.max(t - lastT, 0), 0.1); lastT = t;
+          k = want ? Math.min(1, k + dt / 0.28) : Math.max(0, k - dt / 0.28);
+          ph.visible = k < 0.999;
+          if (k <= 0) { ph.position.copy(seats.R.p); ph.quaternion.copy(seats.R.q); return; }
+          if (!ph.visible) return;
+          handR.updateWorldMatrix(true, false); leg.updateWorldMatrix(true, false);
+          mHand.compose(seats.R.p, seats.R.q, sc.set(1, 1, 1)).premultiply(handR.matrixWorld).decompose(pa, qa, sc);
+          mPock.compose(pocket, pocketQ, sc.set(1, 1, 1)).premultiply(leg.matrixWorld).decompose(pb, qb, sc);
+          const e = k * k * (3 - 2 * k);
+          pa.lerp(pb, e); qa.slerp(qb, e);
+          inv.copy(handR.matrixWorld).invert();
+          mHand.compose(pa, qa, sc).premultiply(inv).decompose(ph.position, ph.quaternion, sc);
+        };
+      }
       if (!custom) for (const s of [-1, 1]) { const r = add(new THREE.TorusGeometry(0.021, 0.0016, 8, 28), metal(0xffd66a, 0.2), head, s * (eye.x + 0.073), eye.y - 0.075, eye.z - 0.075, false); r.rotation.y = Math.PI / 2; }
       break;
     }
@@ -278,6 +305,7 @@ export function addKit(k: KitInput): Kit {
     live: [splint, ...(phone ? [phone] : []), ...(halo ? [halo] : []), ...scarfEnds, ...(tailBones.length ? [tailBones[0].parent!] : [])],
     update(t, amount) {
       if (halo) halo.rotation.z = t * 0.4;
+      phoneStep?.(t);
       tailBones.forEach((b, i) => {
         const q = i / 7;
         const wag = Math.sin(t * 1.9 - q * 3.4) * (0.2 + amount * 0.14);
