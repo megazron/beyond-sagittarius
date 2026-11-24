@@ -136,7 +136,7 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
 /** sipElbow, sipHead: an elbow way at the lips and a turn of the face away from the cup's hand (both off: they cleared the
  *  eyes on one body and not the next). hairGround 0 lets the tails into the ground (A/B). plantBend, plantReach, plantWin,
  *  plantHold: planting's back bend (rad), its IK reach (m), the touch window and the time held at the soil (task k). */
-export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9, sipYaw: -0.5, sipElbow: null as Dir | null, sipHead: 0, cupAlongSip: 1.25, cupFootSip: 0.035, cupPalm: 0.08, cupMax: 1.5, pocketReach: 1, hairGround: 1, plantBend: 0.5, plantReach: 0.6, plantWin: 0.24, plantHold: 0.08 };
+export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9, sipYaw: -0.5, sipElbow: null as Dir | null, sipHead: 0, cupAlongSip: 0.6, cupFootSip: 0.018, cupPalm: 0.08, cupMax: 1.5, pocketReach: 1, hairGround: 1, plantBend: 0.5, plantReach: 0.6, plantWin: 0.24, plantHold: 0.08 };
 /** How far a strand's tip falls towards the ground as the head turns from upright, per metre of strand and per unit of
  *  change in the ground's direction seen from the head (hair.ts uDrop; times the strand's sway squared, at most 1.6) */
 const HAIR_DROP = 0.15;
