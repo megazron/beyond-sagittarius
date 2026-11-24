@@ -55,9 +55,10 @@ export class World {
    * intensity (was 0.55); fill: the sky light's intensity at night (was 0.4); sky/ground: its colours at night; env: the
    * image light at night (was 0.42); exposure: how far the eye opens up at night (was 0.6). The fight's own planet fill (combat.ts, 1.55 at 34 degrees) and the eye stopping
    * down near a fire (0.78) sit on top of these; the story's camp fire light is 3.5. (GPU stills, release fixes: mean
-   * brightness of the frame 12 of 255 with the old values, 26 to 30 with these; 1.05 / 0.62 / 0.55 gave 14, still black)
+   * brightness of the frame 12 of 255 with the old values, 26 to 30 with moon 3, fill 1.4, env 1, exposure +0.9; the exposure
+   * stays +0.6 and the lights carry it, because at +0.9 a white coat by the fight's fire burned out)
    */
-  night = { moon: 3.0, fill: 1.4, sky: new THREE.Color(0x5d6f9c), ground: new THREE.Color(0x1f2a33), env: 1.0, exposure: 0.9 };
+  night = { moon: 3.6, fill: 1.7, sky: new THREE.Color(0x5d6f9c), ground: new THREE.Color(0x1f2a33), env: 1.2, exposure: 0.6 };
   fog: THREE.FogExp2;
   ready = false;
   onCreatureStep: (p: THREE.Vector3) => void = () => {};
