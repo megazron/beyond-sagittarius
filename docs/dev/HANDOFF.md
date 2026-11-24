@@ -1631,3 +1631,10 @@ Why: the release pass found the set pieces reachable only from Pause, Action or 
   canvas (the start banner/toasts sit over (300,150) for seconds) and prints the device and engaged state.
 - GPU plan: ~/bs-cap/combat/mkplan_flow.py (new game, levels 1-6 by the test driver off camera, then the night, fishing
   and the hunt from their stations, on camera); run with `cap3.sh flow1 plan_flow.json ""`.
+- Lessons (combat-flow2): a closed modal keeps its buttons in the page (ui.closeModal only hides it), so a test or a
+  handler that looks for `[data-diff]` / `#cb-retry` must also check `#modal` is not `.hidden`; clicking the stale
+  answer again started the night over each loop. `__bs.step` runs game.update whatever main's state is (it ran the level
+  7 night under the flashback); story fights now also need `game.canFight()` (main.ts: state game, not paused, no modal).
+  cap3.sh's `Q` variable is overwritten by ~/bin/heavy's own `Q` (its queue dir), so its URL ended in
+  `prologue=0/home/gausms/.heavy.q`; use ~/bs-cap/combat/cap4.sh (same, `QS`). The bow-arm play-test check (2.5 cm vs
+  2 cm) fails on main 26f8579 too (the known noisy one).
