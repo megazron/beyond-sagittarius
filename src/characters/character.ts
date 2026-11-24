@@ -219,6 +219,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const acts = new Map<string, { a: THREE.AnimationAction; w: number; target: number; manual: boolean }>();
   let ready: () => void = () => {};
   const whenReady = new Promise<void>((r) => { ready = r; });
+  // and once the light build (when there is one) has loaded too: every mesh it will ever draw is in place
+  let full: () => void = () => {}, lodLoad: Promise<unknown> = Promise.resolve();
+  const whenFull = new Promise<void>((r) => { full = r; });
   let ground: ((x: number, z: number) => number) | null = null;
   const lookAt = { y: 0, x: 0 };
   const morph: Record<string, number> = {};
@@ -453,7 +456,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     scene.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh && o.visible) lodSets[0].push(o as THREE.SkinnedMesh); });
     if (lod === 0 && CHAR_BUDGET.lodFar < Infinity && hasLod1(key)) {
       const skel = lodSets[0][0]?.skeleton;
-      void loadAsset(key, 1).then((as1) => {
+      lodLoad = loadAsset(key, 1).then((as1) => {
         if (!skel || lodSets[0].length === 0) return;
         const s1 = cloneSkinned(as1.scene) as THREE.Group;
         // a crowd body's light build keeps only the shape morphs (build, ears): face and corrective targets are a loop
@@ -507,6 +510,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     prepFade();
     fig.visible = true;
     void texturesReady().then(ready);
+    void Promise.all([lodLoad, texturesReady()]).then(() => full(), () => full());
   };
 
   // the fade near the lens (crowd bodies of the full build: Web, Ultra)
@@ -1214,6 +1218,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     setGround(fn: ((x: number, z: number) => number) | null) { ground = fn; },
     /** Resolves when the skinned body is in place. */
     whenReady,
+    /** Resolves when the skinned body and its light build (if it has one) are both in place. */
+    whenFull,
   };
 }
 

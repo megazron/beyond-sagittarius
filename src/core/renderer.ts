@@ -807,7 +807,7 @@ export class Renderer {
     }
     // a stage's own work that belongs under the black too (Zenvora bakes its far people here)
     if (this.renderPass.scene === scene) return;
-    try { await (scene.userData.prebake as (() => Promise<void>) | undefined)?.(); } catch { /* done in play instead */ }
+    try { await (scene.userData.prebake as ((cam: THREE.Camera) => Promise<void>) | undefined)?.(camera); } catch { /* done in play instead */ }
     const texs = new Set<THREE.Texture>();
     scene.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
@@ -904,6 +904,45 @@ export class Renderer {
       };
       tick();
     });
+  }
+  /**
+   * Draws every mesh under `roots` once, hidden ones too, into one pixel of the target the scene is drawn into, with
+   * the scene's own lights (a spare layer: nothing else is drawn, no shadow pass): their geometry, textures and programs
+   * go to the GPU now instead of the first time each is shown. For pooled bodies (both builds, both hairs): soak_smoke
+   * saw the geometry count climb lap after lap as the pools' bodies were shown for the first time.
+   */
+  async drawOnce(scene: THREE.Scene, cam: THREE.Camera, roots: THREE.Object3D[]) {
+    const r = this.renderer, L = 30, into = this.quality.post && this.renderPass instanceof ScenePass ? this.renderPass.rt : null;
+    // their programs first, linked in the background (the draw would link them one by one on the main thread)
+    { const prevT = r.getRenderTarget(); let done: Promise<unknown>[] = [];
+      try { r.setRenderTarget(into); done = roots.map((o) => r.compileAsync(o, cam, scene)); } catch { /* compiled in the draw */ } finally { r.setRenderTarget(prevT); }
+      await Promise.race([Promise.all(done).catch(() => undefined), new Promise((ok) => setTimeout(ok, 20000))]); }
+    const vis: [THREE.Object3D, boolean][] = [], masks: [THREE.Object3D, number][] = [], culled: THREE.Object3D[] = [];
+    const show = (o: THREE.Object3D) => { vis.push([o, o.visible]); o.visible = true; };
+    for (const root of roots) {
+      for (let p = root.parent; p && p !== scene; p = p.parent) if (!p.visible) show(p);
+      root.traverse((o) => {
+        show(o);
+        if ((o as THREE.Mesh).isMesh) { masks.push([o, o.layers.mask]); o.layers.enable(L); if (o.frustumCulled) { o.frustumCulled = false; culled.push(o); } }
+      });
+    }
+    scene.traverse((o) => { if ((o as THREE.Light).isLight) { masks.push([o, o.layers.mask]); o.layers.enable(L); } });
+    const camMask = cam.layers.mask, prev = r.getRenderTarget(), auto = r.shadowMap.autoUpdate, need = r.shadowMap.needsUpdate;
+    const vp = new THREE.Vector4(), sc = new THREE.Vector4(), held = into ? { vp: into.viewport.clone(), sc: into.scissor.clone(), t: into.scissorTest } : null;
+    const scrT = r.getScissorTest(); r.getViewport(vp); r.getScissor(sc);
+    cam.layers.set(L); r.shadowMap.autoUpdate = false; r.shadowMap.needsUpdate = false;
+    try {
+      if (into) { into.viewport.set(0, 0, 1, 1); into.scissor.set(0, 0, 1, 1); into.scissorTest = true; r.setRenderTarget(into); }
+      else { r.setRenderTarget(null); r.setViewport(0, 0, 1, 1); r.setScissor(0, 0, 1, 1); r.setScissorTest(true); }
+      r.render(scene, cam);
+    } catch { /* uploaded on first draw instead */ } finally {
+      if (held && into) { into.viewport.copy(held.vp); into.scissor.copy(held.sc); into.scissorTest = held.t; }
+      r.setRenderTarget(prev); r.setViewport(vp); r.setScissor(sc); r.setScissorTest(scrT);
+      cam.layers.mask = camMask; r.shadowMap.autoUpdate = auto; r.shadowMap.needsUpdate = need;
+      for (const [o, m] of masks) o.layers.mask = m;
+      for (const o of culled) o.frustumCulled = true;
+      for (let i = vis.length - 1; i >= 0; i--) vis[i][0].visible = vis[i][1];
+    }
   }
   warm(scene: THREE.Scene, cam: THREE.PerspectiveCamera, ao: boolean) {
     this.setScene(scene, cam, ao);
