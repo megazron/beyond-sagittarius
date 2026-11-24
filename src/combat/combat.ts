@@ -1063,6 +1063,14 @@ export class Combat {
     const eng = this.engaged, w = WEAPONS[p.weapon], I = this.I;
     this.hud.show(eng);
     this.teachWeapon(dt, eng ? p.weapon : 'fists');
+    // the story's own spear (story.ts heldSpear, on the right hand) is hidden while the fight draws a spear itself: he
+    // held two shafts crossed in front of him (GPU take flow3, the fishing). The life branch's body.ts also carries it
+    // on his back for other weapons; this only hides, so the two agree.
+    {
+      const sp = P.model.handR.getObjectByName('heldSpear'), same = eng && (p.weapon === 'spear' || p.weapon === 'hafted');
+      if (sp && same && sp.visible) { sp.visible = false; this.storySpearHidden = true; }
+      else if (sp && !same && this.storySpearHidden) { sp.visible = true; this.storySpearHidden = false; }
+    }
     this.hud.showTouch(eng && D.input.device === 'touch' && D.free(), { aim: !!w.proj && !w.ranged, alt: !!w.proj && !w.ranged && p.weapon !== 'rock', trap: !!run || p.weapon !== 'fists', block: true });
     if (!eng) { this.hud.injuries(p.injuries.map((i) => ({ id: i.id, bad: !!i.infected }))); return; }
     const hotE = I.aim && sim.enemies.some((e) => !e.dead && !e.gone && Math.hypot(e.x - I.ax, e.z - I.az) < e.def.radius + 0.4);
@@ -1131,6 +1139,7 @@ export class Combat {
   // ---------------- the first time a weapon is in the hand ----------------
   /** The weapon whose controls are on the screen now, for how long, and for which device they were drawn. */
   private taught: { w: WeaponId; t: number; dev: string } | null = null;
+  private storySpearHidden = false;
   private teachWeapon(dt: number, w: WeaponId) {
     const c = this.cs, dev = this.d.input.device, open = this.d.ui.modalOpen() || this.tensionUi.open;
     if (w !== 'fists' && !c.hints.includes(`w.${w}`) && !open && (!this.taught || this.taught.w !== w)) {

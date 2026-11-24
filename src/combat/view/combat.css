@@ -125,3 +125,6 @@ body.cb-encounter #tutorial { display: none !important; }
 #cb-hud .teach .k .tb svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 #cb-hud .teach i { display: block; font-style: normal; opacity: .8; font-size: 12.5px; margin-top: 4px; }
 @media (max-height: 460px) { #cb-hud .teach { top: 14%; font-size: 12.5px; max-width: min(40vw, 300px); } }
+/* the difficulty question and the lost-fight card: one choice per line, its note under its name */
+.cb-ask .actions, .cb-lost .actions { display: grid; gap: 8px; justify-items: stretch; max-width: 420px; margin: 12px auto 6px; }
+.cb-ask .btn small { display: block; opacity: .75; font-weight: 400; font-size: .82em; margin-top: 2px; }
