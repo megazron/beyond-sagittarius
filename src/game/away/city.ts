@@ -1811,9 +1811,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // (Web, Ultra: two threes at the gate, not five: with the gate's own throng they were more people in view than bodies, and
   // the rest stood there as flat cards as you walked up)
   // (p29: fewer near the walking routes, the owner's "too crowded": with more people in view than bodies the rest were
-  // flat cards up to you. Web, Ultra: three, not six (none at the gate or the queue's end of the crowd); phones: one,
-  // not three (none in the bazaar or at the gate, where the townsfolk took all eleven bodies))
-  const groups: [number, number][] = rich ? [[6.6, 38], [6.4, -8], [-6.6, -36]] : [[-6.6, -36]]; // (none at the gate: perf_gate's Web gate went over 1.3 M triangles with one there, p29)
+  // flat cards up to you. Web, Ultra: three, not six (none at the gate or the queue's end of the crowd); phones: none,
+  // not three (the townsfolk took all eleven bodies in the bazaar and at the gate))
+  const groups: [number, number][] = rich ? [[6.6, 38], [6.4, -8], [-6.6, -36]] : []; // (phones: none; the last, at the tram square, left 4 flat cards there in p29f) // (none at the gate: perf_gate's Web gate went over 1.3 M triangles with one there, p29)
   // no stock emotes on a loop: they stand easy, look at whoever in the three is talking, and the talker's mouth moves
   const chats: { members: CityPerson[]; next: number; who: number }[] = [];
   groups.forEach(([x, z], gi) => {
