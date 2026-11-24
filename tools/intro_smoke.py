@@ -46,9 +46,12 @@ with sync_playwright() as pw:
     script = page.evaluate('__bs.vaultScript') or []
     print(f'narrator opened after {time.time() - t_new:.1f}s; {len(script)} lines', flush=True)
     samples, t0 = [], time.time()
-    while page.evaluate("window.__bs.state === 'narrator'") and time.time() - t0 < 400:
+    # the scene itself: from the black before it starts until its last beat (after it the state stays 'narrator' under the
+    # title card and the city's loading, where a screenshot can wait out a long build on software GL)
+    while page.evaluate("window.__bs.state === 'narrator' && (window.__bs.vault.playing || window.__bs.vault.line < 0)") and time.time() - t0 < 400:
         st = page.evaluate("({ line: __bs.vault.line, playing: __bs.vault.playing, fade: +(document.getElementById('fade').style.opacity || 0) })")
-        jpg = page.screenshot(type='jpeg', quality=60, timeout=60000)
+        try: jpg = page.screenshot(type='jpeg', quality=60, timeout=60000)
+        except Exception: continue
         grid = page.evaluate(GRID, base64.b64encode(jpg).decode())
         samples.append({'t': round(time.time() - t0, 1), 'line': st['line'] if st['playing'] else -1, 'mean': sum(grid) / len(grid), 'grid': grid, 'fade': st['fade']})
         if shots and len(samples) % 4 == 1: (shots / f'intro_{len(samples):03d}.jpg').write_bytes(jpg)
