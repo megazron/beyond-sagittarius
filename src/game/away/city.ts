@@ -81,6 +81,8 @@ const FOLK_VIEW = new URLSearchParams(globalThis.location?.search ?? '').get('fo
 const BERTH = Number(new URLSearchParams(globalThis.location?.search ?? '').get('berth') ?? 2.0) || 2.0;
 /** How near the lens (metres ahead of the camera) a walker on its line steps aside at up to 1.1 m/s, not 0.7 (p32). */
 const LENS_RUSH = 4.5;
+/** ?steallook=0: a card in view with no free body of its look stays a card (before p32). */
+const STEAL_LOOK = typeof location === 'undefined' || new URLSearchParams(location.search).get('steallook') !== '0';
 /** Townsfolk out of the (wide) view beyond 12 m are cards, not bodies (?outcard=0: off). */
 const OUT_CARD = new URLSearchParams(globalThis.location?.search ?? '').get('outcard') !== '0';
 const TURN_CLEAR = new URLSearchParams(globalThis.location?.search ?? '').get('turnclear') !== '0';
@@ -1569,6 +1571,14 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       // the body that walked them last, if it is free (taken again after a cut, they are the same body), else one of their look
       let b = crowdPool.find((x) => x.card < 0 && x.last === i && x.look === q.who % NLOOK) ?? crowdPool.find((x) => x.card < 0 && x.look === q.who % NLOOK); // (the last one only if the card still wears its look: LOOK_SPREAD may have changed it since)
       if (!b && !inView(q.x, FLOOR, q.z)) { b = crowdPool.find((x) => x.card < 0); if (b) q.who = b.look; }
+      // in view with no body of their look free: the body of that look walking someone further off and out of the wide
+      // view comes to them (that one goes on as a card, unseen). Without it a card coming into view at 27-36 m stayed a
+      // card, and within SWAP_FAR it is held as one up to you (p31/ped_a1_mobile: phones' flat cards at 12 m)
+      if (!b && STEAL_LOOK && inView(q.x, FLOOR, q.z)) {
+        const L = q.who % NLOOK, dq = Math.hypot(q.x - c.x, q.z - c.z);
+        b = crowdPool.find((x) => { if (x.card < 0 || x.look !== L) return false; const o = cards[x.card], ox = o.x + x.dx, d = Math.hypot(ox - c.x, o.z - c.z); return d > Math.max(12, dq + 4) && Math.hypot(ox - ux, o.z - uz) > CONTACT_OUT && !inViewWide(ox, o.z); });
+        if (b) { cards[b.card].x += b.dx; taken[b.card] = 0; byCard.delete(b.card); b.card = -1; }
+      }
       if (!b) continue;
       b.card = i; b.last = i; b.dx = 0; b.lastX = NaN; b.yaw = q.v > 0 ? 0 : Math.PI; byCard.set(i, b); taken[i] = 1; b.fig.root.visible = true;
     }
