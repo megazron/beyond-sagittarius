@@ -32,7 +32,16 @@ SPOTS = {'flat': (12.4, 68.4, 3.14), 'bazaar': (6.0, 50.0, 3.14), 'crowd': (-5.5
 # 20 / 24, the painted crowd halved) and the budget with them, the player and the frozen few over the cap included.
 # Mobile draws 120 -> 145 with them: the crowd spot drew 139 on CI with the new caps (each body is 2-3 draws). A cost of
 # the owner's priority (no pedestrian popping); what it does on a real phone is not measured.
-BUDGET = {'mobile': (145, 760_000, 14), 'web': (580, 1_300_000, 34), 'ultra': (1420, 4_200_000, 36)}
+# Web triangles 1.3 M -> 1.45 M (2026-11-24, perf agent 30): the gate spot drew 1 397 602 on ped29/ped30 with FEWER
+# people (24 bodies vs main's 25, 36 painted cards vs 64), 1 137 612 on main. Per body (p30/who.py, main 26f8579 vs
+# dist-p29i): the difference is the build, not the head count. A body takes its build from where it was last drawn
+# (character.ts pickLod: camD is set only when it is drawn) and keeps it in view within SWAP_FAR; on Web the crowd's
+# near build is meant out to 32 m (city.ts crowdLodFar, dfd45fe). On main the six of the gate's threes were last drawn
+# at the start, 120 m off, and showed at 7 to 10 m in their far build (18 to 25 k triangles, hair 2 to 5 k); on this
+# branch the threes are gone (fewer near the routes) and the bodies there are pooled ones never drawn before, in the
+# near build (40 to 50 k, hair 16 to 22 k) the design gives anyone within 27 m. Walked up to, main's would be the near
+# build too. So the budget follows the near build at the gate, about 4 % over this count; not a licence for more people.
+BUDGET = {'mobile': (145, 760_000, 14), 'web': (580, 1_450_000, 34), 'ultra': (1420, 4_200_000, 36)}
 
 class H(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *x, **k): pass

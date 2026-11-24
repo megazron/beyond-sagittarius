@@ -1674,18 +1674,6 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         for (const u of [(mt as THREE.ShaderMaterial).uniforms, (mt.userData as { u?: Record<string, { value?: unknown }> }).u]) if (u) for (const k in u) up(u[k]?.value);
       }
     });
-    // and every pooled body and townsperson starts in its far build, as one handed back from far off is: a body takes its build from
-    // where it was last drawn (character.ts pickLod, camD), and in view within SWAP_FAR it keeps it. A pooled body never
-    // drawn yet had the near build (camD 0) wherever it was first handed out: at the Web gate after a teleport, nine
-    // bodies 8 to 34 m off with the near build's hair (16 to 22 k triangles each, the far build's 2 to 5 k), perf_gate
-    // 1.40 M triangles where main, whose pool had been round the street already, drew them all far, p30
-    const far = new THREE.PerspectiveCamera(); far.position.set(0, 1e4, 0); far.updateMatrixWorld();
-    // (the townsfolk too: they were the nine, never drawn before the teleport, p30)
-    for (const f of [...people.map((q) => q.fig).filter((g) => crowd.has(g)), ...crowdPool.map((b) => b.fig), ...dpool.map((b) => b.fig)]) {
-      let hook: THREE.Object3D | null = null; f.root.updateMatrixWorld(true);
-      f.root.traverse((o) => { if (!hook && (o as THREE.Mesh).isMesh && o.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender) hook = o; });
-      const h = hook as THREE.Object3D | null; if (h) h.onBeforeRender(r, scene, far, (h as THREE.Mesh).geometry, (h as THREE.Mesh).material as THREE.Material, null as unknown as THREE.Group);
-    }
   }).catch(() => undefined);
   if (tier === 0) void Promise.all([...propsBuilt, ...people.map((q) => q.fig.whenReady), ...crowdPool.map((b) => b.fig.whenReady), ...dpool.map((b) => b.fig.whenReady)]).then(() => releaseCrew(scene)).catch(() => undefined);
   const dnear: [number, number][] = [], pk: [number, number][] = [];
