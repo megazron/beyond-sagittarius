@@ -133,7 +133,7 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
 /** Rig switches for A/B tests (dev/animqa.ts): reach, the chest and collarbone helping a held hand get there. */
 /** lipsLetGo: how much of the fingers' torso guard lets go with the hand at the lips (eating, drinking). */
 /** throwTame: how much of the throw clip's lunge (legs and hips) is taken back towards the stance it began from. */
-export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9, sipYaw: -0.5, cupPalm: 0.08, cupMax: 1.5 };
+export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9, sipYaw: -0.5, cupPalm: 0.08, cupMax: 1.5, pocketReach: 1 };
 /** How far a strand's tip falls towards the ground as the head turns from upright, per metre of strand and per unit of
  *  change in the ground's direction seen from the head (hair.ts uDrop; times the strand's sway squared, at most 1.6) */
 const HAIR_DROP = 0.15;
@@ -1677,16 +1677,17 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     kit?.phoneLeft(busyR(task?.prop) || (handTask && task!.prop !== 'phone') || (!task && busyR(heldProp)) || !!hold?.R);
     // the right hand down to her pocket and back while the phone goes in or comes out (kit.ts pocketReach)
     // (standing still only: seated or kneeling the hand is by the pocket already, and the reach down put it into her thigh and
-    // belly, anim_qa meshIn 2.9 to 3.5 cm; a task takes the hand over from 0.15 s, reach_across meshIn 5.9 cm otherwise)
+    // belly, anim_qa meshIn 2.9 to 3.5 cm; a task takes the hand over from 0.15 s; none while a hold has the hand: the
+    // reach to the hold and down to the pocket together put her fingers 4.5 cm into her body, reach_across)
     const pr = kit?.pocketReach();
-    if (!pr) pocketGate = moving || (hold?.R && holdW.R > 0.01) ? 0 : 1;
-    if (pr && !(limbs?.ownArms ?? armOwner)) {
+    if (!pr) pocketGate = moving || hold?.R ? 0 : 1;
+    if (pr && RIG_OPTS.pocketReach && !(limbs?.ownArms ?? armOwner)) {
       const lA = bs.get('upperlegR')!.getWorldPosition(V5), lB = bs.get('lowerlegR')!.getWorldPosition(V1);
       const ax = V2.copy(lB).sub(lA), al = ax.length(), upright = clamp((-ax.y / Math.max(al, 1e-5) - 0.8) / 0.15, 0, 1);
       const taskW = task && (task.hands === 'R' || task.hands === 'both') ? smooth01((task.t - 0.15) / 0.2) : 0;
       // (nor walking or with a hold on the hand: walking with the leaf cup the reach jerked the hand, anim_qa 3.7 cm, and
       // running with the spear it took the spear's hand into her body, 6.8 cm; there the phone goes in at the hand)
-      pocketGate += ((moving || (hold?.R && holdW.R > 0.01) ? 0 : 1) - pocketGate) * (1 - Math.exp(-dt * 10));
+      pocketGate += ((moving || hold?.R ? 0 : 1) - pocketGate) * (1 - Math.exp(-dt * 10));
       const w = pr.w * upright * (1 - taskW) * pocketGate;
       if (w > 0.005) {
         // the wrist a hand's length above the pocket and out from the thigh's line by a few centimetres
