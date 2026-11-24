@@ -54,6 +54,7 @@ export class Vault {
   private lines: VaultLine[] = [];
   private i = -1;
   private left = 0;
+  private late = 0;
   private shot: VaultShot = 'wide';
   private shotT = 0;
   private shotLen = 1;
@@ -167,7 +168,7 @@ export class Vault {
     s.add(new THREE.HemisphereLight(0x5a668f, 0x241410, 1.9));
     // soft front fill so his face and coat read even in the wide shots
     const fill = new THREE.SpotLight(0xffe9d2, 135, 14, 0.34, 0.9); fill.position.set(0.9, 3.0, 4.6); fill.target.position.set(0, 2.1, 0); s.add(fill, fill.target);
-    this.halo.position.set(0, 2.5, -0.2); s.add(this.halo);
+    this.halo.position.set(0, 2.4, -0.7); s.add(this.halo);
 
     this.host = createCharacter('megazron', this.detail);
     s.add(this.host.root);
@@ -192,7 +193,8 @@ export class Vault {
     this.i = -1; this.left = 0;
     this.playing = true;
     this.pose = 'idle';
-    voice.preload(lines.map((l) => l.key));
+    voice.preload(lines.map((l) => l.key).filter(Boolean));
+    this.said = [];
     audio.startDrone();
   }
 
@@ -208,15 +210,20 @@ export class Vault {
   }
 
   get lineIndex() { return this.i; }
+  /** The scene's lines, in order (tests). */
+  get keys() { return this.lines.map((l) => l.key).filter(Boolean); }
+  /** Lines said in this scene so far, in order (tests). */
+  said: string[] = [];
 
   private next() {
     this.i++;
     if (this.i >= this.lines.length) { this.finish(); return; }
     const l = this.lines[this.i];
-    this.subtitle(l.key, 'mz.name');
-    const dur = voice.duration(l.key) ?? Math.max(2.2, t(l.key).length * 0.07);
-    this.host.say(dur);
+    // a beat with no line: a held shot (the room before he speaks, the quill after)
+    const dur = !l.key ? 0 : voice.duration(l.key) ?? Math.max(2.2, t(l.key).length * 0.07);
+    if (l.key) { this.subtitle(l.key, 'mz.name'); this.host.say(dur); this.said.push(l.key); } else this.subtitle(null);
     this.left = dur + (l.after ?? 0.5);
+    this.late = 0;
     this.pose = l.pose ?? 'idle';
     this.shot = l.shot ?? 'push';
     this.shotT = 0;
@@ -229,7 +236,9 @@ export class Vault {
     const t0 = this.time;
     if (this.playing) {
       this.left -= dt;
-      if (this.left <= 0) { this.next(); if (!this.playing) return; }
+      // the next line waits for this one to be said to its end (a take that loaded late, a slow frame), up to 4 s more
+      if (this.left <= 0 && this.i >= 0 && voice.speaking() && this.late < 4) this.late += dt;
+      else if (this.left <= 0) { this.next(); if (!this.playing) return; }
     }
     const sh = SHOTS[this.shot];
     const k = smoothstep(0, 1, Math.min(1, this.shotT / this.shotLen));
@@ -245,7 +254,7 @@ export class Vault {
     // looking down at it buried his chin in his collar)
     this.host.setLookTarget(this.pose === 'write' ? null : this.shot === 'orrery' ? this.orrery.position : this.camera.position);
     const lvl = voice.level();
-    this.halo.intensity = 0.5 + lvl * 2.5;
+    this.halo.intensity = 0.25 + lvl * 0.6;
     this.key.intensity = 7 + Math.sin(t0 * 7.3) * 0.12 + Math.sin(t0 * 3.1) * 0.2;
     this.page.emissiveIntensity = 0.03 + lvl * 0.05;
     this.quill.position.x = 0.28 + Math.sin(t0 * 2.6) * 0.14;
@@ -263,12 +272,14 @@ export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', s: { ateR
   // what the record earned: the Ledger, read back
   const said = (s.comments ?? []).map((key, i): VaultLine => ({ key, shot: i % 2 ? 'profile' : 'hands', pose: i % 2 ? 'present' : 'write' }));
   switch (id) {
+    // the cold open: the room in silence, who he is, the hook over the black hole (the dark he means), the Ledger he
+    // means by "in here", and the quill still writing as it fades
     case 'intro': return [
-      { key: 'mz.intro.1', shot: 'wide', pose: 'stand' },
-      { key: 'mz.intro.2', shot: 'push', pose: 'present' },
-      { key: 'mz.intro.3', shot: 'orrery', pose: 'point' },
-      { key: 'mz.intro.4', shot: 'hands', pose: 'write' },
-      { key: 'mz.intro.5', shot: 'close', pose: 'idle' },
+      { key: '', shot: 'wide', pose: 'stand', after: 1.6 },
+      { key: 'mz.intro.1', shot: 'push', pose: 'present', after: 0.6 },
+      { key: 'mz.intro.2', shot: 'window', pose: 'idle', after: 0.7 },
+      { key: 'mz.intro.3', shot: 'hands', pose: 'write', after: 0.4 },
+      { key: '', shot: 'hands', pose: 'write', after: 1.2 },
     ];
     case 'l3': return [
       { key: 'mz.l3.1', shot: 'wide', pose: 'stand' },

@@ -208,7 +208,9 @@ def main():
         page.click("#nm-ok")
         # ---- MegaZroN opens the game: skippable ----
         page.wait_for_function("window.__bs.state === 'narrator' && window.__bs.vault.playing", timeout=20000)
-        time.sleep(4)
+        # the cold open starts on a silent beat on the room: wait for his first line (software GL runs the scene slowly)
+        try: page.wait_for_function("window.__bs.vault.said.length > 0", timeout=60000)
+        except Exception: pass
         if ev("__bs.vault.line") < 0:
             failures.append("narrator scene did not start speaking")
         if not ev("__bs.voiceDuration('mz.intro.1')"):

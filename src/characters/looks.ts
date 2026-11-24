@@ -95,7 +95,7 @@ export const LOOKS: Record<CrewId, Look> = {
       marks: (c, e) => {
         for (let i = 0; i < 60; i++) { const a = (i * 2.399) % 6.283, r = 0.25 + ((i * 37) % 70) / 100; for (const g of [c, e]) { g.fillStyle = '#d8dcff'; g.beginPath(); g.arc(fx(Math.cos(a) * r), fy(Math.sin(a) * r * 1.1), 0.9 + (i % 3) * 0.5, 0, 7); g.fill(); } }
       } },
-    hair: { root: 0x5f6bb4, mid: 0xc4c7e4, tip: 0xf2ecd2, shine: 0x70708a },
+    hair: { root: 0x4a5490, mid: 0x9a9dc2, tip: 0xcfc8b6, shine: 0x58586e },
     glow: 0xd8dcff, marks: 'dots',
   },
   // Sirelle-human, Venus cloud cities: cobalt skin, gold stars, little antennae.
