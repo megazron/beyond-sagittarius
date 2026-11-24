@@ -544,6 +544,7 @@ export class FightBody {
   /** After the body is posed this frame. */
   late(model: Character, dt: number, t: number) {
     this.ranged.late(model, dt, t);
+    this.storySpear(model);
     const id = this.heldId;
     if (!RIG_ON || !this.held || !id || !MELEE_GEAR.includes(id) || !this.bonesM) return;
     this.hdR = this.hdL = null;
@@ -579,6 +580,48 @@ export class FightBody {
     }
     this.prevL = this.solvedL;
     void dt; void t;
+  }
+  /**
+   * The story's own spear (story.ts heldSpear, on the right hand at a set angle) while this rig has something else in
+   * the hands: the same spear drawn by the fight (the spear, the hafted spear) hides it; any other weapon (a torch, a
+   * club, the bow) puts it across his back, from over the right shoulder down to the left hip, a strap's width out from
+   * the coat. Left on the hand, its 1.9 m shaft at the hand's angle crossed his back while his hands were in front, and
+   * with the fight's spear drawn he held two shafts crossed in front of him (GPU take e169v8, the night).
+   */
+  private spearMine = false; private spearBack = false;
+  private spearM = { m: new THREE.Matrix4(), x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), p: new THREE.Vector3(), q: new THREE.Quaternion(), s: new THREE.Vector3() };
+  private storySpear(model: Character) {
+    const sp = model.handR.getObjectByName('heldSpear');
+    if (!sp) return;
+    const id = this.heldId, ranged = this.ranged.mode !== 'none';
+    const busy = ranged || (!!id && id !== 'fists' && !!this.held);
+    const same = !ranged && (id === 'spear' || id === 'hafted');
+    if (busy && same) { if (sp.visible) { sp.visible = false; this.spearMine = true; } }
+    else if (this.spearMine) { sp.visible = true; this.spearMine = false; }
+    const back = busy && !same && sp.visible;
+    if (!back) {
+      // back in the hand as story.ts holds it
+      if (this.spearBack) { sp.position.set(0, -0.06, 0.01); sp.rotation.set(1.15, 0, 0); sp.scale.set(1, 1, 1); this.spearBack = false; }
+      return;
+    }
+    const M = this.spearM, caps = model.torsoCapsules();
+    if (!caps) return;
+    // the back's middle: the chest's segment, a strap and the shaft's radius out behind its back surface
+    const c = caps[1], top = caps[2];
+    M.y.copy(top.b).sub(caps[0].a).normalize(); // up the spine (root space)
+    M.z.set(0, 0, 1).addScaledVector(M.y, -M.y.z).normalize(); // the way the chest faces
+    M.x.crossVectors(M.y, M.z).normalize(); // his left
+    M.p.copy(c.b).addScaledVector(M.z, -(c.rb + 0.045));
+    // the shaft: point up over the right shoulder, butt down by the left hip
+    const d = M.s.copy(M.y).addScaledVector(M.x, -0.5).normalize();
+    M.p.addScaledVector(d, 0.12);
+    M.x.crossVectors(d, M.z).normalize();
+    M.m.makeBasis(M.x, d, M.z).setPosition(M.p);
+    M.m.premultiply(model.root.matrixWorld);
+    model.handR.updateWorldMatrix(true, false);
+    M.m.premultiply(new THREE.Matrix4().copy(model.handR.matrixWorld).invert());
+    M.m.decompose(sp.position, sp.quaternion, sp.scale);
+    this.spearBack = true;
   }
   /** The arms, solved again on the bones as the character posed them this frame (its clip, bend and turn moved the
    * shoulders since the solve), and set on the bones directly: the right hand lands on the grip, the left on the shaft
