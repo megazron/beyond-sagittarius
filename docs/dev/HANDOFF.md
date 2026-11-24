@@ -1612,3 +1612,47 @@ Owns: mirrored text, touch hints, night readability, fire base, the Android buil
   locally (0 failed on my build); never seen on other branches. I could not find a cause in my input change (a finger
   anywhere now switches to touch, which should only make it pass more). Combat agent: worth a look at that check's
   timing (0.5 s after the tap under SwiftShader).
+
+## 2026-11-24 perf agent 29 (worktree ~/bs-perf, branch ped29; GPU scripts and results ~/bs-assets/gpu/p29)
+- DECISION applied (coordinator, from the owner's "too crowded"): fewer people near the walking routes, not more bodies.
+  citydense painted crowd 64/22 -> 36/12 (Web+Ultra / phones), gate throng 8/4 -> 4/2; story walkers 14/6 -> 10/4;
+  threes 6/3 -> 4/1 (Web keeps one at the gate, phones only the tram-square one); phone side streets 3 a side (6);
+  phones' queue is one (queue2 not built on phones).
+- WHO HELD THE BODIES (new diag in pedProbe: `folk` = townsfolk drawn as bodies in view within 34 m, `cut`, `view`):
+  p29a Mobile gate: used 11 with only kid1/kid2 in view, so the bodies sat with townsfolk out of the view and the
+  painted crowd got none. Now townsfolk out of the view beyond 14 m are cards (OUT_CARD, ?outcard=0 off).
+- SLIDES: the crowd bodies' sideways speed is capped as a whole (the card's lane easing at 0.45 m/s plus the body's own
+  step aside made 0.8 m/s while facing ahead); stood waiting or walking under 0.3 m/s (the gate's throng never turned
+  into a step) 0.35 m/s; walking, at most 0.75 x their pace. Story walkers face the way they actually moved (stood,
+  the forward speed in the yaw turned them half sideways). A crowd body's step aside never takes it within 0.5 m of
+  anyone (asideBlocked). District walkers in view get bodies first (as walkCrowd).
+- LENS (Mobile crowd_walk_through ~4.5 s, p28 frames 284-292): she passed beside the camera inside the 1.7 m a phone
+  hides a body within; walkers now pass you and the low camera 2 m off (BERTH, ?berth=1.7 the old).
+- CAMERA SNAP (pedglitch now keeps the drawn camera's last 6 frames with each teleport sample): p29a Web bazaar
+  t 60.75 the camera moved 1.2 m and turned 37 deg in ONE frame while you moved 7 cm: keepOff's instant push off a
+  body. player.ts now eases the push (rate 14/s); the thinning moves a card only if unseen this frame and the last.
+  The p28 chai_tram burst (9 cards 48-88 m) did not recur in p29a; the same mechanism is the likely cause (not proven).
+- NE WALL (task 4): pickProbe(ndcX, ndcY) hook in main.ts. At 8 s of mobile_ne_street_far (you 264.8, 220.4; camera
+  268.39, 2.72, 223.95) the speckled panel is a merged static mesh (4236 triangles, MeshStandardMaterial white) in the
+  plane z = 220 at x 260.5-262, 8 m off; the next surface behind is 0.6 m further (the face x = 260 of a 182806-triangle
+  merged block).
+- RELAY TO THE CHARACTER AGENT (their files; I did not touch them):
+  1. bodymerge.ts / character.ts mergeCrowd: a crowd body draws 3 times a frame (p28 draws_a, Mobile crowd, 6 bodies
+     over 2 frames: skin_body 12, `kit` skinned 16, hair `Mesh<head<neck` 16). Wanted: fold the rigid kit+hair mesh
+     (character.ts mergeRigid's output, and the head hair) into mergeBodyGeometry as two more parts (aPart 3 kit, 4
+     hair): kit keeps its skinIndex/skinWeight; hair gets skinIndex = the head bone's index, weight 1, positions
+     pre-multiplied by (head bone bind inverse x hair.matrixWorld at bind); bodyMaterial samples uKitMap / uHairMap and
+     their roughness/metalness for parts 3 and 4 (hair with HAIR_CARDS: discard below its alphaTest in the part-4 branch).
+     Phones only first (tier 0, crowd bodies). Expected: 3 -> 1 draw a body; at the gate (14 bodies) 156 -> ~128 draws a
+     frame, and the per-draw uniform uploads (setValue/upload 8-11% of the 4x proxy CPU profile) drop with them.
+  2. character.ts animate, foot IK (line ~1081): `root.updateWorldMatrix(true, true)` updates every bone, the kit and
+     the hair of every posed body each frame, and the render's own matrix pass does it again (updateWorldMatrix self
+     309 ms of 6.9 s in the p27b m_crowd profile, plus most of multiplyMatrices' 254 ms). The feet only need their own
+     chain: getWorldPosition(foot) already updates foot <- hips <- root (updateWorldMatrix(true, false)), so the line
+     can go; at ~1113 replace `fig.updateWorldMatrix(true, true)` with hipsB.updateWorldMatrix(true, false) and each
+     upperleg.updateWorldMatrix(false, true) (already done per leg after solveLeg). And skip foot IK for crowd bodies
+     more than ~10 m from the camera (camD). The same pattern at ~641/713/825 (corrective shapes `en`, tasks): 72+31 ms.
+  3. Memory (p28 census_e, Mobile, in the city: 726 MB GPU estimate): the city player body's 2048 map + normal (45 MB;
+     1024 on phones saves ~34 MB); morph textures RGBA32F 16384x2 x51 (26.7 MB, the player's 51 shapes) and x13 / x11
+     (13.6 + 5.8 MB, crowd looks): bake the constant build/body shapes into the positions at creation and drop those
+     targets (they never change in play), keep only face shapes; on phones drop the player's correctives as the crowd's.

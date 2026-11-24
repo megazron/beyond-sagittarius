@@ -79,7 +79,7 @@ const LOOK_SPREAD = new URLSearchParams(globalThis.location?.search ?? '').get('
 const FOLK_VIEW = new URLSearchParams(globalThis.location?.search ?? '').get('folkview') !== '0';
 /** How far aside walkers pass you and the low camera behind you (was 1.7 and 1.2 m; ?berth=1.7 the old). */
 const BERTH = Number(new URLSearchParams(globalThis.location?.search ?? '').get('berth') ?? 2.0) || 2.0;
-/** Townsfolk out of the view beyond 14 m are cards, not bodies (?outcard=0: off). */
+/** Townsfolk out of the view beyond 28 m are cards, not bodies (?outcard=0: off). */
 const OUT_CARD = new URLSearchParams(globalThis.location?.search ?? '').get('outcard') !== '0';
 const TURN_CLEAR = new URLSearchParams(globalThis.location?.search ?? '').get('turnclear') !== '0';
 const SWAP_FREE = typeof location !== 'undefined' && new URLSearchParams(location.search).get('swapfree') === '1';
@@ -1543,7 +1543,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       // come within SWAP_FAR), then the rest
       // (a holder keeps its place out of view too: letting it go 10 m later than one in view churned bodies at the view's
       // edge, and the detector saw a few change look there, p28c)
-      const dk = d < 8 || mine || inView(cards[i].x, FLOOR, cards[i].z) ? d : d + 30;
+      const dk = d < 8 || mine || inViewWide(cards[i].x, cards[i].z) ? d : d + 30; // (the wide view, 6 m of margin: a turning camera finds them bodies already, p29c's bazaar about-turn)
       near.push([dk - (mine && CONTACT > 0 ? 2 : 0) - (pin ? 1000 : 0), i]);
     }
     near.sort((a, b) => a[0] - b[0]);
@@ -1709,7 +1709,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (pin) pedPinned++;
       // (in view, or within 8 m, before the rest, as walkCrowd: by distance alone the bodies went to walkers behind the
       // camera, and one coming into the view at 30 m stayed a card up to you: the Web detector's district cards, p28)
-      const dk = d < 8 || mine || inView(ps[i].x, 0, ps[i].z) ? d : d + 30;
+      const dk = d < 8 || mine || inViewWide(ps[i].x, ps[i].z) ? d : d + 30;
       pk.push([dk - (mine ? 3 : 0) - (pin ? 1000 : 0) - (du < CONTACT ? 500 : 0), i]); // within reach: before the budget (as walkCrowd)
     }
     pk.sort((a, b) => a[0] - b[0]);
@@ -2268,10 +2268,12 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // and whoever is in the view comes before whoever is out of it beyond 8 m (as the painted crowd): a townsperson
           // in view at 27 m was left a card while the bodies went to people behind the camera, and stayed a card as you
           // walked up to them (the queue, the groups, the aunty)
-          // out of the view beyond 14 m a townsperson takes no body at all (p29: at the gate on phones the townsfolk held
+          // out of the view beyond 28 m a townsperson takes no body at all (p29: at the gate on phones the townsfolk held
           // all 11 bodies with only the two kids in view, and the painted crowd walking into the view got none: flat
-          // cards up to you). A card out of the view is not seen to change; within 14 m they keep theirs for a turn
-          if (OUT_CARD && d > 14 && !inView(q.pos.x, q.pos.y, q.pos.z)) {
+          // cards up to you). A card out of the view is not seen to change; nearer they keep theirs for a turn
+          // (beyond SWAP_FAR + 1 and out of the wide view only: at 14 m, the bazaar's about-turn brought them into the view
+          // as cards within 27 m, where nobody changes, and they stayed cards up to you, p29c)
+          if (OUT_CARD && d > SWAP_FAR + 1 && !inViewWide(q.pos.x, q.pos.z)) {
             if (q.fig.root.visible) q.fig.root.visible = false;
             stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: i, v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
             continue;
