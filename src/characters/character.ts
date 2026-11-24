@@ -1657,7 +1657,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (!CHAR_BUDGET.throttle || camD < (crowd ? 8 : 16)) thighsOut(bs, dt);
     // Nuvexa's own phone goes into her pocket while her right hand holds something else (a stone to throw, a cup)
     const busyR = (p: PropKind | null | undefined) => !!p && p !== 'phone' && p !== 'paper' && p !== 'box';
-    kit?.phoneLeft(busyR(task?.prop) || (!task && busyR(heldProp)) || !!hold?.R);
+    // (planting too: its seed is not a prop, and the phone rode in her hand into the soil, GPU take tasksE)
+    const handTask = !!task && (task.kind === 'plant' || task.kind === 'pickup' || task.kind === 'putdown' || task.kind === 'throw' || task.kind === 'fix');
+    kit?.phoneLeft(busyR(task?.prop) || (handTask && task!.prop !== 'phone') || (!task && busyR(heldProp)) || !!hold?.R);
     if (task) taskArms(bs, kind, t, dt);
     else if (kind === 'idle' && !gaze && speak <= 0 && !moving) idleLife(bs, t, dt);
     else { idleLook *= Math.exp(-dt * 3); }
