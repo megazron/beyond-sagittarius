@@ -136,7 +136,7 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
 /** sipElbow, sipHead: an elbow way at the lips and a turn of the face away from the cup's hand (both off: they cleared the
  *  eyes on one body and not the next). hairGround 0 lets the tails into the ground (A/B). plantBend, plantReach, plantWin,
  *  plantHold: planting's back bend (rad), its IK reach (m), the touch window and the time held at the soil (task k). */
-export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9, sipYaw: -0.5, sipElbow: null as Dir | null, sipHead: 0, cupAlongSip: 1.25, cupFootSip: 0.035, cupPalm: 0.08, cupMax: 1.5, pocketReach: 1, hairGround: 1, plantBend: 1.2, plantReach: 0.6, plantWin: 0.24, plantHold: 0.08 };
+export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9, sipYaw: -0.5, sipElbow: null as Dir | null, sipHead: 0, cupAlongSip: 1.25, cupFootSip: 0.035, cupPalm: 0.08, cupMax: 1.5, pocketReach: 1, hairGround: 1, plantBend: 0.5, plantReach: 0.6, plantWin: 0.24, plantHold: 0.08 };
 /** How far a strand's tip falls towards the ground as the head turns from upright, per metre of strand and per unit of
  *  change in the ground's direction seen from the head (hair.ts uDrop; times the strand's sway squared, at most 1.6) */
 const HAIR_DROP = 0.15;
@@ -1535,8 +1535,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         // planting: the clip kneels and its hand stops at knee height (GPU take tasks9: the middle finger's root 36 to 44
         // cm over the soil at its lowest); round the touch the back bends forward as far as the hand needs (at most
         // RIG_OPTS.plantBend, weighted by near squared: by near alone the chest bent onto the seed hand still at the chest,
-        // 2.8 cm in), IK takes the rest (RIG_OPTS.plantReach, not 12 cm) and holds it there a moment (plantHold). Measured
-        // (task_plant): the finger root 0.5 / 1.4 / 5.2 cm over the soil (Zenvik, Draxum, Nuvexa), arm in torso 0 / 1.8 / 0.3
+        // 2.8 cm in), IK takes the rest (RIG_OPTS.plantReach, not 12 cm) and holds it there a moment (plantHold). Bent 1.2
+        // rad the hand reached the soil (finger root 0.5 to 5 cm) but the body folded with the head under the chest
+        // (renders ~/bs-cap/holds/lk_p); at 0.5 the finger root is 17 / 20 / 21 cm over the soil (Zenvik, Draxum, Nuvexa),
+        // arm in torso 0 / 1.2 / 0 cm. The rest needs a deeper kneel (the hips lower), not more back
         if (T.kind === 'plant' && near > 0 && RIG_OPTS.plantBend > 0) reachBend(bs, up, lo, hd, goal, near * near * w);
         const f3 = bs.get(`finger3_1${sd}`), cur = hd.getWorldPosition(V2).clone(), fp = fingerPush[sd];
         const fd = f3 ? f3.getWorldPosition(V3).sub(cur) : null, pl = fd ? fd.length() : 0;
