@@ -11,6 +11,9 @@ import { buildStage, STAGES } from './kit';
 import { disposeTree } from '../../core/disposeTree';
 import { buildCity } from './city';
 import type { TaskKind } from '../../characters/character';
+import { Arrival } from '../arrival';
+import { ARRIVALS } from '../arrivals';
+import { Injuries, FIRST_AID } from '../injury';
 
 const make = (loc: string, label: (k: string) => string, job: number, detail: number) => (loc === 'city' ? buildCity(label, detail) : buildStage(loc, STAGES[loc], label, job, detail));
 
@@ -43,7 +46,19 @@ export class Away {
     return this.prepared.stage;
   }
 
-  enter(id: CrewId, location: string, done: () => void, job = 0) {
+  /** The first time someone is played on their own world, their arrival plays first (game/arrival.ts). */
+  arrival: Arrival | null = null;
+  /** Their wounds on this stage (game/injury.ts); saved into `wounds` when they leave. */
+  injuries: Injuries | null = null;
+  /** The save's wounds (game.ts hands its own record in). */
+  wounds: Record<string, number> = {};
+  /** Main letterboxes the arrival and shows its Skip. */
+  onIntro: ((on: boolean) => void) | null = null;
+  private stamina = 100;
+  private breathAt = 0;
+  private lope = 0;
+
+  enter(id: CrewId, location: string, done: () => void, job = 0, arrive = false) {
     const pre = this.prepared;
     this.prepared = null;
     const stage = pre && pre.loc === location && !job ? pre.stage : make(location, t, job, this.detail);
@@ -73,9 +88,35 @@ export class Away {
     this.player = p; this.active = true;
     this.show(stage.scene);
     this.ui.setPrompt(null);
-    // why they are alive at all, in their own words, the moment you arrive
-    if (!job) window.setTimeout(() => { if (this.who === id) this.ui.say(`away.${location}.intro`, `crew.${id}.name`, 6); }, 900);
+    this.stamina = 100;
+    this.injuries = location === 'city' ? null : new Injuries(id, this.wounds);
+    // why they are alive at all, in their own words, the moment you arrive (after the arrival, when there is one)
+    // (not after Skyvra's arrival: her line is about two days on the rock, and you have just seen her land)
+    const intro = () => { if (!job && !(arrive && location === 'ring')) window.setTimeout(() => { if (this.who === id) this.ui.say(`away.${location}.intro`, `crew.${id}.name`, 6); }, 900); };
+    const def = arrive && location !== 'city' ? ARRIVALS[id] : undefined;
+    if (def) {
+      this.input.enabled = false;
+      this.onIntro?.(true);
+      this.arrival = new Arrival(id, { scene: stage.scene, camera: this.camera, body: p.model, ground: (x, z) => stage.height(x, z), say: (k, sp, sec) => this.ui.say(k, sp, sec) }, () => {
+        // control from where the body got up, facing the way it faced
+        const last = def.body[def.body.length - 1], Y = def.yaw, [sx, sz] = def.spot, f = last.at;
+        const x = sx + Math.cos(Y) * f[0] - Math.sin(Y) * f[2], z = sz - Math.sin(Y) * f[0] - Math.cos(Y) * f[2];
+        p.spawn(x, z, Y);
+        this.arrival = null; this.input.enabled = true; this.onIntro?.(false);
+        intro();
+      });
+    } else intro();
     this.entered?.();
+  }
+  get arrivalOn() { return !!this.arrival?.active; }
+
+  /** Breath on their world: what sprinting costs and what gives it back (LANDINGS.md, "Gravity, air and pace"). */
+  private air(dt: number, p: Player) {
+    const R: Record<string, [number, number, boolean]> = { ring: [10, 10, false], moon: [22, 9, true], wreck: [16, 5, true], scree: [20, 8, true], clouds: [18, 6, true] };
+    const r = R[this.location]; if (!r) { this.stamina = 100; return; }
+    this.stamina = p.sprinting ? Math.max(0, this.stamina - dt * r[0]) : Math.min(100, this.stamina + dt * r[1]);
+    // a body out of breath is heard: but Skyvra holds hers, and there is no air to hear it in
+    if (r[2] && this.stamina < 35 && (this.breathAt -= dt) <= 0) { this.breathAt = 1.8 + Math.random(); audio.humanInner('breath', 0.35 + (35 - this.stamina) / 100); }
   }
   /** Called at the end of enter() (tools/perf_gate.py holds the clock from this moment: main.ts holdAtArrival). */
   entered: (() => void) | null = null;
@@ -98,7 +139,7 @@ export class Away {
   orbit: { x: number; y: number; z: number; r: number; a: number; h: number } | null = null;
 
   /** Test hook: stand beside a task. */
-  teleport(x: number, z: number, yaw = 0) { this.player?.spawn(x, z, yaw); }
+  teleport(x: number, z: number, yaw = 0) { if (!this.arrival?.active) this.player?.spawn(x, z, yaw); }
 
   /** The level the HUD returns to. */
   level = 1;
@@ -116,8 +157,27 @@ export class Away {
       if (s.outro.active && s.outro.remaining < 0.9 && !this.outroFade) { this.outroFade = true; this.ui.fade('black', 1, 0.8); } // it ends in black
       return;
     }
+    if (this.arrival?.active) {
+      // the arrival poses the body and holds the camera; the stage lives on round it
+      this.ui.setPrompt(null);
+      p.skipAnimate = true; p.update(dt, this.input, false, 100, 1); p.skipAnimate = false;
+      this.arrival.update(dt);
+      s.update(dt, time, this.camera);
+      return;
+    }
     this.ui.setStageObjective(t(`away.${this.location}.place`), this.next?.label ?? null);
-    p.update(dt, this.input, canMove && !this.busy, 100, this.pace);
+    const inj = this.injuries, eff = inj?.effects();
+    p.hurt = eff ? { speed: eff.speed, jump: eff.jump, sprint: eff.sprint } : null;
+    if (eff) { p.model.setLimp(eff.limp); p.model.setLimbs(this.busy ? null : eff.limbs); }
+    this.air(dt, p);
+    p.update(dt, this.input, canMove && !this.busy, this.stamina, this.pace);
+    inj?.update(dt, dt / 50, { resting: p.speedNow < 0.2 });
+    // low gravity: every step leaves the ground for a moment and comes down slowly (a lope, the way Apollo crews moved);
+    // on Verdaxis' 14 there is none
+    if (p.onGround && p.speedNow > 0.4 && s.gravity < 6) {
+      this.lope += p.speedNow * dt / (1.1 + 2.4 * (1 - s.gravity / 14));
+      p.model.root.position.y += Math.abs(Math.sin(this.lope * Math.PI)) * 0.09 * (1 - s.gravity / 14) * Math.min(1, p.speedNow / 2.5);
+    }
     // a hero view: the camera turns to it once, eases back, and the player can always look away; one with `after` waits
     // until that task is done (the square's fired on the walk past the tram, before you had held its door)
     const v = s.vistas?.find((b, i) => !this.seen.has(i) && (!b.after || this.done.has(b.after)) && p.pos.x > b.x0 && p.pos.x < b.x1 && p.pos.z > b.z0 && p.pos.z < b.z1);
@@ -163,7 +223,7 @@ export class Away {
     // the hands do the job: eat, pack, take the phone, open the locker, drink the chai, hold the tram door...
     const base = k.id.startsWith('talk.') ? 'talk' : k.id.replace(/[_\-.]?\d+$/, '');
     const job: Record<string, TaskKind> = { paratha: 'eat', pack: 'carry', phone: 'phone', parcel: 'open', chai: 'drink', tram: 'open', ring: 'pickup',
-      splint: 'fix', ice: 'fix', cracker: 'use', dish: 'use', plate: 'pickup', weld: 'fix', lichen: 'plant', suture: 'fix', burst: 'use', break: 'fix', ember: 'use', patch: 'fix', relay: 'use' };
+      splint: 'fix', shoulder: 'use', bind: 'fix', strap: 'fix', ribs: 'use', ice: 'fix', cracker: 'use', dish: 'use', plate: 'pickup', weld: 'fix', lichen: 'plant', suture: 'fix', burst: 'use', break: 'fix', ember: 'use', patch: 'fix', relay: 'use' };
     const kind = job[base];
     if (kind && this.player) {
       const at = kind === 'eat' || kind === 'carry' ? null : k.pos.clone().setY(Math.max(k.pos.y, this.player.pos.y) + (kind === 'open' ? 1.15 : kind === 'use' ? 0.95 : 0));
@@ -173,6 +233,9 @@ export class Away {
       const f = fx[base]; if (f) audio.sample(f[0], f[1], { delay: f[2] });
     }
     k.run?.();
+    // first aid on their own body: it hurts, and then it is better
+    const aid = FIRST_AID[k.id];
+    if (aid && aid.who === this.who && this.injuries) { this.injuries.treat(aid.part); audio.humanInner('grunt', 0.55, aid.who === 'strong' || aid.who === 'builder' ? 0.85 : 1.15); }
     const go = () => {
       this.done.add(k.id); this.busy = false;
       if (this.stage!.tasks.every((x) => x.optional || this.done.has(x.id))) this.closing();
@@ -204,11 +267,17 @@ export class Away {
   /** Main shows the letterbox and the Skip button while a closing scene plays. */
   onOutro: ((on: boolean) => void) | null = null;
   private outroFade = false;
-  get outroOn() { return !!this.stage?.outro?.active; }
+  get outroOn() { return !!this.stage?.outro?.active || !!this.arrival?.active; }
   /** The prologue keeps the black after the closing scene: the orbit card comes next, not this world. */
   keepBlack = false;
   /** Skip: a quick fade to black first, so the cut never shows the world behind the stage. */
   skipOutro() {
+    if (this.arrival?.active) {
+      if (this.skipping) return;
+      this.skipping = true; this.ui.fade('black', 1, 0.25);
+      setTimeout(() => { this.skipping = false; this.arrival?.skip(); this.ui.fade('black', 0, 0.5); }, 280);
+      return;
+    }
     const o = this.stage?.outro;
     if (!o?.active || this.skipping) return;
     this.skipping = true; this.outroFade = true;
@@ -220,6 +289,8 @@ export class Away {
   debugOutro() { if (this.stage) { for (const k of this.stage.tasks) if (!k.optional) this.done.add(k.id); this.closing(); } }
 
   leave() {
+    if (this.arrival?.active) this.arrival.skip();
+    if (this.injuries) { this.injuries.write(this.wounds); this.injuries.quiet(); this.injuries = null; }
     const s = this.stage;
     if (s && this.player) { s.scene.remove(this.player.model.root); disposeTree(this.player.model.root); }
     if (s) dropStage(s);

@@ -23,6 +23,8 @@ with sync_playwright() as pw:
     for who, loc in (('explorer', 'ring'), ('builder', 'scree'), ('medic', 'wreck'), ('strong', 'moon'), ('social', 'clouds')):
         page.evaluate(f"__bs.goAway('{who}', '{loc}')"); time.sleep(3)
         if page.evaluate('__bs.mode') != 'away': fails.append(f'{loc}: did not enter'); continue
+        # the first visit opens with their arrival (tools/landing_smoke.py plays those through): skipped here
+        if page.evaluate('!!__bs.arrival'): page.evaluate('__bs.skip()'); time.sleep(2)
         if a.shot: page.screenshot(path=f'{a.shot}_{loc}.jpg', type='jpeg', quality=85, timeout=180000)
         for _ in range(14):
             s = page.evaluate('__bs.away')
