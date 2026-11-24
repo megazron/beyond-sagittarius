@@ -26,7 +26,12 @@ SPOTS = {'flat': (12.4, 68.4, 3.14), 'bazaar': (6.0, 50.0, 3.14), 'crowd': (-5.5
 # 0905d5e, so nobody you walk into is a card). A ceiling that took those back made a walker at 2.5 m a card again
 # (crowd_smoke, soak_smoke's bump test failed on perf23-land 9b83112), so the budget is set over the design instead:
 # 12, a fifth over the 10. The crowd spot's draws (240 to 255) and triangles (0.72 to 0.81 M) stay far under theirs.
-BUDGET = {'mobile': (120, 720_000, 4), 'web': (580, 1_300_000, 12), 'ultra': (1420, 4_200_000, 16)}
+# Bodies (2026-11-23, perf agent 26, the owner's pedestrian glitches): nobody in view within 27 m changes between a body
+# and a card any more, so whoever walks into the view must already be a body: the caps went up (city.ts BODY_CAP 11 /
+# 20 / 24, the painted crowd halved) and the budget with them, the player and the frozen few over the cap included.
+# Mobile draws 120 -> 145 with them: the crowd spot drew 139 on CI with the new caps (each body is 2-3 draws). A cost of
+# the owner's priority (no pedestrian popping); what it does on a real phone is not measured.
+BUDGET = {'mobile': (145, 760_000, 14), 'web': (580, 1_300_000, 34), 'ultra': (1420, 4_200_000, 36)}
 
 class H(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *x, **k): pass
@@ -42,6 +47,16 @@ WORST = """(ms) => new Promise((res) => { let calls = 0, tris = 0, bodies = 0, s
     if (p.tris > tris) { tris = p.tris; top = cur; } cur = {};
     if (performance.now() - t0 < ms) requestAnimationFrame(f); else { r.renderBufferDirect = orig;
       res({ calls, tris, bodies, skinned: sk, top: Object.entries(top || {}).sort((x, y) => y[1] - x[1]).slice(0, 12).map(([k, v]) => k + ' ' + Math.round(v)) }); } };
+  requestAnimationFrame(f); })"""
+# after a teleport: at least `n` drawn frames, then until the triangles drawn per frame stop climbing (the highest of
+# each 10 frames within 2% of the one before, twice running), at most `ms` (the CI runner draws 1 to 3 frames a second:
+# 120 frames and 60-frame windows never settled there and the job ran past its 30 minutes). A fixed 4 s of wall clock under SwiftShader
+# measured "mobile flat" anywhere from 550k to 739k triangles on the same code: how many batches had streamed in by then
+# depended on how fast the runner was
+SETTLE = """([n, ms]) => new Promise((res) => { let k = 0, hi = 0, prev = -1, calm = 0; const t0 = performance.now();
+  const f = () => { k++; hi = Math.max(hi, __bs.perf.tris || 0);
+    if (k >= n && k % 10 === 0) { if (prev >= 0 && hi <= prev * 1.02) calm++; else calm = 0; prev = hi; hi = 0; }
+    if (calm >= 2 || performance.now() - t0 > ms) res({ frames: k, secs: +((performance.now() - t0) / 1000).toFixed(1), settled: calm >= 2 }); else requestAnimationFrame(f); };
   requestAnimationFrame(f); })"""
 fails, report = [], {}
 with sync_playwright() as pw:
@@ -60,7 +75,8 @@ with sync_playwright() as pw:
         time.sleep(25)  # every model and its light build in
         D, T, B = BUDGET[q]; rows = {}
         for name, (x, z, yaw) in SPOTS.items():
-            page.evaluate(f"__bs.awayTeleport({x}, {z}, {yaw})"); time.sleep(4)
+            page.evaluate(f"__bs.awayTeleport({x}, {z}, {yaw})"); st = page.evaluate(SETTLE, [20, 15000])
+            print(q, name, 'settled', st, flush=True)
             r = page.evaluate(WORST, 1500); top = r.pop('top'); rows[name] = r
             print(q, name, r, flush=True)
             if r['calls'] > D: fails.append(f"{q} {name}: {r['calls']} draw calls (budget {D})")

@@ -15,6 +15,30 @@ export interface Facade { side: number; z0: number; z1: number; h: number }
 export interface StandIn { x: number; y: number; z: number; h: number; k: number; v?: number; yaw?: number; walk?: boolean }
 export interface DenseOpts { /** Where what is seen from the whole city goes (the stand-in cards). */ top?: THREE.Object3D; rich: boolean; FRONT: number; S: number; N: number; facades: Facade[] }
 
+/**
+ * Where across the pavement someone walking along z should be to pass whoever is just ahead: the x nearest `pref` in
+ * [lo, hi] that is `r` metres clear of every obstacle from 0.5 m behind to 2.4 m ahead ([x, z, x, z, ...], `self` = index
+ * of their own pair to skip). `blocked`: nowhere is clear and someone is right ahead (within 1 m): they wait.
+ */
+export function laneX(x: number, z: number, dir: number, lo: number, hi: number, ob: ArrayLike<number>, r: number, pref: number, self = -1) {
+  const near: number[] = [];
+  let ahead = false;
+  for (let k = 0; k + 1 < ob.length; k += 2) {
+    if (k / 2 === self) continue;
+    const a = (ob[k + 1] - z) * dir;
+    if (a > -0.5 && a < 2.4 && ob[k] > lo - r && ob[k] < hi + r) { near.push(ob[k]); if (a > 0 && a < 1.0 && Math.abs(ob[k] - x) < r) ahead = true; }
+  }
+  if (!near.length) return { tx: Math.min(hi, Math.max(lo, pref)), blocked: false };
+  let best = NaN, cost = 1e9;
+  for (let t = lo; t <= hi + 1e-6; t += 0.1) {
+    let ok = true; for (const o of near) if (Math.abs(o - t) < r) { ok = false; break; }
+    if (!ok) continue;
+    const c = Math.abs(t - pref) + 0.5 * Math.abs(t - x);
+    if (c < cost) { cost = c; best = t; }
+  }
+  return Number.isNaN(best) ? { tx: x, blocked: ahead } : { tx: best, blocked: false };
+}
+
 let seed = 4242;
 const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 
@@ -48,9 +72,17 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   const { rich, FRONT, S, N } = o;
   const updates: ((dt: number, t: number, cam: THREE.Camera | null) => void)[] = [];
   /** The painted crowd: where each card is and which way it walks; `taken` cards are hidden (a real body walks them). */
-  let cards: { x: number; z: number; v: number; gate: boolean }[] = [], taken = new Uint8Array(0);
+  // the street's walkers turn back 12 m into the gate's plaza (at 4 m they all ended in the plaza's throng: a knot of
+  // cards walking through each other and through the groups there, most of the detector's overlaps)
+  const S0 = S + 12;
+  let cards: { x: number; z: number; v: number; gate: boolean; who: number; lane: number; wait?: boolean; waitT?: number; holdT?: number }[] = [], taken = new Uint8Array(0);
   /** Stand-ins: a card where a far body is not drawn (city.ts fills it each frame). */
   let standIns: (list: StandIn[], cam: THREE.Camera | null) => void = () => undefined;
+  /** Where people stand or walk in the street this frame, [x, z, x, z, ...]: the cards walk round them. */
+  let obstacles: number[] = [];
+  const all: number[] = [], mirrored: number[] = [];
+  /** The pairs seen from one side of the street walking one way: x times the side, z times the way (laneX works in +x, +z). */
+  const mirror = (a: number[], sx: number, sz: number) => { mirrored.length = a.length; for (let k = 0; k < a.length; k += 2) { mirrored[k] = a[k] * sx; mirrored[k + 1] = a[k + 1] * sz; } return mirrored; };
   /** Baked impostors (impostor.ts) take over from the painted figures when they are ready. */
   let imp: { cols: number; rows: number; variants: number; views: number } | null = null;
   const grid = { value: new THREE.Vector2(1 / 8, 1) };
@@ -150,7 +182,9 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
       g2.filter = 'blur(1.2px)'; g2.drawImage(g.canvas, 0, 0); g.clearRect(0, 0, 512, 128); g.drawImage(c2, 0, 0);
     });
     const mat = new THREE.MeshBasicMaterial({ map: sheet, transparent: true, alphaTest: 0.22, color: new THREE.Color(0.55, 0.52, 0.6) });
-    const n = rich ? 120 : 60, gateN = rich ? 22 : 12; // a busy street, not a packed one (the owner: "too many people, too crowded")
+    // a busy street, not a packed one (the owner: "too many people, too crowded"); halved again with the pedestrian
+    // fixes: near the camera every one of them is a body now, and the bodies have to cover them all
+    const n = rich ? 64 : 22, gateN = rich ? 8 : 4;
     const geo = new THREE.PlaneGeometry(1, 1); geo.translate(0, 0.5, 0);
     const offs = new Float32Array(n + gateN); for (let i = 0; i < n + gateN; i++) offs[i] = Math.floor(rnd() * 8) / 8; // every card its own figure, gate crowd included
     const tiles = new Float32Array((n + gateN) * 2); for (let i = 0; i < n + gateN; i++) tiles[i * 2] = offs[i];
@@ -167,11 +201,11 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     taken = new Uint8Array(n + gateN);
     const ppl = Array.from({ length: n }, (_, i) => {
       const side = i % 2 ? 1 : -1, x = side * (4.7 + rnd() * 3.8);
-      return { x, z: S + 4 + rnd() * (N - S - 14), v: (rnd() < 0.5 ? 1 : -1) * (0.8 + rnd() * 0.7), h: (offs[i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: false };
+      return { x, z: S0 + rnd() * (N - 10 - S0), v: (rnd() < 0.5 ? 1 : -1) * (0.8 + rnd() * 0.7), h: (offs[i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: false, who: i, lane: x, wait: false, waitT: 0, holdT: 0 };
     });
     // travellers thronging the gate plaza: across the whole width, milling slowly, life-size
     cards = ppl;
-    for (let i = 0, tries = 0; i < gateN && tries < 400; tries++) { const gx = (rnd() < 0.5 ? -1 : 1) * (4.8 + rnd() * 3.6), gz = S + 2 + rnd() * 18; if (ppl.some((o) => o.gate && Math.hypot(o.x - gx, o.z - gz) < 1.6)) continue; ppl.push({ x: gx /* on the pavements, a step apart: the road through the gate is for the cars */, z: gz, v: (rnd() - 0.5) * 0.5, h: (offs[n + i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: true }); i++; }
+    for (let i = 0, tries = 0; i < gateN && tries < 400; tries++) { const gx = (rnd() < 0.5 ? -1 : 1) * (4.8 + rnd() * 3.6), gz = S + 2 + rnd() * 18; if (ppl.some((o) => o.gate && Math.hypot(o.x - gx, o.z - gz) < 1.6)) continue; ppl.push({ x: gx /* on the pavements, a step apart: the road through the gate is for the cars */, z: gz, v: (rnd() - 0.5) * 0.5, h: (offs[n + i] === 5 / 8 ? 1.1 : 1.55) + rnd() * 0.3, wd: 0.37 + rnd() * 0.1, p: rnd() * 6, gate: true, who: n + i, lane: gx, wait: false, waitT: 0, holdT: 0 }); i++; }
     // each card its own shade: a little warmer or cooler, lighter or darker, so no two neighbours match
     const TC = new THREE.Color();
     for (let i = 0; i < n + gateN; i++) { const k = 0.78 + rnd() * 0.42; im.setColorAt(i, TC.setRGB(k * (0.94 + rnd() * 0.12), k * (0.94 + rnd() * 0.1), k * (0.94 + rnd() * 0.12))); }
@@ -217,16 +251,48 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     }
     updates.push((dt, t, cam) => {
       const cp = cam?.position;
+      // they keep a step apart and out of the way of whoever stands or walks in the street (obstacles, from city.ts):
+      // someone within 0.8 m across and up to 2.2 m ahead is passed by easing aside, at most 0.6 m/s, on their own
+      // pavement. Cards used to walk through each other and through the people standing in the street
+      // (the nearest one ahead is passed on the side the card is on, or on the other side when that is off the pavement:
+      // pushed apart towards the kerb, two used to end up pressed into each other at its edge)
+      // the nearest clear line across the pavement (laneX), back to their own lane once past; nowhere clear and someone
+      // right ahead, they wait
+      const lo = 4.75, hi = FRONT - 0.7;
+      all.length = 0; for (const q of ppl) all.push(q.x, q.z); for (let k = 0; k < obstacles.length; k++) all.push(obstacles[k]);
+      for (let i = 0; i < ppl.length; i++) {
+        const q = ppl[i], sv = q.v >= 0 ? 1 : -1, side = q.x >= 0 ? 1 : -1;
+        const L = laneX(q.x * side, q.z * sv, 1, lo, hi, mirror(all, side, sv), 0.8, q.lane * side, i);
+        q.wait = L.blocked; q.waitT = q.wait ? (q.waitT ?? 0) + dt : 0;
+        if ((q.waitT ?? 0) > 3) { q.v = -q.v; q.waitT = 0; q.wait = false; } // still blocked after 3 s: they turn back
+        q.x = side * Math.min(hi, Math.max(lo, q.x * side + Math.max(-0.45 * dt, Math.min(0.45 * dt, (L.tx - q.x * side) * 2 * dt))));
+      }
       ppl.forEach((q, i) => {
-        q.z += q.v * dt;
-        if (q.gate) { if (q.z > S + 20) q.z = S + 2; if (q.z < S + 2) q.z = S + 20; } else { if (q.z > N - 10) q.z = S + 4; if (q.z < S + 4) q.z = N - 10; }
+        // a step that would take them within half a metre of someone ahead of them is not taken (they keep easing
+        // aside meanwhile): the aside alone, at 0.45 m/s, was too slow for two meeting head on, and they walked through
+        // each other (the detector's overlaps; most at the gate end of the street). Held for 3 s, they turn back
+        if (!q.wait) {
+          const nz = q.z + q.v * dt, sv = q.v >= 0 ? 1 : -1;
+          let clash = false;
+          for (let k = 0; k + 1 < all.length && !clash; k += 2) {
+            if (k / 2 === i) continue;
+            const ox = all[k], oz = all[k + 1];
+            if (Math.abs(ox - q.x) < 0.5 && Math.abs(oz - nz) < 0.5 && (oz - q.z) * sv > 0) clash = true;
+          }
+          if (!clash) { q.z = nz; q.holdT = 0; }
+          else if ((q.holdT = (q.holdT ?? 0) + dt) > 3) { q.v = -q.v; q.holdT = 0; }
+        }
+        // at the ends of their stretch they turn round (they used to jump to the other end: a walker blinking out at the
+        // gate and in at the bazaar, in plain view)
+        const z0 = q.gate ? S + 2 : S0, z1 = q.gate ? S + 20 : N - 10;
+        if ((q.z > z1 && q.v > 0) || (q.z < z0 && q.v < 0)) q.v = -q.v;
         // near the camera a real body takes a card's place (city.ts: the crowd pool walks it); a card nobody took stays
         // drawn, so nobody vanishes as you walk up
         const vis = taken[i] ? 0 : 1;
         const bob = Math.abs(Math.sin(t * 6 * Math.abs(q.v) + q.p)) * 0.04;
         const a = cp ? Math.atan2(cp.x - q.x, cp.z - q.z) : 0;
         E.set(0, a, 0); Q.setFromEuler(E);
-        if (imp) { const k = q.h / 1.72; P.set(q.x, 0.14, q.z); SC.set(1.1 * k * vis, 2.0 * k * vis, 1); tileOf(tiles, i, i, a - (q.v > 0 ? 0 : Math.PI), Math.abs(q.v) > 0.3 ? t * Math.abs(q.v) * 1.3 + q.p : -1); }
+        if (imp) { const k = q.h / 1.72; P.set(q.x, 0.14, q.z); SC.set(1.1 * k * vis, 2.0 * k * vis, 1); tileOf(tiles, i, q.who, a - (q.v > 0 ? 0 : Math.PI), Math.abs(q.v) > 0.3 && !q.wait && !q.holdT ? t * Math.abs(q.v) * 1.3 + q.p : -1); }
         else { P.set(q.x, 0.14 + bob, q.z); SC.set(q.h * q.wd * vis, q.h * vis, 1); }
         im.setMatrixAt(i, M.compose(P, Q, SC));
       });
@@ -235,6 +301,10 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
   }
 
   return { update: (dt: number, t: number, cam: THREE.Camera | null, on = true) => { if (on) for (const u of updates) u(dt, t, cam); }, get cards() { return cards; }, get taken() { return taken; },
-    standIns: (list: StandIn[], cam: THREE.Camera | null) => standIns(list, cam), setFar: (m: number) => { cardFar.value = m; },
-    setAtlas: (t: THREE.Texture, cols: number, rows: number, variants: number, views = 4) => setAtlas(t, cols, rows, variants, views), setLight: (c: THREE.Color) => setLight(c) };
+    standIns: (list: StandIn[], cam: THREE.Camera | null) => standIns(list, cam), setObstacles: (o: number[]) => { obstacles = o; }, setFar: (m: number) => { cardFar.value = m; },
+    setAtlas: (t: THREE.Texture, cols: number, rows: number, variants: number, views = 4) => setAtlas(t, cols, rows, variants, views), setLight: (c: THREE.Color) => setLight(c),
+    /** Where card i walks to and fro (z from, to): the gate's plaza or the street. */
+    stretch: (i: number): [number, number] => (cards[i].gate ? [S + 2, S + 20] : [S0, N - 10]),
+    /** Test hook (tools/pedglitch.js): which look a crowd card and a stand-in card wear (-1: a painted figure, before the bake) and where cards stop. */
+    cardLook: (i: number) => (imp ? ((cards[i].who % imp.variants) + imp.variants) % imp.variants : -1), standLook: (s: StandIn) => (imp ? (((s.v ?? s.k) % imp.variants) + imp.variants) % imp.variants : -1), get far() { return cardFar.value; } };
 }

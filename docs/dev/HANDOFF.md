@@ -1375,3 +1375,202 @@ unlanded except this handoff commit and any recording in progress.
 - LANDED combat-s6c 5155be8 on main (CI 45284692079 fully green on that sha, no reruns; perf_gate mobile flat 602929).
 - My working notes moved: HANDOFF.md, LEVELS.md, NAMES.md and MECHANICS_NOTES.md now live in docs/dev/. Rebasing onto
   main carries edits to the old paths over (git follows the rename); write to docs/dev/HANDOFF.md from now on.
+## 2026-11-23 22:45 perf agent 26 (branch ped26; WIP, not landed)
+- OWNER, first: "Pedestrian glitches are still there no fix." Before memory now. tools/pedglitch.js (injected by
+  tools/gpu_tour.py plan "inject") reads __bs.awayPeds() (city.ts pedProbe: everyone drawn this frame as a body or a
+  card, with their look) after each frame, projects them with the game's camera and counts per walker: vanish/appear in
+  view within 25 m (and far), body<->card swaps within 25 m, look changes, body LOD/hair switches, >0.5 m/frame
+  teleports, in a road lane with a car near, inside a car, overlaps < 0.45 m, sideways sliding, cards within 12 m.
+  Plans: ~/bs-assets/gpu/p26/plan_ped_{mobile,web}.json (7 routes: crowd loop, bazaar, chai->tram door, tram->square,
+  gate, downtown, market; ~7 min each); p26/pedrun.sh DIST TAG builds and runs both presets.
+- BASELINE (main 6b05e5a code + hooks, A500, 7 min each): Mobile vanish 32, appear 8, appearFar 11, swap 41,
+  identity 0, lod 0, teleport 133, road 18, carHit 0, overlap 129, slide 20. Web vanish 108, appear 51, vanishFar 12,
+  appearFar 20, swap 216, identity 0, lod 233, teleport 237, road 22, carHit 0, overlap 518, slide 111, cardClose 322;
+  Web had up to 56 walkers in view within 27 m.
+- Causes found: the lens line hid anyone between the camera and you at once (most "vanish" at 1.7 m); bodies and cards
+  traded places nearest-first at 14 m with pools of 2 (phones) and 5 (Web); crowd bodies switched build and hair at 6 m;
+  the painted crowd jumped 142 m (and the gate's 18 m) at the ends of its stretch; cards walked through each other and
+  through people standing; the step aside eased 1.7 m sideways in a few tenths of a second facing straight on; a released
+  body's card reappeared 1.7 m to the side; walkers' step aside went into the road; the builder (x -4.05) and the taxi
+  driver (x 3) stood in the road; district walkers' cards wore look (1e6 + i) mod 12 on Web, not their body's.
+- MEMORY CENSUS (tools/glmem.js, injected; __glmem.census() names every WebGL allocation by the path from __bs that
+  holds it; Mobile, crowd spot, main's code): WebGL's own count 653 MB textures + 198 MB buffers + 12 MB renderbuffers
+  (Windows says 1.55 GB dedicated: ANGLE/D3D keeps more). Textures: the city stage 175 MB (182 maps), the PLANET WORLD
+  STILL RESIDENT 104 MB + forest 13 + explorer 36 + reflHidden 45, combat's player model 53 MB (2048 maps), morph-target
+  textures 16384x2 RGBA32F x51 (27 MB) and x13 (14+7 MB), 4.6k-8k x1 x53 morph textures 3-7 MB each. Images held on the
+  CPU side 402 MB (city 87 + 39 canvas, world 78, combat player 73). Geometry: city 83 MB GPU (163 MB CPU), merged
+  statics 75 MB, terrain 13 MB. Full dump: ~/bs-assets/gpu/p26/census0/report.json. Not cut yet.
+- AFTER (7 min each, same routes; a2 = c92211c's parent, GPU): Mobile vanish 0, appear 0, appearFar 0, swap 0, identity
+  0, lod 0, teleport 0, road 0, carHit 0, overlap 14, slide 3, cardClose 61 (fps 60, up to 16 bodies, 177 draws).
+  Web vanish 1 (0.4 m from the lens: the last-resort hide), appear 1 (0.6 m), swap 1 (24.5 m, t 6 s, not explained),
+  identity 0, lod 0, teleport 0, road 0, carHit 0, overlap 129, slide 4, cardClose 148 (fps 59.9, up to 23 bodies,
+  352 draws, 1.52 M triangles). Then 987ae07: the painted crowd and the walkers take the nearest clear line across the
+  pavement (citydense.ts laneX) and wait when none is clear: for the overlaps. Results: p26/ped_a3_*, ped_a4_*.
+- What changed (city.ts unless said): SWAP_FAR 27 m + swapOK()/inView() (a frustum with 2.5 m margin, cuts after a
+  teleport free for 20 frames); LENS_LINE off (?lensline=1 old); keepOff pushes the camera 0.9 m off bodies and 0.7 m
+  off walls (WALL_M; the clearance margin too: the NE dotted wall was the near-fade dither on a wall 0.25 m from the
+  lens); crowd cards turn round at the ends (citydense.ts), have a mutable look (`who`) taken from a body only while
+  out of view; district walkers likewise (pedLook); pools: BODY_CAP 11/20/24, POOL 8/16/16, DPOOL 6/12/14, TAKE 36,
+  DNEAR 36, painted crowd 22/64 + gate 4/12; crowd LOD (character.ts pickLod) only off screen or past lodSwapFar;
+  people's step aside clamped to the pavement and faced; walkers pause to turn at their ends; shop doors only unseen;
+  the builder and the driver on the kerb; story people drawn to 0.85 x CARD_FAR. perf_gate body budgets 14/24/28.
+- Memory so far: main.ts releases the planet's, films', vault's and title stage's GPU copies on Mobile when you go
+  away (core/disposeTree.ts releaseGpu, ?awayrelease=0 off); ibatch.ts batchStatic drops the batched originals'
+  arrays. Not measured yet: p26/mem3 (census + heap sampling on dist-pg3).
+- Combat flake note left in ~/bs-combat/HANDOFF.md (play_test.py:210: the click's actionability wait; evaluate-click).
+- MEMORY A/B (p26/mem3, dist-pg3 = c92211c, Mobile, Windows counters, steady at the crowd): GPU dedicated 1546 ->
+  1160 MB, shared 431 -> 417, GPU process 2.38 -> 1.97 GB private, renderer 1.54 -> 1.37 GB, JS heap ~726-744 MB
+  (V8 backing stores 622 MB: typed arrays). releaseGpu reported 158 MB of textures + 33 MB of geometry let go, but
+  the census after it still finds world.scene 104 MB, combat.d.player.model (the planet player) 53 MB and
+  world.explorer 36 MB of textures on the GPU: something draws the planet's scene again while you are away (find it:
+  a portrait, a prewarm, the map?). WebGL's own count 653 -> 521 MB textures. Morph textures (RGBA32F): the player's
+  51 shapes 27 MB, the crowd looks' 13 shapes 2 x 6.8 MB. The heap sampling (p26/heaptop.py) saw only 49 MB: the
+  typed arrays are external; use a heap snapshot next. Still far over target (GPU < 500 MB, renderer < 700 MB).
+- COLD LOAD: CPU profile of the cold title load (p26/coldprof.sh + p26/profwin.cjs, dist-cold with source maps):
+  busy 3.9-10.1 s: getProgramInfoLog 3.2 s self, under boot -> world.update -> water.ts reflect 2.3 s (the lake drew
+  the planet before the background compile), texSubImage2D 0.7 s; busy 0-2.7 s: under.ts cast/overCloth 1.6 s (the
+  clothes' under/over passes at attach). Fixed in c148ab9 (boot update drawn=false; checkShaderErrors off outside
+  dev). Re-measure: hitch_p26_cold2.json.
+- FINAL (a4 = 94bf400 + the cold fix, 7 min each): Mobile all pop types 0 (vanish, appear, far pops, swap, identity,
+  lod, teleport, road, carHit), overlap 13, slide 3, cardClose 64. Web all pop types 0, overlap 97, slide 7,
+  cardClose 135, near27 up to 45, 22 bodies, 1.55 M triangles on the A500. Since a4: Web/Ultra BODY_CAP 26/28 and POOL
+  20 (soak's bump test: a card at the elbow when the bazaar's townsfolk used 17 of 20), Web gate 8 (perf_gate
+  triangles), Mobile perf_gate budget 145 draws / 0.76 M triangles / 14 bodies, Web 30, Ultra 32 bodies.
+- GPU clips (94bf400): Downloads/BS_Game_v1.1/mobile_v6_GPU (README.txt). Per clip the detector shows swaps only in the
+  first 0.35 s after the plan's teleport (a cut: city.ts allows swaps 20 frames) except ONE at 17 m, 4.2 s into the
+  Web west-pavement clip (p:walker9, card -> body), not explained, and one at 24.5 m in a Web long run. Still wrong,
+  seen: the NE street's dotted wall up close is STILL there (WALL_M 0.7 did not fix it: find what draws the dots; it may
+  not be the near fade, or that wall is not in `blocks`); a small group stands round you at the tram door on Web; the
+  tram's windows read as beige panels on Web.
+- COLD LOAD after c148ab9 (hitch_p26_cold2.json): 21.2 s, the t 8 freeze gone but a 3.4 s one at t 9.15 (getProgramParameter
+  3.5 s: the frame loop drew the world while warmAll compiled it). c30f92d holds the frame loop's draw during each
+  prewarm (warmHold): not measured yet (p26/coldprof.sh dist-cold3 p26_cold3 is queued after the clips; read
+  hitch_p26_cold3.json). texSubImage2D 2.5 s of uploads at the warm draws remains.
+- NOT DONE: task 3 (draws/uniform uploads for phones); memory targets (GPU < 500 MB, renderer < 700 MB): find what
+  re-uploads the planet while away, then the city's 175 MB of textures (atlases, canvases), morph textures, the 622 MB
+  of typed arrays (use a heap snapshot).
+- 2026-11-24 01:10 LANDING STATE (perf agent 26): NOT LANDED. Branch `ped26-land` = everything rebased on main 5155be8,
+  head ee3229e (do not use `ped26`: it is the pre-rebase branch at 13d8403). CI 45296820153 on ee3229e: all green but
+  soak_smoke: "after two more laps: geometries 1003 -> 1104" (limit 1098). Textures now hold (647 -> 660) since ee3229e
+  uploads every pooled body's textures and bone texture once loaded. The geometry climb has the same cause: the bigger
+  pools' bodies (and their near/far builds, chosen off screen now) upload their meshes the first time each is drawn, on
+  a later lap. Next: draw every pooled body once at load (e.g. in city.ts scene.userData.prebake, all pool roots visible
+  in a throwaway scene rendered to a 1x1 target, both builds), then rerun CI; or show soak_smoke that the count
+  plateaus at the pool size. Earlier runs on the branch: bump test now passes; combat's bow-arm check failed once on the
+  old base (combat code).
+- COLD LOAD after c30f92d (hitch_p26_cold3.json): loaded in 16.8 s (main 20.7 s), worst frame 1567 ms (was 2950-3366),
+  stalls over 0.9 s: 1.57 s at t 8.3, 0.98 s at t 10.8 (33 programs). (The log also shows a "loaded in 19.2 s" line I
+  could not place.)
+
+## 2026-11-24 perf agent 27 (worktree ~/bs-perf; landing branch ped27-land, WIP branch ped27 on top of it)
+- LANDING: ped26-land rebased on main 393e094 as `ped27-land` (the handoff conflicts were both-sides appends: kept both).
+  Its new commit c4c894d/660c638: every pooled body and story person is drawn once under the title card (renderer.ts
+  drawOnce: a spare layer 30, the scene's own lights, one pixel of the scene's target, no shadow pass, programs compiled
+  with compileAsync first; character.ts whenFull = body + light build loaded) so soak_smoke's geometry count stops
+  climbing lap after lap. Called from city prebake (now given the camera), waits up to 8 s, else finishes in play.
+- WIP on ped27 (not landed): painted-crowd thinning (city.ts walkCrowd, THIN/THIN_R 32/THIN_TURN 18, ?thin=0 off):
+  within 32 m of the camera never more painted people than bodies for them; the extra ones out of view are moved
+  further off out of view, an un-bodied card in view coming towards the camera within 18 m turns back. The view used
+  for "may this person change between body and card" now also covers where the camera will be after it moves (VIEW2:
+  last frame's motion repeated), and a camera jump over 3 m is a cut only if it also turned (a wall/body push is not).
+  Facades (facade.ts): aa from fwidth(u/bw)+fwidth(v/fh), not of the fract: the NE street's dotted wall was half-lit
+  windows in the 2x2 quads along every bay/floor seam of blank walls. Tram glass: its sky-map light scaled x0.25 in the
+  shader (three overrides envMapIntensity with scene.environmentIntensity). Camera keeps 0.6 m off cars (keepOff,
+  districts.eachCar; store take t03). perf_gate settles by frames and triangle plateau after teleports (SETTLE), not 4 s.
+  glmem census walks the on-screen stage first (shared body textures were booked to world.* / combat.d.player).
+- GPU scripts: ~/bs-assets/gpu/p27 (pedrun.sh DIST TAG; proxy_ab.sh = 4x CPU proxy main 5155be8 vs c4c894d in the
+  ~/bs-p27-ab worktree).
+- LANDED: CI 45302909399 on 660c638 green (combat's bow-arm check failed once at 2.6 cm vs 2 cm, the flake perf agent 26
+  saw; re-run of the failed job green); `git push origin 660c638:main` fast-forwarded 393e094..660c638. The run on the
+  pre-rebase c4c894d (45300944851) was fully green first try, soak_smoke included.
+- 4x CPU PROXY (p27/proxy_ab.sh, Mobile 844x390, laptop A500 GPU, so not a phone): main 5155be8 vs landed code
+  (raised Mobile body budget). fps / draws / bodies: flat 57.8/77/2 -> 53.7/81/1, bazaar 57.0/74/1 -> 51.9/64/2,
+  crowd 46.7/133/3 -> 34.0/165/10 (draw 11.9 -> 21.4 ms, update 4.6 -> 11 ms), gate 47.6/88/2 -> 41.4/147/13,
+  square 60.3/87/2 -> 52.1/119/6, market 59.9/76/3 -> 54.6/113/3. The bodies cost ~12 fps at the crowd: still over 30
+  everywhere on this proxy; on a real phone not measured. If phones need it back: BODY_CAP/POOL for tier 0.
+- PEDGLITCH b1 (dc7f180 thinning only; same 7 routes): Mobile cardClose 64 -> 39, overlap 13 -> 12, slide 3 -> 0,
+  teleport 0 -> 3 (three cards moved 64-77 m in sight at a camera swing: fixed after, 6 m margin + VIEW2), all pops 0.
+  Web cardClose 135 -> 53, overlap 97 -> 88, slide 7 -> 15 (worse or noise: check b2), all pops/swaps 0, maxTris 1.70 M.
+  What is left of cardClose: cards at exactly 12 m that the camera walks up to in view (the painted crowd and the
+  story's townsfolk, queue/group/aunty, beyond the cap). Next lever: fewer painted people on Web (64) so the ones in
+  view within 30 m never outnumber the bodies, or a cap on the story's townsfolk drawn as cards near you.
+- PEDGLITCH b2 (e3ed385: thinning + VIEW2 + 6 m relocation margin + facade/tram/car fixes): Mobile cardClose 43,
+  overlap 13, slide 2, teleport 0, all pops 0 (fps 60, 16 bodies, 176 draws). Web cardClose 64, overlap 170 (86 of them
+  tram_square; b1 had 88 in all: NOT explained, the detector keeps only the first 40 samples, raise that and look),
+  slide 14, appear 1 (a body back 0.6 m from the lens), swaps 0, near27 51, 28 bodies, 1.74 M triangles max.
+- CLIPS (Downloads/BS_Game_v1.1/mobile_v7_GPU, README.txt; GPU, no sound): swaps only in the first 0.05 s after each
+  teleport. Watched frame by frame: NE street (Mobile 8-10 s) and the Web tram door (last 3 s). The seam dots on the
+  purple wall are gone; a second noise remains: the wall within 0.6 m of the lens dithers (nearfade.ts) and shows the
+  lit shop front behind it, changing every frame. That wall is not in `blocks` (keepOff's WALL_M does not see it):
+  find which mesh it is (raycast from the clip's camera) and add it to the walls the camera keeps off, or opt that
+  material out of the near fade. Tram windows are dark panes now (flat, no interior). The Web door group: in this take
+  they walk past with a cart.
+- NOT DONE: memory (task 3): rerun the census with glmem's stage-first walk (p26/plan_census.json on a ped27 build) to
+  see what is truly the planet's; then the plan above. Phones' draws/uniform uploads and the ~2.5 s cold texture
+  uploads: not touched. Coordinator notes: the store take's hair-at-the-lens (t02) should be better with the landed
+  body keepOff (0.9 m), not re-checked on the GPU; t03 car grille: keepOff off cars on ped27, not clipped.
+  ped27 needs CI (pushed; perf_gate now settles by frames, so its budgets may need a look) before it can land.
+
+## 2026-11-24 perf agent 28 (worktree ~/bs-perf, branch ped27; GPU scripts and results ~/bs-assets/gpu/p28)
+- DETECTOR (tools/pedglitch.js): keeps 400 samples a type (was 40), logs each overlap's two speeds (head on, catching
+  up, standing) and, with each flat card close by, how it came within 27 m in view (`entered`: distance and drawn as
+  what) and the body budget then (`why`, from city.ts pedProbe `diag`: townsfolk bodies used, cap left, painted crowd
+  wanted/held, looks of the free pool bodies). p28/an.py summarises a report.
+- OVERLAPS (Web 170 on ped27 b2; 173 again on the same build, c0): 108 of them in tram_square, all at the gate end
+  (z -58 to -73), most cards standing or head on: the street's cards turned at S + 4, inside the gate plaza, into the
+  plaza's own throng and five threes standing there; the thinning's turn-backs added head-on pairs. Fixes: a card does
+  not take a step that brings it within 0.5 m of anyone ahead (holds, keeps easing aside, turns back after 3 s; it
+  stands, not walks on the spot, body or card); street cards turn 12 m into the plaza (S0); two gate threes on Web, not
+  five; a thinning turn-back only with 4.5 m clear behind; story walkers do not step within 0.5 m of anyone
+  (stepBlocked). p28a (first three): Web overlap 173 -> 40, Mobile 13 -> 5, Mobile slide 2 -> 0.
+- FLAT CARDS CLOSE: the diag shows the cause is the budget, not the looks: Web's painted crowd had its floor of 8
+  bodies held (16 pool bodies free) while the townsfolk used 20-24 of 26; Mobile's townsfolk used all 11 (painted crowd
+  0), mostly the six story people, counted even behind the camera. Fixes: Web/Ultra painted-crowd floor 12 (CROWD_MIN);
+  the story people count against the cap only in view or within 8 m; townsfolk out of view beyond 8 m rank 12 m later
+  (FOLK_VIEW, ?folkview=0 off); a body held out of view ranks 10 m later than one in view; cards out of view for two
+  frames take a look the pool has a free body of (LOOK_SPREAD, ?looks=0 off).
+- p28c (ca3e8c0) Mobile: cardClose 43 -> 32, overlap 13 -> 0, slide 2 -> 0, identity 3 (look changes at 27 m in the
+  bazaar; the out-of-view holder rank change was reverted after it, e81e7d8). Mobile's townsfolk still use all 11 bodies
+  in the bazaar and at the gate (diag left 0, painted crowd 0): with 11 bodies and 24 people in view within 27 m, flat
+  cards close by on phones need fewer people there or more bodies; not decided.
+- Web CROWD_MIN 12 put perf_gate's Web gate at 1.36 M triangles (budget 1.3 M): 10 now (63a4f85).
+- perf_gate SETTLE (ped27) never settled on CI (1 to 3 frames a second) and the job hit its 30 minutes: 20 frames,
+  10-frame windows, at most 15 s.
+- NE STREET NOISE (task 4): not the near fade. A GPU clip with ?nearfade=0 (new switch, main.ts) shows the same speckle
+  (p28/ne_a_nf0). Nor two walls in one plane: insetting every facade box (927d3b7) left it as it was (ne_d), reverted.
+  What it is: the shopfront seen along the wall; the window reveal's offset (rec / into, into small at a grazing angle)
+  moved g by more than a window from one pixel to the next (d5cf211 softens the reveal by fwidth(g)), and the phone
+  shopfront's goods (14 by 42 cm cells) are averaged under two pixels. NEITHER REMOVED IT: the final clip (p28e,
+  mobile_ne_street_far 8 s, p28/clips_mobile) still speckles. Cause NOT found. Next: raycast from the clip's camera at
+  8 s to name the mesh and material, then switch it off (?) to confirm.
+- MEMORY census (p28/census_a, Mobile, in the city): GPU estimate 716 MB (textures 524, buffers 183). What is booked to
+  the planet: world.scene.children[19..23] and world.explorer (the five crew at 1024: the same textures the city's
+  story people use, kept by releaseGpu's keep list, so in use, not waste) and combat.d.player.model (your planet body,
+  two 2048 maps, 45 MB): releasing player.model.root too (a295b1c) changed nothing in the census after it (726 MB,
+  the same maps held), so they are kept as the city's own body uses them: reverted (c2cead8). Other big ones: the
+  city player body's 2048 map + normal (45 MB; 1024 on phones would save about 34 MB, characters area), morph textures
+  16384x2 RGBA32F x51 (27 MB) and x13/x11 (crowd bodies).
+- PHONES (task 2): 4x proxy draw census (p28/draws_a, Mobile gate, 13 bodies, 148 draws over 2 frames = 74 a frame
+  of which about 3 per body: the merged body, its kit (skinned, separate) and its hair (rigid on the head bone)).
+  CPU profile at the gate: updateMatrixWorld + multiplyMatrices about 15%, the renderer's per-draw uniform uploads about
+  30%. Merging kit and hair into bodymerge.ts's one mesh would take 2 draws a body off; that is the character agent's
+  file, not touched. Proxy fps varies run to run (crowd 34 in p27, 49.7 to 52.9 here with 6 bodies).
+- LANDED: 0e542db on main (CI 45325173603 fully green first try on that exact commit, combat and soak included);
+  `git push origin 0e542db:main` fast-forwarded 660c638..0e542db. On top on ped27 (not landed unless CI is green):
+  c2cead8 (revert of a295b1c) and this handoff.
+- FINAL GPU (p28e = 0e542db, p28/final.sh): clips to Downloads/BS_Game_v1.1/mobile_v8_GPU (README.txt, no sound).
+  4x proxy (Mobile): flat 58.4, bazaar 47.4, crowd 40.7 (9 bodies, 169 draws), gate 37.1 (14 bodies, 156 draws),
+  square 45.8, market 56.0 fps: above 45 at the crowd NOT reached (task 2 open: kit and hair into the merged body).
+- Watched frame by frame: Mobile road_walk_cars (camera keeps off the cars; one drives ahead in your lane), gate (the
+  script walks into parked cars, a car fills the lower half), crowd_walk_through 4-5 s (a walker's head at the bottom of
+  the view for a frame, then hidden at the lens: phones hide, the store take t02 kind, shorter), Web road_walk_cars.
+- OPEN: flat cards close by (Mobile 32, Web ~62): more people in view than bodies; on phones the townsfolk take all 11
+  in the bazaar and at the gate. Decide: fewer standing townsfolk/painted crowd near the routes on phones, or a bigger
+  phone budget once draws per body come down. Web slides 13-17 (story walkers stepping round the threes). The
+  detector's Web numbers vary by about 20 between runs of one build: compare two runs before believing a change.
+- FINAL DETECTOR (p28e = 0e542db; b2 before this work in brackets): Mobile cardClose 27 (43), overlap 3 (13), slide 0
+  (2), identity 0, swaps/pops 0. Web cardClose 72 (64; the same build gave 64 and 83 before), overlap 33 (170), slide 19
+  (14), identity 0, and at t 125.6 s in chai_tram one frame with 2 swaps and 9 cards moved 48 to 88 m in view (p28b had
+  the same moment at 125.45 s): a camera jump the city did not take for a cut (ped27's "a jump is a cut only if it also
+  turned"?), so the thinning moved cards with last frame's view. Open: find what jumps there (end of the chai_tram walk
+  at the tram door).

@@ -43,8 +43,12 @@ export function facadeMaterial(o: FacadeOpts = {}) {
             glow = mix(vec3(1.0, 0.74, 0.46), vec3(0.78, 0.9, 1.0), step(0.7, fHash(vec3(bay, fl, seed + 9.0)))) * lit * (0.25 + 0.8 * uNight);
             // no room behind the glass on phones, but not a flat pane either: a lit room is brighter under its ceiling
             // and a shop shows rows of goods on its shelves
-            float sy = fy * fh;
-            glow *= street ? (0.45 + 0.75 * step(0.12, fract(sy / 0.42)) * step(0.3, fHash(vec3(floor(fx * bw * 7.0), floor(sy / 0.42), seed)))) : (0.55 + 0.6 * smoothstep(0.3, 0.85, fy));
+            // (the goods are 14 cm by 42 cm cells: seen along the street they were smaller than a pixel and each frame lit
+            // a different few, a speckle over the whole shopfront as the camera moved (the NE street, Mobile). Where a
+            // cell is under about two pixels it becomes its average: 0.88 of a shelf row times 0.7 of the cells)
+            float sy = fy * fh, cellPx = max(fwidth(u * 7.0), fwidth(v / 0.42)), cellAvg = smoothstep(0.35, 0.7, cellPx);
+            float goodsK = mix(step(0.12, fract(sy / 0.42)) * step(0.3, fHash(vec3(floor(fx * bw * 7.0), floor(sy / 0.42), seed))), 0.616, cellAvg);
+            glow *= street ? (0.45 + 0.75 * goodsK) : (0.55 + 0.6 * smoothstep(0.3, 0.85, fy));
             inside += vec3(0.02, 0.025, 0.03) * smoothstep(0.2, 0.9, fy); }` : `          vec3 inside = vec3(0.0), glow = vec3(0.0);
           if (fWin > 0.001) {
           vec3 V = normalize(vWp - cameraPosition);
@@ -171,7 +175,9 @@ export function facadeMaterial(o: FacadeOpts = {}) {
           } else if (style > 1.5) { lo = vec2(-0.1, 0.3); hi = vec2(1.1, 0.84); }
           else if (style > 0.5) { lo = vec2(0.03, 0.05); hi = vec2(0.97, 0.97); }
           else { lo = vec2(0.2 + 0.07 * step(0.5, h), 0.25); hi = vec2(0.8 - 0.07 * step(0.5, h), 0.86); }
-          float aa = fwidth(fx) + fwidth(fy);
+          // (the derivatives of u and v, not of fx and fy: fract jumps at every bay and floor, and there fwidth was about 1,
+          // so a blank wall lit up as a half window in the 2x2 pixels along each seam: the NE street's dotted wall up close)
+          float aa = fwidth(u / bw) + fwidth(v / fh);
           float inX = smoothstep(lo.x - aa, lo.x + aa, fx) * smoothstep(hi.x + aa, hi.x - aa, fx);
           float inY = smoothstep(lo.y - aa, lo.y + aa, fy) * smoothstep(hi.y + aa, hi.y - aa, fy);
           fWin = inX * inY;
@@ -183,9 +189,14 @@ export function facadeMaterial(o: FacadeOpts = {}) {
             vec3 Tr = alongX ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
             float into = max(-dot(Vr, vWn), 0.08), rec = street ? 0.12 : (style > 0.5 ? 0.06 : 0.22);
             vec2 g = vec2(fx + dot(Vr, Tr) / into * rec / bw, fy + Vr.y / into * rec / fh);
-            float gX = smoothstep(lo.x - aa, lo.x + aa, g.x) * smoothstep(hi.x + aa, hi.x - aa, g.x);
-            float gY = smoothstep(lo.y - aa, lo.y + aa, g.y) * smoothstep(hi.y + aa, hi.y - aa, g.y);
-            float glass = fWin * gX * gY;
+            // (seen along the wall, into is small and g moves by more than a window from one pixel to the next: each
+            // pixel was glass or reveal at random, a speckle of the wall's own colour over the glass that changed every
+            // frame, the NE street's shopfront on Mobile. Where g moves that fast the edges soften, and then the
+            // reveal goes)
+            vec2 gw = vec2(fwidth(g.x), fwidth(g.y)); float gXa = max(aa, gw.x), gYa = max(aa, gw.y);
+            float gX = smoothstep(lo.x - gXa, lo.x + gXa, g.x) * smoothstep(hi.x + gXa, hi.x - gXa, g.x);
+            float gY = smoothstep(lo.y - gYa, lo.y + gYa, g.y) * smoothstep(hi.y + gYa, hi.y - gYa, g.y);
+            float glass = mix(fWin * gX * gY, fWin, smoothstep(0.15, 0.45, max(gw.x, gw.y)));
             fReveal = fWin - glass; fWin = glass;
           }
           float fx2 = smoothstep(lo.x - 0.05 - aa, lo.x - 0.05 + aa, fx) * smoothstep(hi.x + 0.05 + aa, hi.x + 0.05 - aa, fx);

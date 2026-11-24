@@ -160,7 +160,7 @@ const CROWD_FACE_FAR: Record<string, number> = { cornea: 5, lash: 7, eyes: 12 };
 const STRIPPED = new WeakMap<THREE.BufferGeometry, { g: THREE.BufferGeometry; dict: Record<string, number> | undefined }>();
 /** Where the game camera was when it last drew a body (for passers-by at the lens). */
 const LENS = new THREE.Vector3(0, -1e6, 0);
-export const CHAR_BUDGET = { throttle: true, correctiveNear: 9, lodFar: 11, shadowFar: 16, crowdLodFar: 6, crowdShadowFar: 0 };
+export const CHAR_BUDGET = { throttle: true, correctiveNear: 9, lodFar: 11, shadowFar: 16, crowdLodFar: 6, crowdShadowFar: 0, lodSwapFar: 0 };
 
 /** Mocap style per character: how they stand and how they walk. */
 const STYLE: Record<string, { walk: string; idle: string; rate: number }> = {
@@ -296,6 +296,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const acts = new Map<string, { a: THREE.AnimationAction; w: number; target: number; manual: boolean; v?: number }>();
   let ready: () => void = () => {};
   const whenReady = new Promise<void>((r) => { ready = r; });
+  // and once the light build (when there is one) has loaded too: every mesh it will ever draw is in place
+  let full: () => void = () => {}, lodLoad: Promise<unknown> = Promise.resolve();
+  const whenFull = new Promise<void>((r) => { full = r; });
   let ground: ((x: number, z: number) => number) | null = null;
   const lookAt = { y: 0, x: 0 };
   const morph: Record<string, number> = {};
@@ -662,7 +665,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     scene.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh && o.visible) lodSets[0].push(o as THREE.SkinnedMesh); });
     if (lod === 0 && CHAR_BUDGET.lodFar < Infinity && hasLod1(key)) {
       const skel = lodSets[0][0]?.skeleton;
-      void loadAsset(key, 1).then((as1) => {
+      lodLoad = loadAsset(key, 1).then((as1) => {
         if (!skel || lodSets[0].length === 0) return;
         const s1 = cloneSkinned(as1.scene) as THREE.Group;
         // a crowd body's light build keeps only the shape morphs (build, ears): face and corrective targets are a loop
@@ -716,6 +719,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     prepFade();
     fig.visible = true;
     void texturesReady().then(ready);
+    void Promise.all([lodLoad, texturesReady()]).then(() => full(), () => full());
   };
 
   // the fade near the lens (crowd bodies of the full build: Web, Ultra)
@@ -796,6 +800,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (far) m.visible = camD < far * (m.visible ? 1.1 : 0.9);
     }
     for (const h of hairs) if (h) h.castShadow = sh;
+    // in the city a body changes its build or hair only while it is off the screen (not drawn last frame) or far off
+    // (CHAR_BUDGET.lodSwapFar, 0 elsewhere): switching at 6 m in front of you read as their clothes and hair changing
+    if (sinceDrawn < 1 && camD < CHAR_BUDGET.lodSwapFar) return;
     const wantH = hairs[1] && camD > (crowd ? CHAR_BUDGET.crowdLodFar : CHAR_BUDGET.lodFar) * (hairOn ? 0.9 : 1.1) ? 1 : 0;
     if (wantH !== hairOn) { hairOn = wantH; hairs[0]!.visible = wantH === 0; hairs[1]!.visible = wantH === 1; }
     if (!lodSets[1].length) return;
@@ -1550,14 +1557,14 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
           // the person changing. A body is whole until it is right at the lens (0.85 m, back at 1.1 m), and then gone in a
           // tenth of a second, all the way. ?lensfade=old: the band
           const band = dy > -0.3 && dy < 2.3;
-          const x = LENS_BAND ? (band ? THREE.MathUtils.clamp((d - 1.1) / 1.1, 0, 1) : 1) : band && d < (fadeK > 0.5 ? 0.85 : 1.1) ? 0 : 1;
+          const x = LENS_BAND ? (band ? THREE.MathUtils.clamp((d - 1.1) / 1.1, 0, 1) : 1) : band && d < (fadeK > 0.5 ? 0.42 : 0.55) ? 0 : 1; // a last resort now: the city's camera keeps 0.9 m off bodies (keepOff)
           const want = Math.min(x * x * (3 - 2 * x), lensWant);
           // the v4 Web clips still caught the tenth of a second in between as a dithered half-shape: now a body is
           // hidden or shown at once, like on phones (?lensfade=old keeps the band's fade)
           if (LENS_BAND) { fadeK += (want - fadeK) * (1 - Math.exp(-dt * 12)); if (Math.abs(fadeK - want) < 0.01) fadeK = want; } else fadeK = want;
           setFade(fadeK);
         } else {
-          const near = dy > -0.3 && dy < 2.3 && d < (fig.visible ? 0.7 : 0.9);
+          const near = dy > -0.3 && dy < 2.3 && d < (fig.visible ? 0.42 : 0.55); // a last resort (the city's camera keeps 0.9 m off bodies)
           if (fig.visible === near) fig.visible = !near;
         }
       }
@@ -2111,6 +2118,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** A crowd body that can fade (Web, Ultra) fades out towards 0 and back in towards 1; false: the stage hides it. */
     setLensFade(target: number) { lensWant = target; return fadeOn; },
     get canFade() { return fadeOn; },
+    /** Test hook (tools/pedglitch.js): which build and which hair are drawn (0 near, 1 far each: build + 2 x hair). */
+    get lodState() { return lodOn + hairOn * 2; },
     /** Faded out at the lens (not drawn). */
     get faded() { return fadeOn && !fig.visible; },
     /** Held expression (null goes back to what the pose asks for). */
@@ -2150,6 +2159,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     setGround(fn: ((x: number, z: number) => number) | null) { ground = fn; },
     /** Resolves when the skinned body is in place. */
     whenReady,
+    /** Resolves when the skinned body and its light build (if it has one) are both in place. */
+    whenFull,
   };
 }
 

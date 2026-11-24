@@ -31,7 +31,7 @@ import { Wheel } from './ui/wheel';
 import { MapPin, interactiveMap, planetLayer } from './ui/map';
 import { Minimap, MapLayer, MapPoint, routeOf } from './ui/minimap';
 import { PERF, perfFrame } from './core/perfhud';
-import { setDisposeKeep } from './core/disposeTree';
+import { releaseGpu, setDisposeKeep } from './core/disposeTree';
 import { GpsTrail } from './world/gps';
 import type { AwayStage } from './game/away/stage';
 import type { MenuTab } from './ui/ui';
@@ -56,6 +56,7 @@ import { openCodex, showSafetyCard, consentGiven, stopSpeech } from './ui/scienc
 type State = 'loading' | 'title' | 'cinematic' | 'game' | 'narrator' | 'film' | 'flashback';
 // the playable prologue opens every new game; ?prologue=0 (tests) or the settings switch (replays) skip it
 const PROLOGUE_PARAM = new URLSearchParams(location.search).get('prologue');
+const NEAR_FADE_OFF = new URLSearchParams(location.search).get('nearfade') === '0';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 lockViewport();
@@ -126,6 +127,10 @@ let game: Game;
 let state: State = 'loading';
 let paused = false;
 let worldReady = false;
+/** True while warmAll compiles a scene in the background: the frame loop leaves the canvas as it is. */
+let warmHold = false;
+/** What the last trip away let go of on the GPU (phones), in MB: memory reports. */
+const AWAY_RELEASED: { last: { texMB: number; geoMB: number } | null } = { last: null };
 let pendingStart: (() => void) | null = null;
 let suppressPauseOnUnlock = false;
 let pendingNames: CrewNames = {};
@@ -846,9 +851,10 @@ function draw(dt: number) {
   audio.listen(activeCam.position, earFwd);
   fitFov(activeCam);
   // props that pass right by the follow camera dissolve; cutscenes and films are framed by hand
-  NEAR_FADE.value = state === 'game' && game && (game.mode === 'play' || game.mode === 'away' || game.mode === 'dead') && !photo ? 1 : 0;
+  // (?nearfade=0: never, to tell the fade's dither from other noise in a GPU capture)
+  NEAR_FADE.value = !NEAR_FADE_OFF && state === 'game' && game && (game.mode === 'play' || game.mode === 'away' || game.mode === 'dead') && !photo ? 1 : 0;
   portraitFrame();
-  if (!(state === 'film' && film.videoOn)) renderer.render(dt, elapsed);
+  if (!(state === 'film' && film.videoOn) && !warmHold) renderer.render(dt, elapsed);
   if (activeCam.fov !== designFov) { activeCam.fov = designFov; activeCam.updateProjectionMatrix(); }
   input.endFrame();
   fpsFrames++;
@@ -868,7 +874,9 @@ async function warmAll() {
   // working, the loading bar shows how far it is), then drawn once through the real pipeline for what only a draw
   // builds (the shadow and AO passes' variants, the uploads)
   const STEPS = 5; let step = 0;
-  const pre = async (sc: THREE.Scene, cam: THREE.Camera) => { await renderer.prewarm(sc, cam, (k) => ui.setLoading(0.9 + 0.1 * Math.min(1, (step + k) / STEPS))); step++; };
+  // while a scene compiles in the background the frame loop does not draw (it drew the world being compiled, and its
+  // first use of each program waited for that program to link: the cold load's 3.4 s freeze at t 9 after c148ab9)
+  const pre = async (sc: THREE.Scene, cam: THREE.Camera) => { warmHold = true; try { await renderer.prewarm(sc, cam, (k) => ui.setLoading(0.9 + 0.1 * Math.min(1, (step + k) / STEPS))); } finally { warmHold = false; } step++; };
   renderer.warmBegin();
   // the world from the spawn point, in every direction: the wake-up turns the camera around
   const wide = new THREE.PerspectiveCamera(100, 16 / 9, 0.1, 2400);
@@ -926,7 +934,13 @@ async function boot() {
   player.invertY = settings.invertY;
   world.scene.add(player.model.root);
   game = new Game(world, player, input, ui, (id) => touch.highlight(id), (text) => ui.hint(text));
-  game.away = new Away(camera, input, ui, detail(), (sc) => (sc ? renderer.setScene(sc, camera, false) : renderer.setScene(world.scene, camera, true)));
+  game.away = new Away(camera, input, ui, detail(), (sc) => {
+    if (!sc) { renderer.setScene(world.scene, camera, true); return; }
+    renderer.setScene(sc, camera, false);
+    // phones: what the planet, the films, the vault and the title's stage hold on the GPU goes while you are away (it is
+    // uploaded again when next drawn); ?awayrelease=0 keeps it
+    if (quality.name === 'mobile' && new URLSearchParams(location.search).get('awayrelease') !== '0') AWAY_RELEASED.last = releaseGpu([world.scene, cine.scene, vault.scene, stage.scene], [sc]);
+  });
   game.away.skins = lastSkins;
   // the take-off from Zenvora is a scene like any other: letterboxed, with its Skip
   game.away.onOutro = (on) => {
@@ -942,7 +956,10 @@ async function boot() {
   game.timersOff = !!settings.noTimers;
   // warm up shaders so the first in-game frame doesn't hitch
   player.spawn(0, 2, 0.35);
-  world.update(0.016, 0, 8.2, player.pos, camera, renderer.renderer);
+  // drawn = false: light and sky only. Drawn, the lake mirrored the whole planet here, before any of its programs were
+  // compiled in the background: every one linked on the main thread at once (the cold title load's 3 s freeze at t 8,
+  // a CPU profile of the A500 cold run: water.ts reflect 2.3 s, getProgramInfoLog 3.2 s)
+  world.update(0.016, 0, 8.2, player.pos, camera, renderer.renderer, false);
   game.story.npcs.prepare();
   // the default look is set up now, so an unchanged Begin rebuilds nothing
   await crewAll.catch(() => {});
@@ -1099,6 +1116,8 @@ window.addEventListener('resize', () => {
     const top = (M: Map<string, number>, n: number) => [...M.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, v]) => `${k} ${(v / 1e6).toFixed(1)}${N.has(k) ? ' x' + N.get(k) : ''}`);
     return { texMB: +([...T.values()].reduce((a, b) => a + b, 0) / 1e6).toFixed(1), geoMB: +([...G.values()].reduce((a, b) => a + b, 0) / 1e6).toFixed(1), tex: top(T, 40), geo: top(G, 40) };
   },
+  /** Test hook (tools/pedglitch.js): everyone in the street as drawn this frame, and the cars. */
+  awayPeds() { return (game?.away?.stage as { pedProbe?: () => unknown } | null)?.pedProbe?.() ?? null; },
   awayCrowd() { const st = game?.away?.stage as { crowdState?: () => { near: number; bodies: number; lost: number; held?: number[][] } } | null; return st?.crowdState?.() ?? { near: 0, bodies: 0, lost: 0 }; },
   /** Test hook: cars and people on the away stage this frame (tools/traffic_smoke.py). */
   awayTraffic() { return (game?.away?.stage as { trafficState?: () => unknown } | null)?.trafficState?.() ?? null; },
@@ -1124,6 +1143,7 @@ window.addEventListener('resize', () => {
   /** Test hook (tools/soak_smoke.py): milliseconds of one GPS route search on the away stage, and its corners. */
   awayRoute(ax: number, az: number, bx: number, bz: number) { const L = (game?.away?.stage as AwayStage | null | undefined)?.mapLayer; if (!L?.route) return null; const t0 = performance.now(); const r = L.route(ax, az, bx, bz); return { ms: performance.now() - t0, n: r.length }; },
   /** Test hook: what the renderer holds (soak test). */
+  get awayReleased() { return AWAY_RELEASED.last; },
   get gpuMem() { const i = renderer.renderer.info; return { geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0 }; },
   get awayCam() { return game?.away?.camState ?? null; },
   holdSubs(on: boolean) { ui.holdSubs = on; },
