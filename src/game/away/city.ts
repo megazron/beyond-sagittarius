@@ -1793,6 +1793,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // the camera keeps 0.7 m off walls (it was 0.25 m: a wall beside the lens was inside the near fade's band, 0.22 to
   // 0.6 m, and read as a noisy dotted wall up close, the far NE street in the v5 clips)
   const WALL_M = 0.7;
+  const CAR_M = 0.6; // how far the lens keeps off a car's body
   const clearance = (fx: number, fz: number, cx: number, cz: number) => {
     let best = 1;
     const dx = cx - fx, dz = cz - fz;
@@ -2003,6 +2004,20 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         const cx = Math.max(b.min.x, Math.min(p.x, b.max.x)), cz = Math.max(b.min.z, Math.min(p.z, b.max.z)), dx = p.x - cx, dz = p.z - cz, d = Math.hypot(dx, dz);
         if (d >= WALL_M || d < 1e-4) continue; // (inside one: the clearance pull deals with that)
         p.x = cx + (dx / d) * WALL_M; p.z = cz + (dz / d) * WALL_M;
+      }
+      // and off cars (a box 2.3 m by 1 m either way of its middle, in its own heading): walking in the road the lens sat
+      // against a car's grille (the 1.2.0 store take t03)
+      if (p.y < 2.2) {
+        const car = (x: number, z: number, yaw: number) => {
+          const fx = Math.sin(yaw), fz = Math.cos(yaw), dx = p.x - x, dz = p.z - z, al = dx * fx + dz * fz, ac = dx * fz - dz * fx;
+          const HL = 2.3 + CAR_M, HW = 1.0 + CAR_M;
+          if (Math.abs(al) >= HL || Math.abs(ac) >= HW) return;
+          // out through the nearer side or end
+          const nal = HL - Math.abs(al) < HW - Math.abs(ac) ? Math.sign(al || 1) * HL : al, nac = nal === al ? Math.sign(ac || 1) * HW : ac;
+          p.x = x + nal * fx + nac * fz; p.z = z + nal * fz - nac * fx;
+        };
+        dist.eachCar(car);
+        if (oldTown.visible) for (const c of traffic) car(c.x, c.z, c.v > 0 ? 0 : Math.PI);
       }
       // the tram's body (x -3.5..-0.9 at its widest, rounded ends): the lens keeps 1.5 m off it
       if (p.y > 4.6) return;

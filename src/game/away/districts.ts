@@ -1023,6 +1023,8 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
     height: districtHeight,
     peds,
     /** Test hook: where every moving car is (x, z, yaw) and every walker (x, z, crossing?). */
+    /** Each car's place and heading (yaw), without building a list (the camera's keepOff, every frame). */
+    eachCar: (fn: (x: number, z: number, yaw: number) => void) => { for (const c of cars) fn(c.x, c.z, c.yaw); },
     traffic: () => ({ cars: cars.map((c) => [c.x, c.z, c.yaw]), peds: peds.map((p) => [p.x, p.z, p.mode === 'cross' ? 1 : 0, p.mode !== 'cross' && !inOld(p.x, p.z) && districtHeight(p.x, p.z) < 0.07 ? 1 : 0]) }),
     nodes: sigNodes,
     bounds: BOUNDS,
