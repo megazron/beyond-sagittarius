@@ -1045,47 +1045,29 @@
 "fx": ""
 },
 "mz.intro.1": {
-"emotion": "dry",
-"intensity": 0.6,
-"pace": 0.93,
+"emotion": "ominous",
+"intensity": 0.55,
+"pace": 0.88,
 "pre": 0.0,
-"post": 0.2,
+"post": 0.3,
 "tags": [],
 "fx": "room"
 },
 "mz.intro.2": {
-"emotion": "theatrical",
-"intensity": 0.7,
-"pace": 0.9,
+"emotion": "ominous",
+"intensity": 0.65,
+"pace": 0.86,
 "pre": 0.0,
-"post": 0.2,
+"post": 0.3,
 "tags": [],
 "fx": "room"
 },
 "mz.intro.3": {
 "emotion": "dry",
 "intensity": 0.6,
-"pace": 0.95,
-"pre": 0.0,
-"post": 0.2,
-"tags": [],
-"fx": "room"
-},
-"mz.intro.4": {
-"emotion": "ominous",
-"intensity": 0.55,
 "pace": 0.9,
 "pre": 0.0,
-"post": 0.2,
-"tags": [],
-"fx": "room"
-},
-"mz.intro.5": {
-"emotion": "theatrical",
-"intensity": 0.65,
-"pace": 0.92,
-"pre": 0.0,
-"post": 0.25,
+"post": 0.35,
 "tags": [],
 "fx": "room"
 },
