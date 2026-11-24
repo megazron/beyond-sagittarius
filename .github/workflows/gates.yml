@@ -38,6 +38,8 @@ jobs:
           - { name: mobile_memory, run: 'python tools/soak_smoke.py --quality mobile --mem-only --proc-mb 3300' }
           - { name: perf_gate, run: 'python tools/perf_gate.py --out "$RUNNER_TEMP/perf.json"' }
           - { name: text_fit, run: 'python tools/text_fit.py --before --out "$RUNNER_TEMP/textfit.json"' }
+          # words on 3D surfaces read the right way round (signs, boards, neon); no key hints on a touch screen
+          - { name: signs_touch, run: 'python tools/sign_faces.py && python tools/touch_hints.py' }
           - { name: cutscene_qa, run: 'python tools/cutscene_qa.py --out "$RUNNER_TEMP/cutscene"' }
           - { name: combat, run: 'node --experimental-strip-types tools/combat/sim_test.ts && node --experimental-strip-types tools/combat/pose_test.ts && python tools/combat/play_test.py' }
           - { name: anim_qa, run: 'python tools/anim_qa.py --serve --every 0 --out "$RUNNER_TEMP/anim_qa.json"' }

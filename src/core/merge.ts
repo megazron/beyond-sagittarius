@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { hasWords } from './canvastext';
 import { nearFade } from './nearfade';
 
 /**
@@ -218,7 +219,8 @@ export function atlasCanvases(root: THREE.Object3D, take: (o: THREE.Mesh, m: THR
   // share one material; with `oneSide`, single- and double-sided ones do too (all drawn double-sided)
   // phones (`oneSide`): the colour a canvas is multiplied by and its opacity are painted into the atlas as well, so
   // every opaque unlit canvas shares one material, every see-through one another, every lit one a third
-  const sig = (m: Std) => oneSide ? [m.type, m.transparent, m.blending, m.toneMapped, m.depthWrite, m.fog, m.polygonOffset ? m.polygonOffsetFactor : 0, m.emissiveMap ? 'lit' : '', m.map?.colorSpace].join('|') : [m.type, oneSide ? 0 : m.side, m.transparent, m.blending, m.toneMapped, m.color?.getHexString(), m.opacity, m.depthWrite, m.depthTest, m.fog, m.alphaTest, m.polygonOffset, m.polygonOffsetFactor,
+  // (words on a front-only canvas keep their own front-only batch: drawn double-sided they read mirrored from behind)
+  const sig = (m: Std, cv?: HTMLCanvasElement) => oneSide ? [m.side === THREE.FrontSide && hasWords(cv) ? 'front-words' : '', m.type, m.transparent, m.blending, m.toneMapped, m.depthWrite, m.fog, m.polygonOffset ? m.polygonOffsetFactor : 0, m.emissiveMap ? 'lit' : '', m.map?.colorSpace].join('|') : [m.type, oneSide ? 0 : m.side, m.transparent, m.blending, m.toneMapped, m.color?.getHexString(), m.opacity, m.depthWrite, m.depthTest, m.fog, m.alphaTest, m.polygonOffset, m.polygonOffsetFactor,
     m.roughness, m.metalness, m.emissive?.getHexString(), m.emissiveMap ? 'lit' : m.emissiveIntensity, !!m.emissiveMap, m.map?.colorSpace, m.envMapIntensity].join('|');
   const groups = new Map<string, { mesh: THREE.Mesh; mat: Std; cv: HTMLCanvasElement }[]>();
   root.traverse((o) => {
@@ -231,7 +233,7 @@ export function atlasCanvases(root: THREE.Object3D, take: (o: THREE.Mesh, m: THR
     if (t.offset.x || t.offset.y || t.repeat.x !== 1 || t.repeat.y !== 1 || t.rotation || !t.flipY) return;
     if ((m.emissiveMap && m.emissiveMap !== t) || m.normalMap || m.alphaMap || m.roughnessMap || m.metalnessMap || m.aoMap) return;
     if (cv.width > size / 2 || cv.height > size / 2 || !mesh.geometry.attributes.uv) return;
-    const k = sig(m);
+    const k = sig(m, cv);
     (groups.get(k) ?? groups.set(k, []).get(k)!).push({ mesh, mat: m, cv });
   });
   let saved = 0;
@@ -274,7 +276,7 @@ export function atlasCanvases(root: THREE.Object3D, take: (o: THREE.Mesh, m: THR
         const used = Math.min(size, s.y + s.row + PAD), c2 = document.createElement('canvas'); c2.width = size; c2.height = Math.max(4, used);
         c2.getContext('2d')!.drawImage(s.c, 0, 0); s.c = c2;
         const t = new THREE.CanvasTexture(c2); t.colorSpace = it.mat.map!.colorSpace; t.anisotropy = it.mat.map!.anisotropy;
-        m = it.mat.clone(); m.map = t; if (it.mat.emissiveMap) { m.emissiveMap = t; m.emissiveIntensity = K; } if (oneSide) { m.side = THREE.DoubleSide; if (!lit) { m.color.setScalar(KC); m.opacity = 1; } else m.color.set(0xffffff); } m.userData = { ...it.mat.userData }; mats.set(s, m);
+        m = it.mat.clone(); m.map = t; if (it.mat.emissiveMap) { m.emissiveMap = t; m.emissiveIntensity = K; } if (oneSide) { m.side = it.mat.side === THREE.FrontSide && hasWords(it.cv) ? THREE.FrontSide : THREE.DoubleSide; if (!lit) { m.color.setScalar(KC); m.opacity = 1; } else m.color.set(0xffffff); } m.userData = { ...it.mat.userData }; mats.set(s, m);
       }
       const H = s.c.height;
       // a geometry shared with other meshes gets its own copy before its uvs move

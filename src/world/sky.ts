@@ -6,7 +6,8 @@ const C = (h: number) => new THREE.Color(h);
 const KEYS = {
   day: { zenith: C(0x1a5f96), horizon: C(0xa9c9d2), sun: C(0xfff0d8) },
   dusk: { zenith: C(0x30366e), horizon: C(0xf0895e), sun: C(0xffa060) },
-  night: { zenith: C(0x03050d), horizon: C(0x101a30), sun: C(0x8090c0) },
+  // (night: a glow low in the sky, so the trees and the hills stand out against it; it was 0x03050d over 0x101a30)
+  night: { zenith: C(0x060b1a), horizon: C(0x1c2b4a), sun: C(0x8090c0) },
 };
 
 /**
@@ -52,6 +53,8 @@ const fromAzEl = (az: number, el: number) =>
  * so it hangs in the same place in the sky).
  */
 export class Sky {
+  /** The sky's colours at day, dusk and night (shared: tuning one changes the sky). */
+  readonly keys = KEYS;
   group = new THREE.Group();
   sunDir = new THREE.Vector3();
   moonDir = fromAzEl(1.9, 0.78);

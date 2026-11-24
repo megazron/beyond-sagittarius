@@ -47,6 +47,8 @@ import { onLangChange } from './i18n';
 import { fitFov, lockViewport, tryFullscreen } from './core/viewport';
 import { startFit, auditFit, fitState, refitAll } from './ui/fit';
 import { canvasFitStats } from './core/canvastext';
+import { auditTextFaces, probeTextFaces } from './core/textfaces';
+import { FIRE_BASE } from './world/flame';
 import { soundscape, soundscapeState } from './core/soundscape';
 import { CLOTH_HOLES, UNDER_CLOTH, HANDS } from './characters/character';
 import { TECH, AGES } from './game/tech/data';
@@ -1189,6 +1191,11 @@ window.addEventListener('resize', () => {
   fitAudit(lang: Lang, fit = true, menus = false) { setLang(lang); fitState.on = fit; const r = auditFit({ fit, menus }); fitState.on = true; refitAll(); return r; },
   setLang(l: Lang) { setLang(l); },
   get canvasFit() { return { ...canvasFitStats }; },
+  /** Words on 3D surfaces that read mirrored, upside down or from a two-sided material, in the scene shown now (tools/sign_faces.py). */
+  textFaces() { const sc = (game?.away?.active ? (game.away.stage as AwayStage | null)?.scene : null) ?? world.scene; return auditTextFaces(sc); },
+  textFacesProbe() { return probeTextFaces(); },
+  /** The fire's ember bed (src/world/flame.ts FIRE_BASE), for tuning by eye. */
+  get fireBase() { return FIRE_BASE.value; },
   get sound() { return soundscapeState(); },
   /** Repairs made to the characters' meshes since load (holes closed, texture and normal fixes, skin and cloth drawn as their cover). */
   get meshFixes() { return { ...CLOTH_HOLES, ...UNDER_CLOTH }; },

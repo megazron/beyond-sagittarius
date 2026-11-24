@@ -18,6 +18,9 @@ const NOISE = `
   float fbm(vec2 p) { float s = 0.0, a = 0.5; for (int i = 0; i < 3; i++) { s += a * vn(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; } return s; }`;
 
 const uTime = { value: 0 };
+/** The ember bed among the sticks: where it ends (from, to, as parts of a tongue's height), how much dimmer (alpha) and
+ * cooler (heat) it is there. Shared by every fire. */
+export const FIRE_BASE = { value: new THREE.Vector4(0.25, 0.8, 0.85, 0.9) };
 let flameMat: THREE.ShaderMaterial | null = null, coalMat: THREE.ShaderMaterial | null = null, emberMat: THREE.ShaderMaterial | null = null;
 let lite = false;
 /** Phones: one octave less of noise in the flames (the flames are the costliest pixels of a fire). */
@@ -48,7 +51,7 @@ const FLAME_VS = `attribute vec3 aC; attribute vec2 aQ; attribute vec4 aS; attri
     vec3 p = c + r * (aQ.x * aS.y + sway) * sx + vec3(0.0, aQ.y * h * sy, 0.0);
     gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
   }`;
-const FLAME_FS = `uniform float uTime; varying vec2 vQ; varying float vSeed; varying vec2 vK;
+const FLAME_FS = `uniform float uTime; uniform vec4 uBase; varying vec2 vQ; varying float vSeed; varying vec2 vK;
   float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
   float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
     return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -76,14 +79,20 @@ const FLAME_FS = `uniform float uTime; varying vec2 vQ; varying float vSeed; var
     a *= smoothstep(0.0, 0.08, y);
     // (low down every tongue overlaps every other: there they are thinner, so the overlap is not one bright mass; s6 take)
     if (kind > 0.5) a *= 0.55 + 0.45 * smoothstep(0.08, 0.4, y);
+    // inside the sticks (about the lower half of a tongue, the teepee's 0.6 m) the fire is a bed of embers: dim, deep
+    // orange and red; the flame is brightest above the wood (s6c take, release review: the foot was still a
+    // white-yellow mass, every tongue's hottest part overlapping there)
+    float low = 1.0 - smoothstep(uBase.x, uBase.y, y);
+    a *= 1.0 - (kind > 0.5 ? uBase.z : uBase.z * 0.75) * low;
     if (a < 0.004) discard;
     // heat: hottest low in the middle of a tongue, broken by the noise (no even block of colour), cooling to red at
     // the edges and the tips. Never white: the brightest is a deep yellow (the tone map and the bloom do the rest)
     // (the foot, among the fuel, is a little cooler than a hand's breadth up: the brightest is low but not on the coals;
     // the glow layer never gets past orange. s6 first take: still a yellow-white wedge inside the teepee)
-    float heat = clamp(body * 1.1 - y * 0.62 + (n1 - 0.5) * 0.75 + 0.08 - 0.25 * (1.0 - smoothstep(0.0, 0.16, y)), 0.0, 1.0) * (kind < 0.5 ? 0.55 : 1.0);
+    float heat = clamp(body * 1.1 - y * 0.62 + (n1 - 0.5) * 0.75 + 0.08 - 0.25 * (1.0 - smoothstep(0.0, 0.16, y)), 0.0, 1.0) * (kind < 0.5 ? 0.38 : 1.0);
+    heat *= 1.0 - uBase.w * low; // the ember bed: never past orange in among the wood
     vec3 col = mix(vec3(0.38, 0.03, 0.005), vec3(1.35, 0.36, 0.05), smoothstep(0.05, 0.45, heat));
-    col = mix(col, vec3(1.7, 0.95, 0.26), smoothstep(0.6, 1.0, heat));
+    col = mix(col, vec3(1.7, 0.95, 0.26), smoothstep(0.6, 1.0, heat) * (1.0 - low));
     gl_FragColor = vec4(col, a * vK.y);
   }`;
 
@@ -91,7 +100,7 @@ function mats() {
   if (flameMat) return;
   flameMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-    uniforms: { uTime }, defines: lite ? { LITE: 1 } : {},
+    uniforms: { uTime, uBase: FIRE_BASE }, defines: lite ? { LITE: 1 } : {},
     // each quad: its foot at aC (object space), its corner aQ (x -0.5..0.5, y 0..1), its seed, width, height, rate;
     // aK: kind (0 glow, 1 tongue or lick) and its strength
     vertexShader: FLAME_VS, fragmentShader: FLAME_FS,

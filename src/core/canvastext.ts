@@ -9,6 +9,9 @@ let depth = 0;
 let installed = false;
 /** Counts for the text-fit test: texts drawn, ones that had to shrink, ones still too long at the smallest size. */
 export const canvasFitStats = { drawn: 0, shrunk: 0, squeezed: 0, off: false };
+/** Canvases that hold words (drawn on them, or copied in from one that does): the sign-orientation test reads these. */
+const worded = new WeakSet<object>();
+export const hasWords = (c: unknown) => !!c && typeof c === 'object' && worded.has(c as object);
 
 type Draw = (this: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth?: number) => void;
 
@@ -30,6 +33,7 @@ function boxFits(g: CanvasRenderingContext2D, text: string, x: number, y: number
 
 function wrap(orig: Draw): Draw {
   return function (this: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth?: number) {
+    if (text) worded.add(this.canvas);
     if (depth === 0 || canvasFitStats.off || !text) { orig.call(this, text, x, y, maxWidth as number); return; }
     canvasFitStats.drawn++;
     const w0 = Math.min(this.measureText(text).width, maxWidth ?? Infinity);
@@ -61,6 +65,9 @@ function install() {
   const P = CanvasRenderingContext2D.prototype;
   P.fillText = wrap(P.fillText as Draw) as typeof P.fillText;
   P.strokeText = wrap(P.strokeText as Draw) as typeof P.strokeText;
+  // a canvas copied into another (the stacked sign atlases, the halved phone canvases) carries its words with it
+  const di = P.drawImage as (this: CanvasRenderingContext2D, ...a: unknown[]) => void;
+  P.drawImage = function (this: CanvasRenderingContext2D, ...a: unknown[]) { if (worded.has(a[0] as object)) worded.add(this.canvas); return di.apply(this, a); } as typeof P.drawImage;
 }
 
 /** Run a texture's drawing with every text kept on the canvas. */
@@ -69,3 +76,7 @@ export function fitCanvasText<T>(g: CanvasRenderingContext2D, draw: (g: CanvasRe
   depth++;
   try { return draw(g); } finally { depth--; }
 }
+
+// marking starts with the page, so every canvas with words is known (the sign test reads them), not only those drawn
+// after the first fitCanvasText
+install();

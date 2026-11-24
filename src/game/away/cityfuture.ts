@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { twoFaced } from '../../core/textfaces';
 import { fitCanvasText } from '../../core/canvastext';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { cycleAtlas, cycleMaterial, holoMaterial, stamp, steamPuffs } from '../../core/cycle';
@@ -101,7 +102,7 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     if (vertical) text.split('').forEach((ch, i) => g.fillText(ch, 64, 60 + i * 80)); else g.fillText(text, 256, 68);
     g.strokeRect(6, 6, g.canvas.width - 12, g.canvas.height - 12);
   }
-  const additive = (map: THREE.Texture, k = 2.5) => new THREE.MeshBasicMaterial({ map, color: new THREE.Color(k, k, k), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+  const additive = (map: THREE.Texture, k = 2.5) => new THREE.MeshBasicMaterial({ map, color: new THREE.Color(k, k, k), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
   const words: [string, string][] = [['CHAI', '#ffb347'], ['MEHNDI', '#ff6ec7'], ['BIRYANI', '#7cff9a'], ['RISHTA.AI', '#7fd8ff'], ['DAWAI', '#5fffd0'], ['SNAPGRAM', '#ff5d8f'],
     ['PAAN', '#b6ff6e'], ['CHAAT', '#ffd36e'], ['SIM CARDS', '#9fd8ff'], ['TAILOR', '#ff9f6e'], ['HOVER REPAIR', '#6ef7ff'], ['JALEBI', '#ffb36e'], ['GOLD', '#ffe36e'], ['NEURO SPA', '#c79fff']];
   const texCache = new Map<string, THREE.Texture>();
@@ -109,7 +110,8 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     const [txt, col] = words[i % words.length], side = i % 2 ? 1 : -1, z = N - 8 - (i / n) * (N - S - 16) + (rnd() - 0.5) * 4;
     const key = txt + col; if (!texCache.has(key)) texCache.set(key, neon(txt, col, true));
     const tall = Math.min(6, txt.length * 0.55 + 0.5);
-    const v = add(new THREE.Mesh(new THREE.PlaneGeometry(0.85, tall), additive(texCache.get(key)!, 2.2)));
+    // two faces back to back: the letters read from up and down the street (two-sided, one way read mirrored)
+    const v = add(new THREE.Mesh(twoFaced(new THREE.PlaneGeometry(0.85, tall)), additive(texCache.get(key)!, 2.2)));
     v.position.set(side * (FRONT - 0.7), 3.6 + tall / 2 + rnd() * 4, z); v.userData.ground = false;
   }
   // holograms floating over the shops they belong to, slowly turning and flickering: every name in one atlas, every

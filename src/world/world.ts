@@ -50,6 +50,17 @@ export class World {
   /** Sun or moon, with two shadow cascades fitted to the view by three's SunLight. */
   sun = new SunLight(0xffffff, 3);
   hemi = new THREE.HemisphereLight(0x8fb7c8, 0x1a2420, 0.6);
+  /**
+   * Night that you can play in (release review: "almost black away from the fire", night shots left out of the store
+   * set). A full night is still dark and blue, but the ground under the moon and the giant planet reads, the sky glows
+   * at the horizon so trees and hills stand out against it, and the near ground has a cold fill. moon: the moonlight's
+   * intensity (was 0.55); fill: the sky light's intensity at night (was 0.4); sky/ground: its colours at night; env: the
+   * image light at night (was 0.42); exposure: how far the eye opens up at night (was 0.6). The fight's own planet fill (combat.ts, 1.55 at 34 degrees) and the eye stopping
+   * down near a fire (0.78) sit on top of these; the story's camp fire light is 3.5. (GPU stills, release fixes: mean
+   * brightness of the frame 12 of 255 with the old values, 26 to 30 with moon 3, fill 1.4, env 1, exposure +0.9; the exposure
+   * stays +0.6 and the lights carry it, because at +0.9 a white coat by the fight's fire burned out)
+   */
+  night = { moon: 3.6, fill: 1.7, sky: new THREE.Color(0x5d6f9c), ground: new THREE.Color(0x1f2a33), env: 1.2, exposure: 0.6 };
   fog: THREE.FogExp2;
   ready = false;
   onCreatureStep: (p: THREE.Vector3) => void = () => {};
@@ -177,11 +188,12 @@ export class World {
 
     const day = sky.day;
     const sunI = 4.6 * smoothstep(-0.02, 0.25, e);
-    const moonI = 0.55 * (1 - sunUp);
+    const N = this.night, nk = 1 - day; // nk: how much of night it is
+    const moonI = N.moon * (1 - sunUp);
     this.sun.intensity = sunUp > 0.5 ? Math.max(sunI, 0.4) : moonI;
     this.sun.color.copy(sunUp > 0.5 ? sky.sunColor : new THREE.Color(0x9fb4ff));
-    this.hemi.color.copy(sky.zenith).lerp(new THREE.Color(0xffffff), 0.25);
-    this.hemi.groundColor.set(0x141c1a).lerp(new THREE.Color(0x2a3a33), day);
+    this.hemi.color.copy(sky.zenith).lerp(WHITE, 0.25).lerp(N.sky, nk);
+    this.hemi.groundColor.copy(N.ground).lerp(tmpG.set(0x2a3a33), day);
     // image-based light carries most of the ambient now; the hemisphere fills in
     this.envGround.set(0x101814).lerp(tmpG.set(0x3a4a40), day).multiply(tmpG2.copy(this.sun.color).lerp(WHITE, 0.6));
     // the planet's image light is captured again only while the planet is on screen (a capture is six sky renders and
@@ -189,9 +201,9 @@ export class World {
     const envTex = drawn || !this.env.texture ? this.env.update(renderer, time, this.envGround) : this.env.texture;
     if (envTex) {
       this.scene.environment = envTex;
-      this.scene.environmentIntensity = 0.42 + day * 0.68;
+      this.scene.environmentIntensity = N.env + day * (1.1 - N.env);
     }
-    this.hemi.intensity = (0.4 + day * 0.7) * (envTex ? 0.72 : 1);
+    this.hemi.intensity = (N.fill + day * (1.1 - N.fill)) * (envTex ? 0.72 : 1);
     this.fog.color.copy(sky.horizon);
     this.fog.density = this.q.fogDensity * (1 + (1 - day) * 0.5);
     // valley mist: thickest around dawn and at night, thin at noon
@@ -203,7 +215,7 @@ export class World {
     // a low sun already glows through the haze: keep the shafts from washing the frame out
     this.post.strength = sunUp > 0.5 ? 0.15 + 0.85 * smoothstep(0.05, 0.3, e) : 0.25;
     this.post.density = 0.0016 * (1 + dawn * 0.5);
-    renderer.toneMappingExposure = 0.82 + (1 - day) * 0.6;
+    renderer.toneMappingExposure = 0.82 + (1 - day) * N.exposure;
     this.forest.setGlow(0.9 + (1 - day) * 2.2);
     this.forest.setSun(this.lightDir, this.sun.color);
 
