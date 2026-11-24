@@ -248,9 +248,9 @@ with sync_playwright() as pw:
     page.evaluate("""(() => { const s = __bs.save; s.level = 7; s.flags.spear = true; s.flags.fire = true; s.flags.shelter = true; s.flags.houndGone = false;
       s.flags.slept = false; s.timeOfDay = 20.2; })()""")
     for i in range(80):
-        if page.evaluate("!!document.querySelector('[data-diff]') || !!(__bs.combat.run)"): break
+        if page.evaluate("!document.getElementById('modal').classList.contains('hidden') && !!document.querySelector('[data-diff]') || !!(__bs.combat.run)"): break
         step(page, 0.5); time.sleep(0.1)
-    ok(page.evaluate("!!document.querySelector('[data-diff]')"), 'story: the first story fight asks how hard fights should be')
+    ok(page.evaluate("!document.getElementById('modal').classList.contains('hidden') && !!document.querySelector('[data-diff]')"), 'story: the first story fight asks how hard fights should be')
     page.evaluate("""document.querySelector('[data-diff="normal"]').click()"""); step(page, 0.5)
     d = page.evaluate(D)
     ok(d['encounter'] == 'night.defence', 'story: level 7 at night starts the night at the fire by itself', d['encounter'])
@@ -272,7 +272,7 @@ with sync_playwright() as pw:
        'story: a save in the middle of the fight is the moment before it', [sv['inventory'], sv['timeOfDay'], sv['flags'].get('e1.night')])
     # go down: the fight offers to try again
     page.evaluate("__bs.combat.activeSim.player.down = true"); step(page, 3.0); time.sleep(0.3); step(page, 2.0)
-    ok(page.evaluate("!!document.getElementById('cb-retry')"), 'story: a lost fight offers to try again from its start')
+    ok(page.evaluate("!document.getElementById('modal').classList.contains('hidden') && !!document.getElementById('cb-retry')"), 'story: a lost fight offers to try again from its start')
     ok(page.evaluate("!!document.getElementById('cb-easier') && !!document.getElementById('cb-goon')"), 'story: and easier, or go on as it is')
     shot(page, 'story_night_lost')
     page.evaluate("document.getElementById('cb-retry').click()"); step(page, 0.5)

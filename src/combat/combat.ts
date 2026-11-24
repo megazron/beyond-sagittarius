@@ -245,7 +245,10 @@ export class Combat {
     ui.openModal(`<div class="center-msg cb-end cb-ask"><h2>${t('cb.ask.title')}</h2><p>${t('cb.ask.body')}</p>
       <div class="actions">${(['story', 'normal', 'hard'] as Difficulty[]).map((d) => `<button class="btn${d === S.difficulty ? ' primary' : ''}" data-diff="${d}"><span>${t(`cb.set.${d}`)}<small>${t(`cb.ask.${d}`)}</small></span></button>`).join('')}</div>
       <p class="facts">${t('cb.ask.later')}</p></div>`);
+    // once: a closed modal keeps its buttons in the page until the next one replaces them
+    let done = false;
     document.querySelectorAll<HTMLButtonElement>('[data-diff]').forEach((b) => b.addEventListener('click', () => {
+      if (done) return; done = true;
       S.difficulty = b.dataset.diff as Difficulty; S.asked = true; D.saveSettings(); this.applySettings();
       ui.closeModal(); D.input.enabled = true; go();
     }));
@@ -262,10 +265,11 @@ export class Combat {
     const easier = S.difficulty !== 'story';
     ui.openModal(`<div class="center-msg cb-end cb-lost"><h2>${t(`cb.enc.${run.id}`)}</h2><p>${t('cb.lost.body')}</p>
       <div class="actions"><button class="btn primary" id="cb-retry">${t('cb.lost.retry')}</button>${easier ? `<button class="btn" id="cb-easier">${t('cb.lost.easier')}</button>` : ''}<button class="btn" id="cb-goon">${t('cb.lost.goon')}</button></div></div>`);
-    const close = () => { ui.closeModal(); D.input.enabled = true; };
-    document.getElementById('cb-retry')!.addEventListener('click', () => { close(); this.retry(false); });
-    document.getElementById('cb-easier')?.addEventListener('click', () => { close(); this.retry(true); });
-    document.getElementById('cb-goon')!.addEventListener('click', () => { close(); this.slow = 1; this.endEncounterNow(); D.ui.fade('black', 0, 0.6); D.persist(); });
+    let used = false;
+    const close = () => { if (used) return false; used = true; ui.closeModal(); D.input.enabled = true; return true; };
+    document.getElementById('cb-retry')!.addEventListener('click', () => { if (close()) this.retry(false); });
+    document.getElementById('cb-easier')?.addEventListener('click', () => { if (close()) this.retry(true); });
+    document.getElementById('cb-goon')!.addEventListener('click', () => { if (!close()) return; this.slow = 1; this.endEncounterNow(); D.ui.fade('black', 0, 0.6); D.persist(); });
   }
   private retry(easier: boolean) {
     const D = this.d, e = this.enc!, run = this.encounter!;

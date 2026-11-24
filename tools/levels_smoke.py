@@ -494,13 +494,13 @@ def main():
             st = ev("({state: __bs.state, level: __bs.level, mode: __bs.mode, hound: __bs.hound, crew: __bs.crew, busy: __bs.save && null})")
             lvl = st["level"]
             # the story's own fights (src/game/fights.ts): nothing but the story starts them here
-            if ev("!!document.querySelector('[data-diff]')"):
+            if ev("!document.getElementById('modal').classList.contains('hidden') && !!document.querySelector('[data-diff]')"):
                 log("difficulty asked at level", lvl, ev("({t: __bs.save.timeOfDay, enc: __bs.combat.debug().encounter})"))
                 ev("document.querySelector('[data-diff=\"story\"]').click()")
                 ev("__bs.step(0.2)")
                 log("after the answer:", ev("({modal: !document.getElementById('modal').classList.contains('hidden'), diff: !!document.querySelector('[data-diff]'), enc: __bs.combat.debug().encounter, out: __bs.combat.run && __bs.combat.run.outcome, gone: !!__bs.save.flags.houndGone})"))
                 continue
-            if ev("!!document.getElementById('cb-goon')"):
+            if ev("!document.getElementById('modal').classList.contains('hidden') && !!document.getElementById('cb-goon')"):
                 fights.append([ev("__bs.combat.run && __bs.combat.run.id"), "lost"])
                 ev("document.getElementById('cb-goon').click()")
                 time.sleep(0.8)
