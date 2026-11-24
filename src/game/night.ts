@@ -241,6 +241,12 @@ export class FirstNight {
 
   /** The night: noises, stillness, the choice, then the fight (or the hiding) through the combat code. */
   night(done: (held: boolean) => void) {
+    // how hard fights should be is asked first, once, before the night's own scene (combat.ensureAsked; the world waits)
+    const cb0 = this.combat();
+    if (cb0) { cb0.ensureAsked(() => this.nightScene(done)); return; }
+    this.nightScene(done);
+  }
+  private nightScene(done: (held: boolean) => void) {
     const z = this.z, s = this.s;
     this.playScene([
       { hold: 2.4, shot: () => cover.close(z, 0.45, 1.0), run: () => {
