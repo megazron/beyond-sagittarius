@@ -10,10 +10,13 @@ export interface SwayUniforms {
   /** Hair only: the turn (axis xyz, angle w, head space) from the ground's direction with the head upright to where it is now:
    *  long strands turn about their roots by most of it, so they keep hanging down whichever way the head bends or tilts */
   uTilt: { value: THREE.Vector4 };
+  /** Hair only: up to six capsules the strands are pushed out of (the arms and thighs, head space): a, b per capsule,
+   *  the radius in a's w (0: off). Kneeling with the head down, the hanging tails passed through her arm and thigh. */
+  uCap: { value: THREE.Vector4[] };
 }
 
 export function swayUniforms(): SwayUniforms {
-  return { uTime: { value: 0 }, uSwing: { value: new THREE.Vector3() }, uFlutter: { value: 0.012 }, uDrop: { value: new THREE.Vector3() }, uTilt: { value: new THREE.Vector4() } };
+  return { uTime: { value: 0 }, uSwing: { value: new THREE.Vector3() }, uFlutter: { value: 0.012 }, uDrop: { value: new THREE.Vector3() }, uTilt: { value: new THREE.Vector4() }, uCap: { value: Array.from({ length: 12 }, () => new THREE.Vector4()) } };
 }
 
 const VERT_HEAD = /* glsl */ `

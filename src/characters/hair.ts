@@ -300,7 +300,7 @@ function hairMesh(geo: THREE.BufferGeometry, colors: HairColors, sway: SwayUnifo
     // direction and stood out sideways (GPU take tasksD). So each strand also turns about its root (uTilt) by a share of
     // the head's turn from upright that grows with its length (a 0.7 m tail keeps hanging down, a fringe barely moves)
     // and along it (the root stays on the scalp); its normal and tangent turn with it.
-    sh.vertexShader = `attribute float aT; attribute float aLen; attribute vec3 aTan; attribute vec3 aRoot; attribute vec3 aDir; varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uDrop; uniform vec4 uTilt;
+    sh.vertexShader = `attribute float aT; attribute float aLen; attribute vec3 aTan; attribute vec3 aRoot; attribute vec3 aDir; varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uDrop; uniform vec4 uTilt; uniform vec4 uCap[12];
       vec3 hairTurn(vec3 v, float a) { vec3 k = uTilt.xyz; float c = cos(a), s = sin(a); return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c); }
       float hairTurnA() { return uTilt.w * min(aLen * 1.4, 1.0) * min(aT * 3.0, 1.0); }
       // then a long strand gives in to gravity: it turns from where it now runs towards the ground, more the further the
@@ -315,7 +315,15 @@ function hairMesh(geo: THREE.BufferGeometry, colors: HairColors, sway: SwayUnifo
       }\n` + sh.vertexShader
       .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n  vec4 hh = hairHang(); objectNormal = rod(hairTurn(objectNormal, hairTurnA()), hh.xyz, hh.w);`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>\n  vT = aT; vPh = aPhase; vTan = normalMatrix * rod(hairTurn(aTan, hairTurnA()), hh.xyz, hh.w);
-  transformed = aRoot + rod(hairTurn(transformed - aRoot, hairTurnA()), hh.xyz, hh.w) + uDrop * min(aSway * aSway, 1.6) * aLen;`);
+  transformed = aRoot + rod(hairTurn(transformed - aRoot, hairTurnA()), hh.xyz, hh.w) + uDrop * min(aSway * aSway, 1.6) * aLen;
+  // out of the arms and thighs (uCap): only the free part of a strand, never its root on the scalp
+  for (int ci = 0; ci < 6; ci++) {
+    vec4 ca = uCap[ci * 2]; vec3 cb = uCap[ci * 2 + 1].xyz;
+    if (ca.w <= 0.0) continue;
+    vec3 ab = cb - ca.xyz; float ct = clamp(dot(transformed - ca.xyz, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
+    vec3 cd = transformed - (ca.xyz + ab * ct); float cl = length(cd);
+    if (cl < ca.w && cl > 1e-5) transformed += cd * ((ca.w - cl) / cl) * min(aT * 2.5, 1.0);
+  }`);
     sh.fragmentShader = `varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uRoot, uMid, uTip, uShine;\n` + sh.fragmentShader
       .replace('#include <color_fragment>', /* glsl */ `#include <color_fragment>
         diffuseColor.rgb = mix(mix(uRoot, uMid, smoothstep(0.0, 0.35, vT)), uTip, smoothstep(0.45, 1.0, vT));`)

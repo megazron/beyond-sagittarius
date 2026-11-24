@@ -133,7 +133,7 @@ export type CrewPose = 'swim' | 'float' | 'stand' | 'idle' | 'walk' | 'sit' | 'i
 /** Rig switches for A/B tests (dev/animqa.ts): reach, the chest and collarbone helping a held hand get there. */
 /** lipsLetGo: how much of the fingers' torso guard lets go with the hand at the lips (eating, drinking). */
 /** throwTame: how much of the throw clip's lunge (legs and hips) is taken back towards the stance it began from. */
-export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9, sipYaw: -0.5, cupPalm: 0.062, cupMax: 1.6 };
+export const RIG_OPTS = { reach: true, lipsLetGo: 1, throwTame: 0.5, faceUp: 1, sipTip: 1.65, hairTurn: 1, contactEase: 9, sipYaw: -0.5, cupPalm: 0.08, cupMax: 1.5 };
 /** How far a strand's tip falls towards the ground as the head turns from upright, per metre of strand and per unit of
  *  change in the ground's direction seen from the head (hair.ts uDrop; times the strand's sway squared, at most 1.6) */
 const HAIR_DROP = 0.15;
@@ -1675,10 +1675,21 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const handTask = !!task && (task.kind === 'plant' || task.kind === 'pickup' || task.kind === 'putdown' || task.kind === 'throw' || task.kind === 'fix');
     kit?.phoneLeft(busyR(task?.prop) || (handTask && task!.prop !== 'phone') || (!task && busyR(heldProp)) || !!hold?.R);
     // the right hand down to her pocket and back while the phone goes in or comes out (kit.ts pocketReach)
+    // (standing only: seated or kneeling the hand is by the pocket already, and the reach down put it into her thigh and
+    // belly, anim_qa meshIn 2.9 to 3.5 cm; a task takes the hand over once the phone is in, a quarter second on)
     const pr = kit?.pocketReach();
     if (pr && !(limbs?.ownArms ?? armOwner)) {
-      const upR = bs.get('upperarmR')!, loR = bs.get('lowerarmR')!, hdR = bs.get('handR')!;
-      armTo(bs, 'R', upR, loR, hdR, V4s.copy(pr.at).add(V1.set(0, 0.075, 0)), pr.w, dt);
+      const lA = bs.get('upperlegR')!.getWorldPosition(V5), lB = bs.get('lowerlegR')!.getWorldPosition(V1);
+      const ax = V2.copy(lB).sub(lA), al = ax.length(), upright = clamp((-ax.y / Math.max(al, 1e-5) - 0.8) / 0.15, 0, 1);
+      const taskW = task && (task.hands === 'R' || task.hands === 'both') ? smooth01((task.t - 0.25) / 0.25) : 0;
+      const w = pr.w * upright * (1 - taskW);
+      if (w > 0.005) {
+        // the wrist a hand's length above the pocket and out from the thigh's line by a few centimetres
+        const tt = clamp(V3.copy(pr.at).sub(lA).dot(ax) / Math.max(al * al, 1e-6), 0, 1), out = V3.copy(pr.at).sub(V4s.copy(lA).addScaledVector(ax, tt));
+        out.y = 0; if (out.lengthSq() > 1e-8) out.normalize();
+        const upR = bs.get('upperarmR')!, loR = bs.get('lowerarmR')!, hdR = bs.get('handR')!;
+        armTo(bs, 'R', upR, loR, hdR, V4s.copy(pr.at).addScaledVector(out, 0.035).add(V1.set(0, 0.075, 0)), w, dt);
+      }
     }
     if (task) taskArms(bs, kind, t, dt);
     else if (kind === 'idle' && !gaze && speak <= 0 && !moving) idleLife(bs, t, dt);
@@ -1996,6 +2007,18 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         const al = V1.length();
         if (al > 1e-5) sway.uTilt.value.set(V1.x / al, V1.y / al, V1.z / al, ang * RIG_OPTS.hairTurn); else sway.uTilt.value.set(1, 0, 0, 0);
       }
+    }
+    // the arms and thighs as capsules in the head's space, for the long strands to hang round (hair.ts uCap); only as
+    // the head bends (upright, the tails hang behind the shoulders as built)
+    if (hb) {
+      const on = clamp((sway.uTilt.value.w - 0.25) / 0.35, 0, 1), sc = hb.getWorldScale(V1).y || 1;
+      const caps = [['upperarmL', 'lowerarmL', 0.05], ['upperarmR', 'lowerarmR', 0.05], ['lowerarmL', 'handL', 0.042], ['lowerarmR', 'handR', 0.042], ['upperlegL', 'lowerlegL', thighR?.L ?? 0.08], ['upperlegR', 'lowerlegR', thighR?.R ?? 0.08]] as const;
+      caps.forEach(([a, b, r], i) => {
+        const A = sway.uCap.value[i * 2], Bv = sway.uCap.value[i * 2 + 1], ba = bs.get(a), bb = bs.get(b);
+        if (!on || !ba || !bb) { A.w = 0; return; }
+        hb.worldToLocal(ba.getWorldPosition(tmp)); A.set(tmp.x, tmp.y, tmp.z, (r + 0.012) / sc * on);
+        hb.worldToLocal(bb.getWorldPosition(tmp)); Bv.set(tmp.x, tmp.y, tmp.z, 0);
+      });
     }
     sway.uTime.value = t;
     sway.uFlutter.value = 0.003 + Math.min(amount, 1) * 0.007;

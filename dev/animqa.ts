@@ -244,7 +244,8 @@ export function* scenarioFrames(c: Character, name: string, h: QaHooks, every = 
       // a flat thing (the bread, pinched at its edge with most of it out past the fingers) from its nearest point: from its
       // middle it read 7 to 8 cm off a palm it touches
       m.geometry.computeBoundingBox(); const bx = m.geometry.boundingBox!.getSize(new THREE.Vector3());
-      let g = Math.max(0, mid.distanceTo(palm) - m.geometry.boundingSphere!.radius * 0.6);
+      // (its radius as drawn: a cup is scaled to the hand that holds it, character.ts cupScale)
+      let g = Math.max(0, mid.distanceTo(palm) - m.geometry.boundingSphere!.radius * m.matrixWorld.getMaxScaleOnAxis() * 0.6);
       if (Math.min(bx.x, bx.y, bx.z) < 0.25 * Math.max(bx.x, bx.y, bx.z) && m.geometry.type === 'CylinderGeometry') {
         const pa = m.geometry.attributes.position, V = new THREE.Vector3(); let near = Infinity;
         for (let i = 0; i < pa.count; i++) near = Math.min(near, V.fromBufferAttribute(pa, i).applyMatrix4(m.matrixWorld).distanceTo(palm));
