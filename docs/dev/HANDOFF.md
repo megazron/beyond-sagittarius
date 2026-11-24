@@ -15,6 +15,35 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
   over the cutscene's, film's or narrator's camera while it is set (`__bs.photo(null)` gives it back).
 - `__bs.dof(focus, aperture)`: depth of field for a capture (presets with `dofStep` > 0; 0 turns it off).
 
+## The opening: New Game, MegaZroN's cold open, the city (2026-11-24, intro agent, worktree ~/bs-intro)
+- Owner: "No need to mention unnecessary things by the narrator. Also the first thing when we click New Game the
+  MegaZroN scene is glitched, not opening." His order: narrator, then the city, then the take-off, then the rest.
+- Live build a98ead4 on the A500 (fresh profiles, 1920x1080 Web and a 412x915 phone with touch): New Game reached the
+  Vault and played all five lines both times, no console errors, no failed requests. What looked broken: after Begin
+  the title's planet flashed for half a second before the black (the creator closed to the title first); his pale hair
+  burned white under the halo light (a point light 0.4 m over his head, pulsing with his voice); the voice index and
+  the first take were fetched only as the first subtitle showed (a slow first load could start the first line late or
+  silent, and the next line then cut it); on the phone the first line started under the black.
+- intro branch: Begin keeps the creator's figure under the fade to black; `voice.ready(keys)` loads the index and the
+  first take under the black before the Vault starts (4 s cap); the next line waits for the current take to end
+  (`voice.speaking()`, 4 s cap, off on a held clock); halo light lower, further back, steadier; hair a shade darker;
+  the quill cream, not white. `__bs.vault.said`, `__bs.vaultScript` for tests. A VaultLine with key '' is a held shot.
+- Narrator: three lines, `mz.intro.1-3`: who he is, the hook (keeps the story's 41 days), the hand-over; a silent
+  establishing beat first, the hook over the black hole, the last line on the Ledger. Voiced again in en/hi/ur with
+  tools/tts/generate_voice.py --only 'mz.intro.*' --device cuda (venv ~/bs-voice/.venv-tts2), then tools/tts/lipsync.py;
+  generate_voice rewrites hi/ur index.json in its own format: keep the file's format and change only the keys you made.
+  tools/film/vault.json (the Blender film plan) still has the old five lines.
+- CI: `tools/intro_smoke.py` (job intro_smoke): fresh profile, safety card, New Game, Begin, the Vault to its end with
+  no Skip, every line said in order, page screenshots never black or frozen, no console errors or failed requests, the
+  title card, the playable city.
+- GPU probe (scratch, copy if needed): probe.py does player clicks, screencast + game audio, console, network, state
+  samples, and with mode `full` the city's tasks and the take-off; runm.sh runs several probes in ONE exclusive heavy
+  step, one Chrome at a time on port 9471, closed by PID. Clips in ~/bs-cap/intro/clips.
+- Still wrong (not mine to fix, reported): the city takes 9-15 s of loading screen after the title card on the A500
+  (25 s cap in precompile; building the city under the black before the Vault cut it to ~10 s but froze the Vault for
+  3.8 s at its start, so I took that out); a 1.7 s freeze as the city appears; the take-off's first shots fill the frame
+  with the liner's white hull up close; "Prologue: The Last Normal Day" shows after the city, which was that day.
+
 ## Layout
 - `src/combat/sim/`: the simulation. No DOM, no three.js. `core.ts` (types, difficulty), `weapons.ts`, `species.ts`,
   `ai.ts`, `sim.ts`, `encounters.ts`, `tension.ts`. Runs under Node.
