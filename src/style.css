@@ -599,5 +599,5 @@ body.touch .minimap { top: calc(var(--safe-t) + 120px); inset-inline-end: calc(v
 #map-chart { touch-action: none; cursor: crosshair; }
 
 /* Cinema mode (?cinema=1, __bs.cinema): only the 3D view, for trailers and screenshots */
-body.cinema > :not(#c) { visibility: hidden !important; }
-body.cinema, body.cinema * { cursor: none !important; }
+html.cinema body > :not(#c) { opacity: 0 !important; pointer-events: none !important; }
+html.cinema, html.cinema * { cursor: none !important; }
