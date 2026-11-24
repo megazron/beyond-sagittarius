@@ -1658,8 +1658,9 @@ Owns: mirrored text, touch hints, night readability, fire base, the Android buil
   ?folkview=0 on dist-p29i: read p29/pgbisect.log, then bisect by commit if no switch explains it. Also on that run:
   smoke timed out in the planet wake-up (tools/smoke.py:129, outside the city; it passed on 376062b: rerun) and the
   known combat bow-arm flake.
-- STILL RUNNING when I stopped: ped_i_web (detector, dist-p29i: read p29/ped_i_web/report.json with p28/an.py and
-  p29/cc.py) and p29/pgbisect.sh (log p29/pgbisect.log). NO GPU CLIPS were made for this branch and nothing was sent to
+- STILL RUNNING when I stopped: p29/pgbisect.sh (log p29/pgbisect.log; first line, no switch, reproduces CI exactly).
+  The Web detector on dist-p29i was stopped part way (no report; capture Chrome checked closed): rerun
+  `p29/ped.sh dist-p29i i` for Web (p28/an.py, p29/cc.py read the report). NO GPU CLIPS were made for this branch and nothing was sent to
   mobile_v9_GPU: p29/final.sh builds dist-p29j from the worktree HEAD and records the Mobile and Web clips (p28 plans)
   plus the 4x proxy; run it once perf_gate is fixed, watch every clip frame by frame before sending (no sound).
 - PHONES (task 2): not measured on the proxy in this session; draws per body unchanged (bodymerge relay below).
