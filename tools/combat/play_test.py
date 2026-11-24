@@ -263,12 +263,10 @@ with sync_playwright() as pw:
     inv0 = page.evaluate("JSON.stringify(__bs.save.inventory)")
     # spend the bag, then save in the middle of the fight: the save keeps the moment before it began
     page.evaluate("__bs.save.inventory.branch = 0; __bs.save.stats.health = 40"); step(page, 0.2)
-    page.evaluate("__bs.hidden()"); time.sleep(0.3)
+    page.evaluate("window.dispatchEvent(new Event('beforeunload'))"); time.sleep(0.3)
     sv = page.evaluate("JSON.parse(localStorage.getItem('bs-save-v1'))")
     ok(json.dumps(sv['inventory'], sort_keys=True) == json.dumps(json.loads(inv0), sort_keys=True) and sv['timeOfDay'] < 21 and not sv['flags'].get('e1.night'),
        'story: a save in the middle of the fight is the moment before it', [sv['inventory'], sv['timeOfDay'], sv['flags'].get('e1.night')])
-    page.keyboard.press('Escape'); time.sleep(0.5)
-    if page.evaluate("!!__bs.paused"): page.keyboard.press('Escape'); time.sleep(0.3)
     # go down: the fight offers to try again
     page.evaluate("__bs.combat.activeSim.player.down = true"); step(page, 3.0); time.sleep(0.3); step(page, 2.0)
     ok(page.evaluate("!!document.getElementById('cb-retry')"), 'story: a lost fight offers to try again from its start')
@@ -279,7 +277,7 @@ with sync_playwright() as pw:
     ok(d['encounter'] == 'night.defence' and d['phase'] == 'prep' and not d['player']['down'], 'story: trying again starts the night over', [d['encounter'], d['phase']])
     ok(page.evaluate("JSON.stringify(__bs.save.inventory)") == inv0 and page.evaluate("__bs.save.level") == 7, 'story: trying again gives the bag back and keeps the story where it was')
     # load the save made in the middle of the night: the night comes again by itself
-    page.evaluate("__bs.hidden()"); time.sleep(0.3)
+    page.evaluate("window.dispatchEvent(new Event('beforeunload'))"); time.sleep(0.3)
     page.reload(); page.wait_for_function("window.__bs && __bs.state === 'title' && __bs.ready", timeout=600000)
     page.evaluate("document.getElementById('btn-continue').click()")
     for i in range(240):

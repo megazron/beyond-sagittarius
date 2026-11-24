@@ -550,6 +550,7 @@ def main():
                 # between-level scenes: let them start, photograph, skip
                 if not skip_scene(st["state"]):
                     failures.append(f"scene stuck on level {lvl}")
+                    log(f"scene stuck on level {lvl}:", ev("({state: __bs.state, mode: __bs.mode, modal: !document.getElementById('modal').classList.contains('hidden'), diff: !!document.querySelector('[data-diff]'), fb: document.body.classList.contains('flashback'), vault: __bs.vault && __bs.vault.playing, enc: __bs.combat && __bs.combat.debug().encounter})"))
                     break
                 continue
             if st["mode"] == "scene":
@@ -566,6 +567,8 @@ def main():
                 ev("__bs.skip()")
                 ev("__bs.step(0.1)")
                 continue
+            if lvl == 7 and it % 5 == 0:
+                log("level 7 state:", ev("({state: __bs.state, mode: __bs.mode, t: __bs.save.timeOfDay, modal: !document.getElementById('modal').classList.contains('hidden'), diff: !!document.querySelector('[data-diff]'), enc: __bs.combat && __bs.combat.debug().encounter, night: __bs.save.flags['e1.night'], gone: __bs.save.flags.houndGone})"))
             if lvl != last_level:
                 log(f"-> level {lvl}  (iteration {it})")
                 seen_levels.append(lvl)
