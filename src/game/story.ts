@@ -34,7 +34,9 @@ type Req = Record<string, number>;
 type HoundState = 'hidden' | 'approach' | 'circle' | 'windup' | 'lunge' | 'recoil' | 'flee';
 
 export const LAST_LEVEL = 10;
-const DAWN = 6.0;
+/** Waking after the first night: early morning, the sun just up (at 6:00 the world is still dark red, and level 8's
+ * breakfast fights run on from the world's hour). */
+const WAKE = 6.6;
 const DUSK = 19.4;
 const isNight = (h: number) => h >= DUSK || h < 5.5;
 
@@ -437,7 +439,7 @@ export class Story {
   }
 
   private sleep() {
-    this.skipTime(DAWN, 'msg.sleeping', true, () => {
+    this.skipTime(WAKE, 'msg.sleeping', true, () => {
       const st = this.s.stats;
       st.stamina = 100;
       st.health = clamp(st.health + 25, 0, 100);

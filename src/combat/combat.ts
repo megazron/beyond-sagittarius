@@ -41,6 +41,12 @@ export interface StartOpts extends Pick<EncounterOpts, 'companion' | 'story' | '
   /** A trial from the menu: a standard kit, and nothing it does is kept. The story leaves this off. */
   trial?: boolean;
   difficulty?: Difficulty;
+  /**
+   * The world's hour (the story passes `save.timeOfDay`): the fight starts at it instead of its own set hour, its clock
+   * runs on at the game's rate (an hour is 50 s), and the world keeps the hour it ends at, so the light outside and in
+   * the fight is one continuous day. The night at the fire uses it as the start of its dusk. Left off: the set hour.
+   */
+  hour?: number;
 }
 
 interface Deps {
@@ -221,7 +227,8 @@ export class Combat {
       const p = run.sim.player;
       P.spawn(p.x, p.z, Math.atan2(-Math.sin(site.yaw), -Math.cos(site.yaw)));
       P.pitch = -0.12; P.snapCamera();
-      s.timeOfDay = run.hour;
+      if (opts.hour != null && id !== 'night.defence') { run.hour = ((opts.hour % 24) + 24) % 24; run.sim.night = run.hour >= 19.5 || run.hour < 5.5; }
+      s.timeOfDay = id === 'night.defence' ? this.nightHour(run) : run.hour;
       const camp = D.world.camp, L = D.world.layout;
       if (id === 'night.defence' || id === 'chase.escape') { camp.setFire(1); if (id === 'night.defence') camp.setShelter(true); }
       void L;
@@ -282,6 +289,7 @@ export class Combat {
     this.slow = 1;
     this.begin(run.id, { ...e.opts, difficulty: undefined }, e.resolve);
   }
+  private lowSaid = false;
   /** How many times a fight has been tried again since the game started (tests). */
   retries = 0;
 
@@ -298,7 +306,12 @@ export class Combat {
   private goalV = new THREE.Vector3();
   /** Where the set piece wants the player to go, for the compass and the line on the ground. */
   goalPoint(): THREE.Vector3 | null {
-    const run = this.encounter, m = run?.markers.find((q) => q.kind === 'goal' || q.kind === 'prey');
+    const run = this.encounter;
+    if (run?.id === 'night.defence' && (run.objN.fuel ?? 100) < 35 && (run.objN.pile ?? 0) + (run.objN.wood ?? 0) > 0) {
+      const f = run.sim.fires.find((q) => !q.torch && !q.burnsOut);
+      if (f) return this.goalV.set(f.x, this.env.height(f.x, f.z), f.z);
+    }
+    const m = run?.markers.find((q) => q.kind === 'goal' || q.kind === 'prey');
     if (!m || run!.id === 'hunt.first' && run!.phase === 'stalk') return null;
     return this.goalV.set(m.x, this.env.height(m.x, m.z), m.z);
   }
@@ -402,6 +415,11 @@ export class Combat {
       if (run.sim.player.down) s.stats.health = Math.max(s.stats.health, 30);
     }
     s.timeOfDay = e.hour; s.day = e.day;
+    if (!revert && !e.opts.trial && e.opts.hour != null && run.id !== 'night.defence') {
+      // the story's day went on while it was fought: the world keeps the fight's hour (and the fade out, about 2 s)
+      const h = run.hour + (run.t + 2) / 50;
+      s.timeOfDay = h % 24; if (h >= 24 && run.hour < 24) s.day = e.day + 1;
+    }
     D.player.spawn(e.pos[0], e.pos[2], e.yaw);
     const camp = D.world.camp;
     camp.setFire(s.flags.fire ? 2 : s.flags.pitBuilt ? 1 : 0); camp.setShelter(!!s.flags.shelter);
@@ -579,6 +597,8 @@ export class Combat {
     const dev = this.d.input.device === 'pad' ? 1 : this.d.input.device === 'touch' ? 2 : 0;
     this.d.ui.toast(t(`cb.hint.${id}`, { k: GLYPH[key]?.[dev] ?? '' }));
   }
+  /** What to press for the game's own interact (E) on the device in use. */
+  private keyName(_a: 'interact') { const dev = this.d.input.device; return dev === 'pad' ? 'X' : dev === 'touch' ? t('cb.tapPrompt') : 'E'; }
   private toastOnce(key: string, text: string, gap = 4) { if ((this.toastT[key] ?? -99) + gap > this.clock) return; this.toastT[key] = this.clock; this.d.ui.toast(text); }
 
   /** Free play: before the player controller runs. */
@@ -616,7 +636,7 @@ export class Combat {
       return;
     }
     // the hour the encounter is in: the night runs from dusk to first light
-    s.timeOfDay = run.id === 'night.defence' ? (run.phase === 'prep' ? 20.6 + Math.min(1, run.phaseT / 70) * 0.9 : run.phase === 'hush' ? 21.5 : 21.5 + Math.min(1, (run.wave - 1 + Math.min(1, run.phaseT / 80)) / 3) * 7.6) % 24 : run.hour;
+    s.timeOfDay = run.id === 'night.defence' ? this.nightHour(run) : this.fightHour(run);
     this.stepSim(dt, time, false);
     // stamina in a fight: running spends it, standing gives it back, and the body's state decides how fast
     const p = run.sim.player;
@@ -630,13 +650,24 @@ export class Combat {
     D.ui.setStats(st);
   }
 
+  /** The hour inside a fight: its set hour, or (the story's fights, `opts.hour`) the world's hour running on. */
+  private fightHour(run: EncounterRun) { return this.enc?.opts.hour != null ? (run.hour + run.t / 50) % 24 : run.hour; }
+  /**
+   * The night at the fire runs from dusk to first light: the prep from the hour it began (the world's dusk, so the
+   * light does not jump as it starts) to 21:30, then the three waves to about 05:00.
+   */
+  private nightHour(run: EncounterRun) {
+    const h = this.enc?.hour ?? 20.6, h0 = h >= 19 && h < 21.5 ? h : 20.6;
+    return (run.phase === 'prep' ? h0 + Math.min(1, run.phaseT / 70) * (21.5 - h0) : run.phase === 'hush' ? 21.5 : 21.5 + Math.min(1, (run.wave - 1 + Math.min(1, run.phaseT / 80)) / 3) * 7.6) % 24;
+  }
+
   private encounterPrompt(run: EncounterRun) {
     const D = this.d, sim = run.sim, p = sim.player, ui = D.ui;
     let label: string | null = null, at: THREE.Vector3 | null = null, act: (() => void) | null = null;
     const fire = sim.fires.find((f) => !f.torch && !f.burnsOut);
     if (fire && Math.hypot(fire.x - p.x, fire.z - p.z) < 3 && fire.fuel < fire.max * 0.95 && run.id === 'night.defence') {
-      const ok = (sim.inv.branch ?? 0) > 0;
-      label = ok ? t('cb.p.feed') : t('cb.need', { list: t('item.branch') }); at = v2.set(fire.x, p.y + 0.8, fire.z);
+      const n = (fire.pile ?? 0) + (sim.inv.branch ?? 0);
+      label = n > 0 ? t('cb.p.feedN', { n }) : t('cb.need', { list: t('item.branch') }); at = v2.set(fire.x, p.y + 0.8, fire.z);
       act = () => { if (sim.feedFire(fire)) { D.player.act('give', new THREE.Vector3(fire.x, p.y + 0.4, fire.z), 0.9, null); audio.sample('wood', 0.6, { delay: 0.3 }); this.fx.puff('ember', fire.x, p.y + 0.6, fire.z, 0, 0, 4); } };
     } else if (run.phase === 'prep') { label = t('cb.p.ready'); act = () => run.ready(); }
     if (run.id === 'arena' || run.id === 'hunt.first') {
@@ -1080,7 +1111,13 @@ export class Combat {
     this.hud.injuries(p.injuries.map((i) => ({ id: i.id, bad: !!i.infected })));
     if (run) {
       const N = run.objN;
-      this.hud.objective(t(run.objective), run.id === 'night.defence' && run.phase !== 'prep' && run.phase !== 'hush' ? `${t('cb.wave', { n: Math.max(1, N.wave ?? 1) })} · ${t('cb.fire', { n: N.fuel ?? 0 })} · ${t('cb.food', { n: N.food ?? 0 })}` : run.phase === 'prep' ? `${Math.max(0, Math.ceil(70 - run.phaseT))}` : null);
+      const night = run.id === 'night.defence', fighting = night && run.phase !== 'prep' && run.phase !== 'hush';
+      const wood = (N.pile ?? 0) + (N.wood ?? 0), low = fighting && (N.fuel ?? 100) < 35;
+      // the night's one rule, said when it matters: a low fire takes over the line (and the compass points at it)
+      const text = low ? t(wood > 0 ? 'cb.obj.fireLow' : 'cb.obj.fireOut', { k: this.keyName('interact') }) : t(run.objective);
+      this.hud.objective(text, fighting ? `${t('cb.wave', { n: Math.max(1, N.wave ?? 1) })} · ${t('cb.fire', { n: N.fuel ?? 0 })} · ${t('cb.wood', { n: wood })} · ${t('cb.food', { n: N.food ?? 0 })}` : night && run.phase === 'prep' ? t('cb.prep.wood', { s: Math.max(0, Math.ceil(70 - run.phaseT)), n: N.pile ?? 0 }) : run.phase === 'prep' ? `${Math.max(0, Math.ceil(70 - run.phaseT))}` : null, low && wood > 0);
+      if (low && !this.lowSaid && wood > 0) { this.lowSaid = true; audio.sample('wood', 0.25); D.ui.toast(t('cb.obj.fireLow', { k: this.keyName('interact') })); }
+      if (!low && (N.fuel ?? 0) > 50) this.lowSaid = false;
     } else this.hud.objective(null);
     // the eye: how near the most suspicious thing is to knowing
     let top = 0, seen = false;

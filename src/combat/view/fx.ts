@@ -202,6 +202,32 @@ export class CombatFx {
     return { o: g, id, light: fire.light, fire };
   }
 
+  /**
+   * The night's wood pile beside the fire: one log a branch, stacked crosswise, so the player sees how much is left
+   * from across the camp (the HUD says it in words too). Made once with the fire; logs are only shown or hidden.
+   */
+  private syncPile(o: THREE.Object3D, n: number) {
+    let pile = o.getObjectByName('woodPile') as THREE.Group | undefined;
+    if (!pile) {
+      pile = new THREE.Group(); pile.name = 'woodPile';
+      const bark = new THREE.MeshStandardMaterial({ color: 0x5a4130, roughness: 0.95 }), cut = new THREE.MeshStandardMaterial({ color: 0xc89a62, roughness: 0.8 });
+      const geo = new THREE.CylinderGeometry(0.06, 0.07, 1.0, 6), end = new THREE.CircleGeometry(0.06, 6);
+      for (let i = 0; i < 10; i++) {
+        const layer = Math.floor(i / 3), j = i % 3, l = new THREE.Group();
+        const m = new THREE.Mesh(geo, bark); m.castShadow = true; l.add(m);
+        const c = new THREE.Mesh(end, cut); c.position.y = 0.501; c.rotation.x = -Math.PI / 2; l.add(c);
+        // layers alternate direction, like a stacked pile
+        l.rotation.set(Math.PI / 2, layer % 2 ? Math.PI / 2 : 0, 0);
+        const off = (j - 1) * 0.15;
+        l.position.set(layer % 2 ? 0 : off, 0.07 + layer * 0.12, layer % 2 ? off : 0);
+        pile.add(l);
+      }
+      pile.position.set(1.25, 0, 0.55);
+      o.add(pile);
+    }
+    pile.children.forEach((c, i) => { c.visible = i < n; });
+  }
+
   /** Bring the picture in line with the simulation: projectiles, traps, fires, pickups. */
   /** Rings of water spreading from the legs of someone standing in it (wading reads as wading, not as standing on
    * a floor that happens to be wet): one every half second or so standing, faster when the legs move. */
@@ -316,6 +342,7 @@ export class CombatFx {
       if (!fl) { fl = this.makeFlame(f.id, !f.burnsOut); fl.o.position.set(f.x, this.height(f.x, f.z), f.z); this.group.add(fl.o); this.flames.push(fl); }
       const k = Math.max(0, f.fuel / f.max);
       fl.o.visible = true;
+      if (f.pile !== undefined) this.syncPile(fl.o, f.pile);
       fl.fire.update(k, f.burnsOut ? 16 : 7);
       if (k > 0 && this.emberT <= 0) {
         this.puff('ember', f.x, this.height(f.x, f.z) + 0.5, f.z, 0, 0, 0.5);
