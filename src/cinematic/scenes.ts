@@ -108,7 +108,7 @@ export function departScene(a: Cast, origin: THREE.Vector3, seats: Record<string
     // L16 the reply, word for word, into Nuvexa's phone
     { key: 'dep.10', who: 'strong', shot: () => aim(a.strong, 0.35, 2.1, LENS.m50, 0.05, 0.2), run: () => { look(a.strong, phone()); look(a.social, a.strong); }, after: 0.3 },
     // L17 you laugh
-    { hold: 1.7, shot: () => aim(a.scientist, -0.5, 1.6, LENS.c85), run: () => { a.scientist.setFace({ smile: 1, squint: 0.6, open: 0.35 }); look(a.scientist, a.strong); fx.laugh(); } },
+    { hold: 1.7, shot: () => aim(a.scientist, -0.5, 1.6, LENS.c85), run: () => { a.scientist.setFace({ smile: 1, squint: 0.6, open: 0.35 }); look(a.scientist, phone()); fx.laugh(); } },
     // L18 all six laughing: the last time; Bolzar stirs
     { hold: 2.8, shot: () => ({ from: o(2.6, -0.6, 2.9), to: o(-0.8, -1.4, -0.9), push: -0.05, fov: LENS.w24 }),
       run: () => {
