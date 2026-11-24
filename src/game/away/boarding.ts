@@ -182,7 +182,8 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
       { t0: s + 2.2, t1: s + 3.9, fov: 44, cam: (_T, k, e, a) => { F(0.5, SILL + 1.68, STOP_Z + 0.6, e); F(lerp(-8, 8, k), 30, -420, a); } },
       { t0: s + 3.9, t1: ev.arm, fov: 40, cam: (_T, k, e, a) => { F(5.6, SILL + 0.9, PLAT0 - 5.2, e); F(0, SILL + 1.2 + k * 0.4, HULL_Z - 0.6, a); } },
       { t0: ev.arm, t1: ev.lift, fov: 48, cam: (_T, k, e, a) => { F(lerp(36, 33, k), 1.9, -40, e); F(0, 14, -4, a); } },
-      { t0: ev.lift, t1: ev.lift + 5.2, fov: 52, cam: (T, _k, e, a) => { F(40, 1.6, -52, e); a.copy(tmpLiner(T)); a.y += 16; } },
+      // (from the far side, looking west: towards the east the towers and the sky's floating things stood behind it)
+      { t0: ev.lift, t1: ev.lift + 5.2, fov: 52, cam: (T, _k, e, a) => { F(-42, 1.6, -46, e); a.copy(tmpLiner(T)); a.y += 16; } },
       { t0: ev.lift + 5.2, t1: ev.end + 1, fov: 55, cam: (T, k, e, a) => { const L = tmpLiner(T); e.set(L.x + 45 - k * 10, L.y - 60 + k * 10, L.z + 95 - k * 15); a.set(L.x, L.y + 8, L.z - 10); } },
     ];
   }
@@ -196,16 +197,25 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
   sg.traverse((x) => { const m = x as THREE.Mesh; let shown = true; for (let p: THREE.Object3D | null = x; p && p !== sg; p = p.parent) if (!p.visible) shown = false; if (m.isMesh && m !== ship.plume && shown && !vestMats.has(m.material as THREE.Material)) hullMeshes.push(m); });
   const vestMeshes = new Set<THREE.Object3D>();
   const rc = new THREE.Raycaster();
-  /** Is a body at `p` (its feet) hidden from `eye` by the hull (head, chest and feet all behind it)? */
+  /** Is a body at `p` (its feet) hidden from `eye` by the hull (feet, chest and head all behind it)? Measured on the hull's
+   *  own shape (LINER.radius and the vestibule), not by rays on its meshes: points along each sight line, in the ship's
+   *  frame, inside the solid hull. */
+  const invS = new THREE.Matrix4(), sp = new THREE.Vector3();
   function hiddenFrom(eye: THREE.Vector3, p: THREE.Vector3) {
-    sg.updateMatrixWorld(true);
+    liner.updateMatrixWorld(true); invS.copy(sg.matrixWorld).invert();
     for (const h of [0.15, 1.0, 1.6]) {
       tmpB.set(p.x, p.y + h, p.z); const d = tmpB.distanceTo(eye);
-      rc.set(eye, tmpB.clone().sub(eye).normalize()); rc.far = d - 0.05;
-      const hit = rc.intersectObjects(hullMeshes, false).find((x) => !vestMeshes.has(x.object));
-      if (!hit) return false;
+      let blocked = false;
+      for (let u = 0; u < d - 0.2 && !blocked; u += 0.06) { sp.copy(eye).lerp(tmpB, u / d).applyMatrix4(invS); if (insideHull(sp)) blocked = true; }
+      if (!blocked) return false;
     }
     return true;
+  }
+  /** Test: why a body counts as seen (the shot, the eye and the body in the pad's frame, what each ray hit). */
+  function whyVisible(eye2: THREE.Vector3, p: THREE.Vector3, shot: number) {
+    const inv = frame.matrixWorld.clone().invert(), f = (v: THREE.Vector3) => { const l = v.clone().applyMatrix4(inv); return `${l.x.toFixed(2)},${l.y.toFixed(2)},${l.z.toFixed(2)}`; };
+    const rays = [0.15, 1.0, 1.6].map((h) => { tmpB.set(p.x, p.y + h, p.z); const d = tmpB.distanceTo(eye2); rc.set(eye2, tmpB.clone().sub(eye2).normalize()); rc.far = d - 0.05; const hs = rc.intersectObjects(hullMeshes, false); return `${h}:${hs.length ? hs[0].distance.toFixed(1) + ' ' + ((hs[0].object as THREE.Mesh).material as THREE.MeshStandardMaterial).color?.getHexString() : 'none'}`; });
+    return `shot ${shot} eye ${f(eye2)} body ${f(p)} hull meshes ${hullMeshes.length} mesh rays ${rays.join(' ')}`;
   }
 
   // ---- running it ----
@@ -300,7 +310,7 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
    */
   function check() {
     plan(); cut();
-    const bad: string[] = [], pos: THREE.Vector3[][] = [], sh: Shot[] = [];
+    const bad: string[] = [], pos: THREE.Vector3[][] = [], sh: Shot[] = []; let dbg = '';
     const inv = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Vector3(), prev: (THREE.Vector3 | null)[] = Array(N).fill(null), out = Array(N).fill(false);
     const shipM = () => { liner.updateMatrixWorld(true); return inv.copy(sg.matrixWorld).invert(); };
     for (let T2 = 0; T2 <= ev.end; T2 += 1 / 30) {
@@ -311,7 +321,7 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
         const s = sOf(k, T2);
         if (out[k]) continue;
         if (s > sHall + 0.3 && hiddenFrom(eye, p)) { out[k] = true; continue; }
-        if (s > sHall + 0.3 && s >= plans[k].len - 0.05) bad.push(`T ${T2.toFixed(2)}: ${k} stands at the end of the passage still in view`);
+        if (s > sHall + 0.3 && s >= plans[k].len - 0.05) { bad.push(`T ${T2.toFixed(2)}: ${k} stands at the end of the passage still in view`); if (!dbg) dbg = whyVisible(eye, p, shots.indexOf(shot)); }
         // the body: feet, knees, hips, chest, head, and the shoulders half a metre apart
         for (const [dx, dy] of [[0, 0.08], [0, 0.5], [0, 0.95], [0, 1.35], [0, 1.65], [-0.22, 1.35], [0.22, 1.35]]) {
           const yaw = Math.atan2(plans[k].segs[0].b.x - plans[k].segs[0].a.x, plans[k].segs[0].b.z - plans[k].segs[0].a.z);
@@ -328,7 +338,7 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
     }
     linerPose(0, liner);
     const uniq = [...new Set(bad.map((b) => b.replace(/^T [\d.]+: /, '')))];
-    return { problems: bad.length, first: bad.slice(0, 12), kinds: uniq.slice(0, 12), events: { ...ev }, shots: shots.map((x) => [+x.t0.toFixed(2), +x.t1.toFixed(2)]), seconds: +ev.end.toFixed(1), allIn: out.every(Boolean) };
+    return { problems: bad.length, first: bad.slice(0, 12), kinds: uniq.slice(0, 12), events: { ...ev }, shots: shots.map((x) => [+x.t0.toFixed(2), +x.t1.toFixed(2)]), seconds: +ev.end.toFixed(1), allIn: out.every(Boolean), dbg };
   }
 
   // ---- tests: the take-off's swept path and the camera against everything solid in the city ----
@@ -391,8 +401,27 @@ export function buildBoarding(o: { add: <T extends THREE.Object3D>(x: T) => T; g
       sg.updateMatrixWorld(true); const inv = sg.matrixWorld.clone().invert();
       if (insideHull(e.clone().applyMatrix4(inv))) camera = `T ${T2.toFixed(2)}: the camera is inside the hull`;
     }
+    // and what shares the frame with it in the open-sky shots: a solid thing whose screen box overlaps the liner's and
+    // that is about as far away reads as the liner flying through it even when they never touch
+    const frameHits = new Map<THREE.Object3D, string>(), cam = new THREE.PerspectiveCamera(50, 16 / 9, 0.5, 8000), lb = new THREE.Box3(), ob = new THREE.Box3();
+    const sbox = (b: THREE.Box3) => { const r = new THREE.Box2(); let front = false; for (let i = 0; i < 8; i++) { const v = new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).project(cam); if (v.z < 1) front = true; r.expandByPoint(new THREE.Vector2(v.x, v.y)); } return front ? r : null; };
+    const view = new THREE.Box2(new THREE.Vector2(-1, -1), new THREE.Vector2(1, 1));
+    for (let T2 = ev.lift + 1.5; T2 <= ev.end; T2 += 0.25) {
+      linerPose(T2, liner); liner.updateMatrixWorld(true);
+      const sh = camAt(T2, e, a); cam.fov = sh.fov; cam.updateProjectionMatrix(); cam.position.copy(e); cam.lookAt(a); cam.updateMatrixWorld(true);
+      lb.setFromObject(sg); const ls = sbox(lb); if (!ls || !ls.intersectsBox(view)) continue;
+      const dl = e.distanceTo(lb.getCenter(new THREE.Vector3()));
+      for (const x of list) {
+        if (frameHits.has(x.o) || (x.o as THREE.InstancedMesh).isInstancedMesh) continue;
+        ob.copy(x.b); const c = ob.getCenter(new THREE.Vector3()), r = ob.getSize(new THREE.Vector3()).length() / 2;
+        if (r < 3 || r > 400 || ob.min.y < 20) continue; // floating things only: what stands on the ground is the city behind it
+        const d = e.distanceTo(c); if (d > dl * 2.5 || d < dl * 0.4) continue;
+        const os = sbox(ob); if (!os || !os.intersectsBox(ls)) continue;
+        frameHits.set(x.o, `T+${(T2 - ev.lift).toFixed(1)} shot ${shots.indexOf(sh)}: ${name(x.o, ob)}`);
+      }
+    }
     linerPose(0, liner); liner.updateMatrixWorld(true);
-    return { worst: Math.round(worst * 10) / 10, at: Math.round((atT - ev.lift) * 10) / 10, what, camera };
+    return { worst: Math.round(worst * 10) / 10, at: Math.round((atT - ev.lift) * 10) / 10, what, camera, frame: [...frameHits.values()].slice(0, 12) };
   }
   /** The tallest solid thing every G metres over a square round (x, z) (for choosing a pad). */
   function heightMap(x0: number, z0: number, span = 120, G = 4) {
