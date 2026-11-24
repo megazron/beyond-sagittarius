@@ -79,6 +79,8 @@ const LOOK_SPREAD = new URLSearchParams(globalThis.location?.search ?? '').get('
 const FOLK_VIEW = new URLSearchParams(globalThis.location?.search ?? '').get('folkview') !== '0';
 /** How far aside walkers pass you and the low camera behind you (was 1.7 and 1.2 m; ?berth=1.7 the old). */
 const BERTH = Number(new URLSearchParams(globalThis.location?.search ?? '').get('berth') ?? 2.0) || 2.0;
+/** Townsfolk out of the view beyond 14 m are cards, not bodies (?outcard=0: off). */
+const OUT_CARD = new URLSearchParams(globalThis.location?.search ?? '').get('outcard') !== '0';
 const TURN_CLEAR = new URLSearchParams(globalThis.location?.search ?? '').get('turnclear') !== '0';
 const SWAP_FREE = typeof location !== 'undefined' && new URLSearchParams(location.search).get('swapfree') === '1';
 /** Whoever is drawn as a body within CONTACT metres of you stays that body, whatever the budget or the ranking does
@@ -1265,7 +1267,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     const c = createCharacter('scientist', detail * 0.8, LOOKS[v]);
     c.setCrowd(true); crowd.add(c); lookOf.set(c, v); return c;
   };
-  FOLK.forEach((f, i) => person(f.id, someone(f.lineage, i), f.x, f.z, f.yaw, f.pose));
+  // (phones: the queue is one, not two, p29: it stands on the way from the flat, where the six of the story use most bodies)
+  FOLK.forEach((f, i) => { if (tier === 0 && f.id === 'queue2') return; person(f.id, someone(f.lineage, i), f.x, f.z, f.yaw, f.pose); });
   // Mir: a chai stall regular in a three-piece, the same man as the suit skin and the Drexon cameo
   { const c = createCharacter('strong', detail, undefined, 'suit'); c.mergeParts(tier === 0 && LITE_STORY); person('mir', c, 5.0, 15.4, Math.PI / 2 + 0.5, 'idle'); }
   // walkers: up and down the pavements' outer edge, clear of the stalls
@@ -1446,7 +1449,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     crowdPool.push({ fig, card: -1, last: -1, phase: rnd() * 10, dx: 0, yaw: 0, lastX: NaN, look: i % NLOOK });
   }
   const byCard = new Map<number, (typeof crowdPool)[number]>(), near: [number, number][] = [], elbow: [number, number][] = [];
-  const thinK: [number, number][] = [], thinF = new THREE.Vector3();
+  const thinK: [number, number][] = [], thinF = new THREE.Vector3(); let thinSeen = new Uint8Array(0);
   const lookN = new Int32Array(NLOOK), lookQ: [number, number][] = [], perLook = new Int32Array(NLOOK); let lookSeen = new Uint8Array(0); const lookF = new THREE.Vector3(); for (const b of crowdPool) perLook[b.look]++;
   // a card is moved only from and to where no camera swing could show it: 6 m of margin, not inView's 2.5
   const VSW = new THREE.Sphere(new THREE.Vector3(), 6);
@@ -1461,10 +1464,12 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     // out of view; a card nobody walks coming towards the camera in view within THIN_TURN turns back
     if (THIN && viewOn && cut <= 0) {
       const nB = Math.max(0, Math.min(tier > 0 ? Math.max(CROWD_MIN, Math.min(POOL, budget)) : Math.min(POOL, budget), outroT >= 0 || tier > 0 ? 99 : BODY_CAP + 2 - usedLog));
-      thinK.length = 0;
+      thinK.length = 0; if (thinSeen.length !== cards.length) thinSeen = new Uint8Array(cards.length).fill(1);
       for (let i = 0; i < cards.length; i++) {
-        const q = cards[i], d = Math.hypot(q.x - c.x, q.z - c.z); if (d > THIN_R) continue;
-        const seen = inViewWide(q.x, q.z);
+        const q = cards[i], d = Math.hypot(q.x - c.x, q.z - c.z); if (d > THIN_R) { thinSeen[i] = 1; continue; } // (out there: as if seen, so a card coming within THIN_R waits a frame)
+        // (seen this frame or the last: the camera swung 37 deg in a frame in the bazaar, and a card on the screen the
+        // frame before was moved 12 m, p29)
+        const now = inViewWide(q.x, q.z), seen = now || thinSeen[i] === 1; thinSeen[i] = now ? 1 : 0;
         thinK.push([(taken[i] ? -1000 : 0) + (seen ? 0 : 100) + d, i]);
       }
       if (thinK.length > nB) {
@@ -1595,7 +1600,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       // (p29: the limit is on the body's own speed across, the card's lane easing included: the card eased aside at up
       // to 0.45 m/s under a body stepping aside at 0.5, and a body stood waiting, facing ahead, slid 0.8 m/s sideways:
       // the detector's slides of the painted crowd's bodies. Stood waiting: 0.35 m/s, facing ahead)
-      const latV = q.wait || q.holdT ? 0.35 : 0.9;
+      const latV = q.wait || q.holdT || sp < 0.3 ? 0.35 : Math.max(0.35, Math.min(0.9, sp * 0.75)); // (the gate's slow ones, under 0.3 m/s, never turned into it: 0.35 too)
       const bx0 = Number.isFinite(b.lastX) ? b.lastX : q.x + b.dx;
       let bx = bx0 + THREE.MathUtils.clamp((q.x + want - bx0) * (1 - Math.exp(-dt * 3)), -latV * dt, latV * dt);
       // (and never into someone: a step aside within half a metre of a townsperson, a card or another body, nearer than
@@ -2263,6 +2268,14 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // and whoever is in the view comes before whoever is out of it beyond 8 m (as the painted crowd): a townsperson
           // in view at 27 m was left a card while the bodies went to people behind the camera, and stayed a card as you
           // walked up to them (the queue, the groups, the aunty)
+          // out of the view beyond 14 m a townsperson takes no body at all (p29: at the gate on phones the townsfolk held
+          // all 11 bodies with only the two kids in view, and the painted crowd walking into the view got none: flat
+          // cards up to you). A card out of the view is not seen to change; within 14 m they keep theirs for a turn
+          if (OUT_CARD && d > 14 && !inView(q.pos.x, q.pos.y, q.pos.z)) {
+            if (q.fig.root.visible) q.fig.root.visible = false;
+            stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: i, v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
+            continue;
+          }
           const key = d - (q.fig.root.visible ? 1.5 : 0) - (crowd.has(q.fig) ? 0 : 5) - ((tier > 0 || (CONTACT > 0 && q.fig.root.visible)) && dy < 4 ? 30 : 0) + (FOLK_VIEW && d > 8 && !inView(q.pos.x, q.pos.y, q.pos.z) ? 12 : 0);
           let j = nc++; while (j > 0 && candK[j - 1] > key) { candK[j] = candK[j - 1]; candI[j] = candI[j - 1]; j--; }
           candK[j] = key; candI[j] = i;
