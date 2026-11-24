@@ -1574,3 +1574,41 @@ unlanded except this handoff commit and any recording in progress.
   the same moment at 125.45 s): a camera jump the city did not take for a cut (ped27's "a jump is a cut only if it also
   turned"?), so the thinning moved cards with last frame's view. Open: find what jumps there (end of the chai_tram walk
   at the tram door).
+
+
+
+## 2026-11-24 release fixes agent (worktree ~/bs-fix, branch fix1)
+Owns: mirrored text, touch hints, night readability, fire base, the Android build check. Not landed yet unless noted.
+- Signs: hanging signs (city.ts), neon blades (cityfuture.ts, citydense.ts) and roof billboards (districts.ts) were one
+  plane with a two-sided material: from behind the words read mirrored. Now two faces back to back (`twoFaced` in
+  src/core/textfaces.ts), each drawn from its front only. Wall signs and district shop signs are front-only.
+- Test: `python tools/sign_faces.py` (CI job `signs_touch`). canvastext.ts marks every canvas that gets words (and
+  canvases copied from one); `__bs.textFaces()` checks every worded mesh triangle by triangle in world space: not
+  mirrored, not upside down, not two-sided. `__bs.textFacesProbe()` proves the check on probe signs first.
+- Minimap: the layer's names (shops, districts) are no longer painted into the layer canvas; they are recorded and drawn
+  upright over it (`drawLabels` in src/ui/minimap.ts), also on the full map.
+- Touch hints: a touch pointerdown anywhere (menus, HUD) switches the hints to touch (before: only on the 3D canvas, so
+  a key press once left "Enter Select / Esc Close" on a phone). Keys without a code do not switch to keys. Test:
+  `python tools/touch_hints.py` (same CI job). Note for capture bots: pressing keys in a phone take switches the
+  game to key hints, as a paired keyboard would; tap instead (~/bs-cap/fix/cap.py has a "tap" step).
+- Fire (src/world/flame.ts, FIRE_BASE, `__bs.fireBase` to tune): the lower 25-80 % of every tongue is dimmer and capped at orange (an ember bed among the
+  sticks); the glow layers are redder. Brightest flame above the wood.
+- Night (src/world/world.ts `world.night`, sky.ts night keys): moon 0.55 -> 3.6, night sky fill 0.4 -> 1.7 with a
+  cold blue colour, image light 0.42 -> 1.2, night exposure unchanged (+0.6: at +0.9 a white coat by the fight's
+  fire burned out), night horizon glow raised. Chosen from GPU
+  stills of four sets (~/bs-cap/fix/tune): the frame's mean brightness 12/255 before, 26-30 now. The fight's planet fill (1.55) and the eye
+  stopping down by the fire (0.78) sit on top, so fight nights are a little brighter too.
+- Captures: ~/bs-cap/fix (mkplan.py desktop|phone, run.sh NAME PLAN QUERY: one exclusive heavy step, Chrome 9352).
+- 05:20 (release fixes) GPU takes watched: ~/bs-cap/fix/d1 (signs, minimap), p1 (phone touch menus en/hi/ur, phone
+  signs), d3 (night before/after, fire close/mid, night fight edge); clips and notes in
+  Downloads/BS_Game_v1.1/release_fixes (README_release_fixes.txt). Fire chosen from headless stills with the tongues,
+  coals and light switched off one at a time (~/bs-cap/fix/diag): the white-yellow mass was the tongues overlapping.
+- Android: `BS_INTERNAL_TEST=1 store/release.sh --same` from fix3 eb25016 built and checked (check_aab ok, 1.2.0 (2),
+  158.9 MB); saved as Downloads/BeyondSagittarius_PlayStore/1.2.0/BeyondSagittarius-1.2.0-2-INTERNAL-TEST-fixes-eb25016.aab
+  (the release agent's AAB of 393e094 kept as ~/beyond-sagittarius-release/beyond-sagittarius-1.2.0-2-rel393e094.aab).
+  Note: with node_modules linked from another worktree, `cap sync` writes that path into
+  android/capacitor.settings.gradle; I reverted it after the build.
+- Open: the combat play test's "phone: the fight buttons are on the screen" failed on 2 of 5 fix runs in CI and never
+  locally (0 failed on my build); never seen on other branches. I could not find a cause in my input change (a finger
+  anywhere now switches to touch, which should only make it pass more). Combat agent: worth a look at that check's
+  timing (0.5 s after the tap under SwiftShader).
