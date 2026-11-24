@@ -258,6 +258,9 @@ with sync_playwright() as pw:
     page.evaluate("window.__q2 = 0; __bs.combat.ensureAsked(() => { window.__q2 = 1; }); 1")
     ok(page.evaluate("document.querySelectorAll('#modal [data-diff]').length") == 3 and page.evaluate("window.__q2") == 0, 'story: asking again while the question is open opens nothing new')
     page.evaluate("""document.querySelector('#modal [data-diff="normal"]').click()"""); step(page, 0.5); time.sleep(0.4)  # (the modal hides 130 ms after it is closed)
+    for i in range(20):  # (a loaded runner can take longer than the 130 ms)
+        if page.evaluate("document.getElementById('modal').classList.contains('hidden') && window.__q2 === 1"): break
+        time.sleep(0.15)
     ok(page.evaluate("document.getElementById('modal').classList.contains('hidden') && window.__q2 === 1"), 'story: one answer closes it and every caller goes on')
     # then the night's own scene (night.ts FirstNight): noises beyond the light and the choice; brace is the fight at the fire
     for i in range(60):
