@@ -189,9 +189,14 @@ export function facadeMaterial(o: FacadeOpts = {}) {
             vec3 Tr = alongX ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
             float into = max(-dot(Vr, vWn), 0.08), rec = street ? 0.12 : (style > 0.5 ? 0.06 : 0.22);
             vec2 g = vec2(fx + dot(Vr, Tr) / into * rec / bw, fy + Vr.y / into * rec / fh);
-            float gX = smoothstep(lo.x - aa, lo.x + aa, g.x) * smoothstep(hi.x + aa, hi.x - aa, g.x);
-            float gY = smoothstep(lo.y - aa, lo.y + aa, g.y) * smoothstep(hi.y + aa, hi.y - aa, g.y);
-            float glass = fWin * gX * gY;
+            // (seen along the wall, into is small and g moves by more than a window from one pixel to the next: each
+            // pixel was glass or reveal at random, a speckle of the wall's own colour over the glass that changed every
+            // frame, the NE street's shopfront on Mobile. Where g moves that fast the edges soften, and then the
+            // reveal goes)
+            vec2 gw = vec2(fwidth(g.x), fwidth(g.y)); float gXa = max(aa, gw.x), gYa = max(aa, gw.y);
+            float gX = smoothstep(lo.x - gXa, lo.x + gXa, g.x) * smoothstep(hi.x + gXa, hi.x - gXa, g.x);
+            float gY = smoothstep(lo.y - gYa, lo.y + gYa, g.y) * smoothstep(hi.y + gYa, hi.y - gYa, g.y);
+            float glass = mix(fWin * gX * gY, fWin, smoothstep(0.15, 0.45, max(gw.x, gw.y)));
             fReveal = fWin - glass; fWin = glass;
           }
           float fx2 = smoothstep(lo.x - 0.05 - aa, lo.x - 0.05 + aa, fx) * smoothstep(hi.x + 0.05 + aa, hi.x + 0.05 - aa, fx);
