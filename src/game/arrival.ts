@@ -83,6 +83,9 @@ export interface ArrivalDef {
   dust?: { n: number; speed: number; color: number; size: number; up?: number };
   /** Heard heartbeat over time: [t, bpm, volume]. */
   heart?: [number, number, number][];
+  /** A soft light near them for the shots, motivated by their world's own (a rim sun, a lit cloud): colour, strength,
+   * where (landing frame). Removed after. */
+  fill?: { color: number; i: number; at: V3 };
   /** A dark streak of light behind the faller or body while it is in the sky (atmosphere entry). */
   streak?: { t0: number; t1: number; color: number };
 }
@@ -165,6 +168,7 @@ export class Arrival {
       const mat = new THREE.MeshBasicMaterial({ color: this.def.streak.color, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
       this.streak = this.ctx.add(new THREE.Mesh(g, mat)) as THREE.Mesh; this.streak.visible = false;
     }
+    if (this.def.fill) { const L = new THREE.PointLight(this.def.fill.color, this.def.fill.i, 9, 1.4); L.position.copy(this.ctx.P(this.def.fill.at)); this.ctx.add(L); }
     b.root.visible = true;
     this.update(0);
   }

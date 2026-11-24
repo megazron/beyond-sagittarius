@@ -110,7 +110,7 @@ function slab(ctx: ArrivalCtx) {
 // ----------------------------------------------------------------------------------------------------------------
 /** Skyvra: out of the white hole, a few m/s, onto a rock with almost no gravity. No air: no breath, no sound but her own. */
 const explorer: ArrivalDef = {
-  id: 'explorer', dur: 27, g: 0.25, air: false, hit: 5.2, spot: [0, 2], yaw: 0.6,
+  id: 'explorer', dur: 27, g: 0.25, air: false, hit: 5.2, spot: [0, 2], yaw: 0.6, fill: { color: 0xffc8a0, i: 5, at: [1.4, 1.6, 0.6] },
   fallers: [
     // the plate she fell with, tumbling slowly, ending propped where the stage has it
     { mesh: () => hullPiece(2.6, 1.8, 1), stays: false, keys: [
@@ -262,7 +262,7 @@ const strong: ArrivalDef = {
 // ----------------------------------------------------------------------------------------------------------------
 /** Lyrra: thrown clear of her hull section as it ploughs a trench across a grey moon. Her pulse first, then the arm. */
 const medic: ArrivalDef = {
-  id: 'medic', dur: 26, g: 1.2, air: false, hit: 5.0, spot: [0, 2], yaw: 0.3,
+  id: 'medic', dur: 26, g: 1.2, air: false, hit: 5.0, spot: [0, 2], yaw: 0.3, fill: { color: 0xc8d4ff, i: 9, at: [1.6, 2.2, 1.2] },
   fallers: [
     { mesh: () => { const o = hullPiece(4.2, 2.6, 3); o.scale.set(1, 1, 1); return o; }, stays: false, heat: [[0, 0.6], [4.8, 0.3], [7, 0]], keys: [
       { t: 0, at: [30, 9, 70], rot: [0.3, -0.5, 0.25] }, { t: 4.8, at: [5, 0.8, 10], rot: [0.15, -0.3, 0.6] },
@@ -437,7 +437,7 @@ const social: ArrivalDef = {
     // still; the deck bobbing under her
     { t0: 7.6, t1: 9.0, from: [-1.6, 0.9, 1.4], to: [0.1, 0.2, -0.4], fov: 38, hand: 0.015 },
     // the phone's light on her face
-    { t0: 9.0, t1: 12.8, onHead: true, from: [0.75, 0.1, 0.5], to: [0.05, -0.05, 0.1], fov: 32, hand: 0.006 },
+    { t0: 9.0, t1: 12.8, onHead: true, from: [0.6, 0.5, -0.25], to: [0.05, -0.05, 0.05], fov: 34, hand: 0.006 },
     // her eyes: one per cent
     { t0: 12.8, t1: 14.4, pov: true, from: [0, 0, 0], to: [0.45, 0.4, 0.05], fov: 46 },
     // the side, the cough, the sweater over the mouth

@@ -518,10 +518,19 @@ export class Game {
     scripted.position.copy(head).add(new THREE.Vector3(Math.sin(w * 0.3) * 0.05, 0.08 + smoothstep(12, 16, w) * 0.6, 0));
     scripted.lookAt(lookA.clone().add(new THREE.Vector3(Math.sin(w * 0.53) * 2.5, Math.sin(w * 0.41 + 1) * 1.5, 0).multiplyScalar(daze)));
     scripted.rotateZ(Math.sin(w * 0.37) * 0.1 * daze);
-    const blend = easeInOut(smoothstep(16, 20.5, w));
+    // from the moment he tries to get up we see him, not the sky: a low medium shot from his right, on his struggle,
+    // then into the play camera as he stands
+    const out = w >= 12.4;
+    if (out) {
+      const Y = this.player.yaw, pp = this.player.pos, r = new THREE.Vector3(Math.cos(Y), 0, -Math.sin(Y)), f = new THREE.Vector3(-Math.sin(Y), 0, -Math.cos(Y));
+      scripted.position.copy(pp).addScaledVector(r, 2.3).addScaledVector(f, 0.4).add(new THREE.Vector3(Math.sin(w * 0.9) * 0.02, 0.75 + smoothstep(16, 19, w) * 0.5, 0));
+      scripted.up.set(0, 1, 0);
+      scripted.lookAt(pp.clone().addScaledVector(f, -0.25).add(new THREE.Vector3(0, 0.35 + smoothstep(16, 19, w) * 0.6, 0)));
+    }
+    const blend = easeInOut(smoothstep(17.5, 21, w));
     cam.position.lerpVectors(scripted.position, tpPos, blend);
     cam.quaternion.slerpQuaternions(scripted.quaternion, tpQuat, blend);
-    this.player.model.root.visible = blend > 0.05;
+    this.player.model.root.visible = out || blend > 0.05;
   }
 
   update(dt: number, time: number) {
