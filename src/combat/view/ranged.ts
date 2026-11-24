@@ -14,6 +14,10 @@ const clamp01 = (k: number) => Math.min(1, Math.max(0, k));
 const smooth = (k: number) => { k = clamp01(k); return k * k * (3 - 2 * k); };
 const out3 = (k: number) => 1 - (1 - clamp01(k)) ** 3;
 const UP = new THREE.Vector3(0, 1, 0);
+/** How far past the side-on line, towards his back, the bow arms pose to the aim (rad; globalThis.__bowBack overrides
+ * it for the probe, ~/bs-cap/bow2/sweep.py). 0: never past it (0.3 left 23 sweep trials over 1 cm, worst 3.5; 0 left one
+ * at 1.1, twice). */
+const BOW_BACK = 0;
 
 /** Two-bone reach: the elbow that puts the wrist at `t` from shoulder `s`, bending towards `pole`. Root-local. */
 export function reach(s: THREE.Vector3, t: THREE.Vector3, a: number, b: number, pole: THREE.Vector3, elbow: THREE.Vector3, wrist: THREE.Vector3) {
@@ -111,7 +115,11 @@ export class RangedRig {
     // within 0.7 rad of where the turned body points it; the shot itself goes where it is aimed.
     {
       const az0 = -this.faceOffset, h = Math.hypot(aim.x, aim.z) || 1, az = Math.atan2(aim.x, aim.z);
-      const dz = Math.atan2(Math.sin(az - az0), Math.cos(az - az0)), lim = 0.7;
+      // (for the bow, not past the side-on line towards his back at all: with the aim behind his left shoulder at the edge
+      // of the turn the string hand at the nock reached across the chest to behind it and the right arm went through the
+      // chest, probe 2.6 to 13.5 cm at up 1, draw 0 to 0.3, aim z -0.03 to -0.3; his left is +x. The body catches up.)
+      const dz0 = Math.atan2(Math.sin(az - az0), Math.cos(az - az0));
+      const lim = this.mode === 'bow' && dz0 > 0 ? (globalThis as { __bowBack?: number }).__bowBack ?? BOW_BACK : 0.7, dz = dz0;
       if (Math.abs(dz) > lim) { const a2 = az0 + Math.sign(dz) * lim; aim.x = Math.sin(a2) * h; aim.z = Math.cos(a2) * h; }
     }
     const sL = this.local(model, R.upL), sR = this.local(model, R.upR), head = this.local(model, model.head);
