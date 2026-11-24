@@ -248,8 +248,11 @@ export class Combat {
   get playerPos() { return this.d.player.pos; }
 
   /** How hard should fights be: asked once, before the first fight of the story. */
+  /** The difficulty question or the lost-fight card is open: the game stands still (scaleTime). */
+  private carding = false;
   private askDifficulty(go: () => void) {
     const D = this.d, S = D.settings(), ui = D.ui;
+    this.carding = true;
     D.input.enabled = false; D.input.releasePointer();
     ui.openModal(`<div class="center-msg cb-end cb-ask"><h2>${t('cb.ask.title')}</h2><p>${t('cb.ask.body')}</p>
       <div class="actions">${(['story', 'normal', 'hard'] as Difficulty[]).map((d) => `<button class="btn${d === S.difficulty ? ' primary' : ''}" data-diff="${d}"><span>${t(`cb.set.${d}`)}<small>${t(`cb.ask.${d}`)}</small></span></button>`).join('')}</div>
@@ -257,7 +260,7 @@ export class Combat {
     // once: a closed modal keeps its buttons in the page until the next one replaces them
     let done = false;
     document.querySelectorAll<HTMLButtonElement>('[data-diff]').forEach((b) => b.addEventListener('click', () => {
-      if (done) return; done = true;
+      if (done) return; done = true; this.carding = false;
       S.difficulty = b.dataset.diff as Difficulty; S.asked = true; D.saveSettings(); this.applySettings();
       ui.closeModal(); D.input.enabled = true; go();
     }));
@@ -272,10 +275,11 @@ export class Combat {
     const D = this.d, S = D.settings(), ui = D.ui, run = this.encounter!;
     D.input.enabled = false; D.input.releasePointer();
     const easier = S.difficulty !== 'story';
+    this.carding = true;
     ui.openModal(`<div class="center-msg cb-end cb-lost"><h2>${t(`cb.enc.${run.id}`)}</h2><p>${t('cb.lost.body')}</p>
       <div class="actions"><button class="btn primary" id="cb-retry">${t('cb.lost.retry')}</button>${easier ? `<button class="btn" id="cb-easier">${t('cb.lost.easier')}</button>` : ''}<button class="btn" id="cb-goon">${t('cb.lost.goon')}</button></div></div>`);
     let used = false;
-    const close = () => { if (used) return false; used = true; ui.closeModal(); D.input.enabled = true; return true; };
+    const close = () => { if (used) return false; used = true; this.carding = false; ui.closeModal(); D.input.enabled = true; return true; };
     document.getElementById('cb-retry')!.addEventListener('click', () => { if (close()) this.retry(false); });
     document.getElementById('cb-easier')?.addEventListener('click', () => { if (close()) this.retry(true); });
     document.getElementById('cb-goon')!.addEventListener('click', () => { if (!close()) return; this.slow = 1; this.endEncounterNow(); D.ui.fade('black', 0, 0.6); D.persist(); });
@@ -474,6 +478,9 @@ export class Combat {
   // ---------------- time ----------------
   /** Called with real frame time before the game steps: hit-stop and slow motion happen here. */
   scaleTime(dt: number): number {
+    // the difficulty question and the lost-fight card hold the whole game still until answered (the world's clock,
+    // hunger and the animals ran on behind them: main.ts only stops game.update for the pause menu)
+    if (this.carding && document.querySelector("#modal:not(.hidden) .cb-ask, #modal:not(.hidden) .cb-lost")) return 0;
     if (this.stopT > 0) { this.stopT -= dt; return dt * 0.04 * this.testSlow; }
     return dt * this.slow * this.testSlow;
   }
