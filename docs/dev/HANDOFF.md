@@ -1568,3 +1568,9 @@ unlanded except this handoff commit and any recording in progress.
   in the bazaar and at the gate. Decide: fewer standing townsfolk/painted crowd near the routes on phones, or a bigger
   phone budget once draws per body come down. Web slides 13-17 (story walkers stepping round the threes). The
   detector's Web numbers vary by about 20 between runs of one build: compare two runs before believing a change.
+- FINAL DETECTOR (p28e = 0e542db; b2 before this work in brackets): Mobile cardClose 27 (43), overlap 3 (13), slide 0
+  (2), identity 0, swaps/pops 0. Web cardClose 72 (64; the same build gave 64 and 83 before), overlap 33 (170), slide 19
+  (14), identity 0, and at t 125.6 s in chai_tram one frame with 2 swaps and 9 cards moved 48 to 88 m in view (p28b had
+  the same moment at 125.45 s): a camera jump the city did not take for a cut (ped27's "a jump is a cut only if it also
+  turned"?), so the thinning moved cards with last frame's view. Open: find what jumps there (end of the chai_tram walk
+  at the tram door).
