@@ -24,13 +24,13 @@ SIX FRIENDS, SIX FACES
 Each crew member has their own lineage, voice and bad habits. Build your own Scientist in the character creator.
 
 ENGLISH, HINDI AND URDU
-Text and voices in all three, Urdu right to left. Voice and subtitle languages are set separately. The voices are synthetic.
+Text in all three, Urdu right to left, and voices in all three for most lines (the rest are spoken in English under Hindi or Urdu subtitles for now). Voice and subtitle languages are set separately. The voices are synthetic.
 
 MADE FOR PHONES TOO
 Touch controls with a thumbstick, look by dragging, gamepad support, and quality presets for your device.
 
 WHAT IS IN IT TODAY
-The opening and title sequence, Chapter One: The First 24 Hours (levels 1 to 10) and Chapter Two: Rocks to Reason (levels 11 to 21). More chapters are on the way.
+The opening in Zenvora, a spaceport city you can walk, the title sequence, Chapter One: The First 24 Hours (levels 1 to 10) and Chapter Two: Rocks to Reason (levels 11 to 21). More chapters are on the way.
 
 FREE, FULLY OFFLINE
 No ads. No in-app purchases. No account. No internet needed: the whole game is inside the app, and it collects no data.

@@ -1,6 +1,8 @@
 # Play Console answers for Beyond Sagittarius
 
-Prepared 2026-11-19 from the game as it is on main and from Google's pages as of that date.
+Prepared 2026-11-19 from the game as it is on main and from Google's pages as of that date. Re-checked against the
+code for 1.2.0 on 2026-11-23: still no network calls to anything but the game's own files, no analytics, no ads SDK,
+no microphone or camera, no location, no accounts, no Android permissions; saves and settings in local storage only.
 Each section matches a page in Play Console > your app > **Policy and programs > App content**
 (older consoles call it "Policy > App content"). Where Google words a question differently on the day,
 answer what is true; the facts are below.
@@ -33,6 +35,7 @@ URL: `https://megazron.github.io/beyond-sagittarius/privacy.html`
 | --- | --- | --- |
 | Violence | **Yes** | You brace a spear against a predator creature at night (level 7) and drive it off; you can die and wake up again. |
 | ...against realistic humans or human-like characters | **No** | Only an alien creature is fought. |
+| (1.2.0 note) | | The code also holds a hunting and fighting system (alien animals, a machine guardian, fish; spear, bow, sling) that the story does not call yet: players cannot reach it in 1.2.0. When a later version puts it in the story, answer the violence questions again: hunting and killing alien animals, still no humans, no blood. |
 | ...blood / gore / dismemberment | **No** | No blood is shown. (One line of dialogue mentions an alien "blood doesn't freeze"; that is not depicted violence.) |
 | ...is it fantasy / cartoon / non-realistic | **Yes, fantasy creature** | |
 | Fear / horror | **Yes, mild** | Comic horror tone: a predator stalking at night ("Eyes in the dark. Six of them."), a dark forest, peril. |

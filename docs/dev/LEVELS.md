@@ -189,7 +189,7 @@ Branching story system. All of it is data in `src/game/branch/`: write a level a
 
 ## Fights and action (first slice built)
 
-What Episode One needs, built so later ages add rows of data. Rules and their sources: `MECHANICS_NOTES.md`. How the
+What Episode One needs, built so later ages add rows of data. Rules and their sources: `docs/dev/MECHANICS_NOTES.md`. How the
 story calls it: `docs/COMBAT_API.md`. Code: `src/combat/`.
 
 | Part | What is there | Status |
