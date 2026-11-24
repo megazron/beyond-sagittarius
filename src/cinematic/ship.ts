@@ -208,6 +208,7 @@ export function createShip(o: { landed?: boolean } = {}): Ship {
   group.add(band);
 
   // ---- the boarding hatch: the panel that fills the opening, slid round the hull to open; a frame; a lamp over it ----
+  const hatchFrom = group.children.length;
   const dz = D.doorZ1 - D.doorZ0, zc = (D.doorZ0 + D.doorZ1) / 2;
   const arc = (r: number, h: number, half: number, z: number, mat: THREE.Material, segs = 6) => {
     const g = new THREE.CylinderGeometry(r, r, h, segs, 1, true, -half, half * 2); g.rotateX(-Math.PI / 2); g.translate(0, 0, z);
@@ -232,6 +233,9 @@ export function createShip(o: { landed?: boolean } = {}): Ship {
     open(k: number) { panel.rotation.z = -Math.min(1, Math.max(0, k)) * (D.doorHalf * 2 + 0.03); lampM.color.setRGB(k > 0.02 ? 0.4 : 2.6, k > 0.02 ? 2.6 : 1.2, k > 0.02 ? 0.9 : 0.2); },
   };
   hatch.open(0);
+  // the hatch's parts (panel, frame, jambs, the vestibule, the lamp): the films' break-up hides them, the torn halves
+  // have no door in them and the vestibule stood out of the gap as a long dark slab (owner, the pull's break-up)
+  for (const c of group.children.slice(hatchFrom)) c.userData.hatchPart = true;
 
   // ---- landing legs: four struts from the drive section out to pads on the ground, between the hatch and the wings ----
   let legs: Ship['legs'] = null;

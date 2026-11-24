@@ -389,6 +389,8 @@
     "e1.sp.burn": "scientist",
     "e1.ni.held": "scientist",
     "e1.ni.scar": "scientist",
+    "e1.ni.hid": "scientist",
+    "e1.ni.ran": "scientist",
     "e1.sh.bol": "builder",
     "e1.sh.wind": "scientist",
     "e1.sh.thin": "scientist",

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { redFruitMesh } from './fruit';
 import { mergeChildren } from '../core/merge';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { modelMaterial, modelMats, plainCopy, type ModelPack } from './models';
@@ -179,7 +180,7 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
   const rnd = mulberry32(42);
   const scan = (name: string) => (pack && q && pack.lods[name] ? { geo: pack.lods[name][1], mat: plainCopy(modelMaterial(pack.info[name], q, modelMats)) } : null);
   const stoneScan = scan('moss_d'), branchScan = scan('branch_a'), shrubScan = scan('shrub_b');
-  const stoneMat = stoneScan?.mat ?? new THREE.MeshStandardMaterial({ color: 0x8a8494, roughness: 0.85 });
+  const stoneMat = stoneScan?.mat ?? new THREE.MeshStandardMaterial({ color: 0x7b7871, roughness: 0.85 });
   const branchMat = branchScan?.mat ?? new THREE.MeshStandardMaterial({ color: 0x5a4334, roughness: 0.9 });
   let stoneGeo: THREE.BufferGeometry = new THREE.DodecahedronGeometry(0.16, 1);
   {
@@ -242,8 +243,6 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
   const leafMat = new THREE.MeshStandardMaterial({ color: 0x1d4c49, roughness: 0.7, side: THREE.DoubleSide });
   const stemMat = new THREE.MeshStandardMaterial({ color: 0x2b2f28, roughness: 0.9 });
   const blueMat = new THREE.MeshStandardMaterial({ color: 0x3aa9ff, roughness: 0.25, emissive: new THREE.Color(0.2, 0.9, 1.6), emissiveIntensity: 0.45 });
-  const redMat = new THREE.MeshStandardMaterial({ color: 0xa3132a, roughness: 0.35, metalness: 0.1, emissive: 0x3a0008, emissiveIntensity: 0.6 });
-  const thornGeo = new THREE.ConeGeometry(0.02, 0.09, 4);
   const toLake = new THREE.Vector2(LAKE.x, LAKE.z).normalize();
   let bushIndex = 0;
   for (let i = 0; i < 14; i++) {
@@ -286,22 +285,11 @@ export function createItems(terrain: Terrain, forest: Forest, sites: ItemSites, 
     forest.addObstacle(bx, bz, 0.45);
     for (let f = 0; f < 3; f++) {
       const fruit = new THREE.Group();
-      const m = new THREE.Mesh(new THREE.SphereGeometry(safe ? 0.11 : 0.09, 14, 10), safe ? blueMat : redMat);
-      m.scale.y = safe ? 1.3 : 1;
+      // the red (thornix) fruit: a 7 cm ribbed pod (world/fruit.ts), hanging in the leaves, a little tilted on its stalk
+      const m = safe ? new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 10), blueMat) : redFruitMesh();
+      if (safe) m.scale.y = 1.3; else m.rotation.set((rnd() - 0.5) * 0.6, rnd() * 6, (rnd() - 0.5) * 0.6);
       fruit.add(m);
-      if (!safe) {
-        // the thorns are one mesh: ten separate cones a fruit were most of the draw calls on the shore
-        const thorns: THREE.BufferGeometry[] = [];
-        for (let k = 0; k < 10; k++) {
-          const th = new THREE.Object3D();
-          const dir = new THREE.Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize();
-          th.position.copy(dir).multiplyScalar(0.09);
-          th.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-          th.updateMatrix(); thorns.push(thornGeo.clone().applyMatrix4(th.matrix));
-        }
-        fruit.add(new THREE.Mesh(mergeGeometries(thorns), stemMat));
-      }
-      mergeChildren(fruit, ITEM_MERGE); // the red fruit and its thorns: one draw
+      if (safe) mergeChildren(fruit, ITEM_MERGE);
       const fa = (f / 3) * Math.PI * 2 + rnd();
       fruit.position.set(bx + Math.cos(fa) * 0.42, h + 0.75 + rnd() * 0.35, bz + Math.sin(fa) * 0.42);
       group.add(fruit);
