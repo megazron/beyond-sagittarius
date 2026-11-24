@@ -490,6 +490,7 @@ def main():
         last_level = 0
         stuck = 0
         hound_seen = False
+        night_asked = False
         for it in range(900):
             st = ev("({state: __bs.state, level: __bs.level, mode: __bs.mode, hound: __bs.hound, crew: __bs.crew, busy: __bs.save && null})")
             lvl = st["level"]
@@ -538,6 +539,11 @@ def main():
                 time.sleep(0.4)
                 if page.locator("#qte-btn").is_visible():
                     page.keyboard.press("KeyE")
+                elif ev("!!document.querySelector('#dlg-choices button[data-c=\"e1.night.o.brace\"]')"):
+                    # the first night's question (night.ts): brace the spear, so the night is the fight at the fire
+                    shot("14n-night-choice")
+                    night_asked = True
+                    ev("document.querySelector('#dlg-choices button[data-c=\"e1.night.o.brace\"]').click()")
                 else:
                     opts = ev("document.querySelectorAll('#dlg-choices .dlg-c').length")
                     answered.append(opts)
@@ -724,6 +730,8 @@ def main():
             failures.append(f"completed list wrong: {final['completed']}")
         log("fights:", fights)
         ids = [f[0] for f in fights]
+        if not night_asked:
+            failures.append("the first night never asked hide, brace or run")
         if "night.defence" not in ids:
             failures.append(f"the first night's fight did not start from the story: {fights}")
         if not any(i in ids for i in ("fish.spear", "hunt.first")):

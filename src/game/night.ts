@@ -15,7 +15,7 @@ import type { Combat } from '../combat/combat';
  * (`e1.sp.burn`), and he scrapes a new point. THE NIGHT: noises beyond the light, he goes still, and decision e1.night
  * (6 s): hide (a breath moment), brace the spear (the `night.defence` set piece) or run for the fire
  * (`chase.escape`). He cannot die tonight; a loss leaves him `scarred`. Played for a player's own press and on a
- * player's own night; the level tests (a webdriver) keep the old strike and the old Duskhound.
+ * player's own night and in the tests (levels_smoke and the combat play test answer the choice with the brace).
  */
 export class FirstNight {
   private burnt = false;
@@ -30,9 +30,6 @@ export class FirstNight {
     private tension: (spec: TensionSpec) => Promise<TensionResult> | null,
     private combat: () => Combat | null,
   ) {}
-
-  /** Tests drive the game through a webdriver: they get the old mechanics. */
-  static get tested() { return typeof navigator !== 'undefined' && !!navigator.webdriver; }
 
   private get s() { return this.getSave(); }
   private get z() { return this.player.model; }
@@ -247,6 +244,9 @@ export class FirstNight {
     this.nightScene(done);
   }
   private nightScene(done: (held: boolean) => void) {
+    // a save from the middle of the night (the moment before the fight began, game.ts persist) already holds the
+    // choice: the night goes straight back to what he chose, not through the noises and the question again
+    if (this.s.branch?.log?.some((e) => e.id === 'e1.night')) { void this.fight(done); return; }
     const z = this.z, s = this.s;
     this.playScene([
       { hold: 2.4, shot: () => cover.close(z, 0.45, 1.0), run: () => {
@@ -257,8 +257,15 @@ export class FirstNight {
         z.setGazeRate(6); this.after(0.8, () => z.setLookTarget(this.player.pos.clone().addScaledVector(this.fwd(), -4).add(new THREE.Vector3(3, 1, 0))));
       } },
       { choice: 'e1.night', shot: () => cover.mid(z, 0.8, 2.4) },
-    ], async () => {
+    ], () => {
       z.setGazeRate(null); z.setProp(null); z.setKneel(false); z.setLookTarget(null);
+      void this.fight(done);
+    });
+  }
+  /** What he chose (hide, brace, run) through the combat code, then his line and the dawn. */
+  private async fight(done: (held: boolean) => void) {
+    const z = this.z, s = this.s;
+    {
       const pick = s.branch?.log?.find((e) => e.id === 'e1.night')?.pick ?? 'hide';
       const story = { poisoned: !!s.flags.poisoned, cubKilled: !!s.flags['cub.killed'], fireHigh: !!s.flags['fire.high'], hurt: !!s.flags['hurt.zenvik'] };
       const cb = this.combat();
@@ -270,7 +277,7 @@ export class FirstNight {
       this.after(1.2, () => this.playScene([
         { key: scarred ? 'e1.ni.scar' : 'e1.ni.held', who: 'scientist', shot: () => cover.close(z, 0.35, 0.95), run: () => z.setFace(scarred ? { frown: 0.5, squint: 0.4 } : { smile: 0.2 }), after: 0.6 },
       ], () => { z.setFace(null); done(!scarred); this.dawn(); }));
-    });
+    }
   }
 
   /**

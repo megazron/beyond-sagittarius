@@ -259,8 +259,17 @@ with sync_playwright() as pw:
     ok(page.evaluate("document.querySelectorAll('#modal [data-diff]').length") == 3 and page.evaluate("window.__q2") == 0, 'story: asking again while the question is open opens nothing new')
     page.evaluate("""document.querySelector('#modal [data-diff="normal"]').click()"""); step(page, 0.5); time.sleep(0.4)  # (the modal hides 130 ms after it is closed)
     ok(page.evaluate("document.getElementById('modal').classList.contains('hidden') && window.__q2 === 1"), 'story: one answer closes it and every caller goes on')
+    # then the night's own scene (night.ts FirstNight): noises beyond the light and the choice; brace is the fight at the fire
+    for i in range(60):
+        if page.evaluate("!!document.querySelector('#dlg-choices button[data-c=\"e1.night.o.brace\"]') && __bs.branch.open"): break
+        step(page, 0.25); time.sleep(0.1)
+    ok(page.evaluate("!!document.querySelector('#dlg-choices button[data-c=\"e1.night.o.brace\"]') && __bs.branch.open"), 'story: the night asks hide, brace or run', page.evaluate("[__bs.mode, __bs.branch.open, __bs.save.flags['e1.night']]"))
+    page.evaluate("document.querySelector('#dlg-choices button[data-c=\"e1.night.o.brace\"]').click()")
+    for i in range(40):
+        if page.evaluate("!!(__bs.combat && __bs.combat.run)"): break
+        step(page, 0.25); time.sleep(0.1)
     d = page.evaluate(D)
-    ok(d['encounter'] == 'night.defence', 'story: level 7 at night starts the night at the fire by itself', d['encounter'])
+    ok(d['encounter'] == 'night.defence', 'story: level 7 at night, braced, starts the night at the fire by itself', d['encounter'])
     ok(page.evaluate("JSON.parse(localStorage.getItem('bs-settings-v1')).combat.asked") is True, 'story: the answer is kept (asked once)')
     for i in range(12):
         step(page, 0.25); time.sleep(0.1)
@@ -300,7 +309,12 @@ with sync_playwright() as pw:
         elif st[0] not in ('title', 'loading'): page.evaluate('__bs.skip()')
         time.sleep(0.25)
     ok(page.evaluate("__bs.combat.run && __bs.combat.run.id") == 'night.defence', 'story: loading a save from the middle of the night meets the night again')
-    page.evaluate("__bs.combat.leaveEncounter()"); step(page, 2.0); time.sleep(1.0); step(page, 0.5)
+    ok(not page.evaluate("__bs.branch.open"), 'story: the reloaded night does not ask its question again')
+    # leave the fight: his line after the night (a short scene), then the level goes on
+    page.evaluate("__bs.combat.leaveEncounter()")
+    for i in range(40):
+        step(page, 0.5); time.sleep(0.15)
+        if page.evaluate("!__bs.combat.run && !!__bs.save.flags.houndGone"): break
     ok(page.evaluate("!__bs.combat.run && __bs.save.flags.houndGone"), 'story: the night over, the level goes on (sleep)', page.evaluate("[!!__bs.combat.run, __bs.save.flags.houndGone]"))
     ok(not errs, 'story: no page errors', errs[:3])
     page.context.close()

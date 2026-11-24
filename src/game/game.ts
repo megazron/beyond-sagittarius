@@ -154,7 +154,7 @@ export class Game {
       drill: (lit) => { if (this.debugActing) return false; this.drill.start(lit); return true; },
       spear: (made) => { if (this.debugActing) return false; this.night.spear(made); return true; },
       lean: (built) => { if (this.debugActing) return false; this.lean.start(built); return true; },
-      night: (done) => { if (FirstNight.tested || this.mode !== 'play') return false; this.night.night(done); return true; },
+      night: (done) => { if (this.mode !== 'play') return false; this.night.night(done); return true; },
       away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
     this.craft.onFail = () => {
       const c = (this.save.crafts ??= { failed: 0 });
@@ -385,7 +385,9 @@ export class Game {
       this.enterPlay(false);
       // the panel that was open when the game closed is still waiting
       const open = save.branch.open;
-      if (open) this.after(0.6, () => this.playScene([open.kind === 'decision' ? { choice: open.id } : { qte: open.id }]));
+      // the first night's question belongs to the night (night.ts): the story starts the night again and it asks there
+      if (open?.id === 'e1.night' && !save.flags.houndGone) save.flags['e1.night'] = false;
+      else if (open) this.after(0.6, () => this.playScene([open.kind === 'decision' ? { choice: open.id } : { qte: open.id }]));
     }
     this.player.model.root.visible = true;
   }
@@ -1013,7 +1015,8 @@ export class Game {
     // in the middle of a fight the save keeps the moment before it began (combat.ts checkpoint); the night's start is
     // the story's own (it marks the night as begun when it starts it), so that mark is not kept either
     const out = this.combat?.checkpoint(s) ?? s;
-    if (out !== s && this.combat?.encounter?.id === 'night.defence' && !s.flags.houndGone) out.flags = { ...s.flags, 'e1.night': false };
+    const nightFight = this.combat?.encounter?.id === 'night.defence' || (this.combat?.encounter?.id === 'chase.escape' && s.level === 7);
+    if (out !== s && nightFight && !s.flags.houndGone) out.flags = { ...s.flags, 'e1.night': false };
     writeSave(out);
   }
 }
