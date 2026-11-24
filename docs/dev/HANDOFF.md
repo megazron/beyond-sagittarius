@@ -1809,7 +1809,13 @@ Fixing the owner's list from the flow4 GPU takes, in order.
   no vanish/appear (far or near), max bodies 16. Web cardClose 22 (tram square 9), overlap 18, slide 3. So the Web
   out-of-view rule did NOT halve Web's flat cards this time (22 and 22 in e1/f1 vs 12 in p29f); phone pool 16 did not
   bring Mobile under p29's 13-14 in f1 (9 in e1 was with the far-story rule giving the near bodies room). NOT 0.
-- NOT DONE: GPU clips (final.sh) and the proxy fps, the walker-at-the-lens re-check, phone memory/load for pool 16
+- LANDED 888c558 (ped30c, CI all green on that sha, no reruns): facx switch (fixed), perf_gate shader check, Web
+  out-of-view cards, phone pool 16, far-story rule out, Mobile body budget 16. perf_gate there: Mobile gate 16 bodies
+  (AT the budget, no margin), 668 535 triangles; Web gate 1 397 602 (budget 1.45 M), 339 draws.
+- CLIPS: p30/final.sh (dist-p30g = ped30c 888c558) was recording when I stopped: p30/clips_mobile/*.mp4 done, Web and
+  the proxy after it (p30/final.out says finaldone at the end). NOT WATCHED, NOT SENT. Watch every clip frame by frame
+  first (no sound in these captures).
+- NOT DONE: watching/sending the GPU clips and the proxy fps, the walker-at-the-lens re-check, phone memory/load for pool 16
   (CI mobile_memory passes; not measured on the proxy).
 - INCIDENT (mine): 3b1eef8 also carried 1258b70, my first facade probe switch, which put the reveal block's
   `float fReveal` under an if/else: the facade shader did not compile and the facade buildings were NOT DRAWN on main
