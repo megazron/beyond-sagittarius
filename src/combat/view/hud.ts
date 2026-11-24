@@ -2,7 +2,7 @@
 // off screen, a boss bar, injuries, and the touch buttons. All of it is made here and lives in its own layer.
 import './combat.css';
 
-const ICON: Record<string, string> = {
+export const ICON: Record<string, string> = {
   atk: '<path d="M5 19 19 5M15 5h4v4M5 19l3-1-2-2z"/>',
   aim: '<circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/>',
   dge: '<path d="M4 14c2-6 8-8 13-5M17 5v4h-4M6 19h9"/>',
@@ -39,7 +39,8 @@ export class CombatHud {
     this.bossEl = el('div', 'boss', '<span></span><div class="bar"><i></i></div>');
     this.inj = el('div', 'inj');
     this.fa = el('div', 'fa', '<b></b><span></span>');
-    this.root.append(this.vig, this.ret, this.studyEl, this.eye, this.obj, this.bossEl, this.inj, this.fa, this.chip);
+    this.teachEl = el('div', 'teach');
+    this.root.append(this.vig, this.ret, this.studyEl, this.eye, this.obj, this.bossEl, this.inj, this.fa, this.chip, this.teachEl);
     for (let i = 0; i < 4; i++) { const a = el('div', 'arrow', '<i></i>'); this.arrowEls.push(a); this.root.append(a); }
     for (let i = 0; i < 6; i++) { const a = el('div', 'tag'); this.tagEls.push(a); this.root.append(a); }
     this.touchRoot.id = 'cb-touch';
@@ -127,6 +128,9 @@ export class CombatHud {
   injuries(list: { id: string; bad: boolean }[]) {
     this.set('inj', list.map((i) => i.id + i.bad).join(), () => { this.inj.innerHTML = list.map((i) => `<i class="${i.bad ? 'bad' : ''}" title="${i.id}">+</i>`).join(''); });
   }
+  private teachEl: HTMLElement;
+  /** The first time a weapon is in the hand: its controls for the device in use (html built by combat.ts). */
+  teach(html: string | null) { this.set('teach', html ?? '', () => { this.teachEl.classList.toggle('on', !!html); if (html) this.teachEl.innerHTML = html; }); }
   analysis(title: string | null, text = '') { this.set('fa', `${title}|${text}`, () => { this.fa.classList.toggle('on', !!title); this.fa.querySelector('b')!.textContent = title ?? ''; this.fa.querySelector('span')!.textContent = text; }); }
   study(k: number) { this.set('study', k.toFixed(2), () => { this.studyEl.classList.toggle('on', k > 0.02 && k < 1); (this.studyEl.querySelector('circle') as SVGCircleElement).style.strokeDashoffset = String(201 * (1 - k)); }); }
   vignette(on: boolean) { this.set('vig', String(on), () => this.vig.classList.toggle('on', on)); }

@@ -113,3 +113,15 @@ body.cb-encounter #tutorial { display: none !important; }
 #cb-hud .tag { position: absolute; left: -5px; top: -14px; width: 0; height: 0; border: 5px solid transparent; border-top: 8px solid rgba(242,235,221,.85); opacity: 0; transition: opacity .3s; filter: drop-shadow(0 0 2px #000); pointer-events: none; }
 #cb-hud .tag.on { opacity: .9; }
 #cb-hud .tag.warm { border-top-color: rgba(120,220,170,.9); }
+
+/* the first time a weapon is in the hand: how to use it, with the keys, buttons or touch buttons in use */
+#cb-hud .teach { position: absolute; left: max(14px, env(safe-area-inset-left)); top: 22%; max-width: min(46vw, 340px); padding: 8px 12px 9px; background: rgba(10,14,18,.8); border-inline-start: 3px solid #e8a33d; border-radius: 4px; font-size: 14px; line-height: 1.3; opacity: 0; transition: opacity .35s; pointer-events: none; }
+#cb-hud .teach.on { opacity: 1; }
+#cb-hud .teach b { display: block; color: #e8a33d; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 4px; }
+#cb-hud .teach .r { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+#cb-hud .teach .k { display: inline-flex; gap: 3px; flex: none; min-width: 34px; }
+#cb-hud .teach .k kbd, #cb-hud .teach .k .pc { font: 600 11px 'Barlow', sans-serif; padding: 2px 6px; border: 1px solid rgba(255,255,255,.45); border-radius: 4px; background: rgba(255,255,255,.08); }
+#cb-hud .teach .k .tb { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.45); align-items: center; justify-content: center; }
+#cb-hud .teach .k .tb svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#cb-hud .teach i { display: block; font-style: normal; opacity: .8; font-size: 12.5px; margin-top: 4px; }
+@media (max-height: 460px) { #cb-hud .teach { top: 14%; font-size: 12.5px; max-width: min(40vw, 300px); } }

@@ -28,10 +28,10 @@ import { createCreature, NIGHT, NIGHT_RIM } from './view/creatures';
 import type { CreatureView } from './view/creatures';
 import { CombatFx } from './view/fx';
 import { FightBody } from './view/body';
-import { CombatHud } from './view/hud';
+import { CombatHud, ICON } from './view/hud';
 import { TensionUi } from './view/tensionUi';
 
-export interface CombatSettings { difficulty: Difficulty; aim: 0 | 1 | 2; hold: boolean; slowMo: boolean; numbers: boolean; shake: boolean }
+export interface CombatSettings { difficulty: Difficulty; aim: 0 | 1 | 2; hold: boolean; slowMo: boolean; numbers: boolean; shake: boolean; /** The player has been asked how hard fights should be (the first story fight asks). */ asked?: boolean }
 export const defaultCombatSettings = (): CombatSettings => ({ difficulty: 'normal', aim: 1, hold: false, slowMo: false, numbers: false, shake: true });
 /** What a save remembers of the fight: what was made, how worn it is, what hurts, what has been learned. */
 export interface CombatSave { has: Partial<Record<WeaponId, boolean>>; dur: Partial<Record<WeaponId, number>>; weapon: WeaponId; injuries: Injury[]; studied: string[]; hints: string[]; warmth: number }
@@ -60,7 +60,7 @@ const KEYS = { attack: ['Mouse0'], aim: ['Mouse2'], alt: ['KeyG'], block: ['KeyQ
 const PAD = { attack: 7, aim: 6, dodge: 1, block: 4, alt: 5, weapon: 3, kit: 12, sneak: 11, sprint: 10 };
 const PAD_TAKEN = new Set(Object.values(PAD));
 const GLYPH: Record<string, [string, string, string]> = { // keyboard and mouse, pad, touch
-  attack: ['left mouse', 'RT', '●'], aim: ['right mouse', 'LT', '◎'], dodge: ['V', 'B', '↻'], block: ['Q', 'LB', '▲'], sneak: ['X', 'R3', '~'], kit: ['T', 'D-pad ↑', '≡'], weapon: ['R', 'Y', '⇄'],
+  attack: ['left mouse', 'RT', '●'], aim: ['right mouse', 'LT', '◎'], alt: ['G', 'RB', '↗'], dodge: ['V', 'B', '↻'], block: ['Q', 'LB', '▲'], sneak: ['X', 'R3', '~'], kit: ['T', 'D-pad ↑', '≡'], weapon: ['R', 'Y', '⇄'],
 };
 const v = new THREE.Vector3(), v2 = new THREE.Vector3();
 
@@ -191,6 +191,13 @@ export class Combat {
    */
   startEncounter(id: EncounterId, opts: StartOpts = {}): Promise<Outcome> {
     return new Promise((resolve) => {
+      // the first fight the story starts asks how hard fights should be (Pause, Action changes it later)
+      if (!opts.trial && !this.d.settings().asked) this.askDifficulty(() => this.begin(id, opts, resolve));
+      else this.begin(id, opts, resolve);
+    });
+  }
+  private begin(id: EncounterId, opts: StartOpts, resolve: (o: Outcome) => void) {
+    {
       const D = this.d, s = D.save(), P = D.player;
       this.endEncounterNow();
       this.storePlayer();
@@ -222,7 +229,66 @@ export class Combat {
       D.ui.banner(t('cb.menu'), t(`cb.enc.${id}`));
       this.sneakOn = false; this.hud.touch.sneak = false;
       this.hint(id === 'stealth.pass' ? 'sneak' : id === 'night.defence' ? 'trap' : id === 'hunt.first' ? 'sneak' : 'dodge');
-    });
+      this.taught = null;
+    }
+  }
+
+  /** The story's own fights: where one happens (the camp for the night, the clearest ground or shallows otherwise). */
+  siteOf(id: EncounterId) { return { ...this.site(id) }; }
+  groundAt(x: number, z: number) { return this.env.height(x, z); }
+  get playerPos() { return this.d.player.pos; }
+
+  /** How hard should fights be: asked once, before the first fight of the story. */
+  private askDifficulty(go: () => void) {
+    const D = this.d, S = D.settings(), ui = D.ui;
+    D.input.enabled = false; D.input.releasePointer();
+    ui.openModal(`<div class="center-msg cb-end cb-ask"><h2>${t('cb.ask.title')}</h2><p>${t('cb.ask.body')}</p>
+      <div class="actions">${(['story', 'normal', 'hard'] as Difficulty[]).map((d) => `<button class="btn${d === S.difficulty ? ' primary' : ''}" data-diff="${d}"><span>${t(`cb.set.${d}`)}<small>${t(`cb.ask.${d}`)}</small></span></button>`).join('')}</div>
+      <p class="facts">${t('cb.ask.later')}</p></div>`);
+    document.querySelectorAll<HTMLButtonElement>('[data-diff]').forEach((b) => b.addEventListener('click', () => {
+      S.difficulty = b.dataset.diff as Difficulty; S.asked = true; D.saveSettings(); this.applySettings();
+      ui.closeModal(); D.input.enabled = true; go();
+    }));
+  }
+
+  /**
+   * A story fight that ended with the player down: try again from its start (the bag, the body and the clock as they
+   * were before it), try again easier, or go on with the loss (the story's own outcome: `scarred`). Nothing of the
+   * story before the fight is lost either way.
+   */
+  private defeatCard() {
+    const D = this.d, S = D.settings(), ui = D.ui, run = this.encounter!;
+    D.input.enabled = false; D.input.releasePointer();
+    const easier = S.difficulty !== 'story';
+    ui.openModal(`<div class="center-msg cb-end cb-lost"><h2>${t(`cb.enc.${run.id}`)}</h2><p>${t('cb.lost.body')}</p>
+      <div class="actions"><button class="btn primary" id="cb-retry">${t('cb.lost.retry')}</button>${easier ? `<button class="btn" id="cb-easier">${t('cb.lost.easier')}</button>` : ''}<button class="btn" id="cb-goon">${t('cb.lost.goon')}</button></div></div>`);
+    const close = () => { ui.closeModal(); D.input.enabled = true; };
+    document.getElementById('cb-retry')!.addEventListener('click', () => { close(); this.retry(false); });
+    document.getElementById('cb-easier')?.addEventListener('click', () => { close(); this.retry(true); });
+    document.getElementById('cb-goon')!.addEventListener('click', () => { close(); this.slow = 1; this.endEncounterNow(); D.ui.fade('black', 0, 0.6); D.persist(); });
+  }
+  private retry(easier: boolean) {
+    const D = this.d, e = this.enc!, run = this.encounter!;
+    this.retries++;
+    if (easier) { D.settings().difficulty = 'story'; D.saveSettings(); this.applySettings(); }
+    this.enc = null;
+    this.finishRestore(e, true);
+    this.encounter = null;
+    this.slow = 1;
+    this.begin(run.id, { ...e.opts, difficulty: undefined }, e.resolve);
+  }
+  /** How many times a fight has been tried again since the game started (tests). */
+  retries = 0;
+
+  /**
+   * A save made in the middle of a fight keeps the moment before it began (its bag, body, place and hour), so a game
+   * loaded from it meets the fight again from its start instead of half way through with the bag half spent.
+   */
+  checkpoint(s: SaveData): SaveData {
+    const e = this.enc;
+    if (!e || !this.encounter) return s;
+    const b = JSON.parse(e.snap) as { stats: SaveData['stats']; inventory: Record<string, number>; combat?: CombatSave };
+    return { ...s, stats: b.stats, inventory: b.inventory, combat: b.combat, pos: e.pos, yaw: e.yaw, timeOfDay: e.hour, day: e.day } as SaveData;
   }
   private goalV = new THREE.Vector3();
   /** Where the set piece wants the player to go, for the compass and the line on the ground. */
@@ -312,14 +378,14 @@ export class Combat {
     e?.resolve(this.encounter.outcome ?? { id: this.encounter.id, result: 'left', flags: {}, companionLost: null, injuries: [], seconds: this.encounter.t, stats: this.encounter.sim.stats });
     this.encounter = null;
   }
-  private finishRestore(e: Combat['enc']) {
+  private finishRestore(e: Combat['enc'], revert = false) {
     const D = this.d, s = D.save(), run = this.encounter;
     if (!e || !run) return;
     this.body.release(D.player.model);
     document.body.classList.remove('cb-encounter');
     D.player.combat = null; D.input.padMask = null;
     this.dropViews(); this.fx.clear(); D.world.items.ringK = 1;
-    if (e.opts.trial) {
+    if (e.opts.trial || revert) {
       const b = JSON.parse(e.snap) as { stats: SaveData['stats']; inventory: Record<string, number>; combat?: CombatSave };
       Object.assign(s.stats, b.stats);
       for (const k of Object.keys(s.inventory)) delete s.inventory[k];
@@ -464,7 +530,7 @@ export class Combat {
   private nextWeapon() {
     const sim = this.sim!, own = sim.owned(), i = own.indexOf(sim.player.weapon);
     const next = own[(i + 1) % own.length];
-    if (next && sim.equip(next)) { audio.sample('leather', 0.4); this.engagedT = Math.max(this.engagedT, next === 'fists' ? 0 : 6); if (next !== 'fists' && WEAPONS[next].proj) this.hint('aim'); else if (next !== 'fists') this.hint('attack'); }
+    if (next && sim.equip(next)) { audio.sample('leather', 0.4); this.engagedT = Math.max(this.engagedT, next === 'fists' ? 0 : 6); }
   }
 
   /** The field kit: traps to set, things to make, wounds to see to. */
@@ -540,6 +606,7 @@ export class Combat {
       this.slow = 0.5;
       P.update(dt, D.input, false, st.stamina, 1);
       this.present(dt, time);
+      if (e.endT > 1.4 && !e.card && run.outcome.result === 'lost' && !e.opts.trial && run.id !== 'arena') { e.card = true; this.defeatCard(); return; }
       if (e.endT > 1.4 && !e.card) { e.card = true; D.ui.fade('black', 1, 0.35); window.setTimeout(() => { this.slow = 1; this.endEncounterNow(); D.ui.fade('black', 0, 0.6); D.persist(); }, 420); }
       return;
     }
@@ -879,6 +946,9 @@ export class Combat {
   /** The eye's adaptation to a camp fire close by (main.ts scales the exposure by it after the world sets its own):
    * at night a metre from the fire a white coat burned out to flat orange-white (owner); the eye stops down there. */
   private exposure = 1;
+  /** The fight's night on top of the world's own (world.night): its planet fill, the chase's, the animals' cold edge, how
+   * far the eye stops down at the fire. Tunable from the console (`__bs.combat.nightTune`) for GPU stills. */
+  nightTune = { fill: 1.55, chase: 0.8, rim: 1.0, stop: 0.22 };
   get exposureScale() { if (!this.encounter) this.exposure = 1; return this.exposure; }
   private present(dt: number, time: number) {
     {
@@ -890,7 +960,7 @@ export class Combat {
       }
       // (about a second to adapt, as an eye does; down to 0.7 at the fire's edge)
       // (0.7 at the fire's edge stopped the whole frame down with it: past the firelight it went black. 0.78 now)
-      const want = 1 - 0.22 * near;
+      const want = 1 - this.nightTune.stop * near;
       this.exposure += (want - this.exposure) * (1 - Math.exp(-dt * 1.2));
     }
     // a night set piece: the giant planet overhead throws a cold planetshine, enough to see shapes move at the
@@ -906,10 +976,10 @@ export class Combat {
     // was black, s5 GPU take; then 1.35 -> 1.55 and the planet lower in the sky, 34 deg up instead of 58: from high
     // overhead it lit the tops of the grass and left every animal a dark lump with glowing marks (s5 night v2). Low, it
     // lights their sides and backs, and the side away from it stays dark, so a shape reads as a body)
-    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? 0.8 : 1.55) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 46, P0.y + 38, P0.z + 34); this.shine.target.position.copy(P0); } }
+    if (this.shine) { const want = nightRun ? (this.encounter?.id === 'chase.escape' ? this.nightTune.chase : this.nightTune.fill) : 0; this.shine.intensity += (want - this.shine.intensity) * (1 - Math.exp(-dt * 1.5)); if (this.shine.intensity > 0.01) { const P0 = this.d.player.pos; this.shine.position.set(P0.x - 46, P0.y + 38, P0.z + 34); this.shine.target.position.copy(P0); } }
     // the same cold light catches the animals' edges, so a shape beyond the fire reads as an animal, not a shadow
     // (0.55 and a thin edge: they still read only by their marks; 0.8 and pow 1.8 made them glassy, like lit ghosts, s6 take; now 0.65, pow 2)
-    NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine ? this.shine.intensity * 0.65 : 0);
+    NIGHT_RIM.value.setRGB(0.55, 0.66, 0.9).multiplyScalar(this.shine && nightRun ? this.nightTune.rim * Math.min(1, this.shine.intensity / Math.max(0.05, this.nightTune.fill)) : 0);
     const D = this.d, sim = this.sim!, P = D.player, p = sim.player, run = this.encounter, cam = P.camera;
     // creatures: a body for each within sight, none for those far off or gone
     NIGHT.on = sim.night;
@@ -984,6 +1054,7 @@ export class Combat {
     // HUD
     const eng = this.engaged, w = WEAPONS[p.weapon], I = this.I;
     this.hud.show(eng);
+    this.teachWeapon(dt, eng ? p.weapon : 'fists');
     this.hud.showTouch(eng && D.input.device === 'touch' && D.free(), { aim: !!w.proj && !w.ranged, alt: !!w.proj && !w.ranged && p.weapon !== 'rock', trap: !!run || p.weapon !== 'fists', block: true });
     if (!eng) { this.hud.injuries(p.injuries.map((i) => ({ id: i.id, bad: !!i.infected }))); return; }
     const hotE = I.aim && sim.enemies.some((e) => !e.dead && !e.gone && Math.hypot(e.x - I.ax, e.z - I.az) < e.def.radius + 0.4);
@@ -1048,6 +1119,44 @@ export class Combat {
     if (this.faT > 0) { this.faT -= dt; if (this.faT <= 0) this.hud.analysis(null); }
     if (sim.enemies.some((e) => !e.dead && !e.gone && Math.hypot(e.x - p.x, e.z - p.z) < 26 && !c.studied.includes(e.kind))) this.hint('study');
   }
+
+  // ---------------- the first time a weapon is in the hand ----------------
+  /** The weapon whose controls are on the screen now, for how long, and for which device they were drawn. */
+  private taught: { w: WeaponId; t: number; dev: string } | null = null;
+  private teachWeapon(dt: number, w: WeaponId) {
+    const c = this.cs, dev = this.d.input.device, open = this.d.ui.modalOpen() || this.tensionUi.open;
+    if (w !== 'fists' && !c.hints.includes(`w.${w}`) && !open && (!this.taught || this.taught.w !== w)) {
+      c.hints.push(`w.${w}`);
+      this.taught = { w, t: 0, dev: '' };
+    }
+    const q = this.taught;
+    if (!q) return;
+    q.t += dt;
+    if (q.w !== w || q.t > 11) { this.taught = null; this.hud.teach(null); return; }
+    if (q.dev !== dev) { q.dev = dev; this.hud.teach(this.teachHtml(q.w)); }
+  }
+  /** Its controls as keys, pad buttons or the touch buttons themselves, whichever is in use. */
+  teachHtml(w: WeaponId) {
+    const dev = this.d.input.device, di = dev === 'pad' ? 1 : dev === 'touch' ? 2 : 0, W = WEAPONS[w];
+    const TB: Record<string, string> = { attack: 'atk', aim: 'aim', alt: 'alt', block: 'blk', dodge: 'dge' };
+    const cap = (g: string) => di === 2 ? `<span class="tb"><svg viewBox="0 0 24 24">${ICON[TB[g]]}</svg></span>` : di === 1 ? `<span class="pc">${GLYPH[g][1]}</span>` : `<kbd>${GLYPH[g][0]}</kbd>`;
+    const row = (keys: string[], text: string) => `<div class="r"><span class="k">${keys.map(cap).join('+')}</span><span>${t(text)}</span></div>`;
+    const rows: string[] = [];
+    if (W.ranged) { rows.push(row(['attack'], 'cb.t.draw')); if (di !== 2) rows.push(row(['aim'], 'cb.t.aimView')); }
+    else {
+      if (W.melee) rows.push(row(['attack'], 'cb.t.strike'));
+      if (W.proj) rows.push(row(['aim', 'attack'], 'cb.t.throwAim'));
+      if (W.proj && w !== 'rock') rows.push(row(['alt'], 'cb.t.quick'));
+      rows.push(row(['block'], w === 'spear' || w === 'hafted' ? 'cb.t.brace' : 'cb.t.guard'));
+    }
+    rows.push(row(['dodge'], 'cb.t.roll'));
+    const tip = t(`cb.t.tip.${w}`);
+    return `<b>${t(`cb.w.${w}`)}</b>${rows.join('')}${tip !== `cb.t.tip.${w}` ? `<i>${tip}</i>` : ''}`;
+  }
+  /** Tests: the weapon whose controls are showing, and what they say. */
+  /** Tests: the input device the hints are drawn for. */
+  get device() { return this.d.input.device; }
+  get teaching() { return this.taught ? { w: this.taught.w, html: this.teachHtml(this.taught.w) } : null; }
 
   // ---------------- test hooks ----------------
   /** Tests press the fight's keys by code (a headless browser has no pointer lock). */

@@ -5,7 +5,10 @@ then plays every level through the real interaction code: it teleports the
 player next to the current objective (the same point the compass marker uses)
 and presses "E" via window.__bs.act(), advancing game time with
 window.__bs.step() so software-GL frame rates don't matter. Level 7's
-predator fight is played by bracing the spear inside the charge window.
+night is the fight at the fire (the combat set piece, started by the story
+itself), and level 8 begins with breakfast (spear fishing or the hunt): the
+test answers the difficulty question, says it is ready, steps the fight to its
+end and takes "go on" if it is lost.
 
 Afterwards it reloads, continues the save and checks that level, names and the
 rescued crewmate persist, then renders the HUD in Hindi and Urdu.
@@ -431,6 +434,7 @@ def main():
             return False
 
         answered = []
+        fights = []  # the set pieces the story started: [id, result]
         trees = []
 
         def small_actions():
@@ -489,6 +493,33 @@ def main():
         for it in range(900):
             st = ev("({state: __bs.state, level: __bs.level, mode: __bs.mode, hound: __bs.hound, crew: __bs.crew, busy: __bs.save && null})")
             lvl = st["level"]
+            # the story's own fights (src/game/fights.ts): nothing but the story starts them here
+            if ev("!!document.querySelector('[data-diff]')"):
+                ev("document.querySelector('[data-diff=\"story\"]').click()")
+                ev("__bs.step(0.2)")
+                continue
+            if ev("!!document.getElementById('cb-goon')"):
+                fights.append([ev("__bs.combat.run && __bs.combat.run.id"), "lost"])
+                ev("document.getElementById('cb-goon').click()")
+                time.sleep(0.8)
+                continue
+            enc = ev("__bs.combat && __bs.combat.run ? {id: __bs.combat.run.id, phase: __bs.combat.run.phase, out: __bs.combat.run.outcome && __bs.combat.run.outcome.result} : null")
+            if enc:
+                if not fights or fights[-1][0] != enc["id"] or fights[-1][1] is not None:
+                    fights.append([enc["id"], None])
+                    log(f"fight started by the story: {enc['id']} (level {lvl})")
+                    shot(f"07-fight-{enc['id']}")
+                if enc["out"]:
+                    fights[-1][1] = enc["out"]
+                    time.sleep(0.6)
+                    ev("__bs.step(0.5)")
+                    continue
+                if enc["id"] == "night.defence" and enc["phase"] == "prep":
+                    ev("__bs.combat.run.ready()")
+                if enc["id"] in ("fish.spear", "hunt.first") and ev("__bs.combat.run.t") > 6:
+                    ev("__bs.combat.leaveEncounter()")
+                ev("__bs.step(4)")
+                continue
             if page.locator(".pt-cols").is_visible():
                 # the path tree opens by itself after each chapter
                 time.sleep(0.5)
@@ -684,8 +715,16 @@ def main():
             failures.append(f"did not finish the arc: level {final['level']}")
         if sorted(final["completed"]) != list(range(1, 22)):
             failures.append(f"completed list wrong: {final['completed']}")
-        if not hound_seen or (final["hits"] or 0) < 3:
-            failures.append("predator fight did not happen")
+        log("fights:", fights)
+        ids = [f[0] for f in fights]
+        if "night.defence" not in ids:
+            failures.append(f"the first night's fight did not start from the story: {fights}")
+        if not any(i in ids for i in ("fish.spear", "hunt.first")):
+            failures.append(f"the morning's food fight did not start from the story: {fights}")
+        if not final["flags"].get("houndGone") or not (final["flags"].get("cb.night.held") or final["flags"].get("scarred")):
+            failures.append("the first night did not end through the fight")
+        if not final["flags"].get("cb.fed"):
+            failures.append("breakfast did not happen")
         if final["crew"]["mode"] != "camp":
             failures.append(f"crewmate not at camp: {final['crew']}")
         obj = page.inner_text("#objective")

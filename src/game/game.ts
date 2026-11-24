@@ -7,6 +7,7 @@ import { t, onLangChange } from '../i18n';
 import { clamp, smoothstep, lerp, easeInOut } from '../core/noise';
 import { audio } from '../core/audio';
 import { SaveData, writeSave } from '../core/save';
+import { Fights } from './fights';
 import type { World } from '../world/world';
 import { LAKE } from '../world/terrain';
 import { PICKABLE, Item } from '../world/props';
@@ -103,6 +104,8 @@ export class Game {
   private hudClock = 0;
   private interactTarget: { kind: 'water' } | { kind: 'item'; item: Item } | { kind: 'action'; action: Action } | { kind: 'strike' } | null = null;
   story: Story;
+  /** The fights the levels call: the first night, the morning's food. */
+  fights: Fights;
   private cues: { at: number; fn: () => void }[] = [];
   private clock = 0;
   private lastThirstWarn = 0;
@@ -131,7 +134,11 @@ export class Game {
     onLangChange(() => this.tutorial.refresh());
     this.story = new Story(world, player, ui, () => this.save, (sec, fn) => this.after(sec, fn), (amount) => this.hurt(amount), (beats, then) => this.playScene(beats, then));
     this.dialogue.onLine = (who, sec) => this.story.npcs.speak(who, sec);
-    this.story.hooks = { away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
+    this.fights = new Fights(() => this.save, ui, () => this.combat ?? null, () => this.mode === 'play');
+    this.story.fights = this.fights;
+    this.story.hooks = { away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play',
+      // the first night is the night at the fire (src/game/fights.ts)
+      night: (done) => this.fights.night(done) };
     this.craft.onFail = () => {
       const c = (this.save.crafts ??= { failed: 0 });
       c.failed++;
@@ -918,6 +925,10 @@ export class Game {
       s.pos = [this.player.pos.x, this.player.pos.y, this.player.pos.z];
       s.yaw = this.player.yaw;
     }
-    writeSave(s);
+    // in the middle of a fight the save keeps the moment before it began (combat.ts checkpoint); the night's start is
+    // the story's own (it marks the night as begun when it starts it), so that mark is not kept either
+    const out = this.combat?.checkpoint(s) ?? s;
+    if (out !== s && this.combat?.encounter?.id === 'night.defence' && !s.flags.houndGone) out.flags = { ...s.flags, 'e1.night': false };
+    writeSave(out);
   }
 }

@@ -63,7 +63,9 @@ export class Story {
   npcs: Npcs;
   ch2: Chapter2;
   /** Set by the game: open the crafting and dialogue panels. */
-  hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean; away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void; quick: (id: string, done: () => void) => void } = { away: () => {}, quick: () => {}, craft: () => {}, talk: () => {}, free: () => true };
+  hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean; away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void; quick: (id: string, done: () => void) => void; drill?: (lit: () => void) => boolean; spear?: (made: () => void) => boolean; lean?: (built: () => void) => boolean; night?: (done: (held: boolean) => void) => boolean } = { away: () => {}, quick: () => {}, craft: () => {}, talk: () => {}, free: () => true };
+  /** The fights the levels call (src/game/fights.ts): the morning's food after the first night. */
+  fights: { actions(): Action[]; progress(n: number): string | null; marker(n: number): THREE.Vector3 | null; blocks(n: number): boolean } | null = null;
   private strikes = 0;
   private thrustT = 0;
   private spear: THREE.Group;
@@ -151,7 +153,7 @@ export class Story {
         if (this.flag('houndGone')) return t('progress.sleep');
         if (this.hound.state !== 'hidden') return t('progress.hound', { k: this.s.houndHits ?? 0, n: 3 });
         return isNight(this.s.timeOfDay) ? t('progress.waitNight') : t('progress.restDusk');
-      case 8: return this.flag('signal') ? null : t('progress.highGround');
+      case 8: if (this.fights?.blocks(8)) return this.fights.progress(8); return this.flag('signal') ? null : t('progress.highGround');
       case 9:
         return t(this.flag('metCrew') ? 'progress.leadCrew' : 'progress.findCrew');
       case 10:
@@ -191,7 +193,7 @@ export class Story {
       case 5: { const m = needFor(R.shelter); return m.length ? nearest(m) : L.shelter; }
       case 6: { const m = needFor(R.spear); return m.length ? nearest(m) : L.camp; }
       case 7: return this.hound.state !== 'hidden' && this.hound.state !== 'flee' ? null : L.shelter;
-      case 8: return L.ridge;
+      case 8: return this.fights?.blocks(8) ? this.fights.marker(8) : L.ridge;
       case 9: return this.flag('metCrew') ? L.camp : L.ridge;
       case 10: {
         if (!this.flag('transmitter')) return L.pod;
@@ -259,7 +261,8 @@ export class Story {
     if (n === 7 && this.flag('houndGone') && !this.flag('slept')) {
       out.push({ id: 'sleep', pos: L.shelter, radius: 3.2, label: t('action.sleep'), run: () => this.sleep() });
     }
-    if (n === 8 && !this.flag('signal')) {
+    if (this.fights) out.push(...this.fights.actions());
+    if (n === 8 && !this.flag('signal') && !this.fights?.blocks(8)) {
       out.push({ id: 'tune', pos: L.ridge, radius: 5, label: t('action.tune'), run: () => this.tune() });
     }
     if (n === 9 && !this.flag('metCrew')) out.push({ id: 'answer', pos: L.ridge, radius: 6, label: t('action.answer'), run: () => this.answerSignal() });
@@ -327,8 +330,15 @@ export class Story {
       if (h.state === 'hidden') { this.world.hound.root.visible = false; return; }
     }
     if (h.state === 'hidden') {
-      if (s.level === 7 && !this.flag('houndGone') && this.flag('spear') && isNight(s.timeOfDay) && !this.sequence) this.startHound();
-      else return;
+      if (s.level === 7 && !this.flag('houndGone') && this.flag('spear') && isNight(s.timeOfDay) && !this.sequence && performance.now() > this.quietUntil) {
+        // 1.9: on a player's own night the first night is the choice and the combat set piece (game.ts FirstNight)
+        if (!this.flag('e1.night') && this.hooks.night?.((held) => {
+          s.flags.houndGone = true;
+          this.ui.toast(t(held ? 'msg.houndFled' : 'msg.houndBit'));
+        })) { s.flags['e1.night'] = true; return; }
+        if (this.flag('e1.night')) return;
+        this.startHound();
+      } else return;
     }
     h.timer += dt;
     const toP = this.tmp.set(p.x - h.pos.x, 0, p.z - h.pos.z);
@@ -730,13 +740,20 @@ export class Story {
     this.ui.deviceLines(null);
   }
 
+  /** A line is being said; the night does not start over it. */
+  private quietUntil = 0;
+
   private syncSpear() {
     this.spear.visible = this.flag('spear');
   }
 
   /** Called when a level starts (after the previous one completes). */
   onLevelStart(n: number) {
-    if (n === 7) this.after(5.5, () => this.ui.say('dlg.7.1', 'crew.scientist.name', 5));
+    // "Now I wait for the dark": only said before the dark, and the night's noises wait until it is over
+    if (n === 7) this.after(5.5, () => {
+      if (this.flag('e1.night') || this.sequence || isNight(this.s.timeOfDay)) return;
+      this.ui.say('dlg.7.1', 'crew.scientist.name', 5); this.quietUntil = performance.now() + 7000;
+    });
     if (n === 8) {
       this.signalClock = 12.5; // the meter takes over after the first readout
       this.after(5.0, () => { this.ui.deviceLines([t('signal.detect1'), t('signal.detect2')], true); audio.beep(); });

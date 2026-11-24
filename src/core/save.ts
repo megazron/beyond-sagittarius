@@ -71,7 +71,7 @@ export interface Settings {
   /** Skip the playable Zenvora prologue on new games (for replays). */
   skipPrologue?: boolean;
   /** Fights: difficulty and the accessibility switches (src/combat/combat.ts). */
-  combat?: { difficulty: 'story' | 'normal' | 'hard'; aim: 0 | 1 | 2; hold: boolean; slowMo: boolean; numbers: boolean; shake: boolean };
+  combat?: { difficulty: 'story' | 'normal' | 'hard'; aim: 0 | 1 | 2; hold: boolean; slowMo: boolean; numbers: boolean; shake: boolean; asked?: boolean };
   /** Set from the title-screen settings: run the tutorial on the next session. */
   replayTutorial?: boolean;
 }
