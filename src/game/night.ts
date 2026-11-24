@@ -270,8 +270,10 @@ export class FirstNight {
       const story = { poisoned: !!s.flags.poisoned, cubKilled: !!s.flags['cub.killed'], fireHigh: !!s.flags['fire.high'], hurt: !!s.flags['hurt.zenvik'] };
       const cb = this.combat();
       let scarred = false;
-      if (cb && pick === 'brace') { const o = await cb.startEncounter('night.defence', { story }); scarred = !!o.flags.scarred; }
-      else if (cb && pick === 'run') { const o = await cb.startEncounter('chase.escape', { story: { poisoned: story.poisoned, hurt: story.hurt } }); scarred = !!o.flags.scarred; }
+      // the outcome's facts go on the save as the story reads them (`cb.night.held`, ...), as fights.ts keep() does
+      const keep = (o: { flags: Record<string, unknown> }) => { for (const [k, v] of Object.entries(o.flags)) if (v) s.flags[`cb.${k}`] = true; return !!o.flags.scarred; };
+      if (cb && pick === 'brace') { const o = await cb.startEncounter('night.defence', { story }); scarred = keep(o); s.bites = (s.bites ?? 0) + (o.stats.taken > 0 ? 1 : 0); }
+      else if (cb && pick === 'run') { scarred = keep(await cb.startEncounter('chase.escape', { story: { poisoned: story.poisoned, hurt: story.hurt } })); }
       else { const r = await this.tension({ kind: 'breath', count: 6, strain: story.poisoned ? 1.4 : 1 }); scarred = !!r && !r.passed; }
       if (scarred) s.flags.scarred = true;
       this.after(1.2, () => this.playScene([
