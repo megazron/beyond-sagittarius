@@ -1600,7 +1600,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       // (p29: the limit is on the body's own speed across, the card's lane easing included: the card eased aside at up
       // to 0.45 m/s under a body stepping aside at 0.5, and a body stood waiting, facing ahead, slid 0.8 m/s sideways:
       // the detector's slides of the painted crowd's bodies. Stood waiting: 0.35 m/s, facing ahead)
-      const latV = q.wait || q.holdT || sp < 0.3 ? 0.35 : Math.max(0.35, Math.min(0.9, sp * 0.75)); // (the gate's slow ones, under 0.3 m/s, never turned into it: 0.35 too)
+      const latV = q.wait || q.holdT || sp < 0.3 ? 0.35 : Math.max(0.35, Math.min(0.7, sp * 0.55)); // (0.75 x pace, up to 0.9, still slid at 0.66 m/s in p29c Web while the body turned into it) // (the gate's slow ones, under 0.3 m/s, never turned into it: 0.35 too)
       const bx0 = Number.isFinite(b.lastX) ? b.lastX : q.x + b.dx;
       let bx = bx0 + THREE.MathUtils.clamp((q.x + want - bx0) * (1 - Math.exp(-dt * 3)), -latV * dt, latV * dt);
       // (and never into someone: a step aside within half a metre of a townsperson, a card or another body, nearer than
@@ -1610,7 +1610,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       const vx = Number.isFinite(b.lastX) ? (bx - b.lastX) / Math.max(dt, 1e-3) : 0; b.lastX = bx;
       // (turned into the way they go only while walking: the head came from the card's speed even while it stood)
       const head = Math.atan2(vx, (q.v >= 0 ? 1 : -1) * Math.max(sp, 1e-3)), turn = Math.atan2(Math.sin(head - b.yaw), Math.cos(head - b.yaw));
-      b.yaw += sp > 0.3 ? turn * (1 - Math.exp(-dt * 12)) : Math.atan2(Math.sin(yaw - b.yaw), Math.cos(yaw - b.yaw)) * (1 - Math.exp(-dt * 4)); // facing the way they go, the slow ones at the gate too
+      b.yaw += sp > 0.3 ? turn * (1 - Math.exp(-dt * 16)) : Math.atan2(Math.sin(yaw - b.yaw), Math.cos(yaw - b.yaw)) * (1 - Math.exp(-dt * 4)); // facing the way they go, the slow ones at the gate too
       b.fig.root.position.set(bx, hx(bx), q.z); b.fig.root.rotation.y = b.yaw;
       const hide = LENS_LINE && inLens(bx, q.z); if (!b.fig.setLensFade(hide ? 0 : 1) && b.fig.root.visible === hide) b.fig.root.visible = !hide; // Web, Ultra: a fade
       b.phase += dt * sp * 2.2;
@@ -1811,9 +1811,9 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // (Web, Ultra: two threes at the gate, not five: with the gate's own throng they were more people in view than bodies, and
   // the rest stood there as flat cards as you walked up)
   // (p29: fewer near the walking routes, the owner's "too crowded": with more people in view than bodies the rest were
-  // flat cards up to you. Web, Ultra: four, not six (the gate keeps one, the queue's end of the crowd none); phones: one,
+  // flat cards up to you. Web, Ultra: three, not six (none at the gate or the queue's end of the crowd); phones: one,
   // not three (none in the bazaar or at the gate, where the townsfolk took all eleven bodies))
-  const groups: [number, number][] = rich ? [[6.6, 38], [6.4, -8], [-6.6, -36], [-7.4, -63]] : [[-6.6, -36]];
+  const groups: [number, number][] = rich ? [[6.6, 38], [6.4, -8], [-6.6, -36]] : [[-6.6, -36]]; // (none at the gate: perf_gate's Web gate went over 1.3 M triangles with one there, p29)
   // no stock emotes on a loop: they stand easy, look at whoever in the three is talking, and the talker's mouth moves
   const chats: { members: CityPerson[]; next: number; who: number }[] = [];
   groups.forEach(([x, z], gi) => {
@@ -2286,10 +2286,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         // the painted crowd right beside you comes before a townsperson thirty metres off: up to half the bodies are
         // kept for it while it is within reach
         // and the walkers pinned at your elbow (walkCrowd, drawPeds) keep their bodies before anyone further off gets one
-        const cap = outroT >= 0 ? 99 : BODY_CAP - Math.max(Math.min(Math.floor(BODY_CAP / 2), cardsNear), crowdPinned + pedPinned);
+        let cap = outroT >= 0 ? 99 : BODY_CAP - Math.max(Math.min(Math.floor(BODY_CAP / 2), cardsNear), crowdPinned + pedPinned);
+        // phones: never more than BODY_CAP + 2 in all, the painted crowd's bodies held this frame included (p29: with the
+        // townsfolk out of view as cards the crowd took the bodies they left, and perf_gate's phone gate drew 16)
+        if (tier === 0 && outroT < 0) cap = Math.min(cap, BODY_CAP + 2 - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0));
         for (let j = 0; j < nc; j++) {
           // whoever is at your elbow is a body even when the cap is spent (two over it at most)
-          const q = people[candI[j]], show = used < cap || (j < 2 && candK[j] < -20);
+          const q = people[candI[j]], show = used < cap || (j < 2 && candK[j] < -20 && (tier > 0 || used < cap + 1));
           if (show) used++; else stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: candI[j], v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
           if (show !== q.fig.root.visible) q.fig.root.visible = show;
         }
