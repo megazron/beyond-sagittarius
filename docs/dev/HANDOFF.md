@@ -10,7 +10,8 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
 - `?cinema=1` or `__bs.cinema(true)`: every page element but the 3D canvas is hidden (HUD, minimap, hints, prompts,
   subtitles, menus, letterbox bars, fades, toasts, the fight HUD) and so is the cursor. `__bs.cinemaOn` reads it.
 - `__bs.photo(from, to, fov?)`: the free camera now takes a vertical field of view in degrees. Called on every stepped
-  frame (`__bs.hold(true)`, `__bs.advance(1/60)`) it gives scripted dolly, crane and orbit moves.
+  frame (`__bs.hold(true)`, `__bs.advance(1/60)`) it gives scripted dolly, crane and orbit moves. Outside play it takes
+  over the cutscene's, film's or narrator's camera while it is set (`__bs.photo(null)` gives it back).
 - `__bs.dof(focus, aperture)`: depth of field for a capture (presets with `dofStep` > 0; 0 turns it off).
 
 ## Layout

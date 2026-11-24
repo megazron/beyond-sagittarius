@@ -854,6 +854,11 @@ const earFwd = new THREE.Vector3();
 function draw(dt: number) {
   // portrait screens: widen the vertical FOV so the horizontal view stays usable
   const activeCam = stage.active ? stage.camera : state === 'game' ? camera : state === 'narrator' ? vault.camera : state === 'film' && film.inWorld ? film.wcam : cine.camera;
+  // the photo camera frames cutscenes, films and the narrator's room too (games set it in tick, before the world update)
+  if (photo && state !== 'game') {
+    activeCam.position.copy(photo.from); activeCam.lookAt(photo.to);
+    if (photo.fov && activeCam.fov !== photo.fov) { activeCam.fov = photo.fov; activeCam.updateProjectionMatrix(); }
+  }
   const designFov = activeCam.fov;
   activeCam.getWorldDirection(earFwd);
   audio.listen(activeCam.position, earFwd);
@@ -1179,7 +1184,8 @@ window.addEventListener('resize', () => {
   },
   act() { return game?.debugAct() ?? null; },
   /** Freeze the camera at `from` looking at `to` (null releases it), with a vertical field of view in degrees if given.
-   * A capture that calls it every stepped frame moves the camera along its own path (dolly, crane, orbit). */
+   * A capture that calls it every stepped frame moves the camera along its own path (dolly, crane, orbit). Outside
+   * play it takes over the cutscene's, film's or narrator's camera while it is set. */
   photo(from: number[] | null, to?: number[], fov?: number) { photo = from && to ? { from: new THREE.Vector3(...from), to: new THREE.Vector3(...to), fov } : null; },
   /** Cinema mode: hide every bit of UI and the cursor, leaving only the 3D view (also `?cinema=1`). */
   cinema(on: boolean) { setCinema(on); return on; },
