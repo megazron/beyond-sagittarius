@@ -74,8 +74,11 @@ with sync_playwright() as pw:
     for q in a.quality.split(','):
         page = b.new_page(viewport={'width': 844, 'height': 390} if q == 'mobile' else {'width': 960, 'height': 540})
         errs = []; page.on('pageerror', lambda e: errs.append(str(e)[:200]))
+        # a shader that does not compile draws nothing and throws nothing (main 3b1eef8: the facade buildings were gone
+        # for an hour, every gate green): ?shadercheck=1 makes three log it, and that fails this gate
+        page.on('console', lambda m: errs.append('shader: ' + m.text[:300]) if m.type == 'error' and ('Shader Error' in m.text or 'ERROR: 0:' in m.text) else None)
         page.add_init_script("localStorage.setItem('bs-consent-v1', '1')")
-        page.goto(f'http://127.0.0.1:{a.port}/index.html?quality={q}&tod=17.5' + (f'&{a.query}' if a.query else ''))
+        page.goto(f'http://127.0.0.1:{a.port}/index.html?quality={q}&tod=17.5&shadercheck=1' + (f'&{a.query}' if a.query else ''))
         page.wait_for_function("window.__bs && __bs.state === 'title' && __bs.ready", timeout=600000)
         page.click('#btn-new'); page.wait_for_selector('#nm-ok', timeout=30000); page.click('#nm-ok')
         for i in range(300):
