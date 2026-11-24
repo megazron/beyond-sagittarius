@@ -28,6 +28,9 @@ export interface AwayStage {
   weather?: { rain: number; night: number };
   talk?(id: string, seconds: number, listener: THREE.Vector3): void;
   dispose?(): void;
+  /** What is still loading for this stage (tools/perf_gate.py waits for an empty list): bodies whose builds have not all
+   * arrived, props not yet built. */
+  pending?(): string[];
   /** The stage top-down, for the minimap, the full map and the GPS route. */
   mapLayer?: import('../../ui/minimap').MapLayer;
   /** A closing scene once every task is done (the take-off from Zenvora): it drives the camera, the player's body and
