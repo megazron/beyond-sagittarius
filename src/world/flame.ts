@@ -76,18 +76,18 @@ const FLAME_FS = `uniform float uTime; varying vec2 vQ; varying float vSeed; var
     a *= smoothstep(0.0, 0.08, y);
     // (low down every tongue overlaps every other: there they are thinner, so the overlap is not one bright mass; s6 take)
     if (kind > 0.5) a *= 0.55 + 0.45 * smoothstep(0.08, 0.4, y);
-    // inside the sticks (about the lower 40 % of a tongue, the teepee's 0.6 m) the fire is a bed of embers: dim, deep
+    // inside the sticks (about the lower half of a tongue, the teepee's 0.6 m) the fire is a bed of embers: dim, deep
     // orange and red; the flame is brightest above the wood (s6c take, release review: the foot was still a
     // white-yellow mass, every tongue's hottest part overlapping there)
-    float low = 1.0 - smoothstep(0.1, 0.42, y);
-    if (kind > 0.5) a *= 1.0 - 0.55 * low;
+    float low = 1.0 - smoothstep(0.15, 0.55, y);
+    a *= 1.0 - (kind > 0.5 ? 0.7 : 0.5) * low;
     if (a < 0.004) discard;
     // heat: hottest low in the middle of a tongue, broken by the noise (no even block of colour), cooling to red at
     // the edges and the tips. Never white: the brightest is a deep yellow (the tone map and the bloom do the rest)
     // (the foot, among the fuel, is a little cooler than a hand's breadth up: the brightest is low but not on the coals;
     // the glow layer never gets past orange. s6 first take: still a yellow-white wedge inside the teepee)
     float heat = clamp(body * 1.1 - y * 0.62 + (n1 - 0.5) * 0.75 + 0.08 - 0.25 * (1.0 - smoothstep(0.0, 0.16, y)), 0.0, 1.0) * (kind < 0.5 ? 0.38 : 1.0);
-    heat *= 1.0 - 0.7 * low; // the ember bed: never past orange in among the wood
+    heat *= 1.0 - 0.8 * low; // the ember bed: never past orange in among the wood
     vec3 col = mix(vec3(0.38, 0.03, 0.005), vec3(1.35, 0.36, 0.05), smoothstep(0.05, 0.45, heat));
     col = mix(col, vec3(1.7, 0.95, 0.26), smoothstep(0.6, 1.0, heat) * (1.0 - low));
     gl_FragColor = vec4(col, a * vK.y);
