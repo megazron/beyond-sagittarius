@@ -230,6 +230,14 @@
     "pace": 1.1,
     "fx": "highpass=f=340,lowpass=f=3600,acompressor=threshold=0.1:ratio=5:attack=3:release=50"
    }
+  },
+  "pello": {
+   "role": "Pello, a ragged man who has waited nine years in a queue for a refund: polite, vague, worn out",
+   "all": {
+    "ref": "traveller",
+    "pace": 0.9,
+    "pitch": -0.5
+   }
   }
  }
 }

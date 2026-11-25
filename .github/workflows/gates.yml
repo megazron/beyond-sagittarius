@@ -32,8 +32,8 @@ jobs:
           - { name: levels_smoke, run: 'python tools/levels_smoke.py --quality web --shots "$RUNNER_TEMP/shots"' }
           # Episode Two (levels 11 to 14) from a level 11 save, twice: one set of choices each way
           - { name: episode2_smoke, run: 'python tools/episode2_smoke.py --quality web && python tools/episode2_smoke.py --quality mobile --picks e2.snare=far,e2.voice=go,e2.stranger=spear,e2.mark=bare,e2.kiln=kept' }
-          # Episode Three (built: level 15) from a level 15 save, both ways of the site choice
-          - { name: episode3_smoke, run: 'python tools/episode3_smoke.py --quality web && python tools/episode3_smoke.py --quality mobile --picks e3.site=camp,e3.door=view,e3.field=all' }
+          # Episode Three (levels 15 to 21) from a level 15 save, two sets of choices
+          - { name: episode3_smoke, run: 'python tools/episode3_smoke.py --quality web && python tools/episode3_smoke.py --quality mobile --picks e3.site=camp,e3.door=view,e3.field=all,e3.dose=self,e3.wall=mock,e3.kit=eaten,e3.pello=in,e3.name=dayone' }
           - { name: prologue_smoke, run: 'python tools/prologue_smoke.py --quality web' }
           - { name: intro_smoke, run: 'python tools/intro_smoke.py --quality web' }
           - { name: mobile_smoke, run: 'python tools/mobile_smoke.py --shots "$RUNNER_TEMP/shots"' }

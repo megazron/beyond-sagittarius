@@ -179,6 +179,9 @@ export class Game {
       (spec) => this.combat?.tension(spec) ?? null, () => this.combat, () => this.mode === 'play' && this.canFight() && !this.combat?.encounter && !this.combat?.threatened,
       (id, then) => this.discoverNow(id, then));
     this.story.ch2.ep3 = this.ep3;
+    // level 19 is Draxum's, on his own stage: the story's away hook, the stage, and the decision panel
+    this.ep3.hooks = this.story.hooks; this.ep3.awayStage = () => this.away?.stage ?? null; this.ep3.askFn = (id, done) => this.ask(id, done);
+    this.ep3.waking = () => this.waking;
     // the dead stop talking, wherever the line comes from
     ui.sayFilter = (key, who) => {
       const id = /^crew\.(\w+)\.name$/.exec(who ?? '')?.[1];

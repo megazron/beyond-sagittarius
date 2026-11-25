@@ -56,6 +56,7 @@ const S: [string, string, string, string][] = [
   ['cb.kiln.scattered', 'It dragged the fire out of the pit.', 'उसने गड्ढे से आग खींचकर बिखेर दी।', 'اس نے گڑھے سے آگ کھینچ کر بکھیر دی۔'],
   ['cb.kiln.ran', 'Oom-Sa is gone into the dark. The pit is yours.', 'ऊम-सा अँधेरे में भाग गई। गड्ढा अब तुम्हारे ज़िम्मे है।', 'اوم سا اندھیرے میں بھاگ گئی۔ گڑھا اب تمہارے ذمے ہے۔'],
   ['cb.obj.kiln', 'Keep the pit hot till dawn. It is coming for the pots, not for you.', 'सुबह तक गड्ढे की आग तेज़ रखो। वो बर्तनों के लिए आ रहा है, तुम्हारे लिए नहीं।', 'صبح تک گڑھے کی آگ تیز رکھو۔ وہ برتنوں کے لیے آ رہا ہے، تمہارے لیے نہیں۔'],
+  ['cb.obj.store', 'The store is in the house floor. They have smelt it. Keep them off it till the storm blows out.', 'भंडार घर के फ़र्श में है। उन्होंने सूँघ लिया है। तूफ़ान थमने तक उन्हें उससे दूर रखो।', 'ذخیرہ گھر کے فرش میں ہے۔ انہوں نے سونگھ لیا ہے۔ طوفان تھمنے تک انہیں اس سے دور رکھو۔'],
   ['cb.obj.kilnLow', 'The pit is going cold. Feed it ({k}), or the pots crack.', 'गड्ढा ठंडा हो रहा है। लकड़ी डालो ({k}), वरना बर्तन चटक जाएँगे।', 'گڑھا ٹھنڈا ہو رہا ہے۔ لکڑی ڈالو ({k})، ورنہ برتن چٹخ جائیں گے۔'],
   ['cb.food', 'Food {n}', 'खाना {n}', 'کھانا {n}'],
   ['cb.tapPrompt', 'tap the prompt', 'संकेत पर टैप करो', 'اشارے پر ٹیپ کرو'],

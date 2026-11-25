@@ -20,8 +20,8 @@ import { ENDINGS, PathView, trustBand } from '../game/branch';
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 export const LEVEL_COUNT = 21;
-/** The last level that can be played: Episode Three is built to level 16 so far (its 17 to 21 are not). */
-export const PLAYABLE_LEVELS = 17;
+/** The last level that can be played: Episode Three's last (levels 15 to 21). */
+export const PLAYABLE_LEVELS = 21;
 const CREW = CREW_IDS;
 
 export type MenuTab = 'pause' | 'map' | 'inventory' | 'objectives' | 'codex' | 'crew' | 'ledger';

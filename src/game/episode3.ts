@@ -14,6 +14,10 @@ import { createCharacter, type Character } from '../characters/character';
 import { defaultLook, LINEAGES, type PlayerLook } from '../characters/custom';
 import type { Who } from '../cinematic/cutscene';
 import { Episode2 } from './episode2';
+import { createRain, type Rain } from '../world/rain';
+import { isAlive } from './branch';
+import type { CrewId } from '../characters/looks';
+import type { AwayStage } from './away/stage';
 
 const CHOSE = (d: string, o: string): Cond => ({ chose: [d, o] });
 const UP = new THREE.Vector3(0, 1, 0);
@@ -45,19 +49,41 @@ export class Episode3 extends Episode2 {
     if (n === 15) return isDiscovered(this.s, 'polish') && this.f('e3.felled');
     if (n === 16) return isDiscovered(this.s, 'frame') && this.f('e3.houseDone');
     if (n === 17) return isDiscovered(this.s, 'farming') && this.f('inv.farming');
+    if (n === 18) return isDiscovered(this.s, 'remedy') && this.f('inv.medicine');
+    if (n === 19) return isDiscovered(this.s, 'icewall') && this.f('e3.wallDone');
+    if (n === 20) return isDiscovered(this.s, 'irrigation') && this.f('e3.kitDone');
+    if (n === 21) return isDiscovered(this.s, 'salt') && this.f('e3.ledger');
     return false;
   }
   override craftOpen(n: number) {
     if (n === 15) return this.f('e3.axeTried');
     if (n === 16) return this.f('e3.l16.intro') && (!this.campSite() || this.f('e3.ditch'));
     if (n === 17) return this.f('e3.wheat') && (isDiscovered(this.s, 'grain') ? this.f('e3.fieldIntro') : true);
+    if (n === 18) return this.f('e3.l18.intro');
+    if (n === 20) return this.f('e3.l20.intro');
+    if (n === 21) return this.f('e3.harvest');
     return false;
   }
   /** Where the level's work is done (the frame goes up at the house, not by the fire). */
-  override craftAt(n: number) { return n === 16 ? this.houseAt() : n === 17 ? (isDiscovered(this.s, 'grain') ? this.fieldAt() : this.quernAt()) : null; }
+  override craftAt(n: number) { return n === 20 ? this.fieldAt() : n === 16 || n === 18 || n === 21 ? this.houseAt() : n === 17 ? (isDiscovered(this.s, 'grain') ? this.fieldAt() : this.quernAt()) : null; }
   /** Level 17 grinds grain at Hoh-Ma's quern before the field (the level's own discovery). */
   override craftNode(n: number) { return n === 17 && !isDiscovered(this.s, 'grain') ? TECH_BY_ID.grain : null; }
   override progress(n: number): string | null {
+    if (n === 21) {
+      if (!this.f('e3.harvest')) return null;
+      if (!isDiscovered(this.s, 'salt')) return this.has('salt') ? t('e3.obj.salt') : t('e3.obj.brine');
+      return null;
+    }
+    if (n === 20) {
+      if (!this.f('e3.l20.intro')) return null;
+      if (!isDiscovered(this.s, 'irrigation')) return this.has('irrigation') ? t('e3.obj.level') : null;
+      return this.f('e3.kitDone') ? null : t('e3.obj.snare');
+    }
+    if (n === 18) {
+      if (!this.f('e3.l18.intro')) return null;
+      if (!isDiscovered(this.s, 'remedy')) return this.inv('lichen') < 1 ? t('e3.obj.lichen') : t('e3.obj.boil');
+      return this.f('e3.doseDone') ? null : t('e3.obj.band');
+    }
     if (n === 17) {
       if (!this.f('e3.l17.intro')) return null;
       if (!this.f('e3.wheat')) return t('e3.obj.camp');
@@ -77,6 +103,21 @@ export class Episode3 extends Episode2 {
     return null;
   }
   override marker(n: number): THREE.Vector3 | null {
+    if (n === 21) {
+      if (!this.f('e3.harvest') || isDiscovered(this.s, 'salt')) return null;
+      return this.has('salt') ? this.houseAt() : null; // the brine first (chapter2.ts points at the nearest)
+    }
+    if (n === 20) {
+      if (!this.f('e3.l20.intro')) return null;
+      if (!isDiscovered(this.s, 'irrigation')) return this.has('irrigation') ? this.fieldAt() : null;
+      return this.f('e3.kitDone') ? null : this.snareAt();
+    }
+    if (n === 18) {
+      if (!this.f('e3.l18.intro')) return null;
+      // the lichen first (null: chapter2.ts points at the nearest), then the hearth in his house
+      if (!isDiscovered(this.s, 'remedy')) return this.inv('lichen') < 1 ? null : this.houseAt();
+      return this.f('e3.doseDone') ? null : this.fennAt();
+    }
     if (n === 17) {
       if (!this.f('e3.l17.intro')) return null;
       if (!this.f('e3.wheat')) return this.fennAt();
@@ -95,7 +136,7 @@ export class Episode3 extends Episode2 {
     return null;
   }
   override actions(): Action[] { return []; }
-  override debug() { const p = this.player.pos; return { wait: +this.wait.toFixed(2), busy: this.busy, loaded: ep3Loaded(), free: this.free(), level: this.s.level, at: [+p.x.toFixed(1), +p.z.toFixed(1)], shelter: null, house: this.houseG ? { parts: this.meshCount(this.houseG), key: this.houseKey, at: [+this.house().at.x.toFixed(1), +this.house().at.z.toFixed(1)] } : null, kneel: +this.z.root.position.y.toFixed(2), field: this.fieldG ? { rows: this.fieldRows.length, at: [+this.fieldAt().x.toFixed(1), +this.fieldAt().z.toFixed(1)] } : null, fenn: this.fennG ? [+this.fennAt().x.toFixed(1), +this.fennAt().z.toFixed(1)] : null }; }
+  override debug() { const p = this.player.pos; return { wait: +this.wait.toFixed(2), busy: this.busy, loaded: ep3Loaded(), free: this.free(), level: this.s.level, at: [+p.x.toFixed(1), +p.z.toFixed(1)], shelter: null, house: this.houseG ? { parts: this.meshCount(this.houseG), key: this.houseKey, at: [+this.house().at.x.toFixed(1), +this.house().at.z.toFixed(1)] } : null, kneel: +this.z.root.position.y.toFixed(2), rain: +this.raining.toFixed(2), walls: this.wallCount(), field: this.fieldG ? { rows: this.fieldRows.length, at: [+this.fieldAt().x.toFixed(1), +this.fieldAt().z.toFixed(1)] } : null, fenn: this.fennG ? [+this.fennAt().x.toFixed(1), +this.fennAt().z.toFixed(1)] : null }; }
 
   // ------------------------------------------------------------------ the world, each frame
   override update(dt: number) {
@@ -108,6 +149,9 @@ export class Episode3 extends Episode2 {
     this.restoreHouse();
     this.restoreField();
     this.updateFolk(dt);
+    this.updateRain(dt);
+    this.restoreSprouts(); this.restoreDitch(); this.restoreKit();
+    this.fever(s.level === 18 && this.f('e3.l18.intro') && !this.f('e3.doseDone'));
     this.wait -= dt;
     // a story beat waiting only because an animal hangs about near him (CI levels_smoke stood at level 15 for 150 rounds,
     // free() false, 'engaged'): after 10 s it loses interest and goes
@@ -118,8 +162,12 @@ export class Episode3 extends Episode2 {
     if (this.wait > 0 || this.busy || !ep3Loaded() || !this.free()) return;
     if (s.level === 16) { this.update16(); return; }
     if (s.level === 17) { this.update17(); return; }
-    // the levels after 17 are not built yet: say so once, plainly
-    if (s.level > 17) { if (!this.f('e3.wipShown')) { this.set('e3.wipShown'); this.ui.banner(t('e3.title'), t('e3.wip')); } return; }
+    if (s.level === 18) { this.update18(); return; }
+    if (s.level === 19) { this.update19(); return; }
+    if (s.level === 20) { this.update20(); return; }
+    if (s.level === 21) { this.update21(); return; }
+    // past Episode Three's last level: nothing more here
+    if (s.level > 21) return;
     if (!this.f('e3.l15.intro')) { this.intro15(); return; }
     if (!this.f('e3.siteDone')) {
       const p = this.player.pos;
@@ -286,6 +334,9 @@ export class Episode3 extends Episode2 {
     if (n.id === 'frame') return this.beforeFrame(open);
     if (n.id === 'grain') return this.beforeGrain(open);
     if (n.id === 'farming') return this.beforeSow(open);
+    if (n.id === 'remedy') return this.beforeRemedy(open);
+    if (n.id === 'irrigation') return this.beforeIrrigation(open);
+    if (n.id === 'salt') return this.beforeSalt(open);
     if (n.id !== 'polish') return false;
     // both hands on the roughed-out head, pushing it in long strokes on a wet flat stone with sand on it
     this.set('e1.fireOut', false); this.world.camp.setFire(2);
@@ -317,6 +368,19 @@ export class Episode3 extends Episode2 {
       if (step === 0) this.set('e3.gr.grit');
       this.set('e3.failed.grain'); this.say(key, 'scientist', 4.5); return true;
     }
+    if (this.owns(this.s.level) && id === 'salt') {
+      const high = !!info && info.v > info.band[1];
+      this.set('e3.failed.salt'); this.say(step === 0 ? (high ? 'e3.sa.spit' : 'e3.sa.slow') : 'e3.sa.scrape', 'scientist', 4.5); return true;
+    }
+    if (this.owns(this.s.level) && id === 'irrigation') {
+      const high = !!info && info.v > info.band[1];
+      if (step === 0 && high) { if (this.f('e3.ir.steep1')) this.set('e3.ir.steep2'); this.set('e3.ir.steep1'); }
+      this.set('e3.failed.irrigation'); this.say(step === 0 ? (high ? 'e3.ir.steep' : 'e3.ir.flat') : 'e3.ir.dig', 'scientist', 4.5); return true;
+    }
+    if (this.owns(this.s.level) && id === 'remedy') {
+      const high = !!info && info.v > info.band[1];
+      this.set('e3.failed.remedy'); this.say(step === 0 ? (high ? 'e3.ct.over' : 'e3.ct.cool') : 'e3.ct.rush', 'scientist', 4.5); return true;
+    }
     if (this.owns(this.s.level) && id === 'farming') {
       const high = !!info && info.v > info.band[1];
       this.set('e3.failed.farming'); this.say(step === 0 ? (high ? 'e3.fd.deep' : 'e3.fd.shallow') : 'e3.fd.rows', 'scientist', 4.5); return true;
@@ -332,6 +396,9 @@ export class Episode3 extends Episode2 {
     if (this.owns(this.s.level) && n.id === 'frame') { this.raiseFrame(card); return true; }
     if (this.owns(this.s.level) && n.id === 'grain') { this.breadScene(card); return true; }
     if (this.owns(this.s.level) && n.id === 'farming') { this.sowScene(card); return true; }
+    if (this.owns(this.s.level) && n.id === 'remedy') { this.boiledScene(card); return true; }
+    if (this.owns(this.s.level) && n.id === 'irrigation') { this.waterScene(card); return true; }
+    if (this.owns(this.s.level) && n.id === 'salt') { this.busy = false; card(); return true; }
     if (!this.owns(this.s.level) || n.id !== 'polish') return false;
     this.busy = true;
     this.passTime(10.5, true, 'e3.later', () => this.fell(card));
@@ -427,6 +494,7 @@ export class Episode3 extends Episode2 {
     return Math.abs(da) > Math.abs(db) ? (da > 0 ? 'a+' : 'a-') : db > 0 ? 'b+' : 'b-';
   }
 
+  private wallCount() { let n = 0; for (const a of this.world.forest.obstacles.values()) for (const o of a) if (o.tag === 'e3.house') n++; return n; }
   private meshCount(o: THREE.Object3D) { let n = 0; o.traverse((c) => { if ((c as THREE.Mesh).isMesh && c.visible) n++; }); return n; }
   private houseG: THREE.Group | null = null;
   private frameG: THREE.Group | null = null;
@@ -447,8 +515,12 @@ export class Episode3 extends Episode2 {
    */
   private buildHouse(st: number, o: { beamUp?: boolean; brace?: boolean; rows?: number } = {}) {
     this.houseG?.removeFromParent(); this.houseG = null; this.frameG = null; this.thatchRows = [];
+    this.world.forest.removeTagged('e3.house');
     if (st <= 0) return;
     const H = this.house(), g = new THREE.Group(), y0 = H.at.y;
+    // what he cannot walk through: each post, and (once the walls are up) a line of small circles along every wall with
+    // the doorway left open (the owner could walk straight through the walls)
+    const block = (u: number, w: number, r: number, h: number) => { const p = H.at.clone().addScaledVector(H.a, u).addScaledVector(H.b, w); this.world.forest.addObstacle(p.x, p.z, r, h, 'e3.house'); };
     g.name = 'e3.house'; this.group.add(g); this.houseG = g;
     const wood = std(0x7a5e44), bark = std(0x5a4636, { roughness: 0.95 }), soil = std(0x3b2e22, { roughness: 1 });
     const W = (u: number, w: number) => H.at.clone().addScaledVector(H.a, u).addScaledVector(H.b, w);
@@ -487,6 +559,7 @@ export class Episode3 extends Episode2 {
     const EAVE = 1.75, RIDGE = 2.8;
     for (const [u, w, top] of [[-1.6, -1.3, EAVE], [1.6, -1.3, EAVE], [-1.6, 1.3, EAVE], [1.6, 1.3, EAVE], [-1.6, 0, RIDGE], [1.6, 0, RIDGE]] as [number, number, number][]) {
       log(fg, Lc(u, w, foot(u, w)), Lc(u, w, top + 0.04), 0.065, bark);
+      block(u, w, 0.1, top);
       // rammed earth and stones round the foot
       const p = W(u, w), ring = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.08, 9), soil); ring.position.set(0, this.h(p.x, p.z) - y0 + 0.02, 0).addScaledVector(H.a, u).addScaledVector(H.b, w); fg.add(ring);
     }
@@ -528,8 +601,13 @@ export class Episode3 extends Episode2 {
       m.rotation.y = Math.atan2(-(p1.z - p0.z), p1.x - p0.x); m.castShadow = true; m.receiveShadow = true; fg.add(m);
     };
     const sides: Record<string, [number, number, number, number]> = { 'a+': [1.6, -1.3, 1.6, 1.3], 'a-': [-1.6, 1.3, -1.6, -1.3], 'b+': [1.6, 1.3, -1.6, 1.3], 'b-': [-1.6, -1.3, 1.6, -1.3] };
+    const solid = (u0: number, w0: number, u1: number, w1: number) => {
+      const n = Math.max(1, Math.ceil(Math.hypot(u1 - u0, w1 - w0) / 0.22));
+      for (let i = 0; i <= n; i++) block(u0 + (u1 - u0) * (i / n), w0 + (w1 - w0) * (i / n), 0.12, EAVE);
+    };
     for (const [k, [u0, w0, u1, w1]] of Object.entries(sides)) {
-      if (k !== door) { wall(u0, w0, u1, w1, -0.3, EAVE - 0.08); continue; }
+      if (k !== door) { wall(u0, w0, u1, w1, -0.3, EAVE - 0.08); solid(u0, w0, u1, w1); continue; }
+      { const du = u1 - u0, dw = w1 - w0, L2 = Math.hypot(du, dw), a0 = 0.5 - 0.5 / L2, a1 = 0.5 + 0.5 / L2; solid(u0, w0, u0 + du * a0, w0 + dw * a0); solid(u0 + du * a1, w0 + dw * a1, u1, w1); }
       const mu = (u0 + u1) / 2, mw = (w0 + w1) / 2, du = (u1 - u0), dw = (w1 - w0), L2 = Math.hypot(du, dw), k0 = 0.5 - 0.45 / L2, k1 = 0.5 + 0.45 / L2;
       wall(u0, w0, u0 + du * k0, w0 + dw * k0, -0.3, EAVE - 0.08);
       wall(u0 + du * k1, w0 + dw * k1, u1, w1, -0.3, EAVE - 0.08);
@@ -802,15 +880,23 @@ export class Episode3 extends Episode2 {
       );
     }
     if (watch) {
-      beats.push({ hold: 3.2, shot: () => ({ from: H.at.clone().addScaledVector(H.b, 2.4).add(v3(0, 1.5, 0)), to: reeds.clone().add(v3(0, 1.0, 0)), fov: 34, push: 0.02 }), run: () => {
-        this.clearHands(); this.thatchRows.forEach((m) => { m.visible = true; });
-        const her = H.at.clone().addScaledVector(reeds.clone().sub(H.at).setY(0).normalize(), 7); her.y = this.h(her.x, her.z);
-        if (oom) { this.actors['local'] = oom; this.npcs.pin('local', her, Math.atan2(H.at.x - her.x, H.at.z - her.z)); oom.setLookTarget(H.at.clone().add(v3(0, 1.5, 0))); }
-        // from the reeds, in his own voice: the boy who copies voices
-        S.after(0.6, () => this.ui.say('e3.wk.copy', 'e3.who.wenka', 2.6));
-        S.after(2.4, () => audio.human('laugh', 0.35));
-        this.set('e3.wk.copy');
-      } });
+      // Oom-Sa and the boy at the edge of the reeds, watching the frame: he copies "It's a parallelogram" in Zenvik's own
+      // voice and laughs (it was a voice from off screen; the owner wanted to see the child)
+      const toR = reeds.clone().sub(H.at).setY(0).normalize(), sideR = v3(toR.z, 0, -toR.x);
+      const her = H.at.clone().addScaledVector(toR, 7); her.y = this.h(her.x, her.z);
+      const boy = her.clone().addScaledVector(sideR, 1.1).addScaledVector(toR, -0.6); boy.y = this.h(boy.x, boy.z);
+      const F = this.buildFolk();
+      const look = H.at.clone().add(v3(0, 1.5, 0));
+      beats.push(
+        { hold: 2.4, shot: () => ({ from: H.at.clone().addScaledVector(toR, 1.6).addScaledVector(sideR, -1.2).add(v3(0, 1.35, 0)), to: her.clone().lerp(boy, 0.5).add(v3(0, 0.8, 0)), fov: 32, push: 0.02 }), run: () => {
+          this.clearHands(); this.thatchRows.forEach((m) => { m.visible = true; });
+          if (oom) { this.actors['local'] = oom; this.npcs.pin('local', her, Math.atan2(H.at.x - her.x, H.at.z - her.z)); oom.setLookTarget(look); }
+          this.wk16 = true; this.placeFolk('wenka', boy, H.at); F.wenka.setLookTarget(look);
+          z.setLookTarget(boy.clone().add(v3(0, 0.8, 0)));
+        } },
+        { key: 'e3.wk.copy', who: 'wenka' as Who, shot: () => cover.close(F.wenka, 0.35, 0.95, -0.12), run: () => { F.wenka.setLookTarget(this.head()); this.set('e3.wk.copy'); } },
+        { hold: 1.6, shot: () => cover.mid(F.wenka, -0.4, 1.8), run: () => { audio.human('laugh', 0.35); F.wenka.setFace?.({ smile: 0.8 }); } },
+      );
     }
     beats.push(
       { hold: 2.0, shot: () => cover.mid(z, 0.6, 2.6), run: () => {
@@ -826,6 +912,8 @@ export class Episode3 extends Episode2 {
       { hold: 2.6, shot: () => ({ from: H.at.clone().addScaledVector(H.a, -7).addScaledVector(H.b, 3.5).add(v3(0, 2.0, 0)), to: H.at.clone().add(v3(0, 1.4, 0)), fov: 48, push: 0.02 }), run: () => {
         this.set('e3.thatched'); this.buildHouse(4);
         this.s.timeOfDay = 18.2;
+        // the first rain on the new roof: streaks outside the doorway, none under the thatch; it eases off after a while
+        this.rain(1, 40);
         audio.sample('amb_rain', 0.4, { dur: 12 });
         // inside, sitting by the hearth ring, looking up at the underside of the roof
         const seat = H.at.clone().addScaledVector(H.a, -0.7).setY(0);
@@ -838,6 +926,7 @@ export class Episode3 extends Episode2 {
     this.scene(beats, () => {
       S.end();
       this.clearHands();
+      this.wk16 = false; if (this.folk) { this.folk.wenka.setFace?.(null); this.folk.wenka.setLookTarget(null); this.folkSpots = null; }
       if (oom) { this.npcs.pin('local', null, 0, this.L.camp.clone().add(v3(9, 0, 7)).setY(this.h(this.L.camp.x + 9, this.L.camp.z + 7))); oom.setLookTarget(null); }
       if (cut) this.set('e3.cut');
       this.set('e3.thatched'); this.set('inv.frame'); this.set('inv.lever');
@@ -848,6 +937,26 @@ export class Episode3 extends Episode2 {
     });
     void r; void y0;
   }
+
+  // ------------------------------------------------------------------ rain (the house's first, the storm in 21)
+  private rainFx: Rain | null = null;
+  private rainUntil = 0;
+  /** Rain for `sec` seconds of play (0: until told otherwise), at `amount`. */
+  protected rain(amount: number, sec = 0) {
+    if (!this.rainFx) this.rainFx = createRain(this.world.scene, this.world.q.name !== 'mobile');
+    this.rainFx.set(amount); this.rainUntil = sec > 0 ? performance.now() / 1000 + sec : 0;
+  }
+  private updateRain(dt: number) {
+    const R = this.rainFx;
+    if (!R) return;
+    if (this.rainUntil && performance.now() / 1000 > this.rainUntil) { this.rainUntil = 0; R.set(0); }
+    const H = this.houseG && this.f('e3.thatched') ? this.house() : null;
+    const covered = H ? (x: number, z: number, y: number) => { const dx = x - H.at.x, dz = z - H.at.z, u = dx * H.a.x + dz * H.a.z, w = dx * H.b.x + dz * H.b.z; return Math.abs(u) < 2.0 && Math.abs(w) < 1.85 && y < H.at.y + 2.9; } : undefined;
+    R.update(dt, this.player.pos, covered);
+    // the soundscape reads world.weather.rain (main.ts)
+    (this.world as unknown as { weather?: { rain: number } }).weather = { rain: R.amount };
+  }
+  get raining() { return this.rainFx?.amount ?? 0; }
 
   // ------------------------------------------------------------------ level 17: wheat (3.5 Hoh-Ma's stone, 3.6 the first field)
   /** The Fennish camp: reed shelters on stilts along the shore from the reed beds (moved along it when he built at the reeds). */
@@ -940,16 +1049,18 @@ export class Episode3 extends Episode2 {
     this.folkSpots![id] = { at: at.clone().setY(this.h(at.x, at.z)), yaw: y, kneel };
   }
   private folkT = 0;
+  /** Level 16: Wen-Ka stands at the reeds' edge for the frame going up (only while that beat plays). */
+  private wk16 = false;
   private updateFolk(dt: number) {
-    if (this.s.level < 17) return;
-    this.buildFenn();
+    if (this.s.level < 17 && !this.wk16) { if (this.folk) { this.folk.wenka.root.visible = false; this.folk.hohma.root.visible = false; } return; }
+    if (this.s.level >= 17) this.buildFenn();
     const F = this.buildFolk();
     if (!this.folkSpots) this.homeFolk();
     this.folkT += dt;
     // Wen-Ka comes even when the band keeps away; Hoh-Ma is only seen at her camp
     for (const id of ['hohma', 'wenka'] as const) {
       const fig = F[id], sp = this.folkSpots![id], dist = sp.at.distanceTo(this.player.pos);
-      fig.root.visible = dist < 120;
+      fig.root.visible = dist < 120 && (this.s.level >= 17 || id === 'wenka');
       if (!fig.root.visible) continue;
       fig.root.position.copy(sp.at); fig.root.rotation.y = sp.yaw; fig.root.updateMatrixWorld();
       fig.setKneel(sp.kneel, sp.kneel);
@@ -1243,8 +1354,795 @@ export class Episode3 extends Episode2 {
     });
   }
 
+  // ------------------------------------------------------------------ level 18: the cut (3.7 red lines, 3.8 the one dose)
+  private feverEl: HTMLDivElement | null = null;
+  /** The fever: the edges of the picture breathe, red, while it lasts (style.css .e3-fever). */
+  private fever(on: boolean) {
+    if (!on && !this.feverEl) return;
+    if (!this.feverEl) { const d = document.createElement('div'); d.className = 'e3-fever'; document.body.appendChild(d); this.feverEl = d; }
+    if (this.feverEl.classList.contains('on') !== on) this.feverEl.classList.toggle('on', on);
+  }
+  /** His left forearm held out (sitting or kneeling): where the wound is, the red lines running up to the elbow. */
+  private woundG: THREE.Group | null = null;
+  private showWound(arm: THREE.Vector3, f: THREE.Vector3, lines = true) {
+    this.woundG?.removeFromParent();
+    const g = new THREE.Group(), elbow = arm.clone().addScaledVector(f, -0.26).add(v3(0, 0.04, 0)), w = arm.clone().lerp(elbow, 0.35).add(v3(0, 0.03, 0));
+    const sore = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 6), std(0x7a1a14, { roughness: 0.5 })); sore.scale.set(1.4, 0.35, 0.9); sore.position.copy(w); g.add(sore);
+    const swell = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 6), std(0xc0503a, { roughness: 0.7, transparent: true, opacity: 0.55 })); swell.scale.set(1.5, 0.3, 1.1); swell.position.copy(w); g.add(swell);
+    if (lines) for (const off of [-0.008, 0.004, 0.014]) {
+      const a = w.clone().add(v3(0, 0.004, 0)), b = elbow.clone().add(v3(0, 0.03, 0)).addScaledVector(this.right(f), off * 2);
+      const d = b.clone().sub(a), m = new THREE.Mesh(new THREE.CylinderGeometry(0.0022, 0.0022, d.length(), 4), std(0xb02a22, { roughness: 0.6 }));
+      m.position.copy(a).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(UP, d.normalize()); g.add(m);
+    }
+    this.group.add(g); this.woundG = g;
+    return w;
+  }
+  private hideWound() { this.woundG?.removeFromParent(); this.woundG = null; }
+
+  private update18() {
+    if (!this.f('e3.l18.intro')) { this.intro18(); return; }
+    if (isDiscovered(this.s, 'remedy') && !this.f('e3.boiled')) { this.set('e3.boiled'); return; }
+    if (this.f('e3.boiled') && !this.f('e3.doseDone')) { const c = this.fennAt(), p = this.player.pos; if (Math.hypot(p.x - c.x, p.z - c.z) < 6) this.doseScene(); }
+  }
+
+  /** Day 26: the wound has gone bad. Red lines up the inside of his arm, a fever; Oom-Sa sees it and runs to her people. */
+  private intro18() {
+    const S = this.live();
+    this.set('e3.l18.intro');
+    this.busy = true;
+    this.s.day = Math.max(this.s.day ?? 25, 25);
+    this.passTime(7.4, true, 'e3.day', () => {
+      const z = this.z, H = this.house();
+      const seat = H.at.clone().addScaledVector(H.a, -3.3); seat.y = this.h(seat.x, seat.z);
+      const me = this.settle(seat, seat.clone().addScaledVector(H.a, -2), true, true);
+      const f = this.fwd(), r = this.right(f);
+      const arm = me.clone().addScaledVector(f, 0.34).addScaledVector(r, -0.08).add(v3(0, 0.6, 0));
+      const pose = () => z.setHold({ L: { at: arm.clone(), fingers: f.clone(), palm: UP.clone(), radius: 0.03 }, R: { at: arm.clone().addScaledVector(f, -0.2).addScaledVector(r, 0.05).add(v3(0, 0.05, 0)), fingers: r.clone().negate(), palm: UP.clone().negate(), radius: 0.03, grasp: true } });
+      pose();
+      const w = this.showWound(arm, f);
+      const oom = this.leadOom() ? this.oom() : null;
+      const her = me.clone().addScaledVector(f, 2.4).addScaledVector(r, 0.9); her.y = this.h(her.x, her.z);
+      const beats: Beat[] = [
+        { hold: 3.0, shot: () => this.wide(me, 5.0, 0.6, 0.9), run: () => { z.setLookTarget(w); z.setFace({ frown: 0.4, squint: 0.3 }); } },
+        // insert: the wound and the lines walking up the arm from it
+        { hold: 3.2, shot: () => ({ from: w.clone().addScaledVector(r, -0.32).addScaledVector(f, 0.12).add(v3(0, 0.22, 0)), to: w.clone().addScaledVector(f, -0.07), fov: 26, push: 0.006, aperture: 0.004, lightAt: w.clone(), lightScale: 0.6 }), run: () => { pose(); audio.human('breath', 0.4); } },
+        { key: 'e3.ct.1', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95, 0.24), run: () => z.setLookTarget(w) },
+        { key: 'e3.ct.2', who: 'scientist', shot: () => cover.close(z, -0.4, 1.0, 0.24), run: () => { z.setLookTarget(this.ahead()); z.setFace({ frown: 0.2 }); } },
+        { hold: 6.5, shot: () => cover.mid(z, 0.55, 2.2), run: () => { z.setLookTarget(w); this.ui.memory('e3.ct.lyrra', 8); } },
+      ];
+      if (oom) {
+        beats.push(
+          { hold: 2.6, shot: () => this.oomClose(oom, 0.4, 1.1), run: () => { this.actors['local'] = oom; this.npcs.pin('local', her, Math.atan2(me.x - her.x, me.z - her.z)); oom.setLookTarget(w); z.setLookTarget(oom.root.position.clone().add(v3(0, 1.0, 0))); } },
+          { hold: 2.2, shot: () => this.wide(me, 6.0, -0.5, 1.0), run: () => { const c = this.fennAt(); this.npcs.pin('local', null, 0, c.setY(this.h(c.x, c.z))); oom.setLookTarget(null); this.set('e3.oomSaw'); } },
+        );
+      }
+      // the lichen: a magenta crust on the north side of a wall post, scraped off with his thumbnail into his palm (the
+      // world's few tufts were all out of reach by now: the marker fell back to the camp)
+      if (this.inv('lichen') < 1) {
+        const post = H.at.clone().addScaledVector(H.a, -1.6).addScaledVector(H.b, -1.3).add(v3(0, 1.1, 0)).addScaledVector(H.b, -0.07);
+        let crust: THREE.Mesh | null = null;
+        beats.push(
+          { hold: 3.0, shot: () => ({ from: post.clone().addScaledVector(H.b, -0.5).addScaledVector(H.a, -0.3).add(v3(0, 0.05, 0)), to: post.clone(), fov: 26, push: 0.006, aperture: 0.004, lightAt: post.clone() }), run: () => {
+            this.clearHands(); this.hideWound();
+            const stand = post.clone().addScaledVector(H.b, -0.45).addScaledVector(H.a, -0.15); stand.y = this.h(stand.x, stand.z);
+            this.settle(stand, post.clone().setY(stand.y), false);
+            crust = this.mesh(new THREE.SphereGeometry(0.05, 8, 6), std(0x9a4a70, { roughness: 1 }), post.clone()); crust.scale.set(1, 1.6, 0.35);
+            const ff = this.fwd();
+            S.anim(3, (k) => { z.setHold({ R: { at: post.clone().addScaledVector(ff, -0.04).add(v3(0, 0.06 - (k % 0.8) * 0.12, 0)), fingers: ff.clone(), palm: ff.clone().negate(), radius: 0.015 }, L: { at: post.clone().addScaledVector(ff, -0.07).add(v3(0, -0.12, 0)), fingers: ff.clone(), palm: UP.clone(), radius: 0.03 } }); if (crust) crust.scale.y = 1.6 * Math.max(0.2, 1 - k / 3); });
+            audio.sample('leather', 0.15, { rate: 2 });
+          } },
+        );
+        beats.push({ hold: 0.1, run: () => { crust?.removeFromParent(); this.s.inventory.lichen = (this.s.inventory.lichen ?? 0) + 1; } });
+      }
+      this.scene(beats, () => {
+        S.end(); this.clearHands(); this.hideWound();
+        if (this.inv('lichen') < 1) this.s.inventory.lichen = 1;
+        this.ui.toast(t('e3.obj.boil'));
+        if (this.f('dose.used') || this.f('dose.saved')) this.after(7, () => this.say('e3.ct.usnea', 'scientist', 5));
+      });
+    });
+  }
+
+  /** The craft panel opens on him kneeling at the fire, his pot on the stones coming to the boil, the lichen beside it. */
+  private beforeRemedy(open: () => void) {
+    const S = this.live();
+    // at the hearth ring in his own house (at the camp fire Oom-Sa's talk took the action from the craft)
+    const z = this.z, H = this.house(), c = H.at.clone();
+    this.settle(c.clone().addScaledVector(H.b, 0.85), c, true, true);
+    const f = this.fwd(), r = this.right(f);
+    const potAt = c.clone().lerp(this.z.root.position, 0.4); potAt.y = this.h(potAt.x, potAt.z) + 0.1;
+    const embers = this.mesh(new THREE.CircleGeometry(0.24, 12), new THREE.MeshBasicMaterial({ color: 0xff7a2a }), c.clone().setY(this.h(c.x, c.z) + 0.04)); embers.rotation.x = -Math.PI / 2; embers.castShadow = false;
+    const pot = this.mesh(new THREE.CylinderGeometry(0.1, 0.075, 0.16, 14, 1, true), std(0x8a5a3a, { roughness: 0.85, side: THREE.DoubleSide }), potAt.clone());
+    const water = this.mesh(new THREE.CircleGeometry(0.095, 14), std(0x8a9aa0, { roughness: 0.1, metalness: 0.2 }), potAt.clone().add(v3(0, 0.06, 0))); water.rotation.x = -Math.PI / 2;
+    const lichen = this.mesh(new THREE.IcosahedronGeometry(0.04, 1), std(0x9a4a70, { roughness: 1 }), this.z.root.position.clone().addScaledVector(f, 0.3).addScaledVector(r, -0.25).add(v3(0, 0.03, 0))); lichen.scale.set(1.4, 0.5, 1.2);
+    const steam: THREE.Mesh[] = [];
+    for (let i = 0; i < 5; i++) { const m = this.mesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ color: 0xe8eef0, transparent: true, opacity: 0.18, depthWrite: false }), potAt.clone().add(v3(0, 0.1, 0))); m.castShadow = false; steam.push(m); }
+    this.scene([
+      { hold: 3.6, shot: () => ({ from: potAt.clone().addScaledVector(r, 0.55).addScaledVector(f, -0.3).add(v3(0, 0.3, 0)), to: potAt.clone().add(v3(0, 0.05, 0)), fov: 30, push: 0.01, aperture: 0.004, lightAt: potAt.clone() }), run: () => {
+        z.setLookTarget(potAt); audio.sample('fire', 0.3, { dur: 3.6 });
+        S.anim(3.6, (k) => steam.forEach((m, i) => { const u = ((k * 0.5 + i / 5) % 1); m.position.copy(potAt).add(v3(Math.sin(i * 2 + k) * 0.03, 0.1 + u * 0.4, Math.cos(i * 3 + k) * 0.03)); m.scale.setScalar(0.6 + u * 1.4); (m.material as THREE.MeshBasicMaterial).opacity = 0.2 * (1 - u); }));
+      } },
+    ], () => { S.end(); for (const m of [pot, water, lichen, embers, ...steam]) m.removeFromParent(); this.clearHands(); open(); });
+    return true;
+  }
+
+  /** The wound cleaned with boiled water and the lichen; it is not enough. To the band. */
+  private boiledScene(card: () => void) {
+    this.busy = true;
+    const z = this.z;
+    this.set('e3.boiled');
+    this.scene([
+      { key: 'e3.ct.ok', who: 'scientist', shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => { z.setFace({ frown: 0.3 }); z.setLookTarget(this.ahead()); } },
+    ], () => {
+      this.clearHands(); this.busy = false;
+      this.ui.toast(t('e3.learn.remedy'));
+      card();
+      this.after(4, () => this.ui.toast(t('e3.obj.band')));
+    });
+  }
+
+  /** The Fennish camp: Wen-Ka hot with a cut foot gone bad, the band's one honeycomb in a leaf, and who gets it. */
+  private doseScene() {
+    const S = this.live();
+    this.busy = true;
+    const z = this.z, F = this.buildFolk(), { c, d, t: tn } = this.fennAxes(); this.buildFenn();
+    // the boy sits on a mat at the edge of the nearest shelter, his foot out in front of him, Hoh-Ma kneeling at it
+    const mat = c.clone().addScaledVector(d, 1.0).addScaledVector(tn, -1.4); mat.y = this.h(mat.x, mat.z);
+    const out = tn.clone().negate();
+    this.placeFolk('wenka', mat, mat.clone().addScaledVector(out, 2), true);
+    const hm = mat.clone().addScaledVector(out, 0.75).addScaledVector(d, 0.45); this.placeFolk('hohma', hm, mat, true);
+    const me = this.settle(mat.clone().addScaledVector(out, 0.9).addScaledVector(d, -0.55), mat, true, true);
+    const foot = mat.clone().addScaledVector(out, 0.42).add(v3(0, 0.06, 0));
+    const mud = this.mesh(new THREE.SphereGeometry(0.05, 8, 6), std(0x4a3a2a, { roughness: 1 }), foot.clone()); mud.scale.set(1.3, 0.6, 1.8);
+    const f = this.fwd(), r = this.right(f);
+    // the comb in a leaf, in Hoh-Ma's two hands
+    const held = hm.clone().addScaledVector(mat.clone().sub(hm).setY(0).normalize(), 0.28).add(v3(0, 0.45, 0));
+    const leaf = this.mesh(new THREE.CircleGeometry(0.11, 12), std(0x3f6a2a, { roughness: 0.8, side: THREE.DoubleSide }), held.clone()); leaf.rotation.x = -Math.PI / 2; leaf.scale.set(1, 1.5, 1);
+    const comb = this.mesh(new THREE.BoxGeometry(0.1, 0.022, 0.075), std(0xd89a2a, { roughness: 0.35, emissive: 0x3a2000 }), held.clone().add(v3(0, 0.014, 0)));
+    const holdComb = () => F.hohma.setHold({ L: { at: held.clone().addScaledVector(r, -0.07).add(v3(0, -0.01, 0)), fingers: r.clone(), palm: UP.clone(), radius: 0.03 }, R: { at: held.clone().addScaledVector(r, 0.07).add(v3(0, -0.01, 0)), fingers: r.clone().negate(), palm: UP.clone(), radius: 0.03 } });
+    const boy = (): THREE.Vector3 => F.wenka.root.position.clone().add(v3(0, 0.55, 0));
+    const clean = (k: number, at: THREE.Vector3) => { const u = Math.sin(k * 3) * 0.04; z.setHold({ R: { at: at.clone().addScaledVector(r, u).add(v3(0, 0.03, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.02 }, L: { at: at.clone().addScaledVector(r, -0.09).add(v3(0, 0.02, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.03 } }); };
+    const beats: Beat[] = [
+      { hold: 3.2, shot: () => ({ from: mat.clone().addScaledVector(d, -3.2).addScaledVector(out, 2.0).add(v3(0, 0.9, 0)), to: mat.clone().addScaledVector(out, 0.4).add(v3(0, 0.45, 0)), fov: 40, push: 0.02 }), run: () => {
+        holdComb(); F.wenka.setLookTarget(this.head()); F.hohma.setLookTarget(foot); z.setLookTarget(boy()); F.wenka.setFace({ frown: 0.5, squint: 0.4 });
+      } },
+      { key: 'e3.ds.1', who: 'hohma' as Who, shot: () => this.oomClose(F.hohma, 0.4, 1.0), run: () => { F.hohma.setLookTarget(this.head()); } },
+      { hold: 2.6, shot: () => ({ from: held.clone().addScaledVector(f, -0.3).add(v3(0, 0.2, 0)).addScaledVector(r, 0.1), to: held.clone(), fov: 26, push: 0.006, aperture: 0.004, lightAt: held.clone(), lightScale: 0.6 }), run: () => z.setLookTarget(held) },
+      { key: 'e3.ds.2', who: 'scientist', shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => { z.setLookTarget(boy()); z.setFace({ frown: 0.3 }); } },
+      { hold: 1.2, shot: () => cover.close(z, 0.45, 1.1, 0.24), run: () => z.setLookTarget(held) },
+      { choice: 'e3.dose', shot: () => cover.close(z, 0.45, 1.1, 0.24) },
+      { key: 'e3.ds.boy', who: 'scientist', if: CHOSE('e3.dose', 'boy'), shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => z.setLookTarget(F.hohma.head ? F.hohma.root.position.clone().add(v3(0, 0.7, 0)) : held) },
+      { key: 'e3.ds.truth', who: 'scientist', if: CHOSE('e3.dose', 'self'), shot: () => cover.close(z, -0.4, 1.0, 0.24), run: () => { z.setLookTarget(boy()); z.setFace({ frown: 0.5 }); } },
+      { key: 'e3.ds.half', who: 'scientist', if: CHOSE('e3.dose', 'half'), shot: () => cover.close(z, 0.4, 1.0, 0.24) },
+      // he cleans the boy's foot first (or shows her how, when he keeps the honey), Hoh-Ma holding him
+      { hold: 3.6, shot: () => ({ from: foot.clone().addScaledVector(d, -0.6).addScaledVector(out, 0.35).add(v3(0, 0.35, 0)), to: foot.clone(), fov: 30, push: 0.01, aperture: 0.004, lightAt: foot.clone() }), run: () => {
+        comb.removeFromParent(); leaf.removeFromParent(); F.hohma.setHold(null); F.hohma.setLookTarget(foot); F.wenka.setLookTarget(foot);
+        S.anim(3.6, (k) => clean(k, foot)); audio.human('breath', 0.3);
+        S.after(2.0, () => { (mud.material as THREE.MeshStandardMaterial).color.setHex(0xc89a40); });
+      } },
+    ];
+    this.scene(beats, () => {
+      S.end(); mud.removeFromParent(); comb.removeFromParent(); leaf.removeFromParent(); this.clearHands(); F.hohma.setHold(null);
+      this.holdArm();
+    });
+  }
+
+  /** His own arm: boiled water and the lichen (and the honey if he kept any), a long hold with the fever on. */
+  private async holdArm() {
+    this.busy = true;
+    const z = this.z, self = this.f('e3.dose.self'), half = this.f('e3.dose.half');
+    const me = this.z.root.position.clone(), f = this.fwd(), r = this.right(f);
+    const arm = me.clone().addScaledVector(f, 0.34).addScaledVector(r, -0.08).add(v3(0, 0.6, 0));
+    this.settle(me, me.clone().addScaledVector(f, 1), true, true);
+    const w = this.showWound(arm, f, false);
+    z.setHold({ L: { at: arm.clone(), fingers: f.clone(), palm: UP.clone(), radius: 0.03 }, R: { at: w.clone().add(v3(0, 0.04, 0)), fingers: r.clone().negate(), palm: UP.clone().negate(), radius: 0.02 } });
+    z.setLookTarget(w); z.setFace({ frown: 0.8, squint: 0.7 });
+    const spec = self ? { kind: 'steady' as const, seconds: 4, strain: 1 } : half ? { kind: 'steady' as const, seconds: 6, strain: 1.7 } : { kind: 'steady' as const, seconds: 9, strain: 1.5 };
+    const res = await this.tension(spec);
+    const passed = !res || res.passed;
+    this.hideWound(); this.clearHands();
+    this.set(passed ? 'e3.held' : 'e3.fainted');
+    if (passed) { this.afterDose(); return; }
+    // he faints with the knife in his hand: three days, carried (trust) or alone on his own floor
+    const carried = this.trust() >= 1 && !this.f('e2.oomsa.away');
+    if (carried) { this.set('e3.carried'); apply(this.s as unknown as StoryState, [{ trust: 'oomsa', by: 1 }]); } else this.set('e3.feverScar');
+    this.s.day = (this.s.day ?? 28) + 2;
+    this.passTime(9, true, 'e3.later3', () => {
+      const F = this.buildFolk(), H = this.house();
+      if (carried) {
+        const { c, d, t: tn } = this.fennAxes(), fire = c.clone().addScaledVector(d, -0.6).addScaledVector(tn, -0.6);
+        const me2 = this.settle(fire.clone().addScaledVector(tn, -1.0), fire, true, true);
+        this.placeFolk('hohma', fire.clone().addScaledVector(tn, 1.0), fire, true);
+        this.scene([
+          { hold: 3.0, shot: () => this.wide(me2, 4.5, 0.6, 0.8), run: () => { this.z.setLookTarget(fire); this.z.setFace({ squint: 0.4 }); } },
+          { key: 'e3.ds.carried', who: 'hohma' as Who, shot: () => this.oomClose(F.hohma, 0.4, 1.0), run: () => F.hohma.setLookTarget(this.head()) },
+        ], () => { this.clearHands(); this.homeFolk(); this.afterDose(); });
+      } else {
+        const seat = H.at.clone().addScaledVector(H.a, -0.7); seat.y = this.h(seat.x, seat.z);
+        this.settle(seat, H.at.clone().addScaledVector(H.a, 0.8), true, true);
+        this.scene([
+          { key: 'e3.ds.alone', who: 'scientist', shot: () => { const hd = this.head(); return { from: hd.clone().addScaledVector(this.fwd(), 1.0).add(v3(0, -0.1, 0)), to: hd, fov: 35, push: 0.01 }; }, run: () => this.z.setFace({ squint: 0.4 }) },
+        ], () => { this.clearHands(); this.afterDose(); });
+      }
+    });
+  }
+  private afterDose() {
+    const z = this.z;
+    this.scene([
+      { key: 'e3.ds.end', who: 'scientist', shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => { z.setFace(null); z.setLookTarget(this.ahead()); } },
+    ], () => {
+      this.clearHands();
+      this.set('e3.doseDone'); this.set('inv.medicine');
+      this.ui.toast(t('e3.learn.medicine'));
+      this.busy = false;
+    });
+  }
+
+  // ------------------------------------------------------------------ level 19: The Wall (3.9, Draxum on Methryx, an interlude)
+  /** Set by game.ts: the story's hooks (to play Draxum on his stage), the away stage, and the game's own decision panel. */
+  hooks: { away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void } | null = null;
+  awayStage: (() => AwayStage | null) | null = null;
+  askFn: ((id: string, done: () => void) => void) | null = null;
+  private wallOn = false;
+  private wallN = 0;
+  private wallG: THREE.Group | null = null;
+  private update19() {
+    if (this.f('e3.wallDone')) {
+      if (!isDiscovered(this.s, 'icewall')) { this.busy = true; this.discover('icewall', () => { this.busy = false; this.ui.toast(t('e3.learn.icewall')); }); }
+      return;
+    }
+    if (this.wallOn || !this.hooks) return;
+    this.wallOn = true; this.wallN = 0; this.wallG = null; this.set('e3.l19.intro');
+    this.busy = true;
+    this.ui.fade('black', 1, 0.8);
+    this.ui.banner(t('e3.wall.card'), t('e3.wall.sub'));
+    this.after(3.4, () => {
+      this.busy = false; this.ui.fade('black', 0, 0.8);
+      this.hooks!.away('strong', 'moon', (id, go) => this.wallTask(id, go), () => { this.wallOn = false; this.wallG = null; this.set('e3.wallDone'); });
+    });
+  }
+  /** The ring of ice blocks round his ember, a third more of it for each block hauled (15 in all, half a circle). */
+  private wallBlocks(n: number) {
+    const st = this.awayStage?.();
+    if (!st) return;
+    if (!this.wallG || !this.wallG.parent) { this.wallG = new THREE.Group(); this.wallG.name = 'e3.wall'; st.scene.add(this.wallG); }
+    const g = this.wallG, want = Math.min(15, n * 5), ice = std(0xdcd6cc, { roughness: 0.35, metalness: 0.05 });
+    for (let i = g.children.length; i < want; i++) {
+      const row = i < 10 ? 0 : 1, k = row ? (i - 10) / 4 : i / 9, a = Math.PI * (0.1 + 0.8 * k) + Math.PI, R = 2.5;
+      const x = Math.cos(a) * R, z = -6 + Math.sin(a) * R, y = st.height(x, z);
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.42, 0.42), ice);
+      b.position.set(x, y + 0.21 + row * 0.42, z); b.rotation.y = -a + Math.PI / 2 + (Math.sin(i * 7) * 0.08); b.castShadow = true; b.receiveShadow = true; g.add(b);
+    }
+  }
+  private wallTask(id: string, go: () => void) {
+    if (!this.wallOn) { go(); return; }
+    // the voice in the haze is never Bolzar himself: it gets its own label (and so is not stopped when he is dead)
+    const say = (k: string, who: Who, sec: number, then: () => void) => { if (who === 'builder') this.ui.say(k, 'e3.who.voice', sec); else this.say(k, who, sec); this.after(sec, then); };
+    if (/^ice\d$/.test(id)) {
+      const n = ++this.wallN;
+      this.wallBlocks(n);
+      // the first block, carried bare-handed: his own heat slumps it where his palms are; then the sleeves round his hands
+      if (n === 1) { this.set('e3.dx.melted'); say('e3.dx.1', 'strong', 5, () => { audio.sample('stone', 0.4, { rate: 0.6 }); say('e3.dx.melt', 'strong', 5, go); }); return; }
+      if (n === 2) {
+        const bolzarDead = !isAlive(this.s.branch, 'builder');
+        if (bolzarDead) { say('e3.dx.hum', 'builder', 3, () => say('e3.dx.knows', 'strong', 5.5, go)); return; }
+        if (this.f('draxum.bolzar.together')) { say('e3.dx.bol', 'builder', 4, () => say('e3.dx.why', 'strong', 4.5, go)); return; }
+        say('e3.dx.wrap', 'strong', 4.5, go); return;
+      }
+      say('e3.dx.ring', 'strong', 4.5, go); return;
+    }
+    if (id === 'ember') { this.copier(go); return; }
+    go();
+  }
+  /** The copier comes out of the lake for the warm one inside the ring; the choice of how to meet it (timed). */
+  private copier(go: () => void) {
+    const st = this.awayStage?.();
+    let body: THREE.Group | null = null;
+    if (st) {
+      body = new THREE.Group(); body.name = 'e3.copier';
+      const slush = std(0x8a8072, { roughness: 0.3, metalness: 0.1 }), dark = std(0x2a2420, { roughness: 0.6 });
+      const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 3.2, 6, 12), slush); torso.rotation.z = Math.PI / 2; torso.scale.set(1, 1, 0.7); body.add(torso);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 8), slush); head.position.set(2.0, 0.1, 0); head.scale.set(1.3, 0.7, 0.9); body.add(head);
+      for (const s of [-1, 1]) { const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), dark); mouth.position.set(2.45, 0.02, s * 0.14); body.add(mouth); }
+      for (let i = 0; i < 6; i++) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.04, 0.55, 5), slush); leg.position.set(-1.4 + i * 0.55, -0.38, (i % 2 ? 1 : -1) * 0.38); leg.rotation.x = (i % 2 ? 1 : -1) * 0.5; body.add(leg); }
+      body.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+      st.scene.add(body);
+      const from = new THREE.Vector3(14, 0, -16), to = new THREE.Vector3(2.6, 0, -8.4);
+      this.anim(6, (k) => { const u = Math.min(1, k / 6), p = from.clone().lerp(to, u); p.y = st.height(p.x, p.z) + 0.45 - (1 - Math.min(1, k / 1.5)) * 1.2; body!.position.copy(p); body!.rotation.y = Math.atan2(-(to.z - from.z), to.x - from.x); });
+    }
+    audio.sample('stone', 0.5, { rate: 0.45 });
+    this.say('e3.dx.come', 'strong', 4.5);
+    this.after(2.2, () => this.ui.say(isAlive(this.s.branch, 'builder') ? 'e3.dx.voice' : 'e3.dx.hum', 'e3.who.voice', 3));
+    this.after(5.4, () => {
+      const ask = this.askFn ?? ((_: string, d: () => void) => d());
+      ask('e3.wall', async () => {
+        const hurt = this.f('hurt.draxum');
+        const leave = () => { if (body) { const b = body; this.anim(3, (k) => { b.position.x += 0.08; b.position.z -= 0.05; b.position.y -= k * 0.01; }); this.after(3.2, () => b.removeFromParent()); } };
+        if (this.f('e3.wall.mock')) {
+          this.say('e3.dx.joke', 'strong', 3.5);
+          this.after(3.6, () => { this.say('e3.dx.mocked', 'strong', 4.5); leave(); this.after(4.6, () => this.wallEnd(go)); });
+          return;
+        }
+        if (this.f('e3.wall.climb')) {
+          const r = await this.tension({ kind: 'quick', count: 5 });
+          this.set(r && !r.passed ? 'e3.wall.slipped' : 'e3.wall.climbed'); this.set('draxum.wallLost');
+          // it takes the ring apart, block by block, and goes
+          if (this.wallG) { const g = this.wallG; this.anim(2.5, (k) => g.children.forEach((b, i) => { b.rotation.z = Math.min(1.4, k * (0.4 + (i % 3) * 0.3)); b.position.y -= 0.004 * (i % 4); })); }
+          this.say('e3.dx.lost', 'strong', 5); leave(); this.after(5.2, () => this.wallEnd(go));
+          return;
+        }
+        // hold the wall (and a silent timeout): a steady hold against it while it pushes; shorter with his old hurt
+        const hold = () => this.tension({ kind: 'steady', seconds: 6, strain: hurt ? 1.6 : 1.1 });
+        let r = await hold();
+        let held = !r || r.passed;
+        if (!held && hurt && this.f('draxum.waited')) { this.say('e3.dx.again', 'strong', 3); r = await hold(); held = !r || r.passed; if (!held) this.set('e3.wall.twice'); }
+        this.set(held ? 'e3.wall.held' : 'draxum.hurt2');
+        this.say(held ? 'e3.dx.held' : 'e3.dx.thrown', 'strong', 5); leave(); this.after(5.2, () => this.wallEnd(go));
+      });
+    });
+  }
+  private wallEnd(go: () => void) {
+    this.say('e3.dx.end', 'strong', 5);
+    this.after(5.2, () => go());
+  }
+
+  // ------------------------------------------------------------------ level 20: water runs downhill (3.10 dry weeks, 3.11 the kit)
+  /** The sprouts in the rows: yellowing in the dry weeks (`dry` 1), green once the ditch runs, gold at the harvest (`gold` 1). */
+  private sproutG: THREE.Group | null = null;
+  private sproutKey = '';
+  private sprouts(dry: number, gold = 0) {
+    const key = `${dry.toFixed(2)}/${gold.toFixed(2)}/${this.fieldRows.length}`;
+    if (key === this.sproutKey && this.sproutG?.parent) return;
+    this.sproutKey = key;
+    this.sproutG?.removeFromParent(); this.sproutG = null;
+    if (!this.fieldRows.length) return;
+    const H = this.house(), g = new THREE.Group();
+    const col = new THREE.Color(0x4f8a2a).lerp(new THREE.Color(0xb0a040), dry).lerp(new THREE.Color(0xd8b050), gold);
+    const m = std(col.getHex(), { roughness: 0.9 }), tall = 0.12 + gold * 0.75;
+    for (const row of this.fieldRows) {
+      for (let i = 0; i < 14; i++) {
+        const p = row.position.clone().addScaledVector(H.a, -1.65 + i * 0.25).addScaledVector(H.b, Math.sin(i * 3.1) * 0.03);
+        const s = new THREE.Mesh(new THREE.ConeGeometry(0.03 + gold * 0.02, tall, 4), m);
+        s.position.set(p.x, this.h(p.x, p.z) + tall / 2, p.z); s.rotation.z = dry * 0.35 * Math.sin(i); g.add(s);
+      }
+    }
+    this.group.add(g); this.sproutG = g;
+  }
+  private restoreSprouts() {
+    if (this.s.level < 20 || !this.fieldRows.length) { this.sproutG?.removeFromParent(); this.sproutG = null; this.sproutKey = ''; return; }
+    if (this.s.level >= 21) return; // level 21 sets its own (the harvest)
+    this.sprouts(isDiscovered(this.s, 'irrigation') ? 0 : 0.8);
+  }
+  /** The ditch from the stream to the field (shown once dug), and the water in it. */
+  private ditchG: THREE.Group | null = null;
+  private ditchPath() {
+    const at = this.fieldAt(), sp = this.world.streamPlan as unknown as { nearest?: (p: THREE.Vector3, out: THREE.Vector3) => number } | undefined;
+    const st = v3(); this.waking().stream.nearest(at, st);
+    if (st.lengthSq() === 0 || st.distanceTo(at) > 80) st.copy(at).add(v3(18, 0, 10));
+    void sp;
+    const pts: THREE.Vector3[] = [];
+    for (let i = 0; i <= 16; i++) { const p = st.clone().lerp(at, i / 16); p.y = this.h(p.x, p.z); pts.push(p); }
+    return pts;
+  }
+  private buildDitch(water: number) {
+    this.ditchG?.removeFromParent(); this.ditchG = null;
+    const pts = this.ditchPath(), g = new THREE.Group(), soil = std(0x3b2e22, { roughness: 1 }), wet = std(0x5a7a8a, { roughness: 0.1, metalness: 0.3 });
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1], d = b.clone().sub(a), len = d.length();
+      const cut = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, len + 0.05), soil);
+      cut.position.copy(a).addScaledVector(d, 0.5).add(v3(0, 0.015, 0)); cut.rotation.y = Math.atan2(d.x, d.z); cut.receiveShadow = true; g.add(cut);
+      if (i / (pts.length - 1) < water) { const w = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.01, len + 0.05), wet); w.position.copy(cut.position).add(v3(0, 0.03, 0)); w.rotation.y = cut.rotation.y; g.add(w); }
+    }
+    this.group.add(g); this.ditchG = g;
+  }
+  private ditchKey = '';
+  private restoreDitch() {
+    const st = this.s.level >= 20 && isDiscovered(this.s, 'irrigation') ? 1 : 0;
+    const key = `${st}/${this.siteNow()}`;
+    if (key === this.ditchKey || this.busy) return;
+    this.ditchKey = key; if (st) this.buildDitch(1); else { this.ditchG?.removeFromParent(); this.ditchG = null; }
+  }
+  /** Set by game.ts: the waking controller (its stream knows where the moving water is). */
+  waking: () => { stream: { nearest(p: THREE.Vector3, out: THREE.Vector3): number } } = () => ({ stream: { nearest: (_p, out) => { out.set(0, 0, 0); return 0; } } });
+
+  private update20() {
+    if (!this.f('e3.l20.intro')) { this.intro20(); return; }
+    if (isDiscovered(this.s, 'irrigation') && !this.f('e3.kitDone')) { const a = this.snareAt(), p = this.player.pos; if (Math.hypot(p.x - a.x, p.z - a.z) < 5) this.kitScene(); }
+  }
+  /** Day 34: no rain for nine days, the sprouts yellowing. Water runs downhill. */
+  private intro20() {
+    const S = this.live();
+    this.set('e3.l20.intro');
+    this.busy = true;
+    this.s.day = Math.max(this.s.day ?? 33, 33);
+    this.passTime(11.5, true, 'e3.dry', () => {
+      const z = this.z, at = this.fieldAt(), H = this.house();
+      this.sprouts(0.8);
+      const me = this.settle(at.clone().addScaledVector(H.a, -2.4).addScaledVector(H.b, 0.5), at, false);
+      const beats: Beat[] = [
+        { hold: 3.2, shot: () => ({ from: at.clone().addScaledVector(H.a, -6.5).addScaledVector(H.b, 3.0).add(v3(0, 2.4, 0)), to: at.clone().add(v3(0, 0.2, 0)), fov: 50, push: 0.03 }), run: () => z.setLookTarget(at) },
+        { hold: 2.4, shot: () => { const p = this.fieldRows[0]?.position.clone() ?? at.clone(); return { from: p.clone().addScaledVector(H.b, 0.5).add(v3(0, 0.25, 0)), to: p.clone().add(v3(0, 0.06, 0)), fov: 28, push: 0.006, aperture: 0.004, lightAt: p.clone() }; } },
+        { key: 'e3.ir.1', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setLookTarget(this.ahead()) },
+        { key: 'e3.ir.rise', who: 'scientist', if: { flag: 'e3.site.rise' }, shot: () => cover.close(z, -0.4, 1.0, 0.24) },
+      ];
+      this.scene(beats, () => { S.end(); this.clearHands(); void me; this.ui.toast(t('e3.obj.level')); });
+    });
+  }
+  /** The A-frame: two poles and a crossbar, a stone on a cord from the apex; where the cord crosses the bar's mark the feet stand level. */
+  private aFrame(at: THREE.Vector3, along: THREE.Vector3) {
+    const g = new THREE.Group(), wood = std(0x7a5e44), cordM = std(0xc8b48a);
+    const L = (a: THREE.Vector3, b: THREE.Vector3, r: number, m: THREE.Material) => { const d = b.clone().sub(a), c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 6), m); c.position.copy(a).addScaledVector(d, 0.5); c.quaternion.setFromUnitVectors(UP, d.normalize()); c.castShadow = true; g.add(c); return c; };
+    const f0 = at.clone().addScaledVector(along, -0.6), f1 = at.clone().addScaledVector(along, 0.6), top = at.clone().add(v3(0, 1.1, 0));
+    f0.y = this.h(f0.x, f0.z); f1.y = this.h(f1.x, f1.z);
+    L(f0, top, 0.02, wood); L(f1, top, 0.02, wood);
+    const b0 = f0.clone().lerp(top, 0.45), b1 = f1.clone().lerp(top, 0.45); L(b0, b1, 0.015, wood);
+    const mid = b0.clone().lerp(b1, 0.5);
+    const mark = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.04, 0.03), std(0x1a1410)); mark.position.copy(mid); g.add(mark);
+    const cord = L(top, mid.clone().add(v3(0, -0.12, 0)), 0.002, cordM);
+    const bob = new THREE.Mesh(new THREE.DodecahedronGeometry(0.03, 0), std(0x6a645c)); bob.position.copy(mid).add(v3(0, -0.14, 0)); g.add(bob);
+    this.group.add(g);
+    return { g, top, mid, cord, bob };
+  }
+  /** The craft panel opens on him at the field's high corner with the A-frame, watching the cord against the mark. */
+  private beforeIrrigation(open: () => void) {
+    const S = this.live();
+    const z = this.z, pts = this.ditchPath(), at = pts[Math.floor(pts.length * 0.6)].clone(), along = pts[pts.length - 1].clone().sub(pts[0]).setY(0).normalize();
+    const side = this.side(along);
+    this.settle(at.clone().addScaledVector(side, 0.7), at, false);
+    const A = this.aFrame(at, along);
+    const f = this.fwd(), r = this.right(f);
+    z.setHold({ R: { at: A.top.clone().addScaledVector(side, 0.05).add(v3(0, -0.05, 0)), fingers: side.clone().negate(), palm: UP.clone().negate(), radius: 0.02, grasp: true } });
+    this.scene([
+      { hold: 2.6, shot: () => ({ from: at.clone().addScaledVector(side, 3.2).addScaledVector(along, -1.5).add(v3(0, 1.3, 0)), to: at.clone().add(v3(0, 0.7, 0)), fov: 40, push: 0.02 }), run: () => z.setLookTarget(A.mid) },
+      // insert: the plumb cord swinging in to the mark on the bar
+      { hold: 3.4, shot: () => ({ from: A.mid.clone().addScaledVector(side, 0.45).add(v3(0, 0.05, 0)), to: A.mid.clone().add(v3(0, -0.05, 0)), fov: 26, push: 0.006, aperture: 0.004, lightAt: A.mid.clone() }), run: () => {
+        S.anim(3.4, (k) => { const sw = Math.sin(k * 4) * 0.05 * Math.max(0, 1 - k / 3); A.bob.position.copy(A.mid).add(v3(0, -0.14, 0)).addScaledVector(along, sw); A.cord.quaternion.setFromUnitVectors(UP, A.top.clone().sub(A.bob.position).normalize()); A.cord.position.copy(A.top).lerp(A.bob.position, 0.5); });
+      } },
+    ], () => { S.end(); A.g.removeFromParent(); this.clearHands(); void f; void r; open(); });
+    return true;
+  }
+  /** The ditch dug; the water walks along it into the rows. */
+  private waterScene(card: () => void) {
+    const S = this.live();
+    this.busy = true;
+    const z = this.z, pts = this.ditchPath(), at = this.fieldAt(), H = this.house();
+    const me = this.settle(pts[pts.length - 3].clone().addScaledVector(this.side(pts[pts.length - 1].clone().sub(pts[0]).setY(0).normalize()), 0.8), at, false);
+    this.buildDitch(0);
+    const low = pts[Math.floor(pts.length * 0.35)];
+    this.scene([
+      { hold: 5.0, shot: () => ({ from: low.clone().addScaledVector(pts[0].clone().sub(low).setY(0).normalize(), 0.5).add(v3(0, 0.35, 0)), to: pts[pts.length - 1].clone().add(v3(0, 0.1, 0)), fov: 35, push: 0.02 }), run: () => {
+        audio.sample('splash', 0.25, { rate: 0.6 });
+        S.anim(4.8, (k) => { const w = Math.min(1, k / 4.5); if (Math.floor(w * 16) !== Math.floor(Math.max(0, w - 0.02) * 16) || k < 0.05) this.buildDitch(w); });
+      } },
+      { key: 'e3.ir.ok', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => { this.buildDitch(1); this.sprouts(0); z.setLookTarget(at); z.setFace({ smile: 0.3 }); } },
+      { hold: 2.8, shot: () => ({ from: at.clone().addScaledVector(H.a, -5).addScaledVector(H.b, 3.5).add(v3(0, 2.6, 0)), to: at.clone(), fov: 48, push: 0.02 }) },
+    ], () => {
+      S.end(); this.clearHands(); void me;
+      this.set('inv.irrigation'); this.ditchKey = '';
+      if ((this.s.flags['e3.ir.steepN'] as unknown as number) >= 2 || this.f('e3.ir.steep2')) this.set('e3.field.scoured');
+      this.ui.toast(t('e3.learn.irrigation'));
+      this.busy = false;
+      card();
+      this.after(4, () => this.ui.toast(t('e3.obj.snare')));
+    });
+  }
+  /** Day 40: the snare from the first days holds a young nibbet, alive, the mother gone. */
+  private kitG: THREE.Group | null = null;
+  private kit(at: THREE.Vector3) {
+    const g = new THREE.Group(), fur = std(0x8a6a4a, { roughness: 1 }), pale = std(0xc8b090, { roughness: 1 }), eye = std(0x111111, { roughness: 0.2 });
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 8), fur); body.scale.set(1.3, 0.9, 1); body.position.y = 0.09; g.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), fur); head.position.set(0.12, 0.13, 0); g.add(head);
+    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 6), pale); belly.position.set(0.02, 0.06, 0); belly.scale.set(1.2, 0.7, 0.9); g.add(belly);
+    for (const s of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.09, 6), fur); ear.position.set(0.1, 0.2, s * 0.03); ear.rotation.z = -0.3; g.add(ear);
+      const e = new THREE.Mesh(new THREE.SphereGeometry(0.011, 6, 4), eye); e.position.set(0.165, 0.145, s * 0.028); g.add(e);
+    }
+    g.position.copy(at); g.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+    this.group.add(g);
+    return g;
+  }
+  private kitScene() {
+    const S = this.live();
+    this.busy = true;
+    this.s.day = Math.max(this.s.day ?? 39, 39);
+    const z = this.z, at = this.snareAt();
+    const kit = this.kit(at.clone().add(v3(0.5, 0, 0)));
+    const me = this.settle(at.clone().add(v3(-0.4, 0, 0.6)), kit.position, true);
+    const k0 = kit.position.clone();
+    this.scene([
+      { hold: 2.6, shot: () => ({ from: k0.clone().add(v3(0.55, 0.18, 0.35)), to: k0.clone().add(v3(0, 0.1, 0)), fov: 28, push: 0.008, aperture: 0.004, lightAt: k0.clone() }), run: () => {
+        z.setLookTarget(k0); audio.sample('leather', 0.15, { rate: 2.2 });
+        S.anim(2.6, (k) => { kit.rotation.y = Math.sin(k * 9) * 0.25; kit.position.copy(k0).add(v3(0, Math.abs(Math.sin(k * 7)) * 0.02, 0)); });
+      } },
+      { key: 'e3.kt.1', who: 'scientist', shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => z.setLookTarget(k0) },
+      { key: 'e3.kt.fed', who: 'scientist', if: { flag: 'cub.fed' }, shot: () => cover.close(z, -0.4, 1.0, 0.24) },
+      { key: 'e3.kt.killed', who: 'scientist', if: { flag: 'cub.killed' }, shot: () => cover.close(z, -0.4, 1.0, 0.24) },
+      { hold: 1.2, shot: () => cover.close(z, 0.45, 1.1, 0.24) },
+      { choice: 'e3.kit', shot: () => cover.close(z, 0.45, 1.1, 0.24) },
+      { key: 'e3.kt.keep', who: 'scientist', if: CHOSE('e3.kit', 'kept'), shot: () => cover.mid(z, 0.5, 1.8), run: () => { z.setHold({ R: { at: k0.clone().add(v3(0, 0.12, 0)), fingers: UP.clone().negate(), palm: UP.clone().negate(), radius: 0.03 } }); z.setFace({ smile: 0.3 }); } },
+      { key: 'e3.kt.free', who: 'scientist', if: CHOSE('e3.kit', 'free'), shot: () => cover.mid(z, 0.5, 1.8), run: () => { S.anim(2.5, (k) => { kit.position.copy(k0).add(v3(k * 1.6, Math.abs(Math.sin(k * 10)) * 0.05, -k * 0.6)); }); } },
+      { key: 'e3.kt.eat', who: 'scientist', if: CHOSE('e3.kit', 'eaten'), shot: () => cover.close(z, -0.4, 1.0, 0.24), run: () => { z.setFace({ frown: 0.5 }); } },
+    ], () => {
+      S.end(); this.clearHands(); void me;
+      kit.removeFromParent();
+      this.set('e3.kitDone');
+      if (this.f('e3.kit.eaten')) this.s.stats.hunger = Math.min(100, this.s.stats.hunger + 40);
+      this.kitKey = '';
+    });
+  }
+  /** The kept kit lives at the house: it sits by the door and turns its head to him. */
+  private kitKey = '';
+  private restoreKit() {
+    const want = this.s.level >= 20 && this.f('e3.kit.kept') && this.f('e3.kitDone');
+    const key = want ? this.siteNow() : '';
+    if (key !== this.kitKey && !this.busy) {
+      this.kitKey = key; this.kitG?.removeFromParent(); this.kitG = null;
+      if (want) { const H = this.house(), p = H.at.clone().addScaledVector(H.a, -2.2).addScaledVector(H.b, 0.6); p.y = this.h(p.x, p.z); this.kitG = this.kit(p); }
+    }
+    if (this.kitG) { const p = this.player.pos; this.kitG.rotation.y = -Math.atan2(p.z - this.kitG.position.z, p.x - this.kitG.position.x); }
+  }
+
+  // ------------------------------------------------------------------ level 21: first frost (3.12 to 3.17)
+  /** How much the field gives: all of it sown and watered is the most; the scoured ditch takes a third. */
+  private harvestShare() { let k = this.f('e3.field.all') ? 1 : 0.6; if (this.f('e3.field.scoured')) k *= 0.66; return k; }
+  private update21() {
+    if (!this.f('e3.l21.intro')) { this.harvestScene(); return; }
+    if (this.f('e3.harvest') && isDiscovered(this.s, 'salt') && !this.f('e3.stored')) { this.storeScene(); return; }
+    if (this.f('e3.stored') && !this.f('e3.stormDone')) { this.storm(); return; }
+    if (this.f('e3.stormDone') && !this.f('e3.pelloDone')) { this.pelloScene(); return; }
+    if (this.f('e3.pelloDone') && !this.f('e3.named')) { this.nameScene(); return; }
+    if (this.f('e3.named') && !this.f('e3.ledger')) { this.ledgerScene(); return; }
+  }
+  /** Day 72: the field gold; a flint sickle; threshing on a flat stone; winnowing in the wind, the chaff blowing off like smoke. */
+  private harvestScene() {
+    const S = this.live();
+    this.set('e3.l21.intro');
+    this.busy = true;
+    this.s.day = Math.max(this.s.day ?? 71, 71);
+    this.passTime(10.5, true, 'e3.day', () => {
+      const z = this.z, at = this.fieldAt(), H = this.house(), share = this.harvestShare();
+      this.sprouts(0, 1);
+      const me = this.settle(at.clone().addScaledVector(H.a, 1.6).addScaledVector(H.b, ((this.fieldRows.length - 1) / 2) * 0.55 + 0.4), at, false);
+      const f = this.fwd(), r = this.right(f);
+      // the sickle: a curved wooden haft with flint blades set in resin along its inside edge
+      const sickle = new THREE.Group();
+      const haft = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.012, 5, 14, Math.PI * 0.9), std(0x7a5e44)); sickle.add(haft);
+      for (let i = 0; i < 5; i++) { const a = 0.25 + i * 0.5, b = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.004, 0.018), std(0x8a8a90, { roughness: 0.3 })); b.position.set(Math.cos(a) * 0.145, Math.sin(a) * 0.145, 0); b.rotation.z = a + Math.PI / 2; sickle.add(b); }
+      this.group.add(sickle);
+      const cutAt = me.clone().addScaledVector(f, 0.45).addScaledVector(r, 0.1).add(v3(0, 0.55, 0));
+      const swing = (k: number) => { const u = Math.sin(k * 3.4); const p = cutAt.clone().addScaledVector(r, u * 0.18); sickle.position.copy(p); sickle.lookAt(p.clone().add(f)); sickle.rotateZ(u * 0.6);
+        z.setHold({ R: { at: p.clone().add(v3(0, 0.05, 0)), fingers: f.clone(), palm: r.clone().negate(), radius: 0.02, grasp: true }, L: { at: cutAt.clone().addScaledVector(r, -0.12).add(v3(0, 0.12, 0)), fingers: f.clone(), palm: r.clone(), radius: 0.03, grasp: true } }); };
+      swing(0);
+      // the threshing stone and the winnowing tray, beside the field
+      const thresh = me.clone().addScaledVector(r, -1.6); thresh.y = this.h(thresh.x, thresh.z);
+      const chaff: THREE.Mesh[] = [];
+      const band = this.f('e3.field.band') && this.trust() >= 1 && !this.f('e2.oomsa.away');
+      const F = band ? this.buildFolk() : null;
+      if (F) this.placeFolk('hohma', at.clone().addScaledVector(H.b, -((this.fieldRows.length - 1) / 2) * 0.55 - 1.6), at, false);
+      const beats: Beat[] = [
+        { hold: 3.4, shot: () => ({ from: at.clone().addScaledVector(H.a, -6.0).addScaledVector(H.b, 4.0).add(v3(0, 2.0, 0)), to: at.clone().add(v3(0, 0.5, 0)), fov: 50, push: 0.03 }), run: () => { z.setLookTarget(at); S.anim(3.4, (k) => swing(k)); } },
+        { hold: 2.8, shot: () => ({ from: cutAt.clone().addScaledVector(r, 0.55).addScaledVector(f, 0.25).add(v3(0, 0.05, 0)), to: cutAt.clone(), fov: 30, push: 0.008, aperture: 0.004, lightAt: cutAt.clone() }), run: () => { S.anim(2.8, (k) => swing(k + 1)); audio.sample('leather', 0.25, { rate: 1.4 }); } },
+        { hold: 3.6, shot: () => ({ from: thresh.clone().addScaledVector(f, -1.6).addScaledVector(r, -0.6).add(v3(0, 1.1, 0)), to: thresh.clone().add(v3(0, 0.75, 0)), fov: 40, push: 0.02, lightAt: thresh.clone().add(v3(0, 1, 0)) }), run: () => {
+          sickle.visible = false;
+          this.settle(thresh, thresh.clone().addScaledVector(f, 1), false);
+          const ff = this.fwd(), rr = this.right(ff), tray = thresh.clone().addScaledVector(ff, 0.3).add(v3(0, 1.0, 0));
+          const tr = this.mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.04, 14, 1, true), std(0x7a5a3a, { side: THREE.DoubleSide }), tray.clone()); chaff.push(tr);
+          for (let i = 0; i < 40; i++) { const m = this.mesh(new THREE.PlaneGeometry(0.012, 0.006), new THREE.MeshBasicMaterial({ color: 0xe0d0a0, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }), tray.clone()); m.castShadow = false; chaff.push(m); }
+          S.anim(3.6, (k) => {
+            const lift = Math.abs(Math.sin(k * 3)) * 0.12; tr.position.copy(tray).add(v3(0, lift, 0));
+            z.setHold({ L: { at: tr.position.clone().addScaledVector(rr, -0.19), fingers: ff.clone(), palm: UP.clone(), radius: 0.03, grasp: true }, R: { at: tr.position.clone().addScaledVector(rr, 0.19), fingers: ff.clone(), palm: UP.clone(), radius: 0.03, grasp: true } });
+            chaff.slice(1).forEach((m, i) => { const u = ((k * 0.6 + i / 40) % 1); m.position.copy(tray).add(v3(u * 1.4 + Math.sin(i) * 0.05, 0.1 + u * 0.6 + Math.sin(k * 5 + i) * 0.03, Math.cos(i * 1.7) * 0.1 + u * 0.3)); m.rotation.set(k * 3 + i, i, k); (m.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - u); });
+          });
+        } },
+        { key: 'e3.hv.1', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setLookTarget(this.ahead()) },
+      ];
+      if (F) beats.push({ key: 'e3.hm.reap', who: 'hohma' as Who, shot: () => this.oomClose(F.hohma, 0.4, 1.0), run: () => F.hohma.setLookTarget(this.head()) });
+      this.scene(beats, () => {
+        S.end(); sickle.removeFromParent(); chaff.forEach((m) => m.removeFromParent()); this.clearHands(); this.homeFolk();
+        this.s.inventory.grain = (this.s.inventory.grain ?? 0) + Math.round(12 * share);
+        this.set('e3.harvest');
+        this.ui.toast(t('e3.obj.salt'));
+      });
+    });
+  }
+  /** The craft panel opens on the brine in his pot over the hearth, going down to a crust. */
+  private beforeSalt(open: () => void) {
+    const S = this.live();
+    const z = this.z, H = this.house(), c = H.at.clone();
+    this.settle(c.clone().addScaledVector(H.b, 0.85), c, true, true);
+    const potAt = c.clone().lerp(this.z.root.position, 0.4); potAt.y = this.h(potAt.x, potAt.z) + 0.1;
+    const embers = this.mesh(new THREE.CircleGeometry(0.24, 12), new THREE.MeshBasicMaterial({ color: 0xff7a2a }), c.clone().setY(this.h(c.x, c.z) + 0.04)); embers.rotation.x = -Math.PI / 2; embers.castShadow = false;
+    const pot = this.mesh(new THREE.CylinderGeometry(0.1, 0.075, 0.16, 14, 1, true), std(0x8a5a3a, { roughness: 0.85, side: THREE.DoubleSide }), potAt.clone());
+    const brine = this.mesh(new THREE.CircleGeometry(0.095, 14), std(0x9aa49a, { roughness: 0.15, metalness: 0.2 }), potAt.clone().add(v3(0, 0.05, 0))); brine.rotation.x = -Math.PI / 2;
+    this.scene([
+      { hold: 3.4, shot: () => ({ from: potAt.clone().add(v3(0.25, 0.42, 0.25)), to: potAt.clone().add(v3(0, 0.04, 0)), fov: 26, push: 0.006, aperture: 0.004, lightAt: potAt.clone() }), run: () => {
+        z.setLookTarget(potAt); audio.sample('fire', 0.3, { dur: 3.4 });
+        S.anim(3.4, (k) => { const u = Math.min(1, k / 3.2); brine.position.y = potAt.y + 0.05 - u * 0.05; (brine.material as THREE.MeshStandardMaterial).color.setHex(u > 0.7 ? 0xe8e4dc : 0x9aa49a); });
+      } },
+    ], () => { S.end(); for (const m of [pot, brine, embers]) m.removeFromParent(); this.clearHands(); open(); });
+    return true;
+  }
+  /** Day 74 to 76: meat drying and smoking on a rack, a store pit in the floor sealed with clay, a notch for each pot; tracks at dawn. */
+  private storeScene() {
+    const S = this.live();
+    this.busy = true;
+    const z = this.z, H = this.house(), c = H.at.clone();
+    const rackAt = H.at.clone().addScaledVector(H.a, -3.4).addScaledVector(H.b, 1.6); rackAt.y = this.h(rackAt.x, rackAt.z);
+    const g = new THREE.Group(), wood = std(0x6a5440), meat = std(0x7a2a22, { roughness: 0.7 });
+    for (const [u, w] of [[-0.5, -0.3], [0.5, -0.3], [-0.5, 0.3], [0.5, 0.3]]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 1.1, 5), wood); p.position.copy(rackAt).addScaledVector(H.a, u).addScaledVector(H.b, w).add(v3(0, 0.55, 0)); g.add(p); }
+    for (const w of [-0.3, 0.3]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.1, 5), wood); b.position.copy(rackAt).addScaledVector(H.b, w).add(v3(0, 1.05, 0)); b.quaternion.setFromUnitVectors(UP, H.a); g.add(b); }
+    for (let i = 0; i < 7; i++) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.3, 0.01), meat); s.position.copy(rackAt).addScaledVector(H.a, -0.4 + i * 0.13).add(v3(0, 0.88, 0)); s.rotation.y = Math.atan2(H.b.x, H.b.z); g.add(s); }
+    const smoke: THREE.Mesh[] = [];
+    for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshBasicMaterial({ color: 0xb8b8b0, transparent: true, opacity: 0.2, depthWrite: false })); g.add(m); smoke.push(m); }
+    const coals = new THREE.Mesh(new THREE.CircleGeometry(0.22, 10), new THREE.MeshBasicMaterial({ color: 0xc84a1a })); coals.rotation.x = -Math.PI / 2; coals.position.copy(rackAt).add(v3(0, 0.03, 0)); g.add(coals);
+    this.group.add(g);
+    // the store: a pit in the house floor lined with bark, the pots in it, a clay lid; the tally stick by the door
+    const pit = c.clone().addScaledVector(H.a, 0.9).addScaledVector(H.b, -0.7); pit.y = this.h(pit.x, pit.z);
+    const lid = this.mesh(new THREE.CylinderGeometry(0.32, 0.34, 0.05, 16), std(0x8a6a4a, { roughness: 1 }), pit.clone().add(v3(0, 0.03, 0)));
+    const me = this.settle(pit.clone().addScaledVector(H.b, 0.75), pit, true, true);
+    const f = this.fwd(), r = this.right(f);
+    const stick = this.mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.32, 6), std(0xb89a6a), me.clone().addScaledVector(f, 0.3).add(v3(0, 0.45, 0)));
+    stick.quaternion.setFromUnitVectors(UP, r.clone());
+    const notches: THREE.Mesh[] = [];
+    const pots = Math.max(1, Math.min(6, this.inv('pot') || 2));
+    const beats: Beat[] = [
+      { hold: 3.4, shot: () => ({ from: rackAt.clone().addScaledVector(H.b, 3.0).addScaledVector(H.a, -1.2).add(v3(0, 1.1, 0)), to: rackAt.clone().add(v3(0, 0.85, 0)), fov: 40, push: 0.02, lightAt: rackAt.clone().add(v3(0, 0.9, 0)) }), run: () => {
+        S.anim(3.4, (k) => smoke.forEach((m, i) => { const u = ((k * 0.35 + i / 8) % 1); m.position.copy(rackAt).add(v3(Math.sin(i * 2 + k) * 0.15, 0.2 + u * 1.6, Math.cos(i * 3) * 0.15)); m.scale.setScalar(0.6 + u * 2); (m.material as THREE.MeshBasicMaterial).opacity = 0.22 * (1 - u); }));
+      } },
+      { hold: 2.6, shot: () => ({ from: pit.clone().addScaledVector(f, -0.2).add(v3(0, 0.9, 0)).addScaledVector(r, 0.5), to: pit.clone(), fov: 34, push: 0.01 }), run: () => { z.setLookTarget(pit); z.setHold({ L: { at: pit.clone().addScaledVector(r, -0.2).add(v3(0, 0.06, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.03 }, R: { at: pit.clone().addScaledVector(r, 0.2).add(v3(0, 0.06, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.03 } }); } },
+      { hold: 6.0, shot: () => cover.mid(z, 0.5, 1.9), run: () => { this.clearHands(); this.settle(me, pit, true, true); this.ui.memory('e3.ct.nuvexa', 7); } },
+      // insert: a notch for each pot filled
+      { hold: 3.4, shot: () => ({ from: stick.position.clone().addScaledVector(f, -0.25).add(v3(0, 0.12, 0)), to: stick.position.clone(), fov: 24, push: 0.004, aperture: 0.004, lightAt: stick.position.clone() }), run: () => {
+        z.setLookTarget(stick.position);
+        z.setHold({ L: { at: stick.position.clone().addScaledVector(r, -0.12), fingers: r.clone(), palm: UP.clone(), radius: 0.015, grasp: true }, R: { at: stick.position.clone().add(v3(0, 0.03, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.015, grasp: true } });
+        for (let i = 0; i < pots; i++) S.after(0.4 + i * (2.6 / pots), () => { const n = this.mesh(new THREE.BoxGeometry(0.004, 0.026, 0.026), std(0x3a2a1a), stick.position.clone().addScaledVector(r, -0.1 + i * 0.035)); n.quaternion.copy(stick.quaternion); notches.push(n); audio.sample('wood', 0.25, { rate: 2 }); });
+      } },
+      { key: 'e3.tl.1', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => { z.setHold(null); z.setLookTarget(this.ahead()); } },
+    ];
+    if (this.f('scarred') || this.f('e2.cb.kiln.scattered') || this.f('cb.night.held')) {
+      beats.push(
+        { hold: 3.0, shot: () => ({ from: lid.position.clone().add(v3(0.3, 0.5, 0.2)), to: lid.position.clone(), fov: 26, push: 0.006, aperture: 0.004, lightAt: lid.position.clone() }), run: () => {
+          this.s.timeOfDay = 6.8;
+          for (let i = 0; i < 4; i++) { const m = this.mesh(new THREE.BoxGeometry(0.16, 0.006, 0.008), std(0x2a1a10), lid.position.clone().add(v3(-0.06 + i * 0.03, 0.03, 0))); m.rotation.y = 0.5; notches.push(m); }
+        } },
+        { key: 'e3.tr.1', who: 'scientist', shot: () => cover.close(z, -0.4, 1.0, 0.24), run: () => z.setFace({ squint: 0.3 }) },
+      );
+    }
+    this.scene(beats, () => {
+      S.end(); g.removeFromParent(); stick.removeFromParent(); lid.removeFromParent(); notches.forEach((m) => m.removeFromParent()); this.clearHands();
+      this.set('e3.stored'); this.set('inv.storage'); this.set('inv.tally'); this.set('inv.salt');
+      this.ui.toast(t('e3.learn.store'));
+    });
+  }
+  /** Day 78: the first winter storm comes off the lake. The house holds or does not; then the fight for the store. */
+  private storm() {
+    const S = this.live();
+    this.busy = true;
+    this.s.day = Math.max(this.s.day ?? 77, 77);
+    this.passTime(21.2, true, 'e3.day', () => {
+      const z = this.z, H = this.house(), c = H.at.clone();
+      this.rain(1);
+      const band = this.trust() >= 1 && !this.f('e2.oomsa.away');
+      const F = this.buildFolk();
+      const me = this.settle(c.clone().addScaledVector(H.a, -0.7), c, true, true);
+      if (band) { this.placeFolk('hohma', c.clone().addScaledVector(H.b, -0.8), c, true); this.placeFolk('wenka', c.clone().addScaledVector(H.b, 0.8).addScaledVector(H.a, 0.3), c, true); }
+      const door = this.doorSide(), flooded = this.campSite() && !this.f('e3.ditch');
+      const beats: Beat[] = [
+        { hold: 3.4, shot: () => ({ from: c.clone().addScaledVector(H.a, -8).addScaledVector(H.b, 5).add(v3(0, 2.4, 0)), to: c.clone().add(v3(0, 1.4, 0)), fov: 50, push: 0.02 }), run: () => { audio.sample('amb_rain', 0.6, { dur: 14 }); audio.sample('wind', 0.4, { dur: 10 }); } },
+        { hold: 3.0, shot: () => ({ from: c.clone().addScaledVector(H.a, 1.2).addScaledVector(H.b, 0.9).add(v3(0, 1.4, 0)), to: c.clone().add(v3(0, 0.6, 0)).addScaledVector(H.a, -0.4), fov: 55, push: 0.01, lightAt: c.clone().add(v3(0, 0.6, 0)), lightScale: 0.8 }), run: () => z.setLookTarget(c) },
+        { key: door === 'a-' ? 'e3.sm.lee' : door === 'a+' ? 'e3.sm.view' : 'e3.sm.band', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24) },
+        { key: 'e3.sm.flood', who: 'scientist', if: flooded ? undefined : { flag: '__never' }, shot: () => cover.close(z, -0.4, 1.0, 0.24) },
+        { key: 'e3.sm.kit', who: 'scientist', if: { flag: 'e3.kit.kept' }, shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => audio.tone(1800, 0.3, 'square', 0.05) },
+      ];
+      if (band) beats.push({ key: 'e3.st.1', who: 'scientist', shot: () => ({ from: c.clone().addScaledVector(H.a, 1.6).add(v3(0, 1.5, 0)), to: c.clone().add(v3(0, 0.5, 0)), fov: 58, push: 0.01, lightAt: c.clone().add(v3(0, 0.6, 0)), lightScale: 0.8 }), run: () => { F.hohma.setLookTarget(this.head()); F.wenka.setLookTarget(this.head()); } });
+      this.scene(beats, async () => {
+        S.end(); this.clearHands(); void me;
+        // the door in the wind: held (band), braced with a quick press (view), nothing to do (lee)
+        if (door === 'b+' || door === 'b-') { const r = await this.tension({ kind: 'steady', seconds: 5, strain: 1.2 }); this.set(r && !r.passed ? 'e3.door.blew' : 'e3.door.held'); }
+        else if (door === 'a+') { const r = await this.tension({ kind: 'quick', count: 3 }); this.set(r && !r.passed ? 'e3.door.blew' : 'e3.door.braced'); }
+        if (flooded) this.set('e3.floorFlooded');
+        const cb = this.combat();
+        if (cb) {
+          await new Promise<void>((go) => cb.ensureAsked(go));
+          const o = await cb.startEncounter('night.defence', { story: { store: true, oomsa: band, fireHigh: true }, hour: 22.5 });
+          for (const [k, v] of Object.entries(o.flags)) if (v) this.s.flags[`e3.cb.${k}`] = true;
+        }
+        this.rain(0.3, 30);
+        this.set('e3.stormDone');
+        this.busy = false; this.wait = 1.5;
+      });
+    });
+  }
+  /** Day 79, grey dawn: a man at the edge of the clearing with a ticket. */
+  private pello: Character | null = null;
+  private pelloScene() {
+    const S = this.live();
+    this.busy = true;
+    this.passTime(6.4, true, null, () => {
+      const z = this.z, H = this.house(), c = H.at.clone();
+      const me = this.settle(c.clone().addScaledVector(H.a, -2.4), c.clone().addScaledVector(H.a, -8), false);
+      const f = this.fwd();
+      const at = me.clone().addScaledVector(f, 9).addScaledVector(this.right(f), 1.5); at.y = this.h(at.x, at.z);
+      if (!this.pello) {
+        const look: PlayerLook = { ...defaultLook(), lineage: 'korrath', ...LINEAGES.korrath, skin: 0xb88a6a, horns: false, marks: 'dots', glow: 0x806040, iris: 0x8a6a4a, hair: 'explorer', hairRoot: 0x3a2a1a, hairTip: 0x6a5a4a, outfit: 'explorer', accent: 0x6a6a5a, gender: 'm', eye: 'tired', eyeGlow: false, height: 1.02, build: 0.15 };
+        this.pello = createCharacter('explorer', this.world.q.name === 'mobile' ? 0.6 : 1, look);
+        this.pello.setGround((x, zz) => this.h(x, zz)); this.world.scene.add(this.pello.root);
+        this.actors['pello'] = this.pello;
+      }
+      const P = this.pello; P.root.visible = true; P.root.position.copy(at); P.root.rotation.y = Math.atan2(me.x - at.x, me.z - at.z); P.root.updateMatrixWorld();
+      const card = this.mesh(new THREE.BoxGeometry(0.085, 0.002, 0.054), std(0xe8e2d0, { roughness: 0.3 }), at.clone().add(v3(0, 1.05, 0)).addScaledVector(me.clone().sub(at).setY(0).normalize(), 0.28));
+      P.setHold({ R: { at: card.position.clone(), fingers: me.clone().sub(at).setY(0).normalize(), palm: UP.clone(), radius: 0.02 } });
+      P.setLookTarget(card.position);
+      const band = this.trust() >= 1 && !this.f('e2.oomsa.away');
+      const oom = band ? this.oom() : null;
+      if (oom) { const o = me.clone().addScaledVector(this.right(f), 1.4).addScaledVector(f, -0.3); o.y = this.h(o.x, o.z); this.actors['local'] = oom; this.npcs.pin('local', o, Math.atan2(at.x - o.x, at.z - o.z)); oom.setLookTarget(at.clone().add(v3(0, 1.5, 0))); }
+      this.s.timeOfDay = 6.5;
+      this.scene([
+        { hold: 3.6, shot: () => ({ from: me.clone().add(v3(0, 1.5, 0)).addScaledVector(f, -1.0).addScaledVector(this.right(f), 0.5), to: at.clone().add(v3(0, 1.2, 0)), fov: 22, push: 0.01 }), run: () => z.setLookTarget(at.clone().add(v3(0, 1.6, 0))) },
+        { key: 'e3.pl.1', who: 'pello' as Who, shot: () => cover.close(P, 0.35, 1.05, 0), run: () => P.setLookTarget(this.head()) },
+        { key: 'e3.pl.2', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24) },
+        { key: 'e3.pl.3', who: 'pello' as Who, shot: () => cover.close(P, -0.35, 1.05, 0), run: () => P.setLookTarget(card.position) },
+        { hold: 2.4, shot: () => ({ from: card.position.clone().add(v3(0.1, 0.18, 0.12)), to: card.position.clone(), fov: 24, push: 0.004, aperture: 0.003, lightAt: card.position.clone() }) },
+        { key: 'e3.pl.oom', who: 'local' as Who, if: band ? undefined : { flag: '__never' }, shot: () => oom ? this.oomClose(oom, 0.4, 1.0) : cover.close(z, 0.4, 1.0, 0.24) },
+        { hold: 1.0, shot: () => cover.close(z, 0.45, 1.1, 0.24) },
+        { choice: 'e3.pello', shot: () => cover.close(z, 0.45, 1.1, 0.24) },
+        { key: 'e3.pl.ask', who: 'pello' as Who, if: CHOSE('e3.pello', 'ask'), shot: () => cover.close(P, 0.35, 1.05, 0), run: () => P.setLookTarget(this.head()) },
+        { key: 'e3.pl.in', who: 'scientist', if: CHOSE('e3.pello', 'in'), shot: () => cover.close(z, 0.4, 1.0, 0.24) },
+        { key: 'e3.pl.out', who: 'scientist', if: CHOSE('e3.pello', 'out'), shot: () => cover.close(z, 0.4, 1.0, 0.24) },
+        { hold: 2.6, shot: () => ({ from: me.clone().add(v3(0, 1.6, 0)).addScaledVector(f, -2.5), to: at.clone().add(v3(0, 1.0, 0)), fov: 35, push: 0.01 }), run: () => {
+          P.setHold(null); card.removeFromParent();
+          const away = this.f('e3.pello.in') ? c.clone() : at.clone().addScaledVector(this.right(f), 12);
+          const a0 = at.clone(); S.anim(2.6, (k) => { const p = a0.clone().lerp(away, Math.min(1, k / 6)); p.y = this.h(p.x, p.z); P.root.position.copy(p); P.root.rotation.y = Math.atan2(away.x - a0.x, away.z - a0.z); P.animate('walk', k * 1.6, 1, performance.now() / 1000, 1 / 60); });
+        } },
+        { key: 'e3.pl.end', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setLookTarget(this.ahead()) },
+      ], () => {
+        S.end(); this.clearHands(); card.removeFromParent();
+        if (this.pello) this.pello.root.visible = this.f('e3.pello.in');
+        if (this.pello && this.f('e3.pello.in')) { const p = c.clone().addScaledVector(H.b, 0.7); p.y = this.h(p.x, p.z); this.pello.root.position.copy(p); this.pello.setKneel(true, true); }
+        if (oom) this.npcs.pin('local', null, 0, this.L.camp.clone().add(v3(9, 0, 7)).setY(this.h(this.L.camp.x + 9, this.L.camp.z + 7)));
+        this.set('e3.pelloDone');
+      });
+    });
+  }
+  /** Day 80: frost, smoke from the roof, the band's shelters round his house (with trust): the place gets a name. */
+  private nameScene() {
+    const S = this.live();
+    this.busy = true;
+    this.s.day = Math.max(this.s.day ?? 79, 79);
+    this.passTime(8.6, true, 'e3.day', () => {
+      const z = this.z, H = this.house(), c = H.at.clone();
+      const me = this.settle(c.clone().addScaledVector(H.a, -3.0), c, false);
+      this.scene([
+        { hold: 4.0, shot: () => ({ from: c.clone().addScaledVector(H.a, -14).addScaledVector(H.b, 6).add(v3(0, 6, 0)), to: c.clone().add(v3(0, 1.4, 0)), fov: 50, push: 0.03 }), run: () => z.setLookTarget(c.clone().add(v3(0, 2.6, 0))) },
+        { hold: 1.2, shot: () => cover.close(z, 0.45, 1.1, 0.24) },
+        { choice: 'e3.name', shot: () => cover.close(z, 0.45, 1.1, 0.24) },
+        { key: 'e3.nm.1', who: 'scientist', shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => { z.setFace({ smile: 0.25 }); z.setLookTarget(this.ahead()); } },
+      ], () => {
+        S.end(); this.clearHands(); void me;
+        const name = ['six', 'clay', 'dayone', 'hatum'].find((k) => this.f(`e3.name.${k}`)) ?? 'camp';
+        this.s.flags['e3.village'] = name as unknown as boolean;
+        this.set('e3.named');
+      });
+    });
+  }
+  /** 3.17: MegaZroN reads Episode Three's page. */
+  private ledgerScene() {
+    this.busy = true;
+    const say = (k: string, sec: number, then: () => void) => { this.say(k, 'megazron', sec); this.after(sec, then); };
+    const dose = this.f('e3.dose.self') ? 'e3.mz.self' : this.f('e3.dose.half') ? 'e3.mz.half' : 'e3.mz.boy';
+    this.ui.fade('black', 1, 1.0);
+    this.after(1.2, () => {
+      this.ui.banner(t('e3.end'), t('e3.next'));
+      say('e3.mz.1', 7, () => say(dose, 6, () => say('e3.mz.wall', 5, () => say('e3.mz.pello', 5, () => say('e3.mz.4', 5, () => {
+        this.ui.fade('black', 0, 1.4);
+        this.set('e3.ledger'); this.set('ch2.e3.done');
+        this.busy = false;
+      })))));
+    });
+  }
+
 }
 
 /** Episode Three's choices that test a flag; kept so the sealed data and the code agree on names (story_check reads it). */
-export const E3_FLAGS = ['e3.site.rise', 'e3.site.reeds', 'e3.site.camp', 'e3.door.lee', 'e3.door.band', 'e3.door.view', 'e3.field.all', 'e3.field.half', 'e3.field.band'];
+export const E3_FLAGS = ['e3.site.rise', 'e3.site.reeds', 'e3.site.camp', 'e3.door.lee', 'e3.door.band', 'e3.door.view', 'e3.field.all', 'e3.field.half', 'e3.field.band', 'e3.dose.boy', 'e3.dose.self', 'e3.dose.half', 'e3.wall.hold', 'e3.wall.climb', 'e3.wall.mock', 'e3.kit.kept', 'e3.kit.free', 'e3.kit.eaten', 'e3.pello.in', 'e3.pello.ask', 'e3.pello.out', 'e3.pello.wait', 'e3.name.six', 'e3.name.clay', 'e3.name.dayone', 'e3.name.hatum', 'e3.name.camp'];
 void test;

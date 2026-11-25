@@ -315,7 +315,7 @@ const SECTORS = 32, CULL_FROM = 1;
 const CULL = { on: typeof location === 'undefined' || new URLSearchParams(location.search).get('cull') !== '0' };
 
 /** `h`: how tall it stands above the ground (metres); absent: a trunk, as tall as the camera can go. */
-export interface Obstacle { x: number; z: number; r: number; h?: number }
+export interface Obstacle { x: number; z: number; r: number; h?: number; tag?: string }
 
 /** The conifer species' (height, crown start, spread) by field index, as built in Forest.build: for the camera screens. */
 const CONIFER_SHAPE: Record<number, [number, number, number]> = { 0: [23, 0.16, 0.24], 1: [31, 0.22, 0.2], 2: [21, 0.58, 0.3] };
@@ -344,11 +344,20 @@ export class Forest {
 
   private key(x: number, z: number) { return `${Math.floor(x / 10)},${Math.floor(z / 10)}`; }
 
-  addObstacle(x: number, z: number, r: number, h?: number) {
+  addObstacle(x: number, z: number, r: number, h?: number, tag?: string) {
     const k = this.key(x, z);
     let a = this.obstacles.get(k);
     if (!a) { a = []; this.obstacles.set(k, a); }
-    a.push(h === undefined ? { x, z, r } : { x, z, r, h });
+    const o: Obstacle = h === undefined ? { x, z, r } : { x, z, r, h };
+    if (tag) o.tag = tag;
+    a.push(o);
+  }
+  /** Take away every obstacle added with `tag` (a story build that is rebuilt as it grows, e.g. Episode Three's house). */
+  removeTagged(tag: string) {
+    for (const [k, a] of this.obstacles) {
+      const kept = a.filter((o) => o.tag !== tag);
+      if (kept.length !== a.length) { if (kept.length) this.obstacles.set(k, kept); else this.obstacles.delete(k); }
+    }
   }
 
   /** Is a circle of radius r at (x,z) inside an obstacle? (camera collision) `above`: the point's height over the

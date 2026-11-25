@@ -135,7 +135,10 @@ export class EncounterRun {
       // the day's wood stacked beside the fire, for the fire alone (the bag's branches go on traps or on the fire):
       // enough, fed when it is low, to see the night through; fewer on Hard (a fire left alone still goes out)
       const f = this.at(2.5, 0); s.addFire(f.x, f.z, this.story.fireHigh ? 100 : 72, { pile: NIGHT[s.difficulty].pile }); this.markers.push({ x: f.x, z: f.z, kind: 'fire', r: 2 });
-      const food = this.at(0.5, 2.2); s.addScent(food.x, food.z, 4, 60); this.markers.push({ x: food.x, z: food.z, kind: 'food', r: 1 });
+      const food = this.at(0.5, 2.2); s.addScent(food.x, food.z, this.story.store ? 9 : 4, this.story.store ? 140 : 60); this.markers.push({ x: food.x, z: food.z, kind: 'food', r: this.story.store ? 1.4 : 1 });
+      // Episode Three's storm (story.store): the fire is his house's hearth, the food is the winter store in the floor;
+      // fewer and hungrier skritch, and the big one does not come in (it watches); Oom-Sa beside him with trust
+      if (this.story.store && this.story.oomsa) { const a = this.at(-1.2, 1.8); s.ally = { who: 'local', x: a.x, z: a.z, hp: 60, down: false }; }
       if (this.story.firing) {
         // Episode Two's firing night: the pit beside the fire with the pots buried in its embers. It has to stay hot till
         // dawn (above about 600 C the clay turns to ceramic); a burning branch out of it is a weapon (the torch); the
@@ -301,7 +304,8 @@ export class EncounterRun {
           fromDark('skritch', Math.max(1, N.waves[0] - 2), 1);
           const a = Math.atan2(s.windZ, s.windX) + 0.9; this.hound = s.spawn('hound', fire.x + Math.cos(a) * 30, fire.z + Math.sin(a) * 30, { alert: 1.2, aware: true });
           this.objective = 'cb.obj.kiln';
-        } else { fromDark('skritch', N.waves[0], 1); this.objective = 'cb.obj.night'; }
+        } else if (this.story.store) { fromDark('skritch', N.waves[0] + 1, 1, 0.8); this.objective = 'cb.obj.store'; }
+        else { fromDark('skritch', N.waves[0], 1); this.objective = 'cb.obj.night'; }
         this.go('wave1');
       }
     } else if (this.phase === 'wave1') {
@@ -309,9 +313,10 @@ export class EncounterRun {
     } else if (this.phase === 'lull') {
       if (this.phaseT > 12) {
         this.wave = 2; fromDark('skritch', N.waves[1] - (this.pit ? 1 : 0), 2, 1.7);
-        if (!this.hound || this.hound.dead || this.hound.gone) { const a = s.rand() * 6.283; this.hound = s.spawn('hound', fire.x + Math.cos(a) * 34, fire.z + Math.sin(a) * 34, { alert: 1.2, aware: true }); }
+        if (this.story.store) { /* the big one only watches from the treeline in this storm */ }
+        else if (!this.hound || this.hound.dead || this.hound.gone) { const a = s.rand() * 6.283; this.hound = s.spawn('hound', fire.x + Math.cos(a) * 34, fire.z + Math.sin(a) * 34, { alert: 1.2, aware: true }); }
         else if (this.hound.routed) { this.hound.routed = false; this.hound.aware = true; this.hound.alert = 1.2; }
-        if (straight) this.hound.cd = 0;
+        if (straight && this.hound) this.hound.cd = 0;
         this.go('wave2');
       }
     } else if (this.phase === 'wave2') {
@@ -326,6 +331,7 @@ export class EncounterRun {
         for (const e of s.enemies) s.rout(e);
         this.flags['night.held'] = true; this.flags['night.food'] = food; this.flags['night.houndDriven'] = !!this.hound?.routed && this.phaseT <= 85;
         this.flags['night.fireKept'] = fire.fuel > 0;
+        if (this.story.store) this.flags['store.food'] = food;
         if (this.pit) { this.flags['kiln.fuel'] = Math.round((this.pit.fuel / this.pit.max) * 100); this.flags['kiln.cold'] = (this.mem.coldT ?? 0) > 45; }
         s.emit({ t: 'beat', what: 'dawn' });
         this.finish('won');

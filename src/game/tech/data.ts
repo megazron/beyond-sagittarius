@@ -75,7 +75,10 @@ export const TECH: TechNode[] = [
   // it), in rows opened with the digging stick
   playable('farming', 'agri', ['grain'], { branch: 1 }, {}, 'cultivate',
     [{ kind: 'mix', band: [0.42, 0.6] }, { kind: 'rhythm', band: [0.4, 0.72], secs: 5 }], 'medic', []),
-  planned('remedy', 'agri', ['pottery'], 'study', ['heat']),
+  // 3.7: water boiled in his pot and kept at a rolling boil (too cool it is soup for whatever lives in it, too hard it
+  // boils over into the fire), then the wound cleaned out in slow strokes with the lichen (rushed, it is not clean)
+  playable('remedy', 'agri', ['farming'], { lichen: 1 }, {}, 'study',
+    [{ kind: 'heat', band: [0.55, 0.8], secs: 4, rise: 0.3, fall: 0.2 }, { kind: 'rhythm', band: [0.3, 0.58], secs: 5 }], 'medic', ['heat', 'sharp']),
   planned('icewall', 'agri', [], 'build', []),
   // ---- Fire and Tools (the pre-Episode-One chain: kept for the codex and later ages, out of the level order) ----
   later('charcoal', 'tools', ['pottery'], { branch: 4, clay: 1 }, { charcoal: 3 }, 'smoulder',
@@ -84,7 +87,8 @@ export const TECH: TechNode[] = [
   later('lime', 'tools', ['charcoal'], { limestone: 2, charcoal: 1 }, { lime: 3 }, 'calcine',
     [{ kind: 'heat', band: [0.7, 0.86], secs: 6, rise: 0.34, fall: 0.2 }, { kind: 'mix', band: [0.5, 0.66] }], 'builder', ['heat', 'chemical']),
 
-  later('salt', 'tools', ['pottery'], { brine: 3 }, { salt: 3 }, 'evaporate',
+  // 3.13: brine boiled down slowly in a pot over the hearth (too hard it spits and the pot cracks), the crust scraped out
+  playable('salt', 'tools', ['pottery'], { brine: 3 }, { salt: 3 }, 'evaporate',
     [{ kind: 'heat', band: [0.45, 0.62], secs: 4, rise: 0.3, fall: 0.2 }, { kind: 'rhythm', band: [0.35, 0.65], secs: 4 }], 'social', ['heat']),
 
   later('glass', 'tools', ['lime'], { sand: 2, ash: 2, lime: 1, charcoal: 1 }, { glass: 2 }, 'melt',
@@ -100,7 +104,10 @@ export const TECH: TechNode[] = [
   later('acids', 'agri', ['fermentation', 'lime'], { brew: 1, lime: 1, lichen: 1 }, { vinegar: 2 }, 'neutralise',
     [{ kind: 'rhythm', band: [0.4, 0.7], secs: 4 }, { kind: 'mix', band: [0.44, 0.56], litmus: true }], 'megazron', ['chemical']),
 
-  planned('irrigation', 'agri', ['farming'], 'build', []),
+  // 3.10: an A-frame level (two poles, a crossbar, a stone on a cord) to peg a ditch that falls a hand every few paces (too
+  // steep it cuts a gully, too flat it stands and soaks in), then the ditch dug with the soil on the low side
+  playable('irrigation', 'agri', ['remedy'], { branch: 3, stone: 1 }, {}, 'build',
+    [{ kind: 'mix', band: [0.4, 0.58] }, { kind: 'rhythm', band: [0.4, 0.7], secs: 5 }], 'builder', []),
   // ---- Bronze Age ----
   planned('copper', 'bronze', ['charcoal', 'pottery'], 'smelt', ['heat']),
   planned('bronze', 'bronze', ['copper'], 'smelt', ['heat']),

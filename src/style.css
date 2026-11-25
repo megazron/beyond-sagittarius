@@ -601,3 +601,9 @@ body.touch .minimap { top: calc(var(--safe-t) + 120px); inset-inline-end: calc(v
 /* Cinema mode (?cinema=1, __bs.cinema): only the 3D view, for trailers and screenshots */
 html.cinema body > :not(#c) { opacity: 0 !important; pointer-events: none !important; }
 html.cinema, html.cinema * { cursor: none !important; }
+
+/* Episode Three level 18: the fever, the edges of the picture breathing red (episode3.ts fever()) */
+.e3-fever { position: fixed; inset: 0; pointer-events: none; z-index: 4; opacity: 0; transition: opacity 2.5s;
+  background: radial-gradient(ellipse at center, transparent 52%, rgba(120, 24, 12, 0.42) 100%); }
+.e3-fever.on { animation: e3-breathe 3.4s ease-in-out infinite; }
+@keyframes e3-breathe { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }

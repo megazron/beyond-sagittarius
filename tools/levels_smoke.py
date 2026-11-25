@@ -29,8 +29,8 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from smoke import launch, serve  # noqa: E402
 
-# the last level that can be played (src/ui/ui.ts PLAYABLE_LEVELS): Episode Three is built to level 16
-LAST = 17
+# the last level that can be played (src/ui/ui.ts PLAYABLE_LEVELS): Episode Three ends at level 21
+LAST = 21
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 PLAYER = "Quorvex"
@@ -923,7 +923,7 @@ def main():
             failures.append("safety card came back after being accepted")
         if len(ev("__bs.save.discoveries")) != len(disc):
             failures.append("discoveries lost on reload")
-        if re["level"] != 22 or re["names"].get("scientist") != PLAYER or re["crew"]["mode"] != "camp":
+        if re["level"] != LAST + 1 or re["names"].get("scientist") != PLAYER or re["crew"]["mode"] != "camp":
             failures.append(f"save did not persist: {re}")
 
         # ---- a decision can't be taken back ----
@@ -940,7 +940,8 @@ def main():
         page.keyboard.press("Escape")
         time.sleep(0.2)
         page.click("#tab-ledger")
-        page.wait_for_selector(".path-tree", timeout=5000)
+        # Chapter Two (levels 11 to 21) has no path nodes yet: its page shows the trust and record columns only
+        page.wait_for_selector(".path-tree" if LAST + 1 > 21 else ".pt-cols", timeout=5000)
         page.click("#tab-pause")
         page.click("#p-quit")
         page.wait_for_function("window.__bs.state === 'title'", timeout=60000)
