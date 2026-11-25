@@ -2169,3 +2169,25 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   (~/bs-cap/ep3/tools/kneel_e3.py, a level 15 save played with scenes not skipped): every kneeling insert in 15 to 17
   holds hips 0.26 m over the root; the standing seen in the GPU full take did not reproduce from this state. No GPU
   recording of levels 16 to 21 yet.
+
+## 2026-11-25 night: Episode Three GPU takes and fixes (ep3b agent: worktree ~/bs-ep3b, branch ep3b from main 71483bb)
+- GPU takes of levels 15 to 21 from a level 15 save on main 71483bb (Windows Chrome, sound): EP3B A (reeds, band door,
+  all, boy, hold, kept, in, Ha-Tum) and EP3B B (camp, view, band, self, climb, eaten, ask, Six Fires). Capture kit:
+  ~/bs-cap/ep3b (bot.js: plays story tension moments outside fights, presses E at a showing prompt within 2.6 m;
+  unstick.js; kl.js logs kneel and hips in scenes; mkplan.py NAME PICKS [first level] [save.json]; finish.sh joins,
+  encodes and deletes the raw frames; sheet.py and at.py for contact sheets; cdp_eval.py reads the capture page
+  read-only from Windows Python). Clips and notes: Downloads/BS_Game_v1.1/episode3/EP3B_* and NOTES_EP3B.md.
+- Fixed on ep3b from what the takes showed: craft step texts that showed as keys (mg.frame/grain/farming/remedy/
+  icewall/irrigation); craft panels framed from in front of him (game.ts enterPanel uses Episode3.craftShot(); the
+  follow camera stood in the house wall); Episode3.scene wraps every shot in safeShot() (a camera inside a body or a
+  body between camera and subject swings round the subject, then rises); the house doorway's colliders 1.3 m apart
+  (B: he was shut in after the medicine); the ledger plays over a crane shot of the village (A: two minutes black).
+- The owner's list: fever slows him (Episode3.feverAmount; game.ts walk x(1-0.4f), no run past 0.5, stamina drains
+  and caps; e3.feverScar caps stamina at 85); Wen-Ka lies on his back in the dose scene (layDown); the band: eight more
+  Fennish (four on phones) at the reed camp and reaping at the harvest with trust (buildBand/bandPlace/updateBand;
+  they keep out of a scene's ground); PlayerLook.beard + creator row cc.beard + kit.ts beard; Pello human, no glow,
+  long beard; world/ep3props.ts: honeycomb, leaf, iceBlock, createCopier, strawTexture, wattleTexture, thatchCourse;
+  the kit is the combat's nibbet body at half size; Draxum's stage gets frozen lakes and a black lake (dressMoon) and a
+  long-lens Away.cut onto the copier; the shelter's cliff is one sculpted face (rockshelter.ts); Oom-Sa's first close-up
+  framed from his side (Episode2.firstClose); trodden grass at the house and the reed camp (grass clearings 3 and 4).
+- __bs.game exposes the game for probes. Draxum's death is NOT implemented (owner has not confirmed).
