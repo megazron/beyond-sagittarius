@@ -2209,7 +2209,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // height, 17 to 40 cm over the soil: owner, studio holds clips); it gets up again at the end
       let dur2 = dur;
       if (kind === 'plant' && kneelGoal === 0) { kneelGoal = 1; heelsGoal = 1; plantKneel = true; dur2 = Math.max(dur, 3.0); }
-      task = { kind, t: 0, dur: dur2, at: o.at ? o.at.clone() : null, hands, prop, onContact: o.onContact ?? null, clipOk: kneelGoal === 0 && !plantKneel };
+      task = { kind, t: 0, dur: dur2, at: o.at ? o.at.clone() : null, hands, prop, onContact: o.onContact ?? null, clipOk: kneelGoal === 0 || plantKneel };
     },
     /** Hold on to something with one or both hands: live world points and directions (mutate them to move the hands
      *  with what they hold); null lets go. */
