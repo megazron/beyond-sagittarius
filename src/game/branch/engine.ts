@@ -1,5 +1,5 @@
 import { AXES, Axis, BranchState, Chapter, Comment, Cond, Effect, Ending, Hidden, LineChoice, Payoff, Person } from './types';
-import { HIDDEN } from './registry';
+import { HIDDEN, LINE_RULES } from './registry';
 
 /** The part of the save the system reads and writes. */
 export interface StoryState {
@@ -105,7 +105,9 @@ export const storyHours = (s: StoryState) => s.day * 24 + s.timeOfDay;
 export function resolveLine(s: StoryState, l: LineChoice): { key?: string; who?: string } | null {
   const needed = [...(l.requires ?? []), ...(l.who && l.who !== 'megazron' ? [l.who] : [])];
   if (needed.some((id) => !isAlive(s.branch, id))) return l.fallback ? { key: l.fallback, who: l.fallbackWho } : null;
-  const sw = l.swap?.find((x) => test(s, x.if));
+  // a rule kept for the key itself (the sealed data adds some) is tried before the beat's own swaps
+  const rule = l.key ? LINE_RULES[l.key] : undefined;
+  const sw = [...(rule && rule !== l ? rule.swap ?? [] : []), ...(l.swap ?? [])].find((x) => test(s, x.if));
   return sw ? { key: sw.key, who: sw.who ?? l.who } : { key: l.key, who: l.who };
 }
 

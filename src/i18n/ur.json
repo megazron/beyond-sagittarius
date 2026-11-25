@@ -605,6 +605,7 @@
   "codex.planned": "منصوبے میں ہے۔ ابھی کھیل میں نہیں۔",
   "codex.undiscovered": "ابھی دریافت نہیں ہوا۔",
   "codex.needs": "ضروری: {list}",
+  "codex.remembered": "{name}، یادوں میں",
   "codex.st.done": "دریافت شدہ",
   "codex.st.open": "کھلا",
   "codex.st.locked": "بند",

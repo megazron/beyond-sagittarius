@@ -6,7 +6,7 @@ import type { TechNode } from './tech/data';
 import { LAKE } from '../world/terrain';
 import { cover, type Beat, type Shot } from '../cinematic/cutscene';
 import { test, type Cond } from './branch';
-import { ep3Loaded } from './branch/episode3';
+import { ep3Loaded, OUTCOMES, type Outcome } from './branch/episode3';
 import { isDiscovered } from './tech/tech';
 import { TECH_BY_ID } from './tech/data';
 import { apply, type StoryState } from './branch';
@@ -141,6 +141,11 @@ export class Episode3 extends Episode2 {
   override actions(): Action[] { return []; }
   override debug() { const p = this.player.pos; return { wait: +this.wait.toFixed(2), busy: this.busy, loaded: ep3Loaded(), free: this.free(), level: this.s.level, at: [+p.x.toFixed(1), +p.z.toFixed(1)], shelter: null, house: this.houseG ? { parts: this.meshCount(this.houseG), key: this.houseKey, at: [+this.house().at.x.toFixed(1), +this.house().at.z.toFixed(1)] } : null, kneel: +this.z.root.position.y.toFixed(2), rain: +this.raining.toFixed(2), walls: this.wallCount(), field: this.fieldG ? { rows: this.fieldRows.length, at: [+this.fieldAt().x.toFixed(1), +this.fieldAt().z.toFixed(1)] } : null, fenn: this.fennG ? [+this.fennAt().x.toFixed(1), +this.fennAt().z.toFixed(1)] : null }; }
 
+  /** Set by game.ts: a crewmate's own story is due (the roster). */
+  revealPending: (() => boolean) | null = null;
+  /** The level has not begun its own scenes yet (a story due now plays before them). */
+  holdsFor(n: number) { return n >= 15 && n <= 21 && !this.f(`e3.l${n}.intro`); }
+
   // ------------------------------------------------------------------ the world, each frame
   override update(dt: number) {
     const s = this.s;
@@ -165,6 +170,8 @@ export class Episode3 extends Episode2 {
       if (this.blockedT > 10) { this.blockedT = 0; this.combat()?.scatter?.(); }
     } else this.blockedT = 0;
     if (this.wait > 0 || this.busy || !ep3Loaded() || !this.free()) return;
+    // someone's own story is due: it plays first, between the levels, and the level's first scene waits for it
+    if (this.revealPending?.() && this.holdsFor(s.level)) return;
     if (s.level === 16) { this.update16(); return; }
     if (s.level === 17) { this.update17(); return; }
     if (s.level === 18) { this.update18(); return; }
@@ -1761,6 +1768,9 @@ export class Episode3 extends Episode2 {
   private wallG: THREE.Group | null = null;
   private update19() {
     if (this.f('e3.wallDone')) {
+      // what it came to, at home: a quiet beat first (sealed: its lines and when)
+      const o = this.outcome('e3.wall');
+      if (o?.after && this.f(o.id) && !this.f(`${o.id}.seen`)) { this.busy = true; this.set(`${o.id}.seen`); this.ui.fade('black', 0, 1.6); this.outcomeAfter(o, () => { this.busy = false; this.wait = 1; }); return; }
       if (!isDiscovered(this.s, 'icewall')) { this.busy = true; this.discover('icewall', () => { this.busy = false; this.ui.toast(t('e3.learn.icewall')); }); }
       return;
     }
@@ -1812,6 +1822,11 @@ export class Episode3 extends Episode2 {
     lake(15, -17, 5.5, true, 7);
     st.scene.add(g);
   }
+  /** Set by game.ts: the away controller (to hold Draxum's body for a scripted moment). */
+  awayCtl: (() => { pose: ((model: Character, dt: number) => void) | null; bodyAt: THREE.Vector3 | null } | null) | null = null;
+  /** What this moment may come to (sealed data), and whether its warning holds now. */
+  private outcome(at: string) { return OUTCOMES[at] ?? null; }
+  private warned(at: string) { const o = this.outcome(at); return !!o?.warn && test(this.s as unknown as StoryState, o.warn.if); }
   private wallTask(id: string, go: () => void) {
     if (!this.wallOn) { go(); return; }
     this.dressMoon();
@@ -1821,7 +1836,13 @@ export class Episode3 extends Episode2 {
       const n = ++this.wallN;
       this.wallBlocks(n);
       // the first block, carried bare-handed: his own heat slumps it where his palms are; then the sleeves round his hands
-      if (n === 1) { this.set('e3.dx.melted'); say('e3.dx.1', 'strong', 5, () => { audio.sample('stone', 0.4, { rate: 0.6 }); say('e3.dx.melt', 'strong', 5, go); }); return; }
+      if (n === 1) {
+        this.set('e3.dx.melted');
+        const w = this.warned('e3.wall') ? this.outcome('e3.wall')!.warn!.first : undefined;
+        // (his old hurt and thirty days alone, said once, early: the wall's hold is harder for both, and he knows it)
+        say('e3.dx.1', 'strong', 5, () => { audio.sample('stone', 0.4, { rate: 0.6 }); say('e3.dx.melt', 'strong', 5, () => (w ? say(w, 'strong', 4.5, go) : go())); });
+        return;
+      }
       if (n === 2) {
         const bolzarDead = !isAlive(this.s.branch, 'builder');
         if (bolzarDead) { say('e3.dx.hum', 'builder', 3, () => say('e3.dx.knows', 'strong', 5.5, go)); return; }
@@ -1833,6 +1854,9 @@ export class Episode3 extends Episode2 {
     if (id === 'ember') { this.copier(go); return; }
     go();
   }
+  /** The ring's centre and the rock face behind it (dressMoon builds the face: the climb goes up it). */
+  private static RING = new THREE.Vector3(0, 0, -6);
+  private static FACE = { x: 0, z: -11.4, top: 5.2 };
   /** The copier comes out of the lake for the warm one inside the ring; the choice of how to meet it (timed). */
   private copierState = { speed: 0, call: 0, rear: 0 };
   private copier(go: () => void) {
@@ -1856,7 +1880,10 @@ export class Episode3 extends Episode2 {
     this.say('e3.dx.come', 'strong', 4.5);
     this.after(2.2, () => { this.copierState.call = 1; this.ui.say(isAlive(this.s.branch, 'builder') ? 'e3.dx.voice' : 'e3.dx.hum', 'e3.who.voice', 3); });
     this.after(5.2, () => { this.copierState.call = 0; });
-    this.after(5.4, () => {
+    // a scrap from the Ledger before the panel, when this could go badly for good (DECISIONS 7: the scraps warn)
+    const warn = this.warned('e3.wall') ? this.outcome('e3.wall')!.warn!.panel : undefined;
+    if (warn) this.after(5.4, () => this.say(warn, 'megazron', 5.5));
+    this.after(warn ? 11.2 : 5.4, () => {
       const ask = this.askFn ?? ((_: string, d: () => void) => d());
       ask('e3.wall', async () => {
         const hurt = this.f('hurt.draxum');
@@ -1866,23 +1893,139 @@ export class Episode3 extends Episode2 {
           this.after(3.6, () => { this.say('e3.dx.mocked', 'strong', 4.5); leave(); this.after(4.6, () => this.wallEnd(go)); });
           return;
         }
-        if (this.f('e3.wall.climb')) {
-          const r = await this.tension({ kind: 'quick', count: 5 });
-          this.set(r && !r.passed ? 'e3.wall.slipped' : 'e3.wall.climbed'); this.set('draxum.wallLost');
-          // it takes the ring apart, block by block, and goes
-          if (this.wallG) { const g = this.wallG; this.anim(2.5, (k) => g.children.forEach((b, i) => { b.rotation.z = Math.min(1.4, k * (0.4 + (i % 3) * 0.3)); b.position.y -= 0.004 * (i % 4); })); }
-          this.say('e3.dx.lost', 'strong', 5); leave(); this.after(5.2, () => this.wallEnd(go));
-          return;
-        }
+        if (this.f('e3.wall.climb')) { this.climb(body, leave, go); return; }
         // hold the wall (and a silent timeout): a steady hold against it while it pushes; shorter with his old hurt
         const hold = () => { this.copierState.rear = 1; this.copierState.speed = 0.3; return this.tension({ kind: 'steady', seconds: 6, strain: hurt ? 1.6 : 1.1 }); };
         let r = await hold();
         let held = !r || r.passed;
-        if (!held && hurt && this.f('draxum.waited')) { this.say('e3.dx.again', 'strong', 3); r = await hold(); held = !r || r.passed; if (!held) this.set('e3.wall.twice'); }
+        if (!held && hurt && this.f('draxum.waited')) {
+          // the first fail: it shoves him off the wall and he staggers back to it (seen, before the second try)
+          this.stagger();
+          this.say('e3.dx.again', 'strong', 3); r = await hold(); held = !r || r.passed; if (!held) this.set('e3.wall.twice');
+        }
+        const o = this.outcome('e3.wall');
+        if (!held && o && test(this.s as unknown as StoryState, o.if)) { this.set(o.id); apply(this.s as unknown as StoryState, o.effects); this.outcomeScene(o, body, leave, go); return; }
         this.set(held ? 'e3.wall.held' : 'draxum.hurt2');
         this.say(held ? 'e3.dx.held' : 'e3.dx.thrown', 'strong', 5); leave(); this.after(5.2, () => this.wallEnd(go));
       });
     });
+  }
+  /** Shoved off the blocks: two steps back and a hand to the old shoulder, then back to the wall. */
+  private stagger() {
+    const A = this.awayCtl?.(), at = A?.bodyAt;
+    if (!A || !at) return;
+    audio.humanInner('grunt', 0.6, 0.85);
+    let k = 0;
+    A.pose = (m, dt) => {
+      k += dt; const u = Math.min(1, k / 1.4), back = Math.sin(u * Math.PI) * 0.7;
+      m.root.position.set(at.x, at.y, at.z + back);
+      m.setLimbs({ armL: [0.35, -0.2, 0.55], foreL: [-0.6, 0.3, 0.4] });
+      m.animate('stand', 0, 0, performance.now() / 1000, dt);
+      if (u >= 1) { m.setLimbs(null); A.pose = null; }
+    };
+  }
+  /** "Up the cliff, let it have the ring": he climbs the face behind the ring on screen (the quick presses move him up;
+   * a miss slips him back a metre), and from the ledge he watches it take the ring apart (take EP3B B: he stood still). */
+  private climb(body: THREE.Group | null, leave: () => void, go: () => void) {
+    const A = this.awayCtl?.(), st = this.awayStage?.(), at = A?.bodyAt;
+    const F = Episode3.FACE;
+    let want = 0, got = 0, slip = 0, walk = 0;
+    const foot = new THREE.Vector3(F.x + 0.4, st ? st.height(F.x + 0.4, F.z + 0.6) : 0, F.z + 0.6);
+    if (A && at && st) {
+      A.pose = (m, dt) => {
+        walk = Math.min(1, walk + dt / 1.6);
+        if (walk < 1) { // to the foot of the face, then up it
+          const p = at.clone().lerp(foot, walk); p.y = st.height(p.x, p.z);
+          m.root.position.copy(p); m.root.rotation.set(0, Math.atan2(foot.x - at.x, foot.z - at.z), 0);
+          m.setLimbs(null); m.animate('walk', walk * 6, 0.8, performance.now() / 1000, dt); return;
+        }
+        if (slip > 0) { slip -= dt; got = Math.max(0, got - dt * 1.6); } else got += (want - got) * (1 - Math.exp(-dt * 2.2));
+        const y = foot.y + got * F.top, ph = performance.now() / 1000 * 3.2 * (Math.abs(want - got) > 0.02 ? 1 : 0.15);
+        m.root.position.set(foot.x, y, F.z + 0.42 - got * 0.18); m.root.rotation.set(-0.12, Math.PI, 0);
+        const a = Math.sin(ph), b = -a;
+        m.setLimbs({
+          armL: [0.25, 0.75 + 0.2 * a, 0.45], foreL: [0.1, 0.9, 0.3], armR: [-0.25, 0.75 + 0.2 * b, 0.45], foreR: [-0.1, 0.9, 0.3],
+          legL: [0.1, -0.6 + 0.3 * b, 0.7], shinL: [0.05, -0.95, -0.25], legR: [-0.1, -0.6 + 0.3 * a, 0.7], shinR: [-0.05, -0.95, -0.25],
+        });
+        m.animate('stand', 0, 0, performance.now() / 1000, dt);
+      };
+      // a wide from the side: the ring, the face, him on it
+      const c = v3(7.5, st.height(7.5, -5) + 3.2, -5), aim = v3(0, foot.y + 2.4, -10);
+      this.awayCut?.(c, aim, 14, 44);
+    }
+    // five presses, each a fifth of the face; a miss is a slip, and he goes on up
+    const step = (i: number) => {
+      if (i >= 5) { top(); return; }
+      const r = this.tension({ kind: 'quick', count: 1 });
+      if (!r) { want = 1; this.after(1.2, () => step(5)); return; }
+      void r.then((res) => {
+        // one slip at most: after it he finds the holds (a second miss only costs the time)
+        if (!res.passed && !this.f('e3.wall.slipped')) { slip = 0.6; this.set('e3.wall.slipped'); audio.sample('stone', 0.35, { rate: 0.8 }); this.after(0.9, () => step(i)); return; }
+        want = (i + 1) / 5; audio.sample('stone', 0.2, { rate: 1.3 }); this.after(0.5, () => step(i + 1));
+      });
+    };
+    const top = () => {
+      if (!this.f('e3.wall.slipped')) this.set('e3.wall.climbed');
+      this.set('draxum.wallLost');
+      // from the ledge, over his shoulder: it takes the ring apart, block by block, and goes
+      if (st) { const ly = foot.y + F.top; this.awayCut?.(v3(F.x - 1.2, ly + 2.2, F.z + 0.6), Episode3.RING.clone().setY(st.height(0, -6) + 0.3), 7.5, 40); }
+      if (this.wallG) { const g = this.wallG; this.anim(2.5, (k) => g.children.forEach((b, i) => { b.rotation.z = Math.min(1.4, k * (0.4 + (i % 3) * 0.3)); b.position.y -= 0.004 * (i % 4); })); }
+      if (body) { const b = body; this.anim(2.4, (k) => { b.position.lerp(Episode3.RING.clone().setY(b.position.y), 0.02 + k * 0.004); }); }
+      this.say('e3.dx.lost', 'strong', 5); this.after(2.6, leave);
+      this.after(5.4, () => this.wallEnd(() => { if (A) A.pose = null; go(); }));
+    };
+    step(0);
+  }
+  /** A sealed outcome's own scene on his stage: its named shots and actions, its lines, quiet (no gore: what happens is
+   * behind the blocks, then only the light). Back on Verdaxis its `after` beats wait for the next free moment. */
+  private outcomeScene(o: Outcome, body: THREE.Group | null, leave: () => void, go: () => void) {
+    const A = this.awayCtl?.(), st = this.awayStage?.(), at = A?.bodyAt ?? Episode3.RING.clone();
+    const R = Episode3.RING, gy = st ? st.height(R.x, R.z) : 0;
+    const lieAt = v3(R.x - 0.4, gy, R.z - 0.5);
+    let glow = 1, lying = false;
+    const shots: Record<string, () => void> = {
+      low: () => this.awayCut?.(v3(R.x + 4.2, gy + 0.55, R.z + 3.6), v3(R.x, gy + 0.5, R.z), 30, 50),
+      lake: () => this.awayCut?.(v3(R.x + 1.5, gy + 1.4, R.z + 2.5), body ? body.position.clone() : v3(15, gy, -17), 30, 26),
+      lie: () => this.awayCut?.(v3(lieAt.x + 1.1, gy + 1.75, lieAt.z + 1.4), lieAt.clone().add(v3(0, 0.25, 0)), 30, 34),
+      rise: () => { const t0 = performance.now(); this.anim(8, (k) => { const u = k / 8; this.awayCut?.(v3(R.x + 1.2 + u * 2, gy + 1.8 + u * 13, R.z + 1.6 + u * 4), v3(R.x, gy + u * 9, R.z - u * 10), 0.2, 40); void t0; }); },
+    };
+    const acts: Record<string, () => void> = {
+      fall: () => {
+        audio.sample('stone', 0.7, { rate: 0.5 }); audio.humanInner('grunt', 0.5, 0.8);
+        // three blocks of the ring tip inward over him; he is down behind them
+        if (this.wallG) { const g = this.wallG, kids = g.children.slice(0, 3); this.anim(1.2, (k) => kids.forEach((b, i) => { b.rotation.x = Math.min(1.3, k * (1.1 + i * 0.2)); })); }
+        lying = true;
+      },
+      leave: () => leave(),
+      seams: () => { this.anim(7, (k) => { glow = 1 - k / 7; st?.setGlow?.(glow); }); },
+      card: () => {},
+    };
+    if (A) {
+      A.pose = (m, dt) => {
+        if (!lying) return;
+        this.layDown(m, lieAt, v3(-0.3, 0, -1).normalize());
+        m.animate('lie', 0, 0, performance.now() / 1000, dt);
+      };
+    }
+    void at;
+    const play = (i: number) => {
+      const b = o.beats[i];
+      if (!b) { this.ui.fade('black', 1, 1.2); this.after(1.6, () => { if (A) A.pose = null; st?.setGlow?.(1); go(); }); return; }
+      if (b.shot) shots[b.shot]?.();
+      if (b.act) acts[b.act]?.();
+      if (b.card) this.ui.banner(t(b.card), '');
+      if (b.key) this.say(b.key, (b.who ?? 'strong') as Who, b.sec);
+      this.after(b.sec, () => play(i + 1));
+    };
+    play(0);
+  }
+  /** Back on Verdaxis after a sealed outcome: its quiet beats (he does not know; MegaZroN writes it down). */
+  private outcomeAfter(o: Outcome, then: () => void) {
+    const z = this.z, at = this.z.root.position.clone();
+    const sky = (): Shot => ({ from: at.clone().add(v3(0.6, 0.5, 1.2)), to: at.clone().add(v3(-2, 9, -14)), fov: 50, push: 0.01 });
+    const fire = (): Shot => cover.mid(z, 0.5, 2.6);
+    const beats: Beat[] = o.after!.map((b) => ({ ...(b.key ? { key: b.key, who: (b.who ?? 'megazron') as Who } : { hold: b.sec }), shot: b.shot === 'sky' ? sky : fire, after: 0.6 }));
+    this.scene(beats, then);
   }
   private wallEnd(go: () => void) {
     this.say('e3.dx.end', 'strong', 5);
@@ -2056,6 +2199,9 @@ export class Episode3 extends Episode2 {
     this.busy = true;
     this.s.day = Math.max(this.s.day ?? 39, 39);
     const z = this.z, at = this.snareAt();
+    // the sprung snare stands beyond the kit, its noose down to it: the bent stick no longer arcs between him and the
+    // camera (take EP3B C: it crossed every one of his close-ups)
+    if (this.snare) { this.snare.position.copy(at).add(v3(1.35, 0, 0)); this.snare.position.y = this.h(at.x + 1.35, at.z); this.snare.rotation.y = Math.PI; this.snare.updateMatrixWorld(true); }
     const kit = this.kit(at.clone().add(v3(0.5, 0, 0)), true);
     const me = this.settle(at.clone().add(v3(-0.4, 0, 0.6)), kit.position, true);
     const k0 = kit.position.clone();
@@ -2104,6 +2250,7 @@ export class Episode3 extends Episode2 {
     if (this.f('e3.named') && !this.f('e3.ledger')) { this.ledgerScene(); return; }
   }
   /** Day 72: the field gold; a flint sickle; threshing on a flat stone; winnowing in the wind, the chaff blowing off like smoke. */
+  private stooks: THREE.Group[] | null = null;
   private harvestScene() {
     const S = this.live();
     this.set('e3.l21.intro');
@@ -2131,12 +2278,54 @@ export class Episode3 extends Episode2 {
       this.bandHarvest = this.trust() >= 1 && !this.f('e2.oomsa.away');
       const F = band ? this.buildFolk() : null;
       if (F) this.placeFolk('hohma', at.clone().addScaledVector(H.b, -((this.fieldRows.length - 1) / 2) * 0.55 - 1.6), at, false);
+      // (owner, take EP3B: "a fuller harvest") sheaves bound and stood in stooks along the field, a sheaf in his arms, the
+      // threshing on a flat stone, the grain poured into a pot
+      const gold = std(0xd8b050, { roughness: 0.8 }), cord = std(0x8a6a3a);
+      const sheaf = (len = 0.62) => {
+        const g = new THREE.Group();
+        for (let i = 0; i < 22; i++) { const a = i * 2.4, rr = 0.012 + (i % 5) * 0.008, st = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, len, 3), gold); st.position.set(Math.cos(a) * rr, 0, Math.sin(a) * rr); st.rotation.set(Math.sin(a) * 0.18, 0, Math.cos(a) * 0.18); g.add(st);
+          if (i % 2 === 0) { const ear = new THREE.Mesh(new THREE.CapsuleGeometry(0.007, 0.04, 2, 4), gold); ear.position.set(Math.cos(a) * rr * 2.2, len / 2 + 0.02, Math.sin(a) * rr * 2.2); g.add(ear); } }
+        const band = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.005, 4, 12), cord); band.rotation.x = Math.PI / 2; band.position.y = -0.05; g.add(band);
+        return g;
+      };
+      const stooks: THREE.Group[] = [];
+      for (let i = 0; i < 6; i++) {
+        const st = new THREE.Group(), p = at.clone().addScaledVector(H.a, -1.2 + (i % 3) * 1.2).addScaledVector(H.b, (i < 3 ? -1 : 1) * (((this.fieldRows.length - 1) / 2) * 0.55 + 0.9));
+        for (let j = 0; j < 5; j++) { const sf = sheaf(); const a = (j / 5) * Math.PI * 2; sf.position.set(Math.cos(a) * 0.08, 0.3, Math.sin(a) * 0.08); sf.rotation.set(Math.sin(a) * 0.22, 0, -Math.cos(a) * 0.22); st.add(sf); }
+        st.position.set(p.x, this.h(p.x, p.z), p.z); st.visible = false; this.group.add(st); stooks.push(st);
+      }
+      const arms = sheaf(); arms.visible = false; this.group.add(arms);
+      const stone = this.mesh(new THREE.CylinderGeometry(0.34, 0.38, 0.12, 9), std(0x6e6862, { roughness: 0.9, flatShading: true }), thresh.clone().addScaledVector(f, 0.55).add(v3(0, 0.06, 0)));
+      const grains: THREE.Mesh[] = [];
+      const grainPot = this.mesh(new THREE.CylinderGeometry(0.11, 0.08, 0.2, 14, 1, true), std(0x8a5a3a, { roughness: 0.85, side: THREE.DoubleSide }), thresh.clone().addScaledVector(r, 0.6).addScaledVector(f, 0.2).add(v3(0, 0.1, 0)));
+      const fill = this.mesh(new THREE.CircleGeometry(0.1, 14), std(0xc8a860, { roughness: 0.95 }), grainPot.position.clone().add(v3(0, -0.08, 0))); fill.rotation.x = -Math.PI / 2;
       const beats: Beat[] = [
-        { hold: 3.4, shot: () => ({ from: at.clone().addScaledVector(H.a, -6.0).addScaledVector(H.b, 4.0).add(v3(0, 2.0, 0)), to: at.clone().add(v3(0, 0.5, 0)), fov: 50, push: 0.03 }), run: () => { z.setLookTarget(at); S.anim(3.4, (k) => swing(k)); } },
+        { hold: 3.4, shot: () => ({ from: at.clone().addScaledVector(H.a, -6.0).addScaledVector(H.b, 4.0).add(v3(0, 2.0, 0)), to: at.clone().add(v3(0, 0.5, 0)), fov: 50, push: 0.03 }), run: () => { z.setLookTarget(at); S.anim(3.4, (k) => swing(k)); stooks.slice(0, 2).forEach((x) => { x.visible = true; }); } },
         { hold: 2.8, shot: () => ({ from: cutAt.clone().addScaledVector(r, 0.55).addScaledVector(f, 0.25).add(v3(0, 0.05, 0)), to: cutAt.clone(), fov: 30, push: 0.008, aperture: 0.004, lightAt: cutAt.clone() }), run: () => { S.anim(2.8, (k) => swing(k + 1)); audio.sample('leather', 0.25, { rate: 1.4 }); } },
-        { hold: 3.6, shot: () => ({ from: thresh.clone().addScaledVector(f, -1.9).addScaledVector(r, -0.7).add(v3(0, 1.5, 0)), to: thresh.clone().add(v3(0, 1.05, 0)), fov: 40, push: 0.02, lightAt: thresh.clone().add(v3(0, 1, 0)) }), run: () => {
+        // low along the rows: the reaping goes on (the band beside him when they trust him), more stooks standing
+        { hold: 3.4, shot: () => ({ from: at.clone().addScaledVector(H.b, ((this.fieldRows.length - 1) / 2) * 0.55 + 3.2).addScaledVector(H.a, 2.2).add(v3(0, 0.75, 0)), to: at.clone().addScaledVector(H.a, -0.5).add(v3(0, 0.45, 0)), fov: 40, push: 0.02 }), run: () => { stooks.forEach((x, i) => S.after(0.3 + i * 0.4, () => { x.visible = true; })); S.anim(3.4, (k) => swing(k + 2)); } },
+        // insert: the sheaf gathered in his arms and bound with a twist of straw
+        { hold: 2.6, shot: () => ({ from: me.clone().addScaledVector(f, 0.7).addScaledVector(r, 0.35).add(v3(0, 0.75, 0)), to: me.clone().addScaledVector(f, 0.25).add(v3(0, 0.5, 0)), fov: 32, push: 0.006, aperture: 0.004, lightAt: me.clone().add(v3(0, 0.6, 0)) }), run: () => {
           sickle.visible = false;
+          const hp = me.clone().addScaledVector(f, 0.28).add(v3(0, 0.5, 0)); arms.visible = true; arms.position.copy(hp); arms.quaternion.setFromUnitVectors(UP, r.clone().multiplyScalar(-1).add(v3(0, 0.4, 0)).normalize());
+          z.setHold({ L: { at: hp.clone().addScaledVector(r, -0.14), fingers: f.clone(), palm: r.clone(), radius: 0.04, grasp: true }, R: { at: hp.clone().addScaledVector(r, 0.06).add(v3(0, 0.02, 0)), fingers: f.clone().negate(), palm: r.clone().negate(), radius: 0.03, grasp: true } });
+          audio.sample('leather', 0.2, { rate: 1.8, delay: 1.2 });
+        } },
+        // threshing: the sheaf beaten on a flat stone, the grain jumping out of the ears
+        { hold: 3.2, shot: () => ({ from: thresh.clone().addScaledVector(f, 0.55).addScaledVector(r, 1.3).add(v3(0, 0.7, 0)), to: thresh.clone().addScaledVector(f, 0.5).add(v3(0, 0.3, 0)), fov: 36, push: 0.01, lightAt: thresh.clone().add(v3(0, 0.5, 0)) }), run: () => {
           this.settle(thresh, thresh.clone().addScaledVector(f, 1), false);
+          const ff = this.fwd(), rr = this.right(ff), top = stone.position.clone().add(v3(0, 0.07, 0));
+          for (let i = 0; i < 26; i++) { const g0 = this.mesh(new THREE.SphereGeometry(0.006, 4, 3), gold, top.clone()); g0.castShadow = false; g0.visible = false; grains.push(g0); }
+          S.anim(3.2, (k) => {
+            const beat = Math.abs(Math.sin(k * 3.1)), hp = top.clone().addScaledVector(ff, -0.15).add(v3(0, 0.15 + beat * 0.55, 0));
+            arms.position.copy(hp.clone().addScaledVector(ff, 0.25)); arms.quaternion.setFromUnitVectors(UP, ff.clone().add(v3(0, 0.3 + beat * 0.6, 0)).normalize());
+            z.setHold({ L: { at: hp.clone().addScaledVector(rr, -0.06), fingers: ff.clone(), palm: rr.clone(), radius: 0.03, grasp: true }, R: { at: hp.clone().addScaledVector(rr, 0.06), fingers: ff.clone(), palm: rr.clone().negate(), radius: 0.03, grasp: true } });
+            grains.forEach((g0, i) => { const w = ((k * 1.55 + i / 26) % 1); g0.visible = k > 0.4; g0.position.copy(top).add(v3(Math.cos(i * 2.4) * (0.05 + w * 0.22), Math.sin(w * Math.PI) * 0.18, Math.sin(i * 2.4) * (0.05 + w * 0.22))); });
+            if (beat > 0.97) audio.sample('wood', 0.2, { rate: 0.7 });
+          });
+        } },
+        { hold: 3.6, shot: () => ({ from: thresh.clone().addScaledVector(f, -1.9).addScaledVector(r, -0.7).add(v3(0, 1.5, 0)), to: thresh.clone().add(v3(0, 1.05, 0)), fov: 40, push: 0.02, lightAt: thresh.clone().add(v3(0, 1, 0)) }), run: () => {
+          arms.visible = false; grains.forEach((g0) => { g0.visible = false; });
           const ff = this.fwd(), rr = this.right(ff), tray = thresh.clone().addScaledVector(ff, 0.3).add(v3(0, 1.0, 0));
           const tr = this.mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.04, 14, 1, true), std(0x7a5a3a, { side: THREE.DoubleSide }), tray.clone()); chaff.push(tr);
           for (let i = 0; i < 40; i++) { const m = this.mesh(new THREE.PlaneGeometry(0.012, 0.006), new THREE.MeshBasicMaterial({ color: 0xe0d0a0, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }), tray.clone()); m.castShadow = false; chaff.push(m); }
@@ -2146,11 +2335,20 @@ export class Episode3 extends Episode2 {
             chaff.slice(1).forEach((m, i) => { const u = ((k * 0.6 + i / 40) % 1); m.position.copy(tray).add(v3(u * 1.4 + Math.sin(i) * 0.05, 0.1 + u * 0.6 + Math.sin(k * 5 + i) * 0.03, Math.cos(i * 1.7) * 0.1 + u * 0.3)); m.rotation.set(k * 3 + i, i, k); (m.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - u); });
           });
         } },
-        { key: 'e3.hv.1', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setLookTarget(this.ahead()) },
+        // insert: the clean grain poured into a pot, the level coming up
+        { hold: 2.6, shot: () => ({ from: grainPot.position.clone().add(v3(0.28, 0.3, 0.12)), to: grainPot.position.clone().add(v3(0, 0.02, 0)), fov: 28, push: 0.006, aperture: 0.004, lightAt: grainPot.position.clone().add(v3(0, 0.2, 0)) }), run: () => {
+          const top = grainPot.position.clone().add(v3(0, 0.22, 0));
+          grains.forEach((g0) => { g0.visible = true; });
+          S.anim(2.6, (k) => { fill.position.y = grainPot.position.y - 0.08 + Math.min(1, k / 2.4) * 0.13; grains.forEach((g0, i) => { const w = ((k * 1.2 + i / 26) % 1); g0.position.copy(top).add(v3(Math.sin(i) * 0.015, -w * (0.22 - (fill.position.y - grainPot.position.y + 0.08)), Math.cos(i) * 0.015)); }); });
+          audio.sample('leather', 0.18, { rate: 2.6, dur: 2.4 });
+        } },
+        { key: 'e3.hv.1', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => { z.setLookTarget(this.ahead()); grains.forEach((g0) => { g0.visible = false; }); } },
       ];
       if (F) beats.push({ key: 'e3.hm.reap', who: 'hohma' as Who, shot: () => this.oomClose(F.hohma, 0.4, 1.0), run: () => F.hohma.setLookTarget(this.head()) });
       this.scene(beats, () => {
         S.end(); sickle.removeFromParent(); chaff.forEach((m) => m.removeFromParent()); this.clearHands(); this.homeFolk(); this.bandHarvest = false;
+        for (const m of [arms, stone, grainPot, fill, ...grains]) m.removeFromParent();
+        this.stooks?.forEach((x) => x.removeFromParent()); this.stooks = stooks; // (the stooks stay standing in the field)
         this.s.inventory.grain = (this.s.inventory.grain ?? 0) + Math.round(12 * share);
         this.set('e3.harvest');
         this.ui.toast(t('e3.obj.salt'));
@@ -2163,15 +2361,37 @@ export class Episode3 extends Episode2 {
     const z = this.z, H = this.house(), c = H.at.clone();
     this.settle(c.clone().addScaledVector(H.b, 0.85), c, true, true);
     const potAt = c.clone().lerp(this.z.root.position, 0.4); potAt.y = this.h(potAt.x, potAt.z) + 0.1;
-    const embers = this.mesh(new THREE.CircleGeometry(0.24, 12), new THREE.MeshBasicMaterial({ color: 0xff7a2a }), c.clone().setY(this.h(c.x, c.z) + 0.04)); embers.rotation.x = -Math.PI / 2; embers.castShadow = false;
+    // a real hearth under the pot (take EP3B C: the insert was a flat orange disc): a ring of stones, a bed of embers in
+    // lumps that glow unevenly, three sticks burning down; the pot's brine sinks, crusts white from the rim in, steams
+    const hearth = new THREE.Group(), gy = this.h(potAt.x, potAt.z);
+    const stoneM = std(0x5a5450, { roughness: 0.95, flatShading: true });
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2, st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.05 + (i % 3) * 0.012, 0), stoneM); st.position.set(potAt.x + Math.cos(a) * 0.2, gy + 0.03, potAt.z + Math.sin(a) * 0.2); st.scale.set(1.2, 0.75, 1); st.rotation.set(i, i * 2, 0); hearth.add(st); }
+    const glows: THREE.MeshStandardMaterial[] = [];
+    for (let i = 0; i < 9; i++) { const m = new THREE.MeshStandardMaterial({ color: 0x2a1408, emissive: 0xff5a12, emissiveIntensity: 1.2, roughness: 0.9, flatShading: true }); glows.push(m); const e = new THREE.Mesh(new THREE.DodecahedronGeometry(0.022 + (i % 3) * 0.008, 0), m); const a = i * 2.4, r0 = 0.04 + (i % 4) * 0.025; e.position.set(potAt.x + Math.cos(a) * r0, gy + 0.018, potAt.z + Math.sin(a) * r0); e.rotation.set(i, i * 3, i); hearth.add(e); }
+    const char = std(0x1c120c, { roughness: 1 });
+    for (let i = 0; i < 3; i++) { const a = i * 2.1 + 0.4, st = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.016, 0.3, 6), char); st.position.set(potAt.x + Math.cos(a) * 0.09, gy + 0.03, potAt.z + Math.sin(a) * 0.09); st.rotation.set(Math.PI / 2 - 0.15, 0, -a); hearth.add(st); }
+    const glowL = new THREE.PointLight(0xff7a30, 1.2, 1.6, 2); glowL.position.set(potAt.x, gy + 0.08, potAt.z); hearth.add(glowL);
+    this.group.add(hearth);
     const pot = this.mesh(new THREE.CylinderGeometry(0.1, 0.075, 0.16, 14, 1, true), std(0x8a5a3a, { roughness: 0.85, side: THREE.DoubleSide }), potAt.clone());
-    const brine = this.mesh(new THREE.CircleGeometry(0.095, 14), std(0x9aa49a, { roughness: 0.15, metalness: 0.2 }), potAt.clone().add(v3(0, 0.05, 0))); brine.rotation.x = -Math.PI / 2;
+    const brine = this.mesh(new THREE.CircleGeometry(0.095, 18), std(0x7e8c86, { roughness: 0.08, metalness: 0.1 }), potAt.clone().add(v3(0, 0.05, 0))); brine.rotation.x = -Math.PI / 2;
+    // the crust: small flat crystals that form at the rim first and creep in as the brine goes down
+    const crystM = std(0xf2efe8, { roughness: 0.55 }), crust: THREE.Mesh[] = [];
+    for (let i = 0; i < 60; i++) { const a = i * 2.39996, r0 = 0.088 * Math.sqrt(1 - (i / 60) * 0.92), m = new THREE.Mesh(new THREE.BoxGeometry(0.008 + (i % 3) * 0.003, 0.002, 0.007), crystM); m.position.set(Math.cos(a) * r0, Math.sin(a) * r0, 0.0015); m.rotation.set(Math.PI / 2, i, 0); m.visible = false; m.userData.r = r0; crust.push(m); brine.add(m); } // (the brine disc lies on its back: its own x and y are the pot's floor)
+    const steam: THREE.Mesh[] = [];
+    for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshBasicMaterial({ color: 0xe8e8e8, transparent: true, opacity: 0, depthWrite: false })); this.group.add(m); steam.push(m); }
     this.scene([
-      { hold: 3.4, shot: () => ({ from: potAt.clone().add(v3(0.25, 0.42, 0.25)), to: potAt.clone().add(v3(0, 0.04, 0)), fov: 26, push: 0.006, aperture: 0.004, lightAt: potAt.clone() }), run: () => {
-        z.setLookTarget(potAt); audio.sample('fire', 0.3, { dur: 3.4 });
-        S.anim(3.4, (k) => { const u = Math.min(1, k / 3.2); brine.position.y = potAt.y + 0.05 - u * 0.05; (brine.material as THREE.MeshStandardMaterial).color.setHex(u > 0.7 ? 0xe8e4dc : 0x9aa49a); });
+      { hold: 3.8, shot: () => ({ from: potAt.clone().add(v3(0.3, 0.24, 0.14)), to: potAt.clone().add(v3(0, 0.03, 0)), fov: 28, push: 0.006, aperture: 0.004, lightAt: potAt.clone().add(v3(0, 0.1, 0)), lightScale: 0.5 }), run: () => {
+        z.setLookTarget(potAt); audio.sample('fire', 0.3, { dur: 3.8 });
+        S.anim(3.8, (k) => {
+          const u = Math.min(1, k / 3.4);
+          brine.position.y = potAt.y + 0.05 - u * 0.05;
+          (brine.material as THREE.MeshStandardMaterial).color.setHex(u > 0.85 ? 0xb8bcb4 : 0x7e8c86);
+          crust.forEach((m) => { m.visible = m.userData.r > 0.088 * (1 - u * 1.05); });
+          glows.forEach((m, i) => { m.emissiveIntensity = 0.9 + 0.6 * Math.max(0, Math.sin(k * (3 + i * 0.7) + i)); });
+          steam.forEach((m, i) => { const w = ((k * 0.5 + i / 6) % 1); m.position.copy(potAt).add(v3(Math.sin(i * 2.1 + k) * 0.03, 0.06 + w * 0.32, Math.cos(i * 1.3) * 0.03)); m.scale.setScalar(0.6 + w * 2.4); (m.material as THREE.MeshBasicMaterial).opacity = 0.18 * (1 - w) * (1 - u * 0.6); });
+        });
       } },
-    ], () => { S.end(); for (const m of [pot, brine, embers]) m.removeFromParent(); this.clearHands(); open(); });
+    ], () => { S.end(); for (const m of [pot, brine, hearth, ...steam]) m.removeFromParent(); this.clearHands(); open(); });
     return true;
   }
   /** Day 74 to 76: meat drying and smoking on a rack, a store pit in the floor sealed with clay, a notch for each pot; tracks at dawn. */
@@ -2256,7 +2476,10 @@ export class Episode3 extends Episode2 {
         const cb = this.combat();
         if (cb) {
           await new Promise<void>((go) => cb.ensureAsked(go));
+          // lit by the lightning and the hearth, and a lighter HUD (GPU take EP3B: six minutes of dark picture under a lot of HUD)
+          document.body.classList.add('cb-lite'); const stopFlash = this.lightning();
           const o = await cb.startEncounter('night.defence', { story: { store: true, oomsa: band, fireHigh: true }, hour: 22.5 });
+          stopFlash(); document.body.classList.remove('cb-lite');
           for (const [k, v] of Object.entries(o.flags)) if (v) this.s.flags[`e3.cb.${k}`] = true;
         }
         this.rain(0.3, 30);
@@ -2264,6 +2487,28 @@ export class Episode3 extends Episode2 {
         this.busy = false; this.wait = 1.5;
       });
     });
+  }
+  /** Lightning over the storm fight until the returned stop is called: a cold flash from above every 4 to 9 s (two or
+   * three flickers), the sky with it, thunder a moment later. */
+  private lightning(): () => void {
+    const key = new THREE.DirectionalLight(0xd8e4ff, 0), sky = new THREE.HemisphereLight(0xb8c8ff, 0x203040, 0);
+    const at = this.house().at;
+    key.position.copy(at).add(v3(-30, 60, 20)); key.target.position.copy(at); this.world.scene.add(key, key.target, sky);
+    let on = true, next = 2.5, t = 0, flash = -1, last = performance.now();
+    const step = () => {
+      if (!on) { key.removeFromParent(); key.target.removeFromParent(); sky.removeFromParent(); return; }
+      const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now; t += dt;
+      if (t > next) { flash = 0; next = t + 4 + Math.random() * 5; this.after(0.6 + Math.random() * 1.2, () => audio.sample('rumble', 0.55, { rate: 0.7 + Math.random() * 0.25 })); }
+      if (flash >= 0) {
+        flash += dt;
+        const f = flash < 0.06 ? 1 : flash < 0.12 ? 0.25 : flash < 0.2 ? 0.85 : Math.max(0, 0.85 - (flash - 0.2) * 2.4);
+        key.intensity = 5.5 * f; sky.intensity = 2.2 * f;
+        if (flash > 0.6) { flash = -1; key.intensity = 0; sky.intensity = 0.25; }
+      } else { key.intensity = 0; sky.intensity = 0.25; } // (a little cold sky light between the flashes)
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    return () => { on = false; };
   }
   /** Day 79, grey dawn: a man at the edge of the clearing with a ticket. */
   private pello: Character | null = null;
@@ -2276,7 +2521,7 @@ export class Episode3 extends Episode2 {
       const f = this.fwd();
       const at = me.clone().addScaledVector(f, 9).addScaledVector(this.right(f), 1.5); at.y = this.h(at.x, at.z);
       if (!this.pello) {
-        const look: PlayerLook = { ...defaultLook(), lineage: 'korrath', ...LINEAGES.korrath, skin: 0xb88a6a, ears: 'round', horns: false, marks: 'dots', glow: 0x000000, iris: 0x5a4030, hair: 'explorer', hairRoot: 0x3a2a1a, hairTip: 0x6a5a4a, beard: 'long', outfit: 'explorer', accent: 0x5a5a4a, gender: 'm', eye: 'tired', eyeGlow: false, height: 1.02, build: 0.1 };
+        const look: PlayerLook = { ...defaultLook(), lineage: 'korrath', ...LINEAGES.korrath, skin: 0xb88a6a, ears: 'round', horns: false, marks: 'dots', glow: 0x000000, iris: 0x5a4030, hair: 'builder', hairRoot: 0x4a3a2a, hairTip: 0x8a7a68, beard: 'long', outfit: 'explorer', accent: 0x5a5a4a, gender: 'm', eye: 'tired', eyeGlow: false, height: 1.02, build: 0.1 };
         // (human, EPISODE_THREE_SCRIPT 3.15: no horns, no glow; a beard to his chest, from the character builder's beard)
         this.pello = createCharacter('explorer', this.world.q.name === 'mobile' ? 0.6 : 1, look);
         this.pello.setGround((x, zz) => this.h(x, zz)); this.world.scene.add(this.pello.root);

@@ -708,6 +708,8 @@ export class Combat {
    */
   private nightHour(run: EncounterRun) {
     const h = this.enc?.hour ?? 20.6, h0 = h >= 19 && h < 21.5 ? h : 20.6;
+    // Episode Three's storm stays at the last of the dusk: the lightning and the hearth light it, not a black night
+    if (run.story?.store) return 19.9 + Math.min(1, (run.wave - 1 + Math.min(1, run.phaseT / 40)) / 3) * 0.7;
     return (run.phase === 'prep' ? h0 + Math.min(1, run.phaseT / 70) * (21.5 - h0) : run.phase === 'hush' ? 21.5 : 21.5 + Math.min(1, (run.wave - 1 + Math.min(1, run.phaseT / 80)) / 3) * 7.6) % 24;
   }
 

@@ -605,6 +605,7 @@
   "codex.planned": "योजना में है। अभी खेल में नहीं।",
   "codex.undiscovered": "अभी खोजा नहीं गया।",
   "codex.needs": "ज़रूरी: {list}",
+  "codex.remembered": "{name}, यादों में",
   "codex.st.done": "खोजा गया",
   "codex.st.open": "खुला",
   "codex.st.locked": "बंद",

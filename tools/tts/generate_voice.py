@@ -485,6 +485,22 @@ def publish(lang, jobs, out_root, prune):
     os.replace(tmp, idx_p)
 
 
+def sealed_lines():
+    """Voiced lines from the sealed story files (tools/story_seal.py's format): speakers, texts and direction."""
+    sys.path.insert(0, str(ROOT / 'tools'))
+    from story_seal import unseal
+    out = {'voice': {}, 'strings': {}, 'direction': {}}
+    for f in sorted((ROOT / 'src' / 'game' / 'branch').glob('*.sealed')):
+        d = unseal(f.read_text())
+        if not isinstance(d, dict):
+            continue
+        out['voice'].update(d.get('voice', {}))
+        out['direction'].update(d.get('direction', {}))
+        for l, kv in d.get('strings', {}).items():
+            out['strings'].setdefault(l, {}).update(kv)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--lang', default=','.join(LANGS))
@@ -507,10 +523,16 @@ def main():
     voices = load_json(HERE / 'voices.json')
     direction = load_json(HERE / 'direction.json')
     lexicon = {k: v for k, v in load_json(HERE / 'pronunciations.json').items() if not k.startswith('_')}
-    hi_strings = load_json(I18N / 'hi.json')
+    # lines kept in the sealed story data (src/game/branch/*.sealed: "voice", "strings", "direction") are voiced like the
+    # rest, so a full run renders them too and never prunes their takes
+    sealed = sealed_lines()
+    voice_map['lines'].update(sealed['voice'])
+    direction['lines'].update(sealed['direction'])
+    texts = lambda l: {**load_json(I18N / f'{l}.json'), **sealed['strings'].get(l, {})}
+    hi_strings = texts('hi')
     out_root = Path(args.out)
 
-    per_lang = {l: build_jobs(l, voice_map, voices, direction, load_json(I18N / f'{l}.json'), hi_strings, lexicon, only, (lambda k: any(fnmatch.fnmatchcase(k, o) for o in args.turbo)) if args.turbo else False) for l in langs}
+    per_lang = {l: build_jobs(l, voice_map, voices, direction, texts(l), hi_strings, lexicon, only, (lambda k: any(fnmatch.fnmatchcase(k, o) for o in args.turbo)) if args.turbo else False) for l in langs}
     if args.dry_run:
         for l in langs:
             for j in per_lang[l]:

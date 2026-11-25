@@ -20,7 +20,7 @@ import { CH2_LAST, TECH_BY_ID } from './tech/data';
 import { Episode2 } from './episode2';
 import { Episode3 } from './episode3';
 import { recordDiscovery } from './tech/tech';
-import { showDiscovery } from '../ui/science';
+import { codexStory, showDiscovery } from '../ui/science';
 import type { Player } from './player';
 import type { Input } from './input';
 import { UI, PLAYABLE_LEVELS } from '../ui/ui';
@@ -35,7 +35,7 @@ import { Injuries } from './injury';
 import { Cutscene, Beat, SceneBranch } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
 import type { Combat } from '../combat/combat';
-import { apply, collectPayoffs, DECISIONS, LINE_RULES, QTES, record, resolveLine, test } from './branch';
+import { apply, collectPayoffs, DECISIONS, isAlive, LINE_RULES, QTES, record, resolveLine, test } from './branch';
 
 /** Line of sight for cutscene cameras. */
 const SIGHT = new THREE.Raycaster();
@@ -61,7 +61,8 @@ export class Game {
   }
 
   /** Someone whose moment has come and whose story hasn't been told. Skyvra's is in Level 9 itself. */
-  get revealDue() { const s = this.save; return s.replay ? undefined : ROSTER.find((r) => r.location && r.id !== 'explorer' && s.level >= r.unlock && !s.flags[`played.${r.id}`]); }
+  /** (Never someone the story has lost: their own story is not told after that.) */
+  get revealDue() { const s = this.save; return s.replay ? undefined : ROSTER.find((r) => r.location && r.id !== 'explorer' && s.level >= r.unlock && !s.flags[`played.${r.id}`] && isAlive(s.branch, r.id)); }
 
   /** Hand control to a crew member on their own stage; Verdaxis waits. */
   goAway(id: CrewId, location: string, done?: () => void) {
@@ -182,13 +183,22 @@ export class Game {
     // level 19 is Draxum's, on his own stage: the story's away hook, the stage, and the decision panel
     this.ep3.hooks = this.story.hooks; this.ep3.awayStage = () => this.away?.stage ?? null; this.ep3.askFn = (id, done) => this.ask(id, done);
     this.ep3.waking = () => this.waking;
+    this.ep3.revealPending = () => !!this.revealDue;
+    this.ep3.awayCtl = () => this.away ?? null;
     this.ep3.awayCut = (from, to, secs, fov) => { if (this.away) this.away.cut = { from, to, t: secs, fov }; };
     // the dead stop talking, wherever the line comes from
     ui.sayFilter = (key, who) => {
       const id = /^crew\.(\w+)\.name$/.exec(who ?? '')?.[1];
-      if (!id || !this.save) return { key, who };
+      if (!this.save) return { key, who };
+      // MegaZroN's lines and the codex can change with the story too (a rule for the key, from the sealed data)
+      if (!id) { const sw = LINE_RULES[key]?.swap?.find((x) => test(this.save, x.if)); return sw ? { key: sw.key, who: sw.who ? (sw.who === 'megazron' ? 'mz.name' : `crew.${sw.who}.name`) : who } : { key, who }; }
       const line = resolveLine(this.save, { ...LINE_RULES[key], key, who: id });
       return line?.key ? { key: line.key, who: line.who ? `crew.${line.who}.name` : undefined } : null;
+    };
+    codexStory.line = (key, joker) => {
+      if (!this.save || joker === 'megazron' || isAlive(this.save.branch, joker)) return { key, joker };
+      const sw = LINE_RULES[key]?.swap?.find((x) => test(this.save, x.if));
+      return sw ? { key: sw.key, joker: sw.who ?? 'megazron' } : { key, joker, lost: true };
     };
     onLangChange(() => { if (this.save) { this.lastObjKey = ''; this.refreshObjective(); this.ui.setInventory(this.save.inventory, this.story.tools()); } });
   }
@@ -677,7 +687,10 @@ export class Game {
     // a level's own ending lands first: the Vault, the Ledger, then the next person's story
     this.sinceLevel += dt;
     const who = this.revealDue;
-    if (who && this.sinceLevel > 15 && !this.story.busy && !this.ui.modalOpen()) { this.goAway(who.id, who.location!); return; }
+    // Episode Three holds a level's first scene while someone's story is due, so that story comes between the levels
+    // (after the level's card) and never breaks into a scene (GPU takes EP3B: Bolzar's cut into 16, Lyrra's into 21)
+    const between = !!who && !!this.ep3?.holdsFor(s.level);
+    if (who && this.sinceLevel > (between ? 5.5 : 15) && !this.story.busy && !this.ui.modalOpen()) { this.goAway(who.id, who.location!); return; }
     // the crash isn't forgotten by the next cutscene: the fall's wounds (game/injury.ts) heal by the hour; never slower
     // than the old day-one pace (0.45 on day one, 0.72 on day two)
     const inj = this.injuries, eff = inj?.effects();

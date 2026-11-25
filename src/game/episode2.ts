@@ -46,7 +46,7 @@ export class Episode2 {
   /** Set by the game: extra people a scene can cut to (Oom-Sa). */
   actors: Record<string, Character> = {};
   protected group = new THREE.Group();
-  private snare: THREE.Group | null = null;
+  protected snare: THREE.Group | null = null;
   private shelterSite: { at: THREE.Vector3; facing: number; wall: THREE.Vector3; cairn: THREE.Vector3 } | null = null;
   private pots: THREE.Mesh[] = [];
   protected wait = 6;

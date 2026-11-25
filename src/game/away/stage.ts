@@ -22,6 +22,8 @@ export interface AwayStage {
   keepOff?: (p: THREE.Vector3) => void;
   vistas?: { x0: number; x1: number; z0: number; z1: number; yaw: number; pitch: number; secs: number; after?: string }[];
   tasks: AwayTask[];
+  /** Scales a lineage's own light (Draxum's ember seams) from 1 down to 0. */
+  setGlow?(k: number): void;
   update(dt: number, time: number, camera?: THREE.Camera): void;
   /** Someone on the stage speaks to the player for this long: they turn to face them, look at them, and talk. */
   /** The sky over the stage, when it has weather: rain 0..1 (heard as well as seen). */

@@ -139,6 +139,10 @@ export class Away {
   orbit: { x: number; y: number; z: number; r: number; a: number; h: number } | null = null;
   /** A held shot over the play camera for a few seconds (a story's moment on someone's stage: Episode Three's copier). */
   cut: { from: THREE.Vector3; to: THREE.Vector3; t: number; fov?: number; fov0?: number } | null = null;
+  /** The story poses the body for a moment (set it to null to give it back): called after each frame's own update. */
+  pose: ((model: Player['model'], dt: number) => void) | null = null;
+  /** Where the body stands (the story's scripted moments start from it). */
+  get bodyAt() { return this.player?.pos.clone() ?? null; }
 
   /** Test hook: stand beside a task. */
   teleport(x: number, z: number, yaw = 0) { if (!this.arrival?.active) this.player?.spawn(x, z, yaw); }
@@ -173,6 +177,8 @@ export class Away {
     if (eff) { p.model.setLimp(eff.limp); p.model.setLimbs(this.busy ? null : eff.limbs); }
     this.air(dt, p);
     p.update(dt, this.input, canMove && !this.busy, this.stamina, this.pace);
+    // a scripted moment holds the body itself (a climb, a fall): after the player's own update, every frame
+    if (this.pose) { p.skipAnimate = true; this.pose(p.model, dt); p.model.root.updateMatrixWorld(true); } else p.skipAnimate = false;
     inj?.update(dt, dt / 50, { resting: p.speedNow < 0.2 });
     // low gravity: every step leaves the ground for a moment and comes down slowly (a lope, the way Apollo crews moved);
     // on Verdaxis' 14 there is none
@@ -297,6 +303,7 @@ export class Away {
   debugOutro() { if (this.stage) { for (const k of this.stage.tasks) if (!k.optional) this.done.add(k.id); this.closing(); } }
 
   leave() {
+    this.pose = null;
     if (this.arrival?.active) this.arrival.skip();
     if (this.injuries) { this.injuries.write(this.wounds); this.injuries.quiet(); this.injuries = null; }
     const s = this.stage;

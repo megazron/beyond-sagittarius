@@ -84,7 +84,7 @@ export function addKit(k: KitInput): Kit {
   // a beard (custom.beard): locks from a U along the jaw and up the cheeks to the ears, longest at the chin (to the chest
   // when long), and a moustache; one merged mesh on the head, darker at the roots
   const beard = (long: boolean) => {
-    const root = new THREE.Color(custom!.hairRoot).multiplyScalar(0.35), tip = new THREE.Color(custom!.hairRoot).lerp(new THREE.Color(custom!.hairTip), 0.25).multiplyScalar(0.85);
+    const root = new THREE.Color(custom!.hairRoot).multiplyScalar(long ? 0.62 : 0.35), tip = new THREE.Color(custom!.hairRoot).lerp(new THREE.Color(custom!.hairTip), 0.25).multiplyScalar(0.85);
     let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const geos: THREE.BufferGeometry[] = [];
     const W = eye.x * 2.1, chinY = eye.y - 0.12, jawY = eye.y - 0.065, fz = eye.z + 0.014; // (take EP3B C: at the eyes' depth the locks were inside the face)
@@ -94,15 +94,16 @@ export function addKit(k: KitInput): Kit {
       for (let i = 0; i < at.count; i++) { c.copy(root).lerp(tip, Math.min(1, at.getX(i) * 1.6)); col.push(c.r, c.g, c.b); }
       g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.deleteAttribute('aTan'); geos.push(g);
     };
-    const N = Math.max(10, Math.round(26 * Math.min(1, k.detail)));
-    for (const row of [0, 1, 2]) for (let i = 0; i < N; i++) {
+    // (long is a full beard, owner on Pello: "full, per script": more locks, a fourth row up the cheeks, to the chest)
+    const N = Math.max(10, Math.round((long ? 38 : 26) * Math.min(1, k.detail)));
+    for (const row of long ? [0, 1, 2, 3] : [0, 1, 2]) for (let i = 0; i < N; i++) {
       const u = -1 + (2 * (i + 0.5 * (row % 2))) / N; if (Math.abs(u) > 1) continue;
       const c2 = 1 - u * u, up = row * 0.022;
       // the jaw line: low and forward at the chin, up and back towards the ears; rows above it fill the cheeks
       const a = V(u * W * (1 + 0.08 * row), chinY + (jawY - chinY) * (1 - c2) + up * (0.4 + 0.6 * (1 - c2)) + 0.02 * u * u, fz - 0.085 * u * u - 0.004 * row + 0.006);
-      const len = (long ? 0.05 + 0.2 * c2 ** 1.4 : 0.022 + 0.022 * c2) * (1 - row * 0.22) * (0.85 + 0.3 * rnd());
+      const len = (long ? 0.07 + 0.24 * c2 ** 1.15 : 0.022 + 0.022 * c2) * (1 - row * (long ? 0.18 : 0.22)) * (0.85 + 0.3 * rnd());
       const out = V(u * 0.6, 0, 1).normalize(), wob = (rnd() - 0.5) * 0.02;
-      lock([a, a.clone().addScaledVector(out, 0.022).add(V(wob * 0.3, -len * 0.3, 0)), a.clone().addScaledVector(out, 0.03 * (0.5 + c2)).add(V(wob - u * 0.008, -len * 0.68, 0)), a.clone().addScaledVector(out, 0.006).add(V(wob * 1.6 - u * 0.012, -len, -0.004))], 0.011 + 0.004 * c2);
+      lock([a, a.clone().addScaledVector(out, 0.022).add(V(wob * 0.3, -len * 0.3, 0)), a.clone().addScaledVector(out, 0.03 * (0.5 + c2)).add(V(wob - u * 0.008, -len * 0.68, 0)), a.clone().addScaledVector(out, 0.006).add(V(wob * 1.6 - u * 0.012, -len, -0.004))], (long ? 0.015 : 0.011) + 0.004 * c2);
     }
     // the moustache, from under the nose out over the corners of the mouth
     for (const sd of [-1, 1]) for (let j = 0; j < 4; j++) {

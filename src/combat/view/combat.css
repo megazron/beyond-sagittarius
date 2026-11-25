@@ -135,3 +135,7 @@ body.cb-encounter #tutorial { display: none !important; }
 /* the difficulty question and the lost-fight card: one choice per line, its note under its name */
 .cb-ask .actions, .cb-lost .actions { display: grid; gap: 8px; justify-items: stretch; max-width: 420px; margin: 12px auto 6px; }
 .cb-ask .btn small { display: block; opacity: .75; font-weight: 400; font-size: .82em; margin-top: 2px; }
+
+/* Episode Three's storm: a lighter HUD (the objective, the reticle and the threat arrows stay; tags, chips and teach cards go) */
+body.cb-lite #cb-hud .tag, body.cb-lite #cb-hud .chip, body.cb-lite #cb-hud .teach, body.cb-lite #cb-hud .study, body.cb-lite #cb-hud .fa, body.cb-lite #cb-hud .inj { display: none !important; }
+body.cb-lite #cb-hud .vig { opacity: 0.45; }

@@ -605,6 +605,7 @@
   "codex.planned": "Planned. Not in the game yet.",
   "codex.undiscovered": "Not discovered yet.",
   "codex.needs": "Needs: {list}",
+  "codex.remembered": "{name}, remembered",
   "codex.st.done": "Discovered",
   "codex.st.open": "Open",
   "codex.st.locked": "Locked",

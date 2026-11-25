@@ -7,7 +7,14 @@ plays the craft panels with real key events (ruining one try on purpose, so the 
 difficulty question and steps the firing night's fight to its end. Then it checks the flags each beat sets, that the
 Ledger page was read, and that a reload keeps it all.
 
+With --outcome AT (a moment with a sealed outcome, e.g. e3.wall) the run sets the flags given in --flags on the save, fails
+every hold-steady at that moment (an arrow key held across it), and then checks the sealed outcome itself: its effects
+took, its own lines were spoken, every later line follows it (nobody it took speaks again, a rule's swapped line is the
+one used) and the crew panel and the roster agree. The log names no outcome, person or line. --from 19 starts from a
+save at level 19 with levels 15 to 18 done (faster; the choices of the default picks).
+
 Usage: python tools/episode3_smoke.py [--quality web|mobile] [--picks e2.snare=far,e2.kiln=kept,...] [--shots DIR]
+       [--from 15|19] [--flags a,b] [--outcome AT]
 """
 import argparse
 import json
@@ -64,13 +71,96 @@ def save_at_15():
     return s
 
 
+# levels 15 to 18 done (the default picks: rise, lee, half, boy): what those levels leave on the save
+E3_DONE = ["e3.l15.intro", "e3.seen.camp", "e3.seen.reeds", "e3.seen.rise", "e3.siteDone", "e3.axeTried", "e3.felled", "inv.polishedAxe",
+           "e3.l16.intro", "e3.frameUp", "e3.thatched", "e3.houseDone", "inv.frame", "inv.lever", "e3.wk.copy", "e3.cut",
+           "e3.l17.intro", "e3.wheat", "e3.bread", "inv.grain", "e3.fieldIntro", "e3.fieldDone", "inv.farming",
+           "e3.l18.intro", "e3.boiled", "e3.doseDone", "inv.medicine", "played.builder",
+           "e3.site.rise", "e3.door.lee", "e3.field.half", "e3.dose.boy"]
+
+
+def save_at_19():
+    s = save_at_15()
+    s["level"] = 19; s["completed"] = list(range(1, 19)); s["day"] = 30
+    for k in E3_DONE:
+        s["flags"][k] = True
+    s["discoveries"] += ["polish", "frame", "grain", "farming", "remedy"]
+    s["branch"]["log"] += [{"id": d, "pick": p, "t": 0, "kind": "decision", "level": 15, "day": 11, "at": 0}
+                           for d, p in (("e3.site", "rise"), ("e3.door", "lee"), ("e3.field", "half"), ("e3.dose", "boy"))]
+    return s
+
+
+def sealed_ep3():
+    sys.path.insert(0, str(ROOT / "tools"))
+    from story_seal import unseal
+    return unseal((ROOT / "src/game/branch/episode3.sealed").read_text())
+
+
+# every subtitle the game shows, with the level it showed at (the cutscenes and ui.say both come through ui.subtitle)
+SUB_LOG = """(() => { if (window.__subs) return; window.__subs = []; const u = __bs.game.ui, o = u.subtitle.bind(u);
+  u.subtitle = (k, w) => { if (k) window.__subs.push([__bs.level, k, w || '']); return o(k, w); }; })()"""
+
+
+def check_outcome(ev, sealed, at, failures, log, disc_html):
+    """The sealed outcome at `at`: its effects, its lines, and that what follows respects it. Logs nothing by name."""
+    o = next((x for x in sealed.get("outcomes", []) if x["at"] == at), None)
+    if not o:
+        failures.append(f"no sealed outcome at {at}"); return
+    f = ev("__bs.save.flags"); dead = ev("__bs.branch.state.dead") or {}
+    if not f.get(o["id"]):
+        failures.append(f"outcome at {at} never happened"); return
+    lost = []
+    for e in o["effects"]:
+        if "flag" in e and not f.get(e["flag"]):
+            failures.append(f"outcome at {at}: a flag effect did not take")
+        if "kill" in e:
+            lost.append(e["kill"])
+            if e["kill"] not in dead:
+                failures.append(f"outcome at {at}: a kill effect did not take")
+    subs = ev("window.__subs || []")
+    own = {b["key"] for b in o["beats"] + o.get("after", []) if b.get("key")}
+    spoken = {k for _, k, _ in subs}
+    for k in own:
+        if k not in spoken:
+            failures.append(f"outcome at {at}: one of its own lines was never shown")
+    lvl = next((l for l, k, _ in subs if k in own), 99)
+    for who in lost:
+        name = f"crew.{who}.name"
+        late = [k for l, k, w in subs if w == name and l >= lvl and k not in own]
+        if late:
+            failures.append(f"outcome at {at}: {len(late)} later line(s) by someone it took")
+        st = ev(f"__bs.game.story.crewStatus({who!r})")
+        if st.get("unlocked") or st.get("play"):
+            failures.append(f"outcome at {at}: the crew panel still offers someone it took")
+        if ev(f"(() => {{ const r = __bs.game.revealDue; return !!r && r.id === {who!r}; }})()"):
+            failures.append(f"outcome at {at}: the roster would still tell the story of someone it took")
+    for key, rule in sealed.get("lines", {}).items():
+        for sw in rule.get("swap", []):
+            if key in spoken:
+                failures.append(f"outcome at {at}: a line was spoken as written where the story had changed it")
+            if key.startswith("codex.") and disc_html is not None:
+                want = sealed.get("strings", {}).get("en", {}).get(sw["key"])
+                if want and want not in disc_html:
+                    failures.append(f"outcome at {at}: the codex card did not follow it")
+            elif not key.startswith("codex.") and sw["key"] not in spoken:
+                failures.append(f"outcome at {at}: a changed line was never shown")
+    log(f"outcome at {at}: checked ({len(o['effects'])} effects, {len(own)} own lines, {len(sealed.get('lines', {}))} line rules)")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--quality", default="web")
     ap.add_argument("--port", type=int, default=4181)
     ap.add_argument("--picks", default="")
     ap.add_argument("--shots", default="")
+    ap.add_argument("--from", dest="start", type=int, default=15, choices=(15, 19))
+    ap.add_argument("--flags", default="")
+    ap.add_argument("--outcome", default="")
     args = ap.parse_args()
+    sealed = sealed_ep3() if args.outcome else None
+    fail_at = 19 if args.outcome == "e3.wall" else None
+    disc_html = None
+    holding = False
     picks = dict(DEFAULT_PICKS)
     for kv in filter(None, args.picks.split(",")):
         k, v = kv.split("=")
@@ -89,7 +179,10 @@ def main():
         page.set_default_timeout(120000)
         page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
         page.on("console", lambda m: errors.append(f"console.{m.type}: {m.text}") if m.type == "error" else None)
-        save = json.dumps(save_at_15())
+        sv = save_at_19() if args.start == 19 else save_at_15()
+        for k in filter(None, args.flags.split(",")):
+            sv["flags"][k] = True
+        save = json.dumps(sv)
         page.add_init_script("if (!localStorage.getItem('bs-settings-v1')) localStorage.setItem('bs-settings-v1', JSON.stringify({lang: 'en', sensitivity: 1, invertY: false, volume: 0, subtitles: true, showFps: false}))")
         page.goto(url, wait_until="domcontentloaded", timeout=120000)
         page.evaluate(f"localStorage.setItem('bs-save-v1', {json.dumps(save)})")
@@ -102,6 +195,7 @@ def main():
         page.click("#btn-continue")
         page.wait_for_function("window.__bs.mode === 'play'", timeout=180000)
         ev("__bs.step(1)")
+        ev(SUB_LOG)
         log("start:", ev("({level: __bs.level, day: __bs.save.day, t: __bs.save.timeOfDay})"))
 
         answered, fights, seen, taken = [], [], [], set()
@@ -163,6 +257,8 @@ def main():
                     log("discovery:", page.inner_text("#disc h2")); page.keyboard.press("Enter"); ev("__bs.step(0.2)")
                 continue
             if page.locator("#disc h2").is_visible():
+                if lvl == 19:
+                    disc_html = page.inner_text("#disc")
                 log("discovery:", page.inner_text("#disc h2")); shot(f"e3-disc-{lvl}"); page.click("#disc-ok"); ev("__bs.step(0.2)"); continue
             if st["mode"] == "talk":
                 # a decision panel is a talk too: it can open between the check above and this one (CI-picks run: the
@@ -177,6 +273,13 @@ def main():
                 for _ in range(24):
                     if ev("__bs.mode") != "away":
                         break
+                    if fail_at == lvl and ev("!!(__bs.combat && __bs.combat.debug().tension)"):
+                        # every hold steady here fails: the marker is pushed off the band and held there
+                        if not holding:
+                            page.keyboard.down("KeyA"); holding = True
+                        time.sleep(0.15); ev("__bs.step(0.3)"); continue
+                    if holding:
+                        page.keyboard.up("KeyA"); holding = False
                     if ev("__bs.branch.open"):
                         # Draxum's wall (level 19) asks on his own stage: take the planned pick there too
                         time.sleep(0.4)
@@ -221,6 +324,8 @@ def main():
         log("answered:", answered)
         log("discoveries:", ev("__bs.save.discoveries"))
         log("e3 flags:", sorted(k for k in f if k.startswith("e3.") or k.startswith("inv.p")))
+        if args.outcome:
+            check_outcome(ev, sealed, args.outcome, failures, log, disc_html)
         want = ["e3.l15.intro", "e3.seen.camp", "e3.seen.reeds", "e3.seen.rise", "e3.siteDone", "e3.axeTried", "e3.felled", "inv.polishedAxe",
                 "e3.l16.intro", "e3.frameUp", "e3.thatched", "e3.houseDone", "inv.frame", "inv.lever",
                 # the save has trust 2 and no bite from the firing night: Wen-Ka copies him, and the axe slips on a knot
@@ -243,6 +348,8 @@ def main():
             failures.append(f"no house standing at the site: {house}")
         got = dict(answered)
         for d in ("e3.site", "e3.door", "e3.field", "e3.dose", "e3.wall", "e3.kit", "e3.pello", "e3.name"):
+            if args.start == 19 and d in ("e3.site", "e3.door", "e3.field", "e3.dose"):
+                continue
             if d not in got:
                 failures.append(f"decision never asked: {d}")
         log_ids = {e["id"]: e["pick"] for e in ev("__bs.branch.state.log")}

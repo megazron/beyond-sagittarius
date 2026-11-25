@@ -24,7 +24,12 @@ export function speak(keys: string[]) {
 }
 export function stopSpeech() { queueToken++; voice.stop(); }
 
-const jokerName = (n: TechNode) => t(n.joker === 'megazron' ? 'mz.name' : `crew.${n.joker}.name`);
+/** Set by the game: the joke's line as the story now has it (a crewmate the story has lost no longer jokes; their
+ * line can change, or it is shown as remembered). Default: as written. */
+export const codexStory: { line: (key: string, joker: string) => { key: string; joker: string; lost?: boolean } } = { line: (key, joker) => ({ key, joker }) };
+const jokeOf = (n: TechNode) => codexStory.line(`${n.codex}.joke`, n.joker);
+const jokerName = (n: TechNode) => { const j = jokeOf(n), name = t(j.joker === 'megazron' ? 'mz.name' : `crew.${j.joker}.name`); return j.lost ? t('codex.remembered', { name }) : name; };
+const joke = (n: TechNode) => `<p class="disc-joke"><b>${esc(jokerName(n))}</b> ${esc(t(jokeOf(n).key))}</p>`;
 const warnings = (n: TechNode) => n.warn.map((w) => `<p class="warn" data-warn="${w}">${esc(t(`warn.${w}`))}</p>`).join('');
 const needs = (n: TechNode) => n.requires.map((r) => t(`tech.${r}`)).join(', ');
 
@@ -41,11 +46,11 @@ export function showDiscovery(n: TechNode, onClose: () => void) {
     <h2>${esc(t(`tech.${n.id}`))}</h2>
     <p class="disc-text">${esc(t(`${n.codex}.text`))}</p>
     ${warnings(n)}
-    <p class="disc-joke"><b>${esc(jokerName(n))}</b> ${esc(t(`${n.codex}.joke`))}</p>
+    ${joke(n)}
     <button class="btn primary" id="disc-ok">${esc(t('disc.continue'))}</button>`;
   el.classList.remove('hidden');
   audio.chime();
-  speak([`${n.codex}.text`, ...n.warn.map((w) => `warn.${w}`), `${n.codex}.joke`]);
+  speak([`${n.codex}.text`, ...n.warn.map((w) => `warn.${w}`), jokeOf(n).key]);
   discClose = () => {
     discClose = null;
     stopSpeech();
@@ -65,7 +70,7 @@ function detail(save: SaveData, n: TechNode): string {
   if (st === 'planned') return `<p>${esc(t('codex.planned'))}</p>${req}`;
   if (st !== 'done') return `<p>${esc(t('codex.undiscovered'))}</p>${req}`;
   return `<p>${esc(t(`${n.codex}.text`))}</p>${warnings(n)}
-    <p class="disc-joke"><b>${esc(jokerName(n))}</b> ${esc(t(`${n.codex}.joke`))}</p>
+    ${joke(n)}
     <button class="btn small cx-listen" data-id="${n.id}">${esc(t('safety.listen'))}</button>`;
 }
 
@@ -99,7 +104,7 @@ export function openCodex(ui: UI, save: SaveData, onClose: () => void) {
     box.querySelector<HTMLButtonElement>('.cx-listen')?.addEventListener('click', () => {
       const n = TECH_BY_ID[b.dataset.id!];
       audio.uiClick();
-      speak([`${n.codex}.text`, ...n.warn.map((w) => `warn.${w}`), `${n.codex}.joke`]);
+      speak([`${n.codex}.text`, ...n.warn.map((w) => `warn.${w}`), jokeOf(n).key]);
     });
   }));
   $('m-close').addEventListener('click', () => { audio.uiClick(); stopSpeech(); ui.closeModal(); onClose(); });

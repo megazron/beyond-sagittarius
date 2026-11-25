@@ -133,13 +133,14 @@ export function buildStage(name: string, d: StageDef, label: (k: string) => stri
   const puffs: { m: THREE.Mesh; t: number }[] = [];
   const puffM = new THREE.MeshBasicMaterial({ color: 0xe8f4ff, transparent: true, opacity: .35, depthWrite: false });
   for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(.09, 8, 6), puffM.clone()); m.visible = false; scene.add(m); puffs.push({ m, t: 9 }); }
-  let nextPuff = 0;
+  let nextPuff = 0, glowK = 1;
   const head = new THREE.Vector3();
 
   return {
     scene, gravity: d.gravity, jump: d.jump, spawn: new THREE.Vector3(pads[0].x, 0, pads[0].z + 2), tasks,
     height: padAt, collide() { /* the height function is the only wall */ },
     bind(b) { body = b; },
+    setGlow(k: number) { glowK = Math.max(0, k); },
     update(dt, time, cam) {
       dressed(dt, time, cam ?? null);
       bits.forEach((m, i) => { m.rotation.y = time * .7 + i; });
@@ -151,7 +152,7 @@ export function buildStage(name: string, d: StageDef, label: (k: string) => stri
       if (!body) return;
       if (d.trait === 'lichen') { body.glow(.25 + 1.4 * lit); body.slow(.45 + .55 * lit); }  // dormant in the dark, quick in the light
       else if (d.trait === 'plates') body.glow(.6 + .5 * Math.max(0, Math.sin(time * 1.3)));    // plates sealing on each held breath
-      else if (d.trait === 'ember') body.glow(1.1 + .35 * Math.sin(time * 3.1) * Math.sin(time * 1.7));
+      else if (d.trait === 'ember') body.glow((1.1 + .35 * Math.sin(time * 3.1) * Math.sin(time * 1.7)) * glowK);
       else if (d.trait === 'frost') {
         // no breath out here: she is holding the one she has
         body.root.getWorldPosition(head); head.y += 1.6;

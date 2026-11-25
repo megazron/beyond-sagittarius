@@ -277,7 +277,7 @@ export class EncounterRun {
 
   // ---- the night at the fire ----
   private night(dt: number) {
-    const s = this.sim, fire = s.fires.find((f) => !f.torch && !f.burnsOut)!, straight = !!this.story.cubKilled, N = NIGHT[s.difficulty];
+    const s = this.sim, fire = s.fires.find((f) => !f.torch && !f.burnsOut)!, straight = !!this.story.cubKilled, N = NIGHT[s.difficulty], Q = this.story.store ? 0.5 : 1;
     // they come out of the dark to the edge of the light, where the food can be smelt (a home far out had them
     // wander beyond their noses all night in the real world's terrain, and nothing ever came)
     const fromDark = (kind: SpeciesId, n: number, pack: number, spread = 1.2) => {
@@ -293,11 +293,12 @@ export class EncounterRun {
       // time to think: what you set now is what the night meets
       // a dusk fire is built up and left to settle; it is the night that eats wood
       fire.slow = 0.3;
-      if (this.phaseT > 70 || this.mem.ready) { this.objective = 'cb.obj.hush'; this.go('hush'); }
+      // (Episode Three's storm, story.store: every phase shorter, GPU take EP3B: six minutes of it read as one long dark shot)
+      if (this.phaseT > 70 * Q || this.mem.ready) { this.objective = 'cb.obj.hush'; this.go('hush'); }
     } else if (this.phase === 'hush') {
       // the work is done and the camp goes quiet: a few seconds to stand and look at what is set before anything comes
       fire.slow = 0.6;
-      if (this.phaseT > 10) {
+      if (this.phaseT > 10 * Q) {
         fire.slow = N.burn; this.wave = 1;
         if (this.pit) {
           // it comes first this time, and alone at first: it knows the fire now, and it knows him
@@ -309,9 +310,9 @@ export class EncounterRun {
         this.go('wave1');
       }
     } else if (this.phase === 'wave1') {
-      if (packLeft(1) === 0 || this.phaseT > 75) { for (const e of s.enemies) if (e.pack === 1) s.rout(e); this.go('lull'); }
+      if (packLeft(1) === 0 || this.phaseT > 75 * Q) { for (const e of s.enemies) if (e.pack === 1) s.rout(e); this.go('lull'); }
     } else if (this.phase === 'lull') {
-      if (this.phaseT > 12) {
+      if (this.phaseT > 12 * Q) {
         this.wave = 2; fromDark('skritch', N.waves[1] - (this.pit ? 1 : 0), 2, 1.7);
         if (this.story.store) { /* the big one only watches from the treeline in this storm */ }
         else if (!this.hound || this.hound.dead || this.hound.gone) { const a = s.rand() * 6.283; this.hound = s.spawn('hound', fire.x + Math.cos(a) * 34, fire.z + Math.sin(a) * 34, { alert: 1.2, aware: true }); }
@@ -320,16 +321,16 @@ export class EncounterRun {
         this.go('wave2');
       }
     } else if (this.phase === 'wave2') {
-      if ((packLeft(2) === 0 && this.phaseT > 30) || this.phaseT > 80 || this.hound?.routed) { this.wave = 3; if (!this.hound?.routed) fromDark('skritch', N.waves[2], 3); this.go('wave3'); }
+      if ((packLeft(2) === 0 && this.phaseT > 30 * Q) || this.phaseT > 80 * Q || this.hound?.routed) { this.wave = 3; if (!this.hound?.routed) fromDark('skritch', N.waves[2], 3); this.go('wave3'); }
     } else if (this.phase === 'wave3') {
       // the last hour before dawn: the fire burns down faster and the hunter stops waiting
       if (fire.fuel > 0) fire.fuel = Math.max(0, fire.fuel - dt * 0.35 * N.burn);
       if (this.hound && !this.hound.routed && !this.hound.dead) this.hound.atkGone += dt * (straight ? 1.2 : 0.5);
       const clear = s.enemies.every((e) => e.dead || e.routed || e.gone || e.def.temperament === 'ambush');
-      if (this.phaseT > 85 || clear) {
+      if (this.phaseT > 85 * Q || clear) {
         s.night = false;
         for (const e of s.enemies) s.rout(e);
-        this.flags['night.held'] = true; this.flags['night.food'] = food; this.flags['night.houndDriven'] = !!this.hound?.routed && this.phaseT <= 85;
+        this.flags['night.held'] = true; this.flags['night.food'] = food; this.flags['night.houndDriven'] = !!this.hound?.routed && this.phaseT <= 85 * Q;
         this.flags['night.fireKept'] = fire.fuel > 0;
         if (this.story.store) this.flags['store.food'] = food;
         if (this.pit) { this.flags['kiln.fuel'] = Math.round((this.pit.fuel / this.pit.max) * 100); this.flags['kiln.cold'] = (this.mem.coldT ?? 0) > 45; }
