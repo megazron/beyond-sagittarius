@@ -11,7 +11,9 @@ export type Who = CrewId | 'megazron';
 export interface Shot { from: THREE.Vector3; to: THREE.Vector3; push?: number; roll?: number; /** Lens blur override (fraction of screen height). */ aperture?: number; /** Keep this actor's head where it is in frame, whatever the body does. */ track?: Character; /** Lens as a vertical field of view in degrees (a set-up without one keeps the scene's own). */ fov?: number;
   /** A shot with nobody speaking in it (an insert on a thing): light this point softly with the rig instead of leaving
    *  the lamps where the last speaker had them (Episode Two's wall of hands burned white under a lamp set for a face). */
-  lightAt?: THREE.Vector3 }
+  lightAt?: THREE.Vector3;
+  /** How strong the rig is on `lightAt` against a face's (default 0.35): an animal out at the edge of the firelight needs more. */
+  lightScale?: number }
 
 /**
  * A step of a scene. Beyond the line itself it can branch: `if` plays it only
@@ -189,7 +191,7 @@ export class Cutscene {
     const cam = this.ctx.camera, s = this.shot;
     // a voice on the radio has nobody to frame: the shot still swings clear around whoever it is on
     if (!a && s && this.fresh && s.track?.root.visible) { this.clearShot(s.track, headOf(s.track), s); this.fresh = false; }
-    if (!a && s?.lightAt) { this.light(s.lightAt, s.from, 0.35); return; }
+    if (!a && s?.lightAt) { this.light(s.lightAt, s.from, s.lightScale ?? 0.35); return; }
     if (!a || !s) return;
     const h = headOf(a);
     // only coverage built on the speaker can swing: a set-up aimed at something else stays put

@@ -155,7 +155,7 @@ export class Episode3 extends Episode2 {
     const c = this.L.camp, toLake = v3(LAKE.x - c.x, 0, LAKE.z - c.z).normalize(), g = new THREE.Group();
     // the low side towards the lake, the fire on its edge, not in it
     const at = c.clone().addScaledVector(toLake, 5.2);
-    const water = new THREE.Mesh(new THREE.CircleGeometry(3.6, 28), new THREE.MeshStandardMaterial({ color: 0x5a4a32, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.86 }));
+    const water = new THREE.Mesh(new THREE.CircleGeometry(3.6, 28), new THREE.MeshStandardMaterial({ color: 0x5a4a32, roughness: 0.38, metalness: 0, transparent: true, opacity: 0.86 }) /* (at 0.08 the scene lamps shone in it as two suns, GPU take) */);
     water.rotation.x = -Math.PI / 2; water.scale.set(1.6, 1, 1); water.rotation.z = -Math.atan2(toLake.z, toLake.x);
     water.position.set(at.x, Math.max(this.h(at.x, at.z), this.h(c.x, c.z) - 0.05) + 0.04, at.z);
     g.add(water);
@@ -198,7 +198,8 @@ export class Episode3 extends Episode2 {
     }
     this.scene(beats, () => {
       this.clearHands();
-      if (all) { this.set('e3.siteDone'); this.ui.toast(t('e3.obj.axe')); this.buildSapling(); }
+      // by the time he has walked all three the water has gone back down (the flood is gone after a reload too)
+      if (all) { this.set('e3.siteDone'); this.ui.toast(t('e3.obj.axe')); this.buildSapling(); this.flood?.removeFromParent(); this.flood = null; }
     });
   }
 
