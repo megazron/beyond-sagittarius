@@ -10,6 +10,7 @@ import { CH2_FIRST, CH2_LAST, CH2_ORDER, PRODUCTS, TECH, TECH_BY_ID, TechNode } 
 import { isDiscovered, prereqsMet } from './tech/tech';
 import type { DlgChoice, DlgTree } from './dialogue';
 import type { Episode2 } from './episode2';
+import type { Episode3 } from './episode3';
 
 /** Beacon lines triggered by a discovery. */
 const BEACON: Record<string, string> = { fire: 'ch2.beacon.fire', pottery: 'ch2.beacon.pottery', glass: 'ch2.beacon.glass' };
@@ -26,7 +27,11 @@ export class Chapter2 {
   private radioIdx = 0;
   /** Episode Two owns levels 11 to 14: its scenes come round these levels' discoveries (game.ts sets it). */
   ep2: Episode2 | null = null;
-  private ep2Level(n = this.s.level) { return !!this.ep2?.owns(n); }
+  /** Episode Three owns levels 15 to 21 the same way. */
+  ep3: Episode3 | null = null;
+  /** The episode that owns level n (Two or Three), if any. */
+  private ep(n = this.s.level): Episode2 | null { return this.ep2?.owns(n) ? this.ep2 : this.ep3?.owns(n) ? this.ep3 : null; }
+  private ep2Level(n = this.s.level) { return !!this.ep(n); }
 
   constructor(private story: Story, private world: World, private player: Player, private ui: UI, private getSave: () => SaveData, private after: (s: number, fn: () => void) => void) {}
 
@@ -39,7 +44,7 @@ export class Chapter2 {
   }
 
   done(n: number): boolean {
-    if (this.ep2Level(n)) return this.ep2!.done(n);
+    if (this.ep2Level(n)) return this.ep(n)!.done(n);
     if (n === CH2_LAST) return !!this.s.flags.ch2End;
     const node = this.node(n);
     return !!node && isDiscovered(this.s, node.id);
@@ -48,7 +53,7 @@ export class Chapter2 {
   private short(node: TechNode) { return Object.keys(node.ingredients).filter((k) => this.inv(k) < node.ingredients[k]); }
 
   progress(n: number): string | null {
-    if (this.ep2Level(n)) { const p = this.ep2!.progress(n); if (p) return p; if (!this.ep2!.craftOpen(n)) return null; }
+    if (this.ep2Level(n)) { const e = this.ep(n)!, p = e.progress(n); if (p) return p; if (!e.craftOpen(n)) return null; }
     const node = this.node(n);
     if (!node || isDiscovered(this.s, node.id)) return null;
     const short = this.short(node);
@@ -59,7 +64,7 @@ export class Chapter2 {
   }
 
   marker(n: number): THREE.Vector3 | null {
-    if (this.ep2Level(n)) { const m = this.ep2!.marker(n); if (m) return m; if (!this.ep2!.craftOpen(n)) return this.world.layout.campSeat; }
+    if (this.ep2Level(n)) { const e = this.ep(n)!, m = e.marker(n); if (m) return m; if (!e.craftOpen(n)) return this.world.layout.campSeat; }
     const node = this.node(n);
     if (!node || isDiscovered(this.s, node.id)) return this.world.layout.campSeat;
     const raw = this.short(node).filter((k) => !PRODUCTS.has(k));
@@ -72,8 +77,9 @@ export class Chapter2 {
     if (s.level < CH2_FIRST) return out;
     const node = this.node(s.level);
     if (this.ep2Level()) {
-      out.push(...this.ep2!.actions());
-      if (node && !isDiscovered(s, node.id) && prereqsMet(s, node) && this.ep2!.craftOpen(s.level)) {
+      const e = this.ep()!;
+      out.push(...e.actions());
+      if (node && node.status === 'playable' && !isDiscovered(s, node.id) && prereqsMet(s, node) && e.craftOpen(s.level)) {
         out.push({ id: `craft-${node.id}`, pos: L.camp, radius: 2.6, label: t('action.craft', { name: t(`tech.${node.id}`) }), missing: this.story.missing(node.ingredients), run: () => this.story.hooks.craft(node) });
       }
       return out;
@@ -88,7 +94,8 @@ export class Chapter2 {
   update(dt: number) {
     const s = this.s;
     if (s.level < CH2_FIRST) return;
-    if (this.ep2Level()) this.ep2!.update(dt);
+    if (this.ep2Level()) this.ep()!.update(dt);
+    else if (this.ep3 && s.level > 21) this.ep3.update(dt);
     if (!s.flags.ch2Intro && !this.ep2Level()) {
       this.introT -= dt;
       if (this.introT <= 0 && !this.story.busy) {

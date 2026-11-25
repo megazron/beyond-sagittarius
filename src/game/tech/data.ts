@@ -41,6 +41,8 @@ export interface TechNode {
 
 const playable = (id: string, age: AgeId, requires: string[], ingredients: Record<string, number>, yields: Record<string, number>, process: ProcessType, steps: Step[], joker: string, warn: WarnCat[]): TechNode =>
   ({ id, age, requires, ingredients, yields, process, steps, codex: `codex.${id}`, joker, warn, status: 'playable' });
+/** A worked-out recipe that no level uses yet: shown as planned. */
+const later = (...a: Parameters<typeof playable>): TechNode => ({ ...playable(...a), status: 'planned' });
 const planned = (id: string, age: AgeId, requires: string[], process: ProcessType, warn: WarnCat[]): TechNode =>
   ({ id, age, requires, ingredients: {}, yields: {}, process, steps: [], codex: `codex.${id}`, joker: 'megazron', warn, status: 'planned' });
 
@@ -57,22 +59,36 @@ export const TECH: TechNode[] = [
     [{ kind: 'rhythm', band: [0.5, 0.8], secs: 5 }, { kind: 'heat', band: [0.4, 0.62], secs: 3.5, rise: 0.4, fall: 0.28 }], 'medic', ['fire']),
   playable('pottery', 'stone', ['fire'], { clay: 3, sand: 1 }, { pot: 3 }, 'firing',
     [{ kind: 'mix', band: [0.42, 0.6] }, { kind: 'heat', band: [0.55, 0.75], secs: 5, rise: 0.3, fall: 0.2 }], 'builder', ['heat']),
-  // ---- Fire and Tools ----
-  playable('charcoal', 'tools', ['pottery'], { branch: 4, clay: 1 }, { charcoal: 3 }, 'smoulder',
+  // ---- Episode Three (Age 2 after the pot; levels 15 to 21) ----
+  // 3.2: a knapped head ground on a flat stone with wet sand (two stones: the head and the slab; sand from the shore)
+  playable('polish', 'agri', ['pottery'], { stone: 2, sand: 1 }, {}, 'build',
+    [{ kind: 'rhythm', band: [0.42, 0.72], secs: 5 }, { kind: 'mix', band: [0.42, 0.6] }], 'strong', ['sharp']),
+  planned('frame', 'agri', ['polish'], 'build', []),
+  planned('remedy', 'agri', ['pottery'], 'study', ['heat']),
+  planned('icewall', 'agri', [], 'build', []),
+  // ---- Fire and Tools (the pre-Episode-One chain: kept for the codex and later ages, out of the level order) ----
+  later('charcoal', 'tools', ['pottery'], { branch: 4, clay: 1 }, { charcoal: 3 }, 'smoulder',
     [{ kind: 'heat', band: [0.3, 0.5], secs: 6, rise: 0.3, fall: 0.2 }], 'megazron', ['fire']),
-  playable('lime', 'tools', ['charcoal'], { limestone: 2, charcoal: 1 }, { lime: 3 }, 'calcine',
+
+  later('lime', 'tools', ['charcoal'], { limestone: 2, charcoal: 1 }, { lime: 3 }, 'calcine',
     [{ kind: 'heat', band: [0.7, 0.86], secs: 6, rise: 0.34, fall: 0.2 }, { kind: 'mix', band: [0.5, 0.66] }], 'builder', ['heat', 'chemical']),
-  playable('salt', 'tools', ['pottery'], { brine: 3 }, { salt: 3 }, 'evaporate',
+
+  later('salt', 'tools', ['pottery'], { brine: 3 }, { salt: 3 }, 'evaporate',
     [{ kind: 'heat', band: [0.45, 0.62], secs: 4, rise: 0.3, fall: 0.2 }, { kind: 'rhythm', band: [0.35, 0.65], secs: 4 }], 'social', ['heat']),
-  playable('glass', 'tools', ['lime'], { sand: 2, ash: 2, lime: 1, charcoal: 1 }, { glass: 2 }, 'melt',
+
+  later('glass', 'tools', ['lime'], { sand: 2, ash: 2, lime: 1, charcoal: 1 }, { glass: 2 }, 'melt',
     [{ kind: 'mix', band: [0.5, 0.64] }, { kind: 'heat', band: [0.8, 0.9], secs: 5, rise: 0.32, fall: 0.2 }], 'medic', ['heat']),
-  playable('soap', 'tools', ['pottery'], { ash: 2, oilnut: 2 }, { soap: 3 }, 'saponify',
+
+  later('soap', 'tools', ['pottery'], { ash: 2, oilnut: 2 }, { soap: 3 }, 'saponify',
     [{ kind: 'mix', band: [0.45, 0.6] }, { kind: 'rhythm', band: [0.4, 0.7], secs: 5 }], 'medic', ['chemical']),
+
   // ---- Agriculture ----
-  playable('fermentation', 'agri', ['pottery'], { sugarpod: 3, pot: 1 }, { brew: 2 }, 'ferment',
+  later('fermentation', 'agri', ['pottery'], { sugarpod: 3, pot: 1 }, { brew: 2 }, 'ferment',
     [{ kind: 'mix', band: [0.4, 0.58] }, { kind: 'heat', band: [0.28, 0.44], secs: 5, rise: 0.26, fall: 0.18 }], 'strong', ['pressure']),
-  playable('acids', 'agri', ['fermentation', 'lime'], { brew: 1, lime: 1, lichen: 1 }, { vinegar: 2 }, 'neutralise',
+
+  later('acids', 'agri', ['fermentation', 'lime'], { brew: 1, lime: 1, lichen: 1 }, { vinegar: 2 }, 'neutralise',
     [{ kind: 'rhythm', band: [0.4, 0.7], secs: 4 }, { kind: 'mix', band: [0.44, 0.56], litmus: true }], 'megazron', ['chemical']),
+
   planned('farming', 'agri', ['pottery', 'knapping'], 'cultivate', []),
   planned('irrigation', 'agri', ['farming'], 'build', []),
   // ---- Bronze Age ----
@@ -109,7 +125,9 @@ export const TECH_BY_ID: Record<string, TechNode> = Object.fromEntries(TECH.map(
  * hafted point, the bow drill and pottery; the flake (knapping) is Episode One's and is counted found when it starts. */
 export const CH2_FIRST = 11;
 export const EP2_LAST = 14;
-export const CH2_ORDER = ['cordage', 'haft', 'fire', 'pottery', 'charcoal', 'lime', 'salt', 'glass', 'soap', 'fermentation', 'acids'];
+/** Levels 15 to 21 are Episode Three (episode3.ts): the axe, the house, the field, the cure, Draxum's wall, the ditch, the
+ * store (only 15 is built: ui.ts PLAYABLE_LEVELS). */
+export const CH2_ORDER = ['cordage', 'haft', 'fire', 'pottery', 'polish', 'frame', 'farming', 'remedy', 'icewall', 'irrigation', 'salt'];
 export const CH2_LAST = CH2_FIRST + CH2_ORDER.length - 1;
 
 /** Things you make rather than gather; the world never respawns these. */

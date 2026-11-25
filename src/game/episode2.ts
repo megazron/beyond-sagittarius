@@ -44,44 +44,44 @@ const std = (color: number, o: THREE.MeshStandardMaterialParameters = {}) => new
 export class Episode2 {
   /** Set by the game: extra people a scene can cut to (Oom-Sa). */
   actors: Record<string, Character> = {};
-  private group = new THREE.Group();
+  protected group = new THREE.Group();
   private snare: THREE.Group | null = null;
   private shelterSite: { at: THREE.Vector3; facing: number; wall: THREE.Vector3; cairn: THREE.Vector3 } | null = null;
   private pots: THREE.Mesh[] = [];
-  private wait = 6;
-  private busy = false;
+  protected wait = 6;
+  protected busy = false;
   private hurtLines = 0;
-  private quieted = false;
+  protected quieted = false;
 
   constructor(
-    private world: World,
-    private player: Player,
-    private ui: UI,
-    private npcs: Npcs,
-    private getSave: () => SaveData,
-    private playScene: (beats: Beat[], then?: () => void) => void,
-    private after: (sec: number, fn: () => void) => void,
-    private tension: (spec: TensionSpec) => Promise<TensionResult> | null,
-    private combat: () => CombatLike | null,
+    protected world: World,
+    protected player: Player,
+    protected ui: UI,
+    protected npcs: Npcs,
+    protected getSave: () => SaveData,
+    protected playScene: (beats: Beat[], then?: () => void) => void,
+    protected after: (sec: number, fn: () => void) => void,
+    protected tension: (spec: TensionSpec) => Promise<TensionResult> | null,
+    protected combat: () => CombatLike | null,
     /** The game is in plain play, nothing over it (no panel, film, fight). */
-    private free: () => boolean,
+    protected free: () => boolean,
     /** Record a discovery and show its card, then `then` (the game's own path for the craft panel). */
-    private discover: (id: string, then: () => void) => void,
+    protected discover: (id: string, then: () => void) => void,
   ) {
     this.group.name = 'ep2';
     world.scene.add(this.group);
     void ep2Ready;
   }
 
-  private get s() { return this.getSave(); }
-  private get z() { return this.player.model; }
-  private get L() { return this.world.layout; }
-  private f(k: string) { return !!this.s.flags[k]; }
-  private set(k: string, v = true) { this.s.flags[k] = v; }
-  private inv(k: string) { return this.s.inventory[k] ?? 0; }
-  private trust() { return this.s.branch?.trust?.['oomsa>scientist'] ?? 0; }
-  private h(x: number, z: number) { return this.world.terrain.height(x, z); }
-  private oom() { return this.npcs.figure('local'); }
+  protected get s() { return this.getSave(); }
+  protected get z() { return this.player.model; }
+  protected get L() { return this.world.layout; }
+  protected f(k: string) { return !!this.s.flags[k]; }
+  protected set(k: string, v = true) { this.s.flags[k] = v; }
+  protected inv(k: string) { return this.s.inventory[k] ?? 0; }
+  protected trust() { return this.s.branch?.trust?.['oomsa>scientist'] ?? 0; }
+  protected h(x: number, z: number) { return this.world.terrain.height(x, z); }
+  protected oom() { return this.npcs.figure('local'); }
 
   /** Levels 11 to 14 are this episode's. */
   owns(n: number) { return n >= 11 && n <= 14; }
@@ -185,7 +185,7 @@ export class Episode2 {
 
   // ------------------------------------------------------------------ helpers: where he is, how he kneels
   /** Face `target` from `at` (Player.facing points away from where he looks). */
-  private settle(at: THREE.Vector3, target: THREE.Vector3, kneel: boolean, sit = false) {
+  protected settle(at: THREE.Vector3, target: THREE.Vector3, kneel: boolean, sit = false) {
     const p = this.player, d = at.clone().sub(target).setY(0);
     const facing = Math.atan2(d.x, d.z);
     const g = at.clone(); g.y = this.h(g.x, g.z);
@@ -200,27 +200,27 @@ export class Episode2 {
   }
   /** Kneeling to work beside the fire, side-on to it (facing along the ring, the fire at his shoulder): a camera in
    * front of him then never looks across the fire (the cutscene falls back to another shot when the camp blocks it). */
-  private settleWork(dist: number) {
+  protected settleWork(dist: number) {
     const c = this.L.camp, at = this.byFire(dist), d = at.clone().sub(c).setY(0).normalize(), tan = v3(-d.z, 0, d.x);
     return this.settle(at, at.clone().addScaledVector(tan, 2), true, true);
   }
   /** A point ahead of him at eye height: he looks up from the work to say a line. */
-  private ahead() { return this.head().addScaledVector(this.fwd(), 3).add(v3(0, 0.1, 0)); }
-  private fwd() { const r = this.z.root.rotation.y; return v3(Math.sin(r), 0, Math.cos(r)); }
+  protected ahead() { return this.head().addScaledVector(this.fwd(), 3).add(v3(0, 0.1, 0)); }
+  protected fwd() { const r = this.z.root.rotation.y; return v3(Math.sin(r), 0, Math.cos(r)); }
   /** His right, facing f (it was (f.z, 0, -f.x), his left: every two-handed hold had the hands crossed). */
-  private right(f: THREE.Vector3) { return v3(-f.z, 0, f.x); }
+  protected right(f: THREE.Vector3) { return v3(-f.z, 0, f.x); }
   /** His left: the side the shots and the places round him were laid out on (kept, so no camera or cairn moved). */
-  private side(f: THREE.Vector3) { return v3(f.z, 0, -f.x); }
-  private head() { return new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld); }
+  protected side(f: THREE.Vector3) { return v3(f.z, 0, -f.x); }
+  protected head() { return new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld); }
   /** A spot `dist` from the camp fire, on the side towards `towards`. */
-  private byFire(dist: number, towards?: THREE.Vector3) {
+  protected byFire(dist: number, towards?: THREE.Vector3) {
     const c = this.L.camp, d = (towards ?? this.player.pos).clone().sub(c).setY(0);
     if (d.lengthSq() < 0.01) d.set(0, 0, 1);
     const at = c.clone().addScaledVector(d.normalize(), dist); at.y = this.h(at.x, at.z);
     return at;
   }
   /** Low and close on what his hands do at `at`, from his right and in front, his face at the top of frame. */
-  private handShot(at: THREE.Vector3, dist = 0.9, side = 1): Shot {
+  protected handShot(at: THREE.Vector3, dist = 0.9, side = 1): Shot {
     // far enough out that his face stays in frame (closer, the cutscene re-aims at his head and the shot looks up into the sky)
     dist = Math.max(dist, 1.15);
     const f = this.fwd(), r = this.side(f).multiplyScalar(side), hd = this.head();
@@ -231,7 +231,7 @@ export class Episode2 {
     from.y = Math.max(from.y, this.h(from.x, from.z) + 0.55);
     return { from, to: at.clone().lerp(hd, 0.3), push: 0.02, aperture: 0.004 };
   }
-  private wide(at: THREE.Vector3, dist = 6, side = 0.6, up = 1.2): Shot {
+  protected wide(at: THREE.Vector3, dist = 6, side = 0.6, up = 1.2): Shot {
     const f = this.fwd(), r = this.side(f);
     const from = at.clone().addScaledVector(f, dist).addScaledVector(r, dist * side).add(v3(0, up, 0));
     // above the grass where the ground rises towards the camera
@@ -240,18 +240,18 @@ export class Episode2 {
   }
   /** A close-up on Oom-Sa from a little above her eyes, looking down on her as he does (she is small: at her own eye height
    *  the shot looked up past her into a blown-out morning sky, GPU take B). */
-  private oomClose(oom: Character, side = 0.4, dist = 1.05): Shot { return cover.close(oom, side, dist, -0.26); }
-  private say(key: string, who: Who = 'scientist', sec = 4) { this.ui.say(key, who === 'megazron' ? 'mz.name' : `crew.${who}.name`, sec); }
-  private mesh(g: THREE.BufferGeometry, m: THREE.Material, at: THREE.Vector3, parent: THREE.Object3D = this.group) {
+  protected oomClose(oom: Character, side = 0.4, dist = 1.05): Shot { return cover.close(oom, side, dist, -0.26); }
+  protected say(key: string, who: Who = 'scientist', sec = 4) { this.ui.say(key, who === 'megazron' ? 'mz.name' : `crew.${who}.name`, sec); }
+  protected mesh(g: THREE.BufferGeometry, m: THREE.Material, at: THREE.Vector3, parent: THREE.Object3D = this.group) {
     const o = new THREE.Mesh(g, m); o.position.copy(at); o.castShadow = true; parent.add(o); return o;
   }
   /** Run `fn(k)` every frame for `sec` seconds (k = seconds in). */
-  private anim(sec: number, fn: (k: number) => void) {
+  protected anim(sec: number, fn: (k: number) => void) {
     const t0 = performance.now();
     const step = () => { const k = (performance.now() - t0) / 1000; fn(Math.min(k, sec)); if (k < sec) requestAnimationFrame(step); };
     requestAnimationFrame(step);
   }
-  private scene(beats: Beat[], then?: () => void) {
+  protected scene(beats: Beat[], then?: () => void) {
     this.busy = true;
     this.combat()?.holster?.();
     // the spear he carries stays out of his scenes (across a close-up it is a pole through the frame)
@@ -260,7 +260,7 @@ export class Episode2 {
     this.playScene(beats, () => { if (spear) spear.visible = was; this.busy = false; this.wait = 1.2; then?.(); });
   }
   /** A fade to black, a jump in the world's time (and day), back in. */
-  private passTime(hour: number, nextDay: boolean, card: string | null, then: () => void) {
+  protected passTime(hour: number, nextDay: boolean, card: string | null, then: () => void) {
     this.busy = true;
     this.ui.fade('black', 1, 0.9);
     this.after(1.0, () => {
@@ -270,7 +270,7 @@ export class Episode2 {
       this.after(0.6, () => { this.ui.fade('black', 0, 1.4); this.busy = false; then(); });
     });
   }
-  private clearHands() { const z = this.z; z.setHold(null); z.setProp(null); z.setLookTarget(null); z.setFace(null); z.setLimbs(null); z.setKneel(false); }
+  protected clearHands() { const z = this.z; z.setHold(null); z.setProp(null); z.setLookTarget(null); z.setFace(null); z.setLimbs(null); z.setKneel(false); }
 
   // ------------------------------------------------------------------ 2.1 the vine snaps (level 11)
   private intro11() {
@@ -498,7 +498,7 @@ export class Episode2 {
 
   /** A two-ply cord between two points (a twisted pair of thin strands). */
   /** The hafted spear of level 12, along +y from the butt (1.9 m): flint point, resin glue, bark-cord binding. */
-  private haftedSpear() {
+  protected haftedSpear() {
     const g = new THREE.Group();
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 1.7, 7), std(0x6a4e3a)); shaft.position.y = 0.85;
     const pt = new THREE.OctahedronGeometry(0.05, 0); pt.scale(0.85, 2.6, 0.3);
@@ -730,15 +730,17 @@ export class Episode2 {
   }
   private shelterBuilt = false;
   private handSpots: THREE.Vector3[] = [];
-  private buildShelter() {
+  protected buildShelter() {
     if (this.shelterBuilt) return;
     this.shelterBuilt = true;
+    // one shelter in the world, whichever episode builds it first (Episode Three keeps it after a reload)
+    if (this.world.scene.getObjectByName('rockShelterSite')) return;
     const S = this.shelter(), back = v3(Math.sin(S.facing), 0, Math.cos(S.facing)), side = this.side(back);
     // an overhang in a low cliff (world/rockshelter.ts): banded rock, a sooted roof, the cliff's blocks round it, and the
     // hands blown in ochre on the back wall
     const origin = S.at.clone().addScaledVector(back, 1.0); origin.y = this.h(origin.x, origin.z);
     const rs = buildRockShelter(origin, back, side, (x, z) => this.h(x, z), handTex);
-    const g = rs.group;
+    const g = rs.group; g.name = 'rockShelterSite';
     // the old hearth under the soot: a ring of fire-cracked stones round grey ash
     const ashM = std(0x4a4643, { roughness: 1 }), burntM = std(0x2e2a27, { roughness: 0.95 });
     const ash = new THREE.Mesh(new THREE.CircleGeometry(0.42, 14), ashM); ash.rotation.x = -Math.PI / 2; ash.position.copy(rs.hearth).add(v3(0, 0.015, 0)); g.add(ash);
@@ -756,8 +758,9 @@ export class Episode2 {
     this.group.add(g);
   }
   private cairnG: THREE.Group | null = null;
-  private buildCairn(full: boolean) {
+  protected buildCairn(full: boolean) {
     if (this.cairnG) this.cairnG.removeFromParent();
+    this.world.scene.getObjectByName('ep2Cairn')?.removeFromParent();
     const S = this.shelter(), g = new THREE.Group(), m = std(0x8a8494, { roughness: 0.9 });
     const n = full ? 6 : 3;
     let y = 0;
@@ -767,7 +770,7 @@ export class Episode2 {
       const red = new THREE.MeshBasicMaterial({ color: 0xa8321e });
       for (let i = 0; i < marks; i++) { const d = new THREE.Mesh(new THREE.CircleGeometry(0.022, 8), red); const a = (i / Math.max(1, marks)) * Math.PI * 2; d.position.set(Math.cos(a) * 0.16, 0.42, Math.sin(a) * 0.16); d.lookAt(d.position.clone().multiplyScalar(2).setY(0.42)); g.add(d); }
     }
-    g.position.copy(S.cairn); g.traverse((o) => { (o as THREE.Mesh).castShadow = true; });
+    g.position.copy(S.cairn); g.traverse((o) => { (o as THREE.Mesh).castShadow = true; }); g.name = 'ep2Cairn';
     this.group.add(g); this.cairnG = g;
     return g;
   }

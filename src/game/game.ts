@@ -18,6 +18,7 @@ import { Dialogue, DlgTree } from './dialogue';
 import type { TechNode } from './tech/data';
 import { CH2_LAST, TECH_BY_ID } from './tech/data';
 import { Episode2 } from './episode2';
+import { Episode3 } from './episode3';
 import { recordDiscovery } from './tech/tech';
 import { showDiscovery } from '../ui/science';
 import type { Player } from './player';
@@ -167,13 +168,17 @@ export class Game {
       c.failed++;
       const d = this.craft.debug();
       // Episode Two: his own line says what went wrong (the real failure of that step); elsewhere MegaZroN mocks
-      if (d && this.ep2.craftFailed(d.id, d.step)) return;
+      if (d && (this.ep2.craftFailed(d.id, d.step) || this.ep3.craftFailed(d.id, d.step))) return;
       this.ui.say(`fail.${(this.fails++ % 4) + 1}`, 'mz.name', 3.5);
     };
     this.ep2 = new Episode2(world, player, ui, this.story.npcs, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn),
       (spec) => this.combat?.tension(spec) ?? null, () => this.combat, () => this.mode === 'play' && this.canFight() && !this.combat?.encounter && !this.combat?.threatened,
       (id, then) => this.discoverNow(id, then));
     this.story.ch2.ep2 = this.ep2;
+    this.ep3 = new Episode3(world, player, ui, this.story.npcs, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn),
+      (spec) => this.combat?.tension(spec) ?? null, () => this.combat, () => this.mode === 'play' && this.canFight() && !this.combat?.encounter && !this.combat?.threatened,
+      (id, then) => this.discoverNow(id, then));
+    this.story.ch2.ep3 = this.ep3;
     // the dead stop talking, wherever the line comes from
     ui.sayFilter = (key, who) => {
       const id = /^crew\.(\w+)\.name$/.exec(who ?? '')?.[1];
@@ -200,7 +205,7 @@ export class Game {
       branch: this.sceneBranch,
       camera: this.player.camera,
       scene: this.world.scene,
-      actors: { scientist: this.player.model, explorer: this.world.explorer, ...this.ep2?.actors },
+      actors: { scientist: this.player.model, explorer: this.world.explorer, ...this.ep2?.actors, ...this.ep3?.actors },
       subtitle: (k, sp) => this.ui.subtitle(k, sp),
       cameraOk: (p) => !this.world.forest.blocks(p.x, p.z, 0.5) && p.y > this.world.terrain.height(p.x, p.z) + 0.35,
       lineBlocked: (from, to) => {
@@ -255,7 +260,7 @@ export class Game {
   startCraft(n: TechNode) {
     if (this.mode !== 'play') return;
     // Episode Two: the work in his hands first, then the panel
-    if (this.ep2.beforeCraft(n, () => this.openCraft(n))) return;
+    if (this.ep2.beforeCraft(n, () => this.openCraft(n)) || this.ep3.beforeCraft(n, () => this.openCraft(n))) return;
     this.openCraft(n);
   }
   private openCraft(n: TechNode) {
@@ -277,13 +282,26 @@ export class Game {
     if (this.ep2.owns(s.level) && n.id === 'pottery') { this.persist(); this.leavePanel(); this.ep2.crafted(n, () => {}); return; }
     const first = recordDiscovery(s, n.id);
     this.persist();
-    if (first && this.ep2.owns(s.level)) { this.leavePanel(); if (this.ep2.crafted(n, () => this.discoverCard(n))) return; this.discoverCard(n); return; }
+    const ep = this.ep2.owns(s.level) ? this.ep2 : this.ep3.owns(s.level) ? this.ep3 : null;
+    if (first && ep) { this.leavePanel(); if (ep.crafted(n, () => this.discoverCard(n))) return; this.discoverCard(n); return; }
     if (!first) { this.ui.toast(t('msg.madeMore', { name: t(`tech.${n.id}`) })); this.leavePanel(); return; }
     showDiscovery(n, () => { this.leavePanel(); this.story.ch2.afterDiscovery(n); });
   }
 
+  /** A save from the old design's levels 15 to 21 (charcoal to acids) starts Episode Three at level 15: Episode Two is
+   *  counted done (its last beats' flags), what was made stays in the bag and the codex (DECISIONS E3-14). */
+  static migrateEp3(s: SaveData) {
+    if (s.level < 15 || s.flags['e3.l15.intro'] || s.flags['e3.migrated']) return;
+    s.flags['e3.migrated'] = true;
+    if (s.level > 15 || !(s.flags['e2.done'])) { s.flags['e2.done'] = true; s.flags['e2.nightDone'] = true; s.flags['seen-ep2'] = true; }
+    s.level = 15;
+    s.completed = (s.completed ?? []).filter((n) => n < 15);
+    for (let n = 1; n < 15; n++) if (!s.completed.includes(n)) s.completed.push(n);
+  }
   /** Episode Two (levels 11 to 14). */
   ep2!: Episode2;
+  /** Episode Three (levels 15 to 21). */
+  ep3!: Episode3;
   /** The discovery card outside the craft panel (Episode Two shows it after the scene that makes the thing). */
   private discoverCard(n: TechNode, then?: () => void) {
     if (this.mode !== 'play') { this.after(0.5, () => this.discoverCard(n, then)); return; }
@@ -412,6 +430,7 @@ export class Game {
 
   start(save: SaveData, fresh: boolean) {
     this.save = save;
+    Game.migrateEp3(save);
     this.injuries?.quiet();
     this.injuries = new Injuries('scientist', fresh ? undefined : save.wounds);
     this.cues = [];

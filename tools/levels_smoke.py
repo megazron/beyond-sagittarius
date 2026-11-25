@@ -29,6 +29,8 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from smoke import launch, serve  # noqa: E402
 
+# the last level that can be played (src/ui/ui.ts PLAYABLE_LEVELS): Episode Three is built to level 15
+LAST = 15
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 PLAYER = "Quorvex"
@@ -610,7 +612,7 @@ def main():
                 seen_levels.append(lvl)
                 last_level = lvl
                 stuck = 0
-            if lvl > 21:
+            if lvl > LAST:
                 break
             if st["mode"] == "dead":
                 failures.append(f"died on level {lvl}")
@@ -761,14 +763,14 @@ def main():
         if ev("__bs.branch.lineIfDead('medic', {key: 'rad.medic', who: 'medic', fallback: 'br.rad.static'})")["key"] != "br.rad.static":
             failures.append("a dead crewmate's line did not use its fallback")
         flags = ev("__bs.save.flags")
-        for sc in ("l3", "fight", "l7", "ch1", "ep2", "ch2"):
+        for sc in ("l3", "fight", "l7", "ch1", "ep2"):
             if not flags.get(f"seen-{sc}"):
                 failures.append(f"scene {sc} never played")
         final = ev("({level: __bs.level, completed: __bs.save.completed, flags: __bs.save.flags, crew: __bs.crew, hits: __bs.save.houndHits})")
         log("final:", json.dumps(final)[:600])
-        if final["level"] != 22:
+        if final["level"] != LAST + 1:
             failures.append(f"did not finish the arc: level {final['level']}")
-        if sorted(final["completed"]) != list(range(1, 22)):
+        if sorted(final["completed"]) != list(range(1, LAST + 1)):
             failures.append(f"completed list wrong: {final['completed']}")
         log("fights:", fights)
         ids = [f[0] for f in fights]
@@ -808,7 +810,7 @@ def main():
             failures.append(f"discoveries {disc} != playable {playable}")
         if any(n["state"] != "planned" for n in tech["nodes"] if n["status"] == "planned"):
             failures.append("a planned entry is not locked")
-        need_warn = {"Hafting with glue": "sharp", "Fire on demand": "fire", "Pottery": "heat", "Charcoal": "fire", "Lime": "chemical", "Salt": "heat", "Glass": "heat", "Soap": "chemical", "Fermentation": "pressure", "Acids and bases": "chemical"}
+        need_warn = {"Hafting with glue": "sharp", "Fire on demand": "fire", "Pottery": "heat", "Polished stone axe": "sharp"}
         for title, cat in need_warn.items():
             if cat not in shown.get(title, []):
                 failures.append(f"no {cat} warning on the {title} discovery: {shown.get(title)}")
@@ -916,7 +918,7 @@ def main():
         log("after reload:", re)
         if not page.locator("#safety .safety-card").count() == 0 and page.locator("#safety .safety-card").is_visible():
             failures.append("safety card came back after being accepted")
-        if len(ev("__bs.save.discoveries")) != 12:
+        if len(ev("__bs.save.discoveries")) != len(disc):
             failures.append("discoveries lost on reload")
         if re["level"] != 22 or re["names"].get("scientist") != PLAYER or re["crew"]["mode"] != "camp":
             failures.append(f"save did not persist: {re}")
