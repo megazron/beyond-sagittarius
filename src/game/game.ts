@@ -171,7 +171,7 @@ export class Game {
       this.ui.say(`fail.${(this.fails++ % 4) + 1}`, 'mz.name', 3.5);
     };
     this.ep2 = new Episode2(world, player, ui, this.story.npcs, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn),
-      (spec) => this.combat?.tension(spec) ?? null, () => this.combat, () => this.mode === 'play' && this.canFight() && !this.combat?.encounter && !this.combat?.engaged,
+      (spec) => this.combat?.tension(spec) ?? null, () => this.combat, () => this.mode === 'play' && this.canFight() && !this.combat?.encounter && !this.combat?.threatened,
       (id, then) => this.discoverNow(id, then));
     this.story.ch2.ep2 = this.ep2;
     // the dead stop talking, wherever the line comes from

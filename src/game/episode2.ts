@@ -21,6 +21,7 @@ import { isDiscovered, recordDiscovery } from './tech/tech';
 interface CombatLike {
   ensureAsked(go: () => void): void;
   startEncounter(id: 'night.defence', o: { story?: Record<string, boolean>; hour?: number }): Promise<{ result: string; flags: Record<string, unknown>; stats: { taken: number } }>;
+  holster?(): void;
 }
 
 const OOM = 'local' as Who;
@@ -246,6 +247,7 @@ export class Episode2 {
   }
   private scene(beats: Beat[], then?: () => void) {
     this.busy = true;
+    this.combat()?.holster?.();
     // the spear he carries stays out of his scenes (across a close-up it is a pole through the frame)
     const spear = this.z.root.getObjectByName('heldSpear'), was = !!spear?.visible;
     if (spear) spear.visible = false;

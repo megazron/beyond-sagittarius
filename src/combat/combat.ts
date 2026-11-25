@@ -122,6 +122,13 @@ export class Combat {
   get cs(): CombatSave { const s = this.d.save() as SaveX; return (s.combat ??= { has: {}, dur: {}, weapon: 'fists', injuries: [], studied: [], hints: [], warmth: 100 }); }
   /** Something near means harm, or the player has a weapon up: the fight has the controls. */
   get engaged() { return !!this.encounter || this.engagedT > 0; }
+  /** A fight, something hostile near, or the player acting (a swing, an aim): what a story scene must wait for. A
+   *  weapon simply held up keeps `engaged` on too, and Episode Two's scenes waited on that forever (CI levels_smoke stood
+   *  at the rock shelter with nothing hostile near). */
+  get threatened() { return !!this.encounter || this.threatT > 0; }
+  private threatT = 0;
+  /** A story scene is starting in free play: the weapon goes down (a raised spear would stay in his hands through it). */
+  holster() { if (this.encounter || !this.sim) return; this.sim.equip('fists'); this.engagedT = 0; this.threatT = 0; }
   get threat() { return !!this.sim && this.sim.hostile().some((e) => Math.hypot(e.x - this.d.player.pos.x, e.z - this.d.player.pos.z) < 32); }
   /** How fast stamina comes back right now (injuries, hunger, thirst, cold, a raised guard). */
   regenMul() { const s = this.sim; if (!s) return 1; const p = s.player; return p.regenLock > 0 || p.blocking || p.act === 'roll' ? 0 : s.hurtMul().regen; }
@@ -141,7 +148,7 @@ export class Combat {
     this.applySettings();
     this.loadPlayer(sim);
     this.seedAmbient(sim);
-    this.engagedT = 0;
+    this.engagedT = 0; this.threatT = 0;
   }
   private loadPlayer(sim: CombatSim) {
     const c = this.cs, p = sim.player, s = this.d.save();
@@ -459,7 +466,7 @@ export class Combat {
     if (this.ambient) { this.ambient.inv = s.inventory; this.loadPlayer(this.ambient); }
     D.ui.setInventory(s.inventory, s.flags.spear ? ['spear'] : []);
     this.hud.show(false); this.hud.showTouch(false); this.hud.objective(null); this.hud.boss(null); this.hud.awareness(null); this.hud.arrows([]); this.hud.tags([]); this.hud.bars([]); this.hud.analysis(null); this.hud.vignette(false);
-    this.engagedT = 0; this.kitOpen = false; this.hud.picker(null);
+    this.engagedT = 0; this.threatT = 0; this.kitOpen = false; this.hud.picker(null);
   }
 
   // ---------------- the Action menu ----------------
@@ -639,7 +646,7 @@ export class Combat {
   /** Free play: before the player controller runs. */
   before(dt: number, time: number) {
     // on another world the animals of Verdaxis are neither stepped nor drawn
-    if (!this.d.home()) { if (this.views.size) this.dropViews(); this.fx.group.visible = false; this.hud.show(false); this.engagedT = 0; this.d.player.combat = null; return; }
+    if (!this.d.home()) { if (this.views.size) this.dropViews(); this.fx.group.visible = false; this.hud.show(false); this.engagedT = 0; this.threatT = 0; this.d.player.combat = null; return; }
     this.fx.group.visible = true;
     // a moment the story opened on its own runs on the game's clock while the game runs (its own clock otherwise)
     if (this.tensionUi.open && !this.encounter) { this.tensionFed = performance.now(); this.tensionUi.update(dt); return; }
@@ -759,7 +766,9 @@ export class Combat {
     if (p.down && !run) st.health = 0; // free play: the game's own death takes it from here
     const armed = p.weapon !== 'fists';
     const threat = sim.hostile().some((e) => Math.hypot(e.x - p.x, e.z - p.z) < 30);
-    if (run || threat || p.act !== 'idle' || I.aim) this.engagedT = Math.max(this.engagedT, armed ? 8 : 3);
+    const acting = !!run || threat || p.act !== 'idle' || I.aim;
+    this.threatT = acting ? 3 : Math.max(0, this.threatT - dt);
+    if (acting) this.engagedT = Math.max(this.engagedT, armed ? 8 : 3);
     else if (armed) this.engagedT = Math.max(this.engagedT, 0.5);
     else this.engagedT = Math.max(0, this.engagedT - dt);
     const eng = this.engaged;
