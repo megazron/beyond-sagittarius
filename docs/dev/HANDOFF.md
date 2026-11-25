@@ -2117,6 +2117,7 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
 - GPU probes: ~/bs-cap/ep2b/probe (logger.js reads __bs.frameReport and __bs.bodyPoints every 0.25 s; mkprobe.py,
   mkprobe2.py write plans for ~/bs-cap/tools/cap1.sh). Preview servers: 4641 (dist), 4642 (dist-cap), PIDs in
   ~/bs-cap/ep2b/preview*.pid.
+- ~11:40 LANDED ep2b on main as 764259e (CI 45597909761 all green on that sha).
 - ~10:50 GPU takes delivered: Downloads/BS_Game_v1.1/episode2_v2/ (take A and B, each clip under 30 MB, sheets,
   NOTES.md with what still looks wrong). Capture kit: ~/bs-cap/ep2b/cap (bot.js stand-in: follows the land-routed
   marker, repeats keydown while holding, leaves talk menus, wakes up after a death; mkplan.py, mkplan14.py for a level
