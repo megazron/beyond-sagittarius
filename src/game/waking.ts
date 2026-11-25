@@ -285,10 +285,10 @@ export class Waking {
       // up (0 to 0.35), at the lips (0.35 to 0.75), down (0.75 to 1)
       const d = k < 0.35 ? Math.sin((k / 0.35) * Math.PI / 2) : k < 0.75 ? 1 : Math.cos(((k - 0.75) / 0.25) * Math.PI / 2);
       // the leaf's middle a little below and in front of his lips, so its rim is at his mouth
-      const top = m.lipsAt(new THREE.Vector3()).addScaledVector(f, 0.07).add(new THREE.Vector3(0, -0.075, 0));
+      const top = m.lipsAt(new THREE.Vector3()).addScaledVector(f, 0.1).add(new THREE.Vector3(0, -0.12, 0)); // GPU ep1A: at 7 cm out and 7.5 down the rim sat at his nose and eye
       const c = low.clone().lerp(top, d);
       // tipped towards him as it comes up: the fingers turn from forwards to up
-      const fingers = f.clone().multiplyScalar(0.8 - d * 0.55).addScaledVector(up, 0.4 + d * 0.6).normalize();
+      const fingers = f.clone().multiplyScalar(0.8 - d * 0.3).addScaledVector(up, 0.4 + d * 0.35).normalize();
       m.setHold({
         R: { at: c.clone().addScaledVector(r, -0.01), fingers, palm: new THREE.Vector3(-0.3, 1, 0).addScaledVector(f, -d * 0.6).normalize(), grasp: true },
         L: { at: c.clone().addScaledVector(r, 0.025).add(new THREE.Vector3(0, -0.015, 0)), fingers, palm: new THREE.Vector3(0.3, 1, 0).addScaledVector(f, -d * 0.6).normalize(), radius: 0.03, grasp: true },
@@ -382,7 +382,7 @@ export class Waking {
         this.ticker(3.0, () => rub?.());
       } },
       // then the lip: he touches it to his lower lip and holds it there
-      { hold: 2.4, if: TESTED, shot: () => cover.close(z, 0.25, 0.75, 0.0), run: () => {
+      { hold: 2.4, if: TESTED, shot: () => this.profile(0.8), run: () => { // cover.close here framed the back of his head (GPU ep1A)
         rub = null;
         const m = mouth(), f = this.fwd();
         z.setHold({ R: { at: m.clone().addScaledVector(f, 0.035).add(new THREE.Vector3(0, -0.02, 0)), fingers: f.clone().negate().add(new THREE.Vector3(0, 0.3, 0)).normalize(), palm: new THREE.Vector3(0, 0, 0).sub(f).normalize(), grasp: true } }); // the berry's middle at his lower lip
