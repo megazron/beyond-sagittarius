@@ -20,8 +20,8 @@ const SITES: Site[] = ['camp', 'reeds', 'rise'];
 /**
  * Episode Three, "A Place to Stay" (levels 15 to 21; script and choices: the private story folder). Age 2 after the
  * pot, in the tree's order: a place above the flood line and the polished stone axe (15), a post-and-beam house with a
- * lever and a brace (16), the wheat and the first field (17), the infected cut and the one dose (18), Draxum's wall on
- * Methryx (19), the ditch and the tame animal (20), the harvest, the store, the storm and the stranger (21).
+ * lever and a brace (16), grain and the first field (17), basic medicine (18), an interlude on another world (19),
+ * irrigation and a tame animal (20), the harvest and the store (21).
  *
  * It shares Episode Two's helpers (where he kneels, the shots, the scene and time cards). Built so far: level 15. The
  * levels after it are not built yet (ui.ts PLAYABLE_LEVELS stops there and the episode says so). All progress is flags

@@ -2126,3 +2126,23 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
 - Still open (see NOTES.md there): the bow drill insert does not show his hands; the shelter is blocky from the front
   and dark inside; a pale white shape beside him on the ridge (go branch), not identified; ridge find moved after the
   take, not re-recorded; Oom-Sa's first close-up against a blown-out sky.
+
+## 2026-11-25 Episode Two leftovers and Episode Three (ep3 agent: worktree ~/bs-ep3, branch ep3 from main 764259e)
+- Episode Two leftovers (d00c97a): the firing night has its own fight (combat/sim/encounters.ts `story.firing`: a pit
+  fire beside the camp fire to keep hot till dawn, the torch from it, the big one comes in wave 1 and raids the pit
+  when the player is > 4.5 m from it (`Enemy.raid`, ai.ts stalker), Oom-Sa as the ally feeding the pit, running on
+  trust 1; flags kiln.raided/scattered/cold/fuel; probe tools/combat/kiln_probe.ts). world/predator.ts redrawn
+  (`createHound({ big })`, `look`, `sniff`); the fight's hound and Episode One's hiding scene use the big one;
+  Episode Two's eyes() replaced by `bigOne()` walking in, looking, leaving. Ridge crystals `ridge.quiet()` from
+  Episode Two on (they were the white shape). Bow drill insert from the front; Oom-Sa close-ups from above her eyes;
+  shelter ledges wander and round over, more bounce inside. g.f. text + ~f voice takes for Episode Two (0a883af).
+- Episode Three (src/game/episode3.ts extends Episode2; levels 15 to 21; only 15 built): chapter2.ts `ep3`, game.ts
+  `ep3` (beforeCraft/craftFailed/crafted), `Game.migrateEp3` (old 15-21 saves start at 15), tech node `polish`, the
+  old chain `later()` (planned), `PLAYABLE_LEVELS = 15`, sealed data branch/episode3.sealed (master
+  ~/bs-story/episode3.json), tools/episode3_smoke.py, levels_smoke LAST = 15. Script: ~/bs-story/EPISODE_THREE_SCRIPT.md.
+- Next slices in order: 16 to 21, scene by scene from the private script (~/bs-story/EPISODE_THREE_SCRIPT.md); the
+  inventions are the frame (lever, brace), grain and sowing, basic medicine, the ice wall (an interlude on another
+  world), irrigation, and the store (salt, drying, a tally). Each slice: raise PLAYABLE_LEVELS and LAST in
+  levels_smoke, extend the private episode3.json and reseal, add its decisions to episode3_smoke.
+- Capture kit: ~/bs-cap/ep3 (mkplan.py writes ~/bs-cap/plan_ep3A.json: Episode Two from level 11 with one set of picks,
+  then level 15; bot.js ruins the polish mix once).
