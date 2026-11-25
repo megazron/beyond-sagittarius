@@ -2169,3 +2169,4 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   (~/bs-cap/ep3/tools/kneel_e3.py, a level 15 save played with scenes not skipped): every kneeling insert in 15 to 17
   holds hips 0.26 m over the root; the standing seen in the GPU full take did not reproduce from this state. No GPU
   recording of levels 16 to 21 yet.
+- Landed on main as 71483bb (fast-forward from 5ee3e90; CI 45691358032 all 21 jobs green on that sha, no reruns).
