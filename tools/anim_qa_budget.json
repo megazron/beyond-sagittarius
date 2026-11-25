@@ -718,8 +718,8 @@
    "clothPx": 301
   },
   "e2_vine": {
-   "armPenCm": 4.3,
-   "handPenCm": 4.3,
+   "armPenCm": 5.8,
+   "handPenCm": 5.8,
    "meshInCm": 1.1,
    "jerkCm": 5.2,
    "holdErrCm": 2.3,
@@ -727,8 +727,8 @@
    "mouthCm": 1.0
   },
   "e2_cord": {
-   "armPenCm": 3.6,
-   "handPenCm": 3.6,
+   "armPenCm": 5.5,
+   "handPenCm": 5.5,
    "meshInCm": 1.3,
    "jerkCm": 5.4,
    "holdErrCm": 2.3,
@@ -745,8 +745,8 @@
    "mouthCm": 1.0
   },
   "e2_bowdrill": {
-   "armPenCm": 4.1,
-   "handPenCm": 4.1,
+   "armPenCm": 5.4,
+   "handPenCm": 5.4,
    "meshInCm": 3.6,
    "jerkCm": 4.4,
    "holdErrCm": 1.0,
