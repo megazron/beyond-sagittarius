@@ -2094,12 +2094,17 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   your body on Web still casts (shadowFar 10). On phones your body no longer casts into the static map (it has the
   contact blob city.ts draws for it); before, its shadow was frozen where the last redraw caught it.
 - gpu_tour.py plan "hold": true holds the clock from arrival as perf_gate does (steps "eval": "__bs.advance(1)").
-- STACK rebased on gate4 10e7d53 (main 37b105a + gate + this fix): modal-land3 d20a0f5, intro5 027f973, land5 b809215,
-  cabin6 da16394 (each differs from its old branch by these three files only), then ep1land 83e5a4e (ep1polish2
-  43451a5 rebased on cabin6 without its merge of main; lipsync.json merged key by key, no key changed on both sides;
-  voice_check 0 problems, typecheck ok). bowhold2 on ep1land: combat play_test's
-  arena on a held clock with Math.random seeded (the bow-arm check read 0.1 to 5.5 cm on one code: the page's own
-  free-running frames were posed between __bs.step's ticks).
+- LANDED: gate4 10e7d53 on main (CI 45527597544 all green; perf_gate there read the gate [117, 117, 132, 117], the
+  same as the laptop).
+- STACK, rebased again on fa2fde3 (= 10e7d53 + two test fixes below): modal-land4 0952753, intro6 e75a2fe, land7
+  e6a93b4 (+ the levels_smoke arrival fix), cabin7 26fe104, ep1land2 3c32744 (ep1polish2 43451a5 rebased without its
+  merge of main; lipsync.json merged key by key, no key changed on both sides; voice_check 0 problems), bowhold3 (the
+  combat arena on a held clock, this note).
+- TEST FIXES from the first round of runs: soak_smoke (modal-land3: one 186 ms sample of a single frame among 6.7 to
+  12.8 ms failed the trend; now the median of nine frames), mobile_smoke (intro5: a 30 s screenshot timeout failed the
+  pixel7-landscape pass; a picture is now retried once and logged), levels_smoke (land5 and cabin6: the reveal loop stayed
+  on the world for 60 rounds while the new arrival played with the controls off and the teleport waiting; it now skips
+  the arrival as Skip does; levels_smoke passed locally on land6 with it).
 - main 37b105a's levels_smoke failure: demo()'s 5 s wait for '#dlg-choices .dlg-c' ran out (after the menus test).
   modal-land's levels_smoke change retries such a wait after two drawn frames and logs the modal log and long tasks;
   whether that is the cause is not proven.
