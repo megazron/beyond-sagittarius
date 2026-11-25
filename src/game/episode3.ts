@@ -2106,14 +2106,14 @@ export class Episode3 extends Episode2 {
     this.passTime(10.5, true, 'e3.day', () => {
       const z = this.z, at = this.fieldAt(), H = this.house(), share = this.harvestShare();
       this.sprouts(0, 1);
-      const me = this.settle(at.clone().addScaledVector(H.a, 1.6).addScaledVector(H.b, ((this.fieldRows.length - 1) / 2) * 0.55 + 0.4), at, false);
+      const me = this.settle(at.clone().addScaledVector(H.a, 1.6).addScaledVector(H.b, ((this.fieldRows.length - 1) / 2) * 0.55 + 0.4), at, true); // (on his knees in the row: standing, the sickle insert was his coat and legs)
       const f = this.fwd(), r = this.right(f);
       // the sickle: a curved wooden haft with flint blades set in resin along its inside edge
       const sickle = new THREE.Group();
       const haft = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.012, 5, 14, Math.PI * 0.9), std(0x7a5e44)); sickle.add(haft);
       for (let i = 0; i < 5; i++) { const a = 0.25 + i * 0.5, b = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.004, 0.018), std(0x8a8a90, { roughness: 0.3 })); b.position.set(Math.cos(a) * 0.145, Math.sin(a) * 0.145, 0); b.rotation.z = a + Math.PI / 2; sickle.add(b); }
       this.group.add(sickle);
-      const cutAt = me.clone().addScaledVector(f, 0.45).addScaledVector(r, 0.1).add(v3(0, 0.55, 0));
+      const cutAt = me.clone().addScaledVector(f, 0.45).addScaledVector(r, 0.1).add(v3(0, 0.34, 0));
       const swing = (k: number) => { const u = Math.sin(k * 3.4); const p = cutAt.clone().addScaledVector(r, u * 0.18); sickle.position.copy(p); sickle.lookAt(p.clone().add(f)); sickle.rotateZ(u * 0.6);
         z.setHold({ R: { at: p.clone().add(v3(0, 0.05, 0)), fingers: f.clone(), palm: r.clone().negate(), radius: 0.02, grasp: true }, L: { at: cutAt.clone().addScaledVector(r, -0.12).add(v3(0, 0.12, 0)), fingers: f.clone(), palm: r.clone(), radius: 0.03, grasp: true } }); };
       swing(0);
@@ -2128,7 +2128,7 @@ export class Episode3 extends Episode2 {
       const beats: Beat[] = [
         { hold: 3.4, shot: () => ({ from: at.clone().addScaledVector(H.a, -6.0).addScaledVector(H.b, 4.0).add(v3(0, 2.0, 0)), to: at.clone().add(v3(0, 0.5, 0)), fov: 50, push: 0.03 }), run: () => { z.setLookTarget(at); S.anim(3.4, (k) => swing(k)); } },
         { hold: 2.8, shot: () => ({ from: cutAt.clone().addScaledVector(r, 0.55).addScaledVector(f, 0.25).add(v3(0, 0.05, 0)), to: cutAt.clone(), fov: 30, push: 0.008, aperture: 0.004, lightAt: cutAt.clone() }), run: () => { S.anim(2.8, (k) => swing(k + 1)); audio.sample('leather', 0.25, { rate: 1.4 }); } },
-        { hold: 3.6, shot: () => ({ from: thresh.clone().addScaledVector(f, -1.6).addScaledVector(r, -0.6).add(v3(0, 1.1, 0)), to: thresh.clone().add(v3(0, 0.75, 0)), fov: 40, push: 0.02, lightAt: thresh.clone().add(v3(0, 1, 0)) }), run: () => {
+        { hold: 3.6, shot: () => ({ from: thresh.clone().addScaledVector(f, -1.9).addScaledVector(r, -0.7).add(v3(0, 1.5, 0)), to: thresh.clone().add(v3(0, 1.05, 0)), fov: 40, push: 0.02, lightAt: thresh.clone().add(v3(0, 1, 0)) }), run: () => {
           sickle.visible = false;
           this.settle(thresh, thresh.clone().addScaledVector(f, 1), false);
           const ff = this.fwd(), rr = this.right(ff), tray = thresh.clone().addScaledVector(ff, 0.3).add(v3(0, 1.0, 0));
