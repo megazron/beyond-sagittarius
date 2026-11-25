@@ -118,7 +118,9 @@ with sync_playwright() as pw:
     # 1c. time, not distance (the owner: "the longer we play the game, the laggier it gets"): six minutes in the bazaar,
     # moving between two spots, sampled every 30 s. The game's own update time (main thread, measurable even on software
     # GL), the heap after a GC and what the renderer holds must stay flat
-    TS = "(()=>{window.gc&&window.gc();const m=performance.memory||{};const g=__bs.gpuMem;return {tick:+__bs.perf.tick.toFixed(2),geo:g.geometries,tex:g.textures,progs:g.programs,heap:Math.round((m.usedJSHeapSize||0)/1e6)}})()"
+    # (the update time is the median of nine frames: one frame was the whole sample, and modal-land3's run read 6.7 to 12.8
+    # ms for ten samples and 186 ms for one, which alone failed the trend)
+    TS = "new Promise((res)=>{window.gc&&window.gc();const m=performance.memory||{};const g=__bs.gpuMem;const ts=[];const f=()=>{ts.push(__bs.perf.tick);if(ts.length<10){requestAnimationFrame(f);return}ts.shift();ts.sort((a,b)=>a-b);res({tick:+ts[4].toFixed(2),geo:g.geometries,tex:g.textures,progs:g.programs,heap:Math.round((m.usedJSHeapSize||0)/1e6)})};requestAnimationFrame(f)})"
     samples = []
     for k in range(12):
         page.evaluate(f"__bs.awayTeleport(6.0, {50.0 if k % 2 == 0 else 42.0}, {3.14 if k % 2 == 0 else 0})")
