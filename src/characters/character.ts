@@ -320,7 +320,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (propOn && (!want || props.get(want) !== propOn)) { propOn.removeFromParent(); propOn = null; }
     if (!want || propOn) return;
     let m = props.get(want);
-    if (!m) { m = PROP_DEF[want](); m.castShadow = true; props.set(want, m); }
+    if (!m) { m = PROP_DEF[want](); castable.add(m); shSeen.add(m); props.set(want, m); }
+    m.castShadow = shadowsOn; // a held prop casts only while its body does (phones' city: nobody)
     // the rig's rest pose has every rotation at identity (a T pose): the right hand's fingers point along -x, the palm down
     if (want === 'box') { bs.get('hips')!.add(m); m.position.set(0, 0.12, 0.3); m.rotation.set(0, 0, 0); }
     else {
@@ -704,12 +705,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         // draw calls each (Ultra's bazaar drew 83 skinned meshes a frame)
         s1.traverse((o) => { const m = o as THREE.SkinnedMesh; if (m.isSkinnedMesh && (m.material as THREE.Material) !== mouth && !(crowd && (m.name === 'lash' || m.name === 'cornea'))) ms.push(m); });
         for (const m of ms) { m.bind(skel, m.bindMatrix); host.add(m); m.visible = false; }
-        lodSets[1] = ms;
+        lodSets[1] = ms; shDirty = true;
         mergeCrowd();
       }).catch(() => { /* no light build: the full body everywhere */ });
     }
     kit = addKit({ id, custom, human, bones: bs, meta: M, look: L, sway, skinC, glowC, shadeC, detail, heightM });
-    kit.splint.visible = pendingSplint;
+    kit.splint.visible = pendingSplint; shDirty = true;
     // the props, the mouth and the stock ride the skeleton as one to three skinned meshes instead of a dozen and more
     if (lodSets[0][0]) {
       const b0 = lodSets[0][0];
@@ -743,6 +744,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let kitIn: Set<THREE.SkinnedMesh>[] = [new Set(), new Set()], hairIn: (THREE.Object3D | null)[] = [null, null], kitSlots: string[] = [], kitCull = false, hairM: THREE.Matrix4 | null = null, kitShown = true;
   /** The separate kit and hair are drawn only where the set on show does not hold them. */
   function showKitHair() {
+    shDirty = true;
     const sep = BODY_MERGE.separate, u = bodyMat?.userData.u as Record<string, { value: number }> | undefined;
     // the A/B: each merged set swaps for the body as main merged it (its morphs in three.js's texture, nothing baked)
     for (let s = 0; s < 2; s++) {
@@ -868,7 +870,18 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let sinceDrawn = 99, camD = 0, skipN = 0, skipDt = 0, corrOn = false, corrN = 0, crowd = false;
   let lodSets: THREE.SkinnedMesh[][] = [[], []], lodOn = 0, rigid: THREE.SkinnedMesh[] = [], hairs: [THREE.Object3D | null, THREE.Object3D | null] = [null, null], hairOn = 0;
   const castable = new Set<THREE.Object3D>(); // the meshes that cast a shadow when near
-  let shadowsOn = true;
+  // what casts: the first time a mesh under the body is seen (applyShadows), it casts if it was made to; from then on
+  // only while the body casts (pickLod). Bits added later (the kit, the light build, a held phone) are switched with
+  // it: on phones nothing that moves was meant to cast in the city, but the kit's phone, the player's body (Away.enter)
+  // and held props did, so every redraw of the static sun shadow drew them (perf_gate's phone gate: 151 draws in that
+  // frame, 117 in the others)
+  const shSeen = new WeakSet<THREE.Object3D>();
+  let shadowsOn = true, shDirty = true;
+  function applyShadows() {
+    shDirty = false;
+    root.traverse((o) => { const m = o as THREE.Mesh; if (!m.isMesh) return; if (!shSeen.has(m)) { shSeen.add(m); if (m.castShadow) castable.add(m); } m.castShadow = shadowsOn && castable.has(m); });
+    for (const set of [...lodSets, rigid]) for (const m of set) m.castShadow = shadowsOn && castable.has(m);
+  }
   function pickLod() {
     // not drawn last frame (hidden, off the screen, or never drawn yet): camD is from its last draw (0 if never), so a
     // body shown again took the build of where it was last seen; use the last camera's distance to where it is now
@@ -878,7 +891,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     }
     // a far body's shadow is a few pixels: it is left out of the shadow map
     const sh = camD < (crowd ? CHAR_BUDGET.crowdShadowFar : CHAR_BUDGET.shadowFar) * (shadowsOn ? 1.1 : 0.9);
-    if (sh !== shadowsOn) { shadowsOn = sh; for (const set of [...lodSets, rigid]) for (const m of set) m.castShadow = sh && castable.has(m); }
+    if (sh !== shadowsOn || shDirty) { shadowsOn = sh; applyShadows(); }
     // phones: the corneas' shine and the lashes and brows are under a pixel past a few metres, and a draw call each
     if (lod === 1 || crowd) for (const m of lodSets[lod === 1 ? 0 : lodOn]) {
       const far = (crowd ? CROWD_FACE_FAR : FACE_FAR)[m.name];
@@ -2255,6 +2268,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** Draw skin, clothes and eyes as one mesh (bodymerge.ts; crowd bodies always do). For the stages, not the films. */
     /** `lite` (the city's story people on phones): without the forty corrective shapes (armpits, nape, hips), as a crowd
      * body: about 8 MB less per body in the page and as much again in the GPU's morph texture. */
+    /** Every mesh of this body casts while the body does (the body you play: Away.enter). */
+    castAll() { root.traverse((o) => { if ((o as THREE.Mesh).isMesh) { castable.add(o); shSeen.add(o); } }); shDirty = true; },
     mergeParts(lite = false) { mergeWanted = true; mergeLite = lite; mergeCrowd(); },
     /** A crowd body that can fade (Web, Ultra) fades out towards 0 and back in towards 1; false: the stage hides it. */
     setLensFade(target: number) { lensWant = target; return fadeOn; },
