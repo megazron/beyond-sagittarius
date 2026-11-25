@@ -2161,3 +2161,11 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   story.store (encounters.ts: bigger food scent, one more skritch in wave 1, no hound, Oom-Sa ally with story.oomsa),
   cb.obj.store. PLAYABLE_LEVELS 21, levels_smoke LAST 21 (its ledger and persistence checks follow LAST).
   episode3_smoke picks through e3.name. Voice takes for 18 to 21: ~/bs-cap/ep3/tools/tts_ep3.sh (no build).
+- Later the same evening (ep3 agent): 32a4e66 on ep3. Local, on its tree: episode3_smoke web and mobile (CI picks) play
+  15 to 21 to level 22 with all eight Episode Three decisions; levels_smoke (f28c556 build) levels 1 to 22, no page
+  errors. Fixes on the way: icewall playable (recordDiscovery refuses planned nodes), grain needs no stone, the
+  name re-asked if its scene ends unanswered, Oom-Sa off the level 18 marker, findInteraction and __bs.gotoObjective
+  wait while ep2/ep3 isBusy, levels_smoke 2400 rounds, gates timeout 45 min. Kneel probe
+  (~/bs-cap/ep3/tools/kneel_e3.py, a level 15 save played with scenes not skipped): every kneeling insert in 15 to 17
+  holds hips 0.26 m over the root; the standing seen in the GPU full take did not reproduce from this state. No GPU
+  recording of levels 16 to 21 yet.
