@@ -52,7 +52,8 @@ def shot(page, name):
         except Exception as e: print('no picture', name, str(e)[:80], flush=True)
 
 with sync_playwright() as pw:
-    b = pw.chromium.launch(headless=True, args=['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-background-timer-throttling', '--disable-renderer-backgrounding'])
+    launch = lambda: pw.chromium.launch(headless=True, args=['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-background-timer-throttling', '--disable-renderer-backgrounding'])
+    b = launch()
     page, errs = boot(b, a.quality)
     ok(page.evaluate("!!__bs.combat"), 'the fight is part of the game')
     base = page.evaluate("JSON.stringify({ inv: __bs.save.inventory, pos: __bs.debug.player, hour: __bs.save.timeOfDay })")
@@ -302,9 +303,20 @@ with sync_playwright() as pw:
     d = page.evaluate(D)
     ok(d['encounter'] == 'night.defence' and d['phase'] == 'prep' and not d['player']['down'], 'story: trying again starts the night over', [d['encounter'], d['phase']])
     ok(page.evaluate("JSON.stringify(__bs.save.inventory)") == inv0 and page.evaluate("__bs.save.level") == 7, 'story: trying again gives the bag back and keeps the story where it was')
-    # load the save made in the middle of the night: the night comes again by itself
+    # load the save made in the middle of the night: the night comes again by itself.
+    # The game is opened again in a new browser with the saved storage, as a player starts it again. A reload of this
+    # page did not commit in 180 s on CI: just after "try again" SwiftShader's GPU process falls minutes behind (rAF frames
+    # of 5 to 20 s while the page's JavaScript is 99.7% idle; no post pass, light or the fire's meshes switched off made
+    # the frames steady), and every navigation in that browser waits behind its queue: a held clock still took 65 s to
+    # commit, a new page after closing this one 61 s. A new browser has its own GPU process (old one closed in 30 s,
+    # the new page committed in 0.3 s; ~/bs-cap/ep2b/reload_diag*.py).
     page.evaluate("window.dispatchEvent(new Event('beforeunload'))"); time.sleep(0.3)
-    page.reload(timeout=180000, wait_until='commit'); page.wait_for_function("window.__bs && __bs.state === 'title' && __bs.ready", timeout=600000)
+    state = page.context.storage_state()
+    b.close(); b = launch()
+    page = b.new_context(viewport={'width': 1120, 'height': 630}, storage_state=state).new_page()  # (errs goes on collecting: the story's page errors before the restart count too)
+    page.on('pageerror', lambda e: errs.append(str(e)[:300]))
+    page.goto(f'http://127.0.0.1:{a.port}/index.html?quality={a.quality}&prologue=0', timeout=180000, wait_until='commit')
+    page.wait_for_function("window.__bs && __bs.state === 'title' && __bs.ready", timeout=600000)
     page.wait_for_function("(() => { const b = document.getElementById('btn-continue'); return b && !b.classList.contains('hidden'); })()", timeout=60000)
     page.evaluate("document.getElementById('btn-continue').click()")
     for i in range(240):
