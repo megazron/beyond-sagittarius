@@ -399,7 +399,8 @@ export class Episode2 {
   /** The work before the panel: bark into strands, resin on a warm stone, the bow drill set up, clay into coils. */
   private workScene(kind: 'bark' | 'resin' | 'bow' | 'clay', open: () => void) {
     const z = this.z, at = this.settleWork(2.5), f = this.fwd(), r = this.right(f);
-    const work = at.clone().addScaledVector(f, 0.42); work.y = this.h(work.x, work.z);
+    // the clay further out: hands low at 0.42 m put his forearms into his belly (anim_qa e2_coil: 3.6 cm into the torso)
+    const work = at.clone().addScaledVector(f, kind === 'clay' ? 0.52 : 0.42); work.y = this.h(work.x, work.z);
     const made: THREE.Object3D[] = [];
     const keep = <T extends THREE.Object3D>(o: T) => { made.push(o); return o; };
     const beats: Beat[] = [];
