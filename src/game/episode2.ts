@@ -361,7 +361,7 @@ export class Episode2 {
       const c = this.L.camp, d = v3(1, 0, 0.4).normalize(), at = this.settle(c.clone().addScaledVector(d, 1.85), c.clone().addScaledVector(d, 1.15), true, true);
       const row = this.pots[1].position.clone();
       this.scene([
-        { key: 'e2.cl.ok', who: 'scientist', shot: () => ({ from: row.clone().addScaledVector(this.fwd(), -0.9).add(v3(0, 0.18, 0)).addScaledVector(this.right(this.fwd()), 0.25), to: row.clone().lerp(this.head(), 0.25), push: 0.02, aperture: 0.004 }), run: () => z.setLookTarget(row) },
+        { key: 'e2.cl.ok', who: 'scientist', shot: () => cover.mid(z, -0.6, 1.9), run: () => z.setLookTarget(row) },
       ], () => { this.clearHands(); void at; });
       return true;
     }
@@ -766,7 +766,7 @@ export class Episode2 {
       const lump = this.mesh(new THREE.SphereGeometry(0.06, 10, 8), std(0x8e5a3e, { roughness: 0.6 }), at.clone().addScaledVector(f, 0.34).add(v3(0, 0.55, 0)));
       z.setHold({ L: { at: lump.position.clone().addScaledVector(r, -0.05).add(v3(0, -0.03, 0)), fingers: f.clone(), palm: UP.clone(), radius: 0.05 }, R: { at: lump.position.clone().addScaledVector(r, 0.05).add(v3(0, 0.03, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.05 } });
       this.scene([
-        { key: 'e2.cl.1', who: 'scientist', shot: () => this.handShot(lump.position, 0.75), run: () => z.setLookTarget(lump.position) },
+        { key: 'e2.cl.1', who: 'scientist', shot: () => cover.mid(z, 0.55, 1.5), run: () => z.setLookTarget(lump.position) },
         { hold: 6, shot: () => cover.mid(z, -0.6, 2.2), run: () => this.ui.memory('e2.cl.bolzar', 7) },
       ], () => { lump.removeFromParent(); this.clearHands(); this.ui.toast(t('level.14.hint')); });
     });
@@ -809,7 +809,7 @@ export class Episode2 {
       eyes.visible = false;
       this.scene([
         { hold: 3, shot: () => this.wide(me, 6.5, 0.6, 1.3), run: () => z.setLookTarget(pots) },
-        { hold: 2.2, shot: () => ({ from: pots.clone().add(v3(0.35, 0.3, 0.45)), to: pots.clone().add(v3(0, 0.15, 0)), push: 0.01, aperture: 0.005 }), run: () => this.steam(pots) },
+        { hold: 2.2, shot: () => { const away = pots.clone().sub(me).setY(0).normalize(); return { from: pots.clone().addScaledVector(away, 0.9).add(v3(0, 0.45, 0)), to: pots.clone().add(v3(0, 0.12, 0)), push: 0.01, aperture: 0.005 }; }, run: () => this.steam(pots) },
         { key: 'e2.fr.1', who: 'scientist', shot: () => cover.close(z, 0.45, 0.95, 0.24) },
         { key: 'e2.fr.2', who: 'scientist', shot: () => cover.mid(z, -0.5, 2.1) },
         { key: 'e2.fr.oom', who: OOM, if: { flag: 'e2.oomsa.here' }, shot: () => (oom ? cover.ots(oom, z, 0.5) : cover.mid(z)), run: () => oom?.setLookTarget(dark) },

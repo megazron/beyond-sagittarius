@@ -133,7 +133,7 @@ def main():
                 if ev("__bs.branch.open"):
                     continue
                 n = len(taken); taken.add(f"scene{it}")
-                if n < 40 and it % 3 == 0:
+                if n < 80:
                     shot(f"e2-scene-{lvl}-{it}")
                 ev("__bs.skip()"); ev("__bs.step(0.1)"); continue
             if st["mode"] == "craft":
