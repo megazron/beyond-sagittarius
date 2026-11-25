@@ -2047,3 +2047,27 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   intro4 862f0b1 -> land4 (= land3: arrivals + landing_smoke wake fixes; away.ts conflict resolved: Away.entered() is
   called at the end of enter, after the arrival is set up) 551b0f6 -> cabin5 (lipsync.json merged, mz.intro.2 kept from
   intro) b38edf4 + this note. ~/bs-story/DECISIONS.md cabin rows renumbered C1-C5.
+
+## 2026-11-25 gate agent, second pass: the phone shadow casters, the stack rebased (worktree ~/bs-gate; GPU ~/bs-assets/gpu/gate4)
+- CAUSE of the Mobile gate's 151-draw frame: bodies drew into the phones' static sun shadow. character.ts switched
+  castShadow only on its lodSets and rigid meshes, and only when the body's shadow distance flipped; the kit's live
+  meshes (ownPhone), a held prop (showProp set castShadow true), a light build loaded later and the body you play
+  (Away.enter set castShadow on every mesh after the body was built) were never switched off. Now applyShadows walks
+  every mesh under the body when its shadow flips or something is added (kit, light build, merges); the first time a
+  mesh is seen it is a caster if it was made as one; held props follow the body; Away.enter calls castAll().
+- MEASURED: perf_gate Mobile on the laptop, gate four frames [117, 117, 132, 117] (was [117, 117, 151, 117]); the 132
+  frame's shadow pass is S Mesh x12 (the street's shadow-only meshes) and a static batch x3, no body or prop. The redraw
+  frame still draws those 15 static casters: that is the shadow itself. Other Mobile spots unchanged. GPU (RTX A500,
+  held clock, tod 17.5, before = ebf0ef5's src, after = 10e7d53): Mobile gate 117/117 calls, crowd 146 -> 129; Web gate
+  304 -> 271, crowd 277 -> 241, bazaar 180 -> 160 (Web's crowd bodies' kit no longer casts: crowdShadowFar is 0 there
+  too). Stills side by side: gate4/cmp_mobile_*.jpg, cmp_web_*.jpg, coat_web_crowd.jpg: the street's shadows match;
+  your body on Web still casts (shadowFar 10). On phones your body no longer casts into the static map (it has the
+  contact blob city.ts draws for it); before, its shadow was frozen where the last redraw caught it.
+- gpu_tour.py plan "hold": true holds the clock from arrival as perf_gate does (steps "eval": "__bs.advance(1)").
+- STACK rebased on gate4 10e7d53 (main 37b105a + gate + this fix): modal-land3 d20a0f5, intro5 027f973, land5 b809215,
+  cabin6 da16394 (each differs from its old branch by these three files only). bowhold on cabin6: combat play_test's
+  arena on a held clock with Math.random seeded (the bow-arm check read 0.1 to 5.5 cm on one code: the page's own
+  free-running frames were posed between __bs.step's ticks).
+- main 37b105a's levels_smoke failure: demo()'s 5 s wait for '#dlg-choices .dlg-c' ran out (after the menus test).
+  modal-land's levels_smoke change retries such a wait after two drawn frames and logs the modal log and long tasks;
+  whether that is the cause is not proven.
