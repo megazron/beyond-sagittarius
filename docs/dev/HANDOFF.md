@@ -1976,3 +1976,7 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
 - land3 6c80dd9: landing_smoke ok locally (the wake 55 s held, then play); not pushed after the first fix (fd0f7fe CI:
   the wake ended at 47 s into the thirst scene, now held through it). Its levels_smoke ".pt-cols not hidden after
   #m-close" (twice on land2/land3) is what modal-land's fade-out fix is for: land modal first.
+- mobile_smoke's craft check now plays Episode Two's glue panel at level 12 by touch (held finger for the heat
+  step) instead of the old knapping panel. Bolzar's roster unlock moved from 14 to 15.
+- Landing: ~/bs-ep2-land (detached) merges ep2 and main; branches ep2-land1/ep2-land2 carry the exact sha CI checks.
+  Combat's "Page.reload: Timeout" after the night tests also fails on main 26fe104 (not Episode Two); it passed locally.
