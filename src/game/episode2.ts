@@ -473,8 +473,8 @@ export class Episode2 {
       { key: 'e2.sn.far', who: 'scientist', if: CHOSE('e2.snare', 'far'), shot: () => cover.close(z, 0.4, 1.0) },
     ], () => {
       this.set('e2.snareSet'); this.buildSnare();
-      const s = this.snareAt(); void at;
-      this.passTime(19.0, false, null, () => { this.player.spawn(s.x + 1.2, s.z + 0.6, 0); this.wait = 0.5; });
+      void at;
+      this.passTime(19.0, false, null, () => { this.wait = 0.5; });
     });
   }
 

@@ -1220,6 +1220,9 @@ window.addEventListener('resize', () => {
     return [m.x, m.z];
   },
   act() { return game?.debugAct() ?? null; },
+  /** Where the objective marker points and where he stands (a recording's stand-in player walks there with the keys). */
+  get objective() { const m = game?.objectivePoint(); return m ? [m.x, m.y, m.z] : null; },
+  get me() { return player ? [player.pos.x, player.pos.y, player.pos.z, player.yaw] : null; },
   /** Freeze the camera at `from` looking at `to` (null releases it), with a vertical field of view in degrees if given.
    * A capture that calls it every stepped frame moves the camera along its own path (dolly, crane, orbit). Outside
    * play it takes over the cutscene's, film's or narrator's camera while it is set. */
