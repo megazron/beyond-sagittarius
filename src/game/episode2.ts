@@ -566,7 +566,12 @@ export class Episode2 {
   }
   private whistle: THREE.Group | null = null;
   private ridgeFind() {
-    const r = this.L.ridge, at = this.settle(r.clone().add(v3(1.5, 0, 1)), r, true);
+    // the find a few metres from the ridge point, on the side away from Episode One's beacon (its white mast filled the
+    // close-ups of take 2)
+    const bc = (this.L as unknown as { beacon?: THREE.Vector3 }).beacon, away = bc ? this.L.ridge.clone().sub(bc).setY(0) : v3(1, 0, 0);
+    if (away.lengthSq() < 0.01) away.set(1, 0, 0);
+    const r = this.L.ridge.clone().addScaledVector(away.normalize(), 4); r.y = this.h(r.x, r.z);
+    const at = this.settle(r.clone().add(v3(1.5, 0, 1)), r, true);
     const g = new THREE.Group();
     const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), std(0x7a746c)); rock.scale.set(1.2, 0.6, 1); rock.position.y = 0.12; g.add(rock);
     const reed = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.009, 0.16, 7), std(0xb8a860)); reed.rotation.z = Math.PI / 2; reed.position.set(0, 0.3, 0); g.add(reed);
@@ -577,8 +582,9 @@ export class Episode2 {
     void at;
   }
   private whistleShot(): Shot {
-    const w = this.whistle?.position ?? this.L.ridge;
-    return { from: w.clone().add(v3(0.55, 0.45, 0.45)), to: w.clone().add(v3(0, 0.3, 0)), push: 0.02, aperture: 0.005 };
+    // past the reed, looking back at it with him behind it (from his side the shot lost his head and re-aimed on it)
+    const w = this.whistle?.position ?? this.L.ridge, me = this.player.pos, d = w.clone().sub(me).setY(0).normalize();
+    return { from: w.clone().addScaledVector(d, 1.3).add(v3(0, 0.55, 0)), to: w.clone().add(v3(0, 0.3, 0)).lerp(this.head(), 0.35), push: 0.02, aperture: 0.005 };
   }
 
   // ------------------------------------------------------------------ 2.3 someone at the snare (level 12)

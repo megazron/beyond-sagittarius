@@ -28,6 +28,8 @@ window.__cbBot = (mode) => {
   let t0 = performance.now(), st = 0, stT = 0, flag = {};
   const next = (n) => { st = n === undefined ? st + 1 : n; stT = performance.now(); };
   const since = () => (performance.now() - stT) / 1000;
+  // the spear he has: the stone-tipped one once it is hafted (Episode Two's fights have no fire-hardened one beside it)
+  const SPEAR = () => (C.activeSim && !C.activeSim.player.has.spear && C.activeSim.player.has.hafted ? 'hafted' : 'spear');
   const equip = (w) => { const p = C.activeSim.player; if (p.weapon !== w && p.act === 'idle' && since() > 0.35) { tap('KeyR'); stT = performance.now(); } return p.weapon === w; };
   const tension = () => {
     const cur = C.tensionUi && C.tensionUi.cur; if (!cur || cur.T.result) return false;
@@ -51,7 +53,7 @@ window.__cbBot = (mode) => {
     if (dg && o.roll && p.act !== 'roll' && p.stamina > 20) { hold('KeyQ', 0); hold('KeyA', 1); tap('KeyV'); setTimeout(() => hold('KeyA', 0), 500); return; }
     hold('KeyQ', !!dg && !o.roll && p.stamina > 8);
     if (dg && !o.roll) { stop(); return; }
-    const reach = (sim.player.weapon === 'spear' ? 2.3 : 1.4) + t.def.radius;
+    const reach = (sim.player.weapon === 'spear' || sim.player.weapon === 'hafted' ? 2.3 : 1.4) + t.def.radius;
     hold('KeyW', d > reach); hold('ShiftLeft', 0);
     if (d <= reach + 0.3 && (p.act === 'idle' || p.act === 'recover') && p.stamina > 14) tap('Mouse0');
   };
@@ -70,7 +72,7 @@ window.__cbBot = (mode) => {
     const p = sim.player, T = (performance.now() - t0) / 1000;
     if (mode === 'melee') {
       // the spear against a pack of Skritch, then the club against a Duskhound; the roll and the guard are both shown
-      if (st === 0) { if (equip('spear')) { run.summon('skritch', 4); next(); } }
+      if (st === 0) { if (equip(SPEAR())) { run.summon('skritch', 4); next(); } }
       else if (st === 1) { fight(living('skritch'), { roll: Math.floor(T / 6) % 2 === 1 }); if ((!living('skritch').length && since() > 2) || since() > 24) next(); }
       else if (st === 2) { if (equip('club')) { run.summon('hound', 1); next(); } }
       else if (st === 3) fight(living('hound').length ? living('hound') : living('skritch'), { roll: true });
@@ -141,7 +143,7 @@ window.__cbBot = (mode) => {
         } else if (st === plan.length) {
           // ready, said out here (by the fire the same key feeds it)
           // the spear in the hand for the watch (it braces against a lunge when held up), then ready
-          stop(); if (!equip('spear')) return; if (since() > 0.8) { tapE(); next(); }
+          stop(); if (!equip(SPEAR())) return; if (since() > 0.8) { tapE(); next(); }
         } else if (since() > 3) { const d = go(food.x + wx * 2.8 - wz * 4, food.z + wz * 2.8 + wx * 4); if (d < 0.8) stop(); }
         return;
       }
@@ -332,7 +334,7 @@ window.__cbBot = (mode) => {
         if (de <= REACH) { const s = Math.min(de + 0.25, REACH); return { x: f.x + ux * s, z: f.z + uz * s, de, wade: false }; }
         return { x: f.x + ux * 2.0, z: f.z + uz * 2.0, de, wade: true };
       };
-      if (st === 0) { if (equip('spear')) { flag.n = 0; flag.seenLog = 0; log('start', { x: +p.x.toFixed(1), z: +p.z.toFixed(1), feet: +depth(p.x, p.z).toFixed(2) }); next(); } return; }
+      if (st === 0) { if (equip(SPEAR())) { flag.n = 0; flag.seenLog = 0; log('start', { x: +p.x.toFixed(1), z: +p.z.toFixed(1), feet: +depth(p.x, p.z).toFixed(2) }); next(); } return; }
       // what the sim made of each thrust
       if (sim.fishLog.length > flag.seenLog) { for (const w of sim.fishLog.slice(flag.seenLog)) log('result', { what: w }); flag.seenLog = sim.fishLog.length; }
       const fish = living('darter').filter((e) => e.state !== 'flee');
