@@ -69,7 +69,8 @@ export const TECH: TechNode[] = [
     [{ kind: 'tap', hits: 4, zone: 0.18, speed: 0.7 }, { kind: 'rhythm', band: [0.4, 0.7], secs: 5 }], 'builder', []),
   // 3.5: wild grain ground on Hoh-Ma's saddle quern with a hard hand stone (a soft one grinds itself into the flour), then a
   // flatbread on a hot flat stone in the fire (too hot it burns, too cool it stays dough)
-  playable('grain', 'agri', ['frame'], { stone: 1 }, {}, 'build',
+  // (her quern and her hand stone: nothing from his bag; with { stone: 1 } a run with no stone left had no marker at 17)
+  playable('grain', 'agri', ['frame'], {}, {}, 'build',
     [{ kind: 'rhythm', band: [0.4, 0.7], secs: 5 }, { kind: 'heat', band: [0.45, 0.66], secs: 4, rise: 0.32, fall: 0.22 }], 'medic', ['heat']),
   // 3.6: the biggest seed sown two knuckles deep (too deep it runs out of itself, too shallow the birds and the rain take
   // it), in rows opened with the digging stick

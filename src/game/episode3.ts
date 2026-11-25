@@ -2119,9 +2119,14 @@ export class Episode3 extends Episode2 {
         { key: 'e3.nm.1', who: 'scientist', shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => { z.setFace({ smile: 0.25 }); z.setLookTarget(this.ahead()); } },
       ], () => {
         S.end(); this.clearHands(); void me;
-        const name = ['six', 'clay', 'dayone', 'hatum'].find((k) => this.f(`e3.name.${k}`)) ?? 'camp';
-        this.s.flags['e3.village'] = name as unknown as boolean;
-        this.set('e3.named');
+        const go = () => {
+          const name = ['six', 'clay', 'dayone', 'hatum'].find((k) => this.f(`e3.name.${k}`)) ?? 'camp';
+          this.s.flags['e3.village'] = name as unknown as boolean;
+          this.set('e3.named');
+        };
+        // the scene can be skipped past its choice (CI's second episode3_smoke run ended it with nothing chosen): the
+        // village's name is asked for again before the episode moves on
+        if (!this.s.branch.log.some((e) => e.id === 'e3.name') && this.askFn) this.askFn('e3.name', go); else go();
       });
     });
   }

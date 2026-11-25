@@ -165,6 +165,13 @@ def main():
             if page.locator("#disc h2").is_visible():
                 log("discovery:", page.inner_text("#disc h2")); shot(f"e3-disc-{lvl}"); page.click("#disc-ok"); ev("__bs.step(0.2)"); continue
             if st["mode"] == "talk":
+                # a decision panel is a talk too: it can open between the check above and this one (CI-picks run: the
+                # name panel was closed with Escape, nothing chosen)
+                time.sleep(0.3)
+                if ev("__bs.branch.open"):
+                    continue
+                if lvl >= 21:
+                    log("escape from a talk:", ev("({choices: [...document.querySelectorAll('#dlg-choices button')].map(b => b.dataset.c), flags: Object.keys(__bs.save.flags).filter(k => k.startsWith('e3.p') || k.startsWith('e3.n'))})"))
                 page.keyboard.press("Escape"); ev("__bs.step(0.2)"); stuck += 1; continue
             if st["mode"] == "away":
                 for _ in range(24):
