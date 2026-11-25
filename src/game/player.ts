@@ -95,8 +95,8 @@ export class Player {
   /** Stages other than Verdaxis set their own gravity, and let you jump across open gaps. */
   physics = { gravity: 14, jump: 5.2, gaps: false };
 
-  constructor(private terrain: Pick<Terrain, 'height'>, private forest: Pick<Forest, 'collide' | 'blocks' | 'clearance'> & Partial<Pick<Forest, 'inFoliage'>> & { ceiling?: (fx: number, fz: number, fy: number, cx: number, cz: number) => number; keepOff?: (p: THREE.Vector3) => void }, public camera: THREE.PerspectiveCamera, detail = 1, id: CrewId = 'scientist', skin?: string, texDetail = detail) {
-    this.model = createCharacter(id, detail, undefined, skin, texDetail);
+  constructor(private terrain: Pick<Terrain, 'height'>, private forest: Pick<Forest, 'collide' | 'blocks' | 'clearance'> & Partial<Pick<Forest, 'inFoliage'>> & { ceiling?: (fx: number, fz: number, fy: number, cx: number, cz: number) => number; keepOff?: (p: THREE.Vector3) => void }, public camera: THREE.PerspectiveCamera, detail = 1, id: CrewId = 'scientist', skin?: string) {
+    this.model = createCharacter(id, detail, undefined, skin);
     this.baseFov = camera.fov;
     this.model.setGround((x, z) => this.terrain.height(x, z));
   }

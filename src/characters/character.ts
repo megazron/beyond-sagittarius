@@ -156,13 +156,11 @@ function solveLeg(hip: THREE.Bone, knee: THREE.Bone, foot: THREE.Bone, target: T
  * plain Object3D handles, so callers can use a character the moment it is created;
  * the body drops in when its GLB has arrived (preloadCrew makes that instant).
  */
-/** `texDetail`: the detail the body's colour maps are picked for, when not its own (the body you play in the city on
- * phones: the full build and its normal maps, the phone's 1024 colour maps; its 1024 normal maps lost the coat's weave) */
-export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, skinId?: string, texDetail = detail) {
+export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, skinId?: string) {
   const L: Look = LOOKS[id];
   const human = skinId === 'suit';
   const P = L.persona;
-  const lod = lodOf(detail), texLod = lodOf(texDetail);
+  const lod = lodOf(detail);
   const key = custom ? `custom_${custom.gender}_${custom.outfit}` : human ? 'strong_suit' : id;
   const style = STYLE[custom ? custom.outfit : id];
   const heightM = (custom ? (custom.gender === 'f' ? 1.68 : 1.76) * custom.height : (human ? 2 : ({ scientist: 1.76, strong: 1.97, medic: 1.69, explorer: 1.71, builder: 1.57, social: 1.67, megazron: 2.08 } as Record<string, number>)[id]));
@@ -305,12 +303,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const glowC = custom ? custom.glow : human ? 0 : L.glow;
     const marks = custom ? MARK_OF[custom.marks] : human ? 'strong_suit' : id;
     const overC = marks === 'explorer' ? 0xf3e7cf : marks === 'strong' ? 0xe8c49a : 0x1e1e1e;
-    const skin = skinMaterial(M.skin, marks, { skin: skinC, shade: shadeC, lip: lipC, glow: glowC, over: overC, glowK: human ? 0 : 1.15 }, texLod, lod);
+    const skin = skinMaterial(M.skin, marks, { skin: skinC, shade: shadeC, lip: lipC, glow: glowC, over: overC, glowK: human ? 0 : 1.15 }, lod);
     const irisC = custom ? custom.iris : human ? 0x1e120b : L.face.iris;
     const eyes = eyeMaterial(irisC, (custom ? custom.eyeGlow : !human) ? 0.55 : 0);
     const browC = custom ? new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex() : human ? 0x2c1d14 : L.face.brow;
     const atlas = M.atlas;
-    const cloth = new THREE.MeshStandardMaterial({ map: tex(`${atlas}_cloth`, texLod, true), normalMap: tex(`${atlas}_cloth_n`, lod), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, side: THREE.DoubleSide });
+    const cloth = new THREE.MeshStandardMaterial({ map: tex(`${atlas}_cloth`, lod, true), normalMap: tex(`${atlas}_cloth_n`, lod), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, side: THREE.DoubleSide });
     cloth.userData.film = { kind: 'cloth', atlas, satin: human, velvet: id === 'megazron' }; // the narrator's coat is velvet in the films
     const lay = M.layers ?? [];
     const accent = { uAccent: { value: new THREE.Color(custom?.accent ?? 0xffffff) }, uAccentK: { value: custom ? 1 : 0 }, uDetail: { value: clothDetail() }, uHeightM: { value: heightM }, uSatin: { value: human ? 1 : 0 }, uDust: { value: human ? 0.12 : 1 },
@@ -345,7 +343,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     // where cloth and the skin under it meet at the same depth (a cuff on the wrist, a collar on the neck), the cloth wins
     cloth.polygonOffset = true; cloth.polygonOffsetFactor = -1; cloth.polygonOffsetUnits = -2;
     const mouth = mouthMaterial(), cornea = corneaMaterial(), lash = lashMaterial(browC, M.lash);
-    const fur = human ? furMaterial('strong_suit', 0x0e080b, 0x2a1d22, texLod) : undefined;
+    const fur = human ? furMaterial('strong_suit', 0x0e080b, 0x2a1d22, lod) : undefined;
     const sphere = new THREE.Sphere(new THREE.Vector3(0, heightM * 0.5, 0), heightM * 1.1);
     const dress = (sc: THREE.Object3D) => sc.traverse((o) => {
       const m = o as THREE.SkinnedMesh;
@@ -566,8 +564,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       if (parts.some((p) => p.mesh.parent !== sk.parent || !sameSkeleton(p.mesh.skeleton, sk.skeleton) || !p.mesh.bindMatrix.equals(sk.bindMatrix) || !p.mesh.matrix.equals(sk.matrix)
         || (p.mesh.geometry.morphAttributes.position && p.mesh.geometry.morphTargetsRelative !== sk.geometry.morphTargetsRelative) || Object.keys(p.mesh.geometry.morphAttributes).some((k) => k !== 'position'))) continue;
       // the rigid kit and the hair go in too (one draw a body, not three): the kit into every set; the light hair into
-      // the light build, the near hair into the near one (and into both when there is no light hair). Until the light
-      // build is in, a far body keeps its near hair (showKitHair)
+      // the light build; the one hair of a body without a light hair (phones) into both
       const extra: Parameters<typeof mergeBodyGeometry>[2] = [];
       let kitHere: THREE.SkinnedMesh[] = [], hairHere: THREE.Object3D | null = null;
       // the kit is skinned in the same bind space (rigid.ts binds it as the body's first mesh); a skinned mesh's own place
@@ -578,7 +575,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         const k = kitParts(rigid, kitSlots, sk.bindMatrix);
         if (k.parts.length) { extra.push(...k.parts); kitHere = k.parts.map((p) => p.from); kitCull ||= k.cull; }
       }
-      const hs = (s === 1 ? hairs[1] : null) ?? hairs[0];
+      // a body with a light hair (Web, Ultra) keeps its near hair as its own mesh: the near set is merged before the
+      // light build is in, and its far bodies drew their near hair until then (perf_gate's Web gate: 1.33 M triangles)
+      const hs = s === 1 ? hairs[1] ?? hairs[0] : hairs[1] ? null : hairs[0];
       const hsAt = hs ? hs.parent ?? parkedOn.get(hs) ?? null : null;
       if (BODY_MERGE.extras && hs && (hs as THREE.Mesh).isMesh && hsAt) {
         const bi = sk.skeleton.bones.indexOf(hsAt as THREE.Bone);
@@ -705,7 +704,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   function setMorph(k: string, v: number) { morph[k] = v; for (const f of faces) { const i = f.dict[k]; if (i !== undefined) f.infl[i] = v; } }
   const easeMorph = (k: string, v: number, r: number) => setMorph(k, (morph[k] ?? 0) + (v - (morph[k] ?? 0)) * r);
 
-  let limpOn = false, feetFar = false;
+  let limpOn = false;
 
   /** Hands and forearms never sink into the torso: the upper arm swings out just enough to clear it. */
   function keepArmsOut(bs: Map<string, THREE.Bone>) {
@@ -1149,10 +1148,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     }
 
     // ---- feet: planted where they land, on the real ground ----
-    // a crowd body more than 10 m off keeps its clip's feet: the planting is a centimetre or two at that distance, and
-    // its matrix walks were a twentieth of the phone's frame (perf agent 28/29 profiles)
-    if (crowd) feetFar = camD > (feetFar ? 10 : 11);
-    if (ground && standing && root.visible && !(crowd && feetFar && CHAR_BUDGET.throttle)) {
+    if (ground && standing && root.visible) {
       // only the root's own matrix: each foot's getWorldPosition brings its own chain up to date
       root.updateWorldMatrix(true, false);
       const baseY = root.getWorldPosition(tmp).y;

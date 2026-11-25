@@ -1612,3 +1612,33 @@ Owns: mirrored text, touch hints, night readability, fire base, the Android buil
   locally (0 failed on my build); never seen on other branches. I could not find a cause in my input change (a finger
   anywhere now switches to touch, which should only make it pass more). Combat agent: worth a look at that check's
   timing (0.5 s after the tap under SwiftShader).
+
+## 2026-11-24 character agent: crowd body draws (to the perf agent; worktree ~/bs-draw1, branch draw1; GPU scripts and results ~/bs-assets/gpu/draw1)
+- WHAT: bodymerge.ts puts a crowd body's rigid kit (rigid.ts meshes: parts 3 to 8, colour/roughness/metalness/glow per
+  vertex in the attributes skin and cloth already carry, the kit's two normal maps as their own samplers, front-side-only
+  open pieces culled by hand when a look has them) and its hair (part 9, 100% on the head bone, swaying in its own space
+  with its strand highlight) into the merged body. Cut-out card hair (the suit) stays its own mesh. Bodies with a light
+  hair (Web, Ultra) keep the near hair as its own mesh (merging it before the light build was in put perf_gate's Web gate
+  at 1.33 M triangles); phones have one hair and merge it. Kit and hair a set holds leave the scene graph while not drawn.
+  Build and ear shapes are baked into the merged vertices (per look: the merged geometry is shared by bodies of one look
+  and one kit/hair, keyed by content); the other shapes (face; a full body's correctives) go into a texture of the
+  vertices they move (aMorphIx), not three.js's texture of every vertex. Foot IK: the root's own matrix, then only the
+  hips and legs (was the whole body twice). Switches: ?bodyextras=0 (kit and hair their own draws), ?bodymorphs=0
+  (three.js's morph texture, nothing baked). Test hook: __bodyMerge.setSeparate(on, body) draws kit and hair (and with
+  body, the body as main merged it) as before, for an A/B of one frame (plan_ab3_*.json).
+- A/B OF ONE FRAME (GPU, final shader, ab_i_mobile / ab_i_web): Mobile crowd/gate/bazaar/square 19/4/0/28 pixels differ
+  by more than 8 levels (of 844x390). Web 561/438/256/20 (of 1280x720): speckle over the whole frame from rendering it
+  twice through the post chain, and belts (kit, leather grain) a few levels off. Three bugs this caught on the way: the
+  kit's normal-map line did not compile (7cda35d: bodies not drawn at all, CI still green), the eyes' glow branch took kit
+  and hair (phone screen black, hair highlight missing), the kit check refused the atmosphere's '|atmo' key.
+- DRAWS (Mobile, draws plan, calls over 2 frames): crowd 129 -> 83 (body draws: skin_body 16, kit 22 -> 0, hair 20 -> 6),
+  gate 151 -> 93 (kit 38 -> 0, hair 28 -> 8; 13 bodies: about 3.5 -> 1.3 draws a body).
+- 4x PROXY (Mobile; base = 26f8579): final build (ab_i): crowd 39.5, 36.3 -> 42.0, 40.0; gate 36.5, 35.1 -> 29.4,
+  47.4; square 46.7, 42.9 -> 36.9, 53.7. Earlier builds with the kit merged but its shader broken are not counted. Above
+  45 at the crowd: NOT reached. The proxy varies by 15 fps run to run on one build (flat base 44.8 to 60).
+- MEMORY (Mobile census, city): 721.7 MB -> 624.0 MB with the city player's colour maps at 1024; without that (as
+  landed), about 657 MB. Morph textures: x51 26.7 MB, x13 2 x 6.8, x11 5.8 and the crowd's ~35 MB -> under 2 MB.
+- NOT DONE: the city player's maps at 1024 on phones: both the 1024 normal maps and the 1024 colour maps lose the
+  coat's weave in the Mobile GPU still (player_tex_base_vs_new.png, player_colour1024_base_vs_new.png): left at 2048.
+  Skipping foot IK for crowd bodies beyond 10 m was in the measured builds but not watched near the camera: taken out.
+  Two bodies per look in the phone pool: not touched.
