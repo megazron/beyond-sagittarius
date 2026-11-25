@@ -514,6 +514,7 @@ def main():
         seen_levels = []
         last_level = 0
         stuck = 0
+        last_prog = ""
         hound_seen = False
         night_asked = False
         for it in range(900):
@@ -652,6 +653,12 @@ def main():
                 time.sleep(0.05)
                 stuck += 1
                 continue
+            # stuck means no progress: a level with many beats (Episode Two's level 13: rain, the bow drill, its card, the
+            # pyrite, then the shelter) used more than 160 rounds while every beat was still moving it on
+            prog = ev("JSON.stringify([Object.keys(__bs.save.flags).length, __bs.save.discoveries, __bs.save.inventory])")
+            if prog != last_prog:
+                last_prog = prog
+                stuck = 0
             stuck += 1
             if stuck > 160:
                 log(f"stuck on level {lvl}", ev("({prompt: __bs.prompt, talk: __bs.talk, inv: __bs.save.inventory, mode: __bs.mode, paused: __bs.paused, modal: !document.getElementById('modal').classList.contains('hidden')})"))
