@@ -13,7 +13,7 @@ import { voice } from '../core/voice';
 import { AnimSet, CrewAsset, CrewMeta, animNow, assetNow, clipsFor, corneaMaterial, clothDetail, eyeMaterial, furMaterial, hasLod1, lashMaterial, sameSkeleton, loadAnim, loadAsset, lodOf, mouthMaterial, skinMaterial, tex, texturesReady } from './assets';
 import { addKit, Kit } from './kit';
 import { mergeRigid } from './rigid';
-import { BODY_MERGE, BODY_PARTS, bodyMaterial, mergeBodyGeometry } from './bodymerge';
+import { BODY_MERGE, BODY_PARTS, MAX_MORPHS, bodyDepthMaterial, bodyMaterial, hairPart, kitParts, mergeBodyGeometry, morphUniforms, morphVertex } from './bodymerge';
 import { perfBody } from '../core/perfhud';
 
 /** ?lensfade=old: a crowd body fades through a dithered half-shape from 2.2 m to 1.1 m of the camera (the old way). */
@@ -740,6 +740,36 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   // the shapes a crowd body keeps: the face and the build (not the correctives: a crowd body has none)
   const crowdKeep = (n: string) => !/^(pit|nape|hip)[LR]?\d/.test(n), keepAll = (_n: string) => true;
   let mergeWanted = false, mergeLite = false;
+  // what each set's merged mesh holds of the kit and the hair; those are then drawn only with the other set
+  let mergeSrc: ((() => THREE.SkinnedMesh) | null)[] = [null, null], mergeRef: (THREE.SkinnedMesh | null)[] = [null, null], bodyDepth: THREE.MeshDepthMaterial | null = null;
+  let kitIn: Set<THREE.SkinnedMesh>[] = [new Set(), new Set()], hairIn: (THREE.Object3D | null)[] = [null, null], kitSlots: string[] = [], kitCull = false, hairM: THREE.Matrix4 | null = null, kitShown = true;
+  /** The separate kit and hair are drawn only where the set on show does not hold them. */
+  function showKitHair() {
+    const sep = BODY_MERGE.separate, u = bodyMat?.userData.u as Record<string, { value: number }> | undefined;
+    // the A/B: each merged set swaps for the body as main merged it (its morphs in three.js's texture, nothing baked)
+    for (let s = 0; s < 2; s++) {
+      const mk = mergeSrc[s], m = lodSets[s][0];
+      if (!mk || !m) continue;
+      if (BODY_MERGE.separateBody && sep && !mergeRef[s]) mergeRef[s] = mk();
+      const ref = mergeRef[s];
+      if (!ref) continue;
+      if (sep && BODY_MERGE.separateBody && !ref.visible && m.visible) { ref.visible = true; m.visible = false; }
+      else if (!sep && ref.visible) { ref.visible = false; m.visible = true; }
+    }
+    for (const m of rigid) park(m, kitShown && (sep || !kitIn[lodOn].has(m)), kitIn[0].has(m) || kitIn[1].has(m));
+    if (u?.uKitOn) u.uKitOn.value = kitShown && !sep ? 1 : 0;
+    if (u?.uHairOn) u.uHairOn.value = sep ? 0 : 1;
+    hairs.forEach((h, i) => { if (h) park(h, (hairs[1] ? hairOn === i : i === 0) && (sep || !hairIn[lodOn]), hairIn[0] === h || hairIn[1] === h); });
+  }
+  // kit and hair a merged set holds are taken out of the scene graph while they are not drawn on their own (three.js's
+  // matrix pass walked them every frame); they go back on their bone when they are
+  const parkedOn = new Map<THREE.Object3D, THREE.Object3D>();
+  function park(o: THREE.Object3D, show: boolean, merged: boolean) {
+    o.visible = show;
+    const at = parkedOn.get(o);
+    if (show && at) { at.add(o); parkedOn.delete(o); }
+    else if (!show && merged && !at && o.parent) { parkedOn.set(o, o.parent); o.removeFromParent(); }
+  }
   function mergeCrowd() {
     if (!(crowd || mergeWanted) || !bodyMats || !BODY_MERGE.on) return;
     const { skin, cloth, eyes, sphere } = bodyMats;
@@ -753,16 +783,55 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // one skeleton, one bind, one parent and the same place: otherwise leave this set as it is
       if (parts.some((p) => p.mesh.parent !== sk.parent || !sameSkeleton(p.mesh.skeleton, sk.skeleton) || !p.mesh.bindMatrix.equals(sk.bindMatrix) || !p.mesh.matrix.equals(sk.matrix)
         || (p.mesh.geometry.morphAttributes.position && p.mesh.geometry.morphTargetsRelative !== sk.geometry.morphTargetsRelative) || Object.keys(p.mesh.geometry.morphAttributes).some((k) => k !== 'position'))) continue;
-      const { g, names } = mergeBodyGeometry(parts, crowd || mergeLite ? crowdKeep : keepAll);
-      bodyMat ??= bodyMaterial(skin, cloth, eyes);
+      // the rigid kit and the hair go in too (one draw a body, not three): the kit into every set; the light hair into
+      // the light build; the one hair of a body without a light hair (phones) into both
+      const extra: Parameters<typeof mergeBodyGeometry>[2] = [];
+      let kitHere: THREE.SkinnedMesh[] = [], hairHere: THREE.Object3D | null = null;
+      // the kit is skinned in the same bind space (rigid.ts binds it as the body's first mesh); a skinned mesh's own place
+      // does not move its vertices (attached bind: its world matrix cancels), so only the skeleton and the bind must match
+      // (a different bind is taken into this one's: sk bind inverse x the kit's bind)
+      const bound = rigid.length && rigid.every((r) => sameSkeleton(r.skeleton, sk.skeleton));
+      if (BODY_MERGE.extras && bound) {
+        const k = kitParts(rigid, kitSlots, sk.bindMatrix);
+        if (k.parts.length) { extra.push(...k.parts); kitHere = k.parts.map((p) => p.from); kitCull ||= k.cull; }
+      }
+      // a body with a light hair (Web, Ultra) keeps its near hair as its own mesh: the near set is merged before the
+      // light build is in, and its far bodies drew their near hair until then (perf_gate's Web gate: 1.33 M triangles)
+      const hs = s === 1 ? hairs[1] ?? hairs[0] : hairs[1] ? null : hairs[0];
+      const hsAt = hs ? hs.parent ?? parkedOn.get(hs) ?? null : null;
+      if (BODY_MERGE.extras && hs && (hs as THREE.Mesh).isMesh && hsAt) {
+        const bi = sk.skeleton.bones.indexOf(hsAt as THREE.Bone);
+        if (bi >= 0) {
+          hs.updateMatrix();
+          const hm = sk.bindMatrix.clone().invert().multiply(sk.skeleton.boneInverses[bi].clone().invert()).multiply(hs.matrix);
+          const same = !hairM || hairM.elements.every((v, i) => Math.abs(v - hm.elements[i]) < 1e-6);
+          const hp = same ? hairPart(hs as THREE.Mesh, bi, hm) : null;
+          if (hp) { extra.push(hp); hairHere = hs; hairM ??= hm; }
+        }
+      }
+      const keepN = crowd || mergeLite ? crowdKeep : keepAll;
+      const { g, names } = mergeBodyGeometry(parts, keepN, extra);
+      if (!bodyMat) { const f = showKitHair; BODY_MERGE.bodies.push(new WeakRef(f)); }
+      bodyMat ??= bodyMaterial(skin, cloth, eyes, { kit: kitHere.length ? kitSlots.map((k) => rigid.map((r) => r.material as THREE.MeshStandardMaterial).find((m) => m.normalMap && `${m.normalMap.uuid}|${m.normalScale.x},${m.normalScale.y}` === k)!) : null, cull: kitCull, hair: hairHere && hairM ? { mat: (hairHere as THREE.Mesh).material as THREE.MeshStandardMaterial, m: hairM } : null, morphs: BODY_MERGE.morphs ? MAX_MORPHS : 0 });
+      // a set merged after the material was made can only take what the material has
+      const df = bodyMat.defines ?? {};
+      if ((kitHere.length && df.BODY_KIT === undefined) || (kitCull && df.KIT_CULL === undefined)) console.warn('[crew] body merge: kit after the material');
+      kitIn[s] = new Set(df.BODY_KIT !== undefined ? kitHere : []); hairIn[s] = df.BODY_HAIR !== undefined ? hairHere : null;
       const mesh = new THREE.SkinnedMesh(g, bodyMat);
       mesh.name = 'skin_body'; mesh.boundingSphere = sphere; g.boundingSphere = sphere;
       mesh.position.copy(sk.position); mesh.quaternion.copy(sk.quaternion); mesh.scale.copy(sk.scale);
       sk.parent!.add(mesh); mesh.bind(sk.skeleton, sk.bindMatrix);
-      mesh.visible = sk.visible; mesh.receiveShadow = true; mesh.onBeforeRender = seen; mesh.frustumCulled = sk.frustumCulled;
+      mesh.visible = sk.visible; mesh.receiveShadow = true; mesh.frustumCulled = sk.frustumCulled;
+      // its own morph texture (bodymerge.ts): this mesh's shapes and weights before each draw, the shadow's too
+      const bu = bodyMat.userData.u as Parameters<typeof morphUniforms>[0];
+      mesh.onBeforeRender = function (r, sc, c) { morphUniforms(bu, mesh); seen.call(this, r, sc, c); };
+      if (g.userData.morph) { mesh.onBeforeShadow = () => morphUniforms(bu, mesh); bodyDepth ??= bodyDepthMaterial(bodyMat); mesh.customDepthMaterial = bodyDepth; }
       mesh.castShadow = parts.some((p) => p.mesh.castShadow);
       if (parts.some((p) => castable.has(p.mesh))) castable.add(mesh);
-      if (names.length) { mesh.morphTargetDictionary = Object.fromEntries(names.map((n, i) => [n, i])); mesh.morphTargetInfluences = names.map((n) => { for (const p of parts) { const d = p.mesh.morphTargetDictionary; if (d && d[n] !== undefined) return p.mesh.morphTargetInfluences![d[n]]; } return morph[n] ?? 0; }); faces.push({ dict: mesh.morphTargetDictionary, infl: mesh.morphTargetInfluences }); }
+      const weights = (ns: string[], m: THREE.SkinnedMesh) => { if (!ns.length) return; m.morphTargetDictionary = Object.fromEntries(ns.map((n, i) => [n, i])); m.morphTargetInfluences = ns.map((n) => { for (const p of parts) { const d = p.mesh.morphTargetDictionary; if (d && d[n] !== undefined) return p.mesh.morphTargetInfluences![d[n]]; } return morph[n] ?? 0; }); faces.push({ dict: m.morphTargetDictionary, infl: m.morphTargetInfluences }); };
+      weights(names, mesh); morphVertex(mesh);
+      // the test hook's other half (BODY_MERGE.setSeparate): the body as main drew it, for an A/B of one frame
+      mergeSrc[s] = () => { const r = mergeBodyGeometry(parts, keepN, [], true); const m = new THREE.SkinnedMesh(r.g, bodyMat!); m.name = 'skin_body_ref'; m.boundingSphere = sphere; m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale); mesh.parent!.add(m); m.bind(mesh.skeleton, mesh.bindMatrix); m.visible = false; m.frustumCulled = mesh.frustumCulled; m.receiveShadow = true; m.castShadow = mesh.castShadow; m.onBeforeRender = () => morphUniforms(bu, m); weights(r.names, m); r.names.forEach((n, i) => { const j = mesh.morphTargetDictionary?.[n]; if (j !== undefined) m.morphTargetInfluences![i] = mesh.morphTargetInfluences![j]; }); return m; };
       for (const p of parts) {
         castable.delete(p.mesh); p.mesh.removeFromParent();
         const fi = faces.findIndex((f) => f.infl === p.mesh.morphTargetInfluences); if (fi >= 0) faces.splice(fi, 1);
@@ -772,6 +841,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       lodSets[s] = [mesh, ...set.filter((m) => !parts.some((p) => p.mesh === m))];
       BODY_MERGE.merged++;
     }
+    showKitHair();
     if (bodyMat && !fadeSet.some((f) => f.m === bodyMat)) {
       fadeSet = fadeSet.filter((f) => f.m !== skin && f.m !== cloth && f.m !== eyes);
       fadeSet.unshift({ m: bodyMat, o: bodyMat.opacity, a: bodyMat.alphaTest });
@@ -790,7 +860,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (!vis || Math.abs(k - fadeShown) < 0.004) return;
     fadeShown = k;
     for (const f of fadeSet) { if (f.a > 0) f.m.alphaTest = 1 - (1 - f.a) * k; else f.m.opacity = f.o * k; }
-    for (const m of rigid) m.visible = k > 0.6;
+    kitShown = k > 0.6; showKitHair();
   }
   let pitK: CrewMeta['pit'] | null = null;
   // per region: its shapes' morph names and the bones from just below its reference down to its driving bone
@@ -821,13 +891,14 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     // (CHAR_BUDGET.lodSwapFar, 0 elsewhere): switching at 6 m in front of you read as their clothes and hair changing
     if (sinceDrawn < 1 && camD < CHAR_BUDGET.lodSwapFar) return;
     const wantH = hairs[1] && camD > (crowd ? CHAR_BUDGET.crowdLodFar : CHAR_BUDGET.lodFar) * (hairOn ? 0.9 : 1.1) ? 1 : 0;
-    if (wantH !== hairOn) { hairOn = wantH; hairs[0]!.visible = wantH === 0; hairs[1]!.visible = wantH === 1; }
+    if (wantH !== hairOn) { hairOn = wantH; showKitHair(); }
     if (!lodSets[1].length) return;
     const want = camD > (crowd ? CHAR_BUDGET.crowdLodFar : CHAR_BUDGET.lodFar) * (lodOn ? 0.9 : 1.1) ? 1 : 0;
     if (want === lodOn) return;
     lodOn = want;
     for (const m of lodSets[0]) m.visible = want === 0;
     for (const m of lodSets[1]) m.visible = want === 1;
+    showKitHair();
   }
   function seen(this: THREE.Object3D, _r: THREE.WebGLRenderer, _s: THREE.Scene, c: THREE.Camera) {
     if (!(c as THREE.PerspectiveCamera).isPerspectiveCamera) return; // the sun's shadow camera does not count
@@ -2001,7 +2072,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
 
     // ---- feet: planted where they land, on the real ground ----
     if (ground && standing && root.visible && kneel === 0) {
-      root.updateWorldMatrix(true, true);
+      // only the root's own matrix: each foot's getWorldPosition brings its own chain up to date
+      root.updateWorldMatrix(true, false);
       const baseY = root.getWorldPosition(tmp).y;
       const rest = (kit?.footH ?? 0.09) + soleLift;
       let drop = 0, busy = false;
@@ -2033,7 +2105,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       hipDrop += (drop - hipDrop) * (1 - Math.exp(-dt * 6));
       if (busy || Math.abs(hipDrop) > 0.002) {
         hipsB.position.y += hipDrop / fig.scale.y;
-        fig.updateWorldMatrix(true, true);
+        // the hips and the legs only (the rest of the body is brought up to date when it is drawn)
+        for (const l of legs) l.h.updateWorldMatrix(true, true);
         for (const l of legs) {
           solveLeg(l.h, l.k, l.f, l.p);
           l.h.updateWorldMatrix(true, true);
