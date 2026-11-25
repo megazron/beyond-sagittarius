@@ -591,7 +591,7 @@ export class Episode2 {
     this.passTime(8.2, true, 'e2.rain', () => {
       const z = this.z, at = this.settle(this.byFire(1.35), this.L.camp, true, true);
       this.scene([
-        { hold: 2.8, shot: () => ({ from: this.L.camp.clone().add(v3(0.9, 1.6, 0.8)), to: this.L.camp.clone().add(v3(0, 0.05, 0)), push: 0.03 }), run: () => { z.setLookTarget(this.L.camp); audio.sample('amb_rain', 0.35, { dur: 4 }); } },
+        { hold: 2.8, shot: () => this.wide(at, 4.5, -0.8, 0.9), run: () => { z.setLookTarget(this.L.camp); audio.sample('amb_rain', 0.35, { dur: 4 }); } },
         { key: 'e2.bd.1', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95, 0.24), run: () => z.setFace({ frown: 0.3 }) },
       ], () => { this.clearHands(); void at; this.ui.toast(t('level.13.hint')); });
     });
