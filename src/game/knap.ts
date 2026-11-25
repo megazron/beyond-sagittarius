@@ -124,7 +124,8 @@ export class Stones {
   private handShot(dist = 0.8): Shot {
     const W = this.work(), { f, l } = this.axes();
     const up = dist < 0.6 ? 0.05 : 0.08 + (dist - 0.6) * 0.35;
-    return { from: W.clone().addScaledVector(f, dist * 0.82).addScaledVector(l, -dist * 0.5).add(new THREE.Vector3(0, dist * 0.32, 0)), to: W.clone().add(new THREE.Vector3(0, up, 0)), push: 0.02 };
+    // GPU ep1D: lower and straighter in front, his coat over his knees filled the bottom of frame as a white slab
+    return { from: W.clone().addScaledVector(f, dist * 0.55).addScaledVector(l, -dist * 0.72).add(new THREE.Vector3(0, 0.2 + dist * 0.45, 0)), to: W.clone().add(new THREE.Vector3(0, up, 0)), push: 0.02 };
   }
   /** His face from below and in front: he is looking down at his hands, so the lens goes under his brow (a lens at
    * head height framed the top of his hair: owner, life_landed L3). The hands come into the bottom of frame. */
@@ -293,7 +294,7 @@ export class Stones {
     // it works: a long thin flake peels off the edge and drops in front of his knees; an insert on it; he picks it
     // up and turns it to the light, tests the edge on his thumb, it cuts him, he sucks the thumb
     let flake: THREE.Mesh | null = null;
-    const lie = site.kneel.clone().addScaledVector(f, 0.42).addScaledVector(l, 0.02);
+    const lie = site.kneel.clone().addScaledVector(f, 0.62).addScaledVector(l, -0.14); // clear of his coat (at 0.42 the insert looked into it)
     lie.y = this.world.terrain.height(lie.x, lie.z) + 0.006;
     const hold = this.work().add(new THREE.Vector3(0, 0.2, 0)).addScaledVector(l, -0.06);
     this.playScene([
@@ -303,7 +304,7 @@ export class Stones {
         this.after(0.31, () => { flake = this.dropFlake(edge, false, lie); });
       } },
       // the insert: the flake on the ground, its edge catching the light
-      { hold: 1.7, shot: () => ({ from: lie.clone().addScaledVector(f, 0.26).addScaledVector(l, -0.14).add(new THREE.Vector3(0, 0.13, 0)), to: lie.clone().add(new THREE.Vector3(0, 0.01, 0)), push: 0.015 }), run: () => { z.setLookTarget(lie); } },
+      { hold: 1.7, shot: () => ({ from: lie.clone().addScaledVector(f, 0.24).addScaledVector(l, -0.2).add(new THREE.Vector3(0, 0.2, 0)), to: lie.clone().add(new THREE.Vector3(0, 0.01, 0)), push: 0.015 }), run: () => { z.setLookTarget(lie); } },
       // picked up and turned to the light between finger and thumb
       { hold: 2.2, shot: () => this.faceShot(-0.25), run: () => {
         flake?.removeFromParent(); this.takeUp(null); z.setProp('flake');

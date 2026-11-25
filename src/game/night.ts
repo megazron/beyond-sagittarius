@@ -302,7 +302,7 @@ export class FirstNight {
       z.setKneel(true, true); z.setLimbs({ bend: 0.75 }); z.setProp(null);
       z.setFace({ fear: 0.7, squint: 0.2 });
     };
-    const path = at.clone().addScaledVector(f, 3.4);
+    const path = at.clone().addScaledVector(f, 2.8);
     const p0 = path.clone().addScaledVector(l, 5), p1 = path.clone().addScaledVector(l, -5);
     const mouth = () => z.lipsAt(new THREE.Vector3()).addScaledVector(f, 0.05).add(new THREE.Vector3(0, -0.02, 0));
     // over his shoulder, low in the ferns: his back and head dark in the foreground, the path beyond
@@ -316,7 +316,7 @@ export class FirstNight {
       } },
     ], () => done()));
     const hound = createHound(); hound.root.position.copy(p0); this.world.scene.add(hound.root);
-    let mode: 'walk' | 'turn' | 'lunge' | 'gone' = 'walk', u = 0, last = performance.now(), run = true;
+    let mode: 'walk' | 'turn' | 'lunge' | 'gone' = 'walk', u = 0.22, last = performance.now(), run = true;
     const head = () => new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld);
     const tick = () => {
       if (!run) return;
