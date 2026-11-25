@@ -2102,7 +2102,12 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   (325), the page's own JavaScript 99.7% idle over 40 s of CPU profile. The navigation cannot commit behind that GPU
   queue: 40 s and 180 s timeouts. Holding the clock (no new frames) and waiting one frame: the reload committed after
   65 s. Closing the page and opening a new one: 61 s to commit. So the queue is the GPU process's, not the page's.
-  Frame cost per post pass and for the fire's additive meshes: diag7 (see the log in ~/bs-cap/ep2b/diag7.log).
+  Held frames with one thing off at a time (volumetric, AO, bloom, the fire's additive meshes) read 0.05 to 11.5 s with
+  no pattern: nothing single in the scene is the cause. FIX (play_test): the save is opened again in a new browser
+  (storage_state carried over); the old browser closed in 30.5 s, the new page committed in 0.3 s.
+- LANDED affc9e1 on main (ep2-land5 = 7dd2746 + the levels_smoke and play_test fixes; CI 45571781288 all green on that
+  sha, combat and levels_smoke included). ep2-land4's cord softlock fix and Urdu takes are on main with it.
+- Fights in the story: once the head is hafted the fire-hardened spear is not in the kit (ep2b).
 - levels_smoke on ep2-land4 (CI 45564666392) gave up on level 13 because its stuck counter was per level, not per lack
   of progress; the shelter scene played 16 s after. Fixed in the test (0cc8215).
 - Episode Two (all in ep2b, see the commits): bark shot framed a standing head (kneel blend at 0.47 when the beat began)
