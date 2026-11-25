@@ -221,18 +221,20 @@ def main():
         # ---- an old-design save at level 18 (charcoal, lime and salt made) starts Episode Three at level 15 ----
         old = save_at_11(); old["level"] = 18; old["completed"] = list(range(1, 18)); old["discoveries"] = ["knapping", "cordage", "fire", "pottery", "charcoal", "lime", "salt"]
         # (a reload saves the running game over it on the way out: a new page, then the old save, then a reload)
-        ctx = page.context
         page.close()
-        page = ctx.new_page()
+        page = browser.new_page(viewport={"width": 1280, "height": 720})
+        page.set_default_timeout(120000)
+        ev = page.evaluate
         page.goto(url, wait_until="domcontentloaded", timeout=120000)
         page.wait_for_function("window.__bs && window.__bs.ready", timeout=240000)
-        page.evaluate(f"localStorage.setItem('bs-save-v1', {json.dumps(json.dumps(old))})")
+        page.evaluate(f"localStorage.setItem('bs-save-v1', {json.dumps(json.dumps(old))}); localStorage.setItem('bs-settings-v1', JSON.stringify({{lang: 'en', sensitivity: 1, invertY: false, volume: 0, subtitles: true, showFps: false}}))")
         page.reload(wait_until="domcontentloaded", timeout=240000)
         page.wait_for_function("window.__bs && window.__bs.ready", timeout=240000)
+        if page.locator("#sf-ok").is_visible():
+            page.click("#sf-ok")
         page.click("#btn-continue")
         page.wait_for_function("window.__bs.mode === 'play'", timeout=180000)
         ev("__bs.step(1)")
-        ev = page.evaluate
         mig = ev("({level: __bs.level, migrated: !!__bs.save.flags['e3.migrated'], done2: !!__bs.save.flags['e2.done'], completed: __bs.save.completed.length})")
         log("old save:", mig)
         if mig["level"] != 15 or not mig["migrated"] or not mig["done2"] or mig["completed"] != 14:
