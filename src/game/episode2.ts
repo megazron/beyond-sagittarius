@@ -592,8 +592,10 @@ export class Episode2 {
     const r = this.L.ridge.clone().addScaledVector(down.normalize(), 9); r.y = this.h(r.x, r.z);
     const at = this.settle(r.clone().add(v3(1.5, 0, 1)), r, true);
     const g = new THREE.Group();
-    const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), std(0x7a746c)); rock.scale.set(1.2, 0.6, 1); rock.position.y = 0.12; g.add(rock);
-    const reed = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.009, 0.16, 7), std(0xb8a860)); reed.rotation.z = Math.PI / 2; reed.position.set(0, 0.3, 0); g.add(reed);
+    // a low dark rock (GPU take: a pale 0.28 m rock right under the lens filled the frame as a white shape) and on it the reed,
+    // pale against it
+    const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2, 1), std(0x45403a)); rock.scale.set(1.2, 0.5, 1); rock.position.y = 0.08; g.add(rock);
+    const reed = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.01, 0.18, 7), std(0xd8c98a, { roughness: 0.6 })); reed.rotation.z = Math.PI / 2; reed.position.set(0, 0.19, 0); g.add(reed);
     for (let i = 0; i < 3; i++) { const pr = new THREE.Mesh(new THREE.CircleGeometry(0.04, 3), new THREE.MeshBasicMaterial({ color: 0x2a2018 })); pr.rotation.x = -Math.PI / 2; pr.position.set(-0.4 - i * 0.22, 0.01, (i % 2) * 0.12); g.add(pr); }
     g.position.copy(r); g.position.y = this.h(r.x, r.z);
     this.group.add(g); this.whistle = g;
@@ -603,7 +605,10 @@ export class Episode2 {
   private whistleShot(): Shot {
     // past the reed, looking back at it with him behind it (from his side the shot lost his head and re-aimed on it)
     const w = this.whistle?.position ?? this.L.ridge, me = this.player.pos, d = w.clone().sub(me).setY(0).normalize();
-    return { from: w.clone().addScaledVector(d, 1.3).add(v3(0, 0.55, 0)), to: w.clone().add(v3(0, 0.3, 0)).lerp(this.head(), 0.35), push: 0.02, aperture: 0.005 };
+    // from the side and above, the reed on its rock in the lower third and him behind (from past it, low, the rock under the
+    // lens filled the frame)
+    const sd = this.side(d), from = w.clone().addScaledVector(d, 0.9).addScaledVector(sd, 0.9).add(v3(0, 1.05, 0));
+    return { from, to: w.clone().add(v3(0, 0.2, 0)).lerp(this.head(), 0.3), push: 0.02, aperture: 0.005, lightAt: w.clone().add(v3(0, 0.2, 0)), lightScale: 0.8 };
   }
 
   // ------------------------------------------------------------------ 2.3 someone at the snare (level 12)
@@ -884,7 +889,9 @@ export class Episode2 {
         { key: 'e2.fr.1', who: 'scientist', shot: () => cover.close(z, 0.45, 0.95, 0.24) },
         { key: 'e2.fr.2', who: 'scientist', shot: () => cover.mid(z, -0.5, 2.1) },
         { key: 'e2.fr.oom', who: OOM, if: { flag: 'e2.oomsa.here' }, shot: () => (oom ? cover.ots(oom, z, 0.5) : cover.mid(z)), run: () => oom?.setLookTarget(dark) },
-        { hold: 4.2, shot: () => { const at = edge.clone().add(v3(0, 0.8, 0)); return { from: this.head().add(v3(0, 0.05, 0)).lerp(at, 0.25), to: at, push: 0.03, fov: 26, lightAt: at }; }, run: () => { beast = this.bigOne(outer, edge); audio.sample('cb_growl', 0.35); } },
+        // from the fire's side of it, low, four metres off, clear of Oom-Sa (GPU take: from over his head her hair filled the
+        // foreground and the animal was a dark lump far out): firelight on it from the camp side
+        { hold: 4.6, shot: () => { const at = edge.clone().add(v3(0, 0.75, 0)), from = edge.clone().addScaledVector(away, -4.2).addScaledVector(this.side(away), 1.6); from.y = Math.max(this.h(from.x, from.z) + 0.6, at.y - 0.1); return { from, to: at, push: 0.03, fov: 34, lightAt: at, lightScale: 1.1 }; }, run: () => { beast = this.bigOne(outer, edge); audio.sample('cb_growl', 0.35); } },
         { key: 'e2.fr.come', who: 'scientist', shot: () => cover.close(z, 0.35, 0.9, 0.24), run: () => { z.setFace({ frown: 0.4, squint: 0.3 }); z.setLookTarget(edge.clone().add(v3(0, 0.8, 0))); beast?.snarl(0.6); } },
         { choice: 'e2.kiln', shot: () => cover.close(z, -0.6, 1.2, 0.24) },
       ], () => {
@@ -916,7 +923,6 @@ export class Episode2 {
     if (cb) {
       await new Promise<void>((go) => cb.ensureAsked(go));
       const o = await cb.startEncounter('night.defence', { story });
-      if (oom) { oom.setKneel(false); this.npcs.pin('local', null); }
       for (const [k, v] of Object.entries(o.flags)) if (v) s.flags[`e2.cb.${k}`] = true;
       taken = o.stats.taken;
       if (o.flags.scarred) s.flags.scarred = true;
@@ -927,7 +933,11 @@ export class Episode2 {
     if (this.f('e2.kiln.kept') && taken > 0) this.set('e2.bitten');
     // the pots that did not live through the night
     this.pots.forEach((p, i) => { if (i >= this.potsLeft()) { (p.material as THREE.MeshStandardMaterial).color.setHex(0x3a2a22); p.rotation.z = 0.5; } });
-    this.after(1.0, () => {
+    // the look across the fire waits for plain play (GPU take: the fight ended beside Oom-Sa, her talk menu opened and
+    // the scene was skipped because a scene cannot start over a menu)
+    const look = () => { if (!this.free()) { this.after(0.4, look); return; } lookScene(); };
+    this.after(1.0, look);
+    const lookScene = () => {
       this.busy = false;
       const z = this.z, c = this.L.camp, me = this.settle(this.byFire(2.0), c, false);
       const away = c.clone().sub(me).setY(0).normalize(), spot = c.clone().addScaledVector(away, 6.5), from = c.clone().addScaledVector(away, 11.5).addScaledVector(this.side(away), -2.5);
@@ -935,12 +945,12 @@ export class Episode2 {
       // across the fire it stops, its head comes round to him, a long look; then it turns and goes back into the dark
       const beast = this.bigOne(from, spot);
       this.scene([
-        { hold: 4.4, shot: () => ({ from: c.clone().addScaledVector(away, -2.4).add(v3(0.35, 1.0, 0)), to: dark, push: 0.03, fov: 34, lightAt: dark }), run: () => z.setLookTarget(dark) },
-        { hold: 2.2, shot: () => { const hd = beast.head(); return { from: hd.clone().lerp(this.head(), 0.32).add(v3(0, 0.1, 0)), to: hd, push: 0.02, fov: 24, aperture: 0.004, lightAt: hd }; } },
+        { hold: 4.4, shot: () => ({ from: c.clone().addScaledVector(away, -2.4).add(v3(0.35, 1.0, 0)), to: dark, push: 0.03, fov: 34, lightAt: dark, lightScale: 1.1 }), run: () => z.setLookTarget(dark) },
+        { hold: 2.2, shot: () => { const hd = beast.head(); return { from: hd.clone().lerp(this.head(), 0.32).add(v3(0, 0.1, 0)), to: hd, push: 0.02, fov: 24, aperture: 0.004, lightAt: hd, lightScale: 1.1 }; } },
         { key: 'e2.fr.look', who: 'scientist', shot: () => cover.close(z, 0.35, 0.95, 0.24), run: () => { z.setFace({ squint: 0.3 }); this.after(2.2, () => beast.leave()); } },
-        { hold: 3.0, shot: () => ({ from: c.clone().addScaledVector(away, -2.4).add(v3(0.35, 1.0, 0)), to: dark, push: 0.02, fov: 40, lightAt: dark }) },
-      ], () => { beast.remove(); this.clearHands(); this.set('e2.nightDone'); this.wait = 1; void here; });
-    });
+        { hold: 3.0, shot: () => ({ from: c.clone().addScaledVector(away, -2.4).add(v3(0.35, 1.0, 0)), to: dark, push: 0.02, fov: 40, lightAt: dark, lightScale: 1.1 }) },
+      ], () => { beast.remove(); this.clearHands(); if (oom) { oom.setKneel(false); this.npcs.pin('local', null); } this.set('e2.nightDone'); this.wait = 1; void here; });
+    };
   }
   /** The big one in a scene: walks from `from` to `to` (nose down for a stretch on the way), stands there turning to him
    *  and watching his head; `leave()` sends it off the way it came, `snarl(k)` lifts its lip and quills. */
@@ -1002,7 +1012,8 @@ export class Episode2 {
       const rim = pot.position.clone().add(v3(0, 0.2, 0));
       this.scene([
         { hold: 3.2, shot: () => this.wide(me, 6, 0.5, 1.2), run: () => { this.world.camp.setFire(1); z.setLookTarget(pot.position); } },
-        { hold: 1.8, shot: () => ({ from: rim.clone().addScaledVector(f, -0.35).addScaledVector(r, 0.25).add(v3(0, 0.12, 0)), to: rim, push: 0.01, aperture: 0.004 }), run: () => {
+        // from beyond the pot, looking back at his knuckle on the rim (GPU take: from his side his sleeve filled the lens)
+        { hold: 1.8, shot: () => ({ from: rim.clone().addScaledVector(f, 0.5).addScaledVector(r, 0.3).add(v3(0, 0.16, 0)), to: rim.clone().addScaledVector(f, -0.05), push: 0.01, aperture: 0.004, lightAt: rim.clone() }), run: () => {
           z.setHold({ R: { at: rim.clone().addScaledVector(f, -0.1).addScaledVector(r, 0.04), fingers: f.clone(), palm: f.clone(), radius: 0.02 } });
           this.after(0.6, () => { z.setHold({ R: { at: rim.clone().addScaledVector(f, -0.08), fingers: f.clone(), palm: f.clone(), radius: 0.02 } }); audio.sample('pot', 0.4); audio.tone(1960, 0.9, 'sine', 0.07); audio.tone(2940, 0.6, 'sine', 0.035, 0.01); });
           this.after(0.85, () => z.setHold({ R: { at: rim.clone().addScaledVector(f, -0.16).addScaledVector(r, 0.05), fingers: f.clone(), palm: f.clone(), radius: 0.02 } }));
