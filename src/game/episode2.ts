@@ -23,6 +23,7 @@ interface CombatLike {
   ensureAsked(go: () => void): void;
   startEncounter(id: 'night.defence', o: { story?: Record<string, boolean>; hour?: number }): Promise<{ result: string; flags: Record<string, unknown>; stats: { taken: number } }>;
   holster?(): void;
+  scatter?(): void;
 }
 
 const OOM = 'local' as Who;

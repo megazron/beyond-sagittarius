@@ -129,6 +129,13 @@ export class Combat {
   private threatT = 0;
   /** A story scene is starting in free play: the weapon goes down (a raised spear would stay in his hands through it). */
   holster() { if (this.encounter || !this.sim) return; this.sim.equip('fists'); this.engagedT = 0; this.threatT = 0; }
+  /** The story is waiting on him and something hostile has hung about within 30 m for a while: it loses interest and goes. */
+  scatter(r = 30) {
+    if (this.encounter || !this.sim) return;
+    const p = this.sim.player;
+    for (const e of this.sim.hostile()) if (Math.hypot(e.x - p.x, e.z - p.z) < r) this.sim.rout(e);
+    this.sim.equip('fists'); this.engagedT = 0; this.threatT = 0;
+  }
   get threat() { return !!this.sim && this.sim.hostile().some((e) => Math.hypot(e.x - this.d.player.pos.x, e.z - this.d.player.pos.z) < 32); }
   /** How fast stamina comes back right now (injuries, hunger, thirst, cold, a raised guard). */
   regenMul() { const s = this.sim; if (!s) return 1; const p = s.player; return p.regenLock > 0 || p.blocking || p.act === 'roll' ? 0 : s.hurtMul().regen; }

@@ -30,6 +30,7 @@ const SITES: Site[] = ['camp', 'reeds', 'rise'];
 export class Episode3 extends Episode2 {
   private flood: THREE.Group | null = null;
   private restored3 = false;
+  private blockedT = 0;
 
   /** Levels 15 to 21 are this episode's. */
   override owns(n: number) { return n >= 15 && n <= 21; }
@@ -68,6 +69,12 @@ export class Episode3 extends Episode2 {
     // what Episode Two left in the world (after a reload the Episode Two controller no longer builds it)
     if (!this.restored3) { this.restored3 = true; this.buildShelter(); if (this.f('e2.cairnDone')) this.buildCairn(true); }
     this.wait -= dt;
+    // a story beat waiting only because an animal hangs about near him (CI levels_smoke stood at level 15 for 150 rounds,
+    // free() false, 'engaged'): after 10 s it loses interest and goes
+    if (this.wait <= 0 && !this.busy && ep3Loaded() && !this.free() && this.combat() && !(this.combat() as { encounter?: unknown }).encounter) {
+      this.blockedT += dt;
+      if (this.blockedT > 10) { this.blockedT = 0; this.combat()?.scatter?.(); }
+    } else this.blockedT = 0;
     if (this.wait > 0 || this.busy || !ep3Loaded() || !this.free()) return;
     // the levels after 15 are not built yet: say so once, plainly
     if (s.level > 15) { if (!this.f('e3.wipShown')) { this.set('e3.wipShown'); this.ui.banner(t('e3.title'), t('e3.wip')); } return; }
