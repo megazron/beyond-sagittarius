@@ -96,7 +96,17 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     page.on("console", lambda m: errors.append(f"console.{m.type}: {m.text}") if m.type == "error" else None)
     page.add_init_script("if (!localStorage.getItem('bs-settings-v1')) localStorage.setItem('bs-settings-v1', JSON.stringify({lang: 'en', sensitivity: 1, invertY: false, volume: 0, subtitles: true, showFps: false}))")
     touch = Touch(ctx.new_cdp_session(page))
-    shot = lambda name: page.screenshot(path=str(shots / f"{tag}-{name}.jpg"), type="jpeg", quality=82)
+    # a picture is a record, not a check (combat's play_test does the same): intro5's run lost its pixel7-landscape pass to
+    # a 30 s screenshot timeout at the discovery card, with every check up to there passed. One more try after the page
+    # has drawn two frames, then a note in the log
+    def shot(name):
+        for k in range(2):
+            try:
+                page.screenshot(path=str(shots / f"{tag}-{name}.jpg"), type="jpeg", quality=82, timeout=30000); return
+            except Exception as e:
+                log(f"[{tag}] no picture {name} (try {k + 1}): {str(e)[:80]}")
+                try: page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(1))))")
+                except Exception: pass
     ev = page.evaluate
     fail = lambda m: failures.append(f"[{tag}] {m}")
 
