@@ -53,6 +53,7 @@ export class Episode2 {
   protected busy = false;
   private hurtLines = 0;
   protected quieted = false;
+  private blockedT2 = 0;
 
   constructor(
     protected world: World,
@@ -157,6 +158,12 @@ export class Episode2 {
     if (this.world.explorer.root.visible) this.world.explorer.root.visible = false;
     if (!this.quieted) { this.quieted = true; this.world.ridge.quiet?.(); }
     this.wait -= dt;
+    // a beat waiting only because an animal hangs about near him: after 10 s it loses interest (as Episode Three does;
+    // CI levels_smoke on 283026c stood at level 13 for 160 rounds, free() false, no fight running)
+    if (this.wait <= 0 && !this.busy && ep2Loaded() && !this.free() && this.combat() && !(this.combat() as { encounter?: unknown }).encounter) {
+      this.blockedT2 += dt;
+      if (this.blockedT2 > 10) { this.blockedT2 = 0; this.combat()?.scatter?.(); }
+    } else this.blockedT2 = 0;
     if (this.wait > 0 || this.busy || !ep2Loaded() || !this.free()) return;
     const p = this.player.pos;
     if (s.level === 11 && !this.f('e2.l11.intro')) { this.intro11(); return; }
