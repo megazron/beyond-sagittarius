@@ -190,6 +190,8 @@ export class Episode2 {
     const c = this.L.camp, at = this.byFire(dist), d = at.clone().sub(c).setY(0).normalize(), tan = v3(-d.z, 0, d.x);
     return this.settle(at, at.clone().addScaledVector(tan, 2), true, true);
   }
+  /** A point ahead of him at eye height: he looks up from the work to say a line. */
+  private ahead() { return this.head().addScaledVector(this.fwd(), 3).add(v3(0, 0.1, 0)); }
   private fwd() { const r = this.z.root.rotation.y; return v3(Math.sin(r), 0, Math.cos(r)); }
   private right(f: THREE.Vector3) { return v3(f.z, 0, -f.x); }
   private head() { return new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld); }
@@ -205,11 +207,15 @@ export class Episode2 {
     const f = this.fwd(), r = this.right(f).multiplyScalar(side), hd = this.head();
     // the side away from the fire
     if (r.dot(at.clone().sub(this.L.camp)) < 0) r.negate();
-    return { from: at.clone().addScaledVector(f, dist * 0.9).addScaledVector(r, dist * 0.7).add(v3(0, 0.35 + dist * 0.2, 0)), to: at.clone().lerp(hd, 0.35), push: 0.02, aperture: 0.004 };
+    // below his eye line: he bends over the work, and a camera above his head sees only his hair
+    return { from: at.clone().addScaledVector(f, dist * 0.95).addScaledVector(r, dist * 0.6).add(v3(0, 0.08 + dist * 0.12, 0)), to: at.clone().lerp(hd, 0.45), push: 0.02, aperture: 0.004 };
   }
   private wide(at: THREE.Vector3, dist = 6, side = 0.6, up = 1.2): Shot {
     const f = this.fwd(), r = this.right(f);
-    return { from: at.clone().addScaledVector(f, dist).addScaledVector(r, dist * side).add(v3(0, up, 0)), to: at.clone().add(v3(0, 0.7, 0)), push: 0.04 };
+    const from = at.clone().addScaledVector(f, dist).addScaledVector(r, dist * side).add(v3(0, up, 0));
+    // above the grass where the ground rises towards the camera
+    from.y = Math.max(from.y, this.h(from.x, from.z) + 1.35);
+    return { from, to: at.clone().add(v3(0, 0.7, 0)), push: 0.04 };
   }
   private say(key: string, who: Who = 'scientist', sec = 4) { this.ui.say(key, who === 'megazron' ? 'mz.name' : `crew.${who}.name`, sec); }
   private mesh(g: THREE.BufferGeometry, m: THREE.Material, at: THREE.Vector3, parent: THREE.Object3D = this.group) {
@@ -248,10 +254,10 @@ export class Episode2 {
     this.busy = true;
     this.passTime(7.4, true, 'e2.day', () => {
       this.ui.banner(t('e2.title'), t('e2.sub'));
-      const z = this.z, at = this.settleWork(1.6);
+      const z = this.z, at = this.settleWork(2.5);
       const f = this.fwd(), r = this.right(f);
       // the dried vine from the first night, held in both hands in front of him; it parts in the middle
-      const mid = at.clone().addScaledVector(f, 0.36).add(v3(0, 0.52, 0));
+      const mid = at.clone().addScaledVector(f, 0.36).add(v3(0, 0.74, 0));
       const vm = std(0x5c6a2a, { roughness: 0.7 });
       const g = new THREE.CylinderGeometry(0.006, 0.006, 0.2, 6); g.rotateZ(Math.PI / 2);
       const a = this.mesh(g, vm, mid.clone().addScaledVector(r, -0.1)), b = this.mesh(g, vm, mid.clone().addScaledVector(r, 0.1));
@@ -264,11 +270,11 @@ export class Episode2 {
       };
       grip();
       this.scene([
-        { hold: 3.2, shot: () => this.wide(at, 6.5, 0.5, 1.0), run: () => { z.setLookTarget(mid); z.setLimbs({ bend: 0.3 }); } },
+        { hold: 3.2, shot: () => this.wide(at, 6.5, 0.5, 1.0), run: () => { z.setLookTarget(mid); z.setLimbs({ bend: 0.12 }); } },
         { key: 'e2.vn.1', who: 'scientist', shot: () => this.handShot(mid, 0.75), run: () => {
           this.after(0.5, () => { audio.sample('wood', 0.5, { rate: 1.7 }); this.anim(0.4, (k) => { apart = k * 0.15; grip(); }); });
         }, after: 0.4 },
-        { key: 'e2.vn.2', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95), run: () => z.setFace({ frown: 0.3, squint: 0.2 }) },
+        { key: 'e2.vn.2', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95, 0.24), run: () => { z.setFace({ frown: 0.3, squint: 0.2 }); z.setLookTarget(this.ahead()); } },
         { hold: 6.5, shot: () => cover.mid(z, -0.6, 2.2), run: () => { z.setFace(null); z.setLookTarget(mid.clone().add(v3(0, -0.2, 0))); this.ui.memory('e2.vn.lyrra', 8); } },
       ], () => { a.removeFromParent(); b.removeFromParent(); this.clearHands(); this.ui.toast(t('level.11.hint')); });
     });
@@ -306,8 +312,8 @@ export class Episode2 {
     if (!this.owns(this.s.level)) return false;
     const z = this.z;
     if (n.id === 'cordage') {
-      const at = this.settleWork(1.6), f = this.fwd(), r = this.right(f);
-      const mid = at.clone().addScaledVector(f, 0.34).add(v3(0, 0.58, 0));
+      const at = this.settleWork(2.5), f = this.fwd(), r = this.right(f);
+      const mid = at.clone().addScaledVector(f, 0.34).add(v3(0, 0.76, 0));
       const cord = this.cordBetween(mid.clone().addScaledVector(r, -0.22), mid.clone().addScaledVector(r, 0.22));
       z.setHold({ L: { at: mid.clone().addScaledVector(r, -0.25), fingers: f.clone(), palm: r.clone(), radius: 0.01, grasp: true }, R: { at: mid.clone().addScaledVector(r, 0.25), fingers: f.clone(), palm: r.clone().negate(), radius: 0.01, grasp: true } });
       this.scene([
@@ -328,16 +334,16 @@ export class Episode2 {
           z.setHold({ R: { at: grip, fingers: f.clone().add(v3(0, -0.3, 0)).normalize(), palm: r.clone().negate(), radius: 0.016, grasp: true } });
           this.after(0.9, () => { z.setHold({ R: { at: grip.clone().addScaledVector(f, 0.35).add(v3(0, -0.45, 0)), fingers: f.clone().add(v3(0, -0.8, 0)).normalize(), palm: r.clone().negate(), radius: 0.016, grasp: true } }); audio.sample('cb_crack', 0.35); });
         } },
-        { key: 'e2.hf.ok', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0), run: () => z.setFace({ smile: 0.25 }) },
+        { key: 'e2.hf.ok', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setFace({ smile: 0.25 }) },
       ], () => { log.removeFromParent(); this.clearHands(); this.set('inv.haft'); this.ui.toast(t('e2.learn.haft')); card(); });
       return true;
     }
     if (n.id === 'fire') {
       this.set('e1.fireOut', false); this.world.camp.setFire(2);
-      const at = this.settleWork(1.6);
+      const at = this.settleWork(2.5);
       this.scene([
         { hold: 2.2, shot: () => this.wide(at, 3.2, 0.9, 0.4), run: () => { z.setLookTarget(this.L.camp.clone().add(v3(0, 0.2, 0))); audio.sample('amb_fire', 0.4, { dur: 3 }); } },
-        { key: 'e2.bd.ok', who: 'scientist', shot: () => cover.close(z, -0.35, 0.95), run: () => z.setFace({ smile: 0.35 }) },
+        { key: 'e2.bd.ok', who: 'scientist', shot: () => cover.close(z, -0.35, 0.95, 0.24), run: () => { z.setFace({ smile: 0.35 }); z.setLookTarget(this.ahead()); } },
       ], () => { this.clearHands(); this.set('inv.bowDrill'); this.ui.toast(t('e2.learn.bowDrill')); void at; card(); });
       return true;
     }
@@ -357,7 +363,7 @@ export class Episode2 {
 
   /** The work before the panel: bark into strands, resin on a warm stone, the bow drill set up, clay into coils. */
   private workScene(kind: 'bark' | 'resin' | 'bow' | 'clay', open: () => void) {
-    const z = this.z, at = this.settleWork(1.6), f = this.fwd(), r = this.right(f);
+    const z = this.z, at = this.settleWork(2.5), f = this.fwd(), r = this.right(f);
     const work = at.clone().addScaledVector(f, 0.42); work.y = this.h(work.x, work.z);
     const made: THREE.Object3D[] = [];
     const keep = <T extends THREE.Object3D>(o: T) => { made.push(o); return o; };
@@ -469,8 +475,8 @@ export class Episode2 {
     this.scene([
       { hold: 2.6, shot: () => cover.mid(z, -0.7, 2.6), run: () => z.setLookTarget(c.clone().addScaledVector(toLake, 9).add(v3(0, 0.4, 0))) },
       { choice: 'e2.snare', shot: () => cover.mid(z, 0.6, 2.2) },
-      { key: 'e2.sn.near', who: 'scientist', if: CHOSE('e2.snare', 'near'), shot: () => cover.close(z, 0.4, 1.0) },
-      { key: 'e2.sn.far', who: 'scientist', if: CHOSE('e2.snare', 'far'), shot: () => cover.close(z, 0.4, 1.0) },
+      { key: 'e2.sn.near', who: 'scientist', if: CHOSE('e2.snare', 'near'), shot: () => cover.close(z, 0.4, 1.0, 0.24) },
+      { key: 'e2.sn.far', who: 'scientist', if: CHOSE('e2.snare', 'far'), shot: () => cover.close(z, 0.4, 1.0, 0.24) },
     ], () => {
       this.set('e2.snareSet'); this.buildSnare();
       void at;
@@ -484,19 +490,19 @@ export class Episode2 {
     const look = ridge.clone().add(v3(0, 8, 0));
     this.scene([
       { hold: 3, shot: () => this.wide(at, 7, -0.5, 0.4), run: () => { s.timeOfDay = Math.max(s.timeOfDay, 19.0); z.setLookTarget(this.L.camp); } },
-      { key: 'e2.vo.call', shot: () => cover.close(z, 0.9, 1.1), run: () => { z.setGazeRate(5); z.setLookTarget(look); audio.sample('amb_wind', 0.5, { dur: 4 }); } },
+      { key: 'e2.vo.call', shot: () => cover.close(z, 0.9, 1.1, 0.24), run: () => { z.setGazeRate(5); z.setLookTarget(look); audio.sample('amb_wind', 0.5, { dur: 4 }); } },
       { hold: 1.8, shot: () => ({ from: this.head().add(v3(0, 0.05, 0)), to: look, push: 0.03 }) },
-      { key: 'e2.vo.1', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95), run: () => z.setFace({ squint: 0.35, frown: 0.2 }) },
-      { key: 'e2.vo.2', who: 'scientist', shot: () => cover.close(z, -0.4, 1.0) },
+      { key: 'e2.vo.1', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95, 0.24), run: () => z.setFace({ squint: 0.35, frown: 0.2 }) },
+      { key: 'e2.vo.2', who: 'scientist', shot: () => cover.close(z, -0.4, 1.0, 0.24) },
       { choice: 'e2.voice', shot: () => cover.mid(z, 0.5, 2.2) },
       // go: up into the dusk with a burning branch; nobody; small prints and a cut reed
       { hold: 2.4, if: CHOSE('e2.voice', 'go'), shot: () => this.wide(at, 5, 0.3, 1.6), run: () => { z.setFace(null); this.ui.fade('black', 1, 0.6); this.after(0.8, () => { this.ridgeFind(); this.ui.fade('black', 0, 0.8); }); } },
       { key: 'e2.vo.go.2', who: 'scientist', if: CHOSE('e2.voice', 'go'), shot: () => this.whistleShot() },
-      { key: 'e2.vo.shout.1', who: 'scientist', if: CHOSE('e2.voice', 'shout'), shot: () => cover.close(z, 0.5, 1.1) },
+      { key: 'e2.vo.shout.1', who: 'scientist', if: CHOSE('e2.voice', 'shout'), shot: () => cover.close(z, 0.5, 1.1, 0.24) },
       { key: 'e2.vo.shout.2', if: CHOSE('e2.voice', 'shout'), hold: 2.2, shot: () => ({ from: this.head().add(v3(0, 0.05, 0)), to: look, push: 0.02 }) },
-      { key: 'e2.vo.shout.3', who: 'scientist', if: CHOSE('e2.voice', 'shout'), shot: () => cover.close(z, -0.3, 0.9), run: () => z.setFace({ frown: 0.35 }) },
+      { key: 'e2.vo.shout.3', who: 'scientist', if: CHOSE('e2.voice', 'shout'), shot: () => cover.close(z, -0.3, 0.9, 0.24), run: () => z.setFace({ frown: 0.35 }) },
       { key: 'e2.vo.stay.2', who: 'scientist', if: CHOSE('e2.voice', 'stay'), shot: () => cover.mid(z, 0.7, 2.4), run: () => { const p = this.settle(this.byFire(1.4, ridge), this.L.camp, true, true); void p; z.setLookTarget(this.L.camp); } },
-      { key: 'e2.vo.high', who: 'scientist', if: { flag: 'fire.high' }, shot: () => cover.close(z, 0.3, 1.0) },
+      { key: 'e2.vo.high', who: 'scientist', if: { flag: 'fire.high' }, shot: () => cover.close(z, 0.3, 1.0, 0.24) },
     ], () => {
       z.setGazeRate(null); this.clearHands(); this.whistle?.removeFromParent();
       this.set('e2.voiceDone');
@@ -550,7 +556,7 @@ export class Episode2 {
       { key: 'e2.st.give.2', who: OOM, if: CHOSE('e2.stranger', 'give'), shot: () => cover.close(oom, 0.4, 1.0) },
       { hold: 2, if: CHOSE('e2.stranger', 'sit'), shot: () => cover.two(z, oom, 3.2), run: () => { this.z.setKneel(true, true); oom.setKneel(true, true); } },
       { key: 'e2.st.sit.2', who: OOM, if: CHOSE('e2.stranger', 'sit'), shot: () => cover.close(oom, 0.4, 1.0) },
-      { key: 'e2.st.spear.1', who: 'scientist', if: CHOSE('e2.stranger', 'spear'), shot: () => cover.close(z, 0.5, 1.0), run: () => z.setFace({ frown: 0.5 }) },
+      { key: 'e2.st.spear.1', who: 'scientist', if: CHOSE('e2.stranger', 'spear'), shot: () => cover.close(z, 0.5, 1.0, 0.24), run: () => z.setFace({ frown: 0.5 }) },
       { key: 'e2.st.spear.2', who: OOM, if: CHOSE('e2.stranger', 'spear'), shot: () => cover.close(oom, 0.4, 1.1) },
       { key: 'e2.st.joke.1', who: 'scientist', if: CHOSE('e2.stranger', 'joke'), shot: () => cover.ots(z, oom, 0.5) },
       { key: 'e2.st.joke.2', who: OOM, if: CHOSE('e2.stranger', 'joke'), shot: () => cover.close(oom, 0.4, 1.0) },
@@ -581,7 +587,7 @@ export class Episode2 {
       const z = this.z, at = this.settle(this.byFire(1.35), this.L.camp, true, true);
       this.scene([
         { hold: 2.8, shot: () => ({ from: this.L.camp.clone().add(v3(0.9, 1.6, 0.8)), to: this.L.camp.clone().add(v3(0, 0.05, 0)), push: 0.03 }), run: () => { z.setLookTarget(this.L.camp); audio.sample('amb_rain', 0.35, { dur: 4 }); } },
-        { key: 'e2.bd.1', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95), run: () => z.setFace({ frown: 0.3 }) },
+        { key: 'e2.bd.1', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95, 0.24), run: () => z.setFace({ frown: 0.3 }) },
       ], () => { this.clearHands(); void at; this.ui.toast(t('level.13.hint')); });
     });
   }
@@ -601,7 +607,7 @@ export class Episode2 {
         oom.setHold({ R: { at: hands.clone().add(v3(0.03, 0, 0)), fingers: v3(0, 0, 1), palm: v3(-1, 0, 0), radius: 0.02, grasp: true }, L: { at: hands.clone().add(v3(-0.04, 0, 0)), fingers: v3(0, 0, 1), palm: v3(1, 0, 0), radius: 0.02, grasp: true } });
         for (let i = 0; i < 3; i++) this.after(0.4 + i * 0.6, () => { this.sparks(hands); audio.sample('flint', 0.5); });
       } },
-      { key: 'e2.py.2', who: 'scientist', shot: () => cover.close(z, -0.9, 0.9), run: () => { z.setLookTarget(hands); oom.setHold(null); } },
+      { key: 'e2.py.2', who: 'scientist', shot: () => cover.close(z, -0.9, 0.9, 0.24), run: () => { z.setLookTarget(hands); oom.setHold(null); } },
     ], () => {
       pyr.removeFromParent(); this.clearHands(); oom.setKneel(false);
       const home = this.L.camp.clone().add(v3(9, 0, 7)); home.y = this.h(home.x, home.z); this.npcs.pin('local', null, 0, home);
@@ -703,9 +709,9 @@ export class Episode2 {
       { hold: 3.2, shot: () => ({ from: outside, to: S.at.clone().addScaledVector(back, 1.2).add(v3(0, 1.4, 0)), push: 0.04 }), run: () => z.setLookTarget(floor) },
       { key: 'e2.rs.oom', who: OOM, if: { all: [TRUSTS(1), { not: { flag: 'e2.oomsa.away' } }] }, shot: () => (oom ? cover.close(oom, 0.4, 1.1) : cover.mid(z)) },
       { hold: 2.2, shot: () => ({ from: floor.clone().add(v3(0, 0.45, 0)).addScaledVector(side, 0.4).addScaledVector(back, -0.3), to: floor.clone().add(v3(0, 0.02, 0)), push: 0.01, aperture: 0.005 }) },
-      { key: 'e2.rs.1', who: 'scientist', shot: () => cover.close(z, 0.45, 0.95), run: () => { z.setProp('flake'); z.setFace({ squint: 0.3 }); } },
+      { key: 'e2.rs.1', who: 'scientist', shot: () => cover.close(z, 0.45, 0.95, 0.24), run: () => { z.setProp('flake'); z.setFace({ squint: 0.3 }); } },
       { key: 'e2.rs.2', who: 'scientist', shot: () => cover.mid(z, -0.5, 2.0) },
-      { key: 'e2.rs.3', who: 'scientist', shot: () => cover.close(z, -0.3, 0.9), run: () => z.setFace({ frown: 0.25 }) },
+      { key: 'e2.rs.3', who: 'scientist', shot: () => cover.close(z, -0.3, 0.9, 0.24), run: () => z.setFace({ frown: 0.25 }) },
       // the hands on the wall: a slow move along them, ending on the one that is his size
       { hold: 4.6, shot: () => ({ from: five.clone().addScaledVector(back, -1.6).addScaledVector(side, -1.4).add(v3(0, -0.1, 0)), to: five.clone().addScaledVector(side, -0.6), push: 0.12 }), run: () => { z.setProp(null); z.setFace(null); z.setLookTarget(five); } },
       { hold: 2.4, shot: () => ({ from: five.clone().addScaledVector(back, -0.75), to: five, push: 0.03, aperture: 0.004 }) },
@@ -720,9 +726,9 @@ export class Episode2 {
       this.scene([
         { hold: 3, shot: () => ({ from: S.cairn.clone().addScaledVector(back, -6).addScaledVector(side, -3).add(v3(0, 2.2, 0)), to: S.cairn.clone().add(v3(0, 0.6, 0)), push: 0.04 }), run: () => z.setLookTarget(c.position.clone().add(v3(0, 0.4, 0))) },
         { choice: 'e2.mark', shot: () => cover.mid(z, 0.6, 2.2) },
-        { key: 'e2.mk.six', who: 'scientist', if: CHOSE('e2.mark', 'six'), shot: () => cover.close(z, 0.4, 1.0), run: () => this.buildCairn(true) },
-        { key: 'e2.mk.one', who: 'scientist', if: CHOSE('e2.mark', 'one'), shot: () => cover.close(z, 0.4, 1.0), run: () => this.buildCairn(true) },
-        { key: 'e2.mk.joke', who: 'scientist', if: CHOSE('e2.mark', 'joke'), shot: () => cover.close(z, 0.4, 1.0), run: () => { this.buildCairn(true); z.setFace({ smile: 0.4 }); } },
+        { key: 'e2.mk.six', who: 'scientist', if: CHOSE('e2.mark', 'six'), shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => this.buildCairn(true) },
+        { key: 'e2.mk.one', who: 'scientist', if: CHOSE('e2.mark', 'one'), shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => this.buildCairn(true) },
+        { key: 'e2.mk.joke', who: 'scientist', if: CHOSE('e2.mark', 'joke'), shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => { this.buildCairn(true); z.setFace({ smile: 0.4 }); } },
         { hold: 2.4, if: CHOSE('e2.mark', 'bare'), shot: () => cover.mid(z, -0.5, 2.6), run: () => this.buildCairn(true) },
       ], () => { this.clearHands(); this.set('e2.cairnDone'); void stand; if (guided) { const home = this.L.camp.clone().add(v3(9, 0, 7)); home.y = this.h(home.x, home.z); this.npcs.pin('local', null, 0, home); } });
     });
@@ -747,7 +753,7 @@ export class Episode2 {
     this.set('e2.l14.intro');
     this.busy = true;
     this.passTime(9.0, true, 'e2.day', () => {
-      const z = this.z, at = this.settleWork(1.6), f = this.fwd(), r = this.right(f);
+      const z = this.z, at = this.settleWork(2.5), f = this.fwd(), r = this.right(f);
       const lump = this.mesh(new THREE.SphereGeometry(0.06, 10, 8), std(0x8e5a3e, { roughness: 0.6 }), at.clone().addScaledVector(f, 0.34).add(v3(0, 0.55, 0)));
       z.setHold({ L: { at: lump.position.clone().addScaledVector(r, -0.05).add(v3(0, -0.03, 0)), fingers: f.clone(), palm: UP.clone(), radius: 0.05 }, R: { at: lump.position.clone().addScaledVector(r, 0.05).add(v3(0, 0.03, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.05 } });
       this.scene([
@@ -795,12 +801,12 @@ export class Episode2 {
       this.scene([
         { hold: 3, shot: () => this.wide(me, 6.5, 0.6, 1.3), run: () => z.setLookTarget(pots) },
         { hold: 2.2, shot: () => ({ from: pots.clone().add(v3(0.35, 0.3, 0.45)), to: pots.clone().add(v3(0, 0.15, 0)), push: 0.01, aperture: 0.005 }), run: () => this.steam(pots) },
-        { key: 'e2.fr.1', who: 'scientist', shot: () => cover.close(z, 0.45, 0.95) },
+        { key: 'e2.fr.1', who: 'scientist', shot: () => cover.close(z, 0.45, 0.95, 0.24) },
         { key: 'e2.fr.2', who: 'scientist', shot: () => cover.mid(z, -0.5, 2.1) },
         { key: 'e2.fr.oom', who: OOM, if: { flag: 'e2.oomsa.here' }, shot: () => (oom ? cover.ots(oom, z, 0.5) : cover.mid(z)), run: () => oom?.setLookTarget(dark) },
         { hold: 2.4, shot: () => ({ from: this.head().add(v3(0, 0.05, 0)), to: dark, push: 0.04 }), run: () => { eyes.visible = true; audio.sample('cb_growl', 0.35); } },
-        { key: 'e2.fr.come', who: 'scientist', shot: () => cover.close(z, 0.35, 0.9), run: () => { z.setFace({ frown: 0.4, squint: 0.3 }); z.setLookTarget(dark); } },
-        { choice: 'e2.kiln', shot: () => cover.close(z, -0.6, 1.2) },
+        { key: 'e2.fr.come', who: 'scientist', shot: () => cover.close(z, 0.35, 0.9, 0.24), run: () => { z.setFace({ frown: 0.4, squint: 0.3 }); z.setLookTarget(dark); } },
+        { choice: 'e2.kiln', shot: () => cover.close(z, -0.6, 1.2, 0.24) },
       ], () => {
         eyes.removeFromParent(); this.clearHands();
         this.set('e2.kiln.decided');
@@ -834,7 +840,7 @@ export class Episode2 {
       const eyes = this.eyes(dark);
       this.scene([
         { hold: 2.6, shot: () => ({ from: c.clone().addScaledVector(c.clone().sub(dark).setY(0).normalize(), 2.2).add(v3(0.4, 1.0, 0)), to: dark, push: 0.03 }), run: () => z.setLookTarget(dark) },
-        { key: 'e2.fr.look', who: 'scientist', shot: () => cover.close(z, 0.35, 0.95), run: () => { z.setFace({ squint: 0.3 }); this.after(1.6, () => { eyes.visible = false; }); } },
+        { key: 'e2.fr.look', who: 'scientist', shot: () => cover.close(z, 0.35, 0.95, 0.24), run: () => { z.setFace({ squint: 0.3 }); this.after(1.6, () => { eyes.visible = false; }); } },
       ], () => { eyes.removeFromParent(); this.clearHands(); this.set('e2.nightDone'); this.wait = 1; void here; });
     });
   }
@@ -877,10 +883,10 @@ export class Episode2 {
           this.after(0.6, () => { z.setHold({ R: { at: rim.clone().addScaledVector(f, -0.08), fingers: f.clone(), palm: f.clone(), radius: 0.02 } }); audio.sample('pot', 0.4); audio.tone(1960, 0.9, 'sine', 0.07); audio.tone(2940, 0.6, 'sine', 0.035, 0.01); });
           this.after(0.85, () => z.setHold({ R: { at: rim.clone().addScaledVector(f, -0.16).addScaledVector(r, 0.05), fingers: f.clone(), palm: f.clone(), radius: 0.02 } }));
         } },
-        { key: 'e2.dw.1', who: 'scientist', shot: () => cover.close(z, 0.45, 0.95), run: () => { z.setHold(null); z.setFace({ smile: 0.3 }); } },
+        { key: 'e2.dw.1', who: 'scientist', shot: () => cover.close(z, 0.45, 0.95, 0.24), run: () => { z.setHold(null); z.setFace({ smile: 0.3 }); } },
         { key: 'e2.dw.lost', who: 'scientist', if: { any: [{ flag: 'e2.kiln.left' }, { flag: 'e2.kiln.froze' }] }, shot: () => cover.mid(z, -0.5, 2.0) },
         { hold: 2.6, shot: () => ({ from: c.clone().add(v3(0.5, 0.45, 0.5)), to: c.clone().add(v3(0, 0.15, 0)), push: 0.01, aperture: 0.005 }), run: () => { this.boil(); } },
-        { key: 'e2.dw.2', who: 'scientist', shot: () => cover.close(z, -0.4, 0.95) },
+        { key: 'e2.dw.2', who: 'scientist', shot: () => cover.close(z, -0.4, 0.95, 0.24) },
         { key: 'e2.dw.3', who: 'scientist', shot: () => cover.mid(z, 0.5, 2.2) },
         { key: 'e2.dw.oom', who: OOM, if: { all: [TRUSTS(1), { not: { flag: 'e2.oomsa.away' } }] }, shot: () => (oom ? cover.close(oom, 0.4, 1.0) : cover.mid(z)) },
       ], () => {

@@ -1222,6 +1222,16 @@ window.addEventListener('resize', () => {
   act() { return game?.debugAct() ?? null; },
   /** Where the objective marker points and where he stands (a recording's stand-in player walks there with the keys). */
   get objective() { const m = game?.objectivePoint(); return m ? [m.x, m.y, m.z] : null; },
+  /** Which way his body really points (head and toes against the hips, flattened) against the root's heading: a check
+   * for scenes that build shots from his heading. */
+  get facingProbe() {
+    const m = player?.model; if (!m) return null;
+    const v = (n: string) => { const o = m.root.getObjectByName(n); return o ? o.getWorldPosition(new THREE.Vector3()) : null; };
+    const hips = v('hips'), toe = v('toesL') ?? v('footL'), head = new THREE.Vector3().setFromMatrixPosition(m.head.matrixWorld);
+    const r = m.root.rotation.y;
+    return { root: [Math.sin(r), Math.cos(r)], headOff: hips ? [head.x - hips.x, head.z - hips.z] : null, toeOff: hips && toe ? [toe.x - hips.x, toe.z - hips.z] : null, facing: player!.facing };
+  },
+  get cam() { return [camera.position.x, camera.position.y, camera.position.z]; },
   get me() { return player ? [player.pos.x, player.pos.y, player.pos.z, player.yaw] : null; },
   /** Freeze the camera at `from` looking at `to` (null releases it), with a vertical field of view in degrees if given.
    * A capture that calls it every stepped frame moves the camera along its own path (dolly, crane, orbit). Outside
