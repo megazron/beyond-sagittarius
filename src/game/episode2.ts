@@ -102,6 +102,8 @@ export class Episode2 {
   /** May the craft panel for this level open yet? (each one comes after its scene) */
   /** Where a level's craft action stands (null: by the camp fire). */
   craftAt(n: number): THREE.Vector3 | null { void n; return null; }
+  /** The node this level's craft action opens right now, when it is not the level's own discovery (level 17 grinds grain first). */
+  craftNode(n: number): TechNode | null { void n; return null; }
   craftOpen(n: number) {
     switch (n) {
       case 11: return this.f('e2.l11.intro');
@@ -323,7 +325,8 @@ export class Episode2 {
   }
 
   /** A failed try in the panel: the real reason, out loud (the panel stays open for the next try). */
-  craftFailed(id: string, step: number): boolean {
+  craftFailed(id: string, step: number, info?: { v: number; band: [number, number] }): boolean {
+    void info;
     if (!this.owns(this.s.level)) return false;
     const n = this.hurtLines++;
     const line: Record<string, string> = {

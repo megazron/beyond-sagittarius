@@ -21,7 +21,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 
 export const LEVEL_COUNT = 21;
 /** The last level that can be played: Episode Three is built to level 16 so far (its 17 to 21 are not). */
-export const PLAYABLE_LEVELS = 16;
+export const PLAYABLE_LEVELS = 17;
 const CREW = CREW_IDS;
 
 export type MenuTab = 'pause' | 'map' | 'inventory' | 'objectives' | 'codex' | 'crew' | 'ledger';

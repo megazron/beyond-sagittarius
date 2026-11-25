@@ -30,7 +30,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from smoke import launch, serve  # noqa: E402
 
 # the last level that can be played (src/ui/ui.ts PLAYABLE_LEVELS): Episode Three is built to level 16
-LAST = 16
+LAST = 17
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 PLAYER = "Quorvex"

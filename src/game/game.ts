@@ -168,7 +168,7 @@ export class Game {
       c.failed++;
       const d = this.craft.debug();
       // Episode Two: his own line says what went wrong (the real failure of that step); elsewhere MegaZroN mocks
-      if (d && (this.ep2.craftFailed(d.id, d.step) || this.ep3.craftFailed(d.id, d.step))) return;
+      if (d && (this.ep2.craftFailed(d.id, d.step) || this.ep3.craftFailed(d.id, d.step, { v: d.v, band: d.band as [number, number] }))) return;
       this.ui.say(`fail.${(this.fails++ % 4) + 1}`, 'mz.name', 3.5);
     };
     this.ep2 = new Episode2(world, player, ui, this.story.npcs, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn),

@@ -95,6 +95,23 @@
     "fx": "aphaser=in_gain=0.9:out_gain=0.9:delay=2:decay=0.3:speed=0.4"
    }
   },
+  "hohma": {
+   "role": "Hoh-Ma, the Fennish band's old woman: slow, dry, very old, alien-sounding",
+   "all": {
+    "ref": "ammi",
+    "pace": 0.86,
+    "pitch": -0.5,
+    "fx": "aphaser=in_gain=0.9:out_gain=0.9:delay=2:decay=0.3:speed=0.3"
+   }
+  },
+  "wenka": {
+   "role": "Wen-Ka, a Fennish child (about ten): quick, curious, alien-sounding",
+   "all": {
+    "ref": "kid2",
+    "pace": 1.04,
+    "fx": "rubberband=pitch=1.25:formant=shifted,aphaser=in_gain=0.9:out_gain=0.9:delay=2:decay=0.25:speed=0.5"
+   }
+  },
   "hermit": {
    "role": "old, dry, knowing",
    "all": {

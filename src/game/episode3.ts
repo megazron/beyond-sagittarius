@@ -9,6 +9,10 @@ import { test, type Cond } from './branch';
 import { ep3Loaded } from './branch/episode3';
 import { isDiscovered } from './tech/tech';
 import { TECH_BY_ID } from './tech/data';
+import { apply, type StoryState } from './branch';
+import { createCharacter, type Character } from '../characters/character';
+import { defaultLook, LINEAGES, type PlayerLook } from '../characters/custom';
+import type { Who } from '../cinematic/cutscene';
 import { Episode2 } from './episode2';
 
 const CHOSE = (d: string, o: string): Cond => ({ chose: [d, o] });
@@ -40,16 +44,27 @@ export class Episode3 extends Episode2 {
   override done(n: number): boolean {
     if (n === 15) return isDiscovered(this.s, 'polish') && this.f('e3.felled');
     if (n === 16) return isDiscovered(this.s, 'frame') && this.f('e3.houseDone');
+    if (n === 17) return isDiscovered(this.s, 'farming') && this.f('inv.farming');
     return false;
   }
   override craftOpen(n: number) {
     if (n === 15) return this.f('e3.axeTried');
     if (n === 16) return this.f('e3.l16.intro') && (!this.campSite() || this.f('e3.ditch'));
+    if (n === 17) return this.f('e3.wheat') && (isDiscovered(this.s, 'grain') ? this.f('e3.fieldIntro') : true);
     return false;
   }
   /** Where the level's work is done (the frame goes up at the house, not by the fire). */
-  override craftAt(n: number) { return n === 16 ? this.houseAt() : null; }
+  override craftAt(n: number) { return n === 16 ? this.houseAt() : n === 17 ? (isDiscovered(this.s, 'grain') ? this.fieldAt() : this.quernAt()) : null; }
+  /** Level 17 grinds grain at Hoh-Ma's quern before the field (the level's own discovery). */
+  override craftNode(n: number) { return n === 17 && !isDiscovered(this.s, 'grain') ? TECH_BY_ID.grain : null; }
   override progress(n: number): string | null {
+    if (n === 17) {
+      if (!this.f('e3.l17.intro')) return null;
+      if (!this.f('e3.wheat')) return t('e3.obj.camp');
+      if (!isDiscovered(this.s, 'grain')) return this.has('grain') ? t('e3.obj.grind') : null;
+      if (!this.f('e3.fieldIntro')) return t('e3.obj.field');
+      return this.has('farming') ? t('e3.obj.sow') : null;
+    }
     if (n === 16) {
       if (!this.f('e3.l16.intro')) return null;
       if (this.campSite() && !this.f('e3.ditch')) return t('e3.obj.ditch');
@@ -62,6 +77,13 @@ export class Episode3 extends Episode2 {
     return null;
   }
   override marker(n: number): THREE.Vector3 | null {
+    if (n === 17) {
+      if (!this.f('e3.l17.intro')) return null;
+      if (!this.f('e3.wheat')) return this.fennAt();
+      if (!isDiscovered(this.s, 'grain')) return this.has('grain') ? this.quernAt() : null;
+      if (!this.f('e3.fieldIntro')) return this.fieldAt();
+      return this.has('farming') ? this.fieldAt() : null;
+    }
     if (n === 16) {
       if (!this.f('e3.l16.intro')) return null;
       if (this.campSite() && !this.f('e3.ditch')) return this.houseAt();
@@ -73,7 +95,7 @@ export class Episode3 extends Episode2 {
     return null;
   }
   override actions(): Action[] { return []; }
-  override debug() { const p = this.player.pos; return { wait: +this.wait.toFixed(2), busy: this.busy, loaded: ep3Loaded(), free: this.free(), level: this.s.level, at: [+p.x.toFixed(1), +p.z.toFixed(1)], shelter: null, house: this.houseG ? { parts: this.meshCount(this.houseG), key: this.houseKey, at: [+this.house().at.x.toFixed(1), +this.house().at.z.toFixed(1)] } : null, kneel: +this.z.root.position.y.toFixed(2) }; }
+  override debug() { const p = this.player.pos; return { wait: +this.wait.toFixed(2), busy: this.busy, loaded: ep3Loaded(), free: this.free(), level: this.s.level, at: [+p.x.toFixed(1), +p.z.toFixed(1)], shelter: null, house: this.houseG ? { parts: this.meshCount(this.houseG), key: this.houseKey, at: [+this.house().at.x.toFixed(1), +this.house().at.z.toFixed(1)] } : null, kneel: +this.z.root.position.y.toFixed(2), field: this.fieldG ? { rows: this.fieldRows.length, at: [+this.fieldAt().x.toFixed(1), +this.fieldAt().z.toFixed(1)] } : null, fenn: this.fennG ? [+this.fennAt().x.toFixed(1), +this.fennAt().z.toFixed(1)] : null }; }
 
   // ------------------------------------------------------------------ the world, each frame
   override update(dt: number) {
@@ -84,6 +106,8 @@ export class Episode3 extends Episode2 {
     // what Episode Two left in the world (after a reload the Episode Two controller no longer builds it)
     if (!this.restored3) { this.restored3 = true; this.buildShelter(); if (this.f('e2.cairnDone')) this.buildCairn(true); }
     this.restoreHouse();
+    this.restoreField();
+    this.updateFolk(dt);
     this.wait -= dt;
     // a story beat waiting only because an animal hangs about near him (CI levels_smoke stood at level 15 for 150 rounds,
     // free() false, 'engaged'): after 10 s it loses interest and goes
@@ -93,8 +117,9 @@ export class Episode3 extends Episode2 {
     } else this.blockedT = 0;
     if (this.wait > 0 || this.busy || !ep3Loaded() || !this.free()) return;
     if (s.level === 16) { this.update16(); return; }
-    // the levels after 16 are not built yet: say so once, plainly
-    if (s.level > 16) { if (!this.f('e3.wipShown')) { this.set('e3.wipShown'); this.ui.banner(t('e3.title'), t('e3.wip')); } return; }
+    if (s.level === 17) { this.update17(); return; }
+    // the levels after 17 are not built yet: say so once, plainly
+    if (s.level > 17) { if (!this.f('e3.wipShown')) { this.set('e3.wipShown'); this.ui.banner(t('e3.title'), t('e3.wip')); } return; }
     if (!this.f('e3.l15.intro')) { this.intro15(); return; }
     if (!this.f('e3.siteDone')) {
       const p = this.player.pos;
@@ -259,6 +284,8 @@ export class Episode3 extends Episode2 {
   override beforeCraft(n: TechNode, open: () => void): boolean {
     if (!this.owns(this.s.level)) return false;
     if (n.id === 'frame') return this.beforeFrame(open);
+    if (n.id === 'grain') return this.beforeGrain(open);
+    if (n.id === 'farming') return this.beforeSow(open);
     if (n.id !== 'polish') return false;
     // both hands on the roughed-out head, pushing it in long strokes on a wet flat stone with sand on it
     this.set('e1.fireOut', false); this.world.camp.setFire(2);
@@ -283,7 +310,17 @@ export class Episode3 extends Episode2 {
     ], () => { slab.removeFromParent(); wet.removeFromParent(); head.removeFromParent(); this.clearHands(); open(); });
     return true;
   }
-  override craftFailed(id: string, step: number): boolean {
+  override craftFailed(id: string, step: number, info?: { v: number; band: [number, number] }): boolean {
+    if (this.owns(this.s.level) && id === 'grain') {
+      const high = !!info && info.v > info.band[1];
+      const key = step === 0 ? (this.f('e3.gr.grit') ? 'e3.gr.rhythm' : 'e3.gr.grit') : high ? 'e3.gr.burnt' : 'e3.gr.dough';
+      if (step === 0) this.set('e3.gr.grit');
+      this.set('e3.failed.grain'); this.say(key, 'scientist', 4.5); return true;
+    }
+    if (this.owns(this.s.level) && id === 'farming') {
+      const high = !!info && info.v > info.band[1];
+      this.set('e3.failed.farming'); this.say(step === 0 ? (high ? 'e3.fd.deep' : 'e3.fd.shallow') : 'e3.fd.rows', 'scientist', 4.5); return true;
+    }
     if (this.owns(this.s.level) && id === 'frame') { this.set('e3.failed.frame'); this.say(step === 0 ? 'e3.fr.tap' : 'e3.fr.lever', 'scientist', 4.5); return true; }
     if (!this.owns(this.s.level) || id !== 'polish') return false;
     this.set('e3.failed.polish');
@@ -293,6 +330,8 @@ export class Episode3 extends Episode2 {
   }
   override crafted(n: TechNode, card: () => void): boolean {
     if (this.owns(this.s.level) && n.id === 'frame') { this.raiseFrame(card); return true; }
+    if (this.owns(this.s.level) && n.id === 'grain') { this.breadScene(card); return true; }
+    if (this.owns(this.s.level) && n.id === 'farming') { this.sowScene(card); return true; }
     if (!this.owns(this.s.level) || n.id !== 'polish') return false;
     this.busy = true;
     this.passTime(10.5, true, 'e3.later', () => this.fell(card));
@@ -810,8 +849,402 @@ export class Episode3 extends Episode2 {
     void r; void y0;
   }
 
+  // ------------------------------------------------------------------ level 17: wheat (3.5 Hoh-Ma's stone, 3.6 the first field)
+  /** The Fennish camp: reed shelters on stilts along the shore from the reed beds (moved along it when he built at the reeds). */
+  private fennSpot: THREE.Vector3 | null = null;
+  fennAt() {
+    if (this.fennSpot) return this.fennSpot.clone();
+    const r = this.siteAt('reeds'), d = v3(r.x - LAKE.x, 0, r.z - LAKE.z).normalize(), tan = v3(d.z, 0, -d.x);
+    const H = this.s.level >= 16 && this.f('e3.l16.intro') ? this.houseAt() : null;
+    let best = r.clone(), score = -1e9;
+    for (const k of [13, 16, 19, 22]) for (const sg of [1, -1]) for (const inl of [0, 2, 4]) {
+      const x = r.x + tan.x * k * sg + d.x * inl, z = r.z + tan.z * k * sg + d.z * inl, y = this.h(x, z);
+      if (y < 0.55 || this.world.forest.blocks(x, z, 3)) continue;
+      if (H && Math.hypot(x - H.x, z - H.z) < 11) continue;
+      let flat = 0; for (const [dx, dz] of [[2.5, 0], [-2.5, 0], [0, 2.5], [0, -2.5]]) flat += Math.abs(this.h(x + dx, z + dz) - y);
+      const sc = -flat * 3 - k * 0.15 - inl * 0.2;
+      if (sc > score) { score = sc; best = v3(x, y, z); }
+    }
+    this.fennSpot = best;
+    return best.clone();
+  }
+  /** Lake-ward and along-shore axes at the Fennish camp. */
+  private fennAxes() { const c = this.fennAt(), d = v3(LAKE.x - c.x, 0, LAKE.z - c.z).normalize(); return { c, d, t: v3(d.z, 0, -d.x) }; }
+  quernAt() { const { c, d, t: tn } = this.fennAxes(); const q = c.clone().addScaledVector(d, -1.6).addScaledVector(tn, 1.2); q.y = this.h(q.x, q.z); return q; }
+  private fennG: THREE.Group | null = null;
+  private buildFenn() {
+    if (this.fennG) return;
+    const g = new THREE.Group(), { c, d, t: tn } = this.fennAxes();
+    const pole = std(0x6a5440, { roughness: 0.95 }), reed = std(0xb09a62, { roughness: 1 }), mat = std(0x8a7448, { roughness: 1 });
+    // three shelters on stilts (the shore floods), domed reed roofs, a ladder of lashed poles
+    const spots: [number, number, number][] = [[2.6, -1.2, 1.0], [-1.8, 2.8, 0.9], [-2.4, -3.0, 0.8]];
+    for (const [a, b, sc] of spots) {
+      const at = c.clone().addScaledVector(d, a).addScaledVector(tn, b), y = this.h(at.x, at.z), deck = y + 0.75;
+      for (const [px, pz] of [[-0.8, -0.7], [0.8, -0.7], [-0.8, 0.7], [0.8, 0.7]]) {
+        const p = at.clone().addScaledVector(d, px * sc).addScaledVector(tn, pz * sc), gy = this.h(p.x, p.z);
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, deck - gy + 0.05, 6), pole); m.position.set(p.x, (deck + gy) / 2, p.z); g.add(m);
+      }
+      const plat = new THREE.Mesh(new THREE.BoxGeometry(1.9 * sc, 0.07, 1.7 * sc), mat); plat.position.set(at.x, deck, at.z); plat.rotation.y = Math.atan2(d.x, d.z); g.add(plat);
+      const roof = new THREE.Mesh(new THREE.SphereGeometry(1.0 * sc, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), reed); roof.scale.set(1.05, 0.95, 0.95); roof.position.set(at.x, deck + 0.04, at.z); g.add(roof);
+      // the doorway: a dark arch on the side away from the water
+      const door = new THREE.Mesh(new THREE.CircleGeometry(0.32 * sc, 10, 0, Math.PI), std(0x1e1812, { roughness: 1 }));
+      const dp = at.clone().addScaledVector(d, -0.93 * sc); door.position.set(dp.x, deck + 0.05, dp.z); door.rotation.y = Math.atan2(-d.x, -d.z); g.add(door);
+      for (let i = 0; i < 3; i++) { const lad = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5, 5), pole); const lp = dp.clone().addScaledVector(d, -0.25); lad.position.set(lp.x, y + 0.15 + i * 0.22, lp.z); lad.rotation.z = Math.PI / 2; lad.rotation.y = Math.atan2(d.x, d.z) + Math.PI / 2; g.add(lad); }
+    }
+    // their fire, a flat baking stone at its edge, the quern (a hollowed stone with a hand stone in it), a bark tray of heads
+    const fire = c.clone().addScaledVector(d, -0.6).addScaledVector(tn, -0.6); fire.y = this.h(fire.x, fire.z);
+    for (let i = 0; i < 8; i++) { const an = (i / 8) * Math.PI * 2; const s = new THREE.Mesh(new THREE.DodecahedronGeometry(0.09, 0), std(0x6a645c)); s.position.set(fire.x + Math.cos(an) * 0.42, fire.y + 0.04, fire.z + Math.sin(an) * 0.42); g.add(s); }
+    const embers = new THREE.Mesh(new THREE.CircleGeometry(0.3, 12), new THREE.MeshBasicMaterial({ color: 0xff7a2a })); embers.rotation.x = -Math.PI / 2; embers.position.set(fire.x, fire.y + 0.03, fire.z); g.add(embers);
+    const bake = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.05, 10), std(0x5a544c, { roughness: 0.7 })); bake.position.set(fire.x + 0.42, fire.y + 0.08, fire.z); bake.name = 'bake'; g.add(bake);
+    const q = this.quernAt();
+    const quern = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 6, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.45), std(0x7c7266, { roughness: 0.8, side: THREE.DoubleSide }));
+    quern.scale.set(1.25, 0.5, 0.8); quern.position.set(q.x, q.y + 0.17, q.z); quern.rotation.y = Math.atan2(d.x, d.z); g.add(quern);
+    const hand = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.16, 4, 8), std(0x8e8678, { roughness: 0.6 })); hand.rotation.z = Math.PI / 2; hand.rotation.y = Math.atan2(d.x, d.z) + Math.PI / 2; hand.position.set(q.x, q.y + 0.2, q.z); hand.name = 'handstone'; g.add(hand);
+    const tray = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.18, 0.05, 12, 1, true), std(0x7a5a3a, { side: THREE.DoubleSide })); const tp = q.clone().addScaledVector(tn, -0.6); tray.position.set(tp.x, tp.y + 0.04, tp.z); g.add(tray);
+    for (let i = 0; i < 9; i++) { const hd = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.06, 2, 5), std(0xc8a860)); hd.position.set(tp.x + Math.cos(i * 2.1) * 0.12, tp.y + 0.06, tp.z + Math.sin(i * 2.1) * 0.12); hd.rotation.z = Math.PI / 2; hd.rotation.y = i; g.add(hd); }
+    // the tall grass they gather, between the camp and the water
+    const stem = std(0xa89450, { roughness: 1 }), ear = std(0xc8a860, { roughness: 0.9 });
+    for (let i = 0; i < 26; i++) {
+      const p = c.clone().addScaledVector(d, 3.6 + (i % 5) * 0.35).addScaledVector(tn, -2.4 + (i * 0.37) % 4.8), y = this.h(p.x, p.z);
+      const s = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.008, 1.0, 4), stem); s.position.set(p.x, y + 0.5, p.z); s.rotation.set(0.12 * Math.sin(i), 0, 0.12 * Math.cos(i)); g.add(s);
+      const e = new THREE.Mesh(new THREE.CapsuleGeometry(0.014, 0.07, 2, 5), ear); e.position.set(p.x + 0.06 * Math.cos(i), y + 1.02, p.z + 0.06 * Math.sin(i)); g.add(e);
+    }
+    g.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true; });
+    this.group.add(g); this.fennG = g;
+  }
+  /** Hoh-Ma (very old, faded star marks) and Wen-Ka (a child): Fennish bodies like Oom-Sa's, built once from level 17. */
+  private folk: { hohma: Character; wenka: Character } | null = null;
+  private folkSpots: Record<'hohma' | 'wenka', { at: THREE.Vector3; yaw: number; kneel: boolean }> | null = null;
+  private buildFolk() {
+    if (this.folk) return this.folk;
+    const d = this.world.q.name === 'mobile' ? 0.6 : 1;
+    const look = (o: Partial<PlayerLook>): PlayerLook => ({ ...defaultLook(), lineage: 'vael', ...LINEAGES.vael, skin: 0x2f8f8f, ears: 'fin', tail: true, marks: 'stars', outfit: 'explorer', eye: 'doll', ...o });
+    const hohma = createCharacter('scientist', d, look({ glow: 0x4a8a5a, hair: 'medic', hairRoot: 0x9ab0a8, hairTip: 0xdfe8e0, height: 0.92, build: 0.05, gender: 'f', eye: 'tired', iris: 0x8aaa8a, skin: 0x3f7f7a }));
+    const wenka = createCharacter('scientist', d, look({ glow: 0x7fff8a, hair: 'explorer', hairRoot: 0x12a48c, hairTip: 0x9aff6a, height: 0.92, build: 0.0, gender: 'm', iris: 0x9fff8a }));
+    wenka.root.scale.setScalar(0.66); hohma.root.scale.setScalar(0.9);
+    for (const fig of [hohma, wenka]) { fig.setGround((x, z) => this.h(x, z)); fig.root.visible = false; this.world.scene.add(fig.root); }
+    this.folk = { hohma, wenka };
+    this.actors['hohma'] = hohma; this.actors['wenka'] = wenka;
+    return this.folk;
+  }
+  /** Where the two are while nothing else moves them: Hoh-Ma kneeling at her quern, Wen-Ka by the shelters. */
+  private homeFolk() {
+    const { c, d, t: tn } = this.fennAxes(), q = this.quernAt();
+    const hm = q.clone().addScaledVector(d, -0.55); hm.y = this.h(hm.x, hm.z);
+    const wk = c.clone().addScaledVector(tn, 1.8).addScaledVector(d, 0.6); wk.y = this.h(wk.x, wk.z);
+    this.folkSpots = { hohma: { at: hm, yaw: Math.atan2(d.x, d.z), kneel: true }, wenka: { at: wk, yaw: Math.atan2(-tn.x, -tn.z), kneel: false } };
+  }
+  private placeFolk(id: 'hohma' | 'wenka', at: THREE.Vector3, face: THREE.Vector3, kneel = false) {
+    if (!this.folkSpots) this.homeFolk();
+    const y = Math.atan2(face.x - at.x, face.z - at.z);
+    this.folkSpots![id] = { at: at.clone().setY(this.h(at.x, at.z)), yaw: y, kneel };
+  }
+  private folkT = 0;
+  private updateFolk(dt: number) {
+    if (this.s.level < 17) return;
+    this.buildFenn();
+    const F = this.buildFolk();
+    if (!this.folkSpots) this.homeFolk();
+    this.folkT += dt;
+    // Wen-Ka comes even when the band keeps away; Hoh-Ma is only seen at her camp
+    for (const id of ['hohma', 'wenka'] as const) {
+      const fig = F[id], sp = this.folkSpots![id], dist = sp.at.distanceTo(this.player.pos);
+      fig.root.visible = dist < 120;
+      if (!fig.root.visible) continue;
+      fig.root.position.copy(sp.at); fig.root.rotation.y = sp.yaw; fig.root.updateMatrixWorld();
+      fig.setKneel(sp.kneel, sp.kneel);
+      fig.animate('idle', this.folkT * 0.3, 0, performance.now() / 1000, dt);
+    }
+  }
+  private leadOom() { return this.trust() >= 1 && !this.f('e2.oomsa.away'); }
+
+  /** The field: rows beside the house, on the side away from the poles; how many by the choice (all of it: twice the rows). */
+  fieldAt() {
+    const H = this.house();
+    for (const [ka, kb] of [[0, -5.2], [-5.5, -1.5], [5.5, -1.5], [0, -7]]) {
+      const p = H.at.clone().addScaledVector(H.a, ka).addScaledVector(H.b, kb); p.y = this.h(p.x, p.z);
+      if (p.y > 0.7 && !this.world.forest.blocks(p.x, p.z, 2.4)) return p;
+    }
+    const p = H.at.clone().addScaledVector(H.b, -5.2); p.y = this.h(p.x, p.z); return p;
+  }
+  private fieldG: THREE.Group | null = null;
+  private fieldKey = '';
+  /** The rows (0 none, 1 opened, 2 sown); `tint` (0 green to 1 gold) is for the later levels' sprouts and harvest. */
+  fieldRows: THREE.Mesh[] = [];
+  private buildField(st: number) {
+    this.fieldG?.removeFromParent(); this.fieldG = null; this.fieldRows = [];
+    if (st <= 0) return;
+    const H = this.house(), at = this.fieldAt(), g = new THREE.Group();
+    const n = this.f('e3.field.all') ? 9 : 5, len = 3.6;
+    const soil = std(0x4a3626, { roughness: 1 }), ridge = std(0x5e4630, { roughness: 1 });
+    for (let i = 0; i < n; i++) {
+      const off = (i - (n - 1) / 2) * 0.55, p = at.clone().addScaledVector(H.b, off);
+      const fur = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, len), soil);
+      fur.position.set(p.x, this.h(p.x, p.z) + 0.01, p.z); fur.rotation.y = Math.atan2(H.a.x, H.a.z); g.add(fur);
+      const rd = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, len, 6, 1), ridge);
+      const rp = p.clone().addScaledVector(H.b, 0.27); rd.position.set(rp.x, this.h(rp.x, rp.z) + 0.03, rp.z); rd.rotation.set(Math.PI / 2, 0, 0); rd.rotation.y = 0;
+      rd.quaternion.setFromUnitVectors(UP, H.a); g.add(rd);
+      if (st >= 2) this.fieldRows.push(fur);
+    }
+    // a peg and a cord along the first row (he sowed to a line)
+    const peg = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.012, 0.4, 5), std(0x6a5440)); const pp = at.clone().addScaledVector(H.a, len / 2 + 0.2).addScaledVector(H.b, -((n - 1) / 2) * 0.55); peg.position.set(pp.x, this.h(pp.x, pp.z) + 0.2, pp.z); g.add(peg);
+    g.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).receiveShadow = true; });
+    this.group.add(g); this.fieldG = g;
+  }
+  private restoreField() {
+    if (this.s.level < 17 || this.busy) return;
+    const st = this.f('e3.fieldDone') ? 2 : 0;
+    const key = `${st}/${this.f('e3.field.all') ? 1 : 0}/${this.siteNow()}`;
+    if (key === this.fieldKey) return;
+    this.fieldKey = key; this.buildField(st);
+  }
+
+  private update17() {
+    if (!this.f('e3.l17.intro')) { this.intro17(); return; }
+    const p = this.player.pos;
+    if (!this.f('e3.wheat')) { const c = this.fennAt(); if (Math.hypot(p.x - c.x, p.z - c.z) < 6) this.campScene(); return; }
+    if (isDiscovered(this.s, 'grain') && !this.f('e3.bread')) { this.breadScene(() => {}); return; }
+    if (this.f('e3.bread') && !this.f('e3.fieldIntro')) { const a = this.fieldAt(); if (Math.hypot(p.x - a.x, p.z - a.z) < 4.5) this.fieldIntro(); return; }
+    if (isDiscovered(this.s, 'farming') && !this.f('inv.farming')) { if (this.f('e3.fieldDone')) this.fieldChoice(() => {}); else this.sowScene(() => {}); return; }
+  }
+
+  /** Day 19: someone comes for him from the reeds: Oom-Sa (she trusts him), or the small one on his own. */
+  private intro17() {
+    const S = this.live();
+    this.set('e3.l17.intro');
+    this.busy = true;
+    this.s.day = Math.max(this.s.day ?? 18, 18);
+    this.passTime(9.0, true, 'e3.day', () => {
+      const z = this.z, H = this.house(), F = this.buildFolk(); this.buildFenn();
+      const door = H.at.clone().addScaledVector(H.b, 2.6); door.y = this.h(door.x, door.z);
+      const camp = this.fennAt(), toward = camp.clone().sub(door).setY(0).normalize();
+      const me = this.settle(door, door.clone().addScaledVector(toward, 4), false);
+      const who = this.leadOom() ? 'oom' : 'wenka';
+      const them = me.clone().addScaledVector(toward, 3.4); them.y = this.h(them.x, them.z);
+      const oom = who === 'oom' ? this.oom() : null;
+      if (oom) { this.actors['local'] = oom; this.npcs.pin('local', them, Math.atan2(me.x - them.x, me.z - them.z)); oom.setLookTarget(this.head()); }
+      else this.placeFolk('wenka', them, me);
+      const fig = oom ?? F.wenka;
+      this.scene([
+        { hold: 3.2, shot: () => this.wide(me, 5.5, 0.7, 0.8), run: () => { z.setLookTarget(them.clone().add(v3(0, oom ? 1.3 : 0.9, 0))); } },
+        { hold: 2.2, shot: () => cover.mid(fig, 0.4, 2.0), run: () => { fig.setLookTarget(this.head()); fig.setHold({ R: { at: them.clone().add(v3(0, oom ? 1.25 : 0.85, 0)).addScaledVector(toward, 0.25).addScaledVector(this.side(toward), 0.15), fingers: toward.clone(), palm: UP.clone(), radius: 0.03 } }); S.after(1.8, () => fig.setHold(null)); } },
+        { key: oom ? 'e3.l17.oom' : 'e3.l17.wk', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setLookTarget(them.clone().add(v3(0, 1, 0))) },
+      ], () => {
+        S.end(); this.clearHands(); fig.setHold(null);
+        // they go on ahead to the camp
+        if (oom) { const at = this.fennAt().addScaledVector(toward, -2.2); this.npcs.pin('local', at.setY(this.h(at.x, at.z)), Math.atan2(-toward.x, -toward.z)); }
+        this.homeFolk();
+        this.ui.toast(t('e3.obj.camp'));
+      });
+    });
+  }
+
+  /** The reed camp: Wen-Ka's first words, Hoh-Ma at her quern, and the grain in her tray. */
+  private campScene() {
+    const S = this.live();
+    this.busy = true;
+    const z = this.z, F = this.buildFolk(), { c, d, t: tn } = this.fennAxes(), q = this.quernAt();
+    this.homeFolk();
+    const me = this.settle(q.clone().addScaledVector(d, -1.5).addScaledVector(tn, -0.4), q, false);
+    const wk = me.clone().addScaledVector(tn, 1.2).addScaledVector(d, 0.9); this.placeFolk('wenka', wk, me);
+    const hm = this.folkSpots!.hohma.at, oom = this.leadOom() ? this.oom() : null;
+    if (oom) { const at = c.clone().addScaledVector(d, -0.4).addScaledVector(tn, -2.0); this.actors['local'] = oom; this.npcs.pin('local', at.setY(this.h(at.x, at.z)), Math.atan2(me.x - at.x, me.z - at.z)); oom.setLookTarget(this.head()); }
+    const wkLine = this.f('e2.called') ? 'e3.wk.1a' : this.f('e2.whistle') ? 'e3.wk.1b' : 'e3.wk.1c';
+    const f = this.fwd(), r = this.right(f);
+    const palm = me.clone().addScaledVector(f, 0.32).add(v3(0, 1.08, 0));
+    const grains: THREE.Mesh[] = [];
+    const beats: Beat[] = [
+      { hold: 3.6, shot: () => ({ from: c.clone().addScaledVector(d, -7.5).addScaledVector(tn, 3.5).add(v3(0, 2.2, 0)), to: c.clone().add(v3(0, 1.0, 0)), fov: 50, push: 0.03 }), run: () => { z.setLookTarget(c.clone().add(v3(0, 1.2, 0))); F.wenka.setLookTarget(this.head()); F.hohma.setLookTarget(q.clone().add(v3(0, 0.2, 0))); } },
+      { key: wkLine, who: 'wenka' as Who, shot: () => cover.close(F.wenka, 0.35, 0.9, -0.1), run: () => { F.wenka.setLookTarget(this.head()); if (wkLine === 'e3.wk.1b') F.wenka.setHold({ R: { at: wk.clone().add(v3(0, 0.62, 0)).addScaledVector(me.clone().sub(wk).setY(0).normalize(), 0.25), fingers: me.clone().sub(wk).setY(0).normalize(), palm: UP.clone(), radius: 0.025 } }); } },
+    ];
+    if (wkLine === 'e3.wk.1b') {
+      // he gives the whistle back: a reed whistle from his pocket into the small hand
+      let whistle: THREE.Mesh | null = null;
+      beats.push({ hold: 2.6, shot: () => { const mid = wk.clone().lerp(me, 0.5).add(v3(0, 0.75, 0)); return { from: mid.clone().addScaledVector(r, 1.1).add(v3(0, 0.15, 0)), to: mid, fov: 30, push: 0.01, aperture: 0.004, lightAt: mid }; }, run: () => {
+        const to = wk.clone().add(v3(0, 0.66, 0)).addScaledVector(me.clone().sub(wk).setY(0).normalize(), 0.27);
+        whistle = this.mesh(new THREE.CylinderGeometry(0.008, 0.009, 0.12, 6), std(0xd8c98a), to.clone());
+        whistle.rotation.z = Math.PI / 2;
+        z.setHold({ R: { at: to.clone().addScaledVector(f, -0.03).add(v3(0, 0.02, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.02, grasp: true } });
+        S.after(1.4, () => { z.setHold(null); audio.tone(1760, 0.25, 'sine', 0.05); });
+        S.after(2.0, () => { audio.tone(2200, 0.35, 'triangle', 0.06); audio.tone(2640, 0.25, 'triangle', 0.04, 0.12); });
+      } }, { hold: 0.1, run: () => { whistle?.removeFromParent(); F.wenka.setHold(null); if (!this.f('e3.whistleBack')) { this.set('e3.whistleBack'); apply(this.s as unknown as StoryState, [{ trust: 'oomsa', by: 1 }]); } } });
+    }
+    beats.push(
+      { hold: 2.4, shot: () => ({ from: hm.clone().addScaledVector(d, 1.3).addScaledVector(tn, 0.7).add(v3(0, 1.25, 0)), to: q.clone().add(v3(0, 0.25, 0)).lerp(hm.clone().add(v3(0, 0.7, 0)), 0.5), fov: 35, push: 0.02, lightAt: q.clone().add(v3(0, 0.3, 0)) }), run: () => {
+        F.wenka.setHold(null); F.wenka.setLookTarget(q);
+        const hand = F.hohma; this.anim(2.4, (k) => { const w = Math.sin(k * 5) * 0.08; const at = q.clone().add(v3(0, 0.22, 0)).addScaledVector(d, -0.05 + w); hand.setHold({ L: { at: at.clone().addScaledVector(tn, -0.07), fingers: d.clone(), palm: UP.clone().negate(), radius: 0.03 }, R: { at: at.clone().addScaledVector(tn, 0.07), fingers: d.clone(), palm: UP.clone().negate(), radius: 0.03 } }); });
+        audio.sample('stone', 0.15, { rate: 0.5 });
+      } },
+      { key: this.f('fire.high') ? 'e3.hm.1h' : 'e3.hm.1', who: 'hohma' as Who, shot: () => cover.close(F.hohma, 0.4, 1.0, -0.22), run: () => { F.hohma.setHold(null); F.hohma.setLookTarget(this.head()); } },
+      { key: 'e3.hm.cairn', who: 'hohma' as Who, if: { flag: 'e2.cairn.six' }, shot: () => cover.close(F.hohma, -0.35, 1.0, -0.22) },
+      // the grain: a head rubbed between his palms, the husk blown off, fat grains creased down one side
+      { hold: 3.2, shot: () => ({ from: palm.clone().addScaledVector(f, 0.36).addScaledVector(r, 0.12).add(v3(0, 0.08, 0)), to: palm.clone(), fov: 24, push: 0.006, aperture: 0.003, lightAt: palm.clone(), lightScale: 0.7 }), run: () => {
+        z.setLookTarget(palm);
+        z.setHold({ L: { at: palm.clone().addScaledVector(r, -0.03), fingers: f.clone(), palm: UP.clone(), radius: 0.03 }, R: { at: palm.clone().addScaledVector(r, 0.03).add(v3(0, 0.03, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.03 } });
+        S.anim(1.4, (k) => z.setHold({ L: { at: palm.clone().addScaledVector(r, -0.03), fingers: f.clone(), palm: UP.clone(), radius: 0.03 }, R: { at: palm.clone().addScaledVector(r, 0.03 + 0.025 * Math.sin(k * 14)).add(v3(0, 0.035, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.03 } }));
+        S.after(1.5, () => {
+          z.setHold({ L: { at: palm.clone(), fingers: f.clone(), palm: UP.clone(), radius: 0.03 } });
+          for (let i = 0; i < 6; i++) { const gm = this.mesh(new THREE.CapsuleGeometry(0.0035, 0.004, 2, 5), std(0xc89a50, { roughness: 0.6 }), palm.clone().add(v3(Math.cos(i * 1.7) * 0.012, 0.012, Math.sin(i * 1.7) * 0.012))); gm.scale.set(1, 1, 0.7); gm.rotation.set(0.3 * i, i, Math.PI / 2); grains.push(gm); }
+          audio.sample('leather', 0.12, { rate: 1.6 });
+        });
+      } },
+      { key: 'e3.wh.1', who: 'scientist', shot: () => { const hd = this.head(); return { from: hd.clone().addScaledVector(this.fwd(), 1.05).add(v3(0, -0.05, 0)), to: hd.clone(), fov: 32, push: 0.01 }; }, run: () => { z.setFace({ squint: 0.2 }); z.setLookTarget(palm); } },
+      { key: 'e3.wh.2', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => { z.setLookTarget(this.ahead()); } },
+      { key: 'e3.wh.3', who: 'scientist', shot: () => cover.close(z, -0.4, 1.05, 0.24), run: () => { z.setFace({ frown: 0.3 }); } },
+    );
+    this.scene(beats, () => {
+      S.end(); for (const gm of grains) gm.removeFromParent(); this.clearHands();
+      if (this.folk) { this.folk.hohma.setHold(null); this.folk.wenka.setHold(null); this.folk.hohma.setLookTarget(null); }
+      this.homeFolk();
+      this.set('e3.wheat'); this.set('inv.wheat');
+      this.ui.toast(t('e3.obj.grind'));
+    });
+  }
+
+  /** The craft panel opens on him kneeling at Hoh-Ma's quern, both hands on the hand stone, pushing it down the hollow. */
+  private beforeGrain(open: () => void) {
+    const S = this.live();
+    const z = this.z, { d, t: tn } = this.fennAxes(), q = this.quernAt();
+    this.buildFenn();
+    // Hoh-Ma moves aside for him; he kneels where she knelt, the hollow running away from him
+    const F = this.buildFolk(); this.placeFolk('hohma', q.clone().addScaledVector(tn, 1.1).addScaledVector(d, -0.4), q, true);
+    this.settle(q.clone().addScaledVector(d, -0.62), q.clone().addScaledVector(d, 1), true, true);
+    const f = this.fwd(), r = this.right(f);
+    const hs = this.fennG?.getObjectByName('handstone') as THREE.Mesh | undefined; const hs0 = hs?.position.clone();
+    const top = q.clone().add(v3(0, 0.21, 0));
+    const grip = (k: number) => {
+      const w = Math.sin(k * 3.6) * 0.1, at = top.clone().addScaledVector(f, w);
+      if (hs) hs.position.copy(at);
+      z.setHold({ L: { at: at.clone().addScaledVector(r, -0.08).add(v3(0, 0.04, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.03, grasp: true }, R: { at: at.clone().addScaledVector(r, 0.08).add(v3(0, 0.04, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.03, grasp: true } });
+    };
+    grip(0);
+    // low, from beside the quern: both hands, the hand stone and the flour at the hollow's lip
+    const insert = (): Shot => { const from = top.clone().addScaledVector(r, 0.75).addScaledVector(f, 0.45).add(v3(0, 0.28, 0)); from.y = Math.max(from.y, this.h(from.x, from.z) + 0.3); return { from, to: top.clone().add(v3(0, 0.03, 0)), fov: 30, push: 0.012, aperture: 0.004, lightAt: top.clone() }; };
+    this.scene([
+      { hold: 4.0, shot: insert, run: () => { z.setLookTarget(top); F.hohma.setLookTarget(top); S.anim(4, (k) => { grip(k); if (Math.random() < 0.05) audio.sample('stone', 0.13, { rate: 0.55 }); }); } },
+    ], () => { S.end(); if (hs && hs0) hs.position.copy(hs0); this.clearHands(); open(); });
+    return true;
+  }
+
+  /** The flatbread on Hoh-Ma's hot stone: it browns, he eats it, burnt edge and all. */
+  private breadScene(card: () => void) {
+    const S = this.live();
+    this.busy = true;
+    const z = this.z, F = this.buildFolk(), { c, d, t: tn } = this.fennAxes(); this.buildFenn();
+    const bake = this.fennG?.getObjectByName('bake'); const stone = bake ? bake.getWorldPosition(v3()) : c.clone();
+    const me = this.settle(stone.clone().addScaledVector(tn, 0.8).addScaledVector(d, -0.5), stone, true, true);
+    this.placeFolk('hohma', stone.clone().addScaledVector(tn, -0.9).addScaledVector(d, -0.3), stone, true);
+    const bread = this.mesh(new THREE.CylinderGeometry(0.11, 0.115, 0.012, 14), std(0xd8c49a, { roughness: 0.9 }), stone.clone().add(v3(0, 0.035, 0)));
+    const m = bread.material as THREE.MeshStandardMaterial, raw = new THREE.Color(0xd8c49a), done = new THREE.Color(0x9a6a36);
+    const f = this.fwd(), r = this.right(f);
+    this.scene([
+      { hold: 3.4, shot: () => ({ from: stone.clone().addScaledVector(d, 0.7).addScaledVector(tn, 0.3).add(v3(0, 0.35, 0)), to: stone.clone().add(v3(0, 0.04, 0)), fov: 30, push: 0.01, aperture: 0.004, lightAt: stone.clone().add(v3(0, 0.1, 0)) }), run: () => {
+        z.setLookTarget(stone); audio.sample('fire', 0.25, { dur: 3 });
+        S.anim(3.2, (k) => { m.color.copy(raw).lerp(done, Math.min(1, k / 3)); });
+      } },
+      { hold: 1.8, shot: () => cover.mid(z, 0.55, 1.9), run: () => {
+        const at = me.clone().addScaledVector(f, 0.25).add(v3(0, 0.95, 0));
+        bread.position.copy(at); m.color.copy(done);
+        z.setHold({ R: { at: at.clone().addScaledVector(r, 0.06), fingers: f.clone(), palm: r.clone().negate(), radius: 0.03, grasp: true }, L: { at: at.clone().addScaledVector(r, -0.06), fingers: f.clone(), palm: r.clone(), radius: 0.03, grasp: true } });
+      } },
+      { key: 'e3.gr.ok', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => { const at = this.head().addScaledVector(this.fwd(), 0.12).add(v3(0, -0.08, 0)); bread.position.copy(at); z.setHold({ R: { at: at.clone().addScaledVector(r, 0.05), fingers: f.clone(), palm: r.clone().negate(), radius: 0.03, grasp: true } }); z.setFace({ smile: 0.3 }); audio.sample('leather', 0.15, { rate: 1.8 }); } },
+      { key: 'e3.hm.2', who: 'hohma' as Who, shot: () => cover.close(F.hohma, 0.4, 1.0, -0.22), run: () => { bread.removeFromParent(); z.setHold(null); F.hohma.setLookTarget(this.head()); z.setLookTarget(F.hohma.root.position.clone().add(v3(0, 0.8, 0))); } },
+    ], () => {
+      S.end(); bread.removeFromParent(); this.clearHands(); this.homeFolk();
+      this.set('e3.bread'); this.set('inv.grain');
+      this.ui.toast(t('e3.learn.grain'));
+      this.busy = false;
+      card();
+      this.after(4, () => this.ui.toast(t('e3.obj.field')));
+    });
+  }
+
+  /** At the field: the biggest heads saved; Lyrra's two knuckles. */
+  private fieldIntro() {
+    this.set('e3.fieldIntro');
+    const z = this.z, at = this.fieldAt(), H = this.house();
+    const me = this.settle(at.clone().addScaledVector(H.a, -2.4), at, false);
+    this.scene([
+      { hold: 3.0, shot: () => ({ from: at.clone().addScaledVector(H.a, -6.5).addScaledVector(H.b, 3.0).add(v3(0, 2.2, 0)), to: at.clone().add(v3(0, 0.4, 0)), fov: 45, push: 0.03 }), run: () => z.setLookTarget(at) },
+      { key: 'e3.fd.1', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setLookTarget(this.ahead()) },
+      { hold: 6.0, shot: () => cover.mid(z, 0.6, 2.4), run: () => { z.setLookTarget(at); this.ui.memory('e3.fd.lyrra', 7); } },
+    ], () => { this.clearHands(); this.ui.toast(t('level.17.hint')); void me; });
+  }
+
+  /** The craft panel opens on him kneeling at the first row, pressing seed in two knuckles deep with his fingers. */
+  private beforeSow(open: () => void) {
+    const S = this.live();
+    const z = this.z, at = this.fieldAt(), H = this.house();
+    this.buildField(1);
+    const row = at.clone().addScaledVector(H.a, -1.4); row.y = this.h(row.x, row.z);
+    this.settle(row.clone().addScaledVector(H.b, 0.55), row, true, true);
+    const f = this.fwd(), r = this.right(f);
+    const press = (k: number) => {
+      const u = Math.abs(Math.sin(k * 3.2)), p = row.clone().addScaledVector(H.a, (k * 0.05) % 0.3).add(v3(0, 0.02 + u * 0.09, 0));
+      z.setHold({ R: { at: p, fingers: UP.clone().negate().addScaledVector(f, 0.4).normalize(), palm: f.clone(), radius: 0.02 }, L: { at: p.clone().addScaledVector(r, -0.18).add(v3(0, 0.12, 0)), fingers: f.clone(), palm: UP.clone(), radius: 0.03, grasp: true } });
+    };
+    press(0);
+    const insert = (): Shot => { const from = row.clone().addScaledVector(r, 0.7).addScaledVector(f, 0.35).add(v3(0, 0.32, 0)); from.y = Math.max(from.y, this.h(from.x, from.z) + 0.3); return { from, to: row.clone().add(v3(0, 0.06, 0)), fov: 30, push: 0.012, aperture: 0.004, lightAt: row.clone().add(v3(0, 0.08, 0)) }; };
+    this.scene([
+      { hold: 4.0, shot: insert, run: () => { z.setLookTarget(row); S.anim(4, (k) => press(k)); } },
+    ], () => { S.end(); this.clearHands(); open(); });
+    return true;
+  }
+
+  /** Rows opened with the digging stick, the seed in, a card (Day 24), and what to do with the rest of the seed. */
+  private sowScene(card: () => void) {
+    const S = this.live();
+    this.busy = true;
+    const z = this.z, at = this.fieldAt(), H = this.house();
+    this.buildField(1);
+    const start = at.clone().addScaledVector(H.a, 1.6).addScaledVector(H.b, 0.8);
+    const me = this.settle(start, start.clone().addScaledVector(H.a, -3), false);
+    const f = this.fwd(), r = this.right(f);
+    const stick = this.mesh(new THREE.CylinderGeometry(0.018, 0.012, 1.1, 6), std(0x6a5440), me.clone());
+    const stroke = (k: number) => {
+      const u = Math.abs(Math.sin(k * 3.0)), tip = me.clone().addScaledVector(f, 0.55).add(v3(0, 0.02 + u * 0.14, 0)), top = tip.clone().addScaledVector(f, -0.5).add(v3(0, 0.8, 0));
+      const d = tip.clone().sub(top).normalize();
+      stick.position.copy(tip).lerp(top, 0.5); stick.quaternion.setFromUnitVectors(UP, d.clone().negate());
+      z.setHold({ R: { at: top.clone().addScaledVector(d, 0.08), fingers: r.clone().negate(), palm: f.clone(), radius: 0.02, grasp: true }, L: { at: top.clone().addScaledVector(d, 0.32), fingers: r.clone().negate(), palm: f.clone(), radius: 0.02, grasp: true } });
+    };
+    stroke(0);
+    this.scene([
+      { hold: 3.6, shot: () => ({ from: me.clone().addScaledVector(r, 3.4).addScaledVector(f, 1.2).add(v3(0, 1.2, 0)), to: me.clone().addScaledVector(f, 0.6).add(v3(0, 0.7, 0)), fov: 40, push: 0.02 }), run: () => { z.setLookTarget(me.clone().addScaledVector(f, 0.6)); S.anim(3.6, (k) => { stroke(k); if (Math.random() < 0.04) audio.sample('stone', 0.12, { rate: 0.6 }); }); } },
+    ], () => {
+      S.end(); stick.removeFromParent(); this.clearHands();
+      this.s.day = Math.max(this.s.day ?? 23, 23);
+      this.passTime(17.5, true, 'e3.day', () => this.fieldChoice(card));
+    });
+  }
+  private fieldChoice(card: () => void) {
+    const S = this.live();
+    this.busy = true;
+    const z = this.z, at = this.fieldAt(), H = this.house();
+    this.set('e3.fieldDone'); this.buildField(2); this.fieldKey = '';
+    const me = this.settle(at.clone().addScaledVector(H.a, -2.6).addScaledVector(H.b, 0.4), at, false);
+    const tray = this.mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.04, 12, 1, true), std(0x7a5a3a, { side: THREE.DoubleSide }), me.clone());
+    const f = this.fwd(), r = this.right(f), tp = me.clone().addScaledVector(f, 0.3).add(v3(0, 0.95, 0));
+    tray.position.copy(tp);
+    z.setHold({ L: { at: tp.clone().addScaledVector(r, -0.13), fingers: f.clone(), palm: UP.clone(), radius: 0.03, grasp: true }, R: { at: tp.clone().addScaledVector(r, 0.13), fingers: f.clone(), palm: UP.clone(), radius: 0.03, grasp: true } });
+    this.scene([
+      { hold: 3.2, shot: () => ({ from: at.clone().addScaledVector(H.a, 5.5).addScaledVector(H.b, -3).add(v3(0, 1.6, 0)), to: me.clone().add(v3(0, 0.9, 0)), fov: 45, push: 0.02 }), run: () => { z.setLookTarget(tp); } },
+      { hold: 1.2, shot: () => cover.close(z, 0.5, 1.15, 0.24) },
+      { choice: 'e3.field', shot: () => cover.close(z, 0.5, 1.15, 0.24) },
+      { key: 'e3.fd.all', who: 'scientist', if: CHOSE('e3.field', 'all'), shot: () => cover.close(z, 0.4, 1.0, 0.24) },
+      { key: 'e3.fd.half', who: 'scientist', if: CHOSE('e3.field', 'half'), shot: () => cover.close(z, 0.4, 1.0, 0.24) },
+      { key: 'e3.fd.band', who: 'scientist', if: CHOSE('e3.field', 'band'), shot: () => cover.close(z, 0.4, 1.0, 0.24) },
+      { hold: 2.8, shot: () => ({ from: at.clone().addScaledVector(H.a, -5).addScaledVector(H.b, 4).add(v3(0, 3.2, 0)), to: at.clone(), fov: 48, push: 0.02 }), run: () => { tray.removeFromParent(); z.setHold(null); this.buildField(2); } },
+    ], () => {
+      S.end(); tray.removeFromParent(); this.clearHands();
+      this.set('inv.farming'); this.fieldKey = '';
+      this.ui.toast(t('e3.learn.farming'));
+      this.busy = false;
+      card();
+    });
+  }
+
 }
 
 /** Episode Three's choices that test a flag; kept so the sealed data and the code agree on names (story_check reads it). */
-export const E3_FLAGS = ['e3.site.rise', 'e3.site.reeds', 'e3.site.camp', 'e3.door.lee', 'e3.door.band', 'e3.door.view'];
+export const E3_FLAGS = ['e3.site.rise', 'e3.site.reeds', 'e3.site.camp', 'e3.door.lee', 'e3.door.band', 'e3.door.view', 'e3.field.all', 'e3.field.half', 'e3.field.band'];
 void test;

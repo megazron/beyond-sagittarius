@@ -67,6 +67,14 @@ export const TECH: TechNode[] = [
   // (branches for the poles' bindings and the rafters, reed fibre for the thatch)
   playable('frame', 'agri', ['polish'], { branch: 3, fibre: 3 }, {}, 'build',
     [{ kind: 'tap', hits: 4, zone: 0.18, speed: 0.7 }, { kind: 'rhythm', band: [0.4, 0.7], secs: 5 }], 'builder', []),
+  // 3.5: wild grain ground on Hoh-Ma's saddle quern with a hard hand stone (a soft one grinds itself into the flour), then a
+  // flatbread on a hot flat stone in the fire (too hot it burns, too cool it stays dough)
+  playable('grain', 'agri', ['frame'], { stone: 1 }, {}, 'build',
+    [{ kind: 'rhythm', band: [0.4, 0.7], secs: 5 }, { kind: 'heat', band: [0.45, 0.66], secs: 4, rise: 0.32, fall: 0.22 }], 'medic', ['heat']),
+  // 3.6: the biggest seed sown two knuckles deep (too deep it runs out of itself, too shallow the birds and the rain take
+  // it), in rows opened with the digging stick
+  playable('farming', 'agri', ['grain'], { branch: 1 }, {}, 'cultivate',
+    [{ kind: 'mix', band: [0.42, 0.6] }, { kind: 'rhythm', band: [0.4, 0.72], secs: 5 }], 'medic', []),
   planned('remedy', 'agri', ['pottery'], 'study', ['heat']),
   planned('icewall', 'agri', [], 'build', []),
   // ---- Fire and Tools (the pre-Episode-One chain: kept for the codex and later ages, out of the level order) ----
@@ -92,7 +100,6 @@ export const TECH: TechNode[] = [
   later('acids', 'agri', ['fermentation', 'lime'], { brew: 1, lime: 1, lichen: 1 }, { vinegar: 2 }, 'neutralise',
     [{ kind: 'rhythm', band: [0.4, 0.7], secs: 4 }, { kind: 'mix', band: [0.44, 0.56], litmus: true }], 'megazron', ['chemical']),
 
-  planned('farming', 'agri', ['pottery', 'knapping'], 'cultivate', []),
   planned('irrigation', 'agri', ['farming'], 'build', []),
   // ---- Bronze Age ----
   planned('copper', 'bronze', ['charcoal', 'pottery'], 'smelt', ['heat']),

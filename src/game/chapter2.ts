@@ -79,8 +79,9 @@ export class Chapter2 {
     if (this.ep2Level()) {
       const e = this.ep()!;
       out.push(...e.actions());
-      if (node && node.status === 'playable' && !isDiscovered(s, node.id) && prereqsMet(s, node) && e.craftOpen(s.level)) {
-        out.push({ id: `craft-${node.id}`, pos: e.craftAt(s.level) ?? L.camp, radius: 2.6, label: t('action.craft', { name: t(`tech.${node.id}`) }), missing: this.story.missing(node.ingredients), run: () => this.story.hooks.craft(node) });
+      const cn = e.craftNode(s.level) ?? node;
+      if (cn && cn.status === 'playable' && !isDiscovered(s, cn.id) && prereqsMet(s, cn) && e.craftOpen(s.level)) {
+        out.push({ id: `craft-${cn.id}`, pos: e.craftAt(s.level) ?? L.camp, radius: 2.6, label: t('action.craft', { name: t(`tech.${cn.id}`) }), missing: this.story.missing(cn.ingredients), run: () => this.story.hooks.craft(cn) });
       }
       return out;
     }
