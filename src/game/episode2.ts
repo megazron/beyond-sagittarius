@@ -75,6 +75,8 @@ export class Episode2 {
   }
 
   protected get s() { return this.getSave(); }
+  /** A scene, a hold or a timed beat of this episode is running (tests: do not walk him off to the marker meanwhile). */
+  get isBusy() { return this.busy; }
   protected get z() { return this.player.model; }
   protected get L() { return this.world.layout; }
   protected f(k: string) { return !!this.s.flags[k]; }

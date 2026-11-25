@@ -790,7 +790,8 @@ export class Game {
   findInteraction() {
     const p = this.player;
     // a held work shot (the drill, the knapping, the spear, the lean-to): nothing to press but the moment itself
-    if (p.workShot) { this.interactTarget = null; this.ui.setPrompt(null); return; }
+    if (p.workShot || this.ep2?.isBusy || this.ep3?.isBusy) { this.interactTarget = null; this.ui.setPrompt(null); return; }
+    // (an episode's scene, hold or timed beat: no talk menu or pickup over it; CI levels_smoke opened Oom-Sa's talk during level 18's hold)
     if (this.story.houndEngaged() && !this.combat?.encounter) {
       this.interactTarget = { kind: 'strike' };
       this.ui.setPrompt(this.story.strikePrompt());
