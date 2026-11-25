@@ -1676,9 +1676,9 @@ export class Episode3 extends Episode2 {
         holdComb(); F.wenka.setLookTarget(this.head()); F.hohma.setLookTarget(foot); z.setLookTarget(boy()); F.wenka.setFace({ frown: 0.5, squint: 0.4 });
       } },
       // her close from in front of her (from the mat's side), not from the way the body's yaw says she faces
-      { key: 'e3.ds.1', who: 'hohma' as Who, shot: () => { const hh = F.hohma.head.getWorldPosition(new THREE.Vector3()), dm = me.clone().sub(hm).setY(0).normalize(), sd = v3(dm.z, 0, -dm.x); return { from: hh.clone().addScaledVector(dm, 0.95).addScaledVector(sd, 0.3).add(v3(0, 0.12, 0)), to: hh.clone().add(v3(0, -0.06, 0)), fov: 40, push: 0.01 }; }, run: () => { F.hohma.setLookTarget(this.head()); } },
+      { key: 'e3.ds.1', who: 'hohma' as Who, shot: () => { const hh = F.hohma.head.getWorldPosition(new THREE.Vector3()); return { from: mat.clone().addScaledVector(out, -0.15).addScaledVector(d, 0.25).add(v3(0, 1.25, 0)), to: hh.clone().add(v3(0, -0.05, 0)), fov: 38, push: 0.01 }; }, run: () => { F.hohma.setLookTarget(this.head()); } },
       // the comb in her hands from above and in front of her (the camera stood inside her body in the GPU take)
-      { hold: 2.6, shot: () => { const away = held.clone().sub(hm).setY(0).normalize(), sd = v3(away.z, 0, -away.x); return { from: held.clone().addScaledVector(away, 0.3).addScaledVector(sd, 0.25).add(v3(0, 0.2, 0)), to: held.clone().add(v3(0, 0.01, 0)), fov: 30, push: 0.006, aperture: 0.004, lightAt: held.clone().add(v3(0, 0.15, 0)), lightScale: 0.6 }; }, run: () => z.setLookTarget(held) },
+      { hold: 2.6, shot: () => ({ from: mat.clone().addScaledVector(out, -0.05).addScaledVector(d, 0.35).add(v3(0, 0.95, 0)), to: held.clone().add(v3(0, 0.01, 0)), fov: 30, push: 0.006, aperture: 0.004, lightAt: held.clone().add(v3(0, 0.15, 0)), lightScale: 0.6 }), run: () => z.setLookTarget(held) },
       { key: 'e3.ds.2', who: 'scientist', shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => { z.setLookTarget(boy()); z.setFace({ frown: 0.3 }); } },
       { hold: 1.2, shot: () => cover.close(z, 0.45, 1.1, 0.24), run: () => z.setLookTarget(held) },
       { choice: 'e3.dose', shot: () => cover.close(z, 0.45, 1.1, 0.24) },
@@ -1687,7 +1687,7 @@ export class Episode3 extends Episode2 {
       { key: 'e3.ds.half', who: 'scientist', if: CHOSE('e3.dose', 'half'), shot: () => cover.close(z, 0.4, 1.0, 0.24) },
       // he cleans the boy's foot first (or shows her how, when he keeps the honey), Hoh-Ma holding him
       // the foot from above the boy's shins, looking out past it to the hands (the camera stood in a body in the GPU take)
-      { hold: 3.6, shot: () => ({ from: foot.clone().addScaledVector(out, -0.45).add(v3(0, 0.78, 0)), to: foot.clone().addScaledVector(out, 0.12), fov: 34, push: 0.01, aperture: 0.004, lightAt: foot.clone().add(v3(0, 0.2, 0)) }), run: () => {
+      { hold: 3.6, shot: () => ({ from: mat.clone().addScaledVector(out, 0.0).addScaledVector(d, -0.1).add(v3(0, 1.0, 0)), to: foot.clone().addScaledVector(out, 0.1), fov: 34, push: 0.01, aperture: 0.004, lightAt: foot.clone().add(v3(0, 0.2, 0)) }), run: () => {
         comb.removeFromParent(); leaf.removeFromParent(); F.hohma.setHold(null); F.hohma.setLookTarget(foot); F.wenka.setLookTarget(foot);
         S.anim(3.6, (k) => clean(k, foot)); audio.human('breath', 0.3);
         S.after(2.0, () => { (mud.material as THREE.MeshStandardMaterial).color.setHex(0xc89a40); });
