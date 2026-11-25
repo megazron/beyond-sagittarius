@@ -1795,7 +1795,7 @@ export class Episode3 extends Episode2 {
     if (!st || this.moonDressed === st.scene) return;
     this.moonDressed = st.scene;
     const g = new THREE.Group(); g.name = 'e3.moonLakes';
-    const sheetM = new THREE.MeshStandardMaterial({ color: 0x8fa2ac, roughness: 0.18, metalness: 0.05, envMapIntensity: 1.4 });
+    const sheetM = new THREE.MeshStandardMaterial({ color: 0x7f9ab8, roughness: 0.12, metalness: 0.05, envMapIntensity: 1.4, emissive: 0x0a1626 });
     const crackM = new THREE.MeshBasicMaterial({ color: 0x3a4248 });
     const lake = (x: number, z: number, r: number, black: boolean, seed: number) => {
       const y = st.height(x, z);
@@ -1851,7 +1851,8 @@ export class Episode3 extends Episode2 {
     }
     audio.sample('stone', 0.5, { rate: 0.45 });
     // a long lens over his shoulder onto it coming out of the black lake and up the shore (shot list 3.9/3: fov 20)
-    if (st) { const y = st.height(-2.6, -3.6); this.awayCut?.(v3(-2.6, y + 1.9, -3.6), v3(8.3, st.height(8.3, -12.2) + 0.5, -12.2), 5.2, 22); }
+    // (take EP3B C: aimed at a fixed point the long lens saw only rocks; now it follows the creature itself, from in front of the ring)
+    if (st && body) { const y = st.height(5.2, -5.6); this.awayCut?.(v3(5.2, y + 1.7, -5.6), body.position, 5.2, 30); }
     this.say('e3.dx.come', 'strong', 4.5);
     this.after(2.2, () => { this.copierState.call = 1; this.ui.say(isAlive(this.s.branch, 'builder') ? 'e3.dx.voice' : 'e3.dx.hum', 'e3.who.voice', 3); });
     this.after(5.2, () => { this.copierState.call = 0; });

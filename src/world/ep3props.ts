@@ -69,7 +69,7 @@ let iceMat: THREE.MeshStandardMaterial | null = null;
 export function iceBlock(seed: number): THREE.Mesh {
   const R = rng(seed * 31 + 7), W = 0.75, H = 0.42, D = 0.42;
   const geo = new THREE.BoxGeometry(W, H, D, 10, 6, 6);
-  const p = geo.getAttribute('position'), col: number[] = [], c = new THREE.Color(), deep = new THREE.Color(0x8fa6b0), frost = new THREE.Color(0xe8e6e0), slush = new THREE.Color(0xb8b0a2);
+  const p = geo.getAttribute('position'), col: number[] = [], c = new THREE.Color(), deep = new THREE.Color(0x5f84a8), frost = new THREE.Color(0xd8e4ec), slush = new THREE.Color(0x9aa8b4);
   const n = (x: number, y: number, z: number) => Math.sin(x * 23 + seed) * Math.cos(z * 19 - seed) * 0.5 + Math.sin(y * 31 + x * 7) * 0.3 + Math.sin((x + z) * 57 + y * 11) * 0.2;
   for (let i = 0; i < p.count; i++) {
     let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
