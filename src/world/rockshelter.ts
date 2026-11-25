@@ -19,7 +19,7 @@ const N = new Simplex(1307);
 const fbm = (x: number, y: number) => N.noise2(x, y) * 0.6 + N.noise2(x * 2.1 + 7, y * 2.1 - 3) * 0.3 + N.noise2(x * 4.3 - 11, y * 4.3 + 5) * 0.12;
 
 /** The profile of the back wall and roof, bottom to lip, as (z, y) in metres. */
-const PROFILE: [number, number][] = [[1.9, -0.45], [2.3, 0.55], [2.25, 1.45], [1.75, 2.25], [0.7, 2.7], [-0.6, 2.72], [-1.55, 2.5], [-1.95, 2.2]];
+const PROFILE: [number, number][] = [[1.9, -0.45], [2.3, 0.55], [2.25, 1.45], [1.75, 2.25], [0.7, 2.62], [-0.5, 2.62], [-1.4, 2.55]]; // the lip's edge ends inside the lip's bed
 function profile(v: number) {
   const pts = PROFILE.map(([z, y]) => new THREE.Vector3(0, y, z));
   return new THREE.CatmullRomCurve3(pts, false, 'centripetal').getPoint(v);
@@ -29,7 +29,7 @@ function rockColour(y: number, n: number, out: THREE.Color) {
   // bedding: bands of slightly different stone every 25 to 40 cm, broken by the noise
   const band = Math.sin(y * 17 + n * 4) * 0.5 + 0.5, fine = Math.sin(y * 61 + n * 9) * 0.5 + 0.5;
   // a warm grey-brown sandstone, darker and lighter by bed (sRGB values: the vertex colours are linear)
-  out.setRGB(0.4 + band * 0.08 + fine * 0.03 + n * 0.05, 0.36 + band * 0.07 + fine * 0.025 + n * 0.04, 0.31 + band * 0.05 + fine * 0.02 + n * 0.03, THREE.SRGBColorSpace);
+  out.setRGB(0.5 + band * 0.1 + fine * 0.03 + n * 0.05, 0.41 + band * 0.08 + fine * 0.025 + n * 0.04, 0.32 + band * 0.05 + fine * 0.02 + n * 0.03, THREE.SRGBColorSpace);
   return out;
 }
 
@@ -49,6 +49,24 @@ function block(sx: number, sy: number, sz: number, seed: number) {
   return g;
 }
 
+/** A bed of rock: a slab with its edges eaten back unevenly and a slightly lumpy top and bottom (the cliff's layers). */
+function ledge(w: number, h: number, d: number, seed: number) {
+  const g = new THREE.BoxGeometry(w, h, d, 16, 3, 10), p = g.attributes.position as THREE.BufferAttribute, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const ex = Math.abs(v.x) / (w / 2), ez = Math.abs(v.z) / (d / 2), edge = Math.max(ex, ez);
+    const n = fbm(v.x * 0.7 + seed, v.z * 0.7 - seed), m = N.noise2(v.x * 2.3 + seed * 2, v.y * 3 + v.z * 2.3);
+    // eroded back where it is an edge, the lower edge more (undercut), rounded corners
+    const bite = edge > 0.98 ? (0.18 + n * 0.22 + m * 0.06) * (v.y < 0 ? 1.4 : 1) : 0;
+    const corner = Math.max(0, ex + ez - 1.5) * 0.6;
+    if (ex >= ez) v.x -= Math.sign(v.x) * (bite + corner * w * 0.1); else v.z -= Math.sign(v.z) * (bite + corner * d * 0.1);
+    v.y += (v.y > 0 ? 1 : -1) * n * 0.08 + m * 0.03;
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
 /** Paint vertex colours: banded rock, and soot near `hearth` (world) and under the lip. */
 function paint(g: THREE.BufferGeometry, m: THREE.Matrix4, hearth: THREE.Vector3 | null, lipZ: number | null, into: THREE.Vector3 | null) {
   const p = g.attributes.position as THREE.BufferAttribute, col = new Float32Array(p.count * 3), v = new THREE.Vector3(), c = new THREE.Color();
@@ -62,7 +80,7 @@ function paint(g: THREE.BufferGeometry, m: THREE.Matrix4, hearth: THREE.Vector3 
     if (hearth) {
       // soot: a long-burnt ceiling, heaviest straight over the hearth and pulled out along the roof to the lip
       const d = v.distanceTo(hearth), over = v.y - hearth.y;
-      let s = Math.max(0, 1 - d / 2.4) * THREE.MathUtils.smoothstep(over, 1.2, 2.4);
+      let s = Math.max(0, 1 - d / 2.0) * THREE.MathUtils.smoothstep(over, 1.8, 2.5);
       if (lipZ !== null && into) { const z = loc.z; s = Math.max(s, THREE.MathUtils.smoothstep(over, 1.9, 2.6) * THREE.MathUtils.smoothstep(-z, -0.2, 1.4) * 0.8); }
       s *= 0.75 + 0.25 * fbm(v.x * 3, v.z * 3 + v.y);
       c.lerp(new THREE.Color().setRGB(0.09, 0.075, 0.065, THREE.SRGBColorSpace), Math.min(0.92, s));
@@ -80,7 +98,8 @@ export function buildRockShelter(origin: THREE.Vector3, into: THREE.Vector3, sid
   const group = new THREE.Group();
   const basis = new THREE.Matrix4().makeBasis(side.clone().normalize(), new THREE.Vector3(0, 1, 0), into.clone().normalize());
   const toWorld = basis.clone().setPosition(origin);
-  const rock = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0, side: THREE.DoubleSide, flatShading: false });
+  // a little warm light of its own: the sunlit ground's bounce into the overhang (the inside was near black on screen)
+  const rock = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0, side: THREE.DoubleSide, emissive: 0x2a1f15, emissiveIntensity: 0.7 });
   const hearth = origin.clone().addScaledVector(into, 0.15); hearth.y = ground(hearth.x, hearth.z);
 
   // ---- the wall and roof: one sheet, u across, v bottom to lip
@@ -89,7 +108,8 @@ export function buildRockShelter(origin: THREE.Vector3, into: THREE.Vector3, sid
     const v = j / NV, P = profile(v), vv = THREE.MathUtils.smoothstep(v, 0.3, 1);
     for (let i = 0; i <= NU; i++) {
       const u = (i / NU) * 2 - 1, W = 3.0 + vv * 0.25;
-      let x = u * W, z = P.z - 1.7 * u * u * (1 - 0.45 * vv), y = P.y - 1.2 * Math.pow(Math.abs(u), 4) * vv;
+      // the sides bow forward and down into the piers; at the lip they do not hang (they read as cloth)
+      let x = u * W, z = P.z - 1.7 * u * u * (1 - 0.75 * vv), y = P.y - 1.2 * Math.pow(Math.abs(u), 4) * vv * (1 - THREE.MathUtils.smoothstep(v, 0.55, 0.9));
       // the sides come down to the ground: below it, nothing is seen anyway
       const w = new THREE.Vector3(x, y, z).applyMatrix4(toWorld);
       const n = fbm(w.x * 0.35, w.z * 0.35 + w.y * 0.5);
@@ -113,12 +133,24 @@ export function buildRockShelter(origin: THREE.Vector3, into: THREE.Vector3, sid
 
   // ---- the cliff round it: blocks behind the wall, over the roof (its thickness) and along the lip
   const outer = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97, metalness: 0 });
-  const blocks: [number, number, number, number, number, number, number][] = [
-    // x, y, z, sx, sy, sz, turn
-    [0, 1.2, 4.6, 5.8, 2.8, 2.4, 0], [-5.0, 0.9, 2.6, 1.9, 2.3, 2.6, 0.4], [5.0, 1.0, 2.4, 2.0, 2.4, 2.6, -0.3],
-    [0.2, 3.75, 1.6, 4.2, 0.9, 2.8, 0.05], [-0.1, 3.15, -1.15, 3.5, 0.45, 1.0, -0.06], [-2.8, 4.4, 3.4, 2.6, 1.6, 2.2, 0.7],
-    [3.0, 4.2, 3.6, 2.4, 1.4, 2.0, -0.5], [-6.0, 0.3, -0.2, 1.3, 1.0, 1.4, 1.1], [6.2, 0.2, 0.4, 1.1, 0.9, 1.2, 0.3],
+  // the cliff in beds: stepped ledges above the roof, the lip's bed over the floor, piers of beds either side, a mass
+  // behind; each a slab eaten back at its edges
+  const beds: [number, number, number, number, number, number, number][] = [
+    // x, y, z, w, h, d, turn
+    [0, 2.72, -0.8, 7.6, 0.62, 2.5, 0.02], [0.1, 3.25, 1.2, 8.6, 0.75, 5.0, -0.03], [-0.2, 3.95, 2.3, 8.0, 0.8, 4.6, 0.04],
+    [0.3, 4.7, 3.3, 6.8, 0.85, 3.6, -0.05], [0, 1.25, 4.6, 8.8, 2.7, 2.2, 0],
+    [-4.0, 0.45, 1.0, 2.9, 1.3, 4.8, 0.08], [-3.95, 1.55, 1.3, 2.8, 1.0, 4.4, 0.05], [-3.8, 2.45, 1.5, 2.7, 0.9, 4.2, 0.1],
+    [4.0, 0.4, 0.9, 2.9, 1.2, 4.8, -0.06], [3.95, 1.45, 1.2, 2.8, 1.0, 4.4, -0.04], [3.8, 2.35, 1.5, 2.6, 0.9, 4.2, -0.09],
   ];
+  beds.forEach(([x, y, z, w, h, d, turn], k) => {
+    const g = ledge(w, h, d, k * 3.7 + 1);
+    const m = new THREE.Matrix4().makeRotationY(turn).setPosition(x, y, z).premultiply(toWorld);
+    paint(g, m, hearth, null, null);
+    const o = new THREE.Mesh(g, outer); o.matrixAutoUpdate = false; o.matrix.copy(m); o.castShadow = true; o.receiveShadow = true;
+    group.add(o);
+  });
+  // a few weathered boulders at the foot
+  const blocks: [number, number, number, number, number, number, number][] = [[-5.9, 0.3, -0.6, 1.3, 1.0, 1.4, 1.1], [6.1, 0.2, -0.3, 1.1, 0.9, 1.2, 0.3]];
   blocks.forEach(([x, y, z, sx, sy, sz, turn], k) => {
     const g = block(sx, sy, sz, k * 3.7 + 1);
     const m = new THREE.Matrix4().makeRotationY(turn).setPosition(x, y, z).premultiply(toWorld);
