@@ -346,6 +346,7 @@ export class Combat {
   /** Where the set piece wants the player to go, for the compass and the line on the ground. */
   goalPoint(): THREE.Vector3 | null {
     const run = this.encounter;
+    if (run?.id === 'night.defence' && run.pit && (run.objN.kiln ?? 100) < 35 && (run.pit.pile ?? 0) + (run.objN.wood ?? 0) > 0) return this.goalV.set(run.pit.x, this.env.height(run.pit.x, run.pit.z), run.pit.z);
     if (run?.id === 'night.defence' && (run.objN.fuel ?? 100) < 35 && (run.objN.pile ?? 0) + (run.objN.wood ?? 0) > 0) {
       const f = run.sim.fires.find((q) => !q.torch && !q.burnsOut);
       if (f) return this.goalV.set(f.x, this.env.height(f.x, f.z), f.z);
@@ -706,8 +707,9 @@ export class Combat {
   private encounterPrompt(run: EncounterRun) {
     const D = this.d, sim = run.sim, p = sim.player, ui = D.ui;
     let label: string | null = null, at: THREE.Vector3 | null = null, act: (() => void) | null = null;
-    const fire = sim.fires.find((f) => !f.torch && !f.burnsOut);
-    if (fire && Math.hypot(fire.x - p.x, fire.z - p.z) < 3 && fire.fuel < fire.max * 0.95 && run.id === 'night.defence') {
+    // the nearer of the camp fire and (on the firing night) the pit
+    const fire = sim.fires.filter((f) => !f.torch && !f.burnsOut).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+    if (fire && Math.hypot(fire.x - p.x, fire.z - p.z) < (fire.kiln ? 2.2 : 3) && fire.fuel < fire.max * 0.95 && run.id === 'night.defence') {
       const n = (fire.pile ?? 0) + (sim.inv.branch ?? 0);
       label = n > 0 ? t('cb.p.feedN', { n }) : t('cb.need', { list: t('item.branch') }); at = v2.set(fire.x, p.y + 0.8, fire.z);
       act = () => { if (sim.feedFire(fire)) { D.player.act('give', new THREE.Vector3(fire.x, p.y + 0.4, fire.z), 0.9, null); audio.sample('wood', 0.6, { delay: 0.3 }); this.fx.puff('ember', fire.x, p.y + 0.6, fire.z, 0, 0, 4); } };
@@ -973,9 +975,12 @@ export class Combat {
           else if (e.what === 'rattle') { this.sfx('rattle', 1, e.x, e.z); this.sfx('rattle', 0.8, e.x, e.z, 1.1, 0.45); }
           break;
         }
-        case 'fire': if (e.what === 'out') this.toastOnce('fireout', t('cb.fire', { n: 0 })); break;
+        case 'fire':
+          if (e.what === 'out') this.toastOnce('fireout', t('cb.fire', { n: 0 }));
+          else if (e.what === 'scattered') { this.sfx('crack', 1, e.x, e.z, 0.7); audio.sample('wood', 0.7, { rate: 0.8 }); this.fx.puff('ember', e.x!, this.env.height(e.x!, e.z!) + 0.3, e.z!, 0, 0, 6); D.ui.toast(t('cb.kiln.scattered')); }
+          break;
         case 'pickup': audio.pickup(); break;
-        case 'ally': if (e.what === 'hurt') audio.human('yelp', 0.5 * this.vol(e.x, e.z)); break;
+        case 'ally': if (e.what === 'hurt') audio.human('yelp', 0.5 * this.vol(e.x, e.z)); else if (e.what === 'ran') D.ui.toast(t('cb.kiln.ran')); break;
         case 'player': {
           const w = e.what ?? '';
           if (w === 'roll') { this.sfx('swing', 0.4, undefined, undefined, 0.7); audio.sample('cloth', 0.5); this.fx.puff('dust', P.pos.x, P.pos.y + 0.1, P.pos.z, 0, 0, 0.7); }
@@ -1172,10 +1177,10 @@ export class Combat {
     if (run) {
       const N = run.objN;
       const night = run.id === 'night.defence', fighting = night && run.phase !== 'prep' && run.phase !== 'hush';
-      const wood = (N.pile ?? 0) + (N.wood ?? 0), low = fighting && (N.fuel ?? 100) < 35;
+      const wood = (N.pile ?? 0) + (N.wood ?? 0), low = fighting && (N.fuel ?? 100) < 35, kilnLow = fighting && !!run.pit && (N.kiln ?? 100) < 35;
       // the night's one rule, said when it matters: a low fire takes over the line (and the compass points at it)
-      const text = low ? t(wood > 0 ? 'cb.obj.fireLow' : 'cb.obj.fireOut', { k: this.keyName('interact') }) : t(run.objective);
-      this.hud.objective(text, fighting ? `${t('cb.wave', { n: Math.max(1, N.wave ?? 1) })} · ${t('cb.fire', { n: N.fuel ?? 0 })} · ${t('cb.wood', { n: wood })} · ${t('cb.food', { n: N.food ?? 0 })}` : night && run.phase === 'prep' ? t('cb.prep.wood', { s: Math.max(0, Math.ceil(70 - run.phaseT)), n: N.pile ?? 0 }) : run.phase === 'prep' ? `${Math.max(0, Math.ceil(70 - run.phaseT))}` : null, low && wood > 0);
+      const text = low ? t(wood > 0 ? 'cb.obj.fireLow' : 'cb.obj.fireOut', { k: this.keyName('interact') }) : kilnLow ? t('cb.obj.kilnLow', { k: this.keyName('interact') }) : t(run.objective);
+      this.hud.objective(text, fighting ? `${t('cb.wave', { n: Math.max(1, N.wave ?? 1) })} · ${t('cb.fire', { n: N.fuel ?? 0 })}${run.pit ? ` · ${t('cb.kiln', { n: N.kiln ?? 0 })}` : ''} · ${t('cb.wood', { n: wood })} · ${t('cb.food', { n: N.food ?? 0 })}` : night && run.phase === 'prep' ? t('cb.prep.wood', { s: Math.max(0, Math.ceil(70 - run.phaseT)), n: N.pile ?? 0 }) : run.phase === 'prep' ? `${Math.max(0, Math.ceil(70 - run.phaseT))}` : null, low && wood > 0);
       if (low && !this.lowSaid && wood > 0) { this.lowSaid = true; audio.sample('wood', 0.25); D.ui.toast(t('cb.obj.fireLow', { k: this.keyName('interact') })); }
       if (!low && (N.fuel ?? 0) > 50) this.lowSaid = false;
     } else this.hud.objective(null);

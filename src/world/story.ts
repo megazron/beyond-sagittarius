@@ -502,5 +502,11 @@ export function createRidge(L: StoryLayout) {
   const slab = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 0.35, 7), flat(0x6c6676));
   slab.position.y = 0.05; slab.receiveShadow = true; slab.castShadow = true;
   root.add(slab);
-  return { root };
+  /** Quiet the outcrop to plain rock (Episode Two on): at dusk on the GPU its lit crystals bloomed into a large
+   *  pale-white shape beside him in the ridge close-ups (take B, "go towards the voice"). */
+  const quiet = () => {
+    const rock = new THREE.MeshStandardMaterial({ color: 0x8d8796, roughness: 0.55, metalness: 0, flatShading: true });
+    root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.material === crystal || m.material === glow)) m.material = rock; });
+  };
+  return { root, quiet };
 }

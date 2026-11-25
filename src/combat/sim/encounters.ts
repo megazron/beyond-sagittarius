@@ -2,7 +2,7 @@
 // Places are given relative to a site (a point and a heading), so the same hunt fits any clearing.
 import { CombatSim } from './sim.ts';
 import type { Intent, InjuryId } from './sim.ts';
-import type { Assist, Difficulty, Env } from './core.ts';
+import type { Assist, Difficulty, Env, Fire } from './core.ts';
 import { dist2 } from './core.ts';
 import { fishWater } from './ai.ts';
 import type { Enemy, SpeciesId } from './species.ts';
@@ -68,6 +68,8 @@ export class EncounterRun {
   ask: (TensionSpec & { id: string }) | null = null;
   private onAnswer: ((passed: boolean) => void) | null = null;
   flags: Record<string, boolean | number> = {};
+  /** The firing night's pit fire (story.firing), or null. */
+  pit: Fire | null = null;
   story: Record<string, boolean>;
   private site: { x: number; z: number; yaw: number };
   private mem: Record<string, number> = {};
@@ -134,6 +136,17 @@ export class EncounterRun {
       // enough, fed when it is low, to see the night through; fewer on Hard (a fire left alone still goes out)
       const f = this.at(2.5, 0); s.addFire(f.x, f.z, this.story.fireHigh ? 100 : 72, { pile: NIGHT[s.difficulty].pile }); this.markers.push({ x: f.x, z: f.z, kind: 'fire', r: 2 });
       const food = this.at(0.5, 2.2); s.addScent(food.x, food.z, 4, 60); this.markers.push({ x: food.x, z: food.z, kind: 'food', r: 1 });
+      if (this.story.firing) {
+        // Episode Two's firing night: the pit beside the fire with the pots buried in its embers. It has to stay hot till
+        // dawn (above about 600 C the clay turns to ceramic); a burning branch out of it is a weapon (the torch); the
+        // big one goes for it. Kept: the pit built up and its wood beside it; left: he took the pit's wood to the trail;
+        // froze: it was kicked half apart before the fight began. Oom-Sa, if she keeps it, sits by it and feeds it.
+        const k = this.at(3.0, 1.25);
+        this.pit = s.addFire(k.x, k.z, this.story.froze ? 30 : this.story.kept ? 100 : 82, { pile: this.story.left ? 1 : this.story.oomsa ? 5 : 3, kiln: true });
+        this.markers.push({ x: k.x, z: k.z, kind: 'fire', r: 1.4 });
+        s.player.has.torch = true;
+        if (this.story.oomsa) { const a = this.at(3.6, 2.3); s.ally = { who: 'local', x: a.x, z: a.z, hp: 60, down: false }; }
+      }
       // a steady night breeze from the fire across the food and out into the dark: the smoke leans the way the smell goes
       const wa = Math.atan2(food.z - f.z, food.x - f.x) + (s.rand() - 0.5) * 0.6; s.windX = Math.cos(wa); s.windZ = Math.sin(wa);
       this.objective = 'cb.obj.prep'; this.go('prep');
@@ -271,6 +284,7 @@ export class EncounterRun {
     };
     const food = s.scents.reduce((n, sc) => n + Math.max(0, sc.food), 0);
     this.objN = { food, fuel: Math.round((fire.fuel / fire.max) * 100), wave: this.wave, pile: fire.pile ?? 0, wood: s.inv.branch ?? 0 };
+    if (this.pit) this.kiln(dt, N.burn);
     const packLeft = (pack: number) => s.enemies.filter((e) => e.pack === pack && !e.dead && !e.routed && !e.gone).length;
     if (this.phase === 'prep') {
       // time to think: what you set now is what the night meets
@@ -280,13 +294,23 @@ export class EncounterRun {
     } else if (this.phase === 'hush') {
       // the work is done and the camp goes quiet: a few seconds to stand and look at what is set before anything comes
       fire.slow = 0.6;
-      if (this.phaseT > 10) { fire.slow = N.burn; this.wave = 1; fromDark('skritch', N.waves[0], 1); this.objective = 'cb.obj.night'; this.go('wave1'); }
+      if (this.phaseT > 10) {
+        fire.slow = N.burn; this.wave = 1;
+        if (this.pit) {
+          // it comes first this time, and alone at first: it knows the fire now, and it knows him
+          fromDark('skritch', Math.max(1, N.waves[0] - 2), 1);
+          const a = Math.atan2(s.windZ, s.windX) + 0.9; this.hound = s.spawn('hound', fire.x + Math.cos(a) * 30, fire.z + Math.sin(a) * 30, { alert: 1.2, aware: true });
+          this.objective = 'cb.obj.kiln';
+        } else { fromDark('skritch', N.waves[0], 1); this.objective = 'cb.obj.night'; }
+        this.go('wave1');
+      }
     } else if (this.phase === 'wave1') {
       if (packLeft(1) === 0 || this.phaseT > 75) { for (const e of s.enemies) if (e.pack === 1) s.rout(e); this.go('lull'); }
     } else if (this.phase === 'lull') {
       if (this.phaseT > 12) {
-        this.wave = 2; fromDark('skritch', N.waves[1], 2, 1.7);
-        const a = s.rand() * 6.283; this.hound = s.spawn('hound', fire.x + Math.cos(a) * 34, fire.z + Math.sin(a) * 34, { alert: 1.2, aware: true });
+        this.wave = 2; fromDark('skritch', N.waves[1] - (this.pit ? 1 : 0), 2, 1.7);
+        if (!this.hound || this.hound.dead || this.hound.gone) { const a = s.rand() * 6.283; this.hound = s.spawn('hound', fire.x + Math.cos(a) * 34, fire.z + Math.sin(a) * 34, { alert: 1.2, aware: true }); }
+        else if (this.hound.routed) { this.hound.routed = false; this.hound.aware = true; this.hound.alert = 1.2; }
         if (straight) this.hound.cd = 0;
         this.go('wave2');
       }
@@ -302,9 +326,43 @@ export class EncounterRun {
         for (const e of s.enemies) s.rout(e);
         this.flags['night.held'] = true; this.flags['night.food'] = food; this.flags['night.houndDriven'] = !!this.hound?.routed && this.phaseT <= 85;
         this.flags['night.fireKept'] = fire.fuel > 0;
+        if (this.pit) { this.flags['kiln.fuel'] = Math.round((this.pit.fuel / this.pit.max) * 100); this.flags['kiln.cold'] = (this.mem.coldT ?? 0) > 45; }
         s.emit({ t: 'beat', what: 'dawn' });
         this.finish('won');
       }
+    }
+  }
+  /** The firing night's pit: it burns hotter than the camp fire, Oom-Sa feeds it if she is there, and the big one
+   *  tries it whenever he is away from it. Flags: kiln.raided, kiln.scattered (times it got there), kiln.cold. */
+  private kiln(dt: number, burn: number) {
+    const s = this.sim, pit = this.pit!, p = s.player, h = this.hound;
+    if (this.phase !== 'prep') pit.slow = this.phase === 'hush' ? 0.8 : burn * 1.15;
+    if (this.phase !== 'prep' && this.phase !== 'hush' && pit.fuel < pit.max * 0.25) this.mem.coldT = (this.mem.coldT ?? 0) + dt;
+    this.objN.kiln = Math.round((pit.fuel / pit.max) * 100); this.objN.kilnPile = pit.pile ?? 0;
+    const a = s.ally;
+    if (a && !a.down) {
+      // she feeds it a branch at a time from its own stack, low and steady (a potter's fire is kept, not built up)
+      this.mem.feedT = (this.mem.feedT ?? 6) - dt;
+      if (this.mem.feedT <= 0 && (pit.pile ?? 0) > 0 && pit.fuel < pit.max * 0.8) { pit.pile!--; pit.fuel = Math.min(pit.max, pit.fuel + 28); pit.r = s.fireRadius(pit); this.mem.feedT = 13; s.emit({ t: 'fire', what: 'fed', x: pit.x, z: pit.z, n: pit.fuel / pit.max }); }
+      // trusted only a little, she runs when the big one comes into the light
+      if (this.story.oomsaRuns && h && !h.dead && !h.routed && dist2(h.x, h.z, a.x, a.z) < 15) { s.ally = null; this.flags['kiln.oomsaRan'] = true; s.emit({ t: 'ally', what: 'ran', x: a.x, z: a.z }); }
+    }
+    if (!h || h.dead || h.gone || h.routed) { if (h) h.raid = null; return; }
+    if (h.state === 'stagger' || h.stunT > 0 || h.state === 'flee') { if (h.raid) { h.raid = null; this.flags['kiln.saved'] = ((this.flags['kiln.saved'] as number) || 0) + 1; } return; }
+    this.mem.raidCd = (this.mem.raidCd ?? 22) - dt;
+    const away = dist2(p.x, p.z, pit.x, pit.z) > 4.5;
+    if (!h.raid && away && this.mem.raidCd <= 0 && pit.fuel > 0 && h.state !== 'windup' && h.state !== 'strike') {
+      h.raid = { x: pit.x, z: pit.z }; this.mem.raidCd = 26;
+      this.flags['kiln.raided'] = ((this.flags['kiln.raided'] as number) || 0) + 1;
+      s.emit({ t: 'sound', what: 'growl', x: h.x, z: h.z });
+    }
+    if (h.raid && dist2(h.x, h.z, pit.x, pit.z) < 1.7) {
+      // it drags the burning wood out of the pit with its forefeet and jaws, and goes: the pots lie half bare
+      pit.fuel = Math.max(0, pit.fuel - 45); pit.r = s.fireRadius(pit);
+      h.raid = null; h.state = 'flee'; h.stateT = 0;
+      this.flags['kiln.scattered'] = ((this.flags['kiln.scattered'] as number) || 0) + 1;
+      s.emit({ t: 'fire', what: 'scattered', x: pit.x, z: pit.z });
+      s.hurtEnemy(h, 3, 'fire', pit.x, pit.z, 0, 0, 'trap');
     }
   }
   /** The player says they are ready before the prep time is up. */

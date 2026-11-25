@@ -315,7 +315,9 @@ export class FirstNight {
         z.setGazeRate(5); z.setLookTarget(p0.clone().add(new THREE.Vector3(0, 0.5, 0)));
       } },
     ], () => done()));
-    const hound = createHound(); hound.root.position.copy(p0); this.world.scene.add(hound.root);
+    const hound = createHound({ big: true }); hound.root.position.copy(p0); this.world.scene.add(hound.root);
+    // seen as it passes (it was hidden until it turned, and the owner saw only its eyes): a shape on the path, nose down
+    hound.root.visible = true;
     let mode: 'walk' | 'turn' | 'lunge' | 'gone' = 'walk', u = 0.22, last = performance.now(), run = true;
     const head = () => new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld);
     const tick = () => {
@@ -326,12 +328,13 @@ export class FirstNight {
         // walks, stops to sniff twice (0.3 and 0.62 of the way), walks on
         const sniff = (u > 0.3 && u < 0.36) || (u > 0.62 && u < 0.67);
         speed = sniff ? 0.02 : 0.85; u = Math.min(1, u + dt * (sniff ? 0.006 : 0.085));
+        hound.sniff(sniff ? 1 : 0.25); hound.look(null);
         const p = p0.clone().lerp(p1, u); p.y = this.world.terrain.height(p.x, p.z);
         hound.root.position.copy(p); hound.root.rotation.y = Math.atan2(p1.x - p0.x, p1.z - p0.z) + (sniff ? Math.sin(now / 300) * 0.25 : 0);
         z.setLookTarget(p.clone().add(new THREE.Vector3(0, 0.5, 0)));
         if (u >= 1) { mode = 'gone'; hound.root.visible = false; }
       } else if (mode === 'turn') {
-        const d = at.clone().sub(hound.root.position); snarl = 1;
+        const d = at.clone().sub(hound.root.position); snarl = 1; hound.sniff(0); hound.look(head());
         hound.root.rotation.y += (Math.atan2(d.x, d.z) - hound.root.rotation.y) * Math.min(1, dt * 6);
       } else if (mode === 'lunge') {
         const d = at.clone().sub(hound.root.position).setY(0); snarl = 1; speed = 6;

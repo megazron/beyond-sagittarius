@@ -100,6 +100,8 @@ export interface Enemy {
   cd: number;
   /** Seconds the weak point is open, held in a snare, switched off by a shock. */
   weakT: number; heldT: number; stunT: number;
+  /** The firing night: the pit fire it is going for, to drag it apart (set by the encounter, cleared when it gets there or is hit). */
+  raid?: { x: number; z: number } | null;
   provoked: number; warned: number;
   /** Angle on the circle it stalks on, and which way round. */
   angle: number; side: number;
