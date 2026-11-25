@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { cobble } from './cobble';
 import { mulberry32, smoothstep } from '../core/noise';
 import { LAKE, Terrain } from './terrain';
 import type { Forest } from './forest';
@@ -160,7 +161,6 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
   const rnd = mulberry32(404);
   const wood = flat(0x5a4334);
   const woodDark = flat(0x3b2b22);
-  const stone = flat(0x8a8494);
   // the lean-to's fronds: cut from the giant ferns round the camp, fresh green ones and a few that have browned (they
   // read as flat teal and blue tarps before: owner). Leaflets cut out of a painted frond, not a coloured sheet
   const leafMat = new THREE.MeshStandardMaterial({ map: frondTexture(11, false), side: THREE.DoubleSide, roughness: 0.7, alphaTest: 0.45 });
@@ -172,13 +172,15 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
   fire.position.copy(L.camp);
   root.add(fire);
   const ring = new THREE.Group();
-  const stoneGeo = new THREE.DodecahedronGeometry(0.17, 0);
+  // river cobbles carried up from the stream (grey granite and brown sandstone, rounded, matt): flat-shaded lavender
+  // dodecahedra read as big crystals on the GPU (owner, life_landed clips)
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2;
-    const s = new THREE.Mesh(stoneGeo, stone);
-    s.position.set(Math.cos(a) * 0.62, 0.06, Math.sin(a) * 0.62);
-    s.scale.set(1 + rnd() * 0.4, 0.7 + rnd() * 0.3, 1 + rnd() * 0.3);
-    s.rotation.set(rnd(), rnd() * 6, rnd());
+    const s = cobble(i % 3 === 1 ? 'sand' : 'granite', 500 + i * 13, 2.1 + rnd() * 0.6);
+    // warmed and darkened (soot, the purple dusk sky made plain grey read lavender again on the GPU)
+    (s.material as THREE.MeshStandardMaterial).color.setHex(i % 2 ? 0x9a8670 : 0x8a7a68);
+    s.position.set(Math.cos(a) * 0.62, 0.045, Math.sin(a) * 0.62);
+    s.rotation.set((rnd() - 0.5) * 0.4, -a + (rnd() - 0.5) * 0.6, (rnd() - 0.5) * 0.3);
     s.castShadow = true; s.receiveShadow = true;
     ring.add(s);
   }
@@ -396,6 +398,13 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
         c.visible = k >= need && !(thin && k === need && i % 2 === 1);
       });
       roof.children.slice(12).forEach((c) => { c.visible = k >= 5; });
+      // once the leaning poles are up (and the frame faces the right way) the back blocks a walk through it, as the
+      // finished shelter does (he walked through the frame: owner, L5 clip)
+      if (k >= 2 && !turn && !shelterObstacles) {
+        shelterObstacles = true;
+        const back = new THREE.Vector3(0, 0, -1.6).applyQuaternion(shelter.quaternion).add(L.shelter);
+        forest.addObstacle(back.x, back.z, 0.9);
+      }
     },
     /** Where the lean-to stands and which way its open side faces (towards the fire). */
     shelterAt() { const f = new THREE.Vector3(0, 0, 1).applyQuaternion(baseQ ?? shelter.quaternion); return { at: L.shelter.clone(), open: f.setY(0).normalize() }; },

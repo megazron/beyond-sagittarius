@@ -8,7 +8,7 @@ import type { Cond, Effect, LineChoice } from '../game/branch/types';
 export type Who = CrewId | 'megazron';
 
 /** A camera set-up: `from` looks at `to`; `push` drifts towards the subject. */
-export interface Shot { from: THREE.Vector3; to: THREE.Vector3; push?: number; roll?: number; /** Lens blur override (fraction of screen height). */ aperture?: number; /** Keep this actor's head where it is in frame, whatever the body does. */ track?: Character }
+export interface Shot { from: THREE.Vector3; to: THREE.Vector3; push?: number; roll?: number; /** Lens blur override (fraction of screen height). */ aperture?: number; /** Keep this actor's head where it is in frame, whatever the body does. */ track?: Character; /** Lens as a vertical field of view in degrees (a set-up without one keeps the scene's own). */ fov?: number }
 
 /**
  * A step of a scene. Beyond the line itself it can branch: `if` plays it only
@@ -40,6 +40,8 @@ export interface Beat extends Omit<LineChoice, 'who' | 'fallbackWho'> {
   /** Extra pause after the line, for comic timing. */
   after?: number;
   run?: () => void;
+  /** Called every frame of the beat with its seconds so far: a look that moves on, a pen that stops. */
+  tick?: (t: number) => void;
 }
 
 /** What a scene needs from the story system. Without it no beat is conditional. */
@@ -122,6 +124,9 @@ export class Cutscene {
   private aim = new THREE.Vector3();
   private trackOff = new THREE.Vector3();
   done = false;
+  private beatT = 0;
+  private tickFn: ((t: number) => void) | undefined;
+  private baseFov: number;
 
   /** A panel is up: the scene holds until it answers. */
   private waiting = false;
@@ -129,6 +134,7 @@ export class Cutscene {
   constructor(private beats: Beat[], private ctx: CutsceneCtx) {
     voice.preload(beats.flatMap((b) => [b.key, b.fallback, ...(b.swap ?? []).map((x) => x.key)].filter((k): k is string => !!k)));
     this.rig = rigFor(ctx.scene);
+    this.baseFov = ctx.camera.fov;
   }
 
   private plays(b: Beat) { return this.ctx.branch?.test(b.if) ?? true; }
@@ -227,6 +233,7 @@ export class Cutscene {
     const key = line.key, who = line.who as Who | undefined;
     const { actors, subtitle } = this.ctx;
     b.run?.();
+    this.beatT = 0; this.tickFn = b.tick;
     if (b.effects) br?.apply(b.effects);
     if (b.poses) for (const id in b.poses) this.poses[id as CrewId] = b.poses[id as CrewId]!;
     if (b.faces) Object.assign(this.faces, b.faces);
@@ -249,6 +256,8 @@ export class Cutscene {
         x.root.updateMatrixWorld(true);
       }
       this.shot = b.shot(); this.shotT = 0; this.shotLen = Math.max(this.left, 6); this.fresh = true;
+      const fov = this.shot.fov ?? this.baseFov, cam = this.ctx.camera;
+      if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
     }
     this.frame(who, key);
     const sh = this.shot;
@@ -268,6 +277,7 @@ export class Cutscene {
   update(dt: number) {
     if (this.done) return;
     if (this.i < 0) { this.next(); if (this.done) return; }
+    if (this.tickFn) { this.beatT += dt; this.tickFn(this.beatT); }
     if (!this.waiting) {
       this.left -= dt;
       if (this.left <= 0) { this.next(); if (this.done) return; }
@@ -317,6 +327,7 @@ export class Cutscene {
 
   private end() {
     this.done = true;
+    const cam = this.ctx.camera; if (cam.fov !== this.baseFov) { cam.fov = this.baseFov; cam.updateProjectionMatrix(); }
     this.rig.children.forEach((l) => ((l as THREE.PointLight).intensity = 0));
     Renderer.current?.setDof(0, 0);
     this.ctx.subtitle(null);

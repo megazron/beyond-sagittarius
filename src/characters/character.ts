@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { redFruitMesh } from '../world/fruit';
 import { fillSmallHoles, fixOpposedNormals } from './holes';
 import { underCloth, overCloth } from './under';
 import { DECREEP } from './decreep';
@@ -81,7 +82,8 @@ const PROP_DEF: Record<PropKind, () => THREE.Mesh> = {
     g.rotateX(Math.PI); g.computeVertexNormals();
     return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.6, side: THREE.DoubleSide }));
   },
-  berry: () => new THREE.Mesh(new THREE.SphereGeometry(0.036, 16, 12), new THREE.MeshStandardMaterial({ color: 0xc3172a, roughness: 0.28 })),
+  // the red fruit of 1.1, the same pod as on the bush (world/fruit.ts), held between finger and thumb
+  berry: () => redFruitMesh(),
   // a fist-sized hammerstone (1.3) and the flint flake it knocks off
   stone: () => { const g = new THREE.IcosahedronGeometry(0.042, 2); g.scale(1.2, 0.85, 1); return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x8d8c88, roughness: 0.8 })); },
   // the hand drill's spindle: a straight stem, finger thick, about half a metre (1.6)
@@ -1884,7 +1886,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       hd.parent!.getWorldQuaternion(Q).invert(); selfM.q.premultiply(Q);
       hd.quaternion.slerp(selfM.q, sw);
       if (!gaze) headLook(bs, V4s, sw * 0.7);
-      if (id !== 'social') showProp(bs, 'phone', sw); // Nuvexa's own phone is part of her
+      // Nuvexa's own phone is part of her; a crowd body (one merged draw) keeps its hands empty rather than add a draw
+      if (id !== 'social' && !crowd) showProp(bs, 'phone', sw);
     } else if (selfieHeld && !task) showProp(bs, null, 0);
     if (!task && kind !== 'selfie' && (heldProp || heldShown)) { showProp(bs, heldProp, 1); heldShown = !!heldProp; }
     selfieHeld = sw > 0.004;

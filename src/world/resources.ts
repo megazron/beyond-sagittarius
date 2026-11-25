@@ -29,7 +29,7 @@ export function addResources(items: Item[], group: THREE.Group, terrain: Terrain
     nodule: mat(0x2a2c38, { roughness: 0.35 }), skin: mat(0xcfc8b8), clay: mat(0x9a5a3c, { roughness: 0.6 }), sand: mat(0xd8cda8),
     lime: mat(0xd6d2c2), brine: mat(0x8fc8c8, { roughness: 0.15, metalness: 0.1 }), salt: mat(0xf2f0ea), reed: mat(0xa89a4c),
     ash: mat(0x8c8c90), oil: mat(0x6a4a24, { roughness: 0.4 }), pod: mat(0xe0a030, { emissive: 0x402000 }), lichen: mat(0xa03a6a),
-    stone: mat(0x8a8494), wood: mat(0x5a4334), moss: mat(0xb59a58),
+    stone: mat(0x7b7871), wood: mat(0x5a4334), moss: mat(0xb59a58),
     bark: mat(0x4a3628, { roughness: 0.95 }), resin: mat(0xd88a1c, { roughness: 0.18, emissive: 0x3a1800 }),
   };
   const build = (type: ItemType) => {

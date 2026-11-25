@@ -1,11 +1,12 @@
 import * as THREE from 'three';
+import { createHound } from '../world/predator';
 import { audio } from '../core/audio';
 import { t } from '../i18n';
 import type { SaveData } from '../core/save';
 import type { World } from '../world/world';
 import type { UI } from '../ui/ui';
 import type { Player } from './player';
-import { cover, type Beat } from '../cinematic/cutscene';
+import { cover, type Beat, type Shot } from '../cinematic/cutscene';
 import type { TensionResult, TensionSpec } from '../combat/sim/tension';
 import type { Combat } from '../combat/combat';
 
@@ -273,13 +274,103 @@ export class FirstNight {
       // the outcome's facts go on the save as the story reads them (`cb.night.held`, ...), as fights.ts keep() does
       const keep = (o: { flags: Record<string, unknown> }) => { for (const [k, v] of Object.entries(o.flags)) if (v) s.flags[`cb.${k}`] = true; return !!o.flags.scarred; };
       if (cb && pick === 'brace') { const o = await cb.startEncounter('night.defence', { story }); scarred = keep(o); s.bites = (s.bites ?? 0) + (o.stats.taken > 0 ? 1 : 0); }
-      else if (cb && pick === 'run') { scarred = keep(await cb.startEncounter('chase.escape', { story: { poisoned: story.poisoned, hurt: story.hurt } })); }
-      else { const r = await this.tension({ kind: 'breath', count: 6, strain: story.poisoned ? 1.4 : 1 }); scarred = !!r && !r.passed; }
+      else if (cb && pick === 'run') { scarred = keep(await cb.startEncounter('chase.escape', { story: { poisoned: story.poisoned, hurt: story.hurt }, hour: s.timeOfDay })); }
+      else scarred = await this.hide(story.poisoned);
       if (scarred) s.flags.scarred = true;
       this.after(1.2, () => this.playScene([
-        { key: scarred ? 'e1.ni.scar' : 'e1.ni.held', who: 'scientist', shot: () => cover.close(z, 0.35, 0.95), run: () => z.setFace(scarred ? { frown: 0.5, squint: 0.4 } : { smile: 0.2 }), after: 0.6 },
+        { key: scarred ? 'e1.ni.scar' : pick === 'brace' ? 'e1.ni.held' : pick === 'run' ? 'e1.ni.ran' : 'e1.ni.hid', who: 'scientist', shot: () => cover.close(z, 0.35, 0.95), run: () => z.setFace(scarred ? { frown: 0.5, squint: 0.4 } : { smile: 0.2 }), after: 0.6 },
       ], () => { z.setFace(null); done(!scarred); this.dawn(); }));
     }
+  }
+
+  /**
+   * HIDE, acted (owner: "he stands upright in the open grass"): a cut to him down in the ferns behind the lean-to, low
+   * on his heels, folded small, one hand over his mouth; the breathing moment plays while a hound walks across the
+   * dark in front of him, three or four metres out, stopping to sniff. Held, it walks on. Failed, it stops, turns and
+   * comes at him: a hit in the dark, and he is down holding his arm (13+: the hurt is in how he holds himself).
+   * Returns whether he was hurt.
+   */
+  private async hide(poisoned: boolean): Promise<boolean> {
+    const z = this.z, L = this.world.layout!, camp = L.camp as THREE.Vector3, sh = L.shelter as THREE.Vector3;
+    const away = sh.clone().sub(camp).setY(0).normalize();
+    const at = sh.clone().addScaledVector(away, 1.0); at.y = this.world.terrain.height(at.x, at.z);
+    // he faces out into the dark, his back to the lean-to and the fire beyond it
+    const f = away.clone(), l = new THREE.Vector3(f.z, 0, -f.x);
+    const place = () => {
+      const p = this.player; p.pos.copy(at); p.vel.set(0, 0, 0); p.facing = Math.atan2(-f.x, -f.z);
+      z.root.position.copy(at); z.root.rotation.y = Math.atan2(f.x, f.z); z.root.updateMatrixWorld(true);
+      z.setKneel(true, true); z.setLimbs({ bend: 0.75 }); z.setProp(null);
+      z.setFace({ fear: 0.7, squint: 0.2 });
+    };
+    const path = at.clone().addScaledVector(f, 2.8);
+    const p0 = path.clone().addScaledVector(l, 5), p1 = path.clone().addScaledVector(l, -5);
+    const mouth = () => z.lipsAt(new THREE.Vector3()).addScaledVector(f, 0.05).add(new THREE.Vector3(0, -0.02, 0));
+    // over his shoulder, low in the ferns: his back and head dark in the foreground, the path beyond
+    const overShoulder = (): Shot => { const h = new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld); return { from: h.clone().addScaledVector(f, -0.85).addScaledVector(l, -0.45).add(new THREE.Vector3(0, 0.05, 0)), to: path.clone().add(new THREE.Vector3(0, 0.55, 0)), push: 0.02 }; };
+    await new Promise<void>((done) => this.playScene([
+      // the cut: he is already down in the ferns, folding smaller, the hand coming up over his mouth
+      { hold: 1.8, shot: () => { const h = new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld); return { from: h.clone().addScaledVector(f, 0.9).addScaledVector(l, 0.35).add(new THREE.Vector3(0, -0.3, 0)), to: h.clone().add(new THREE.Vector3(0, -0.12, 0)), push: 0.03 }; }, run: () => {
+        place(); audio.human('breath', 0.45);
+        this.after(0.6, () => z.setHold({ L: { at: mouth(), fingers: l.clone().negate().add(new THREE.Vector3(0, 0.3, 0)).normalize(), palm: f.clone().negate() } }));
+        z.setGazeRate(5); z.setLookTarget(p0.clone().add(new THREE.Vector3(0, 0.5, 0)));
+      } },
+    ], () => done()));
+    const hound = createHound(); hound.root.position.copy(p0); this.world.scene.add(hound.root);
+    let mode: 'walk' | 'turn' | 'lunge' | 'gone' = 'walk', u = 0.22, last = performance.now(), run = true;
+    const head = () => new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld);
+    const tick = () => {
+      if (!run) return;
+      const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now;
+      let speed = 0, snarl = 0;
+      if (mode === 'walk') {
+        // walks, stops to sniff twice (0.3 and 0.62 of the way), walks on
+        const sniff = (u > 0.3 && u < 0.36) || (u > 0.62 && u < 0.67);
+        speed = sniff ? 0.02 : 0.85; u = Math.min(1, u + dt * (sniff ? 0.006 : 0.085));
+        const p = p0.clone().lerp(p1, u); p.y = this.world.terrain.height(p.x, p.z);
+        hound.root.position.copy(p); hound.root.rotation.y = Math.atan2(p1.x - p0.x, p1.z - p0.z) + (sniff ? Math.sin(now / 300) * 0.25 : 0);
+        z.setLookTarget(p.clone().add(new THREE.Vector3(0, 0.5, 0)));
+        if (u >= 1) { mode = 'gone'; hound.root.visible = false; }
+      } else if (mode === 'turn') {
+        const d = at.clone().sub(hound.root.position); snarl = 1;
+        hound.root.rotation.y += (Math.atan2(d.x, d.z) - hound.root.rotation.y) * Math.min(1, dt * 6);
+      } else if (mode === 'lunge') {
+        const d = at.clone().sub(hound.root.position).setY(0); snarl = 1; speed = 6;
+        if (d.length() > 0.9) hound.root.position.addScaledVector(d.normalize(), dt * 7);
+      }
+      hound.animate(speed, snarl, now / 1000, dt);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    const os = overShoulder(); this.player.workShot = { from: os.from.clone(), to: os.to.clone() };
+    const r = await this.tension({ kind: 'breath', count: 6, strain: poisoned ? 1.4 : 1 });
+    this.player.workShot = null;
+    const hurt = !!r && !r.passed;
+    const finish = () => { run = false; hound.root.removeFromParent(); z.setHold(null); z.setGazeRate(null); };
+    if (!hurt) {
+      // it has gone on into the dark; he lets the breath out
+      await new Promise<void>((done) => this.playScene([
+        { hold: 2.2, shot: () => overShoulder(), run: () => { if (mode === 'walk') u = Math.max(u, 0.8); this.after(1.2, () => { z.setHold(null); z.setFace({ fear: 0.3 }); audio.human('breath', 0.6); }); } },
+      ], () => done()));
+      finish(); z.setFace(null); z.setLimbs(null);
+      return false;
+    }
+    await new Promise<void>((done) => this.playScene([
+      // it stops, its head comes round to him
+      { hold: 1.3, shot: () => overShoulder(), run: () => { mode = 'turn'; hound.root.visible = true; audio.sample('cb_growl', 0.5); z.setFace({ fear: 1, open: 0.3 }); } },
+      // it comes; black on the hit
+      { hold: 0.9, shot: () => overShoulder(), run: () => { mode = 'lunge'; audio.human('grunt', 0.6); this.after(0.45, () => { this.ui.fade('black', 1, 0.06); audio.sample('cb_crack', 0.4); }); } },
+      // the dark, then he is down on his side of the ferns, holding his forearm, the thing gone
+      { hold: 2.4, shot: () => { const h = head(); return { from: h.clone().addScaledVector(f, 0.85).addScaledVector(l, -0.4).add(new THREE.Vector3(0, -0.15, 0)), to: h.clone().add(new THREE.Vector3(0, -0.2, 0)), push: 0.02 }; }, run: () => {
+        mode = 'gone'; hound.root.visible = false;
+        z.setLimbs({ bend: 0.45 });
+        const arm = new THREE.Vector3().setFromMatrixPosition(z.handR.matrixWorld).lerp(head(), 0.25);
+        z.setHold({ R: { at: head().addScaledVector(f, 0.3).addScaledVector(l, -0.08).add(new THREE.Vector3(0, -0.4, 0)), fingers: l.clone(), palm: new THREE.Vector3(0, 1, 0) }, L: { at: arm, fingers: l.clone().negate(), palm: new THREE.Vector3(0, -1, 0), grasp: true, radius: 0.04 } });
+        z.setFace({ frown: 0.8, squint: 0.8, open: 0.25 });
+        this.ui.fade('black', 0, 0.9); audio.human('breath', 0.7);
+      } },
+    ], () => done()));
+    finish();
+    return true;
   }
 
   /**
@@ -292,7 +383,10 @@ export class FirstNight {
     const z = this.z, s = this.s, camp = this.world.camp;
     this.ui.fade('black', 1, 1.2);
     this.after(1.4, () => {
-      s.timeOfDay = 6.15; s.flags['e1.fireOut'] = true; camp.setFire(1);
+      // first light with the sun just over the hills (at 06:09 the wide shot across the dead fire was black on the GPU)
+      s.timeOfDay = 6.6; s.flags['e1.fireOut'] = true; camp.setFire(1);
+      // the spear lies across his knees (layStick), not also upright in his hand: one spear (owner, dawn clip)
+      const held = z.root.getObjectByName('heldSpear'); if (held) { held.visible = false; this.after(17, () => { held.visible = true; }); }
       const c = this.sitAtFire(), { f, r } = this.axes(c);
       z.setProp(null); z.setLimbs({ bend: 0.35 });
       // the spear across his knees, the point out to his right, blackened

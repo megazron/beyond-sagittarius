@@ -130,9 +130,11 @@ export class LeanTo {
     if (!ok) {
       // the frame goes up facing the wrong way; the wind comes straight in; he turns it
       this.playScene([
-        { hold: 2.4, shot: () => this.wide(4.2, 0.9), run: () => { this.camp.shelterStage(2, false, Math.PI); this.gust(2.6, Math.PI); z.setFace({ squint: 0.6 }); } },
+        // the frame turned the wrong way leans its poles out over where he worked: he stands off to the side of it
+        // (he stood inside the poles with his arms through them: owner, L5 clip)
+        { hold: 2.4, shot: () => this.wide(4.2, 0.9), run: () => { this.camp.shelterStage(2, false, Math.PI); this.stand(this.aside(), this.site().at); this.gust(2.6, Math.PI); z.setFace({ squint: 0.6 }); } },
         { key: 'e1.sh.wind', who: 'scientist', shot: () => cover.close(this.z, 0.45, 1.0), run: () => z.setFace({ frown: 0.4, squint: 0.4 }), after: 0.2 },
-        { hold: 1.8, shot: () => this.wide(4.4, -0.7), run: () => { z.setFace(null); this.camp.shelterStage(2); this.reach(this.site().at.clone().add(new THREE.Vector3(0, 1.2, 0)), 1.6); audio.sample('wood', 0.5, { rate: 0.7 }); } },
+        { hold: 1.8, shot: () => this.wide(4.4, -0.7), run: () => { z.setFace(null); this.camp.shelterStage(2); this.stand(this.site().work, this.site().at); this.reach(this.site().at.clone().add(new THREE.Vector3(0, 1.2, 0)), 1.6); audio.sample('wood', 0.5, { rate: 0.7 }); } },
       ], () => this.thatch(built, 3));
       return;
     }
@@ -157,9 +159,13 @@ export class LeanTo {
     if (!ok) {
       this.camp.shelterStage(row, true);
       this.playScene([
-        { hold: 1.8, shot: () => this.inside(), run: () => { z.setLookTarget(S.at.clone().add(new THREE.Vector3(0, 1.2, 0))); audio.sample('leather', 0.2); } },
+        { hold: 2.0, shot: () => this.inside(), run: () => {
+          const under = S.at.clone().addScaledVector(S.open, -0.35); under.y = this.world.terrain.height(under.x, under.z);
+          this.stand(under, under.clone().addScaledVector(S.open, 1));
+          z.setKneel(true, true); z.setLookTarget(S.at.clone().addScaledVector(S.open, -0.7).add(new THREE.Vector3(0, 1.3, 0))); audio.sample('leather', 0.2);
+        } },
         { key: 'e1.sh.thin', who: 'scientist', shot: () => cover.close(z, -0.4, 1.0), run: () => z.setFace({ squint: 0.3, smile: 0.15 }), after: 0.3 },
-      ], () => { z.setFace(null); this.thatch(built, row); });
+      ], () => { z.setFace(null); z.setKneel(false); this.stand(S.work, S.at); this.thatch(built, row); });
       return;
     }
     this.camp.shelterStage(row);
@@ -170,10 +176,16 @@ export class LeanTo {
     this.sit(built);
   }
 
-  /** From inside, looking up at the roof from under it: the light comes through a thin row. */
+  /** Above the roof and off to one side, looking down through the thin row: the gaps show the ground and him under it,
+   * kneeling, looking up at them. (From under the roof looking up, the lens saw only blown-out sky: owner, L5.) */
   private inside(): Shot {
-    const S = this.site(), at = S.at.clone().addScaledVector(S.open, -0.5).add(new THREE.Vector3(0, 0.5, 0));
-    return { from: at, to: at.clone().addScaledVector(S.open, -0.8).add(new THREE.Vector3(0, 0.9, 0)), push: 0.01 };
+    const S = this.site(), aim = S.at.clone().addScaledVector(S.open, -0.55).add(new THREE.Vector3(0, 0.7, 0));
+    return { from: aim.clone().addScaledVector(S.open, 1.9).addScaledVector(S.r, 1.5).add(new THREE.Vector3(0, 1.9, 0)), to: aim, push: 0.01 };
+  }
+  /** Beside the frame, clear of its poles whichever way it is turned. */
+  private aside() {
+    const S = this.site(), p = S.at.clone().addScaledVector(S.r, 2.2).addScaledVector(S.open, 0.9); p.y = this.world.terrain.height(p.x, p.z);
+    return p;
   }
 
   /** He sits in it and does not move: five seconds of nothing but the place. */

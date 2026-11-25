@@ -67,7 +67,7 @@ def step(name):
 step('title to creator'); ev("document.getElementById('btn-new').click()"); wait("document.getElementById('nm-ok')",10); time.sleep(2)
 step('creator to narrator'); ev("document.getElementById('nm-ok').click()"); wait("__bs.state==='narrator'&&__bs.vault.playing",30); time.sleep(5)
 step('narrator to cinematic'); ev("__bs.skip()"); wait("__bs.state==='cinematic'",30); time.sleep(3)
-step('deck scene'); ev("__bs.cineSeek(33.45)"); time.sleep(6)
+step('deck scene'); ev("__bs.cineSeek(14.1)"); time.sleep(6)
 step('deck to event'); ev("__bs.skip()"); time.sleep(4)
 step('cinematic to film'); ev("__bs.skip()"); wait("__bs.state==='film'",30); time.sleep(3)
 step('film to wake'); ev("__bs.skip()"); wait("__bs.mode==='wake'",60); time.sleep(4)

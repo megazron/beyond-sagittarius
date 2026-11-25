@@ -6,6 +6,50 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## Departure lounge (Scene 1) (2026-11-24, cabin agent, branch cabin3)
+- The friends' talk now plays in the passenger lounge while the liner is still docked at Earth (owner's design doc,
+  Scene 1): `src/cinematic/scenes.ts` `departScene` (shots L1 to L18 of `~/bs-story/SHOTLIST_departure_lounge.md`),
+  started by `cinematic.ts` `holdDepart()` at 14.2 s; the liner leaves after it. The old deck chat (`deckScene`, op.1
+  to op.16, j.1-3, j.9) is gone; the journey cuts at 33.45 s straight to the pull's A1 (S = 39).
+- The lounge is the deck shell dressed in `ship.ts` `createInterior`: `lounge` (two sofas, table, cups, bag, runner;
+  visible only in the departure), end bulkheads with the aft hatch and ceiling strips (always), `stripLight` and
+  `earthLight` (departure only), the mission text on the holo (`display`), the departure marks (`seats`).
+- `cutscene.ts`: `Shot.fov` (a lens per set-up, the scene's own restored at the end) and `Beat.tick(t)` (a look that
+  moves on within a line). New lines dep.1 to dep.10 (en/hi/ur takes, dep.5~f).
+- Nuvexa's sweater and the authored selfie came to main with life-wip. Measured in the deck's 8 views at 1 to 2 m
+  (flag pixels per view, a98ead4 -> life-wip build): skin through cloth standing 1407 -> 25, selfie 2244 -> 397, argue
+  2840 -> 119; seated 519 -> 596 (worse, small). Probe: ~/bs-cap/cabin/nv_probe.py.
+
+## Episode One scene polish (2026-11-24 night, ep1 agent: worktree ~/bs-ep1, branch ep1polish)
+- Fixes for the owner's notes on the life_landed clips, in his order. Knapping (game/knap.ts): he sits back on his
+  heels (setKneel(true, true), bend 0.5); each cobble is taken into his left hand at a work spot 30 cm in front of his
+  knees and 27 cm up, struck by the hammerstone in his right hand (driven every frame: lift, fast swing, contact,
+  bounce); shots `handShot` (hands and stone, 0.45 m insert to 1.1 m medium) and `faceShot` (from below his brow). The
+  flake drops in front of his knees with an insert on it. Studio probe (~/bs-cap/ep1/probe/reach.js): kneeling upright
+  the wrist cannot go below 33 cm; sat back with bend 0.7 it reaches 14 cm at 25 cm out.
+- Hand drill (game/drill.ts): the board 30 cm in front of his knees (was 55 cm, out of reach), faster rub (22 rad/s,
+  4.5 cm each way) with a flick back to the top, a banded spindle so the turn reads, smoke that builds (soft sprites)
+  and black dust in the notch, a notch insert with the ember, face shots from below. Work light mostly warm white.
+- Night (game/night.ts): `hide()` acts the hide (cut to him down behind the lean-to, a hound walks past 3.4 m out
+  while the breath moment plays; a failed breath: it turns and comes, black on the hit, he is down holding his arm).
+  The line after the night is `e1.ni.held` for brace, `e1.ni.ran` for run, `e1.ni.hid` for hide (en/hi/ur, voiced).
+  The chase gets `hour: s.timeOfDay` (it started at its own 18.7, a sunset sky in the middle of the night). Dawn at
+  06:36 (06:09 was black on the GPU), the held spear hidden while the one across his knees shows.
+- world/cobble.ts (river cobbles, shared with knap.ts) makes the fire ring (the lavender dodecahedra read as gems);
+  world/fruit.ts is the red fruit (a 7 cm ribbed pod, on the bush and in his hand; it was an 18 cm glowing ball).
+- Leaf cup sip (waking.ts sipLeaf), fruit test: smell, skin, lip, a tiny bite, wait, spit. Planting: tried kneeling for the task (studio
+  look: kneeling, the hand still hung in the air, not on the soil); reverted, not fixed. Lean-to (lean.ts): thin-thatch shot from above looking down
+  through the row (was blown-out sky), he stands clear of the frame when it is turned the wrong way, the frame's
+  back blocks from the pole stage on. The pull's break-up hides the ship's hatch parts (userData.hatchPart) and the
+  sun there is whiter.
+- Seen on the GPU (clips in Downloads/BS_Game_v1.1/ep1_polish, NOTES.md there): knapping hands, hammer and core in
+  shot, face shots from below read; his coat lying forward over his knees still crosses the hand shots as a white
+  slab. The hand drill still does not read as a drill: smoke, the notch insert and the ember read, his palms on the
+  spindle do not (hidden by his body in every angle tried). Hide reads as hiding. Run keeps the night sky. Lean-to
+  thin-row shot has no sky. Ring cobbles are rounded now; tinted warmer after the last spear take.
+- Captures: ~/bs-cap/ep1/round.sh PLAN... (build dist-ep1, preview 4621, cap1.sh per plan, join). Plans
+  ~/bs-cap/plan_ep1A/B/C.json.
+
 ## Cinema mode for trailers and screenshots (2026-11-24, trailer agent)
 - `?cinema=1` or `__bs.cinema(true)`: every page element but the 3D canvas is hidden (HUD, minimap, hints, prompts,
   subtitles, menus, letterbox bars, fades, toasts, the fight HUD) and so is the cursor. `__bs.cinemaOn` reads it. The world's hint rings (meshes named `ring`: items and build
@@ -2021,3 +2065,28 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   jump, sprint; limp; held arms as Limbs, which give way to combat's every frame), first-aid `first` tasks in kit.ts.
 - Test: `tools/landing_smoke.py` (CI job landing_smoke). Dev page: `dev/arrival.html?id=explorer` (vite), seekable.
 - GPU takes: `~/bs-cap/land1/` (`capture.sh`, `plan.json`); clips in `Downloads/BS_Game_v1.1/landings_v1/` with notes.
+
+## 2026-11-25 ~01:20 gate agent: state at handover (NOTHING LANDED by me)
+- DETERMINISM PROVEN: gate2 f371807, perf_gate run three times on CI (jobs 138875721025, 138886376954, 138895892427):
+  all 27 spot rows identical to the triangle; the same as gate2 4b5d98e's run and the laptop's full Mobile run.
+- CONTENT CHECKS (ebf0ef5, coordinator's request after 7cda35d): __bs.shaderErrors() (programs with three's diagnostics
+  runnable false, ?shadercheck=1), body floors (bazaar 2, crowd 6, gate 8, elsewhere 1), a black-frame check (mean
+  brightness under 6 of 255, read in the drawing's own animation frame). On 7cda35d plus the hooks it fails: five
+  programs that did not link plus the fragment shader error. The body count does NOT see it (7 at the crowd): a body is
+  counted in onBeforeRender, linked or not, and three counts its triangles too.
+- BLOCKER, REAL, NOT RAISED: Mobile gate 151 draw calls (budget 145) on gate3 ebf0ef5 (= main 37b105a + gate):
+  calls each of the four frames [117, 117, 151, 117]. 151 is the frame the phones' static sun shadow is redrawn
+  (city.ts: due when the camera has gone 9 m, every 300 ticks, and every 45 in the first 900). In that frame the shadow
+  pass draws bodies (S BODY/crew/hips x5, hips [skin] x4, head x3) and a phone prop (S ownPhone x4), though city.ts says
+  nothing that moves casts a shadow on phones. Likely sources (not verified one by one): character.ts showProp makes a
+  prop with castShadow = true and pickLod never switches props; Away.enter sets castShadow on every mesh of your body.
+  A frozen shadow of a moving body would also show on the ground until the next redraw (not checked on a GPU). The old
+  gate missed this frame (main 37b105a read 117). cabin's b38edf4 (no phone in a selfie hand) takes the ownPhone draws
+  (6 main + 4 shadow) off: with it the gate would read about 141 (not measured).
+- gate3 ebf0ef5 also failed traffic_smoke ("row: a car overlapped a person 6 times" at 11.5, 171.7) and combat's bow
+  arms (2.6 cm vs 2 cm, the gate the boarding agent saw read 0.1 to 5.5 cm): neither is on the rerun list, my change
+  does not touch them (the hooks do nothing unless perf_gate calls holdAtArrival). main 37b105a's own run failed levels_smoke.
+- STACK (each on the one before, all rebased, typecheck ok, not landed): gate1/gate3 ebf0ef5 -> modal-land2 4a0f6e4 ->
+  intro4 862f0b1 -> land4 (= land3: arrivals + landing_smoke wake fixes; away.ts conflict resolved: Away.entered() is
+  called at the end of enter, after the arrival is set up) 551b0f6 -> cabin5 (lipsync.json merged, mz.intro.2 kept from
+  intro) b38edf4 + this note. ~/bs-story/DECISIONS.md cabin rows renumbered C1-C5.
