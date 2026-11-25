@@ -145,16 +145,17 @@ with sync_playwright() as pw:
                 if not still: raise NotSettled(f'a frozen frame still changed after 40 draws: {prev} then {cur}')
                 pending = [w for w in page.evaluate('__bs.settled()')]
                 if pending: raise NotSettled('; '.join(pending))
-                page.evaluate(TOP_ON); r = {'calls': 0, 'tris': 0, 'bodies': 0, 'skinned': 0}; top = []; topc = []
+                page.evaluate(TOP_ON); r = {'calls': 0, 'tris': 0, 'bodies': 0, 'skinned': 0}; top = []; topc = []; each = []
                 for _ in range(4):
                     p = step(1 / 30, dl, ticking=True); t = page.evaluate(TOP_TAKE)
                     for k in r: r[k] = max(r[k], p[k])
+                    each.append(p['calls'])
                     if p['tris'] >= r['tris']: top = t['tris']
                     if p['calls'] >= r['calls']: topc = t['calls']
                 page.evaluate(TOP_OFF)
             except NotSettled as e:
                 fails.append(f"{q} {name}: did not settle in {a.settle:.0f} s ({e})"); print(fails[-1], flush=True); continue
-            st = {'clock': round(page.evaluate('__bs.clock'), 3), 'secs': round(time.time() - t0, 1), 'frozen': nf + 1}
+            st = {'clock': round(page.evaluate('__bs.clock'), 3), 'secs': round(time.time() - t0, 1), 'frozen': nf + 1, 'calls each': each}
             print(q, name, 'settled', st, flush=True)
             rows[name] = r
             print(q, name, r, flush=True)
