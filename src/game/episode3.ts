@@ -1179,7 +1179,10 @@ export class Episode3 extends Episode2 {
     const me = this.player.pos, t = performance.now() / 1000;
     this.band.forEach((fig, i) => {
       const sp = this.bandSpots[i];
-      fig.root.visible = !!sp && sp.at.distanceTo(me) < 90;
+      // nobody of the band stands where a scene is played round him or Hoh-Ma and Wen-Ka (the still of the dose scene had one
+      // standing in the middle of it): they step back out of the way, i.e. are not drawn there
+      const fs = this.folkSpots, clash = !!sp && (sp.at.distanceTo(me) < 2.4 || (!!fs && (sp.at.distanceTo(fs.hohma.at) < 1.6 || sp.at.distanceTo(fs.wenka.at) < 1.6)));
+      fig.root.visible = !!sp && !clash && sp.at.distanceTo(me) < 90;
       if (!fig.root.visible || !sp) return;
       fig.root.position.copy(sp.at); fig.root.rotation.y = sp.yaw; fig.root.updateMatrixWorld();
       fig.setKneel(sp.kneel, sp.heels);
@@ -1672,9 +1675,10 @@ export class Episode3 extends Episode2 {
       { hold: 3.2, shot: () => ({ from: mat.clone().addScaledVector(out, 3.3).addScaledVector(d, 0.9).add(v3(0, 1.45, 0)), to: mat.clone().addScaledVector(out, 0.35).add(v3(0, 0.3, 0)), fov: 42, push: 0.02 }), run: () => {
         holdComb(); F.wenka.setLookTarget(this.head()); F.hohma.setLookTarget(foot); z.setLookTarget(boy()); F.wenka.setFace({ frown: 0.5, squint: 0.4 });
       } },
-      { key: 'e3.ds.1', who: 'hohma' as Who, shot: () => this.oomClose(F.hohma, 0.4, 1.0), run: () => { F.hohma.setLookTarget(this.head()); } },
+      // her close from in front of her (from the mat's side), not from the way the body's yaw says she faces
+      { key: 'e3.ds.1', who: 'hohma' as Who, shot: () => { const hh = F.hohma.head.getWorldPosition(new THREE.Vector3()), dm = me.clone().sub(hm).setY(0).normalize(), sd = v3(dm.z, 0, -dm.x); return { from: hh.clone().addScaledVector(dm, 0.95).addScaledVector(sd, 0.3).add(v3(0, 0.12, 0)), to: hh.clone().add(v3(0, -0.06, 0)), fov: 40, push: 0.01 }; }, run: () => { F.hohma.setLookTarget(this.head()); } },
       // the comb in her hands from above and in front of her (the camera stood inside her body in the GPU take)
-      { hold: 2.6, shot: () => { const away = held.clone().sub(hm).setY(0).normalize(); return { from: held.clone().addScaledVector(away, 0.22).addScaledVector(r, 0.08).add(v3(0, 0.42, 0)), to: held.clone().add(v3(0, 0.01, 0)), fov: 30, push: 0.006, aperture: 0.004, lightAt: held.clone().add(v3(0, 0.15, 0)), lightScale: 0.6 }; }, run: () => z.setLookTarget(held) },
+      { hold: 2.6, shot: () => { const away = held.clone().sub(hm).setY(0).normalize(), sd = v3(away.z, 0, -away.x); return { from: held.clone().addScaledVector(away, 0.3).addScaledVector(sd, 0.25).add(v3(0, 0.2, 0)), to: held.clone().add(v3(0, 0.01, 0)), fov: 30, push: 0.006, aperture: 0.004, lightAt: held.clone().add(v3(0, 0.15, 0)), lightScale: 0.6 }; }, run: () => z.setLookTarget(held) },
       { key: 'e3.ds.2', who: 'scientist', shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => { z.setLookTarget(boy()); z.setFace({ frown: 0.3 }); } },
       { hold: 1.2, shot: () => cover.close(z, 0.45, 1.1, 0.24), run: () => z.setLookTarget(held) },
       { choice: 'e3.dose', shot: () => cover.close(z, 0.45, 1.1, 0.24) },
