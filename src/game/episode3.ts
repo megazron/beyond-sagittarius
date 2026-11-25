@@ -1382,7 +1382,7 @@ export class Episode3 extends Episode2 {
   private update18() {
     if (!this.f('e3.l18.intro')) { this.intro18(); return; }
     if (isDiscovered(this.s, 'remedy') && !this.f('e3.boiled')) { this.set('e3.boiled'); return; }
-    if (this.f('e3.boiled') && !this.f('e3.doseDone')) { const c = this.fennAt(), p = this.player.pos; if (Math.hypot(p.x - c.x, p.z - c.z) < 6) this.doseScene(); }
+    if (this.f('e3.boiled') && !this.f('e3.doseDone')) { const c = this.fennAt(), p = this.player.pos; if (Math.hypot(p.x - c.x, p.z - c.z) < 8) this.doseScene(); }
   }
 
   /** Day 26: the wound has gone bad. Red lines up the inside of his arm, a fever; Oom-Sa sees it and runs to her people. */
@@ -1413,7 +1413,7 @@ export class Episode3 extends Episode2 {
       if (oom) {
         beats.push(
           { hold: 2.6, shot: () => this.oomClose(oom, 0.4, 1.1), run: () => { this.actors['local'] = oom; this.npcs.pin('local', her, Math.atan2(me.x - her.x, me.z - her.z)); oom.setLookTarget(w); z.setLookTarget(oom.root.position.clone().add(v3(0, 1.0, 0))); } },
-          { hold: 2.2, shot: () => this.wide(me, 6.0, -0.5, 1.0), run: () => { const c = this.fennAt(); this.npcs.pin('local', null, 0, c.setY(this.h(c.x, c.z))); oom.setLookTarget(null); this.set('e3.oomSaw'); } },
+          { hold: 2.2, shot: () => this.wide(me, 6.0, -0.5, 1.0), run: () => { const { c, d, t: tn } = this.fennAxes(); const at = c.clone().addScaledVector(d, 2.2).addScaledVector(tn, 2.6); this.npcs.pin('local', null, 0, at.setY(this.h(at.x, at.z))); oom.setLookTarget(null); this.set('e3.oomSaw'); } }, // beside the shelters, not on the camp's middle (the marker: walking there opened her talk instead of the scene)
         );
       }
       // the lichen: a magenta crust on the north side of a wall post, scraped off with his thumbnail into his palm (the
