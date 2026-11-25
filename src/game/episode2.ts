@@ -204,6 +204,8 @@ export class Episode2 {
   }
   /** Low and close on what his hands do at `at`, from his right and in front, his face at the top of frame. */
   private handShot(at: THREE.Vector3, dist = 0.9, side = 1): Shot {
+    // far enough out that his face stays in frame (closer, the cutscene re-aims at his head and the shot looks up into the sky)
+    dist = Math.max(dist, 1.15);
     const f = this.fwd(), r = this.right(f).multiplyScalar(side), hd = this.head();
     // the side away from the fire
     if (r.dot(at.clone().sub(this.L.camp)) < 0) r.negate();
@@ -608,7 +610,7 @@ export class Episode2 {
     const pyr = this.mesh(new THREE.DodecahedronGeometry(0.03, 0), std(0xc9a640, { metalness: 0.8, roughness: 0.35 }), hands.clone());
     this.scene([
       { key: 'e2.py.1', who: OOM, shot: () => cover.two(z, oom, 2.8), run: () => { oom.setLookTarget(this.head()); } },
-      { hold: 2.4, shot: () => { const ax = her.clone().sub(me).setY(0).normalize(), side = v3(ax.z, 0, -ax.x); return { from: hands.clone().addScaledVector(side, 0.6).addScaledVector(ax, -0.15).add(v3(0, 0.25, 0)), to: hands, push: 0.01, aperture: 0.005 }; }, run: () => {
+      { hold: 2.4, shot: () => cover.two(z, oom, 2.4), run: () => {
         oom.setHold({ R: { at: hands.clone().add(v3(0.03, 0, 0)), fingers: v3(0, 0, 1), palm: v3(-1, 0, 0), radius: 0.02, grasp: true }, L: { at: hands.clone().add(v3(-0.04, 0, 0)), fingers: v3(0, 0, 1), palm: v3(1, 0, 0), radius: 0.02, grasp: true } });
         for (let i = 0; i < 3; i++) this.after(0.4 + i * 0.6, () => { this.sparks(hands); audio.sample('flint', 0.5); });
       } },
@@ -662,7 +664,7 @@ export class Episode2 {
     if (this.shelterBuilt) return;
     this.shelterBuilt = true;
     const S = this.shelter(), g = new THREE.Group(), back = v3(Math.sin(S.facing), 0, Math.cos(S.facing)), side = this.right(back);
-    const rockM = std(0x6b625a, { roughness: 0.95 }), sootM = std(0x2b2622, { roughness: 1 });
+    const rockM = std(0x4e4740, { roughness: 0.97 }), sootM = std(0x2b2622, { roughness: 1 });
     // the back wall and two shoulders, the overhang roof leaning out over the floor
     // a cliff face of layered rock (a displaced box, its front face square to the floor), two fallen blocks either side,
     // and a thick ledge leaning out over the floor: the roof, sooted underneath
@@ -939,16 +941,19 @@ const HAND_TEX = new Map<number, THREE.Texture>();
 function handTex(n: number) {
   let tx = HAND_TEX.get(n);
   if (tx) return tx;
-  const S = 64, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  // a negative hand, as the oldest ones are made: ochre blown round a hand pressed to the rock, the hand left bare
+  const S = 128, cv = document.createElement('canvas'); cv.width = cv.height = S;
   const g = cv.getContext('2d')!;
-  g.fillStyle = 'rgba(160,48,26,0.92)';
-  g.beginPath(); g.ellipse(S / 2, S * 0.66, S * 0.17, S * 0.2, 0, 0, Math.PI * 2); g.fill();
-  const spread = n === 5 ? [-0.62, -0.3, -0.05, 0.2, 0.45] : [-0.4, -0.12, 0.15, 0.42];
-  spread.forEach((a, i) => {
-    const thumb = n === 5 && i === 0, len = thumb ? 0.2 : 0.3 - Math.abs(a) * 0.08;
-    g.save(); g.translate(S / 2, S * 0.6); g.rotate(thumb ? -1.1 : a * 0.6);
-    g.beginPath(); g.ellipse(0, -S * (0.12 + len / 2), S * 0.045, S * len / 2, 0, 0, Math.PI * 2); g.fill(); g.restore();
-  });
+  const halo = g.createRadialGradient(S / 2, S * 0.55, S * 0.1, S / 2, S * 0.55, S * 0.5);
+  halo.addColorStop(0, 'rgba(150,40,22,0.95)'); halo.addColorStop(0.7, 'rgba(150,40,22,0.6)'); halo.addColorStop(1, 'rgba(150,40,22,0)');
+  g.fillStyle = halo; g.fillRect(0, 0, S, S);
+  g.globalCompositeOperation = 'destination-out'; g.fillStyle = '#000';
+  const pill = (x: number, y: number, w: number, h: number, a: number) => { g.save(); g.translate(x, y); g.rotate(a); g.beginPath(); g.roundRect(-w / 2, -h, w, h, w / 2); g.fill(); g.restore(); };
+  g.beginPath(); g.roundRect(S * 0.36, S * 0.5, S * 0.28, S * 0.3, S * 0.08); g.fill(); // the palm
+  const fingers = n === 5 ? [[-0.1, 0.24, -0.18], [-0.03, 0.29, -0.06], [0.04, 0.3, 0.03], [0.1, 0.26, 0.13]] : [[-0.08, 0.22, -0.2], [0, 0.27, -0.03], [0.08, 0.24, 0.14]];
+  for (const [dx, len, a] of fingers) pill(S * (0.5 + dx), S * 0.53, S * 0.065, S * len, a);
+  pill(S * 0.37, S * 0.68, S * 0.07, S * (n === 5 ? 0.2 : 0.14), -1.05); // the thumb
+  g.globalCompositeOperation = 'source-over';
   tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
   HAND_TEX.set(n, tx);
   return tx;
