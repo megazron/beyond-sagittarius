@@ -361,7 +361,8 @@ export class Episode2 {
       pose(hip, level);
       const tip = () => sp.position.clone().addScaledVector(level, 1.86);
       this.scene([
-        { hold: 2.6, shot: () => this.handShot(tip(), 0.9), run: () => { z.setLookTarget(tip()); } },
+        // an insert on the new head, from the side (from in front, the log stood between the lens and the point)
+        { hold: 2.6, shot: () => ({ from: tip().addScaledVector(r, 0.7).add(v3(0, 0.12, 0)), to: tip().addScaledVector(level, -0.12), push: 0.02, aperture: 0.004, fov: 35, lightAt: tip() }), run: () => { z.setLookTarget(tip()); } },
         { hold: 2.0, shot: () => this.wide(at, 3.4, 0.8, 0.5), run: () => {
           z.setLookTarget(log.position);
           this.anim(1.6, (k) => {
@@ -371,7 +372,7 @@ export class Episode2 {
           });
           this.after(1.2, () => audio.sample('cb_crack', 0.35));
         } },
-        { key: 'e2.hf.ok', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => { z.setFace({ smile: 0.25 }); pose(hip, level); } },
+        { key: 'e2.hf.ok', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => { z.setFace({ smile: 0.25 }); pose(hip, level); z.setLookTarget(this.ahead()); } }, // (still on the log, his head was bowed and the close-up saw his hair)
       ], () => { log.removeFromParent(); sp.removeFromParent(); this.clearHands(); this.set('inv.haft'); this.set('inv.hafting'); this.ui.toast(t('e2.learn.haft')); card(); });
       return true;
     }
@@ -446,7 +447,8 @@ export class Episode2 {
       const bowG = new THREE.TorusGeometry(0.3, 0.008, 5, 18, Math.PI * 0.55);
       const bow = keep(this.mesh(bowG, std(0x6a4c30), notch.clone().add(v3(0, 0.15, 0))));
       const cordM = keep(this.mesh(new THREE.CylinderGeometry(0.002, 0.002, 0.5, 4).rotateZ(Math.PI / 2), std(0xc8b48a), notch.clone().add(v3(0, 0.14, 0))));
-      beats.push({ hold: 3.8, shot: () => this.handShot(notch.clone().add(v3(0, 0.12, 0)), 0.85, -1), run: () => {
+      // aimed between his hands (the socket stone at 0.37 m, the bow hand at 0.16): at 0.12 the hands were out of the top of frame
+      beats.push({ hold: 3.8, shot: () => this.handShot(notch.clone().add(v3(0, 0.26, 0)), 0.85, -1), run: () => {
         z.setLookTarget(notch);
         this.anim(3.8, (k) => {
           const w = Math.sin(k * 5.5) * 0.18, hand = notch.clone().add(v3(0, 0.14, 0)).addScaledVector(r, 0.2 + w).addScaledVector(f, -0.02);
