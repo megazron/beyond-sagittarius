@@ -376,9 +376,9 @@ export class Episode3 extends Episode2 {
     if (!this.owns(this.s.level) || this.s.level === 19) return null;
     const me = this.z.root.position.clone(), f = this.fwd(), r = this.right(f), kneel = this.z.kneeling > 0.5;
     const hands = me.clone().addScaledVector(f, 0.4).add(v3(0, kneel ? 0.45 : 0.85, 0));
-    const from = me.clone().addScaledVector(f, 1.25).addScaledVector(r, 0.55).add(v3(0, kneel ? 1.05 : 1.55, 0));
+    const from = me.clone().addScaledVector(f, 1.75).addScaledVector(r, 0.75).add(v3(0, kneel ? 1.3 : 1.75, 0));
     from.y = Math.max(from.y, this.h(from.x, from.z) + 0.5);
-    return { from, to: hands.lerp(this.head(), 0.35) };
+    return { from, to: hands.lerp(this.head(), 0.5) };
   }
   override beforeCraft(n: TechNode, open: () => void): boolean {
     if (!this.owns(this.s.level)) return false;
