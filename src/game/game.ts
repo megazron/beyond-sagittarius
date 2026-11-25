@@ -15,7 +15,8 @@ import { Story, Action, LAST_LEVEL } from './story';
 import { Craft } from './tech/craft';
 import { Dialogue, DlgTree } from './dialogue';
 import type { TechNode } from './tech/data';
-import { CH2_LAST } from './tech/data';
+import { CH2_LAST, TECH_BY_ID } from './tech/data';
+import { Episode2 } from './episode2';
 import { recordDiscovery } from './tech/tech';
 import { showDiscovery } from '../ui/science';
 import type { Player } from './player';
@@ -159,8 +160,15 @@ export class Game {
     this.craft.onFail = () => {
       const c = (this.save.crafts ??= { failed: 0 });
       c.failed++;
+      const d = this.craft.debug();
+      // Episode Two: his own line says what went wrong (the real failure of that step); elsewhere MegaZroN mocks
+      if (d && this.ep2.craftFailed(d.id, d.step)) return;
       this.ui.say(`fail.${(this.fails++ % 4) + 1}`, 'mz.name', 3.5);
     };
+    this.ep2 = new Episode2(world, player, ui, this.story.npcs, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn),
+      (spec) => this.combat?.tension(spec) ?? null, () => this.combat, () => this.mode === 'play' && this.canFight() && !this.combat?.encounter && !this.combat?.engaged,
+      (id, then) => this.discoverNow(id, then));
+    this.story.ch2.ep2 = this.ep2;
     // the dead stop talking, wherever the line comes from
     ui.sayFilter = (key, who) => {
       const id = /^crew\.(\w+)\.name$/.exec(who ?? '')?.[1];
@@ -187,7 +195,7 @@ export class Game {
       branch: this.sceneBranch,
       camera: this.player.camera,
       scene: this.world.scene,
-      actors: { scientist: this.player.model, explorer: this.world.explorer },
+      actors: { scientist: this.player.model, explorer: this.world.explorer, ...this.ep2?.actors },
       subtitle: (k, sp) => this.ui.subtitle(k, sp),
       cameraOk: (p) => !this.world.forest.blocks(p.x, p.z, 0.5) && p.y > this.world.terrain.height(p.x, p.z) + 0.35,
       lineBlocked: (from, to) => {
@@ -241,6 +249,12 @@ export class Game {
 
   startCraft(n: TechNode) {
     if (this.mode !== 'play') return;
+    // Episode Two: the work in his hands first, then the panel
+    if (this.ep2.beforeCraft(n, () => this.openCraft(n))) return;
+    this.openCraft(n);
+  }
+  private openCraft(n: TechNode) {
+    if (this.mode !== 'play') return;
     this.enterPanel('craft');
     // Bolzar's favour covers one build, start to finish
     this.craft.sure = !!this.save.favours?.sure;
@@ -254,10 +268,29 @@ export class Game {
     for (const k in n.ingredients) s.inventory[k] = Math.max(0, (s.inventory[k] ?? 0) - n.ingredients[k]);
     for (const k in n.yields) s.inventory[k] = (s.inventory[k] ?? 0) + n.yields[k];
     this.ui.setInventory(s.inventory, this.story.tools());
+    // Episode Two's pottery: the pots are made, and found good only when they come out of the fire (episode2.ts dawn)
+    if (this.ep2.owns(s.level) && n.id === 'pottery') { this.persist(); this.leavePanel(); this.ep2.crafted(n, () => {}); return; }
     const first = recordDiscovery(s, n.id);
     this.persist();
+    if (first && this.ep2.owns(s.level)) { this.leavePanel(); if (this.ep2.crafted(n, () => this.discoverCard(n))) return; this.discoverCard(n); return; }
     if (!first) { this.ui.toast(t('msg.madeMore', { name: t(`tech.${n.id}`) })); this.leavePanel(); return; }
     showDiscovery(n, () => { this.leavePanel(); this.story.ch2.afterDiscovery(n); });
+  }
+
+  /** Episode Two (levels 11 to 14). */
+  ep2!: Episode2;
+  /** The discovery card outside the craft panel (Episode Two shows it after the scene that makes the thing). */
+  private discoverCard(n: TechNode, then?: () => void) {
+    if (this.mode !== 'play') { this.after(0.5, () => this.discoverCard(n, then)); return; }
+    this.enterPanel('talk');
+    showDiscovery(n, () => { this.leavePanel(); then?.(); this.story.ch2.afterDiscovery(n); });
+  }
+  private discoverNow(id: string, then: () => void) {
+    const n = TECH_BY_ID[id];
+    if (!n) { then(); return; }
+    recordDiscovery(this.save, id);
+    this.persist();
+    this.discoverCard(n, then);
   }
 
   /** Accessibility setting: choices wait for the player. */

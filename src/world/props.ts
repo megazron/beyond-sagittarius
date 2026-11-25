@@ -8,10 +8,10 @@ import { Terrain, LAKE } from './terrain';
 import type { Forest } from './forest';
 
 export type ItemType = 'stone' | 'branch' | 'fruit' | 'redFruit' | 'tinder' | 'frond' | 'flint' | 'vine' | 'scrap'
-  | 'nodule' | 'fibre' | 'clay' | 'sand' | 'limestone' | 'brine' | 'ash' | 'oilnut' | 'sugarpod' | 'lichen';
+  | 'nodule' | 'fibre' | 'clay' | 'sand' | 'limestone' | 'brine' | 'ash' | 'oilnut' | 'sugarpod' | 'lichen' | 'resin';
 
 /** Item types that go straight into the inventory when picked up. */
-export const PICKABLE = new Set<ItemType>(['stone', 'branch', 'tinder', 'frond', 'flint', 'vine', 'scrap', 'nodule', 'fibre', 'clay', 'sand', 'limestone', 'brine', 'ash', 'oilnut', 'sugarpod', 'lichen']);
+export const PICKABLE = new Set<ItemType>(['stone', 'branch', 'tinder', 'frond', 'flint', 'vine', 'scrap', 'nodule', 'fibre', 'clay', 'sand', 'limestone', 'brine', 'ash', 'oilnut', 'sugarpod', 'lichen', 'resin']);
 
 /** Story locations the items are scattered around (see world/story.ts). */
 export interface ItemSites { camp: { x: number; z: number }; pod2: { x: number; z: number }; pod: { x: number; z: number } }

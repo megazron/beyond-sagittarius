@@ -10,6 +10,7 @@ carry it); tools/story_check.py reads it through unseal() below.
   python3 tools/story_seal.py open  OUT.json    write the plain data to OUT.json (keep it outside the repo)
   python3 tools/story_seal.py seal  IN.json     seal IN.json into src/game/branch/episode1.sealed
   python3 tools/story_seal.py check             the sealed file decodes, and the TypeScript decoder agrees
+  --file src/game/branch/episode2.sealed        (after the command) work on another sealed file
 """
 import base64
 import hashlib
@@ -55,6 +56,11 @@ def load() -> object:
 
 
 def main():
+    global SEALED
+    if '--file' in sys.argv:
+        i = sys.argv.index('--file')
+        SEALED = (ROOT / sys.argv[i + 1]).resolve()
+        del sys.argv[i:i + 2]
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(2)
@@ -70,7 +76,7 @@ def main():
     elif cmd == 'check':
         import subprocess
         data = load()
-        js = subprocess.run(['node', '--experimental-strip-types', str(ROOT / 'tools/story_seal_check.ts')],
+        js = subprocess.run(['node', '--experimental-strip-types', str(ROOT / 'tools/story_seal_check.ts'), str(SEALED)],
                             capture_output=True, text=True, cwd=ROOT)
         if js.returncode != 0:
             sys.exit('sealed.ts failed: ' + js.stderr[-800:])

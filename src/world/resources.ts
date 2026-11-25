@@ -30,6 +30,7 @@ export function addResources(items: Item[], group: THREE.Group, terrain: Terrain
     lime: mat(0xd6d2c2), brine: mat(0x8fc8c8, { roughness: 0.15, metalness: 0.1 }), salt: mat(0xf2f0ea), reed: mat(0xa89a4c),
     ash: mat(0x8c8c90), oil: mat(0x6a4a24, { roughness: 0.4 }), pod: mat(0xe0a030, { emissive: 0x402000 }), lichen: mat(0xa03a6a),
     stone: mat(0x8a8494), wood: mat(0x5a4334), moss: mat(0xb59a58),
+    bark: mat(0x4a3628, { roughness: 0.95 }), resin: mat(0xd88a1c, { roughness: 0.18, emissive: 0x3a1800 }),
   };
   const build = (type: ItemType) => {
     const o = new THREE.Group();
@@ -51,6 +52,8 @@ export function addResources(items: Item[], group: THREE.Group, terrain: Terrain
       case 'stone': add(rock, M.stone, 0, 0.08); break;
       case 'branch': add(stick, M.wood, 0, 0.05, 0); break;
       case 'tinder': few(4, tuft, M.moss, 0.25, 0.04); break;
+      // a broken limb of a resin tree, amber beads where the bark split (Episode Two 2.4)
+      case 'resin': add(stick, M.bark, 0, 0.05, 0).scale.set(0.9, 1.5, 1.5); few(4, nut, M.resin, 0.5, 0.1); o.children.slice(1).forEach((c) => c.scale.setScalar(0.45)); break;
     }
     const ring = new THREE.Mesh(ringG, ringM.clone());
     ring.position.y = 0.02; ring.name = 'ring';
@@ -97,6 +100,8 @@ export function addResources(items: Item[], group: THREE.Group, terrain: Terrain
   scatter('stone', 6, L.camp.x, L.camp.z, 8, 26);
   scatter('branch', 14, L.camp.x, L.camp.z, 8, 30);
   scatter('tinder', 4, L.camp.x, L.camp.z, 8, 26);
+  // resin trees at the forest edge round camp (Episode Two: glue)
+  scatter('resin', 5, L.camp.x, L.camp.z, 12, 34);
 
   // finished work collects around the fire
   const camp = new THREE.Group();

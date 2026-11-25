@@ -268,7 +268,7 @@ export class Vault {
 }
 
 /** Scene scripts. `s` says what the player actually did. */
-export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', s: { ateRed: boolean; deaths: number; bites: number; renamed: boolean; failed?: number; comments?: string[] }): VaultLine[] {
+export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', s: { ateRed: boolean; deaths: number; bites: number; renamed: boolean; failed?: number; comments?: string[] }): VaultLine[] {
   // what the record earned: the Ledger, read back
   const said = (s.comments ?? []).map((key, i): VaultLine => ({ key, shot: i % 2 ? 'profile' : 'hands', pose: i % 2 ? 'present' : 'write' }));
   switch (id) {
@@ -295,6 +295,12 @@ export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', s: { ateR
       { key: 'mz.l7.2', shot: 'orrery', pose: 'point' },
       ...said,
       { key: 'mz.l7.hint', shot: 'close', pose: 'idle' },
+    ];
+    // Episode Two's page: the kitchen, who he met and how, the cairn, and the next place
+    case 'ep2': return [
+      { key: 'e2.mz.1', shot: 'wide', pose: 'write' },
+      ...said,
+      { key: 'e2.mz.4', shot: 'close', pose: 'idle', after: 1.2 },
     ];
     case 'ch2': return [
       { key: 'mz.ch2.1', shot: 'wide', pose: 'write' },

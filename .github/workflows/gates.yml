@@ -27,7 +27,7 @@ jobs:
         include:
           # spoiler_check: no known story spoiler in plain text in the tracked files or the built game (dist); the
           # phrases are kept privately, only their hashes are here. story_seal: the sealed Episode One data decodes
-          - { name: build and typecheck, nobrowser: true, run: 'npx tsc --noEmit -p . && python3 tools/voice_check.py && python3 tools/spoiler_check.py dist && python3 tools/story_seal.py check' }
+          - { name: build and typecheck, nobrowser: true, run: 'npx tsc --noEmit -p . && python3 tools/voice_check.py && python3 tools/spoiler_check.py dist && python3 tools/story_seal.py check && python3 tools/story_seal.py check --file src/game/branch/episode2.sealed' }
           - { name: smoke, run: 'python tools/smoke.py --quality web --out "$RUNNER_TEMP/shots"' }
           - { name: levels_smoke, run: 'python tools/levels_smoke.py --quality web --shots "$RUNNER_TEMP/shots"' }
           - { name: prologue_smoke, run: 'python tools/prologue_smoke.py --quality web' }

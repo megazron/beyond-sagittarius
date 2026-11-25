@@ -14,7 +14,7 @@ import type { Action } from './story';
 import type { DlgChoice, DlgTree } from './dialogue';
 import { isDiscovered } from './tech/tech';
 
-type NpcId = 'trader' | 'local' | 'hermit' | 'trav' | 'cameo';
+export type NpcId = 'trader' | 'local' | 'hermit' | 'trav' | 'cameo';
 
 interface Npc {
   id: NpcId;
@@ -303,9 +303,20 @@ export class Npcs {
       const dist = n.pos.distanceTo(p);
       // you wake up alone: nobody is anywhere near for the first two levels, and nobody ever wanders up to the landing
       // site on their own (the story has not introduced them; you find them by going out)
-      const near = dist < 140 && this.s.level >= 3;
+      const pin = this.pins.get(n.id);
+      // Oom-Sa is met in Episode Two (2.3): nobody on Verdaxis before (DECISIONS D4, E2-5); she shows from then on, or
+      // from the old chapter's levels on
+      const met = n.id !== 'local' || !!this.s.flags['e2.met'] && !this.s.flags['e2.oomsa.away'] || this.s.level > 14;
+      const near = !!pin || (dist < 140 && this.s.level >= 3 && met);
       n.fig.root.visible = near;
       if (!near) continue;
+      if (pin) {
+        n.pos.copy(pin.at); n.yaw = pin.yaw; n.speed = 0;
+        n.fig.root.position.copy(n.pos); n.fig.root.rotation.y = n.yaw; n.fig.root.updateMatrixWorld();
+        n.fig.animate(n.pose, n.phase, 0, time, dt);
+        n.fig.setTagVisible(0);
+        continue;
+      }
       if (n.roam > 0) {
         n.wait -= dt;
         const d = Math.hypot(n.target.x - n.pos.x, n.target.z - n.pos.z);
@@ -363,4 +374,16 @@ export class Npcs {
   }
 
   debug() { return this.list.map((n) => ({ id: n.id, pos: n.pos.toArray(), visible: n.fig.root.visible })); }
+
+  /** Episode Two: a scene stands someone at a mark facing `yaw` (they stay there, seen, until let go); null lets them go
+   * back to roaming round `home` (or where they stand). */
+  private pins = new Map<NpcId, { at: THREE.Vector3; yaw: number }>();
+  pin(id: NpcId, at: THREE.Vector3 | null, yaw = 0, home?: THREE.Vector3) {
+    const n = this.list.find((x) => x.id === id);
+    if (!this.built) this.build();
+    if (!at) { this.pins.delete(id); if (n && home) { n.home.copy(home); n.target.copy(home); } return; }
+    this.pins.set(id, { at: at.clone(), yaw });
+    if (n) { n.pos.copy(at); n.target.copy(at); n.yaw = yaw; n.speed = 0; n.pose = 'idle'; }
+  }
+  figure(id: NpcId) { if (!this.built) this.build(); return this.list.find((x) => x.id === id)?.fig ?? null; }
 }

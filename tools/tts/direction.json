@@ -2645,6 +2645,645 @@
 "post": 0.1,
 "tags": [],
 "fx": ""
+},
+"e2.vn.1": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.vn.2": {
+"emotion": "dry",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.vn.lyrra": {
+"emotion": "warm",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.bk.1": {
+"emotion": "calm",
+"intensity": 0.4,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.cd.fail": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.cd.fix": {
+"emotion": "wonder",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.cd.ok": {
+"emotion": "dry",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.sn.near": {
+"emotion": "suspicious",
+"intensity": 0.4,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.sn.far": {
+"emotion": "calm",
+"intensity": 0.4,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.vo.call": {
+"emotion": "eerie",
+"intensity": 0.6,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.vo.1": {
+"emotion": "fear",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.vo.2": {
+"emotion": "eerie",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.vo.go.2": {
+"emotion": "awe",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.vo.shout.1": {
+"emotion": "anxious",
+"intensity": 0.7,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.vo.shout.2": {
+"emotion": "eerie",
+"intensity": 0.6,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.vo.shout.3": {
+"emotion": "fear",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.vo.stay.2": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.vo.high": {
+"emotion": "wonder",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.st.1": {
+"emotion": "eerie",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.st.1b": {
+"emotion": "eerie",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.st.2": {
+"emotion": "anxious",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.st.3": {
+"emotion": "deadpan",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.st.3h": {
+"emotion": "deadpan",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.st.give.1": {
+"emotion": "warm",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.st.give.2": {
+"emotion": "deadpan",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.st.sit.2": {
+"emotion": "deadpan",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.st.spear.1": {
+"emotion": "angry",
+"intensity": 0.55,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.st.spear.2": {
+"emotion": "cold",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.st.joke.1": {
+"emotion": "easy",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.st.joke.2": {
+"emotion": "deadpan",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.hf.1": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.hf.oom": {
+"emotion": "deadpan",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.hf.self": {
+"emotion": "calm",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.hf.burn": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.hf.crack": {
+"emotion": "dry",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.hf.ok": {
+"emotion": "wonder",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.bd.1": {
+"emotion": "tired",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.bd.2": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.bd.slip": {
+"emotion": "dry",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.bd.jump": {
+"emotion": "dry",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.bd.ok": {
+"emotion": "relief",
+"intensity": 0.6,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.py.1": {
+"emotion": "smug",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.py.2": {
+"emotion": "wonder",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.rs.oom": {
+"emotion": "ominous",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.rs.1": {
+"emotion": "awe",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.rs.2": {
+"emotion": "calm",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.rs.3": {
+"emotion": "eerie",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.mk.six": {
+"emotion": "sad",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.mk.one": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.mk.joke": {
+"emotion": "easy",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.cl.1": {
+"emotion": "calm",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.cl.bolzar": {
+"emotion": "easy",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.cl.crack": {
+"emotion": "sarcasm",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.cl.ok": {
+"emotion": "dry",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.fr.1": {
+"emotion": "calm",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.fr.2": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.fr.oom": {
+"emotion": "ominous",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.fr.come": {
+"emotion": "fear",
+"intensity": 0.6,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.fr.look": {
+"emotion": "eerie",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.dw.1": {
+"emotion": "relief",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.dw.lost": {
+"emotion": "tired",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.dw.2": {
+"emotion": "warm",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.dw.3": {
+"emotion": "wonder",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.dw.oom": {
+"emotion": "deadpan",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.mz.1": {
+"emotion": "theatrical",
+"intensity": 0.55,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.mz.kind": {
+"emotion": "warm",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.mz.spear": {
+"emotion": "dry",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.mz.none": {
+"emotion": "deadpan",
+"intensity": 0.5,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.mz.cairn": {
+"emotion": "sad",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.mz.bare": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
+},
+"e2.mz.4": {
+"emotion": "ominous",
+"intensity": 0.45,
+"pace": 1.0,
+"pre": 0.0,
+"post": 0.2,
+"tags": [],
+"fx": ""
 }
 }
 }

@@ -50,6 +50,9 @@ export const TECH: TechNode[] = [
     [{ kind: 'tap', hits: 4, zone: 0.16, speed: 0.75 }], 'strong', ['sharp']),
   playable('cordage', 'stone', ['knapping'], { fibre: 3 }, { cord: 2 }, 'twist',
     [{ kind: 'rhythm', band: [0.4, 0.75], secs: 5 }], 'social', []),
+  // Episode Two 2.4: resin warmed soft, charcoal stirred in, a flake seated in the shaft and bound (INVENTION_TREE row 12)
+  playable('haft', 'stone', ['cordage'], { resin: 2, cord: 1 }, {}, 'assemble',
+    [{ kind: 'heat', band: [0.35, 0.58], secs: 3.5, rise: 0.36, fall: 0.26 }, { kind: 'mix', band: [0.4, 0.6] }], 'strong', ['heat', 'sharp']),
   playable('fire', 'stone', ['cordage'], { branch: 2, tinder: 1, cord: 1 }, {}, 'friction',
     [{ kind: 'rhythm', band: [0.5, 0.8], secs: 5 }, { kind: 'heat', band: [0.4, 0.62], secs: 3.5, rise: 0.4, fall: 0.28 }], 'medic', ['fire']),
   playable('pottery', 'stone', ['fire'], { clay: 3, sand: 1 }, { pot: 3 }, 'firing',
@@ -102,9 +105,11 @@ export const TECH: TechNode[] = [
 
 export const TECH_BY_ID: Record<string, TechNode> = Object.fromEntries(TECH.map((n) => [n.id, n]));
 
-/** Chapter Two: level number -> discovery, in story order. */
+/** Chapter Two: level number -> discovery, in story order. Levels 11 to 14 are Episode Two (episode2.ts): cord, the
+ * hafted point, the bow drill and pottery; the flake (knapping) is Episode One's and is counted found when it starts. */
 export const CH2_FIRST = 11;
-export const CH2_ORDER = ['knapping', 'cordage', 'fire', 'pottery', 'charcoal', 'lime', 'salt', 'glass', 'soap', 'fermentation', 'acids'];
+export const EP2_LAST = 14;
+export const CH2_ORDER = ['cordage', 'haft', 'fire', 'pottery', 'charcoal', 'lime', 'salt', 'glass', 'soap', 'fermentation', 'acids'];
 export const CH2_LAST = CH2_FIRST + CH2_ORDER.length - 1;
 
 /** Things you make rather than gather; the world never respawns these. */

@@ -279,7 +279,7 @@ function openSkins(onClose: () => void) {
 }
 
 /** Fade into the Vault for a MegaZroN scene, then hand back to `after`. */
-function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', after: () => void) {
+function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', after: () => void) {
   const s = game?.save;
   const names = (s?.names ?? pendingNames) as CrewNames;
   const lines = vaultScript(id, { ateRed: !!s?.flags.ateRed, deaths: s?.deaths ?? 0, bites: s?.bites ?? 0, renamed: Object.keys(names).length > 0, failed: s?.crafts?.failed ?? 0, comments: s ? pickComments(s, COMMENTS, id) : [] });
@@ -384,7 +384,7 @@ function startReplay(ch: Chapter) {
 
 /** Level endings that cut away to the Vault or a memory (once per save). */
 function onLevelDone(n: number) {
-  const beat: Record<number, 'l3' | 'fight' | 'l7' | 'ch1' | 'ch2'> = { 3: 'l3', 5: 'fight', 7: 'l7', 10: 'ch1', 21: 'ch2' };
+  const beat: Record<number, 'l3' | 'fight' | 'l7' | 'ch1' | 'ep2' | 'ch2'> = { 3: 'l3', 5: 'fight', 7: 'l7', 10: 'ch1', 14: 'ep2', 21: 'ch2' };
   const id = beat[n];
   if (!id || game.save.flags[`seen-${id}`]) return;
   const go = () => {
