@@ -2144,5 +2144,9 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   inventions are the frame (lever, brace), grain and sowing, basic medicine, the ice wall (an interlude on another
   world), irrigation, and the store (salt, drying, a tally). Each slice: raise PLAYABLE_LEVELS and LAST in
   levels_smoke, extend the private episode3.json and reseal, add its decisions to episode3_smoke.
+- Level 16 (posts and a beam): episode3.ts update16/intro16/ditchScene/beforeFrame/raiseFrame/thatchScene, the house
+  mesh (buildHouse, restoreHouse; __bs.ep3.house), tech node `frame` playable, Episode2.craftAt (the craft action at the
+  house, not the fire), decision e3.door in the sealed data, PLAYABLE_LEVELS 16. Scene timers go through live() so a
+  skipped scene stops posing the hands. Players can walk through the house walls (no collider yet).
 - Capture kit: ~/bs-cap/ep3 (mkplan.py writes ~/bs-cap/plan_ep3A.json: Episode Two from level 11 with one set of picks,
   then level 15; bot.js ruins the polish mix once).

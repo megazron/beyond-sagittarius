@@ -80,7 +80,7 @@ export class Chapter2 {
       const e = this.ep()!;
       out.push(...e.actions());
       if (node && node.status === 'playable' && !isDiscovered(s, node.id) && prereqsMet(s, node) && e.craftOpen(s.level)) {
-        out.push({ id: `craft-${node.id}`, pos: L.camp, radius: 2.6, label: t('action.craft', { name: t(`tech.${node.id}`) }), missing: this.story.missing(node.ingredients), run: () => this.story.hooks.craft(node) });
+        out.push({ id: `craft-${node.id}`, pos: e.craftAt(s.level) ?? L.camp, radius: 2.6, label: t('action.craft', { name: t(`tech.${node.id}`) }), missing: this.story.missing(node.ingredients), run: () => this.story.hooks.craft(node) });
       }
       return out;
     }

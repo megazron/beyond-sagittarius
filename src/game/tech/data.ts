@@ -63,7 +63,10 @@ export const TECH: TechNode[] = [
   // 3.2: a knapped head ground on a flat stone with wet sand (two stones: the head and the slab; sand from the shore)
   playable('polish', 'agri', ['pottery'], { stone: 2, sand: 1 }, {}, 'build',
     [{ kind: 'rhythm', band: [0.42, 0.72], secs: 5 }, { kind: 'mix', band: [0.42, 0.6] }], 'strong', ['sharp']),
-  planned('frame', 'agri', ['polish'], 'build', []),
+  // 3.3/3.4: posts rammed into holes a third deep, then the ridge beam lifted with a lever over a log, a hand at a time
+  // (branches for the poles' bindings and the rafters, reed fibre for the thatch)
+  playable('frame', 'agri', ['polish'], { branch: 3, fibre: 3 }, {}, 'build',
+    [{ kind: 'tap', hits: 4, zone: 0.18, speed: 0.7 }, { kind: 'rhythm', band: [0.4, 0.7], secs: 5 }], 'builder', []),
   planned('remedy', 'agri', ['pottery'], 'study', ['heat']),
   planned('icewall', 'agri', [], 'build', []),
   // ---- Fire and Tools (the pre-Episode-One chain: kept for the codex and later ages, out of the level order) ----
@@ -126,7 +129,7 @@ export const TECH_BY_ID: Record<string, TechNode> = Object.fromEntries(TECH.map(
 export const CH2_FIRST = 11;
 export const EP2_LAST = 14;
 /** Levels 15 to 21 are Episode Three (episode3.ts): the axe, the house, the field, the cure, Draxum's wall, the ditch, the
- * store (only 15 is built: ui.ts PLAYABLE_LEVELS). */
+ * store (built so far: 15 and 16, ui.ts PLAYABLE_LEVELS). */
 export const CH2_ORDER = ['cordage', 'haft', 'fire', 'pottery', 'polish', 'frame', 'farming', 'remedy', 'icewall', 'irrigation', 'salt'];
 export const CH2_LAST = CH2_FIRST + CH2_ORDER.length - 1;
 

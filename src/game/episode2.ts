@@ -100,6 +100,8 @@ export class Episode2 {
   }
 
   /** May the craft panel for this level open yet? (each one comes after its scene) */
+  /** Where a level's craft action stands (null: by the camp fire). */
+  craftAt(n: number): THREE.Vector3 | null { void n; return null; }
   craftOpen(n: number) {
     switch (n) {
       case 11: return this.f('e2.l11.intro');

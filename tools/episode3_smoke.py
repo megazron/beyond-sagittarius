@@ -1,4 +1,4 @@
-"""Episode Three smoke test ("A Place to Stay", levels 15 to 21; built so far: level 15).
+"""Episode Three smoke test ("A Place to Stay", levels 15 to 21; built so far: levels 15 and 16).
 
 Serves dist/, writes a save that stands at the start of level 15 (Episode Two finished), continues it, and plays the
 episode through the real interaction code, as tools/levels_smoke.py does: it teleports next to the objective marker
@@ -23,7 +23,7 @@ from levels_smoke import play_craft  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SKIP = "(() => { const b = document.getElementById('btn-skip'); if (b && b.offsetParent) b.click(); })()"
-DEFAULT_PICKS = {"e3.site": "rise"}
+DEFAULT_PICKS = {"e3.site": "rise", "e3.door": "lee"}
 
 # Episode One done: what the levels before 11 leave on the save (flags the old levels and Episode One set)
 EP1_FLAGS = ["drank", "ateSafe", "pitBuilt", "fire", "shelter", "spear", "slept", "signal", "crewCamp", "arcEnd", "houndGone",
@@ -106,12 +106,12 @@ def main():
 
         answered, fights, seen, taken = [], [], [], set()
         last, stuck = 0, 0
-        for it in range(1400):
+        for it in range(2600):
             lvl = ev("__bs.level")
             if lvl != last:
                 log(f"-> level {lvl} (iteration {it})", ev("({flags: Object.keys(__bs.save.flags).filter(k => k.startsWith('e3.')).join(' ')})"))
                 seen.append(lvl); last = lvl; stuck = 0
-            if lvl > 15:
+            if lvl > 16:
                 break
             if ev("!document.getElementById('modal').classList.contains('hidden') && !!document.querySelector('[data-diff]')"):
                 ev("document.querySelector('[data-diff=\"story\"]').click()"); ev("__bs.step(0.2)"); continue
@@ -183,19 +183,44 @@ def main():
             if label is None:
                 ev("__bs.step(1.0)")
 
-        for _ in range(20):
+        # the level after the last built one says so once in plain play: a crew member's own story (the roster) or a card
+        # can come first, so play those out
+        for _ in range(120):
+            if ev("!!__bs.save.flags['e3.wipShown']"):
+                break
+            m = ev("__bs.mode")
+            if m == "away":
+                if ev("__bs.branch.open"):
+                    page.keyboard.press("Space")
+                ev("__bs.awayGoNext()"); ev("__bs.step(0.3)"); page.keyboard.press("KeyE"); time.sleep(.3)
+            elif page.locator("#disc h2").is_visible():
+                page.click("#disc-ok")
+            elif m == "scene":
+                ev(SKIP); ev("__bs.skip()")
             ev("__bs.step(0.5)")
+        log("after the last level:", ev("({mode: __bs.mode, level: __bs.level, ep3: __bs.ep3, wip: !!__bs.save.flags['e3.wipShown']})"))
         f = ev("__bs.save.flags")
         log("answered:", answered)
         log("discoveries:", ev("__bs.save.discoveries"))
         log("e3 flags:", sorted(k for k in f if k.startswith("e3.") or k.startswith("inv.p")))
-        for k in ("e3.l15.intro", "e3.seen.camp", "e3.seen.reeds", "e3.seen.rise", "e3.siteDone", "e3.axeTried", "e3.felled", "inv.polishedAxe", "e3.wipShown"):
+        want = ["e3.l15.intro", "e3.seen.camp", "e3.seen.reeds", "e3.seen.rise", "e3.siteDone", "e3.axeTried", "e3.felled", "inv.polishedAxe",
+                "e3.l16.intro", "e3.frameUp", "e3.thatched", "e3.houseDone", "inv.frame", "inv.lever", "e3.wipShown",
+                # the save has trust 2 and no bite from the firing night: Wen-Ka copies him, and the axe slips on a knot
+                "e3.wk.copy", "e3.cut"]
+        if picks.get("e3.site") == "camp":
+            want.append("e3.ditch")
+        for k in want:
             if not f.get(k):
                 failures.append(f"flag never set: {k}")
-        if "polish" not in ev("__bs.save.discoveries"):
-            failures.append("not discovered: polish")
+        for n in ("polish", "frame"):
+            if n not in ev("__bs.save.discoveries"):
+                failures.append(f"not discovered: {n}")
+        house = ev("__bs.ep3 && __bs.ep3.house")
+        log("house:", house)
+        if not house or house["parts"] < 40:
+            failures.append(f"no house standing at the site: {house}")
         got = dict(answered)
-        for d in ("e3.site",):
+        for d in ("e3.site", "e3.door"):
             if d not in got:
                 failures.append(f"decision never asked: {d}")
         log_ids = {e["id"]: e["pick"] for e in ev("__bs.branch.state.log")}
@@ -204,8 +229,8 @@ def main():
                 failures.append(f"branch log: {d} = {log_ids.get(d)}, wanted {o}")
             if d.startswith("e3.") and not f.get(f"{d}.{o}"):
                 failures.append(f"choice flag not set: {d}.{o}")
-        if ev("__bs.level") != 16:
-            failures.append(f"did not reach level 16: {ev('__bs.level')}")
+        if ev("__bs.level") != 17:
+            failures.append(f"did not reach level 17: {ev('__bs.level')}")
 
         # ---- reload: everything Episode Three set is still there ----
         ev("window.dispatchEvent(new Event('beforeunload'))")
@@ -215,7 +240,7 @@ def main():
         page.wait_for_function("window.__bs.mode === 'play'", timeout=180000)
         ev("__bs.step(1)")
         f2 = ev("__bs.save.flags")
-        if ev("__bs.level") != 16 or not f2.get("e3.felled") or "polish" not in ev("__bs.save.discoveries"):
+        if ev("__bs.level") != 17 or not f2.get("e3.felled") or not f2.get("e3.houseDone") or "frame" not in ev("__bs.save.discoveries"):
             failures.append("Episode Three did not survive a reload")
 
         # ---- an old-design save at level 18 (charcoal, lime and salt made) starts Episode Three at level 15 ----
