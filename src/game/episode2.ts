@@ -152,6 +152,9 @@ export class Episode2 {
     }
     if (s.level === 12 && this.f('e2.met') && !this.f('e2.l12.glue')) { this.glueLines(); return; }
     if (s.level === 13 && !this.f('e2.l13.intro')) { this.intro13(); return; }
+    // the bow drill needs a cord; if the last one went (traded, used), he twists another from the fibre he kept: a made
+    // thing the world cannot hand back must never stop the level
+    if (s.level === 13 && !isDiscovered(s, 'fire') && this.inv('cord') < 1) { s.inventory.cord = 1; this.ui.setInventory(s.inventory); this.ui.toast(t('e2.cordAgain')); }
     if (s.level === 13 && isDiscovered(s, 'fire') && !this.f('e2.pyriteDone') && test(s, TRUSTS(2)) && !this.f('e2.oomsa.away')) { this.pyriteScene(); return; }
     if (s.level === 13 && isDiscovered(s, 'fire') && !this.f('e2.cairnDone')) {
       const a = this.shelter().at; if (Math.hypot(p.x - a.x, p.z - a.z) < 4) { this.shelterScene(); return; }
