@@ -134,6 +134,8 @@ export class Episode2 {
     return out;
   }
 
+  /** Test hook (levels_smoke logs it when a level looks stuck): what holds the episode's next beat back. */
+  debug() { const p = this.player.pos; return { wait: +this.wait.toFixed(2), busy: this.busy, loaded: ep2Loaded(), free: this.free(), level: this.s.level, at: [+p.x.toFixed(1), +p.z.toFixed(1)], shelter: this.s.level === 13 ? [+this.shelter().at.x.toFixed(1), +this.shelter().at.z.toFixed(1)] : null }; }
   /** The legacy Skyvra-at-camp projection stays out of this episode's scenes (six worlds; DECISIONS E2-2). */
   hidesExplorer() { return this.owns(this.s.level); }
 

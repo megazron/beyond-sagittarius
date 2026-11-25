@@ -660,6 +660,8 @@ def main():
                 last_prog = prog
                 stuck = 0
             stuck += 1
+            if stuck in (40, 100, 150):
+                log(f"no progress for {stuck} rounds on level {lvl}:", ev("({mode: __bs.mode, objective: __bs.objective, me: __bs.me, ep2: __bs.ep2, engaged: !!(__bs.combat && __bs.combat.engaged), busy: __bs.save && __bs.save.flags && Object.keys(__bs.save.flags).filter(k => k.startsWith('e2.')).slice(-4)})"))
             if stuck > 160:
                 log(f"stuck on level {lvl}", ev("({prompt: __bs.prompt, talk: __bs.talk, inv: __bs.save.inventory, mode: __bs.mode, paused: __bs.paused, modal: !document.getElementById('modal').classList.contains('hidden')})"))
                 failures.append(f"stuck on level {lvl}: {ev('({prompt: __bs.prompt, save: __bs.save.flags, inv: __bs.save.inventory})')}")

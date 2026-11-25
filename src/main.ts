@@ -1277,6 +1277,7 @@ window.addEventListener('resize', () => {
   get hound() { return game?.story.debugHound(); },
   /** Fights: state for the tests, and the way to start a set piece (tools/combat/play_test.py). */
   get combat() { return combat; },
+  get ep2() { return (game as unknown as { ep2?: { debug(): unknown } } | null)?.ep2?.debug() ?? null; },
   /** The player's body: kneeling (0..1), the game mode, where the hips are (checks of the kneel in Episode One). */
   get body() { const m = (game as unknown as { player?: { model: import('./characters/character').Character } } | null)?.player?.model; if (!m) return null; const h = new THREE.Vector3(); (m.root.getObjectByName('hips') ?? m.root).getWorldPosition(h); return { kneel: m.kneeling, mode: game!.mode, rootY: m.root.position.y, hipsY: h.y }; },
   /** Your body's hands, head and facing in world space (tools/ep2_probe.py: which side each hand works on in a scene). */
