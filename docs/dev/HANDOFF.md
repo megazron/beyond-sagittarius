@@ -2022,3 +2022,28 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   jump, sprint; limp; held arms as Limbs, which give way to combat's every frame), first-aid `first` tasks in kit.ts.
 - Test: `tools/landing_smoke.py` (CI job landing_smoke). Dev page: `dev/arrival.html?id=explorer` (vite), seekable.
 - GPU takes: `~/bs-cap/land1/` (`capture.sh`, `plan.json`); clips in `Downloads/BS_Game_v1.1/landings_v1/` with notes.
+
+## 2026-11-25 ~01:20 gate agent: state at handover (NOTHING LANDED by me)
+- DETERMINISM PROVEN: gate2 f371807, perf_gate run three times on CI (jobs 138875721025, 138886376954, 138895892427):
+  all 27 spot rows identical to the triangle; the same as gate2 4b5d98e's run and the laptop's full Mobile run.
+- CONTENT CHECKS (ebf0ef5, coordinator's request after 7cda35d): __bs.shaderErrors() (programs with three's diagnostics
+  runnable false, ?shadercheck=1), body floors (bazaar 2, crowd 6, gate 8, elsewhere 1), a black-frame check (mean
+  brightness under 6 of 255, read in the drawing's own animation frame). On 7cda35d plus the hooks it fails: five
+  programs that did not link plus the fragment shader error. The body count does NOT see it (7 at the crowd): a body is
+  counted in onBeforeRender, linked or not, and three counts its triangles too.
+- BLOCKER, REAL, NOT RAISED: Mobile gate 151 draw calls (budget 145) on gate3 ebf0ef5 (= main 37b105a + gate):
+  calls each of the four frames [117, 117, 151, 117]. 151 is the frame the phones' static sun shadow is redrawn
+  (city.ts: due when the camera has gone 9 m, every 300 ticks, and every 45 in the first 900). In that frame the shadow
+  pass draws bodies (S BODY/crew/hips x5, hips [skin] x4, head x3) and a phone prop (S ownPhone x4), though city.ts says
+  nothing that moves casts a shadow on phones. Likely sources (not verified one by one): character.ts showProp makes a
+  prop with castShadow = true and pickLod never switches props; Away.enter sets castShadow on every mesh of your body.
+  A frozen shadow of a moving body would also show on the ground until the next redraw (not checked on a GPU). The old
+  gate missed this frame (main 37b105a read 117). cabin's b38edf4 (no phone in a selfie hand) takes the ownPhone draws
+  (6 main + 4 shadow) off: with it the gate would read about 141 (not measured).
+- gate3 ebf0ef5 also failed traffic_smoke ("row: a car overlapped a person 6 times" at 11.5, 171.7) and combat's bow
+  arms (2.6 cm vs 2 cm, the gate the boarding agent saw read 0.1 to 5.5 cm): neither is on the rerun list, my change
+  does not touch them (the hooks do nothing unless perf_gate calls holdAtArrival). main 37b105a's own run failed levels_smoke.
+- STACK (each on the one before, all rebased, typecheck ok, not landed): gate1/gate3 ebf0ef5 -> modal-land2 4a0f6e4 ->
+  intro4 862f0b1 -> land4 (= land3: arrivals + landing_smoke wake fixes; away.ts conflict resolved: Away.entered() is
+  called at the end of enter, after the arrival is set up) 551b0f6 -> cabin5 (lipsync.json merged, mz.intro.2 kept from
+  intro) b38edf4 + this note. ~/bs-story/DECISIONS.md cabin rows renumbered C1-C5.
