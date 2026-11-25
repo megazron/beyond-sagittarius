@@ -30,6 +30,8 @@ jobs:
           - { name: build and typecheck, nobrowser: true, run: 'npx tsc --noEmit -p . && python3 tools/voice_check.py && python3 tools/spoiler_check.py dist && python3 tools/story_seal.py check && python3 tools/story_seal.py check --file src/game/branch/episode2.sealed' }
           - { name: smoke, run: 'python tools/smoke.py --quality web --out "$RUNNER_TEMP/shots"' }
           - { name: levels_smoke, run: 'python tools/levels_smoke.py --quality web --shots "$RUNNER_TEMP/shots"' }
+          # Episode Two (levels 11 to 14) from a level 11 save, twice: one set of choices each way
+          - { name: episode2_smoke, run: 'python tools/episode2_smoke.py --quality web && python tools/episode2_smoke.py --quality mobile --picks e2.snare=far,e2.voice=go,e2.stranger=spear,e2.mark=bare,e2.kiln=kept' }
           - { name: prologue_smoke, run: 'python tools/prologue_smoke.py --quality web' }
           - { name: intro_smoke, run: 'python tools/intro_smoke.py --quality web' }
           - { name: mobile_smoke, run: 'python tools/mobile_smoke.py --shots "$RUNNER_TEMP/shots"' }

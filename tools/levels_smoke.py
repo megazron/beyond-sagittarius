@@ -548,7 +548,9 @@ def main():
                     ev("document.querySelector('#dlg-choices button[data-c=\"e1.night.o.brace\"]').click()")
                 else:
                     opts = ev("document.querySelectorAll('#dlg-choices .dlg-c').length")
-                    answered.append(opts)
+                    # Episode Two's choices (levels 11 to 14) are checked by tools/episode2_smoke.py
+                    if lvl < 11:
+                        answered.append(opts)
                     shot(f"14c-choice-{len(answered)}")
                     page.keyboard.press("Digit1")  # big fire, then the truth
                 ev("__bs.step(0.2)")
@@ -610,6 +612,12 @@ def main():
                         shot("21-discovery")
                     page.keyboard.press("Enter")
                     ev("__bs.step(0.2)")
+                continue
+            if page.locator("#disc h2").is_visible():
+                # Episode Two shows its discovery cards after the scene that makes the thing, outside the panel
+                shown[page.inner_text("#disc h2")] = ev("[...document.querySelectorAll('#disc .warn')].map(e => e.dataset.warn)")
+                page.click("#disc-ok")
+                ev("__bs.step(0.2)")
                 continue
             if st["mode"] == "talk":  # the loop walked into Skyvra: leave, the story goes on
                 page.keyboard.press("Escape")
@@ -721,7 +729,7 @@ def main():
         if ev("__bs.branch.lineIfDead('medic', {key: 'rad.medic', who: 'medic', fallback: 'br.rad.static'})")["key"] != "br.rad.static":
             failures.append("a dead crewmate's line did not use its fallback")
         flags = ev("__bs.save.flags")
-        for sc in ("l3", "fight", "l7", "ch1", "ch2"):
+        for sc in ("l3", "fight", "l7", "ch1", "ep2", "ch2"):
             if not flags.get(f"seen-{sc}"):
                 failures.append(f"scene {sc} never played")
         final = ev("({level: __bs.level, completed: __bs.save.completed, flags: __bs.save.flags, crew: __bs.crew, hits: __bs.save.houndHits})")
@@ -768,7 +776,7 @@ def main():
             failures.append(f"discoveries {disc} != playable {playable}")
         if any(n["state"] != "planned" for n in tech["nodes"] if n["status"] == "planned"):
             failures.append("a planned entry is not locked")
-        need_warn = {"Flint knapping": "sharp", "Fire on demand": "fire", "Pottery": "heat", "Charcoal": "fire", "Lime": "chemical", "Salt": "heat", "Glass": "heat", "Soap": "chemical", "Fermentation": "pressure", "Acids and bases": "chemical"}
+        need_warn = {"Hafting with glue": "sharp", "Fire on demand": "fire", "Pottery": "heat", "Charcoal": "fire", "Lime": "chemical", "Salt": "heat", "Glass": "heat", "Soap": "chemical", "Fermentation": "pressure", "Acids and bases": "chemical"}
         for title, cat in need_warn.items():
             if cat not in shown.get(title, []):
                 failures.append(f"no {cat} warning on the {title} discovery: {shown.get(title)}")
@@ -872,7 +880,7 @@ def main():
         log("after reload:", re)
         if not page.locator("#safety .safety-card").count() == 0 and page.locator("#safety .safety-card").is_visible():
             failures.append("safety card came back after being accepted")
-        if len(ev("__bs.save.discoveries")) != 11:
+        if len(ev("__bs.save.discoveries")) != 12:
             failures.append("discoveries lost on reload")
         if re["level"] != 22 or re["names"].get("scientist") != PLAYER or re["crew"]["mode"] != "camp":
             failures.append(f"save did not persist: {re}")

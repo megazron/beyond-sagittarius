@@ -158,7 +158,7 @@ So per-character work exists at levels 9 to 22 for Skyvra, 14 to 22 for Bolzar, 
 
 | Levels | Age | Status |
 | --- | --- | --- |
-| 11 to 14 | Stone Age: knapping, cordage, fire, pottery | playable, dubbing to render |
+| 11 to 14 | Episode Two (src/game/episode2.ts; choice data sealed in src/game/branch/episode2.sealed): cord, a hafted point with resin glue, the bow drill, pottery. The flake is Episode One's and counts as found when it starts | playable, not owner-reviewed; tests: tools/episode2_smoke.py |
 | 15 to 19 | Fire and Tools: charcoal, lime, salt, glass, soap | playable, dubbing to render |
 | 20 to 21 | Agriculture, first part: fermentation, acids and bases | playable, dubbing to render |
 | | Farming, irrigation, Bronze, Iron, Classical, Industrial, Space, Civilisation | planned, data entries only (`src/game/tech/data.ts`) |

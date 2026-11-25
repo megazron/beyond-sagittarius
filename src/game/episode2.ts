@@ -184,6 +184,12 @@ export class Episode2 {
     this.z.setKneel(kneel, sit);
     return g;
   }
+  /** Kneeling to work beside the fire, side-on to it (facing along the ring, the fire at his shoulder): a camera in
+   * front of him then never looks across the fire (the cutscene falls back to another shot when the camp blocks it). */
+  private settleWork(dist: number) {
+    const c = this.L.camp, at = this.byFire(dist), d = at.clone().sub(c).setY(0).normalize(), tan = v3(-d.z, 0, d.x);
+    return this.settle(at, at.clone().addScaledVector(tan, 2), true, true);
+  }
   private fwd() { const r = this.z.root.rotation.y; return v3(Math.sin(r), 0, Math.cos(r)); }
   private right(f: THREE.Vector3) { return v3(f.z, 0, -f.x); }
   private head() { return new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld); }
@@ -197,6 +203,8 @@ export class Episode2 {
   /** Low and close on what his hands do at `at`, from his right and in front, his face at the top of frame. */
   private handShot(at: THREE.Vector3, dist = 0.9, side = 1): Shot {
     const f = this.fwd(), r = this.right(f).multiplyScalar(side), hd = this.head();
+    // the side away from the fire
+    if (r.dot(at.clone().sub(this.L.camp)) < 0) r.negate();
     return { from: at.clone().addScaledVector(f, dist * 0.9).addScaledVector(r, dist * 0.7).add(v3(0, 0.35 + dist * 0.2, 0)), to: at.clone().lerp(hd, 0.35), push: 0.02, aperture: 0.004 };
   }
   private wide(at: THREE.Vector3, dist = 6, side = 0.6, up = 1.2): Shot {
@@ -240,7 +248,7 @@ export class Episode2 {
     this.busy = true;
     this.passTime(7.4, true, 'e2.day', () => {
       this.ui.banner(t('e2.title'), t('e2.sub'));
-      const z = this.z, at = this.settle(this.byFire(1.45), this.L.camp, true, true);
+      const z = this.z, at = this.settleWork(1.6);
       const f = this.fwd(), r = this.right(f);
       // the dried vine from the first night, held in both hands in front of him; it parts in the middle
       const mid = at.clone().addScaledVector(f, 0.36).add(v3(0, 0.52, 0));
@@ -298,7 +306,7 @@ export class Episode2 {
     if (!this.owns(this.s.level)) return false;
     const z = this.z;
     if (n.id === 'cordage') {
-      const at = this.settle(this.byFire(1.5), this.L.camp, true, true), f = this.fwd(), r = this.right(f);
+      const at = this.settleWork(1.6), f = this.fwd(), r = this.right(f);
       const mid = at.clone().addScaledVector(f, 0.34).add(v3(0, 0.58, 0));
       const cord = this.cordBetween(mid.clone().addScaledVector(r, -0.22), mid.clone().addScaledVector(r, 0.22));
       z.setHold({ L: { at: mid.clone().addScaledVector(r, -0.25), fingers: f.clone(), palm: r.clone(), radius: 0.01, grasp: true }, R: { at: mid.clone().addScaledVector(r, 0.25), fingers: f.clone(), palm: r.clone().negate(), radius: 0.01, grasp: true } });
@@ -309,7 +317,8 @@ export class Episode2 {
       return true;
     }
     if (n.id === 'haft') {
-      const at = this.settle(this.byFire(1.6), this.L.camp, false), f = this.fwd(), r = this.right(f);
+      const at = this.settleWork(2.3), f = this.fwd(), r = this.right(f);
+      z.setKneel(false);
       const log = this.mesh(new THREE.CylinderGeometry(0.16, 0.18, 1.2, 9).rotateZ(Math.PI / 2), std(0x4d3a2a), at.clone().addScaledVector(f, 1.2).add(v3(0, 0.16, 0)));
       log.rotation.y = z.root.rotation.y + Math.PI / 2;
       const grip = at.clone().addScaledVector(f, 0.35).addScaledVector(r, 0.18).add(v3(0, 1.0, 0));
@@ -325,9 +334,9 @@ export class Episode2 {
     }
     if (n.id === 'fire') {
       this.set('e1.fireOut', false); this.world.camp.setFire(2);
-      const at = this.settle(this.byFire(1.3), this.L.camp, true, true);
+      const at = this.settleWork(1.6);
       this.scene([
-        { hold: 2.2, shot: () => ({ from: this.L.camp.clone().addScaledVector(this.fwd(), -0.2).add(v3(0, 0.35, 0)).addScaledVector(this.right(this.fwd()), 0.5), to: this.head(), push: 0.02 }), run: () => { z.setLookTarget(this.L.camp.clone().add(v3(0, 0.2, 0))); audio.sample('amb_fire', 0.4, { dur: 3 }); } },
+        { hold: 2.2, shot: () => this.wide(at, 3.2, 0.9, 0.4), run: () => { z.setLookTarget(this.L.camp.clone().add(v3(0, 0.2, 0))); audio.sample('amb_fire', 0.4, { dur: 3 }); } },
         { key: 'e2.bd.ok', who: 'scientist', shot: () => cover.close(z, -0.35, 0.95), run: () => z.setFace({ smile: 0.35 }) },
       ], () => { this.clearHands(); this.set('inv.bowDrill'); this.ui.toast(t('e2.learn.bowDrill')); void at; card(); });
       return true;
@@ -336,7 +345,7 @@ export class Episode2 {
       // the pots are made; the card waits for the morning they come out of the fire
       this.set('e2.potsMade');
       this.buildPots();
-      const c = this.L.camp, at = this.settle(this.byFire(1.7), c, true, true);
+      const c = this.L.camp, d = v3(1, 0, 0.4).normalize(), at = this.settle(c.clone().addScaledVector(d, 1.85), c.clone().addScaledVector(d, 1.15), true, true);
       const row = this.pots[1].position.clone();
       this.scene([
         { key: 'e2.cl.ok', who: 'scientist', shot: () => ({ from: row.clone().addScaledVector(this.fwd(), -0.9).add(v3(0, 0.18, 0)).addScaledVector(this.right(this.fwd()), 0.25), to: row.clone().lerp(this.head(), 0.25), push: 0.02, aperture: 0.004 }), run: () => z.setLookTarget(row) },
@@ -348,7 +357,7 @@ export class Episode2 {
 
   /** The work before the panel: bark into strands, resin on a warm stone, the bow drill set up, clay into coils. */
   private workScene(kind: 'bark' | 'resin' | 'bow' | 'clay', open: () => void) {
-    const z = this.z, at = this.settle(this.byFire(1.45), this.L.camp, true, true), f = this.fwd(), r = this.right(f);
+    const z = this.z, at = this.settleWork(1.6), f = this.fwd(), r = this.right(f);
     const work = at.clone().addScaledVector(f, 0.42); work.y = this.h(work.x, work.z);
     const made: THREE.Object3D[] = [];
     const keep = <T extends THREE.Object3D>(o: T) => { made.push(o); return o; };
@@ -581,18 +590,18 @@ export class Episode2 {
     const oom = this.oom(); if (!oom) return;
     this.actors[OOM] = oom;
     const c = this.L.camp, z = this.z;
-    const me = this.settle(this.byFire(1.4), c, true, true);
-    const her = c.clone().add(c.clone().sub(me).setY(0).normalize().multiplyScalar(1.3)); her.y = this.h(her.x, her.z);
+    const me = this.settle(this.byFire(2.0), c, true, true);
+    const her = c.clone().add(c.clone().sub(me).setY(0).normalize().multiplyScalar(1.9)); her.y = this.h(her.x, her.z);
     this.npcs.pin('local', her, Math.atan2(c.x - her.x, c.z - her.z)); oom.setKneel(true, true);
     const hands = her.clone().add(c.clone().sub(her).setY(0).normalize().multiplyScalar(0.35)).add(v3(0, 0.5, 0));
     const pyr = this.mesh(new THREE.DodecahedronGeometry(0.03, 0), std(0xc9a640, { metalness: 0.8, roughness: 0.35 }), hands.clone());
     this.scene([
-      { key: 'e2.py.1', who: OOM, shot: () => cover.close(oom, 0.4, 1.0), run: () => { oom.setLookTarget(this.head()); } },
+      { key: 'e2.py.1', who: OOM, shot: () => cover.two(z, oom, 2.8), run: () => { oom.setLookTarget(this.head()); } },
       { hold: 2.4, shot: () => ({ from: hands.clone().add(v3(0.45, 0.2, 0.4)), to: hands, push: 0.01, aperture: 0.005 }), run: () => {
         oom.setHold({ R: { at: hands.clone().add(v3(0.03, 0, 0)), fingers: v3(0, 0, 1), palm: v3(-1, 0, 0), radius: 0.02, grasp: true }, L: { at: hands.clone().add(v3(-0.04, 0, 0)), fingers: v3(0, 0, 1), palm: v3(1, 0, 0), radius: 0.02, grasp: true } });
         for (let i = 0; i < 3; i++) this.after(0.4 + i * 0.6, () => { this.sparks(hands); audio.sample('flint', 0.5); });
       } },
-      { key: 'e2.py.2', who: 'scientist', shot: () => cover.close(z, -0.4, 0.95), run: () => { z.setLookTarget(hands); oom.setHold(null); } },
+      { key: 'e2.py.2', who: 'scientist', shot: () => cover.close(z, -0.9, 0.9), run: () => { z.setLookTarget(hands); oom.setHold(null); } },
     ], () => {
       pyr.removeFromParent(); this.clearHands(); oom.setKneel(false);
       const home = this.L.camp.clone().add(v3(9, 0, 7)); home.y = this.h(home.x, home.z); this.npcs.pin('local', null, 0, home);
@@ -738,7 +747,7 @@ export class Episode2 {
     this.set('e2.l14.intro');
     this.busy = true;
     this.passTime(9.0, true, 'e2.day', () => {
-      const z = this.z, at = this.settle(this.byFire(1.5), this.L.camp, true, true), f = this.fwd(), r = this.right(f);
+      const z = this.z, at = this.settleWork(1.6), f = this.fwd(), r = this.right(f);
       const lump = this.mesh(new THREE.SphereGeometry(0.06, 10, 8), std(0x8e5a3e, { roughness: 0.6 }), at.clone().addScaledVector(f, 0.34).add(v3(0, 0.55, 0)));
       z.setHold({ L: { at: lump.position.clone().addScaledVector(r, -0.05).add(v3(0, -0.03, 0)), fingers: f.clone(), palm: UP.clone(), radius: 0.05 }, R: { at: lump.position.clone().addScaledVector(r, 0.05).add(v3(0, 0.03, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.05 } });
       this.scene([
@@ -776,8 +785,8 @@ export class Episode2 {
       // she comes into the light if she trusts him, or for her people's whistle when she does not
       const here = !!oom && !this.f('e2.kiln.decided') && (test(s, TRUSTS(1)) || (this.f('e2.oomsa.away') && this.f('e2.whistle')));
       if (here) this.set('e2.oomsa.here');
-      const me = this.settle(this.byFire(1.4), c, true, true);
-      const her = c.clone().add(c.clone().sub(me).setY(0).normalize().multiplyScalar(1.5)); her.y = this.h(her.x, her.z);
+      const me = this.settle(this.byFire(2.0), c, true, true);
+      const her = c.clone().add(c.clone().sub(me).setY(0).normalize().multiplyScalar(2.0)); her.y = this.h(her.x, her.z);
       if (here && oom) { this.actors[OOM] = oom; this.npcs.pin('local', her, Math.atan2(c.x - her.x, c.z - her.z)); oom.setKneel(true, true); }
       const pots = this.pots[1].position.clone();
       const dark = c.clone().addScaledVector(c.clone().sub(me).setY(0).normalize(), 13).add(v3(0, 0.7, 0));
@@ -820,7 +829,7 @@ export class Episode2 {
     this.pots.forEach((p, i) => { if (i >= this.potsLeft()) { (p.material as THREE.MeshStandardMaterial).color.setHex(0x3a2a22); p.rotation.z = 0.5; } });
     this.after(1.0, () => {
       this.busy = false;
-      const z = this.z, c = this.L.camp, me = this.settle(this.byFire(1.4), c, false);
+      const z = this.z, c = this.L.camp, me = this.settle(this.byFire(2.0), c, false);
       const dark = c.clone().addScaledVector(c.clone().sub(me).setY(0).normalize(), 11).add(v3(0, 0.75, 0));
       const eyes = this.eyes(dark);
       this.scene([

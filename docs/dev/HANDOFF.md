@@ -1932,3 +1932,17 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   merged, hair), not 1. The measurements above are on draw1 (26f8579 base) with the old hair merged. Next: port
   hairHang/hairTurn and the capsules into the hair branch (local space via uHairInv/uHairM; aRoot, aDir, aLen per
   vertex), then an A/B of one frame with kneeling and bowed heads.
+
+## Episode Two, levels 11 to 14 (ep2 agent, worktree ~/bs-ep2, branch ep2; 2026-11-25)
+- Code: `src/game/episode2.ts` (scenes and beats round the craft panels of `cordage`, `haft` (new), `fire`, `pottery`);
+  `chapter2.ts` hands levels 11 to 14 to it (`ch2.ep2`); `game.ts` asks it before a craft panel opens
+  (`beforeCraft`), on a failed try (`craftFailed`: his line instead of MegaZroN's) and after (`crafted`; pottery's card
+  waits for its own beat). Progress is `e2.*` flags on the save; `update()` resumes from the last beat after a load.
+- Choice data: sealed (`src/game/branch/episode2.sealed`, loaded by `branch/episode2.ts` at start-up into DECISIONS
+  and COMMENTS). Plain master is private. `python3 tools/story_seal.py check --file src/game/branch/episode2.sealed`
+  (also in CI's build job).
+- New: item `resin` (world, round camp), `pyrite` (given), Oom-Sa (`npcs.ts` 'local') hidden until she is met in
+  Episode Two (`Npcs.pin/figure` for scenes), the Ledger page `ep2` after level 14 (`vault.ts`), `CH2_ORDER` now
+  starts with `cordage, haft` (knapping is recorded when level 11 starts).
+- Tests: `tools/episode2_smoke.py [--picks e2.snare=far,...]` (starts from a level 11 save); `levels_smoke.py`
+  expects 12 discoveries and the `ep2` Ledger page.

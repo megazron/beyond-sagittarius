@@ -22,6 +22,7 @@ from smoke import launch, serve  # noqa: E402
 from levels_smoke import play_craft  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+SKIP = "(() => { const b = document.getElementById('btn-skip'); if (b && b.offsetParent) b.click(); })()"
 DEFAULT_PICKS = {"e2.snare": "near", "e2.voice": "shout", "e2.stranger": "give", "e2.mark": "six", "e2.kiln": "oomsa"}
 
 # Episode One done: what the levels before 11 leave on the save (flags the old levels and Episode One set)
@@ -123,7 +124,7 @@ def main():
                 ev("__bs.step(0.2)"); continue
             st = ev("({state: __bs.state, mode: __bs.mode})")
             if st["state"] == "narrator":
-                time.sleep(1.5); shot("e2-ledger"); page.click("#btn-skip"); time.sleep(1); continue
+                time.sleep(1.5); shot("e2-ledger"); ev(SKIP); time.sleep(1); continue
             if st["mode"] == "scene":
                 for _ in range(8):
                     ev("__bs.step(0.2)")
@@ -169,7 +170,7 @@ def main():
             if ev("!!__bs.save.flags['seen-ep2']") and ev("__bs.state") == "game":
                 break
             if ev("__bs.state") == "narrator":
-                time.sleep(1.2); shot("e2-ledger"); page.click("#btn-skip")
+                time.sleep(1.2); shot("e2-ledger"); ev(SKIP)
             ev("__bs.step(0.5)"); time.sleep(0.2)
         f = ev("__bs.save.flags")
         log("answered:", answered)
