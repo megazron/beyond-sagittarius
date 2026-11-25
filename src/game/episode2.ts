@@ -208,7 +208,9 @@ export class Episode2 {
     // the side away from the fire
     if (r.dot(at.clone().sub(this.L.camp)) < 0) r.negate();
     // below his eye line: he bends over the work, and a camera above his head sees only his hair
-    return { from: at.clone().addScaledVector(f, dist * 0.95).addScaledVector(r, dist * 0.6).add(v3(0, 0.08 + dist * 0.12, 0)), to: at.clone().lerp(hd, 0.45), push: 0.02, aperture: 0.004 };
+    const from = at.clone().addScaledVector(f, dist * 1.05).addScaledVector(r, dist * 0.65).add(v3(0, 0.22, 0));
+    from.y = Math.max(from.y, this.h(from.x, from.z) + 0.55);
+    return { from, to: at.clone().lerp(hd, 0.3), push: 0.02, aperture: 0.004 };
   }
   private wide(at: THREE.Vector3, dist = 6, side = 0.6, up = 1.2): Shot {
     const f = this.fwd(), r = this.right(f);
@@ -229,7 +231,10 @@ export class Episode2 {
   }
   private scene(beats: Beat[], then?: () => void) {
     this.busy = true;
-    this.playScene(beats, () => { this.busy = false; this.wait = 1.2; then?.(); });
+    // the spear he carries stays out of his scenes (across a close-up it is a pole through the frame)
+    const spear = this.z.root.getObjectByName('heldSpear'), was = !!spear?.visible;
+    if (spear) spear.visible = false;
+    this.playScene(beats, () => { if (spear) spear.visible = was; this.busy = false; this.wait = 1.2; then?.(); });
   }
   /** A fade to black, a jump in the world's time (and day), back in. */
   private passTime(hour: number, nextDay: boolean, card: string | null, then: () => void) {
@@ -252,7 +257,7 @@ export class Episode2 {
     this.set('ch2Intro');
     this.set('e2.l11.intro');
     this.busy = true;
-    this.passTime(7.4, true, 'e2.day', () => {
+    this.passTime(8.6, true, 'e2.day', () => {
       this.ui.banner(t('e2.title'), t('e2.sub'));
       const z = this.z, at = this.settleWork(2.5);
       const f = this.fwd(), r = this.right(f);
@@ -544,7 +549,7 @@ export class Episode2 {
     const me = this.settle(her.clone().add(v3(-1.9, 0, -0.9)), her, false);
     const meet = () => { oom.setKneel(false); this.npcs.pin('local', her, Math.atan2(me.x - her.x, me.z - her.z)); oom.setLookTarget(this.head()); };
     this.scene([
-      { hold: 3, shot: () => ({ from: me.clone().addScaledVector(this.fwd(), -1.6).add(v3(0.4, 1.7, 0)), to: her.clone().add(v3(0, 0.6, 0)), push: 0.05 }), run: () => { z.setLookTarget(her.clone().add(v3(0, 0.6, 0))); oom.setHold({ R: { at: noose, fingers: v3(0, -1, 0), palm: v3(1, 0, 0), radius: 0.006, grasp: true } }); } },
+      { hold: 3, shot: () => ({ from: me.clone().addScaledVector(this.fwd(), -3.2).addScaledVector(this.right(this.fwd()), 1.4).add(v3(0, 1.9, 0)), to: her.clone().add(v3(0, 0.5, 0)), push: 0.05 }), run: () => { z.setLookTarget(her.clone().add(v3(0, 0.6, 0))); oom.setHold({ R: { at: noose, fingers: v3(0, -1, 0), palm: v3(1, 0, 0), radius: 0.006, grasp: true } }); } },
       { hold: 2, shot: () => ({ from: noose.clone().add(v3(0.4, 0.25, 0.35)), to: noose.clone(), push: 0.01, aperture: 0.005 }) },
       { key: 'e2.st.1', who: OOM, if: { flag: 'e2.called' }, shot: () => cover.close(oom, 0.4, 1.0), run: () => { oom.setHold(null); meet(); } },
       { key: 'e2.st.1b', who: OOM, if: { not: { flag: 'e2.called' } }, shot: () => cover.close(oom, 0.4, 1.0), run: () => { oom.setHold(null); meet(); } },
@@ -603,7 +608,7 @@ export class Episode2 {
     const pyr = this.mesh(new THREE.DodecahedronGeometry(0.03, 0), std(0xc9a640, { metalness: 0.8, roughness: 0.35 }), hands.clone());
     this.scene([
       { key: 'e2.py.1', who: OOM, shot: () => cover.two(z, oom, 2.8), run: () => { oom.setLookTarget(this.head()); } },
-      { hold: 2.4, shot: () => ({ from: hands.clone().add(v3(0.45, 0.2, 0.4)), to: hands, push: 0.01, aperture: 0.005 }), run: () => {
+      { hold: 2.4, shot: () => { const ax = her.clone().sub(me).setY(0).normalize(), side = v3(ax.z, 0, -ax.x); return { from: hands.clone().addScaledVector(side, 0.6).addScaledVector(ax, -0.15).add(v3(0, 0.25, 0)), to: hands, push: 0.01, aperture: 0.005 }; }, run: () => {
         oom.setHold({ R: { at: hands.clone().add(v3(0.03, 0, 0)), fingers: v3(0, 0, 1), palm: v3(-1, 0, 0), radius: 0.02, grasp: true }, L: { at: hands.clone().add(v3(-0.04, 0, 0)), fingers: v3(0, 0, 1), palm: v3(1, 0, 0), radius: 0.02, grasp: true } });
         for (let i = 0; i < 3; i++) this.after(0.4 + i * 0.6, () => { this.sparks(hands); audio.sample('flint', 0.5); });
       } },
@@ -659,10 +664,12 @@ export class Episode2 {
     const S = this.shelter(), g = new THREE.Group(), back = v3(Math.sin(S.facing), 0, Math.cos(S.facing)), side = this.right(back);
     const rockM = std(0x6b625a, { roughness: 0.95 }), sootM = std(0x2b2622, { roughness: 1 });
     // the back wall and two shoulders, the overhang roof leaning out over the floor
-    const wall = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 2), rockM); wall.scale.set(1.6, 1.1, 0.55); wall.position.copy(S.wall).add(v3(0, 1.0, 0)); wall.rotation.y = S.facing; g.add(wall);
-    for (const sd of [-1, 1]) { const sh = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1, 1), rockM); sh.scale.set(0.8, 1.2, 1.2); sh.position.copy(S.at).addScaledVector(side, sd * 2.4).addScaledVector(back, 1.2); sh.position.y = this.h(sh.position.x, sh.position.z) + 0.8; g.add(sh); }
-    const roof = new THREE.Mesh(new THREE.IcosahedronGeometry(2.2, 2), rockM); roof.scale.set(1.5, 0.35, 1.1); roof.position.copy(S.at).addScaledVector(back, 1.1).add(v3(0, 2.4, 0)); roof.rotation.y = S.facing; g.add(roof);
-    const soot = new THREE.Mesh(new THREE.CircleGeometry(1.2, 16), sootM); soot.position.copy(roof.position).add(v3(0, -0.72, 0)); soot.rotation.x = Math.PI / 2; g.add(soot);
+    // a cliff face of layered rock (a displaced box, its front face square to the floor), two fallen blocks either side,
+    // and a thick ledge leaning out over the floor: the roof, sooted underneath
+    const wall = new THREE.Mesh(rockBox(6.5, 3.4, 1.4, 11), rockM); wall.position.copy(S.wall).addScaledVector(back, 0.1).add(v3(0, 1.5, 0)); wall.rotation.y = S.facing; g.add(wall);
+    for (const sd of [-1, 1]) { const sh = new THREE.Mesh(rockBox(1.4, 1.9, 2.2, 23 + sd), rockM); sh.position.copy(S.at).addScaledVector(side, sd * 2.7).addScaledVector(back, 1.0); sh.position.y = this.h(sh.position.x, sh.position.z) + 0.8; sh.rotation.y = S.facing + sd * 0.2; g.add(sh); }
+    const roof = new THREE.Mesh(rockBox(6.2, 0.8, 3.0, 37), rockM); roof.position.copy(S.at).addScaledVector(back, 0.9).add(v3(0, 2.75, 0)); roof.rotation.set(-0.08, S.facing, 0); g.add(roof);
+    const soot = new THREE.Mesh(new THREE.CircleGeometry(1.3, 16), sootM); soot.position.copy(roof.position).add(v3(0, -0.42, 0)); soot.rotation.x = Math.PI / 2; g.add(soot);
     // the old flakes in the floor dust, pale with weathering, and one hand axe
     for (let i = 0; i < 9; i++) {
       const fl = new THREE.Mesh(new THREE.TetrahedronGeometry(0.035, 0), std(0xbdb6a8, { roughness: 0.6 }));
@@ -670,7 +677,7 @@ export class Episode2 {
     }
     const axe = new THREE.Mesh(new THREE.OctahedronGeometry(0.08, 0), std(0xa8a090, { roughness: 0.55 })); axe.scale.set(0.7, 0.25, 1.3); axe.position.copy(S.at).addScaledVector(back, 0.95); axe.position.y = this.h(axe.position.x, axe.position.z) + 0.02; g.add(axe);
     // red hands on the back wall: small four-fingered ones, and one five-fingered, his size
-    const wallFace = S.wall.clone().addScaledVector(back, -0.85).add(v3(0, 1.1, 0));
+    const wallFace = S.wall.clone().addScaledVector(back, 0.1 - 0.7 - 0.06).add(v3(0, 1.1, 0));
     const sizes = [[-0.7, 0.2, 0.14, 4], [-0.45, 0.45, 0.13, 4], [-0.2, 0.15, 0.15, 4], [0.15, 0.4, 0.12, 4], [0.55, 0.25, 0.2, 5]];
     for (const [x, y, sz, n] of sizes) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(sz, sz), new THREE.MeshBasicMaterial({ map: handTex(n), transparent: true, depthWrite: false, opacity: 0.85 }));
@@ -913,6 +920,18 @@ export class Episode2 {
     this.steam(c.clone().add(v3(0, 0.05, 0)));
     audio.sample('splash', 0.15, { rate: 1.6 });
   }
+}
+
+/** A box of rock: subdivided, every vertex pushed in or out by a few layered waves (bedding planes, then lumps). */
+function rockBox(w: number, h: number, d: number, seed: number) {
+  const g = new THREE.BoxGeometry(w, h, d, 10, 6, 5), p = g.attributes.position as THREE.BufferAttribute, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const n = Math.sin(v.y * 5.1 + seed) * 0.06 + Math.sin(v.x * 1.7 + v.z * 2.3 + seed * 1.3) * 0.12 + Math.sin(v.x * 4.3 - v.y * 3.1 + seed * 0.7) * 0.05;
+    v.addScaledVector(v.clone().normalize(), n); p.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
 }
 
 /** A red hand stencil on a transparent square (n fingers), drawn once per kind. */

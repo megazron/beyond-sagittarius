@@ -88,7 +88,7 @@ methane moon, a loose band of rubble, and a hot cloud-wrapped planet closer to t
 | --- | --- | --- | --- | --- | --- |
 | Start | Zenvik, Ulari | Verdaxis (Verdaxis), surface | Under-ice lungs and cold-water diving reflex; the player's own lineage can change this | Mammalian dive reflex | Research, analysis, the science tree |
 | Level 9 | Skyvra, Tarnkin | A bare asteroid near the giant's ring: rock, pockets of ice, the hull plate she fell with | Antifreeze blood and torpor; the tail is a balance organ in near-zero gravity. She needs no air (her lineage lives in vacuum); she melts ice on the plate for water | Antifreeze glycoproteins in polar fish; ground squirrels that supercool below 0 C | Tracking, navigating boulder to boulder, scouting |
-| End of Stone Age (14) | Bolzar, Ortek | Shardrift: the broken half of a small moon, airless | Mineral dermal plates that seal; oxygen banked in muscle for hours outside | Scaly-foot snail iron armour; seal myoglobin | Welding shelter from hull, tools, machines |
+| End of Stone Age (15, after Episode Two) | Bolzar, Ortek | Shardrift: the broken half of a small moon, airless | Mineral dermal plates that seal; oxygen banked in muscle for hours outside | Scaly-foot snail iron armour; seal myoglobin | Welding shelter from hull, tools, machines |
 | After soap (19) | Lyrra, Vael | Thalwen: a grey tide-locked dust moon, her hull section crashed on it | Lichen symbiont in her violet skin: she dries down into dormancy and wakes when the sun comes over the rim, so her radio only works in bursts | Tardigrade and lichen survival in open vacuum (ESA exposure tests); retinal based purple photosynthesis | Self surgery, growing lichen for air, triage over radio |
 | Agriculture (21 or next) | Draxum, Korrath | Methryx: the giant's methane moon, nitrogen air, lakes of liquid methane | Titan foundry lineage: burns hydrogen and acetylene instead of oxygen, ember seams hold body heat | Proposed Titan biochemistry (McKay 2005) | Heavy carry, breaking ice bedrock, defences |
 | Bronze Age | Nuvexa, Sirelle | Aerolis: the cloud deck of the hot planet, drifting at the one height with sane pressure | Venus cloud lineage: acid-proof skin, and breathable air is a lifting gas in thick carbon dioxide, so her piece of the liner simply floats | Air is buoyant in a CO2 atmosphere (Venus aerostat studies) | Morale, negotiation with whatever lives in the clouds, signal relays |
@@ -99,7 +99,7 @@ methane moon, a loose band of rubble, and a hot cloud-wrapped planet closer to t
 | --- | --- | --- | --- |
 | Zenvik | Verdaxis (Verdaxis) | Everything in levels 1 to 22 | Done |
 | Skyvra | The asteroid | Splint (the quick-time), three ice, melt it on the plate, the dish | Playable at Level 9, part of the story. No reveal film yet |
-| Bolzar | Shardrift | Salvage hull plate, weld the seal | Stage and tasks work from Level 14. No reveal film, no voiced lines |
+| Bolzar | Shardrift | Salvage hull plate, weld the seal | Stage and tasks work from Level 15. No reveal film, no voiced lines |
 | Lyrra | The wreck | Tend lichen, close the wound, send in the sun window | Stage and tasks work from Level 19. No reveal film, no voiced lines |
 | Draxum | Methryx | Haul ice, break bedrock, feed the ember | Stage and tasks work from Level 22. No reveal film, no voiced lines |
 | Nuvexa | Aerolis | Patch the float, raise the relay | Stage and tasks work when forced by test only. Her unlock is in the Bronze Age, which does not exist yet |

@@ -16,7 +16,7 @@ export interface RosterEntry {
 export const ROSTER: RosterEntry[] = [
   { id: 'scientist', unlock: 1, lineage: 'ulari' },
   { id: 'explorer', location: 'ring', unlock: 9, lineage: 'tarnkin' },
-  { id: 'builder', location: 'scree', unlock: 14, lineage: 'ortek' },
+  { id: 'builder', location: 'scree', unlock: 15, lineage: 'ortek' }, // after Episode Two (levels 11 to 14), not in the middle of its last level
   { id: 'medic', location: 'wreck', unlock: 19, lineage: 'vael' },
   { id: 'strong', location: 'moon', unlock: 22, lineage: 'korrath' },
   { id: 'social', location: 'clouds', unlock: 40, lineage: 'sirelle' },
