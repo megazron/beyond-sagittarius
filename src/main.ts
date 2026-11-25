@@ -290,6 +290,7 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', after: () 
   // under the black: the voices' index and the first line's take are in before the scene starts (a fresh profile asked
   // for them only as the first subtitle showed, so the first line came late or not at all)
   const voiced = voice.ready(lines.map((l) => l.key).filter(Boolean));
+  vault.skipNext = false;
   setTimeout(() => void voiced.then(() => {
     // Begin in the creator leaves its stage up under the fade; the black is complete now
     if (stage.active) showStage(false);
@@ -301,8 +302,8 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', after: () 
       ui.fade('black', 1, 0.45);
       setTimeout(() => { ui.show('cine', false); after(); }, 480);
     });
-    // lift the black only once the Vault is really on screen
-    requestAnimationFrame(() => requestAnimationFrame(() => ui.fade('black', 0, 1.0)));
+    // lift the black only once the Vault is really on screen (and not if it was skipped while loading)
+    if (vault.playing) requestAnimationFrame(() => requestAnimationFrame(() => { if (vault.playing) ui.fade('black', 0, 1.0); }));
   }), 520);
 }
 
@@ -433,9 +434,6 @@ function playOpening(withCity: boolean, replay: boolean) {
     renderer.setScene(cine.scene, cine.camera, false);
     cine.start(() => playFilm(replay));
   };
-  // ?earlycity=1 (trial): Zenvora is built under the black before MegaZroN and its programs compile in the background
-  // while he speaks, so less of it is left for the black after the title card
-  if (withCity && new URLSearchParams(location.search).get('earlycity') === '1') setTimeout(() => { if (!game?.away) return; const st = game.away.prepare('city'); void renderer.compileFor(st.scene, camera); }, 600);
   playVault('intro', () => (withCity ? playPrologue(() => titleCard(films, 'takeoff.card')) : films()));
 }
 
@@ -984,6 +982,11 @@ async function boot() {
   });
   game.away.skins = lastSkins;
   game.away.entered = () => { if (!arrivalHold) return; setHold(true); elapsed = arrivalHold.at; Math.random = seeded(arrivalHold.seed); arrivalHold = null; };
+  // someone's arrival on their own world (game/arrival.ts) is a scene too: letterboxed, HUD off, with its Skip
+  game.away.onIntro = (on) => {
+    ui.show('cine', on); ui.show('hud', !on);
+    document.getElementById('btn-skip')!.classList.toggle('hidden', !on);
+  };
   // the take-off from Zenvora is a scene like any other: letterboxed, with its Skip
   game.away.onOutro = (on) => {
     // (its sounds are the scene's own, on its clock: boarding.ts)
@@ -1214,6 +1217,9 @@ window.addEventListener('resize', () => {
   get awayOutroOn() { return !!game?.away?.outroOn; },
   /** Test hook (recordings): these tasks count as done (the hero views that wait for one). */
   awayMarkDone(...ids: string[]) { for (const id of ids) game?.away?.done.add(id); },
+  /** The arrival on someone's own world (game/arrival.ts): who, how far in, how long, and the body's wounds after. */
+  get arrival() { const a = game?.away?.arrival; return a?.active ? { id: a.def.id, t: a.t, dur: a.def.dur } : null; },
+  get wounds() { const i = game?.mode === 'away' ? game?.away?.injuries : game?.injuries; return i ? { who: i.who, wounds: i.wounds.map((w) => ({ ...w })), effects: i.effects() } : null; },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
   /** Walk with the keys, not a teleport (soak_smoke's bump test): hold or let go a key, and turn the away body to a heading. */

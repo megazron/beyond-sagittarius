@@ -157,6 +157,29 @@ def main():
         page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
         page.on("console", lambda m: errors.append(f"console.{m.type}: {m.text}") if m.type == "error" else None)
         page.add_init_script("if (!localStorage.getItem('bs-settings-v1')) localStorage.setItem('bs-settings-v1', JSON.stringify({lang: 'en', sensitivity: 1, invertY: false, volume: 0, subtitles: true, showFps: false}))")
+        # (p32) a 5 s wait that fails here prints the page's last modal opens and closes and its long tasks (the main thread
+        # held over 200 ms), to tell a slow page from a modal opened again over the one being closed
+        page.add_init_script("window.__longT = []; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) if (e.duration > 200) { window.__longT.push([Math.round(e.startTime), Math.round(e.duration)]); if (window.__longT.length > 30) window.__longT.shift(); } }).observe({ type: 'longtask', buffered: true }); } catch (e) {}")
+        _wfs = page.wait_for_selector
+        # (p32, modal-land CI 45454504900: the codex opened at 65.32 s in the 2 ms between a 15.6 s and a 7.2 s task of the
+        # world's first frames after Continue under SwiftShader, and the 5 s wait for it ran out inside the 7.2 s one. So a
+        # wait that runs out waits for the page to draw two frames, however long, and is tried once more: 5 s of a page
+        # that is drawing, not 5 s of a page held by the software renderer)
+        def _wfs_logged(sel, **kw):
+            try:
+                return _wfs(sel, **kw)
+            except Exception:
+                try:
+                    log("wait_for_selector ran out:", sel, kw, "now", page.evaluate("Math.round(performance.now())"))
+                    log("  modal log:", page.evaluate("window.__modalLog || null"))
+                    log("  long tasks:", page.evaluate("window.__longT || null"))
+                except Exception as e2:
+                    log("  (could not read the page:", e2, ")")
+                page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(1))))")
+                r = _wfs(sel, **kw)
+                log("  ...found after the page drew again:", sel, "now", page.evaluate("Math.round(performance.now())"), "long tasks:", page.evaluate("(window.__longT || []).slice(-4)"))
+                return r
+        page.wait_for_selector = _wfs_logged
         page.goto(url, wait_until="domcontentloaded", timeout=120000)
         page.evaluate("localStorage.removeItem('bs-save-v1')")
         page.wait_for_function("window.__bs && window.__bs.state === 'title'", timeout=60000)
@@ -810,7 +833,11 @@ def main():
         # a level can end in someone's reveal: play it out first
         for _ in range(60):
             ev("__bs.step(1)")
-            if ev("__bs.mode") == "away":
+            if ev("__bs.mode") == "away" and ev("!!__bs.arrival"):
+                # (arrivals, game/arrival.ts: the first visit to someone's world plays their landing with the controls off,
+                # and the teleport waits for it; land5's run stayed on the world all 60 rounds) the Skip button's way past it
+                ev("__bs.skip()"); time.sleep(0.6); ev("__bs.step(0.5)")
+            elif ev("__bs.mode") == "away":
                 ev("__bs.awayGoNext()"); ev("__bs.step(0.3)"); page.keyboard.press("KeyE"); time.sleep(.5); ev("__bs.step(0.5)")
             elif ev("__bs.mode") == "play" and not ev("__bs.revealDue"):
                 break
