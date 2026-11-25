@@ -41,8 +41,11 @@ def check_i18n():
     import voice_check
     problems += voice_check.problems()[:20]
     for l in ("hi", "ur"):
-        missing = [k for k in dicts["en"] if k not in dicts[l]]
-        extra = [k for k in dicts[l] if k not in dicts["en"]]
+        # a g.f. key is a feminine form, and which lines need one differs by language (Hindi and Urdu verbs agree with a
+        # first-person speaker, English does not): it only needs its plain line to exist
+        gf = lambda k: k.startswith("g.f.")
+        missing = [k for k in dicts["en"] if k not in dicts[l] and not gf(k)]
+        extra = [k for k in dicts[l] if (k[4:] if gf(k) else k) not in dicts["en"]]
         if missing or extra:
             problems.append(f"{l}: missing {missing} extra {extra}")
     for l, d in dicts.items():
