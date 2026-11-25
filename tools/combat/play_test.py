@@ -45,8 +45,10 @@ def boot(b, q, mobile=False):
 
 D = "__bs.combat.debug()"
 def step(page, sec): page.evaluate(f"__bs.step({sec})")
+HELD = [False]
 def shot(page, name):
     if out:
+        if HELD[0]: page.evaluate("__bs.advance(1e-9)")  # held clock: one draw without a tick, so the picture is this state
         time.sleep(0.6)
         try: page.screenshot(path=str(out / f'{name}.png'), timeout=60000)
         except Exception as e: print('no picture', name, str(e)[:80], flush=True)
@@ -62,6 +64,12 @@ with sync_playwright() as pw:
     time.sleep(1.5); calls0 = page.evaluate("__bs.perf.calls")
     # ---- each set piece
     for enc in ['arena', 'hunt.first', 'night.defence', 'chase.escape', 'stealth.pass', 'fish.spear']:
+        if enc == 'arena':
+            # the arena's pose checks (the shaft and the arms against the body) are the worst over the frames posed. With the
+            # clock running free, the page's own frames (wall-clock dt, 1 to 3 a second under SwiftShader) were posed between
+            # the steps, so each run measured different frames: the bow's arm depth read 0.1 to 5.5 cm on the same code. Held
+            # here (and Math.random seeded) the arena is posed only by __bs.step's 0.05 s ticks, the same every run
+            page.evaluate("__bs.hold(true); (() => { let s = 11; Math.random = () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })()"); HELD[0] = True
         page.evaluate(f"__bs.combat.trial('{enc}')"); time.sleep(0.3); step(page, 1.0)
         d = page.evaluate(D)
         ok(d['encounter'] == enc and len(d['enemies']) >= (0 if enc == 'night.defence' else 1), f'{enc}: starts', d['encounter'])
@@ -138,6 +146,7 @@ with sync_playwright() as pw:
                 # against the body's shapes turned with the chest (a side-on archer, a wound-up sling)
                 print(f'  {wpn}: arm depth in the body shapes {ps["rangedArmIn"] * 100:.1f} cm at {ps.get("rangedWhere")} (solve {ps.get("rangedSolveIn", 0) * 100:.1f})', flush=True)
                 ok(ps['rangedArmIn'] <= 0.02, f'arena: with the {wpn} the arms stay out of the body (within 2 cm)', json.dumps(ps))
+            page.evaluate("__bs.hold(false)"); HELD[0] = False  # the rest of the arena counts draws on real frames
             # wake the guardian and let it work
             g = [e for e in page.evaluate(D)['enemies'] if e['kind'] == 'guardian'][0]
             # (the ranged section can leave him down: no wake while down (ai.ts), and the arena's revive after 2.5 s came
