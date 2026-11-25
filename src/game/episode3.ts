@@ -2339,20 +2339,21 @@ export class Episode3 extends Episode2 {
   }
   /** 3.17: MegaZroN reads Episode Three's page. */
   private ledgerScene() {
-    this.busy = true;
-    const say = (k: string, sec: number, then: () => void) => { this.say(k, 'megazron', sec); this.after(sec, then); };
+    // MegaZroN's page over the village itself, not over black (GPU take EP3B A: two minutes of a black screen): a slow crane
+    // up from the house over the field and the reed camp, his lines as subtitles
     const dose = this.f('e3.dose.self') ? 'e3.mz.self' : this.f('e3.dose.half') ? 'e3.mz.half' : 'e3.mz.boy';
-    this.ui.fade('black', 1, 1.0);
-    this.after(1.2, () => {
-      this.ui.banner(t('e3.end'), t('e3.next'));
-      say('e3.mz.1', 7, () => say(dose, 6, () => say('e3.mz.wall', 5, () => say('e3.mz.pello', 5, () => say('e3.mz.4', 5, () => {
-        this.ui.fade('black', 0, 1.4);
-        this.set('e3.ledger'); this.set('ch2.e3.done');
-        this.busy = false;
-      })))));
-    });
+    const H = this.house(), c = H.at.clone(), fld = this.fieldAt(), fenn = this.fennAt();
+    const mid = c.clone().lerp(fld, 0.5);
+    const crane = (k: number) => ({ from: mid.clone().addScaledVector(H.a, -9 - k * 3).addScaledVector(H.b, 6 + k * 2).add(v3(0, 4 + k * 3, 0)), to: mid.clone().lerp(fenn, 0.15 + k * 0.1).add(v3(0, 0.6, 0)), fov: 48, push: 0.02 });
+    this.ui.banner(t('e3.end'), t('e3.next'));
+    this.scene([
+      { key: 'e3.mz.1', who: 'megazron' as Who, shot: () => crane(0) },
+      { key: dose, who: 'megazron' as Who, shot: () => crane(0.4) },
+      { key: 'e3.mz.wall', who: 'megazron' as Who, shot: () => crane(0.8) },
+      { key: 'e3.mz.pello', who: 'megazron' as Who, shot: () => crane(1.2) },
+      { key: 'e3.mz.4', who: 'megazron' as Who, shot: () => crane(1.6) },
+    ], () => { this.set('e3.ledger'); this.set('ch2.e3.done'); });
   }
-
 }
 
 /** Episode Three's choices that test a flag; kept so the sealed data and the code agree on names (story_check reads it). */
