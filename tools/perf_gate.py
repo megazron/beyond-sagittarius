@@ -63,8 +63,16 @@ class H(http.server.SimpleHTTPRequestHandler):
 srv = http.server.ThreadingHTTPServer(('127.0.0.1', a.port), functools.partial(H, directory=a.dist))
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 # one held frame: `sec` of game time in ticks of 1/30 s, then one draw (1e-9: a draw without a tick); the frame's counts
-STEP = """(sec) => new Promise((res) => { const n = __bs.frames; __bs.advance(sec);
-  const f = () => (__bs.frames > n ? res(__bs.perf) : requestAnimationFrame(f)); requestAnimationFrame(f); })"""
+# `lum`: the frame's mean brightness (0-255), read in the same animation frame as the draw, before the canvas is cleared
+STEP = """([sec, lum]) => new Promise((res) => { const n = __bs.frames; __bs.advance(sec);
+  const f = () => { if (__bs.frames <= n) { requestAnimationFrame(f); return; } const out = { ...__bs.perf };
+    if (lum) { const c = document.createElement('canvas'); c.width = 64; c.height = 36; const x = c.getContext('2d'); x.drawImage(__bs.gl.domElement, 0, 0, 64, 36);
+      const d = x.getImageData(0, 0, 64, 36).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += (d[i] + d[i + 1] + d[i + 2]) / 3; out.lum = +(s / (64 * 36)).toFixed(1); }
+    res(out); }; requestAnimationFrame(f); })"""
+# what must be there (2026-11-25: CI was green on 7cda35d, where the merged body shader did not link and no crowd body was
+# drawn): bodies drawn at each spot at least this (you are one), a frame that is not black, no shader that failed to link
+BODY_FLOOR = {'bazaar': 2, 'crowd': 6, 'gate': 8}
+LUM_FLOOR = 6
 # what drew each frame's triangles (object paths, main pass M or shadow S), kept for a failure's log
 TOP_ON = """() => { const r = __bs.gl, orig = r.renderBufferDirect; window.__pgTop = { orig, cur: {} };
   const name = (obj) => { const parts = []; for (let o = obj; o && parts.length < 4; o = o.parent) { let n = o.name || ''; if (o.userData && o.userData.isCharacter) n = 'BODY'; if (n) parts.push(n); }
@@ -117,9 +125,9 @@ with sync_playwright() as pw:
                 if now > deadline: raise NotSettled('; '.join(why))
                 page.wait_for_timeout(100); waited += 1
 
-        def step(sec, deadline, ticking=False):
+        def step(sec, deadline, ticking=False, lum=False):
             wait_in(deadline, ticking)
-            return page.evaluate(STEP, sec)
+            return page.evaluate(STEP, [sec, lum])
 
         # arrival: everything in, a few draws to upload what is first drawn, then 4 s of play (the atlas bakes in ticks)
         try:
@@ -146,8 +154,8 @@ with sync_playwright() as pw:
                 pending = [w for w in page.evaluate('__bs.settled()')]
                 if pending: raise NotSettled('; '.join(pending))
                 page.evaluate(TOP_ON); r = {'calls': 0, 'tris': 0, 'bodies': 0, 'skinned': 0}; top = []; topc = []; each = []
-                for _ in range(4):
-                    p = step(1 / 30, dl, ticking=True); t = page.evaluate(TOP_TAKE)
+                for i in range(4):
+                    p = step(1 / 30, dl, ticking=True, lum=i == 3); t = page.evaluate(TOP_TAKE)
                     for k in r: r[k] = max(r[k], p[k])
                     each.append(p['calls'])
                     if p['tris'] >= r['tris']: top = t['tris']
@@ -155,7 +163,7 @@ with sync_playwright() as pw:
                 page.evaluate(TOP_OFF)
             except NotSettled as e:
                 fails.append(f"{q} {name}: did not settle in {a.settle:.0f} s ({e})"); print(fails[-1], flush=True); continue
-            st = {'clock': round(page.evaluate('__bs.clock'), 3), 'secs': round(time.time() - t0, 1), 'frozen': nf + 1, 'calls each': each}
+            st = {'clock': round(page.evaluate('__bs.clock'), 3), 'secs': round(time.time() - t0, 1), 'frozen': nf + 1, 'calls each': each, 'lum': p.get('lum')}
             print(q, name, 'settled', st, flush=True)
             rows[name] = r
             print(q, name, r, flush=True)
@@ -167,6 +175,10 @@ with sync_playwright() as pw:
                 print('  worst frame by triangles:\n   ' + '\n   '.join(top), flush=True)
             if r['bodies'] > B: fails.append(f"{q} {name}: {r['bodies']} bodies drawn (budget {B})")
             if r['calls'] < 10: fails.append(f"{q} {name}: nothing drawn")
+            if r['bodies'] < BODY_FLOOR.get(name, 1): fails.append(f"{q} {name}: only {r['bodies']} bodies drawn (at least {BODY_FLOOR.get(name, 1)}: a body that is not drawn throws nothing)")
+            if p.get('lum', 255) < LUM_FLOOR: fails.append(f"{q} {name}: the frame is black (mean brightness {p['lum']} of 255)")
+        bad = page.evaluate('__bs.shaderErrors()')
+        if bad: fails.append(f"{q}: shader programs that did not link: {bad[:6]}")
         if errs: fails.append(f"{q}: errors {errs[:3]}")
         report[q] = rows
         page.close()

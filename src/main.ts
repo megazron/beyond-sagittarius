@@ -1076,6 +1076,9 @@ window.addEventListener('resize', () => {
   cineCam() { const c = cine as unknown as { camera: THREE.Camera; ins: { stick: THREE.Object3D; cockpit: THREE.Object3D }; pilot: { root: THREE.Object3D; handR: THREE.Object3D } }; const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map((v) => +v.toFixed(2)); return { cam: w(c.camera), dir: c.camera.getWorldDirection(new THREE.Vector3()).toArray().map((v) => +v.toFixed(2)), stick: w(c.ins.stick), cockpit: w(c.ins.cockpit), pilot: w(c.pilot.root), handR: w(c.pilot.handR), t: (cine as unknown as { time: number }).time }; },
   /** Freeze the clock (true) and step it by hand; `frames` counts finished steps. */
   hold(on: boolean) { setHold(on); },
+  /** Shader programs that did not link (needs ?shadercheck=1, which keeps three's diagnostics): their names. A body whose
+   * merged shader fails is simply not drawn and nothing throws (7cda35d), so tools/perf_gate.py fails on any. */
+  shaderErrors() { return ((renderer.renderer.info.programs ?? []) as unknown as { name: string; diagnostics?: { runnable: boolean } }[]).filter((p) => p.diagnostics && !p.diagnostics.runnable).map((p) => p.name); },
   /** Hold the clock from the next arrival on a stage (tools/perf_gate.py): the game clock becomes `at`, Math.random a seeded sequence. */
   holdAtArrival(at = 600, seed = 1) { arrivalHold = { at, seed }; },
   /** What is still loading or compiling: the stage's bodies, props and card atlas, textures waiting for their upload,
