@@ -825,7 +825,11 @@ def main():
         # a level can end in someone's reveal: play it out first
         for _ in range(60):
             ev("__bs.step(1)")
-            if ev("__bs.mode") == "away":
+            if ev("__bs.mode") == "away" and ev("!!__bs.arrival"):
+                # (arrivals, game/arrival.ts: the first visit to someone's world plays their landing with the controls off,
+                # and the teleport waits for it; land5's run stayed on the world all 60 rounds) the Skip button's way past it
+                ev("__bs.skip()"); time.sleep(0.6); ev("__bs.step(0.5)")
+            elif ev("__bs.mode") == "away":
                 ev("__bs.awayGoNext()"); ev("__bs.step(0.3)"); page.keyboard.press("KeyE"); time.sleep(.5); ev("__bs.step(0.5)")
             elif ev("__bs.mode") == "play" and not ev("__bs.revealDue"):
                 break
