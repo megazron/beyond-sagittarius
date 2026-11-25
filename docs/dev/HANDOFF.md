@@ -2117,3 +2117,12 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
 - GPU probes: ~/bs-cap/ep2b/probe (logger.js reads __bs.frameReport and __bs.bodyPoints every 0.25 s; mkprobe.py,
   mkprobe2.py write plans for ~/bs-cap/tools/cap1.sh). Preview servers: 4641 (dist), 4642 (dist-cap), PIDs in
   ~/bs-cap/ep2b/preview*.pid.
+- ~10:50 GPU takes delivered: Downloads/BS_Game_v1.1/episode2_v2/ (take A and B, each clip under 30 MB, sheets,
+  NOTES.md with what still looks wrong). Capture kit: ~/bs-cap/ep2b/cap (bot.js stand-in: follows the land-routed
+  marker, repeats keydown while holding, leaves talk menus, wakes up after a death; mkplan.py, mkplan14.py for a level
+  14 start; encode.sh splits into <=160 s parts under 29 MB). tools/combat/demo_bot.js takes up the spear he has.
+- levels_smoke's level 13 stall, found with its new logging (__bs.ep2): Episode Two's free() was false because
+  combat.engaged stays on while a weapon is held up; scenes now wait for combat.threatened, and a scene holsters.
+- Still open (see NOTES.md there): the bow drill insert does not show his hands; the shelter is blocky from the front
+  and dark inside; a pale white shape beside him on the ridge (go branch), not identified; ridge find moved after the
+  take, not re-recorded; Oom-Sa's first close-up against a blown-out sky.
