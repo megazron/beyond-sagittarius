@@ -212,10 +212,12 @@ export class Combat {
       this.enc = { resolve, opts, snap, pos: [P.pos.x, P.pos.y, P.pos.z], yaw: P.yaw, hour: s.timeOfDay, day: s.day, endT: 0, card: false };
       const site = this.site(id);
       const S = D.settings();
+      // (the stone head is hafted onto the same spear: once it is, the fire-hardened one is not in the kit beside it;
+      // GPU take A's night started stone-tipped and the HUD said fire-hardened for the rest of it)
       const run = new EncounterRun(id, {
         site, env: this.env, seed: opts.seed ?? 11, difficulty: opts.difficulty ?? S.difficulty,
         assist: { aim: S.aim, hold: S.hold, slowMo: S.slowMo, noTimers: false, damageNumbers: S.numbers },
-        companion: opts.companion, story: opts.story, inv: s.inventory, has: trial ? { fists: true } : { ...this.cs.has, fists: true, rock: true, ...(s.flags.spear ? { spear: true } : {}), ...(s.flags.spear && (s.flags['inv.hafting'] || s.flags['inv.haft']) ? { hafted: true } : {}) }, kit: trial || id === 'arena',
+        companion: opts.companion, story: opts.story, inv: s.inventory, has: trial ? { fists: true } : { ...this.cs.has, fists: true, rock: true, ...(s.flags.spear ? { spear: true } : {}), ...(s.flags.spear && (s.flags['inv.hafting'] || s.flags['inv.haft']) ? { hafted: true, spear: false } : {}) }, kit: trial || id === 'arena',
       });
       run.sim.regen = false; run.sim.ownsBody = false;
       if (!trial) { run.sim.player.dur = { ...this.cs.dur }; run.sim.player.injuries = this.cs.injuries.map((i) => ({ ...i })); }
