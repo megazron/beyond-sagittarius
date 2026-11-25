@@ -365,8 +365,10 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     shot("10-lake")
 
     # ---- Chapter Two on a phone: codex, minigame, discovery, dialogue ----
-    ev("""(() => { const s = __bs.save; s.level = 11; s.completed = [1,2,3,4,5,6,7,8,9,10]; s.flags.crewCamp = true; s.flags.ch2Intro = true;
-        Object.assign(s.inventory, { nodule: 2, stone: 1, branch: 2 }); })()""")
+    # Episode Two's level 12 (src/game/episode2.ts): the stranger met, resin and cord in the bag, the hafted point to make
+    ev("""(() => { const s = __bs.save; s.level = 12; s.completed = [1,2,3,4,5,6,7,8,9,10,11]; s.flags.crewCamp = true; s.flags.ch2Intro = true;
+        for (const k of ['e2.l11.intro', 'e2.snareSet', 'e2.voiceDone', 'e2.met', 'e2.l12.glue']) s.flags[k] = true;
+        s.discoveries = ['knapping', 'cordage']; Object.assign(s.inventory, { resin: 2, cord: 1, branch: 2 }); })()""")
     ev("__bs.gotoObjective(0.4)")
     ev("__bs.step(0.4)")
     time.sleep(0.5)
@@ -375,31 +377,67 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
     touch.tap(*centre(page, "#tb-act"))
     time.sleep(0.3)
     ev("__bs.step(0.1)")
+    # the work in his hands plays first (a short scene), then the panel
+    for _ in range(40):
+        if ev("__bs.mode") == "craft":
+            break
+        if ev("__bs.mode") == "scene":
+            ev("__bs.skip()")
+        ev("__bs.step(0.3)")
+        time.sleep(0.1)
     page.wait_for_selector("#craft:not(.hidden)", timeout=10000)
     shot("11-craft")
     b = page.locator("#mg-main").bounding_box()
     if b["height"] < 44 or b["y"] + b["height"] > vh + 1:
         fail(f"craft button unusable: {b}")
+    held = False
     for _ in range(4000):
         c = ev("__bs.craft")
         if not c:
             break
+        if held and c["kind"] != "heat":
+            touch.send("touchEnd", []); held = False
         if c["failed"]:
+            if held:
+                touch.send("touchEnd", []); held = False
             touch.tap(*centre(page, "#mg-main"))
             continue
         lo, hi = c["band"]
-        if lo + 0.03 < c["v"] < hi - 0.03:
-            bx = page.locator("#mg-main").bounding_box()
-            touch.tap(bx["x"] + bx["width"] / 2, bx["y"] + bx["height"] / 2)
+        bx = page.locator("#mg-main").bounding_box()
+        mx, my = bx["x"] + bx["width"] / 2, bx["y"] + bx["height"] / 2
+        if c["kind"] == "heat":
+            # a finger held on the button raises the heat, lifting it lets it fall
+            want = c["v"] < (lo + hi) / 2
+            if want and not held:
+                touch.send("touchStart", [(1, (mx, my))]); held = True
+            elif not want and held:
+                touch.send("touchEnd", []); held = False
+        elif c["kind"] == "mix":
+            if c["v"] < lo + 0.01:
+                touch.tap(*centre(page, "#mg-right"))
+            elif c["v"] > hi - 0.01:
+                touch.tap(*centre(page, "#mg-left"))
+            else:
+                touch.tap(mx, my)
+        elif lo + 0.03 < c["v"] < hi - 0.03:
+            touch.tap(mx, my)
         ev("__bs.step(0.05)")
+    # his line with the thing made, then the card
+    for _ in range(40):
+        if page.locator("#disc:not(.hidden)").count():
+            break
+        if ev("__bs.mode") == "scene":
+            ev("__bs.skip()")
+        ev("__bs.step(0.3)")
+        time.sleep(0.1)
     page.wait_for_selector("#disc:not(.hidden)", timeout=5000)
     time.sleep(0.3)
     shot("12-discovery")
     if "Sharp stone" not in page.inner_text("#disc"):
-        fail("no sharp-tool warning on the knapping discovery")
+        fail("no sharp-tool warning on the hafting discovery")
     touch.tap(*centre(page, "#disc-ok"))
     ev("__bs.step(0.3)")
-    if "knapping" not in ev("__bs.save.discoveries"):
+    if "haft" not in ev("__bs.save.discoveries"):
         fail("discovery not saved")
     ev("__bs.step(0.5)")
     touch.tap(*centre(page, "#tb-codex"))
