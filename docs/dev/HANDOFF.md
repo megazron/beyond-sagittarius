@@ -23,8 +23,8 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
   06:36 (06:09 was black on the GPU), the held spear hidden while the one across his knees shows.
 - world/cobble.ts (river cobbles, shared with knap.ts) makes the fire ring (the lavender dodecahedra read as gems);
   world/fruit.ts is the red fruit (a 7 cm ribbed pod, on the bush and in his hand; it was an 18 cm glowing ball).
-- Leaf cup sip (waking.ts sipLeaf), fruit test: smell, skin, lip, a tiny bite, wait, spit. Planting (character.ts
-  doTask 'plant') kneels for the task when standing. Lean-to (lean.ts): thin-thatch shot from above looking down
+- Leaf cup sip (waking.ts sipLeaf), fruit test: smell, skin, lip, a tiny bite, wait, spit. Planting: tried kneeling for the task (studio
+  look: kneeling, the hand still hung in the air, not on the soil); reverted, not fixed. Lean-to (lean.ts): thin-thatch shot from above looking down
   through the row (was blown-out sky), he stands clear of the frame when it is turned the wrong way, the frame's
   back blocks from the pole stage on. The pull's break-up hides the ship's hatch parts (userData.hatchPart) and the
   sun there is whiter.
