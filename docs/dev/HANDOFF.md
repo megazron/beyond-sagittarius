@@ -1946,3 +1946,33 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   starts with `cordage, haft` (knapping is recorded when level 11 starts).
 - Tests: `tools/episode2_smoke.py [--picks e2.snare=far,...]` (starts from a level 11 save); `levels_smoke.py`
   expects 12 discoveries and the `ep2` Ledger page.
+
+## 2026-11-24 gate agent (worktree ~/bs-gate, branch gate1, pushed as gate2; landing queue)
+- PERF_GATE ON A HELD CLOCK (tools/perf_gate.py docstring has the whole method). Cause of the run-to-run spread (145,
+  167, 181 draws at the phone gate on the same code): the clock ran free, so on CI's 1 to 3 frames a second each spot
+  got 8 to 40 frames (0.05 s each) of crowd simulation and the crowd stood elsewhere each run; and "settled: False"
+  everywhere. Now: `__bs.holdAtArrival(600, 1)` holds the clock from Away.enter (game clock 600 s, Math.random seeded),
+  the script steps it; before each step it waits for `__bs.settled()` (city.ts pending(): bodies not full, props, pools
+  drawing, card atlas, prebake; textures waiting for upload; shader programs linking) and no request in flight. A spot
+  whose wait passes --settle (300 s) fails "did not settle (what was pending)". `advance(1e-9)` draws without a tick.
+- LANDING QUEUE (mine): gate, modal-land2 (= modal-land rebased, play_test conflict: the modal wait from modal-land,
+  the brace night from main), intro4, land3 (= land2 + landing_smoke wake fix), cabin5. ~/bs-story/DECISIONS.md: the
+  cabin decisions are C1-C5 now (land2's are L1-L10).
+- land2's landing_smoke "wake: did not reach play": the wake's cues are stretched by wakeRate (0.48 with the English
+  takes: wake.line3 6.72 s in a 3.4 s slot), so 22.2 s of cues is about 46 s of game time; the test held only 40 s.
+  Now up to 90 s held. smoke's known flake "wake did not reach play" is likely the same stretch (not checked).
+- levels_smoke "the first night did not end through the fight": fixed on main by 32945fa (night.ts kept no cb.* flags
+  when the fight was won), not by me.
+- SAME COUNTS ON TWO MACHINES: the full Mobile run on the laptop (dist-gate, 4b5d98e's code) and CI gate2 4b5d98e read
+  the same draws and triangles at all nine spots (flat 60/553077, bazaar 75/341974, crowd 133/561218, gate 174/686795,
+  square 92/528361, downtown 52/273737, market 62/424628, waterfront 50/334157, park 36/375498). --spots changes the
+  numbers (the clock at each spot depends on the spots before it): compare full runs only.
+- REAL OVER-BUDGET, NOT A NEW REGRESSION: Mobile gate 174 draw calls (budget 145) at clock 616.5, 15 bodies (budget 16).
+  The worst frame by object: crowd bodies' kit x23, head parts x18, skin_body x15, hips x5+4, a phone prop x6 (+4 in the
+  shadow pass), unnamed MeshStandardMaterial x27, MeshBasicMaterial x15, shadow pass about 31. The 145 budget assumed
+  2-3 draws a body; on phones a crowd body draws about 5 in the main pass plus its shadow. The old free-running gate read
+  145, 167 and 181 on this same code; 145 was a lucky frame. I did NOT raise the budget. cabin4's dfe5752 (no phone
+  in a selfie body's hand) takes about 10 of these off. Everything else on gate2 4b5d98e was green.
+- land3 6c80dd9: landing_smoke ok locally (the wake 55 s held, then play); not pushed after the first fix (fd0f7fe CI:
+  the wake ended at 47 s into the thirst scene, now held through it). Its levels_smoke ".pt-cols not hidden after
+  #m-close" (twice on land2/land3) is what modal-land's fade-out fix is for: land modal first.

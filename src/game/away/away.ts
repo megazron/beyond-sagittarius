@@ -61,7 +61,7 @@ export class Away {
     p.crowdRise = new URLSearchParams(window.location.search).get('crowdcam') === 'rise';
     // what the feet hear: Zenvora's paving and the flat's floorboards, ice on the ring, rock and metal elsewhere
     p.surface = location === 'city' ? (x, z) => (x > 9.4 && z > 61 && z < 77 ? 'wood' : 'stone') : location === 'ring' ? () => 'snow' : location === 'clouds' ? () => 'wood' : location === 'wreck' ? () => 'metal' : () => 'stone';
-    p.model.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; } });
+    p.model.castAll(); // casts where a body does: not in the phones' city (CHAR_BUDGET.shadowFar 0 there)
     // the lineage, in play: the stage lights their marks and sets their pace
     stage.bind({
       root: p.model.root,
@@ -75,7 +75,12 @@ export class Away {
     this.ui.setPrompt(null);
     // why they are alive at all, in their own words, the moment you arrive
     if (!job) window.setTimeout(() => { if (this.who === id) this.ui.say(`away.${location}.intro`, `crew.${id}.name`, 6); }, 900);
+    this.entered?.();
   }
+  /** Called at the end of enter() (tools/perf_gate.py holds the clock from this moment: main.ts holdAtArrival). */
+  entered: (() => void) | null = null;
+  /** What the stage is still loading (an empty list once everything it builds is in). */
+  get pending() { return this.stage?.pending?.() ?? []; }
 
   private open(k: AwayTask) { return (k.repeat || !this.done.has(k.id)) && (k.need ?? []).every((n) => this.done.has(n)); }
 

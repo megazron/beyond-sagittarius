@@ -37,7 +37,7 @@ import type { AwayStage } from './game/away/stage';
 import type { MenuTab } from './ui/ui';
 import { setPortraitCast, setPortraitRenderer, portraitFrame } from './ui/portraits';
 import { preloadCrew } from './characters/character';
-import { setKtx2Renderer, setTextureWarmer } from './core/assets';
+import { setKtx2Renderer, setTextureWarmer, warmPending } from './core/assets';
 import { defaultLook, PlayerLook, CrewSkins } from './characters/custom';
 import { voice } from './core/voice';
 import { frameReport } from './cinematic/cutscene';
@@ -762,6 +762,12 @@ let fpsAcc = 0, fpsFrames = 0, fpsLast = performance.now();
 let frameCount = 0;
 /** Test hook: frames only move when asked, by a fixed step, so a slow GPU sees the same film. */
 const hold = { on: false, pending: 0, done: 0 };
+function setHold(on: boolean) { hold.on = on; film.manual = on; voice.manual = on ? () => elapsed : null; audio.manual = on ? () => elapsed : null; }
+// tools/perf_gate.py: from the moment you arrive on a stage the clock is held (stepped by hand with advance), the game's
+// clock set to `at` and Math.random seeded, so every run of the gate steps the same simulation whatever the machine's
+// speed (on CI's software GL the free-running clock ran 8 to 40 frames per spot and the crowd stood elsewhere each run)
+let arrivalHold: { at: number; seed: number } | null = null;
+function seeded(seed: number) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 // ---- the graphics context: lost and restored without a crash; a memory guard before the browser kills the tab ----
 // A phone (or a laptop's driver) can take the WebGL context away: the game used to freeze on a black or garbled frame.
 // Now it saves, says so, waits for the context to come back (three.js uploads everything again; the image lights are
@@ -977,6 +983,7 @@ async function boot() {
     if (quality.name === 'mobile' && new URLSearchParams(location.search).get('awayrelease') !== '0') AWAY_RELEASED.last = releaseGpu([world.scene, cine.scene, vault.scene, stage.scene], [sc]);
   });
   game.away.skins = lastSkins;
+  game.away.entered = () => { if (!arrivalHold) return; setHold(true); elapsed = arrivalHold.at; Math.random = seeded(arrivalHold.seed); arrivalHold = null; };
   // the take-off from Zenvora is a scene like any other: letterboxed, with its Skip
   game.away.onOutro = (on) => {
     // (its sounds are the scene's own, on its clock: boarding.ts)
@@ -1068,7 +1075,21 @@ window.addEventListener('resize', () => {
   /** Where the cinematic camera is and what it looks at, and the cockpit's yoke and pilot (debugging shots). */
   cineCam() { const c = cine as unknown as { camera: THREE.Camera; ins: { stick: THREE.Object3D; cockpit: THREE.Object3D }; pilot: { root: THREE.Object3D; handR: THREE.Object3D } }; const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map((v) => +v.toFixed(2)); return { cam: w(c.camera), dir: c.camera.getWorldDirection(new THREE.Vector3()).toArray().map((v) => +v.toFixed(2)), stick: w(c.ins.stick), cockpit: w(c.ins.cockpit), pilot: w(c.pilot.root), handR: w(c.pilot.handR), t: (cine as unknown as { time: number }).time }; },
   /** Freeze the clock (true) and step it by hand; `frames` counts finished steps. */
-  hold(on: boolean) { hold.on = on; film.manual = on; voice.manual = on ? () => elapsed : null; audio.manual = on ? () => elapsed : null; },
+  hold(on: boolean) { setHold(on); },
+  /** Shader programs that did not link (needs ?shadercheck=1, which keeps three's diagnostics): their names. A body whose
+   * merged shader fails is simply not drawn and nothing throws (7cda35d), so tools/perf_gate.py fails on any. */
+  shaderErrors() { return ((renderer.renderer.info.programs ?? []) as unknown as { name: string; diagnostics?: { runnable: boolean } }[]).filter((p) => p.diagnostics && !p.diagnostics.runnable).map((p) => p.name); },
+  /** Hold the clock from the next arrival on a stage (tools/perf_gate.py): the game clock becomes `at`, Math.random a seeded sequence. */
+  holdAtArrival(at = 600, seed = 1) { arrivalHold = { at, seed }; },
+  /** What is still loading or compiling: the stage's bodies, props and card atlas, textures waiting for their upload,
+   * shader programs still linking (an empty list when the scene is all in). `advance(1e-9)` draws a frame without a tick. */
+  settled() {
+    const why: string[] = [...(game?.away?.pending ?? [])];
+    const w = warmPending(); if (w) why.push(`textures ${w}`);
+    const progs = (renderer.renderer.info.programs ?? []) as unknown as { isReady?: () => boolean }[];
+    const linking = progs.filter((p) => p.isReady && !p.isReady()).length; if (linking) why.push(`shaders ${linking}`);
+    return why;
+  },
   /** What was played on the held clock: lines, sounds, music, beds (laid under recorded frames). */
   get soundLog() { return [...voice.log, ...audio.log]; },
   get clock() { return elapsed; },

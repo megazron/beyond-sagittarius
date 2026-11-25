@@ -126,6 +126,9 @@ wait("window.__bs && __bs.state==='title' && __bs.ready", 240)
 ev("localStorage.removeItem('bs-save-v1'); localStorage.setItem('bs-consent-v1','1')"); w.call('Page.reload'); time.sleep(2)
 wait("window.__bs && __bs.state==='title' && __bs.ready", 240)
 print('gpu', ev("(()=>{const g=document.createElement('canvas').getContext('webgl2'),e=g.getExtension('WEBGL_debug_renderer_info');return g.getParameter(e.UNMASKED_RENDERER_WEBGL)})()"), flush=True)
+# plan "hold": true: the clock held from arrival as in perf_gate (game clock 600 s, Math.random seeded), stepped by
+# "eval": "__bs.advance(sec)" steps, so two builds can be compared on the same frame
+if PLAN.get('hold'): ev("__bs.holdAtArrival(600, 1)")
 ev("document.getElementById('btn-new').click()"); time.sleep(1.5)
 wait("document.getElementById('nm-ok')", 30); ev("document.getElementById('nm-ok').click()")
 for i in range(300):
