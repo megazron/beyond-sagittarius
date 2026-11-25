@@ -203,6 +203,8 @@ export class Episode2 {
   private fwd() { const r = this.z.root.rotation.y; return v3(Math.sin(r), 0, Math.cos(r)); }
   /** His right, facing f (it was (f.z, 0, -f.x), his left: every two-handed hold had the hands crossed). */
   private right(f: THREE.Vector3) { return v3(-f.z, 0, f.x); }
+  /** His left: the side the shots and the places round him were laid out on (kept, so no camera or cairn moved). */
+  private side(f: THREE.Vector3) { return v3(f.z, 0, -f.x); }
   private head() { return new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld); }
   /** A spot `dist` from the camp fire, on the side towards `towards`. */
   private byFire(dist: number, towards?: THREE.Vector3) {
@@ -215,7 +217,7 @@ export class Episode2 {
   private handShot(at: THREE.Vector3, dist = 0.9, side = 1): Shot {
     // far enough out that his face stays in frame (closer, the cutscene re-aims at his head and the shot looks up into the sky)
     dist = Math.max(dist, 1.15);
-    const f = this.fwd(), r = this.right(f).multiplyScalar(side), hd = this.head();
+    const f = this.fwd(), r = this.side(f).multiplyScalar(side), hd = this.head();
     // the side away from the fire
     if (r.dot(at.clone().sub(this.L.camp)) < 0) r.negate();
     // below his eye line: he bends over the work, and a camera above his head sees only his hair
@@ -224,7 +226,7 @@ export class Episode2 {
     return { from, to: at.clone().lerp(hd, 0.3), push: 0.02, aperture: 0.004 };
   }
   private wide(at: THREE.Vector3, dist = 6, side = 0.6, up = 1.2): Shot {
-    const f = this.fwd(), r = this.right(f);
+    const f = this.fwd(), r = this.side(f);
     const from = at.clone().addScaledVector(f, dist).addScaledVector(r, dist * side).add(v3(0, up, 0));
     // above the grass where the ground rises towards the camera
     from.y = Math.max(from.y, this.h(from.x, from.z) + 1.35);
@@ -502,7 +504,7 @@ export class Episode2 {
   /** Where the snare is set: on the game trail by camp, or down by the stream (the choice). Deterministic. */
   snareAt() {
     const c = this.L.camp, far = this.f('e2.snare.far');
-    const toLake = v3(LAKE.x - c.x, 0, LAKE.z - c.z).normalize(), side = this.right(toLake);
+    const toLake = v3(LAKE.x - c.x, 0, LAKE.z - c.z).normalize(), side = this.side(toLake);
     const at = far ? c.clone().addScaledVector(toLake, 30).addScaledVector(side, 8) : c.clone().addScaledVector(side, -10).addScaledVector(toLake, 3);
     at.y = this.h(at.x, at.z);
     return at;
@@ -592,7 +594,7 @@ export class Episode2 {
     const me = this.settle(her.clone().add(v3(-1.9, 0, -0.9)), her, false);
     const meet = () => { oom.setKneel(false); this.npcs.pin('local', her, Math.atan2(me.x - her.x, me.z - her.z)); oom.setLookTarget(this.head()); };
     this.scene([
-      { hold: 3, shot: () => ({ from: me.clone().addScaledVector(this.fwd(), -3.2).addScaledVector(this.right(this.fwd()), 1.4).add(v3(0, 1.9, 0)), to: her.clone().add(v3(0, 0.5, 0)), push: 0.05 }), run: () => { z.setLookTarget(her.clone().add(v3(0, 0.6, 0))); oom.setHold({ R: { at: noose, fingers: v3(0, -1, 0), palm: v3(1, 0, 0), radius: 0.006, grasp: true } }); } },
+      { hold: 3, shot: () => ({ from: me.clone().addScaledVector(this.fwd(), -3.2).addScaledVector(this.side(this.fwd()), 1.4).add(v3(0, 1.9, 0)), to: her.clone().add(v3(0, 0.5, 0)), push: 0.05 }), run: () => { z.setLookTarget(her.clone().add(v3(0, 0.6, 0))); oom.setHold({ R: { at: noose, fingers: v3(0, -1, 0), palm: v3(1, 0, 0), radius: 0.006, grasp: true } }); } },
       { hold: 2, shot: () => ({ from: noose.clone().add(v3(0.4, 0.25, 0.35)), to: noose.clone(), push: 0.01, aperture: 0.005 }) },
       { key: 'e2.st.1', who: OOM, if: { flag: 'e2.called' }, shot: () => cover.close(oom, 0.4, 1.0), run: () => { oom.setHold(null); meet(); } },
       { key: 'e2.st.1b', who: OOM, if: { not: { flag: 'e2.called' } }, shot: () => cover.close(oom, 0.4, 1.0), run: () => { oom.setHold(null); meet(); } },
@@ -695,7 +697,7 @@ export class Episode2 {
     }
     const at = best.at, back = toRidge.clone();
     const wall = at.clone().addScaledVector(back, 2.4); wall.y = this.h(wall.x, wall.z);
-    const cairn = at.clone().addScaledVector(back, -2.2).addScaledVector(this.right(back), 2.4); cairn.y = this.h(cairn.x, cairn.z);
+    const cairn = at.clone().addScaledVector(back, -2.2).addScaledVector(this.side(back), 2.4); cairn.y = this.h(cairn.x, cairn.z);
     this.shelterSite = { at, facing: Math.atan2(back.x, back.z), wall, cairn };
     return this.shelterSite;
   }
@@ -704,7 +706,7 @@ export class Episode2 {
   private buildShelter() {
     if (this.shelterBuilt) return;
     this.shelterBuilt = true;
-    const S = this.shelter(), back = v3(Math.sin(S.facing), 0, Math.cos(S.facing)), side = this.right(back);
+    const S = this.shelter(), back = v3(Math.sin(S.facing), 0, Math.cos(S.facing)), side = this.side(back);
     // an overhang in a low cliff (world/rockshelter.ts): banded rock, a sooted roof, the cliff's blocks round it, and the
     // hands blown in ochre on the back wall
     const origin = S.at.clone().addScaledVector(back, 1.0); origin.y = this.h(origin.x, origin.z);
@@ -744,7 +746,7 @@ export class Episode2 {
   }
   private shelterScene() {
     this.buildShelter();
-    const S = this.shelter(), z = this.z, oom = this.oom(), back = v3(Math.sin(S.facing), 0, Math.cos(S.facing)), side = this.right(back);
+    const S = this.shelter(), z = this.z, oom = this.oom(), back = v3(Math.sin(S.facing), 0, Math.cos(S.facing)), side = this.side(back);
     const guided = test(this.s, TRUSTS(1)) && !this.f('e2.oomsa.away') && !!oom;
     if (guided && oom) { this.actors[OOM] = oom; const her = S.at.clone().addScaledVector(side, 1.6).addScaledVector(back, -0.4); her.y = this.h(her.x, her.z); this.npcs.pin('local', her, Math.atan2(back.x, back.z)); }
     const floor = S.at.clone().addScaledVector(back, 0.8);
@@ -811,7 +813,7 @@ export class Episode2 {
   private buildPots() {
     for (const p of this.pots) p.removeFromParent();
     this.pots = [];
-    const c = this.L.camp, d = v3(1, 0, 0.4).normalize(), side = this.right(d);
+    const c = this.L.camp, d = v3(1, 0, 0.4).normalize(), side = this.side(d);
     const pts = [v3(0.0, 0), v3(0.075, 0), v3(0.09, 0.04), v3(0.095, 0.1), v3(0.085, 0.16), v3(0.07, 0.2), v3(0.075, 0.22)].map((p) => new THREE.Vector2(p.x, p.y));
     for (let i = 0; i < 4; i++) {
       const at = c.clone().addScaledVector(d, 1.15).addScaledVector(side, (i - 1.5) * 0.26); at.y = this.h(at.x, at.z);
@@ -919,7 +921,7 @@ export class Episode2 {
       this.pots.forEach((p, i) => { const mm = p.material as THREE.MeshStandardMaterial; if (i < left) mm.color.setHex(0xa0623c); else { mm.color.setHex(0x3a2a22); p.rotation.z = 0.5; } });
       const pot = this.pots[0], me = this.settle(pot.position.clone().addScaledVector(pot.position.clone().sub(c).setY(0).normalize(), 0.5), pot.position, true, true);
       const oom = this.oom(), with_ = !!oom && test(s, TRUSTS(1)) && !this.f('e2.oomsa.away');
-      if (with_ && oom) { this.actors[OOM] = oom; const her = me.clone().addScaledVector(this.right(this.fwd()), 1.3); her.y = this.h(her.x, her.z); this.npcs.pin('local', her, Math.atan2(pot.position.x - her.x, pot.position.z - her.z)); }
+      if (with_ && oom) { this.actors[OOM] = oom; const her = me.clone().addScaledVector(this.side(this.fwd()), 1.3); her.y = this.h(her.x, her.z); this.npcs.pin('local', her, Math.atan2(pot.position.x - her.x, pot.position.z - her.z)); }
       const f = this.fwd(), r = this.right(f);
       const rim = pot.position.clone().add(v3(0, 0.2, 0));
       this.scene([

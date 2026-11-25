@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { DecalGeometry } from 'three/examples/jsm/geometries/DecalGeometry.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Simplex } from '../core/noise';
 
 /**
@@ -27,13 +28,15 @@ function profile(v: number) {
 function rockColour(y: number, n: number, out: THREE.Color) {
   // bedding: bands of slightly different stone every 25 to 40 cm, broken by the noise
   const band = Math.sin(y * 17 + n * 4) * 0.5 + 0.5, fine = Math.sin(y * 61 + n * 9) * 0.5 + 0.5;
-  out.setRGB(0.36 + band * 0.07 + fine * 0.025, 0.33 + band * 0.06 + fine * 0.02, 0.3 + band * 0.045 + fine * 0.015);
+  // a warm grey-brown sandstone, darker and lighter by bed (sRGB values: the vertex colours are linear)
+  out.setRGB(0.4 + band * 0.08 + fine * 0.03 + n * 0.05, 0.36 + band * 0.07 + fine * 0.025 + n * 0.04, 0.31 + band * 0.05 + fine * 0.02 + n * 0.03, THREE.SRGBColorSpace);
   return out;
 }
 
 /** A weathered block: an icosphere pushed about by noise and cut into layers. */
 function block(sx: number, sy: number, sz: number, seed: number) {
-  const g = new THREE.IcosahedronGeometry(1, 4), p = g.attributes.position as THREE.BufferAttribute, v = new THREE.Vector3();
+  const ico = new THREE.IcosahedronGeometry(1, 4); ico.deleteAttribute('normal'); ico.deleteAttribute('uv');
+  const g = mergeVertices(ico), p = g.attributes.position as THREE.BufferAttribute, v = new THREE.Vector3();
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i);
     const n = fbm(v.x * 1.3 + seed, v.z * 1.3 + v.y * 0.7 - seed);
@@ -55,14 +58,14 @@ function paint(g: THREE.BufferGeometry, m: THREE.Matrix4, hearth: THREE.Vector3 
     rockColour(v.y, fbm(v.x * 0.4, v.z * 0.4), c);
     // lichen-pale on the weather side, high up
     const pale = Math.max(0, fbm(v.x * 0.9 + 4, v.z * 0.9) * 0.5 + 0.1) * THREE.MathUtils.smoothstep(v.y - (hearth?.y ?? 0), 2.6, 4.5);
-    c.lerp(new THREE.Color(0.58, 0.57, 0.5), pale * 0.6);
+    c.lerp(new THREE.Color().setRGB(0.62, 0.6, 0.52, THREE.SRGBColorSpace), pale * 0.5);
     if (hearth) {
       // soot: a long-burnt ceiling, heaviest straight over the hearth and pulled out along the roof to the lip
       const d = v.distanceTo(hearth), over = v.y - hearth.y;
       let s = Math.max(0, 1 - d / 2.4) * THREE.MathUtils.smoothstep(over, 1.2, 2.4);
       if (lipZ !== null && into) { const z = loc.z; s = Math.max(s, THREE.MathUtils.smoothstep(over, 1.9, 2.6) * THREE.MathUtils.smoothstep(-z, -0.2, 1.4) * 0.8); }
       s *= 0.75 + 0.25 * fbm(v.x * 3, v.z * 3 + v.y);
-      c.lerp(new THREE.Color(0.07, 0.06, 0.055), Math.min(0.92, s));
+      c.lerp(new THREE.Color().setRGB(0.09, 0.075, 0.065, THREE.SRGBColorSpace), Math.min(0.92, s));
     }
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
@@ -112,9 +115,9 @@ export function buildRockShelter(origin: THREE.Vector3, into: THREE.Vector3, sid
   const outer = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97, metalness: 0 });
   const blocks: [number, number, number, number, number, number, number][] = [
     // x, y, z, sx, sy, sz, turn
-    [0, 1.3, 4.2, 5.4, 2.6, 2.2, 0], [-3.9, 0.7, 2.2, 2.0, 2.1, 2.6, 0.4], [3.8, 0.8, 2.0, 2.2, 2.2, 2.5, -0.3],
-    [0.2, 3.45, 1.0, 4.0, 0.85, 3.0, 0.05], [-0.1, 3.0, -1.2, 3.4, 0.5, 1.1, -0.06], [-2.6, 4.2, 3.0, 2.6, 1.6, 2.2, 0.7],
-    [2.9, 4.0, 3.3, 2.4, 1.4, 2.0, -0.5], [-5.2, 0.2, -0.4, 1.3, 1.0, 1.4, 1.1],
+    [0, 1.2, 4.6, 5.8, 2.8, 2.4, 0], [-5.0, 0.9, 2.6, 1.9, 2.3, 2.6, 0.4], [5.0, 1.0, 2.4, 2.0, 2.4, 2.6, -0.3],
+    [0.2, 3.75, 1.6, 4.2, 0.9, 2.8, 0.05], [-0.1, 3.15, -1.15, 3.5, 0.45, 1.0, -0.06], [-2.8, 4.4, 3.4, 2.6, 1.6, 2.2, 0.7],
+    [3.0, 4.2, 3.6, 2.4, 1.4, 2.0, -0.5], [-6.0, 0.3, -0.2, 1.3, 1.0, 1.4, 1.1], [6.2, 0.2, 0.4, 1.1, 0.9, 1.2, 0.3],
   ];
   blocks.forEach(([x, y, z, sx, sy, sz, turn], k) => {
     const g = block(sx, sy, sz, k * 3.7 + 1);
@@ -125,7 +128,7 @@ export function buildRockShelter(origin: THREE.Vector3, into: THREE.Vector3, sid
   });
   // fallen pieces on the floor at the sides
   for (let k = 0; k < 5; k++) {
-    const x = (k % 2 ? 1 : -1) * (2.1 + k * 0.25), z = 0.4 + (k * 0.7) % 1.6;
+    const x = (k % 2 ? 1 : -1) * (2.9 + k * 0.3), z = -0.6 + (k * 0.7) % 1.6;
     const w = new THREE.Vector3(x, 0, z).applyMatrix4(toWorld), s = 0.22 + (k % 3) * 0.12;
     const g = block(s * 1.3, s * 0.7, s, 40 + k), m = new THREE.Matrix4().makeRotationY(k * 1.9).setPosition(w.x, ground(w.x, w.z) + s * 0.4, w.z);
     paint(g, m, null, null, null);

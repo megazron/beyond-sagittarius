@@ -2094,3 +2094,21 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   step) instead of the old knapping panel. Bolzar's roster unlock moved from 14 to 15.
 - Landing: ~/bs-ep2-land (detached) merges ep2 and main; branches ep2-land1/ep2-land2 carry the exact sha CI checks.
   Combat's "Page.reload: Timeout" after the night tests also fails on main 26fe104 (not Episode Two); it passed locally.
+
+## 2026-11-25 Episode Two fixes and main's combat reload (ep2b agent: worktree ~/bs-ep2b, branch ep2b from 7dd2746)
+- MAIN COMBAT RED ("Page.reload: Timeout 180000ms" in play_test after "trying again ... keeps the story where it was"):
+  reproduced locally (scripts ~/bs-cap/ep2b/reload_diag*.py). After "try again" the night is rebuilt and SwiftShader's
+  GPU process falls behind: rAF frames of 5 to 20 s (also 17 to 50 ms ones in between), shader program count constant
+  (325), the page's own JavaScript 99.7% idle over 40 s of CPU profile. The navigation cannot commit behind that GPU
+  queue: 40 s and 180 s timeouts. Holding the clock (no new frames) and waiting one frame: the reload committed after
+  65 s. Closing the page and opening a new one: 61 s to commit. So the queue is the GPU process's, not the page's.
+  Frame cost per post pass and for the fire's additive meshes: diag7 (see the log in ~/bs-cap/ep2b/diag7.log).
+- levels_smoke on ep2-land4 (CI 45564666392) gave up on level 13 because its stuck counter was per level, not per lack
+  of progress; the shelter scene played 16 s after. Fixed in the test (0cc8215).
+- Episode Two (all in ep2b, see the commits): bark shot framed a standing head (kneel blend at 0.47 when the beat began)
+  -> settle kneels and poses at once; episode2.ts right() was his left (crossed wrists in every two-handed hold); vine
+  and cord over the lap; inv.haft vs inv.hafting (spear head, fight weapon, HUD); world/rockshelter.ts; Shot.lightAt;
+  game/landway.ts (marker and nearest item on foot round the lake); Oom-Sa's hair; anim_qa e2_* scenarios + budgets.
+- GPU probes: ~/bs-cap/ep2b/probe (logger.js reads __bs.frameReport and __bs.bodyPoints every 0.25 s; mkprobe.py,
+  mkprobe2.py write plans for ~/bs-cap/tools/cap1.sh). Preview servers: 4641 (dist), 4642 (dist-cap), PIDs in
+  ~/bs-cap/ep2b/preview*.pid.
