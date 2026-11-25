@@ -11,6 +11,9 @@ import { isDiscovered } from './tech/tech';
 import { TECH_BY_ID } from './tech/data';
 import { apply, type StoryState } from './branch';
 import { createCharacter, type Character } from '../characters/character';
+import { createCreature, type CreatureView } from '../combat/view/creatures';
+import { createCopier, honeycomb, leaf as leafMesh, iceBlock } from '../world/ep3props';
+import type { Enemy } from '../combat/sim/species';
 import { defaultLook, LINEAGES, type PlayerLook } from '../characters/custom';
 import type { Who } from '../cinematic/cutscene';
 import { Episode2 } from './episode2';
@@ -149,9 +152,10 @@ export class Episode3 extends Episode2 {
     this.restoreHouse();
     this.restoreField();
     this.updateFolk(dt);
+    this.updateBand(dt);
     this.updateRain(dt);
-    this.restoreSprouts(); this.restoreDitch(); this.restoreKit();
-    this.fever(s.level === 18 && this.f('e3.l18.intro') && !this.f('e3.doseDone'));
+    this.restoreSprouts(); this.restoreDitch(); this.restoreKit(); this.tickKits(dt);
+    this.fever(s.level === 18 && this.f('e3.l18.intro') && !this.f('e3.doseDone'), dt);
     this.wait -= dt;
     // a story beat waiting only because an animal hangs about near him (CI levels_smoke stood at level 15 for 150 rounds,
     // free() false, 'engaged'): after 10 s it loses interest and goes
@@ -1023,7 +1027,7 @@ export class Episode3 extends Episode2 {
   }
   /** Hoh-Ma (very old, faded star marks) and Wen-Ka (a child): Fennish bodies like Oom-Sa's, built once from level 17. */
   private folk: { hohma: Character; wenka: Character } | null = null;
-  private folkSpots: Record<'hohma' | 'wenka', { at: THREE.Vector3; yaw: number; kneel: boolean }> | null = null;
+  private folkSpots: Record<'hohma' | 'wenka', { at: THREE.Vector3; yaw: number; kneel: boolean; lie?: THREE.Vector3 }> | null = null;
   private buildFolk() {
     if (this.folk) return this.folk;
     const d = this.world.q.name === 'mobile' ? 0.6 : 1;
@@ -1043,12 +1047,95 @@ export class Episode3 extends Episode2 {
     const wk = c.clone().addScaledVector(tn, 1.8).addScaledVector(d, 0.6); wk.y = this.h(wk.x, wk.z);
     this.folkSpots = { hohma: { at: hm, yaw: Math.atan2(d.x, d.z), kneel: true }, wenka: { at: wk, yaw: Math.atan2(-tn.x, -tn.z), kneel: false } };
   }
-  private placeFolk(id: 'hohma' | 'wenka', at: THREE.Vector3, face: THREE.Vector3, kneel = false) {
+  private placeFolk(id: 'hohma' | 'wenka', at: THREE.Vector3, face: THREE.Vector3, kneel = false, lie?: THREE.Vector3) {
     if (!this.folkSpots) this.homeFolk();
     const y = Math.atan2(face.x - at.x, face.z - at.z);
-    this.folkSpots![id] = { at: at.clone().setY(this.h(at.x, at.z)), yaw: y, kneel };
+    this.folkSpots![id] = { at: at.clone().setY(this.h(at.x, at.z)), yaw: y, kneel, lie: lie?.clone().setY(0).normalize() };
+  }
+  /** A body laid on its back on the ground: the feet at `at`, the head along `dir`, the face up (the rest body; its arms
+   * down along its sides, the knees a little up). */
+  private layDown(fig: Character, at: THREE.Vector3, dir: THREE.Vector3) {
+    const up = dir.clone(), fw = UP.clone(), side = new THREE.Vector3().crossVectors(up, fw).normalize();
+    const m = new THREE.Matrix4().makeBasis(side, up, fw);
+    fig.root.quaternion.setFromRotationMatrix(m);
+    fig.root.position.copy(at).add(v3(0, 0.1 * fig.root.scale.y, 0));
+    fig.setKneel(false, false, true);
+    fig.setLimbs({ armL: [0.2, -0.98, 0.04], foreL: [0.08, -0.95, 0.3], armR: [-0.2, -0.98, 0.04], foreR: [-0.08, -0.95, 0.3], legL: [0.06, -0.93, 0.36], shinL: [0.02, -0.96, -0.28], legR: [-0.08, -0.97, 0.22], shinR: [-0.02, -0.99, -0.1] });
   }
   private folkT = 0;
+  /** The rest of the band (EPISODE_THREE_SCRIPT 3.5: "eleven of them"): eight more Fennish (four on phones), full game
+   * bodies at the camp's own work: two at the fire, one weaving, one at the tray, watchers by the shelters and the shore,
+   * a second child. They turn their heads to him when he is near. At the harvest some reap beside him (with trust). */
+  private band: Character[] = [];
+  private bandSpots: { at: THREE.Vector3; yaw: number; kneel: boolean; heels: boolean }[] = [];
+  private bandMode = '';
+  private buildBand() {
+    if (this.band.length) return this.band;
+    const mob = this.world.q.name === 'mobile', d = mob ? 0.6 : 1;
+    const base = (o: Partial<PlayerLook>): PlayerLook => ({ ...defaultLook(), lineage: 'vael', ...LINEAGES.vael, skin: 0x2f8f8f, ears: 'fin', tail: true, marks: 'stars', outfit: 'explorer', eye: 'doll', iris: 0x8aff9a, glow: 0x5ac87a, ...o });
+    const looks: [Partial<PlayerLook>, number][] = [
+      [{ gender: 'm', hair: 'strong', hairRoot: 0x0e4a40, hairTip: 0x6ad8a0, height: 1.0, build: 0.4, skin: 0x2a7f7c, eye: 'narrow' }, 0.92],
+      [{ gender: 'f', hair: 'social', hairRoot: 0x12a48c, hairTip: 0xb6ff5a, height: 0.96, build: 0.15, skin: 0x358f88 }, 0.9],
+      [{ gender: 'f', hair: 'medic', hairRoot: 0x1a5a50, hairTip: 0x9adfc0, height: 0.98, build: 0.3, skin: 0x2f7a80, eye: 'calm' }, 0.9],
+      [{ gender: 'm', hair: 'builder', hairRoot: 0x0e3a3a, hairTip: 0x4ab88a, height: 1.04, build: 0.55, skin: 0x27706e, eye: 'squint' }, 0.94],
+      [{ gender: 'f', hair: 'explorer', hairRoot: 0x12a48c, hairTip: 0xffd24a, height: 0.92, build: 0.0, skin: 0x3a9a90 }, 0.62],
+      [{ gender: 'm', hair: 'scientist', hairRoot: 0x0e2a30, hairTip: 0x6fb6ff, height: 1.02, build: 0.2, skin: 0x2c8486, eye: 'tired' }, 0.92],
+      [{ gender: 'f', hair: 'strong', hairRoot: 0x9ab0a8, hairTip: 0xdfe8e0, height: 0.94, build: 0.2, skin: 0x3f7f7a, eye: 'tired' }, 0.88],
+      [{ gender: 'm', hair: 'medic', hairRoot: 0x12a48c, hairTip: 0x9aff6a, height: 1.0, build: 0.1, skin: 0x33888a }, 0.9],
+    ];
+    for (const [lk, sc] of looks.slice(0, mob ? 4 : 8)) {
+      const fig = createCharacter('scientist', d, base(lk));
+      fig.root.scale.setScalar(sc); fig.setGround((x, z) => this.h(x, z)); fig.root.visible = false; this.world.scene.add(fig.root);
+      this.band.push(fig);
+    }
+    return this.band;
+  }
+  /** Where the band is: at their camp, or (level 21, the harvest with trust) reaping in the rows and carrying the sheaves. */
+  private bandPlace(mode: string) {
+    if (mode === this.bandMode) return;
+    this.bandMode = mode; this.bandSpots = [];
+    if (mode === 'camp') {
+      const { c, d, t: tn } = this.fennAxes(), fire = c.clone().addScaledVector(d, -0.6).addScaledVector(tn, -0.6);
+      // [along d, along t, kneel, heels, face: 0 the fire, 1 the lake, 2 the camp's middle]
+      const spots: [number, number, boolean, boolean, number][] = [[-1.5, -0.1, true, true, 0], [-0.1, -1.6, true, true, 0], [-0.9, 3.6, true, false, 2], [1.5, -2.2, false, false, 2], [-1.4, -2.6, true, true, 2], [4.4, 0.9, false, false, 1], [0.8, 1.6, true, false, 2], [-3.6, 0.4, false, false, 2]];
+      for (const [a, b, kn, he, face] of spots) {
+        const at = c.clone().addScaledVector(d, a).addScaledVector(tn, b); at.y = this.h(at.x, at.z);
+        const to = face === 0 ? fire : face === 1 ? at.clone().addScaledVector(d, 3) : c;
+        this.bandSpots.push({ at, yaw: Math.atan2(to.x - at.x, to.z - at.z), kneel: kn, heels: he });
+      }
+    } else if (mode === 'field') {
+      const at = this.fieldAt(), H = this.house(), n = Math.max(1, this.fieldRows.length);
+      for (let i = 0; i < 8; i++) {
+        const row = (i % n) - (n - 1) / 2, reap = i < 5;
+        const p = at.clone().addScaledVector(H.b, reap ? row * 0.55 + 0.27 : -((n - 1) / 2) * 0.55 - 1.2 - (i - 5) * 0.9).addScaledVector(H.a, reap ? -1.2 + i * 0.6 : 0.8 + (i - 5) * 0.7);
+        p.y = this.h(p.x, p.z);
+        const to = reap ? p.clone().addScaledVector(H.a, 1) : at;
+        this.bandSpots.push({ at: p, yaw: Math.atan2(to.x - p.x, to.z - p.z), kneel: reap, heels: false });
+      }
+    }
+  }
+  private updateBand(dt: number) {
+    const lvl = this.s.level;
+    const mode = lvl < 17 || lvl === 19 ? '' : this.bandHarvest ? 'field' : 'camp';
+    if (!mode && !this.band.length) return;
+    if (mode) this.buildBand();
+    this.bandPlace(mode);
+    const me = this.player.pos, t = performance.now() / 1000;
+    this.band.forEach((fig, i) => {
+      const sp = this.bandSpots[i];
+      fig.root.visible = !!sp && sp.at.distanceTo(me) < 90;
+      if (!fig.root.visible || !sp) return;
+      fig.root.position.copy(sp.at); fig.root.rotation.y = sp.yaw; fig.root.updateMatrixWorld();
+      fig.setKneel(sp.kneel, sp.heels);
+      // they watch him when he is near (the adults from where they are, saying nothing)
+      const dd = sp.at.distanceTo(me);
+      fig.setLookTarget(dd < 14 && (i + Math.floor(t / 7)) % 3 !== 0 ? this.head() : null);
+      fig.animate('idle', this.folkT * 0.3 + i * 1.7, 0, t + i, dt);
+    });
+  }
+  /** Level 21: the band reaps beside him while the harvest scene plays (trust >= 1). */
+  private bandHarvest = false;
+  private laid: 'hohma' | 'wenka' | null = null;
   /** Level 16: Wen-Ka stands at the reeds' edge for the frame going up (only while that beat plays). */
   private wk16 = false;
   private updateFolk(dt: number) {
@@ -1062,6 +1149,8 @@ export class Episode3 extends Episode2 {
       const fig = F[id], sp = this.folkSpots![id], dist = sp.at.distanceTo(this.player.pos);
       fig.root.visible = dist < 120 && (this.s.level >= 17 || id === 'wenka');
       if (!fig.root.visible) continue;
+      if (sp.lie && this.s.level === 18) { this.layDown(fig, sp.at, sp.lie); fig.root.updateMatrixWorld(); fig.animate('lie', 0, 0, performance.now() / 1000, dt); this.laid = id; continue; }
+      if (this.laid === id) { this.laid = null; fig.setLimbs(null); fig.root.quaternion.identity(); }
       fig.root.position.copy(sp.at); fig.root.rotation.y = sp.yaw; fig.root.updateMatrixWorld();
       fig.setKneel(sp.kneel, sp.kneel);
       fig.animate('idle', this.folkT * 0.3, 0, performance.now() / 1000, dt);
@@ -1357,7 +1446,11 @@ export class Episode3 extends Episode2 {
   // ------------------------------------------------------------------ level 18: the cut (3.7 red lines, 3.8 the one dose)
   private feverEl: HTMLDivElement | null = null;
   /** The fever: the edges of the picture breathe, red, while it lasts (style.css .e3-fever). */
-  private fever(on: boolean) {
+  /** How hard the fever has him (0 to 1): it comes on over a few seconds and goes the same way; game.ts slows his walk,
+   * takes his run and his breath by it (EPISODE_THREE_SCRIPT 3.7: "speed down, stamina down"). */
+  feverAmount = 0;
+  private fever(on: boolean, dt = 0) {
+    this.feverAmount = Math.max(0, Math.min(1, this.feverAmount + (on ? dt / 4 : -dt / 3)));
     if (!on && !this.feverEl) return;
     if (!this.feverEl) { const d = document.createElement('div'); d.className = 'e3-fever'; document.body.appendChild(d); this.feverEl = d; }
     if (this.feverEl.classList.contains('on') !== on) this.feverEl.classList.toggle('on', on);
@@ -1489,7 +1582,8 @@ export class Episode3 extends Episode2 {
     // the boy sits on a mat at the edge of the nearest shelter, his foot out in front of him, Hoh-Ma kneeling at it
     const mat = c.clone().addScaledVector(d, 1.0).addScaledVector(tn, -1.4); mat.y = this.h(mat.x, mat.z);
     const out = tn.clone().negate();
-    this.placeFolk('wenka', mat, mat.clone().addScaledVector(out, 2), true);
+    // (he lies on his back, his head in the shelter's shade and the bad foot out towards them: owner, "Wen-Ka lies down")
+    this.placeFolk('wenka', mat.clone().addScaledVector(out, 0.42), mat.clone().addScaledVector(out, 2), false, out.clone().negate());
     const hm = mat.clone().addScaledVector(out, 0.75).addScaledVector(d, 0.45); this.placeFolk('hohma', hm, mat, true);
     const me = this.settle(mat.clone().addScaledVector(out, 0.9).addScaledVector(d, -0.55), mat, true, true);
     const foot = mat.clone().addScaledVector(out, 0.42).add(v3(0, 0.06, 0));
@@ -1497,10 +1591,11 @@ export class Episode3 extends Episode2 {
     const f = this.fwd(), r = this.right(f);
     // the comb in a leaf, in Hoh-Ma's two hands
     const held = hm.clone().addScaledVector(mat.clone().sub(hm).setY(0).normalize(), 0.28).add(v3(0, 0.45, 0));
-    const leaf = this.mesh(new THREE.CircleGeometry(0.11, 12), std(0x3f6a2a, { roughness: 0.8, side: THREE.DoubleSide }), held.clone()); leaf.rotation.x = -Math.PI / 2; leaf.scale.set(1, 1.5, 1);
-    const comb = this.mesh(new THREE.BoxGeometry(0.1, 0.022, 0.075), std(0xd89a2a, { roughness: 0.35, emissive: 0x3a2000 }), held.clone().add(v3(0, 0.014, 0)));
+    // (real models: world/ep3props.ts, a torn piece of wild comb with its cells, honey and caps, on a broad leaf)
+    const leaf = leafMesh(); leaf.position.copy(held); leaf.rotation.y = Math.atan2(r.x, r.z) + Math.PI / 2; this.group.add(leaf);
+    const comb = honeycomb(); comb.position.copy(held).add(v3(0, 0.016, 0)); comb.rotation.y = leaf.rotation.y + 0.2; this.group.add(comb);
     const holdComb = () => F.hohma.setHold({ L: { at: held.clone().addScaledVector(r, -0.07).add(v3(0, -0.01, 0)), fingers: r.clone(), palm: UP.clone(), radius: 0.03 }, R: { at: held.clone().addScaledVector(r, 0.07).add(v3(0, -0.01, 0)), fingers: r.clone().negate(), palm: UP.clone(), radius: 0.03 } });
-    const boy = (): THREE.Vector3 => F.wenka.root.position.clone().add(v3(0, 0.55, 0));
+    const boy = (): THREE.Vector3 => F.wenka.head.getWorldPosition(new THREE.Vector3());
     const clean = (k: number, at: THREE.Vector3) => { const u = Math.sin(k * 3) * 0.04; z.setHold({ R: { at: at.clone().addScaledVector(r, u).add(v3(0, 0.03, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.02 }, L: { at: at.clone().addScaledVector(r, -0.09).add(v3(0, 0.02, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.03 } }); };
     const beats: Beat[] = [
       { hold: 3.2, shot: () => ({ from: mat.clone().addScaledVector(d, -3.2).addScaledVector(out, 2.0).add(v3(0, 0.9, 0)), to: mat.clone().addScaledVector(out, 0.4).add(v3(0, 0.45, 0)), fov: 40, push: 0.02 }), run: () => {
@@ -1610,7 +1705,7 @@ export class Episode3 extends Episode2 {
     for (let i = g.children.length; i < want; i++) {
       const row = i < 10 ? 0 : 1, k = row ? (i - 10) / 4 : i / 9, a = Math.PI * (0.1 + 0.8 * k) + Math.PI, R = 2.5;
       const x = Math.cos(a) * R, z = -6 + Math.sin(a) * R, y = st.height(x, z);
-      const b = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.42, 0.42), ice);
+      const b = iceBlock(i + 1); void ice;
       b.position.set(x, y + 0.21 + row * 0.42, z); b.rotation.y = -a + Math.PI / 2 + (Math.sin(i * 7) * 0.08); b.castShadow = true; b.receiveShadow = true; g.add(b);
     }
   }
@@ -1635,29 +1730,30 @@ export class Episode3 extends Episode2 {
     go();
   }
   /** The copier comes out of the lake for the warm one inside the ring; the choice of how to meet it (timed). */
+  private copierState = { speed: 0, call: 0, rear: 0 };
   private copier(go: () => void) {
     const st = this.awayStage?.();
     let body: THREE.Group | null = null;
     if (st) {
-      body = new THREE.Group(); body.name = 'e3.copier';
-      const slush = std(0x8a8072, { roughness: 0.3, metalness: 0.1 }), dark = std(0x2a2420, { roughness: 0.6 });
-      const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 3.2, 6, 12), slush); torso.rotation.z = Math.PI / 2; torso.scale.set(1, 1, 0.7); body.add(torso);
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 8), slush); head.position.set(2.0, 0.1, 0); head.scale.set(1.3, 0.7, 0.9); body.add(head);
-      for (const s of [-1, 1]) { const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), dark); mouth.position.set(2.45, 0.02, s * 0.14); body.add(mouth); }
-      for (let i = 0; i < 6; i++) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.04, 0.55, 5), slush); leg.position.set(-1.4 + i * 0.55, -0.38, (i % 2 ? 1 : -1) * 0.38); leg.rotation.x = (i % 2 ? 1 : -1) * 0.5; body.add(leg); }
-      body.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+      // (a real creature now: world/ep3props.ts createCopier, its own spine, six legs, a throat sac that swells as it calls)
+      const cv = createCopier(this.world.q.name === 'mobile' ? 0.6 : 1); body = cv.root;
+      const cs = this.copierState = { speed: 1, call: 0, rear: 0 };
+      let last = performance.now();
+      const tick = () => { if (!cv.root.parent && performance.now() - last > 500) return; const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now; cv.update(now / 1000, dt, cs); requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
       st.scene.add(body);
       const from = new THREE.Vector3(14, 0, -16), to = new THREE.Vector3(2.6, 0, -8.4);
-      this.anim(6, (k) => { const u = Math.min(1, k / 6), p = from.clone().lerp(to, u); p.y = st.height(p.x, p.z) + 0.45 - (1 - Math.min(1, k / 1.5)) * 1.2; body!.position.copy(p); body!.rotation.y = Math.atan2(-(to.z - from.z), to.x - from.x); });
+      this.anim(6, (k) => { const u = Math.min(1, k / 6), p = from.clone().lerp(to, u); p.y = st.height(p.x, p.z) - (1 - Math.min(1, k / 1.5)) * 1.2; body!.position.copy(p); this.copierState.speed = u < 1 ? 1 : 0.1; body!.rotation.y = Math.atan2(-(to.z - from.z), to.x - from.x); });
     }
     audio.sample('stone', 0.5, { rate: 0.45 });
     this.say('e3.dx.come', 'strong', 4.5);
-    this.after(2.2, () => this.ui.say(isAlive(this.s.branch, 'builder') ? 'e3.dx.voice' : 'e3.dx.hum', 'e3.who.voice', 3));
+    this.after(2.2, () => { this.copierState.call = 1; this.ui.say(isAlive(this.s.branch, 'builder') ? 'e3.dx.voice' : 'e3.dx.hum', 'e3.who.voice', 3); });
+    this.after(5.2, () => { this.copierState.call = 0; });
     this.after(5.4, () => {
       const ask = this.askFn ?? ((_: string, d: () => void) => d());
       ask('e3.wall', async () => {
         const hurt = this.f('hurt.draxum');
-        const leave = () => { if (body) { const b = body; this.anim(3, (k) => { b.position.x += 0.08; b.position.z -= 0.05; b.position.y -= k * 0.01; }); this.after(3.2, () => b.removeFromParent()); } };
+        const leave = () => { this.copierState.rear = 0; this.copierState.speed = 1; if (body) { const b = body; this.anim(3, (k) => { b.position.x += 0.08; b.position.z -= 0.05; b.position.y -= k * 0.01; }); this.after(3.2, () => b.removeFromParent()); } };
         if (this.f('e3.wall.mock')) {
           this.say('e3.dx.joke', 'strong', 3.5);
           this.after(3.6, () => { this.say('e3.dx.mocked', 'strong', 4.5); leave(); this.after(4.6, () => this.wallEnd(go)); });
@@ -1672,7 +1768,7 @@ export class Episode3 extends Episode2 {
           return;
         }
         // hold the wall (and a silent timeout): a steady hold against it while it pushes; shorter with his old hurt
-        const hold = () => this.tension({ kind: 'steady', seconds: 6, strain: hurt ? 1.6 : 1.1 });
+        const hold = () => { this.copierState.rear = 1; this.copierState.speed = 0.3; return this.tension({ kind: 'steady', seconds: 6, strain: hurt ? 1.6 : 1.1 }); };
         let r = await hold();
         let held = !r || r.passed;
         if (!held && hurt && this.f('draxum.waited')) { this.say('e3.dx.again', 'strong', 3); r = await hold(); held = !r || r.passed; if (!held) this.set('e3.wall.twice'); }
@@ -1828,25 +1924,32 @@ export class Episode3 extends Episode2 {
   }
   /** Day 40: the snare from the first days holds a young nibbet, alive, the mother gone. */
   private kitG: THREE.Group | null = null;
-  private kit(at: THREE.Vector3) {
-    const g = new THREE.Group(), fur = std(0x8a6a4a, { roughness: 1 }), pale = std(0xc8b090, { roughness: 1 }), eye = std(0x111111, { roughness: 0.2 });
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 8), fur); body.scale.set(1.3, 0.9, 1); body.position.y = 0.09; g.add(body);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), fur); head.position.set(0.12, 0.13, 0); g.add(head);
-    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 6), pale); belly.position.set(0.02, 0.06, 0); belly.scale.set(1.2, 0.7, 0.9); g.add(belly);
-    for (const s of [-1, 1]) {
-      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.09, 6), fur); ear.position.set(0.1, 0.2, s * 0.03); ear.rotation.z = -0.3; g.add(ear);
-      const e = new THREE.Mesh(new THREE.SphereGeometry(0.011, 6, 4), eye); e.position.set(0.165, 0.145, s * 0.028); g.add(e);
-    }
-    g.position.copy(at); g.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+  /** The kit is a young nibbet: the combat's own nibbet body (combat/view/creatures.ts) at half size, posed by a still
+   * stand-in of its simulation state; `caught` makes it pull at the snare. Its head is along +x of the returned group. */
+  private kitBodies: { v: CreatureView; e: Record<string, unknown>; g: THREE.Group }[] = [];
+  private kit(at: THREE.Vector3, caught = false) {
+    const g = new THREE.Group(), v = createCreature('nibbet');
+    v.root.scale.setScalar(0.5); g.add(v.root);
+    const e: Record<string, unknown> = { id: -7, x: 0, y: 0, z: 0, yaw: Math.PI / 2, dead: false, deadT: 0, state: 'idle', speed: 0, stunT: 0, aware: true, heldT: caught ? 9 : 0, def: { height: 0.54, radius: 0.34 } };
+    v.update(e as unknown as Enemy, 0, 1 / 60, 0);
+    g.position.copy(at);
     this.group.add(g);
+    this.kitBodies.push({ v, e, g });
     return g;
+  }
+  /** The kit stops pulling (it is out of the snare). */
+  private kitFree(g: THREE.Group, run = 0) { const k = this.kitBodies.find((x) => x.g === g); if (k) { k.e.heldT = 0; k.e.speed = run; k.e.state = run ? 'flee' : 'idle'; } }
+  private tickKits(dt: number) {
+    this.kitBodies = this.kitBodies.filter((k) => !!k.g.parent);
+    const t = performance.now() / 1000;
+    for (const k of this.kitBodies) k.v.update(k.e as unknown as Enemy, t, dt, 0);
   }
   private kitScene() {
     const S = this.live();
     this.busy = true;
     this.s.day = Math.max(this.s.day ?? 39, 39);
     const z = this.z, at = this.snareAt();
-    const kit = this.kit(at.clone().add(v3(0.5, 0, 0)));
+    const kit = this.kit(at.clone().add(v3(0.5, 0, 0)), true);
     const me = this.settle(at.clone().add(v3(-0.4, 0, 0.6)), kit.position, true);
     const k0 = kit.position.clone();
     this.scene([
@@ -1859,8 +1962,8 @@ export class Episode3 extends Episode2 {
       { key: 'e3.kt.killed', who: 'scientist', if: { flag: 'cub.killed' }, shot: () => cover.close(z, -0.4, 1.0, 0.24) },
       { hold: 1.2, shot: () => cover.close(z, 0.45, 1.1, 0.24) },
       { choice: 'e3.kit', shot: () => cover.close(z, 0.45, 1.1, 0.24) },
-      { key: 'e3.kt.keep', who: 'scientist', if: CHOSE('e3.kit', 'kept'), shot: () => cover.mid(z, 0.5, 1.8), run: () => { z.setHold({ R: { at: k0.clone().add(v3(0, 0.12, 0)), fingers: UP.clone().negate(), palm: UP.clone().negate(), radius: 0.03 } }); z.setFace({ smile: 0.3 }); } },
-      { key: 'e3.kt.free', who: 'scientist', if: CHOSE('e3.kit', 'free'), shot: () => cover.mid(z, 0.5, 1.8), run: () => { S.anim(2.5, (k) => { kit.position.copy(k0).add(v3(k * 1.6, Math.abs(Math.sin(k * 10)) * 0.05, -k * 0.6)); }); } },
+      { key: 'e3.kt.keep', who: 'scientist', if: CHOSE('e3.kit', 'kept'), shot: () => cover.mid(z, 0.5, 1.8), run: () => { this.kitFree(kit); z.setHold({ R: { at: k0.clone().add(v3(0, 0.12, 0)), fingers: UP.clone().negate(), palm: UP.clone().negate(), radius: 0.03 } }); z.setFace({ smile: 0.3 }); } },
+      { key: 'e3.kt.free', who: 'scientist', if: CHOSE('e3.kit', 'free'), shot: () => cover.mid(z, 0.5, 1.8), run: () => { this.kitFree(kit, 2.4); kit.rotation.y = Math.atan2(0.6, 1.6); S.anim(2.5, (k) => { kit.position.copy(k0).add(v3(k * 1.6, 0, -k * 0.6)); kit.position.y = this.h(kit.position.x, kit.position.z); }); } },
       { key: 'e3.kt.eat', who: 'scientist', if: CHOSE('e3.kit', 'eaten'), shot: () => cover.close(z, -0.4, 1.0, 0.24), run: () => { z.setFace({ frown: 0.5 }); } },
     ], () => {
       S.end(); this.clearHands(); void me;
@@ -1917,6 +2020,8 @@ export class Episode3 extends Episode2 {
       const thresh = me.clone().addScaledVector(r, -1.6); thresh.y = this.h(thresh.x, thresh.z);
       const chaff: THREE.Mesh[] = [];
       const band = this.f('e3.field.band') && this.trust() >= 1 && !this.f('e2.oomsa.away');
+      // (the band comes to the harvest whenever they trust him; with e3.field.band it is their grain too)
+      this.bandHarvest = this.trust() >= 1 && !this.f('e2.oomsa.away');
       const F = band ? this.buildFolk() : null;
       if (F) this.placeFolk('hohma', at.clone().addScaledVector(H.b, -((this.fieldRows.length - 1) / 2) * 0.55 - 1.6), at, false);
       const beats: Beat[] = [
@@ -1938,7 +2043,7 @@ export class Episode3 extends Episode2 {
       ];
       if (F) beats.push({ key: 'e3.hm.reap', who: 'hohma' as Who, shot: () => this.oomClose(F.hohma, 0.4, 1.0), run: () => F.hohma.setLookTarget(this.head()) });
       this.scene(beats, () => {
-        S.end(); sickle.removeFromParent(); chaff.forEach((m) => m.removeFromParent()); this.clearHands(); this.homeFolk();
+        S.end(); sickle.removeFromParent(); chaff.forEach((m) => m.removeFromParent()); this.clearHands(); this.homeFolk(); this.bandHarvest = false;
         this.s.inventory.grain = (this.s.inventory.grain ?? 0) + Math.round(12 * share);
         this.set('e3.harvest');
         this.ui.toast(t('e3.obj.salt'));
@@ -2064,7 +2169,8 @@ export class Episode3 extends Episode2 {
       const f = this.fwd();
       const at = me.clone().addScaledVector(f, 9).addScaledVector(this.right(f), 1.5); at.y = this.h(at.x, at.z);
       if (!this.pello) {
-        const look: PlayerLook = { ...defaultLook(), lineage: 'korrath', ...LINEAGES.korrath, skin: 0xb88a6a, horns: false, marks: 'dots', glow: 0x806040, iris: 0x8a6a4a, hair: 'explorer', hairRoot: 0x3a2a1a, hairTip: 0x6a5a4a, outfit: 'explorer', accent: 0x6a6a5a, gender: 'm', eye: 'tired', eyeGlow: false, height: 1.02, build: 0.15 };
+        const look: PlayerLook = { ...defaultLook(), lineage: 'korrath', ...LINEAGES.korrath, skin: 0xb88a6a, ears: 'round', horns: false, marks: 'dots', glow: 0x000000, iris: 0x5a4030, hair: 'strong', hairRoot: 0x3a2a1a, hairTip: 0x6a5a4a, beard: 'long', outfit: 'explorer', accent: 0x5a5a4a, gender: 'm', eye: 'tired', eyeGlow: false, height: 1.02, build: 0.1 };
+        // (human, EPISODE_THREE_SCRIPT 3.15: no horns, no glow; a beard to his chest, from the character builder's beard)
         this.pello = createCharacter('explorer', this.world.q.name === 'mobile' ? 0.6 : 1, look);
         this.pello.setGround((x, zz) => this.h(x, zz)); this.world.scene.add(this.pello.root);
         this.actors['pello'] = this.pello;

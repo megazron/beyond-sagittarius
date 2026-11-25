@@ -255,6 +255,13 @@ export class Episode2 {
   /** A close-up on Oom-Sa from a little above her eyes, looking down on her as he does (she is small: at her own eye height
    *  the shot looked up past her into a blown-out morning sky, GPU take B). */
   protected oomClose(oom: Character, side = 0.4, dist = 1.05): Shot { return cover.close(oom, side, dist, -0.26); }
+  /** Oom-Sa close, from the side of her that faces `me` (standing height, a little above her eyes, looking down onto the
+   * ground behind her), whichever way she faces at the cut. */
+  protected firstClose(oom: Character, her: THREE.Vector3, me: THREE.Vector3): Shot {
+    const d = me.clone().sub(her).setY(0).normalize(), r = v3(d.z, 0, -d.x);
+    const h = her.clone().add(v3(0, 1.5 * oom.root.scale.y, 0));
+    return { from: h.clone().addScaledVector(d, 1.0).addScaledVector(r, 0.4).add(v3(0, 0.3, 0)), to: h.clone().add(v3(0, -0.14, 0)), push: 0.08, track: oom };
+  }
   protected say(key: string, who: Who = 'scientist', sec = 4) { this.ui.say(key, who === 'megazron' ? 'mz.name' : `crew.${who}.name`, sec); }
   protected mesh(g: THREE.BufferGeometry, m: THREE.Material, at: THREE.Vector3, parent: THREE.Object3D = this.group) {
     const o = new THREE.Mesh(g, m); o.position.copy(at); o.castShadow = true; parent.add(o); return o;
@@ -643,8 +650,10 @@ export class Episode2 {
     this.scene([
       { hold: 3, shot: () => ({ from: me.clone().addScaledVector(this.fwd(), -3.2).addScaledVector(this.side(this.fwd()), 1.4).add(v3(0, 1.9, 0)), to: her.clone().add(v3(0, 0.5, 0)), push: 0.05 }), run: () => { z.setLookTarget(her.clone().add(v3(0, 0.6, 0))); oom.setHold({ R: { at: noose, fingers: v3(0, -1, 0), palm: v3(1, 0, 0), radius: 0.006, grasp: true } }); } },
       { hold: 2, shot: () => ({ from: noose.clone().add(v3(0.4, 0.25, 0.35)), to: noose.clone(), push: 0.01, aperture: 0.005 }) },
-      { key: 'e2.st.1', who: OOM, if: { flag: 'e2.called' }, shot: () => this.oomClose(oom, 0.4, 1.0), run: () => { oom.setHold(null); meet(); } },
-      { key: 'e2.st.1b', who: OOM, if: { not: { flag: 'e2.called' } }, shot: () => this.oomClose(oom, 0.4, 1.0), run: () => { oom.setHold(null); meet(); } },
+      // her first close-up is framed from his side of her (the shot was worked out from the way she faced, the noose: the
+      // camera stood between her and the open hill and the background was the pale, hazy hillside; owner: "foggy")
+      { key: 'e2.st.1', who: OOM, if: { flag: 'e2.called' }, shot: () => this.firstClose(oom, her, me), run: () => { oom.setHold(null); meet(); } },
+      { key: 'e2.st.1b', who: OOM, if: { not: { flag: 'e2.called' } }, shot: () => this.firstClose(oom, her, me), run: () => { oom.setHold(null); meet(); } },
       { key: 'e2.st.2', who: 'scientist', shot: () => cover.ots(z, oom, 0.5) },
       { key: 'e2.st.3', who: OOM, shot: () => cover.ots(oom, z, -0.5) },
       { key: 'e2.st.3h', who: OOM, if: { flag: 'fire.high' }, shot: () => this.oomClose(oom, -0.3, 1.0) },

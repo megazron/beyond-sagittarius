@@ -16,6 +16,8 @@ export interface PlayerLook {
   skin: number;
   ears: Ears;
   horns: boolean;
+  /** A beard (none by default): short, or long to the chest (Pello, EPISODE_THREE_SCRIPT 3.15). */
+  beard?: 'none' | 'short' | 'long';
   tail: boolean;
   marks: Marks;
   glow: number;

@@ -49,31 +49,6 @@ function block(sx: number, sy: number, sz: number, seed: number) {
   return g;
 }
 
-/** A bed of rock: a slab with its edges eaten back unevenly and a slightly lumpy top and bottom (the cliff's layers). */
-function ledge(w: number, h: number, d: number, seed: number) {
-  const g = new THREE.BoxGeometry(w, h, d, 16, 3, 10), p = g.attributes.position as THREE.BufferAttribute, v = new THREE.Vector3();
-  for (let i = 0; i < p.count; i++) {
-    v.fromBufferAttribute(p, i);
-    const ex = Math.abs(v.x) / (w / 2), ez = Math.abs(v.z) / (d / 2), edge = Math.max(ex, ez);
-    const n = fbm(v.x * 0.7 + seed, v.z * 0.7 - seed), m = N.noise2(v.x * 2.3 + seed * 2, v.y * 3 + v.z * 2.3);
-    // eroded back where it is an edge, the lower edge more (undercut), rounded corners
-    // (GPU take B: with a bite of 0.2 m and tops lumpy by 8 cm the beds read as flat-topped boxes from the front; now the
-    // front wanders in and out by up to 0.7 m along its length, each bed thins and thickens, and the top edge is rounded
-    // over like weathered sandstone)
-    const wander = fbm(v.x * 0.45 + seed * 3, seed) * 0.55 + N.noise2(v.x * 1.6 - seed, v.y * 2) * 0.15;
-    const bite = edge > 0.98 ? (0.22 + Math.abs(n) * 0.3 + m * 0.08 + Math.max(0, wander)) * (v.y < 0 ? 1.5 : 1) : 0;
-    const corner = Math.max(0, ex + ez - 1.5) * 0.6;
-    if (ex >= ez) v.x -= Math.sign(v.x) * (bite + corner * w * 0.1); else v.z -= Math.sign(v.z) * (bite + corner * d * 0.1);
-    const thick = 1 + fbm(v.x * 0.6 - seed, v.z * 0.6 + seed) * 0.45;
-    v.y = v.y * thick + (v.y > 0 ? 1 : -1) * n * 0.14 + m * 0.05;
-    // round the top front edge over: the nearer the edge, the further the top comes down
-    if (v.y > 0) v.y -= Math.pow(Math.max(0, edge - 0.6) / 0.4, 2) * h * 0.45;
-    p.setXYZ(i, v.x, v.y, v.z);
-  }
-  g.computeVertexNormals();
-  return g;
-}
-
 /** Paint vertex colours: banded rock, and soot near `hearth` (world) and under the lip. */
 function paint(g: THREE.BufferGeometry, m: THREE.Matrix4, hearth: THREE.Vector3 | null, lipZ: number | null, into: THREE.Vector3 | null) {
   const p = g.attributes.position as THREE.BufferAttribute, col = new Float32Array(p.count * 3), v = new THREE.Vector3(), c = new THREE.Color();
@@ -140,23 +115,54 @@ export function buildRockShelter(origin: THREE.Vector3, into: THREE.Vector3, sid
   group.add(wall);
 
   // ---- the cliff round it: blocks behind the wall, over the roof (its thickness) and along the lip
-  const outer = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97, metalness: 0 });
-  // the cliff in beds: stepped ledges above the roof, the lip's bed over the floor, piers of beds either side, a mass
-  // behind; each a slab eaten back at its edges
-  const beds: [number, number, number, number, number, number, number][] = [
-    // x, y, z, w, h, d, turn
-    [0, 2.72, -0.8, 7.6, 0.62, 2.5, 0.02], [0.1, 3.25, 1.2, 8.6, 0.75, 5.0, -0.03], [-0.2, 3.95, 2.3, 8.0, 0.8, 4.6, 0.04],
-    [0.3, 4.7, 3.3, 6.8, 0.85, 3.6, -0.05], [0, 1.25, 4.6, 8.8, 2.7, 2.2, 0],
-    [-4.0, 0.45, 1.0, 2.9, 1.3, 4.8, 0.08], [-3.95, 1.55, 1.3, 2.8, 1.0, 4.4, 0.05], [-3.8, 2.45, 1.5, 2.7, 0.9, 4.2, 0.1],
-    [4.0, 0.4, 0.9, 2.9, 1.2, 4.8, -0.06], [3.95, 1.45, 1.2, 2.8, 1.0, 4.4, -0.04], [3.8, 2.35, 1.5, 2.6, 0.9, 4.2, -0.09],
-  ];
-  beds.forEach(([x, y, z, w, h, d, turn], k) => {
-    const g = ledge(w, h, d, k * 3.7 + 1);
-    const m = new THREE.Matrix4().makeRotationY(turn).setPosition(x, y, z).premultiply(toWorld);
-    paint(g, m, hearth, null, null);
-    const o = new THREE.Mesh(g, outer); o.matrixAutoUpdate = false; o.matrix.copy(m); o.castShadow = true; o.receiveShadow = true;
+  const outer = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97, metalness: 0, side: THREE.DoubleSide });
+  // the cliff: one continuous sculpted face (owner: from the front the stacked beds read as "grey slabs"). A U of rock
+  // round the opening: piers either side that come down to the ground, the face over the lip, and the top running back.
+  // Its beds are terraces 50 to 75 cm high that wander, each undercut at its foot and rounded over at its top; big
+  // lumps and fine grit on top of that. The opening (|x| < 2.9 m, below the lip) is left open for the wall sheet.
+  {
+    const NS = 96, NH = 64, S0 = 9.5, H0 = -0.7, H1 = 6.4, TOP = 5.0;
+    const pos: number[] = [], idx: number[] = [], keep: boolean[] = [];
+    const bedOf = (y: number, x: number) => { const k = y / 0.62 + fbm(x * 0.18 + 3, y * 0.1) * 0.8; return k - Math.floor(k); };
+    for (let j = 0; j <= NH; j++) {
+      const hv = j / NH, h = H0 + (H1 + TOP - H0) * hv;
+      for (let i = 0; i <= NS; i++) {
+        const sx = (i / NS) * 2 - 1, x0 = sx * S0, ax = Math.abs(x0);
+        // the front line: the lip's face across the middle, the piers just outside the opening, curving back further out
+        const front = ax < 3.1 ? -1.45 : -1.0 + Math.pow(Math.max(0, ax - 3.1) / 6.4, 1.6) * 3.2;
+        let x = x0, y: number, z: number;
+        if (h <= H1) {
+          y = h;
+          // the face leans back as it goes up; a bed's foot is undercut, its top edge rounded over
+          const t = bedOf(y, x), lean = Math.max(0, y - 2.4) * 0.14;
+          const bed = (1 - t) ** 3 * 0.22 - Math.pow(Math.max(0, t - 0.75) / 0.25, 2) * 0.1;
+          z = front + lean + bed;
+          // the piers lean in towards the opening at their tops, round the lip
+          if (ax >= 2.9 && ax < 4.2 && y < 2.6) x = Math.sign(x0) * (2.9 + (ax - 2.9) * (0.6 + 0.4 * (y / 2.6)));
+        } else {
+          // over the top and back into the hillside
+          const back = h - H1;
+          y = H1 + Math.sin(Math.min(1, back / 1.2) * Math.PI / 2) * 0.55 + back * 0.06;
+          z = front + (H1 - 2.4) * 0.14 + back * 1.2;
+        }
+        const w = new THREE.Vector3(x, y, z).applyMatrix4(toWorld);
+        const n = fbm(w.x * 0.28 + 11, w.y * 0.32 + w.z * 0.2), m = N.noise2(w.x * 1.7 + w.z, w.y * 2.1) ;
+        z += n * 0.45 + m * 0.08 + N.noise2(w.x * 6, w.y * 6 + w.z) * 0.025;
+        if (h > H1) y += n * 0.25;
+        pos.push(x, y, z);
+        keep.push(!(ax < 2.95 && h < 2.42));
+      }
+    }
+    for (let j = 0; j < NH; j++) for (let i = 0; i < NS; i++) {
+      const a = j * (NS + 1) + i, b = a + 1, c = a + NS + 1, d = c + 1;
+      if (keep[a] && keep[b] && keep[c] && keep[d]) idx.push(a, b, c, b, d, c);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+    paint(g, toWorld, hearth, null, null);
+    const o = new THREE.Mesh(g, outer); o.name = 'shelterCliff'; o.matrixAutoUpdate = false; o.matrix.copy(toWorld); o.castShadow = true; o.receiveShadow = true;
     group.add(o);
-  });
+  }
   // a few weathered boulders at the foot
   const blocks: [number, number, number, number, number, number, number][] = [[-5.9, 0.3, -0.6, 1.3, 1.0, 1.4, 1.1], [6.1, 0.2, -0.3, 1.1, 0.9, 1.2, 0.3]];
   blocks.forEach(([x, y, z, sx, sy, sz, turn], k) => {

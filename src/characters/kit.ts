@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { skullFrom } from './hair';
 import { loft, sweep, smoothPath, weaveNormal, grainNormal } from './shapes';
 import { applySway, swayByStrand, SwayUniforms } from './sway';
@@ -79,6 +80,40 @@ export function addKit(k: KitInput): Kit {
     }
   };
   if (custom ? custom.horns : id === 'strong' && !human) { horn(1); horn(-1); }
+
+  // a beard (custom.beard): locks from a U along the jaw and up the cheeks to the ears, longest at the chin (to the chest
+  // when long), and a moustache; one merged mesh on the head, darker at the roots
+  const beard = (long: boolean) => {
+    const root = new THREE.Color(custom!.hairRoot).multiplyScalar(0.35), tip = new THREE.Color(custom!.hairRoot).lerp(new THREE.Color(custom!.hairTip), 0.25).multiplyScalar(0.85);
+    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const geos: THREE.BufferGeometry[] = [];
+    const W = eye.x * 2.05, chinY = eye.y - 0.112, jawY = eye.y - 0.06, fz = eye.z - 0.004;
+    const lock = (pts: THREE.Vector3[], w0: number) => {
+      const g = sweep(smoothPath(pts, 8), { width: (t) => w0 * (1 - 0.75 * t) + 0.0015, thick: (t) => 0.0055 * (1 - 0.6 * t) + 0.001, side: V(1, 0, 0), sides: 5 });
+      const at = g.getAttribute('aT'), col: number[] = []; const c = new THREE.Color();
+      for (let i = 0; i < at.count; i++) { c.copy(root).lerp(tip, Math.min(1, at.getX(i) * 1.6)); col.push(c.r, c.g, c.b); }
+      g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.deleteAttribute('aTan'); geos.push(g);
+    };
+    const N = Math.max(10, Math.round(26 * Math.min(1, k.detail)));
+    for (const row of [0, 1, 2]) for (let i = 0; i < N; i++) {
+      const u = -1 + (2 * (i + 0.5 * (row % 2))) / N; if (Math.abs(u) > 1) continue;
+      const c2 = 1 - u * u, up = row * 0.022;
+      // the jaw line: low and forward at the chin, up and back towards the ears; rows above it fill the cheeks
+      const a = V(u * W * (1 + 0.08 * row), chinY + (jawY - chinY) * (1 - c2) + up * (0.4 + 0.6 * (1 - c2)) + 0.02 * u * u, fz - 0.085 * u * u - 0.004 * row + 0.006);
+      const len = (long ? 0.05 + 0.2 * c2 ** 1.4 : 0.022 + 0.022 * c2) * (1 - row * 0.22) * (0.85 + 0.3 * rnd());
+      const out = V(u * 0.25, 0, 1).normalize(), wob = (rnd() - 0.5) * 0.02;
+      lock([a, a.clone().addScaledVector(out, 0.012).add(V(wob * 0.3, -len * 0.3, 0)), a.clone().addScaledVector(out, 0.016 * (0.5 + c2)).add(V(wob - u * 0.008, -len * 0.68, 0)), a.clone().addScaledVector(out, 0.006).add(V(wob * 1.6 - u * 0.012, -len, -0.004))], 0.011 + 0.004 * c2);
+    }
+    // the moustache, from under the nose out over the corners of the mouth
+    for (const sd of [-1, 1]) for (let j = 0; j < 4; j++) {
+      const a = V(sd * (0.004 + j * 0.006), eye.y - 0.058, fz + 0.012 - j * 0.004);
+      lock([a, a.clone().add(V(sd * 0.012, -0.006, 0.003)), a.clone().add(V(sd * 0.022, -0.016 - (long ? 0.012 : 0), -0.004))], 0.006);
+    }
+    const g = mergeGeometries(geos); geos.forEach((x) => x.dispose());
+    const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0 });
+    const o = add(g, m, head); o.name = 'beard';
+  };
+  if (custom?.beard && custom.beard !== 'none') beard(custom.beard === 'long');
 
   const glasses = () => {
     const fr = metal(0xc9a86a, 0.28);

@@ -677,13 +677,15 @@ export class Game {
     const inj = this.injuries, eff = inj?.effects();
     const hurt = Math.max(s.level <= 1 ? 0.45 : s.level === 2 ? 0.72 : 1, eff?.speed ?? 1);
     // he can run on cracked ribs: it costs him (the picture tightens, he grunts) and his breath
-    p.hurt = eff ? { speed: 1, jump: eff.jump, sprint: true } : null;
-    p.model.setLimp(s.level <= 1 || !!eff?.limp);
+    // the fever (Episode Three, level 18): a slow walk, no run, and the breath goes quickly and comes back slowly
+    const fev = this.ep3?.feverAmount ?? 0;
+    p.hurt = eff || fev > 0 ? { speed: 1, jump: eff?.jump ?? 1, sprint: fev < 0.5 } : null;
+    p.model.setLimp(s.level <= 1 || !!eff?.limp || fev > 0.5);
     if (inj && p.sprinting && inj.sev('ribsL') > 0.3 && (this.sprintSore -= dt) <= 0) { this.sprintSore = 2.6; audio.human('grunt', 0.35); st.stamina = Math.max(0, st.stamina - 6); }
     this.combat?.before(dt, time);
     // the hand on the ribs, unless a weapon or a fight has the arms (combat sets them first, every frame)
     { const cur = p.model.limbsNow; if (!cur || cur === this.heldLimbs) { const want = p.busy || p.combat ? null : eff?.limbs ?? null; p.model.setLimbs(want); this.heldLimbs = want; } }
-    p.update(dt, this.input, true, st.stamina, (st.health < 25 ? 0.75 : 1) * hurt);
+    p.update(dt, this.input, true, st.stamina, (st.health < 25 ? 0.75 : 1) * hurt * (1 - 0.4 * fev));
     this.combat?.after(dt, time);
     if (this.camShake > 0) {
       p.camera.position.x += (Math.random() - 0.5) * this.camShake;
@@ -703,7 +705,8 @@ export class Game {
       if (st.stamina <= 0) { st.health -= dt * 3; if (!this.swimWarned) { this.swimWarned = true; this.ui.toast(t('msg.swimTired')); } }
       if (!s.flags.swamOnce) { s.flags.swamOnce = true; this.ui.toast(t('msg.swim')); }
     } else if (p.sprinting && s.favours?.tirelessDay !== s.day) st.stamina = clamp(st.stamina - dt * 16, 0, 100);
-    else st.stamina = clamp(st.stamina + dt * (p.speedNow > 0.5 ? 8 : 14) * (this.combat?.regenMul() ?? 1), 0, 100);
+    else st.stamina = clamp(st.stamina + dt * (p.speedNow > 0.5 ? 8 : 14) * (this.combat?.regenMul() ?? 1) * (1 - 0.7 * fev), 0, 100 - 45 * fev - (s.flags['e3.feverScar'] ? 15 : 0));
+    if (fev > 0 && p.speedNow > 0.5 && !p.swimming) st.stamina = clamp(st.stamina - dt * 6 * fev, 0, 100);
     if (st.thirst <= 0 || st.hunger <= 0) st.health -= dt * 0.6;
     else if (st.thirst > 40 && st.hunger > 40) st.health = Math.min(100, st.health + dt * 0.12);
     if (st.thirst < 15 && time - this.lastThirstWarn > 40) { this.lastThirstWarn = time; this.ui.toast(t('msg.thirsty')); }

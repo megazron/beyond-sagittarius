@@ -96,6 +96,7 @@ export function openCreator(ui: UI, start: PlayerLook, mode: 'new' | 'edit', sta
           ${row('cc.ears', choices('ears', EARS.map((e, i) => [e, String(i + 1)]), look.ears))}
           ${row('cc.horns', choices('horns', off(look.horns), look.horns ? '1' : '0'))}
           ${row('cc.tail', choices('tail', off(look.tail), look.tail ? '1' : '0'))}
+          ${row('cc.beard', choices('beard', [['none', t('settings.off')], ['short', '1'], ['long', '2']], look.beard ?? 'none'))}
           ${row('cc.marks', choices('marks', MARKS.map((e, i) => [e, String(i + 1)]), look.marks))}
           ${row('cc.glow', swatches('glow', GLOWS, look.glow))}
           ${row('cc.face', choices('eye', EYES.map((e, i) => [e, String(i + 1)]), look.eye))}
