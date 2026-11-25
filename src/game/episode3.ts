@@ -2276,7 +2276,7 @@ export class Episode3 extends Episode2 {
       const f = this.fwd();
       const at = me.clone().addScaledVector(f, 9).addScaledVector(this.right(f), 1.5); at.y = this.h(at.x, at.z);
       if (!this.pello) {
-        const look: PlayerLook = { ...defaultLook(), lineage: 'korrath', ...LINEAGES.korrath, skin: 0xb88a6a, ears: 'round', horns: false, marks: 'dots', glow: 0x000000, iris: 0x5a4030, hair: 'strong', hairRoot: 0x3a2a1a, hairTip: 0x6a5a4a, beard: 'long', outfit: 'explorer', accent: 0x5a5a4a, gender: 'm', eye: 'tired', eyeGlow: false, height: 1.02, build: 0.1 };
+        const look: PlayerLook = { ...defaultLook(), lineage: 'korrath', ...LINEAGES.korrath, skin: 0xb88a6a, ears: 'round', horns: false, marks: 'dots', glow: 0x000000, iris: 0x5a4030, hair: 'explorer', hairRoot: 0x3a2a1a, hairTip: 0x6a5a4a, beard: 'long', outfit: 'explorer', accent: 0x5a5a4a, gender: 'm', eye: 'tired', eyeGlow: false, height: 1.02, build: 0.1 };
         // (human, EPISODE_THREE_SCRIPT 3.15: no horns, no glow; a beard to his chest, from the character builder's beard)
         this.pello = createCharacter('explorer', this.world.q.name === 'mobile' ? 0.6 : 1, look);
         this.pello.setGround((x, zz) => this.h(x, zz)); this.world.scene.add(this.pello.root);

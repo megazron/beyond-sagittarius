@@ -87,7 +87,7 @@ export function addKit(k: KitInput): Kit {
     const root = new THREE.Color(custom!.hairRoot).multiplyScalar(0.35), tip = new THREE.Color(custom!.hairRoot).lerp(new THREE.Color(custom!.hairTip), 0.25).multiplyScalar(0.85);
     let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const geos: THREE.BufferGeometry[] = [];
-    const W = eye.x * 2.05, chinY = eye.y - 0.112, jawY = eye.y - 0.06, fz = eye.z - 0.004;
+    const W = eye.x * 2.1, chinY = eye.y - 0.12, jawY = eye.y - 0.065, fz = eye.z + 0.014; // (take EP3B C: at the eyes' depth the locks were inside the face)
     const lock = (pts: THREE.Vector3[], w0: number) => {
       const g = sweep(smoothPath(pts, 8), { width: (t) => w0 * (1 - 0.75 * t) + 0.0015, thick: (t) => 0.0055 * (1 - 0.6 * t) + 0.001, side: V(1, 0, 0), sides: 5 });
       const at = g.getAttribute('aT'), col: number[] = []; const c = new THREE.Color();
@@ -101,8 +101,8 @@ export function addKit(k: KitInput): Kit {
       // the jaw line: low and forward at the chin, up and back towards the ears; rows above it fill the cheeks
       const a = V(u * W * (1 + 0.08 * row), chinY + (jawY - chinY) * (1 - c2) + up * (0.4 + 0.6 * (1 - c2)) + 0.02 * u * u, fz - 0.085 * u * u - 0.004 * row + 0.006);
       const len = (long ? 0.05 + 0.2 * c2 ** 1.4 : 0.022 + 0.022 * c2) * (1 - row * 0.22) * (0.85 + 0.3 * rnd());
-      const out = V(u * 0.25, 0, 1).normalize(), wob = (rnd() - 0.5) * 0.02;
-      lock([a, a.clone().addScaledVector(out, 0.012).add(V(wob * 0.3, -len * 0.3, 0)), a.clone().addScaledVector(out, 0.016 * (0.5 + c2)).add(V(wob - u * 0.008, -len * 0.68, 0)), a.clone().addScaledVector(out, 0.006).add(V(wob * 1.6 - u * 0.012, -len, -0.004))], 0.011 + 0.004 * c2);
+      const out = V(u * 0.6, 0, 1).normalize(), wob = (rnd() - 0.5) * 0.02;
+      lock([a, a.clone().addScaledVector(out, 0.022).add(V(wob * 0.3, -len * 0.3, 0)), a.clone().addScaledVector(out, 0.03 * (0.5 + c2)).add(V(wob - u * 0.008, -len * 0.68, 0)), a.clone().addScaledVector(out, 0.006).add(V(wob * 1.6 - u * 0.012, -len, -0.004))], 0.011 + 0.004 * c2);
     }
     // the moustache, from under the nose out over the corners of the mouth
     for (const sd of [-1, 1]) for (let j = 0; j < 4; j++) {
