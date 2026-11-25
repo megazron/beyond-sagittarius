@@ -432,6 +432,13 @@ function stalker(sim: CombatSim, e: Enemy, dt: number, awake: boolean) {
   }
   if (e.state === 'recover') { e.speed = 0; if (e.stateT > (e.atk?.recover ?? 1)) { const nip = e.atk?.id === 'nip'; e.atk = null; setState(sim, e, nip ? 'flee' : e.aware ? 'stalk' : 'idle'); if (nip) e.stateT = 2.2; e.angle = Math.atan2(e.z - p.z, e.x - p.x); } return; }
   if (e.state === 'flee') { fleeFrom(sim, e, p.x, p.z, dt, def.run); if (e.stateT > 3.2) { setState(sim, e, 'stalk'); e.angle = Math.atan2(e.z - p.z, e.x - p.x); } return; }
+  // the firing night: it has learnt the fire. It does not come at the man; it goes for the pit while he is away from it,
+  // through its edge light (a pit is a low fire), to drag the burning wood apart
+  if (e.raid) {
+    if (e.state !== 'stalk') setState(sim, e, 'stalk');
+    move(sim, e, e.raid.x, e.raid.z, def.run * 0.9, dt, { fire: false });
+    return;
+  }
   if (!awake && !e.aware && e.provoked <= 0 && e.alert < 0.3) { setState(sim, e, 'asleep'); return; }
   if (e.state === 'idle' || e.state === 'investigate') {
     if (e.aware) { setState(sim, e, 'stalk'); e.angle = Math.atan2(e.z - p.z, e.x - p.x); sim.emit({ t: 'sound', what: 'growl', x: e.x, z: e.z }); return; }

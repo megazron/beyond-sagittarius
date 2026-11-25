@@ -84,7 +84,9 @@ export interface Noise { x: number; z: number; r: number; t: number; from: numbe
 /** Something that smells of food. */
 export interface Scent { x: number; z: number; r: number; food: number; id: number }
 /** A fire: light, warmth and the one thing the night is afraid of. */
-export interface Fire { x: number; z: number; fuel: number; max: number; r: number; id: number; torch?: boolean; burnsOut?: boolean; /** Burn rate scale: a fire nobody is pressing on (the dusk before the night) burns slower. */ slow?: number; /** Branches stacked beside it for it alone (the night's wood pile): fed before the bag's. */ pile?: number }
+export interface Fire { x: number; z: number; fuel: number; max: number; r: number; id: number; torch?: boolean; burnsOut?: boolean; /** Burn rate scale: a fire nobody is pressing on (the dusk before the night) burns slower. */ slow?: number; /** Branches stacked beside it for it alone (the night's wood pile): fed before the bag's. */ pile?: number;
+  /** The kiln: the pit fire over the pots on Episode Two's firing night. Fed like the camp fire; it is what the night is for. */
+  kiln?: boolean }
 
 /** Low ballistic launch from a to b at a given speed: the velocity, or a flat shot when b is out of reach. */
 export function solveLaunch(a: V3, b: V3, speed: number, g: number): V3 {

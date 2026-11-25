@@ -234,7 +234,7 @@ function shineTex() {
 }
 
 function hound(): CreatureView {
-  const h = createHound();
+  const h = createHound({ big: true }); // the hunter at the fire is the big one, both nights (world/predator.ts)
   const root = new THREE.Group(), tilt = new THREE.Group();
   h.root.visible = true; root.add(tilt); tilt.add(h.root);
   const C = common(root, tilt);

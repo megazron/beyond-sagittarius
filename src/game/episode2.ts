@@ -11,6 +11,7 @@ import type { Npcs } from './npcs';
 import type { TechNode } from './tech/data';
 import { LAKE } from '../world/terrain';
 import { buildRockShelter } from '../world/rockshelter';
+import { createHound } from '../world/predator';
 import { cover, type Beat, type Shot, type Who } from '../cinematic/cutscene';
 import type { TensionResult, TensionSpec } from '../combat/sim/tension';
 import { test, type Cond } from './branch';
@@ -50,6 +51,7 @@ export class Episode2 {
   private wait = 6;
   private busy = false;
   private hurtLines = 0;
+  private quieted = false;
 
   constructor(
     private world: World,
@@ -146,6 +148,7 @@ export class Episode2 {
     if (!this.owns(s.level)) return;
     this.restore();
     if (this.world.explorer.root.visible) this.world.explorer.root.visible = false;
+    if (!this.quieted) { this.quieted = true; this.world.ridge.quiet?.(); }
     this.wait -= dt;
     if (this.wait > 0 || this.busy || !ep2Loaded() || !this.free()) return;
     const p = this.player.pos;
@@ -235,6 +238,9 @@ export class Episode2 {
     from.y = Math.max(from.y, this.h(from.x, from.z) + 1.35);
     return { from, to: at.clone().add(v3(0, 0.7, 0)), push: 0.04 };
   }
+  /** A close-up on Oom-Sa from a little above her eyes, looking down on her as he does (she is small: at her own eye height
+   *  the shot looked up past her into a blown-out morning sky, GPU take B). */
+  private oomClose(oom: Character, side = 0.4, dist = 1.05): Shot { return cover.close(oom, side, dist, -0.26); }
   private say(key: string, who: Who = 'scientist', sec = 4) { this.ui.say(key, who === 'megazron' ? 'mz.name' : `crew.${who}.name`, sec); }
   private mesh(g: THREE.BufferGeometry, m: THREE.Material, at: THREE.Vector3, parent: THREE.Object3D = this.group) {
     const o = new THREE.Mesh(g, m); o.position.copy(at); o.castShadow = true; parent.add(o); return o;
@@ -451,8 +457,17 @@ export class Episode2 {
       const bowG = new THREE.TorusGeometry(0.3, 0.008, 5, 18, Math.PI * 0.55);
       const bow = keep(this.mesh(bowG, std(0x6a4c30), notch.clone().add(v3(0, 0.15, 0))));
       const cordM = keep(this.mesh(new THREE.CylinderGeometry(0.002, 0.002, 0.5, 4).rotateZ(Math.PI / 2), std(0xc8b48a), notch.clone().add(v3(0, 0.14, 0))));
-      // aimed between his hands (the socket stone at 0.37 m, the bow hand at 0.16): at 0.12 the hands were out of the top of frame
-      beats.push({ hold: 3.8, shot: () => this.handShot(notch.clone().add(v3(0, 0.26, 0)), 0.85, -1), run: () => {
+      // from in front of him, low, on the side away from the fire, aimed at the middle of the two hands (the socket stone
+      // at 0.35 m, the bow hand at 0.14 m and up to 0.38 m to his right): from his side (take B) the bow hand was behind the
+      // spindle and his body, and an aim pulled up towards his head put the socket hand out of the top of frame
+      const hands = notch.clone().add(v3(0, 0.25, 0)).addScaledVector(r, 0.13);
+      const lat = this.side(f); if (lat.dot(hands.clone().sub(this.L.camp)) < 0) lat.negate();
+      const bowShot = (): Shot => {
+        const from = hands.clone().addScaledVector(f, 1.05).addScaledVector(lat, 0.4).add(v3(0, 0.14, 0));
+        from.y = Math.max(from.y, this.h(from.x, from.z) + 0.3);
+        return { from, to: hands.clone(), fov: 40, push: 0.015, aperture: 0.004, lightAt: hands.clone() };
+      };
+      beats.push({ hold: 3.8, shot: bowShot, run: () => {
         z.setLookTarget(notch);
         this.anim(3.8, (k) => {
           const w = Math.sin(k * 5.5) * 0.18, hand = notch.clone().add(v3(0, 0.14, 0)).addScaledVector(r, 0.2 + w).addScaledVector(f, -0.02);
@@ -570,11 +585,11 @@ export class Episode2 {
   }
   private whistle: THREE.Group | null = null;
   private ridgeFind() {
-    // the find a few metres from the ridge point, on the side away from Episode One's beacon (its white mast filled the
-    // close-ups of take 2)
-    const bc = (this.L as unknown as { beacon?: THREE.Vector3 }).beacon, away = bc ? this.L.ridge.clone().sub(bc).setY(0) : v3(1, 0, 0);
-    if (away.lengthSq() < 0.01) away.set(1, 0, 0);
-    const r = this.L.ridge.clone().addScaledVector(away.normalize(), 4); r.y = this.h(r.x, r.z);
+    // the find on the path up, 9 m short of the ridge point on the camp side: the outcrop's crystals stand 1.6 to 4 m
+    // round the point (at 4 m the find was among them; their glow was the pale-white shape of take B)
+    const down = this.L.camp.clone().sub(this.L.ridge).setY(0);
+    if (down.lengthSq() < 0.01) down.set(1, 0, 0);
+    const r = this.L.ridge.clone().addScaledVector(down.normalize(), 9); r.y = this.h(r.x, r.z);
     const at = this.settle(r.clone().add(v3(1.5, 0, 1)), r, true);
     const g = new THREE.Group();
     const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), std(0x7a746c)); rock.scale.set(1.2, 0.6, 1); rock.position.y = 0.12; g.add(rock);
@@ -608,20 +623,20 @@ export class Episode2 {
     this.scene([
       { hold: 3, shot: () => ({ from: me.clone().addScaledVector(this.fwd(), -3.2).addScaledVector(this.side(this.fwd()), 1.4).add(v3(0, 1.9, 0)), to: her.clone().add(v3(0, 0.5, 0)), push: 0.05 }), run: () => { z.setLookTarget(her.clone().add(v3(0, 0.6, 0))); oom.setHold({ R: { at: noose, fingers: v3(0, -1, 0), palm: v3(1, 0, 0), radius: 0.006, grasp: true } }); } },
       { hold: 2, shot: () => ({ from: noose.clone().add(v3(0.4, 0.25, 0.35)), to: noose.clone(), push: 0.01, aperture: 0.005 }) },
-      { key: 'e2.st.1', who: OOM, if: { flag: 'e2.called' }, shot: () => cover.close(oom, 0.4, 1.0), run: () => { oom.setHold(null); meet(); } },
-      { key: 'e2.st.1b', who: OOM, if: { not: { flag: 'e2.called' } }, shot: () => cover.close(oom, 0.4, 1.0), run: () => { oom.setHold(null); meet(); } },
+      { key: 'e2.st.1', who: OOM, if: { flag: 'e2.called' }, shot: () => this.oomClose(oom, 0.4, 1.0), run: () => { oom.setHold(null); meet(); } },
+      { key: 'e2.st.1b', who: OOM, if: { not: { flag: 'e2.called' } }, shot: () => this.oomClose(oom, 0.4, 1.0), run: () => { oom.setHold(null); meet(); } },
       { key: 'e2.st.2', who: 'scientist', shot: () => cover.ots(z, oom, 0.5) },
       { key: 'e2.st.3', who: OOM, shot: () => cover.ots(oom, z, -0.5) },
-      { key: 'e2.st.3h', who: OOM, if: { flag: 'fire.high' }, shot: () => cover.close(oom, -0.3, 1.0) },
+      { key: 'e2.st.3h', who: OOM, if: { flag: 'fire.high' }, shot: () => this.oomClose(oom, -0.3, 1.0) },
       { choice: 'e2.stranger', shot: () => cover.two(z, oom, 3) },
       { key: 'e2.st.give.1', who: 'scientist', if: CHOSE('e2.stranger', 'give'), shot: () => cover.ots(z, oom, 0.5) },
-      { key: 'e2.st.give.2', who: OOM, if: CHOSE('e2.stranger', 'give'), shot: () => cover.close(oom, 0.4, 1.0) },
+      { key: 'e2.st.give.2', who: OOM, if: CHOSE('e2.stranger', 'give'), shot: () => this.oomClose(oom, 0.4, 1.0) },
       { hold: 2, if: CHOSE('e2.stranger', 'sit'), shot: () => cover.two(z, oom, 3.2), run: () => { this.z.setKneel(true, true); oom.setKneel(true, true); } },
-      { key: 'e2.st.sit.2', who: OOM, if: CHOSE('e2.stranger', 'sit'), shot: () => cover.close(oom, 0.4, 1.0) },
+      { key: 'e2.st.sit.2', who: OOM, if: CHOSE('e2.stranger', 'sit'), shot: () => this.oomClose(oom, 0.4, 1.0) },
       { key: 'e2.st.spear.1', who: 'scientist', if: CHOSE('e2.stranger', 'spear'), shot: () => cover.close(z, 0.5, 1.0, 0.24), run: () => z.setFace({ frown: 0.5 }) },
-      { key: 'e2.st.spear.2', who: OOM, if: CHOSE('e2.stranger', 'spear'), shot: () => cover.close(oom, 0.4, 1.1) },
+      { key: 'e2.st.spear.2', who: OOM, if: CHOSE('e2.stranger', 'spear'), shot: () => this.oomClose(oom, 0.4, 1.1) },
       { key: 'e2.st.joke.1', who: 'scientist', if: CHOSE('e2.stranger', 'joke'), shot: () => cover.ots(z, oom, 0.5) },
-      { key: 'e2.st.joke.2', who: OOM, if: CHOSE('e2.stranger', 'joke'), shot: () => cover.close(oom, 0.4, 1.0) },
+      { key: 'e2.st.joke.2', who: OOM, if: CHOSE('e2.stranger', 'joke'), shot: () => this.oomClose(oom, 0.4, 1.0) },
       { hold: 2.6, if: CHOSE('e2.stranger', 'nothing'), shot: () => cover.two(z, oom, 3.4) },
     ], () => {
       prey.removeFromParent(); this.clearHands(); oom.setKneel(false); oom.setLookTarget(null);
@@ -767,7 +782,7 @@ export class Episode2 {
     const outside = S.at.clone().addScaledVector(back, -5.5).add(v3(0, 1.2, 0)).addScaledVector(side, 1.5);
     this.scene([
       { hold: 3.2, shot: () => ({ from: outside, to: S.at.clone().addScaledVector(back, 1.2).add(v3(0, 1.4, 0)), push: 0.04 }), run: () => z.setLookTarget(floor) },
-      { key: 'e2.rs.oom', who: OOM, if: { all: [TRUSTS(1), { not: { flag: 'e2.oomsa.away' } }] }, shot: () => (oom ? cover.close(oom, 0.4, 1.1) : cover.mid(z)) },
+      { key: 'e2.rs.oom', who: OOM, if: { all: [TRUSTS(1), { not: { flag: 'e2.oomsa.away' } }] }, shot: () => (oom ? this.oomClose(oom, 0.4, 1.1) : cover.mid(z)) },
       { hold: 2.2, shot: () => ({ from: floor.clone().add(v3(0, 0.45, 0)).addScaledVector(side, 0.4).addScaledVector(back, -0.3), to: floor.clone().add(v3(0, 0.02, 0)), push: 0.01, aperture: 0.005 }) },
       { key: 'e2.rs.1', who: 'scientist', shot: () => cover.close(z, 0.45, 0.95, 0.24), run: () => { z.setProp('flake'); z.setFace({ squint: 0.3 }); } },
       { key: 'e2.rs.2', who: 'scientist', shot: () => cover.mid(z, -0.5, 2.0) },
@@ -835,10 +850,13 @@ export class Episode2 {
     }
   }
   private potsLeft() {
-    if (this.f('e2.kiln.kept')) return 4;
-    if (this.f('e2.kiln.oomsa')) return test(this.s, TRUSTS(3)) ? 4 : 3;
-    if (this.f('e2.kiln.left')) return 2;
-    return 1;
+    let n = this.f('e2.kiln.kept') ? 4 : this.f('e2.kiln.oomsa') ? (test(this.s, TRUSTS(3)) ? 4 : 3) : this.f('e2.kiln.left') ? 2 : 1;
+    // what the night did to the pit: each time the big one dragged it apart, and a pit left cold for long, cracks one
+    // more (at least one pot always comes out: DECISIONS E2-8)
+    if (this.f('e2.cb.kiln.scattered')) n -= 1;
+    if (this.f('e2.cb.kiln.cold')) n -= 1;
+    if (this.f('e2.cb.kiln.oomsaRan') && this.f('e2.kiln.oomsa')) n = Math.min(n, 3);
+    return Math.max(1, n);
   }
 
   private night() {
@@ -855,20 +873,22 @@ export class Episode2 {
       const her = c.clone().add(c.clone().sub(me).setY(0).normalize().multiplyScalar(2.0)); her.y = this.h(her.x, her.z);
       if (here && oom) { this.actors[OOM] = oom; this.npcs.pin('local', her, Math.atan2(c.x - her.x, c.z - her.z)); oom.setKneel(true, true); }
       const pots = this.pots[1].position.clone();
-      const dark = c.clone().addScaledVector(c.clone().sub(me).setY(0).normalize(), 13).add(v3(0, 0.7, 0));
-      const eyes = this.eyes(dark);
-      eyes.visible = false;
+      const away = c.clone().sub(me).setY(0).normalize(), dark = c.clone().addScaledVector(away, 13).add(v3(0, 0.7, 0));
+      // the big one (world/predator.ts): out of the dark beyond the pit to the edge of the light, nose down on the smell
+      // of the pots and the food, then the head comes up and it looks at him (it was two points of light)
+      const edge = c.clone().addScaledVector(away, 8.5), outer = c.clone().addScaledVector(away, 13.5).addScaledVector(this.side(away), 3);
+      let beast: ReturnType<Episode2['bigOne']> | null = null;
       this.scene([
         { hold: 3, shot: () => this.wide(me, 6.5, 0.6, 1.3), run: () => z.setLookTarget(pots) },
         { hold: 2.2, shot: () => { const away = pots.clone().sub(me).setY(0).normalize(); return { from: pots.clone().addScaledVector(away, 0.9).add(v3(0, 0.45, 0)), to: pots.clone().add(v3(0, 0.12, 0)), push: 0.01, aperture: 0.005 }; }, run: () => this.steam(pots) },
         { key: 'e2.fr.1', who: 'scientist', shot: () => cover.close(z, 0.45, 0.95, 0.24) },
         { key: 'e2.fr.2', who: 'scientist', shot: () => cover.mid(z, -0.5, 2.1) },
         { key: 'e2.fr.oom', who: OOM, if: { flag: 'e2.oomsa.here' }, shot: () => (oom ? cover.ots(oom, z, 0.5) : cover.mid(z)), run: () => oom?.setLookTarget(dark) },
-        { hold: 2.4, shot: () => ({ from: this.head().add(v3(0, 0.05, 0)), to: dark, push: 0.04 }), run: () => { eyes.visible = true; audio.sample('cb_growl', 0.35); } },
-        { key: 'e2.fr.come', who: 'scientist', shot: () => cover.close(z, 0.35, 0.9, 0.24), run: () => { z.setFace({ frown: 0.4, squint: 0.3 }); z.setLookTarget(dark); } },
+        { hold: 4.2, shot: () => { const at = edge.clone().add(v3(0, 0.8, 0)); return { from: this.head().add(v3(0, 0.05, 0)).lerp(at, 0.25), to: at, push: 0.03, fov: 26, lightAt: at }; }, run: () => { beast = this.bigOne(outer, edge); audio.sample('cb_growl', 0.35); } },
+        { key: 'e2.fr.come', who: 'scientist', shot: () => cover.close(z, 0.35, 0.9, 0.24), run: () => { z.setFace({ frown: 0.4, squint: 0.3 }); z.setLookTarget(edge.clone().add(v3(0, 0.8, 0))); beast?.snarl(0.6); } },
         { choice: 'e2.kiln', shot: () => cover.close(z, -0.6, 1.2, 0.24) },
       ], () => {
-        eyes.removeFromParent(); this.clearHands();
+        beast?.remove(); void dark; this.clearHands();
         this.set('e2.kiln.decided');
         if (here && oom) { oom.setKneel(false); this.npcs.pin('local', null); this.set('e2.oomsa.hidden'); }
         void this.fight(here);
@@ -878,11 +898,25 @@ export class Episode2 {
   private async fight(here: boolean) {
     const s = this.s, cb = this.combat();
     this.busy = true;
-    const story = { poisoned: this.f('e2.snare.far'), cubKilled: this.f('e2.snare.near') || !!s.flags.scarred, fireHigh: this.f('e2.kiln.kept') || this.f('e2.kiln.oomsa'), hurt: this.f('e2.cold') };
+    // not Episode One's night again (owner): the pit with the pots beside the fire, to be kept hot till dawn; a burning
+    // branch from it to fight with; the big one going for the pit, not him, whenever he is away from it; Oom-Sa feeding
+    // it if he gave it to her (and running when it comes, if she trusts him only a little) (combat/sim/encounters.ts kiln)
+    const withHer = this.f('e2.kiln.oomsa') && this.f('e2.oomsa.here');
+    const story = {
+      poisoned: this.f('e2.snare.far'), cubKilled: this.f('e2.snare.near') || !!s.flags.scarred, fireHigh: this.f('e2.kiln.kept') || this.f('e2.kiln.oomsa'), hurt: this.f('e2.cold'),
+      firing: true, kept: this.f('e2.kiln.kept'), left: this.f('e2.kiln.left'), froze: this.f('e2.kiln.froze'), oomsa: withHer, oomsaRuns: withHer && !test(s, TRUSTS(2)),
+    };
     let taken = 0;
+    const oom = withHer ? this.oom() : null;
+    if (oom) {
+      // she sits at the pit through the fight, feeding it (the fight's ally stands where she sits)
+      const c = this.L.camp, at = c.clone().addScaledVector(v3(1, 0, 0.4).normalize(), 1.15).add(v3(0.9, 0, 0.6)); at.y = this.h(at.x, at.z);
+      this.npcs.pin('local', at, Math.atan2(c.x - at.x, c.z - at.z)); oom.setKneel(true, true);
+    }
     if (cb) {
       await new Promise<void>((go) => cb.ensureAsked(go));
       const o = await cb.startEncounter('night.defence', { story });
+      if (oom) { oom.setKneel(false); this.npcs.pin('local', null); }
       for (const [k, v] of Object.entries(o.flags)) if (v) s.flags[`e2.cb.${k}`] = true;
       taken = o.stats.taken;
       if (o.flags.scarred) s.flags.scarred = true;
@@ -896,21 +930,51 @@ export class Episode2 {
     this.after(1.0, () => {
       this.busy = false;
       const z = this.z, c = this.L.camp, me = this.settle(this.byFire(2.0), c, false);
-      const dark = c.clone().addScaledVector(c.clone().sub(me).setY(0).normalize(), 11).add(v3(0, 0.75, 0));
-      const eyes = this.eyes(dark);
+      const away = c.clone().sub(me).setY(0).normalize(), spot = c.clone().addScaledVector(away, 6.5), from = c.clone().addScaledVector(away, 11.5).addScaledVector(this.side(away), -2.5);
+      const dark = spot.clone().add(v3(0, 0.95, 0));
+      // across the fire it stops, its head comes round to him, a long look; then it turns and goes back into the dark
+      const beast = this.bigOne(from, spot);
       this.scene([
-        { hold: 2.6, shot: () => ({ from: c.clone().addScaledVector(c.clone().sub(dark).setY(0).normalize(), 2.2).add(v3(0.4, 1.0, 0)), to: dark, push: 0.03 }), run: () => z.setLookTarget(dark) },
-        { key: 'e2.fr.look', who: 'scientist', shot: () => cover.close(z, 0.35, 0.95, 0.24), run: () => { z.setFace({ squint: 0.3 }); this.after(1.6, () => { eyes.visible = false; }); } },
-      ], () => { eyes.removeFromParent(); this.clearHands(); this.set('e2.nightDone'); this.wait = 1; void here; });
+        { hold: 4.4, shot: () => ({ from: c.clone().addScaledVector(away, -2.4).add(v3(0.35, 1.0, 0)), to: dark, push: 0.03, fov: 34, lightAt: dark }), run: () => z.setLookTarget(dark) },
+        { hold: 2.2, shot: () => { const hd = beast.head(); return { from: hd.clone().lerp(this.head(), 0.32).add(v3(0, 0.1, 0)), to: hd, push: 0.02, fov: 24, aperture: 0.004, lightAt: hd }; } },
+        { key: 'e2.fr.look', who: 'scientist', shot: () => cover.close(z, 0.35, 0.95, 0.24), run: () => { z.setFace({ squint: 0.3 }); this.after(2.2, () => beast.leave()); } },
+        { hold: 3.0, shot: () => ({ from: c.clone().addScaledVector(away, -2.4).add(v3(0.35, 1.0, 0)), to: dark, push: 0.02, fov: 40, lightAt: dark }) },
+      ], () => { beast.remove(); this.clearHands(); this.set('e2.nightDone'); this.wait = 1; void here; });
     });
   }
-  /** Two points of light out in the dark: something looking back at the fire. */
-  private eyes(at: THREE.Vector3) {
-    const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color: 0xffd27a });
-    for (const x of [-0.07, 0.07]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 4), m); e.position.set(x, 0, 0); g.add(e); }
-    g.position.copy(at); g.lookAt(this.L.camp.clone().setY(at.y));
-    this.group.add(g);
-    return g;
+  /** The big one in a scene: walks from `from` to `to` (nose down for a stretch on the way), stands there turning to him
+   *  and watching his head; `leave()` sends it off the way it came, `snarl(k)` lifts its lip and quills. */
+  private bigOne(from: THREE.Vector3, to: THREE.Vector3) {
+    const hd = createHound({ big: true }); hd.root.visible = true; this.group.add(hd.root);
+    const a0 = from.clone(), b0 = to.clone(); a0.y = this.h(a0.x, a0.z); b0.y = this.h(b0.x, b0.z);
+    let mode: 'in' | 'stand' | 'out' = 'in', u = 0, last = performance.now(), snarl = 0.1;
+    hd.root.position.copy(a0);
+    const turn = (to: number, k: number) => { let d = to - hd.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); hd.root.rotation.y += d * Math.min(1, k); };
+    const step = () => {
+      if (!hd.root.parent) return;
+      const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now;
+      let speed = 0;
+      if (mode === 'stand') {
+        const d = this.player.pos.clone().sub(hd.root.position); turn(Math.atan2(d.x, d.z), dt * 1.6); hd.look(this.head()); hd.sniff(0);
+      } else {
+        const a = mode === 'in' ? a0 : b0, b = mode === 'in' ? b0 : a0, len = Math.max(1, a.distanceTo(b));
+        const nose = mode === 'in' && u > 0.45 && u < 0.7;
+        speed = nose ? 0.35 : mode === 'out' ? 1.6 : 1.2;
+        u = Math.min(1, u + (dt * speed) / len);
+        const p = a.clone().lerp(b, u); p.y = this.h(p.x, p.z); hd.root.position.copy(p);
+        const d = b.clone().sub(a); turn(Math.atan2(d.x, d.z), dt * 5); hd.sniff(nose ? 1 : 0.2); hd.look(null);
+        if (u >= 1) { if (mode === 'in') mode = 'stand'; else { hd.root.removeFromParent(); return; } }
+      }
+      hd.animate(speed, snarl, now / 1000, dt);
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    return {
+      leave: () => { mode = 'out'; u = 0; snarl = 0; },
+      snarl: (k: number) => { snarl = k; },
+      remove: () => hd.root.removeFromParent(),
+      head: () => new THREE.Vector3().setFromMatrixPosition(hd.head.matrixWorld),
+    };
   }
   private steam(at: THREE.Vector3) {
     const N = 24, g = new THREE.BufferGeometry(), pos = new Float32Array(N * 3);
@@ -948,7 +1012,7 @@ export class Episode2 {
         { hold: 2.6, shot: () => ({ from: c.clone().add(v3(0.5, 0.45, 0.5)), to: c.clone().add(v3(0, 0.15, 0)), push: 0.01, aperture: 0.005 }), run: () => { this.boil(); } },
         { key: 'e2.dw.2', who: 'scientist', shot: () => cover.close(z, -0.4, 0.95, 0.24) },
         { key: 'e2.dw.3', who: 'scientist', shot: () => cover.mid(z, 0.5, 2.2) },
-        { key: 'e2.dw.oom', who: OOM, if: { all: [TRUSTS(1), { not: { flag: 'e2.oomsa.away' } }] }, shot: () => (oom ? cover.close(oom, 0.4, 1.0) : cover.mid(z)) },
+        { key: 'e2.dw.oom', who: OOM, if: { all: [TRUSTS(1), { not: { flag: 'e2.oomsa.away' } }] }, shot: () => (oom ? this.oomClose(oom, 0.4, 1.0) : cover.mid(z)) },
       ], () => {
         this.clearHands(); this.boilPot?.removeFromParent();
         if (with_ && oom) { const home = c.clone().add(v3(9, 0, 7)); home.y = this.h(home.x, home.z); this.npcs.pin('local', null, 0, home); }

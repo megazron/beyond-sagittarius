@@ -57,10 +57,17 @@ function ledge(w: number, h: number, d: number, seed: number) {
     const ex = Math.abs(v.x) / (w / 2), ez = Math.abs(v.z) / (d / 2), edge = Math.max(ex, ez);
     const n = fbm(v.x * 0.7 + seed, v.z * 0.7 - seed), m = N.noise2(v.x * 2.3 + seed * 2, v.y * 3 + v.z * 2.3);
     // eroded back where it is an edge, the lower edge more (undercut), rounded corners
-    const bite = edge > 0.98 ? (0.18 + n * 0.22 + m * 0.06) * (v.y < 0 ? 1.4 : 1) : 0;
+    // (GPU take B: with a bite of 0.2 m and tops lumpy by 8 cm the beds read as flat-topped boxes from the front; now the
+    // front wanders in and out by up to 0.7 m along its length, each bed thins and thickens, and the top edge is rounded
+    // over like weathered sandstone)
+    const wander = fbm(v.x * 0.45 + seed * 3, seed) * 0.55 + N.noise2(v.x * 1.6 - seed, v.y * 2) * 0.15;
+    const bite = edge > 0.98 ? (0.22 + Math.abs(n) * 0.3 + m * 0.08 + Math.max(0, wander)) * (v.y < 0 ? 1.5 : 1) : 0;
     const corner = Math.max(0, ex + ez - 1.5) * 0.6;
     if (ex >= ez) v.x -= Math.sign(v.x) * (bite + corner * w * 0.1); else v.z -= Math.sign(v.z) * (bite + corner * d * 0.1);
-    v.y += (v.y > 0 ? 1 : -1) * n * 0.08 + m * 0.03;
+    const thick = 1 + fbm(v.x * 0.6 - seed, v.z * 0.6 + seed) * 0.45;
+    v.y = v.y * thick + (v.y > 0 ? 1 : -1) * n * 0.14 + m * 0.05;
+    // round the top front edge over: the nearer the edge, the further the top comes down
+    if (v.y > 0) v.y -= Math.pow(Math.max(0, edge - 0.6) / 0.4, 2) * h * 0.45;
     p.setXYZ(i, v.x, v.y, v.z);
   }
   g.computeVertexNormals();
@@ -83,7 +90,7 @@ function paint(g: THREE.BufferGeometry, m: THREE.Matrix4, hearth: THREE.Vector3 
       let s = Math.max(0, 1 - d / 2.0) * THREE.MathUtils.smoothstep(over, 1.8, 2.5);
       if (lipZ !== null && into) { const z = loc.z; s = Math.max(s, THREE.MathUtils.smoothstep(over, 1.9, 2.6) * THREE.MathUtils.smoothstep(-z, -0.2, 1.4) * 0.8); }
       s *= 0.75 + 0.25 * fbm(v.x * 3, v.z * 3 + v.y);
-      c.lerp(new THREE.Color().setRGB(0.09, 0.075, 0.065, THREE.SRGBColorSpace), Math.min(0.92, s));
+      c.lerp(new THREE.Color().setRGB(0.12, 0.1, 0.085, THREE.SRGBColorSpace), Math.min(0.78, s));
     }
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
@@ -99,7 +106,8 @@ export function buildRockShelter(origin: THREE.Vector3, into: THREE.Vector3, sid
   const basis = new THREE.Matrix4().makeBasis(side.clone().normalize(), new THREE.Vector3(0, 1, 0), into.clone().normalize());
   const toWorld = basis.clone().setPosition(origin);
   // a little warm light of its own: the sunlit ground's bounce into the overhang (the inside was near black on screen)
-  const rock = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0, side: THREE.DoubleSide, emissive: 0x2a1f15, emissiveIntensity: 0.7 });
+  // (still near black inside on the GPU take B: more of the bounce, and the soot below kept off the back wall)
+  const rock = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0, side: THREE.DoubleSide, emissive: 0x3d2d1e, emissiveIntensity: 0.95 });
   const hearth = origin.clone().addScaledVector(into, 0.15); hearth.y = ground(hearth.x, hearth.z);
 
   // ---- the wall and roof: one sheet, u across, v bottom to lip
