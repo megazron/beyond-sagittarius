@@ -72,7 +72,8 @@ export class FireDrill {
     const f = this.dir(b), r = new THREE.Vector3(f.z, 0, -f.x).multiplyScalar(side);
     // far enough out that the board, the spindle, both palms and his face all fit (at 1 m it framed his coat)
     const to = b.at.clone().addScaledVector(f, -0.2).add(new THREE.Vector3(0, 0.42, 0));
-    return { from: b.at.clone().addScaledVector(r, dist * 1.5).addScaledVector(f, 0.35 * dist).add(new THREE.Vector3(0, 0.7 + dist * 0.15, 0)), to, push: 0.02 };
+    // GPU ep1B: from his side (r 1.5, f 0.35) his arm and coat hid both palms; now beyond the board, to one side, facing him
+    return { from: b.at.clone().addScaledVector(r, dist * 0.8).addScaledVector(f, 0.8 * dist).add(new THREE.Vector3(0, 0.55 + dist * 0.15, 0)), to: b.at.clone().addScaledVector(f, -0.12).add(new THREE.Vector3(0, 0.3, 0)), push: 0.02 };
   }
   /** Extreme close on the notch in the board: the dust, the smoke, the ember. */
   private notchShot(b: { kneel: THREE.Vector3; at: THREE.Vector3 }): Shot {
