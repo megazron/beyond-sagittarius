@@ -522,7 +522,7 @@ def main():
         last_prog = ""
         hound_seen = False
         night_asked = False
-        for it in range(900):
+        for it in range(2400):  # Episode Three (levels 15 to 21) needs more rounds: its holds and scenes run in real time
             st = ev("({state: __bs.state, level: __bs.level, mode: __bs.mode, hound: __bs.hound, crew: __bs.crew, busy: __bs.save && null})")
             lvl = st["level"]
             # the story's own fights (src/game/fights.ts): nothing but the story starts them here
