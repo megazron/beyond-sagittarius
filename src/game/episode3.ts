@@ -661,8 +661,9 @@ export class Episode3 extends Episode2 {
     };
     for (const [k, [u0, w0, u1, w1]] of Object.entries(sides)) {
       if (k !== door) { wall(u0, w0, u1, w1, -0.3, EAVE - 0.08); solid(u0, w0, u1, w1); continue; }
-      { const du = u1 - u0, dw = w1 - w0, L2 = Math.hypot(du, dw), a0 = 0.5 - 0.5 / L2, a1 = 0.5 + 0.5 / L2; solid(u0, w0, u0 + du * a0, w0 + dw * a0); solid(u0 + du * a1, w0 + dw * a1, u1, w1); }
-      const mu = (u0 + u1) / 2, mw = (w0 + w1) / 2, du = (u1 - u0), dw = (w1 - w0), L2 = Math.hypot(du, dw), k0 = 0.5 - 0.45 / L2, k1 = 0.5 + 0.45 / L2;
+      // (the doorway's colliders 1.3 m apart: at 1.0 m, 0.76 m clear for a 0.7 m body, GPU take EP3B B shut him in)
+      { const du = u1 - u0, dw = w1 - w0, L2 = Math.hypot(du, dw), a0 = 0.5 - 0.66 / L2, a1 = 0.5 + 0.66 / L2; solid(u0, w0, u0 + du * a0, w0 + dw * a0); solid(u0 + du * a1, w0 + dw * a1, u1, w1); }
+      const mu = (u0 + u1) / 2, mw = (w0 + w1) / 2, du = (u1 - u0), dw = (w1 - w0), L2 = Math.hypot(du, dw), k0 = 0.5 - 0.52 / L2, k1 = 0.5 + 0.52 / L2;
       wall(u0, w0, u0 + du * k0, w0 + dw * k0, -0.3, EAVE - 0.08);
       wall(u0 + du * k1, w0 + dw * k1, u1, w1, -0.3, EAVE - 0.08);
       wall(u0 + du * k0, w0 + dw * k0, u0 + du * k1, w0 + dw * k1, 1.5, EAVE - 0.08);
@@ -975,7 +976,7 @@ export class Episode3 extends Episode2 {
         this.settle(seat, H.at.clone().addScaledVector(H.a, 0.8), true, true);
         z.setFace(null);
       } },
-      { key: 'e3.fr.ok', who: 'scientist', shot: () => { const hd = this.head(); return { from: hd.clone().addScaledVector(this.fwd(), 1.0).addScaledVector(this.right(this.fwd()), 0.35).add(v3(0, -0.15, 0)), to: hd.clone().add(v3(0, 0.12, 0)), fov: 35, push: 0.01 }; }, run: () => { z.setLookTarget(H.at.clone().add(v3(0, 2.6, 0))); z.setFace({ smile: 0.2 }); } },
+      { key: 'e3.fr.ok', who: 'scientist', shot: () => { const hd = this.head(); return { from: hd.clone().addScaledVector(this.fwd(), 1.35).addScaledVector(this.right(this.fwd()), 0.55).add(v3(0, 0.05, 0)), to: hd.clone().add(v3(0, 0.02, 0)), fov: 42, push: 0.01 }; }, run: () => { z.setLookTarget(H.at.clone().add(v3(0, 2.6, 0))); z.setFace({ smile: 0.2 }); } },
       { hold: 2.8, shot: () => { const hd = this.head(); return { from: hd.clone().add(v3(0, -0.1, 0)).addScaledVector(this.fwd(), -0.2), to: H.at.clone().add(v3(0, 2.5, 0)).addScaledVector(H.b, 0.6), fov: 50, push: 0.01, lightAt: H.at.clone().add(v3(0, 2.3, 0)), lightScale: 0.6 }; } },
     );
     this.scene(beats, () => {
