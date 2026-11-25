@@ -345,18 +345,18 @@ export class Episode3 extends Episode2 {
    * what it looks at, a little at a time, then rises, until it is clear. */
   protected safeShot(sh: Shot): Shot {
     const bodies = this.bodies(); if (!bodies.length) return sh;
-    const axis = bodies.map((c) => { const a = c.root.getWorldPosition(new THREE.Vector3()), h = c.head.getWorldPosition(new THREE.Vector3()); return [a.add(h.clone().sub(a).multiplyScalar(0.08)), h] as const; });
+    const axis = bodies.map((c) => { const a = c.root.getWorldPosition(new THREE.Vector3()), h = c.head.getWorldPosition(new THREE.Vector3()); return [a.add(h.clone().sub(a).multiplyScalar(0.08)), h, c === this.z ? 0.36 : 0.5] as const; });
     const P = new THREE.Vector3(), Q = new THREE.Vector3();
     const near = (a: THREE.Vector3, b: THREE.Vector3, p0: THREE.Vector3, p1: THREE.Vector3, skipEnd: number) => {
       let m = 9;
       for (let i = 0; i <= 14; i++) { const u = i / 14; P.copy(a).lerp(b, u); if (a.distanceTo(P) > a.distanceTo(b) - skipEnd) continue; for (let j = 0; j <= 6; j++) { Q.copy(p0).lerp(p1, j / 6); m = Math.min(m, P.distanceTo(Q)); } }
       return m;
     };
-    const bad = (from: THREE.Vector3) => axis.some(([r, h]) => {
+    const bad = (from: THREE.Vector3) => axis.some(([r, h, rin]) => {
       // the subject (its head near where the camera looks) may fill the frame; it must not be cut by the lens or in front
       const subject = h.distanceTo(sh.to) < 0.45 || r.distanceTo(sh.to) < 0.45;
-      if (near(from, from, r, h, 0) < 0.36) return true;
-      return !subject && near(from, sh.to, r, h, 0.5) < 0.2;
+      if (near(from, from, r, h, 0) < rin) return true;
+      return !subject && near(from, sh.to, r, h, 0.45) < 0.3;
     });
     if (!bad(sh.from)) return sh;
     const off = sh.from.clone().sub(sh.to);
@@ -950,7 +950,7 @@ export class Episode3 extends Episode2 {
           this.wk16 = true; this.placeFolk('wenka', boy, H.at); F.wenka.setLookTarget(look);
           z.setLookTarget(boy.clone().add(v3(0, 0.8, 0)));
         } },
-        { key: 'e3.wk.copy', who: 'wenka' as Who, shot: () => cover.close(F.wenka, 0.35, 0.95, -0.12), run: () => { F.wenka.setLookTarget(this.head()); this.set('e3.wk.copy'); } },
+        { key: 'e3.wk.copy', who: 'wenka' as Who, shot: () => { const wh = F.wenka.head.getWorldPosition(new THREE.Vector3()), dz = this.player.pos.clone().sub(F.wenka.root.position).setY(0).normalize(), sd = v3(dz.z, 0, -dz.x); return { from: wh.clone().addScaledVector(dz, 1.0).addScaledVector(sd, 0.3).add(v3(0, 0.08, 0)), to: wh.clone().add(v3(0, -0.04, 0)), fov: 40, push: 0.01 }; }, run: () => { F.wenka.setLookTarget(this.head()); this.set('e3.wk.copy'); } },
         { hold: 1.6, shot: () => cover.mid(F.wenka, -0.4, 1.8), run: () => { audio.human('laugh', 0.35); F.wenka.setFace?.({ smile: 0.8 }); } },
       );
     }
