@@ -29,11 +29,13 @@ function rimmed<T extends THREE.MeshStandardMaterial>(m: T, held: { value: THREE
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uNightRim = NIGHT_RIM; sh.uniforms.uHeldLit = held;
     sh.fragmentShader = 'uniform vec3 uNightRim;\nuniform vec3 uHeldLit;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
-      '#include <emissivemap_fragment>\n  { float fr = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0); totalEmissiveRadiance += uNightRim * pow(fr, 2.0) + uHeldLit * (0.12 + 0.88 * pow(fr, 1.6)); }');
+      '#include <emissivemap_fragment>\n  { float fr = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0); vec3 tint = 0.15 + 1.6 * diffuseColor.rgb; totalEmissiveRadiance += (uNightRim * pow(fr, 2.0) + uHeldLit * (0.12 + 0.88 * pow(fr, 1.6))) * tint; }');
     nearFade(m, sh);
   };
   const key = m.customProgramCacheKey.bind(m);
-  m.customProgramCacheKey = () => key() + '|nightRim5';
+  // (the edge light tinted by the hide's own colour: as a flat cold-white edge of 0.9 on dark hides the animals glowed
+  // white at night like lit ghosts, GPU take e169v8; a dark hide now gets about a quarter of it, in its own hue)
+  m.customProgramCacheKey = () => key() + '|nightRim6';
   return m;
 }
 const glow = (r: number, g: number, b: number) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b) });
@@ -688,7 +690,7 @@ export function createCreature(kind: SpeciesId): CreatureView {
     case 'guardian': return guardian();
     case 'darter': return darter();
     case 'skritch': return small(quadruped({ len: 0.75, girth: 0.17, legLen: 0.3, legR: 0.035, headLen: 0.3, neck: 0.1, tail: 0.5, ears: 0.9, hide: 0x4a3f33, belly: 0x8a7a62, ridge: [0.5, 1.5, 0.9], eye: [2.2, 1.6, 0.4], gait: 1.1 }));
-    case 'nibbet': return small(quadruped({ len: 0.5, girth: 0.15, legLen: 0.26, legR: 0.03, headLen: 0.22, neck: 0.08, tail: 0.12, ears: 1.9, hide: 0x7d745a, belly: 0xc9c2a4, ridge: [0.4, 1.1, 1.3], eye: [1.2, 1.4, 1.5], gait: 1.3, flag: 0xf1eee4, perk: 0.85 }));
+    case 'nibbet': return small(quadruped({ len: 0.6, girth: 0.18, legLen: 0.3, legR: 0.034, headLen: 0.26, neck: 0.09, tail: 0.15, ears: 1.9, hide: 0x9a5f38, belly: 0xe2d6b4, ridge: [0.4, 1.1, 1.3], eye: [1.2, 1.4, 1.5], gait: 1.3, flag: 0xf1eee4, perk: 0.85 }));
     default: return quadruped({ len: 2.5, girth: 0.72, legLen: 0.95, legR: 0.16, headLen: 0.8, neck: 0.3, tail: 0.5, ears: 0.35, hide: 0x4b4f45, belly: 0x6f6a58, ridge: [0.4, 1.2, 0.5], eye: [1.6, 1.3, 0.5], plates: 1, moss: 0x3f7a4c, gait: 0.42 });
   }
 }

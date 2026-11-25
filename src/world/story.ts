@@ -98,7 +98,7 @@ function siteRing(radius: number) {
   const g = new THREE.RingGeometry(radius - 0.08, radius, 40);
   g.rotateX(-Math.PI / 2);
   const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.5, 0.5), transparent: true, opacity: 0.6, depthWrite: false }));
-  m.position.y = 0.06;
+  m.position.y = 0.06; m.name = 'ring'; // a hint: cinema mode hides it
   return m;
 }
 
@@ -119,6 +119,41 @@ function poleBetween(a: THREE.Vector3, b: THREE.Vector3, r: number, mat: THREE.M
   return m;
 }
 
+/**
+ * A giant fern frond painted into a texture (no canvas: it is built in plain arrays, so it runs in the tests too): a
+ * pale rib, pairs of leaflets angled to the tip, each a little different in green, browning at the tips; `dry` for an
+ * older frond, olive going brown. u runs across, v from the stalk (0) to the tip (1).
+ */
+function frondTexture(seed: number, dry: boolean) {
+  const Wd = 128, Ht = 256, data = new Uint8Array(Wd * Ht * 4), rnd = mulberry32(seed);
+  const base = dry ? [104, 98, 52] : [58, 92, 48], brown = dry ? [122, 88, 48] : [96, 92, 50];
+  for (let i = 0; i < Wd * Ht; i++) { data[i * 4] = base[0]; data[i * 4 + 1] = base[1]; data[i * 4 + 2] = base[2]; data[i * 4 + 3] = 0; }
+  const stamp = (x: number, y: number, r: number, c: number[]) => {
+    for (let yy = Math.floor(y - r); yy <= Math.ceil(y + r); yy++) for (let xx = Math.floor(x - r); xx <= Math.ceil(x + r); xx++) {
+      if (xx < 0 || yy < 0 || xx >= Wd || yy >= Ht || (xx - x) ** 2 + (yy - y) ** 2 > r * r) continue;
+      const k = (yy * Wd + xx) * 4; data[k] = c[0]; data[k + 1] = c[1]; data[k + 2] = c[2]; data[k + 3] = 255;
+    }
+  };
+  const N = 19;
+  for (let k = 0; k < N; k++) for (const sg of [-1, 1]) {
+    const v0 = 0.07 + (k / N) * 0.88, reach = Math.sin(Math.PI * (0.12 + 0.88 * (k / N))) * (0.46 - 0.12 * (k / N)) * (0.9 + rnd() * 0.15);
+    const ang = 0.95 + rnd() * 0.2, len = reach / Math.sin(ang), wid = 2.2 + 2.4 * Math.sin(Math.PI * (k + 1) / (N + 1));
+    const tone = 0.82 + rnd() * 0.3, brownAt = 0.55 + rnd() * 0.4;
+    const n = Math.ceil(len * Ht * 1.2);
+    for (let j = 0; j <= n; j++) {
+      const t = j / n, x = 0.5 + sg * Math.sin(ang) * len * t, y = v0 + Math.cos(ang) * len * t * 0.5;
+      const b = Math.max(0, (t - brownAt) / (1 - brownAt)) * (dry ? 1 : 0.8);
+      const c = base.map((q, ci) => Math.min(255, (q + (brown[ci] - q) * b) * tone * (0.9 + 0.2 * t)));
+      stamp(x * Wd, y * Ht, wid * (1 - t * 0.75), c);
+    }
+  }
+  for (let y = 0; y < Ht * 0.985; y++) stamp(Wd / 2, y, 1.6 - (y / Ht) * 0.9, dry ? [140, 124, 70] : [118, 128, 66]);
+  const tex = new THREE.DataTexture(data, Wd, Ht, THREE.RGBAFormat);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true; tex.anisotropy = 4; tex.needsUpdate = true;
+  return tex;
+}
+
 /** The camp: fire pit, lean-to shelter and the radio beacon, each with build stages. */
 export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
   const root = new THREE.Group();
@@ -126,8 +161,11 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
   const wood = flat(0x5a4334);
   const woodDark = flat(0x3b2b22);
   const stone = flat(0x8a8494);
-  const leafMat = flat(0x2f8f86, { side: THREE.DoubleSide, roughness: 0.65, emissive: 0x041a18 });
-  const leafMat2 = flat(0x4b6f9a, { side: THREE.DoubleSide, roughness: 0.65 });
+  // the lean-to's fronds: cut from the giant ferns round the camp, fresh green ones and a few that have browned (they
+  // read as flat teal and blue tarps before: owner). Leaflets cut out of a painted frond, not a coloured sheet
+  const leafMat = new THREE.MeshStandardMaterial({ map: frondTexture(11, false), side: THREE.DoubleSide, roughness: 0.7, alphaTest: 0.45 });
+  const leafMat2 = new THREE.MeshStandardMaterial({ map: frondTexture(29, true), side: THREE.DoubleSide, roughness: 0.75, alphaTest: 0.45 });
+  const bedMat = flat(0x4a4a2a, { roughness: 0.95 });
 
   // ---------- fire pit ----------
   const fire = new THREE.Group();
@@ -188,6 +226,12 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
   const light = new THREE.PointLight(0xff9a4a, 0, 22, 1.0);
   light.position.set(0, 0.9, 0);
   fire.add(light);
+  // a work light for the hand-drill at dusk, also there from the start and off: the last glow of the sky after sunset,
+  // put where the western sky is (Episode One 1.6 was too dark to read at 18:30). The ember's own small glow borrows
+  // the fire's light while the fire is not lit (one more light in the scene costs every pixel of every frame)
+  const skyGlow = new THREE.PointLight(0xffb48a, 0, 9, 1.4);
+  root.add(skyGlow);
+  const work = { sky: 0, ember: 0, at: new THREE.Vector3(), skyAt: new THREE.Vector3() };
   const fireSite = siteRing(0.9);
   fire.add(fireSite);
 
@@ -208,25 +252,35 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
     const x = -W / 2 + (i / 5) * W;
     frame.add(poleBetween(new THREE.Vector3(x, H + 0.05, 0.25), new THREE.Vector3(x * 1.05, -0.1, -D), 0.03, i % 2 ? wood : woodDark));
   }
-  // fronds layered like shingles on the slanted poles
-  const leafGeo = new THREE.PlaneGeometry(0.9, 1.3, 1, 4);
+  // fronds laid on the slanted poles like shingles: each one's stalk up at the ridge, its tip down the slope, the
+  // rows from the ridge down overlapping the row below on the outside (the rain runs off)
+  const FL = 1.45, FW = 0.82;
+  const leafGeo = new THREE.PlaneGeometry(FW, FL, 4, 8);
   {
     const p = leafGeo.attributes.position;
-    for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setX(i, p.getX(i) * (1 - Math.abs(y) * 0.45)); p.setZ(i, Math.abs(p.getX(i)) * 0.18); }
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), t = p.getY(i) / FL + 0.5; // 0 at the stalk, 1 at the tip
+      // folded a little along the rib, arched, and the tip hanging on to the roof
+      p.setXYZ(i, x * (0.75 + 0.25 * Math.sin(Math.PI * Math.min(1, t * 1.6))), t * FL, -Math.abs(x) * 0.16 + Math.sin(Math.PI * t) * 0.06);
+    }
     leafGeo.computeVertexNormals();
   }
-  const slope = Math.atan2(H + 0.15, D + 0.25);
+  const S = Math.hypot(H + 0.15, D + 0.25), down = new THREE.Vector3(0, -(H + 0.15), -(D + 0.25)).normalize();
+  const out = new THREE.Vector3(1, 0, 0).cross(down); // the roof's outer side (up and back)
+  const basis = new THREE.Matrix4().makeBasis(new THREE.Vector3(1, 0, 0), down, out);
   for (let row = 0; row < 3; row++) {
     for (let i = 0; i < 4; i++) {
-      const lf = new THREE.Mesh(leafGeo, (row + i) % 3 ? leafMat : leafMat2);
-      const u = (row + 0.5) / 3;
-      lf.position.set(-W / 2 + 0.35 + i * ((W - 0.7) / 3) + (rnd() - 0.5) * 0.1, H - u * (H + 0.15) + 0.08, 0.25 - u * (D + 0.25) - 0.04);
-      lf.rotation.set(-(Math.PI / 2 - slope), (rnd() - 0.5) * 0.2, (rnd() - 0.5) * 0.25);
+      const lf = new THREE.Mesh(leafGeo, (row * 4 + i) % 3 === 1 ? leafMat2 : leafMat);
+      const u = (row + 0.5) / 3, x = -W / 2 + 0.33 + i * ((W - 0.66) / 3) + (rnd() - 0.5) * 0.1;
+      // the stalk end, up the slope from the row's middle; upper rows a little further out (they lie over the next)
+      const s0 = Math.max(0, u * S - FL * 0.5 - 0.05);
+      lf.position.set(x, H + 0.05, 0.25).addScaledVector(down, s0).addScaledVector(out, 0.05 + (2 - row) * 0.025);
+      lf.quaternion.setFromRotationMatrix(basis).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, (rnd() - 0.5) * 0.12, (rnd() - 0.5) * 0.18)));
       lf.castShadow = true; lf.receiveShadow = true;
       roof.add(lf);
     }
   }
-  const bed = new THREE.Mesh(new THREE.BoxGeometry(W * 0.8, 0.12, D * 0.6), leafMat);
+  const bed = new THREE.Mesh(new THREE.BoxGeometry(W * 0.8, 0.12, D * 0.6), bedMat);
   bed.position.set(0, 0.04, -D * 0.45); bed.receiveShadow = true;
   roof.add(bed);
   frame.visible = false; roof.visible = false;
@@ -297,7 +351,7 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
   // the fire ring: knee high (the camera passes over it; as a trunk of no height it pulled the night watch's view in
   // to over his head in one frame each time he came to the fire: 2:06 in v14, 2:13, 2:38 and 3:08 in v15)
   forest.addObstacle(L.camp.x, L.camp.z, 0.75, 0.9);
-  let shelterObstacles = false, beaconObstacle = false;
+  let shelterObstacles = false, beaconObstacle = false, baseQ: THREE.Quaternion | null = null;
 
   const state = { fireStage: 0, lit: false, shelter: false, beaconBuilt: false, beaconOn: false, sites: { fire: false, shelter: false, beacon: false } };
 
@@ -315,7 +369,9 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
     },
     setShelter(on: boolean) {
       state.shelter = on;
+      if (baseQ) shelter.quaternion.copy(baseQ);
       frame.visible = on; roof.visible = on;
+      for (const c of [...frame.children, ...roof.children]) c.visible = true;
       if (on && !shelterObstacles) {
         shelterObstacles = true;
         // the back wall blocks, the open front lets the player crawl in
@@ -323,6 +379,26 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
         forest.addObstacle(back.x, back.z, 0.9);
       }
     },
+    /**
+     * The lean-to going up, for Episode One's build (lean.ts): 0 nothing, 1 the uprights and the ridge pole, 2 the
+     * leaning poles, 3 to 5 the thatch rows from the bottom up (5 adds the bed). `thin`: every other frond of the
+     * newest row left out (light through the roof). `turn`: the whole frame turned about its upright (the wrong way
+     * to the wind), in radians. setShelter(true) is stage 5, untouched.
+     */
+    shelterStage(k: number, thin = false, turn = 0) {
+      if (!baseQ) baseQ = shelter.quaternion.clone();
+      shelter.quaternion.copy(baseQ); if (turn) shelter.rotateY(turn);
+      frame.visible = k >= 1; roof.visible = k >= 3;
+      frame.children.forEach((c, i) => { c.visible = i < 5 ? k >= 1 : k >= 2; });
+      const fronds = roof.children.slice(0, 12);
+      fronds.forEach((c, i) => {
+        const row = Math.floor(i / 4), need = 5 - row; // row 2 is the bottom: it goes on first (stage 3)
+        c.visible = k >= need && !(thin && k === need && i % 2 === 1);
+      });
+      roof.children.slice(12).forEach((c) => { c.visible = k >= 5; });
+    },
+    /** Where the lean-to stands and which way its open side faces (towards the fire). */
+    shelterAt() { const f = new THREE.Vector3(0, 0, 1).applyQuaternion(baseQ ?? shelter.quaternion); return { at: L.shelter.clone(), open: f.setY(0).normalize() }; },
     setBeacon(built: boolean, on: boolean) {
       state.beaconBuilt = built; state.beaconOn = on;
       tripod.visible = built; device.visible = built;
@@ -332,6 +408,18 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
     /** Which ghost rings to show (the next thing to build). */
     setSites(s: { fire: boolean; shelter: boolean; beacon: boolean }) { state.sites = s; },
     strikeSparks() { sparkT = 0; sparks.visible = true; },
+    /**
+     * Light for work at dusk (the drill): `sky` 0..1 the sky's last glow from `skyAt` (a point out towards the sunset,
+     * coloured like the horizon), `ember` 0..1 an ember at `at`. null puts both out.
+     */
+    workLight(o: { sky?: number; skyAt?: THREE.Vector3; color?: THREE.Color; ember?: number; at?: THREE.Vector3 } | null) {
+      if (!o) { work.sky = work.ember = 0; return; }
+      if (o.sky !== undefined) work.sky = o.sky;
+      if (o.ember !== undefined) work.ember = o.ember;
+      if (o.skyAt) work.skyAt.copy(o.skyAt);
+      if (o.at) work.at.copy(o.at);
+      if (o.color) skyGlow.color.copy(o.color);
+    },
     update(t: number, dt: number, player: THREE.Vector3) {
       const near = smoothstep(40, 8, player.distanceTo(L.camp));
       const pulse = (0.35 + 0.35 * Math.sin(t * 3)) * near;
@@ -354,6 +442,13 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
       } else {
         light.intensity = 0;
       }
+      // the fire's light, unlit, as the ember's glow (a small warm light low at the notch, short reach)
+      const emb = !state.lit && work.ember > 0;
+      light.distance = emb ? 2.2 : 22; light.color.setHex(emb ? 0xff6a24 : 0xff9a4a);
+      if (emb) { light.position.copy(work.at).sub(L.camp); light.position.y += 0.06; light.intensity = work.ember * (1.1 + 0.35 * Math.sin(t * 7.3) + 0.2 * Math.sin(t * 17.1)); }
+      else light.position.set(0, 0.9, 0);
+      // root sits at the origin of the world (the fire pit group carries the camp's position)
+      skyGlow.intensity = 20 * work.sky; skyGlow.position.copy(work.skyAt);
       if (sparks.visible) {
         sparkT += dt * 1.8;
         for (let i = 0; i < sparkN; i++) {

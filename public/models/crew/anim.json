@@ -154,6 +154,70 @@
 "hand": "relaxed",
 "dur": 2.6
 },
+"pickup_low": {
+"loop": false,
+"speed": 0.0,
+"kind": "once",
+"take": "ual2:Farm_Harvest",
+"hand": null,
+"dur": 2.5
+},
+"pickup_table": {
+"loop": false,
+"speed": 0.0,
+"kind": "once",
+"take": "ual:PickUp_Table",
+"hand": null,
+"dur": 0.8333333333333334
+},
+"plant": {
+"loop": false,
+"speed": 0.0,
+"kind": "once",
+"take": "ual2:Farm_PlantSeed",
+"hand": null,
+"dur": 2.7666666666666666
+},
+"consume": {
+"loop": false,
+"speed": 0.0,
+"kind": "once",
+"take": "ual2:Consume",
+"hand": null,
+"dur": 1.3333333333333333
+},
+"throw": {
+"loop": false,
+"speed": 0.0,
+"kind": "once",
+"take": "ual2:OverhandThrow",
+"hand": null,
+"dur": 1.3333333333333333
+},
+"fix_kneel": {
+"loop": false,
+"speed": 0.0,
+"kind": "once",
+"take": "ual:Fixing_Kneeling",
+"hand": null,
+"dur": 5.166666666666667
+},
+"walk_carry": {
+"loop": true,
+"speed": 0.6515537550335395,
+"kind": "cycle",
+"take": "ual2:Walk_Carry_Loop",
+"hand": null,
+"dur": 2.0
+},
+"hold_lantern": {
+"loop": true,
+"speed": 0.0,
+"kind": "loop",
+"take": "ual2:Idle_Lantern_Loop",
+"hand": null,
+"dur": 2.5
+},
 "facepalm": {
 "loop": true,
 "speed": 0.0,

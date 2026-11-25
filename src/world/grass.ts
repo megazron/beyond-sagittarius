@@ -9,6 +9,9 @@ import { windUniforms } from './forest';
  * the terrain heightmap texture in the vertex shader. Blades never move in
  * world space, the field just follows you.
  */
+/** Points in the no-grass line (setRibbon). */
+const RIB = 40;
+
 export function createGrass(terrain: Terrain, q: Quality) {
   const R = q.grassRadius;
   // one instance = a tuft of thin, curved 3-segment blades
@@ -62,13 +65,17 @@ export function createGrass(terrain: Terrain, q: Quality) {
     uRes: { value: terrain.res },
     // trampled clearings (camp, crash sites): xz centre, radius
     uClear: { value: [new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1)] },
+    // a water course with no grass on it (Episode One's stream and pool): points (x, z, half width); a point with a
+    // negative width starts a new line; only blades inside the box test the line
+    uRib: { value: Array.from({ length: RIB }, () => new THREE.Vector3(0, 0, -1)) },
+    uRibBox: { value: new THREE.Vector4(1, 1, -1, -1) },
   };
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, side: THREE.DoubleSide, vertexColors: false });
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms, { uTime: windUniforms.uTime, uWind: windUniforms.uWind });
     sh.vertexShader = /* glsl */ `
       attribute vec4 aOffset;
-      uniform vec2 uCenter; uniform sampler2D uHeight; uniform float uWorld, uRadius, uTime, uWind, uRes; uniform vec3 uClear[4];
+      uniform vec2 uCenter; uniform sampler2D uHeight; uniform float uWorld, uRadius, uTime, uWind, uRes; uniform vec3 uClear[4]; uniform vec3 uRib[${RIB}]; uniform vec4 uRibBox;
       varying float vTip; varying float vVar; varying float vPatch;
       float th(vec2 p){ return texture2D(uHeight, ((p + uWorld * 0.5) / uWorld * (uRes - 1.0) + 0.5) / uRes).r; }
       float gh(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -86,6 +93,16 @@ export function createGrass(terrain: Terrain, q: Quality) {
       float dist = length(wp - uCenter) / uRadius;
       float s = (0.7 + aOffset.w * 0.75) * smoothstep(0.6, 1.4, hgt) * (1.0 - smoothstep(0.35, 0.6, slope)) * smoothstep(1.0, 0.75, dist) * smoothstep(0.15, 0.45, patchK);
       for (int i = 0; i < 4; i++) { float cr = uClear[i].z; if (cr > 0.0) s *= mix(0.15, 1.0, smoothstep(cr * 0.55, cr, length(wp - uClear[i].xy))); }
+      if (wp.x > uRibBox.x && wp.y > uRibBox.y && wp.x < uRibBox.z && wp.y < uRibBox.w) {
+        float dm = 1e5;
+        for (int i = 0; i < ${RIB - 1}; i++) {
+          vec3 A = uRib[i], B = uRib[i + 1];
+          if (A.z <= 0.0 || B.z <= 0.0) continue;
+          vec2 ab = B.xy - A.xy; float tt = clamp(dot(wp - A.xy, ab) / max(dot(ab, ab), 1e-4), 0.0, 1.0);
+          dm = min(dm, length(wp - A.xy - ab * tt) - mix(A.z, B.z, tt));
+        }
+        s *= smoothstep(-0.1, 0.7, dm);
+      }
       vec3 transformed = vec3(position);
       transformed.y *= s;
       transformed.xz *= 0.8 + dist * 2.2; // far tufts widen so the field stays solid
@@ -125,6 +142,18 @@ export function createGrass(terrain: Terrain, q: Quality) {
   return {
     mesh,
     update(center: THREE.Vector3) { uniforms.uCenter.value.set(center.x, center.z); },
+    /** Lines with no grass on them (x, z, half width; a negative width starts a new line), up to RIB points. */
+    setRibbon(pts: [number, number, number][]) {
+      const v = uniforms.uRib.value, b = uniforms.uRibBox.value;
+      b.set(1e9, 1e9, -1e9, -1e9);
+      v.forEach((p, i) => {
+        const q = pts[i];
+        if (!q) { p.set(0, 0, -1); return; }
+        p.set(q[0], q[1], q[2]);
+        const r = Math.abs(q[2]) + 1;
+        b.set(Math.min(b.x, q[0] - r), Math.min(b.y, q[1] - r), Math.max(b.z, q[0] + r), Math.max(b.w, q[1] + r));
+      });
+    },
     /** Up to four circles (x, z, radius) where the grass is trampled short. */
     setClearings(list: [number, number, number][]) {
       uniforms.uClear.value.forEach((v, i) => { const c = list[i]; if (c) v.set(c[0], c[1], c[2]); else v.set(0, 0, -1); });

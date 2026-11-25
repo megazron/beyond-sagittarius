@@ -2,6 +2,7 @@ import { Combat, defaultCombatSettings } from './combat/combat';
 import './style.css';
 import * as THREE from 'three';
 import { BATCH, batchSupported } from './core/ibatch';
+import { clipProbe, clipStats, type ClipHit } from './core/clipprobe';
 import { NEAR_FADE } from './core/nearfade';
 import { setLang, setPlayer, t, Lang } from './i18n';
 import { detectQuality, isPhone, saveQualityChoice, QualityName, qualityFromUrl } from './core/quality';
@@ -42,6 +43,7 @@ import { voice } from './core/voice';
 import { frameReport } from './cinematic/cutscene';
 import { Vault, vaultScript } from './narrator/vault';
 import { Montage } from './cinematic/montage';
+import { designOf } from './game/away/boarding';
 import { onLangChange } from './i18n';
 import { fitFov, lockViewport, tryFullscreen } from './core/viewport';
 import { startFit, auditFit, fitState, refitAll } from './ui/fit';
@@ -49,7 +51,7 @@ import { canvasFitStats } from './core/canvastext';
 import { auditTextFaces, probeTextFaces } from './core/textfaces';
 import { FIRE_BASE } from './world/flame';
 import { soundscape, soundscapeState } from './core/soundscape';
-import { CLOTH_HOLES, UNDER_CLOTH } from './characters/character';
+import { CLOTH_HOLES, UNDER_CLOTH, HANDS } from './characters/character';
 import { TECH, AGES } from './game/tech/data';
 import { techState } from './game/tech/tech';
 import { openCodex, showSafetyCard, consentGiven, stopSpeech } from './ui/science';
@@ -138,7 +140,21 @@ let pendingNames: CrewNames = {};
 /** Chapter being replayed by the next world start. */
 let replaying: number | null = null;
 /** Debug camera override used for documentation screenshots. */
-let photo: { from: THREE.Vector3; to: THREE.Vector3 } | null = null;
+let photo: { from: THREE.Vector3; to: THREE.Vector3; fov?: number } | null = null;
+/** Cinema mode (?cinema=1 or __bs.cinema(true)) for trailers and screenshots: everything on the page but the 3D view is
+ * hidden (HUD, hints, minimap, prompts, subtitles, menus, letterbox bars, fades) and so is the cursor. */
+const setCinema = (on: boolean) => { document.documentElement.classList.toggle('cinema', on); hintSweep = 0; };
+/** World hints (the glowing rings on items and build sites, all named 'ring') go with the UI in cinema mode. */
+let hintSweep = 0;
+function sweepHints() {
+  const show = !document.documentElement.classList.contains('cinema');
+  world?.scene.traverse((o) => {
+    if (o.name !== 'ring' || !(o as THREE.Mesh).isMesh) return;
+    const m = (o as THREE.Mesh).material as THREE.Material;
+    if (m.visible !== show) m.visible = show;
+  });
+}
+if (new URLSearchParams(location.search).get('cinema') === '1') setCinema(true);
 
 document.getElementById('quality-badge')!.textContent = quality.name.toUpperCase();
 document.getElementById('version-badge')!.textContent = `v${__APP_VERSION__}`;
@@ -271,7 +287,12 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', after: () => void)
   input.enabled = false; input.resetTouch(); touch.show(false); suppressPauseOnUnlock = true; input.releasePointer();
   ui.fade('black', 1, 0.5);
   ui.show('hud', false);
-  setTimeout(() => {
+  // under the black: the voices' index and the first line's take are in before the scene starts (a fresh profile asked
+  // for them only as the first subtitle showed, so the first line came late or not at all)
+  const voiced = voice.ready(lines.map((l) => l.key).filter(Boolean));
+  setTimeout(() => void voiced.then(() => {
+    // Begin in the creator leaves its stage up under the fade; the black is complete now
+    if (stage.active) showStage(false);
     renderer.setScene(vault.scene, vault.camera, false);
     renderer.renderer.toneMappingExposure = 1;
     ui.show('cine', true);
@@ -282,7 +303,7 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2', after: () => void)
     });
     // lift the black only once the Vault is really on screen
     requestAnimationFrame(() => requestAnimationFrame(() => ui.fade('black', 0, 1.0)));
-  }, 520);
+  }), 520);
 }
 
 /** Return from a scene to the running game. */
@@ -412,6 +433,9 @@ function playOpening(withCity: boolean, replay: boolean) {
     renderer.setScene(cine.scene, cine.camera, false);
     cine.start(() => playFilm(replay));
   };
+  // ?earlycity=1 (trial): Zenvora is built under the black before MegaZroN and its programs compile in the background
+  // while he speaks, so less of it is left for the black after the title card
+  if (withCity && new URLSearchParams(location.search).get('earlycity') === '1') setTimeout(() => { if (!game?.away) return; const st = game.away.prepare('city'); void renderer.compileFor(st.scene, camera); }, 600);
   playVault('intro', () => (withCity ? playPrologue(() => titleCard(films, 'takeoff.card')) : films()));
 }
 
@@ -826,7 +850,10 @@ function tick(step: number) {
     // after the update: a prompt set this frame is placed this frame, never drawn once in the corner
     if (state === 'game') ui.track(camera);
     const focus = player.pos;
-    if (photo) { camera.position.copy(photo.from); camera.lookAt(photo.to); }
+    if (photo) {
+      camera.position.copy(photo.from); camera.lookAt(photo.to);
+      if (photo.fov && camera.fov !== photo.fov) { camera.fov = photo.fov; camera.updateProjectionMatrix(); }
+    }
     world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer, renderer.stageInfo().scene === world.scene);
     // the eye adapting to a camp fire close by in a fight (combat.ts exposure; 1 elsewhere)
     if (combat) renderer.renderer.toneMappingExposure *= combat.exposureScale;
@@ -847,6 +874,13 @@ const earFwd = new THREE.Vector3();
 function draw(dt: number) {
   // portrait screens: widen the vertical FOV so the horizontal view stays usable
   const activeCam = stage.active ? stage.camera : state === 'game' ? camera : state === 'narrator' ? vault.camera : state === 'film' && film.inWorld ? film.wcam : cine.camera;
+  // the photo camera frames cutscenes, films and the narrator's room too (games set it in tick, before the world update)
+  if (photo && state !== 'game') {
+    activeCam.position.copy(photo.from); activeCam.lookAt(photo.to);
+    if (photo.fov && activeCam.fov !== photo.fov) { activeCam.fov = photo.fov; activeCam.updateProjectionMatrix(); }
+  }
+  // cinema mode: hide the world's hint rings (again every second, for items placed since), show them after
+  if (hintSweep-- <= 0) { hintSweep = document.documentElement.classList.contains('cinema') ? 60 : 1e9; sweepHints(); }
   const designFov = activeCam.fov;
   activeCam.getWorldDirection(earFwd);
   audio.listen(activeCam.position, earFwd);
@@ -892,6 +926,8 @@ async function warmAll() {
     await breathe();
   }
   await cine.warm(async (sc, cam) => { await pre(sc, cam); renderer.warm(sc, cam, false); });
+  await breathe();
+  film.warmStages((sc, cam) => renderer.warm(sc, cam, false));
   await breathe();
   vault.prepare();
   await pre(vault.scene, vault.camera);
@@ -943,14 +979,16 @@ async function boot() {
   game.away.skins = lastSkins;
   // the take-off from Zenvora is a scene like any other: letterboxed, with its Skip
   game.away.onOutro = (on) => {
-    // the liner lifts off: engines, then the long roar of the climb
-    if (on) { audio.sample('launch', 0.85, { delay: 1.2 }); audio.sample('thruster', 0.5, { delay: 0.6 }); }
+    // (its sounds are the scene's own, on its clock: boarding.ts)
     ui.show('cine', on); ui.show('hud', !on);
     document.getElementById('btn-skip')!.classList.toggle('hidden', !on);
   };
   combat = new Combat({ world, player, input, ui, save: () => game.save, settings: () => (settings.combat ??= defaultCombatSettings()), saveSettings: persistSettings,
     free: () => state === 'game' && game.mode === 'play' && !paused && !ui.modalOpen(), persist: () => game.persist(), home: () => game.mode !== 'away' });
   game.combat = combat;
+  { const d = new URLSearchParams(location.search).get('diff'); if (d === 'story' || d === 'normal' || d === 'hard') combat.setDifficulty(d); }
+  // a story fight starts only in plain play: not under a flashback, the Vault, a film, the pause menu or a panel
+  game.canFight = () => state === 'game' && !paused && !ui.modalOpen();
   game.onLevelComplete = onLevelDone;
   game.timersOff = !!settings.noTimers;
   // warm up shaders so the first in-game frame doesn't hitch
@@ -1018,7 +1056,8 @@ window.addEventListener('resize', () => {
   sayTest(k: string) { ui.subtitle(k, 'mz.name', true); },
   get voice() { return { last: voice.lastKey, played: voice.played, cuts: voice.cuts, remaining: voice.remaining() }; },
   voiceDuration(k: string) { return voice.duration(k); },
-  get vault() { return { playing: vault.playing, line: vault.lineIndex }; },
+  get vault() { return { playing: vault.playing, line: vault.lineIndex, said: [...vault.said] }; },
+  get vaultScript() { return vault.keys; },
   skip() { skipCurrent(); },
   get tutorial() { const tu = game?.tutorial; return tu?.active ? { step: tu.step, index: tu.index } : null; },
   get device() { return input.device; },
@@ -1026,6 +1065,8 @@ window.addEventListener('resize', () => {
   get level() { return game?.save?.level; },
   setTime(h: number) { if (game?.save) game.save.timeOfDay = h; },
   cineSeek(t: number) { cine.seek(t); },
+  /** Where the cinematic camera is and what it looks at, and the cockpit's yoke and pilot (debugging shots). */
+  cineCam() { const c = cine as unknown as { camera: THREE.Camera; ins: { stick: THREE.Object3D; cockpit: THREE.Object3D }; pilot: { root: THREE.Object3D; handR: THREE.Object3D } }; const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map((v) => +v.toFixed(2)); return { cam: w(c.camera), dir: c.camera.getWorldDirection(new THREE.Vector3()).toArray().map((v) => +v.toFixed(2)), stick: w(c.ins.stick), cockpit: w(c.ins.cockpit), pilot: w(c.pilot.root), handR: w(c.pilot.handR), t: (cine as unknown as { time: number }).time }; },
   /** Freeze the clock (true) and step it by hand; `frames` counts finished steps. */
   hold(on: boolean) { hold.on = on; film.manual = on; voice.manual = on ? () => elapsed : null; audio.manual = on ? () => elapsed : null; },
   /** What was played on the held clock: lines, sounds, music, beds (laid under recorded frames). */
@@ -1054,6 +1095,20 @@ window.addEventListener('resize', () => {
     const cam = camera.position;
     const grounded = on ? a.grounded : player.onGround;
     return { x: body.x, z: body.z, feet: body.y, drawn: down(body.x, body.z), cam: cam.y, camDrawn: down(cam.x, cam.z), mode: game?.mode, grounded };
+  },
+  /** Test hook: every surface the drawn camera's ray through screen point (ndc x, y) passes, nearest first: what is it,
+   * which material, how far (two hits within a few mm of each other on different meshes would fight in depth). */
+  pickProbe(nx: number, ny: number, max = 8) {
+    const info = renderer.stageInfo(), cam = info.camera; if (!cam) return null;
+    cam.updateMatrixWorld();
+    const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(nx, ny), cam);
+    const path = (o: THREE.Object3D) => { const n: string[] = []; for (let p: THREE.Object3D | null = o; p && n.length < 5; p = p.parent) n.push(p.name || p.type); return n.join('<'); };
+    const vis = (o: THREE.Object3D) => { for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false; return true; };
+    const hits = ray.intersectObject(info.scene, true).filter((h) => vis(h.object)).slice(0, max);
+    return { cam: cam.position.toArray().map((v) => +v.toFixed(2)), near: cam.near, far: cam.far, hits: hits.map((h) => {
+      const m = h.object as THREE.Mesh, mt = (Array.isArray(m.material) ? m.material[h.face?.materialIndex ?? 0] : m.material) as THREE.Material & { color?: THREE.Color };
+      return { d: +h.distance.toFixed(4), path: path(m), type: m.type, geo: m.geometry?.type, tris: m.geometry ? (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3 : 0, mat: mt ? `${mt.type}:${mt.name}:${mt.color?.getHexString() ?? ''}:${mt.polygonOffset ? 'po' : ''}${mt.transparent ? 't' : ''}` : null, n: h.face ? h.face.normal.toArray().map((v) => +v.toFixed(2)) : null, p: h.point.toArray().map((v) => +v.toFixed(3)), inst: h.instanceId ?? null, ud: Object.keys(m.userData) };
+    }) };
   },
   swimProbe() { return { x: player.pos.x, y: player.pos.y, depth: -world.terrain.height(player.pos.x, player.pos.z), swimming: player.swimming }; },
   /** Test hook: where a person on the away stage is (their head, in the world) and which way they face. */
@@ -1124,6 +1179,17 @@ window.addEventListener('resize', () => {
   awayLeave() { game?.away?.leave(); },
   /** Test hook: every Zenvora task done at once, so the take-off plays now. */
   awayOutro() { game?.away?.debugOutro(); },
+  /** The boarding and take-off (boarding.ts): played on its own clock and checked, without drawing (needs the city). */
+  boardingCheck() { return (game?.away?.stage as { boardingCheck?: () => unknown } | null)?.boardingCheck?.() ?? null; },
+  takeoffClearance() { return (game?.away?.stage as { takeoffClearance?: () => unknown } | null)?.takeoffClearance?.() ?? null; },
+  takeoffMap(x: number, z: number, span?: number, G?: number) { return JSON.stringify((game?.away?.stage as { takeoffMap?: (...a: unknown[]) => unknown } | null)?.takeoffMap?.(x, z, span, G) ?? null); },
+  /** One ship everywhere: the liner on Zenvora's pad against the ship in the films, mesh by mesh. */
+  shipDesigns() {
+    let film: string[] | null = null;
+    cine.scene.traverse((o) => { if (!film && o.userData.design === 'liner') film = designOf(o); });
+    const pad = (game?.away?.stage as { linerDesign?: () => string[] | null } | null)?.linerDesign?.() ?? null;
+    return { film, pad, same: !!film && !!pad && JSON.stringify(film) === JSON.stringify(pad) };
+  },
   get awayOutroOn() { return !!game?.away?.outroOn; },
   /** Test hook (recordings): these tasks count as done (the hero views that wait for one). */
   awayMarkDone(...ids: string[]) { for (const id of ids) game?.away?.done.add(id); },
@@ -1154,8 +1220,15 @@ window.addEventListener('resize', () => {
     return [m.x, m.z];
   },
   act() { return game?.debugAct() ?? null; },
-  /** Freeze the camera at `from` looking at `to` (null releases it). */
-  photo(from: number[] | null, to?: number[]) { photo = from && to ? { from: new THREE.Vector3(...from), to: new THREE.Vector3(...to) } : null; },
+  /** Freeze the camera at `from` looking at `to` (null releases it), with a vertical field of view in degrees if given.
+   * A capture that calls it every stepped frame moves the camera along its own path (dolly, crane, orbit). Outside
+   * play it takes over the cutscene's, film's or narrator's camera while it is set. */
+  photo(from: number[] | null, to?: number[], fov?: number) { photo = from && to ? { from: new THREE.Vector3(...from), to: new THREE.Vector3(...to), fov } : null; },
+  /** Cinema mode: hide every bit of UI and the cursor, leaving only the 3D view (also `?cinema=1`). */
+  cinema(on: boolean) { setCinema(on); return on; },
+  get cinemaOn() { return document.documentElement.classList.contains('cinema'); },
+  /** Depth of field for a capture: focus distance in metres and aperture (0 turns it off). Only on presets with DoF. */
+  dof(focus: number, aperture: number) { renderer.setDof(focus, aperture); },
   step(sec: number) { game?.debugStep(sec, elapsed); },
   get save() { return game?.save; },
   get wheelOpen() { return wheel.open; },
@@ -1164,7 +1237,17 @@ window.addEventListener('resize', () => {
   get hound() { return game?.story.debugHound(); },
   /** Fights: state for the tests, and the way to start a set piece (tools/combat/play_test.py). */
   get combat() { return combat; },
+  /** The player's body: kneeling (0..1), the game mode, where the hips are (checks of the kneel in Episode One). */
+  get body() { const m = (game as unknown as { player?: { model: import('./characters/character').Character } } | null)?.player?.model; if (!m) return null; const h = new THREE.Vector3(); (m.root.getObjectByName('hips') ?? m.root).getWorldPosition(h); return { kneel: m.kneeling, mode: game!.mode, rootY: m.root.position.y, hipsY: h.y }; },
   groundAt(x: number, z: number) { return world.terrain.height(x, z); },
+  /** Episode One for captures: the pool, the stream's centre line (every 10th point), the red fruit (1.1) and where he
+   * kneels at the cobbles (1.3). */
+  get e1() {
+    if (!game) return null;
+    const st = game.waking.stream;
+    const k = game.stones.place().kneel;
+    return { pool: st.pool, line: st.line.filter((_, i) => i % 10 === 0).map((p) => [p.x, p.y, p.z]), red: world.items.items.filter((i) => i.active && i.type === 'redFruit').map((i) => [i.pos.x, i.pos.z]), stones: [k.x, k.z] };
+  },
   get crew() { return game?.story.debugCrew(); },
   get layout() { const L = world.layout; return L ? Object.fromEntries(Object.entries(L).map(([k, v]) => [k, (v as THREE.Vector3).toArray()])) : null; },
   /** Text fit: every string in every UI slot, in a language (tools/text_fit.py). fit=false measures the old layout. */
@@ -1179,7 +1262,33 @@ window.addEventListener('resize', () => {
   get sound() { return soundscapeState(); },
   /** Repairs made to the characters' meshes since load (holes closed, texture and normal fixes, skin and cloth drawn as their cover). */
   get meshFixes() { return { ...CLOTH_HOLES, ...UNDER_CLOTH }; },
+  /** Finger joints since load: largest bend from rest (rad) and fastest turn (rad/s), over every character drawn. */
+  get hands() { return { ...HANDS }; },
   audioTap() { audio.start(); return audio.tap(); },
+  /** Test: parts of bodies through the set or each other in the scene drawn now (src/core/clipprobe.ts). */
+  clipProbe() { return clipProbe(renderer.renderPass.scene as THREE.Scene); },
+  get clipStats() { return { ...clipStats }; },
+  /** Test: seek the opening ('cine', seconds) or the title sequence ('film', beats) from a to b in steps, probe each
+   *  frame after it is drawn; returns the hits with their time, worst first per (who, part, what). */
+  async clipScan(which: 'cine' | 'film', a: number, b: number, step = 0.5) {
+    const raf = () => new Promise((r) => requestAnimationFrame(r));
+    const all: (ClipHit & { t: number })[] = [];
+    for (let t = a; t <= b + 1e-6; t += step) {
+      if (which === 'cine') cine.seek(t); else film.seek(t);
+      await raf(); await raf(); await raf();
+      for (const h of clipProbe(renderer.renderPass.scene as THREE.Scene)) all.push({ ...h, t: Math.round(t * 100) / 100 });
+    }
+    const best = new Map<string, ClipHit & { t: number; n: number }>();
+    for (const h of all) { const k = `${h.who}|${h.part}|${h.what}|${h.kind}`; const o = best.get(k); if (!o || h.depth > o.depth) best.set(k, { ...h, n: (o?.n ?? 0) + 1 }); else o.n++; }
+    return [...best.values()].sort((x, y) => y.depth - x.depth);
+  },
+  /** Sync test for captures: every second, on the audio clock, a 1.5 kHz beep on the last audio node and a white screen in the
+   *  same animation frame, held 0.15 s so a recording at a low frame rate still catches it. A recording of this shows
+   *  any offset or drift between picture and sound as a number (tools/av_sync.py). */
+  syncTest(secs = 30) { return syncFlash(secs, 1, 'position:fixed;inset:0;background:#fff', 1500); },
+  /** Sync marks for every capture (tools/gpu_capture.py puts them at the start and end of each recording and aligns
+   *  sound to picture by them): n 2 kHz beeps 0.6 s apart, each with a small white square in the top-left corner. */
+  syncMark(n = 3) { return syncFlash(n, 0.6, 'position:fixed;left:0;top:0;width:48px;height:48px;background:#fff;outline:6px solid #000', 2000); },
   openMenu(which: 'settings' | 'legal' | 'chapters') { if (which === 'settings') document.getElementById('btn-settings')?.click(); else if (which === 'legal') document.getElementById('btn-legal')?.click(); else document.getElementById('btn-chapters')?.click(); },
   quality: quality.name,
   get world() { return world; },
@@ -1187,5 +1296,20 @@ window.addEventListener('resize', () => {
     return { frames: frameCount, t: elapsed, mode: game?.mode, player: player?.pos.toArray(), cam: camera.position.toArray(), yaw: player?.yaw, creature: world.creature?.position.toArray() };
   },
 };
+
+function syncFlash(n: number, gap: number, css: string, freq: number): number {
+  audio.start(); const ctx = audio.ctx; if (!ctx) return 0;
+  const el = document.createElement('div'); el.style.cssText = css + ';z-index:99999;pointer-events:none;opacity:0';
+  document.body.appendChild(el);
+  const t0 = ctx.currentTime + 0.25; let k = 0, on = -1;
+  const tick = () => {
+    const t = ctx.currentTime;
+    if (on >= 0 && t - on >= 0.15) { el.style.opacity = '0'; on = -1; }
+    if (on < 0 && k < n && t >= t0 + k * gap) { audio.mark(0.06, freq); el.style.opacity = '1'; on = t; k++; }
+    if (k >= n && on < 0) { el.remove(); return; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick); return t0;
+}
 
 boot();

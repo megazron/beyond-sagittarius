@@ -25,6 +25,7 @@ import { cityProbe } from './probe';
 import { carKit } from './cars';
 import { dayCycle, skyMaterial, wetify } from './daycycle';
 import { Renderer } from '../../core/renderer';
+import { buildBoarding, PAD } from './boarding';
 
 /**
  * Zenvora, Taravel, 2189: the last normal afternoon. One long bazaar street from the flat (north-east corner)
@@ -77,6 +78,10 @@ const THIN = new URLSearchParams(globalThis.location?.search ?? '').get('thin') 
  * a card all the way up to you. Out of view a card takes a look that has a body to spare. ?looks=0: off. */
 const LOOK_SPREAD = new URLSearchParams(globalThis.location?.search ?? '').get('looks') !== '0';
 const FOLK_VIEW = new URLSearchParams(globalThis.location?.search ?? '').get('folkview') !== '0';
+/** How far aside walkers pass you and the low camera behind you (was 1.7 and 1.2 m; ?berth=1.7 the old). */
+const BERTH = Number(new URLSearchParams(globalThis.location?.search ?? '').get('berth') ?? 2.0) || 2.0;
+/** Townsfolk out of the (wide) view beyond 12 m are cards, not bodies (?outcard=0: off). */
+const OUT_CARD = new URLSearchParams(globalThis.location?.search ?? '').get('outcard') !== '0';
 const TURN_CLEAR = new URLSearchParams(globalThis.location?.search ?? '').get('turnclear') !== '0';
 const SWAP_FREE = typeof location !== 'undefined' && new URLSearchParams(location.search).get('swapfree') === '1';
 /** Whoever is drawn as a body within CONTACT metres of you stays that body, whatever the budget or the ranking does
@@ -450,7 +455,7 @@ function model(name: string) {
   return p;
 }
 
-export function buildCity(label: (k: string) => string, detail = 1): AwayStage & { bind(b: StageBody): void; people: CityPerson[]; mapLayer: import('../../ui/minimap').MapLayer; drawnAs(id: string): string; readonly perfState: Record<string, unknown>; crowdState(): { near: number; bodies: number; lost: number; room?: number }; trafficState(): unknown; pedProbe(): unknown } {
+export function buildCity(label: (k: string) => string, detail = 1): AwayStage & { bind(b: StageBody): void; people: CityPerson[]; mapLayer: import('../../ui/minimap').MapLayer; drawnAs(id: string): string; readonly perfState: Record<string, unknown>; crowdState(): { near: number; bodies: number; lost: number; room?: number }; trafficState(): unknown; pedProbe(): unknown; boardingCheck(): unknown; linerDesign(): string[] | null; takeoffClearance(): unknown; takeoffMap(x: number, z: number, span?: number, G?: number): unknown } {
   seed = 1234567; // the same city every time
   const rich = detail >= 1; // phones get fewer props, people and lights
   const scene = new THREE.Scene();
@@ -560,6 +565,15 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     const near = (ox: number, oz: number) => Math.abs(ox - x) < 0.5 && Math.abs(oz - z) < 0.5 && Math.hypot(ox - x, oz - z) < Math.hypot(ox - q.pos.x, oz - q.pos.z) - 1e-4;
     for (const o of people) if (o !== q && o.walk?.shop?.stage !== 'inside' && near(o.pos.x, o.pos.z)) return true; // (a card or a body)
     for (const o of dense.cards) if (near(o.x, o.z)) return true;
+    return false;
+  };
+  /** Would the crowd body walking card ci, stepping across from x0 to x at z, come within half a metre of anyone, nearer than now? */
+  const asideBlocked = (ci: number, x0: number, x: number, z: number) => {
+    const near = (ox: number, oz: number) => Math.abs(ox - x) < 0.5 && Math.abs(oz - z) < 0.5 && Math.hypot(ox - x, oz - z) < Math.hypot(ox - x0, oz - z) - 1e-4;
+    for (const o of people) if (o.walk?.shop?.stage !== 'inside' && near(o.pos.x, o.pos.z)) return true;
+    const cs = dense.cards, tk = dense.taken;
+    for (let k = 0; k < cs.length; k++) if (k !== ci && !tk[k] && near(cs[k].x, cs[k].z)) return true;
+    for (const o of crowdPool) if (o.card >= 0 && o.card !== ci && near(cs[o.card].x + o.dx, cs[o.card].z)) return true;
     return false;
   };
   const wob: number[] = [], wmir: number[] = []; // the same for the walkers (people, then the painted crowd), filled once a frame
@@ -1188,7 +1202,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   });
   plane(10, 2.5, new THREE.MeshBasicMaterial({ map: board, color: new THREE.Color(1.4, 1.4, 1.4), toneMapped: false }), 0, 9.2, S + 1.2, 0);
 
-  let linerG: THREE.Group | null = null;
+  let linerG: THREE.Group | null = null, boardingKit: ReturnType<typeof buildBoarding> | null = null;
   // ---- the spaceport: the apron, pads with light rings, the terminal's long canopy, the liner docked with its bridge ----
   {
     const apronM = over(new THREE.MeshStandardMaterial({ color: 0xc9ccd0, roughness: 0.8 }), 1); tex('road', [apronM], [30, 24]);
@@ -1199,22 +1213,18 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       ringP.rotation.x = -Math.PI / 2; ringP.position.set(x, 0.02, z);
       const disc = add(new THREE.Mesh(new THREE.CircleGeometry(r - 0.4, 64), over(new THREE.MeshStandardMaterial({ color: 0x5c6670, roughness: 0.6 }), 2))); disc.rotation.x = -Math.PI / 2; disc.position.set(x, 0.01, z);
     };
-    pad(16, S - 66, 22); pad(-44, S - 90, 14); pad(44, S - 104, 14);
+    pad(PAD.x, PAD.z, 20); pad(16, S - 66, 14); pad(44, S - 104, 14);
     // the terminal: a long glass hall under a curved canopy, warm inside, with people-sized detail at the front
     const canopy = add(new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 60, 32, 1, true, -Math.PI / 2, Math.PI), hull));
     canopy.rotation.z = Math.PI / 2; canopy.position.set(-38, 2, S - 26); canopy.castShadow = true;
     box(60, 9, 0.2, new THREE.MeshStandardMaterial({ color: 0x9fbfd6, roughness: 0.05, metalness: 0.5, emissive: 0xffd6a0, emissiveIntensity: 0.45, transparent: true, opacity: 0.85 }), -38, 4.5, S - 13);
     for (let i = 0; i < 9; i++) box(0.4, 10, 0.4, gateM, -66 + i * 7, 5, S - 12.8);
     plane(14, 2, lit(sign('TERMINAL 2 · TARAVEL', '#10233d', '#9fd8ff'), 0.9), -38, 11.5, S - 12.6, 0);
-    // the liner on its pad, and the boarding bridge reaching out to it
-    const liner = add(new THREE.Group()); liner.position.set(16, 9, S - 66); liner.rotation.y = 0.5; linerG = liner;
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(7.5, 52, 8, 32), hull); body.rotation.x = Math.PI / 2; body.castShadow = true; liner.add(body);
-    const stripe = new THREE.Mesh(new THREE.CylinderGeometry(7.58, 7.58, 52, 32, 1, true, -0.25, 0.5), cyan); stripe.rotation.x = Math.PI / 2; liner.add(stripe);
-    for (const sx of [-1, 1]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(12, 0.7, 14), hull); fin.position.set(sx * 11, -2.5, 16); fin.rotation.z = sx * -0.18; fin.castShadow = true; liner.add(fin); }
-    for (let i = 0; i < 14; i++) { const w = new THREE.Mesh(new THREE.CircleGeometry(0.6, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe2b0).multiplyScalar(1.5), toneMapped: false })); w.position.set(-7.55, 1.5, -22 + i * 3.2); w.rotation.y = -Math.PI / 2; liner.add(w); }
-    for (const [lx, lz] of [[-5, -16], [5, -16], [-5, 16], [5, 16]]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 9), gateM); leg.position.set(lx, -4.5, lz); liner.add(leg); }
-    const bridge = add(new THREE.Mesh(new THREE.BoxGeometry(3, 3, 26), hull)); bridge.position.set(-6, 8, S - 40); bridge.rotation.y = 0.9; bridge.castShadow = true;
-    const bridgeGlow = add(new THREE.Mesh(new THREE.BoxGeometry(3.05, 0.2, 26), cyan)); bridgeGlow.position.set(-6, 6.6, S - 40); bridgeGlow.rotation.y = 0.9;
+    // the liner on its pad: the films' ship (cinematic/ship.ts), standing on its tail on its legs, its hatch open towards
+    // the terminal, the boarding gantry up to it (boarding.ts, which also plays the boarding and the take-off). The pad
+    // is out on the apron where nothing stands above it, so it lifts straight up through nothing
+    boardingKit = buildBoarding({ add, gateM, glowM: cyan, scene, hide: [] });
+    linerG = boardingKit.liner;
     // light masts and a few ground vehicles
     for (const [mx, mz] of [[-20, -30], [36, -40], [-10, -110], [60, -80]]) {
       box(0.5, 18, 0.5, gateM, mx, 9, S + mz);
@@ -1254,12 +1264,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     const c = createCharacter('scientist', detail * 0.8, LOOKS[v]);
     c.setCrowd(true); crowd.add(c); lookOf.set(c, v); return c;
   };
-  FOLK.forEach((f, i) => person(f.id, someone(f.lineage, i), f.x, f.z, f.yaw, f.pose));
+  // (phones: the queue is one, not two, p29: it stands on the way from the flat, where the six of the story use most bodies)
+  FOLK.forEach((f, i) => { if (tier === 0 && f.id === 'queue2') return; person(f.id, someone(f.lineage, i), f.x, f.z, f.yaw, f.pose); });
   // Mir: a chai stall regular in a three-piece, the same man as the suit skin and the Drexon cameo
   { const c = createCharacter('strong', detail, undefined, 'suit'); c.mergeParts(tier === 0 && LITE_STORY); person('mir', c, 5.0, 15.4, Math.PI / 2 + 0.5, 'idle'); }
   // walkers: up and down the pavements' outer edge, clear of the stalls
   const lineages = Object.keys(LINEAGES) as PlayerLook['lineage'][];
-  for (let i = 0, n = rich ? 14 : 6; i < n; i++) {
+  for (let i = 0, n = rich ? 10 : 4; i < n; i++) { // (14 and 6 before p29: fewer people near the routes, not more bodies)
     const sd = i % 2 ? 1 : -1, x = sd * (4.9 + rnd() * 0.5), za = S + 12 + rnd() * 30, zb = Math.min(za + 40 + rnd() * 50, N - 12);
     person(`walker${i}`, someone(lineages[i % lineages.length], i + 3), x, za + rnd() * (zb - za), 0, 'idle', { z0: za, z1: zb, dir: rnd() < 0.5 ? 1 : -1, speed: 1.1 + rnd() * 0.5 });
   }
@@ -1267,7 +1278,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // the side streets: people at the shopfronts, window shopping and talking
   sideStreets.forEach((st, si) => {
     const poses: CrewPose[] = ['idle', 'idle', 'write', 'idle', 'idle', 'write'];
-    for (let j = 0; j < 6; j++) {
+    for (let j = 0; j < (rich ? 6 : 3); j++) { // (phones: three, p29)
       const d = FRONT + 14 + j * 5.2, dz = j % 2 ? 1 : -1, z = (dz > 0 ? st.z0 : st.z1) - dz * 1.3;
       person(`group_ss${si}_${j}`, someone(lineages[(si * 2 + j) % lineages.length], 100 + si * 7 + j), st.side * d, z, dz > 0 ? 0 : Math.PI, poses[j]);
     }
@@ -1416,13 +1427,18 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   };
   const propsBuilt: Promise<unknown>[] = [buildProps(placed, oldTown, true)];
   const future = buildFuture(oldTown as unknown as THREE.Scene, { rich, N, S, FRONT, FLOOR, shops: SHOPS });
+  boardingKit?.hideDuring(future.hero);
   blocks.push(...future.solids);
   const mega = buildMega(scene, { rich, N, S, FRONT, haze: HAZE });
   const dense = buildDense(oldTown as unknown as THREE.Scene, { top: scene, rich, FRONT, S, N, facades: facadesOut });
   // ---- the crowd crowdPool: real bodies that take over the painted crowd near the camera. A card closer than TAKE metres
   // is walked by a body from the crowd pool (the nearest first) and hidden; the body goes back when the card is far again.
   // Before this, the cards simply vanished within 9 m and the street emptied as you walked into it.
-  const POOL = [8, 20, 20][tier], TAKE = 36; // bodies are given out from 36 m, so whoever walks into the view is one before SWAP_FAR
+  // (phones 16, two bodies of each of the 8 looks, p30: with one per look a card in view whose look's body was out
+  // stayed a card with bodies free, the tram square in p29i; the phone total, BODY_CAP + 2, still holds what is drawn)
+  // (Web 24, p31: with 20 the tram square's cards stayed cards with the pool full, want 20 held 19-20; 24 bodies are
+  // built either way, ceil(20/12)*12)
+  const POOL = [16, 24, 20][tier], TAKE = 36; // bodies are given out from 36 m, so whoever walks into the view is one before SWAP_FAR
   // Web, Ultra: the painted crowd's own bodies whatever the townsfolk use (it was 8: with the townsfolk near the flat and
   // in the bazaar using 20 to 24 of 26, the crowd had its 8 held and every card that came into the view after them at
   // 27 m stayed a card up to you, the most of the detector's flat cards close by; the pool has 24)
@@ -1435,7 +1451,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     crowdPool.push({ fig, card: -1, last: -1, phase: rnd() * 10, dx: 0, yaw: 0, lastX: NaN, look: i % NLOOK });
   }
   const byCard = new Map<number, (typeof crowdPool)[number]>(), near: [number, number][] = [], elbow: [number, number][] = [];
-  const thinK: [number, number][] = [], thinF = new THREE.Vector3();
+  const thinK: [number, number][] = [], thinF = new THREE.Vector3(); let thinSeen = new Uint8Array(0);
   const lookN = new Int32Array(NLOOK), lookQ: [number, number][] = [], perLook = new Int32Array(NLOOK); let lookSeen = new Uint8Array(0); const lookF = new THREE.Vector3(); for (const b of crowdPool) perLook[b.look]++;
   // a card is moved only from and to where no camera swing could show it: 6 m of margin, not inView's 2.5
   const VSW = new THREE.Sphere(new THREE.Vector3(), 6);
@@ -1450,10 +1466,12 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     // out of view; a card nobody walks coming towards the camera in view within THIN_TURN turns back
     if (THIN && viewOn && cut <= 0) {
       const nB = Math.max(0, Math.min(tier > 0 ? Math.max(CROWD_MIN, Math.min(POOL, budget)) : Math.min(POOL, budget), outroT >= 0 || tier > 0 ? 99 : BODY_CAP + 2 - usedLog));
-      thinK.length = 0;
+      thinK.length = 0; if (thinSeen.length !== cards.length) thinSeen = new Uint8Array(cards.length).fill(1);
       for (let i = 0; i < cards.length; i++) {
-        const q = cards[i], d = Math.hypot(q.x - c.x, q.z - c.z); if (d > THIN_R) continue;
-        const seen = inViewWide(q.x, q.z);
+        const q = cards[i], d = Math.hypot(q.x - c.x, q.z - c.z); if (d > THIN_R) { thinSeen[i] = 1; continue; } // (out there: as if seen, so a card coming within THIN_R waits a frame)
+        // (seen this frame or the last: the camera swung 37 deg in a frame in the bazaar, and a card on the screen the
+        // frame before was moved 12 m, p29)
+        const now = inViewWide(q.x, q.z), seen = now || thinSeen[i] === 1; thinSeen[i] = now ? 1 : 0;
         thinK.push([(taken[i] ? -1000 : 0) + (seen ? 0 : 100) + d, i]);
       }
       if (thinK.length > nB) {
@@ -1527,7 +1545,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       // come within SWAP_FAR), then the rest
       // (a holder keeps its place out of view too: letting it go 10 m later than one in view churned bodies at the view's
       // edge, and the detector saw a few change look there, p28c)
-      const dk = d < 8 || mine || inView(cards[i].x, FLOOR, cards[i].z) ? d : d + 30;
+      const dk = d < 8 || mine || inViewWide(cards[i].x, cards[i].z) ? d : d + 30; // (the wide view, 6 m of margin: a turning camera finds them bodies already, p29c's bazaar about-turn)
       near.push([dk - (mine && CONTACT > 0 ? 2 : 0) - (pin ? 1000 : 0), i]);
     }
     near.sort((a, b) => a[0] - b[0]);
@@ -1560,17 +1578,19 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       let want = 0;
       if (you) {
         const ahead = (you.position.z - q.z) * Math.sign(q.v || 1), ax = you.position.x - (q.x + b.dx);
-        if (ahead > -1.0 && ahead < 5.0 && Math.abs(ax) < 1.5) {
+        // (2 m, p29: a phone hides a body within 1.7 m of the camera, which follows behind you, and one passing you at
+        // 1.7 m came by the camera inside that, drawn big at the bottom of the view for a frame and then gone)
+        if (ahead > -1.0 && ahead < 5.0 && Math.abs(ax) < BERTH) {
           let sg = -Math.sign(ax || 1);
           const ok = (x: number) => Math.abs(x) > 4.6 && Math.abs(x) < 9.1;
-          if (!ok(q.x + sg * 1.7) && ok(q.x - sg * 1.7)) sg = -sg;
-          want = sg * 1.7;
+          if (!ok(q.x + sg * BERTH) && ok(q.x - sg * BERTH)) sg = -sg;
+          want = sg * BERTH;
         }
       }
       // and round the camera (a low camera on the pavement behind you): nobody walks into the lens
       if (!want) {
         const ahead = (c.z - q.z) * Math.sign(q.v || 1), ax = c.x - (q.x + b.dx);
-        if (c.y < 2.4 && ahead > -0.8 && ahead < 3.0 && Math.abs(ax) < 1.0) { let sg = -Math.sign(ax || 1); const ok = (x: number) => Math.abs(x) > 4.6 && Math.abs(x) < 9.1; if (!ok(q.x + sg * 1.2) && ok(q.x - sg * 1.2)) sg = -sg; want = sg * 1.2; }
+        if (c.y < 2.4 && ahead > -0.8 && ahead < 4.0 && Math.abs(ax) < BERTH) { let sg = -Math.sign(ax || 1); const ok = (x: number) => Math.abs(x) > 4.6 && Math.abs(x) < 9.1; if (!ok(q.x + sg * BERTH) && ok(q.x - sg * BERTH)) sg = -sg; want = sg * BERTH; }
       }
       for (const o of crowdPool) {
         if (o === b || o.card < 0) continue;
@@ -1579,12 +1599,20 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       }
       // the step aside is walked, not slid: at most 1.1 m/s across, and the body turns into the way it goes (it used to
       // ease 1.7 m sideways in a few tenths of a second facing straight on, feet walking forwards)
-      const latV = q.wait || q.holdT ? 0.5 : 0.9; // (stood waiting for someone ahead: a slower step aside, not a slide)
-      const ddx = THREE.MathUtils.clamp((want - b.dx) * (1 - Math.exp(-dt * 3)), -latV * dt, latV * dt);
-      b.dx += ddx;
-      const bx = q.x + b.dx, vx = Number.isFinite(b.lastX) ? (bx - b.lastX) / Math.max(dt, 1e-3) : 0; b.lastX = bx;
-      const head = Math.atan2(vx, q.v || 1e-3), turn = Math.atan2(Math.sin(head - b.yaw), Math.cos(head - b.yaw));
-      b.yaw += Math.hypot(vx, sp) > 0.3 ? turn * (1 - Math.exp(-dt * 12)) : Math.atan2(Math.sin(yaw - b.yaw), Math.cos(yaw - b.yaw)) * (1 - Math.exp(-dt * 4)); // facing the way they go, the slow ones at the gate too
+      // (p29: the limit is on the body's own speed across, the card's lane easing included: the card eased aside at up
+      // to 0.45 m/s under a body stepping aside at 0.5, and a body stood waiting, facing ahead, slid 0.8 m/s sideways:
+      // the detector's slides of the painted crowd's bodies. Stood waiting: 0.35 m/s, facing ahead)
+      const latV = q.wait || q.holdT || sp < 0.3 ? 0.35 : Math.max(0.35, Math.min(0.7, sp * 0.55)); // (0.75 x pace, up to 0.9, still slid at 0.66 m/s in p29c Web while the body turned into it) // (the gate's slow ones, under 0.3 m/s, never turned into it: 0.35 too)
+      const bx0 = Number.isFinite(b.lastX) ? b.lastX : q.x + b.dx;
+      let bx = bx0 + THREE.MathUtils.clamp((q.x + want - bx0) * (1 - Math.exp(-dt * 3)), -latV * dt, latV * dt);
+      // (and never into someone: a step aside within half a metre of a townsperson, a card or another body, nearer than
+      // they are now, is not taken; the detector's overlaps of a body with a three or a card, p28)
+      if (bx !== bx0 && asideBlocked(b.card, bx0, bx, q.z)) bx = bx0;
+      b.dx = bx - q.x;
+      const vx = Number.isFinite(b.lastX) ? (bx - b.lastX) / Math.max(dt, 1e-3) : 0; b.lastX = bx;
+      // (turned into the way they go only while walking: the head came from the card's speed even while it stood)
+      const head = Math.atan2(vx, (q.v >= 0 ? 1 : -1) * Math.max(sp, 1e-3)), turn = Math.atan2(Math.sin(head - b.yaw), Math.cos(head - b.yaw));
+      b.yaw += sp > 0.3 ? turn * (1 - Math.exp(-dt * 16)) : Math.atan2(Math.sin(yaw - b.yaw), Math.cos(yaw - b.yaw)) * (1 - Math.exp(-dt * 4)); // facing the way they go, the slow ones at the gate too
       b.fig.root.position.set(bx, hx(bx), q.z); b.fig.root.rotation.y = b.yaw;
       const hide = LENS_LINE && inLens(bx, q.z); if (!b.fig.setLensFade(hide ? 0 : 1) && b.fig.root.visible === hide) b.fig.root.visible = !hide; // Web, Ultra: a fade
       b.phase += dt * sp * 2.2;
@@ -1592,7 +1620,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     }
   };
 
-  const { moved, recoloured } = mergeStatic(scene, new Set<THREE.Object3D>([ground, skyMesh, ringLight, sun, sun.target, ...(linerG ? [linerG] : [])]), tier === 2 ? 39 : tier === 1 ? 117 : 400, (t) => { future.update(0.05, t); mega.update(0.05, t); dense.update(0.05, t, null); }, tier === 0);
+  const { moved, recoloured } = mergeStatic(scene, new Set<THREE.Object3D>([ground, skyMesh, ringLight, sun, sun.target, ...(linerG ? [linerG] : []), ...(boardingKit ? [boardingKit.gantry] : [])]), tier === 2 ? 39 : tier === 1 ? 117 : 400, (t) => { future.update(0.05, t); mega.update(0.05, t); dense.update(0.05, t, null); }, tier === 0);
   // ---- the rest of Zenvora: districts, traffic and people round the old town (districts.ts) ----
   const placedD = new Map<string, { name: string; at: THREE.Matrix4[] }>(), DCELL = tier === 0 ? 104 : 52;
   const placeD = (name: string, x: number, y: number, z: number, yaw: number, scale = 1) => {
@@ -1681,7 +1709,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (d > DNEAR * (mine ? 1.2 : 1)) { if (d > DNEAR * 1.2) break; continue; }
       const du = CONTACT > 0 ? Math.hypot(ps[i].x - ux, ps[i].z - uz) : 99, pin = mine && du < CONTACT_OUT && pedPinned < DPOOL + 2;
       if (pin) pedPinned++;
-      pk.push([d - (mine ? 3 : 0) - (pin ? 1000 : 0) - (du < CONTACT ? 500 : 0), i]); // within reach: before the budget (as walkCrowd)
+      // (in view, or within 8 m, before the rest, as walkCrowd: by distance alone the bodies went to walkers behind the
+      // camera, and one coming into the view at 30 m stayed a card up to you: the Web detector's district cards, p28)
+      const dk = d < 8 || mine || inViewWide(ps[i].x, ps[i].z) ? d : d + 30;
+      pk.push([dk - (mine ? 3 : 0) - (pin ? 1000 : 0) - (du < CONTACT ? 500 : 0), i]); // within reach: before the budget (as walkCrowd)
     }
     pk.sort((a, b) => a[0] - b[0]);
     const room = outroT >= 0 || tier > 0 ? 99 : BODY_CAP + 2 - usedLog - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0);
@@ -1781,7 +1812,10 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // the left of the gate's hero view)
   // (Web, Ultra: two threes at the gate, not five: with the gate's own throng they were more people in view than bodies, and
   // the rest stood there as flat cards as you walked up)
-  const groups: [number, number][] = rich ? [[6.6, 38], [-6.4, 12], [6.4, -8], [-6.6, -36], [6.2, -58], [-7.4, -63]] : [[6.6, 38], [-6.6, -36], [-7.4, -63]];
+  // (p29: fewer near the walking routes, the owner's "too crowded": with more people in view than bodies the rest were
+  // flat cards up to you. Web, Ultra: three, not six (none at the gate or the queue's end of the crowd); phones: none,
+  // not three (the townsfolk took all eleven bodies in the bazaar and at the gate))
+  const groups: [number, number][] = rich ? [[6.6, 38], [6.4, -8], [-6.6, -36]] : []; // (phones: none; the last, at the tram square, left 4 flat cards there in p29f) // (none at the gate: perf_gate's Web gate went over 1.3 M triangles with one there, p29)
   // no stock emotes on a loop: they stand easy, look at whoever in the three is talking, and the talker's mouth moves
   const chats: { members: CityPerson[]; next: number; who: number }[] = [];
   groups.forEach(([x, z], gi) => {
@@ -1861,86 +1895,45 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     return best;
   };
 
-  // ---- the take-off: the six walk out through the gate to the terminal, the liner lifts off its pad and climbs over the
-  // city towards the one in orbit. Three shots, about fourteen seconds; the camera is the game's own ----
-  const OUTRO = 14;
-  let outroT = -1, outroDone: (() => void) | null = null;
-  const boarding = new Map<CityPerson, THREE.Vector3>();
-  const plumes: THREE.Mesh[] = [];
-  const eyeP = new THREE.Vector3(), aimP = new THREE.Vector3(), linerHome = new THREE.Vector3();
-  const smooth = (a: number, b: number, x: number) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+  // ---- the boarding and the take-off (boarding.ts): the six walk up the gantry into the liner one after another, its
+  // hatch shuts and it lifts off over the city. The camera is the game's own ----
+  /** board in this order; he (the player) goes last and looks back */
+  const ORDER: CrewId[] = ['explorer', 'strong', 'social', 'builder', 'medic'];
+  let outroT = -1, outroDone: (() => void) | null = null, outroCam: THREE.PerspectiveCamera | null = null;
+  const boarding = new Set<CityPerson>();
   function startOutro(playerFig: Character | null, done: () => void) {
+    if (!boardingKit) { done(); return; }
     outroT = 0; outroDone = done;
-    const crew = people.filter((q) => FRIENDS.some((f) => f.id === q.id));
+    const crew = ORDER.map((id) => people.find((q) => q.id === id)).filter((q): q is CityPerson => !!q);
     const all: CityPerson[] = [...crew];
-    if (playerFig) all.unshift({ id: 'player', fig: playerFig, pos: playerFig.root.position, yaw: 0, pose: 'idle', phase: 0 });
-    // in a loose group at the gate, facing the spaceport (south, -z)
-    all.forEach((q, i) => {
-      q.pos.set(-2.6 + (i % 3) * 2.1 + (i > 2 ? 0.9 : 0), hx(0), S + 6.5 + Math.floor(i / 3) * 1.6);
-      q.yaw = Math.PI; q.fig.root.rotation.y = Math.PI; q.fig.root.visible = true; q.fig.setLookTarget(null);
-      boarding.set(q, new THREE.Vector3(q.pos.x * 0.6, 0, S - 16 - i * 0.8));
-    });
-    if (linerG) {
-      linerHome.copy(linerG.position);
-      if (!plumes.length) {
-        const pm = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9fdcff).multiplyScalar(1.8), transparent: true, opacity: 0, toneMapped: false, depthWrite: false });
-        // lift jets under the fins, and the main drive at the stern
-        for (const [px, py, pz, rx] of [[-11, -4, 16, Math.PI], [11, -4, 16, Math.PI], [-6, -6, -16, Math.PI], [6, -6, -16, Math.PI], [0, 0, -34, -Math.PI / 2]] as number[][]) {
-          const c = new THREE.Mesh(new THREE.ConeGeometry(rx < 0 ? 4 : 1.8, rx < 0 ? 22 : 9, 16, 1, true), pm); c.position.set(px, py - (rx < 0 ? 0 : 4.5), pz + (rx < 0 ? -11 : 0)); c.rotation.x = rx; linerG.add(c); plumes.push(c);
-        }
-      }
-    }
+    if (playerFig) all.push({ id: 'player', fig: playerFig, pos: playerFig.root.position, yaw: 0, pose: 'idle', phase: 0 });
+    for (const q of all) boarding.add(q);
+    boardingKit.start(all, endOutro);
   }
   function endOutro() {
     if (outroT < 0) return;
     outroT = -1;
+    if (outroCam) boardingKit?.restoreFov(outroCam);
     const d = outroDone; outroDone = null; d?.();
   }
+  function skipOutro() { if (outroT >= 0) boardingKit?.skip(); }
   function outro(dt: number, time: number, cam?: THREE.PerspectiveCamera) {
-    outroT += dt;
-    const T = outroT;
-    // the six walk out through the gate and are gone into the terminal
-    for (const [q, to] of boarding) {
-      const dx = to.x - q.pos.x, dz = to.z - q.pos.z, d = Math.hypot(dx, dz);
-      const v = T < 0.6 ? 0 : Math.min(1.35, d / Math.max(dt, 1e-3));
-      if (d > 0.05) { q.pos.x += dx / d * v * dt; q.pos.z += dz / d * v * dt; }
-      q.pos.y = hx(q.pos.x); q.phase += dt * v * 2.2;
-      q.fig.root.rotation.y = Math.atan2(dx, dz);
-      q.fig.animate(v > 0.1 ? 'walk' : 'idle', q.phase, v / 3, time, dt);
-      if (q.pos.z < S - 8) q.fig.root.visible = false;
-    }
-    // the liner: the lift jets light, it rises off its pad, noses up and climbs away towards the one in orbit
-    if (linerG) {
-      const lift = smooth(4.2, 7, T), climb = Math.max(0, T - 7);
-      linerG.position.set(linerHome.x - climb * climb * 0.8, linerHome.y + lift * 22 + climb * climb * 2.6, linerHome.z - climb * climb * 3.2);
-      linerG.rotation.x = -smooth(6.5, 9.5, T) * 0.32;
-      const jets = smooth(3.6, 4.6, T) * (1 + Math.sin(time * 40) * 0.08);
-      for (let i = 0; i < plumes.length; i++) { const m = plumes[i]; (m.material as THREE.MeshBasicMaterial).opacity = (i === plumes.length - 1 ? smooth(6.8, 8, T) : jets * (1 - smooth(10, 12, T))) * 0.6; }
-    }
-    if (cam) {
-      const L = linerG ? linerG.position : linerHome;
-      if (T < 4.4) {
-        // behind the group at the gate, the docked liner beyond them
-        const k = smooth(0, 4.4, T);
-        eyeP.set(4.5 - k * 2, 2.1 + k * 0.6, S + 13 - k * 3); aimP.set(4, 4 + k * 2, S - 40);
-      } else if (T < 9.4) {
-        // high over the apron, clear of the terminal's canopy: the whole liner on its pad as it lifts
-        const k = smooth(4.4, 9.4, T);
-        eyeP.set(linerHome.x - 38 + k * 3, linerHome.y + 22 + k * 2, linerHome.z + 30); aimP.set(L.x, L.y, L.z);
-      } else {
-        // over the street, the city lights below, the liner climbing away
-        const k = smooth(9.4, OUTRO, T);
-        eyeP.set(3, 26 + k * 10, 30 - k * 20); aimP.set(L.x * 0.7, L.y * 0.8, L.z * 0.85);
-      }
-      cam.position.copy(eyeP); cam.lookAt(aimP);
-    }
-    if (T >= OUTRO) endOutro();
+    outroT += dt; if (cam) outroCam = cam;
+    boardingKit?.update(dt, time, cam);
   }
 
   // phones: the big painted canvases at half size (a quarter of their memory)
   if (tier === 0 && CANVAS_HALF) CANVAS_SAVED.mb = Math.round(halveCanvases(scene) / 1e6);
   return {
-    outro: { start: startOutro, skip: endOutro, get active() { return outroT >= 0; }, get remaining() { return outroT >= 0 ? OUTRO - outroT : 0; } },
+    outro: { start: startOutro, skip: skipOutro, get active() { return outroT >= 0; }, get remaining() { return outroT >= 0 ? boardingKit?.remaining ?? 0 : 0; } },
+    /** Test: the boarding played on its own clock, checked every 1/30 s (boarding.ts check()). */
+    boardingCheck: () => boardingKit?.check() ?? null,
+    /** Test: the liner's make-up, mesh by mesh (the same list as the films' ship). */
+    linerDesign: () => boardingKit?.design() ?? null,
+    /** Test: the take-off's swept path and its camera against the city (boarding.ts clearance()). */
+    takeoffClearance: () => boardingKit?.clearance() ?? null,
+    /** Test: the tallest thing every G m round a point (choosing the pad). */
+    takeoffMap: (x: number, z: number, span?: number, G?: number) => boardingKit?.heightMap(x, z, span, G) ?? null,
     // what the sky is doing, for the ears (soundscape.ts lays the rain bed under the street)
     get weather() { return { rain: day.state.rain, night: day.state.night }; },
     mapLayer: {
@@ -2012,7 +2005,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       const d = dist.traffic();
       // why someone near is a card (tools/pedglitch.js logs it with each cardClose): the townsfolk's bodies used and the
       // cap left, the painted crowd's bodies wanted, and the looks of the pool's free bodies
-      const diag = { used: usedLog, left: bodiesLeft, cardsNear, pinned: crowdPinned + pedPinned, want: wantLog.length, held: byCard.size, free: crowdPool.filter((b) => b.card < 0).map((b) => b.look) };
+      const diag = { used: usedLog, left: bodiesLeft, cardsNear, pinned: crowdPinned + pedPinned, want: wantLog.length, held: byCard.size, free: crowdPool.filter((b) => b.card < 0).map((b) => b.look), cut, view: [+VIEW_C.x.toFixed(2), +VIEW_C.y.toFixed(2), +VIEW_C.z.toFixed(2), +CAM_F0.x.toFixed(3), +CAM_F0.z.toFixed(3)], folk: people.filter((q) => q.fig.root.visible && Math.hypot(q.pos.x - VIEW_C.x, q.pos.z - VIEW_C.z) < CROWD_FAR && inView(q.pos.x, q.pos.y, q.pos.z)).map((q) => q.id) };
       return { diag, peds: out, cars: [...d.cars, ...(oldTown.visible ? traffic.map((c) => [c.x, c.z, c.v > 0 ? 0 : Math.PI]) : [])], far: dense.far, old: oldTown.visible, crossing: dist.peds.flatMap((q, i) => (q.mode === 'cross' ? ['d:' + i] : [])) };
     },
     /** Test hook (tools/traffic_smoke.py): the cars and the people, old town and districts, this frame. */
@@ -2207,7 +2200,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         }
         if (oldOn) for (let i = 0; i < people.length; i++) {
           const q = people[i];
-          if (boarding.has(q) || talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
+          if (boarding.has(q)) { if (q.fig.root.visible) used++; continue; } // (boarding.ts shows them and lets them go)
+          if (talking?.q === q) { if (!q.fig.root.visible) q.fig.root.visible = true; used++; continue; }
           if (q.walk?.shop?.stage === 'inside') { if (q.fig.root.visible) q.fig.root.visible = false; continue; }
           const d = Math.hypot(q.pos.x - cp.x, q.pos.z - cp.z);
           const lensHit = ((LENS_OLD || (LENS_LINE && crowd.has(q.fig))) && d < 9 && inLens(q.pos.x, q.pos.z)) || (LENS_LINE && d < 1.2); // the story's people too, right at the lens (their hair filled the bottom of a phone's view)
@@ -2215,6 +2209,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // the six of the story and Mir have no card of their own look: they stay themselves (a body) out to 48 m
           // (a body until the far cards thin out, on every preset: they have no card of their own look, and blinking
           // out at 48 m, at 34 m on phones, was someone vanishing down the street)
+          // (p30: on phones they once counted against the phone's total, nearest first, and the detector saw them blink out
+          // and back 46 to 82 m off as the near bodies came and went: 9 vanishFar, 9 appearFar in a 7-minute walk. Not again)
           if (d >= CROWD_FAR && !crowd.has(q.fig)) { const v = d < CARD_FAR * 0.85; /* until the cards thin out (popping in at 60 m was someone appearing down the street) */ if (q.fig.root.visible !== v) q.fig.root.visible = v; continue; } // (far off they do not count against the cap)
           if (d >= CROWD_FAR) { if (q.fig.root.visible) q.fig.root.visible = false; stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: i, v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk }); continue; }
           // the six of the story (and Mir) are never a card within speaking distance, whatever the cap
@@ -2236,6 +2232,19 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           // and whoever is in the view comes before whoever is out of it beyond 8 m (as the painted crowd): a townsperson
           // in view at 27 m was left a card while the bodies went to people behind the camera, and stayed a card as you
           // walked up to them (the queue, the groups, the aunty)
+          // out of the view beyond 12 m a townsperson takes no body at all (p29: at the gate on phones the townsfolk held
+          // all 11 bodies with only the two kids in view, and the painted crowd walking into the view got none: flat
+          // cards up to you). A card out of the view is not seen to change; nearer they keep theirs for a turn
+          // (out of the WIDE view, 6 m of margin: tested against the view itself at 14 m, the bazaar's about-turn brought
+          // them into it as cards within 27 m, where nobody changes, and they stayed cards up to you, p29c; beyond 28 m
+          // only, the phone gate's start still had the townsfolk behind you holding the bodies, p29d)
+          // (Web too again, p30: it halved Web's flat cards close by in p29f; phones-only from 839de72 because perf_gate's
+          // Web gate went to 1.40 M triangles, which was the near build of bodies never drawn before, not this rule, p30)
+          if (OUT_CARD && d > 12 && !inViewWide(q.pos.x, q.pos.z)) {
+            if (q.fig.root.visible) q.fig.root.visible = false;
+            stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: i, v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
+            continue;
+          }
           const key = d - (q.fig.root.visible ? 1.5 : 0) - (crowd.has(q.fig) ? 0 : 5) - ((tier > 0 || (CONTACT > 0 && q.fig.root.visible)) && dy < 4 ? 30 : 0) + (FOLK_VIEW && d > 8 && !inView(q.pos.x, q.pos.y, q.pos.z) ? 12 : 0);
           let j = nc++; while (j > 0 && candK[j - 1] > key) { candK[j] = candK[j - 1]; candI[j] = candI[j - 1]; j--; }
           candK[j] = key; candI[j] = i;
@@ -2244,10 +2253,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         // the painted crowd right beside you comes before a townsperson thirty metres off: up to half the bodies are
         // kept for it while it is within reach
         // and the walkers pinned at your elbow (walkCrowd, drawPeds) keep their bodies before anyone further off gets one
-        const cap = outroT >= 0 ? 99 : BODY_CAP - Math.max(Math.min(Math.floor(BODY_CAP / 2), cardsNear), crowdPinned + pedPinned);
+        let cap = outroT >= 0 ? 99 : BODY_CAP - Math.max(Math.min(Math.floor(BODY_CAP / 2), cardsNear), crowdPinned + pedPinned);
+        // phones: never more than BODY_CAP + 2 in all, the painted crowd's bodies held this frame included (p29: with the
+        // townsfolk out of view as cards the crowd took the bodies they left, and perf_gate's phone gate drew 16)
+        if (tier === 0 && outroT < 0) cap = Math.min(cap, BODY_CAP + 2 - crowdPool.reduce((n, b) => n + (b.card >= 0 ? 1 : 0), 0));
         for (let j = 0; j < nc; j++) {
           // whoever is at your elbow is a body even when the cap is spent (two over it at most)
-          const q = people[candI[j]], show = used < cap || (j < 2 && candK[j] < -20);
+          const q = people[candI[j]], show = used < cap || (j < 2 && candK[j] < -20 && tier > 0);
           if (show) used++; else stand.push({ x: q.pos.x, y: q.pos.y, z: q.pos.z, h: 1.72, k: candI[j], v: lookOf.get(q.fig), yaw: q.yaw, walk: !!q.walk });
           if (show !== q.fig.root.visible) q.fig.root.visible = show;
         }
@@ -2310,20 +2322,20 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           q.pos.y = hx(q.pos.x); q.fig.root.rotation.y = q.yaw; q.phase += dt * w.speed * 2.2;
           if (sh?.stage !== 'inside') q.fig.animate(sh ? 'walk' : 'walk', q.phase, Math.min(1.1, (sh ? 0.8 : 1) * w.speed / 3), time, dt);
         } else if (w) {
-          let lat = 0;
+          let lat = 0, fwd = 0;
           // at the end of their stretch they stop and turn round before walking back (an instant about-turn was a body
           // walking backwards for a moment)
           // (a step that would take them within half a metre of anyone, nearer than they are now, is not taken: they
           // wait a moment. Easing aside alone, they walked through the threes standing on the pavement)
-          if (w.pause && w.pause > 0) w.pause -= dt; else { const nz = q.pos.z + w.dir * w.speed * dt; if (!stepBlocked(q, q.pos.x, nz)) q.pos.z = nz; else w.pause = 0.15; }
+          if (w.pause && w.pause > 0) w.pause -= dt; else { const nz = q.pos.z + w.dir * w.speed * dt; if (!stepBlocked(q, q.pos.x, nz)) { q.pos.z = nz; fwd = w.dir * w.speed; } else w.pause = 0.15; }
           if ((q.pos.z > w.z1 && w.dir > 0) || (q.pos.z < w.z0 && w.dir < 0)) { w.dir = -w.dir; w.pause = 0.8; }
           // someone in the way: step aside (towards the wall or the kerb, away from you), and back once past
           if (you) {
             const dz = (you.position.z - q.pos.z) * w.dir, dx = you.position.x - q.pos.x;
             const side = w.home ?? (w.home = q.pos.x);
-            let want = dz > -1.0 && dz < 5.0 && Math.abs(dx) < 1.5 ? side - Math.sign(dx || 1) * 1.6 : side; // a wider berth (as the crowd's bodies)
+            let want = dz > -1.0 && dz < 5.0 && Math.abs(dx) < BERTH ? side - Math.sign(dx || 1) * BERTH : side; // a wider berth (as the crowd's bodies)
             // and round a low camera behind you
-            if (want === side && lastCam && lastCam.y < 2.4) { const cz = (lastCam.z - q.pos.z) * w.dir, cx = lastCam.x - q.pos.x; if (cz > -0.8 && cz < 3.0 && Math.abs(cx) < 1.0) want = side - Math.sign(cx || 1) * 1.2; }
+            if (want === side && lastCam && lastCam.y < 2.4) { const cz = (lastCam.z - q.pos.z) * w.dir, cx = lastCam.x - q.pos.x; if (cz > -0.8 && cz < 4.0 && Math.abs(cx) < BERTH) want = side - Math.sign(cx || 1) * BERTH; }
             // and round whoever else is on the pavement ahead (walkers, the people standing, the painted crowd): the
             // nearest clear line (citydense.ts laneX), and they wait when there is none and someone is right ahead (they
             // used to walk through each other, and through a group standing there)
@@ -2337,13 +2349,14 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
             // on the pavement, never into the road (|x| < 4.35 is the kerb) or the shopfronts
             const sg = Math.sign(side) || 1; want = sg * THREE.MathUtils.clamp(want * sg, 4.7, FRONT - 0.6);
             // (0.5 m/s while they wait for someone ahead: stood still, a faster step aside read as a slide)
-            const latV = (w.pause ?? 0) > 0 ? 0.5 : 0.9;
+            const latV = (w.pause ?? 0) > 0 || !fwd ? 0.35 : 0.9; // (0.35 stood: under the detector's 0.6 m/s slide, p29)
             lat = THREE.MathUtils.clamp((want - q.pos.x) * (1 - Math.exp(-dt * 3)), -latV * dt, latV * dt); // walked, not slid
             if (stepBlocked(q, q.pos.x + lat, q.pos.z)) lat = 0;
             q.pos.x += lat;
           }
           // facing the way they walk, the step aside included
-          const want = Math.atan2(lat / Math.max(dt, 1e-3), w.dir * w.speed); q.yaw += Math.atan2(Math.sin(want - q.yaw), Math.cos(want - q.yaw)) * (1 - Math.exp(-dt * 12));
+          // (from how they moved this frame: stood, the forward speed in it turned them half to the side they stepped)
+          const want = fwd ? Math.atan2(lat / Math.max(dt, 1e-3), fwd) : w.dir > 0 ? 0 : Math.PI; q.yaw += Math.atan2(Math.sin(want - q.yaw), Math.cos(want - q.yaw)) * (1 - Math.exp(-dt * 12));
           q.pos.y = hx(q.pos.x); q.fig.root.rotation.y = q.yaw; q.phase += dt * w.speed * 2.2;
           q.fig.animate('walk', q.phase, (w.pause ?? 0) > 0 ? 0 : Math.min(1.1, w.speed / 3), time, dt);
         } else {

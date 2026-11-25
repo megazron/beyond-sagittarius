@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bakeStatic, createShip } from '../../cinematic/ship';
 import { twoFaced } from '../../core/textfaces';
 import { fitCanvasText } from '../../core/canvastext';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -246,18 +247,16 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
   const puff = canvasTex(64, 64, (g) => { const r = g.createRadialGradient(32, 32, 2, 32, 32, 30); r.addColorStop(0, 'rgba(255,255,255,.55)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); });
   if (rich) add(steamPuffs([[6.4, 1.2, 12.6], [-8.6, 1.6, 0], [-8.6, 1.6, 1.4]].map(([x, y, z]) => new THREE.Vector3(x, y, z)), 6, puff));
 
-  // ---- the hero: an orbital liner holding station above the spaceport, framed by the street from its first step ----
-  const hero = new THREE.Group(); add(hero); hero.position.set(-6, 70, S - 120); hero.rotation.set(0.08, 0.5, 0.12);
-  const heroHull = new THREE.MeshStandardMaterial({ color: 0xe9eef4, roughness: 0.3, metalness: 0.5, emissive: 0x22313f, emissiveIntensity: 0.3, fog: false });
-  // the hull and its four spokes are one mesh (five draws before); the ring turns, so it stays its own
-  const hullParts: THREE.BufferGeometry[] = [new THREE.CapsuleGeometry(12, 110, 8, 32).applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2))];
-  for (let i = 0; i < 4; i++) hullParts.push(new THREE.BoxGeometry(1.2, 26, 1.2).applyMatrix4(new THREE.Matrix4().makeTranslation(0, 0, 10).multiply(new THREE.Matrix4().makeRotationZ((i * Math.PI) / 4))));
-  hero.add(new THREE.Mesh(mergeGeometries(hullParts, false)!, heroHull));
-  const ringH = new THREE.Mesh(new THREE.TorusGeometry(26, 2.2, 12, 64), heroHull); ringH.position.z = 10; hero.add(ringH);
-  const ringGlow = new THREE.Mesh(new THREE.TorusGeometry(26, 0.6, 8, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6ff7ff).multiplyScalar(2.5), toneMapped: false, fog: false })); ringGlow.position.z = 10; hero.add(ringGlow);
-  const eng = new THREE.Mesh(new THREE.CircleGeometry(9, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9fdcff).multiplyScalar(2.8), toneMapped: false, fog: false })); eng.position.z = -67; eng.rotation.y = Math.PI; hero.add(eng);
+  // ---- the hero: a liner of the same line as the six's (the films' ship, cinematic/ship.ts, at twice and more its pad
+  // size) holding station above the spaceport, framed by the street from its first step. 200 m out, not 120: at 120 it
+  // hung over the column the boarded liner climbs at the end of the prologue ----
+  const heroShip = createShip(); const hero = heroShip.group; add(hero);
+  // (high and east of the pad's column: lower, it hung beside the boarded liner in the boarding's wide shot and read as
+  // a part of it)
+  hero.position.set(20, 140, S - 200); hero.rotation.set(0.08, 0.5, 0.12); hero.scale.setScalar(7);
+  bakeStatic(hero, [heroShip.ring, heroShip.plume]);
   hero.traverse((x) => { x.userData.ground = false; });
-  updates.push((dt) => { ringH.rotation.z += dt * 0.05; ringGlow.rotation.z = ringH.rotation.z; });
+  updates.push((dt) => { heroShip.ring.rotation.z += dt * 0.05; });
 
   // ---- ships at the end of the street: shuttles rising from the pads and settling again ----
   const shipM = new THREE.MeshStandardMaterial({ color: 0xeef1f5, roughness: 0.3, metalness: 0.5 });
@@ -269,7 +268,10 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     for (const a of [0, 2.1, 4.2]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4, 3), shipM); fin.position.set(Math.cos(a) * 2.4, -4, Math.sin(a) * 2.4); fin.rotation.y = -a; g.add(fin); }
     const flame = new THREE.Mesh(new THREE.ConeGeometry(1.4, 6, 16, 1, true), flameM); flame.position.y = -9.5; flame.rotation.x = Math.PI; g.add(flame);
     g.traverse((x) => { x.userData.ground = false; });
-    add(g); ships.push({ g, x: (i - 1) * 42 + 8, z: S - 110 - i * 30, p: i * 0.37 });
+    // on the two lit pads east of the liner's pad, then further east (the first one used to climb out of the middle of
+    // the boarded liner's footprint at the end of the prologue)
+    const [px, pz] = ([[44, -182], [16, -144], [86, -230]] as const)[i];
+    add(g); ships.push({ g, x: px, z: pz, p: i * 0.37 });
   }
   updates.push((_, t) => ships.forEach((s) => {
     const k = (t * 0.03 + s.p) % 1; // a slow climb, then gone, then the next one on the pad
@@ -277,5 +279,5 @@ export function buildFuture(scene: THREE.Scene, o: FutureOpts) {
     (s.g.children[s.g.children.length - 1] as THREE.Mesh).scale.setScalar(0.7 + Math.sin(t * 30) * 0.1);
   }));
 
-  return { solids, update: (dt: number, t: number) => { for (const u of updates) u(dt, t); } };
+  return { solids, hero, update: (dt: number, t: number) => { for (const u of updates) u(dt, t); } };
 }

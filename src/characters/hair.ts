@@ -234,6 +234,19 @@ export function buildHair(locks: Lock[], colors: HairColors, sway: SwayUniforms,
   return hairMesh(geo, colors, sway, rough, cards);
 }
 const HAIR_GEO = new Map<string, THREE.BufferGeometry>();
+/** Each strand's length (metres) on its vertices: how far it can fall as the head bends (uDrop), so a short fringe barely
+ *  moves and a long ponytail swings down (one fall for every strand made Zenvik's bob hang like a curtain, kneeling) */
+function withLen(g: THREE.BufferGeometry, len: number, root?: THREE.Vector3, tip?: THREE.Vector3) {
+  const n = g.getAttribute('position').count, r = new Float32Array(n * 3), dr = new Float32Array(n * 3);
+  if (root) for (let i = 0; i < n; i++) { r[i * 3] = root.x; r[i * 3 + 1] = root.y; r[i * 3 + 2] = root.z; dr[i * 3 + 1] = -1; }
+  if (root && tip) { const d = tip.clone().sub(root).normalize(); for (let i = 0; i < n; i++) { dr[i * 3] = d.x; dr[i * 3 + 1] = d.y; dr[i * 3 + 2] = d.z; } }
+  // which way the strand runs, root to tip (it gives in to gravity from there as the head bends)
+  g.setAttribute('aDir', new THREE.BufferAttribute(dr, 3));
+  g.setAttribute('aLen', new THREE.BufferAttribute(new Float32Array(n).fill(len), 1));
+  // the strand's root on the scalp: it turns about this point (uTilt)
+  g.setAttribute('aRoot', new THREE.BufferAttribute(r, 3));
+  return g;
+}
 
 function hairGeometry(locks: Lock[], rnd: () => number, detail: number, capLow: number, capFront: number, skull: Skull, volume: number, cards: boolean | 'curly') {
   const steps = detail < 0.8 ? 5 : 7;
@@ -249,7 +262,7 @@ function hairGeometry(locks: Lock[], rnd: () => number, detail: number, capLow: 
     const { path } = grow(l, steps + 3, skull);
     // curly: one card shows one clump of the texture (a quarter of its width)
     const u0 = cards === 'curly' ? Math.floor(rnd() * 4) * 0.25 + 0.01 : rnd() * 0.75, uw = cards === 'curly' ? 0.23 : 0.22 + rnd() * 0.1;
-    return swayByStrand(card(path, l.w ?? 0.035, skull, u0, uw), 0.15, l.sway ?? 1, rnd());
+    return withLen(swayByStrand(card(path, l.w ?? 0.035, skull, u0, uw), 0.15, l.sway ?? 1, rnd()), l.len, path[0], path[path.length - 1]);
   }) : fine.map((l) => {
     const { path, side } = grow(l, steps, skull);
     const w = l.w ?? 0.03, th = l.thick ?? w * 0.42;
@@ -260,9 +273,9 @@ function hairGeometry(locks: Lock[], rnd: () => number, detail: number, capLow: 
       thick: (t) => th * Math.pow(1 - t, 0.5) + 0.0006,
       sides: detail < 0.8 ? 4 : 6,
     });
-    return swayByStrand(g, 0.12, l.sway ?? 1, rnd());
+    return withLen(swayByStrand(g, 0.12, l.sway ?? 1, rnd()), l.len, path[0], path[path.length - 1]);
   });
-  parts.push(capShell(capLow, capFront, skull, volume, !!cards));
+  parts.push(withLen(capShell(capLow, capFront, skull, volume, !!cards), 0));
   return mergeGeometries(parts)!;
 }
 
@@ -281,8 +294,38 @@ function hairMesh(geo: THREE.BufferGeometry, colors: HairColors, sway: SwayUnifo
   };
   applySway(mat, sway, (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.vertexShader = `attribute float aT; attribute vec3 aTan; varying float vT; varying float vPh; varying vec3 vTan;\n` + sh.vertexShader.replace(
-      '#include <begin_vertex>', `#include <begin_vertex>\n  vT = aT; vPh = aPhase; vTan = normalMatrix * aTan;`);
+    // (uDrop: the strands hang. They are built for an upright head and ride it rigidly, so bending, Nuvexa's ponytails
+    // stood out stiff and sideways; now each point falls by its sway squared towards where the ground is from the head)
+    // A translation cannot swing a strand: with the head bowed and tilted, the tail on the high side kept its built
+    // direction and stood out sideways (GPU take tasksD). So each strand also turns about its root (uTilt) by a share of
+    // the head's turn from upright that grows with its length (a 0.7 m tail keeps hanging down, a fringe barely moves)
+    // and along it (the root stays on the scalp); its normal and tangent turn with it.
+    sh.vertexShader = `attribute float aT; attribute float aLen; attribute vec3 aTan; attribute vec3 aRoot; attribute vec3 aDir; varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uDrop; uniform vec4 uTilt; uniform vec4 uCap[12]; uniform vec4 uGround;
+      vec3 hairTurn(vec3 v, float a) { vec3 k = uTilt.xyz; float c = cos(a), s = sin(a); return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c); }
+      float hairTurnA() { return uTilt.w * min(aLen * 1.4, 1.0) * min(aT * 3.0, 1.0); }
+      // then a long strand gives in to gravity: it turns from where it now runs towards the ground, more the further the
+      // head is from upright (the spiral tails are built to stand out level; bent over, they hang)
+      vec3 rod(vec3 v, vec3 k, float a) { float c = cos(a), s = sin(a); return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c); }
+      vec4 hairHang() {
+        vec3 g = hairTurn(vec3(0.0, -1.0, 0.0), uTilt.w), d = hairTurn(aDir, uTilt.w * min(aLen * 1.4, 1.0));
+        vec3 k = cross(d, g); float kl = length(k);
+        if (kl < 1e-4) return vec4(1.0, 0.0, 0.0, 0.0);
+        float a = acos(clamp(dot(d, g), -1.0, 1.0)) * min(uTilt.w / 1.2, 1.0) * clamp(aLen * 1.2 - 0.2, 0.0, 0.7) * min(aT * 2.0, 1.0);
+        return vec4(k / kl, a);
+      }\n` + sh.vertexShader
+      .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n  vec4 hh = hairHang(); objectNormal = rod(hairTurn(objectNormal, hairTurnA()), hh.xyz, hh.w);`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\n  vT = aT; vPh = aPhase; vTan = normalMatrix * rod(hairTurn(aTan, hairTurnA()), hh.xyz, hh.w);
+  transformed = aRoot + rod(hairTurn(transformed - aRoot, hairTurnA()), hh.xyz, hh.w) + uDrop * min(aSway * aSway, 1.6) * aLen;
+  // out of the arms and thighs (uCap): only the free part of a strand, never its root on the scalp
+  for (int ci = 0; ci < 6; ci++) {
+    vec4 ca = uCap[ci * 2]; vec3 cb = uCap[ci * 2 + 1].xyz;
+    if (ca.w <= 0.0) continue;
+    vec3 ab = cb - ca.xyz; float ct = clamp(dot(transformed - ca.xyz, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
+    vec3 cd = transformed - (ca.xyz + ab * ct); float cl = length(cd);
+    if (cl < ca.w && cl > 1e-5) transformed += cd * ((ca.w - cl) / cl) * min(aT * 2.5, 1.0);
+  }
+  // and never into the ground (uGround, a plane a little above it): the free part of a strand rests on it
+  { float gd = dot(uGround.xyz, transformed) + uGround.w; if (gd < 0.0) transformed -= uGround.xyz * gd * min(aT * 2.5, 1.0); }`);
     sh.fragmentShader = `varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uRoot, uMid, uTip, uShine;\n` + sh.fragmentShader
       .replace('#include <color_fragment>', /* glsl */ `#include <color_fragment>
         diffuseColor.rgb = mix(mix(uRoot, uMid, smoothstep(0.0, 0.35, vT)), uTip, smoothstep(0.45, 1.0, vT));`)

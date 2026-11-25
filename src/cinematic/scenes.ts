@@ -43,10 +43,9 @@ export function deckScene(a: Cast, origin: THREE.Vector3): Beat[] {
     { key: 'op.14', who: 'strong', shot: () => cover.mid(a.strong, 0.5, 2.2) },
     { key: 'op.15', who: 'scientist', shot: () => cover.close(a.scientist, 0.42), poses: { scientist: 'present' } },
     { key: 'op.16', who: 'medic', shot: () => cover.close(a.medic, 0.45, 1), poses: { scientist: 'stand' }, after: 0.8 },
-    // the turn: hold on the window with nobody talking
-    { hold: 1.6, shot: () => ({ from: o(0.3, -0.9, 3.4), to: o(0, -0.7, -3), push: 0.14 }) },
-    { key: 'op.17', who: 'explorer', shot: () => cover.close(a.explorer, 0.3, 1.2), faces: {}, after: 0.5 },
-    { key: 'op.18', who: 'builder', shot: () => cover.mid(a.builder, -0.4, 1.8), poses: { explorer: 'stand' } },
+    // the talk winds down; the pull (cinematic.ts, shot list A1 to G7) begins outside, and Skyvra's "Why are the stars
+    // moving?" is its shot A6, after Zenvik has seen the gauge
+    { hold: 1.2, shot: () => ({ from: o(0.3, -0.9, 3.4), to: o(0, -0.7, -3), push: 0.14 }) },
   ];
 }
 

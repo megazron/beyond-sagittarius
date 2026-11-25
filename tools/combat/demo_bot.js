@@ -1,6 +1,6 @@
 // A stand-in player for recordings: it plays the fight through the game's own controls (keys, mouse buttons, mouse
 // look), never by reaching into the simulation to change it. tools/gpu_capture.py evals this file, then calls
-// __cbBot('<mode>'). Modes: melee, ranged, guardian, hunt, night, chase, stealth, tour, fish (log in window.__cbFishLog). __cbStop = true ends it.
+// __cbBot('<mode>'). Modes: melee, ranged, stones, guardian, hunt, night, chase, stealth, tour, fish (log in window.__cbFishLog). __cbStop = true ends it.
 window.__cbBot = (mode) => {
   const C = __bs.combat, held = {};
   window.__cbStop = false;
@@ -74,6 +74,12 @@ window.__cbBot = (mode) => {
       else if (st === 1) { fight(living('skritch'), { roll: Math.floor(T / 6) % 2 === 1 }); if ((!living('skritch').length && since() > 2) || since() > 24) next(); }
       else if (st === 2) { if (equip('club')) { run.summon('hound', 1); next(); } }
       else if (st === 3) fight(living('hound').length ? living('hound') : living('skritch'), { roll: true });
+    } else if (mode === 'stones') {
+      // a story night's thrown stones: stones from the bag at the nearest scavenger in reach (the clip per weapon)
+      if (equip('rock')) {
+        const t = nearest(living().filter((e) => e.kind !== 'hound' && !e.routed && dist(e, p) < 20));
+        if (t) shoot(t, { loft: 0.015 }); else { hold('Mouse2', 0); hold('Mouse0', 0); }
+      }
     } else if (mode === 'ranged') {
       if (st === 0) { if (equip('sling')) { run.summon('skritch', 3); next(); } }
       else if (st === 1) { const t = nearest(living('skritch')); if (t && since() < 22) shoot(t, { loft: 0.02 }); else { hold('Mouse2', 0); hold('Mouse0', 0); next(); } }
@@ -174,7 +180,7 @@ window.__cbBot = (mode) => {
         // business before the next small sound turns the head; a growl always does)
         flag.fedAt ||= now;
         const low = fire.fuel < fire.max * (o.hold1 ? 0.45 : 0.66), due = !o.hold1 && now - flag.fedAt > 30000 && fire.fuel < fire.max * 0.92;
-        const wood = (sim.inv.branch || 0) > 0, busy = flag.feeding || (wood && low);
+        const wood = (sim.inv.branch || 0) + (fire.pile || 0) > 0, busy = flag.feeding || (wood && low);
         const H = (C.heard || []).filter((h) => h.t > (flag.heardT || 0) && h.t <= now && /chitter|squeak|growl|snarl|howl|rustle|twig|snort/.test(h.name) && dist(h, p) > 2.5 && dist(h, p) < 24);
         if (H.length) {
           const h = H[H.length - 1], hound = /growl|snarl|howl/.test(h.name); flag.heardT = h.t;
@@ -213,7 +219,7 @@ window.__cbBot = (mode) => {
       hold('KeyQ', 0);
       const close = living('skritch').filter((e) => !e.routed && e.heldT <= 0 && dist(e, p) < 2.2);
       // a fire near out comes first, whatever is at the heels (they follow him to the light and are fought there)
-      const dying = fire.fuel < fire.max * 0.3 && (sim.inv.branch || 0) > 0;
+      const dying = fire.fuel < fire.max * 0.3 && (sim.inv.branch || 0) + (fire.pile || 0) > 0;
       if (close.length && !(dying && dist(p, fire) > 2.2)) { if (dying && dist(p, fire) <= 2.2 && since() > 0.8) { tapE(); stT = performance.now(); } fight(close, { level: true }); return; }
       if (dying) { const d = go(fire.x, fire.z); if (d < 2.2) { stop(); look(fire.x, fire.z, C.cam.y + 0.3); if (since() > 0.8) { tapE(); stT = performance.now(); } } return; }
       if (!hold1) {

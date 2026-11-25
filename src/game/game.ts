@@ -7,6 +7,7 @@ import { t, onLangChange } from '../i18n';
 import { clamp, smoothstep, lerp, easeInOut } from '../core/noise';
 import { audio } from '../core/audio';
 import { SaveData, writeSave } from '../core/save';
+import { Fights } from './fights';
 import type { World } from '../world/world';
 import { LAKE } from '../world/terrain';
 import { PICKABLE, Item } from '../world/props';
@@ -21,6 +22,11 @@ import type { Player } from './player';
 import type { Input } from './input';
 import { UI, PLAYABLE_LEVELS } from '../ui/ui';
 import { Tutorial } from './tutorial';
+import { Waking } from './waking';
+import { Stones } from './knap';
+import { FireDrill } from './drill';
+import { LeanTo } from './lean';
+import { FirstNight } from './night';
 import { Cutscene, Beat, SceneBranch } from '../cinematic/cutscene';
 import { voice } from '../core/voice';
 import type { Combat } from '../combat/combat';
@@ -101,8 +107,12 @@ export class Game {
   private saveClock = 0;
   private payoffClock = 0;
   private hudClock = 0;
-  private interactTarget: { kind: 'water' } | { kind: 'item'; item: Item } | { kind: 'action'; action: Action } | { kind: 'strike' } | null = null;
+  private interactTarget: { kind: 'water'; src?: 'stream' | 'pool' } | { kind: 'item'; item: Item } | { kind: 'action'; action: Action } | { kind: 'strike' } | null = null;
   story: Story;
+  /** The fights the levels call: the first night, the morning's food. */
+  fights: Fights;
+  /** main.ts: the game is in plain play (no flashback, Vault, film, pause or panel over it). */
+  canFight: () => boolean = () => true;
   private cues: { at: number; fn: () => void }[] = [];
   private clock = 0;
   private lastThirstWarn = 0;
@@ -130,8 +140,22 @@ export class Game {
     };
     onLangChange(() => this.tutorial.refresh());
     this.story = new Story(world, player, ui, () => this.save, (sec, fn) => this.after(sec, fn), (amount) => this.hurt(amount), (beats, then) => this.playScene(beats, then));
+    this.waking = new Waking(world, player, ui, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn));
+    this.stones = new Stones(world, player, ui, this.waking.stream, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn), (spec) => this.combat?.tension(spec) ?? null);
+    this.drill = new FireDrill(world, player, ui, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn), (spec) => this.combat?.tension(spec) ?? null);
+    this.lean = new LeanTo(world, player, ui, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn), (spec) => this.combat?.tension(spec) ?? null);
+    this.night = new FirstNight(world, player, ui, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn), (spec) => this.combat?.tension(spec) ?? null, () => this.combat);
     this.dialogue.onLine = (who, sec) => this.story.npcs.speak(who, sec);
-    this.story.hooks = { away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
+    this.fights = new Fights(() => this.save, ui, () => this.combat ?? null, () => this.mode === 'play' && !this.story.busy && this.canFight());
+    this.story.fights = this.fights;
+    // the first night is FirstNight's (night.ts), the night at the fire; main's fights.ts night stands in only where
+    // life's work is not on the branch
+    this.story.hooks = {
+      drill: (lit) => { if (this.debugActing) return false; this.drill.start(lit); return true; },
+      spear: (made) => { if (this.debugActing) return false; this.night.spear(made); return true; },
+      lean: (built) => { if (this.debugActing) return false; this.lean.start(built); return true; },
+      night: (done) => { if (this.mode !== 'play') return false; this.night.night(done); return true; },
+      away: (id, loc, task, done) => { if (this.away) this.away.onTask = task; this.goAway(id, loc, done); }, quick: (id, done) => this.quick(id, done), craft: (n) => this.startCraft(n), talk: (tree) => this.startTalk(tree), free: () => this.mode === 'play' };
     this.craft.onFail = () => {
       const c = (this.save.crafts ??= { failed: 0 });
       c.failed++;
@@ -361,7 +385,9 @@ export class Game {
       this.enterPlay(false);
       // the panel that was open when the game closed is still waiting
       const open = save.branch.open;
-      if (open) this.after(0.6, () => this.playScene([open.kind === 'decision' ? { choice: open.id } : { qte: open.id }]));
+      // the first night's question belongs to the night (night.ts): the story starts the night again and it asks there
+      if (open?.id === 'e1.night' && !save.flags.houndGone) save.flags['e1.night'] = false;
+      else if (open) this.after(0.6, () => this.playScene([open.kind === 'decision' ? { choice: open.id } : { qte: open.id }]));
     }
     this.player.model.root.visible = true;
   }
@@ -376,7 +402,7 @@ export class Game {
     }
   }
 
-  private enterPlay(announce: boolean) {
+  private enterPlay(announce: boolean, acted = false) {
     this.mode = 'play';
     this.finishWakeVisuals();
     this.input.enabled = true;
@@ -384,11 +410,15 @@ export class Game {
     this.ui.device(null);
     this.ui.setInventory(this.save.inventory, this.story.tools());
     this.refreshObjective();
+    this.waking.startSound();
     if (announce) {
-      if (!this.save.flags.tutorialDone) {
-        this.pendingIntro = true;
-        this.tutorial.start();
-      } else this.announceLevel1();
+      // 1.1: he checks his body, then thirst, before anything is asked of the player
+      this.waking.thirst(acted, () => {
+        if (!this.save.flags.tutorialDone) {
+          this.pendingIntro = true;
+          this.tutorial.start();
+        } else this.announceLevel1();
+      });
     }
   }
 
@@ -408,6 +438,19 @@ export class Game {
   /** main.ts tells us when a panel was opened (the tutorial waits for it). */
   notePanel(kind: string) { this.tutorial.notePanel(kind); }
 
+  /** Episode One 1.1: the stream, the pool, thirst and the red fruit. */
+  waking: Waking;
+  /** Episode One 1.3: the cobbles on the stream bank, the good stone and the first flake. */
+  stones: Stones;
+  /** Episode One 1.6: fire by hand drill at the pit (level 4). */
+  drill: FireDrill;
+  /** Episode One 1.9: the fire-hardened spear and the first night through the combat set pieces. */
+  night: FirstNight;
+  /** Episode One 1.3: the lean-to and the throwing stick (level 5). */
+  lean: LeanTo;
+  /** True while a test presses the interact key through debugAct: the hand drill keeps the old strikes for it. */
+  private debugActing = false;
+  private streamHeard = true;
   private wakeRate = 1;
   private buildWake() {
     const ui = this.ui;
@@ -415,16 +458,22 @@ export class Game {
     const slots: [string, number][] = [['wake.line1', 4.4], ['wake.line2', 3.6], ['wake.line3', 3.4], ['wake.line4', 4.2], ['wake.line5', 3.8]];
     this.wakeRate = 1 / Math.max(1, ...slots.map(([k, s]) => ((voice.duration(k) ?? 0) + 0.3) / s));
     this.wakeCues = [
-      { t: 0.4, fn: () => ui.fade('black', 0, 4) },
-      { t: 1.6, fn: () => ui.say('wake.line1', 'crew.scientist.name', 3.4) },
+      // he came down at dusk and it is midday now: say so, on black, before his eyes open
+      { t: 0.05, fn: () => ui.chapter(['wake.nextday'], true) },
+      { t: 1.9, fn: () => ui.chapter(null) },
+      { t: 2.0, fn: () => ui.fade('black', 0, 4) },
+      { t: 2.4, fn: () => ui.say('wake.line1', 'crew.scientist.name', 3.4) },
       { t: 4.0, fn: () => { ui.device(['wake.device1', 'wake.device2', 'wake.device3']); audio.beep(); } },
       { t: 6.2, fn: () => ui.say('wake.line2', 'crew.scientist.name', 3.6) },
+      // the device dies here, in his hand: the last thing on it is its own battery
+      { t: 8.9, fn: () => { ui.device(['wake.device4']); audio.beep(); } },
       { t: 10.0, fn: () => { ui.device(null); ui.say('wake.line3', 'crew.scientist.name', 3.4); } },
       { t: 13.6, fn: () => { ui.say('wake.line4', 'crew.scientist.name', 3.6); audio.thud(); } },
       { t: 18.0, fn: () => ui.say('wake.line5', 'crew.scientist.name', 3.6) },
       { t: 18.4, fn: () => ui.chapter(['wake.chapter']) },
       { t: 22.0, fn: () => ui.chapter(null) },
-      { t: 22.2, fn: () => this.skipWake() }, // through black, like the skip: entering play is never seen
+      // through black, like the skip: entering play is never seen
+      { t: 22.2, fn: () => this.skipWake(true) },
     ];
     this.ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden'); // tap to skip on phones
@@ -440,7 +489,8 @@ export class Game {
   skipScene() { if (this.ui.choice.open) this.ui.choice.press(); else this.scene?.skip(); }
 
   private wakeSkipped = false;
-  skipWake() {
+  /** natural: the wake played to its end (then 1.1's acted thirst scene follows; a skip goes straight to play). */
+  skipWake(natural = false) {
     if (this.mode !== 'wake' || this.wakeSkipped) return;
     this.wakeSkipped = true;
     for (const c of this.wakeCues) if (!c.done) { c.done = true; }
@@ -449,7 +499,7 @@ export class Game {
     this.ui.fade('black', 1, 0.2);
     setTimeout(() => {
       this.finishWakeVisuals();
-      this.enterPlay(true);
+      this.enterPlay(true, natural);
       this.wakeSkipped = false;
       requestAnimationFrame(() => requestAnimationFrame(() => this.ui.fade('black', 0, 0.6)));
     }, 240);
@@ -501,12 +551,17 @@ export class Game {
     const s = this.save;
     const st = s.stats;
     s.timeOfDay += dt / 50; // one in-game hour = 50 s
+    // the first day does not run out on him: he wakes at midday and the light waits in the late afternoon until the
+    // night level begins (an unscripted night before "Survive the First Night" made that one the second)
+    if (s.day === 1 && s.level < 7 && s.timeOfDay > 18.6 && s.timeOfDay < 19.5) s.timeOfDay = 18.6;
     if (s.timeOfDay >= 24) { s.timeOfDay -= 24; s.day++; }
     if (Math.abs(s.timeOfDay - 19.2) < dt / 50 && !s.flags.nightMsg) { s.flags.nightMsg = true; this.ui.toast(t('msg.night')); }
 
     if (this.mode === 'wake') { this.updateWake(dt * this.wakeRate); return; }
     if (this.mode === 'dead') return;
     this.runCues(dt);
+    // the stream is on Verdaxis: quiet while the game is on someone else's world
+    if ((this.mode !== 'away') !== this.streamHeard) { this.streamHeard = this.mode !== 'away'; this.waking.setAudible(this.streamHeard); }
     if (this.mode === 'away') { this.away?.update(dt, time, !this.ui.modalOpen()); return; }
     this.ui.choice.update(dt);
     if (this.mode === 'scene') this.dialogue.update(dt);
@@ -547,7 +602,8 @@ export class Game {
     }
 
     // stats
-    st.thirst = clamp(st.thirst - dt * 0.16, 0, 100);
+    // the pool's water: a slow day, thirst comes back faster
+    st.thirst = clamp(st.thirst - dt * 0.16 * (s.flags['sick.water'] && s.day === 1 ? 1.35 : 1), 0, 100);
     st.hunger = clamp(st.hunger - dt * 0.07, 0, 100);
     if (!p.swimming) this.swimWarned = false;
     if (p.swimming) {
@@ -568,11 +624,26 @@ export class Game {
     this.story.update(dt, time);
     if (this.mode !== 'play') return; // the story can kill the player (predator)
     this.tutorial.update(dt);
+    // (not while the controls tutorial is running: the listen beat would take the controls mid-lesson)
+    // (nor during a fight or the arena)
+    if (this.mode === 'play' && !this.tutorial.active && !this.pendingIntro && !this.combat?.engaged && !this.combat?.encounter && !this.combat?.threat) this.waking.update();
+    if (this.mode !== 'play') return;
     this.findInteraction();
     if (this.interactTarget && this.input.act('interact')) this.interact();
 
+    // 1.1 step 6: the first red fruit he walks up to is a decision
+    if (s.level === 2 && !s.flags['e1.fruitSeen']) {
+      for (const it of this.world.items.items) {
+        if (it.type !== 'redFruit' || !it.active || it.pos.distanceTo(p.pos) > 3.2) continue;
+        s.flags.medicHint = true;
+        if (this.waking.fruit(it.pos, () => this.collect(it, 0.35))) return;
+      }
+    }
+    // 1.3: at the cobbles on the stream bank (level 3) he finds a good stone and knaps a flake
+    if (this.stones.near(p.pos)) { this.stones.start(); return; }
     // Medic memory when first approaching fruit
-    if (!s.flags.medicHint) {
+    // (in level 2 the red fruit's own scene teaches this, so the general hint waits for it)
+    if (!s.flags.medicHint && (s.level !== 2 || s.flags['e1.fruitSeen'])) {
       for (const it of this.world.items.items) {
         if ((it.type === 'fruit' || it.type === 'redFruit') && it.active && it.pos.distanceTo(p.pos) < 9) {
           s.flags.medicHint = true;
@@ -626,6 +697,8 @@ export class Game {
 
   findInteraction() {
     const p = this.player;
+    // a held work shot (the drill, the knapping, the spear, the lean-to): nothing to press but the moment itself
+    if (p.workShot) { this.interactTarget = null; this.ui.setPrompt(null); return; }
     if (this.story.houndEngaged() && !this.combat?.encounter) {
       this.interactTarget = { kind: 'strike' };
       this.ui.setPrompt(this.story.strikePrompt());
@@ -653,6 +726,12 @@ export class Game {
       const name = t(`item.${best.type}`);
       const fruit = best.type === 'fruit' || best.type === 'redFruit';
       this.ui.setPrompt(fruit ? (best.examined ? t('prompt.eat', { item: name }) : t('prompt.examine', { item: name })) : t('prompt.pick', { item: name }), this.anchor(best.pos, 0.35));
+      return;
+    }
+    const src = this.waking.source(p.pos);
+    if (src) {
+      this.interactTarget = { kind: 'water', src };
+      this.ui.setPrompt(t('prompt.drink'), this.anchor(p.pos, 0.2));
       return;
     }
     const f = p.forward(this.tmpV);
@@ -683,6 +762,13 @@ export class Game {
     }
     if (target.kind === 'water') {
       if (st.thirst > 97) { this.ui.toast(t('msg.drinkFull')); return; }
+      if (target.src) {
+        { const p = this.player, f = this.tmpV.set(-Math.sin(p.facing), 0, -Math.cos(p.facing)); this.player.act('drink', new THREE.Vector3(p.pos.x + f.x * 0.7, p.pos.y - 0.2, p.pos.z + f.z * 0.7), undefined, null); }
+        if (!audio.sample('drink', 0.6, { delay: 0.5 })) audio.tone(300, 0.25, 'sine', 0.15, 0, 200);
+        audio.sample('splash', 0.25, { rate: 1.4, delay: 0.2 });
+        this.waking.drink(target.src);
+        return;
+      }
       st.thirst = clamp(st.thirst + 35, 0, 100);
       { const p = this.player, f = this.tmpV.set(-Math.sin(p.facing), 0, -Math.cos(p.facing)); this.player.act('drink', new THREE.Vector3(p.pos.x + f.x * 0.7, p.pos.y - 0.2, p.pos.z + f.z * 0.7), undefined, null); }
       if (!audio.sample('drink', 0.6, { delay: 0.5 })) audio.tone(300, 0.25, 'sine', 0.15, 0, 200);
@@ -760,7 +846,12 @@ export class Game {
     const s = this.save;
     if (n === 1) return !!s.flags.drank;
     if (n === 2) return !!s.flags.ateSafe;
-    if (n === 3) return (s.inventory.stone ?? 0) >= 5 && (s.inventory.branch ?? 0) >= 5;
+    if (n === 3) {
+      const done = (s.inventory.stone ?? 0) >= 5 && (s.inventory.branch ?? 0) >= 5;
+      // 1.3: a straight branch, its end scraped to a point and hardened: the digging stick (combat: woodBone)
+      if (done && !s.flags['inv.woodBone']) { s.flags['inv.woodBone'] = true; this.after(5.5, () => this.ui.toast(t('e1.learn.stick'))); }
+      return done;
+    }
     return this.story.done(n);
   }
 
@@ -806,6 +897,10 @@ export class Game {
     const s = this.save;
     if (this.tutorial.target) return this.tutorial.target.clone();
     if (s.level === 1) {
+      // 1.1: the marker leads to the stream (moving water), not the lake
+      const at = new THREE.Vector3();
+      this.waking.stream.nearest(p, at);
+      if (at.lengthSq() > 0) return at;
       const dx = p.x - LAKE.x, dz = p.z - LAKE.z;
       const d = Math.hypot(dx, dz) || 1;
       const r = LAKE.r - 8; // shallow water at the near shore
@@ -838,9 +933,7 @@ export class Game {
     const p = this.player.pos;
     const m = this.objectivePoint();
     if (!m) return null;
-    const dist = this.save.level === 1 && !this.tutorial.target
-      ? Math.max(0, Math.hypot(LAKE.x - p.x, LAKE.z - p.z) - LAKE.r + 4)
-      : Math.hypot(m.x - p.x, m.z - p.z);
+    const dist = Math.hypot(m.x - p.x, m.z - p.z);
     const bearing = Math.atan2(m.x - p.x, -(m.z - p.z));
     return { bearing, dist };
   }
@@ -894,7 +987,8 @@ export class Game {
     const tg = this.interactTarget;
     if (!tg) return null;
     const label = tg.kind === 'action' ? tg.action.id : tg.kind === 'item' ? tg.item.type : tg.kind;
-    this.interact();
+    this.debugActing = true;
+    try { this.interact(); } finally { this.debugActing = false; }
     return label;
   }
 
@@ -918,6 +1012,11 @@ export class Game {
       s.pos = [this.player.pos.x, this.player.pos.y, this.player.pos.z];
       s.yaw = this.player.yaw;
     }
-    writeSave(s);
+    // in the middle of a fight the save keeps the moment before it began (combat.ts checkpoint); the night's start is
+    // the story's own (it marks the night as begun when it starts it), so that mark is not kept either
+    const out = this.combat?.checkpoint(s) ?? s;
+    const nightFight = this.combat?.encounter?.id === 'night.defence' || (this.combat?.encounter?.id === 'chase.escape' && s.level === 7);
+    if (out !== s && nightFight && !s.flags.houndGone) out.flags = { ...s.flags, 'e1.night': false };
+    writeSave(out);
   }
 }

@@ -961,6 +961,10 @@ export class Renderer {
       const named = new Map<object, string>([[this.renderPass, 'scene'], [this.bloom, 'bloom'], [this.final, 'final'], ...([['ao', this.ao], ['ssr', this.ssr], ['volumetric', this.volumetric], ['temporal', this.temporal], ['dof', this.dof]] as [string, object | null][]).filter(([, p]) => p).map(([n, p]) => [p!, n] as [object, string])]);
       installGpuTimer(this.renderer, this.composer.passes.map((p, i) => ({ pass: p as unknown as { render: (...a: unknown[]) => void }, name: named.get(p) ?? `pass${i}` })));
     }
+    // resolution changes first: a new pixel ratio resizes (and so clears) the canvas, and done after the frame was drawn
+    // it put a black frame on screen every time it stepped (each 0.8 s or so while it settles: the black frames in the
+    // pull's GPU captures)
+    if (this.quality.dynamicResolution) this.adaptResolution(dt, time);
     this.final.uniforms.uTime.value = time;
     if (this.volumetric) this.volumetric.source = (this.renderPass.scene.userData.post as PostSource | undefined) ?? null;
     if (this.ssr) { const k = (this.renderPass.scene.userData.ssr as number | undefined) ?? 0; this.ssr.strength = k; this.ssr.enabled = k > 0.01 && this.shed < 2; }
@@ -978,7 +982,6 @@ export class Renderer {
       this.renderer.setRenderTarget(null); this.renderer.render(this.renderPass.scene, cam);
     } else this.composer.render(dt);
     if (jittered) cam.clearViewOffset();
-    if (this.quality.dynamicResolution) this.adaptResolution(dt, time);
   }
 
   /** The hot air over the nearest two fires that burn on screen (core/heat.ts). */

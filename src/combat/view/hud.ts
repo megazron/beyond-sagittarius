@@ -2,7 +2,7 @@
 // off screen, a boss bar, injuries, and the touch buttons. All of it is made here and lives in its own layer.
 import './combat.css';
 
-const ICON: Record<string, string> = {
+export const ICON: Record<string, string> = {
   atk: '<path d="M5 19 19 5M15 5h4v4M5 19l3-1-2-2z"/>',
   aim: '<circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/>',
   dge: '<path d="M4 14c2-6 8-8 13-5M17 5v4h-4M6 19h9"/>',
@@ -39,7 +39,8 @@ export class CombatHud {
     this.bossEl = el('div', 'boss', '<span></span><div class="bar"><i></i></div>');
     this.inj = el('div', 'inj');
     this.fa = el('div', 'fa', '<b></b><span></span>');
-    this.root.append(this.vig, this.ret, this.studyEl, this.eye, this.obj, this.bossEl, this.inj, this.fa, this.chip);
+    this.teachEl = el('div', 'teach');
+    this.root.append(this.vig, this.ret, this.studyEl, this.eye, this.obj, this.bossEl, this.inj, this.fa, this.chip, this.teachEl);
     for (let i = 0; i < 4; i++) { const a = el('div', 'arrow', '<i></i>'); this.arrowEls.push(a); this.root.append(a); }
     for (let i = 0; i < 6; i++) { const a = el('div', 'tag'); this.tagEls.push(a); this.root.append(a); }
     this.touchRoot.id = 'cb-touch';
@@ -94,8 +95,8 @@ export class CombatHud {
       (d.firstElementChild as HTMLElement).style.width = `${Math.round((dur ?? 0) * 100)}%`;
     });
   }
-  objective(text: string | null, sub: string | null = null) {
-    this.set('obj', `${text}|${sub}`, () => { this.obj.classList.toggle('on', !!text); this.obj.firstElementChild!.textContent = text ?? ''; this.obj.querySelector('small')!.textContent = sub ?? ''; });
+  objective(text: string | null, sub: string | null = null, warn = false) {
+    this.set('obj', `${text}|${sub}|${warn}`, () => { this.obj.classList.toggle('on', !!text); this.obj.classList.toggle('warn', warn); this.obj.firstElementChild!.textContent = text ?? ''; this.obj.querySelector('small')!.textContent = sub ?? ''; });
   }
   /** How close something is to knowing you are there (0 to 1), or that it does. */
   awareness(k: number | null, seen = false) {
@@ -121,12 +122,27 @@ export class CombatHud {
       e.style.transform = `translate(${q.x.toFixed(0)}px, ${q.y.toFixed(0)}px)`;
     });
   }
+  private barEls: HTMLElement[] = [];
+  /** Small health bars over creatures just struck. */
+  bars(list: { x: number; y: number; k: number }[]) {
+    while (this.barEls.length < list.length) { const b = el('div', 'hp', '<i></i>'); this.root.append(b); this.barEls.push(b); }
+    this.barEls.forEach((e, i) => {
+      const q = list[i];
+      if (!q) { if (e.classList.contains('on')) e.classList.remove('on'); return; }
+      e.classList.add('on'); e.classList.toggle('low', q.k < 0.34);
+      e.style.transform = `translate(${q.x.toFixed(0)}px, ${q.y.toFixed(0)}px)`;
+      (e.firstElementChild as HTMLElement).style.width = `${(q.k * 100).toFixed(0)}%`;
+    });
+  }
   boss(name: string | null, k = 0, p2 = false) {
     this.set('boss', `${name}|${k.toFixed(3)}|${p2}`, () => { this.bossEl.classList.toggle('on', !!name); this.bossEl.classList.toggle('p2', p2); this.bossEl.firstElementChild!.textContent = name ?? ''; (this.bossEl.querySelector('.bar i') as HTMLElement).style.width = `${Math.max(0, k) * 100}%`; });
   }
   injuries(list: { id: string; bad: boolean }[]) {
     this.set('inj', list.map((i) => i.id + i.bad).join(), () => { this.inj.innerHTML = list.map((i) => `<i class="${i.bad ? 'bad' : ''}" title="${i.id}">+</i>`).join(''); });
   }
+  private teachEl: HTMLElement;
+  /** The first time a weapon is in the hand: its controls for the device in use (html built by combat.ts). */
+  teach(html: string | null) { this.set('teach', html ?? '', () => { this.teachEl.classList.toggle('on', !!html); if (html) this.teachEl.innerHTML = html; }); }
   analysis(title: string | null, text = '') { this.set('fa', `${title}|${text}`, () => { this.fa.classList.toggle('on', !!title); this.fa.querySelector('b')!.textContent = title ?? ''; this.fa.querySelector('span')!.textContent = text; }); }
   study(k: number) { this.set('study', k.toFixed(2), () => { this.studyEl.classList.toggle('on', k > 0.02 && k < 1); (this.studyEl.querySelector('circle') as SVGCircleElement).style.strokeDashoffset = String(201 * (1 - k)); }); }
   vignette(on: boolean) { this.set('vig', String(on), () => this.vig.classList.toggle('on', on)); }

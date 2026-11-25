@@ -5,16 +5,33 @@ from scipy.spatial.transform import Rotation, Slerp
 
 ROOT = os.path.expanduser(os.environ.get('MH_ROOT', '~/bs-mh'))
 PATH = f'{ROOT}/ual/gltf-universal-animation-library/glTF/AnimationLibrary_Godot_Standard.gltf'
+# the second pack (CC0 too): pick up from the ground, plant, carry, eat and drink, an overhand throw, chopping
+PATH2 = f'{ROOT}/ual2/x/Universal Animation Library 2 [Standard]/Unreal-Godot/UAL2_Standard.glb'
+UE_NAMES = {'Head': 'DEF-head', 'neck_01': 'DEF-neck', 'spine_03': 'DEF-spine.003', 'spine_02': 'DEF-spine.002', 'spine_01': 'DEF-spine.001', 'pelvis': 'DEF-hips'}
+for _s, _S in (('l', 'L'), ('r', 'R')):
+    UE_NAMES.update({f'clavicle_{_s}': f'DEF-shoulder.{_S}', f'upperarm_{_s}': f'DEF-upper_arm.{_S}', f'lowerarm_{_s}': f'DEF-forearm.{_S}', f'hand_{_s}': f'DEF-hand.{_S}',
+                     f'thigh_{_s}': f'DEF-thigh.{_S}', f'calf_{_s}': f'DEF-shin.{_S}', f'foot_{_s}': f'DEF-foot.{_S}', f'ball_{_s}': f'DEF-toe.{_S}'})
+    for _f, _g in (('index', 'f_index'), ('middle', 'f_middle'), ('ring', 'f_ring'), ('pinky', 'f_pinky'), ('thumb', 'thumb')):
+        for _j in (1, 2, 3):
+            UE_NAMES[f'{_f}_0{_j}_{_s}'] = f'DEF-{_g}.0{_j}.{_S}'
 _CT = {5126: np.float32, 5123: np.uint16, 5125: np.uint32, 5121: np.uint8, 5122: np.int16}
 _NC = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT4': 16}
 
 
 class Ual:
     def __init__(self, path=PATH):
-        self.g = json.load(open(path))
-        self.bin = open(os.path.join(os.path.dirname(path), self.g['buffers'][0]['uri']), 'rb').read()
+        if path.endswith('.glb'):
+            # binary glTF: a JSON chunk, then the BIN chunk
+            b = open(path, 'rb').read(); n = struct.unpack('<I', b[12:16])[0]
+            self.g = json.loads(b[20:20 + n]); m = struct.unpack('<I', b[20 + n:24 + n])[0]
+            self.bin = b[28 + n:28 + n + m]
+        else:
+            self.g = json.load(open(path))
+            self.bin = open(os.path.join(os.path.dirname(path), self.g['buffers'][0]['uri']), 'rb').read()
         g = self.g
         self.names = [n.get('name', str(i)) for i, n in enumerate(g['nodes'])]
+        # the second pack names its bones the Unreal way: renamed to the first pack's, so one retarget reads both
+        self.names = [UE_NAMES.get(n, n) for n in self.names]
         self.parent = [-1] * len(g['nodes'])
         for i, n in enumerate(g['nodes']):
             for c in n.get('children', []):

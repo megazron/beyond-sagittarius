@@ -5,13 +5,17 @@ clear of that body's own torso, the head's glances, the sway), for the pose-driv
 further out than a slim one, so its shoulders need their own keys.
   vite, then: python tools/chars/capture_poses.py [--url http://localhost:5197/dev/chars.html] [--only cid,cid]
 Writes tools/chars/poses/<cid>.json. The clips start at other times than the skin gate's (another seed) and are sampled
-over their whole length, so the shapes learn the clips, not the gate's frames."""
+over their whole length, so the shapes learn the clips, not the gate's frames.
+--scenarios N also takes a pose every N frames of every animation QA scenario (dev/animqa.ts: every clip, every task
+with its prop, holds on a spear and a stone, kneeling, crouching, throws and extreme joint ranges), so the coverage mask
+and the corrective shapes are made for every pose the game plays (they learnt six clips, and every new animation came
+out through the clothes). 0 keeps the six clips only."""
 import argparse, json, os, sys, pathlib
 from playwright.sync_api import sync_playwright
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from smoke import launch  # noqa: E402
 ap = argparse.ArgumentParser(); ap.add_argument('--url', default='http://localhost:5197/dev/chars.html'); ap.add_argument('--only', default='')
-ap.add_argument('--samples', type=int, default=10); a = ap.parse_args()
+ap.add_argument('--samples', type=int, default=10); ap.add_argument('--scenarios', type=int, default=20); a = ap.parse_args()
 POSES = [('idle', 0), ('walk', .9), ('point', 0), ('cheer', 0), ('sit', 0), ('argue', 0)]
 CREW = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social', 'megazron']
 OUTFITS = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social']
@@ -36,6 +40,9 @@ with sync_playwright() as pw:
                     pg.evaluate('step(13)')
                     qs = pg.evaluate(f"(()=>{{const r={{}}; chars[{i}].root.traverse(o=>{{if(o.isBone) r[o.name]=[o.quaternion.x,o.quaternion.y,o.quaternion.z,o.quaternion.w].map(x=>Math.round(x*1e4)/1e4);}}); return r;}})()")
                     rec.append({'pose': pose, 'q': qs})
+            if a.scenarios > 0:
+                for n in pg.evaluate(f"qaNames({str(kind != 'custom').lower()})"):
+                    rec += pg.evaluate(f"qa({i}, {json.dumps(n)}, 0, {a.scenarios})")['poses']
             json.dump(rec, open(out_dir / f'{cid}.json', 'w'), separators=(',', ':'))
             print(cid, len(rec), flush=True)
         if pg is not None: pg.close()

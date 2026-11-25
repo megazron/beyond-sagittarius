@@ -12,7 +12,7 @@ import mh, amc, ual
 from glb import Glb, F32, I16
 
 M = os.path.expanduser(f'{mh.ROOT}/mocap')
-OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'models', 'crew')
+OUT = os.environ.get('ANIM_OUT') or os.path.join(os.path.dirname(__file__), '..', 'public', 'models', 'crew')
 FPS = 30
 
 SRC = {'hips': 'root', 'spine': 'lowerback', 'spine1': 'upperback', 'chest': 'thorax', 'neck': 'lowerneck', 'head': 'head'}
@@ -43,6 +43,15 @@ CLIPS = {
     'argue':      ('ual:Idle_Talking_Loop', None, None, 'uloop', None),
     'present':    ('ual:Idle_Talking_Loop', None, None, 'uloop', None),
     'write':      ('79_31', 1.3, 3.9, 'loop', 'relaxed'),
+    # authored actions for the hands and what they hold (Quaternius, CC0): played once, IK only for the last few cm
+    'pickup_low': ('ual2:Farm_Harvest', None, None, 'uonce', None),
+    'pickup_table': ('ual:PickUp_Table', None, None, 'uonce', None),
+    'plant':      ('ual2:Farm_PlantSeed', None, None, 'uonce', None),
+    'consume':    ('ual2:Consume', None, None, 'uonce', None),
+    'throw':      ('ual2:OverhandThrow', None, None, 'uonce', None),
+    'fix_kneel':  ('ual:Fixing_Kneeling', None, None, 'uonce', None),
+    'walk_carry': ('ual2:Walk_Carry_Loop', None, None, 'ucycle', None),
+    'hold_lantern': ('ual2:Idle_Lantern_Loop', None, None, 'uloop', None),
 }
 
 
@@ -153,8 +162,8 @@ class UalSource:
     """Rest frames of the Quaternius rig against ours: each bone is matched by direction plus a real
     second axis (elbow and knee hinge read from how the joint actually bends, palm plane from the knuckles),
     so no limb twists and no wrist breaks."""
-    def __init__(self, ref):
-        self.u = ual.Ual()
+    def __init__(self, ref, path=None, arm=('Sitting_Talking_Loop', 'Idle_Talking_Loop', 'Jog_Fwd_Loop'), leg=('Walk_Loop', 'Jog_Fwd_Loop')):
+        self.u = ual.Ual(path) if path else ual.Ual()
         R, P, _ = self.u.sample('A_TPose')
         self.R0 = {b: R[b][0] for b in R}
         self.P0 = {b: P[b][0] for b in P}
@@ -171,7 +180,7 @@ class UalSource:
         C['head'] = np.eye(3)
         for s, sg in (('L', 1), ('R', -1)):
             ua, fa, ha = f'DEF-upper_arm.{s}', f'DEF-forearm.{s}', f'DEF-hand.{s}'
-            hs = self.hinge(ua, fa, ha, ('Sitting_Talking_Loop', 'Idle_Talking_Loop', 'Jog_Fwd_Loop'))
+            hs = self.hinge(ua, fa, ha, arm)
             u_t = p(f'lowerarm{s}') - p(f'upperarm{s}'); f_t = p(f'hand{s}') - p(f'lowerarm{s}')
             ht = np.cross(u_t, f_t)
             C[f'upperarm{s}'] = align(u_t, d(ua, fa), ht, hs)
@@ -188,7 +197,7 @@ class UalSource:
                     ft = (p(f'finger{n}_{j + 1}{s}') - p(f'finger{n}_{j}{s}')) if j < 3 else (p(f'finger{n}_3{s}') - p(f'finger{n}_2{s}'))
                     C[f'finger{n}_{j}{s}'] = align(ft, fs, nt, ns)
             th, sh, ft_ = f'DEF-thigh.{s}', f'DEF-shin.{s}', f'DEF-foot.{s}'
-            hk = self.hinge(th, sh, ft_, ('Walk_Loop', 'Jog_Fwd_Loop'))
+            hk = self.hinge(th, sh, ft_, leg)
             X = np.array([1.0, 0, 0])
             C[f'upperleg{s}'] = align(p(f'lowerleg{s}') - p(f'upperleg{s}'), d(th, sh), X, hk)
             C[f'lowerleg{s}'] = align(p(f'foot{s}') - p(f'lowerleg{s}'), d(sh, ft_), X, hk)
@@ -218,14 +227,24 @@ class UalSource:
 
 
 _US = None
+_US2 = None
 def make_ual(ref, take, mode):
-    global _US
-    _US = _US or UalSource(ref)
-    clip = take[4:]
-    W, pos = _US.retarget(ref, clip)
+    global _US, _US2
+    if take.startswith('ual2:'):
+        # the second pack: its own rest and hinge axes (read from its own clips that bend the elbows and knees)
+        _US2 = _US2 or UalSource(ref, ual.PATH2, arm=('Consume', 'TreeChopping_Loop', 'Idle_TalkingPhone_Loop'), leg=('Walk_Carry_Loop', 'Zombie_Walk_Fwd_Loop'))
+        src, clip = _US2, take[5:]
+    else:
+        _US = _US or UalSource(ref)
+        src, clip = _US, take[4:]
+    W, pos = src.retarget(ref, clip)
     W = level_gaze(W, 0.6)
     pos = pos.copy()
-    pos[:, 0] -= pos[:, 0].mean(); pos[:, 2] -= pos[:, 2].mean()
+    if mode == 'uonce':
+        # an action played once (a pick up, a throw): it starts where the body stands
+        pos[:, 0] -= pos[0, 0]; pos[:, 2] -= pos[0, 2]
+    else:
+        pos[:, 0] -= pos[:, 0].mean(); pos[:, 2] -= pos[:, 2].mean()
     Q = world_to_local(ref, W)
     T = {k: v[:-1].copy() for k, v in Q.items()}
     p = pos[:-1].copy()
@@ -253,6 +272,8 @@ def make_ual(ref, take, mode):
         p[:, 1] = p[:, 1].mean() + (p[:, 1] - p[:, 1].mean()) * 0.5  # the pack's jog bounces like a cartoon
     if mode == 'uloop':
         T, p = smooth_clip(T, p, 2.5, 1.0, True)  # circular, so the seam itself is smoothed away
+    if mode == 'uonce':
+        return {k: Q[k].copy() for k in Q}, pos.copy(), dict(loop=False, speed=0.0, kind='once', take=take)
     # closed loop: last key equals the first
     T = {k: np.concatenate([v, v[:1] * np.sign(np.sum(v[:1] * v[-1:]) or 1)]) for k, v in T.items()}
     p = np.concatenate([p, p[:1]])
@@ -669,14 +690,14 @@ def main():
     ref = Ref()
     made = {}
     for name, (take, t0, t1, mode, hand) in CLIPS.items():
-        if take.startswith('ual:'):
+        if take.startswith('ual:') or take.startswith('ual2:'):
             T, p, meta = make_ual(ref, take, mode)
         elif mode == 'cycle':
             T, p, meta = make_cycle(ref, take)
         else:
             T, p, meta = make_window(ref, take, t0, t1, mode)
         meta['hand'] = hand
-        if not take.startswith('ual:'):
+        if not take.startswith('ual'):
             idle = name.startswith('idle')
             sig = 7.0 if idle else 1.2 if mode == 'cycle' else 3.0
             T, p = smooth_clip(T, p, sig, CALM.get(name, 0.2 if idle else 1.0), mode != 'once')

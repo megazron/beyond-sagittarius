@@ -25,10 +25,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: build and typecheck, nobrowser: true, run: 'npx tsc --noEmit -p . && python3 tools/voice_check.py' }
+          # spoiler_check: no known story spoiler in plain text in the tracked files or the built game (dist); the
+          # phrases are kept privately, only their hashes are here. story_seal: the sealed Episode One data decodes
+          - { name: build and typecheck, nobrowser: true, run: 'npx tsc --noEmit -p . && python3 tools/voice_check.py && python3 tools/spoiler_check.py dist && python3 tools/story_seal.py check' }
           - { name: smoke, run: 'python tools/smoke.py --quality web --out "$RUNNER_TEMP/shots"' }
           - { name: levels_smoke, run: 'python tools/levels_smoke.py --quality web --shots "$RUNNER_TEMP/shots"' }
           - { name: prologue_smoke, run: 'python tools/prologue_smoke.py --quality web' }
+          - { name: intro_smoke, run: 'python tools/intro_smoke.py --quality web' }
           - { name: mobile_smoke, run: 'python tools/mobile_smoke.py --shots "$RUNNER_TEMP/shots"' }
           - { name: crowd_smoke, run: 'python tools/crowd_smoke.py' }
           - { name: traffic_smoke, run: 'python tools/traffic_smoke.py' }
@@ -42,6 +45,8 @@ jobs:
           - { name: signs_touch, run: 'python tools/sign_faces.py && python tools/touch_hints.py' }
           - { name: cutscene_qa, run: 'python tools/cutscene_qa.py --out "$RUNNER_TEMP/cutscene"' }
           - { name: combat, run: 'node --experimental-strip-types tools/combat/sim_test.ts && node --experimental-strip-types tools/combat/pose_test.ts && python tools/combat/play_test.py' }
+          - { name: anim_qa, run: 'python tools/anim_qa.py --serve --every 0 --out "$RUNNER_TEMP/anim_qa.json"' }
+          - { name: anim_qa_pixels, run: 'python tools/anim_qa.py --serve --every 15 --only zenvik,nuvexa,custom_f_social --out "$RUNNER_TEMP/anim_qa_px.json"' }
           - { name: app_smoke, cap: true, run: 'python tools/android/app_smoke.py --shots "$RUNNER_TEMP/shots"' }
     steps:
       - uses: actions/checkout@v4

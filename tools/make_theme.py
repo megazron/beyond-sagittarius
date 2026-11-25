@@ -380,27 +380,36 @@ def make_music():
             ('A5', 8)]
     put(ld, lead(hook, S['drop']), S['drop'], 1.0)
 
-    # ---- Planet: the band falls away ----
-    for i, c in enumerate(['Gm', 'Asus']):
+    # ---- Planet: the band falls away. Six fates are drawn and named here, so this holds long enough to read them:
+    # pads and a slow low pulse, the kick only comes back for the last two bars, the snare run hands into the landing.
+    n4 = int((S['landing'] - S['planet']) // 4)
+    prog = (['Gm', 'Asus', 'Gm', 'Bb', 'Gm', 'Asus'] * 4)[:n4]
+    for i, c in enumerate(prog):
         b = S['planet'] + i * 4
-        put(keys, pad(c, 4.4, 3, 1500), b, 1.5)
-        put(keys, piano(hz(chord_notes(c, 5)[0]), 3.5, 0.8), b, 0.5, 0.2)
-        for off in (0, 1.5, 2.5, 3):
-            put(drums, kick(0.85), b + off, 0.85)
-            d = 0.5 * BEAT
+        put(keys, pad(c, 4.4, 3, 1200 + 200 * i), b, 1.4)
+        if i % 2 == 0:
+            put(keys, piano(hz(chord_notes(c, 5)[0]), 3.5, 0.8), b, 0.45, 0.2)
+        late = i >= n4 - 2
+        for off in ((0, 1.5, 2.5, 3) if late else (0,)):
+            put(drums, kick(0.85 if late else 0.5), b + off, 0.85 if late else 0.5)
+            d = (0.5 if late else 2.0) * BEAT
             root = hz(f'{CHORDS[c][0]}2' if NOTE[CHORDS[c][0]] < 5 else f'{CHORDS[c][0]}1')
             y = lp(osc(root, d, 'saw'), 420) * env(int(d * SR), 0.002, 0.04, 0.7, 0.01)
             put(bass, np.tanh(y * 2), b + off, 0.42)
-    for off, g in ((6, .4), (6.5, .5), (7, .7), (7.25, .8), (7.5, .9), (7.75, 1)):
-        put(drums, snare(g), S['planet'] + off, 0.8)
+    for off, g in ((-2, .4), (-1.5, .5), (-1, .7), (-0.75, .8), (-0.5, .9), (-0.25, 1)):
+        put(drums, snare(g), S['landing'] + off, 0.8)
 
     # ---- Landing: three turns of a four-bar groove, a stab on every impact ----
-    land = ['Dm', 'Bb', 'F', 'C'] * 3
+    # each landing is 32 beats (the shot list's grammar: the world, the hit, a breath, a look, the sky, the line): the
+    # groove plays only round each hit; the rest is held pads under the quiet
+    land = ['Dm', 'Bb', 'F', 'C'] * int((S['rise'] - S['landing']) // 16)
+    hits = MAP['impacts']
     for i, c in enumerate(land):
         b = S['landing'] + i * 4
-        beat_bar(b, c, fill=i % 2 == 1)
+        if any(h - 4 <= b < h + 4 for h in hits):
+            beat_bar(b, c, fill=False)
         put(keys, pad(c, 4.2, 4, 2200), b, 0.75)
-        if i % 2 == 0:
+        if any(h - 1 <= b < h + 3 for h in hits):
             for n in chord_notes(c, 4) + chord_notes(c, 3):
                 y = supersaw(hz(n), 0.45, 5, 0.008)
                 y = lp(y, 3800) * env(len(y), 0.002, 0.12, 0.3, 0.1)[:, None]
@@ -408,9 +417,8 @@ def make_music():
             put(drums, crash(0.5, 2), b, 1.0, 0.25 if i % 4 else -0.25)
     # a small answer in the gap after each joke
     answer = [('D6', .5), ('C6', .5), ('A5', 1), ('C6', .5), ('D6', 1.5)]
-    for i in range(1, 12, 2):
-        if i < 11:
-            put(ld, lead(answer, 0), S['landing'] + i * 4 + 0, 0.42)
+    for c in MAP['cards']:
+        put(ld, lead(answer, 0), c + 6, 0.36)
 
     # ---- Rise ----
     for i, c in enumerate(['Bb', 'C']):
@@ -459,7 +467,7 @@ def make_music():
 
     # the pad ducks under the kick in the drop: that's the pump
     pump = np.ones(N)
-    ks = [S['drop'] + i * 4 + o for i in range(6) for o in (0, 1.5, 2.5)] + [S['landing'] + i * 4 + o for i in range(12) for o in (0, 1.5, 2.5)]
+    ks = [S['drop'] + i * 4 + o for i in range(6) for o in (0, 1.5, 2.5)] + [h - 4 + i * 4 + o for h in MAP['impacts'] for i in range(2) for o in (0, 1.5, 2.5)]
     t = np.arange(int(0.26 * SR)) / SR
     dip = 1 - 0.5 * np.exp(-t * 14)
     for b in ks:
@@ -591,7 +599,8 @@ def make_sfx():
     for b in MAP['faceHits']:
         put(fx, pop(1), b, 0.6)
         put(fx, boom(0.4, 0.5), b, 0.6)
-    put(fx, noise_rise(3, 90, 900, 0.3), 56, 1.0)
+    put(fx, noise_rise(3, 90, 900, 0.3), S['planet'], 1.0)
+    put(fx, noise_rise(3, 300, 6000, 0.35), S['landing'] - 8, 1.0)
     # Act III: each comet screams in, then lands exactly on the downbeat
     for i, b in enumerate(MAP['impacts']):
         put(fx, whoosh(0.8, 0.7 * (-1) ** i, -0.2 * (-1) ** i), b - 2, 0.8)
@@ -602,7 +611,7 @@ def make_sfx():
         put(fx, pop(0.8), b, 0.45)
     # the giant walking behind Skyvra
     for off in (4, 6):
-        put(fx, boom(0.55, 1.2), 88 + off, 0.8)
+        put(fx, boom(0.55, 1.2), MAP['impacts'][3] + off, 0.8)
     # Act IV
     put(fx, noise_rise(4.5, 120, 9000, 0.6), S['rise'] - 4, 1.0)
     put(fx, noise_rise(3, 500, 12000, 0.8), S['hit'] - 8, 1.0)

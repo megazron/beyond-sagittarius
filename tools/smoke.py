@@ -113,7 +113,7 @@ def main():
         page.click("#btn-skip")
         page.wait_for_function("window.__bs.state === 'film' && window.__bs.film.playing", timeout=30000)
         # the title sequence: a frame from each act, then the skip must land on the wake-up
-        for b, name in [(26, "02e-film-ring"), (40, "02f-film-scatter"), (66.5, "02g-film-landing")]:
+        for b, name in [(26, "02e-film-ring"), (40, "02f-film-scatter"), (82.5, "02g-film-landing")]:
             page.evaluate(f"window.__bs.film.seek({b})")
             time.sleep(3)
             shot(name)
@@ -126,7 +126,9 @@ def main():
         t_enter = page.evaluate("performance.now()")
         page.keyboard.press("Enter")  # skip the rest of the wake-up sequence
         try:
-            page.wait_for_function("window.__bs.mode === 'play'", timeout=30000)
+            # 60 s: on CI's software renderer the wake-up's skip has reached play just after 30 s (82f05cb's run printed
+            # mode 'play' in this except)
+            page.wait_for_function("window.__bs.mode === 'play'", timeout=60000)
         except Exception:
             print("wake did not reach play:", page.evaluate("({state: __bs.state, mode: __bs.mode})"), flush=True)
             print("long tasks over 1 s (ms, mode after):", page.evaluate("__bs.longTasks.filter(t => t.ms > 1000).slice(-8).map(t => [t.t, t.ms, t.state, t.mode])"), flush=True)

@@ -59,7 +59,10 @@ export class Audio {
     this.master.gain.value = this.mix.muted ? 0 : this.volume;
     // everything passes one last filter: open, except where there is no air to carry sound (vacuum())
     this.vac = this.ctx.createBiquadFilter(); this.vac.type = 'lowpass'; this.vac.frequency.value = 20000; this.vac.Q.value = 0.7;
-    this.master.connect(this.vac).connect(this.ctx.destination);
+    // the very last node: the speakers and the recording tap both hang off it, so the vacuum heartbeat and the capture
+    // sync marks (which bypass the mix) are recorded too
+    this.post = this.ctx.createGain();
+    this.master.connect(this.vac).connect(this.post).connect(this.ctx.destination);
     const music = this.ctx.createGain(), sfx = this.ctx.createGain(), voice = this.ctx.createGain();
     const analyser = this.ctx.createAnalyser(); analyser.fftSize = 256;
     music.connect(this.master); sfx.connect(this.master); voice.connect(analyser); analyser.connect(this.master);
@@ -124,6 +127,23 @@ export class Audio {
   }
 
   voiceIn(): AudioNode { return this.buses!.voice; }
+  private memBus: AudioNode | null = null;
+  /** A remembered voice: no low end and no air (a phone-thin band), a little quieter, with a short soft echo, so it
+   * reads as inside his head and not as someone standing there. Feeds the voice bus (ducking and volume as usual). */
+  memoryIn(): AudioNode {
+    if (this.memBus) return this.memBus;
+    const ctx = this.ctx!, out = this.buses!.voice;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 420; hp.Q.value = 0.8;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; lp.Q.value = 0.9;
+    const dry = ctx.createGain(); dry.gain.value = 0.8;
+    const dl = ctx.createDelay(1); dl.delayTime.value = 0.13;
+    const fb = ctx.createGain(); fb.gain.value = 0.32;
+    const wet = ctx.createGain(); wet.gain.value = 0.38;
+    hp.connect(lp); lp.connect(dry).connect(out);
+    lp.connect(dl); dl.connect(fb).connect(dl); dl.connect(wet).connect(out);
+    this.memBus = hp;
+    return hp;
+  }
 
   // ---------------------------------------------------------------- the space you are in
   // Everything in the world (effects, beds, voices a little) is sent to a reverb shaped like where you stand, and the
@@ -182,14 +202,25 @@ export class Audio {
     this.vac.frequency.setTargetAtTime(on ? 380 : 20000, ctx.currentTime, on ? 0.04 : 0.25);
     clearInterval(this.vacTimer);
     if (!on) return;
-    const beat = () => { if (!this.ctx) return; const t = this.ctx.currentTime; for (const [dt, v] of [[0, 0.5], [0.16, 0.32]] as [number, number][]) { const o = this.ctx.createOscillator(), g = this.ctx.createGain(); o.frequency.setValueAtTime(62, t + dt); o.frequency.exponentialRampToValueAtTime(38, t + dt + 0.12); g.gain.setValueAtTime(0, t + dt); g.gain.linearRampToValueAtTime(v, t + dt + 0.015); g.gain.exponentialRampToValueAtTime(0.001, t + dt + 0.2); o.connect(g).connect(this.ctx.destination); o.start(t + dt); o.stop(t + dt + 0.25); } };
+    const beat = () => { if (!this.ctx) return; const t = this.ctx.currentTime; for (const [dt, v] of [[0, 0.5], [0.16, 0.32]] as [number, number][]) { const o = this.ctx.createOscillator(), g = this.ctx.createGain(); o.frequency.setValueAtTime(62, t + dt); o.frequency.exponentialRampToValueAtTime(38, t + dt + 0.12); g.gain.setValueAtTime(0, t + dt); g.gain.linearRampToValueAtTime(v, t + dt + 0.015); g.gain.exponentialRampToValueAtTime(0.001, t + dt + 0.2); o.connect(g).connect(this.post ?? this.ctx.destination); o.start(t + dt); o.stop(t + dt + 0.25); } };
     beat(); this.vacTimer = window.setInterval(beat, 860);
+  }
+  private post: GainNode | null = null;
+  /** A capture sync mark: a short beep (2 kHz for syncMark, 1.5 kHz for syncTest) straight onto the last node (no mix, duck, filter or vacuum), at the
+   *  audio clock's now. Returns that audio-clock time. */
+  mark(dur = 0.06, freq = 2000): number {
+    const ctx = this.ctx; if (!ctx || !this.post) return 0;
+    const t0 = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.5, t0 + 0.003); g.gain.setValueAtTime(0.5, t0 + dur); g.gain.linearRampToValueAtTime(0, t0 + dur + 0.005);
+    o.connect(g).connect(this.post); o.start(t0); o.stop(t0 + dur + 0.02);
+    return t0;
   }
   private tapNode: MediaStreamAudioDestinationNode | null = null;
   /** What the speakers get, as a stream (recordings of real play: tools/gpu_capture.py). */
   tap(): MediaStream | null {
     if (!this.ctx) return null;
-    if (!this.tapNode) { this.tapNode = this.ctx.createMediaStreamDestination(); (this.vac ?? this.master).connect(this.tapNode); }
+    if (!this.tapNode) { this.tapNode = this.ctx.createMediaStreamDestination(); (this.post ?? this.master).connect(this.tapNode); }
     return this.tapNode.stream;
   }
   duck(on: boolean) { this.ducked = on; this.applyMix(); }
@@ -455,7 +486,7 @@ export class Audio {
    * A one-shot recorded sound. With `at` it sits in the world (HRTF, fading with distance from `near` to `far` m).
    * Returns false when it is not loaded yet (it starts loading), so callers can fall back to a synthesised one.
    */
-  sample(name: string, vol = 0.8, o: { at?: { x: number; y: number; z: number }; near?: number; far?: number; rate?: number; delay?: number; outside?: boolean } = {}): boolean {
+  sample(name: string, vol = 0.8, o: { at?: { x: number; y: number; z: number }; near?: number; far?: number; rate?: number; delay?: number; outside?: boolean; dur?: number; tag?: string } = {}): boolean {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== 'running') return false;
     if (!this.sfxIdx) { void this.loadSfx(); return false; }
@@ -474,8 +505,21 @@ export class Audio {
     if (o.at) node = node.connect(this.panner(o.at, o.near ?? 2, o.far ?? 60));
     // a sound placed outside while you are in: through the walls (muffled), like the street beds
     node.connect(o.at && o.outside ? this.outdoorOut : this.sfxOut);
-    src.start(ctx.currentTime + (o.delay ?? 0));
+    const t0 = ctx.currentTime + (o.delay ?? 0);
+    src.start(t0);
+    // `dur`: only the first seconds of the file, faded out over the last half second of them
+    if (o.dur) { g.gain.setValueAtTime(vol, t0 + Math.max(0, o.dur - 0.6)); g.gain.linearRampToValueAtTime(0, t0 + o.dur); src.stop(t0 + o.dur + 0.05); }
+    // `tag`: stopTag() can fade it out early (a skipped scene's sounds)
+    if (o.tag) { const set = this.tagged.get(o.tag) ?? this.tagged.set(o.tag, new Set()).get(o.tag)!; const h = { src, g }; set.add(h); src.onended = () => set.delete(h); }
     return true;
+  }
+  private tagged = new Map<string, Set<{ src: AudioBufferSourceNode; g: GainNode }>>();
+  /** Fades out (over `fade` s) and stops every sound started with this tag. */
+  stopTag(tag: string, fade = 0.3) {
+    const ctx = this.ctx, set = this.tagged.get(tag);
+    if (!ctx || !set) return;
+    for (const { src, g } of set) { g.gain.cancelScheduledValues(ctx.currentTime); g.gain.setValueAtTime(g.gain.value, ctx.currentTime); g.gain.linearRampToValueAtTime(0, ctx.currentTime + fade); try { src.stop(ctx.currentTime + fade + 0.05); } catch { /* already stopped */ } }
+    set.clear();
   }
 
   /** A footstep on a surface: stone, grass, wood, carpet, snow, metal. */

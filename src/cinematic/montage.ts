@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import beat from './beatmap.json';
-import { clamp, easeInOut, lerp, smoothstep } from '../core/noise';
+import { clamp, easeInOut, lerp, mulberry32, Simplex, smoothstep } from '../core/noise';
 import { audio } from '../core/audio';
 import { voice } from '../core/voice';
 import { t } from '../i18n';
@@ -10,8 +10,56 @@ import type { Cinematic } from './cinematic';
 import { FilmVideo } from './filmvideo';
 import type { World } from '../world/world';
 import { LAKE } from '../world/heightfield';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { NOISE_GLSL } from '../core/glsl';
 
 const BEAT = 60 / beat.bpm;
+/** Where each one's eyes go in their sky (I5): the giant, the black hole, the old stars, the hole overhead, the cloud. */
+/** Skyvra's old red sun as a star, not a disc: limb darkening (the edge is cooler and much dimmer than the middle, as
+ * on any real star, stronger for a cool giant), slow granulation cells across the face, and a corona that falls off from
+ * the limb with a few faint streamers. */
+function oldSun(at: THREE.Vector3, r: number) {
+  const g = new THREE.Group(); g.position.copy(at);
+  const disc = new THREE.Mesh(new THREE.SphereGeometry(r, 64, 32), new THREE.ShaderMaterial({
+    vertexShader: 'varying vec3 vN; varying vec3 vV; varying vec3 vO; void main(){ vO = position; vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = -mv.xyz; gl_Position = projectionMatrix * mv; }',
+    fragmentShader: `varying vec3 vN; varying vec3 vV; varying vec3 vO;
+      float h(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+      float n3(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(h(i), h(i + vec3(1,0,0)), f.x), mix(h(i + vec3(0,1,0)), h(i + vec3(1,1,0)), f.x), f.y),
+                   mix(mix(h(i + vec3(0,0,1)), h(i + vec3(1,0,1)), f.x), mix(h(i + vec3(0,1,1)), h(i + vec3(1,1,1)), f.x), f.y), f.z); }
+      void main(){
+        float mu = clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0);
+        float limb = 1.0 - 0.78 * (1.0 - mu) - 0.17 * (1.0 - mu) * (1.0 - mu); // quadratic limb-darkening law
+        vec3 p = normalize(vO) * 5.0;
+        float cells = 0.6 * n3(p) + 0.3 * n3(p * 2.3 + 4.1) + 0.1 * n3(p * 5.7);
+        vec3 core = vec3(1.05, 0.34, 0.1), edge = vec3(0.42, 0.06, 0.015); // kept under the tone curve's shoulder, or the middle washes out pink
+        vec3 c = mix(edge, core, pow(mu, 0.6)) * limb * (0.82 + 0.36 * cells);
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+  }));
+  g.add(disc);
+  // the corona: a camera-facing glow from the limb outwards, brightest at the edge, with a few long faint streamers
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256; const x = cv.getContext('2d')!;
+  const R = 128, edgeAt = 0.3;
+  const img = x.createImageData(256, 256);
+  for (let j = 0; j < 256; j++) for (let i = 0; i < 256; i++) {
+    const dx = (i - R + 0.5) / R, dy = (j - R + 0.5) / R, d = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
+    const out = Math.max(0, d - edgeAt) / (1 - edgeAt);
+    const streak = 1 + 0.22 * Math.pow(Math.max(0, Math.cos(a * 3 + 0.7)), 4) + 0.15 * Math.pow(Math.max(0, Math.cos(a * 7 - 1.1)), 6);
+    let v = d < edgeAt ? 0.35 * Math.pow(d / edgeAt, 8) : Math.exp(-out * 7 / streak) * (1 - out) * 0.9 + 0.12 * Math.exp(-out * 2.2) * (1 - out);
+    v = Math.min(1, v); const k = (j * 256 + i) * 4;
+    img.data[k] = 255; img.data[k + 1] = Math.round(110 + 60 * Math.exp(-out * 4)); img.data[k + 2] = Math.round(55 + 30 * Math.exp(-out * 5)); img.data[k + 3] = Math.round(v * 255);
+  }
+  x.putImageData(img, 0, 0);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(0.9, 0.55, 0.45) }));
+  glow.scale.setScalar((r / edgeAt) * 2); g.add(glow);
+  return g;
+}
+
+const SKYDIR: Record<string, THREE.Vector3> = { strong: new THREE.Vector3(-0.28, 0.12, -0.95).normalize(), medic: new THREE.Vector3(0.2, 0.15, -1).normalize(), explorer: new THREE.Vector3(0.1, 0.9, -0.4).normalize(), builder: new THREE.Vector3(-1, 16, -24).normalize(), social: new THREE.Vector3(-0.35, 0.75, -0.6).normalize() };
+/** How each one checks themself first (I4): Draxum his fist, Lyrra her pulse, Skyvra her trapped leg, Bolzar the plate, Nuvexa her phone. */
+const CHECK: Record<string, 'use' | 'phone' | 'gesture'> = { strong: 'use', medic: 'use', explorer: 'use', builder: 'use', social: 'phone' };
 const S = beat.sections;
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -445,7 +493,7 @@ export class Montage {
 
     // The player: the clearing where the wake-up starts
     const z = at(0, 2);
-    land('scientist', z, z.clone(), 5.8, 1.1, 1, z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(-2.6, 0.55, 3.6)), z.clone().add(V(0, 1.1, 0)), 0.35);
+    land('scientist', z, z.clone(), 19.3, 1.1, 1, z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(-2.6, 0.55, 3.6)), z.clone().add(V(0, 1.1, 0)), 0.35);
     this.lands[5].wide = [z.clone().add(V(-5, 1.5, 12)), z.clone().add(V(5, 24, -14))];
     this.lands[5].from = V(0.18, 1, -0.4).normalize();
   }
@@ -462,6 +510,38 @@ export class Montage {
     shown.forEach((o) => (o.visible = false));
     [this.dust, this.smoke, this.fire, this.spray].forEach((b) => (b.points.visible = false));
     this.worldTrails[0].mesh.visible = false;
+  }
+
+  /** Draw the crew once under every lighting the title sequence puts them in, while the game loads. Lights decide
+   *  which shader each material needs: the crew were only ever compiled for the lit deck, so the first frame with them
+   *  in open space (after the ship breaks) compiled every garment at once and froze for seconds on the GPU, and the
+   *  first landing (each set adds a sky light) did it again. Also builds and draws the five landing sets. */
+  warmStages(draw: (scene: THREE.Scene, cam: THREE.PerspectiveCamera) => void) {
+    const cast = this.crew;
+    const saved = ORDER.map((id) => { const c = cast[id]; return { c, parent: c.root.parent, p: c.root.position.clone(), q: c.root.quaternion.clone(), v: c.root.visible }; });
+    const wasInterior = this.set.interior.group.visible;
+    const cam = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 40000);
+    const line = (at: THREE.Vector3) => ORDER.forEach((id, i) => {
+      const c = cast[id];
+      this.group.add(c.root); c.root.visible = true; c.root.quaternion.identity();
+      c.root.position.copy(at).add(V(-2.5 + i, 0, 0)); c.root.updateMatrixWorld(); c.animate('float', 0, 0, 0, 0.016);
+    });
+    // open space, as from the ship breaking to the fates
+    this.set.show('deep');
+    line(V(0, 0, 0));
+    cam.position.set(0, 1.2, 7); cam.lookAt(0, 1, 0); cam.updateMatrixWorld();
+    draw(this.set.scene, cam);
+    // each landing set, with the crew standing in it
+    for (const id of ORDER.slice(0, 5)) {
+      const o = this.worldStage(id);
+      line(o);
+      cam.position.copy(o).add(V(0, 1.4, 7)); cam.lookAt(o.clone().add(V(0, 1, 0))); cam.updateMatrixWorld();
+      draw(this.set.scene, cam);
+    }
+    if (this.stageG) this.stageG.visible = false;
+    this.stageOn = false;
+    for (const x of saved) { x.parent?.add(x.c.root); x.c.root.position.copy(x.p); x.c.root.quaternion.copy(x.q); x.c.root.visible = x.v; x.c.root.updateMatrixWorld(); }
+    this.set.interior.group.visible = wasInterior;
   }
 
   private get crew() { const ids: CrewId[] = ['scientist', 'strong', 'medic', 'explorer', 'builder', 'social']; return Object.fromEntries(ids.map((id, i) => [id, this.set.interior.crew[i]])) as Record<CrewId, Character>; }
@@ -498,6 +578,7 @@ export class Montage {
 
   private finish() {
     for (const el of this.tags) el.style.opacity = '0';
+    if (this.fateEl) this.fateEl.style.opacity = '0';
     if (this.sys) this.sys.group.visible = false;
     if (this.stageG) this.stageG.visible = false;
     if (this.vacuum) { this.vacuum = false; audio.vacuum(false); }
@@ -592,6 +673,7 @@ export class Montage {
   }
 
   private sysOn = false;
+  private homeSun: THREE.Vector3 | null = null;
   private sys: { group: THREE.Group; at: Record<CrewId, THREE.Vector3> } | null = null;
   /** The system the six are thrown into, for the wide shot: simple lit bodies, each where one of them comes down. */
   private system() {
@@ -615,8 +697,43 @@ export class Montage {
     at.builder = ball(70, 0x6f5a4a, V(-520, -420, 500), { flat: true }).position;
     // the cloud planet, nearer the star, gold (Nuvexa)
     at.social = ball(210, 0xe8c25a, V(1500, -520, 700), { emissive: 0x6a4a10, rough: 1 }).position;
+    // lit from our side of the system, so every world shows its day side and not a thin crescent
+    const sun = new THREE.DirectionalLight(0xfff2dc, 2.6); sun.position.set(-1400, 1500, 3000); g.add(sun, sun.target);
     this.set.scene.add(g); g.visible = false;
     return (this.sys = { group: g, at });
+  }
+
+  /** How each one falls (shot list H3): Draxum fights it, Lyrra goes still, Bolzar curls up, Nuvexa reaches for the
+   * others, Skyvra laughs, Zenvik stares at the hole. Each starts in the same shock (the first fifth of the single) and
+   * turns into their own. Returns the body, the face and the head (a look2 pair, or 'hole' for a fixed stare). */
+  private fallReact(id: CrewId, k: number, t: number, n: number, thrash: number): [Limbs, Face, [number, number] | 'hole'] {
+    const own = smoothstep(0.12, 0.45, k), shock: Face = { fear: 0.8, open: 0.45 };
+    const wander: [number, number] = [nz(t * 2.7, n + 1) * 0.8, nz(t * 2.1, n + 2) * 0.3];
+    const mixF = (f: Face): Face => { const o: Face = {}; for (const key of ['smile', 'frown', 'fear', 'squint', 'open', 'blink'] as const) o[key] = lerp(shock[key] ?? 0, f[key] ?? 0, own); return o; };
+    switch (id) {
+      case 'strong': { // fights it: big swimming strokes, teeth set, shouting in bursts
+        const shout = Math.max(0, Math.sin(t * 5.5)) ** 2;
+        return [flail(FALL.strong, t * 1.4, n * 4.3, lerp(thrash, 1.25, own)), mixF({ frown: 0.95, squint: 0.45, open: 0.15 + 0.6 * shout }), wander];
+      }
+      case 'medic': { // goes still: the thrash runs out, arms come in to the body, the eyes close and stay closed
+        const still: Limbs = { armL: [0.25, -0.95, 0.2], foreL: [-0.6, 0.2, 0.75], armR: [-0.25, -0.95, 0.2], foreR: [0.6, 0.2, 0.75], legL: [0.06, -1, 0.04], shinL: [0.02, -1, -0.12], legR: [-0.03, -1, 0.1], shinR: [0.05, -1, -0.1], hair: [0, 1, 0] };
+        return [mixLimbs(flail(FALL.medic, t, n * 4.3, 0.6), flail(still, t * 0.4, n, 0.05), own), mixF({ blink: smoothstep(0.35, 0.6, k), smile: 0.05, fear: 0.1 }), [wander[0] * (1 - own), 0.25 * own]];
+      }
+      case 'builder': { // curls: knees to the chest, arms round them, head down
+        const curl: Limbs = { armL: [0.35, -0.5, 0.8], foreL: [-0.7, -0.1, 0.7], armR: [-0.35, -0.5, 0.8], foreR: [0.7, -0.1, 0.7], legL: [0.15, -0.15, 1], shinL: [0.05, -1, 0.1], legR: [-0.15, -0.15, 1], shinR: [-0.05, -1, 0.1], bend: 0.85, hair: [0, 1, 0] };
+        return [mixLimbs(flail(FALL.builder, t, n * 4.3, thrash), flail(curl, t * 0.5, n, 0.06), own), mixF({ fear: 0.75, frown: 0.6, squint: 0.7 }), [wander[0] * (1 - own), lerp(wander[1], 0.5, own)]];
+      }
+      case 'social': { // reaches: one arm out towards the others (the lens), fingers wide, the other arm for balance
+        const reach: Limbs = { ...FALL.social, armR: [-0.15, 0.25, 1], foreR: [-0.05, 0.2, 1], armL: [0.95, -0.1, -0.2], foreL: [0.9, 0.2, -0.1], openHands: true };
+        return [mixLimbs(flail(FALL.social, t, n * 4.3, thrash), flail(reach, t * 0.6, n, 0.12), own), mixF({ fear: 0.7, open: 0.35, frown: 0.2 }), [lerp(wander[0], 0, own), lerp(wander[1], -0.1, own)]];
+      }
+      case 'explorer': { // laughs: the fear breaks into a laugh, head back, the body lets go into the spin
+        const laugh = 0.5 + 0.5 * Math.max(0, Math.sin(t * 9));
+        return [flail({ ...FALL.explorer, openHands: true }, t, n * 4.3, lerp(thrash, 0.45, own)), mixF({ smile: 0.85, open: 0.25 + 0.4 * laugh, squint: 0.35 }), [wander[0] * (1 - own), lerp(wander[1], -0.35, own)]];
+      }
+      default: // the player stares: the body slows, the eyes do not leave the hole and do not blink
+        return [flail(FALL.scientist, t, n * 4.3, lerp(thrash, 0.2, own)), mixF({ fear: 0.85, open: 0.3, blink: 0 }), own > 0.3 ? 'hole' : wander];
+    }
   }
 
   private stageG: THREE.Group | null = null;
@@ -625,27 +742,107 @@ export class Montage {
   private worldStage(id: CrewId) {
     if (!this.stageG) {
       this.stageG = new THREE.Group(); this.set.scene.add(this.stageG);
-      const mk = (name: string, ground: number, rough: number, extra: (g: THREE.Group) => void) => {
+      // Ground per world, built so it reads at human scale: a dense grid near them (cells of centimetres under the body,
+      // tens of metres at the horizon), small undulation, mid-ground swells, ridges on the horizon, craters on the airless
+      // ones, the asteroid's ground curving away (a small body: the horizon is close), mottled colour, and stones from
+      // pebbles to boulders so the eye has sizes to measure them by.
+      const TER: Record<string, { curve: number; craters: number; pebbles: number; ridge: number; mott: number }> = {
+        strong: { curve: 0, craters: 0, pebbles: 260, ridge: 30, mott: 0.25 }, medic: { curve: 0, craters: 26, pebbles: 520, ridge: 55, mott: 0.3 },
+        explorer: { curve: 260, craters: 14, pebbles: 420, ridge: 0, mott: 0.35 }, builder: { curve: 0, craters: 0, pebbles: 460, ridge: 70, mott: 0.4 },
+        social: { curve: 0, craters: 0, pebbles: 0, ridge: 0, mott: 0.15 } };
+      const sx = new Simplex(7);
+      const heightAt = (name: string, relief: number, craters: [number, number, number][]) => (x: number, z: number) => {
+        const T = TER[name], d = Math.hypot(x, z);
+        if (name === 'social') {
+          // a cloud deck seen from just above it: rounded cells of rising cloud with creases between them (billow
+          // noise: round tops, sharp seams), small near the raft, big further out, and the deck curving away with the
+          // planet; the raft rides in a hollow of it
+          const bil = (f: number, o: number, n = 3) => Math.abs(sx.fbm(x * f + o, z * f - o * 0.7, n));
+          const cells = bil(0.06, 3) ** 0.75 * 3.2 + bil(0.17, 11, 2) ** 0.8 * 0.9 + bil(0.016, 23) ** 0.7 * 14 * smoothstep(50, 240, d);
+          return (cells - 1.4) * smoothstep(6, 22, d) - 0.7 * smoothstep(3.5, 7, d) - (d * d) / (2 * 7000);
+        }
+        let y = sx.fbm(x * 0.35, z * 0.35, 3) * 0.16 * smoothstep(1.8, 8, d);
+        y += sx.fbm(x * 0.03 + 3, z * 0.03, 3) * 3.5 * smoothstep(8, 70, d) * relief;
+        if (T.ridge) { const n = 1 - Math.abs(sx.fbm(x * 0.004 + 9, z * 0.004, 4)); y += n * n * T.ridge * smoothstep(160, 700, d) * relief; }
+        for (const [cx, cz, r] of craters) { const q = Math.hypot(x - cx, z - cz) / r; if (q < 1.6) y += r * (q < 1 ? 0.18 * (q * q - 1) + 0.06 * q ** 6 : 0.06 * Math.exp(-(((q - 1) * 5) ** 2))); }
+        if (T.curve) y -= (d * d) / (2 * T.curve);
+        return y;
+      };
+      const lumpy = (r: number, seed: number, detail = 3, squash = 0.72) => {
+        // the polyhedron comes unindexed (every face its own corners): weld it, or the normals are per face and every stone
+        // shows its facets
+        const raw = new THREE.IcosahedronGeometry(1, detail); raw.deleteAttribute('normal'); raw.deleteAttribute('uv');
+        const geo = mergeVertices(raw), q = geo.getAttribute('position'), n = new Simplex(seed);
+        for (let i = 0; i < q.count; i++) {
+          const x = q.getX(i), y = q.getY(i), z = q.getZ(i);
+          const k = 1 + 0.32 * n.fbm(x * 1.3 + seed, y * 1.3 - z, 4) + 0.18 * n.noise2(y * 3.1 + z, x * 2.7) + 0.08 * n.noise2(z * 6, x * 6 + y);
+          q.setXYZ(i, x * r * k, y * r * k * squash, z * r * k);
+        }
+        geo.computeVertexNormals(); return geo;
+      };
+      let ground: (x: number, z: number) => number = () => 0;
+      const mk = (name: string, ground0: number, rough: number, extra: (g: THREE.Group) => void, relief = 1, amb: [number, number, number] = [0x8090a0, 0x202020, 0.5]) => {
         const g = new THREE.Group(); g.name = name;
-        const geo = new THREE.CircleGeometry(60, 48); geo.rotateX(-Math.PI / 2);
-        // a little relief, so it is ground and not a plate
-        const p = geo.getAttribute('position'); for (let i = 0; i < p.count; i++) p.setY(i, Math.sin(p.getX(i) * 0.9) * Math.cos(p.getZ(i) * 0.7) * 0.12);
-        geo.computeVertexNormals();
-        g.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: ground, roughness: rough })));
+        const T = TER[name], rnd = mulberry32(name.length * 131 + 17);
+        const craters: [number, number, number][] = [];
+        for (let i = 0; i < T.craters; i++) { const a = rnd() * Math.PI * 2, d = 7 + rnd() ** 1.5 * 260, r = 1.2 + rnd() ** 2.5 * (d < 40 ? 6 : 40); craters.push([Math.cos(a) * d, Math.sin(a) * d, r]); }
+        ground = heightAt(name, relief, craters);
+        const N = 190, geo = new THREE.PlaneGeometry(2, 2, N, N); geo.rotateX(-Math.PI / 2);
+        const p = geo.getAttribute('position'), col = new Float32Array(p.count * 3), base = new THREE.Color(ground0);
+        for (let i = 0; i < p.count; i++) {
+          const ux = p.getX(i), uz = p.getZ(i), x = Math.sign(ux) * 1200 * Math.abs(ux) ** 2.6, z = Math.sign(uz) * 1200 * Math.abs(uz) ** 2.6;
+          const y = ground(x, z); p.setXYZ(i, x, y, z);
+          const m = 1 + T.mott * sx.fbm(x * 0.12 + 5, z * 0.12, 3) + 0.12 * sx.noise2(x * 1.7, z * 1.7) * smoothstep(30, 3, Math.hypot(x, z));
+          col[i * 3] = m; col[i * 3 + 1] = m; col[i * 3 + 2] = m;
+        }
+        geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.computeVertexNormals();
+        g.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: base, roughness: rough, vertexColors: true })));
+        // stones: many small ones near, fewer and bigger further out; each sunk a third into the ground
+        if (T.pebbles) {
+          const pg = lumpy(1, 11, 1, 0.6), pm = new THREE.MeshStandardMaterial({ color: base.clone().multiplyScalar(0.8), roughness: 1 });
+          const inst = new THREE.InstancedMesh(pg, pm, T.pebbles), o = new THREE.Object3D();
+          for (let i = 0; i < T.pebbles; i++) {
+            const a = rnd() * Math.PI * 2, d = 1.3 + rnd() ** 1.8 * 45, sz = (0.025 + rnd() ** 3 * 0.3) * (1 + d * 0.015);
+            const x = Math.cos(a) * d, z = Math.sin(a) * d;
+            o.position.set(x, ground(x, z) - sz * 0.25, z); o.rotation.set(rnd() * 6, rnd() * 6, rnd() * 6); o.scale.set(sz * (0.7 + rnd() * 0.6), sz, sz * (0.7 + rnd() * 0.6)); o.updateMatrix(); inst.setMatrixAt(i, o.matrix);
+            const c = 0.75 + rnd() * 0.45; inst.setColorAt(i, new THREE.Color(c, c, c));
+          }
+          g.add(inst);
+        }
+        g.add(new THREE.HemisphereLight(amb[0], amb[1], amb[2]));
         extra(g); this.stageG!.add(g); return g;
       };
-      const rock = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number) => { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true })); m.position.set(x, y, z); m.rotation.set(x, y, z); g.add(m); return m; };
+      // a boulder: a lumpy, squashed stone sitting in the ground at (x, z); y is how far its middle stands above it (a y
+      // well above its size is a stone floating in the sky, as on the asteroid)
+      let rockSeed = 1;
+      const rock = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number) => { const m = new THREE.Mesh(lumpy(r, rockSeed++), new THREE.MeshStandardMaterial({ color, roughness: 0.95 })); m.position.set(x, y > r * 1.5 ? y : ground(x, z) + Math.min(y, r * 0.45), z); m.rotation.set(x * 0.1, y + z, z * 0.07); g.add(m); return m; };
       const sky = (g: THREE.Group, r: number, x: number, y: number, z: number, color: number, emissive = 0) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 24), new THREE.MeshStandardMaterial({ color, roughness: 1, emissive, emissiveIntensity: 0.5 })); m.position.set(x, y, z); g.add(m); return m; };
       // Methryx: black slush, orange haze, the ringed giant huge on the horizon
-      mk('strong', 0x1a1410, 0.5, (g) => { sky(g, 240, -160, 70, -520, 0xcdb48a, 0x3a2a10); const r = new THREE.Mesh(new THREE.RingGeometry(300, 480, 64), new THREE.MeshBasicMaterial({ color: 0xd8c9a8, transparent: true, opacity: 0.5, side: THREE.DoubleSide })); r.position.set(-160, 70, -520); r.rotation.set(-1.3, 0.3, 0); g.add(r); rock(g, 1.2, 3, 0.2, -4, 0x2a211a); rock(g, 0.7, -4, 0.1, -2, 0x2a211a); });
+      mk('strong', 0x2a2018, 0.5, (g) => { ringedGiant(g, V(-170, 45, -560), 110, V(0.7, 0.4, 0.6)); rock(g, 1.2, 3, 0.2, -4, 0x2a211a); rock(g, 0.7, -4, 0.1, -2, 0x2a211a); rock(g, 2.2, -7, 0.5, -9, 0x2a211a); rock(g, 3.5, 11, 1, -18, 0x241c16);
+        // a black methane lake behind him, flat and glossy
+        const lake = new THREE.Mesh(new THREE.CircleGeometry(26, 48), new THREE.MeshStandardMaterial({ color: 0x050403, roughness: 0.08, metalness: 0.6 })); lake.rotation.x = -Math.PI / 2; lake.position.set(4, ground(4, -34) + 0.25, -34); lake.scale.set(1.6, 1, 0.7); g.add(lake); }, 0.6, [0xc8803a, 0x2a1a0c, 0.95]);
       // the grey moon: dust, hard light, a torn piece of hull
-      mk('medic', 0x8a8a90, 1, (g) => { const h = new THREE.Mesh(new THREE.BoxGeometry(5, 3.2, 0.25), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); h.position.set(-3.5, 1.2, -4); h.rotation.set(0.2, 0.5, 0.35); g.add(h); rock(g, 0.9, 4, 0.2, -5, 0x77777c); });
+      mk('medic', 0x8a8a90, 1, (g) => { const h = new THREE.Mesh(new THREE.BoxGeometry(5, 3.2, 0.25), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); h.position.set(-3.5, 1.2, -4); h.rotation.set(0.2, 0.5, 0.35); g.add(h); rock(g, 0.9, 4, 0.2, -5, 0x77777c); rock(g, 0.5, 2, 0.1, -2.5, 0x77777c); rock(g, 2.6, -11, 0.7, -14, 0x6c6c72); rock(g, 6, 22, 2, -44, 0x64646a); rock(g, 0.35, -1.5, 0.08, 1.2, 0x808086); }, 1, [0x8088a0, 0x18181c, 0.35]);
       // the asteroid: bare tumbling rock, nothing else but stars
-      mk('explorer', 0x4a4640, 1, (g) => { rock(g, 2.4, -5, 0.6, -6, 0x55504a); rock(g, 1.1, 4, 0.3, -3, 0x55504a); rock(g, 5, 14, 9, -40, 0x3c3a36); rock(g, 3, -22, 14, -60, 0x3c3a36); });
+      mk('explorer', 0x4a4640, 1, (g) => { rock(g, 2.4, -5, 0.6, -6, 0x55504a); rock(g, 1.1, 4, 0.3, -3, 0x55504a); rock(g, 5, 14, 9, -40, 0x3c3a36); rock(g, 3, -22, 14, -60, 0x3c3a36); rock(g, 0.6, 2, 0.15, 1, 0x55504a); rock(g, 1.6, 9, 4, -22, 0x3c3a36); rock(g, 0.9, -12, 7, -30, 0x3c3a36); rock(g, 2.2, 30, 18, -80, 0x33312e);
+        // billions of years on: the sun she sees is an old red one, big and dim, with a faint glow round it
+        g.add(oldSun(V(30, 270, -120), 24)); }, 0.25, [0x6a7890, 0x101014, 0.4]);
       // Shardrift: split cliffs, old metal
-      mk('builder', 0x5a4636, 1, (g) => { rock(g, 9, -9, 5, -12, 0x4a392c); rock(g, 12, 13, 7, -16, 0x4a392c); rock(g, 6, 0, 2, -20, 0x3a2c22); });
+      mk('builder', 0x5a4636, 1, (g) => { rock(g, 9, -15, 5, -12, 0x4a392c); rock(g, 12, 19, 7, -16, 0x4a392c); rock(g, 6, 0, 2, -20, 0x3a2c22); rock(g, 1.1, 3.5, 0.3, -2.5, 0x4a392c);
+        // old metal in the split: ribs of something that was built here long ago
+        for (let i = 0; i < 4; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.3, 7, 0.3), new THREE.MeshStandardMaterial({ color: 0x8a8f96, roughness: 0.45, metalness: 0.8 })); b.position.set(-3 + i * 2.1, 3, -10 - i * 0.6); b.rotation.set(0.1 * i, 0, 0.18 - i * 0.12); g.add(b); } }, 1.6, [0xb09a84, 0x1c140e, 0.7]);
       // Aerolis: a raft of hull on gold cloud to every horizon
-      mk('social', 0xe2c46a, 1, (g) => { const d = new THREE.Mesh(new THREE.BoxGeometry(6, 0.3, 4), new THREE.MeshStandardMaterial({ color: 0xb9bcc4, roughness: 0.4, metalness: 0.7 })); d.position.set(0, 0.16, 0); d.rotation.set(0.03, 0.4, -0.04); g.add(d); for (let i = 0; i < 9; i++) sky(g, 14 + (i % 3) * 8, Math.cos(i * 0.7) * (60 + i * 6), -6 + (i % 2) * 5, -70 + Math.sin(i * 0.7) * 50, 0xf0d890, 0x6a5010); });
+      mk('social', 0xe2c46a, 1, (g) => { const d = hullRaft(); d.position.set(0, 0.16, 0); d.rotation.set(0.03, 0.4, -0.04); g.add(d);
+        // the floor is cloud, not ground: cells of billowing cloud lit from the low sun's side, shaded in their seams,
+        // fading into gold haze; heaps of cumulus standing up out of the deck (many rounded puffs each, the edges thin
+        // and torn: hard-edged lumps read as rock); over it all a thick hot sky, gold at the horizon, thinning upwards
+        // to a young universe's dark, with a few small blue galaxies and hardly any stars
+        const sunD = V(0.3, 0.26, -0.92).normalize();
+        (g.children[0] as THREE.Mesh).material = cloudFloorMat(sunD);
+        const cm = cloudTowerMat(sunD), rr = mulberry32(913);
+        const heaps: [number, number, number][] = [[-70, -150, 26], [55, -120, 18], [140, -260, 44], [-190, -320, 52], [10, -420, 70], [260, -180, 30], [-300, -90, 34], [90, -40, 9], [-40, -60, 11], [-120, 40, 22], [180, 90, 28], [380, -420, 80]];
+        for (const [x, z, r] of heaps) { const c = new THREE.Mesh(cumulus(r, Math.floor(rr() * 1e6)), cm); c.position.set(x, ground(x, z) - r * 0.35, z); c.rotation.y = rr() * 6.28; c.renderOrder = 3; g.add(c); }
+        g.add(aerolisSky(sunD)); }, 0, [0xffe9b0, 0x6a4a20, 0.55]);
       this.stageG.children.forEach((c, i) => c.position.set(i * 4000, -20000, 0));
     }
     for (const c of this.stageG.children) c.visible = c.name === id;
@@ -653,37 +850,69 @@ export class Montage {
     return this.stageG.children.find((c) => c.name === id)!.position;
   }
 
-  /** One of the five comes down on their own world: the light in, the hit, them, the card, the line. */
+  /** One of the five comes down on their own world, in the shot list's landing grammar (I1 to I6). */
   private arrive(id: CrewId, i: number, b: number, imp: number) {
     const o = this.worldStage(id), col = TRAIL[id], tt = (b - imp) * BEAT, hit = b >= imp;
     const u = this.set.dome.uniforms;
     u.uBH.value = 0; u.uWarp.value = 0;
     // each sky its own: orange haze, hard black, deep stars, dusty brown, gold
-    const SKY: Record<string, [number, number, number]> = { strong: [0.5, 1, 0.95], medic: [0.05, 0, 0.9], explorer: [0.35, 0, 1], builder: [0.6, 1, 0.7], social: [0.9, 1, 0.95] };
+    const SKY: Record<string, [number, number, number]> = { strong: [0.5, 1, 1.05], medic: [0.05, 0, 0.9], explorer: [0.35, 0, 1], builder: [0.6, 1, 1.05], social: [0.9, 1, 0.8] };
     const [neb, other, exposure] = SKY[id];
     u.uNebula.value = neb; u.uOther.value = other;
-    const k = clamp((b - (imp - 2)) / 8, 0, 1), drift = easeInOut(k);
-    const cam = this.lens(this.tmp.copy(o).add(V(1.6 - drift * 0.5, 1.35, 4.6 - drift * 0.6)).add(hit ? shakeAt(b, 0.5 * after(b, imp, 1.0), this.tmp2) : V(0, 0, 0)).clone(), this.tmp3.copy(o).add(V(0, 1.05, 0)).clone(), 34, 4.6, 0.004);
+    // whose sky is it: Lyrra's moon is in the crowded cluster round the black hole, which hangs in Bolzar's sky;
+    // Skyvra came out billions of years on, under an old, dim sky; Nuvexa's universe is young and nearly starless
+    if (id === 'builder') { this.hole(-1, 16, -24, 0, 0); u.uNebula.value = neb; }
+    else if (id === 'medic') { this.hole(14, 9, -70, 0, 0); u.uNebula.value = neb; u.uStar.value = 2.6; }
+    else if (id === 'explorer') { u.uStar.value = 0.45; u.uNebula.value = 0.15; }
+    // Aerolis is in a universe born inside the black hole, still young: hardly any stars and a few small blue galaxies
+    // (drawn by its own sky, aerolisSky); the dome's nebulae and the other-universe filaments are off
+    else if (id === 'social') { u.uStar.value = 0.12; u.uOther.value = 0; u.uNebula.value = 0; }
+    // each world's own sun: the light left over from the ship's last shot was painting every ground orange.
+    // Thalwen: a hard white sun low over the rim. The asteroid: an old, dim sky, a faint cold light. Shardrift: the
+    // haze round the black hole, dull and warm. Methryx: orange through methane haze. Aerolis: gold through cloud.
+    const SUN: Record<string, [THREE.Vector3, number, number]> = { medic: [V(0.9, 0.25, 0.3), 0xffffff, 3.2], explorer: [V(-0.4, 0.5, 0.6), 0xb8c4e0, 0.9], builder: [V(-0.3, 0.4, -1), 0xd8a888, 1.4], strong: [V(0.7, 0.4, 0.6), 0xff9a50, 2.4], social: [V(0.3, 0.26, -0.92), 0xffd890, 2.6] };
+    const [sd, sc, si] = SUN[id]; this.sun(sd, sc, si);
+    // the landing grammar (shot list I1 to I6), in beats from the hit: the world first (-5), the hit (0), the body still,
+    // then a breath (+4), eyes open and the body checks itself (+9), their sky (+14), and only then the line (+19)
+    const ph = b - imp, sky0 = SKYDIR[id];
+    // Nuvexa stands on her raft of hull, whose deck is 0.3 m up
+    const lift = id === 'social' ? 0.3 : 0;
+    const head = o.clone().add(V(0, (id === 'explorer' || id === 'builder' ? 0.95 : id === 'strong' ? 1.0 : 1.55) + lift, 0));
+    let cam: THREE.Camera;
+    if (ph < 0) cam = this.lens(o.clone().add(V(9, 1.4, 16)), o.clone().add(V(-6, 5 + 2 * clamp((ph + 5) / 5, 0, 1), -40)), 53, 30, 0.001); // I1 extreme wide, low: the world
+    else if (ph < 4) cam = this.lens(o.clone().add(V(3.6, 0.7, 6.2)).add(shakeAt(b, 0.5 * after(b, imp, 1.0), this.tmp2)), o.clone().add(V(0, 0.8, 0)), 38, 7, 0.003); // I2 wide, low: the hit
+    else if (ph < 9) cam = this.lens(o.clone().add(V(1.5, 1.05, 2.7)), o.clone().add(V(0, 0.7, 0)), 27, 3.1, 0.006); // I3 medium, held: still, then a breath
+    else if (ph < 14) cam = this.lens(head.clone().add(V(0.4, -0.38, 1.05)), head.clone().add(V(0, -0.1, 0)), 20, 1.2, 0.01); // I4 close-up from a little below: they look down at themselves, and we still see the face
+    else if (ph < 19) { const u = easeInOut(clamp((ph - 14) / 5, 0, 1)); cam = this.lens(head.clone().add(V(sky0.x * 0.35, 0.12, sky0.z * 0.35 + 0.2)), head.clone().add(V(sky0.x * 10, lerp(0.5, sky0.y * 10, u), sky0.z * 10)), 53, 40, 0.001); } // I5 their eyeline up to the sky, from just in front of their eyes
+    else cam = this.lens(head.clone().add(V(0.8, -0.08, 1.55)), head.clone().add(V(0, -0.1, 0)), 27, 1.8, 0.006); // I6 medium close: the look, then the line
     // the light comes down the sky to where they will be
     const tr = this.trails[i]; tr.color = col;
-    if (!hit) { const h = clamp((b - (imp - 2)) / 2, 0, 1); const from = o.clone().add(V(-40, 60, -70)), to = o.clone().add(V(0, 0.4, 0)); tr.draw((s, out) => out.lerpVectors(from, to, Math.max(0, h - s * 0.35)), cam, 0.9, b, 2); }
+    if (!hit && ph > -2.5) { const h = clamp((b - (imp - 2)) / 2, 0, 1); const from = o.clone().add(V(-40, 60, -70)), to = o.clone().add(V(0, 0.4, 0)); tr.draw((s, out) => out.lerpVectors(from, to, Math.max(0, h - s * 0.35)), cam, 0.9, b, 2); }
     else tr.mesh.visible = false;
     if (hit) {
       const q = (x: number, y: number) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, 0, 'YXZ'));
       // one held pose each, for who they are: no stock gesture on a loop
       const POSE: Record<string, [CrewPose, number, Face]> = { strong: ['injured', 0.25, { frown: 0.5, squint: 0.3 }], medic: ['stand', -0.2, { squint: 0.2 }], explorer: ['sit', 0.3, { frown: 0.6 }], builder: ['sit', -0.25, { smile: 0.2 }], social: ['selfie', 0.15, { smile: 0.3 }] };
       const [pose, yaw, face] = POSE[id];
-      const c = this.act(id, o.clone().add(V(0, 0.02, 0)), q(0, yaw), pose, null, face);
-      c.look2(-yaw * 0.6, 0);
+      const breath = ph >= 4 ? 0 : 1, eyes = ph < 9 ? 1 : 0;
+      const c = this.act(id, o.clone().add(V(0, 0.02 + lift, 0)), q(0, yaw), pose, null, ph < 9 ? { blink: eyes, frown: 0.3 * (1 - breath) } : face);
+      if (ph < 9) c.look2(0, 0.35); // still, head down
+      else if (ph < 14) c.look2(-yaw * 0.6, 0.45); // looking at themself: the check
+      // their sky: it is behind them as we see them (the camera is in front), out of the neck's reach for a look-at, so
+      // the head tips up by the sky's own height; the check's head-down (look2 0.45) used to stay on and Bolzar looked
+      // at his feet in I6
+      else { c.setLookTarget(null); c.look2(0, -clamp(Math.asin(sky0.y) + 0.12, 0.15, 0.5)); }
+      if (ph >= 9 && ph < 9.2 && !c.task) c.doTask(CHECK[id], { seconds: 5 * BEAT * 0.9, hands: 'R', prop: id === 'social' ? 'phone' : null });
       this.embers.set({ at: o.clone().add(V(0, 0.3, 0)), c0: col, c1: 0x202020, life: 1.6, speed: 5, drag: 1.4, grav: id === 'explorer' ? 0 : -2, size: 0.06, grow: 0.4, stagger: 0.1 }).play(tt);
     }
     // key light per world, and the colour of their own trail from behind
+    // (on the asteroid the trail's rim sits close in and short, or it lit the rocks behind her red)
     const KEY: Record<string, number> = { strong: 0xffb070, medic: 0xffffff, explorer: 0xdfe8ff, builder: 0xffd0a0, social: 0xffe6a0 };
-    this.setRig([{ p: o.clone().add(V(3, 4, 4)), color: KEY[id], i: id === 'medic' ? 60 : 34, d: 18 }, { p: o.clone().add(V(-2.5, 1.5, -2.5)), color: col, i: 14, d: 9 }, { p: o.clone().add(V(0, 9, -14)), color: KEY[id], i: 16, d: 70 }]);
+    this.setRig([{ p: o.clone().add(V(3, 4, 4)), color: KEY[id], i: ({ medic: 48, builder: 60, social: 22, strong: 44 } as Record<string, number>)[id] ?? 34, d: 18 }, id === 'explorer' ? { p: o.clone().add(V(-1.1, 1.3, -1.1)), color: new THREE.Color(col).lerp(new THREE.Color(0xdfe8ff), 0.45).getHex(), i: 6, d: 2.8 } : { p: o.clone().add(V(-2.5, 1.5, -2.5)), color: col, i: 14, d: 9 }, { p: o.clone().add(V(0, 9, -14)), color: KEY[id], i: id === 'builder' ? 40 : 10, d: 70 }]);
     const f = after(b, imp, 0.45) * 0.8, c2 = new THREE.Color(col).lerp(new THREE.Color(1, 1, 1), 0.7);
     this.fx = { flash: [c2.r * f, c2.g * f, c2.b * f], zoom: 0.05 * after(b, imp, 0.6), exposure };
-    this.card(id, (b - (imp + 1.1)) / 0.5);
-    if (b >= imp + 5.6) this.el.card.style.opacity = '0';
+    this.card(id, (b - (imp + 19.3)) / 0.5);
+    if (b >= imp + 26.6 || b < imp + 19) this.el.card.style.opacity = '0';
     // Skyvra has no air round her: the world goes silent but for what she hears inside her own head
     this.vacuum = id === 'explorer' && hit;
   }
@@ -699,14 +928,45 @@ export class Montage {
       el.style.cssText = 'position:absolute;left:0;top:0;font:600 clamp(11px,1.5vw,18px) var(--font-ui);letter-spacing:.16em;text-transform:uppercase;white-space:nowrap;pointer-events:none;text-shadow:0 0 8px #000,0 0 2px #000;will-change:transform;opacity:0;transition:opacity .25s';
       this.el.root.appendChild(el); this.tags[i] = el;
     }
-    if (!at) { el.style.opacity = '0'; return; }
+    if (!at) { el.style.opacity = '0'; this.tagPos[i] = null; return; }
     const id = ORDER[i], c = new THREE.Color(id === 'scientist' ? this.playerGlow() : TRAIL[id]).lerp(new THREE.Color(1, 1, 1), 0.45);
+    // only the name rides the light: the fate is written in the list once it is settled (see fateList)
     const name = t(`crew.${id}.name`);
     if (el.textContent !== name) el.textContent = name;
     el.style.color = `#${c.getHexString()}`;
     const p = at.clone().project(cam), w = this.el.root.clientWidth || window.innerWidth, h = this.el.root.clientHeight || window.innerHeight;
-    el.style.transform = `translate(${((p.x * 0.5 + 0.5) * w + 14).toFixed(1)}px, ${((-p.y * 0.5 + 0.5) * h - 22).toFixed(1)}px)`;
+    this.tagPos[i] = [(p.x * 0.5 + 0.5) * w + 14, (-p.y * 0.5 + 0.5) * h - 22];
     el.style.opacity = '1';
+  }
+  private tagPos: ([number, number] | null)[] = [];
+  /** Push overlapping names apart (top to bottom), then place them. */
+  private layoutTags() {
+    const live = this.tagPos.map((p, i) => (p ? { i, x: p[0], y: p[1] } : null)).filter(Boolean) as { i: number; x: number; y: number }[];
+    live.sort((a, b) => a.y - b.y);
+    for (let a = 0; a < live.length; a++) for (let b = 0; b < a; b++) {
+      const A = live[a], B = live[b];
+      if (Math.abs(A.x - B.x) < 120 && A.y - B.y < 24) A.y = B.y + 24;
+    }
+    for (const L of live) this.tags[L.i].style.transform = `translate(${L.x.toFixed(1)}px, ${L.y.toFixed(1)}px)`;
+  }
+  private fateEl: HTMLElement | null = null;
+  /** The list of fates, bottom left, a line written as each one is settled. */
+  private fateList(shown: boolean[]) {
+    if (!this.fateEl) {
+      const el = document.createElement('div');
+      el.style.cssText = 'position:absolute;left:4%;bottom:27%;font:600 clamp(11px,1.35vw,16px) var(--font-ui);letter-spacing:.14em;text-transform:uppercase;line-height:1.7;pointer-events:none;text-shadow:0 0 8px #000,0 0 2px #000;transition:opacity .4s';
+      this.el.root.appendChild(el); this.fateEl = el;
+      ORDER.forEach((id) => { const d = document.createElement('div'); d.style.cssText = 'opacity:0;transition:opacity .6s'; el.appendChild(d); });
+    }
+    const el = this.fateEl;
+    el.style.opacity = shown.some(Boolean) ? '1' : '0';
+    ORDER.forEach((id, i) => {
+      const d = el.children[i] as HTMLElement, c = new THREE.Color(id === 'scientist' ? this.playerGlow() : TRAIL[id]).lerp(new THREE.Color(1, 1, 1), 0.45);
+      const txt = `${t(`crew.${id}.name`)} · ${t(`film.fate.${id}`)}`;
+      if (d.textContent !== txt) d.textContent = txt;
+      d.style.color = `#${c.getHexString()}`;
+      d.style.opacity = shown[i] ? '1' : '0';
+    });
   }
 
   private card(id: CrewId | null, show: number) {
@@ -732,13 +992,16 @@ export class Montage {
     const set = this.set, ship = set.ship, tmp = this.tmp;
     const down = V(0, 0, -1);
     this.cues.push(
-      { b: 20.4, fn: () => { this.ui.subtitle('cine.line8', 'crew.strong.name'); this.cast.strong.say(voice.duration('cine.line8') ?? 2); } },
-      { b: 27.4, fn: () => this.ui.subtitle('op.21', 'crew.explorer.name') },
-      { b: 31, fn: () => this.ui.subtitle(null) },
-      ...ORDER.slice(0, 5).map((id, i) => ({ b: beat.impacts[i] + 1.3, fn: () => { this.ui.subtitle(`film.${id}`, `crew.${id}.name`); this.cast[id].say(voice.duration(`film.${id}`) ?? 1.4); } })),
-      ...ORDER.slice(0, 5).map((_, i) => ({ b: beat.impacts[i] + 5.95, fn: () => this.ui.subtitle(null) })),
+      // "Hold on to something!" is said in the pull, as the deck tips (cinematic.ts); not twice
+      // over the hands (H2): she calls it as the fingers touch; it runs on over the black (an L cut)
+      { b: 26.8, fn: () => this.ui.subtitle('op.21', 'crew.explorer.name') },
+      // said over the six fates, which hold long enough to be read
+      { b: 57.5, fn: () => this.ui.subtitle('mz.science', 'mz.name') },
+      { b: 32.7, fn: () => this.ui.subtitle(null) },
+      ...ORDER.slice(0, 5).map((id, i) => ({ b: beat.impacts[i] + 20.4, fn: () => { this.ui.subtitle(`film.${id}`, `crew.${id}.name`); this.cast[id].say(voice.duration(`film.${id}`) ?? 1.4); } })),
+      ...ORDER.slice(0, 5).map((_, i) => ({ b: beat.impacts[i] + 26.9, fn: () => this.ui.subtitle(null) })),
       // early enough to be said whole before the title leaves (it was cut off after one word at 129.2)
-      { b: Math.min(123, S.end - ((voice.duration('film.scientist') ?? 2.5) + 0.8) / BEAT), fn: () => this.ui.subtitle('film.scientist', 'crew.scientist.name') },
+      { b: Math.min(S.hit + 3, S.end - ((voice.duration('film.scientist') ?? 2.5) + 0.8) / BEAT), fn: () => this.ui.subtitle('film.scientist', 'crew.scientist.name') },
     );
 
     // ---- Act I: The Horizon ----
@@ -838,7 +1101,7 @@ export class Montage {
     }, () => set.show('interior'));
 
     // Six in a ring above the hole, hand reaching for hand. The ring is breaking.
-    P(24, 28, 'deep', (k, b) => {
+    P(24, 27, 'deep', (k, b) => {
       const e = easeInOut(k), R = lerp(1.0, 1.9, e * e);
       ship.group.visible = false;
       const spin = b * 0.03;
@@ -862,10 +1125,10 @@ export class Montage {
       this.lens(V(0.3, 8.5 + e * 3.5, 0.4), V(0, 0, 0), 44, 10, 0, 0.3 + b * 0.008, down);
     }, () => set.show('deep'));
 
-    // Two hands, a few centimetres short.
-    P(28, 31, 'deep', (k, b) => {
+    // H2 two hands: they reach, the fingertips touch, hold for a breath, and slide apart. One action, no flourish
+    P(27, 31, 'deep', (k, b) => {
       ship.group.visible = false;
-      const gap = 0.1 + k * k * 0.16;
+      const gap = lerp(0.14, 0.074, smoothstep(0, 0.32, k)) + 0.26 * smoothstep(0.55, 1, k) * smoothstep(0.55, 1, k); // fingertips meet near 0.074
       const fit = (c: Character, side: 'L' | 'R', want: number, id: CrewId, o: THREE.Vector3, tilt: number) => {
         // the arm's length differs per body: steer the body so the wrist lands on its mark
         const w = this.handOf(c, side);
@@ -879,8 +1142,8 @@ export class Montage {
       this.hole(0.5, 0.3, -30);
       this.sun(V(0, 0.2, -1), 0xffa060, 3);
       this.setRig([{ p: V(0.1, 0.5, 0.9), color: 0xbfd6ff, i: 3, d: 4 }, { p: V(-0.6, -0.3, -0.6), color: 0xff9a50, i: 2.5, d: 4 }]);
-      const dist = lerp(0.95, 0.82, k);
-      this.lens(V(lerp(-0.08, 0.08, k), 0.05, dist), V(0, 0, 0), 26, dist, 0.012, -0.06);
+      const dist = lerp(0.9, 0.8, k);
+      this.lens(V(lerp(-0.06, 0.06, k), 0.05, dist), V(0, 0, 0), 26, dist, 0.012, -0.06);
       this.fx = { exposure: 0.5 };
     }, () => set.show('deep'));
 
@@ -908,8 +1171,11 @@ export class Montage {
         ship.group.visible = false;
         const eu = o.spin ? o.spin(b) : new THREE.Euler(-1.1, 0, 0);
         const t = b * BEAT;
-        const c = this.act(id, V(nz(t * 2.6, n) * 0.3, -0.9 + nz(t * 2.2, n + 3) * 0.3, nz(t * 2, n + 6) * 0.25), new THREE.Quaternion().setFromEuler(eu), 'float', flail(FALL[id], t, n * 4.3, o.thrash ?? 0.8), FACE[id]);
-        c.look2(nz(t * 2.7, n + 1) * 0.8, nz(t * 2.1, n + 2) * 0.3);
+        // H3: each one's own reaction to falling, played across the single (k 0 to 1), a beat of shock first
+        const [body, face, look] = this.fallReact(id, k, t, n, o.thrash ?? 0.8);
+        const c = this.act(id, V(nz(t * 2.6, n) * 0.3, -0.9 + nz(t * 2.2, n + 3) * 0.3, nz(t * 2, n + 6) * 0.25), new THREE.Quaternion().setFromEuler(eu), 'float', body, face);
+        if (look === 'hole') { c.setLookTarget(V(30 * o.dir.x, 30 * o.dir.y, -70)); c.look2(0, 0); }
+        else { c.setLookTarget(null); c.look2(look[0], look[1]); }
         const col = id === 'scientist' ? this.playerGlow() : TRAIL[id];
         const h = c.chest.getWorldPosition(tmp).clone();
         const cam = this.lens(o.cam(k).add(shakeAt(b, 0.012, this.tmp2)), o.aim ?? h, o.fov ?? 32, 3.2, 0.006, o.roll ? o.roll(k) : 0);
@@ -963,51 +1229,65 @@ export class Montage {
     const fh = beat.faceHits;
     ORDER.forEach((id, i) => face(fh[i], fh[i + 1] ?? S.planet, id));
 
-    P(56, 62, 'home', (k, b) => {
-      const e = easeInOut(k);
-      // one system, six worlds: the green world near us, the ringed giant and its orange moon beyond, a grey moon, a
-      // broken moonlet, a band of rock, and the cloud planet sunward. Six lights break from one point and each goes to a
-      // different one, its name on it until it gets there.
-      const sys = this.system();
-      sys.group.visible = true;
-      const cam = this.lens(V(-260 + e * 120, 420 - e * 60, 2500 - e * 160), V(520, 40, -300), 40, 0, 0, -0.03 + e * 0.03);
-      const origin = this.tmp.set(-520, 1250, -300);
+    // Six fates. Thrown clear of the breaking ship above the edge, each on their own line. Seen from here nobody is
+    // ever seen to cross: four lights fall to the black and redden and fade at its edge (real: an outside observer
+    // never sees anything go in). Lyrra's is whirled round just outside the edge and flung away; Bolzar's is caught
+    // going round and round. MegaZroN says what is theory.
+    P(56, S.landing - 2, 'deep', (k, b) => {
+      const C = this.tmp.set(0, 30000, 0).clone(), hc = C.clone().add(V(0, -1.5, -14));
+      this.hole(0, -1.5, -14, 0.25, 0);
+      const cam = this.lens(C.clone().add(V(Math.sin(k * 0.6) * 0.3, 0.2, 0)), hc.clone().add(V(0, 0.6, 0)), 52, 0, 0);
+      const origin = C.clone().add(V(-0.4, 2.0, -7));
+      const rim = (a: number, r: number, z = 0) => hc.clone().add(V(Math.cos(a) * r, Math.sin(a) * r * 0.9, z));
+      const FALL_TO: Record<string, THREE.Vector3> = { scientist: rim(-1.2, 1.9), explorer: rim(2.5, 1.9), strong: rim(0.4, 1.9), social: rim(3.6, 1.9) };
+      const settled: boolean[] = [];
       this.trails.forEach((tr, i) => {
         const id = ORDER[i];
         tr.color = i === 5 ? this.playerGlow() : TRAIL[id];
-        const end = sys.at[id];
-        const head = smoothstep(0.08 + i * 0.03, 0.82 + i * 0.03, k);
-        // a bowed path, so six lines from one point do not read as one
-        const mid = this.tmp2.copy(origin).lerp(end, 0.5).add(this.tmp3.set(Math.sin(i * 2.4) * 260, 160 + Math.cos(i * 1.7) * 120, Math.cos(i * 2.4) * 200));
-        const at = (t: number, o: THREE.Vector3) => { const a = 1 - t; return o.set(a * a * origin.x + 2 * a * t * mid.x + t * t * end.x, a * a * origin.y + 2 * a * t * mid.y + t * t * end.y, a * a * origin.z + 2 * a * t * mid.z + t * t * end.z); };
-        tr.draw((s, o) => at(Math.max(0, head - s * 0.28), o), cam, 2.4 + head * 2, b, head > 0 ? 1.7 : 0);
-        this.tag(i, head > 0.1 && head < 0.985 ? at(head, new THREE.Vector3()) : null, cam);
+        // set off one after another so the six lights (and their names) are apart from the first moment
+        const head = smoothstep(0.03 + i * 0.07, 0.62 + i * 0.06, k);
+        settled[i] = FALL_TO[id] ? head > 0.86 : head > 0.8;
+        let at: (t: number, o: THREE.Vector3) => THREE.Vector3;
+        if (FALL_TO[id]) {
+          const end = FALL_TO[id], mid = origin.clone().lerp(end, 0.5).add(V(Math.sin(i * 2.4) * 1.6, 1.2 + Math.cos(i * 1.7) * 0.6, 0.5));
+          at = (t, o) => { const a = 1 - t; return o.set(a * a * origin.x + 2 * a * t * mid.x + t * t * end.x, a * a * origin.y + 2 * a * t * mid.y + t * t * end.y, a * a * origin.z + 2 * a * t * mid.z + t * t * end.z); };
+        } else if (id === 'medic') {
+          // whirled round just outside the edge, then flung clear
+          at = (t, o) => { const th = 1.9 + t * 4.6, r = t < 0.75 ? lerp(5.5, 2.5, smoothstep(0, 0.45, t)) : lerp(2.5, 12, smoothstep(0.75, 1, t)); return o.copy(rim(th, r, 0.4)).lerp(origin, 1 - smoothstep(0, 0.22, t)); };
+        } else {
+          // caught going round: an orbit that does not close
+          at = (t, o) => { const th = -1.4 - t * 5.2, r = lerp(6.5, 3.6, smoothstep(0, 0.5, t)); return o.copy(rim(th, r, -0.6)).lerp(origin, 1 - smoothstep(0, 0.22, t)); };
+        }
+        // the fallers redden and fade at the edge: from out here nothing is ever seen to go in
+        const fade = FALL_TO[id] ? 1 - smoothstep(0.82, 1, head) : 1;
+        tr.draw((s, o) => at(Math.max(0, head - s * 0.3), o), cam, (0.03 + head * 0.03) * fade, b, head > 0 && fade > 0.02 ? 1.7 * fade : 0);
+        this.tag(i, head > 0.06 && fade > 0.4 ? at(head, new THREE.Vector3()) : null, cam);
       });
-      this.tagsOn = true; this.sysOn = true;
-      const u = set.dome.uniforms;
-      u.uBH.value = 0; u.uWarp.value = 0; u.uOther.value = 0; u.uNebula.value = 0.6;
-      const pf = after(b, 56, 0.6) * 0.15;
-      // the break itself: a flash where the one light becomes six
-      const br = after(b, 56.4, 0.9) * 0.35;
-      this.fx = { flash: [pf + br, pf + br, pf + br * 0.9], exposure: 1.15 };
-    }, () => set.show('home'));
+      this.layoutTags();
+      this.fateList(settled);
+      this.tagsOn = true;
+      const br = after(b, 56.2, 0.9) * 0.25;
+      this.fx = { flash: [br, br, br * 0.9], exposure: 1.1 };
+    }, () => set.show('deep'));
 
+    { const f = this.shots[this.shots.length - 1]; if (f && f.from === 56) f.holdVoice = true; }
     // ---- Act III: The Landing ----
     // Each of the other five comes down on a world of its own: its own sky, its own ground. The light comes in, the
     // hit lands on the downbeat, then them, a name and a world, and one line said to its end before the next one falls.
     ORDER.slice(0, 5).forEach((id, i) => {
       const imp = beat.impacts[i];
-      this.shots.push({ from: imp - 2, to: imp + 6, where: 'deep', at: (k, b) => this.arrive(id, i, b, imp), enter: () => set.show('deep'), holdVoice: true });
+      // MegaZroN's line has been said whole by now (the fates shot holds for it): its subtitle goes with the cut
+      this.shots.push({ from: imp - 5, to: imp + 27, where: 'deep', at: (k, b) => this.arrive(id, i, b, imp), enter: () => { set.show('deep'); if (i === 0) this.ui.subtitle(null); }, holdVoice: true });
     });
 
     // ---- Act IV: The player comes down ----
-    P(102, 108, 'world', (k, b) => this.lookUp(k, b), () => this.setLand('scientist'));
-    P(108, 112, 'world', (k, b) => this.falling(k, b, 0));
-    P(112, 116, 'world', (k, b) => this.falling(k, b, 1));
-    P(116, 118, 'world', (k, b) => this.falling(k, b, 2));
-    P(118, 119, 'world', (k, b) => this.falling(k, b, 3));
-    P(119, 120, 'world', (k, b) => this.falling(k, b, 4));
-    P(120, S.end + 1, 'world', (k, b) => this.titleShot(k, b));
+    P(S.rise - 10, S.rise - 4, 'world', (k, b) => this.lookUp(k, b), () => this.setLand('scientist'));
+    P(S.rise - 4, S.rise, 'world', (k, b) => this.falling(k, b, 0));
+    P(S.rise, S.rise + 4, 'world', (k, b) => this.falling(k, b, 1));
+    P(S.rise + 4, S.rise + 6, 'world', (k, b) => this.falling(k, b, 2));
+    P(S.rise + 6, S.rise + 7, 'world', (k, b) => this.falling(k, b, 3));
+    P(S.rise + 7, S.hit, 'world', (k, b) => this.falling(k, b, 4));
+    P(S.hit, S.end + 1, 'world', (k, b) => this.titleShot(k, b));
   }
 
   private handOf(c: Character, side: 'L' | 'R') { return (side === 'L' ? c.handL : c.handR).getWorldPosition(new THREE.Vector3()); }
@@ -1126,7 +1406,7 @@ export class Montage {
   /** The player, in pieces of a fall that gets shorter and closer every cut. */
   private falling(k: number, b: number, n: number) {
     const l = this.land('scientist'), col = this.playerGlow();
-    const u = (b - 108) / 12; // 0 at the first cut, 1 at the ground
+    const u = (b - (S.hit - 12)) / 12; // 0 at the first cut, 1 at the ground
     const alt = 480 * Math.pow(1 - u, 1.6) + 8;
     const p = l.at.clone().addScaledVector(l.from, alt);
     const c = this.act('scientist', p, new THREE.Quaternion().setFromEuler(new THREE.Euler(1.3, 0.25, Math.sin(b * 0.4) * 0.2)), 'float', { ...FALL.scientist, armL: wob(FALL.scientist.armL!, b, 1, 0.08), armR: wob(FALL.scientist.armR!, b, 3, 0.08), hair: [0, 0, -1] }, { fear: 0.95, open: 0.65 });
@@ -1144,7 +1424,7 @@ export class Montage {
     tr.draw((s, o) => o.copy(chest).addScaledVector(dir, 0.6 + s * 60), cam, 0.42, b, 0.7);
     this.fire.set({ at: chest, c0: 0xffffff, c1: col, life: 0.7, speed: 3, drag: 0.5, grav: -40, size: 0.05, grow: 0.5, stagger: 0.6 }).play(0.6 + (b % 1) * 0.3);
     this.setRig([{ p: chest.clone().add(V(0, -2, 0.5)), color: col, i: 5, d: 8 }, { p: chest.clone().add(V(1.5, 1.5, 2)), color: 0xfff0e0, i: 4, d: 7 }]);
-    this.card('scientist', n === 0 ? (b - 109) / 0.5 : 0);
+    this.card('scientist', n === 0 ? (b - (S.hit - 11)) / 0.5 : 0);
     if (n > 0) this.el.card.style.opacity = '0';
     const hit = after(b % 1, 0, 0.5) * (0.05 + u * 0.15) + (n === 4 ? k * k * 1.4 : 0);
     this.fx = { zoom: 0.015 + u * 0.07, lines: u * 0.5, flash: [hit, hit, hit] };
@@ -1184,7 +1464,7 @@ export class Montage {
     // little behind the music, and catches up while the player's light is still far off)
     const cur = this.cur;
     if (cur?.holdVoice && this.time / BEAT >= cur.to && voice.remaining() > 0.05) { this.lag += this.time - Math.min(was, cur.to * BEAT - 0.001); this.time = Math.min(was, cur.to * BEAT - 0.001); }
-    else if (this.lag > 0 && this.time / BEAT >= 102 && this.time / BEAT < 107.5) { const d = Math.min(this.lag, dt * 0.8); this.lag -= d; this.time += d; }
+    else if (this.lag > 0 && this.time / BEAT >= S.hit - 18 && this.time / BEAT < S.hit - 12.5) { const d = Math.min(this.lag, dt * 0.8); this.lag -= d; this.time += d; }
     const b = this.time / BEAT;
     // never leave on a line still being said
     if (b >= S.end) { if (voice.remaining() > 0) { this.time = (S.end - 0.02) * BEAT; return; } this.finish(); return; }
@@ -1215,10 +1495,11 @@ export class Montage {
       shot.enter?.();
     }
     for (const c of this.cues) if (!c.done && b >= c.b) { c.done = true; c.fn(); }
-    this.tagsOn = false; this.sysOn = false; this.stageOn = false; const wasVac = this.vacuum; this.vacuum = false;
+    this.tagsOn = false; this.sysOn = false; this.stageOn = false; this.set.dome.uniforms.uStar.value = 1; const wasVac = this.vacuum; this.vacuum = false;
     if (shot) shot.at(clamp((b - shot.from) / (shot.to - shot.from), 0, 1), b);
-    if (!this.tagsOn) for (const el of this.tags) el.style.opacity = '0';
+    if (!this.tagsOn) { for (const el of this.tags) el.style.opacity = '0'; if (this.fateEl) this.fateEl.style.opacity = '0'; }
     if (!this.sysOn && this.sys) this.sys.group.visible = false;
+    if (!this.sysOn && this.homeSun) { ((this.set.home.material as THREE.ShaderMaterial).uniforms.uSun.value as THREE.Vector3).copy(this.homeSun); this.homeSun = null; }
     if (!this.stageOn && this.stageG) this.stageG.visible = false;
     if (this.vacuum !== wasVac) audio.vacuum(this.vacuum);
     // shots that place a body by where its hand ended up need one solved pose first, or their first frame snaps
@@ -1241,3 +1522,226 @@ export class Montage {
 }
 
 const DECK: Record<string, [number, number]> = { social: [-1.5, 1.4], strong: [-0.25, 2.0], medic: [1.15, 1.75], explorer: [1.95, 0.75], builder: [-2.5, 0.5], scientist: [0.3, -0.45] };
+
+/**
+ * Methryx's ringed giant (the landing's horizon): turbulent belts and zones with a storm, and a ring of many thin
+ * bands with a dark gap, lit from the sun's side, with the planet's shadow lying across the ring behind it.
+ */
+function ringedGiant(g: THREE.Group, at: THREE.Vector3, r: number, sunDir: THREE.Vector3) {
+  const W = 512, H = 256, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const x2 = cv.getContext('2d')!, img = x2.createImageData(W, H), d = img.data;
+  const h1 = (n: number) => { const v = Math.sin(n * 127.1) * 43758.5453; return v - Math.floor(v); };
+  const vn = (x: number) => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return h1(i) * (1 - u) + h1(i + 1) * u; };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const lat = y / H, lon = x / W * Math.PI * 2;
+    // the belts are bent by eddies, more so near the edges of each band
+    const warp = (vn(x * 0.03 + y * 0.11) - 0.5) * 7 + Math.sin(lon * 3 + lat * 20) * 2.2;
+    const yy = y + warp;
+    const band = 0.5 + 0.5 * Math.sin(yy * 0.19) * Math.cos(yy * 0.051 + 1) + 0.18 * Math.sin(yy * 0.83);
+    const fine = vn(x * 0.09 + yy * 0.7) * 0.18;
+    // a storm, an oval with a pale rim, in the southern belts
+    const sx = (x - W * 0.62) / 34, sy = (y - H * 0.64) / 15, so = Math.hypot(sx, sy);
+    const storm = so < 1.25 ? (so < 1 ? 0.35 : 0.65) * (1 - Math.max(0, so - 1) * 4) : 0;
+    const v = Math.min(1, Math.max(0, band * 0.85 + fine));
+    let R = 150 + 95 * v, G = 100 + 75 * v, B = 55 + 55 * v;
+    if (storm) { R = R * (1 - storm) + 210 * storm; G = G * (1 - storm) + 120 * storm; B = B * (1 - storm) + 80 * storm; }
+    // the poles darker and greyer
+    const pole = Math.pow(Math.abs(lat - 0.5) * 2, 3) * 0.45;
+    const k = (y * W + x) * 4; d[k] = R * (1 - pole); d[k + 1] = G * (1 - pole * 0.9); d[k + 2] = B * (1 - pole * 0.6); d[k + 3] = 255;
+  }
+  x2.putImageData(img, 0, 0);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 4;
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 96, 48), new THREE.MeshStandardMaterial({ map: tx, roughness: 1, emissive: 0x3a2a10, emissiveIntensity: 0.5 }));
+  ball.position.copy(at); ball.rotation.z = 0.35; g.add(ball);
+  const ri = r * 1.27, ro = r * 2.05;
+  const geo = new THREE.RingGeometry(ri, ro, 160, 1);
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, side: THREE.DoubleSide, depthWrite: false,
+    fog: true,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uR: { value: r }, uIn: { value: ri }, uOut: { value: ro }, uSun: { value: sunDir.clone().normalize() } }]),
+    // the ring's centre is the planet's: the offset from it, in the world's axes, wherever the stage is moved
+    vertexShader: '#include <fog_pars_vertex>\nvarying vec3 vO; varying vec2 vL; void main(){ vL = position.xy; vec4 w = modelMatrix * vec4(position, 1.0); vO = w.xyz - (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
+    fragmentShader: `
+      #include <fog_pars_fragment>
+      uniform vec3 uSun; uniform float uR, uIn, uOut; varying vec3 vO; varying vec2 vL;
+      float h(float n){ return fract(sin(n * 91.7) * 43758.5); }
+      void main(){
+        float t = (length(vL) - uIn) / (uOut - uIn);
+        // many thin ringlets of differing density, a wide dark gap two thirds out, a faint inner ring
+        float q = t * 140.0, i = floor(q);
+        float d = mix(h(i), h(i + 1.0), smoothstep(0.0, 1.0, fract(q)));
+        d = 0.35 + 0.65 * d;
+        d *= 0.55 + 0.45 * sin(t * 37.0 + 1.3) * sin(t * 11.0);
+        d *= 1.0 - 0.95 * smoothstep(0.6, 0.62, t) * (1.0 - smoothstep(0.68, 0.7, t));
+        d *= mix(0.25, 1.0, smoothstep(0.0, 0.18, t)) * (1.0 - smoothstep(0.93, 1.0, t));
+        // the planet's shadow: is the sun blocked on the way from here?
+        vec3 o = vO; float b = dot(o, uSun), c = dot(o, o) - uR * uR;
+        float lit = (b < 0.0 && b * b - c > 0.0) ? 0.06 : 1.0;
+        vec3 col = mix(vec3(0.62, 0.55, 0.45), vec3(0.88, 0.8, 0.66), h(i * 1.7)) * lit;
+        gl_FragColor = vec4(col, clamp(d, 0.0, 1.0) * 0.85);
+        #include <fog_fragment>
+      }`,
+  });
+  const ring = new THREE.Mesh(geo, mat);
+  ring.position.copy(at); ring.rotation.set(-1.3, 0.3, 0); g.add(ring);
+}
+
+/** Aerolis's cloud floor: the deck's own cells (its geometry) lit from the low sun, the seams between them in shade,
+ * fine billows on every cell, the far deck going into the gold haze of the sky above it. */
+function cloudFloorMat(sun: THREE.Vector3) {
+  return new THREE.ShaderMaterial({
+    fog: true,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSun: { value: sun } }]),
+    vertexShader: '#include <fog_pars_vertex>\nvarying vec3 vW; varying vec2 vR; varying vec3 vN; varying float vH; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vH = position.y; vN = normalize(mat3(modelMatrix) * normal); vR = w.xz - (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
+    fragmentShader: `
+      #include <fog_pars_fragment>
+      ${NOISE_GLSL}
+      uniform vec3 uSun; varying vec3 vW; varying vec2 vR; varying vec3 vN; varying float vH;
+      float bil(vec2 p){ float a = 0.0, w = 0.55; for (int i = 0; i < 5; i++) { a += w * (1.0 - abs(vnoise2(p) * 2.0 - 1.0)); p = p * 2.03 + 7.1; w *= 0.5; } return a; }
+      void main(){
+        float r = length(vR);
+        // fine billows on the cells, fading out with distance (they would shimmer)
+        vec2 p = vR * 0.35;
+        float h = bil(p), hs = bil(p + normalize(uSun.xz + 1e-4) * 0.08), near = 1.0 - smoothstep(25.0, 140.0, r);
+        vec3 N = normalize(vN);
+        // soft light that wraps round each cell, as light does through cloud; the seams (low) in shade
+        float wrap = clamp(dot(N, uSun) * 0.6 + 0.45, 0.0, 1.0);
+        float seam = smoothstep(-2.5, 3.0, vH - (-(r * r) / 14000.0));
+        float lit = wrap * mix(0.55, 1.0, seam) + (hs - h) * 1.8 * near + (h - 0.6) * 0.25 * near;
+        vec3 shade = vec3(0.42, 0.33, 0.24), sunny = vec3(1.0, 0.9, 0.68);
+        vec3 col = mix(shade, sunny, clamp(lit, 0.0, 1.0));
+        // a little cooler down in the seams, warmer on the sunlit tops
+        col = mix(col, col * vec3(0.86, 0.9, 1.05), (1.0 - seam) * 0.5);
+        // the far deck into the haze of the sky (aerolisSky's horizon colour)
+        vec3 dir = normalize(vW - cameraPosition);
+        float sd = max(dot(dir, uSun), 0.0);
+        vec3 hz = mix(vec3(0.86, 0.62, 0.32), vec3(1.0, 0.86, 0.58), pow(sd, 3.0)) * (0.55 + 0.6 * pow(sd, 8.0));
+        col = mix(col, hz, smoothstep(60.0, 850.0, r) * 0.92);
+        gl_FragColor = vec4(col, 1.0);
+        #include <fog_fragment>
+      }`,
+  });
+}
+
+/** The piece of the liner Nuvexa rides: a torn section of hull plating, ragged at the edges, scorched, with the
+ * ribs of its frame under it (a box read as a table). About 6 by 4 m. */
+function hullRaft() {
+  const rnd = mulberry32(77), sh = new THREE.Shape(), N = 28;
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2, r = 1 + (rnd() - 0.5) * 0.28 + (i % 3 === 0 ? -0.12 * rnd() : 0);
+    const x = Math.cos(a) * 3 * r, y = Math.sin(a) * 2 * r;
+    if (i === 0) sh.moveTo(x, y); else sh.lineTo(x, y);
+  }
+  const plate = new THREE.ExtrudeGeometry(sh, { depth: 0.12, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.02, bevelSegments: 1 });
+  plate.rotateX(-Math.PI / 2);
+  // the hull's curve: the plate bows along its length
+  const p = plate.getAttribute('position');
+  const col = new Float32Array(p.count * 3), n = new Simplex(5);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    p.setY(i, p.getY(i) - (x * x) * 0.018);
+    // scorched towards the torn rim, panel seams every 1.5 m
+    const rim = Math.min(1, Math.max(0, (Math.hypot(x / 3, z / 2) - 0.7) / 0.3));
+    const seam = Math.abs(((x + 30) % 1.5) - 0.75) < 0.03 ? 0.75 : 1;
+    const k = (0.78 + 0.12 * n.noise2(x * 0.9, z * 0.9)) * (1 - rim * 0.65) * seam;
+    col[i * 3] = k; col[i * 3 + 1] = k * 0.99; col[i * 3 + 2] = k * 1.03;
+  }
+  plate.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  plate.computeVertexNormals();
+  const m = new THREE.MeshStandardMaterial({ color: 0xb4b6bb, roughness: 0.78, metalness: 0.45, vertexColors: true }); // scuffed and sooted: a broad dull sheen, no hard sun glint (WIP6)
+  const g = new THREE.Group(); g.add(new THREE.Mesh(plate, m));
+  const rib = new THREE.MeshStandardMaterial({ color: 0x5a5d64, roughness: 0.6, metalness: 0.7 });
+  for (let i = -2; i <= 2; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.22, 3.4 - Math.abs(i) * 0.4), rib); b.position.set(i * 1.3, -0.14 - i * i * 0.03, 0); g.add(b); }
+  return g;
+}
+
+/** A heap of cumulus about r across: rounded puffs piled on a flat-ish base, smaller and fewer towards the top. */
+function cumulus(r: number, seed: number) {
+  const rnd = mulberry32(seed), n = new Simplex(seed), parts: THREE.BufferGeometry[] = [];
+  const count = 16 + Math.floor(rnd() * 8);
+  for (let i = 0; i < count; i++) {
+    const lift = rnd() ** 1.3, spread = r * (1 - lift * 0.65), a = rnd() * Math.PI * 2, q = Math.sqrt(rnd()) * spread * 0.7;
+    const pr = r * (0.28 + rnd() * 0.22) * (1 - lift * 0.45);
+    const raw = new THREE.IcosahedronGeometry(1, 3); raw.deleteAttribute('normal'); raw.deleteAttribute('uv');
+    const geo = mergeVertices(raw), p = geo.getAttribute('position');
+    for (let k = 0; k < p.count; k++) {
+      const x = p.getX(k), y = p.getY(k), z = p.getZ(k);
+      // a lumpy puff with a flatter underside
+      const m = 1 + 0.22 * n.noise2(x * 2.1 + i, y * 2.1 - z) + 0.1 * n.noise2(z * 4.3 + i, x * 4.3);
+      p.setXYZ(k, Math.cos(a) * q + x * pr * m, lift * r * 1.1 + (y < 0 ? y * 0.45 : y) * pr * m, Math.sin(a) * q + z * pr * m);
+    }
+    parts.push(geo);
+  }
+  const g = mergeGeometries(parts); parts.forEach((x) => x.dispose());
+  g.computeVertexNormals();
+  return g;
+}
+
+/** Aerolis's sky: thick, hot air, gold to the horizon round the sun, thinning to the dark of a young universe
+ * overhead, where a few small blue galaxies show (no old stars to speak of). Drawn over the far deck, so its edge
+ * melts into the haze. */
+function aerolisSky(sun: THREE.Vector3) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(900, 48, 24), new THREE.ShaderMaterial({
+    side: THREE.BackSide, transparent: true, depthWrite: false, fog: false,
+    uniforms: { uSun: { value: sun.clone().normalize() } },
+    vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `
+      ${NOISE_GLSL}
+      uniform vec3 uSun; varying vec3 vD;
+      void main(){
+        vec3 d = normalize(vD);
+        float up = clamp(d.y, -1.0, 1.0), s = max(dot(d, uSun), 0.0);
+        // haze: thick at the horizon, thin overhead; brighter towards the sun
+        float thick = exp(-max(up, 0.0) * 5.0);
+        vec3 hz = mix(vec3(0.86, 0.62, 0.32), vec3(1.0, 0.86, 0.58), pow(s, 3.0));
+        vec3 col = hz * (0.55 + 0.6 * pow(s, 8.0)) + vec3(1.0, 0.9, 0.7) * pow(s, 300.0) * 3.0;
+        float a = clamp(thick * 1.05 + pow(s, 6.0) * 0.6, 0.0, 1.0);
+        // the dark above: a deep violet-brown, not black, the air still in it
+        col = mix(vec3(0.06, 0.04, 0.07), col, a);
+        a = max(a, 0.55 + 0.45 * thick);
+        // a few small blue galaxies, only where the air is thin: few, but each a few degrees across with a bright
+        // core, so they read at 540p (WIP6: at a third of a degree they never showed)
+        vec3 p = d * 7.0, id = floor(p), f = fract(p) - 0.5;
+        float h = hash13(id);
+        if (h > 0.8) {
+          vec3 q = f - (hash33(id) - 0.5) * 0.4; q -= d * dot(q, d);
+          vec3 ax = hash33(id + 3.0) - 0.5; ax -= d * dot(ax, d); ax = normalize(ax);
+          float u = dot(q, ax), v = length(q - ax * u), sz = 0.7 + (h - 0.8) * 6.0;
+          // young galaxies, still making stars: a deep blue disc, knots of blue star-forming clumps along it, a
+          // small blue-white core (owner: bluer; they read white against the violet-brown)
+          float disc = exp(-(u * u * 70.0 + v * v * 420.0) / sz), core = exp(-(u * u + v * v) * 2600.0 / sz);
+          float knots = smoothstep(0.62, 0.9, vnoise(vec3(u, v, h) * 38.0)) * disc;
+          vec3 gc = vec3(0.16, 0.36, 1.1) * disc * 1.1 + vec3(0.35, 0.6, 1.25) * knots * 1.2 + vec3(0.62, 0.78, 1.15) * core * 1.2;
+          col += gc * smoothstep(0.75, 0.2, thick);
+        }
+        gl_FragColor = vec4(col, a);
+      }`,
+  }));
+  m.renderOrder = -1; m.frustumCulled = false; m.name = 'aerolis-sky';
+  return m;
+}
+
+/** A tower of cloud: bright on the sun's side and on top, grey-gold underneath, the edge thin and torn. */
+function cloudTowerMat(sun: THREE.Vector3) {
+  return new THREE.ShaderMaterial({
+    fog: true, transparent: true, depthWrite: false,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSun: { value: sun } }]),
+    vertexShader: '#include <fog_pars_vertex>\nvarying vec3 vW; varying vec3 vN; varying vec3 vL; void main(){ vL = position; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
+    fragmentShader: `
+      #include <fog_pars_fragment>
+      ${NOISE_GLSL}
+      uniform vec3 uSun; varying vec3 vW; varying vec3 vN; varying vec3 vL;
+      void main(){
+        vec3 V = normalize(cameraPosition - vW), N = normalize(vN);
+        float n = vnoise(vL * 0.18) * 0.55 + vnoise(vL * 0.5) * 0.3 + vnoise(vL * 1.3) * 0.15;
+        float wrap = clamp(dot(N, uSun) * 0.5 + 0.5 + (n - 0.5) * 0.6, 0.0, 1.0);
+        float up = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
+        vec3 col = mix(vec3(0.6, 0.5, 0.36), vec3(1.0, 0.95, 0.82), wrap * 0.75 + up * 0.25);
+        // the silhouette thins out into wisps
+        float rim = clamp(dot(N, V), 0.0, 1.0);
+        float a = smoothstep(0.05, 0.45, rim + (n - 0.5) * 0.7) * smoothstep(-0.25, 0.2, N.y + (n - 0.5));
+        gl_FragColor = vec4(col, a);
+        #include <fog_fragment>
+      }`,
+  });
+}

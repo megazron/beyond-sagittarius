@@ -17,6 +17,41 @@ export const SAID_NOTHING: Cond = chose('c1.accuse', 'silent');
 export const HARD_TO_BELIEVE: Cond = { trust: 'explorer', lte: 2 };
 
 export const DECISIONS: Decision[] = [
+  // Episode One 1.1: the red fruit by the path (waits; no timer)
+  {
+    id: 'e1.fruit', title: 'e1.fruit.title', prompt: 'e1.fruit.ask', who: 'scientist', fallback: 'hungry',
+    options: [
+      { id: 'eat', label: 'e1.fruit.o.eat', effects: [{ trait: 'nerve', by: 1 }, { flag: 'poisoned' }] },
+      { id: 'test', label: 'e1.fruit.o.test', effects: [{ trait: 'honesty', by: 1 }, { trust: 'medic', by: 1 }] },
+      { id: 'hungry', label: 'e1.fruit.o.hungry', effects: [] },
+    ],
+  },
+  // Episode One 1.3: which stone to make a tool of (waits; no timer). Only the flint holds an edge.
+  {
+    id: 'e1.stone', title: 'e1.stone.title', prompt: 'e1.stone.ask', who: 'scientist', fallback: 'flint',
+    options: [
+      { id: 'granite', label: 'e1.stone.o.granite', effects: [] },
+      { id: 'flint', label: 'e1.stone.o.flint', effects: [{ trait: 'honesty', by: 1 }, { trust: 'strong', by: 1 }] },
+      { id: 'sand', label: 'e1.stone.o.sand', effects: [] },
+    ],
+  },
+  // Episode One 1.6: the first fire, how big (waits). A high fire is seen far off (CONTINUITY E2).
+  {
+    id: 'e1.fire', title: 'e1.fire.title', prompt: 'e1.fire.ask', who: 'scientist', fallback: 'low',
+    options: [
+      { id: 'high', label: 'e1.fire.o.high', effects: [{ trait: 'nerve', by: 1 }, { flag: 'fire.high' }] },
+      { id: 'low', label: 'e1.fire.o.low', effects: [{ trait: 'honesty', by: 1 }, { flag: 'fire.low' }] },
+    ],
+  },
+  // Episode One 1.9: something beyond the firelight (6 s). Hide, brace the spear, or run for the fire.
+  {
+    id: 'e1.night', title: 'e1.night.title', prompt: 'e1.night.ask', who: 'scientist', seconds: 6, fallback: 'hide',
+    options: [
+      { id: 'hide', label: 'e1.night.o.hide', effects: [{ flag: 'e1.night.hide' }] },
+      { id: 'brace', label: 'e1.night.o.brace', effects: [{ trait: 'nerve', by: 1 }, { flag: 'e1.night.brace' }] },
+      { id: 'run', label: 'e1.night.o.run', effects: [{ flag: 'e1.night.run' }] },
+    ],
+  },
   {
     id: 'c1.fire', title: 'br.fire.title', prompt: 'br.fire.ask', who: 'explorer', fallback: 'small',
     options: [

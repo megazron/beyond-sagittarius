@@ -47,6 +47,7 @@ Mir (Drexon) looks like a real person but speaks with an original synthetic voic
 | Pharmacist | calm, patient, tired | LibriTTS-R 6319 | |
 | Tourist | light, curious, lost | LibriTTS-R 3170 | |
 | Parcel locker | a cheerful machine | LibriTTS-R 6295 | band-limited, bit-crushed |
+| The liner's pilot | steady, working hard, heard over the intercom | the pharmacist's LibriTTS-R voice, faster | intercom band, compressed |
 
 Lines several people speak (`"Ammi: Did you eat? Me: ..."`, the friends' `"Draxum: ..."` in Zenvora) are marked
 `scene` in `src/i18n/voice.json`: each person's part is rendered in their own voice and the parts are joined with a

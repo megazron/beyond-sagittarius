@@ -68,6 +68,38 @@ class Part:
         return pv, uv, inv.astype(np.uint32)
 
 
+def weld_seams(part, tol=0.0015):
+    """The source garments split their seams: a vertex per UV island, and on Nuvexa's sweater the front seam's two sides
+    lie 0.8 mm apart. To facing() that seam was an opening (a band pulled in to the skin under it: the dark notch at her
+    collar) and to the decimator two boundaries that shrink each on their own. Boundary vertices within `tol` of each
+    other become one (at their middle); the per-corner uv ids (TU) keep the seam in the texture."""
+    from collections import Counter
+    e = Counter()
+    for a, b, c in part.T:
+        for x, y in ((a, b), (b, c), (c, a)): e[(min(x, y), max(x, y))] += 1
+    bv = np.unique([v for k, n in e.items() if n == 1 for v in k])
+    rep = np.arange(len(part.P))
+    if len(bv):
+        for a, b in sorted(cKDTree(part.P[bv]).query_pairs(tol)):
+            ra, rb = rep[bv[a]], rep[bv[b]]
+            while rep[ra] != ra: ra = rep[ra]
+            while rep[rb] != rb: rb = rep[rb]
+            if ra != rb: rep[max(ra, rb)] = min(ra, rb)
+        for v in range(len(rep)):
+            r = v
+            while rep[r] != r: r = rep[r]
+            rep[v] = r
+        for r in np.unique(rep[bv]):
+            grp = np.where(rep == r)[0]
+            if len(grp) > 1: part.P[grp] = part.P[grp].mean(0)
+    T = rep[part.T]
+    ok = (T[:, 0] != T[:, 1]) & (T[:, 1] != T[:, 2]) & (T[:, 2] != T[:, 0])
+    part.T, part.TU = T[ok], part.TU[ok]
+    if hasattr(part, 'island'): part.island = part.island[ok]
+    part.welded = True
+    return part
+
+
 def write_prim(g, part, skin, mat):
     pv, uv, idx = part.corners()
     P = part.P[pv]
@@ -144,14 +176,24 @@ def skirt_weights(c, p, pivots):
     k = k * k * (3 - 2 * k)
     a = np.clip((x + 0.11) / 0.22, 0, 1)
     a = a * a * (3 - 2 * a)
+    # in front, each panel goes more with the thigh behind it: at a run the knee rises 50 degrees and a panel turned
+    # with 62% of the thigh was punched through by it (the lab coat, 2026-11-23 flags); behind, the hips keep the
+    # back from splitting
+    fz = np.clip((p.P[:, 2] - pivots[ix['hips']][2]) / 0.08, 0, 1)
+    fz = fz * fz * (3 - 2 * fz)
+    leg = 0.62 + 0.23 * fz
+    # behind, the middle of the back panel goes with the hips: half on each thigh, standing wide the two thighs turned it
+    # opposite ways, the blend pulled it in and it showed as a grey mass between Zenvik's legs (GPU takes e13v4, e13v5)
+    mid = 1 - np.abs(2 * a - 1)
+    leg = leg * (1 - 0.75 * mid * (1 - fz))
     Wn = np.zeros_like(p.W)
-    Wn[:, ix['upperlegL']] = a * 0.62
-    Wn[:, ix['upperlegR']] = (1 - a) * 0.62
-    Wn[:, ix['hips']] = 0.38
+    Wn[:, ix['upperlegL']] = a * leg
+    Wn[:, ix['upperlegR']] = (1 - a) * leg
+    Wn[:, ix['hips']] = 1 - leg
     p.W = p.W * (1 - k[:, None]) + Wn * k[:, None]
-    # a skirt stands clear of the legs it hides: striding thighs must not come through
+    # a skirt stands clear of the legs it hides: striding thighs must not come through (a little more in front)
     r = np.stack([x, np.zeros_like(x), p.P[:, 2] - pivots[ix['hips']][2]], 1)
-    p.P = p.P + r / np.maximum(np.linalg.norm(r, axis=1, keepdims=True), 1e-6) * (k * 0.075)[:, None]
+    p.P = p.P + r / np.maximum(np.linalg.norm(r, axis=1, keepdims=True), 1e-6) * (k * (0.075 + 0.015 * fz))[:, None]
     sway = np.clip((crotch + 0.12 - y) / max(crotch + 0.12, 1e-3), 0, 1).astype(np.float32)
     p.extra['_SWAY'] = sway
     return p
@@ -178,15 +220,27 @@ def ear_morphs(Vdm, scale):
     return {k: v * scale for k, v in out.items()}
 
 
-def resolve_layers(inner_P, outer, margin):
-    """Push anything poking through an outer garment back under it."""
+def resolve_layers(inner_P, outer, margin, rim_margin=None):
+    """Push anything poking through an outer garment back under it. rim_margin: deeper within 3 cm of the outer
+    garment's open edges (a coat's lapels: the decimated edge bows in between its vertices and the shirt under it
+    showed through along the opening, the "inner collar" flags)."""
     tree = cKDTree(outer.P)
     d, j = tree.query(inner_P, workers=1)
     n = outer.N[j]
     s = np.einsum('ij,ij->i', inner_P - outer.P[j], n)
-    m = (d < 0.05) & (s > -margin)
+    mg = np.full(len(inner_P), margin)
+    if rim_margin is not None:
+        e = {}
+        for t in outer.T:
+            for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+                k = (min(a_, b_), max(a_, b_)); e[k] = e.get(k, 0) + 1
+        rim = np.unique([k[0] for k, c in e.items() if c == 1])
+        if len(rim):
+            rd = cKDTree(outer.P[rim]).query(inner_P, workers=1)[0]
+            mg = np.where(rd < 0.03, np.maximum(mg, rim_margin), mg)
+    m = (d < 0.05) & (s > -mg)
     out = inner_P.copy()
-    out[m] -= n[m] * (s[m] + margin)[:, None]
+    out[m] -= n[m] * (s[m] + mg[m])[:, None]
     return out
 
 
@@ -224,6 +278,65 @@ def follow(inner_P, inner_W, outers, keep=None, reach=0.035, near=0.012, far=0.0
         W[under] = inner_W[under] * (1 - k) + o.W[j[under]] * k
         best[under] = d[under]
     return W / np.maximum(W.sum(1, keepdims=True), 1e-9)
+
+def drape(p, V, Nb, Wb, rig, k_=1.0, it=36, margin=0.013):
+    """A knit top over a full bust: the source garment, fitted vertex by vertex to the morphed body, came out pointed at
+    each bust with a crease under it (Nuvexa's sweater). Real cloth bridges a hollow and rounds a peak: the top's front,
+    from the waist to the collarbone, is smoothed (Taubin: no shrinking overall) while it is held at least `margin`
+    off the body under it, so it lies over the bust as one round surface and falls straight below it."""
+    T = p.T
+    nb = [[] for _ in range(len(p.P))]
+    for t in T:
+        for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+            nb[a_].append(b_); nb[b_].append(a_)
+    nb = [np.unique(n) for n in nb]
+    has = np.array([len(n) > 0 for n in nb])
+    # the region: front of the torso, weighted to the chest and the spine above the waist, away from the garment's rim
+    tw = sum(p.W[:, rig.index[n]] for n in ('spine1', 'spine2', 'chest', 'spine') if n in rig.index)
+    front = np.clip((p.N[:, 2] + 0.15) / 0.45, 0, 1)
+    e = {}
+    for t in T:
+        for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+            kk = (min(a_, b_), max(a_, b_)); e[kk] = e.get(kk, 0) + 1
+    rim = np.unique([kk[0] for kk, n in e.items() if n == 1])
+    rd = cKDTree(p.P[rim]).query(p.P, workers=1)[0] if len(rim) else np.full(len(p.P), 9.)
+    k = np.clip(tw / 0.5, 0, 1) * front * np.clip((rd - 0.03) / 0.05, 0, 1) * has * k_
+    if os.environ.get('DRAPE_DEBUG'): print(f'    drape {p.asset}: {int((k > .5).sum())} vertices held to it of {len(p.P)}', flush=True)
+    body = cKDTree(V)
+    P = p.P.copy()
+    def lap(P_):
+        L = np.zeros_like(P_)
+        for i in np.nonzero(k > 0)[0]:
+            L[i] = P_[nb[i]].mean(0) - P_[i]
+        return L
+    for _ in range(it):
+        P = P + (0.55 * k)[:, None] * lap(P)
+        P = P + (-0.58 * k)[:, None] * lap(P)
+        # never inside the body (and never closer than margin to it)
+        d, j = body.query(P, workers=1)
+        sd = np.einsum('ij,ij->i', P - V[j], Nb[j])
+        m = (k > 0) & (d < 0.08) & (sd < margin)
+        P[m] += Nb[j[m]] * (margin - sd[m])[:, None]
+    # below the bust the knit falls from the fullest point towards the hem instead of following the body in under it
+    # (it read as painted on): per 2 cm column across the chest, the front may not fall back faster than `slope`
+    fr = (k > 0.2) & (p.N[:, 2] > 0.2)
+    if fr.any():
+        cols = np.floor(P[:, 0] / 0.02).astype(int)
+        for cidx in np.unique(cols[fr]):
+            m = fr & (cols == cidx)
+            if m.sum() < 3: continue
+            top = np.argmax(np.where(m, P[:, 2], -9))
+            za, ya = P[top, 2], P[top, 1]
+            lo = m & (P[:, 1] < ya)
+            want = za - (ya - P[lo, 1]) * 0.45
+            P[lo, 2] = np.maximum(P[lo, 2], P[lo, 2] + (want - P[lo, 2]).clip(0) * k[lo])
+        for _ in range(4):
+            P = P + (0.5 * k)[:, None] * lap(P)
+    mv = np.linalg.norm(P - p.P, axis=1)
+    print(f'    drape {p.asset}: moved {int((mv > 0.002).sum())} vertices, most {mv.max() * 100:.1f} cm', flush=True)
+    p.P = P
+    p.N = vnormals(P, T)
+
 
 def covered(P, N, garments, reach=0.035):
     """Vertices hidden under a garment: one lies just outside them, facing the same way."""
@@ -685,13 +798,22 @@ def build(c, cid, force=False):
         _, j = tree.query(g.P, workers=1)
         flip = np.einsum('ij,ij->i', g.N, Nb0[bodyidx[j]]) < -0.15
         g.N[flip] *= -1
+    for g in garments:
+        if g.opt.get('knit'):
+            # a knit top as a tube round the torso (tools/chars/knit.py): it bridges the hollows, stands off the bust,
+            # falls straight below it and ends in a level hem (drape() left it close over the bust, the hem uneven)
+            from knit import knit_fit
+            g.P = knit_fit(g.P, g.T, g.W, V[bodyidx], Nb0[bodyidx], [rig.index.get(n, -1) for n in ('spine1', 'spine2', 'chest', 'spine')])
+            g.N = vnormals(g.P, g.T)
+        elif g.opt.get('drape'):
+            drape(g, V[bodyidx], Nb0[bodyidx], None, rig, g.opt['drape'])
     # layers: inner garments never show through outer ones, and hidden cloth is not shipped
     for i in range(len(garments)):
         # footwear goes on under the trouser hem: a boot never pushes cloth aside or eats it
         outer = [o for o in garments[i + 1:] if 'boot' not in o.asset and 'shoe' not in o.asset]
         g = garments[i]
         for o in outer:
-            g.P = resolve_layers(g.P, o, 0.012)
+            g.P = resolve_layers(g.P, o, 0.012, 0.02)
         if not g.opt.get('skirt'):
             g.W = follow(g.P, g.W, outer)
         # whatever an outer layer really covers is cut, along exact sight lines
@@ -1031,6 +1153,9 @@ def build(c, cid, force=False):
     if not os.environ.get('NO_BAND'):
         surf = bodyv & ~((liner | cut) if LINER else cut)
         for g in garments:
+            # a split seam is a boundary loop to facing(): welded first, so only real openings get a facing (Nuvexa's front
+            # seam got a band pulled in to the skin: the dark notch at her collar)
+            if g.opt.get('knit') and not getattr(g, 'welded', False): weld_seams(g)
             n_ = facing(g, Vb[surf])
             if os.environ.get('CAP_DEBUG') and n_: print(f'    {g.asset}: {n_} edges of facing inside its openings', flush=True)
     Adj0 = pit.laplacian(Tall, len(V))[1]
@@ -1104,6 +1229,8 @@ def build(c, cid, force=False):
         # the clothes keep their shape at every LOD (the error bound of the full one): flattened on the lighter one, a coat's
         # shoulders and a trouser's seat cut inside the skin under them and it showed through
         ccost = min(L['cost'], LODS['']['cost'])
+        for p in garments:
+            if p.opt.get('knit') and not getattr(p, 'welded', False): weld_seams(p)
         cl = [p.decimated(max(300, int(budget * len(p.T) * p.opt.get('budget', 1) / tot)), None, None, ccost * (0.25 if p.opt.get('budget') else 1)) for p in garments]
         if not os.environ.get('NO_CAPS'):
             bb, nk, nd = cap_holes(bb, seam, V[bodyv], Nb[bodyv], piv, posed)

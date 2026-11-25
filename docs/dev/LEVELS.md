@@ -73,7 +73,7 @@ NPCs and the five friends are `createCharacter` bodies playing the existing clip
 | 6 | Craft a Spear | done |
 | 7 | Survive the First Night | done |
 | 8 | Find the Signal | done |
-| 9 | Reunite with the Explorer | done |
+| 9 | Answer Skyvra (by radio; she is on an asteroid) | done |
 | 10 | Light the Beacon | done, final Vault scene follows |
 
 ## The Scatter: where the six landed
@@ -87,18 +87,18 @@ methane moon, a loose band of rubble, and a hot cloud-wrapped planet closer to t
 | Unlock | Who | Where | Lineage trait that keeps them alive | Real science it leans on | Own tasks |
 | --- | --- | --- | --- | --- | --- |
 | Start | Zenvik, Ulari | Verdaxis (Verdaxis), surface | Under-ice lungs and cold-water diving reflex; the player's own lineage can change this | Mammalian dive reflex | Research, analysis, the science tree |
-| Level 9 | Skyvra, Tarnkin | Cryovale: an ice boulder in the giant's ring, pod 2 wedged in it | Antifreeze blood and torpor; the tail is a balance organ in near-zero gravity. The pod cracks ring ice into air | Antifreeze glycoproteins in polar fish; ground squirrels that supercool below 0 C | Tracking, navigating boulder to boulder, scouting |
-| End of Stone Age (14) | Bolzar, Ortek | Shardrift: a rubble asteroid, airless | Mineral dermal plates that seal; oxygen banked in muscle for hours outside | Scaly-foot snail iron armour; seal myoglobin | Welding shelter from hull, tools, machines |
-| After soap (19) | Lyrra, Vael | Open space, adrift in a tumbling hull section, no ground at all | Lichen symbiont in her violet skin: she dries down into dormancy and wakes when the wreck turns into sunlight, so her radio only works in bursts | Tardigrade and lichen survival in open vacuum (ESA exposure tests); retinal based purple photosynthesis | Self surgery, growing lichen for air, triage over radio |
+| Level 9 | Skyvra, Tarnkin | A bare asteroid near the giant's ring: rock, pockets of ice, the hull plate she fell with | Antifreeze blood and torpor; the tail is a balance organ in near-zero gravity. She needs no air (her lineage lives in vacuum); she melts ice on the plate for water | Antifreeze glycoproteins in polar fish; ground squirrels that supercool below 0 C | Tracking, navigating boulder to boulder, scouting |
+| End of Stone Age (14) | Bolzar, Ortek | Shardrift: the broken half of a small moon, airless | Mineral dermal plates that seal; oxygen banked in muscle for hours outside | Scaly-foot snail iron armour; seal myoglobin | Welding shelter from hull, tools, machines |
+| After soap (19) | Lyrra, Vael | Thalwen: a grey tide-locked dust moon, her hull section crashed on it | Lichen symbiont in her violet skin: she dries down into dormancy and wakes when the sun comes over the rim, so her radio only works in bursts | Tardigrade and lichen survival in open vacuum (ESA exposure tests); retinal based purple photosynthesis | Self surgery, growing lichen for air, triage over radio |
 | Agriculture (21 or next) | Draxum, Korrath | Methryx: the giant's methane moon, nitrogen air, lakes of liquid methane | Titan foundry lineage: burns hydrogen and acetylene instead of oxygen, ember seams hold body heat | Proposed Titan biochemistry (McKay 2005) | Heavy carry, breaking ice bedrock, defences |
-| Bronze Age | Nuvexa, Sirelle | Aerolis: the cloud deck of the hot planet, drifting at the one height with sane pressure | Venus cloud lineage: acid-proof skin, and breathable air is a lifting gas in thick carbon dioxide, so her pod simply floats | Air is buoyant in a CO2 atmosphere (Venus aerostat studies) | Morale, negotiation with whatever lives in the clouds, signal relays |
+| Bronze Age | Nuvexa, Sirelle | Aerolis: the cloud deck of the hot planet, drifting at the one height with sane pressure | Venus cloud lineage: acid-proof skin, and breathable air is a lifting gas in thick carbon dioxide, so her piece of the liner simply floats | Air is buoyant in a CO2 atmosphere (Venus aerostat studies) | Morale, negotiation with whatever lives in the clouds, signal relays |
 
 **Who can be played, as built:**
 
 | Who | Stage | Tasks | State |
 | --- | --- | --- | --- |
 | Zenvik | Verdaxis (Verdaxis) | Everything in levels 1 to 22 | Done |
-| Skyvra | Cryovale | Splint (the quick-time), three ice, the pod, the dish | Playable at Level 9, part of the story. No reveal film yet |
+| Skyvra | The asteroid | Splint (the quick-time), three ice, melt it on the plate, the dish | Playable at Level 9, part of the story. No reveal film yet |
 | Bolzar | Shardrift | Salvage hull plate, weld the seal | Stage and tasks work from Level 14. No reveal film, no voiced lines |
 | Lyrra | The wreck | Tend lichen, close the wound, send in the sun window | Stage and tasks work from Level 19. No reveal film, no voiced lines |
 | Draxum | Methryx | Haul ice, break bedrock, feed the ember | Stage and tasks work from Level 22. No reveal film, no voiced lines |
@@ -108,14 +108,14 @@ Every level from someone's unlock on has a job for them: Play as from the Crew t
 
 | Who | Job pays off as |
 | --- | --- |
-| Skyvra | From orbit she pins the nearest finds on your map |
+| Skyvra | From her rock she pins the nearest finds on your map |
 | Bolzar | He talks you through your next build: it can't fail |
 | Lyrra | Her advice: health and stamina restored |
 | Draxum | His drills: sprinting costs no stamina for the rest of the day |
 
 So per-character work exists at levels 9 to 22 for Skyvra, 14 to 22 for Bolzar, 19 to 22 for Lyrra and 22 for Draxum. Nuvexa has none yet. Switching is the Crew tab's Play as, on keyboard, touch and gamepad through the same menu, and only after that person's story has been told. Stages have textured relief ground (CC0 Poly Haven sets), shadows that follow you, faceted rock, and the lineage in play: Skyvra's breath frosts, Bolzar's plates glow as he seals, Lyrra's lichen lights in the sun and she slows in the dark, Draxum's seams burn. Still short of Verdaxis: no grass or foliage equivalent, few props.
 
-**Skyvra.** She is physically present in Levels 9 and 10 and at the camp through Chapter Two.
+**Skyvra.** She is never on Verdaxis: a voice at Levels 9 and 10, and a projection at the camp through Chapter Two.
 
 - Option B, chosen and built: she is on the ring. Level 8 finds her signal, Level 9 is her survival film and the first character switch: the splint quick-time becomes something the player does as her. The fire and accusation choices stay, over radio. After the beacon she appears at camp as a flickering projection, so Chapter Two conversations keep working. Meets "everyone somewhere different" literally.
 - Option A: she stays on Verdaxis, in a far region. Cheapest, least re-recording, but two of the six share a world.
@@ -200,10 +200,12 @@ story calls it: `docs/COMBAT_API.md`. Code: `src/combat/`.
 | Creatures | Skritch (pack scavenger), Duskhound (night hunter), Mossback (charging grazer), Lashbloom (trap plant), Nibbet (prey), with sight, hearing and smell, and a pose and a sound for every state | built |
 | Machines and bosses | Phases, armour, weak points and a boss bar in the framework; one guardian in the proving ground | prototype |
 | Traps | Snare, stakes, fire line, rattle, bait, each from what the first days give you | built |
-| Set pieces | The first hunt, the night at the fire (three waves), the run to the fire, past the sleeper | built, playable from Pause, Action; not yet called by the story |
+| Set pieces | The first hunt, the night at the fire (three waves), the run to the fire, past the sleeper, spear fishing | built, playable from Pause, Action; the night, the fishing and the hunt are called by levels 7 and 8 (src/game/fights.ts) |
 | Tension moments | Quick press, hold steady, breath, aim | built |
 | Difficulty and access | Story, Normal, Hard; aim assist, hold instead of timing, slow motion, damage numbers, shake off | built |
-| Level 7 | Still the older scripted night. The night at the fire replaces it when Episode One's scenes call it | open |
+| Level 7 | The night at the fire, started by the level when night falls (the brace; Episode One's hide or run choice is on life-wip) | built, owner to confirm |
+| Level 8 | Breakfast first: spear fishing in the shallows or the first hunt in the meadow, then the ridge | built, owner to confirm |
+| Around a story fight | Difficulty asked once; a loss offers try again, easier, or go on; a save in a fight keeps the moment before it; each weapon's controls shown the first time | built |
 
 Original designs only: no characters, techniques, names or lines from any series. Violence stays teen-safe: no blood,
 nothing comes apart, animals fall and fade or run, machines shut down.

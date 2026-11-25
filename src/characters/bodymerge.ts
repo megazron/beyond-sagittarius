@@ -89,6 +89,9 @@ export function hairPart(hair: THREE.Mesh, bone: number, m: THREE.Matrix4): Extr
   if (mat.map || mat.alphaTest || mat.transparent || !mat.userData.film || mat.userData.film.kind !== 'hair' || m.determinant() <= 0) return null;
   const P = g0.attributes.position, Nn = g0.attributes.normal, T = g0.getAttribute('aT'), Tan = g0.getAttribute('aTan'), sw = g0.getAttribute('aSway'), ph = g0.getAttribute('aPhase');
   if (!Nn || !T || !Tan || !sw || !ph) return null;
+  // hair that hangs, turns and keeps out of the arms and the ground (hair.ts aRoot, aDir, aLen; uDrop, uTilt, uCap,
+  // uGround) is not in this shader yet: it stays its own mesh
+  if (g0.getAttribute('aRoot')) return null;
   const n = P.count, N3 = new THREE.Matrix3().getNormalMatrix(m), M3 = new THREE.Matrix3().setFromMatrix4(m), v = new THREE.Vector3();
   const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), under = new Float32Array(n * 4), over = new Float32Array(n * 3);
   const si = new Uint16Array(n * 4), swt = new Float32Array(n * 4);

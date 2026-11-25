@@ -152,7 +152,7 @@ def main():
                     r.advance(0.1)
             page.wait_for_function("__bs.state === 'film'", timeout=30000)
             if 'film' in want:
-                r.play('film', "__bs.state === 'film' && __bs.film.playing", a.film_step, 80)
+                r.play("film", "__bs.state === 'film' && __bs.film.playing", a.film_step, 130)  # the film runs about 95 s since the landings got their 12 s each
             else:
                 page.evaluate('__bs.skip()')
                 r.advance(0.1)
@@ -200,6 +200,14 @@ def main():
                 print(f"line cut short: {c['cut']} by {c['by']} with {c['left']} s left", flush=True)
         except Exception:
             pass
+        # fingers: no joint bent past what a finger can do, none snapping from one shape to another
+        try:
+            h = page.evaluate('__bs.hands')
+            print(f"hands: largest bend {h['maxCurl'] * 57.3:.0f} deg, fastest turn {h['maxRate'] * 57.3:.0f} deg/s over {h['frames']} character frames", flush=True)
+            if h['maxCurl'] > 1.75: errors.append(f"a finger joint bent {h['maxCurl'] * 57.3:.0f} degrees from rest (limit 100)")
+            if h['maxRate'] > 11: errors.append(f"a finger joint turned at {h['maxRate'] * 57.3:.0f} degrees a second (limit 630)")
+        except Exception as e:
+            errors.append(f'hands check did not run: {e}')
         b.close()
     httpd.shutdown()
     real = [e for e in errors if 'fonts.g' not in e and 'net::ERR' not in e]

@@ -34,7 +34,9 @@ type Req = Record<string, number>;
 type HoundState = 'hidden' | 'approach' | 'circle' | 'windup' | 'lunge' | 'recoil' | 'flee';
 
 export const LAST_LEVEL = 10;
-const DAWN = 6.0;
+/** Waking after the first night: early morning, the sun just up (at 6:00 the world is still dark red, and level 8's
+ * breakfast fights run on from the world's hour). */
+const WAKE = 6.6;
 const DUSK = 19.4;
 const isNight = (h: number) => h >= DUSK || h < 5.5;
 
@@ -63,7 +65,9 @@ export class Story {
   npcs: Npcs;
   ch2: Chapter2;
   /** Set by the game: open the crafting and dialogue panels. */
-  hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean; away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void; quick: (id: string, done: () => void) => void } = { away: () => {}, quick: () => {}, craft: () => {}, talk: () => {}, free: () => true };
+  hooks: { craft: (n: TechNode) => void; talk: (t: DlgTree) => void; free: () => boolean; away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void; quick: (id: string, done: () => void) => void; drill?: (lit: () => void) => boolean; spear?: (made: () => void) => boolean; lean?: (built: () => void) => boolean; night?: (done: (held: boolean) => void) => boolean } = { away: () => {}, quick: () => {}, craft: () => {}, talk: () => {}, free: () => true };
+  /** The fights the levels call (src/game/fights.ts): the morning's food after the first night. */
+  fights: { actions(): Action[]; progress(n: number): string | null; marker(n: number): THREE.Vector3 | null; blocks(n: number): boolean } | null = null;
   private strikes = 0;
   private thrustT = 0;
   private spear: THREE.Group;
@@ -151,7 +155,7 @@ export class Story {
         if (this.flag('houndGone')) return t('progress.sleep');
         if (this.hound.state !== 'hidden') return t('progress.hound', { k: this.s.houndHits ?? 0, n: 3 });
         return isNight(this.s.timeOfDay) ? t('progress.waitNight') : t('progress.restDusk');
-      case 8: return this.flag('signal') ? null : t('progress.highGround');
+      case 8: if (this.fights?.blocks(8)) return this.fights.progress(8); return this.flag('signal') ? null : t('progress.highGround');
       case 9:
         return t(this.flag('metCrew') ? 'progress.leadCrew' : 'progress.findCrew');
       case 10:
@@ -191,7 +195,7 @@ export class Story {
       case 5: { const m = needFor(R.shelter); return m.length ? nearest(m) : L.shelter; }
       case 6: { const m = needFor(R.spear); return m.length ? nearest(m) : L.camp; }
       case 7: return this.hound.state !== 'hidden' && this.hound.state !== 'flee' ? null : L.shelter;
-      case 8: return L.ridge;
+      case 8: return this.fights?.blocks(8) ? this.fights.marker(8) : L.ridge;
       case 9: return this.flag('metCrew') ? L.camp : L.ridge;
       case 10: {
         if (!this.flag('transmitter')) return L.pod;
@@ -218,7 +222,9 @@ export class Story {
         this.ui.toast(t('msg.pitBuilt'));
       } });
     } else if (n === 4 && !this.flag('fire')) {
-      out.push({ id: 'strike', pos: L.camp, radius: 2.6, label: t('action.strike'), missing: this.missing(R.strike), run: () => {
+      out.push({ id: 'strike', pos: L.camp, radius: 2.6, label: t('action.drill'), missing: this.missing(R.strike), run: () => {
+        // 1.6: a player's own press makes fire by hand drill (game.ts FireDrill); the level tests keep the strikes
+        if (this.hooks.drill?.(() => { this.consume(R.strike); s.flags.fire = true; this.world.camp.setFire(2); this.ui.toast(t('msg.fireLit')); })) return;
         this.strikes++;
         this.world.camp.strikeSparks();
         this.thrustT = 0.35;
@@ -237,6 +243,8 @@ export class Story {
     }
     if (n === 5 && !this.flag('shelter')) {
       out.push({ id: 'shelter', pos: L.shelter, radius: 3, label: t('action.buildShelter'), missing: this.missing(R.shelter), run: () => {
+        // 1.3: a player's own press builds the lean-to by hand and learns the throwing stick (game.ts LeanTo)
+        if (this.hooks.lean?.(() => { this.consume(R.shelter); s.flags.shelter = true; this.world.camp.setShelter(true); this.ui.toast(t('msg.shelterBuilt')); })) return;
         this.consume(R.shelter);
         s.flags.shelter = true;
         this.world.camp.setShelter(true);
@@ -246,6 +254,8 @@ export class Story {
     }
     if (n === 6 && !this.flag('spear')) {
       out.push({ id: 'spear', pos: L.camp, radius: 3, label: t('action.craftSpear'), missing: this.missing(R.spear), run: () => {
+        // 1.9: a player's own press scrapes and fire-hardens the point (game.ts FirstNight); the level tests keep the craft
+        if (this.hooks.spear?.(() => { this.consume(R.spear); s.flags.spear = true; this.syncSpear(); this.ui.toast(t('msg.spearCrafted')); })) return;
         this.consume(R.spear);
         s.flags.spear = true;
         this.syncSpear();
@@ -259,7 +269,8 @@ export class Story {
     if (n === 7 && this.flag('houndGone') && !this.flag('slept')) {
       out.push({ id: 'sleep', pos: L.shelter, radius: 3.2, label: t('action.sleep'), run: () => this.sleep() });
     }
-    if (n === 8 && !this.flag('signal')) {
+    if (this.fights) out.push(...this.fights.actions());
+    if (n === 8 && !this.flag('signal') && !this.fights?.blocks(8)) {
       out.push({ id: 'tune', pos: L.ridge, radius: 5, label: t('action.tune'), run: () => this.tune() });
     }
     if (n === 9 && !this.flag('metCrew')) out.push({ id: 'answer', pos: L.ridge, radius: 6, label: t('action.answer'), run: () => this.answerSignal() });
@@ -327,8 +338,15 @@ export class Story {
       if (h.state === 'hidden') { this.world.hound.root.visible = false; return; }
     }
     if (h.state === 'hidden') {
-      if (s.level === 7 && !this.flag('houndGone') && this.flag('spear') && isNight(s.timeOfDay) && !this.sequence) this.startHound();
-      else return;
+      if (s.level === 7 && !this.flag('houndGone') && this.flag('spear') && isNight(s.timeOfDay) && !this.sequence && performance.now() > this.quietUntil) {
+        // 1.9: on a player's own night the first night is the choice and the combat set piece (game.ts FirstNight)
+        if (!this.flag('e1.night') && this.hooks.night?.((held) => {
+          s.flags.houndGone = true;
+          this.ui.toast(t(held ? 'msg.houndFled' : 'msg.houndBit'));
+        })) { s.flags['e1.night'] = true; return; }
+        if (this.flag('e1.night')) return;
+        this.startHound();
+      } else return;
     }
     h.timer += dt;
     const toP = this.tmp.set(p.x - h.pos.x, 0, p.z - h.pos.z);
@@ -427,7 +445,7 @@ export class Story {
   }
 
   private sleep() {
-    this.skipTime(DAWN, 'msg.sleeping', true, () => {
+    this.skipTime(WAKE, 'msg.sleeping', true, () => {
       const st = this.s.stats;
       st.stamina = 100;
       st.health = clamp(st.health + 25, 0, 100);
@@ -644,7 +662,8 @@ export class Story {
     const beaconShot = () => ({ from: b.clone().add(new THREE.Vector3(5.5, 1.5, 6)), to: b.clone().add(new THREE.Vector3(0, 2.4, 0)), push: 0.1 });
     const skyShot = () => ({ from: z.root.position.clone().add(new THREE.Vector3(-1.5, 0.5, 2.6)), to: b.clone().add(new THREE.Vector3(0, 7, 0)), push: 0.08 });
     this.crew.pos.set(b.x - 1.6, this.world.terrain.height(b.x - 1.6, b.z + 1.8), b.z + 1.8);
-    this.player.spawn(b.x + 1.2, b.z + 2.0, 0);
+    // clear of the tripod's legs (they splay 0.9 m and lean in; where he stood, one leg crossed him in the shot)
+    this.player.spawn(b.x + 2.6, b.z + 0.9, 0); // and off the line from the beacon shot's camera to the beacon
     this.playScene([
       { run: push('beacon.1'), hold: 1.8, shot: beaconShot, poses: { scientist: 'stand', explorer: 'stand' } },
       { run: push('beacon.2'), hold: 1.7 },
@@ -716,7 +735,8 @@ export class Story {
   /** Rebuild world state (camp stages, spear, crewmate) from the save. */
   sync() {
     const s = this.s, camp = this.world.camp;
-    camp.setFire(this.flag('fire') ? 2 : this.flag('pitBuilt') ? 1 : 0);
+    // the fire burnt out in the first night (1.9 dawn) until the next level
+    camp.setFire(this.flag('fire') && !this.flag('e1.fireOut') ? 2 : this.flag('pitBuilt') || this.flag('fire') ? 1 : 0);
     camp.setShelter(this.flag('shelter'));
     camp.setBeacon(this.flag('beaconBuilt'), this.flag('beacon'));
     this.world.setCampWork(s.discoveries ?? []);
@@ -730,20 +750,61 @@ export class Story {
     this.ui.deviceLines(null);
   }
 
+  /** A line is being said; the night does not start over it. */
+  private quietUntil = 0;
+
+  /**
+   * Outside a fight the spear is carried like a staff: near upright beside him, the point a little forward and out,
+   * the butt by his feet, whatever the hand is doing as he walks (the wrist keeps it). Fixed to the hand at one angle it
+   * swung with the arm and its point passed by his face (owner, GPU take of the hunt station). A fight (player.combat)
+   * or the old thrust poses it themselves; it goes back to the hand's own angle for them.
+   */
+  private carried = false;
+  private carryM = { m: new THREE.Matrix4(), q: new THREE.Quaternion(), d: new THREE.Vector3(), p: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0), inv: new THREE.Matrix4() };
+  private carrySpear() {
+    const sp = this.spear, model = this.player.model;
+    if (!sp.visible || this.thrustT > 0 || this.player.combat || sp.parent !== model.handR) {
+      if (this.carried) { sp.position.set(0, -0.06, 0.01); sp.rotation.set(1.15, 0, 0); sp.scale.set(1, 1, 1); this.carried = false; }
+      return;
+    }
+    const M = this.carryM;
+    model.root.updateWorldMatrix(true, false); model.handR.updateWorldMatrix(true, false);
+    // root space: +z is where he faces, +x his left; up, a little forward and out to his right
+    M.d.set(-0.12, 1, 0.16).normalize().transformDirection(model.root.matrixWorld);
+    M.q.setFromUnitVectors(M.up, M.d);
+    // held a little below the middle of the shaft: the butt about 0.8 m under the hand
+    M.p.setFromMatrixPosition(model.handR.matrixWorld).addScaledVector(M.d, 0.15);
+    M.m.makeRotationFromQuaternion(M.q).setPosition(M.p);
+    M.m.premultiply(M.inv.copy(model.handR.matrixWorld).invert());
+    M.m.decompose(sp.position, sp.quaternion, sp.scale);
+    this.carried = true;
+  }
+
   private syncSpear() {
     this.spear.visible = this.flag('spear');
+    // the fire-hardened point of 1.9 until a stone head is hafted on
+    const hard = this.flag('inv.fireSpear') && !this.flag('inv.hafting');
+    for (const [n, on] of [['flintTip', !hard], ['lashing', !hard], ['burntPoint', hard]] as const) { const o = this.spear.getObjectByName(n); if (o) o.visible = on; }
   }
 
   /** Called when a level starts (after the previous one completes). */
   onLevelStart(n: number) {
-    if (n === 7) this.after(5.5, () => this.ui.say('dlg.7.1', 'crew.scientist.name', 5));
+    // "Now I wait for the dark": only said before the dark, and the night's noises wait until it is over
+    if (n === 7) this.after(5.5, () => {
+      if (this.flag('e1.night') || this.sequence || isNight(this.s.timeOfDay)) return;
+      this.ui.say('dlg.7.1', 'crew.scientist.name', 5); this.quietUntil = performance.now() + 7000;
+    });
     if (n === 8) {
       this.signalClock = 12.5; // the meter takes over after the first readout
       this.after(5.0, () => { this.ui.deviceLines([t('signal.detect1'), t('signal.detect2')], true); audio.beep(); });
       this.after(6.5, () => this.ui.say('dlg.8.1', 'crew.scientist.name', 5));
       this.after(12, () => this.ui.deviceLines(null));
     }
-    if (n === 9) this.after(5.0, () => this.ui.memory('memory.explorer', 10));
+    if (n === 9) {
+      // by now he has blown the night's coals back up (off screen; the fire went out in the first night)
+      if (this.flag('e1.fireOut')) { this.s.flags['e1.fireOut'] = false; if (this.flag('fire')) this.world.camp.setFire(2); }
+      this.after(5.0, () => this.ui.memory('memory.explorer', 10));
+    }
     if (n === 10) {
       if (this.campPending) this.nextTalk = true;
       else this.beaconPlan();
@@ -771,8 +832,9 @@ export class Story {
       const k = Math.sin((1 - this.thrustT / 0.4) * Math.PI);
       this.player.model.armR.rotation.x = -0.3 - k * 1.3;
     }
+    this.carrySpear();
     // signal meter while looking for high ground
-    if (s.level === 8 && !this.flag('signal') && !this.sequence) {
+    if (s.level === 8 && !this.flag('signal') && !this.sequence && !this.fights?.blocks(8)) {
       this.signalClock -= dt;
       if (this.signalClock <= 0) {
         this.signalClock = 0.4;
@@ -781,7 +843,11 @@ export class Story {
         this.ui.deviceLines([t('signal.meter', { p: Math.round(k * 100) }), '▮'.repeat(bars) + '▯'.repeat(10 - bars), k > 0.8 ? t('signal.strong') : t('signal.climb')], true);
       }
     }
-    this.world.camp.setSites({
+    // no ghost rings in a scene or a held work shot (the fire's ring lay across the front of every drill shot)
+    const busy = !!this.scenePose || !!this.player.workShot;
+    // nor the cyan pickup rings (a stone's ring glowed across the thatching shots, e13v3)
+    this.world.items.ringK = busy ? 0 : 1;
+    this.world.camp.setSites(busy ? { fire: false, shelter: false, beacon: false } : {
       fire: s.level === 4 || (s.level === 6 && !this.flag('spear')) || (s.level >= CH2_FIRST && !!this.ch2.node(s.level) && this.ch2.progress(s.level) === t('progress.ch2Ready')),
       shelter: s.level === 5 && !this.flag('shelter'),
       beacon: s.level === 10 && !this.flag('beaconBuilt'),
@@ -810,14 +876,16 @@ export class Story {
 const V_LOOK = new THREE.Vector3();
 
 function buildSpear() {
-  const g = new THREE.Group();
+  const g = new THREE.Group(); g.name = 'heldSpear';
   const wood = new THREE.MeshStandardMaterial({ color: 0x6a4e3a, roughness: 0.85, flatShading: true });
   const flint = new THREE.MeshStandardMaterial({ color: 0x1a1f2e, roughness: 0.2, metalness: 0.35, flatShading: true });
   const vine = new THREE.MeshStandardMaterial({ color: 0x2c4a2a, roughness: 0.9, flatShading: true });
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.028, 1.9, 5), wood);
-  const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), flint);
+  const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), flint); tip.name = 'flintTip';
   tip.scale.set(0.6, 2.0, 0.35); tip.position.y = 1.02;
-  const wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.1, 5), vine);
+  const wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.1, 5), vine); wrap.name = 'lashing';
+  // Episode One's spear has no stone head: a scraped point, fire-blackened (shown instead of the flint until hafting)
+  const burnt = new THREE.Mesh(new THREE.ConeGeometry(0.024, 0.16, 6), new THREE.MeshStandardMaterial({ color: 0x241a14, roughness: 0.9 })); burnt.name = 'burntPoint'; burnt.position.y = 1.03; burnt.visible = false; g.add(burnt);
   wrap.position.y = 0.9;
   g.add(shaft, tip, wrap);
   g.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });

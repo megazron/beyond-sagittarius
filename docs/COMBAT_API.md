@@ -8,6 +8,7 @@ exported from `src/combat/index.ts`). The story never needs to import anything e
 ```ts
 const out = await game.combat.startEncounter('night.defence', {
   companion: 'explorer',            // optional: someone beside the player who cannot fight
+  hour: save.timeOfDay,             // optional: start at the world's hour and keep the clock running (see below)
   story: { cubKilled: true },       // optional: what the story knows that changes the fight
 });
 // out.result: 'won' | 'lost' | 'spared' | 'left'
@@ -30,6 +31,31 @@ an encounter: at zero they go down, the result is `lost` and `flags.scarred` is 
 
 `out.injuries` lists what the player carries out of it (`bite`, `ribs`, `sprain`, `sting`); they stay on the save
 until treated. `out.stats` has the counts (damage dealt and taken, rolls, parries, trap hits, food lost).
+
+## Called by the levels on main (src/game/fights.ts)
+- Level 7, the first night: the night at the fire (`night.defence`) starts by itself when night falls with the spear
+  made. The bag is topped up first (8 branches, 2 vines, 4 stones, 1 fruit) and a wood pile lies beside the fire for
+  the fire alone (Story 7, Normal 6, Hard 4 branches; fed before the bag's). The HUD shows the fire, the wood and the
+  food; below 35 % the objective line says to feed the fire and the compass points at it. Story burns slower and brings
+  fewer scavengers (`NIGHT` in encounters.ts; `tools/combat/night_probe.ts` prints how a few kinds of player fare).
+- The story's fights keep the world's clock (`startEncounter(id, { hour: save.timeOfDay })`): the fight starts at the
+  world's hour, its clock runs on at the game's rate, and the world keeps the hour it ends at. The night uses it as the
+  start of its dusk. Waking after the first night is at 6:36 (early morning), so breakfast is in the morning sun.
+- Level 8, the morning after: breakfast first, at one of two stations: spear fishing (`fish.spear`) or the first hunt
+  (`hunt.first`). Either opens the ridge; the other stays open until the beacon. What is caught is eaten at once.
+- Outcome facts are kept on the save as `flags['cb.<fact>']` (`cb.night.held`, `cb.fish.lesson`, `cb.hunt.kill`...).
+
+## Around every story fight (not trials)
+- The first one asks how hard fights should be (Story, Normal, Hard; `settings.combat.asked`). A first night asks it
+  at its very start, before anything of the night: `game.combat.ensureAsked(go)` asks once (the world stands still until
+  it is answered) and then calls `go`, or calls `go` at once if it was asked before. main's fights.ts night calls it;
+  the life branch's FirstNight is to call it at its start.
+- A loss shows a card: try again from the start (the bag, body, place and hour from before it come back), try again on
+  Story, or go on as it is (the promise then resolves with `result: 'lost'`). `startEncounter` resolves only once.
+- A save made in the middle of one keeps the moment before it began (`combat.checkpoint`), so loading it meets the fight
+  again from its start.
+- The first time each weapon is in the hand a card shows its controls for the device in use (keys, pad, or the touch
+  buttons themselves), about 11 s.
 
 ## A tension moment on its own
 

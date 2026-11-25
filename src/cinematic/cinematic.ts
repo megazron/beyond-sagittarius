@@ -6,9 +6,11 @@ import { audio } from '../core/audio';
 import { voice } from '../core/voice';
 import { Cutscene, Beat, addCutsceneRig } from './cutscene';
 import { deckScene, fightScene, stageDeck } from './scenes';
-import { createCharacter, Character, CrewId } from '../characters/character';
+import { createCharacter, Character, CrewId, CrewPose, type Face } from '../characters/character';
 import { flail, mixLimbs, FALL, STANDING } from './montage';
-import type { PlayerLook, CrewSkins } from '../characters/custom';
+import { defaultLook, type PlayerLook, type CrewSkins } from '../characters/custom';
+import { createInserts, type Inserts } from './inserts';
+import { FilmVideo } from './filmvideo';
 
 export interface CineUI {
   subtitle(key: string | null, speakerKey?: string): void;
@@ -20,7 +22,8 @@ export interface CineUI {
 }
 
 interface Cue { t: number; fn: () => void; done?: boolean; voiced?: boolean; key?: string; t0?: number }
-interface Shot { start: number; end: number; enter?: () => void; update: (k: number, local: number) => void; done?: boolean }
+/** film: a rendered (Blender) take of this shot, played as video over the engine picture when its file is there. */
+interface Shot { start: number; end: number; enter?: () => void; update: (k: number, local: number) => void; done?: boolean; film?: string }
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -32,7 +35,7 @@ export class Cinematic {
   camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.05, 40000);
   time = 0;
   playing = false;
-  readonly duration = 52.4;
+  readonly duration = 120;
   private dome = createSpaceDome();
   private sunDir = V(1, 0.22, 0.55).normalize();
   private earth = createEarth(100, this.sunDir);
@@ -54,6 +57,8 @@ export class Cinematic {
   private lookTarget = new THREE.Vector3();
   private onDone: (() => void) | null = null;
   private bhRot = new THREE.Matrix3();
+  private ins!: Inserts;
+  private pilot!: Character;
 
   constructor(private ui: CineUI, light = false) {
     this.crewDetail = light || matchMedia('(pointer: coarse)').matches ? 0.6 : 1;
@@ -67,6 +72,9 @@ export class Cinematic {
     // at the origin, not parked far away: skinned faces lose centimetres of float precision out there.
     // Earth shares the spot, but the two are never on screen together.
     s.add(this.interior.group);
+    this.ins = createInserts(this.interior.group);
+    this.pilot = createCharacter('scientist', matchMedia('(pointer: coarse)').matches ? 0.6 : 1, { ...defaultLook(), name: 'Pilot', gender: 'f', hair: 'medic', outfit: 'explorer', hairRoot: 0x2a1a14, hairTip: 0x6a4a34, accent: 0x6fe3ff, skin: 0xb98463, horns: false, tail: false });
+    this.pilot.root.position.set(0, -2.2, -0.05); this.pilot.root.rotation.set(0, Math.PI, 0); this.ins.cockpit.add(this.pilot.root);
     this.mars.position.set(20000, 0, 0);
     s.add(this.mars);
     this.giant.position.set(40000, 0, 0);
@@ -128,6 +136,36 @@ export class Cinematic {
     this.cues.forEach((c) => (c.done = false));
     this.shots.forEach((s) => (s.done = false));
     audio.startDrone();
+    void this.openFilms();
+  }
+
+  // ---- rendered takes (BLENDER shots): muted video over the engine picture, on the cinematic's own clock, under the
+  // game's sound and subtitles. A shot without its file plays in the engine as before.
+  private films = new Map<string, FilmVideo>();
+  private filmEl: HTMLElement | null = null;
+  private filmOn: string | null = null;
+  private async openFilms() {
+    if (!this.filmEl) {
+      const el = document.createElement('div'); el.id = 'cine-film';
+      el.style.cssText = 'position:fixed;inset:0;z-index:5;pointer-events:none;display:none;background:#000';
+      document.body.appendChild(el); this.filmEl = el;
+    }
+    const small = window.matchMedia?.('(max-width: 900px)').matches ?? false;
+    // every take made so far has the player in it (A4 is Zenvik): only the default look gets them
+    if (!this.playerDefault) return;
+    for (const name of new Set(this.shots.map((s) => s.film).filter(Boolean) as string[])) {
+      if (this.films.has(name)) continue;
+      const v = await FilmVideo.open(name, this.filmEl, small);
+      if (v) this.films.set(name, v);
+    }
+  }
+  /** Show the shot's rendered take at its local time, or hide the video. */
+  private filmAt(name: string | undefined, local: number) {
+    const v = name ? this.films.get(name) : undefined;
+    if (!this.filmEl) return;
+    if (!v) { if (this.filmOn) { this.filmEl.style.display = 'none'; this.filmOn = null; } return; }
+    if (this.filmOn !== name) { this.filmEl.style.display = 'block'; this.filmOn = name!; for (const [n, f] of this.films) f.visible(n === name); }
+    v.sync(local);
   }
 
   /** Jump to a time (debug / screenshots). Earlier cues are marked done without firing. */
@@ -137,6 +175,7 @@ export class Cinematic {
     this.time = t;
     this.cues.forEach((c) => { if (c.t < t) c.done = true; });
     this.shots.forEach((s) => { if (s.end <= t) { s.enter?.(); s.done = true; } });
+    if (t > 0) this.ui.chapter(null); // its hide cue was skipped with the rest: the card would stay over every shot
     this.ui.fade('black', 0, 0.2);
   }
 
@@ -175,7 +214,12 @@ export class Cinematic {
   }
 
   /** The player's figure and any crew skins on the deck. */
+  /** A rendered take shows the default Zenvik: with any other look for the player it would show the wrong person, so
+   *  those shots stay in the engine (the look is compared field by field, the name aside). */
+  private playerDefault = true;
   setCast(look: PlayerLook, skins: CrewSkins) {
+    const dl = defaultLook() as unknown as Record<string, unknown>, lk = look as unknown as Record<string, unknown>;
+    this.playerDefault = Object.keys(dl).every((k) => k === 'name' || JSON.stringify(dl[k]) === JSON.stringify(lk[k]));
     const g = this.interior.group, crew = this.interior.crew, d = this.crewDetail;
     const swap = (i: number, c: Character) => { const o = crew[i]; c.root.position.copy(o.root.position); c.root.rotation.copy(o.root.rotation); g.remove(o.root); g.add(c.root); crew[i] = c; };
     swap(0, createCharacter('scientist', d, look));
@@ -187,10 +231,11 @@ export class Cinematic {
 
   /** Compile everything, including what is hidden at the title, so no shot stalls later. */
   async warm(draw: (scene: THREE.Scene, cam: THREE.PerspectiveCamera) => void | Promise<void>) {
-    const shown = [this.earth.group, this.ring, this.mars, this.giant, this.giantRing, this.home, this.interior.group, this.ship.group];
+    const shown = [this.earth.group, this.ring, this.mars, this.giant, this.giantRing, this.home, this.interior.group, this.ship.group, this.ins.cockpit];
     const was = shown.map((o) => o.visible);
     shown.forEach((o) => (o.visible = true));
-    await Promise.all(this.interior.crew.map((c) => c.whenReady));
+    await Promise.all([...this.interior.crew, this.pilot].map((c) => c.whenReady));
+    this.pilot.root.updateMatrixWorld(); this.pilot.animate('stand', 0, 0, 0, 0.016);
     // the deck with the whole crew in view: their shaders, buffers and textures
     stageDeck(this.cast, -2.2);
     this.interior.crew.forEach((c) => { c.root.updateMatrixWorld(); c.animate('stand', 0, 0, 0, 0.016); });
@@ -226,11 +271,12 @@ export class Cinematic {
   get inFlashback() { return this.flashback; }
 
   private animateCrew(dt: number) {
+    if (this.ins.cockpit.visible) { this.pilot.root.updateMatrixWorld(); this.pilot.animate('stand', 0, 0, this.clockT, dt); } // seated by setLimbs: the sit clip sits on the ground, far forward of its root
     if (!this.interior.group.visible) return;
     const poses = this.stage?.poses;
     this.interior.crew.forEach((c) => {
       c.root.updateMatrixWorld();
-      c.animate(poses?.[c.id as CrewId] ?? 'stand', 0, 0, this.clockT, dt);
+      c.animate(poses?.[c.id as CrewId] ?? this.pullPose[c.id as CrewId] ?? 'stand', 0, 0, this.clockT, dt);
     });
   }
   private clockT = 0;
@@ -238,7 +284,8 @@ export class Cinematic {
   private finish() {
     this.playing = false;
     this.stage = null;
-    audio.alarm(false);
+    this.filmAt(undefined, 0); for (const f of this.films.values()) f.close(); this.films.clear();
+    audio.alarm(false); audio.vacuum(false);
     audio.stopDrone();
     this.ui.subtitle(null); this.ui.caption(null); this.ui.mission(null); this.ui.aiAlert(null); this.ui.chapter(null);
     const cb = this.onDone; this.onDone = null;
@@ -250,14 +297,15 @@ export class Cinematic {
     return { scene: this.scene, camera: this.camera, dome: this.dome, ship: this.ship, interior: this.interior, home: this.home, sun: this.sunLight, show: (g: 'interior' | 'deep' | 'home') => this.setVisible(g), tick: (dt: number) => { this.clockT += dt; this.time += dt; this.commonUpdate(dt); } };
   }
 
-  private setVisible(group: 'earth' | 'mars' | 'giant' | 'interior' | 'deep' | 'home') {
+  private setVisible(group: 'earth' | 'mars' | 'giant' | 'interior' | 'deep' | 'home' | 'cockpit') {
+    this.ins.cockpit.visible = group === 'cockpit';
     this.earth.group.visible = group === 'earth';
     this.ring.visible = group === 'earth';
     this.mars.visible = group === 'mars';
     this.giant.visible = group === 'giant';
     this.giantRing.visible = group === 'giant';
     this.interior.group.visible = group === 'interior';
-    this.ship.group.visible = group !== 'interior' && group !== 'home';
+    this.ship.group.visible = group !== 'interior' && group !== 'home' && group !== 'cockpit';
     this.home.visible = group === 'home';
     this.sunDisc.visible = group === 'earth' || group === 'mars' || group === 'giant';
     this.sunLight.intensity = group === 'interior' ? 1.2 : 3.2; // no sun reaches the deck like open space
@@ -266,9 +314,11 @@ export class Cinematic {
   private cue(t: number, fn: () => void) { this.cues.push({ t, fn }); }
   /** A spoken cue: the timeline waits for the previous line to finish before firing it. */
   private vcue(t: number, key: string, fn: () => void) {
-    this.cues.push({ t, voiced: true, key, fn: () => { this.speechEnd = this.clockT + (voice.duration(key) ?? 2) + 0.15; fn(); } });
+    this.cues.push({ t, voiced: true, key, fn: () => { this.speechEnd = this.clockT + (voice.duration(key) ?? 2) + 0.15; this.subClearAt = t >= 39 ? this.speechEnd + 0.3 : 0; fn(); } });
   }
   private speechEnd = 0;
+  /** From the pull on, a line's subtitle goes when the line ends (it stayed up into the next shots before). */
+  private subClearAt = 0;
   private inserts: { at: number; by: number }[] = [];
 
   /**
@@ -394,11 +444,9 @@ export class Cinematic {
 
     // ---- Interior: the impossible reading ----
     this.cue(33.5, () => this.holdDeck());
-    this.vcue(39.8, 'cine.ai1', () => { ui.subtitle(null); ui.aiAlert('cine.ai1'); audio.alarm(true); });
-    this.cue(44.2, () => { ui.aiAlert(null); audio.alarm(false); });
     const intr = this.interior;
     this.shots.push({
-      start: 33.4, end: 40.6,
+      start: 33.4, end: 39.0,
       enter: () => {
         this.setVisible('interior'); d.uWarp.value = 0; d.uNebula.value = 0.9; d.uBH.value = 1;
       },
@@ -421,72 +469,446 @@ export class Cinematic {
       },
     });
 
-    // ---- Approach Sagittarius A* ----
-    this.cue(41.0, () => ui.caption('cine.approach'));
-    this.vcue(43.0, 'op.19', () => ui.subtitle('op.19', 'crew.social.name'));
-    this.vcue(45.4, 'op.20', () => { ui.caption(null); ui.subtitle('op.20', 'crew.scientist.name'); });
-    this.vcue(46.2, 'cine.line6', () => ui.subtitle('cine.line6', 'crew.scientist.name'));
-    this.cue(49.8, () => ui.subtitle(null));
-    this.shots.push({
-      start: 40.6, end: 46.6,
-      enter: () => { this.setVisible('deep'); d.uBH.value = 1; d.uNebula.value = 0.8; },
-      update: (k) => {
-        const p = V(80000, 0, 0);
-        ship.group.position.copy(p);
-        ship.group.lookAt(p.clone().add(V(0, 0, -1)));
-        (ship.plume.material as THREE.ShaderMaterial).uniforms.uPower.value = 0;
-        ship.engineGlow.color.setRGB(0.012, 0.02, 0.04); // propulsion is about to fail, and the bells read as dark holes
-        this.camera.position.copy(p).add(V(lerp(5, 3, k), lerp(2.2, 1.4, k), lerp(14, 11, k)));
-        this.lookTarget.copy(p).add(V(0, 0.8, -20));
-        const dist = lerp(160, 70, easeInOut(k));
-        d.uBHPos.value.set(-4, 7, -dist);
-        d.uWarp.value = k * 0.15; d.uWarpDir.value.set(0, 0, -1);
-        this.shake = k * 0.015;
-      },
-    });
+    // ---- The pull into Sagittarius (Scene 3 of the design doc, beat for beat) ----
+    // Tension in steps, each small and each worse than the last; then control goes; then the Event. One cause, then
+    // its effect. Nobody with nothing to do moves. The tearing apart itself is the title sequence (montage.ts).
+    const S = 39.0, FLOOR = -2.2;
+    const at = (x: number, y: number, z: number) => intr.group.position.clone().add(V(x, y, z));
+    // the crew are fetched again at every shot: setCast swaps the player's figure and Draxum's in after this was built,
+    // and a reference taken here acted on figures that were no longer in the scene
+    let [sci, drx, lyr, sky, bol, nuv] = intr.crew;
+    const fresh = () => { [sci, drx, lyr, sky, bol, nuv] = intr.crew; };
+    const put = (c: Character, x: number, z: number, ry: number, y = FLOOR) => { c.root.position.set(x, y, z); c.root.rotation.set(0, ry, 0); };
+    const talk = (c: Character, key: string) => c.say((voice.duration(key) ?? 2));
+    const calm = () => intr.crew.forEach((c) => { c.setLimbs(null); c.setFace(null); c.look2(0, 0); });
+    const lounge = () => { put(drx, -0.3, 1.9, Math.PI * 0.62); put(nuv, -1.5, 1.35, -Math.PI * 0.35); put(lyr, 1.2, 1.8, Math.PI * 0.9); put(sky, 2.0, 0.9, Math.PI * 1.05); put(bol, -2.6, 0.7, Math.PI * 0.75); };
+    const AMBER = new THREE.Color(0xffa020), RED = new THREE.Color(0xff2a1a), COOL = new THREE.Color(0xcfe6ff), GOLD = new THREE.Color(0xffc45a);
+    // the console's screen only where someone is reading it; elsewhere it filled the frame behind the faces
+    const holoMesh = intr.group.children.find((m) => (m as THREE.Mesh).material === intr.holo);
+    const holoOn = (on: boolean) => { if (holoMesh) holoMesh.visible = on; };
+    const floatUp = (g: number, local: number, slide = 0) => { for (const f of intr.floaters) { const base = f.userData.base as THREE.Vector3, spin = f.userData.spin as THREE.Vector3; f.position.set(base.x + slide * (0.6 + f.userData.rise), base.y + g * f.userData.rise * local * 0.5, base.z); f.rotation.x += spin.x * 0.016 * g; f.rotation.y += spin.y * 0.016 * g; f.rotation.z += spin.z * 0.016 * g; } };
 
-    // ---- Scene 3: The Event ----
-    this.vcue(46.7, 'cine.ai2', () => { ui.aiAlert('cine.ai2'); audio.alarm(true); audio.thud(); });
-    this.vcue(50.6, 'cine.line7', () => { ui.aiAlert(null); ui.subtitle('cine.line7', 'crew.social.name'); });
-    this.shots.push({
-      start: 46.6, end: 52.4,
-      enter: () => { this.setVisible('interior'); },
+    // ==== The pull into Sagittarius, shot by shot (~/bs-story/SHOTLIST_pull_and_fates.md, A1 to G7) ====
+    // The line of action runs between Zenvik at the console's left end and the five by the window at the right: the
+    // camera stays on the room side (+z), so Zenvik is always screen left, the group and the window screen right, the
+    // ship travels left to right outside and the galactic centre sits screen right. Lenses are full-frame focal
+    // lengths (vertical field of view 2 atan(12 / mm)). Every named thing has its insert; every line lands on a face.
+    const lens = (mm: number) => { this.camera.fov = 2 * Math.atan(12 / mm) * 180 / Math.PI; this.camera.updateProjectionMatrix(); };
+    const ins = this.ins;
+    const head = (c: Character, dy = 0) => new THREE.Vector3().setFromMatrixPosition(c.head.matrixWorld).add(V(0, 0.1 + dy, 0));
+    const hand = (c: Character, r = true) => (r ? c.handR : c.handL).getWorldPosition(new THREE.Vector3());
+    const WIN = at(1.0, -0.6, -3.6); // a point out of the window, for eyelines
+    // A4's eyeline: further along the window, so from the close-up's camera his look passes well left of the lens (WIN
+    // itself lies almost on the lens axis there, and he looked straight into it)
+    const WIN_A4 = WIN.clone().add(V(1.6, 0, 0.8));
+    const group = () => { put(drx, 2.3, -1.9, Math.PI * 1.15); put(nuv, 1.4, -1.6, Math.PI * 0.82); put(lyr, 3.2, -1.5, Math.PI * 1.1); put(sky, 2.7, -2.55, Math.PI); put(bol, 4.0, -2.2, Math.PI * 1.2); };
+    const atConsole = () => put(sci, -0.85, -0.62, Math.PI);
+    const exterior = (local: number, k: number, strain = 0) => {
+      const p = V(80000, 0, 0);
+      ship.group.position.copy(p); ship.group.lookAt(p.clone().add(V(1, 0, -0.08))); // left to right across the screen
+      ship.group.rotateZ(Math.sin(local * 0.7) * 0.01 + strain * 0.05);
+      (ship.plume.material as THREE.ShaderMaterial).uniforms.uPower.value = 0.5 + strain * (0.9 + 0.5 * Math.abs(Math.sin(local * 5.3)));
+      ship.engineGlow.color.setRGB(0.4 + strain, 1.2 + strain, 3 * (1 + strain));
+      return { p, k };
+    };
+    // a close shot may cheat the others out of the frame (they would stand between the lens and the face): every
+    // shot starts with all six shown, and `only` hides the rest for that shot
+    const only = (...cs: Character[]) => intr.crew.forEach((c) => { c.root.visible = cs.length === 0 || cs.includes(c); });
+    const shotAt = (start: number, end: number, sh: Omit<Shot, 'start' | 'end'>) => this.shots.push({ start, end, film: sh.film, enter: () => { fresh(); only(); sh.enter?.(); }, update: (k, l) => { fresh(); sh.update(k, l); } });
+
+    // ---- A. Something is wrong ----
+    this.cue(S + 0.2, () => { calm(); audio.tone(58, 7, 'sine', 0.22, 0, -9); });
+    // A1 extreme wide: the liner small, crossing left to right, the bright centre ahead at screen right
+    shotAt(S, S + 3.2, {
+      enter: () => { this.setVisible('deep'); d.uBH.value = 1; d.uNebula.value = 0.9; d.uWarp.value = 0; holoOn(true); ins.warn(null); group(); atConsole(); },
       update: (k, local) => {
-        const b = intr.group.position;
-        this.camera.position.copy(b).add(V(-4.2 + k * 0.5, -0.8, -0.4));
-        this.lookTarget.copy(b).add(V(0.4, -0.6, 1.0));
-        d.uBHPos.value.set(-6, 10, -lerp(60, 40, k));
-        intr.alarmLight.intensity = (Math.sin(local * 9) * 0.5 + 0.5) * 20;
-        intr.consoleLight.intensity = 0.6;
-        intr.mainLight.intensity = 4 * (0.35 + 0.65 * (Math.sin(local * 37) > -0.6 ? 1 : 0.1)) * (1 - k * 0.5);
-        intr.holo.uniforms.uAlarm.value = 1;
-        intr.holo.uniforms.uSpike.value = 2;
-        const g = smoothstep(0.3, 2.2, local);
-        for (const f of intr.floaters) {
-          const base = f.userData.base as THREE.Vector3;
-          const spin = f.userData.spin as THREE.Vector3;
-          f.position.y = base.y + g * f.userData.rise * local * 0.55;
-          f.rotation.x += spin.x * 0.016 * g; f.rotation.y += spin.y * 0.016 * g; f.rotation.z += spin.z * 0.016 * g;
-        }
-        // the deck goes out from under them: staggered, then thrown, then off their feet
-        intr.crew.forEach((c, i) => {
-          const hit = smoothstep(0.2 + i * 0.12, 1.5 + i * 0.12, local), up = smoothstep(2 + (i % 3) * 0.3, 5, local), side = i % 2 ? 1 : -1;
-          if (!c.root.userData.mark) c.root.userData.mark = c.root.position.clone();
-          const m = c.root.userData.mark as THREE.Vector3;
-          c.root.position.set(m.x + side * hit * 0.5 + Math.sin(local * 3.1 + i) * 0.1 * hit, -2.2 + up * (0.5 + (i % 3) * 0.28) + Math.sin(local * 2.3 + i * 2) * 0.06 * up, m.z - hit * 0.7 - up * up * 0.9);
-          c.root.rotation.x = -hit * 0.28 - up * (0.7 + (i % 3) * 0.3) + Math.sin(local * 2.6 + i) * 0.1 * hit;
-          c.root.rotation.z = side * hit * 0.24 + side * up * 0.7 + Math.sin(local * 3.3 + i * 3) * 0.1 * hit;
-          c.setLimbs(mixLimbs(STANDING, flail({ ...FALL.spread, openHands: true }, local, i * 2.9, 0.35 + 0.45 * up), smoothstep(0, 1, hit)));
-          c.setFace({ fear: 0.3 + 0.6 * hit, open: 0.1 + 0.45 * hit });
-          c.look2(Math.sin(local * 2.4 + i * 1.7) * 0.7 * hit, Math.sin(local * 1.9 + i) * 0.25 * hit);
-        });
-        this.shake = 0.035 + 0.03 * Math.max(0, Math.sin(local * 3));
+        const { p } = exterior(local, k);
+        lens(35); this.camera.position.copy(p).add(V(lerp(-60, -40, k), 6, 150)); this.lookTarget.copy(p).add(V(lerp(10, 25, k), 2, 0));
+        d.uBHPos.value.set(260, 10, -420);
+      },
+    });
+    // A2 the master: five laughing by the window, Zenvik alone at the console, back left
+    shotAt(S + 3.2, S + 6.2, {
+      enter: () => { this.setVisible('interior'); holoOn(false); group(); atConsole(); intr.mainLight.color.copy(COOL); intr.mainLight.intensity = 9; intr.mainLight.position.set(0, 2.5, 0.5); intr.alarmLight.intensity = 0; intr.holo.uniforms.uAlarm.value = 0; this.pullPose.social = 'selfie'; },
+      update: (k, local) => {
+        lens(24); this.camera.position.copy(at(0.9, -0.75, 3.1)); this.lookTarget.copy(at(1.1, -1.1, -1.4));
+        for (const [c, ph] of [[drx, 0], [nuv, 0.7], [lyr, 1.3], [sky, 0.4], [bol, 1.9]] as [Character, number][]) { c.setFace({ smile: 0.55 + 0.25 * Math.max(0, Math.sin(local * 2.1 + ph)) }); c.setLookTarget(head(nuv)); }
+        nuv.setLookTarget(head(drx)); sci.setFace({ squint: 0.2 }); sci.look2(0, 0.45);
+        ins.gauge(-0.02 * k);
+      },
+    });
+    // A3 insert: the nav gauge. The needle creeps a hair left; a tick; it creeps again
+    this.cue(S + 7.3, () => audio.tone(2400, 0.02, 'square', 0.05));
+    this.cue(S + 8.4, () => audio.tone(2400, 0.02, 'square', 0.05));
+    this.cue(S + 6.9, () => sci.doTask('use', { seconds: 0.7, at: ins.gaugeAt.getWorldPosition(new THREE.Vector3()).add(V(0, 0, 0.02)), hands: 'L', prop: null }));
+    this.cue(S + 8.0, () => sci.doTask('use', { seconds: 0.6, at: ins.gaugeAt.getWorldPosition(new THREE.Vector3()).add(V(0, 0, 0.02)), hands: 'L', prop: null }));
+    shotAt(S + 6.2, S + 9.0, {
+      enter: () => put(sci, -0.55, -0.6, Math.PI),
+      update: (k, local) => {
+        const g = ins.gaugeAt; g.updateMatrixWorld(); const c0 = g.getWorldPosition(new THREE.Vector3()), n = V(0, 0, 1).applyQuaternion(g.getWorldQuaternion(new THREE.Quaternion()));
+        lens(85); this.camera.position.copy(c0).addScaledVector(n, 0.55).add(V(-0.3, 0.1, 0)); this.lookTarget.copy(c0); // from his left; he stands to its right
+        sci.setLookTarget(c0); // his eyes are on the gauge already, so A4 does not open on his head swinging down to it
+        ins.gauge(-0.02 - 0.05 * smoothstep(0.9, 1.3, local) - 0.05 * smoothstep(2.0, 2.4, local));
+      },
+    });
+    // A4 close-up: Zenvik (back at the gauge's end of the console). He wants it to be a sensor fault. Brows draw together; a slow blink; eyes to the window and back
+    shotAt(S + 9.0, S + 11.6, {
+      film: 'pull_a4',
+      enter: () => atConsole(),
+      update: (k, local) => {
+        // slightly low (the shot list): under his eyeline as he looks down at the gauge, so his eyes read, not his lids
+        lens(85); const h = head(sci, -0.12); this.camera.position.copy(h).add(V(lerp(0.5, 0.42, k), -0.17, -1.04)); this.lookTarget.copy(h).add(V(0, -0.04, 0)); // a close-up: about a metre, the push in by the lerp
+        // no smile at all (his look's resting smile showed teeth and read as a smirk)
+        sci.setFace({ frown: smoothstep(0, 0.8, local) * 0.55, squint: 0.25, smile: 0, blink: local > 1.1 && local < 1.35 ? 1 : 0 });
+        // the dart: the eyes jump to the window and the head follows them fast, then both come back to the gauge
+        sci.setGazeRate(local < 0.1 ? 80 : local > 1.3 ? 9 : 2.2); // the first frames settle his head on the gauge under the cut
+        sci.setLookTarget(local < 1.4 ? ins.gaugeAt.getWorldPosition(new THREE.Vector3()) : local < 2.1 ? WIN_A4 : ins.gaugeAt.getWorldPosition(new THREE.Vector3()));
+      },
+    });
+    // A5 his eyeline through the window: near the core the stars are short arcs, all bent the same way
+    shotAt(S + 11.6, S + 14.4, {
+      enter: () => sci.setGazeRate(null),
+      update: (k) => { lens(50); this.camera.position.copy(at(0.2, -0.45, -0.55)); this.lookTarget.copy(at(1.6, -0.2, -6)); d.uWarp.value = smoothstep(0, 1, k) * 0.55; d.uWarpDir.value.set(-0.6, 0.3, -1).normalize(); d.uBHPos.value.set(-40, 18, -lerp(420, 330, k)); },
+    });
+    // A6 Skyvra at the window, her back to us; she turns, head first, then her body; a half smile that does not hold
+    this.vcue(S + 15.0, 'op.17', () => { ui.subtitle('op.17', 'crew.explorer.name'); talk(sky, 'op.17'); });
+    shotAt(S + 14.4, S + 18.4, {
+      enter: () => { this.pullPose = {}; },
+      update: (k, local) => {
+        lens(50); this.camera.position.copy(at(2.2, -0.6, 0.2)); this.lookTarget.copy(head(sky, -0.15));
+        const turn = smoothstep(0.2, 1.1, local), body = smoothstep(0.6, 1.6, local);
+        sky.root.rotation.y = Math.PI - body * 2.3; sky.look2(turn * 0.6 * (1 - body), 0);
+        sky.setFace({ smile: 0.35 * smoothstep(0.8, 1.2, local) * (1 - smoothstep(2.4, 3.2, local)), frown: 0.3 * smoothstep(2.6, 3.4, local) });
+        sky.setLookTarget(local > 1.4 ? head(drx) : null);
+        d.uWarp.value = 0.55;
       },
     });
 
-    // the rest happens in the title sequence: montage.ts
-    this.cue(52.4, () => { intr.crew.forEach((c) => { c.setLimbs(null); c.setFace(null); c.look2(0, 0); delete c.root.userData.mark; }); this.finish(); });
+    // ---- B. Denial ----
+    this.cue(S + 18.4, () => { drx.doTask('use', { seconds: 8, prop: 'cup', hands: 'R' }); this.pullPose.social = 'selfie'; });
+    // B1 the last normal moment: Nuvexa filming Draxum, who poses with his cup
+    shotAt(S + 18.4, S + 20.4, {
+      enter: () => { sky.root.rotation.y = Math.PI - 2.3; put(drx, 2.3, -1.9, 0.25); put(nuv, 1.7, -0.9, 2.6); },
+      update: (k) => {
+        lens(50); const m = head(drx).add(head(nuv)).multiplyScalar(0.5); this.camera.position.copy(m).add(V(1.3, -0.25, 2.1)); this.lookTarget.copy(m).add(V(0, -0.25, 0));
+        drx.setFace({ smile: 0.6 }); drx.look2(0, -0.15); nuv.setFace({ smile: 0.8 }); nuv.setLookTarget(head(drx));
+      },
+    });
+    // B2 insert: the drink. Its surface leans and creeps up one side; a drop climbs the rim. The room stays level
+    const CUP = at(2.25, -1.05, -1.45);
+    this.cue(S + 20.6, () => audio.tone(180, 0.5, 'sine', 0.05, 0, -40));
+    this.vcue(S + 21.9, 'pull.strong', () => { ui.subtitle('pull.strong', 'crew.strong.name'); talk(drx, 'pull.strong'); });
+    shotAt(S + 20.4, S + 23.0, {
+      update: (k, local) => {
+        ins.cup(CUP, 0.42 * smoothstep(0.2, 2.0, local), smoothstep(0.8, 2.4, local), smoothstep(1.6, 2.6, local));
+        lens(85); this.camera.position.copy(CUP).add(V(-0.05, 0.25, 0.24)); this.lookTarget.copy(CUP).add(V(0, 0.012, 0)); // high enough to see into it
+      },
+    });
+    // B3 close-up: Draxum looks down at the cup, blinks, looks up at the others; the joke shape stays a beat too long
+    shotAt(S + 23.0, S + 25.4, {
+      enter: () => ins.cup(null),
+      update: (k, local) => {
+        lens(85); const h = head(drx, -0.1); this.camera.position.copy(h).add(V(0.45, 0.18, 1.45)); this.lookTarget.copy(h);
+        drx.setLookTarget(local < 1.0 ? hand(drx) : head(lyr)); drx.setFace({ smile: 0.45 * (1 - smoothstep(1.4, 2.0, local)), blink: local > 0.9 && local < 1.1 ? 1 : 0, fear: 0.25 * smoothstep(1.6, 2.4, local) });
+      },
+    });
+    // B4 Bolzar by the hull panel. The first "It'll hold" a grin; the third flat; his hand stops on the panel
+    this.vcue(S + 25.6, 'pull.builder', () => { ui.subtitle('pull.builder', 'crew.builder.name'); talk(bol, 'pull.builder'); });
+    shotAt(S + 25.4, S + 29.4, {
+      enter: () => { put(bol, 4.3, -1.6, Math.PI * 1.45); },
+      update: (k, local) => {
+        lens(50); const h = head(bol, -0.2); this.camera.position.copy(h).add(V(-1.3, -0.05, 1.5)); this.lookTarget.copy(h);
+        bol.setLimbs(mixLimbs(STANDING, { ...STANDING, armL: [0.6, -0.1, 0.8], foreL: [0.5, 0.2, 0.9] }, smoothstep(0.2, 0.8, local)));
+        bol.setFace({ smile: 0.6 * (1 - smoothstep(1.6, 2.6, local)), fear: 0.4 * smoothstep(2.4, 3.2, local) }); bol.setLookTarget(local < 2.4 ? head(drx) : at(5, -0.6, -1.6));
+      },
+    });
+
+    // ---- C. The jokes die ----
+    // C1 over Zenvik's shoulder: the group turning to him. He swallows before the line
+    this.vcue(S + 30.1, 'cine.line4', () => { ui.subtitle('cine.line4', 'crew.scientist.name'); talk(sci, 'cine.line4'); });
+    shotAt(S + 29.4, S + 31.8, {
+      enter: () => { put(bol, 4.0, -2.2, Math.PI * 1.2); bol.setLimbs(null); sci.root.rotation.y = Math.PI * 0.55; this.pullPose = {}; drx.stopTask(); },
+      update: (k, local) => {
+        lens(50); const h = head(sci); this.camera.position.copy(h).add(V(-0.75, 0.05, 0.55)); this.lookTarget.copy(at(2.4, -0.8, -1.9));
+        sci.setFace({ fear: 0.2 }); const turn = smoothstep(0.6, 1.6, local);
+        for (const c of [drx, nuv, lyr, sky, bol]) { c.setLookTarget(turn > 0.3 ? head(sci) : null); c.setFace({ smile: 0.4 * (1 - turn) }); }
+      },
+    });
+    // C2 reaction, held: five faces, the laughter gone, each stopping at a different moment (Lyrra first, Nuvexa last)
+    shotAt(S + 31.8, S + 33.8, {
+      update: (k, local) => {
+        lens(35); this.camera.position.copy(at(0.6, -0.55, 0.9)); this.lookTarget.copy(at(2.8, -0.7, -1.9));
+        const stop = (c: Character, t0: number) => { const g = smoothstep(t0, t0 + 0.4, local); c.setFace({ smile: 0.3 * (1 - g), fear: 0.3 * g }); c.setLookTarget(head(sci)); };
+        stop(lyr, 0.0); stop(sky, 0.3); stop(drx, 0.5); stop(bol, 0.8); stop(nuv, 1.3);
+        this.pullPose.social = local < 1.3 ? 'selfie' : undefined as unknown as CrewPose;
+      },
+    });
+    // C3 insert: the console screen says it; amber washes over the room
+    this.vcue(S + 34.0, 'cine.ai1', () => { ui.subtitle('cine.ai1'); audio.alarm(true); }); // the screen insert carries it: no alert box over it
+    this.cue(S + 42.6, () => { ui.subtitle(null); audio.alarm(false); });
+    shotAt(S + 33.8, S + 42.6, {
+      enter: () => { this.pullPose = {}; ins.warn(['WARNING', 'UNIDENTIFIED GRAVITATIONAL DISTURBANCE', 'NAVIGATION: ANOMALOUS DEVIATION']); holoOn(false); },
+      update: (k, local) => {
+        lens(50); const w = ins.warnAt; const c0 = w.getWorldPosition(new THREE.Vector3()), n = V(0, 0, 1).applyQuaternion(w.getWorldQuaternion(new THREE.Quaternion()));
+        this.camera.position.copy(c0).addScaledVector(n, lerp(2.0, 1.75, k)); this.lookTarget.copy(c0);
+        intr.alarmLight.color.copy(AMBER); intr.alarmLight.intensity = 6 + Math.sin(local * 5) * 4;
+      },
+    });
+
+    // ---- D. Loss of control: the cockpit, established wide before its close shots ----
+    this.cue(S + 42.6, () => { audio.whoosh(); audio.tone(44, 13, 'sawtooth', 0.12, 0, 14); ins.warn(null); });
+    // D1 wide from behind and above the pilot, over her right shoulder: the seat, her hands on the yoke, the panel and
+    // the canopy with the core beyond. She is already fighting it
+    const YH = { L: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(1, 0, 0), radius: 0.019 }, R: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(-1, 0, 0), radius: 0.019 } }; // the horns are 19 mm round
+    const yoke = (local: number, haul: number) => { // she hauls back and fights the roll; the hands go with the yoke
+      ins.stick.position.z = -0.56 + 0.07 * haul + Math.sin(local * 7.3) * 0.006;
+      ins.stick.rotation.z = Math.sin(local * 1.9) * 0.12 * haul + Math.sin(local * 11) * 0.015;
+      ins.yokeHold(YH);
+    };
+    shotAt(S + 42.6, S + 44.8, {
+      enter: () => { this.setVisible('cockpit'); d.uBHPos.value.set(-6, 4, -160); ins.attitude(0, 0); ins.mfd(['THRUST', '112%'], ['NAV', 'DEVIATION +2.1°'], '#ffb347'); ins.yokeHold(YH); this.pilot.setHold(YH);
+        // in a chair: thighs forward, shins down; the hip joints just above the cushion (top at y -1.69)
+        this.pilot.setLimbs({ legL: [0.06, -0.12, 1], legR: [-0.06, -0.12, 1], shinL: [0.04, -1, 0.12], shinR: [-0.04, -1, 0.12] });
+        const r = this.pilot.root; r.position.y = -2.2; r.updateMatrixWorld(true);
+        const hipH = this.pilot.legL.getWorldPosition(new THREE.Vector3()).y - r.getWorldPosition(new THREE.Vector3()).y;
+        r.position.y = -1.69 + 0.09 - hipH; },
+      update: (k, local) => {
+        lens(24); const c = ins.cockpit.position; this.camera.position.copy(c).add(V(0.62, -0.62, 0.95)); this.lookTarget.copy(c).add(V(-0.12, -1.18, -1.6));
+        yoke(local, 0.6 + 0.2 * k);
+        this.pilot.setLookTarget(c.clone().add(V(0, -0.7, -3))); this.pilot.setFace({ frown: 0.6, squint: 0.4 });
+        ins.attitude(0.08 + local * 0.03, -0.1);
+        this.shake = 0.01;
+      },
+    });
+    // D2 insert: her hands on the yoke, from in front, low by the panel: knuckles tight, hauling back. Between the
+    // "come on"s a held breath
+    this.vcue(S + 45.0, 'pull.pilot', () => { ui.subtitle('pull.pilot', 'crew.pilot.name'); this.pilot.say(voice.duration('pull.pilot') ?? 3.9); });
+    shotAt(S + 44.8, S + 49.0, {
+      update: (k, local) => {
+        yoke(local, 0.8 + 0.2 * smoothstep(0.5, 3.5, local));
+        // from just over the glare shield, a little right of the column: both horns and both hands clear of the hub, her
+        // face above them in the same frame (the camera sits between the shield's back edge, z -1.15, and the yoke)
+        lens(26); const g = ins.stick.getWorldPosition(new THREE.Vector3()), hp = head(this.pilot, -0.1);
+        this.camera.position.copy(ins.cockpit.position).add(V(0.17, -0.9, -1.07)); this.lookTarget.copy(g).lerp(hp, 0.4);
+        this.pilot.setFace({ frown: 0.75, squint: 0.5, open: Math.max(0, Math.sin(local * 2.4)) * 0.25 }); this.pilot.setLookTarget(ins.cockpit.position.clone().add(V(0, -0.7, -3)));
+        this.shake = 0.008;
+      },
+    });
+    // D3 insert: the attitude display straight on, the side displays at its edges; the horizon rolls the wrong way
+    this.vcue(S + 49.3, 'pull.ai1', () => { ui.subtitle('pull.ai1'); audio.thud(); });
+    this.cue(S + 56.2, () => { ui.subtitle(null); this.pilot.setHold(null); this.pilot.setLimbs(null); });
+    shotAt(S + 49.0, S + 56.2, {
+      update: (k, local) => {
+        yoke(local, 1);
+        lens(50); const a = ins.attAt, c0 = a.getWorldPosition(new THREE.Vector3()), n = V(0, 0, 1).applyQuaternion(a.getWorldQuaternion(new THREE.Quaternion()));
+        this.camera.position.copy(c0).addScaledVector(n, 0.8); this.lookTarget.copy(c0);
+        ins.attitude(0.2 + easeInOut(k) * 0.9, -0.1 - 0.5 * k, local > 0.4);
+        if (local > 0.4) ins.mfd(['THRUST', local > 3 ? 'OVERSTRESS' : '118%'], ['NAV', `DEVIATION +${(2.1 + local * 1.3).toFixed(1)}°`], local > 3 ? '#ff5a3a' : '#ffb347');
+      },
+    });
+    // D4 extreme wide, as A1: engines flaring, the liner still drifting towards screen right
+    shotAt(S + 56.2, S + 59.0, {
+      enter: () => this.setVisible('deep'),
+      update: (k, local) => {
+        const { p } = exterior(local, k, 1);
+        lens(35); this.camera.position.copy(p).add(V(-45, 6, 150)); this.lookTarget.copy(p).add(V(25, 2, 0));
+        ship.group.position.x += k * 9; d.uBHPos.value.set(lerp(200, 150, k), 8, -300); this.shake = 0.01;
+      },
+    });
+
+    // ---- E. Everything slides: the camera is fixed to the ship, so the room stays level and the people slide ----
+    this.cue(S + 59.05, () => audio.thud());
+    shotAt(S + 59.0, S + 61.4, {
+      enter: () => { this.setVisible('interior'); holoOn(false); group(); put(sci, -0.85, -0.62, Math.PI * 0.6); },
+      update: (k, local) => {
+        lens(24); this.camera.position.copy(at(-1.6, -0.8, 2.6)); this.lookTarget.copy(at(1.6, -1.2, -1.3)); this.shake = 0.015;
+        const sl = (c: Character, go: number) => { const g = smoothstep(go, go + 1.6, local); c.root.position.x += g * 0.012; c.setLimbs(mixLimbs(STANDING, { ...FALL.spread, legL: [0.35, -1, 0.1], legR: [-0.35, -1, -0.1] }, g * 0.6)); c.setFace({ fear: 0.5 * g }); return g; };
+        sl(nuv, 0.2); sl(bol, 0.1); sl(sky, 0.4); sl(sci, 0.5); sl(drx, 0.3); sl(lyr, 0.6);
+        floatUp(0, 0, smoothstep(0, 2.4, local) * 2.2);
+        intr.alarmLight.color.copy(AMBER); intr.alarmLight.intensity = 5 + Math.sin(local * 5) * 3;
+      },
+    });
+    // E2 insert: Lyrra's hand closes on Nuvexa's wrist as she slides past
+    this.cue(S + 62.2, () => audio.tone(320, 0.18, 'sine', 0.05, 0, -120));
+    shotAt(S + 61.4, S + 62.9, {
+      enter: () => { put(nuv, 2.6, -1.6, Math.PI * 0.6); put(lyr, 3.2, -1.3, -Math.PI * 0.45); only(nuv, lyr); },
+      update: (k, local) => {
+        const g = smoothstep(0.1, 0.9, local);
+        nuv.setLimbs(mixLimbs(STANDING, { ...FALL.spread, armL: [0.9, 0.35, 0.3], foreL: [1, 0.25, 0.3] }, 0.9)); nuv.setFace({ fear: 0.8, open: 0.4 });
+        lyr.setLimbs(mixLimbs(STANDING, { ...STANDING, armR: [-0.9, 0.15, 0.45], foreR: [-1, 0.1, 0.3] }, g));
+        const m = hand(lyr).add(hand(nuv, false)).multiplyScalar(0.5);
+        lens(50); this.camera.position.copy(m).add(V(0.15, 0.35, 1.05)); this.lookTarget.copy(m);
+      },
+    });
+    // E3 Draxum plants his feet and takes Bolzar's weight on one arm; eyes on Bolzar, not on us
+    this.vcue(S + 63.2, 'cine.line8', () => { ui.subtitle('cine.line8', 'crew.strong.name'); talk(drx, 'cine.line8'); });
+    shotAt(S + 62.9, S + 65.8, {
+      enter: () => { put(drx, 2.2, -1.2, -0.35); put(bol, 2.85, -1.45, -0.9); },
+      update: (k, local) => {
+        lens(35); const h = head(drx, -0.3); this.camera.position.copy(h).add(V(-0.7, -0.3, 2.1)); this.lookTarget.copy(h).add(V(0.3, 0, 0)); this.shake = 0.02;
+        drx.setLimbs(mixLimbs(STANDING, { ...STANDING, legL: [0.45, -1, 0.1], shinL: [0.2, -1, 0], legR: [-0.4, -1, -0.15], shinR: [-0.2, -1, 0], armL: [1, -0.1, 0.35], foreL: [0.9, 0.2, 0.5] }, smoothstep(0, 0.8, local)));
+        drx.setFace({ frown: 0.7, open: 0.2 }); drx.setLookTarget(head(bol));
+        bol.setLimbs(mixLimbs(STANDING, FALL.spread, 0.5)); bol.setFace({ fear: 0.6 }); bol.setLookTarget(head(drx));
+      },
+    });
+
+    // ---- F. It is the black hole ----
+    // F1 over Zenvik's shoulder onto the main screen: the trajectory goes vertical; his hand stops on its frame
+    shotAt(S + 65.8, S + 67.8, {
+      enter: () => { holoOn(true); calm(); put(sci, 0.2, -0.95, Math.PI); },
+      update: (k, local) => {
+        lens(50); const h = head(sci); this.camera.position.copy(h).add(V(lerp(0.55, 0.45, k), 0.12, 0.9)); this.lookTarget.copy(at(0, -0.55, -1.45));
+        intr.holo.uniforms.uSpike.value = 1 + 2 * k; intr.holo.uniforms.uAlarm.value = 0.8;
+        sci.setLimbs(mixLimbs(STANDING, { ...STANDING, armR: [-0.35, -0.3, 0.9], foreR: [-0.2, 0.2, 1] }, smoothstep(0.3, 1.1, local)));
+      },
+    });
+    // F2 close-up: he turns from the screen to the window, eyes before the head; quiet; a held moment after "bending"
+    this.vcue(S + 68.1, 'pull.sci2', () => { ui.subtitle('pull.sci2', 'crew.scientist.name'); talk(sci, 'pull.sci2'); });
+    shotAt(S + 67.8, S + 74.4, {
+      update: (k, local) => {
+        lens(85); const h = head(sci, -0.12); this.camera.position.copy(h).add(V(0.75, -0.05, -1.45)); this.lookTarget.copy(h);
+        holoOn(false); sci.setLimbs(null); sci.setLookTarget(local < 0.6 ? at(0, -0.55, -1.45) : WIN);
+        sci.root.rotation.y = Math.PI - 0.5 * smoothstep(0.5, 1.4, local);
+        sci.setFace({ fear: 0.35, open: 0.08, frown: 0.2, blink: local > 5.7 && local < 5.9 ? 1 : 0 });
+        intr.mainLight.color.copy(COOL).lerp(GOLD, 0.3);
+      },
+    });
+    // F3 his eyeline: the black fills the window; a faint flickering haze, a flare going round, stars bent into rings
+    this.cue(S + 74.5, () => { ui.subtitle(null); audio.tone(36, 6, 'sine', 0.35, 0, 22); });
+    shotAt(S + 74.4, S + 79.0, {
+      update: (k) => {
+        const e = easeInOut(k); lens(35);
+        this.camera.position.copy(at(lerp(1.5, 1.2, e), -0.5, lerp(0.2, -0.4, e))); this.lookTarget.copy(at(0.4, -0.2, -6));
+        d.uBHPos.value.set(lerp(-6, -2.5, e), lerp(9, 3.5, e), -lerp(70, 15, e)); d.uWarp.value = 0.4 + 0.4 * e;
+        intr.mainLight.intensity = 9 - 3 * e + 4 * Math.max(0, Math.sin(this.clockT * 2.7)) * e; this.shake = 0.01 * e;
+      },
+    });
+    // F4 five quick close-ups, each on its own eyeline to the window (screen right), lit by the glow
+    // (by crew index, resolved per frame: the figures are swapped after this is built)
+    const F4: [number, Face][] = [[1, { frown: 0.7, open: 0.1 }], [2, { fear: 0.5, open: 0.35 }], [3, { smile: 0.4, fear: 0.5 }], [4, { fear: 0.6, squint: 0.3 }], [5, { fear: 0.7, open: 0.2 }]];
+    F4.forEach(([ci, face], i) => shotAt(S + 79.0 + i * 1.1, S + 80.1 + i * 1.1, {
+      // facing the glass, turned a little to the lens; Lyrra (i 1) turned further and shot more from the front, or her
+      // hair (it hangs on the lens side) hides her face
+      enter: () => { group(); only(intr.crew[ci]); intr.crew[ci].root.rotation.y = Math.PI - (i === 1 ? 0.85 : 0.5); },
+      update: (k, local) => {
+        const c = intr.crew[ci];
+        lens(85); const h = head(c, -0.12); this.camera.position.copy(h).add(i === 1 ? V(0.72, -0.05, -0.92) : V(1.05, -0.05, -0.55)); this.lookTarget.copy(h);
+        // each looks straight out through the glass, a little towards the lens side: screen right
+        const out = h.clone().add(i === 1 ? V(-1.2, 0.2, -4) : V(0.6, 0.2, -4)); // Lyrra's lens is more frontal: her look goes further screen right to match
+        c.setLookTarget(out); c.setFace(i === 2 ? { smile: 0.4 * (1 - smoothstep(0.3, 0.7, local)), fear: 0.6 * smoothstep(0.4, 0.9, local) } : face);
+        if (i === 3) c.setLookTarget(local > 0.5 ? h.clone().add(V(-2, -1.2, 1)) : out); // Bolzar looks away
+        if (i === 4) this.pullPose.social = local < 0.5 ? 'selfie' : undefined as unknown as CrewPose; // Nuvexa lowers the phone
+      },
+    }));
+
+    // ---- G. The ship breaks ----
+    this.vcue(S + 85.0, 'cine.ai2', () => { ui.aiAlert('cine.ai2'); audio.alarm(true); audio.thud(); });
+    // G1 wide from the hatch end: they have turned from the window to the room; the lights fail section by section from
+    // the far end towards us and their faces follow each one; the red strips by the hatch come on and light them
+    const SECT = [-3.6, -1.2, 1.3, 3.6], FAIL = [0.8, 1.7, 2.6, 3.5];
+    shotAt(S + 84.5, S + 93.6, {
+      enter: () => { this.pullPose = {}; group(); for (const c of [drx, nuv, lyr, sky, bol]) c.root.rotation.y = 0.35 + (c.root.position.x - 2.6) * 0.12; put(sci, -0.6, -0.4, 0.9); },
+      update: (k, local) => {
+        lens(24); this.camera.position.copy(at(4.7, -0.7, 1.3)); this.lookTarget.copy(at(0.9, -1.15, -1.5)); this.shake = 0.015;
+        const gone = FAIL.filter((f) => local >= f).length; // sections dark so far, from the far end
+        const lit = SECT.slice(gone);
+        intr.mainLight.color.copy(GOLD).lerp(COOL, 0.5);
+        if (lit.length) { intr.mainLight.position.set(lit.reduce((a, b) => a + b, 0) / lit.length, 1.2, 0.6); intr.mainLight.intensity = 3 + 3.2 * lit.length; }
+        else intr.mainLight.intensity = 0.8; // only the strips
+        intr.consoleLight.intensity = 0.6;
+        // the red strips at the hatch end: low, in front of them, so the faces stay readable in the dark
+        intr.alarmLight.color.copy(RED); intr.alarmLight.position.set(4.2, -0.6, 1.0);
+        intr.alarmLight.intensity = local > 2.6 ? 14 + (Math.sin(local * 9) * 0.5 + 0.5) * 18 : 0;
+        const failing = at(SECT[Math.min(gone, SECT.length - 1)], 1.4, 0);
+        intr.crew.forEach((c, i) => { c.setFace({ fear: 0.55 + 0.1 * gone, open: 0.15 + 0.05 * (i % 3) }); c.setLookTarget(local > FAIL[0] - 0.4 + i * 0.06 ? failing : null); });
+      },
+    });
+    // G2 insert: the comms panel. NO SIGNAL; the alarm stops mid-tone; a heartbeat comes in
+    this.cue(S + 94.4, () => { ui.aiAlert(null); audio.alarm(false); audio.vacuum(true); ins.comms(['COMMS', 'NO SIGNAL'], '#ff5a3a'); });
+    shotAt(S + 93.6, S + 96.2, {
+      enter: () => { intr.alarmLight.position.set(0, 2.0, 1.0); intr.mainLight.position.set(0, 2.5, 0.5); },
+      update: (k) => {
+        lens(50); const m = ins.commsAt, c0 = m.getWorldPosition(new THREE.Vector3()); this.camera.position.copy(c0).add(V(-0.75, 0, 0)); this.lookTarget.copy(c0);
+        intr.alarmLight.intensity = 5;
+      },
+    });
+    // G3 gravity off: the cup, a tablet and hair lift; Draxum thrown to the ceiling; Skyvra catches the handrail
+    this.cue(S + 97.4, () => { audio.thud(); this.shake = 0.12; });
+    shotAt(S + 96.2, S + 102.4, {
+      enter: () => { calm(); put(sci, 0.2, -0.9, Math.PI); put(drx, -1.3, -0.3, Math.PI); put(nuv, -2.3, 0.1, Math.PI); put(lyr, 1.5, -0.2, Math.PI); put(sky, 2.5, 0.1, Math.PI); put(bol, -3.3, 0.4, Math.PI); },
+      update: (k, local) => {
+        lens(24); this.camera.position.copy(at(lerp(3.9, 3.4, k), lerp(-1.5, -1.2, k), 2.7)); this.lookTarget.copy(at(-0.4, lerp(-0.6, 0.1, k), 0));
+        const g = smoothstep(0.3, 1.6, local);
+        floatUp(g, local, 2.4);
+        intr.mainLight.intensity = 0.6; intr.alarmLight.color.copy(RED); intr.alarmLight.intensity = 5 + Math.sin(local * 2.2) * 3;
+        const up = smoothstep(0.9, 2.9, local), hit = smoothstep(2.9, 3.05, local);
+        drx.root.position.set(-1.3 + up * 0.3, FLOOR + up * up * 2.55, -0.3 + up * 0.5); drx.root.rotation.set(-up * 1.1 - hit * 0.25, Math.PI, up * 0.5);
+        drx.setLimbs(flail(FALL.strong, local, 3.1, 0.3 + 0.3 * (1 - hit))); drx.setFace({ fear: 0.6, open: 0.5 * (1 - hit), frown: hit * 0.8, squint: hit * 0.7 });
+        const sw = smoothstep(0.6, 2.4, local);
+        sky.root.position.set(2.5, FLOOR + sw * 0.75, 0.1 - sw * 0.5); sky.root.rotation.set(sw * (0.9 + Math.sin(local * 1.6) * 0.18), Math.PI, sw * Math.sin(local * 1.3) * 0.25);
+        sky.setLimbs(mixLimbs(STANDING, { ...FALL.spread, armR: [-0.25, 0.6, 1], foreR: [-0.1, 0.5, 1] }, sw)); sky.setFace({ fear: 0.6 * sw, frown: 0.3 });
+        for (const [c, i] of [[sci, 0], [lyr, 2], [bol, 4], [nuv, 5]] as [Character, number][]) {
+          const u = smoothstep(1 + i * 0.12, 4.5, local);
+          c.root.position.y = FLOOR + u * (0.35 + (i % 3) * 0.12) + Math.sin(local * 1.4 + i) * 0.04 * u;
+          c.root.rotation.x = -u * 0.25; c.root.rotation.z = (i % 2 ? 1 : -1) * u * 0.22;
+          c.setLimbs(mixLimbs(STANDING, flail({ ...FALL.spread, openHands: true }, local, i * 2.9, 0.2), u * 0.8)); c.setFace({ fear: 0.7, open: 0.25 });
+        }
+      },
+    });
+    // G4 insert: the readout. How long, and that the danger is the ship, not the hole
+    this.cue(S + 102.6, () => { audio.beep(); ins.readout(['EVENT HORIZON: 40 SECONDS', 'ENGINES OVERSTRESSED · HULL FAILING', 'TIDAL STRESS: NEGLIGIBLE'], '#ffb347'); });
+    shotAt(S + 102.4, S + 106.0, {
+      enter: () => ins.readout(['EVENT HORIZON: 40 SECONDS', 'ENGINES OVERSTRESSED · HULL FAILING', 'TIDAL STRESS: NEGLIGIBLE'], '#ffb347'),
+      update: (k, local) => {
+        lens(50); const m = ins.readoutAt, c0 = m.getWorldPosition(new THREE.Vector3()); this.camera.position.copy(c0).add(V(-1.15, 0, 0)); this.lookTarget.copy(c0);
+        floatUp(1, 6 + local, 2.4);
+      },
+    });
+    // G5 two-shot, close: Zenvik and Nuvexa floating, her phone still streaming. He tells her the truth gently
+    this.vcue(S + 106.4, 'pull.sci3', () => { ui.subtitle('pull.sci3', 'crew.scientist.name'); talk(sci, 'pull.sci3'); });
+    shotAt(S + 106.0, S + 114.4, {
+      enter: () => { holoOn(false); put(sci, 0.2, -0.95, 0.35, FLOOR + 0.3); put(nuv, 0.95, -0.75, -0.55, FLOOR + 0.35); this.pullPose.social = 'selfie'; put(drx, -3.2, 0.6, Math.PI, FLOOR + 1.4); put(lyr, 3.6, 0.4, Math.PI, FLOOR + 0.5); put(sky, 4.2, -0.6, Math.PI, FLOOR + 0.7); put(bol, -3.8, -0.4, Math.PI, FLOOR + 0.4); },
+      update: (k, local) => {
+        lens(50); const m = head(sci).add(head(nuv)).multiplyScalar(0.5); this.camera.position.copy(m).add(V(-0.3, -0.12, 1.55)); this.lookTarget.copy(m).add(V(0, -0.12, 0));
+        sci.setLimbs(mixLimbs(STANDING, FALL.spread, 0.25)); sci.setFace({ fear: 0.4, squint: 0.15 }); sci.setLookTarget(local < 2.0 ? hand(nuv) : head(nuv));
+        nuv.setLimbs(mixLimbs(STANDING, FALL.spread, 0.3)); nuv.setFace({ fear: 0.6, open: 0.1 }); nuv.setLookTarget(head(sci));
+        if (local > 6.4) this.pullPose.social = undefined as unknown as CrewPose; // she holds the phone to her chest
+        intr.alarmLight.intensity = 3 + Math.sin(local * 1.1) * 2;
+        floatUp(1, 10 + local, 2.4);
+      },
+    });
+    // G6 close-up to medium, a fast pull back as he turns: he takes charge, too late
+    this.cue(S + 114.9, () => audio.vacuum(false));
+    this.vcue(S + 115.2, 'pull.pods', () => { ui.subtitle('pull.pods', 'crew.scientist.name'); talk(sci, 'pull.pods'); audio.alarm(true); });
+    shotAt(S + 114.4, S + 117.6, {
+      enter: () => { this.pullPose = {}; },
+      update: (k, local) => {
+        const back = easeInOut(smoothstep(0.6, 1.6, local)); lens(lerp(50, 35, back));
+        const h = head(sci, -0.1); this.camera.position.copy(h).add(V(lerp(0.35, 0.8, back), -0.05, lerp(1.0, 2.6, back))); this.lookTarget.copy(h).add(V(0, -0.2 * back, 0));
+        sci.root.rotation.y = lerp(0.35, -0.2, smoothstep(0.3, 0.9, local));
+        sci.setLimbs(local < 0.9 ? mixLimbs(STANDING, FALL.spread, 0.25) : { ...FALL.spread, armR: [-0.9, 0.5, 0.3], foreR: [-0.6, 0.9, 0.3] });
+        sci.setFace({ fear: 0.7, open: smoothstep(0.7, 0.9, local) * 0.7, frown: 0.3 });
+        intr.alarmLight.intensity = (Math.sin(local * 9) * 0.5 + 0.5) * 22; floatUp(1, 18 + local, 2.4);
+      },
+    });
+    // G7 wide behind the group towards the hatch: they push off together; the hatch stays far; the walls open, silently
+    this.cue(S + 118.0, () => { audio.alarm(false); audio.vacuum(true); ui.subtitle(null); });
+    shotAt(S + 117.6, S + 121.2, {
+      update: (k, local) => {
+        lens(24); this.camera.position.copy(at(-4.2, -0.9, 1.0)); this.lookTarget.copy(at(4.8, -1.0, 0.6));
+        const push = smoothstep(0, 1.2, local);
+        intr.crew.forEach((c, i) => { c.root.position.x = lerp(-1.6 + (i % 3) * 0.5, 0.2 + (i % 3) * 0.5, push * k); c.root.rotation.set(-0.5 * push, Math.PI * 0.5, 0); c.setLimbs(mixLimbs(STANDING, { ...FALL.spread, armR: [-0.3, 0.3, 1], foreR: [-0.2, 0.3, 1] }, push)); c.setLookTarget(at(5, -0.8, 0.6)); });
+        intr.group.scale.set(1 + 0.05 * k, 1, 1); // the deck stretches away from them: the hatch never gets closer
+        floatUp(1, 22 + local, 2.4);
+      },
+    });
+    // the breaking apart, the white and the six fates are the title sequence: montage.ts
+    this.cue(S + 121.2, () => { holoOn(true); intr.crew.forEach((c) => { c.root.visible = true; }); ui.subtitle(null); audio.alarm(false); calm(); intr.crew.forEach((c) => { c.root.rotation.set(0, Math.PI, 0); c.setLookTarget(null); }); intr.group.scale.set(1, 1, 1); this.roll = 0; this.pullPose = {}; audio.vacuum(false); ins.cup(null); ins.warn(null); ins.comms(['COMMS', 'LINK OK']); ins.readout(['NAV', 'COURSE NOMINAL']); this.finish(); });
   }
+
+  /** Camera roll for the shot in hand (the deck tilting), and poses the pull gives the crew outside a staged scene. */
+  private roll = 0;
+  private pullPose: Partial<Record<CrewId, CrewPose>> = {};
 
   update(dt: number) {
     this.clockT += dt;
@@ -503,7 +925,9 @@ export class Cinematic {
     if (!blocked) this.time = next;
     const t = this.time;
     for (const c of this.cues) if (!c.done && t >= c.t) { c.done = true; c.fn(); if (!this.playing) return; }
+    if (this.subClearAt && this.clockT > this.subClearAt) { this.subClearAt = 0; this.ui.subtitle(null); }
     this.animateCrew(dt);
+    let film = false;
     for (const s of this.shots) {
       if (t >= s.start && t < s.end) {
         if (!s.done) {
@@ -512,11 +936,15 @@ export class Cinematic {
           s.enter?.();
         }
         const local = t - s.start;
+        this.roll = 0;
         s.update(clamp(local / (s.end - s.start), 0, 1), local);
+        this.filmAt(s.film, local); film = true;
         break;
       }
     }
+    if (!film) this.filmAt(undefined, 0);
     this.camera.lookAt(this.lookTarget);
+    if (this.roll) this.camera.rotateZ(this.roll);
     this.commonUpdate(dt);
   }
 

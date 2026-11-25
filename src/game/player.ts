@@ -89,6 +89,8 @@ export class Player {
   private crowdS = 0;
   /** How far the camera is held down under a roof (awning, shelter): in fast, out slowly. */
   private ceilS = 0;
+  /** keepOff's push, eased (p29): a body showing beside the lens moved the camera 1.2 m and turned the view 37 deg in one frame. */
+  private keepX = 0; private keepZ = 0;
   private backS = 0;
   private turnS = 0;
   private zoomS = 0;
@@ -136,7 +138,15 @@ export class Player {
   /** Stop what the hands are doing (a panel closed, the job is over). */
   endAct() { this.model.stopTask(); this.busyT = 0; this.busyFace = null; }
 
+  /**
+   * A fixed camera on the work in his hands while a tension moment runs outside a cutscene (the hand drill, the
+   * knapping, the spear in the coals): the follow camera would show his back. He does not walk while it is set.
+   */
+  workShot: { from: THREE.Vector3; to: THREE.Vector3 } | null = null;
+  private workK = 0;
+
   update(dt: number, input: Input, canMove: boolean, stamina: number, slow: number) {
+    if (this.workShot) canMove = false;
     if (this.busyT > 0) {
       this.busyT -= dt; canMove = false;
       if (this.busyFace !== null) { const d = angleTo(this.facing, this.busyFace); this.facing += d * (1 - Math.exp(-dt * 8)); }
@@ -299,7 +309,7 @@ export class Player {
 
   snapCamera() {
     this.focus.copy(this.pos);
-    this.yawS = this.yaw; this.pitchS = this.pitch; this.distS = this.camDist; this.ceilS = 0;
+    this.yawS = this.yaw; this.pitchS = this.pitch; this.distS = this.camDist; this.ceilS = 0; this.keepX = 0; this.keepZ = 0;
     this.fovKick = 0; this.bobK = 0; this.lean = 0; this.dip = 0; this.dipV = 0; this.backS = 0; this.turnS = 0; this.zoomS = 0;
     if (this.camera.fov !== this.baseFov) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
     this.overS = this.combat?.over ?? 0; this.capS = Math.min(this.camDist, this.combat?.dist ?? this.camDist);
@@ -357,7 +367,13 @@ export class Player {
     this.orbit(this.camPos, this.focus, yawV, pitchV, this.distS * (1 - aim) + Math.min(this.distS, 3.1) * aim);
     // beside a big vehicle (the city's tram) the lens keeps a metre and a half off its side and nose: grazing them, its
     // white side or nose filled half the frame
-    this.forest.keepOff?.(this.camPos);
+    if (this.forest.keepOff) {
+      const x0 = this.camPos.x, z0 = this.camPos.z;
+      this.forest.keepOff(this.camPos);
+      // the push eases in and out over a tenth of a second (the bodies hide at the lens meanwhile), never a jump
+      const k = e(14); this.keepX += (this.camPos.x - x0 - this.keepX) * k; this.keepZ += (this.camPos.z - z0 - this.keepZ) * k;
+      this.camPos.x = x0 + this.keepX; this.camPos.z = z0 + this.keepZ;
+    }
     // under an awning or a shelter the camera stays below its roof (it rose into them in a thick crowd)
     if (this.forest.ceiling) {
       const top = this.forest.ceiling(this.focus.x, this.focus.z, this.focus.y, this.camPos.x, this.camPos.z);
@@ -405,7 +421,16 @@ export class Player {
     this.zoomS += (zw - this.zoomS) * e(zw > this.zoomS ? 2.2 : 1.6);
     const fov = this.baseFov + this.fovKick - 9 * aim - 15 * this.zoomS;
     if (Math.abs(fov - this.camera.fov) > 0.01) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
+    // the work shot: cut to it at once, ease back to the follow camera when it is let go
+    this.workK = this.workShot ? 1 : Math.max(0, this.workK - dt * 2.5);
+    if (this.workShot) { this.lastWork.from.copy(this.workShot.from); this.lastWork.to.copy(this.workShot.to); }
+    if (this.workK > 0) {
+      tmpC.copy(this.camera.quaternion); tmpA.copy(this.camera.position);
+      this.camera.position.copy(this.lastWork.from); this.camera.lookAt(this.lastWork.to);
+      if (this.workK < 1) { this.camera.position.lerp(tmpA, 1 - this.workK); this.camera.quaternion.slerpQuaternions(this.camera.quaternion, tmpC, 1 - this.workK); }
+    }
   }
+  private lastWork = { from: new THREE.Vector3(), to: new THREE.Vector3() };
 
   /** Unit vector the player is facing (horizontal). */
   forward(out = new THREE.Vector3()) {

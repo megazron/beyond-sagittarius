@@ -222,6 +222,9 @@ Standing, walking, jogging, sprinting, jumping and talking are from the Universa
 [Quaternius](https://quaternius.com/packs/universalanimationlibrary.html) (animation help by Gonzalo Furnier),
 CC0 1.0, free version as mirrored at https://github.com/J-Ponzo/gltf-universal-animation-library, retargeted
 to the crew rig by `tools/build_animations.py`.
+Picking things up (from the ground and from a table), planting, eating and drinking, an overhand throw, fixing while
+kneeling, a two-handed carry and holding a lantern are from Universal Animation Library 2 (Standard) by
+[Quaternius](https://quaternius.com/), CC0 1.0, retargeted the same way.
 
 ## Motion capture
 

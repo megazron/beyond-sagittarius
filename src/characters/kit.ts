@@ -11,7 +11,17 @@ export interface KitInput {
   id: CrewId; custom?: PlayerLook; human: boolean; bones: Map<string, THREE.Bone>; meta: CrewMeta; look: Look; sway: SwayUniforms;
   skinC: number; glowC: number; shadeC: number; detail: number; heightM: number;
 }
-export interface Kit { splint: THREE.Group; footH: number; live: THREE.Object3D[]; update(t: number, amount: number): void; }
+export interface Kit {
+  splint: THREE.Group; footH: number; live: THREE.Object3D[]; update(t: number, amount: number): void;
+  /** Nuvexa's own phone to her left hand (true) or back to her right: her right hand takes the stone, the cup, the bread */
+  /** Nuvexa's own phone into her pocket (true) or back into her right hand (false), over a quarter second. */
+  phoneLeft(on: boolean): void;
+  /** While the phone goes into the pocket or comes out: how much the right hand reaches down to the pocket (0 to 1, the
+   *  most halfway) and the pocket's place (world, last frame); null when the hand need not go there. */
+  pocketReach(): { w: number; at: THREE.Vector3 } | null;
+  /** False while her own phone is still in her right hand on its way to the pocket (what the hand takes waits for it). */
+  handFree(): boolean;
+}
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const cloth = (color: number, rough = 0.86) => new THREE.MeshStandardMaterial({ color, roughness: rough, side: THREE.DoubleSide, normalMap: weaveNormal(), normalScale: new THREE.Vector2(0.5, 0.5) });
@@ -118,6 +128,9 @@ export function addKit(k: KitInput): Kit {
     return { rx: rx * grow, rz: rz * grow, y: y - piv('hips').y, z: z - piv('hips').z };
   };
   let scarfEnds: THREE.Mesh[] = [];
+  let phone: THREE.Object3D | null = null, phoneTo: ((left: boolean) => void) | null = null, phoneStep: ((t: number) => void) | null = null;
+  const reach = { w: 0, at: new THREE.Vector3() };
+  let phoneK = () => 0;
   switch (outfit) {
     case 'scientist': {
       if (!custom) { glasses(); earGlow(); }
@@ -186,12 +199,45 @@ export function addKit(k: KitInput): Kit {
     }
     case 'social': {
       if (!custom) antennae();
-      const hand = B.get('handR')!;
-      const d = local('handR', piv('finger3_2R')), up = d.clone().normalize();
-      const ph = add(rbox(0.074, 0.15, 0.009, 0.008), metal(0xe6d7f0, 0.25), hand);
-      ph.position.copy(d.multiplyScalar(0.55).add(V(0, -0.02, 0)));
-      ph.quaternion.setFromUnitVectors(V(0, 1, 0), up);
+      const ph = add(rbox(0.074, 0.15, 0.009, 0.008), metal(0xe6d7f0, 0.25), B.get('handR')!);
+      // it lies in her palm with its screen facing out of the palm (the palm is the hand's -y at rest), so that when
+      // she lifts it for a selfie the screen is towards her face and her fingers are behind it. The same in the left
+      // hand, for when the right one takes something (throwing, she held the phone and the stone together)
+      const seat = (sd: 'L' | 'R') => {
+        const d = local(`hand${sd}`, piv(`finger3_2${sd}`)), up = d.clone().normalize();
+        const pn = V(0, -1, 0); pn.addScaledVector(up, -pn.dot(up)).normalize();
+        return { p: d.multiplyScalar(0.55).addScaledVector(pn, 0.022), q: new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(up, pn), up, pn)) };
+      };
+      const seats = { R: seat('R'), L: seat('L') };
+      ph.position.copy(seats.R.p); ph.quaternion.copy(seats.R.q);
       add(new THREE.BoxGeometry(0.066, 0.138, 0.001), glowMat(0x8fd8ff, 0.8), ph, 0, 0, 0.005, false);
+      ph.name = 'ownPhone'; phone = ph;
+      // While her right hand holds something else (a stone to throw, a cup) the phone goes into her right front pocket and
+      // comes back out after. It used to jump to the left hand in one frame (GPU take tasksD); now it travels from the
+      // palm to the pocket in a quarter second, sinks into the trousers and is hidden there, and back the same way.
+      const leg = B.get('upperlegR');
+      if (leg) {
+        const hp = piv('upperlegR'), side = Math.sign(hp.x) || -1;
+        const pocket = local('upperlegR', hp.clone().add(V(side * 0.05, -0.12, 0.085)));
+        // upright in the pocket, its screen to the thigh's outside
+        const pocketQ = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(V(0, 0, side), V(0, -1, 0), V(side, 0, 0)));
+        let want = false, k = 0, lastT = -1;
+        const mPock = new THREE.Matrix4(), qb = new THREE.Quaternion(), sc = new THREE.Vector3();
+        phoneTo = (on) => { want = on; };
+        phoneK = () => (want ? k : 0);
+        // The hand carries it (it slid on its own from the palm to the pocket beside a still hand, GPU take tasksE): over
+        // half a second the right hand goes down to the pocket with the phone in the palm and comes back empty; the
+        // phone is in the pocket (hidden) from the halfway mark. Coming out, the same the other way.
+        phoneStep = (t) => {
+          const dt = lastT < 0 ? 0 : Math.min(Math.max(t - lastT, 0), 0.1); lastT = t;
+          k = want ? Math.min(1, k + dt / 0.5) : Math.max(0, k - dt / 0.5);
+          const x = 1 - Math.abs(2 * k - 1); reach.w = k > 0 && k < 1 ? x * x * (3 - 2 * x) : 0;
+          leg.updateWorldMatrix(true, false);
+          mPock.compose(pocket, pocketQ, sc.set(1, 1, 1)).premultiply(leg.matrixWorld).decompose(reach.at, qb, sc);
+          ph.visible = k < 0.5;
+          if (ph.visible) { ph.position.copy(seats.R.p); ph.quaternion.copy(seats.R.q); }
+        };
+      }
       if (!custom) for (const s of [-1, 1]) { const r = add(new THREE.TorusGeometry(0.021, 0.0016, 8, 28), metal(0xffd66a, 0.2), head, s * (eye.x + 0.073), eye.y - 0.075, eye.z - 0.075, false); r.rotation.y = Math.PI / 2; }
       break;
     }
@@ -260,11 +306,12 @@ export function addKit(k: KitInput): Kit {
   shin.add(splint);
 
   return {
-    splint, footH: piv('footL').y,
+    splint, footH: piv('footL').y, phoneLeft: (on) => phoneTo?.(on), pocketReach: () => (reach.w > 0.005 ? reach : null), handFree: () => !phone || !phone.visible || phoneK() <= 0,
     // what moves or hides on its own: never merged into the body (rigid.ts)
-    live: [splint, ...(halo ? [halo] : []), ...scarfEnds, ...(tailBones.length ? [tailBones[0].parent!] : [])],
+    live: [splint, ...(phone ? [phone] : []), ...(halo ? [halo] : []), ...scarfEnds, ...(tailBones.length ? [tailBones[0].parent!] : [])],
     update(t, amount) {
       if (halo) halo.rotation.z = t * 0.4;
+      phoneStep?.(t);
       tailBones.forEach((b, i) => {
         const q = i / 7;
         const wag = Math.sin(t * 1.9 - q * 3.4) * (0.2 + amount * 0.14);

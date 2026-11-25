@@ -141,6 +141,9 @@ export function openCreator(ui: UI, start: PlayerLook, mode: 'new' | 'edit', sta
     }));
     document.getElementById('nm-ok')!.addEventListener('click', () => {
       look.name = cleanName(look.name);
+      // a new game keeps the creator's figure on screen while the black fades in over it (closing the stage first
+      // showed the title's planet for half a second between Begin and MegaZroN); the caller turns the stage off
+      if (mode === 'new') { ui.closeModal(); onDone(look); return; }
       close();
       onDone(look);
     });
