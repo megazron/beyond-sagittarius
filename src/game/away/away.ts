@@ -137,6 +137,8 @@ export class Away {
 
   /** Test hook (recording clips): the camera circles a point instead of following the player. */
   orbit: { x: number; y: number; z: number; r: number; a: number; h: number } | null = null;
+  /** A held shot over the play camera for a few seconds (a story's moment on someone's stage: Episode Three's copier). */
+  cut: { from: THREE.Vector3; to: THREE.Vector3; t: number; fov?: number; fov0?: number } | null = null;
 
   /** Test hook: stand beside a task. */
   teleport(x: number, z: number, yaw = 0) { if (!this.arrival?.active) this.player?.spawn(x, z, yaw); }
@@ -192,6 +194,12 @@ export class Away {
       else if (this.settle <= 0) p.pitch = -0.18; // whatever the frame rate, it ends at the usual eye line
     }
     if (this.orbit) { const o = this.orbit; this.camera.position.set(o.x + Math.sin(o.a) * o.r, o.y + o.h, o.z + Math.cos(o.a) * o.r); this.camera.lookAt(o.x, o.y + o.h * 0.55, o.z); }
+    if (this.cut) {
+      const c = this.cut, cam = this.camera as THREE.PerspectiveCamera;
+      if (c.fov && c.fov0 === undefined) { c.fov0 = cam.fov; cam.fov = c.fov; cam.updateProjectionMatrix(); }
+      cam.position.copy(c.from); cam.lookAt(c.to);
+      if ((c.t -= dt) <= 0) { if (c.fov0 !== undefined) { cam.fov = c.fov0; cam.updateProjectionMatrix(); } this.cut = null; }
+    }
     s.update(dt, time, this.camera);
     this.crowdSteps(dt);
     // falling off the ice costs nothing but the walk back

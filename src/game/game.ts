@@ -182,6 +182,7 @@ export class Game {
     // level 19 is Draxum's, on his own stage: the story's away hook, the stage, and the decision panel
     this.ep3.hooks = this.story.hooks; this.ep3.awayStage = () => this.away?.stage ?? null; this.ep3.askFn = (id, done) => this.ask(id, done);
     this.ep3.waking = () => this.waking;
+    this.ep3.awayCut = (from, to, secs, fov) => { if (this.away) this.away.cut = { from, to, t: secs, fov }; };
     // the dead stop talking, wherever the line comes from
     ui.sayFilter = (key, who) => {
       const id = /^crew\.(\w+)\.name$/.exec(who ?? '')?.[1];
@@ -242,10 +243,14 @@ export class Game {
     this.player.pose = 'idle';
     // at the workbench the hands keep working for as long as the craft panel is open
     if (mode === 'craft') { const p = this.player, f = this.tmpV.set(-Math.sin(p.facing), 0, -Math.cos(p.facing)); p.act('fix', new THREE.Vector3(p.pos.x + f.x * 0.5, p.pos.y + 0.75, p.pos.z + f.z * 0.5), 600); }
+    // Episode Three's crafts happen in and round his house: the follow camera behind him stood in the house wall (GPU take
+    // EP3B A, level 18: the medicine panel over a flat beige wall), so the episode frames him from in front instead
+    if (mode === 'craft' && !this.player.workShot) { const ws = this.ep3?.craftShot(); if (ws) { this.player.workShot = ws; this.craftShotSet = true; } }
   }
 
   private leavePanel() {
     if (this.mode === 'craft') this.player.endAct();
+    if (this.craftShotSet) { this.craftShotSet = false; this.player.workShot = null; }
     this.mode = 'play';
     document.body.classList.remove('in-panel');
     this.input.enabled = true;
@@ -305,6 +310,7 @@ export class Game {
   ep2!: Episode2;
   /** Episode Three (levels 15 to 21). */
   ep3!: Episode3;
+  private craftShotSet = false;
   /** The discovery card outside the craft panel (Episode Two shows it after the scene that makes the thing). */
   private discoverCard(n: TechNode, then?: () => void) {
     if (this.mode !== 'play') { this.after(0.5, () => this.discoverCard(n, then)); return; }

@@ -12,7 +12,7 @@ import { TECH_BY_ID } from './tech/data';
 import { apply, type StoryState } from './branch';
 import { createCharacter, type Character } from '../characters/character';
 import { createCreature, type CreatureView } from '../combat/view/creatures';
-import { createCopier, honeycomb, leaf as leafMesh, iceBlock } from '../world/ep3props';
+import { createCopier, honeycomb, leaf as leafMesh, iceBlock, strawTexture, wattleTexture, thatchCourse } from '../world/ep3props';
 import type { Enemy } from '../combat/sim/species';
 import { defaultLook, LINEAGES, type PlayerLook } from '../characters/custom';
 import type { Who } from '../cinematic/cutscene';
@@ -153,6 +153,7 @@ export class Episode3 extends Episode2 {
     this.restoreField();
     this.updateFolk(dt);
     this.updateBand(dt);
+    this.trample();
     this.updateRain(dt);
     this.restoreSprouts(); this.restoreDitch(); this.restoreKit(); this.tickKits(dt);
     this.fever(s.level === 18 && this.f('e3.l18.intro') && !this.f('e3.doseDone'), dt);
@@ -333,6 +334,52 @@ export class Episode3 extends Episode2 {
   }
 
   // ------------------------------------------------------------------ the craft panel's scenes
+  /** Every body standing (or lying) in the world now: the episode's own people, the band, Oom-Sa, the player. */
+  private bodies(): Character[] {
+    const out = new Set<Character>([...Object.values(this.actors), ...this.band, this.z]);
+    const o = this.oom(); if (o) out.add(o);
+    return [...out].filter((c) => !!c && c.root.visible && !!c.root.parent);
+  }
+  /** A shot that never starts inside a body or looks through one (GPU take EP3B A: the honeycomb and the cleaning inserts
+   * were shot from inside Hoh-Ma and Wen-Ka; the house's "Dry. Inside." through Oom-Sa's back). The camera swings round
+   * what it looks at, a little at a time, then rises, until it is clear. */
+  protected safeShot(sh: Shot): Shot {
+    const bodies = this.bodies(); if (!bodies.length) return sh;
+    const axis = bodies.map((c) => { const a = c.root.getWorldPosition(new THREE.Vector3()), h = c.head.getWorldPosition(new THREE.Vector3()); return [a.add(h.clone().sub(a).multiplyScalar(0.08)), h] as const; });
+    const P = new THREE.Vector3(), Q = new THREE.Vector3();
+    const near = (a: THREE.Vector3, b: THREE.Vector3, p0: THREE.Vector3, p1: THREE.Vector3, skipEnd: number) => {
+      let m = 9;
+      for (let i = 0; i <= 14; i++) { const u = i / 14; P.copy(a).lerp(b, u); if (a.distanceTo(P) > a.distanceTo(b) - skipEnd) continue; for (let j = 0; j <= 6; j++) { Q.copy(p0).lerp(p1, j / 6); m = Math.min(m, P.distanceTo(Q)); } }
+      return m;
+    };
+    const bad = (from: THREE.Vector3) => axis.some(([r, h]) => {
+      // the subject (its head near where the camera looks) may fill the frame; it must not be cut by the lens or in front
+      const subject = h.distanceTo(sh.to) < 0.45 || r.distanceTo(sh.to) < 0.45;
+      if (near(from, from, r, h, 0) < 0.36) return true;
+      return !subject && near(from, sh.to, r, h, 0.5) < 0.2;
+    });
+    if (!bad(sh.from)) return sh;
+    const off = sh.from.clone().sub(sh.to);
+    for (const lift of [0, 0.35, 0.7]) for (const a of [0.35, -0.35, 0.7, -0.7, 1.05, -1.05]) {
+      const f = sh.to.clone().add(off.clone().applyAxisAngle(UP, a)).add(v3(0, lift, 0));
+      f.y = Math.max(f.y, this.h(f.x, f.z) + 0.3);
+      if (!bad(f)) return { ...sh, from: f };
+    }
+    return sh;
+  }
+  protected override scene(beats: Beat[], then?: () => void) {
+    super.scene(beats.map((b) => (b.shot ? { ...b, shot: () => this.safeShot((b.shot as () => Shot)()) } : b)), then);
+  }
+  /** The camera for a craft panel in this episode: in front of him and to one side, a little above, on his hands (null
+   * outside Episode Three's levels or on Draxum's stage). */
+  craftShot(): { from: THREE.Vector3; to: THREE.Vector3 } | null {
+    if (!this.owns(this.s.level) || this.s.level === 19) return null;
+    const me = this.z.root.position.clone(), f = this.fwd(), r = this.right(f), kneel = this.z.kneeling > 0.5;
+    const hands = me.clone().addScaledVector(f, 0.4).add(v3(0, kneel ? 0.45 : 0.85, 0));
+    const from = me.clone().addScaledVector(f, 1.25).addScaledVector(r, 0.55).add(v3(0, kneel ? 1.05 : 1.55, 0));
+    from.y = Math.max(from.y, this.h(from.x, from.z) + 0.5);
+    return { from, to: hands.lerp(this.head(), 0.35) };
+  }
   override beforeCraft(n: TechNode, open: () => void): boolean {
     if (!this.owns(this.s.level)) return false;
     if (n.id === 'frame') return this.beforeFrame(open);
@@ -579,14 +626,15 @@ export class Episode3 extends Episode2 {
       }
     }
     if (st < 4) return;
-    const thatch = std(0xb09454, { roughness: 1 }), wattle = std(0x7d6444, { roughness: 1, side: THREE.DoubleSide });
+    // (GPU take EP3B A: flat yellow boards and plain beige panels; now straw courses and woven, daubed walls)
+    const thatch = std(0xffffff, { roughness: 1, map: strawTexture('straw') }), wattle = std(0xffffff, { roughness: 1, side: THREE.DoubleSide, map: wattleTexture() });
     for (const s of [-1, 1]) for (let i = 0; i < 5; i++) { const u = -1.6 + i * 0.8; log(fg, Lc(u, s * 1.55, EAVE - 0.12), Lc(u, 0, RIDGE + 0.08), 0.035, bark); }
     // the thatch: five rows a side laid from the eaves up, each over the one below
     const rows = o.rows ?? 10;
     for (let i = 0; i < 5; i++) for (const s of [1, -1]) {
       const E = Lc(0, s * 1.75, EAVE - 0.2), R = Lc(0, 0, RIDGE + 0.12), up = R.clone().sub(E), len = up.length(); up.normalize();
       const c = E.clone().addScaledVector(up, len * (i + 0.6) / 5.2);
-      const box = new THREE.Mesh(new THREE.BoxGeometry(3.9, 0.1, (len / 5) * 1.45), thatch);
+      const box = new THREE.Mesh(thatchCourse(3.9, (len / 5) * 1.45, i * 2 + (s > 0 ? 1 : 0)), thatch);
       const Y = up.clone().cross(H.a).normalize(); if (Y.y < 0) Y.negate();
       // an orthonormal basis: Z up the slope, Y off the roof, X along the ridge
       const Z = up.clone(), X = Y.clone().cross(Z).normalize();
@@ -600,7 +648,9 @@ export class Episode3 extends Episode2 {
     // wattle walls to the eaves, sunk a little into the ground; the doorway (0.9 m) in the chosen wall
     const wall = (u0: number, w0: number, u1: number, w1: number, h0: number, h1: number) => {
       const p0 = Lc(u0, w0, h0), p1 = Lc(u1, w1, h0), len = p0.distanceTo(p1);
-      const m = new THREE.Mesh(new THREE.BoxGeometry(len, h1 - h0, 0.07), wattle);
+      const bg = new THREE.BoxGeometry(len, h1 - h0, 0.07), uv = bg.getAttribute('uv');
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * len / 0.9, uv.getY(i) * (h1 - h0) / 0.9);
+      const m = new THREE.Mesh(bg, wattle);
       m.position.copy(p0).lerp(p1, 0.5); m.position.y = (h0 + h1) / 2;
       m.rotation.y = Math.atan2(-(p1.z - p0.z), p1.x - p0.x); m.castShadow = true; m.receiveShadow = true; fg.add(m);
     };
@@ -875,7 +925,8 @@ export class Episode3 extends Episode2 {
           z.setHold({ L: { at: arm.clone().addScaledVector(rr, -0.05), fingers: ff.clone(), palm: UP.clone(), radius: 0.03 }, R: { at: arm.clone().addScaledVector(rr, 0.03).addScaledVector(ff, -0.06).add(v3(0, 0.03, 0)), fingers: rr.clone().negate(), palm: UP.clone().negate(), radius: 0.02, grasp: true } });
           audio.sample('wood', 0.6, { rate: 1.4 }); audio.human('grunt', 0.6); z.setFace({ frown: 0.8, squint: 0.6 });
         } },
-        { key: 'e3.fr.slip', who: 'scientist', shot: () => cover.close(z, -0.4, 0.95, 0.24), run: () => { z.setLookTarget(arm); } },
+        // (from his side at head height, his face and the arm he holds: the close from in front looked down on his hair in the GPU take)
+        { key: 'e3.fr.slip', who: 'scientist', shot: () => { const hd = this.head(), ff = this.fwd(), rr = this.right(ff); return { from: hd.clone().addScaledVector(rr, 0.85).addScaledVector(ff, 0.45).add(v3(0, 0.02, 0)), to: hd.clone().lerp(arm, 0.45), fov: 40, push: 0.01 }; }, run: () => { z.setLookTarget(arm); } },
         { key: 'e3.fr.bind', who: 'scientist', shot: () => cover.mid(z, 0.5, 2.0), run: () => {
           z.setFace({ frown: 0.4 });
           const ff = this.fwd(), rr = this.right(ff);
@@ -988,7 +1039,7 @@ export class Episode3 extends Episode2 {
   private buildFenn() {
     if (this.fennG) return;
     const g = new THREE.Group(), { c, d, t: tn } = this.fennAxes();
-    const pole = std(0x6a5440, { roughness: 0.95 }), reed = std(0xb09a62, { roughness: 1 }), mat = std(0x8a7448, { roughness: 1 });
+    const pole = std(0x6a5440, { roughness: 0.95 }), reed = std(0xffffff, { roughness: 1, map: strawTexture('reed') }), mat = std(0x8a7448, { roughness: 1 });
     // three shelters on stilts (the shore floods), domed reed roofs, a ladder of lashed poles
     const spots: [number, number, number][] = [[2.6, -1.2, 1.0], [-1.8, 2.8, 0.9], [-2.4, -3.0, 0.8]];
     for (const [a, b, sc] of spots) {
@@ -998,7 +1049,11 @@ export class Episode3 extends Episode2 {
         const m = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, deck - gy + 0.05, 6), pole); m.position.set(p.x, (deck + gy) / 2, p.z); g.add(m);
       }
       const plat = new THREE.Mesh(new THREE.BoxGeometry(1.9 * sc, 0.07, 1.7 * sc), mat); plat.position.set(at.x, deck, at.z); plat.rotation.y = Math.atan2(d.x, d.z); g.add(plat);
-      const roof = new THREE.Mesh(new THREE.SphereGeometry(1.0 * sc, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), reed); roof.scale.set(1.05, 0.95, 0.95); roof.position.set(at.x, deck + 0.04, at.z); g.add(roof);
+      // a dome of reed bundles: lumpy, its eaves ragged, the reeds running from the top down (sphere uvs: v from the top)
+      const rg = new THREE.SphereGeometry(1.0 * sc, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2), rp = rg.getAttribute('position'), ruv = rg.getAttribute('uv');
+      for (let i = 0; i < rp.count; i++) { const x = rp.getX(i), y = rp.getY(i), zz = rp.getZ(i), an = Math.atan2(zz, x), k = 1 + Math.sin(an * 9 + a) * 0.035 + Math.sin(y * 11 + an * 3) * 0.02; rp.setXYZ(i, x * k, y < 0.05 ? y - 0.06 - Math.abs(Math.sin(an * 23 + b)) * 0.08 : y * k, zz * k); ruv.setXY(i, ruv.getX(i) * 8, ruv.getY(i) * 2.2); }
+      rg.computeVertexNormals();
+      const roof = new THREE.Mesh(rg, reed); roof.scale.set(1.05, 0.95, 0.95); roof.position.set(at.x, deck + 0.04, at.z); roof.castShadow = true; g.add(roof);
       // the doorway: a dark arch on the side away from the water
       const door = new THREE.Mesh(new THREE.CircleGeometry(0.32 * sc, 10, 0, Math.PI), std(0x1e1812, { roughness: 1 }));
       const dp = at.clone().addScaledVector(d, -0.93 * sc); door.position.set(dp.x, deck + 0.05, dp.z); door.rotation.y = Math.atan2(-d.x, -d.z); g.add(door);
@@ -1132,6 +1187,20 @@ export class Episode3 extends Episode2 {
       fig.setLookTarget(dd < 14 && (i + Math.floor(t / 7)) % 3 !== 0 ? this.head() : null);
       fig.animate('idle', this.folkT * 0.3 + i * 1.7, 0, t + i, dt);
     });
+  }
+  /** Where people live and work the grass is trodden short (the GPU take's inserts at the house and the reed camp were shot
+   * through blades a metre tall): from level 16 the house's floor and, from 17, the reed camp take the two clearings
+   * the first days used (the crew spot and the second wreck). */
+  private trampleKey = '';
+  private trample() {
+    const lvl = this.s.level, w = this.world as unknown as { clearings: [number, number, number][]; grass?: { setClearings(l: [number, number, number][]): void } };
+    if (lvl < 16 || !w.grass || !w.clearings?.length || !this.f('e3.siteDone')) return;
+    const H = this.house(), key = `${this.siteNow()}/${lvl >= 17}`;
+    if (key === this.trampleKey) return;
+    this.trampleKey = key;
+    const list: [number, number, number][] = [w.clearings[0], w.clearings[1], [H.at.x, H.at.z, 4.2]];
+    if (lvl >= 17) { const c = this.fennAt(); list.push([c.x, c.z, 6.5]); }
+    w.grass.setClearings(list);
   }
   /** Level 21: the band reaps beside him while the harvest scene plays (trust >= 1). */
   private bandHarvest = false;
@@ -1598,11 +1667,13 @@ export class Episode3 extends Episode2 {
     const boy = (): THREE.Vector3 => F.wenka.head.getWorldPosition(new THREE.Vector3());
     const clean = (k: number, at: THREE.Vector3) => { const u = Math.sin(k * 3) * 0.04; z.setHold({ R: { at: at.clone().addScaledVector(r, u).add(v3(0, 0.03, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.02 }, L: { at: at.clone().addScaledVector(r, -0.09).add(v3(0, 0.02, 0)), fingers: f.clone(), palm: UP.clone().negate(), radius: 0.03 } }); };
     const beats: Beat[] = [
-      { hold: 3.2, shot: () => ({ from: mat.clone().addScaledVector(d, -3.2).addScaledVector(out, 2.0).add(v3(0, 0.9, 0)), to: mat.clone().addScaledVector(out, 0.4).add(v3(0, 0.45, 0)), fov: 40, push: 0.02 }), run: () => {
+      // (GPU take EP3B A: from the camp side a reed roof filled half the frame; now from the open side, over the three of them)
+      { hold: 3.2, shot: () => ({ from: mat.clone().addScaledVector(out, 3.3).addScaledVector(d, 0.9).add(v3(0, 1.45, 0)), to: mat.clone().addScaledVector(out, 0.35).add(v3(0, 0.3, 0)), fov: 42, push: 0.02 }), run: () => {
         holdComb(); F.wenka.setLookTarget(this.head()); F.hohma.setLookTarget(foot); z.setLookTarget(boy()); F.wenka.setFace({ frown: 0.5, squint: 0.4 });
       } },
       { key: 'e3.ds.1', who: 'hohma' as Who, shot: () => this.oomClose(F.hohma, 0.4, 1.0), run: () => { F.hohma.setLookTarget(this.head()); } },
-      { hold: 2.6, shot: () => ({ from: held.clone().addScaledVector(f, -0.3).add(v3(0, 0.2, 0)).addScaledVector(r, 0.1), to: held.clone(), fov: 26, push: 0.006, aperture: 0.004, lightAt: held.clone(), lightScale: 0.6 }), run: () => z.setLookTarget(held) },
+      // the comb in her hands from above and in front of her (the camera stood inside her body in the GPU take)
+      { hold: 2.6, shot: () => { const away = held.clone().sub(hm).setY(0).normalize(); return { from: held.clone().addScaledVector(away, 0.22).addScaledVector(r, 0.08).add(v3(0, 0.42, 0)), to: held.clone().add(v3(0, 0.01, 0)), fov: 30, push: 0.006, aperture: 0.004, lightAt: held.clone().add(v3(0, 0.15, 0)), lightScale: 0.6 }; }, run: () => z.setLookTarget(held) },
       { key: 'e3.ds.2', who: 'scientist', shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => { z.setLookTarget(boy()); z.setFace({ frown: 0.3 }); } },
       { hold: 1.2, shot: () => cover.close(z, 0.45, 1.1, 0.24), run: () => z.setLookTarget(held) },
       { choice: 'e3.dose', shot: () => cover.close(z, 0.45, 1.1, 0.24) },
@@ -1610,7 +1681,8 @@ export class Episode3 extends Episode2 {
       { key: 'e3.ds.truth', who: 'scientist', if: CHOSE('e3.dose', 'self'), shot: () => cover.close(z, -0.4, 1.0, 0.24), run: () => { z.setLookTarget(boy()); z.setFace({ frown: 0.5 }); } },
       { key: 'e3.ds.half', who: 'scientist', if: CHOSE('e3.dose', 'half'), shot: () => cover.close(z, 0.4, 1.0, 0.24) },
       // he cleans the boy's foot first (or shows her how, when he keeps the honey), Hoh-Ma holding him
-      { hold: 3.6, shot: () => ({ from: foot.clone().addScaledVector(d, -0.6).addScaledVector(out, 0.35).add(v3(0, 0.35, 0)), to: foot.clone(), fov: 30, push: 0.01, aperture: 0.004, lightAt: foot.clone() }), run: () => {
+      // the foot from above the boy's shins, looking out past it to the hands (the camera stood in a body in the GPU take)
+      { hold: 3.6, shot: () => ({ from: foot.clone().addScaledVector(out, -0.45).add(v3(0, 0.78, 0)), to: foot.clone().addScaledVector(out, 0.12), fov: 34, push: 0.01, aperture: 0.004, lightAt: foot.clone().add(v3(0, 0.2, 0)) }), run: () => {
         comb.removeFromParent(); leaf.removeFromParent(); F.hohma.setHold(null); F.hohma.setLookTarget(foot); F.wenka.setLookTarget(foot);
         S.anim(3.6, (k) => clean(k, foot)); audio.human('breath', 0.3);
         S.after(2.0, () => { (mud.material as THREE.MeshStandardMaterial).color.setHex(0xc89a40); });
@@ -1678,6 +1750,7 @@ export class Episode3 extends Episode2 {
   hooks: { away: (id: CrewId, loc: string, task: (id: string, go: () => void) => void, done: () => void) => void } | null = null;
   awayStage: (() => AwayStage | null) | null = null;
   askFn: ((id: string, done: () => void) => void) | null = null;
+  awayCut: ((from: THREE.Vector3, to: THREE.Vector3, secs: number, fov?: number) => void) | null = null;
   private wallOn = false;
   private wallN = 0;
   private wallG: THREE.Group | null = null;
@@ -1709,8 +1782,34 @@ export class Episode3 extends Episode2 {
       b.position.set(x, y + 0.21 + row * 0.42, z); b.rotation.y = -a + Math.PI / 2 + (Math.sin(i * 7) * 0.08); b.castShadow = true; b.receiveShadow = true; g.add(b);
     }
   }
+  /** Draxum's stage, once: a frozen lake at each place he cuts ice (a sheet of pale ice with cracks, a block half cut out of
+   * it, the score lines), and the black lake the thing comes out of. */
+  private moonDressed: THREE.Scene | null = null;
+  private dressMoon() {
+    const st = this.awayStage?.();
+    if (!st || this.moonDressed === st.scene) return;
+    this.moonDressed = st.scene;
+    const g = new THREE.Group(); g.name = 'e3.moonLakes';
+    const sheetM = new THREE.MeshStandardMaterial({ color: 0x8fa2ac, roughness: 0.18, metalness: 0.05, envMapIntensity: 1.4 });
+    const crackM = new THREE.MeshBasicMaterial({ color: 0x3a4248 });
+    const lake = (x: number, z: number, r: number, black: boolean, seed: number) => {
+      const y = st.height(x, z);
+      const shape = new THREE.Shape(); const n = 22;
+      for (let i = 0; i <= n; i++) { const a = (i / n) * Math.PI * 2, rr = r * (1 + Math.sin(a * 3 + seed) * 0.12 + Math.sin(a * 5 - seed) * 0.06); if (i) shape.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); else shape.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+      const m = new THREE.Mesh(new THREE.ShapeGeometry(shape, 4), black ? new THREE.MeshStandardMaterial({ color: 0x0c0a0a, roughness: 0.05, metalness: 0.3 }) : sheetM);
+      m.rotation.x = -Math.PI / 2; m.position.set(x, y + 0.03, z); m.receiveShadow = true; g.add(m);
+      if (black) return;
+      for (let i = 0; i < 9; i++) { const a = seed + i * 0.7, l = r * (0.4 + (i % 3) * 0.2); const c = new THREE.Mesh(new THREE.PlaneGeometry(l, 0.012), crackM); c.rotation.set(-Math.PI / 2, 0, a); c.position.set(x + Math.cos(a * 1.7) * r * 0.3, y + 0.035, z + Math.sin(a * 1.3) * r * 0.3); g.add(c); }
+      // a block half cut out of the sheet, standing proud of it
+      const b = iceBlock(40 + seed); b.position.set(x + r * 0.35, y + 0.08, z - r * 0.2); b.rotation.set(0.12, seed, 0.06); g.add(b);
+    };
+    st.tasks.forEach((tk, i) => { if (/^ice\d$/.test(tk.id)) lake(tk.pos.x, tk.pos.z, 2.6, false, i * 2.3 + 1); });
+    lake(15, -17, 5.5, true, 7);
+    st.scene.add(g);
+  }
   private wallTask(id: string, go: () => void) {
     if (!this.wallOn) { go(); return; }
+    this.dressMoon();
     // the voice in the haze is never Bolzar himself: it gets its own label (and so is not stopped when he is dead)
     const say = (k: string, who: Who, sec: number, then: () => void) => { if (who === 'builder') this.ui.say(k, 'e3.who.voice', sec); else this.say(k, who, sec); this.after(sec, then); };
     if (/^ice\d$/.test(id)) {
@@ -1746,6 +1845,8 @@ export class Episode3 extends Episode2 {
       this.anim(6, (k) => { const u = Math.min(1, k / 6), p = from.clone().lerp(to, u); p.y = st.height(p.x, p.z) - (1 - Math.min(1, k / 1.5)) * 1.2; body!.position.copy(p); this.copierState.speed = u < 1 ? 1 : 0.1; body!.rotation.y = Math.atan2(-(to.z - from.z), to.x - from.x); });
     }
     audio.sample('stone', 0.5, { rate: 0.45 });
+    // a long lens over his shoulder onto it coming out of the black lake and up the shore (shot list 3.9/3: fov 20)
+    if (st) { const y = st.height(-2.6, -3.6); this.awayCut?.(v3(-2.6, y + 1.9, -3.6), v3(8.3, st.height(8.3, -12.2) + 0.5, -12.2), 5.2, 22); }
     this.say('e3.dx.come', 'strong', 4.5);
     this.after(2.2, () => { this.copierState.call = 1; this.ui.say(isAlive(this.s.branch, 'builder') ? 'e3.dx.voice' : 'e3.dx.hum', 'e3.who.voice', 3); });
     this.after(5.2, () => { this.copierState.call = 0; });

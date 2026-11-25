@@ -178,3 +178,60 @@ export function createCopier(detail = 1): Copier {
     },
   };
 }
+
+const texCache: Record<string, THREE.CanvasTexture> = {};
+/** Straw or reed laid in a thatch: fine strands along v, in a few tans, with darker gaps and lighter ends (sRGB map). */
+export function strawTexture(kind: 'straw' | 'reed' = 'straw'): THREE.CanvasTexture {
+  if (texCache[kind]) return texCache[kind];
+  const W = 256, H = 256, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d')!, R = rng(kind === 'straw' ? 11 : 23);
+  const base = kind === 'straw' ? [176, 150, 92] : [150, 138, 96];
+  g.fillStyle = `rgb(${base[0] * 0.45},${base[1] * 0.42},${base[2] * 0.38})`; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 1400; i++) {
+    const x = R() * W, y = R() * H, len = 30 + R() * 90, k = 0.65 + R() * 0.5, w = 0.8 + R() * 1.6;
+    g.strokeStyle = `rgb(${Math.min(255, base[0] * k)},${Math.min(255, base[1] * k)},${Math.min(255, base[2] * k * 0.95)})`; g.lineWidth = w;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + (R() - 0.5) * 6, y + len); g.stroke();
+    if (y + len > H) { g.beginPath(); g.moveTo(x, y - H); g.lineTo(x + (R() - 0.5) * 6, y - H + len); g.stroke(); }
+  }
+  // the courses: a darker band every quarter where one layer lies over the next
+  for (let k = 0; k < 4; k++) { const gr = g.createLinearGradient(0, k * 64 + 50, 0, k * 64 + 64); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(20,14,6,0.45)'); g.fillStyle = gr; g.fillRect(0, k * 64 + 50, W, 14); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
+  texCache[kind] = t; return t;
+}
+/** Wattle and daub: woven withies between stakes, daubed with clay that has cracked and fallen off in places. */
+export function wattleTexture(): THREE.CanvasTexture {
+  if (texCache.wattle) return texCache.wattle;
+  const W = 256, H = 256, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d')!, R = rng(5);
+  g.fillStyle = 'rgb(92,70,46)'; g.fillRect(0, 0, W, H);
+  // the stakes and the withies woven in and out of them
+  for (let x = 0; x < W; x += 32) { g.fillStyle = 'rgb(70,52,36)'; g.fillRect(x, 0, 7, H); }
+  for (let y = 0; y < H; y += 12) for (let x = 0; x < W; x += 32) {
+    const over = ((y / 12) + (x / 32)) % 2 === 0, sh = over ? 1.15 : 0.8;
+    g.fillStyle = `rgb(${120 * sh},${92 * sh},${60 * sh})`; g.beginPath(); g.ellipse(x + 16 + 3, y + 6, 17, 5.2, 0, 0, Math.PI * 2); g.fill();
+  }
+  // the daub over most of it: a mottled clay with cracks, gone in patches
+  for (let i = 0; i < 26; i++) {
+    const x = R() * W, y = R() * H, r = 24 + R() * 46;
+    const gr = g.createRadialGradient(x, y, r * 0.2, x, y, r); gr.addColorStop(0, `rgba(${150 + R() * 20},${118 + R() * 14},${82},0.95)`); gr.addColorStop(0.8, 'rgba(140,108,74,0.85)'); gr.addColorStop(1, 'rgba(140,108,74,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  }
+  g.strokeStyle = 'rgba(50,36,24,0.7)'; g.lineWidth = 1;
+  for (let i = 0; i < 40; i++) { let x = R() * W, y = R() * H; g.beginPath(); g.moveTo(x, y); for (let k = 0; k < 5; k++) { x += (R() - 0.5) * 22; y += (R() - 0.5) * 22; g.lineTo(x, y); } g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
+  texCache.wattle = t; return t;
+}
+/** One course of thatch: a slab of straw `w` long, `d` down the slope and 10 cm thick, its lower edge ragged with ends. */
+export function thatchCourse(w: number, d: number, seed: number): THREE.BufferGeometry {
+  const geo = new THREE.BoxGeometry(w, 0.1, d, Math.max(8, Math.round(w * 10)), 1, 2), p = geo.getAttribute('position'), R = rng(seed + 3);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    if (z < -d / 2 + 0.01) { p.setZ(i, z - R() * 0.07 - Math.abs(Math.sin(x * 9 + seed)) * 0.04); p.setY(i, p.getY(i) - 0.02 - R() * 0.02); }
+    p.setY(i, p.getY(i) + Math.sin(x * 2.3 + seed) * 0.015);
+  }
+  geo.computeVertexNormals();
+  // the straw runs down the slope (v along z)
+  const uv = geo.getAttribute('uv');
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, (p.getX(i) + w / 2) / 0.8, (p.getZ(i) + d / 2) / 0.8);
+  return geo;
+}
