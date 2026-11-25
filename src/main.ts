@@ -1241,7 +1241,7 @@ window.addEventListener('resize', () => {
   teleport(x: number, z: number, yaw = 0) { player?.spawn(x, z, yaw); },
   /** Teleport next to the current objective (marker target). */
   gotoObjective(offset = 0.6) {
-    const m = game?.story.busy || game?.ep2?.isBusy || game?.ep3?.isBusy || (game?.save.level === 7 && game.story.houndEngaged()) ? null : game?.objectivePoint();
+    const m = game?.story.busy || game?.ep3?.isBusy || (game?.save.level === 7 && game.story.houndEngaged()) ? null : game?.objectivePoint();
     if (!m || !player) return null;
     player.spawn(m.x + offset, m.z + offset * 0.5, player.yaw);
     return [m.x, m.z];

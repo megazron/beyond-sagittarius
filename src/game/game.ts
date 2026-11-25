@@ -790,8 +790,9 @@ export class Game {
   findInteraction() {
     const p = this.player;
     // a held work shot (the drill, the knapping, the spear, the lean-to): nothing to press but the moment itself
-    if (p.workShot || this.ep2?.isBusy || this.ep3?.isBusy) { this.interactTarget = null; this.ui.setPrompt(null); return; }
-    // (an episode's scene, hold or timed beat: no talk menu or pickup over it; CI levels_smoke opened Oom-Sa's talk during level 18's hold)
+    if (p.workShot || (this.ep3?.isBusy && !this.combat?.encounter)) { this.interactTarget = null; this.ui.setPrompt(null); return; }
+    // (Episode Three's scene, hold or timed beat: no talk menu or pickup over it; CI levels_smoke opened Oom-Sa's talk
+    // during level 18's hold. Not Episode Two's busy: it stays set through some play, and mobile_smoke lost the trader's Use)
     if (this.story.houndEngaged() && !this.combat?.encounter) {
       this.interactTarget = { kind: 'strike' };
       this.ui.setPrompt(this.story.strikePrompt());
