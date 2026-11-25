@@ -10,6 +10,7 @@ import type { Action } from './story';
 import type { Npcs } from './npcs';
 import type { TechNode } from './tech/data';
 import { LAKE } from '../world/terrain';
+import { buildRockShelter } from '../world/rockshelter';
 import { cover, type Beat, type Shot, type Who } from '../cinematic/cutscene';
 import type { TensionResult, TensionSpec } from '../combat/sim/tension';
 import { test, type Cond } from './branch';
@@ -184,7 +185,11 @@ export class Episode2 {
     const g = at.clone(); g.y = this.h(g.x, g.z);
     p.pos.copy(g); p.vel.set(0, 0, 0); p.facing = facing;
     p.model.root.position.copy(g); p.model.root.rotation.y = facing + Math.PI; p.model.root.updateMatrixWorld(true);
-    this.z.setKneel(kneel, sit);
+    // at once, and posed now: settle is always under a cut, and the shot that follows is framed on where his head is
+    // this frame (kneeling over a second, the first shot of the bark scene framed a standing head and looked into the sky)
+    this.z.setKneel(kneel, sit, true);
+    this.z.animate('idle', 0, 0, performance.now() / 1000, 0);
+    this.z.root.updateMatrixWorld(true);
     return g;
   }
   /** Kneeling to work beside the fire, side-on to it (facing along the ring, the fire at his shoulder): a camera in
@@ -196,7 +201,8 @@ export class Episode2 {
   /** A point ahead of him at eye height: he looks up from the work to say a line. */
   private ahead() { return this.head().addScaledVector(this.fwd(), 3).add(v3(0, 0.1, 0)); }
   private fwd() { const r = this.z.root.rotation.y; return v3(Math.sin(r), 0, Math.cos(r)); }
-  private right(f: THREE.Vector3) { return v3(f.z, 0, -f.x); }
+  /** His right, facing f (it was (f.z, 0, -f.x), his left: every two-handed hold had the hands crossed). */
+  private right(f: THREE.Vector3) { return v3(-f.z, 0, f.x); }
   private head() { return new THREE.Vector3().setFromMatrixPosition(this.z.head.matrixWorld); }
   /** A spot `dist` from the camp fire, on the side towards `towards`. */
   private byFire(dist: number, towards?: THREE.Vector3) {
@@ -267,7 +273,7 @@ export class Episode2 {
       const z = this.z, at = this.settleWork(2.5);
       const f = this.fwd(), r = this.right(f);
       // the dried vine from the first night, held in both hands in front of him; it parts in the middle
-      const mid = at.clone().addScaledVector(f, 0.36).add(v3(0, 0.74, 0));
+      const mid = at.clone().addScaledVector(f, 0.34).add(v3(0, 0.5, 0)); // over the lap (at 0.74 it was in front of his face)
       const vm = std(0x5c6a2a, { roughness: 0.7 });
       const g = new THREE.CylinderGeometry(0.006, 0.006, 0.2, 6); g.rotateZ(Math.PI / 2);
       const a = this.mesh(g, vm, mid.clone().addScaledVector(r, -0.1)), b = this.mesh(g, vm, mid.clone().addScaledVector(r, 0.1));
@@ -323,7 +329,7 @@ export class Episode2 {
     const z = this.z;
     if (n.id === 'cordage') {
       const at = this.settleWork(2.5), f = this.fwd(), r = this.right(f);
-      const mid = at.clone().addScaledVector(f, 0.34).add(v3(0, 0.76, 0));
+      const mid = at.clone().addScaledVector(f, 0.34).add(v3(0, 0.52, 0));
       const cord = this.cordBetween(mid.clone().addScaledVector(r, -0.22), mid.clone().addScaledVector(r, 0.22));
       z.setHold({ L: { at: mid.clone().addScaledVector(r, -0.25), fingers: f.clone(), palm: r.clone(), radius: 0.01, grasp: true }, R: { at: mid.clone().addScaledVector(r, 0.25), fingers: f.clone(), palm: r.clone().negate(), radius: 0.01, grasp: true } });
       this.scene([
@@ -335,17 +341,36 @@ export class Episode2 {
     if (n.id === 'haft') {
       const at = this.settleWork(2.3), f = this.fwd(), r = this.right(f);
       z.setKneel(false);
-      const log = this.mesh(new THREE.CylinderGeometry(0.16, 0.18, 1.2, 9).rotateZ(Math.PI / 2), std(0x4d3a2a), at.clone().addScaledVector(f, 1.2).add(v3(0, 0.16, 0)));
+      const log = this.mesh(new THREE.CylinderGeometry(0.16, 0.18, 1.2, 9).rotateZ(Math.PI / 2), std(0x4d3a2a), at.clone().addScaledVector(f, 1.25).add(v3(0, 0.16, 0)));
       log.rotation.y = z.root.rotation.y + Math.PI / 2;
-      const grip = at.clone().addScaledVector(f, 0.35).addScaledVector(r, 0.18).add(v3(0, 1.0, 0));
+      // the new spear in both hands: a knapped flint point in black resin glue, bound with the bark cord
+      const sp = this.haftedSpear();
+      const pose = (butt: THREE.Vector3, dir: THREE.Vector3) => {
+        sp.position.copy(butt); sp.quaternion.setFromUnitVectors(UP, dir);
+        z.setHold({
+          R: { at: butt.clone().addScaledVector(dir, 0.3), fingers: r.clone().negate(), palm: dir.clone().cross(r).normalize(), radius: 0.02, grasp: true },
+          L: { at: butt.clone().addScaledVector(dir, 0.58), fingers: r.clone(), palm: dir.clone().cross(r).normalize().negate(), radius: 0.02, grasp: true },
+        });
+      };
+      // held level at the waist first, the point out in front of him; then the test: a thrust down into the log
+      const hip = at.clone().addScaledVector(r, 0.15).add(v3(0, 1.1, 0)); // the butt by his right hip; both hands within reach (tools/anim_qa.py e2_haft)
+      const level = f.clone().add(v3(0, -0.03, 0)).normalize();
+      const aim = log.position.clone().add(v3(0, 0.08, 0)).sub(hip).normalize();
+      pose(hip, level);
+      const tip = () => sp.position.clone().addScaledVector(level, 1.86);
       this.scene([
-        { hold: 1.6, shot: () => this.wide(at, 3.2, 0.7, 0.6), run: () => {
-          z.setProp('throwstick'); z.setLookTarget(log.position);
-          z.setHold({ R: { at: grip, fingers: f.clone().add(v3(0, -0.3, 0)).normalize(), palm: r.clone().negate(), radius: 0.016, grasp: true } });
-          this.after(0.9, () => { z.setHold({ R: { at: grip.clone().addScaledVector(f, 0.35).add(v3(0, -0.45, 0)), fingers: f.clone().add(v3(0, -0.8, 0)).normalize(), palm: r.clone().negate(), radius: 0.016, grasp: true } }); audio.sample('cb_crack', 0.35); });
+        { hold: 2.6, shot: () => this.handShot(tip(), 0.9), run: () => { z.setLookTarget(tip()); } },
+        { hold: 2.0, shot: () => this.wide(at, 3.4, 0.8, 0.5), run: () => {
+          z.setLookTarget(log.position);
+          this.anim(1.6, (k) => {
+            const a = Math.min(1, k / 0.6), th = k < 0.95 ? 0 : Math.min(1, (k - 0.95) / 0.18);
+            const dir = level.clone().lerp(aim, a).normalize();
+            pose(hip.clone().addScaledVector(dir, -0.1 * a + 0.22 * th), dir);
+          });
+          this.after(1.2, () => audio.sample('cb_crack', 0.35));
         } },
-        { key: 'e2.hf.ok', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setFace({ smile: 0.25 }) },
-      ], () => { log.removeFromParent(); this.clearHands(); this.set('inv.haft'); this.ui.toast(t('e2.learn.haft')); card(); });
+        { key: 'e2.hf.ok', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => { z.setFace({ smile: 0.25 }); pose(hip, level); } },
+      ], () => { log.removeFromParent(); sp.removeFromParent(); this.clearHands(); this.set('inv.haft'); this.set('inv.hafting'); this.ui.toast(t('e2.learn.haft')); card(); });
       return true;
     }
     if (n.id === 'fire') {
@@ -448,6 +473,18 @@ export class Episode2 {
   }
 
   /** A two-ply cord between two points (a twisted pair of thin strands). */
+  /** The hafted spear of level 12, along +y from the butt (1.9 m): flint point, resin glue, bark-cord binding. */
+  private haftedSpear() {
+    const g = new THREE.Group();
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 1.7, 7), std(0x6a4e3a)); shaft.position.y = 0.85;
+    const pt = new THREE.OctahedronGeometry(0.05, 0); pt.scale(0.85, 2.6, 0.3);
+    const point = new THREE.Mesh(pt, std(0x5e584f, { roughness: 0.45, flatShading: true })); point.position.y = 1.76;
+    const glue = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.022, 0.07, 7), std(0x1c140e, { roughness: 0.35 })); glue.position.y = 1.68;
+    const bind = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.1, 7), std(0xa88a5c, { roughness: 0.95 })); bind.position.y = 1.6;
+    for (const m of [shaft, point, glue, bind]) { m.castShadow = true; g.add(m); }
+    this.group.add(g);
+    return g;
+  }
   private cordBetween(a: THREE.Vector3, b: THREE.Vector3) {
     const g = new THREE.Group(), d = b.clone().sub(a), len = d.length(), m = std(0xc8b48a, { roughness: 0.9 });
     for (const ph of [0, Math.PI]) {
@@ -662,34 +699,30 @@ export class Episode2 {
     return this.shelterSite;
   }
   private shelterBuilt = false;
-  private hands: THREE.Mesh[] = [];
+  private handSpots: THREE.Vector3[] = [];
   private buildShelter() {
     if (this.shelterBuilt) return;
     this.shelterBuilt = true;
-    const S = this.shelter(), g = new THREE.Group(), back = v3(Math.sin(S.facing), 0, Math.cos(S.facing)), side = this.right(back);
-    const rockM = std(0x4e4740, { roughness: 0.97 }), sootM = std(0x2b2622, { roughness: 1 });
-    // the back wall and two shoulders, the overhang roof leaning out over the floor
-    // a cliff face of layered rock (a displaced box, its front face square to the floor), two fallen blocks either side,
-    // and a thick ledge leaning out over the floor: the roof, sooted underneath
-    const wall = new THREE.Mesh(rockBox(6.5, 3.4, 1.4, 11), rockM); wall.position.copy(S.wall).addScaledVector(back, 0.1).add(v3(0, 1.5, 0)); wall.rotation.y = S.facing; g.add(wall);
-    for (const sd of [-1, 1]) { const sh = new THREE.Mesh(rockBox(1.4, 1.9, 2.2, 23 + sd), rockM); sh.position.copy(S.at).addScaledVector(side, sd * 2.7).addScaledVector(back, 1.0); sh.position.y = this.h(sh.position.x, sh.position.z) + 0.8; sh.rotation.y = S.facing + sd * 0.2; g.add(sh); }
-    const roof = new THREE.Mesh(rockBox(6.2, 0.8, 3.0, 37), rockM); roof.position.copy(S.at).addScaledVector(back, 0.9).add(v3(0, 2.75, 0)); roof.rotation.set(-0.08, S.facing, 0); g.add(roof);
-    const soot = new THREE.Mesh(new THREE.CircleGeometry(1.3, 16), sootM); soot.position.copy(roof.position).add(v3(0, -0.42, 0)); soot.rotation.x = Math.PI / 2; g.add(soot);
+    const S = this.shelter(), back = v3(Math.sin(S.facing), 0, Math.cos(S.facing)), side = this.right(back);
+    // an overhang in a low cliff (world/rockshelter.ts): banded rock, a sooted roof, the cliff's blocks round it, and the
+    // hands blown in ochre on the back wall
+    const origin = S.at.clone().addScaledVector(back, 1.0); origin.y = this.h(origin.x, origin.z);
+    const rs = buildRockShelter(origin, back, side, (x, z) => this.h(x, z), handTex);
+    const g = rs.group;
+    // the old hearth under the soot: a ring of fire-cracked stones round grey ash
+    const ashM = std(0x4a4643, { roughness: 1 }), burntM = std(0x2e2a27, { roughness: 0.95 });
+    const ash = new THREE.Mesh(new THREE.CircleGeometry(0.42, 14), ashM); ash.rotation.x = -Math.PI / 2; ash.position.copy(rs.hearth).add(v3(0, 0.015, 0)); g.add(ash);
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2, st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.075 + (i % 3) * 0.015, 0), burntM);
+      st.position.copy(rs.hearth).add(v3(Math.cos(a) * 0.48, 0, Math.sin(a) * 0.48)); st.position.y = this.h(st.position.x, st.position.z) + 0.04; st.scale.set(1, 0.65, 1.15); st.rotation.y = i; g.add(st);
+    }
     // the old flakes in the floor dust, pale with weathering, and one hand axe
     for (let i = 0; i < 9; i++) {
       const fl = new THREE.Mesh(new THREE.TetrahedronGeometry(0.035, 0), std(0xbdb6a8, { roughness: 0.6 }));
       fl.scale.set(1, 0.25, 1.4); fl.position.copy(S.at).addScaledVector(back, 0.6 + (i % 3) * 0.25).addScaledVector(side, (i - 4) * 0.16); fl.position.y = this.h(fl.position.x, fl.position.z) + 0.01; fl.rotation.y = i * 1.3; g.add(fl);
     }
     const axe = new THREE.Mesh(new THREE.OctahedronGeometry(0.08, 0), std(0xa8a090, { roughness: 0.55 })); axe.scale.set(0.7, 0.25, 1.3); axe.position.copy(S.at).addScaledVector(back, 0.95); axe.position.y = this.h(axe.position.x, axe.position.z) + 0.02; g.add(axe);
-    // red hands on the back wall: small four-fingered ones, and one five-fingered, his size
-    const wallFace = S.wall.clone().addScaledVector(back, 0.1 - 0.7 - 0.06).add(v3(0, 1.1, 0));
-    const sizes = [[-0.7, 0.2, 0.14, 4], [-0.45, 0.45, 0.13, 4], [-0.2, 0.15, 0.15, 4], [0.15, 0.4, 0.12, 4], [0.55, 0.25, 0.2, 5]];
-    for (const [x, y, sz, n] of sizes) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(sz, sz), new THREE.MeshBasicMaterial({ map: handTex(n), transparent: true, depthWrite: false, opacity: 0.85 }));
-      m.position.copy(wallFace).addScaledVector(side, x).add(v3(0, y, 0)); m.lookAt(m.position.clone().addScaledVector(back, -1));
-      g.add(m); this.hands.push(m);
-    }
-    g.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true; });
+    this.handSpots = rs.hands;
     this.group.add(g);
   }
   private cairnG: THREE.Group | null = null;
@@ -715,7 +748,7 @@ export class Episode2 {
     if (guided && oom) { this.actors[OOM] = oom; const her = S.at.clone().addScaledVector(side, 1.6).addScaledVector(back, -0.4); her.y = this.h(her.x, her.z); this.npcs.pin('local', her, Math.atan2(back.x, back.z)); }
     const floor = S.at.clone().addScaledVector(back, 0.8);
     const me = this.settle(S.at.clone().addScaledVector(back, 0.2), floor.clone().addScaledVector(back, 1), true);
-    const five = this.hands[this.hands.length - 1]?.position ?? S.wall;
+    const five = this.handSpots[this.handSpots.length - 1] ?? S.wall;
     const outside = S.at.clone().addScaledVector(back, -5.5).add(v3(0, 1.2, 0)).addScaledVector(side, 1.5);
     this.scene([
       { hold: 3.2, shot: () => ({ from: outside, to: S.at.clone().addScaledVector(back, 1.2).add(v3(0, 1.4, 0)), push: 0.04 }), run: () => z.setLookTarget(floor) },
@@ -725,8 +758,8 @@ export class Episode2 {
       { key: 'e2.rs.2', who: 'scientist', shot: () => cover.mid(z, -0.5, 2.0) },
       { key: 'e2.rs.3', who: 'scientist', shot: () => cover.close(z, -0.3, 0.9, 0.24), run: () => z.setFace({ frown: 0.25 }) },
       // the hands on the wall: a slow move along them, ending on the one that is his size
-      { hold: 4.6, shot: () => ({ from: five.clone().addScaledVector(back, -1.6).addScaledVector(side, -1.4).add(v3(0, -0.1, 0)), to: five.clone().addScaledVector(side, -0.6), push: 0.12 }), run: () => { z.setProp(null); z.setFace(null); z.setLookTarget(five); } },
-      { hold: 2.4, shot: () => ({ from: five.clone().addScaledVector(back, -0.75), to: five, push: 0.03, aperture: 0.004 }) },
+      { hold: 4.6, shot: () => ({ from: five.clone().addScaledVector(back, -1.6).addScaledVector(side, -1.4).add(v3(0, -0.1, 0)), to: five.clone().addScaledVector(side, -0.6), push: 0.12, lightAt: five.clone().addScaledVector(side, -0.4) }), run: () => { z.setProp(null); z.setFace(null); z.setLookTarget(five); } },
+      { hold: 2.4, shot: () => ({ from: five.clone().addScaledVector(back, -0.75), to: five, push: 0.03, aperture: 0.004, lightAt: five }) },
       // ochre: a soft red stone ground on a flat one with fat
       { hold: 2.8, shot: () => this.handShot(me.clone().addScaledVector(this.fwd(), 0.4).add(v3(0, 0.05, 0)), 0.7), run: () => this.grind(me) },
     ], () => {
@@ -944,18 +977,29 @@ const HAND_TEX = new Map<number, THREE.Texture>();
 function handTex(n: number) {
   let tx = HAND_TEX.get(n);
   if (tx) return tx;
-  // a negative hand, as the oldest ones are made: ochre blown round a hand pressed to the rock, the hand left bare
-  const S = 128, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  // a negative hand, as the oldest ones are made: ochre blown from the mouth round a hand pressed to the rock, so the
+  // hand and wrist stay bare rock inside a spray that is dense at the hand's edge and thins out in specks
+  const S = 256, cv = document.createElement('canvas'); cv.width = cv.height = S;
   const g = cv.getContext('2d')!;
-  const halo = g.createRadialGradient(S / 2, S * 0.55, S * 0.1, S / 2, S * 0.55, S * 0.5);
-  halo.addColorStop(0, 'rgba(150,40,22,0.95)'); halo.addColorStop(0.7, 'rgba(150,40,22,0.6)'); halo.addColorStop(1, 'rgba(150,40,22,0)');
-  g.fillStyle = halo; g.fillRect(0, 0, S, S);
+  let seed = 977 + n * 31; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const cx = S / 2, cy = S * 0.5;
+  for (let i = 0; i < 5200; i++) {
+    // more specks near the middle, fewer and finer out at the edge of the spray
+    const r = Math.pow(rnd(), 0.75) * S * 0.48, a = rnd() * Math.PI * 2, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * 1.08;
+    const k = 1 - r / (S * 0.48), sz = 0.6 + rnd() * (1.2 + k * 2.4);
+    g.fillStyle = `rgba(${150 + Math.round(rnd() * 30)},${44 + Math.round(rnd() * 22)},${20 + Math.round(rnd() * 12)},${(0.18 + 0.5 * k) * (0.6 + rnd() * 0.4)})`;
+    g.beginPath(); g.arc(x, y, sz, 0, Math.PI * 2); g.fill();
+  }
   g.globalCompositeOperation = 'destination-out'; g.fillStyle = '#000';
   const pill = (x: number, y: number, w: number, h: number, a: number) => { g.save(); g.translate(x, y); g.rotate(a); g.beginPath(); g.roundRect(-w / 2, -h, w, h, w / 2); g.fill(); g.restore(); };
-  g.beginPath(); g.roundRect(S * 0.36, S * 0.5, S * 0.28, S * 0.3, S * 0.08); g.fill(); // the palm
-  const fingers = n === 5 ? [[-0.1, 0.24, -0.18], [-0.03, 0.29, -0.06], [0.04, 0.3, 0.03], [0.1, 0.26, 0.13]] : [[-0.08, 0.22, -0.2], [0, 0.27, -0.03], [0.08, 0.24, 0.14]];
-  for (const [dx, len, a] of fingers) pill(S * (0.5 + dx), S * 0.53, S * 0.065, S * len, a);
-  pill(S * 0.37, S * 0.68, S * 0.07, S * (n === 5 ? 0.2 : 0.14), -1.05); // the thumb
+  g.save(); g.filter = 'blur(1.2px)';
+  // palm and wrist, open to the bottom edge (the arm was there)
+  g.beginPath(); g.roundRect(S * 0.37, S * 0.48, S * 0.27, S * 0.26, S * 0.07); g.fill();
+  g.beginPath(); g.roundRect(S * 0.41, S * 0.66, S * 0.19, S * 0.4, S * 0.05); g.fill();
+  const fingers = n === 5 ? [[-0.105, 0.22, -0.2], [-0.035, 0.27, -0.07], [0.035, 0.28, 0.04], [0.1, 0.23, 0.16]] : [[-0.09, 0.21, -0.2], [0, 0.26, -0.03], [0.085, 0.22, 0.15]];
+  for (const [dx, len, a] of fingers) pill(S * (0.5 + dx), S * 0.51, S * 0.058, S * len, a);
+  pill(S * 0.38, S * 0.64, S * 0.065, S * (n === 5 ? 0.17 : 0.12), -1.0); // the thumb
+  g.restore();
   g.globalCompositeOperation = 'source-over';
   tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
   HAND_TEX.set(n, tx);

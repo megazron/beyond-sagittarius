@@ -8,7 +8,10 @@ import type { Cond, Effect, LineChoice } from '../game/branch/types';
 export type Who = CrewId | 'megazron';
 
 /** A camera set-up: `from` looks at `to`; `push` drifts towards the subject. */
-export interface Shot { from: THREE.Vector3; to: THREE.Vector3; push?: number; roll?: number; /** Lens blur override (fraction of screen height). */ aperture?: number; /** Keep this actor's head where it is in frame, whatever the body does. */ track?: Character; /** Lens as a vertical field of view in degrees (a set-up without one keeps the scene's own). */ fov?: number }
+export interface Shot { from: THREE.Vector3; to: THREE.Vector3; push?: number; roll?: number; /** Lens blur override (fraction of screen height). */ aperture?: number; /** Keep this actor's head where it is in frame, whatever the body does. */ track?: Character; /** Lens as a vertical field of view in degrees (a set-up without one keeps the scene's own). */ fov?: number;
+  /** A shot with nobody speaking in it (an insert on a thing): light this point softly with the rig instead of leaving
+   *  the lamps where the last speaker had them (Episode Two's wall of hands burned white under a lamp set for a face). */
+  lightAt?: THREE.Vector3 }
 
 /**
  * A step of a scene. Beyond the line itself it can branch: `if` plays it only
@@ -186,6 +189,7 @@ export class Cutscene {
     const cam = this.ctx.camera, s = this.shot;
     // a voice on the radio has nobody to frame: the shot still swings clear around whoever it is on
     if (!a && s && this.fresh && s.track?.root.visible) { this.clearShot(s.track, headOf(s.track), s); this.fresh = false; }
+    if (!a && s?.lightAt) { this.light(s.lightAt, s.from, 0.35); return; }
     if (!a || !s) return;
     const h = headOf(a);
     // only coverage built on the speaker can swing: a set-up aimed at something else stays put
@@ -195,9 +199,14 @@ export class Cutscene {
     let q = look(), fixed = false;
     if (Math.abs(q.x) > 0.8 || Math.abs(q.y) > 0.8 || q.z > 1) { s.to.copy(h); s.to.y -= 0.05; q = look(); fixed = true; }
     if (key) frameReport.push({ key, x: q.x, y: q.y, fixed });
-    const d = s.from.clone().sub(h).setY(0).normalize(), r = new THREE.Vector3(d.z, 0, -d.x), up = new THREE.Vector3(0, 1, 0);
+    this.light(h, s.from, 1, a);
+  }
+
+  /** Key, fill and back lamps round `h` as seen from `from` (scale: how strong, against a face's). */
+  private light(h: THREE.Vector3, from: THREE.Vector3, scale: number, a?: Character) {
+    const d = from.clone().sub(h).setY(0).normalize(), r = new THREE.Vector3(d.z, 0, -d.x), up = new THREE.Vector3(0, 1, 0);
     const [k, f, b] = this.rig.children;
-    this.rig.children.forEach((l, i) => ((l as THREE.PointLight).intensity = RIG[i]));
+    this.rig.children.forEach((l, i) => ((l as THREE.PointLight).intensity = RIG[i] * scale));
     k.position.copy(h).addScaledVector(d, 1.2).addScaledVector(r, 0.8).addScaledVector(up, 0.9);
     f.position.copy(h).addScaledVector(d, 1.3).addScaledVector(r, -1.1).addScaledVector(up, -0.1);
     b.position.copy(h).addScaledVector(d, -1.1).addScaledVector(r, -0.5).addScaledVector(up, 0.7);

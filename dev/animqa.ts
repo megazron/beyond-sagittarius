@@ -83,6 +83,25 @@ const HOLDS: Scenario[] = [
     hold: (x) => ({ R: item(x, [-0.06, 0.48 + 0.14 * ease(tri(x.k * x.dt * 2.5)), 0.47], [0.4, -0.6, 1], [0, -1, 0], 0.035), L: item(x, [0.06, 0.46, 0.45], [-0.2, 0, 1], [0, 1, 0], 0.04) }) },
   { name: 'drill', sec: 3, setup: (x) => x.c.setKneel(true), crewOnly: true,
     hold: (x) => { const r = 0.05 * Math.sin(x.k * x.dt * Math.PI * 2 * 2.2); return { R: item(x, [r, 0.55, 0.4 - r * 0.3], [0, 0, 1], [1, 0, 0], 0.01), L: item(x, [r, 0.55, 0.4 + r * 0.3], [0, 0, 1], [-1, 0, 0], 0.01) }; } },
+  // Episode Two's work holds (src/game/episode2.ts), sat back on the heels (settleWork), the same targets in body space
+  // (his right is -x here): the vine that parts, the finished cord, bark split on the palm, the bow drill, coils of clay,
+  // the lump of clay, resin stirred with a twig; standing, the hafted spear held and thrust
+  { name: 'e2_vine', sec: 2.4, setup: (x) => x.c.setKneel(true, true), crewOnly: true, hold: (x) => { const a = Math.min(1, Math.max(0, x.k * x.dt - 1.4) / 0.4) * 0.15; return { L: item(x, [0.2 + a, 0.5, 0.34], [0, 0, 1], [-1, 0, 0], 0.008), R: item(x, [-0.2 - a, 0.5, 0.34], [0, 0, 1], [1, 0, 0], 0.008) }; } },
+  { name: 'e2_cord', sec: 2, setup: (x) => x.c.setKneel(true, true), crewOnly: true, hold: (x) => ({ L: item(x, [0.25, 0.52, 0.34], [0, 0, 1], [-1, 0, 0], 0.01), R: item(x, [-0.25, 0.52, 0.34], [0, 0, 1], [1, 0, 0], 0.01) }) },
+  { name: 'e2_bark', sec: 2.5, setup: (x) => x.c.setKneel(true, true), crewOnly: true, hold: (x) => { const w = Math.sin(x.k * x.dt * 3) * 0.06; return { L: item(x, [0.15, 0.5, 0.42], [-1, 0, 0], [0, 1, 0], 0.004), R: item(x, [-0.12 - w, 0.5, 0.42], [1, 0, 0], [0, -1, 0], 0.004) }; } },
+  { name: 'e2_bowdrill', sec: 3, setup: (x) => x.c.setKneel(true, true), crewOnly: true, hold: (x) => { const w = Math.sin(x.k * x.dt * 5.5) * 0.18; return { L: item(x, [0, 0.37, 0.42], [0, 0, 1], [0, -1, 0], 0.03), R: item(x, [-(0.2 + w), 0.16, 0.4], [1, 0, 0], [0, 0, -1], 0.008) }; } },
+  { name: 'e2_coil', sec: 3, setup: (x) => x.c.setKneel(true, true), crewOnly: true, hold: (x) => { const t = x.k * x.dt, y = 0.04 + 0.2 * Math.min(1, 0.1 + t / 3); return { L: grip(x, [0.1, y, 0.42], [0, 0, 1], [-1, 0, 0], 0.01), R: grip(x, [-0.1, y, 0.42 + Math.sin(t * 6) * 0.02], [0, 0, 1], [1, 0, 0], 0.01) }; } },
+  { name: 'e2_clay', sec: 2, setup: (x) => x.c.setKneel(true, true), crewOnly: true, hold: (x) => ({ L: grip(x, [0.05, 0.52, 0.34], [0, 0, 1], [0, 1, 0], 0.05), R: grip(x, [-0.05, 0.58, 0.34], [0, 0, 1], [0, -1, 0], 0.05) }) },
+  { name: 'e2_resin', sec: 3, setup: (x) => x.c.setKneel(true, true), crewOnly: true, hold: (x) => { const t = x.k * x.dt; return { R: item(x, [Math.cos(t * 4) * 0.025, 0.305, 0.37 + Math.sin(t * 4) * 0.025], [0, -1, 0.2], [1, 0, 0], 0.004) }; } },
+  { name: 'e2_haft', sec: 3, crewOnly: true, hold: (x) => {
+    // the butt by the right hip, level, then a short thrust down at a log 1.25 m out (episode2.ts haft)
+    const t = x.k * x.dt, a = Math.min(1, t / 1.0), th = t < 1.5 ? 0 : Math.min(1, (t - 1.5) / 0.18);
+    const lv = new THREE.Vector3(0, -0.03, 1).normalize(), butt = new THREE.Vector3(-0.15, 1.1, 0), aim = new THREE.Vector3(0, 0.24, 1.25).sub(butt).normalize();
+    const dir = lv.clone().lerp(aim, a).normalize(), b = butt.clone().addScaledVector(dir, -0.1 * a + 0.22 * th);
+    const rgt = new THREE.Vector3(-1, 0, 0), palm = dir.clone().cross(rgt).normalize();
+    const at = (k: number) => b.clone().addScaledVector(dir, k).toArray() as [number, number, number];
+    return { R: item(x, at(0.3), [1, 0, 0], palm.toArray() as [number, number, number], 0.02), L: item(x, at(0.58), [-1, 0, 0], palm.clone().negate().toArray() as [number, number, number], 0.02) };
+  } },
   { name: 'throw_over', sec: 2.4, crewOnly: true, hold: (x) => {
     // wind back over the shoulder for 0.8 s, then forward and down in 0.25 s, then let go
     const s = x.k * x.dt; if (s > 1.3) return null;

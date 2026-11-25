@@ -7,6 +7,7 @@ import { audio } from '../core/audio';
 import type { SaveData } from '../core/save';
 import type { World } from '../world/world';
 import type { Player } from './player';
+import { landWay } from './landway';
 import type { CrewPose } from '../characters/character';
 import type { UI } from '../ui/ui';
 import { cover, Beat } from '../cinematic/cutscene';
@@ -171,7 +172,8 @@ export class Story {
     let best: THREE.Vector3 | null = null, bd = Infinity;
     for (const it of this.world.items.items) {
       if (!it.active || !types.includes(it.type)) continue;
-      const d = it.pos.distanceTo(this.player.pos);
+      // the nearest on foot: a stone across the lake is a long walk, not a short swim (landway.ts)
+      const d = landWay(this.world.terrain).route(this.player.pos, it.pos).len;
       if (d < bd) { bd = d; best = it.pos; }
     }
     return best;
@@ -780,11 +782,13 @@ export class Story {
     this.carried = true;
   }
 
+  private spearKey = '';
   private syncSpear() {
     this.spear.visible = this.flag('spear');
     // the fire-hardened point of 1.9 until a stone head is hafted on
-    const hard = this.flag('inv.fireSpear') && !this.flag('inv.hafting');
-    for (const [n, on] of [['flintTip', !hard], ['lashing', !hard], ['burntPoint', hard]] as const) { const o = this.spear.getObjectByName(n); if (o) o.visible = on; }
+    // (Episode Two's glue level sets inv.haft, the invention list's id is hafting: either one is the stone head)
+    const hard = this.flag('inv.fireSpear') && !this.flag('inv.hafting') && !this.flag('inv.haft');
+    for (const [n, on] of [['flintTip', !hard], ['lashing', !hard], ['mastic', !hard], ['burntPoint', hard]] as const) { const o = this.spear.getObjectByName(n); if (o) o.visible = on; }
   }
 
   /** Called when a level starts (after the previous one completes). */
@@ -826,6 +830,9 @@ export class Story {
     this.updateHound(dt, time);
     this.updateCrew(dt, time);
     this.ch2.update(dt);
+    // the head goes on the spear the moment it is made (Episode Two's glue level), not at the next load
+    const sk = `${this.flag('spear')}${this.flag('inv.fireSpear')}${this.flag('inv.hafting') || this.flag('inv.haft')}`;
+    if (sk !== this.spearKey) { this.spearKey = sk; this.syncSpear(); }
     // spear thrust animation overrides the walk cycle's right arm
     if (this.thrustT > 0) {
       this.thrustT = Math.max(0, this.thrustT - dt);
@@ -878,8 +885,9 @@ const V_LOOK = new THREE.Vector3();
 function buildSpear() {
   const g = new THREE.Group(); g.name = 'heldSpear';
   const wood = new THREE.MeshStandardMaterial({ color: 0x6a4e3a, roughness: 0.85, flatShading: true });
-  const flint = new THREE.MeshStandardMaterial({ color: 0x1a1f2e, roughness: 0.2, metalness: 0.35, flatShading: true });
-  const vine = new THREE.MeshStandardMaterial({ color: 0x2c4a2a, roughness: 0.9, flatShading: true });
+  // a knapped flint point, set in black resin glue and bound with the bark cord of Episode Two
+  const flint = new THREE.MeshStandardMaterial({ color: 0x5e584f, roughness: 0.45, flatShading: true });
+  const vine = new THREE.MeshStandardMaterial({ color: 0xa88a5c, roughness: 0.95, flatShading: true });
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.028, 1.9, 5), wood);
   const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), flint); tip.name = 'flintTip';
   tip.scale.set(0.6, 2.0, 0.35); tip.position.y = 1.02;
@@ -887,7 +895,9 @@ function buildSpear() {
   // Episode One's spear has no stone head: a scraped point, fire-blackened (shown instead of the flint until hafting)
   const burnt = new THREE.Mesh(new THREE.ConeGeometry(0.024, 0.16, 6), new THREE.MeshStandardMaterial({ color: 0x241a14, roughness: 0.9 })); burnt.name = 'burntPoint'; burnt.position.y = 1.03; burnt.visible = false; g.add(burnt);
   wrap.position.y = 0.9;
-  g.add(shaft, tip, wrap);
+  const mastic = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.026, 0.07, 6), new THREE.MeshStandardMaterial({ color: 0x1c140e, roughness: 0.35 })); mastic.name = 'mastic';
+  mastic.position.y = 0.97;
+  g.add(shaft, tip, wrap, mastic);
   g.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
   // in the hand, angled forward and up
   g.position.set(0, -0.06, 0.01);

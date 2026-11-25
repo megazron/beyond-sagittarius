@@ -76,7 +76,13 @@ function gearMesh(id: WeaponId): THREE.Object3D {
   else if (id === 'handaxe') { const f = new THREE.OctahedronGeometry(0.06, 0); f.scale(0.42, 1, 1.9); add(f, new THREE.MeshStandardMaterial({ color: 0x7d7468, roughness: 0.75, flatShading: true }), 0.07); }
   // fire-hardened: one piece of wood, the point blackened by the coals
   else if (id === 'spear') { add(rod(0.016, 2), wood, 0.35); const tip = new THREE.ConeGeometry(0.016, 0.22, 6); tip.rotateX(Math.PI / 2); add(tip, new THREE.MeshStandardMaterial({ color: 0x2a211a, roughness: 0.9 }), 1.46); }
-  else if (id === 'hafted') { add(rod(0.016, 2), wood, 0.35); const tip = new THREE.ConeGeometry(0.035, 0.2, 4); tip.rotateX(Math.PI / 2); add(tip, stone, 1.43); add(rod(0.022, 0.08), vine, 1.3); }
+  // hafted: a knapped flint leaf set in black resin glue in the split end of the shaft, bound with bark cord
+  else if (id === 'hafted') {
+    add(rod(0.016, 2), wood, 0.35);
+    const tip = new THREE.OctahedronGeometry(0.05, 0); tip.scale(0.85, 0.3, 2.4); add(tip, new THREE.MeshStandardMaterial({ color: 0x5e584f, roughness: 0.45, flatShading: true }), 1.43);
+    add(rod(0.021, 0.06), new THREE.MeshStandardMaterial({ color: 0x1c140e, roughness: 0.35 }), 1.345);
+    add(rod(0.02, 0.09), new THREE.MeshStandardMaterial({ color: 0xa88a5c, roughness: 0.95 }), 1.28);
+  }
   // the spear-thrower: a forearm-long stick, the hook at the far end, a dart lying along it with its butt in the hook
   else if (id === 'atlatl') { add(rod(0.012, 0.6), wood, 0.25); const hook = add(new THREE.BoxGeometry(0.02, 0.05, 0.03), wood, 0.55, 0.025); hook.name = 'hook'; const dart = add(rod(0.007, 1.7), wood, -0.25, 0.04); dart.name = 'dart'; const tip = new THREE.ConeGeometry(0.014, 0.06, 4); tip.rotateX(-Math.PI / 2); add(tip, stone, -1.12, 0.04); }
   else if (id === 'torch') {

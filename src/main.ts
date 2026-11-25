@@ -1279,6 +1279,12 @@ window.addEventListener('resize', () => {
   get combat() { return combat; },
   /** The player's body: kneeling (0..1), the game mode, where the hips are (checks of the kneel in Episode One). */
   get body() { const m = (game as unknown as { player?: { model: import('./characters/character').Character } } | null)?.player?.model; if (!m) return null; const h = new THREE.Vector3(); (m.root.getObjectByName('hips') ?? m.root).getWorldPosition(h); return { kneel: m.kneeling, mode: game!.mode, rootY: m.root.position.y, hipsY: h.y }; },
+  /** Your body's hands, head and facing in world space (tools/ep2_probe.py: which side each hand works on in a scene). */
+  get bodyPoints() {
+    const m = (game as unknown as { player?: { model: import('./characters/character').Character } } | null)?.player?.model; if (!m) return null;
+    const at = (n: string) => { const o = m.root.getObjectByName(n); return o ? o.getWorldPosition(new THREE.Vector3()).toArray() : null; };
+    return { root: m.root.position.toArray(), yaw: m.root.rotation.y, handL: at('handL'), handR: at('handR'), head: new THREE.Vector3().setFromMatrixPosition(m.head.matrixWorld).toArray(), camDir: camera.getWorldDirection(new THREE.Vector3()).toArray(), fov: camera.fov, aspect: camera.aspect };
+  },
   groundAt(x: number, z: number) { return world.terrain.height(x, z); },
   /** Episode One for captures: the pool, the stream's centre line (every 10th point), the red fruit (1.1) and where he
    * kneels at the cobbles (1.3). */

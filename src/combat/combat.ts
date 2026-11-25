@@ -215,7 +215,7 @@ export class Combat {
       const run = new EncounterRun(id, {
         site, env: this.env, seed: opts.seed ?? 11, difficulty: opts.difficulty ?? S.difficulty,
         assist: { aim: S.aim, hold: S.hold, slowMo: S.slowMo, noTimers: false, damageNumbers: S.numbers },
-        companion: opts.companion, story: opts.story, inv: s.inventory, has: trial ? { fists: true } : { ...this.cs.has, fists: true, rock: true, ...(s.flags.spear ? { spear: true } : {}) }, kit: trial || id === 'arena',
+        companion: opts.companion, story: opts.story, inv: s.inventory, has: trial ? { fists: true } : { ...this.cs.has, fists: true, rock: true, ...(s.flags.spear ? { spear: true } : {}), ...(s.flags.spear && (s.flags['inv.hafting'] || s.flags['inv.haft']) ? { hafted: true } : {}) }, kit: trial || id === 'arena',
       });
       run.sim.regen = false; run.sim.ownsBody = false;
       if (!trial) { run.sim.player.dur = { ...this.cs.dur }; run.sim.player.injuries = this.cs.injuries.map((i) => ({ ...i })); }

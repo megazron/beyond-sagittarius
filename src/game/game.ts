@@ -10,6 +10,7 @@ import { SaveData, writeSave } from '../core/save';
 import { Fights } from './fights';
 import type { World } from '../world/world';
 import { LAKE } from '../world/terrain';
+import { landWay } from './landway';
 import { PICKABLE, Item } from '../world/props';
 import { Story, Action, LAST_LEVEL } from './story';
 import { Craft } from './tech/craft';
@@ -992,7 +993,8 @@ export class Game {
     }
     if (s.level >= 4 && s.level <= PLAYABLE_LEVELS) {
       const m = this.story.markerTarget(s.level);
-      return m ? m.clone() : null;
+      // the way on foot: round the lake, never across it (landway.ts)
+      return m ? landWay(this.world.terrain).route(p, m).via.clone() : null;
     }
     return null;
   }

@@ -69,6 +69,7 @@ with sync_playwright() as pw:
             for n in names:
                 r = pg.evaluate(f'qa({i}, {json.dumps(n)}, {a.every})'); r['body'] = who; r.update(flat(r)); rows.append(r)
             mine = [r for r in rows if r['body'] == who]
+            if not mine: continue  # --scen with crew-only scenarios: the townsfolk run none of them
             w = {m: max(mine, key=lambda r: r[m]) for m in METRICS}
             print(f'{who:18s} ' + '  '.join(f"{m} {w[m][m]} ({w[m]['scenario']})" for m in METRICS), f'[{time.time() - t0:.0f}s]', flush=True)
         pg.close()

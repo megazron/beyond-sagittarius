@@ -2237,8 +2237,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** Mouth moves while > 0 (seconds of speech left). */
     /** Hand-set pose over the clip (null gives the body back to the clip). */
     setLimbs(l: Limbs | null) { limbs = l; },
-    /** Down on both knees (true) or back up (false); it takes about a second either way. */
-    setKneel(on: boolean, sit = false) { kneelGoal = on ? 1 : 0; heelsGoal = on && sit ? 1 : 0; },
+    /** Down on both knees (true) or back up (false); it takes about a second either way (instant: at once, under a cut). */
+    setKneel(on: boolean, sit = false, instant = false) { kneelGoal = on ? 1 : 0; heelsGoal = on && sit ? 1 : 0; if (instant) { kneel = kneelGoal; heels = heelsGoal; } },
     get kneeling() { return kneel; },
     /** An external pose owner (combat's melee rig) claims the arms until it lets go (null): keepArmsOut does not move
      *  them. The same as Limbs.ownArms, for a caller that poses the bones itself instead of through setLimbs. */

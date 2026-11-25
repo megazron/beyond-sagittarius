@@ -75,6 +75,8 @@ export function knownFrom(save: { flags?: Record<string, unknown>; inventions?: 
   const k = new Set<string>(KNOWN_AT_START);
   for (const [f, v] of Object.entries(save.flags ?? {})) if (v && f.startsWith('inv.')) k.add(f.slice(4));
   for (const i of save.inventions ?? []) k.add(i);
+  // Episode Two's glue level (episode2.ts) records the hafted point as inv.haft
+  if (save.flags?.['inv.haft']) k.add('hafting');
   // the spear's head is lashed on with a vine: whoever made one knows a vine ties
   if (save.flags?.spear) { k.add('fireSpear'); k.add('flake'); k.add('goodStone'); k.add('vineTraps'); }
   if (save.flags?.fire || save.flags?.pitBuilt) { k.add('fireDrill'); k.add('torch'); k.add('fireline'); }
