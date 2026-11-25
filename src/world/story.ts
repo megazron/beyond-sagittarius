@@ -177,6 +177,8 @@ export function createCamp(terrain: Terrain, forest: Forest, L: StoryLayout) {
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2;
     const s = cobble(i % 3 === 1 ? 'sand' : 'granite', 500 + i * 13, 2.1 + rnd() * 0.6);
+    // warmed and darkened (soot, the purple dusk sky made plain grey read lavender again on the GPU)
+    (s.material as THREE.MeshStandardMaterial).color.setHex(i % 2 ? 0x9a8670 : 0x8a7a68);
     s.position.set(Math.cos(a) * 0.62, 0.045, Math.sin(a) * 0.62);
     s.rotation.set((rnd() - 0.5) * 0.4, -a + (rnd() - 0.5) * 0.6, (rnd() - 0.5) * 0.3);
     s.castShadow = true; s.receiveShadow = true;
