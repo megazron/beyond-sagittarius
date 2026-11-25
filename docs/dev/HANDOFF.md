@@ -42,6 +42,11 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
   through the row (was blown-out sky), he stands clear of the frame when it is turned the wrong way, the frame's
   back blocks from the pole stage on. The pull's break-up hides the ship's hatch parts (userData.hatchPart) and the
   sun there is whiter.
+- Seen on the GPU (clips in Downloads/BS_Game_v1.1/ep1_polish, NOTES.md there): knapping hands, hammer and core in
+  shot, face shots from below read; his coat lying forward over his knees still crosses the hand shots as a white
+  slab. The hand drill still does not read as a drill: smoke, the notch insert and the ember read, his palms on the
+  spindle do not (hidden by his body in every angle tried). Hide reads as hiding. Run keeps the night sky. Lean-to
+  thin-row shot has no sky. Ring cobbles are rounded now; tinted warmer after the last spear take.
 - Captures: ~/bs-cap/ep1/round.sh PLAN... (build dist-ep1, preview 4621, cap1.sh per plan, join). Plans
   ~/bs-cap/plan_ep1A/B/C.json.
 
