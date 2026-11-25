@@ -2090,3 +2090,7 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   intro4 862f0b1 -> land4 (= land3: arrivals + landing_smoke wake fixes; away.ts conflict resolved: Away.entered() is
   called at the end of enter, after the arrival is set up) 551b0f6 -> cabin5 (lipsync.json merged, mz.intro.2 kept from
   intro) b38edf4 + this note. ~/bs-story/DECISIONS.md cabin rows renumbered C1-C5.
+- mobile_smoke's craft check now plays Episode Two's glue panel at level 12 by touch (held finger for the heat
+  step) instead of the old knapping panel. Bolzar's roster unlock moved from 14 to 15.
+- Landing: ~/bs-ep2-land (detached) merges ep2 and main; branches ep2-land1/ep2-land2 carry the exact sha CI checks.
+  Combat's "Page.reload: Timeout" after the night tests also fails on main 26fe104 (not Episode Two); it passed locally.
