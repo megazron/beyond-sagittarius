@@ -1950,3 +1950,16 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   Now up to 90 s held. smoke's known flake "wake did not reach play" is likely the same stretch (not checked).
 - levels_smoke "the first night did not end through the fight": fixed on main by 32945fa (night.ts kept no cb.* flags
   when the fight was won), not by me.
+- SAME COUNTS ON TWO MACHINES: the full Mobile run on the laptop (dist-gate, 4b5d98e's code) and CI gate2 4b5d98e read
+  the same draws and triangles at all nine spots (flat 60/553077, bazaar 75/341974, crowd 133/561218, gate 174/686795,
+  square 92/528361, downtown 52/273737, market 62/424628, waterfront 50/334157, park 36/375498). --spots changes the
+  numbers (the clock at each spot depends on the spots before it): compare full runs only.
+- REAL OVER-BUDGET, NOT A NEW REGRESSION: Mobile gate 174 draw calls (budget 145) at clock 616.5, 15 bodies (budget 16).
+  The worst frame by object: crowd bodies' kit x23, head parts x18, skin_body x15, hips x5+4, a phone prop x6 (+4 in the
+  shadow pass), unnamed MeshStandardMaterial x27, MeshBasicMaterial x15, shadow pass about 31. The 145 budget assumed
+  2-3 draws a body; on phones a crowd body draws about 5 in the main pass plus its shadow. The old free-running gate read
+  145, 167 and 181 on this same code; 145 was a lucky frame. I did NOT raise the budget. cabin4's dfe5752 (no phone
+  in a selfie body's hand) takes about 10 of these off. Everything else on gate2 4b5d98e was green.
+- land3 6c80dd9: landing_smoke ok locally (the wake 55 s held, then play); not pushed after the first fix (fd0f7fe CI:
+  the wake ended at 47 s into the thirst scene, now held through it). Its levels_smoke ".pt-cols not hidden after
+  #m-close" (twice on land2/land3) is what modal-land's fade-out fix is for: land modal first.
