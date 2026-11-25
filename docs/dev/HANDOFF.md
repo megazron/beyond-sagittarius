@@ -2150,3 +2150,14 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   skipped scene stops posing the hands. Players can walk through the house walls (no collider yet).
 - Capture kit: ~/bs-cap/ep3 (mkplan.py writes ~/bs-cap/plan_ep3A.json: Episode Two from level 11 with one set of picks,
   then level 15; bot.js ruins the polish mix once).
+- 2026-11-25 evening (ep3 agent, second session): ep3 merged origin/main 5ee3e90 (51a2087; the merged tree equals ep3's
+  own: main's four commits were the same changes). Levels 16 to 21 written in episode3.ts (42bec11, WIP, not yet played
+  through to the end headless): level 16 house colliders (Forest.addObstacle(x, z, r, h, tag), Forest.removeTagged;
+  __bs.ep3.walls), world/rain.ts (streaks round the player, none under the thatch; Episode3.rain(amount, sec)), Wen-Ka
+  as a figure at level 16; level 18 tech node remedy (heat, rhythm) at the house hearth, the fever overlay
+  (.e3-fever in style.css); level 19 runs Draxum on the moon stage through story.hooks.away('strong', 'moon', task,
+  done) (game.ts sets ep3.hooks, ep3.awayStage, ep3.askFn); ROSTER medic unlock 19 -> 20; level 20 irrigation node
+  (mix, rhythm), ditch and sprouts meshes; level 21 salt node playable, the storm fight is night.defence with
+  story.store (encounters.ts: bigger food scent, one more skritch in wave 1, no hound, Oom-Sa ally with story.oomsa),
+  cb.obj.store. PLAYABLE_LEVELS 21, levels_smoke LAST 21 (its ledger and persistence checks follow LAST).
+  episode3_smoke picks through e3.name. Voice takes for 18 to 21: ~/bs-cap/ep3/tools/tts_ep3.sh (no build).

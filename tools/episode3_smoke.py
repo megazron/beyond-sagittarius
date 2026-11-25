@@ -105,12 +105,12 @@ def main():
         log("start:", ev("({level: __bs.level, day: __bs.save.day, t: __bs.save.timeOfDay})"))
 
         answered, fights, seen, taken = [], [], [], set()
-        last, stuck = 0, 0
+        last, stuck, busy_n = 0, 0, 0
         for it in range(2600):
             lvl = ev("__bs.level")
             if lvl != last:
                 log(f"-> level {lvl} (iteration {it})", ev("({flags: Object.keys(__bs.save.flags).filter(k => k.startsWith('e3.')).join(' ')})"))
-                seen.append(lvl); last = lvl; stuck = 0
+                seen.append(lvl); last = lvl; stuck = 0; busy_n = 0
             if lvl > 21:
                 break
             if ev("!document.getElementById('modal').classList.contains('hidden') && !!document.querySelector('[data-diff]')"):
@@ -182,6 +182,9 @@ def main():
                         ev("__bs.step(0.4)"); continue
                     ev("__bs.awayGoNext()"); ev("__bs.step(0.3)"); page.keyboard.press("KeyE"); time.sleep(.4); ev("__bs.step(0.5)")
                 continue
+            # a scene's real-time moment (a hold steady, a quick press) or a timed beat: the story is busy, not stuck
+            if ev("!!(__bs.ep3 && __bs.ep3.busy)") and busy_n < 900:
+                busy_n += 1; time.sleep(0.15); ev("__bs.step(0.3)"); continue
             stuck += 1
             if stuck > 220:
                 failures.append(f"stuck on level {lvl}: {ev('({prompt: __bs.prompt, mode: __bs.mode, inv: __bs.save.inventory, flags: Object.keys(__bs.save.flags).filter(k => k.startsWith(\"e2.\"))})')}")

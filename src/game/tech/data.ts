@@ -79,7 +79,10 @@ export const TECH: TechNode[] = [
   // boils over into the fire), then the wound cleaned out in slow strokes with the lichen (rushed, it is not clean)
   playable('remedy', 'agri', ['farming'], { lichen: 1 }, {}, 'study',
     [{ kind: 'heat', band: [0.55, 0.8], secs: 4, rise: 0.3, fall: 0.2 }, { kind: 'rhythm', band: [0.3, 0.58], secs: 5 }], 'medic', ['heat', 'sharp']),
-  planned('icewall', 'agri', [], 'build', []),
+  // 3.9 (Draxum, on Methryx): blocks scored with a stone and levered out of the lake ice, carried with his hands wrapped
+  // (bare, his own heat slumps them); the work is the stage's tasks, so no panel opens for it (craftOpen is false at 19)
+  playable('icewall', 'agri', ['remedy'], {}, {}, 'build',
+    [{ kind: 'tap', hits: 4, zone: 0.18, speed: 0.7 }, { kind: 'rhythm', band: [0.4, 0.7], secs: 4 }], 'strong', ['sharp']),
   // ---- Fire and Tools (the pre-Episode-One chain: kept for the codex and later ages, out of the level order) ----
   later('charcoal', 'tools', ['pottery'], { branch: 4, clay: 1 }, { charcoal: 3 }, 'smoulder',
     [{ kind: 'heat', band: [0.3, 0.5], secs: 6, rise: 0.3, fall: 0.2 }], 'megazron', ['fire']),
