@@ -822,9 +822,9 @@ def main():
         if ev("document.querySelectorAll('.cx-node').length") != len(tech["nodes"]):
             failures.append("codex does not list every entry")
         cx = lambda i: (ev(f"document.querySelector('.cx-node[data-id={i}]').scrollIntoView({{block: 'center'}})"), page.click(f".cx-node[data-id={i}]"))  # the menu footer sits over the last rows
-        cx("soap")
+        cx("polish")
         body = page.inner_text(".cx-done .cx-detail:not(.hidden)")
-        if "alkali" not in body or page.locator(".cx-detail:not(.hidden) .warn").count() < 1:
+        if "wet sand" not in body or page.locator(".cx-detail:not(.hidden) .warn").count() < 1:
             failures.append(f"codex entry incomplete: {body[:120]}")
         time.sleep(0.3)
         shot("22-codex")
