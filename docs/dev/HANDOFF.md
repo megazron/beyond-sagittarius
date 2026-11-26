@@ -107,7 +107,38 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
   (E1 slides by distance per person, E2/E3 from where the slide left them, G3 floats from G1's marks, G5 moves only the
   two in shot, G7 pushes off from where each one floats, each with their own timing and limbs); the old reading shot's
   single frame at 107 s is gone; loose props rest on the table, console, sofas and floor (deterministic).
-- Not landed yet at the time of writing: parts 2 to 4 in the working tree (yoke grasp, voice bus, pods reaction shots).
+- LANDED c313e40 (part 1). Clips + notes: Downloads/BS_Game_v1.1/owner_fixes_1126/.
+- PART 2 (the pilot's hands): HoldSide.rigid (character.ts: the hand turns with the held thing at once), the hold uses
+  grasp on the horns' axes with setGrip radius 0.019, the pilot is animated after the shot moves the yoke (it was a
+  frame behind), the yoke 16 cm nearer (inserts.ts stick z -0.4: her arms ran out 5 to 10 cm short), its roll on the
+  film clock (each shot restarted it: 0.1 rad jumps at cuts). `__bs.yokeReport(true)` logs the wrists in the yoke's
+  frame; `tools/yoke_check.py` (CI job `yoke`). Still wrong on the GPU: her right coat sleeve lies over the left horn.
+- PART 3 (voices): voice.ts levels each take to -20 dBFS of speech (levelOf) and pans it (voice.pan, set by
+  Cutscene.frame and the pull's talk()); audio.ts voiceIn() is a close-mic chain (85 Hz high-pass, -2 dB at 320 Hz,
+  +2.5 dB at 3.2 kHz, 3:1 compressor, x1.35) and the voice bus goes round the vacuum/ears muffle straight to `post`;
+  room send 0.35 -> 0.1; ducking music 0.3 -> 0.22, effects 0.5 -> 0.4. Measured on GPU takes with
+  ~/bs-cap/cine1/vo_mix.py (lines over their take length from the subtitle log): main -16.5 LUFS mean (quietest
+  -20.5) over a -25.0 bed, tail 14.7 LU under the line; branch -15.4 (quietest -19.2) over -24.9, tail 16.5 LU.
+  Both takes peak over 0 dBFS (effects, not voices): a limiter on `post` is still to do.
+- PART 4 (pods): G6 Zenvik keeps his right hand on the console and points up towards the hatch; G6b Lyrra goes to
+  Nuvexa and takes her wrist while Draxum braces on the ceiling; G6c Bolzar holds the sofa's back while Skyvra pushes
+  off towards Zenvik; G7 each pushes off from where they float with their own timing and limbs (PODS table).
+- PARTS 5 TO 7 NOT STARTED (my context ran out first). What I found that the next agent can use:
+  - Choices (part 5): the branch system already has timed decisions (Decision.seconds + fallback), quick-time moments
+    (Qte), trust between any two people (Effect trust/to, Cond trust), four traits (honesty, mercy, nerve, humour), and
+    a small "written in the book" mark (ui/choice.ts QuickPrompt.note, #ledger-note). Cutscene beats take `choice`/`qte`
+    (cutscene.ts) but the opening's timeline (cinematic.ts cues and shots) has no branch and runs before a save exists
+    (main.ts startNewGame -> playOpening; the save is made in enterWorld). Plan: give Cinematic an optional SceneBranch
+    over a scratch save made in startNewGame, pause the timeline while a panel is open (like `blocked` for speech),
+    copy the scratch save's branch log, trust and flags into the new save in enterWorld(true). Candidate moments with no
+    new voice takes needed: C1 (tell them now / check the gauge again: timed), E (a QTE to catch the console as the
+    floor tilts), G6c/G7 (reach for Skyvra or for Nuvexa: timed binary; it can change who is in H2's insert). The
+    Ledger notice should say what changed in plain words ("Lyrra will remember that") and the trust shift; a Bonds
+    panel for the six on the pause menu. Original names only. Consequences go in sealed data (tools/story_seal.py).
+    Public research used (no assets copied): The Dark Pictures games use a two-option-plus-silence dialogue pick, button
+    prompts with a warning, a heartbeat-rhythm press while hiding, trait and relationship shifts, and found premonition
+    clips.
+  - Physics (part 6) and city tasks/crowd (part 7): not looked at.
 
 ## Layout
 - `src/combat/sim/`: the simulation. No DOM, no three.js. `core.ts` (types, difficulty), `weapons.ts`, `species.ts`,
