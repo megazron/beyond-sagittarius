@@ -50,6 +50,8 @@ jobs:
           - { name: cutscene_qa, run: 'python tools/cutscene_qa.py --out "$RUNNER_TEMP/cutscene"' }
           # the opening is one room: furniture, who sits and stands, and where everyone is agree from cut to cut
           - { name: continuity, run: 'python tools/continuity_check.py --step 0.1' }
+          # the pilot's wrists stay on the yoke's horns while it hauls and rolls (the pull's cockpit shots)
+          - { name: yoke, run: 'python tools/yoke_check.py' }
           # each of the six arrivals plays from its first frame to control (game/arrival.ts), and leaves them hurt
           - { name: landing_smoke, run: 'python tools/landing_smoke.py --quality web' }
           - { name: combat, run: 'node --experimental-strip-types tools/combat/sim_test.ts && node --experimental-strip-types tools/combat/pose_test.ts && python tools/combat/play_test.py' }

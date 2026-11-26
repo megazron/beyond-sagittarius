@@ -1238,6 +1238,8 @@ window.addEventListener('resize', () => {
   get continuity() { const c = cine.cont; return { on: c.on, cuts: c.cuts, seen: c.seen, breaks: c.check() }; },
   contLog(on: boolean) { cine.cont.on = on; cine.cont.reset(); },
   deckOverlaps() { return cine.deckOverlaps(); },
+  /** Start (true) or read the log of the pilot's wrists in the yoke's frame (tools/yoke_check.py). */
+  yokeReport(on?: boolean) { if (on) cine.yokeRows = []; return cine.yokeRows; },
   get stagePlaying() { return cine.staged; },
   gameScene(id: 'rescue' | 'camp' | 'beacon') { game?.debugScene(id); },
   wakeSeek(t: number) { game?.debugWakeSeek(t); },
