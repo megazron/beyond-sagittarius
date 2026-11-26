@@ -2047,12 +2047,42 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         const clear = (zz: number) => { for (const k of wallsNear(-7, zz - 1.1, 7, zz + 1.1)) { const b = blocks[k]; if (b.max.y > 0.25 && b.min.y < 1.8 && b.max.z > zz - 1.1 && b.min.z < zz + 1.1 && b.max.x > -7 && b.min.x < 7) return false; } return true; }; // a lane 2.2 m wide: a walker drifts off the line a little
         // already off the kerb (the route is asked again every half second as he goes): on across from where he is. Sent
         // back to his own pavement first, he swung between the road and the kerb at (4.2, 41.3) for minutes (g_city4)
+        // along a pavement from z0 to z1 near lane x: the lane round whatever stands in it. A straight walk down the lane
+        // x -6.8 ran into the fruit stall at (-6.4, 18) and the walker (and a player on the GPS line) stood against its
+        // north side at (-6.8, 20.15) for minutes on the way to the chai stall (P9 GPU take, 2026-11-26). A search over
+        // lanes 0.4 m apart and rows 0.5 m apart, forward or sideways, the lane asked for preferred.
+        const along = (x: number, z0: number, z1: number): [number, number][] => {
+          const sd = x < 0 ? -1 : 1, n = Math.max(1, Math.ceil(Math.abs(z1 - z0) / 0.5)), st = (z1 - z0) / n, R = 0.45, RZ = 0.3;
+          const L: number[] = []; for (let a = 4.5; a <= 8.95; a += 0.4) L.push(a);
+          const bs = wallsNear(sd > 0 ? 4 : -FRONT, Math.min(z0, z1) - 1, sd > 0 ? FRONT : -4, Math.max(z0, z1) + 1).map((k) => blocks[k]).filter((b) => b.max.y > 0.25 && b.min.y < 1.8);
+          const hit = (xa: number, xb: number, za: number, zb: number, rz: number) => { const x0 = Math.min(xa, xb) - R, x1 = Math.max(xa, xb) + R, lo = Math.min(za, zb) - rz, hi = Math.max(za, zb) + rz; for (const b of bs) if (b.max.x > x0 && b.min.x < x1 && b.max.z > lo && b.min.z < hi) return true; return false; };
+          const pref = Math.abs(x), li0 = L.reduce((m, a, i) => (Math.abs(a - pref) < Math.abs(L[m] - pref) ? i : m), 0), Z = (j: number) => z0 + j * st;
+          if (!bs.length || !hit(sd * L[li0], sd * L[li0], z0 + st * 0.5, z1, RZ)) return [[x, z0], [x, z1]];
+          const cost: number[][] = [], from: number[][] = [];
+          for (let j = 0; j <= n; j++) {
+            const c = L.map(() => Infinity), f = L.map(() => -1);
+            if (j === 0) c[li0] = 0;
+            else for (let i = 0; i < L.length; i++) { const p = cost[j - 1][i]; if (p < Infinity && !hit(sd * L[i], sd * L[i], Z(j - 1), Z(j), j - 1 === 0 ? 0 : RZ)) { c[i] = p + Math.abs(st) * (1 + 0.6 * Math.abs(L[i] - pref)); f[i] = i; } }
+            // sideways within the row: one sweep each way (each step 0.4 m)
+            for (const dir of [1, -1]) for (let i = dir > 0 ? 1 : L.length - 2; i >= 0 && i < L.length; i += dir) { const k = i - dir; if (c[k] + 0.5 < c[i] && !hit(sd * L[k], sd * L[i], Z(j), Z(j), RZ)) { c[i] = c[k] + 0.5; f[i] = 100 + k; } }
+            cost.push(c); from.push(f);
+          }
+          let i = cost[n][li0] < Infinity ? li0 : cost[n].reduce((m, v, k) => (v < cost[n][m] ? k : m), 0);
+          if (cost[n][i] === Infinity) return [[x, z0], [x, z1]];
+          const out: [number, number][] = [];
+          for (let j = n; j >= 0;) { out.push([+(sd * L[i]).toFixed(2), +Z(j).toFixed(2)]); const f = from[j][i]; if (f < 0) break; if (f >= 100) i = f - 100; else j--; }
+          out.reverse();
+          // only the corners
+          const pts2 = out.filter((q, k) => k === 0 || k === out.length - 1 || !((q[0] === out[k - 1][0] && q[0] === out[k + 1][0]) || (q[1] === out[k - 1][1] && q[1] === out[k + 1][1])));
+          if (Math.abs(pts2[0][0] - x) > 0.05) pts2.unshift([x, z0]);
+          return pts2;
+        };
         const onRoad = Math.abs(cx) < 5.2, from = onRoad ? cz : ez;
         let zx = from;
         if (crosses) for (let d = 0; d <= 24; d += 0.5) { if (clear(from + (from < cz ? d : -d))) { zx = from + (from < cz ? d : -d); break; } if (clear(from - (from < cz ? d : -d))) { zx = from - (from < cz ? d : -d); break; } }
-        if (crosses && onRoad) { const lb = laneOf(ex); if (Math.abs(zx - cz) > 0.5) pts.push([cx, zx]); pts.push([lb, zx]); if (Math.abs(ez - zx) > 0.5) pts.push([lb, ez]); }
-        else if (crosses) { const la = laneOf(cx), lb = laneOf(ex); if (Math.abs(la - cx) > 0.5 || Math.abs(zx - cz) > 0.5) pts.push([la, cz]); pts.push([la, zx], [lb, zx]); if (Math.abs(ez - zx) > 0.5) pts.push([lb, ez]); }
-        else if (Math.abs(ez - cz) > 4) { const lane = laneOf(cx); if (Math.abs(lane - cx) > 0.5) pts.push([lane, cz]); pts.push([lane, ez]); }
+        if (crosses && onRoad) { const lb = laneOf(ex); if (Math.abs(zx - cz) > 0.5) pts.push([cx, zx]); if (Math.abs(ez - zx) > 0.5) pts.push(...along(lb, zx, ez)); else pts.push([lb, zx]); }
+        else if (crosses) { const la = laneOf(cx), lb = laneOf(ex); if (Math.abs(la - cx) > 0.5 && Math.abs(zx - cz) <= 0.5) pts.push([la, cz]); if (Math.abs(zx - cz) > 0.5) pts.push(...along(la, cz, zx)); else pts.push([la, zx]); if (Math.abs(ez - zx) > 0.5) pts.push(...along(lb, zx, ez)); else pts.push([lb, zx]); }
+        else if (Math.abs(ez - cz) > 4) pts.push(...along(laneOf(cx), cz, ez));
         return [...pts, ...tail, [bx, bz]];
       },
     },

@@ -1170,12 +1170,16 @@ window.addEventListener('resize', () => {
     const others = bodies.filter((o) => o !== me).sort((a, b) => a.getWorldPosition(new THREE.Vector3()).distanceTo(cam) - b.getWorldPosition(new THREE.Vector3()).distanceTo(cam));
     const onto = me ?? others[1], mover = others[0];
     if (!onto || !mover || mover === onto) return { ran: false, caught: false };
-    const was = mover.position.clone(), w = onto.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0.05, 0, 0.05));
+    // hips onto hips, not root onto root: a seated, lying or pulled body's hips are a metre from its root, and a root
+    // put on such a root left the two bodies apart (the misses in the pull's middle and Episode Two's start, g_e23b)
+    const hip = (r: THREE.Object3D) => { let h: THREE.Object3D | undefined; r.traverse((o) => { if (!h && (o as THREE.Bone).isBone && /^(hips|pelvis)$/i.test(o.name)) h = o; }); return h?.getWorldPosition(new THREE.Vector3()); };
+    sc.updateMatrixWorld(true);
+    const h0 = hip(mover), h1 = hip(onto), mw = mover.getWorldPosition(new THREE.Vector3());
+    const was = mover.position.clone(), w = (h0 && h1 ? mw.add(h1.sub(h0)) : onto.getWorldPosition(new THREE.Vector3())).add(new THREE.Vector3(0.05, 0, 0.05));
     if (mover.parent) { mover.parent.updateWorldMatrix(true, false); mover.parent.worldToLocal(w); }
     mover.position.copy(w); mover.updateMatrixWorld(true);
     const hits = clipProbe(sc);
     // what the probe saw (a miss says why): the two hips apart after the move, the mover's distance, its bone count
-    const hip = (r: THREE.Object3D) => { let h: THREE.Object3D | undefined; r.traverse((o) => { if (!h && (o as THREE.Bone).isBone && /^(hips|pelvis)$/i.test(o.name)) h = o; }); return h?.getWorldPosition(new THREE.Vector3()); };
     const ha = hip(mover), hb = hip(onto), apart = ha && hb ? +ha.distanceTo(hb).toFixed(2) : null;
     let nb = 0; mover.traverse((o) => { if ((o as THREE.Bone).isBone) nb++; });
     mover.position.copy(was); mover.updateMatrixWorld(true);
@@ -1231,6 +1235,7 @@ window.addEventListener('resize', () => {
   moment: {
     get open() { return ui.moment.open; },
     get log() { return ui.moment.log; },
+    get placed() { return ui.moment.placed; },
     get choosing() { return cine.choosing; },
     get said() { return [...ui.subLog]; },
     get opening() { return openingSave ? { log: openingSave.branch.log, trust: openingSave.branch.trust, flags: openingSave.flags, record: openingSave.branch.record } : null; },
@@ -1546,6 +1551,7 @@ window.addEventListener('resize', () => {
   syncTest(secs = 30) { return syncFlash(secs, 1, 'position:fixed;inset:0;background:#fff', 1500); },
   /** Sync marks for every capture (tools/gpu_capture.py puts them at the start and end of each recording and aligns
    *  sound to picture by them): n 2 kHz beeps 0.6 s apart, each with a small white square in the top-left corner. */
+  get syncLog() { return syncLog; },
   syncMark(n = 3) { return syncFlash(n, 0.6, 'position:fixed;left:0;top:0;width:48px;height:48px;background:#fff;outline:6px solid #000', 2000); },
   openMenu(which: 'settings' | 'legal' | 'chapters') { if (which === 'settings') document.getElementById('btn-settings')?.click(); else if (which === 'legal') document.getElementById('btn-legal')?.click(); else document.getElementById('btn-chapters')?.click(); },
   quality: quality.name,
@@ -1557,6 +1563,7 @@ window.addEventListener('resize', () => {
   },
 };
 
+const syncLog: { k: number; perf: number; ctxT: number; audible: number | null; outLat: number | null; baseLat: number | null; origin: number }[] = [];
 function syncFlash(n: number, gap: number, css: string, freq: number): number {
   audio.start(); const ctx = audio.ctx; if (!ctx) return 0;
   const el = document.createElement('div'); el.style.cssText = css + ';z-index:99999;pointer-events:none;opacity:0';
@@ -1565,11 +1572,41 @@ function syncFlash(n: number, gap: number, css: string, freq: number): number {
   const tick = () => {
     const t = ctx.currentTime;
     if (on >= 0 && t - on >= 0.15) { el.style.opacity = '0'; on = -1; }
-    if (on < 0 && k < n && t >= t0 + k * gap) { audio.mark(0.06, freq); el.style.opacity = '1'; on = t; k++; }
+    if (on < 0 && k < n && t >= t0 + k * gap) {
+      const at = audio.mark(0.06, freq); el.style.opacity = '1'; on = t; k++;
+      // both clocks at the mark (A/V sync checks): when this beep reaches the speakers by the context's own output
+      // timestamp, and the page clock now (the square is composited on the next frame)
+      const o = ctx.getOutputTimestamp?.() as AudioTimestamp | undefined;
+      syncLog.push({ k, perf: performance.now(), ctxT: at, audible: o && o.performanceTime ? o.performanceTime + (at - (o.contextTime ?? 0)) * 1000 : null, outLat: (ctx as AudioContext & { outputLatency?: number }).outputLatency ?? null, baseLat: ctx.baseLatency ?? null, origin: performance.timeOrigin });
+    }
     if (k >= n && on < 0) { el.remove(); return; }
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick); return t0;
+}
+
+// the choice panel's band (ui/moment.ts place()): every face drawn now, as a rect on screen, and the shot's subject (the
+// middle of the frame, where a cutscene aims its camera: an insert's hands and props)
+{
+  const heads = new WeakMap<THREE.Object3D, THREE.Object3D | null>(), P = new THREE.Vector3(), Q = new THREE.Vector3(), R = new THREE.Vector3();
+  const shown = (o: THREE.Object3D) => { for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false; return true; };
+  ui.moment.avoid = () => {
+    const out: { x0: number; y0: number; x1: number; y1: number }[] = [{ x0: 0.38, y0: 0.34, x1: 0.62, y1: 0.6 }];
+    const sc = renderer.renderPass.scene as THREE.Scene | undefined; if (!sc) return out;
+    camera.updateMatrixWorld(); R.setFromMatrixColumn(camera.matrixWorld, 0);
+    sc.traverseVisible((o) => {
+      if (!o.userData.isCharacter || !shown(o)) return;
+      let h = heads.get(o); if (h === undefined) { h = null; o.traverse((b) => { if (!h && /^head$/i.test(b.name)) h = b; }); heads.set(o, h); }
+      if (!h) return;
+      h.getWorldPosition(P); P.y += 0.06; Q.copy(P).addScaledVector(R, 0.13);
+      P.project(camera); Q.project(camera);
+      if (P.z > 1 || P.z < -1) return;
+      const x = (P.x + 1) / 2, y = (1 - P.y) / 2, rx = Math.abs(Q.x - P.x) / 2, ry = rx * camera.aspect * 1.25;
+      if (rx < 0.012 || x + rx < 0 || x - rx > 1 || y + ry < 0 || y - ry > 1) return;
+      out.push({ x0: x - rx, y0: y - ry, x1: x + rx, y1: y + ry });
+    });
+    return out;
+  };
 }
 
 boot();

@@ -61,6 +61,13 @@ export class MomentLayer {
   private pressedThis = false;
   private ledgerTimer = 0;
   private bondTimer = 0;
+  /** Where the faces (and the shot's subject) are on screen now, as rects 0..1 from the top left; set by main.ts. The
+   *  panel takes the band (low or high) that covers least of them: low it sat under the faces in most shots, but a
+   *  kneeling or seated speaker framed low had the panel over the chin. */
+  avoid: (() => { x0: number; y0: number; x1: number; y1: number }[]) | null = null;
+  private placeT = 0;
+  /** Test: which band the panel took, and the face rects it read. */
+  placed: { band: 'low' | 'high'; low: number; high: number; rects: number } | null = null;
   /** Everything shown, for tests: kind, id-ish text and result. */
   readonly log: { at: number; what: string; detail: string }[] = [];
 
@@ -101,6 +108,7 @@ export class MomentLayer {
     this.root.classList.remove('hidden', 'gone');
     document.body.classList.add('choosing', 'forking');
     this.paint();
+    this.place(this.root, true);
     audio.tone(spec.style === 'act' ? 330 : 523, 0.12, 'sine', 0.08, 0, spec.style === 'act' ? -60 : 40);
     this.log.push({ at: performance.now(), what: 'fork', detail: spec.prompt ?? spec.options.map((o) => o.label).join('|') });
   }
@@ -118,6 +126,7 @@ export class MomentLayer {
     this.reflexEl.className = `reflex ${spec.kind}`;
     document.body.classList.add('choosing');
     this.paint();
+    this.place(this.reflexEl, true);
     audio.tone(spec.kind === 'beat' ? 90 : 740, 0.1, spec.kind === 'beat' ? 'sine' : 'square', 0.06);
     this.log.push({ at: performance.now(), what: spec.kind, detail: spec.label });
   }
@@ -149,6 +158,7 @@ export class MomentLayer {
 
   update(dt: number) {
     const r = this.reflex;
+    if ((this.fork || r) && (this.placeT -= dt) <= 0) this.place(this.fork ? this.root : this.reflexEl, false);
     if (this.fork && this.total) {
       this.left -= dt;
       if (this.left <= 0) { this.finishFork(this.fork.fallback, true); return; }
@@ -246,6 +256,23 @@ export class MomentLayer {
     audio.tone(passed ? 660 : 140, 0.18, passed ? 'sine' : 'sawtooth', 0.06, 0, passed ? 220 : -40);
     this.log.push({ at: performance.now(), what: 'result', detail: `${r.label}:${passed ? 'pass' : 'fail'}` });
     r.onDone(passed);
+  }
+
+  /** The band for the panel: the one whose rect covers less of the faces and the subject (ties: low). Moved later only if
+   *  the band it is in covers a face and the other is clear, so it does not hop with every small head turn. */
+  private place(e: HTMLElement, first: boolean) {
+    this.placeT = 0.5;
+    const rs = this.avoid?.() ?? [];
+    const W = innerWidth || 1, H = innerHeight || 1, b = e.getBoundingClientRect(), wasHigh = e.classList.contains('high');
+    const h = b.height / H, x0 = b.left / W, x1 = b.right / W;
+    // the two bands as fractions of the screen (style.css: .fork bottom 9vh / top 9vh; .reflex at 68% / 26% of the height)
+    const low = e === this.root ? [1 - 0.09 - h, 1 - 0.09] : [0.68 - h / 2, 0.68 + h / 2], high = e === this.root ? [0.09, 0.09 + h] : [0.26 - h / 2, 0.26 + h / 2];
+    const cover = (y: number[]) => rs.reduce((a, r) => a + Math.max(0, Math.min(x1, r.x1) - Math.max(x0, r.x0)) * Math.max(0, Math.min(y[1], r.y1) - Math.max(y[0], r.y0)) / Math.max(1e-6, (r.x1 - r.x0) * (r.y1 - r.y0)), 0);
+    const cl = cover(low), ch = cover(high);
+    let hi = first ? ch + 0.02 < cl : wasHigh ? !(cl < 0.02 && ch > 0.02) : cl > 0.02 && ch < 0.02;
+    if (!rs.length) hi = wasHigh && !first;
+    e.classList.toggle('high', hi);
+    this.placed = { band: hi ? 'high' : 'low', low: +cl.toFixed(3), high: +ch.toFixed(3), rects: rs.length };
   }
 
   /** Closes whatever is open without an answer (a scene torn down). */
