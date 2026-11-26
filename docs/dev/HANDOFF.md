@@ -88,6 +88,27 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
   3.8 s at its start, so I took that out); a 1.7 s freeze as the city appears; the take-off's first shots fill the frame
   with the liner's white hull up close; "Prologue: The Last Normal Day" shows after the city, which was that day.
 
+## 2026-11-26 owner fixes, cinematic agent (worktree ~/bs-cine, branch cine1; captures ~/bs-cap/cine1)
+- Owner's list (verbatim in the coordinator's brief): continuity lounge -> pull -> pods, the pilot's hands on the yoke,
+  voices "in the background", the pods scene copy-paste, choices like an interactive drama, physics glitches, city tasks
+  and crowd. Order of work as listed; each part lands on its own when green.
+- PART 1 (continuity): `src/cinematic/continuity.ts` logs, every frame with ?contlog=1 (or __bs.contLog(true)), the set,
+  the lounge furniture and the six (position, yaw, hip height over the floor / body height -> stand, sit, low, air,
+  in frame or not) and keeps the cut-out and cut-in states; `check()` lists breaks: furniture appearing or vanishing
+  between deck shots, a posture change across a cut that was not acted on screen, an off-screen move faster than
+  1.4 m/s, pops inside a shot (0.3 m or 60 degrees or a posture change in one frame), standing inside a footprint
+  (sofas, table, bag, console: Interior.footprints). `__bs.continuity`, `__bs.deckOverlaps()` (loose props inside
+  furniture). Test: `tools/continuity_check.py` (CI job `continuity`, ~25 min locally on a loaded machine).
+  Main 024067b: 117 problems headless, 104 in the GPU take (base2). Causes and fixes: the 'sit' clip is a sit on the
+  ground (hips ~0.2 m up): on the sofas the hips were inside the cushion, and it faded in from standing in L1 ->
+  scenes.ts `seatAt` (standing clip + chair legs + hips on the cushion, k 0..1 is the way up); the lounge was hidden
+  after the departure -> always shown; the pull opens with Lyrra and Bolzar on their sofa seats (they get up in C2,
+  acted), the other three behind the sofa at the window; per-shot `put` teleports replaced by marks that carry over
+  (E1 slides by distance per person, E2/E3 from where the slide left them, G3 floats from G1's marks, G5 moves only the
+  two in shot, G7 pushes off from where each one floats, each with their own timing and limbs); the old reading shot's
+  single frame at 107 s is gone; loose props rest on the table, console, sofas and floor (deterministic).
+- Not landed yet at the time of writing: parts 2 to 4 in the working tree (yoke grasp, voice bus, pods reaction shots).
+
 ## Layout
 - `src/combat/sim/`: the simulation. No DOM, no three.js. `core.ts` (types, difficulty), `weapons.ts`, `species.ts`,
   `ai.ts`, `sim.ts`, `encounters.ts`, `tension.ts`. Runs under Node.

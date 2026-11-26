@@ -133,6 +133,8 @@ export class Cutscene {
   private tickFn: ((t: number) => void) | undefined;
   private baseFov: number;
 
+  /** Index of the beat whose shot is on screen (continuity log). */
+  shotBeat = -1;
   /** A panel is up: the scene holds until it answers. */
   private waiting = false;
 
@@ -266,6 +268,7 @@ export class Cutscene {
         x.root.rotation.y = Math.atan2(y.root.position.x - x.root.position.x, y.root.position.z - x.root.position.z);
         x.root.updateMatrixWorld(true);
       }
+      this.shotBeat = this.i;
       this.shot = b.shot(); this.shotT = 0; this.shotLen = Math.max(this.left, 6); this.fresh = true;
       const fov = this.shot.fov ?? this.baseFov, cam = this.ctx.camera;
       if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }

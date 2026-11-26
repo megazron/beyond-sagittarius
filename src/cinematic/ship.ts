@@ -273,16 +273,18 @@ export interface Interior {
   display(lines: string[] | null): void;
   /** Where each of the six sits or stands in the lounge for the departure (deck units, root on the floor). */
   seats: Record<string, { x: number; z: number; yaw: number }>;
-  /** The passenger lounge's furniture (sofas, table, bag, runner): shown for the departure only. The pull days later
-   *  is on the observation deck, the same hull section further forward, which has none. */
+  /** The passenger lounge's furniture (sofas, table, bag, runner): the deck is one room through the whole opening, so it
+   *  stays in every shot of it (the owner: the sofas vanished between the departure and the pull). */
   lounge: THREE.Group;
+  /** Floor footprints nobody may stand in (deck units, centre, turn, width along x, depth along z before the turn). */
+  footprints: { name: string; x: number; z: number; yaw: number; w: number; d: number }[];
 }
 
 /** The lounge's furniture, in deck units: two low sofas either side of the console, backs to the window. */
 const SOFA = { w: 1.9, d: 0.78, seat: 0.44, back: 0.86 } as const;
 const SOFAS = [{ x: -2.35, z: -0.55, yaw: 0.5 }, { x: 2.35, z: -0.55, yaw: -0.5 }] as const;
 /** A point on a sofa's seat: along its width (-1 one arm .. 1 the other) and out from the back cushion. */
-function onSofa(i: 0 | 1, along: number, out = 0.12) {
+export function onSofa(i: 0 | 1, along: number, out = 0.12) {
   const s = SOFAS[i], c = Math.cos(s.yaw), n = Math.sin(s.yaw), lx = along * (SOFA.w / 2 - 0.35), lz = out;
   return { x: s.x + lx * c + lz * n, z: s.z - lx * n + lz * c, yaw: s.yaw };
 }
@@ -364,23 +366,36 @@ export function createInterior(detail = 1): Interior {
   const floaters: THREE.Mesh[] = [];
   const fMats = [new THREE.MeshStandardMaterial({ color: 0xe0e0e0, roughness: 0.4 }), new THREE.MeshStandardMaterial({ color: 0xff7a3d, roughness: 0.5 }), frameMat];
   const fGeos = [new THREE.BoxGeometry(0.16, 0.02, 0.11), new THREE.CylinderGeometry(0.03, 0.03, 0.09, 10), new THREE.BoxGeometry(0.07, 0.03, 0.05), new THREE.SphereGeometry(0.035, 8, 6)];
-  for (let i = 0; i < 26; i++) {
+  // where each one rests (x, z, the surface's height): the table, the console's top, the sofas' middles, the floor along
+  // the window and at the ends, clear of the furniture and of everyone's marks. They were thrown at random over the
+  // whole floor, up to 25 cm in the air, some inside the sofas (the continuity check found them)
+  const REST: [number, number, number][] = [
+    [0.62, 0.88, -1.755], [1.32, 0.6, -1.755], [0.95, 0.58, -1.755], // the table (the two cups are at 0.75/0.68 and 1.12/0.85)
+    [-0.9, -1.62, -1.3], [0.9, -1.15, -1.3], [0.55, -1.72, -1.3], // the console's top
+    [onSofa(0, 0.0, 0.15).x, onSofa(0, 0.0, 0.15).z, -1.76], [onSofa(1, 0.05, 0.15).x, onSofa(1, 0.05, 0.15).z, -1.76], // the sofas' middles
+    [-4.6, -2.75, -2.2], [-3.3, -2.8, -2.2], [-2.0, -2.75, -2.2], [-0.4, -2.8, -2.2], [0.9, -2.75, -2.2], // along the window
+    [-5.2, 1.7, -2.2], [-5.25, -0.9, -2.2], [5.2, -1.6, -2.2], [-0.95, 1.3, -2.2], [-0.15, 1.25, -2.2], // the ends, by the bag
+  ];
+  const HALF = [0.01, 0.045, 0.015, 0.035]; // each shape's half height, so it sits on the surface
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646; // the same every run
+  REST.forEach(([x, z, y], i) => {
     const f = new THREE.Mesh(fGeos[i % 4], fMats[i % 3]);
-    f.position.set((Math.random() - 0.5) * 8, -2.15 + Math.random() * 0.3, (Math.random() - 0.5) * 3.5);
+    f.position.set(x, y + HALF[i % 4], z); f.rotation.y = rnd() * Math.PI;
     f.userData.base = f.position.clone();
-    f.userData.spin = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(2);
-    f.userData.rise = 0.3 + Math.random() * 0.6;
-    f.castShadow = true;
+    f.userData.onFloor = y < -2.1; // only what is on the floor slides when the deck tilts
+    f.userData.spin = new THREE.Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).multiplyScalar(2);
+    f.userData.rise = 0.3 + rnd() * 0.6;
+    f.castShadow = true; f.name = `loose${i}`;
     group.add(f); floaters.push(f);
-  }
+  });
 
   // ---- the lounge: sofas, a low table, a bag, end bulkheads with the hatch aft, ceiling strips, a runner ----
   const fabric = new THREE.MeshStandardMaterial({ color: 0x7d7268, roughness: 0.92 });
   const cushion = new THREE.MeshStandardMaterial({ color: 0x9a8c7e, roughness: 0.95 });
   const base = new THREE.MeshStandardMaterial({ color: 0x2b2f36, metalness: 0.6, roughness: 0.45 });
   const rb = (w: number, h: number, d: number, r = 0.05) => new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2.2, h / 2.2, d / 2.2));
-  const lounge = new THREE.Group(); lounge.name = 'lounge'; lounge.visible = false; group.add(lounge);
-  const put = (g: THREE.BufferGeometry, m: THREE.Material, p: THREE.Object3D, x: number, y: number, z: number) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; p.add(o); return o; };
+  const lounge = new THREE.Group(); lounge.name = 'lounge'; group.add(lounge);
+  let pn = 0; const put = (g: THREE.BufferGeometry, m: THREE.Material, p: THREE.Object3D, x: number, y: number, z: number) => { const o = new THREE.Mesh(g, m); o.name = `lounge${pn++}`; o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; p.add(o); return o; };
   for (const s of SOFAS) {
     const so = new THREE.Group(); so.position.set(s.x, -2.2, s.z); so.rotation.y = s.yaw; lounge.add(so);
     put(rb(SOFA.w, 0.08, SOFA.d - 0.04, 0.02), base, so, 0, 0.04, 0);
@@ -451,7 +466,12 @@ export function createInterior(detail = 1): Interior {
   const amb = new THREE.HemisphereLight(0x8899bb, 0x111118, 0.6);
   group.add(amb);
 
-  return { group, crew, floaters, alarmLight, holo, consoleLight, mainLight, earthLight, stripLight, display, seats, lounge };
+  const footprints: Interior['footprints'] = [
+    ...SOFAS.map((f, i) => ({ name: i ? 'sofaR' : 'sofaL', x: f.x, z: f.z, yaw: f.yaw, w: SOFA.w, d: SOFA.d })),
+    { name: 'table', x: 0.95, z: 0.75, yaw: 0, w: 0.9, d: 0.5 }, { name: 'bag', x: -0.6, z: 0.85, yaw: 0.4, w: 0.62, d: 0.38 },
+    { name: 'console', x: 0, z: -1.4, yaw: 0, w: 2.4, d: 0.9 },
+  ];
+  return { group, crew, floaters, alarmLight, holo, consoleLight, mainLight, earthLight, stripLight, display, seats, lounge, footprints };
 }
 
 /** The liner's vestibule (ship units): floor, ceiling and walls as one lit mesh and the passages' dark ends as another. */

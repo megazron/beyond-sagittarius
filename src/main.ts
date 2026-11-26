@@ -1234,6 +1234,10 @@ window.addEventListener('resize', () => {
   holdSubs(on: boolean) { ui.holdSubs = on; },
   awayOrbit(o: { x: number; y: number; z: number; r: number; a: number; h: number } | null) { if (game?.away) game.away.orbit = o; },
   cineTime() { return cine.time; },
+  /** The opening's continuity log (?contlog=1 or contLog(true) before it plays): cuts, acted posture changes and the breaks. */
+  get continuity() { const c = cine.cont; return { on: c.on, cuts: c.cuts, seen: c.seen, breaks: c.check() }; },
+  contLog(on: boolean) { cine.cont.on = on; cine.cont.reset(); },
+  deckOverlaps() { return cine.deckOverlaps(); },
   get stagePlaying() { return cine.staged; },
   gameScene(id: 'rescue' | 'camp' | 'beacon') { game?.debugScene(id); },
   wakeSeek(t: number) { game?.debugWakeSeek(t); },
