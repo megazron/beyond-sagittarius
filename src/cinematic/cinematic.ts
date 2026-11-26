@@ -544,9 +544,9 @@ export class Cinematic {
     const rise = (c: Character, along: number, t0: number, local: number) => {
       const g = smoothstep(t0, t0 + 1.1, local), st = this.seated.get(c);
       if (g <= 0 || !st) return;
-      st.k = 1 - g; st.extra = undefined; st.hands = true; if (g > 0.05) c.stopTask();
+      st.k = 1 - smoothstep(0.2, 1, g); st.extra = undefined; st.hands = true; if (g > 0.05) c.stopTask();
       // the hips go forward over the feet first, then up
-      const f = onSofa(1, along, 0.12 + 0.52 * smoothstep(0.05, 0.6, g)); c.root.position.x = f.x; c.root.position.z = f.z;
+      const f = onSofa(1, along, 0.12 + 0.52 * smoothstep(0, 0.4, g)); c.root.position.x = f.x; c.root.position.z = f.z;
     };
     const atConsole = () => put(sci, -0.85, -0.62, Math.PI);
     const exterior = (local: number, k: number, strain = 0) => {
