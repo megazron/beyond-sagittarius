@@ -119,7 +119,7 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
   room send 0.35 -> 0.1; ducking music 0.3 -> 0.22, effects 0.5 -> 0.4. Measured on GPU takes with
   ~/bs-cap/cine1/vo_mix.py (lines over their take length from the subtitle log): main -16.5 LUFS mean (quietest
   -20.5) over a -25.0 bed, tail 14.7 LU under the line; branch -15.4 (quietest -19.2) over -24.9, tail 16.5 LU.
-  Both takes peak over 0 dBFS (effects, not voices): a limiter on `post` is still to do.
+  Both takes peaked over 0 dBFS (effects, not voices): a limiter now follows `post` (f26a3f6), not yet on a GPU take.
 - PART 4 (pods): G6 Zenvik keeps his right hand on the console and points up towards the hatch; G6b Lyrra goes to
   Nuvexa and takes her wrist while Draxum braces on the ceiling; G6c Bolzar holds the sofa's back while Skyvra pushes
   off towards Zenvik; G7 each pushes off from where they float with their own timing and limbs (PODS table).
