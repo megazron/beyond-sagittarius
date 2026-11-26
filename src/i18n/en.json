@@ -1638,5 +1638,12 @@
   "g.f.e3.mz.boy": "She gave the honey to the child and nearly died of being right.",
   "g.f.e3.mz.self": "She kept the honey and lived and was right, and the child limps. I wrote both down. I always write both down.",
   "g.f.e3.mz.half": "She cut the medicine in half. Medicine does not like being cut in half. Neither do people.",
-  "g.f.e3.mz.4": "Next, she has to remember things longer than she can remember them. Marks on clay."
+  "g.f.e3.mz.4": "Next, she has to remember things longer than she can remember them. Marks on clay.",
+  "mo.as": "You are {who}",
+  "mo.press": "Press now",
+  "mo.hold": "Press and keep holding",
+  "mo.beat": "Press on each heartbeat",
+  "mo.ledger": "MegaZroN's Ledger",
+  "mo.bonds": "Bonds",
+  "mo.silent": "(says nothing)"
 }

@@ -4,7 +4,7 @@ import { createShip, createInterior, onSofa } from './ship';
 import { easeInOut, clamp, smoothstep, lerp } from '../core/noise';
 import { audio } from '../core/audio';
 import { voice } from '../core/voice';
-import { Cutscene, Beat, addCutsceneRig } from './cutscene';
+import { Cutscene, Beat, addCutsceneRig, type SceneBranch } from './cutscene';
 import { departScene, fightScene, stageDeck, seatAt } from './scenes';
 import { t } from '../i18n';
 import { createCharacter, Character, CrewId, CrewPose, type Face, type Limbs } from '../characters/character';
@@ -13,6 +13,7 @@ import { defaultLook, type PlayerLook, type CrewSkins } from '../characters/cust
 import { createInserts, type Inserts } from './inserts';
 import { FilmVideo } from './filmvideo';
 import { ContinuityLog, overlaps } from './continuity';
+import { emptyBranch, test } from '../game/branch/engine';
 
 export interface CineUI {
   subtitle(key: string | null, speakerKey?: string): void;
@@ -23,7 +24,7 @@ export interface CineUI {
   fade(color: 'black' | 'white', to: number, seconds: number): void;
 }
 
-interface Cue { t: number; fn: () => void; done?: boolean; voiced?: boolean; key?: string; t0?: number }
+interface Cue { t: number; fn: () => void; done?: boolean; voiced?: boolean; key?: string; t0?: number; /** A choice or reflex the player has to answer here. */ moment?: string }
 /** film: a rendered (Blender) take of this shot, played as video over the engine picture when its file is there. */
 interface Shot { start: number; end: number; enter?: () => void; update: (k: number, local: number) => void; done?: boolean; film?: string; /** Its name in the shot list (continuity log). */ label?: string }
 
@@ -66,6 +67,24 @@ export class Cinematic {
   private pilot!: Character;
   /** Continuity log (?contlog=1, __bs.continuity): the set and the six at every cut. */
   readonly cont = new ContinuityLog();
+  /** The story's choices over the opening (main.ts: the opening's save). Without it the opening plays as one film. */
+  branch: SceneBranch | null = null;
+  /** How fast the film runs while a choice is open (the choice layer's: a decision nearly stops it, a reflex slows it). */
+  momentScale: () => number = () => 1;
+  /** A choice or reflex is open over the timeline. */
+  private waiting: string | null = null;
+  /** A skip is passing the film from choice to choice. */
+  private skipping = false;
+  /** Has this moment been answered, and how. */
+  chose(decision: string, option: string) { return this.branch?.test({ chose: [decision, option] }) ?? false; }
+  passed(qte: string) { return this.branch?.test({ passed: qte }) ?? false; }
+  answered(id: string) { return this.branch?.test({ decided: id }) ?? false; }
+  /** No story attached (a replay from the title, the tests): every scene plays its first way and asks nothing. */
+  private passive: SceneBranch = {
+    test: (c) => { const st = { branch: emptyBranch(), flags: {}, level: 0, day: 0, timeOfDay: 0, inventory: {}, stats: { health: 100, thirst: 0, hunger: 0, stamina: 100 } }; return test(st, c); },
+    line: (b) => ({ key: b.key, who: b.who }), apply: () => {}, answered: () => true, ask: (_, d) => d(), quick: (_, d) => d(),
+  };
+  get choosing() { return this.waiting; }
 
   constructor(private ui: CineUI, light = false) {
     this.crewDetail = light || matchMedia('(pointer: coarse)').matches ? 0.6 : 1;
@@ -141,6 +160,7 @@ export class Cinematic {
     this.onDone = onDone;
     this.time = PRE;
     this.playing = true;
+    this.waiting = null; this.skipping = false; this.zenSlide = 0.5; this.drxGive = 0;
     this.fitToVoice();
     this.cues.forEach((c) => (c.done = false));
     this.shots.forEach((s) => (s.done = false));
@@ -178,9 +198,9 @@ export class Cinematic {
   }
 
   /** Jump to a time (debug / screenshots). Earlier cues are marked done without firing. */
-  seek(t: number) {
+  seek(t: number, raw = false) {
     if (!this.playing) return;
-    t = this.warp(t);
+    if (!raw) t = this.warp(t);
     this.time = t;
     this.cues.forEach((c) => { if (c.t < t) c.done = true; });
     this.shots.forEach((s) => { if (s.end <= t) { s.enter?.(); s.done = true; } });
@@ -191,6 +211,10 @@ export class Cinematic {
   skip() {
     if (this.stage) { this.stage.skip(); return; } // skip the scene; a second tap skips the rest
     if (!this.playing) return;
+    if (this.waiting) return; // a skip never answers for the player
+    // skipping passes the film, never a choice: on to the next one still open, then the end
+    const open = this.branch ? this.cues.filter((c) => c.moment && !c.done && !this.branch!.answered(c.moment)).sort((a, b) => a.t - b.t)[0] : undefined;
+    if (open) { voice.stop(); this.ui.subtitle(null); this.skipping = true; this.seek(Math.max(this.time, open.t - 0.6), true); return; }
     this.finish();
   }
 
@@ -231,6 +255,7 @@ export class Cinematic {
       camera: this.camera,
       scene: this.scene,
       actors: this.cast,
+      branch: this.branch ?? this.passive,
       subtitle: (k, sp) => this.ui.subtitle(k, sp),
       // inside the hull, off the floor, clear of the console
       cameraOk: (p) => Math.hypot(p.y, p.z) < 3.75 && p.y > -2.05 && Math.abs(p.x) < 5.6 && !(Math.abs(p.x) < 1.7 && p.z < -0.7),
@@ -320,6 +345,7 @@ export class Cinematic {
 
   private finish() {
     this.playing = false;
+    this.waiting = null;
     this.seated.clear();
     this.stage = null;
     this.filmAt(undefined, 0); for (const f of this.films.values()) f.close(); this.films.clear();
@@ -350,6 +376,16 @@ export class Cinematic {
   }
 
   private cue(t: number, fn: () => void) { this.cues.push({ t, fn }); }
+  /** A choice (kind 'choice') or a reflex ('qte') over the film at time t: the film slows behind it until it is answered. */
+  private mcue(t: number, id: string, kind: 'choice' | 'qte', after?: () => void) {
+    this.cues.push({ t, moment: id, fn: () => {
+      const br = this.branch;
+      if (!br || br.answered(id)) { after?.(); return; }
+      this.waiting = id;
+      const done = () => { if (this.waiting === id) this.waiting = null; after?.(); if (this.skipping) { this.skipping = false; this.skip(); } };
+      if (kind === 'choice') br.ask(id, done); else br.quick(id, done);
+    } });
+  }
   /** A spoken cue: the timeline waits for the previous line to finish before firing it. */
   private vcue(t: number, key: string, fn: () => void) {
     this.cues.push({ t, voiced: true, key, fn: () => { this.speechEnd = this.clockT + (voice.duration(key) ?? 2) + 0.15; this.subClearAt = t >= 39 ? this.speechEnd + 0.3 : 0; fn(); } });
@@ -682,13 +718,18 @@ export class Cinematic {
 
     // ---- C. The jokes die ----
     // C1 over Zenvik's shoulder: the group turning to him. He swallows before the line
-    this.vcue(S + 30.1, 'cine.line4', () => { ui.subtitle('cine.line4', 'crew.scientist.name'); talk(sci, 'cine.line4'); });
+    // the first choice of the pull (Zenvik): tell them now, or check it once more and say nothing (the silent default)
+    this.mcue(S + 29.55, 'e1.reading', 'choice');
+    this.vcue(S + 30.1, 'cine.line4', () => { if (this.chose('e1.reading', 'check')) return; ui.subtitle('cine.line4', 'crew.scientist.name'); talk(sci, 'cine.line4'); });
     shotAt(S + 29.4, S + 31.8, {
       enter: () => { const st = this.seated.get(bol); if (st) st.extra = undefined; sci.root.rotation.y = Math.PI * 0.55; keepSit(); drx.stopTask(); lyr.stopTask(); },
       update: (k, local) => {
         lens(50); const h = head(sci); this.camera.position.copy(h).add(V(-0.75, 0.05, 0.55)); this.lookTarget.copy(at(2.4, -0.8, -1.9));
         sci.setFace({ fear: 0.2 }); const turn = smoothstep(0.6, 1.6, local);
-        for (const c of [drx, nuv, lyr, sky, bol]) { c.setLookTarget(turn > 0.3 ? head(sci) : null); c.setFace({ smile: 0.4 * (1 - turn) }); }
+        // checking again: his eyes go back down to the gauge and only Lyrra turns, to his face, not to anything he said
+        const quiet = this.chose('e1.reading', 'check');
+        if (quiet) sci.setLookTarget(ins.gaugeAt.getWorldPosition(new THREE.Vector3()));
+        for (const c of [drx, nuv, lyr, sky, bol]) { const t2 = quiet && c !== lyr ? 0 : turn; c.setLookTarget(t2 > 0.3 ? head(sci) : null); c.setFace({ smile: 0.4 * (1 - t2) }); }
       },
     });
     // C2 reaction, held: five faces, the laughter gone, each stopping at a different moment (Lyrra first, Nuvexa last)
@@ -795,6 +836,9 @@ export class Cinematic {
         lens(24); this.camera.position.copy(at(-1.6, -0.8, 2.6)); this.lookTarget.copy(at(1.6, -1.2, -1.3)); this.shake = 0.015;
         // how far each one goes before their feet hold: Nuvexa furthest (she goes past Lyrra, E2), Bolzar least (the aft wall)
         const SLIDE: Record<string, number> = { social: 1.3, builder: 0.3, explorer: 0.6, scientist: 0.5, strong: 0.7, medic: 0.15 };
+        // his own slide follows the reflex: caught on the console's edge, or carried into the sofa (eased, never a jump)
+        const want = this.passed('e1.brace') ? 0.12 : this.answered('e1.brace') ? 1.0 : 0.5;
+        this.zenSlide += (want - this.zenSlide) * (1 - Math.exp(-(1 / 60) * 4)); SLIDE.scientist = this.zenSlide;
         const sl = (c: Character, go: number) => { const g = smoothstep(go, go + 1.6, local); if (!slideFrom.has(c)) slideFrom.set(c, c.root.position.x); c.root.position.x = slideFrom.get(c)! + g * SLIDE[c.id]; c.setLimbs(mixLimbs(STANDING, { ...FALL.spread, legL: [0.35, -1, 0.1], legR: [-0.35, -1, -0.1] }, g * 0.6)); c.setFace({ fear: 0.5 * g }); return g; };
         sl(nuv, 0.2); sl(bol, 0.1); sl(sky, 0.4); sl(sci, 0.5); sl(drx, 0.3); sl(lyr, 0.6);
         floatUp(0, 0, smoothstep(0, 2.4, local) * 2.2);
@@ -802,30 +846,45 @@ export class Cinematic {
       },
     });
     const slideFrom = new Map<Character, number>();
+    this.mcue(S + 59.45, 'e1.brace', 'qte');
     // E2 insert: Lyrra's hand closes on Nuvexa's wrist as she slides past
     this.cue(S + 62.2, () => audio.tone(320, 0.18, 'sine', 0.05, 0, -120));
     shotAt(S + 61.4, S + 62.9, {
-      enter: () => { const l = lyr.root.position; put(lyr, l.x, l.z, -Math.PI * 0.45); put(nuv, l.x - 0.6, l.z - 0.3, Math.PI * 0.6); only(nuv, lyr); }, // where the slide left them
+      enter: () => { const l = lyr.root.position; put(lyr, l.x, l.z, -Math.PI * 0.45); put(nuv, l.x - 0.6, l.z - 0.3, Math.PI * 0.6); only(nuv, lyr); nuvFrom.copy(nuv.root.position); }, // where the slide left them
       update: (k, local) => {
-        const g = smoothstep(0.1, 0.9, local);
+        // Lyrra's choice: her hand closes on Nuvexa's wrist, or she turns for Bolzar and Nuvexa slides on past her hand
+        const caught = !this.answered('e1.reach') || this.chose('e1.reach', 'nuvexa');
+        const g = caught ? smoothstep(0.1, 0.9, local) : 0.35 * smoothstep(0.1, 0.6, local);
+        if (!caught) { nuv.root.position.x = nuvFrom.x + 0.9 * smoothstep(0.2, 1.4, local); lyr.setLookTarget(local > 0.3 ? at(3.2, -0.8, -1.6) : null); }
         nuv.setLimbs(mixLimbs(STANDING, { ...FALL.spread, armL: [0.9, 0.35, 0.3], foreL: [1, 0.25, 0.3] }, 0.9)); nuv.setFace({ fear: 0.8, open: 0.4 });
         lyr.setLimbs(mixLimbs(STANDING, { ...STANDING, armR: [-0.9, 0.15, 0.45], foreR: [-1, 0.1, 0.3] }, g));
         const m = hand(lyr).add(hand(nuv, false)).multiplyScalar(0.5);
         lens(50); this.camera.position.copy(m).add(V(0.15, 0.35, 1.05)); this.lookTarget.copy(m);
       },
     });
+    const nuvFrom = new THREE.Vector3();
+    this.mcue(S + 61.5, 'e1.reach', 'choice', () => { if (!this.chose('e1.reach', 'nuvexa')) this.cue(this.time + 0.5, () => { audio.thud(); audio.human('yelp', 0.7); }); });
     // E3 Draxum plants his feet and takes Bolzar's weight on one arm; eyes on Bolzar, not on us
     this.vcue(S + 63.2, 'cine.line8', () => { ui.subtitle('cine.line8', 'crew.strong.name'); talk(drx, 'cine.line8'); });
     shotAt(S + 62.9, S + 65.8, {
-      enter: () => { const p = drx.root.position; put(drx, p.x, p.z, -0.35); put(bol, p.x + 0.65, p.z - 0.25, -0.9); }, // Bolzar has fallen against him
+      enter: () => { const p = drx.root.position; put(drx, p.x, p.z, -0.35); put(bol, p.x + 0.65, p.z - 0.25, -0.9); this.bolY0 = bol.root.position.y; this.drxGive = 0; }, // Bolzar has fallen against him
       update: (k, local) => {
         lens(35); const h = head(drx, -0.3); this.camera.position.copy(h).add(V(-0.7, -0.3, 2.1)); this.lookTarget.copy(h).add(V(0.3, 0, 0)); this.shake = 0.02;
         drx.setLimbs(mixLimbs(STANDING, { ...STANDING, legL: [0.45, -1, 0.1], shinL: [0.2, -1, 0], legR: [-0.4, -1, -0.15], shinR: [-0.2, -1, 0], armL: [1, -0.1, 0.35], foreL: [0.9, 0.2, 0.5] }, smoothstep(0, 0.8, local)));
         drx.setFace({ frown: 0.7, open: 0.2 }); drx.setLookTarget(head(bol));
         bol.setLimbs(mixLimbs(STANDING, FALL.spread, 0.5)); bol.setFace({ fear: 0.6 }); bol.setLookTarget(head(drx));
+        // the hold lost: his arm gives at the elbow and Bolzar's weight takes him down to one knee (eased in)
+        if (this.answered('e1.hold') && !this.passed('e1.hold')) {
+          this.drxGive = Math.min(1, this.drxGive + 1 / 60 / 0.5);
+          const gv = smoothstep(0, 1, this.drxGive);
+          drx.setLimbs(mixLimbs(STANDING, { ...STANDING, legL: [0.45, -1, 0.1], shinL: [0.2, -1, 0], legR: [-0.4, -1, -0.15], shinR: [-0.2, -1, 0], armL: [0.6, -0.7, 0.3], foreL: [0.2, -0.9, 0.4], bend: 0.35 * gv }, 1));
+          drx.setFace({ frown: 0.4, open: 0.5, squint: 0.8 * gv });
+          bol.root.position.y = this.bolY0 - 0.18 * gv;
+        }
       },
     });
 
+    this.mcue(S + 63.05, 'e1.hold', 'qte', () => { if (!this.passed('e1.hold')) { audio.human('grunt', 0.9); audio.thud(); } });
     // ---- F. It is the black hole ----
     // F1 over Zenvik's shoulder onto the main screen: the trajectory goes vertical; his hand stops on its frame
     shotAt(S + 65.8, S + 67.8, {
@@ -899,6 +958,7 @@ export class Cinematic {
     });
     // G2 insert: the comms panel. NO SIGNAL; the alarm stops mid-tone; a heartbeat comes in
     this.cue(S + 94.4, () => { ui.aiAlert(null); audio.alarm(false); audio.vacuum(true); ins.comms(['COMMS', 'NO SIGNAL'], '#ff5a3a'); });
+    this.mcue(S + 94.6, 'e1.breath', 'qte', () => { if (!this.passed('e1.breath')) audio.humanInner('gasp', 0.9); });
     shotAt(S + 93.6, S + 96.2, {
       enter: () => { intr.alarmLight.position.set(0, 2.0, 1.0); intr.mainLight.position.set(0, 2.5, 0.5); ins.comms(['COMMS', 'NO SIGNAL'], '#ff5a3a'); ui.aiAlert(null); }, // (the panel showed LINK OK under the alert for 0.8 s before its cue)
       update: (k) => {
@@ -1014,6 +1074,7 @@ export class Cinematic {
         floatUp(1, 0, 2.4);
       },
     });
+    this.mcue(S + 119.5, 'e1.handcore', 'choice');
     // each pushes off from where they are floating, in their own time and their own way (they all moved as one before)
     const PODS: Record<string, { t0: number; pace: number; look: Face }> = {
       scientist: { t0: 0.0, pace: 1.0, look: { fear: 0.6, frown: 0.4, open: 0.3 } }, // first, the one who called it
@@ -1029,13 +1090,20 @@ export class Cinematic {
       update: (k, local) => {
         lens(24); this.camera.position.copy(at(-4.2, -0.9, 1.0)); this.lookTarget.copy(at(4.8, -1.0, 0.6));
         const hatch = V(5.9, -1.4, 0.9);
+        // Zenvik's choice: her hand (they go together, her path bends to his), the core (he turns back for it first and her
+        // hand closes on nothing), or neither (he freezes a beat, then goes alone)
+        const hand = this.chose('e1.handcore', 'hand'), core = this.chose('e1.handcore', 'core'), froze = !hand && !core;
         intr.crew.forEach((c, i) => {
-          const pd = PODS[c.id], p0 = podFrom.get(c) ?? c.root.position, go = smoothstep(pd.t0, pd.t0 + 0.9, local);
+          const late = c.id === 'scientist' ? (core ? 0.7 : froze && this.answered('e1.handcore') ? 0.45 : 0) : 0;
+          const pd = { ...PODS[c.id], t0: PODS[c.id].t0 + late }, p0 = podFrom.get(c) ?? c.root.position, go = smoothstep(pd.t0, pd.t0 + 0.9, local);
           const dir = hatch.clone().sub(p0); dir.y *= 0.4; dir.normalize();
           const dist = pd.pace * (0.9 * smoothstep(pd.t0, pd.t0 + 1.3, local) + 0.35 * Math.max(0, local - pd.t0 - 1.3));
           c.root.position.copy(p0).addScaledVector(dir, dist);
+          if (c.id === 'explorer' && hand) { const z = intr.crew[0].root.position; c.root.position.lerp(V(z.x - 0.35, z.y, z.z + 0.45), smoothstep(0.2, 1.4, local) * 0.6); }
           c.root.rotation.set(-0.55 * go, Math.atan2(dir.x, dir.z), (i % 2 ? 0.12 : -0.12) * go);
-          const reach: Limbs = c.id === 'explorer' ? { ...FALL.explorer, armR: [-0.3, 0.45, 1], foreR: [-0.2, 0.3, 1] }
+          const reach: Limbs = c.id === 'scientist' && hand ? { ...FALL.spread, armR: [-0.85, -0.1, -0.5], foreR: [-0.8, 0, -0.4] } // his hand back for hers
+            : c.id === 'scientist' && core && local < pd.t0 ? { ...FALL.spread, armL: [0.2, 0.1, -1], foreL: [0.1, 0.2, -1] } // back to the console for the core
+            : c.id === 'explorer' ? { ...FALL.explorer, armR: [-0.3, 0.45, 1], foreR: [-0.2, 0.3, 1] }
             : c.id === 'medic' ? { ...FALL.medic, armL: [0.9, 0.2, -0.4], foreL: [0.8, 0.4, -0.3] } // an arm back for Nuvexa
             : c.id === 'social' ? { ...FALL.social, armR: [-0.35, -0.3, 0.6], foreR: [0.4, 0.3, 0.6] } // the phone to her chest
             : FALL[c.id] ?? FALL.spread;
@@ -1052,6 +1120,10 @@ export class Cinematic {
 
   /** Camera roll for the shot in hand (the deck tilting), and poses the pull gives the crew outside a staged scene. */
   private roll = 0;
+  /** The pull's choices, as staged: Zenvik's slide (e1.brace), Draxum's arm giving (e1.hold). */
+  private zenSlide = 0.5;
+  private drxGive = 0;
+  private bolY0 = 0;
   private pullPose: Partial<Record<CrewId, CrewPose>> = {};
 
   update(dt: number) {
@@ -1064,7 +1136,8 @@ export class Cinematic {
       return;
     }
     if (!this.playing) return;
-    const next = this.time + dt;
+    let next = this.time + dt * (this.waiting ? this.momentScale() : 1);
+    if (this.waiting) { const sh = this.shots.find((x) => this.time >= x.start && this.time < x.end); if (sh) next = Math.min(next, sh.end - 0.02); }
     // hold the picture rather than talk over a line (Hindi and Urdu run longer)
     const blocked = this.clockT < this.speechEnd && this.cues.some((c) => c.voiced && !c.done && c.t <= next);
     if (!blocked) this.time = next;

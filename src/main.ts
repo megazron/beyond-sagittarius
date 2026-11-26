@@ -3,6 +3,7 @@ import './style.css';
 import * as THREE from 'three';
 import { BATCH, batchSupported } from './core/ibatch';
 import { clipProbe, clipStats, type ClipHit } from './core/clipprobe';
+import { glitch } from './core/glitch';
 import { NEAR_FADE } from './core/nearfade';
 import { setLang, setPlayer, t, Lang } from './i18n';
 import { detectQuality, isPhone, saveQualityChoice, QualityName, qualityFromUrl } from './core/quality';
@@ -11,7 +12,7 @@ import { Away } from './game/away/away';
 import type { CrewId } from './characters/character';
 import { Renderer } from './core/renderer';
 import { audio } from './core/audio';
-import { loadSave, newSave, clearSave, loadSettings, writeSettings, useSlot, SaveData, Settings } from './core/save';
+import { loadSave, newSave, clearSave, loadSettings, writeSettings, useSlot, writeSave, SaveData, Settings } from './core/save';
 import { UI } from './ui/ui';
 import { Cinematic } from './cinematic/cinematic';
 import { World } from './world/world';
@@ -21,6 +22,8 @@ import { Game } from './game/game';
 import { applyCrewNames, CREW_IDS, CrewNames } from './core/crew';
 import { CHAPTERS, COMMENTS, emptyBranch, pathView, pickComments, resolveLine, takenBranches, endingFor, ENDINGS } from './game/branch';
 import type { Chapter } from './game/branch';
+import { openingReady } from './game/branch/opening';
+import { MomentBranch } from './game/moments';
 import { TouchControls, TouchAction } from './ui/touch';
 import { openCreator, CreatorStage } from './ui/creator';
 import { applyIcons } from './ui/icons';
@@ -137,6 +140,24 @@ const AWAY_RELEASED: { last: { texMB: number; geoMB: number } | null } = { last:
 let pendingStart: (() => void) | null = null;
 let suppressPauseOnUnlock = false;
 let pendingNames: CrewNames = {};
+/** The new story's save from New Game on: the opening's choices are written to it as they are made (it is on disk at
+ *  once, marked `openingLive`), and the planet starts from it. Null outside a new game's opening. */
+let openingSave: SaveData | null = null;
+let autoWalk = false;
+if (new URLSearchParams(location.search).get('glitch') === '1') glitch.on = true;
+function beginOpeningSave(from?: SaveData) {
+  const s = from ?? newSave();
+  if (!from) { s.names = { ...pendingNames }; s.player = { ...pendingLook }; s.skins = settings.skins ?? {}; }
+  s.flags.openingLive = true;
+  openingSave = s;
+  writeSave(s);
+  // automated browsers (the smoke tests drive the opening by Skip and fixed waits) play it as one film unless the URL
+  // asks for the choices (?choices=1, tools/choices_check.py); ?choices=0 turns them off anywhere
+  const want = new URLSearchParams(location.search).get('choices');
+  if (want === '0' || (navigator.webdriver && want !== '1')) { cine.branch = null; return; }
+  cine.branch = new MomentBranch(() => openingSave!, ui.moment, () => { if (openingSave) writeSave(openingSave); }, () => !!settings.noTimers);
+  cine.momentScale = () => ui.moment.timeScale;
+}
 /** Chapter being replayed by the next world start. */
 let replaying: number | null = null;
 /** Debug camera override used for documentation screenshots. */
@@ -356,6 +377,7 @@ function openChapters() {
 /** The whole opening again (chapter select), in the replay slot with your own look and names; the story stays as it was. */
 function replayOpening() {
   const base = loadSave();
+  openingSave = null; cine.branch = null; // a replay asks nothing and changes nothing
   audio.start();
   if (input.device === 'touch') tryFullscreen();
   useSlot('replay');
@@ -415,6 +437,7 @@ function startNewGame(look: PlayerLook = defaultLook()) {
   applyPlayer(look, settings.skins ?? {});
   ui.show('title', false);
   void voice.load();
+  beginOpeningSave();
   // MegaZroN's cold open, the playable Zenvora prologue and the take-off, then the films and the wake-up
   const prologue = PROLOGUE_PARAM !== null ? PROLOGUE_PARAM !== '0' : !settings.skipPrologue;
   playOpening(prologue, false);
@@ -458,8 +481,9 @@ function playPrologue(then: () => void) {
   titleCard(() => { ui.show('loading', true); void Promise.race([ready, new Promise((r) => setTimeout(r, 25000))]).then(() => whenWorldReady(() => {
     ui.show('loading', false);
     state = 'game';
-    const save = newSave(); save.names = { ...pendingNames }; save.player = { ...pendingLook }; save.skins = settings.skins ?? {};
+    const save = openingSave ?? newSave(); save.names = { ...pendingNames }; save.player = { ...pendingLook }; save.skins = settings.skins ?? {};
     applyPlayer(save.player, save.skins);
+    game.momentBranch = openingSave && cine.branch ? cine.branch : null;
     game.prologue(save, () => { input.enabled = false; ui.show('hud', false); ui.fade('black', 1, 0.8); setTimeout(then, 900); });
     ui.show('hud', true);
     input.enabled = true;
@@ -483,6 +507,16 @@ function continueGame() {
   audio.start();
   if (input.device === 'touch') tryFullscreen();
   ui.show('title', false);
+  const mid = loadSave();
+  if (mid?.flags.openingLive) {
+    pendingLook = mid.player ?? defaultLook(); pendingNames = { ...(mid.names ?? {}) } as CrewNames;
+    applyPlayer(pendingLook, settings.skins ?? {});
+    void voice.load();
+    beginOpeningSave(mid);
+    const prologue = !mid.flags.prologueDone && (PROLOGUE_PARAM !== null ? PROLOGUE_PARAM !== '0' : !settings.skipPrologue);
+    playOpening(prologue, false);
+    return;
+  }
   ui.fade('black', 1, 0.6);
   setTimeout(() => whenWorldReady(() => enterWorld(false)), 650);
 }
@@ -494,11 +528,20 @@ function enterWorld(fresh: boolean) {
   renderer.aoHidden = world.aoHidden();
   const save = fresh ? newSave() : (loadSave() ?? newSave());
   if (fresh) { save.names = { ...pendingNames }; save.player = { ...pendingLook }; save.skins = settings.skins ?? {}; }
+  // the opening's answers come with you: the decisions log, trust, the record, what they set and what they cost
+  if (fresh && openingSave && !replaying) {
+    const o = openingSave;
+    save.branch = { ...o.branch, open: null }; save.flags = { ...o.flags, ...save.flags }; save.stats = { ...o.stats };
+    delete save.flags.openingLive; delete save.flags.prologueDone;
+    if (o.flags.prologueDone) save.flags.prologueDone = true;
+  }
+  if (fresh) { openingSave = null; cine.branch = null; }
   if (fresh && replaying) { save.replay = replaying; save.flags.tutorialDone = true; replaying = null; }
   applyPlayer(save.player ?? defaultLook(), save.skins ?? {});
   const replay = !!settings.replayTutorial;
   if (replay) { save.flags.tutorialDone = false; settings.replayTutorial = false; persistSettings(); }
   game.start(save, fresh);
+  if (fresh) game.persist(); // the opening's save (marked live) is replaced by the story's at once
   // the wake-up keeps you hidden until you get up, so your look's programs (a new look from the creator) were compiled in
   // the first frame after a skip, in one long task: on CI's software GL it outlasted smoke's 30 s wait for play (the
   // "wake did not reach play" flake: the mode read 'play' right after). Compiled now, in the background, while the sky shows
@@ -838,10 +881,12 @@ function tick(step: number) {
     input.lookDX = input.lookDY = 0;
     dt *= 0.3; // the world slows while you choose
   }
+  if (!paused) ui.moment.update(dt);
   if (state === 'title' || state === 'loading') {
     cine.idle(dt);
   } else if (state === 'cinematic' || state === 'flashback') {
     cine.update(dt);
+    if (glitch.on) glitch.frame(cine.scene, cine.camera, dt, { zeroG: cine.time > 130 });
   } else if (state === 'film') {
     film.update(dt);
     if (film.inWorld) { world.update(dt, elapsed, film.hours, film.focus, film.wcam, renderer.renderer); renderer.renderer.toneMappingExposure *= film.boost; world.fog.density *= film.fog; }
@@ -859,6 +904,24 @@ function tick(step: number) {
       if (photo.fov && camera.fov !== photo.fov) { camera.fov = photo.fov; camera.updateProjectionMatrix(); }
     }
     world.update(paused ? 0 : dt, elapsed, game.save.timeOfDay, focus, camera, renderer.renderer, renderer.stageInfo().scene === world.scene);
+    if (autoWalk && !paused) {
+      // steer the body played towards the next task (away) or the objective (the planet), forward held
+      const aw = game.away?.active ? game.away : null, body = aw ? aw.body : player;
+      const tgt = aw ? aw.next?.pos ?? null : game.objectivePoint();
+      if (body && tgt && (game.mode === 'play' || game.mode === 'away')) {
+        const want = Math.atan2(-(tgt.x - body.pos.x), -(tgt.z - body.pos.z)), d = Math.hypot(tgt.x - body.pos.x, tgt.z - body.pos.z);
+        body.yaw += Math.atan2(Math.sin(want - body.yaw), Math.cos(want - body.yaw)) * Math.min(1, dt * 6);
+        input.hold('KeyW', d > 1.4);
+      } else input.hold('KeyW', false);
+    }
+    if (glitch.on && !paused) {
+      const aw = game.away?.active ? game.away : null, st = aw?.stage, body = aw ? aw.body : player;
+      glitch.frame(renderer.renderPass.scene as THREE.Scene, camera, dt, {
+        ground: st ? (x, z) => st.height(x, z) : (x, z) => world.terrain.height(x, z),
+        player: body && (game.mode === 'play' || game.mode === 'away') ? { root: body.model.root, onGround: body.onGround, speed: body.speedNow, pos: body.pos } : null,
+        collide: st ? (p, r) => st.collide(p, r) : undefined,
+      });
+    }
     // the eye adapting to a camp fire close by in a fight (combat.ts exposure; 1 elsewhere)
     if (combat) renderer.renderer.toneMappingExposure *= combat.exposureScale;
   }
@@ -1056,6 +1119,21 @@ window.addEventListener('resize', () => {
       return resolveLine(s, l);
     },
     get savedLog() { const raw = localStorage.getItem('bs-save-v1'); return raw ? (JSON.parse(raw) as SaveData).branch?.log ?? [] : []; },
+  },
+  /** Physics glitches over time (core/glitch.ts, tools/glitch_check.py). */
+  glitch(on = true) { if (on && !glitch.on) glitch.reset(); glitch.on = on; return glitch.summary(); },
+  get glitches() { return { events: glitch.events, summary: glitch.summary() }; },
+  /** Walks the player towards the next task or objective (glitch_check.py): steers and holds W. */
+  autoWalk(on = true) { autoWalk = on; if (!on) input.hold('KeyW', false); },
+  /** The cutscene choice layer and the opening's save (tools/choices_check.py). */
+  moment: {
+    get open() { return ui.moment.open; },
+    get log() { return ui.moment.log; },
+    get choosing() { return cine.choosing; },
+    get said() { return [...ui.subLog]; },
+    get opening() { return openingSave ? { log: openingSave.branch.log, trust: openingSave.branch.trust, flags: openingSave.flags, record: openingSave.branch.record } : null; },
+    get saved() { const raw = localStorage.getItem('bs-save-v1'); return raw ? JSON.parse(raw) as SaveData : null; },
+    get ready() { return openingReady.then(() => true); },
   },
   get npcs() { return game?.story.npcs.debug(); },
   get craft() { return game?.craft.debug() ?? null; },

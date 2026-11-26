@@ -128,6 +128,8 @@ export class Away {
   /** The next thing to do: what the quest line and marker point at. */
   get next() { return this.stage?.tasks.find((k) => !k.optional && this.open(k)) ?? null; }
   get position() { return this.player?.pos ?? null; }
+  /** The body played on this stage (tests: core/glitch.ts). */
+  get body() { return this.player; }
   get grounded() { return !!this.player?.onGround; }
   /** Test hook: the camera's aim and any hero view in progress. */
   get camState() { const p = this.player, c = this.camera.position; return p ? { yaw: p.yaw, pitch: p.pitch, x: p.pos.x, y: p.pos.y, z: p.pos.z, cam: [c.x, c.y, c.z], vista: this.vista, seen: [...this.seen] } : null; }

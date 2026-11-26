@@ -85,6 +85,8 @@ export class Game {
 
   private mirTurn = 1;
   /** The playable prologue: Zenvora before the trip. Each list item and each person speaks when you get there. */
+  /** The opening's choices over the city (main.ts sets it with the opening's save; null on a replay). */
+  momentBranch: SceneBranch | null = null;
   prologue(save: SaveData, done: () => void) {
     if (!this.away) return;
     this.save = save;
@@ -98,8 +100,19 @@ export class Game {
         const key = crew ? `city.friend.${who}` : line;
         this.ui.say(key, crew ? `crew.${who}.name` : `city.who.${who}`, 5);
         this.away!.talk(who, voice.duration(key) ?? 3.5);
+        go();
+        return;
       }
-      else this.ui.say(`city.done.${id}`, 'crew.scientist.name', 4.5);
+      // three of the list's jobs are choices: the snack debt, the ring light, the tram door (the answer picks the line)
+      const said = (key: string) => this.ui.say(key, 'crew.scientist.name', Math.max(4.5, (voice.duration(key) ?? 4) + 0.6));
+      const ch = (d: string, o: string) => test(save, { chose: [d, o] });
+      // he stops while you answer (the street goes on), and walks on after it
+      const hold = (fn: (b: SceneBranch, done: () => void) => void) => (b: SceneBranch) => { this.input.enabled = false; fn(b, () => { this.input.enabled = true; }); };
+      const br = this.momentBranch ? { ask: (d: string, f: () => void) => hold((b, en) => b.ask(d, () => { en(); f(); }))(this.momentBranch!), quick: (q: string, f: () => void) => hold((b, en) => b.quick(q, () => { en(); f(); }))(this.momentBranch!) } : null;
+      if (id === 'chai' && br) { br.ask('e1.snacks', () => { said(ch('e1.snacks', 'argue') ? 'city.chai.argue' : ch('e1.snacks', 'joke') ? 'city.chai.joke' : 'city.done.chai'); go(); }); return; }
+      if (id === 'ring' && br) { br.ask('e1.ringlight', () => { said(ch('e1.ringlight', 'keep') ? 'city.ring.keep' : 'city.done.ring'); go(); }); return; }
+      if (id === 'tram' && br) { br.quick('e1.tramdoor', () => { said(test(save, { passed: 'e1.tramdoor' }) ? 'city.done.tram' : 'city.tram.burn'); go(); }); return; }
+      said(`city.done.${id}`);
       go();
     };
     this.away.keepBlack = true;

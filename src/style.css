@@ -607,3 +607,58 @@ html.cinema, html.cinema * { cursor: none !important; }
   background: radial-gradient(ellipse at center, transparent 52%, rgba(120, 24, 12, 0.42) 100%); }
 .e3-fever.on { animation: e3-breathe 3.4s ease-in-out infinite; }
 @keyframes e3-breathe { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+
+/* ---- the cutscene choice layer (ui/moment.ts): the Fork, reflexes, the Ledger line, Bonds ---- */
+.fork { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 9vh); transform: translateX(-50%); z-index: 32; width: min(980px, 94vw); display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; text-shadow: var(--shadow); transition: opacity .35s; }
+.fork.hidden { display: none; }
+.fork-as { font: 600 14px var(--font-ui); letter-spacing: .3em; text-transform: uppercase; color: var(--teal); }
+.fork-who { font: 600 15px var(--font-ui); letter-spacing: var(--track); color: var(--accent); }
+.fork-prompt { font: 500 clamp(18px, 2.2vw, 26px) var(--font-body); color: var(--paper); max-width: 760px; }
+.fork-opts { display: flex; gap: 14px; justify-content: center; width: 100%; }
+.fork-o { flex: 1 1 0; max-width: 300px; min-height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: linear-gradient(180deg, rgba(10, 9, 7, .78), rgba(10, 9, 7, .6)); border: 1px solid var(--faint); border-radius: 3px; color: var(--paper); font: 600 clamp(16px, 1.7vw, 21px) var(--font-ui); letter-spacing: var(--track); text-align: start; cursor: pointer; transition: transform .18s, border-color .18s, opacity .3s; }
+.fork-o kbd { font: 600 13px var(--font-ui); color: var(--dim); border: 1px solid var(--faint); border-radius: 2px; padding: 1px 6px; }
+body.touch .fork-o kbd { display: none; }
+.fork-o .tone { font-style: normal; font-size: 20px; width: 20px; color: var(--accent); }
+.fork-o .tone.kind { color: var(--teal); } .fork-o .tone.nerve { color: var(--red); } .fork-o .tone.joke { color: #c9a8ff; }
+.fork-o:hover, .fork-o.sel, .fork-o:focus-visible { border-color: var(--accent); transform: translateY(-2px); outline: none; }
+.fork.act .fork-o { border-color: rgba(226, 86, 63, .55); text-transform: uppercase; }
+.fork-o.taken { border-color: var(--accent); background: rgba(232, 163, 61, .22); }
+.fork-o.gone { opacity: 0; }
+.fork-fuse { width: min(620px, 80vw); height: 3px; background: var(--faint); }
+.fork-fuse b { display: block; height: 100%; background: var(--accent); transform-origin: center; }
+.fork.urgent .fork-fuse b { background: var(--red); }
+.fork-silent { font: italic 500 18px var(--font-body); color: var(--dim); }
+.reflex { position: fixed; left: 50%; top: 54%; transform: translate(-50%, -50%); z-index: 32; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; text-shadow: var(--shadow); touch-action: none; user-select: none; }
+.reflex.hidden { display: none; }
+.reflex-ring { position: relative; width: 104px; height: 104px; display: grid; place-items: center; }
+.reflex-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.reflex-ring circle { fill: rgba(10, 9, 7, .5); stroke-width: 3.5; }
+.reflex-ring .bg { stroke: var(--faint); } .reflex-ring .fg { stroke: var(--accent); fill: none; }
+.reflex-ring kbd { font: 600 28px var(--font-ui); color: var(--accent); }
+body.touch .reflex-ring kbd { display: none; }
+.reflex.urgent .fg { stroke: var(--red); }
+.reflex.holding .reflex-ring { transform: scale(.94); }
+.reflex.thump .reflex-ring { animation: mo-thump .3s ease-out; }
+.reflex.wrong .reflex-ring .bg { stroke: var(--red); }
+.reflex.passed .reflex-ring .fg { stroke: var(--teal); } .reflex.failed { opacity: .5; }
+.reflex-label { font: 600 24px var(--font-ui); letter-spacing: var(--track); text-transform: uppercase; }
+.reflex-how { font: 500 15px var(--font-body); color: var(--dim); }
+.pulse { display: flex; gap: 10px; } .pulse i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--dim); }
+.pulse i.hit { background: var(--teal); border-color: var(--teal); } .pulse i.miss { background: var(--red); border-color: var(--red); }
+@keyframes mo-thump { 0% { transform: scale(1.14); } 100% { transform: scale(1); } }
+.ledger-line { position: fixed; inset-inline-start: calc(var(--safe-l) + 26px); bottom: calc(var(--safe-b) + 26vh); z-index: 31; max-width: min(430px, 70vw); padding: 10px 16px 11px; border-inline-start: 3px solid var(--accent); background: linear-gradient(90deg, rgba(10, 9, 7, .78), rgba(10, 9, 7, 0)); text-shadow: var(--shadow); pointer-events: none; animation: mo-in .5s ease-out; }
+.ledger-line.hidden { display: none; }
+.ledger-line small { display: block; font: 600 12px var(--font-ui); letter-spacing: .28em; text-transform: uppercase; color: var(--accent); }
+.ledger-line span { font: italic 500 18px var(--font-body); color: var(--paper); }
+.bonds { position: fixed; top: calc(var(--safe-t) + 64px); inset-inline-end: calc(var(--safe-r) + 22px); z-index: 31; width: 250px; display: flex; flex-direction: column; gap: 9px; padding: 10px 14px; background: rgba(10, 9, 7, .62); border-top: 2px solid var(--teal); text-shadow: var(--shadow); pointer-events: none; animation: mo-in .5s ease-out; }
+.bonds.hidden { display: none; }
+.bonds small { font: 600 12px var(--font-ui); letter-spacing: .28em; text-transform: uppercase; color: var(--teal); }
+.bond-names { font: 600 16px var(--font-ui); letter-spacing: var(--track); }
+.bond.up .bond-names b { color: var(--teal); } .bond.down .bond-names b { color: var(--red); }
+.bond-bar { position: relative; height: 6px; margin: 5px 0 3px; background: linear-gradient(90deg, rgba(226, 86, 63, .45), var(--faint) 50%, rgba(127, 209, 189, .45)); }
+.bond-bar::after { content: ''; position: absolute; left: 50%; top: -3px; width: 1px; height: 12px; background: var(--dim); }
+.bond-bar i { position: absolute; top: -4px; width: 4px; height: 14px; margin-left: -2px; }
+.bond-bar .was { background: var(--dim); opacity: .5; } .bond-bar .now { background: var(--paper); transition: left 1.1s cubic-bezier(.2, .8, .2, 1); }
+.bond-word { font: 500 13px var(--font-body); color: var(--dim); }
+@keyframes mo-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (max-width: 700px) { .fork-opts { flex-direction: column; align-items: stretch; } .fork-o { max-width: none; min-height: 52px; } .bonds { width: 200px; } }

@@ -1,3 +1,4 @@
+import { MomentLayer } from './moment';
 import { t, tIn, getLang, setLang, Lang, onLangChange, RTL } from '../i18n';
 import { CREW_IDS } from '../core/crew';
 import type { CrewSkins } from '../characters/custom';
@@ -51,6 +52,8 @@ export class UI implements CineUI {
   subtitlesOn = true;
   /** Quick-time prompt (see choice.ts). */
   choice = new QuickPrompt();
+  /** The cutscene choice layer: decisions over a film, reflexes, the Ledger's line, the bonds (ui/moment.ts). */
+  moment = new MomentLayer();
   /** May change or drop a line spoken in the world, as the story requires. */
   sayFilter: ((key: string, speakerKey?: string) => { key: string; who?: string } | null) | null = null;
   /** Subtitle language; null follows the game language. */
@@ -95,8 +98,11 @@ export class UI implements CineUI {
   }
 
   // ---------- cinematic ----------
+  /** Every line put up, in order (tests read which lines a story played). */
+  readonly subLog: string[] = [];
   subtitle(key: string | null, speakerKey?: string, quiet = false) {
     this.lastSub = { key, speaker: speakerKey };
+    if (key && this.subLog[this.subLog.length - 1] !== key) { this.subLog.push(key); if (this.subLog.length > 400) this.subLog.shift(); }
     const el = $('subtitle');
     clearTimeout(this.subTimer);
     if (key && !quiet) voice.play(key);

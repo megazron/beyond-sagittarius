@@ -116,10 +116,14 @@ export function departScene(a: Cast, origin: THREE.Vector3, seats: Record<string
     // L5 the argument: Skyvra at her bag, then up at Zenvik
     { key: 'dep.4', who: 'explorer', shot: () => aim(a.explorer, 1.2, 2.0, LENS.m50, 0.05, 0.25), poses: { social: 'stand' },
       run: () => { look(a.explorer, bag); look(a.social, a.explorer); }, tick: (t) => { if (t > 0.5) look(a.explorer, a.scientist); } },
-    // L6 reverse: Zenvik, calm, a little smug
-    { key: 'dep.5', who: 'scientist', shot: () => aim(a.scientist, -0.95, 1.6, LENS.c85), run: () => look(a.scientist, a.explorer) },
+    // L6 reverse: Zenvik. The player answers her: own up, put it on Draxum, or say nothing (the scene waits on his face)
+    { choice: 'e1.lounge', shot: () => aim(a.scientist, -0.95, 1.6, LENS.c85), run: () => look(a.scientist, a.explorer) },
+    { key: 'dep.5', who: 'scientist', if: { not: { any: [{ chose: ['e1.lounge', 'blame'] }, { chose: ['e1.lounge', 'silent'] }] } }, shot: () => aim(a.scientist, -0.95, 1.6, LENS.c85), run: () => look(a.scientist, a.explorer) },
+    { key: 'dep.5b', who: 'scientist', if: { chose: ['e1.lounge', 'blame'] }, shot: () => aim(a.scientist, -0.95, 1.6, LENS.c85), run: () => { look(a.scientist, a.strong); look(a.strong, a.scientist); } },
+    { key: 'dep.6b', who: 'explorer', if: { chose: ['e1.lounge', 'blame'] }, shot: () => aim(a.explorer, 1.25, 1.6, LENS.c85), run: () => { look(a.explorer, a.scientist); a.explorer.setFace({ frown: 0.3, smile: 0.3 }); }, after: 0.4 },
+    { key: 'dep.6s', who: 'explorer', if: { chose: ['e1.lounge', 'silent'] }, shot: () => aim(a.explorer, 1.25, 1.6, LENS.c85), run: () => { look(a.explorer, a.scientist); a.explorer.setFace({ smile: 0.4 }); }, after: 0.4 },
     // L7 reverse: her excuse, with a grin she cannot hold back
-    { key: 'dep.6', who: 'explorer', shot: () => aim(a.explorer, 1.25, 1.6, LENS.c85), run: () => { look(a.explorer, a.scientist); a.explorer.setFace({ smile: 0.6 }); }, after: 0.4 },
+    { key: 'dep.6', who: 'explorer', if: { not: { any: [{ chose: ['e1.lounge', 'blame'] }, { chose: ['e1.lounge', 'silent'] }] } }, shot: () => aim(a.explorer, 1.25, 1.6, LENS.c85), run: () => { look(a.explorer, a.scientist); a.explorer.setFace({ smile: 0.6 }); }, after: 0.4 },
     // L8 Lyrra, not looking up from her list
     { key: 'dep.7', who: 'medic', shot: () => aim(a.medic, -0.35, 1.6, LENS.c85, -0.2, 0.06), run: () => { a.explorer.setFace(null); look(a.medic, lap(a.medic)); }, after: 0.6 },
     // L9 back to the trip: Nuvexa turns her phone on Zenvik

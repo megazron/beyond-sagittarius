@@ -59,7 +59,14 @@ export interface Option {
   /** Path tree text while `requires` was never met. */
   lockedHint?: string;
   effects: Effect[];
+  /** The voice it is said in, shown as a small mark on the button (cutscene choices). */
+  tone?: Tone;
+  /** The Ledger's line when this is taken (an i18n key): what it changed, in plain words. */
+  note?: string;
 }
+
+/** The four voices of the record, and silence. */
+export type Tone = 'truth' | 'kind' | 'nerve' | 'joke' | 'silent';
 
 export interface Decision {
   id: string;
@@ -73,6 +80,10 @@ export interface Decision {
   /** Option taken when the timer ends. Silence is usually the honest default. */
   fallback: string;
   options: Option[];
+  /** Whose choice it is, when you play someone else for a moment (default: the player). */
+  as?: Person;
+  /** 'talk' answers in a tone; 'act' is what you do under pressure (cutscene choices). */
+  style?: 'talk' | 'act';
 }
 
 export interface Qte {
@@ -84,6 +95,13 @@ export interface Qte {
   seconds: number;
   pass: Effect[];
   fail: Effect[];
+  /** press: one press in the window; hold: keep it held the whole window; beat: press on each heartbeat. */
+  kind?: 'press' | 'hold' | 'beat';
+  /** Heartbeats in a 'beat' moment. */
+  count?: number;
+  as?: Person;
+  /** The Ledger's line for each result (i18n keys). */
+  note?: { pass?: string; fail?: string };
 }
 
 /** A consequence that arrives later, once the level is reached. */
