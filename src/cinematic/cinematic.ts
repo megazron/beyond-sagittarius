@@ -968,7 +968,7 @@ export class Cinematic {
         // not both arms flung out (a T: the owner's "unrealistic"): his right hand keeps its hold on the console's edge,
         // the breath in, then the left arm goes out to the hatch (aft, his left) as he shouts, and stays there
         const call = smoothstep(0.75, 1.15, local), held = { armR: [-0.35, -0.55, 0.75] as [number, number, number], foreR: [-0.15, -0.45, 1] as [number, number, number] };
-        const point: Limbs = { ...mixLimbs(STANDING, FALL.spread, 0.2), ...held, armL: [1, 0.12 + 0.08 * Math.sin(local * 3), 0.35], foreL: [1, 0.18, 0.2] };
+        const point: Limbs = { ...mixLimbs(STANDING, FALL.spread, 0.2), ...held, armL: [0.72, 0.62 + 0.05 * Math.sin(local * 3), 0.12], foreL: [0.8, 0.55, 0.05] }; // up and over Nuvexa's head (level, it went through her face in the GPU take)
         sci.setLimbs(mixLimbs({ ...mixLimbs(STANDING, FALL.spread, 0.25), ...held, armL: [0.45, -0.7, 0.4], foreL: [0.35, -0.4, 0.8] }, point, call));
         sci.setLookTarget(local < 0.9 ? head(nuv) : at(5.5, -0.9, 0.9)); // eyes to the hatch before the arm
         sci.setFace({ fear: 0.7, open: smoothstep(0.7, 0.9, local) * 0.7, frown: 0.3 });
@@ -994,7 +994,7 @@ export class Cinematic {
         drx.root.position.copy(d0).add(V(0.2 * push, -0.6 * push * push, 0.2 * push)); drx.root.rotation.set(-1.2 + 0.9 * push, Math.PI, 0.3);
         drx.setLimbs({ ...FALL.strong, legL: [0.35, -0.2 - 0.6 * push, 0.9 - 0.7 * push], legR: [-0.35, -0.2 - 0.6 * push, 0.9 - 0.7 * push], shinL: [0.2, -1, -0.3 + 0.6 * (1 - push)], shinR: [-0.2, -1, -0.3 + 0.6 * (1 - push)] }); drx.setFace({ frown: 0.85, open: 0.3 * push });
         const m = head(lyr).lerp(head(nuv), 0.5);
-        lens(35); this.camera.position.copy(m).add(V(-0.6, -0.15, 2.3)); this.lookTarget.copy(m).add(V(0.15, 0.1, 0));
+        lens(35); this.camera.position.copy(m).add(V(-0.9, 0.05, 3.1)); this.lookTarget.copy(m).add(V(0.15, 0.1, 0)); // wide enough for both and Draxum above
         floatUp(1, 0, 2.4);
       },
     });
@@ -1010,7 +1010,7 @@ export class Cinematic {
         const p = smoothstep(0.2, 1.4, local);
         sky.root.position.copy(s0).lerp(head(sci).setY(s0.y), 0.25 * p); sky.root.rotation.set(-0.5 * p, Math.atan2(sci.root.position.x - s0.x, sci.root.position.z - s0.z), 0);
         sky.setLimbs(mixLimbs(FALL.explorer, { ...FALL.explorer, armR: [-0.3, 0.3, 1], foreR: [-0.2, 0.25, 1] }, p)); sky.setFace({ fear: 0.5, open: 0.3, frown: 0.2 }); sky.setLookTarget(head(sci));
-        lens(35); const m = head(bol).lerp(head(sky), 0.45); this.camera.position.copy(m).add(V(-1.4, -0.35, 1.9)); this.lookTarget.copy(m);
+        lens(35); const m = head(bol).lerp(head(sky), 0.45); this.camera.position.copy(m).add(V(-2.1, -0.2, 2.8)); this.lookTarget.copy(m);
         floatUp(1, 0, 2.4);
       },
     });
