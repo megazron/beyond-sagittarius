@@ -565,7 +565,7 @@ export class Cinematic {
     // a close shot may cheat the others out of the frame (they would stand between the lens and the face): every
     // shot starts with all six shown, and `only` hides the rest for that shot
     const only = (...cs: Character[]) => intr.crew.forEach((c) => { c.root.visible = cs.length === 0 || cs.includes(c); });
-    const LABELS = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'D1', 'D2', 'D3', 'D4', 'E1', 'E2', 'E3', 'F1', 'F2', 'F3', 'F4a', 'F4b', 'F4c', 'F4d', 'F4e', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7'];
+    const LABELS = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'D1', 'D2', 'D3', 'D4', 'E1', 'E2', 'E3', 'F1', 'F2', 'F3', 'F4a', 'F4b', 'F4c', 'F4d', 'F4e', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G6b', 'G6c', 'G7'];
     let nth = 0;
     const shotAt = (start: number, end: number, sh: Omit<Shot, 'start' | 'end'>) => this.shots.push({ start, end, film: sh.film, label: sh.label ?? LABELS[nth++], enter: () => { fresh(); only(); sh.enter?.(); }, update: (k, l) => { fresh(); sh.update(k, l); } });
 
@@ -900,7 +900,7 @@ export class Cinematic {
     // G2 insert: the comms panel. NO SIGNAL; the alarm stops mid-tone; a heartbeat comes in
     this.cue(S + 94.4, () => { ui.aiAlert(null); audio.alarm(false); audio.vacuum(true); ins.comms(['COMMS', 'NO SIGNAL'], '#ff5a3a'); });
     shotAt(S + 93.6, S + 96.2, {
-      enter: () => { intr.alarmLight.position.set(0, 2.0, 1.0); intr.mainLight.position.set(0, 2.5, 0.5); },
+      enter: () => { intr.alarmLight.position.set(0, 2.0, 1.0); intr.mainLight.position.set(0, 2.5, 0.5); ins.comms(['COMMS', 'NO SIGNAL'], '#ff5a3a'); ui.aiAlert(null); }, // (the panel showed LINK OK under the alert for 0.8 s before its cue)
       update: (k) => {
         lens(50); const m = ins.commsAt, c0 = m.getWorldPosition(new THREE.Vector3()); this.camera.position.copy(c0).add(V(-0.75, 0, 0)); this.lookTarget.copy(c0);
         intr.alarmLight.intensity = 5;
@@ -965,13 +965,55 @@ export class Cinematic {
         const back = easeInOut(smoothstep(0.6, 1.6, local)); lens(lerp(50, 35, back));
         const h = head(sci, -0.1); this.camera.position.copy(h).add(V(lerp(0.35, 0.8, back), -0.05, lerp(1.0, 2.6, back))); this.lookTarget.copy(h).add(V(0, -0.2 * back, 0));
         sci.root.rotation.y = lerp(0.35, -0.2, smoothstep(0.3, 0.9, local));
-        sci.setLimbs(local < 0.9 ? mixLimbs(STANDING, FALL.spread, 0.25) : { ...FALL.spread, armR: [-0.9, 0.5, 0.3], foreR: [-0.6, 0.9, 0.3] });
+        // not both arms flung out (a T: the owner's "unrealistic"): his right hand keeps its hold on the console's edge,
+        // the breath in, then the left arm goes out to the hatch (aft, his left) as he shouts, and stays there
+        const call = smoothstep(0.75, 1.15, local), held = { armR: [-0.35, -0.55, 0.75] as [number, number, number], foreR: [-0.15, -0.45, 1] as [number, number, number] };
+        const point: Limbs = { ...mixLimbs(STANDING, FALL.spread, 0.2), ...held, armL: [1, 0.12 + 0.08 * Math.sin(local * 3), 0.35], foreL: [1, 0.18, 0.2] };
+        sci.setLimbs(mixLimbs({ ...mixLimbs(STANDING, FALL.spread, 0.25), ...held, armL: [0.45, -0.7, 0.4], foreL: [0.35, -0.4, 0.8] }, point, call));
+        sci.setLookTarget(local < 0.9 ? head(nuv) : at(5.5, -0.9, 0.9)); // eyes to the hatch before the arm
         sci.setFace({ fear: 0.7, open: smoothstep(0.7, 0.9, local) * 0.7, frown: 0.3 });
         intr.alarmLight.intensity = (Math.sin(local * 9) * 0.5 + 0.5) * 22; floatUp(1, 18 + local, 2.4);
       },
     });
     // G7 wide behind the group towards the hatch: they push off together; the hatch stays far; the walls open, silently
-    this.cue(S + 118.0, () => { audio.alarm(false); audio.vacuum(true); ui.subtitle(null); });
+    this.cue(S + 121.2, () => { audio.alarm(false); audio.vacuum(true); ui.subtitle(null); });
+    // G6b: they hear him, each their own way. Lyrra pushes off towards Nuvexa and takes her wrist (the medic goes to the
+    // one with no hands free: the phone); behind them Draxum, against the ceiling, braces his feet on it to push off
+    const reachFrom = new Map<Character, THREE.Vector3>();
+    shotAt(S + 117.6, S + 119.4, {
+      enter: () => { reachFrom.clear(); for (const c of [lyr, drx, nuv]) reachFrom.set(c, c.root.position.clone()); },
+      update: (k, local) => {
+        const l0 = reachFrom.get(lyr)!, n0 = reachFrom.get(nuv)!, d0 = reachFrom.get(drx)!;
+        const go = smoothstep(0.1, 1.6, local), grab = smoothstep(1.3, 1.6, local);
+        const meet = n0.clone().lerp(l0, 0.35); // she covers most of the gap; Nuvexa drifts a little her way
+        lyr.root.position.copy(l0).lerp(meet.clone().add(V(0.45, 0, -0.1)), go); lyr.root.rotation.set(-0.35 * go, Math.atan2(n0.x - l0.x, n0.z - l0.z), 0.1);
+        nuv.root.position.copy(n0).lerp(meet.clone().add(V(-0.1, 0, 0.05)), go * 0.4); nuv.root.rotation.set(-0.2, Math.atan2(l0.x - n0.x, l0.z - n0.z) * 0.5, -0.1);
+        lyr.setLimbs(mixLimbs(FALL.medic, { ...FALL.medic, armR: [-0.25, 0.1, 1], foreR: [-0.15, 0.05, 1] }, go)); lyr.setFace({ frown: 0.5, open: 0.15 }); lyr.setLookTarget(hand(nuv, false));
+        this.pullPose.social = 'selfie'; nuv.setLimbs({ ...FALL.social, armL: [0.55 * (1 - grab) + 0.2, 0.1, 0.8], foreL: [0.3, 0.2, 1] }); nuv.setFace({ fear: 0.75, open: 0.3 }); nuv.setLookTarget(head(lyr));
+        const push = smoothstep(0.4, 1.2, local); // Draxum: knees to his chest against the ceiling, then the shove
+        drx.root.position.copy(d0).add(V(0.2 * push, -0.6 * push * push, 0.2 * push)); drx.root.rotation.set(-1.2 + 0.9 * push, Math.PI, 0.3);
+        drx.setLimbs({ ...FALL.strong, legL: [0.35, -0.2 - 0.6 * push, 0.9 - 0.7 * push], legR: [-0.35, -0.2 - 0.6 * push, 0.9 - 0.7 * push], shinL: [0.2, -1, -0.3 + 0.6 * (1 - push)], shinR: [-0.2, -1, -0.3 + 0.6 * (1 - push)] }); drx.setFace({ frown: 0.85, open: 0.3 * push });
+        const m = head(lyr).lerp(head(nuv), 0.5);
+        lens(35); this.camera.position.copy(m).add(V(-0.6, -0.15, 2.3)); this.lookTarget.copy(m).add(V(0.15, 0.1, 0));
+        floatUp(1, 0, 2.4);
+      },
+    });
+    // G6c: Bolzar has hold of the sofa's back and will not let go of it; Skyvra pushes off the window frame towards
+    // Zenvik, her hand out for his (the shot list's G7: her hand in his)
+    shotAt(S + 119.4, S + 120.8, {
+      enter: () => { reachFrom.set(bol, bol.root.position.clone()); reachFrom.set(sky, sky.root.position.clone()); },
+      update: (k, local) => {
+        const b0 = reachFrom.get(bol)!, s0 = reachFrom.get(sky)!, back = at(3.25, -1.5, -1.45); // the sofa's back, at its right end
+        const g = smoothstep(0, 0.7, local);
+        bol.root.position.copy(b0).lerp(back.clone().add(V(0.35, -0.75, -0.45)), g); bol.root.rotation.set(0.25, Math.PI * 1.25, 0.15 * Math.sin(local * 2));
+        bol.setLimbs({ ...FALL.builder, armL: [0.3, -0.35, 1], foreL: [-0.1, -0.5, 1], armR: [-0.3, -0.35, 1], foreR: [0.1, -0.5, 1], bend: 0.5 }); bol.setFace({ fear: 0.8, squint: 0.5 }); bol.setLookTarget(back);
+        const p = smoothstep(0.2, 1.4, local);
+        sky.root.position.copy(s0).lerp(head(sci).setY(s0.y), 0.25 * p); sky.root.rotation.set(-0.5 * p, Math.atan2(sci.root.position.x - s0.x, sci.root.position.z - s0.z), 0);
+        sky.setLimbs(mixLimbs(FALL.explorer, { ...FALL.explorer, armR: [-0.3, 0.3, 1], foreR: [-0.2, 0.25, 1] }, p)); sky.setFace({ fear: 0.5, open: 0.3, frown: 0.2 }); sky.setLookTarget(head(sci));
+        lens(35); const m = head(bol).lerp(head(sky), 0.45); this.camera.position.copy(m).add(V(-1.4, -0.35, 1.9)); this.lookTarget.copy(m);
+        floatUp(1, 0, 2.4);
+      },
+    });
     // each pushes off from where they are floating, in their own time and their own way (they all moved as one before)
     const PODS: Record<string, { t0: number; pace: number; look: Face }> = {
       scientist: { t0: 0.0, pace: 1.0, look: { fear: 0.6, frown: 0.4, open: 0.3 } }, // first, the one who called it
@@ -982,7 +1024,7 @@ export class Cinematic {
       builder: { t0: 1.0, pace: 0.7, look: { fear: 0.65, squint: 0.3 } }, // last, curled, kicks off the sofa's back
     };
     const podFrom = new Map<Character, THREE.Vector3>();
-    shotAt(S + 117.6, S + 121.2, {
+    shotAt(S + 120.8, S + 124.4, {
       enter: () => { podFrom.clear(); for (const c of intr.crew) podFrom.set(c, c.root.position.clone()); },
       update: (k, local) => {
         lens(24); this.camera.position.copy(at(-4.2, -0.9, 1.0)); this.lookTarget.copy(at(4.8, -1.0, 0.6));
@@ -1005,7 +1047,7 @@ export class Cinematic {
       },
     });
     // the breaking apart, the white and the six fates are the title sequence: montage.ts
-    this.cue(S + 121.2, () => { holoOn(true); intr.crew.forEach((c) => { c.root.visible = true; }); ui.subtitle(null); audio.alarm(false); calm(); intr.crew.forEach((c) => { c.root.rotation.set(0, Math.PI, 0); c.setLookTarget(null); }); intr.group.scale.set(1, 1, 1); this.roll = 0; this.pullPose = {}; audio.vacuum(false); ins.cup(null); ins.warn(null); ins.comms(['COMMS', 'LINK OK']); ins.readout(['NAV', 'COURSE NOMINAL']); this.finish(); });
+    this.cue(S + 124.4, () => { holoOn(true); intr.crew.forEach((c) => { c.root.visible = true; }); ui.subtitle(null); audio.alarm(false); calm(); intr.crew.forEach((c) => { c.root.rotation.set(0, Math.PI, 0); c.setLookTarget(null); }); intr.group.scale.set(1, 1, 1); this.roll = 0; this.pullPose = {}; audio.vacuum(false); ins.cup(null); ins.warn(null); ins.comms(['COMMS', 'LINK OK']); ins.readout(['NAV', 'COURSE NOMINAL']); this.finish(); });
   }
 
   /** Camera roll for the shot in hand (the deck tilting), and poses the pull gives the crew outside a staged scene. */
