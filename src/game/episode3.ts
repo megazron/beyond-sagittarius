@@ -2064,13 +2064,23 @@ export class Episode3 extends Episode2 {
     const H = this.house(), g = new THREE.Group();
     const col = new THREE.Color(0x4f8a2a).lerp(new THREE.Color(0xb0a040), dry).lerp(new THREE.Color(0xd8b050), gold);
     const m = std(col.getHex(), { roughness: 0.9 }), tall = 0.12 + gold * 0.75;
+    // thin stems, many to a row, each with an ear when it is gold (take EP3B C / probe EP3C: thick cones read as yellow
+    // planks across every close shot of the harvest); instanced, two draws for the whole field
+    const per = gold > 0.5 ? 34 : 14, n = per * this.fieldRows.length;
+    const stem = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.0035, 0.006, 1, 4).translate(0, 0.5, 0), m, n);
+    const ear = gold > 0.5 ? new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.011, 0.07, 2, 5), std(0xc89a40, { roughness: 0.85 }), n) : null;
+    const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), S = new THREE.Vector3(), P = new THREE.Vector3();
+    let k = 0;
     for (const row of this.fieldRows) {
-      for (let i = 0; i < 14; i++) {
-        const p = row.position.clone().addScaledVector(H.a, -1.65 + i * 0.25).addScaledVector(H.b, Math.sin(i * 3.1) * 0.03);
-        const s = new THREE.Mesh(new THREE.ConeGeometry(0.03 + gold * 0.02, tall, 4), m);
-        s.position.set(p.x, this.h(p.x, p.z) + tall / 2, p.z); s.rotation.z = dry * 0.35 * Math.sin(i); g.add(s);
+      for (let i = 0; i < per; i++, k++) {
+        const p = row.position.clone().addScaledVector(H.a, -1.65 + (i / per) * 3.4).addScaledVector(H.b, Math.sin(i * 3.1) * 0.05);
+        const h0 = tall * (0.85 + 0.3 * Math.abs(Math.sin(i * 1.7 + k))), lean = dry * 0.35 * Math.sin(i) + Math.sin(i * 2.3 + k) * 0.08;
+        E.set(Math.cos(i * 1.3) * 0.08, 0, lean); Q.setFromEuler(E); S.set(1, h0, 1); P.set(p.x, this.h(p.x, p.z), p.z);
+        stem.setMatrixAt(k, M.compose(P, Q, S));
+        if (ear) { const top = new THREE.Vector3(0, h0 + 0.03, 0).applyQuaternion(Q).add(P); E.set(E.x + 0.25, 0, lean * 1.6 + 0.2); Q.setFromEuler(E); ear.setMatrixAt(k, M.compose(top, Q, S.set(1, 1, 1))); }
       }
     }
+    stem.castShadow = true; g.add(stem); if (ear) { ear.castShadow = true; g.add(ear); }
     this.group.add(g); this.sproutG = g;
   }
   private restoreSprouts() {
@@ -2322,7 +2332,7 @@ export class Episode3 extends Episode2 {
         { hold: 3.4, shot: () => ({ from: at.clone().addScaledVector(H.a, -6.0).addScaledVector(H.b, 4.0).add(v3(0, 2.0, 0)), to: at.clone().add(v3(0, 0.5, 0)), fov: 50, push: 0.03 }), run: () => { z.setLookTarget(at); S.anim(3.4, (k) => swing(k)); stooks.slice(0, 2).forEach((x) => { x.visible = true; }); } },
         { hold: 2.8, shot: () => ({ from: cutAt.clone().addScaledVector(r, 0.55).addScaledVector(f, 0.25).add(v3(0, 0.05, 0)), to: cutAt.clone(), fov: 30, push: 0.008, aperture: 0.004, lightAt: cutAt.clone() }), run: () => { S.anim(2.8, (k) => swing(k + 1)); audio.sample('leather', 0.25, { rate: 1.4 }); } },
         // low along the rows: the reaping goes on (the band beside him when they trust him), more stooks standing
-        { hold: 3.4, shot: () => ({ from: at.clone().addScaledVector(H.b, ((this.fieldRows.length - 1) / 2) * 0.55 + 3.2).addScaledVector(H.a, 2.2).add(v3(0, 0.75, 0)), to: at.clone().addScaledVector(H.a, -0.5).add(v3(0, 0.45, 0)), fov: 40, push: 0.02 }), run: () => { stooks.forEach((x, i) => S.after(0.3 + i * 0.4, () => { x.visible = true; })); S.anim(3.4, (k) => swing(k + 2)); } },
+        { hold: 3.4, shot: () => ({ from: at.clone().addScaledVector(H.b, -(((this.fieldRows.length - 1) / 2) * 0.55 + 3.2)).addScaledVector(H.a, 2.6).add(v3(0, 0.75, 0)), to: at.clone().addScaledVector(H.a, -0.5).add(v3(0, 0.45, 0)), fov: 40, push: 0.02 }), run: () => { stooks.forEach((x, i) => S.after(0.3 + i * 0.4, () => { x.visible = true; })); S.anim(3.4, (k) => swing(k + 2)); } },
         // insert: the sheaf gathered in his arms and bound with a twist of straw
         { hold: 2.6, shot: () => ({ from: me.clone().addScaledVector(f, 0.7).addScaledVector(r, 0.35).add(v3(0, 0.75, 0)), to: me.clone().addScaledVector(f, 0.25).add(v3(0, 0.5, 0)), fov: 32, push: 0.006, aperture: 0.004, lightAt: me.clone().add(v3(0, 0.6, 0)) }), run: () => {
           sickle.visible = false;
@@ -2343,7 +2353,7 @@ export class Episode3 extends Episode2 {
             if (beat > 0.97) audio.sample('wood', 0.2, { rate: 0.7 });
           });
         } },
-        { hold: 3.6, shot: () => ({ from: thresh.clone().addScaledVector(f, -1.9).addScaledVector(r, -0.7).add(v3(0, 1.5, 0)), to: thresh.clone().add(v3(0, 1.05, 0)), fov: 40, push: 0.02, lightAt: thresh.clone().add(v3(0, 1, 0)) }), run: () => {
+        { hold: 3.6, shot: () => ({ from: thresh.clone().addScaledVector(f, 2.3).addScaledVector(r, -0.9).add(v3(0, 1.3, 0)), to: thresh.clone().add(v3(0, 1.0, 0)), fov: 40, push: 0.02, lightAt: thresh.clone().add(v3(0, 1, 0)) }), run: () => {
           arms.visible = false; grains.forEach((g0) => { g0.visible = false; });
           const ff = this.fwd(), rr = this.right(ff), tray = thresh.clone().addScaledVector(ff, 0.3).add(v3(0, 1.0, 0));
           const tr = this.mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.04, 14, 1, true), std(0x7a5a3a, { side: THREE.DoubleSide }), tray.clone()); chaff.push(tr);
@@ -2540,7 +2550,7 @@ export class Episode3 extends Episode2 {
       const f = this.fwd();
       const at = me.clone().addScaledVector(f, 9).addScaledVector(this.right(f), 1.5); at.y = this.h(at.x, at.z);
       if (!this.pello) {
-        const look: PlayerLook = { ...defaultLook(), lineage: 'korrath', ...LINEAGES.korrath, skin: 0xb88a6a, ears: 'round', horns: false, marks: 'dots', glow: 0x000000, iris: 0x5a4030, hair: 'builder', hairRoot: 0x4a3a2a, hairTip: 0x8a7a68, beard: 'long', outfit: 'explorer', accent: 0x5a5a4a, gender: 'm', eye: 'tired', eyeGlow: false, height: 1.02, build: 0.1 };
+        const look: PlayerLook = { ...defaultLook(), lineage: 'korrath', ...LINEAGES.korrath, skin: 0xb88a6a, ears: 'round', horns: false, marks: 'dots', glow: 0x000000, iris: 0x5a4030, hair: 'suit', hairRoot: 0x4a3a2a, hairTip: 0x8a7a68, beard: 'long', outfit: 'explorer', accent: 0x5a5a4a, gender: 'm', eye: 'tired', eyeGlow: false, height: 1.02, build: 0.1 };
         // (human, EPISODE_THREE_SCRIPT 3.15: no horns, no glow; a beard to his chest, from the character builder's beard)
         this.pello = createCharacter('explorer', this.world.q.name === 'mobile' ? 0.6 : 1, look);
         this.pello.setGround((x, zz) => this.h(x, zz)); this.world.scene.add(this.pello.root);
