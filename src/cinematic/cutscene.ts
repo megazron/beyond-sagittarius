@@ -203,6 +203,7 @@ export class Cutscene {
     let q = look(), fixed = false;
     if (Math.abs(q.x) > 0.8 || Math.abs(q.y) > 0.8 || q.z > 1) { s.to.copy(h); s.to.y -= 0.05; q = look(); fixed = true; }
     if (key) frameReport.push({ key, x: q.x, y: q.y, fixed });
+    if (key) voice.pan = Math.max(-0.3, Math.min(0.3, q.x * 0.3)); // the line a little towards the speaker's side of the frame
     this.light(h, s.from, 1, a);
   }
 

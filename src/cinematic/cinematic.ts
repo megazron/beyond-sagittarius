@@ -494,7 +494,8 @@ export class Cinematic {
     let [sci, drx, lyr, sky, bol, nuv] = intr.crew;
     const fresh = () => { [sci, drx, lyr, sky, bol, nuv] = intr.crew; };
     const put = (c: Character, x: number, z: number, ry: number, y = FLOOR) => { c.root.position.set(x, y, z); c.root.rotation.set(0, ry, 0); };
-    const talk = (c: Character, key: string) => c.say((voice.duration(key) ?? 2));
+    // the line placed a little towards where the speaker is in frame (the take starts a moment later, once decoded)
+    const talk = (c: Character, key: string) => { c.say((voice.duration(key) ?? 2)); const p = new THREE.Vector3().setFromMatrixPosition(c.head.matrixWorld).project(this.camera); voice.pan = p.z < 1 && Math.abs(p.x) < 1.2 ? clamp(p.x * 0.3, -0.3, 0.3) : 0; };
     const calm = () => intr.crew.forEach((c) => { c.setLimbs(null); c.setFace(null); c.look2(0, 0); });
     const lounge = () => { put(drx, -0.3, 1.9, Math.PI * 0.62); put(nuv, -1.5, 1.35, -Math.PI * 0.35); put(lyr, 1.2, 1.8, Math.PI * 0.9); put(sky, 2.0, 0.9, Math.PI * 1.05); put(bol, -2.6, 0.7, Math.PI * 0.75); };
     const AMBER = new THREE.Color(0xffa020), RED = new THREE.Color(0xff2a1a), COOL = new THREE.Color(0xcfe6ff), GOLD = new THREE.Color(0xffc45a);

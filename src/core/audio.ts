@@ -44,6 +44,8 @@ export class Audio {
   private buses: { music: GainNode; sfx: GainNode; voice: GainNode; analyser: AnalyserNode } | null = null;
   private mix = { music: 0.6, sfx: 0.8, voice: 1, muted: false };
   private ducked = false;
+  private voiceOut: GainNode | null = null;
+  private voiceChain: AudioNode | null = null;
   private meter = new Uint8Array(256);
   private humans: Promise<Map<string, AudioBuffer[]>> | null = null;
   private lastHuman = new Map<string, AudioBuffer>();
@@ -65,7 +67,12 @@ export class Audio {
     this.master.connect(this.vac).connect(this.post).connect(this.ctx.destination);
     const music = this.ctx.createGain(), sfx = this.ctx.createGain(), voice = this.ctx.createGain();
     const analyser = this.ctx.createAnalyser(); analyser.fftSize = 256;
-    music.connect(this.master); sfx.connect(this.master); voice.connect(analyser); analyser.connect(this.master);
+    music.connect(this.master); sfx.connect(this.master); voice.connect(analyser);
+    // Dialogue is the front of the mix (the owner: "the voices feel like they are spoken in the background"): it goes
+    // round the vacuum and ears muffle straight to the last node, at the master volume, so a line said in the vacuum or
+    // under the drone stays close and dry; only the world's own sounds lose their air.
+    this.voiceOut = this.ctx.createGain(); this.voiceOut.gain.value = this.mix.muted ? 0 : this.volume;
+    analyser.connect(this.voiceOut).connect(this.post);
     this.buses = { music, sfx, voice, analyser };
     this.applyMix();
     void this.loadHumans();
@@ -114,9 +121,10 @@ export class Audio {
     if (!this.ctx || !this.buses) return;
     // under a spoken line the music drops to a third and the effects to half, fast, and come back slowly: a line said
     // over the title sequence's loudest bars ("You still owe me snacks!") was lost at the old 0.45 and 0.7
-    const t = this.ctx.currentTime, d = this.ducked ? 0.3 : 1, b = this.buses, tc = this.ducked ? 0.05 : 0.3;
+    // (2026-11-26: deeper, the effects too: under the alarm and the drone the lines still sounded far off)
+    const t = this.ctx.currentTime, d = this.ducked ? 0.22 : 1, b = this.buses, tc = this.ducked ? 0.05 : 0.35;
     b.music.gain.setTargetAtTime(this.mix.music * d, t, tc);
-    b.sfx.gain.setTargetAtTime(this.mix.sfx * (this.ducked ? 0.5 : 1), t, tc);
+    b.sfx.gain.setTargetAtTime(this.mix.sfx * (this.ducked ? 0.4 : 1), t, tc);
     b.voice.gain.setTargetAtTime(this.mix.voice, t, 0.05);
   }
 
@@ -127,7 +135,20 @@ export class Audio {
     this.setVolume(this.volume);
   }
 
-  voiceIn(): AudioNode { return this.buses!.voice; }
+  /** Where a spoken line goes: a close-mic chain (rumble off, a little presence, a gentle compressor so loud and quiet
+   *  words sit together) into the voice bus. Lines arrive already levelled (voice.ts levels each take). */
+  voiceIn(): AudioNode {
+    if (this.voiceChain) return this.voiceChain;
+    const ctx = this.ctx!;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 85; hp.Q.value = 0.7;
+    const pres = ctx.createBiquadFilter(); pres.type = 'peaking'; pres.frequency.value = 3200; pres.Q.value = 0.9; pres.gain.value = 2.5;
+    const mud = ctx.createBiquadFilter(); mud.type = 'peaking'; mud.frequency.value = 320; mud.Q.value = 1.0; mud.gain.value = -2;
+    const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -24; comp.knee.value = 8; comp.ratio.value = 3; comp.attack.value = 0.005; comp.release.value = 0.16;
+    const make = ctx.createGain(); make.gain.value = 1.35;
+    hp.connect(mud).connect(pres).connect(comp).connect(make).connect(this.buses!.voice);
+    this.voiceChain = hp;
+    return hp;
+  }
   private memBus: AudioNode | null = null;
   /** A remembered voice: no low end and no air (a phone-thin band), a little quieter, with a short soft echo, so it
    * reads as inside his head and not as someone standing there. Feeds the voice bus (ducking and volume as usual). */
@@ -189,7 +210,8 @@ export class Audio {
       wet.gain.value = 0;
       this.buses.sfx.connect(conv); conv.connect(wet).connect(this.master);
       // voices get the room too, but less: they must stay clear
-      const vs = ctx.createGain(); vs.gain.value = 0.35; this.buses.voice.connect(vs).connect(conv);
+      // (0.35 before: with the deck's 1.4 s tail the lines sounded as if said across the room)
+      const vs = ctx.createGain(); vs.gain.value = 0.1; this.buses.voice.connect(vs).connect(conv);
       s = { conv, wet }; this.spaces.set(sp, s);
     }
     s.wet.gain.setTargetAtTime(SPACES[sp].wet, t, 0.4);
@@ -248,6 +270,7 @@ export class Audio {
   setVolume(v: number) {
     this.volume = v;
     if (this.ctx) this.master.gain.setTargetAtTime(this.mix.muted ? 0 : v, this.ctx.currentTime, 0.1);
+    if (this.ctx && this.voiceOut) this.voiceOut.gain.setTargetAtTime(this.mix.muted ? 0 : v, this.ctx.currentTime, 0.1);
     if (this.ctx && this.innerG) this.innerG.gain.setTargetAtTime(this.mix.muted ? 0 : v * this.mix.sfx, this.ctx.currentTime, 0.1);
   }
 

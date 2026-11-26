@@ -15,6 +15,24 @@ type Take = { d: number; f: string[] };
  * replaces the generated line. override/index.json is written at build time, so
  * the game knows what exists without probing for 404s.
  */
+/** Speech level of a take: RMS over its 50 ms windows louder than -45 dBFS (the pauses left out). Every take is brought
+ *  to -20 dBFS of speech (about -18 LUFS), within -6 to +9 dB, so no line sits back in the mix because its file is quiet. */
+const LEVEL = new WeakMap<AudioBuffer, number>();
+export function levelOf(b: AudioBuffer) {
+  let g = LEVEL.get(b);
+  if (g !== undefined) return g;
+  const d = b.getChannelData(0), w = Math.max(1, Math.round(b.sampleRate * 0.05)), gate = 10 ** (-45 / 10);
+  let sum = 0, n = 0;
+  for (let i = 0; i + w <= d.length; i += w) {
+    let e = 0; for (let j = i; j < i + w; j++) e += d[j] * d[j];
+    e /= w; if (e > gate) { sum += e; n++; }
+  }
+  const db = n ? 10 * Math.log10(sum / n) : -20;
+  g = Math.min(2.8, Math.max(0.5, 10 ** ((-20 - db) / 20)));
+  LEVEL.set(b, g);
+  return g;
+}
+
 class Voice {
   private index: Partial<Record<Lang, Record<string, number>>> = {};
   private takes: Partial<Record<Lang, Record<string, Take>>> = {};
@@ -141,7 +159,10 @@ class Voice {
       if (!b || tk !== this.token || !audio.ctx) return;
       const s = audio.ctx.createBufferSource();
       s.buffer = b;
-      s.connect(o.memory ? audio.memoryIn() : audio.voiceIn());
+      // each take levelled to the same speech loudness, and placed a little towards where the speaker is on screen
+      const g = audio.ctx.createGain(); g.gain.value = levelOf(b);
+      const pan = audio.ctx.createStereoPanner(); pan.pan.value = o.memory ? 0 : this.pan; this.pan = 0;
+      s.connect(g).connect(pan).connect(o.memory ? audio.memoryIn() : audio.voiceIn());
       s.onended = () => { if (this.src === s) { this.src = null; audio.duck(false); } };
       s.start();
       if (!this.manual) { this.startedAt = audio.ctx.currentTime; this.lipFile = f; }
@@ -151,6 +172,8 @@ class Voice {
     return dur;
   }
 
+  /** Stereo place of the next line (-1 left .. 1 right): the scene sets it from where the speaker is in frame. Used once. */
+  pan = 0;
   /** The token of a line still being fetched and decoded (0: none). */
   private waiting = 0;
   /** A line is being said, or is still loading to be said (scenes wait for it before the next line). */
