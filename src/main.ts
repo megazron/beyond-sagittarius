@@ -1552,6 +1552,8 @@ window.addEventListener('resize', () => {
   /** Sync marks for every capture (tools/gpu_capture.py puts them at the start and end of each recording and aligns
    *  sound to picture by them): n 2 kHz beeps 0.6 s apart, each with a small white square in the top-left corner. */
   get syncLog() { return syncLog; },
+  /** Test: the faces the choice panel keeps clear of now (rects 0..1), and how many bodies and heads it found. */
+  faceRects() { const r = ui.moment.avoid?.() ?? []; return { rects: r.map((q) => [q.x0, q.y0, q.x1, q.y1].map((v) => +v.toFixed(3))), ...faceDbg }; },
   syncMark(n = 3) { return syncFlash(n, 0.6, 'position:fixed;left:0;top:0;width:48px;height:48px;background:#fff;outline:6px solid #000', 2000); },
   openMenu(which: 'settings' | 'legal' | 'chapters') { if (which === 'settings') document.getElementById('btn-settings')?.click(); else if (which === 'legal') document.getElementById('btn-legal')?.click(); else document.getElementById('btn-chapters')?.click(); },
   quality: quality.name,
@@ -1585,6 +1587,7 @@ function syncFlash(n: number, gap: number, css: string, freq: number): number {
   requestAnimationFrame(tick); return t0;
 }
 
+const faceDbg = { chars: 0, heads: 0, kept: 0 };
 // the choice panel's band (ui/moment.ts place()): every face drawn now, as a rect on screen, and the shot's subject (the
 // middle of the frame, where a cutscene aims its camera: an insert's hands and props)
 {
@@ -1594,16 +1597,20 @@ function syncFlash(n: number, gap: number, css: string, freq: number): number {
     const out: { x0: number; y0: number; x1: number; y1: number }[] = [{ x0: 0.38, y0: 0.34, x1: 0.62, y1: 0.6 }];
     const sc = renderer.renderPass.scene as THREE.Scene | undefined; if (!sc) return out;
     camera.updateMatrixWorld(); R.setFromMatrixColumn(camera.matrixWorld, 0);
+    faceDbg.chars = faceDbg.heads = faceDbg.kept = 0;
     sc.traverseVisible((o) => {
       if (!o.userData.isCharacter || !shown(o)) return;
-      let h = heads.get(o); if (h === undefined) { h = null; o.traverse((b) => { if (!h && /^head$/i.test(b.name)) h = b; }); heads.set(o, h); }
+      faceDbg.chars++;
+      // a found head is kept; not found is asked again (a body's model loads after its root is in the scene)
+      let h = heads.get(o) ?? null; if (!h) { o.traverse((b) => { if (!h && (b as THREE.Bone).isBone && /^head$/i.test(b.name)) h = b; }); if (h) heads.set(o, h); }
       if (!h) return;
+      faceDbg.heads++;
       h.getWorldPosition(P); P.y += 0.06; Q.copy(P).addScaledVector(R, 0.13);
       P.project(camera); Q.project(camera);
       if (P.z > 1 || P.z < -1) return;
       const x = (P.x + 1) / 2, y = (1 - P.y) / 2, rx = Math.abs(Q.x - P.x) / 2, ry = rx * camera.aspect * 1.25;
       if (rx < 0.012 || x + rx < 0 || x - rx > 1 || y + ry < 0 || y - ry > 1) return;
-      out.push({ x0: x - rx, y0: y - ry, x1: x + rx, y1: y + ry });
+      faceDbg.kept++; out.push({ x0: x - rx, y0: y - ry, x1: x + rx, y1: y + ry });
     });
     return out;
   };

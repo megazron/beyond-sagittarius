@@ -1048,7 +1048,9 @@ export class Cinematic {
         const meet = n0.clone().lerp(l0, 0.35); // she covers most of the gap; Nuvexa drifts a little her way
         lyr.root.position.copy(l0).lerp(meet.clone().add(V(0.45, 0, -0.1)), go); lyr.root.rotation.set(-0.35 * go, Math.atan2(n0.x - l0.x, n0.z - l0.z), 0.1);
         nuv.root.position.copy(n0).lerp(meet.clone().add(V(-0.1, 0, 0.05)), go * 0.4); nuv.root.rotation.set(-0.2, Math.atan2(l0.x - n0.x, l0.z - n0.z) * 0.5, -0.1);
-        lyr.setLimbs(mixLimbs(FALL.medic, { ...FALL.medic, armR: [-0.25, 0.1, 1], foreR: [-0.15, 0.05, 1] }, go)); lyr.setFace({ frown: 0.5, open: 0.15 }); lyr.setLookTarget(hand(nuv, false));
+        // eased in from her clip's pose: set at once, her forearm turned 84 degrees in a frame with the camera barely
+        // moving (the cut from the shot before is 0.2 m: it reads as one shot), glitch_planet / snap_probe2
+        lyr.setLimbs({ ...mixLimbs(FALL.medic, { ...FALL.medic, armR: [-0.25, 0.1, 1], foreR: [-0.15, 0.05, 1] }, go), weight: smoothstep(0, 0.35, local) }); lyr.setFace({ frown: 0.5, open: 0.15 }); lyr.setLookTarget(hand(nuv, false));
         this.pullPose.social = 'selfie'; nuv.setLimbs({ ...FALL.social, armL: [0.55 * (1 - grab) + 0.2, 0.1, 0.8], foreL: [0.3, 0.2, 1] }); nuv.setFace({ fear: 0.75, open: 0.3 }); nuv.setLookTarget(head(lyr));
         const push = smoothstep(0.4, 1.2, local); // Draxum: knees to his chest against the ceiling, then the shove
         drx.root.position.copy(d0).add(V(0.2 * push, -0.6 * push * push, 0.2 * push)); drx.root.rotation.set(-1.2 + 0.9 * push, Math.PI, 0.3);
@@ -1145,12 +1147,12 @@ export class Cinematic {
     for (const c of this.cues) if (!c.done && t >= c.t) { c.done = true; c.fn(); if (!this.playing) return; }
     if (this.subClearAt && this.clockT > this.subClearAt) { this.subClearAt = 0; this.ui.subtitle(null); }
     this.animateCrew(dt);
-    let film = false, label = '';
+    let film = false, label = '', cut = false;
     for (const s of this.shots) {
       if (t >= s.start && t < s.end) {
         label = s.label ?? `t${s.start.toFixed(1)}`;
         if (!s.done) {
-          s.done = true;
+          s.done = true; cut = true;
           this.camera.fov = 45; this.camera.updateProjectionMatrix();
           s.enter?.();
         }
@@ -1162,6 +1164,10 @@ export class Cinematic {
       }
     }
     if (!film) this.filmAt(undefined, 0);
+    // a shot's first frame: the crew posed again after it (animateCrew ran before it, so the poses it set showed a frame
+    // late: the cut frame with the last shot's arms, then a jump with no cut to hide it: Lyrra's forearm 84 and 104
+    // degrees in a frame at the push-off and the pods, glitch_planet). dt 0: poses only, no time passes
+    if (cut) this.animateCrew(0);
     if (this.ins.cockpit.visible) { this.pilot.root.updateMatrixWorld(); this.pilot.animate('stand', 0, 0, this.clockT, dt); this.yokeLog(); }
     if (label) this.logCut(label, t < 39 ? 'journey' : 'pull');
     this.camera.lookAt(this.lookTarget);

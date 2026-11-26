@@ -40,7 +40,9 @@ export interface Limbs { armL?: Dir; armR?: Dir; foreL?: Dir; foreR?: Dir; legL?
   /** These arms were solved by their caller (combat's melee rig puts both hands on a weapon): the rig's own push of the
    *  arms out of the torso (keepArmsOut) leaves them where they are set, so it never pulls a hand off the shaft. The
    *  caller keeps them clear of the body itself, against Character.torsoCapsules() if it wants the rig's own shapes. */
-  ownArms?: 'L' | 'R' | 'both' }
+  ownArms?: 'L' | 'R' | 'both';
+  /** How far the set pose is laid over the clip, 0..1 (default 1): a pose eased in from the clip's own, mid-shot. */
+  weight?: number }
 export type Face = Partial<Record<'smile' | 'frown' | 'fear' | 'squint' | 'open' | 'blink', number>>;
 /** A hand's finger shape for Character.setGrip. */
 export interface Grip { shape: 'open' | 'relaxed' | 'grip' | 'pinch' | 'point'; radius?: number; amount?: number }
@@ -287,7 +289,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   // ---- runtime state ----
   let pendingSplint = false, soleLift = 0;
   const gazeAt = new THREE.Vector3();
-  let gaze: THREE.Vector3 | null = null, gazeY = 0, gazeX = 0, gazeRate = 2.2;
+  let gaze: THREE.Vector3 | null = null, gazeY = 0, gazeX = 0, gazeRate = 2.2, gazeSnap = false;
   let B: Map<string, THREE.Bone> | null = null;
   const clipPose = new Map<THREE.Bone, { q: THREE.Quaternion; p: THREE.Vector3 }>();
   // the forearm's own axis per side (rest frames carry no rotation, so it is the same in the twist bone and the hand)
@@ -1324,8 +1326,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const q = new THREE.Quaternion().setFromUnitVectors(from.clone().applyQuaternion(q1), to).multiply(q1);
       aimAxis.set(a, k); worldRotate(p, q);
     };
+    const wt = l.weight ?? 1;
     const held = (a: string, b: string, d?: Dir) => {
+      const q0 = wt < 1 && d ? bs.get(a)!.quaternion.clone() : null;
       aim(a, b, d);
+      if (q0) { const p = bs.get(a)!; p.quaternion.copy(q0.slerp(p.quaternion, Math.max(0, wt))); p.updateWorldMatrix(false, true); }
       if (!steady || !d) return;
       const p = bs.get(a)!, last = aimLast.get(p), want = V5.set(d[0], d[1], d[2]).normalize().applyQuaternion(rq);
       if (last && last.tick === aimTick - 1 && last.dir.angleTo(want) < AIM_STEP && last.q.angleTo(p.quaternion) > AIM_STEP) { p.quaternion.copy(last.q.rotateTowards(p.quaternion, AIM_STEP)); p.updateWorldMatrix(false, true); }
@@ -1366,6 +1371,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
 
   /** 0..1: how far into its task the body is (eases in, holds, eases out). */
   let taskClipName: string | null = null;
+  /** The task whose clock the task clip shows (a new one hands the old pose to a fading copy). */
+  let clipTask: object | null = null;
   const LOWER = ['hips', 'upperlegL', 'lowerlegL', 'footL', 'upperlegR', 'lowerlegR', 'footR'], lowerAt = new Map<THREE.Bone, { q: THREE.Quaternion; p: THREE.Vector3 }>();
   /** The authored clip for the running task, if anim.glb has it: low or high by where `at` is against the hips. */
   function taskClip() {
@@ -1776,7 +1783,22 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // the path (authored clip or procedural reach) is chosen once, as the task starts: a kneel still easing out when a pick
       // up began switched it to the clip mid-reach a few frames in (a 37 cm jerk, the townsman picking up after kneeling)
       const tc = task && !FULL_BODY.has(kind) && task.clipOk ? taskClip() : null;
-      if (tc) { const c = action(tc, false); c.target = taskEnv(); s.target = 1 - taskEnv(); taskClipName = tc; }
+      if (tc) {
+        // a new task on the clip a task before it still shows (asked as one ends, or the same reach again at once): the
+        // clip's clock would jump back to its start under that weight, an arm swinging 116 degrees in a frame (the
+        // upperarmR snaps 'doing pickup' in glitch_planet, Episode Two). The outgoing pose goes to a copy of the clip
+        // held still where it was and faded out; the new task fades in from nothing
+        if (task !== clipTask) {
+          clipTask = task;
+          const prev = acts.get(tc);
+          if (prev && prev.w > 0.02) {
+            let g = acts.get(tc + '~out');
+            if (!g) { const a = mixer!.clipAction(clips!.get(tc)!.clone()); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play(); g = { a, w: 0, target: 0, manual: false }; acts.set(tc + '~out', g); }
+            g.a.timeScale = 0; g.a.time = prev.a.time; g.w = Math.max(g.w, prev.w); prev.w = 0;
+          }
+        }
+        const c = action(tc, false); c.target = taskEnv(); s.target = 1 - taskEnv(); taskClipName = tc;
+      }
       else {
         const low = task && !(task.kind === 'drink' && task.prop) ? (LOW_TASKS[task.kind] ?? 0) * taskEnv() * (FULL_BODY.has(kind) ? 0 : 1) : 0;
         if (low > 0 && clips!.has('crouch') && name !== 'crouch') { const c = action('crouch', false); c.target = low * 0.8; s.target = 1 - low * 0.8; }
@@ -2005,7 +2027,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const yawTo = Math.atan2(V3.x, V3.z);
       if (Math.abs(yawTo) < 1.7) { wantY = yawTo; wantX = -Math.atan2(V3.y, Math.hypot(V3.x, V3.z)); }
     }
-    const gr = 1 - Math.exp(-dt * gazeRate);
+    const gr = gazeSnap ? 1 : 1 - Math.exp(-dt * gazeRate); gazeSnap = false;
     gazeY += (wantY - gazeY) * gr; gazeX += (wantX - gazeX) * gr;
     const ly = clamp(lookAt.y + gazeY + clamp(yawRate * 0.05, -0.15, 0.15), -1.1, 1.1), lx = clamp(lookAt.x + gazeX, -0.5, 0.5);
     if (ly || lx) {
@@ -2341,6 +2363,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     setLookTarget(v: THREE.Vector3 | null) { if (v) { gaze = gazeAt.copy(v); } else gaze = null; },
     /** How fast the head turns to the look target (per second; null = the usual 2.2). A dart is about 8: the eyes still lead. */
     setGazeRate(r: number | null) { gazeRate = r ?? 2.2; },
+    /** On a cut: the head is where it looks from the next frame (no turn seen at the start of a shot). */
+    snapGaze() { gazeSnap = true; },
     /** Height of the ground under a point: enables foot planting on slopes. */
     setGround(fn: ((x: number, z: number) => number) | null) { ground = fn; },
     /** Resolves when the skinned body is in place. */

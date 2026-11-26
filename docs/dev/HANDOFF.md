@@ -140,6 +140,39 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
     clips.
   - Physics (part 6) and city tasks/crowd (part 7): not looked at.
 
+## 2026-11-26 night, cine6 third agent (same worktree ~/bs-cine and branch cine6; captures and tools ~/bs-cap/cine7)
+NOT ON MAIN until a landing line below says so. What I changed and measured:
+- CI on 5938dbd: every job green except glitch_planet, which was cancelled at the 45 minute job limit (it never finished
+  in any run: pull, ep1 and ep2 took the whole 45). In its log: pull 1 snap (Lyrra lowerarmL 117 deg) and a clip probe
+  miss, ep2 4 upperarmR snaps 'doing pickup'. gates.yml now runs it as two jobs: glitch_pull_ep1, glitch_ep2_ep3.
+- City walker to the chai stall stuck at (-6.8, 20.15): the fruit stall at (-6.4, 18) (block x -7.35..-5.45, z 17.2..19.8)
+  stands in the pavement lane x -6.8 that route() walked; only the road crossing was checked for room. route() now
+  searches lanes 0.4 m apart along the pavement (`along`) round what stands there. ~/bs-cap/cine7/chai_probe.py: from
+  (-6.8, 20.15) he reaches the chai stall in 8.5 s, from the parcel locker in 11.7 s (logs chai1.log before, chai2.log
+  after). The GPS line uses the same route.
+- Hoh-Ma's close-ups (camp scene and the bread): she knelt facing her quern with her back to him and the camera 0.34 m
+  above her head looked down on her hair. For her lines she now turns (kneeling) to him, the camera is three-quarter at
+  0.8 m a little above her eyes, her gaze snaps to him on the cut (Character.snapGaze). Stills: ~/bs-cap/cine7/hm_before,
+  hm_after2 (SwiftShader, level 17 save, ~/bs-cap/cine7/hohma_probe.py; the level 15 save hides the camp folk).
+- Choice panel: picks its band (low, 9vh from the bottom, or high, 9vh from the top) when it opens and every 0.5 s,
+  from the faces on screen (main.ts: every drawn body's head projected) and the frame's middle; low unless low covers a
+  face and high does not; a soft dark ground behind it. Reflexes the same (68% or 26%). `__bs.moment.placed`,
+  `__bs.faceRects()`. The city's first frames: 13 bodies, 13 heads found (face_probe.py). NOT yet seen on the GPU.
+- Task clips: a new task on the clip a task before it still showed reset the clip's clock under its weight (the pickup
+  snaps). The outgoing pose now goes to a copy of the clip held where it was and faded out (character.ts clipTask).
+  Not measured alone: glitch_ep2_ep3 in CI is the measure.
+- Lyrra's forearm in the pull (film 166.5 and 169.7, 84-117 and 104 deg): a pose a shot sets on its first frame showed a
+  frame late (Cinematic.update ran animateCrew before the shot): the crew are posed again (dt 0) on a shot's first frame;
+  her reach for Nuvexa eases in from the clip (new Limbs.weight). The 0.45 rad cap of 2704552 is untouched.
+- clipPoke puts the mover's hips on the other's hips (roots on roots left seated or pulled bodies apart).
+- Sync marks log both clocks (`__bs.syncLog`: the beep's audible time by getOutputTimestamp, the page time of the
+  square); ~/bs-cap/cine7/cap.py also saves the recorder's start() and onstart times; ~/bs-cap/cine7/av_clock.py splits
+  the offset into what a player gets and what the recorder adds.
+- Watched time (tools/watch_time.py, SwiftShader, dist of 2704552+route): Episode One levels 1-10 3.1 min in 6 stretches,
+  longest 1.1 min; Episode Two 4.3 min in 24, longest 0.6; Episode Three 9.6 min in 42, longest 0.6. None over 4 min.
+  NOT measured: the scenes between levels (narrator, flashback): the runner only has their SwiftShader wall time
+  (256-692 s each), which is the renderer's slowness, not their length. Time them on the GPU.
+
 ## 2026-11-26 evening, cine6 continued (second cine6 agent; same worktree, branch and capture folder)
 NOT ON MAIN YET. What I changed after 809fb55, and what I measured:
 - g_e23b (SwiftShader, 2 ticks a frame, before these fixes): ep2 24 pops + 5 snaps, ep3 18 pops + 1 snap, pull 1 snap

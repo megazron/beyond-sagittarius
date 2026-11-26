@@ -1113,6 +1113,16 @@ export class Episode3 extends Episode2 {
     const wk = c.clone().addScaledVector(tn, 1.8).addScaledVector(d, 0.6); wk.y = this.h(wk.x, wk.z);
     this.folkSpots = { hohma: { at: hm, yaw: Math.atan2(d.x, d.z), kneel: true }, wenka: { at: wk, yaw: Math.atan2(-tn.x, -tn.z), kneel: false } };
   }
+  /** Hoh-Ma speaking: still kneeling, turned to him, seen three-quarter from a little above her eyes. Framed from the
+   *  front of her quern with her back to him, the close-ups looked down on her bowed head: hair, no face (P8 GPU take,
+   *  2026-11-26). The turn is a cut (the shot before is never on her). */
+  private hohmaClose(fig: Character, side: 1 | -1) {
+    const sp = this.folkSpots!.hohma;
+    this.placeFolk('hohma', sp.at, this.player.pos, true);
+    fig.root.rotation.y = this.folkSpots!.hohma.yaw; fig.root.updateMatrixWorld(true);
+    fig.setLookTarget(this.head()); fig.snapGaze();
+    return cover.close(fig, side * 0.6, 0.8, -0.03);
+  }
   private placeFolk(id: 'hohma' | 'wenka', at: THREE.Vector3, face: THREE.Vector3, kneel = false, lie?: THREE.Vector3) {
     if (!this.folkSpots) this.homeFolk();
     const y = Math.atan2(face.x - at.x, face.z - at.z);
@@ -1358,16 +1368,16 @@ export class Episode3 extends Episode2 {
         const hand = F.hohma; this.anim(2.4, (k) => { const w = Math.sin(k * 5) * 0.08; const at = q.clone().add(v3(0, 0.22, 0)).addScaledVector(d, -0.05 + w); hand.setHold({ L: { at: at.clone().addScaledVector(tn, -0.07), fingers: d.clone(), palm: UP.clone().negate(), radius: 0.03 }, R: { at: at.clone().addScaledVector(tn, 0.07), fingers: d.clone(), palm: UP.clone().negate(), radius: 0.03 } }); });
         audio.sample('stone', 0.15, { rate: 0.5 });
       } },
-      { key: this.f('fire.high') ? 'e3.hm.1h' : 'e3.hm.1', who: 'hohma' as Who, shot: () => cover.close(F.hohma, 0.4, 1.0, -0.22), run: () => { F.hohma.setHold(null); F.hohma.setLookTarget(this.head()); } },
-      { key: 'e3.hm.cairn', who: 'hohma' as Who, if: { flag: 'e2.cairn.six' }, shot: () => cover.close(F.hohma, -0.35, 1.0, -0.22) },
+      { key: this.f('fire.high') ? 'e3.hm.1h' : 'e3.hm.1', who: 'hohma' as Who, shot: () => this.hohmaClose(F.hohma, 1), run: () => { F.hohma.setHold(null); F.hohma.setLookTarget(this.head()); } },
+      { key: 'e3.hm.cairn', who: 'hohma' as Who, if: { flag: 'e2.cairn.six' }, shot: () => this.hohmaClose(F.hohma, -1) },
       // (a decision, branch/moments.ts) the loud one, she says: how he answers her; the harvest remembers
       { choice: 'e3d.hohma', shot: () => cover.close(z, 0.45, 1.05, 0.24) },
       { key: 'e3d.hm.truth', who: 'scientist', if: { chose: ['e3d.hohma', 'truth'] }, shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setFace({ frown: 0.2 }) },
       { key: 'e3d.hm.joke', who: 'scientist', if: { chose: ['e3d.hohma', 'joke'] }, shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setFace({ smile: 0.35 }) },
       { key: 'e3d.hm.kind', who: 'scientist', if: { chose: ['e3d.hohma', 'kind'] }, shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setFace({ smile: 0.2 }) },
-      { key: 'e3d.hm.r.truth', who: 'hohma' as Who, if: { chose: ['e3d.hohma', 'truth'] }, shot: () => cover.close(F.hohma, 0.4, 1.0, -0.22) },
-      { key: 'e3d.hm.r.joke', who: 'hohma' as Who, if: { chose: ['e3d.hohma', 'joke'] }, shot: () => cover.close(F.hohma, 0.4, 1.0, -0.22) },
-      { key: 'e3d.hm.r.kind', who: 'hohma' as Who, if: { chose: ['e3d.hohma', 'kind'] }, shot: () => cover.close(F.hohma, 0.4, 1.0, -0.22) },
+      { key: 'e3d.hm.r.truth', who: 'hohma' as Who, if: { chose: ['e3d.hohma', 'truth'] }, shot: () => this.hohmaClose(F.hohma, 1) },
+      { key: 'e3d.hm.r.joke', who: 'hohma' as Who, if: { chose: ['e3d.hohma', 'joke'] }, shot: () => this.hohmaClose(F.hohma, 1) },
+      { key: 'e3d.hm.r.kind', who: 'hohma' as Who, if: { chose: ['e3d.hohma', 'kind'] }, shot: () => this.hohmaClose(F.hohma, 1) },
       // the grain: a head rubbed between his palms, the husk blown off, fat grains creased down one side
       { hold: 3.2, shot: () => ({ from: palm.clone().addScaledVector(f, 0.36).addScaledVector(r, 0.12).add(v3(0, 0.08, 0)), to: palm.clone(), fov: 24, push: 0.006, aperture: 0.003, lightAt: palm.clone(), lightScale: 0.7 }), run: () => {
         z.setLookTarget(palm);
@@ -1439,7 +1449,7 @@ export class Episode3 extends Episode2 {
         z.setHold({ R: { at: at.clone().addScaledVector(r, 0.06), fingers: f.clone(), palm: r.clone().negate(), radius: 0.03, grasp: true }, L: { at: at.clone().addScaledVector(r, -0.06), fingers: f.clone(), palm: r.clone(), radius: 0.03, grasp: true } });
       } },
       { key: 'e3.gr.ok', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => { const at = this.head().addScaledVector(this.fwd(), 0.12).add(v3(0, -0.08, 0)); bread.position.copy(at); z.setHold({ R: { at: at.clone().addScaledVector(r, 0.05), fingers: f.clone(), palm: r.clone().negate(), radius: 0.03, grasp: true } }); z.setFace({ smile: 0.3 }); audio.sample('leather', 0.15, { rate: 1.8 }); } },
-      { key: 'e3.hm.2', who: 'hohma' as Who, shot: () => cover.close(F.hohma, 0.4, 1.0, -0.22), run: () => { bread.removeFromParent(); z.setHold(null); F.hohma.setLookTarget(this.head()); z.setLookTarget(F.hohma.root.position.clone().add(v3(0, 0.8, 0))); } },
+      { key: 'e3.hm.2', who: 'hohma' as Who, shot: () => this.hohmaClose(F.hohma, 1), run: () => { bread.removeFromParent(); z.setHold(null); F.hohma.setLookTarget(this.head()); z.setLookTarget(F.hohma.root.position.clone().add(v3(0, 0.8, 0))); } },
     ], () => {
       S.end(); bread.removeFromParent(); this.clearHands(); this.homeFolk();
       this.set('e3.bread'); this.set('inv.grain');
