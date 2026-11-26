@@ -2078,7 +2078,7 @@ export class Episode3 extends Episode2 {
     // thin stems, many to a row, each with an ear when it is gold (take EP3B C / probe EP3C: thick cones read as yellow
     // planks across every close shot of the harvest); instanced, two draws for the whole field
     const per = gold > 0.5 ? 34 : 14, n = per * this.fieldRows.length;
-    const stem = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.0035, 0.006, 1, 4).translate(0, 0.5, 0), m, n);
+    const stem = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.002, 0.0032, 1, 4).translate(0, 0.5, 0), m, n);
     const ear = gold > 0.5 ? new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.011, 0.07, 2, 5), std(0xc89a40, { roughness: 0.85 }), n) : null;
     const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), S = new THREE.Vector3(), P = new THREE.Vector3();
     let k = 0;
@@ -2635,7 +2635,8 @@ export class Episode3 extends Episode2 {
     const dose = this.f('e3.dose.self') ? 'e3.mz.self' : this.f('e3.dose.half') ? 'e3.mz.half' : 'e3.mz.boy';
     const H = this.house(), c = H.at.clone(), fld = this.fieldAt(), fenn = this.fennAt();
     const mid = c.clone().lerp(fld, 0.5);
-    const crane = (k: number) => ({ from: mid.clone().addScaledVector(H.a, -9 - k * 3).addScaledVector(H.b, 6 + k * 2).add(v3(0, 4 + k * 3, 0)), to: mid.clone().lerp(fenn, 0.15 + k * 0.1).add(v3(0, 0.6, 0)), fov: 48, push: 0.02 });
+    // (GPU probe EP3C: from 4 to 9 m up the crane went through the tree canopy: now from above the trees, looking down)
+    const crane = (k: number) => ({ from: mid.clone().addScaledVector(H.a, -10 - k * 4).addScaledVector(H.b, 7 + k * 3).add(v3(0, 22 + k * 5, 0)), to: mid.clone().lerp(fenn, 0.15 + k * 0.1).add(v3(0, 0.6, 0)), fov: 46, push: 0.02 });
     this.ui.banner(t('e3.end'), t('e3.next'));
     this.scene([
       { key: 'e3.mz.1', who: 'megazron' as Who, shot: () => crane(0) },
