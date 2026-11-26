@@ -170,6 +170,11 @@ def main():
         page.wait_for_function('window.__bs && window.__bs.ready', timeout=600000)
         time.sleep(1)
         touch.tap(*centre(page, '#btn-new'))
+        # the first run's opening is saved from New Game on (its choices are kept), so a new game asks first
+        try:
+            page.wait_for_selector('#c-yes', timeout=4000); touch.tap(*centre(page, '#c-yes'))
+        except Exception:
+            pass
         page.wait_for_selector('#nm-ok', timeout=15000)
         touch.tap(*centre(page, '#nm-ok'))
         if not to_play("__bs.state === 'game' && __bs.mode === 'play'"): fail('planet play not reached')
