@@ -13,9 +13,9 @@ import './moment.css';
  * what a choice changed. Its own names and marks (the Fork, the Ledger, Bonds). Time comes from update(dt), so a held
  * clock (tests) or a paused game stops it.
  *
- * The look is the MegaZroN Ledger's (~/bs-story/CHOICE_UI.md): answers on slips torn from the book, physical acts on
- * its ink-blue binding cloth, the timer an ink line burning in from both ends, reflexes a wax seal, "You are <name>" a
- * brass plate, his notes in his own hand. Panels place themselves off the faces in the current shot (head bones
+ * The look (owner: "modern, minimalist, transparent", it must sit in the scene): frosted glass over the shot, light
+ * type with room around it, a hairline timer that shortens towards its middle, a thin ring for a reflex, small
+ * translucent captions for the Ledger and Bonds. Panels place themselves off the faces in the current shot (head bones
  * projected through the camera) and never in the middle of the frame, where the inserts are.
  */
 export interface ForkSpec {
@@ -46,48 +46,21 @@ const GUARD_MS = 300;
 const BEAT = 0.86;
 const BEAT_WIN = 0.2;
 
-/** Tone marks drawn as ink stamps on a 24 box: a shape for each, never a colour alone. */
+/** Tone marks as thin line icons on a 24 box: a shape for each, never a colour alone. */
 const MARK: Record<Tone, string> = {
-  truth: 'M12 3.2 L20.6 11.8 L12.3 20.9 L3.4 12.2 Z',
-  kind: 'M12 4.1 C16.9 3.9 20.2 7.6 20 12.1 C19.8 16.6 16.4 20.1 11.8 19.9 C7.3 19.7 3.9 16.3 4.1 11.9 C4.3 7.4 7.6 4.3 12 4.1 Z',
-  nerve: 'M12.2 3.6 L20.9 19.8 L3.2 20.1 Z',
-  joke: 'M2.6 13.2 C5.8 6.4 8.9 6.6 11.9 12 C14.8 17.3 18.1 17.5 21.4 10.8',
-  silent: 'M11.2 11.4 L12.8 12.6',
+  truth: 'M12 4 L20 12 L12 20 L4 12 Z',
+  kind: 'M12 4 A8 8 0 1 0 12.01 4',
+  nerve: 'M12 4.5 L20 19 L4 19 Z',
+  joke: 'M3 13 C6 7 9 7 12 12 S18 17 21 11',
+  silent: 'M11.4 12 L12.6 12',
 };
-/** Face buttons by where the slip sits (standard pad layout: 0 bottom, 1 right, 2 left, 3 top). */
+/** Face buttons by where the answer sits (standard pad layout: 0 bottom, 1 right, 2 left, 3 top). */
 const PAD_SLOTS: Record<number, number[]> = { 1: [0], 2: [2, 1], 3: [2, 3, 1], 4: [2, 3, 1, 0] };
-const TILT = [-0.9, 0.55, -0.35, 0.7];
 
 const el = (tag: string, cls: string, html = '') => { const e = document.createElement(tag); e.className = cls; e.innerHTML = html; return e; };
 
-/** A small seeded random, so a slip's edge or the fuse's line is the same each time it is drawn. */
-function rand(seed: number) {
-  let a = seed >>> 0;
-  return () => { a = (a + 0x6d2b79f5) >>> 0; let x = Math.imul(a ^ (a >>> 15), 1 | a); x ^= x + Math.imul(x ^ (x >>> 7), 61 | x); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
-}
-/** A ruled ink line as a filled shape: thicker where the nib pressed, tapering at both ends, never quite straight. */
-function inkLine(w: number, h: number, seed: number) {
-  const r = rand(seed), n = 48, top: string[] = [], bot: string[] = [];
-  let wob = 0;
-  for (let i = 0; i <= n; i++) {
-    const x = (i / n) * w, s = Math.sin(Math.PI * i / n);
-    wob = wob * 0.8 + (r() - 0.5) * 0.5;
-    const th = 0.5 + 1.7 * Math.pow(s, 0.45) + (r() - 0.5) * 0.35, y = h / 2 + wob;
-    top.push(`${x.toFixed(1)} ${(y - th).toFixed(2)}`); bot.unshift(`${x.toFixed(1)} ${(y + th * 0.8).toFixed(2)}`);
-  }
-  return `M${top.join(' L')} L${bot.join(' L')} Z`;
-}
-/** A circle drawn by hand: the radius wanders a little and the stroke does not quite meet itself. */
-function inkRing(r: number, c: number, seed: number) {
-  const q = rand(seed), n = 40, pts: string[] = [];
-  const k = [q() * 6.3, q() * 6.3, q() * 6.3];
-  for (let i = 0; i <= n; i++) {
-    const a = -Math.PI / 2 + (i / n) * Math.PI * 2.04;
-    const rr = r * (1 + 0.018 * Math.sin(2 * a + k[0]) + 0.012 * Math.sin(3 * a + k[1]) + 0.008 * Math.sin(5 * a + k[2]));
-    pts.push(`${(c + Math.cos(a) * rr).toFixed(2)} ${(c + Math.sin(a) * rr).toFixed(2)}`);
-  }
-  return `M${pts.join(' L')}`;
-}
+/** A circle for the reflex ring, drawn from the top, clockwise. */
+const RING = 'M75 11 A64 64 0 1 1 74.99 11';
 const tone = (tn: Tone) => `<svg class="tone ${tn}" viewBox="0 0 24 24" role="img" aria-label="${esc(t(`mo.tone.${tn}`))}"><path d="${MARK[tn]}"/></svg>`;
 
 type Box = { x0: number; y0: number; x1: number; y1: number };
@@ -117,7 +90,6 @@ export class MomentLayer {
   private bondTimer = 0;
   private padPrev = 0;
   private dev = '';
-  private seed = 1;
   /** Where the heads are on screen when a panel opened (CSS px, radius of the face), for tests and the UI sheet. */
   faces: { x: number; y: number; r: number; w?: number }[] = [];
   /** Everything shown, for tests: kind, id-ish text and result. */
@@ -151,19 +123,16 @@ export class MomentLayer {
     this.fork = spec; this.sel = -1;
     this.total = this.left = spec.seconds ?? 0;
     this.opened = performance.now();
-    const seed = this.seed++;
     const as = spec.as ? `<div class="fork-as"><span>${esc(t('mo.as', { who: t(spec.as) }))}</span></div>` : '';
     const who = spec.who ? `<div class="fork-who">${esc(t(spec.who))}</div>` : '';
     const prompt = spec.prompt ? `<div class="fork-prompt">${esc(t(spec.prompt))}</div>` : '';
     const n = spec.options.length;
-    const opts = spec.options.map((o, i) => `<button class="fork-o ${spec.style}" data-i="${i}" style="--r:${TILT[i % 4] * (seed % 2 ? 1 : -1)}deg;--d:${80 + i * 90}ms">`
+    const opts = spec.options.map((o, i) => `<button class="fork-o ${spec.style}" data-i="${i}" style="--d:${60 + i * 70}ms">`
       + `<span class="mo-key" data-slot="${i}">${this.keyFor(i, n)}</span>`
       + `<span class="fork-text">${esc(t(o.label))}</span>`
-      + (o.tone ? tone(o.tone) : '')
-      + `<svg class="stroke" viewBox="0 0 200 10" preserveAspectRatio="none" aria-hidden="true"><path d="M3 6.5 C40 3.5 90 7.5 130 5 S180 4 197 5.5" pathLength="100"/></svg></button>`).join('');
+      + (o.tone ? tone(o.tone) : '') + `</button>`).join('');
     const fuse = spec.seconds
-      ? `<div class="fork-fuse" aria-hidden="true"><svg viewBox="0 0 600 14" preserveAspectRatio="none"><defs><clipPath id="fuse-clip-${seed}"><rect class="clip" x="0" y="0" width="600" height="14"/></clipPath></defs>`
-        + `<path class="ash" d="${inkLine(600, 14, seed * 7)}"/><path class="ink" clip-path="url(#fuse-clip-${seed})" d="${inkLine(600, 14, seed * 7)}"/></svg><i class="ember l"></i><i class="ember r"></i></div>`
+      ? `<div class="fork-fuse" aria-hidden="true"><i class="bar"></i></div>`
       : '';
     this.root.innerHTML = `<div class="fork-head">${as}${who}${prompt}</div><div class="fork-opts n${n}">${opts}</div>${fuse}`;
     this.root.classList.toggle('act', spec.style === 'act');
@@ -184,13 +153,11 @@ export class MomentLayer {
     this.total = this.left = spec.kind === 'beat' ? (spec.count ?? 4) * BEAT + 0.6 : spec.seconds ?? 0;
     this.opened = performance.now();
     this.held = false; this.heldFor = 0; this.letGo = 0; this.beatT = 0; this.beatsDone = 0; this.hits = 0; this.misses = 0;
-    const seed = this.seed++;
     const as = spec.as ? `<div class="fork-as"><span>${esc(t('mo.as', { who: t(spec.as) }))}</span></div>` : '';
     const how = t(spec.kind === 'hold' ? 'mo.hold' : spec.kind === 'beat' ? 'mo.beat' : 'mo.press');
     const pips = spec.kind === 'beat' ? `<div class="pulse">${Array.from({ length: spec.count ?? 4 }, () => '<i></i>').join('')}</div>` : '';
-    const ring = inkRing(64, 75, seed * 13);
     this.reflexEl.innerHTML = `${as}<div class="reflex-ring ${spec.kind}"><svg viewBox="0 0 150 150" aria-hidden="true">`
-      + `<path class="bg" d="${ring}" pathLength="100"/><path class="fg" d="${ring}" pathLength="100" stroke-dasharray="100"/>`
+      + `<path class="bg" d="${RING}" pathLength="100"/><path class="fg" d="${RING}" pathLength="100" stroke-dasharray="100"/>`
       + `<circle class="near" cx="75" cy="75" r="64"/></svg><div class="seal"><span class="mo-key" data-slot="-1">${this.keyFor(-1, 1)}</span></div></div>`
       + `<div class="reflex-label">${esc(t(spec.label))}</div><div class="reflex-how">${esc(how)}</div>${pips}`;
     this.reflexEl.className = `reflex ${spec.kind}`;
@@ -283,9 +250,7 @@ export class MomentLayer {
   private paint() {
     if (this.fork && this.total) {
       const k = Math.max(0, this.left / this.total);
-      const clip = this.root.querySelector<SVGRectElement>('.fork-fuse .clip');
-      // the line burns in from both ends towards the middle; an ember at each burning end
-      if (clip) { clip.setAttribute('x', String(300 - 300 * k)); clip.setAttribute('width', String(600 * k)); }
+      // the hairline shortens from both ends towards its middle (CSS reads --k)
       this.root.style.setProperty('--k', k.toFixed(4));
       this.root.classList.toggle('urgent', k < 0.34);
     }
@@ -408,7 +373,7 @@ export class MomentLayer {
   private keyFor(i: number, n: number) {
     const dev = inputDevice();
     this.dev = dev;
-    if (dev === 'touch') return i < 0 ? '<svg class="star" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 3 L23.2 16.8 L37 20 L23.2 23.2 L20 37 L16.8 23.2 L3 20 L16.8 16.8 Z"/></svg>' : '';
+    if (dev === 'touch') return i < 0 ? '<i class="dot" aria-hidden="true"></i>' : '';
     if (dev === 'pad') return padCap(i < 0 ? 0 : (PAD_SLOTS[Math.min(4, n)] ?? PAD_SLOTS[4])[i] ?? 0);
     return i < 0 ? keyCap('KeyE') : `<kbd class="kc">${i + 1}</kbd>`;
   }

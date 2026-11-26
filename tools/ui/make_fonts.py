@@ -35,13 +35,10 @@ FONTS = [
     ("noto-sans-devanagari", "notosansdevanagari", "NotoSansDevanagari[wdth,wght].ttf", DEVA, {"wdth": 100, "wght": (400, 700)}),
     ("noto-naskh-arabic", "notonaskharabic", "NotoNaskhArabic[wght].ttf", ARAB, {"wght": (400, 700)}),
     ("noto-nastaliq-urdu", "notonastaliqurdu", "NotoNastaliqUrdu[wght].ttf", ARAB, {"wght": (400, 700)}),
-    # the choice layer (ui/moment.ts): a screen serif for what you choose, a hand for MegaZroN's Ledger
-    ("spectral-400", "spectral", "Spectral-Regular.ttf", LATIN, None),
-    ("spectral-400i", "spectral", "Spectral-Italic.ttf", LATIN, None),
-    ("spectral-600", "spectral", "Spectral-SemiBold.ttf", LATIN, None),
-    ("kalam-400", "kalam", "Kalam-Regular.ttf", LATIN + "," + DEVA, None),
-    ("tiro-devanagari-hindi-400", "tirodevanagarihindi", "TiroDevanagariHindi-Regular.ttf", DEVA, None),
-    ("gulzar-400", "gulzar", "Gulzar-Regular.ttf", ARAB, None),
+    # the choice layer (ui/moment.ts): light and regular weights for a quiet overlay in the scene
+    ("barlow-300", "barlow", "Barlow-Light.ttf", LATIN, None),
+    ("barlow-300i", "barlow", "Barlow-LightItalic.ttf", LATIN, None),
+    ("barlow-400", "barlow", "Barlow-Regular.ttf", LATIN, None),
 ]
 
 
