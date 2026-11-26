@@ -267,7 +267,7 @@ export class Vault {
     g.fillStyle = 'rgba(40,24,14,0.85)'; for (let y = 22; y < 240; y += 13) for (const x0 of [24, 272]) { let x = x0; while (x < x0 + 214) { const w = 8 + ((x * 7 + y * 3) % 26); g.fillRect(x, y, w, 2.2); x += w + 5; } }
     g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(253, 0, 6, 256);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-    this.page = new THREE.MeshStandardMaterial({ map: tex, color: 0x8a8070, roughness: 0.8, emissive: 0xffc98a, emissiveMap: tex, emissiveIntensity: 0.02 });
+    this.page = new THREE.MeshStandardMaterial({ map: tex, color: 0x766e60, roughness: 0.8, emissive: 0xffc98a, emissiveMap: tex, emissiveIntensity: 0.02 });
     film(this.page, 'page', 1, 0xfff0dc); // the film's page: the same writing, drawn at full size by tools/fetch_vault.py
     // the Ledger: a leather-bound block with its open pages as their own sheet (one material per mesh, so the film reads both)
     const book = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.07, 0.56), leather);
@@ -350,7 +350,7 @@ export class Vault {
     rim.position.set(1.8, 6.5, -8); rim.target.position.set(0, 1.9, 0); rim.castShadow = true; rim.shadow.mapSize.set(1024, 1024); rim.shadow.bias = -0.0004; s.add(rim, rim.target);
     const rim2 = new THREE.SpotLight(0x8fb4ff, 70, 26, 0.5, 0.8); rim2.position.set(-6, 4, 1.5); rim2.target.position.set(0, 1.9, 0); s.add(rim2, rim2.target);
     s.add(this.hemi = new THREE.HemisphereLight(0x6a76a0, 0x3a2418, 2.6));
-    const fill = new THREE.SpotLight(0xffe9d2, 120, 14, 0.34, 0.9); fill.position.set(0.9, 3.0, 4.6); fill.target.position.set(0, 2.1, 0); s.add(fill, fill.target);
+    const fill = new THREE.SpotLight(0xffe9d2, 80, 14, 0.34, 0.9); fill.position.set(0.9, 3.0, 4.6); fill.target.position.set(0, 2.1, 0); s.add(fill, fill.target);
     // the window's glow across the floor
     const sill2 = new THREE.SpotLight(0xffa860, 160, 30, 0.7, 0.9); sill2.position.set(0, 9, -12); sill2.target.position.set(0, 0, 1); s.add(sill2, sill2.target);
     this.halo.position.set(0, 2.4, -0.7); s.add(this.halo);
@@ -396,6 +396,10 @@ export class Vault {
       for (const mt of (Array.isArray(m.material) ? m.material : m.material ? [m.material] : []) as THREE.Material[]) {
         const u = mt.userData?.u as { uMarks?: { value: THREE.Texture | null } } | undefined;
         if (u?.uMarks) u.uMarks.value = NO_MARKS;
+        // his pale hair burned white under the lamp and the room's reflections (GPU take a1): a shade down, little sheen
+        if ((mt.userData?.film as { kind?: string } | undefined)?.kind === 'hair' && !mt.userData.dimmed) {
+          mt.userData.dimmed = true; (mt as THREE.MeshStandardMaterial).color?.multiplyScalar(0.62); (mt as THREE.MeshStandardMaterial).envMapIntensity = 0.12;
+        }
       }
       if (!m.isSkinnedMesh || !m.geometry.attributes.normal) return;
       smoothNormals(m.geometry);
@@ -542,6 +546,9 @@ export class Vault {
   private speak(l: VaultLine) {
     const dur = voice.duration(l.key) ?? Math.max(2.2, t(l.key).length * 0.07);
     this.subtitle(l.key, 'mz.name'); this.host.say(dur); this.said.push(l.key);
+    // a film of the room for another story writes down when each line starts (wall clock, as the recorder stamps frames)
+    const f = (globalThis as { __mzFilm?: { log?: [string, number, number][] } }).__mzFilm;
+    if (f) (f.log ??= []).push([l.key, Date.now() / 1000, dur]);
     return dur;
   }
 
@@ -663,8 +670,9 @@ export class Vault {
       if (this.left <= 0 && this.i >= 0 && voice.speaking() && this.late < 4) this.late += dt;
       else if (this.left <= 0) { this.next(); if (!this.playing) return; }
     }
-    const l = this.i >= 0 ? this.lines[this.i] : this.lines[0];
-    if (l?.move && (this.playing || this.i < 0)) this.entrance(l, this.i < 0 ? 0 : dt);
+    // after its last beat an entrance holds its last frame under the fade out (it cut to the wide set-up for a moment)
+    const l = this.lines[Math.min(Math.max(this.i, 0), this.lines.length - 1)];
+    if (l?.move) this.entrance(l, this.i < 0 || !this.playing ? 0 : dt);
     else {
       const sh = SHOTS[this.shot];
       const k = smoothstep(0, 1, Math.min(1, this.shotT / this.shotLen));
@@ -688,11 +696,11 @@ export class Vault {
     this.host.look2(0, 0);
     const lvl = voice.level();
     const lampK = this.beat.lampK, flick = lampK < 1 ? (Math.sin(t0 * 41) > 0.2 ? 1 : 0.55) : 1;
-    this.lamp.intensity = 9 * lampK * flick * (1 + Math.sin(t0 * 3.1) * 0.015);
+    this.lamp.intensity = 4 * lampK * flick * (1 + Math.sin(t0 * 3.1) * 0.015);
     this.lampBulb.emissiveIntensity = 3.5 * lampK * flick;
     this.halo.intensity = 0.15 + lvl * 0.45;
-    this.key.intensity = (2.5 + 4.5 * lampK) + Math.sin(t0 * 7.3) * 0.12 + Math.sin(t0 * 3.1) * 0.2;
-    this.page.emissiveIntensity = 0.03 + lvl * 0.05 + lampK * 0.04 + this.beat.glowK * 2.2;
+    this.key.intensity = (2.0 + 3.0 * lampK) + Math.sin(t0 * 7.3) * 0.12 + Math.sin(t0 * 3.1) * 0.2;
+    this.page.emissiveIntensity = 0.02 + lvl * 0.04 + lampK * 0.012 + this.beat.glowK * 2.2;
     for (const [i, ln] of this.lantern.entries()) { const f = 0.86 + 0.1 * Math.sin(t0 * (8.1 + i) + i) + 0.04 * Math.sin(t0 * 23.7 + i * 2); ln.l.intensity = ln.base * f; ln.m.emissiveIntensity = 2.6 * f; }
     (this.beams[0]?.material as THREE.ShaderMaterial | undefined)?.uniforms.uTime && ((this.beams[0].material as THREE.ShaderMaterial).uniforms.uTime.value = t0);
     this.orrery.rotation.y = t0 * 0.05;
@@ -750,9 +758,9 @@ function introBeats(): VaultLine[] {
       move: { a: V(0.36, 1.96, 1.5), b: V(0.27, 1.96, 1.3), la: eyes, fa: 1.5, fb: 1.3, rack: [0, 1], ap: 0.015, fov: [28, 27] } },
     // 6. the hook: he turns to the window; the camera rises behind his shoulder until the black hole fills the frame past him
     { key: 'mz.intro.2', lead: 1.2, after: 0.8, act: { pose: 'stand', face: [Math.PI - 0.32, 0.1, 1.9], gaze: 'window', note: 'swell' },
-      move: { a: V(1.1, 1.85, 2.2), via: V(1.5, 2.2, 1.6), b: V(0.85, 2.45, 1.75), la: eyes, lb: V(-1.0, 7.5, -40), look: [0.12, 0.7], fa: 2.0, fb: 30, rack: [0.15, 0.65], ap: 0.01, fov: [34, 38] } },
+      move: { a: V(1.2, 1.85, 2.4), via: V(1.9, 2.3, 2.3), b: V(1.25, 2.75, 3.0), la: eyes, lb: V(-1.0, 7.5, -40), look: [0.12, 0.7], fa: 2.0, fb: 30, rack: [0.15, 0.65], ap: 0.01, fov: [34, 38] } },
     // 7. the Ledger: he turns back and writes; from the nib, focus racks up to his face
-    { key: 'mz.intro.3', lead: 1.6, after: 0.5, act: { pose: 'write', face: [0, 0, 1.4], gaze: 'book', scratch: [1.6, 4.6] },
+    { key: 'mz.intro.3', lead: 1.6, after: 0.5, act: { pose: 'stand', face: [0, 0, 1.4], gaze: 'book', scratch: [1.6, 4.6] },
       move: { a: V(0.75, 1.48, 1.7), b: V(0.62, 1.58, 1.52), la: page, lb: V(0, 1.75, 0.2), look: [0.35, 0.8], fa: 0.95, fb: 1.65, rack: [0.4, 0.75], ap: 0.016 } },
     // 8. the hand-over: two taps of the quill, "Turn the page", and the camera goes into the glowing page
     { key: 'mz.intro.4', lead: 1.1, min: 5.2, after: 0.2, act: { pose: 'stand', gaze: 'cam', taps: [0.3, 0.62], glow: [1.8, 5.0], note: 'resolve' },
