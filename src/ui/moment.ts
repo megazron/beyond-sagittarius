@@ -194,7 +194,7 @@ export class MomentLayer {
     this.bondEl.innerHTML = `<small>${esc(t('mo.bonds'))}</small>` + changes.slice(0, 3).map((c, i) => {
       const up = c.after > c.before, a = X(c.before), b = X(c.after);
       const arrow = up ? 'M3 15 L10 5 L17 15 M10 5 L10 19' : 'M3 9 L10 19 L17 9 M10 19 L10 5';
-      return `<div class="bond ${up ? 'up' : 'down'}" style="--d:${200 + i * 160}ms">`
+      return `<div class="bond ${up ? 'up' : 'down'}" style="--d:${i * 140}ms">`
         + `<div class="bond-names"><span>${esc(t(`crew.${c.from}.name`))}</span><svg class="arrow" viewBox="0 0 20 24" role="img" aria-label="${esc(t(up ? 'mo.up' : 'mo.down'))}"><path d="${arrow}"/></svg><span>${esc(t(`crew.${c.to}.name`))}</span></div>`
         + `<div class="bond-word">${esc(t(`br.trust.${trustBand(c.after)}`))}</div>`
         + `<svg class="bond-scale" viewBox="0 0 200 26" aria-hidden="true"><path class="rule" d="M8 15.2 C60 14.4 140 15.8 192 14.9"/>`
@@ -453,7 +453,7 @@ export class MomentLayer {
       lines[lines.length - 1].push(w.textContent || '');
     }
     const total = Math.min(1800, Math.max(650, chars * 34)), lift = 140;
-    let at = 250;
+    let at = 90;
     hand.innerHTML = lines.map((ws) => {
       const s = ws.join(' '), d = Math.max(260, Math.round(total * s.length / Math.max(1, chars)));
       const html = `<span class="ln" style="--d:${at}ms;--write:${d}ms;--st:${Math.max(6, s.length)}">${esc(s)}</span>`;

@@ -86,10 +86,10 @@ body.lang-hi .fork.act .fork-o, body.lang-ur .fork.act .fork-o { text-transform:
 
 /* the taken answer brightens and holds; the others fade */
 .fork-o.taken { background: rgba(255, 255, 255, .18); border-color: rgba(255, 255, 255, .7); box-shadow: 0 0 30px var(--mo-glow); transform: none; animation: mo-take .25s var(--mo-ease) both; }
-.fork-o.gone { animation: mo-out .22s ease-in both; }
-.fork.answered .fork-head, .fork.answered .fork-fuse { animation: mo-out .22s ease-in forwards; }
-.fork.answered .fork-o.taken { animation: mo-take .25s var(--mo-ease) both, mo-out .3s ease-in .38s forwards; }
-.fork.answered::before { animation: mo-out .4s ease-in .1s forwards; }
+.fork-o.gone { animation: mo-out .16s ease-in both; }
+.fork.answered .fork-head, .fork.answered .fork-fuse { animation: mo-out .16s ease-in forwards; }
+.fork.answered .fork-o.taken { animation: mo-take .2s var(--mo-ease) both, mo-out .2s ease-in .2s forwards; }
+.fork.answered::before { animation: mo-out .3s ease-in forwards; }
 .fork-silent { font: italic 300 calc(18px * var(--mo-k)) var(--mo-sans); color: var(--mo-dim); text-shadow: var(--mo-shadow); animation: mo-fade .25s both; }
 
 /* the timer: a hairline that shortens from both ends towards its middle */
@@ -171,8 +171,8 @@ body.lang-hi .bonds small, body.lang-ur .bonds small { letter-spacing: 0; text-t
 .bond-scale .rule { stroke: rgba(255, 255, 255, .24); stroke-width: 1; }
 .bond-scale .tick { stroke: rgba(255, 255, 255, .3); stroke-width: 1; }
 .bond-scale .was { stroke: rgba(255, 255, 255, .45); stroke-width: 1.2; stroke-dasharray: 2 2.5; }
-.bond-scale .move { stroke: rgba(255, 255, 255, .85); stroke-width: 1.6; stroke-dasharray: 100; stroke-dashoffset: 100; animation: mo-draw .8s var(--mo-ease) calc(var(--d, 0ms) + 200ms) forwards; }
-.bond-scale .now { opacity: 0; animation: mo-fade .2s calc(var(--d, 0ms) + 900ms) forwards; }
+.bond-scale .move { stroke: rgba(255, 255, 255, .85); stroke-width: 1.6; stroke-dasharray: 100; stroke-dashoffset: 100; animation: mo-draw .8s var(--mo-ease) calc(var(--d, 0ms) + 120ms) forwards; }
+.bond-scale .now { opacity: 0; animation: mo-fade .2s calc(var(--d, 0ms) + 800ms) forwards; }
 .bond.up .bond-scale .now { fill: var(--mo-up); } .bond.down .bond-scale .now { fill: var(--mo-down); }
 
 /* ---------- motion: quick fades, small moves ---------- */
@@ -233,7 +233,7 @@ body.mo-still .reflex:not(.passed):not(.failed) .reflex-how, body.mo-still .ledg
 body.mo-still .reflex.passed .reflex-ring { animation-direction: reverse; }
 body.mo-still .fork.urgent .fork-fuse .bar, body.mo-still .reflex.thump .seal, body.mo-still .reflex.wrong .seal, body.mo-still .reflex.urgent .fg, body.mo-still .reflex .pulse i.hit { animation: none; }
 body.mo-still .fork-o.taken { animation: none; }
-body.mo-still .fork.answered .fork-o.taken { animation: mo-out .3s ease-in .38s forwards; }
+body.mo-still .fork.answered .fork-o.taken { animation: mo-out .2s ease-in .2s forwards; }
 body.mo-still .ledger-line .ln { animation: mo-fade .3s both; }
 body.mo-still .fork-o, body.mo-still .fork-o:hover, body.mo-still .fork-o.sel { transform: none; }
 @media (prefers-reduced-motion: reduce) {
@@ -241,7 +241,7 @@ body.mo-still .fork-o, body.mo-still .fork-o:hover, body.mo-still .fork-o.sel { 
   .reflex.passed .reflex-ring { animation-name: mo-fade; animation-direction: reverse; }
   .fork.urgent .fork-fuse .bar, .reflex.thump .seal, .reflex.wrong .seal, .reflex.urgent .fg { animation: none; }
   .fork-o.taken { animation: none; }
-  .fork.answered .fork-o.taken { animation: mo-out .3s ease-in .38s forwards; }
+  .fork.answered .fork-o.taken { animation: mo-out .2s ease-in .2s forwards; }
   .ledger-line .ln { animation: mo-fade .3s both; }
   .fork-o, .fork-o:hover, .fork-o.sel { transform: none; }
 }
