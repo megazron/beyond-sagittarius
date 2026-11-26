@@ -24,10 +24,18 @@ export function posture(c: Character, floor: number): { hip: number; posture: Po
   return { hip, y, posture: y > 0.15 ? 'air' : hip > 0.4 ? 'stand' : hip > 0.18 ? 'sit' : 'low' };
 }
 
-function mark(c: Character, floor: number): CrewMark {
+const C = new THREE.Vector3();
+/** In the picture: shown, and the head or the chest inside the frame in front of the lens. */
+function inFrame(c: Character, cam?: THREE.Camera) {
+  if (!isShown(c.root)) return false;
+  if (!cam) return true;
+  for (const part of [c.head, c.chest]) { part.getWorldPosition(C).project(cam); if (C.z < 1 && Math.abs(C.x) < 1.05 && Math.abs(C.y) < 1.05) return true; }
+  return false;
+}
+function mark(c: Character, floor: number, cam?: THREE.Camera): CrewMark {
   const p = posture(c, floor);
   c.root.getWorldPosition(P); c.root.getWorldQuaternion(Q); E.setFromQuaternion(Q, 'YXZ');
-  return { id: c.id, x: +P.x.toFixed(3), y: +p.y.toFixed(3), z: +P.z.toFixed(3), yaw: +E.y.toFixed(3), hip: +p.hip.toFixed(3), posture: p.posture, visible: isShown(c.root) };
+  return { id: c.id, x: +P.x.toFixed(3), y: +p.y.toFixed(3), z: +P.z.toFixed(3), yaw: +E.y.toFixed(3), hip: +p.hip.toFixed(3), posture: p.posture, visible: inFrame(c, cam) };
 }
 /** Visible all the way up the tree (a hidden group hides everyone in it). */
 function isShown(o: THREE.Object3D | null) {
@@ -60,9 +68,9 @@ export class ContinuityLog {
   }
 
   /** Call once a frame after the bodies are posed. */
-  frame(shot: string, scene: string, set: string, clock: number, furniture: boolean, crew: Character[], floor: number) {
+  frame(shot: string, scene: string, set: string, clock: number, furniture: boolean, crew: Character[], floor: number, cam?: THREE.Camera) {
     if (!this.on) return;
-    const now: CutMark = { at: 'in', shot, scene, set, clock: +clock.toFixed(3), furniture, crew: crew.map((c) => mark(c, floor)) };
+    const now: CutMark = { at: 'in', shot, scene, set, clock: +clock.toFixed(3), furniture, crew: crew.map((c) => mark(c, floor, cam)) };
     const p = this.prev;
     if (set === 'deck') for (const c of now.crew) {
       if (!c.visible || c.posture === 'air' || c.posture === 'sit') continue;
@@ -123,12 +131,15 @@ export class ContinuityLog {
   }
 }
 
-/** Is any of these meshes inside another's box (a floor prop sunk into a sofa)? Names of the pairs. */
+/** Loose props whose middle is inside a piece of furniture (tested in the furniture's own frame, so a turned sofa's
+ *  box does not swallow what rests beside it): names of the pairs. */
 export function overlaps(a: THREE.Object3D[], b: THREE.Object3D[], margin = 0.01): string[] {
-  const out: string[] = [], A = new THREE.Box3(), B = new THREE.Box3();
-  for (const x of a) {
-    A.setFromObject(x).expandByScalar(-margin);
-    for (const y of b) { B.setFromObject(y); if (A.intersectsBox(B)) out.push(`${x.name || x.uuid.slice(0, 6)}~${y.name || y.uuid.slice(0, 6)}`); }
+  const out: string[] = [], p = new THREE.Vector3(), box = new THREE.Box3();
+  for (const y of b) {
+    const g = (y as THREE.Mesh).geometry; if (!g) continue;
+    g.computeBoundingBox(); box.copy(g.boundingBox!).expandByScalar(-margin);
+    const inv = y.matrixWorld.clone().invert();
+    for (const x of a) { x.getWorldPosition(p).applyMatrix4(inv); if (box.containsPoint(p)) out.push(`${x.name || x.uuid.slice(0, 6)}~${y.name || y.uuid.slice(0, 6)}`); }
   }
   return out;
 }

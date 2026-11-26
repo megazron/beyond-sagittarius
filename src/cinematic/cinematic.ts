@@ -5,7 +5,7 @@ import { easeInOut, clamp, smoothstep, lerp } from '../core/noise';
 import { audio } from '../core/audio';
 import { voice } from '../core/voice';
 import { Cutscene, Beat, addCutsceneRig } from './cutscene';
-import { departScene, fightScene, stageDeck } from './scenes';
+import { departScene, fightScene, stageDeck, seatAt } from './scenes';
 import { t } from '../i18n';
 import { createCharacter, Character, CrewId, CrewPose, type Face, type Limbs } from '../characters/character';
 import { flail, mixLimbs, FALL, STANDING } from './montage';
@@ -219,7 +219,7 @@ export class Cinematic {
       this.time = Math.max(this.time, this.warp(15.2));
       this.earth.group.position.set(0, 0, 0); this.ring.position.set(0, 0, 0);
       i.display(null); i.earthLight.intensity = 0; i.stripLight.intensity = 0; i.mainLight.intensity = 9; i.consoleLight.intensity = 2.2;
-      i.crew.forEach((c) => { c.setLookTarget(null); c.setFace(null); c.root.rotation.set(0, Math.PI, 0); });
+      i.crew.forEach((c) => { c.setLookTarget(null); c.setFace(null); c.setLimbs(null); c.root.position.y = i.group.position.y - 2.2; c.root.rotation.set(0, Math.PI, 0); });
       this.setVisible('earth');
     });
   }
@@ -299,15 +299,24 @@ export class Cinematic {
     if (this.ins.cockpit.visible) { this.pilot.root.updateMatrixWorld(); this.pilot.animate('stand', 0, 0, this.clockT, dt); } // seated by setLimbs: the sit clip sits on the ground, far forward of its root
     if (!this.interior.group.visible) return;
     const poses = this.stage?.poses;
+    // whoever sits on a sofa in the pull: the chair legs and the hips on the cushion every frame, whatever a shot did
+    for (const [c, st] of this.seated) {
+      seatAt(c, this.interior.group.position.y - 2.2, st.k, st.hands);
+      if (st.extra) c.setLimbs({ ...c.limbsNow, ...st.extra });
+      if (st.k <= 0) this.seated.delete(c);
+    }
     this.interior.crew.forEach((c) => {
       c.root.updateMatrixWorld();
       c.animate(poses?.[c.id as CrewId] ?? this.pullPose[c.id as CrewId] ?? 'stand', 0, 0, this.clockT, dt);
     });
   }
   private clockT = 0;
+  /** Seated on a sofa in the pull (1 sat, 0 up), the hands free or on a task, and an arm pose over the seated one. */
+  private seated = new Map<Character, { k: number; hands: boolean; extra?: Limbs }>();
 
   private finish() {
     this.playing = false;
+    this.seated.clear();
     this.stage = null;
     this.filmAt(undefined, 0); for (const f of this.films.values()) f.close(); this.films.clear();
     audio.alarm(false); audio.vacuum(false);
@@ -467,30 +476,9 @@ export class Cinematic {
     // ---- Interior: the impossible reading ----
     // the friends' talk is in the departure now (holdDepart): the journey cuts straight to the pull's first shot
     this.cue(33.45, () => { this.time = Math.max(this.time, this.warp(39.0)); });
+    // (the reading's old interior shot from 33.4 s is gone: the cue above jumps past it, but its first frame still drew
+    // the deck with the six as the departure left them, a one-frame flash between the gas giant and the pull)
     const intr = this.interior;
-    this.shots.push({
-      start: 33.4, end: 39.0,
-      enter: () => {
-        this.setVisible('interior'); d.uWarp.value = 0; d.uNebula.value = 0.9; d.uBH.value = 1;
-      },
-      update: (k, local) => {
-        const b = intr.group.position;
-        const e = easeInOut(k);
-        this.camera.position.copy(b).add(V(lerp(2.6, 1.2, e), lerp(-0.4, -0.7, e), lerp(3.4, 2.4, e)));
-        this.lookTarget.copy(b).add(V(lerp(0.2, 0, e), -0.8, -2.2));
-        d.uBHPos.value.set(-40, 18, -420);
-        intr.holo.uniforms.uSpike.value = smoothstep(0.5, 2.5, local) + smoothstep(5.5, 7, local);
-        intr.holo.uniforms.uAlarm.value = smoothstep(6.3, 7, local);
-        const sci = intr.crew[0];
-        sci.root.rotation.y = Math.PI + lerp(0, 0.9, smoothstep(0.5, 1.5, local)) - lerp(0, 0.9, smoothstep(2.5, 3.5, local));
-        for (let i = 1; i < intr.crew.length; i++) {
-          const c = intr.crew[i];
-          const lean = smoothstep(1.2 + i * 0.25, 3 + i * 0.25, local);
-          c.root.position.z = lerp(c.root.position.z, 0.2 + (i % 2) * 0.5, lean * 0.02);
-        }
-        intr.alarmLight.intensity = local > 6.4 ? (Math.sin(local * 8) * 0.5 + 0.5) * 40 : 0;
-      },
-    });
 
     // ---- The pull into Sagittarius (Scene 3 of the design doc, beat for beat) ----
     // Tension in steps, each small and each worse than the last; then control goes; then the Event. One cause, then
@@ -543,22 +531,22 @@ export class Cinematic {
     // up (C2) before anyone needs them on their feet. Marks only change on screen or in time to walk there (the
     // continuity check, tools/continuity_check.py).
     const SEAT_L = onSofa(1, -0.6), SEAT_B = onSofa(1, 0.7);
-    const sit = (c: Character, st: { x: number; z: number; yaw: number }) => { put(c, st.x, st.z, st.yaw); this.pullPose[c.id as CrewId] = 'sit'; };
+    const sit = (c: Character, st: { x: number; z: number; yaw: number }) => { put(c, st.x, st.z, st.yaw); this.seated.set(c, { k: 1, hands: c.id !== 'medic' }); };
     /** Everyone's pose back to standing, except whoever is still sitting. */
     const keepSit = () => { const k: Partial<Record<CrewId, CrewPose>> = {}; for (const [id, p] of Object.entries(this.pullPose)) if (p === 'sit') k[id as CrewId] = p; this.pullPose = k; };
     /** The party at the window (A to C: facing each other and the phone) or the five looking out (F and G). */
     const group = (party = false) => {
       put(drx, 2.3, -1.9, party ? -0.7 : Math.PI * 1.15); put(nuv, 1.4, -1.95, party ? 1.52 : Math.PI * 0.82); put(sky, 2.7, -2.55, Math.PI);
       if (party) { sit(lyr, SEAT_L); sit(bol, SEAT_B); return; }
-      put(lyr, 3.2, -1.5, Math.PI * 1.1); put(bol, 4.0, -2.2, Math.PI * 1.2); delete this.pullPose.medic; delete this.pullPose.builder;
+      put(lyr, 3.2, -1.5, Math.PI * 1.1); put(bol, 4.0, -2.2, Math.PI * 1.2); this.seated.clear();
     };
     /** Up off the sofa: weight forward, the seat left behind, onto the feet in front of it, over about a second. */
     const rise = (c: Character, along: number, t0: number, local: number) => {
-      const g = smoothstep(t0, t0 + 1.0, local);
-      if (g <= 0) return;
-      if (this.pullPose[c.id as CrewId] === 'sit') delete this.pullPose[c.id as CrewId];
-      const f = onSofa(1, along, 0.12 + 0.34 * g); c.root.position.set(f.x, FLOOR, f.z);
-      c.setLimbs(g < 1 ? { bend: 0.5 * Math.sin(Math.PI * Math.min(1, g * 1.2)) } : null);
+      const g = smoothstep(t0, t0 + 1.1, local), st = this.seated.get(c);
+      if (g <= 0 || !st) return;
+      st.k = 1 - g; st.extra = undefined; st.hands = true; if (g > 0.05) c.stopTask();
+      // the hips go forward over the feet first, then up
+      const f = onSofa(1, along, 0.12 + 0.52 * smoothstep(0.05, 0.6, g)); c.root.position.x = f.x; c.root.position.z = f.z;
     };
     const atConsole = () => put(sci, -0.85, -0.62, Math.PI);
     const exterior = (local: number, k: number, strain = 0) => {
@@ -681,8 +669,8 @@ export class Cinematic {
       update: (k, local) => {
         lens(50); const h = head(bol, -0.2); this.camera.position.copy(h).add(V(-1.3, -0.05, 1.5)); this.lookTarget.copy(h);
         // seated: only his left arm is posed (the clip keeps the legs on the seat), out to the sofa's arm beside him
-        const ARM = { armL: STANDING.armL!, foreL: STANDING.foreL! };
-        bol.setLimbs(mixLimbs(ARM, { armL: [0.75, -0.55, 0.25], foreL: [0.5, -0.6, 0.6] }, smoothstep(0.2, 0.8, local)));
+        const st = this.seated.get(bol);
+        if (st) st.extra = mixLimbs({ armL: [0.22, -0.85, 0.42], foreL: [0.02, -0.3, 1] }, { armL: [0.75, -0.55, 0.25], foreL: [0.5, -0.6, 0.6] }, smoothstep(0.2, 0.8, local));
         bol.setFace({ smile: 0.6 * (1 - smoothstep(1.6, 2.6, local)), fear: 0.4 * smoothstep(2.4, 3.2, local) }); bol.setLookTarget(local < 2.4 ? head(drx) : at(5, -0.6, -1.6));
       },
     });
@@ -691,7 +679,7 @@ export class Cinematic {
     // C1 over Zenvik's shoulder: the group turning to him. He swallows before the line
     this.vcue(S + 30.1, 'cine.line4', () => { ui.subtitle('cine.line4', 'crew.scientist.name'); talk(sci, 'cine.line4'); });
     shotAt(S + 29.4, S + 31.8, {
-      enter: () => { bol.setLimbs(null); sci.root.rotation.y = Math.PI * 0.55; keepSit(); drx.stopTask(); lyr.stopTask(); },
+      enter: () => { const st = this.seated.get(bol); if (st) st.extra = undefined; sci.root.rotation.y = Math.PI * 0.55; keepSit(); drx.stopTask(); lyr.stopTask(); },
       update: (k, local) => {
         lens(50); const h = head(sci); this.camera.position.copy(h).add(V(-0.75, 0.05, 0.55)); this.lookTarget.copy(at(2.4, -0.8, -1.9));
         sci.setFace({ fear: 0.2 }); const turn = smoothstep(0.6, 1.6, local);
@@ -1062,7 +1050,7 @@ export class Cinematic {
     if (!this.cont.on) return;
     const set = this.interior.group.visible ? 'deck' : this.ins.cockpit.visible ? 'cockpit' : 'space';
     this.scene.updateMatrixWorld();
-    this.cont.frame(shot, scene, set, this.clockT, this.interior.lounge.visible, this.interior.crew, this.interior.group.position.y - 2.2);
+    this.cont.frame(shot, scene, set, this.clockT, this.interior.lounge.visible, this.interior.crew, this.interior.group.position.y - 2.2, this.camera);
   }
 
   private commonUpdate(dt: number) {

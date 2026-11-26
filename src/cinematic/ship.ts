@@ -395,7 +395,7 @@ export function createInterior(detail = 1): Interior {
   const base = new THREE.MeshStandardMaterial({ color: 0x2b2f36, metalness: 0.6, roughness: 0.45 });
   const rb = (w: number, h: number, d: number, r = 0.05) => new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2.2, h / 2.2, d / 2.2));
   const lounge = new THREE.Group(); lounge.name = 'lounge'; group.add(lounge);
-  const put = (g: THREE.BufferGeometry, m: THREE.Material, p: THREE.Object3D, x: number, y: number, z: number) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; p.add(o); return o; };
+  let pn = 0; const put = (g: THREE.BufferGeometry, m: THREE.Material, p: THREE.Object3D, x: number, y: number, z: number) => { const o = new THREE.Mesh(g, m); o.name = `lounge${pn++}`; o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; p.add(o); return o; };
   for (const s of SOFAS) {
     const so = new THREE.Group(); so.position.set(s.x, -2.2, s.z); so.rotation.y = s.yaw; lounge.add(so);
     put(rb(SOFA.w, 0.08, SOFA.d - 0.04, 0.02), base, so, 0, 0.04, 0);

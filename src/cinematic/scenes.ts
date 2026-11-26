@@ -1,9 +1,46 @@
 import * as THREE from 'three';
 import { cover, Beat, Shot } from './cutscene';
-import type { Character, CrewId } from '../characters/character';
+import type { Character, CrewId, Limbs } from '../characters/character';
 
 type Cast = Record<CrewId, Character>;
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+
+/**
+ * Sitting on the lounge's sofas. The 'sit' clip is a sit on the ground (hips about 20 cm up): placed on a sofa its hips
+ * were sunk into the cushion with the knees up by the chest, and it faded in from standing over the first half second of
+ * the scene (the owner's "sofa glitch"). Now a seated body keeps the standing clip's upper body and gets the legs of a
+ * chair: thighs forward along the cushion, shins down to the floor, hands on the thighs, the hips on the cushion.
+ */
+export const SOFA_TOP = 0.44;
+const HIP = new WeakMap<Character, number>();
+/** The hip joint's height over the root when standing (measured once, while the body stands). */
+function hipOf(c: Character) {
+  let h = HIP.get(c);
+  if (h === undefined) {
+    c.root.updateMatrixWorld(true);
+    h = c.legL.getWorldPosition(new THREE.Vector3()).y - c.root.getWorldPosition(new THREE.Vector3()).y;
+    if (!(h > 0.6 && h < 1.2)) h = c.height * 0.5; // not posed yet
+    HIP.set(c, h);
+  }
+  return h;
+}
+export const SEATED: Limbs = { legL: [0.1, -0.08, 1], legR: [-0.1, -0.08, 1], shinL: [0.05, -1, 0.18], shinR: [-0.05, -1, 0.18], armL: [0.22, -0.85, 0.42], foreL: [0.02, -0.3, 1], armR: [-0.22, -0.85, 0.42], foreR: [-0.02, -0.3, 1], bend: -0.06 };
+/** Seated on a sofa at `floor` (world y of the floor) for k = 1; k between 0 and 1 is the way up (or down). `hands`
+ *  false leaves the arms to a task (a list, a cup). */
+export function seatAt(c: Character, floor: number, k: number, hands = true) {
+  const lift = SOFA_TOP + 0.085 - hipOf(c); // root offset that puts the hip joints on the cushion
+  c.root.position.y = floor + lift * k;
+  if (k <= 0) { c.setLimbs(null); return; }
+  const L: Limbs = {};
+  const parts: ('legL' | 'legR' | 'shinL' | 'shinR' | 'armL' | 'armR' | 'foreL' | 'foreR')[] = ['legL', 'legR', 'shinL', 'shinR', ...(hands ? ['armL', 'armR', 'foreL', 'foreR'] as const : [])];
+  for (const n of parts) {
+    const a = STAND[n]!, b = SEATED[n]!; L[n] = [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+  }
+  // getting up: the weight goes forward over the feet before the legs straighten
+  L.bend = k < 1 ? 0.55 * Math.sin(Math.PI * Math.min(1, (1 - k) * 1.6)) : SEATED.bend;
+  c.setLimbs(L);
+}
+const STAND: Limbs = { armL: [0.18, -1, 0.02], foreL: [0.14, -1, 0.14], armR: [-0.18, -1, 0.02], foreR: [-0.14, -1, 0.14], legL: [0.08, -1, 0], shinL: [0.06, -1, -0.04], legR: [-0.08, -1, 0], shinR: [-0.06, -1, -0.04] };
 
 /** Places the six around the deck for the opening. */
 export function stageDeck(a: Cast, y: number, marks = DECK) {
@@ -56,12 +93,15 @@ export function departScene(a: Cast, origin: THREE.Vector3, seats: Record<string
   const bag = o(-0.6, -1.95, 0.85);
   const lap = (c: Character) => new THREE.Vector3().setFromMatrixPosition(c.root.matrixWorld).add(V(0, 0.6, 0)).addScaledVector(V(Math.sin(c.root.rotation.y), 0, Math.cos(c.root.rotation.y)), 0.6);
   const stand = (id: CrewId, s: Seat) => { const c = a[id]; c.root.position.copy(o(s.x, -2.2, s.z)); c.root.rotation.set(0, s.yaw, 0); c.root.updateMatrixWorld(true); };
-  const all = { scientist: 'sit', strong: 'sit', medic: 'sit', builder: 'sit', explorer: 'stand', social: 'selfie' } as const;
+  // the four on the sofas sit on them (seatAt): their clip stays the standing one, so nothing fades in from standing
+  const SAT: CrewId[] = ['scientist', 'strong', 'medic', 'builder'];
+  const all = { scientist: 'stand', strong: 'stand', medic: 'stand', builder: 'stand', explorer: 'stand', social: 'selfie' } as const;
   return [
     // L1 establish: the lounge, still docked, Earth in the window behind them
     { hold: 3.4, poses: { ...all }, shot: () => ({ from: o(3.2, -0.55, 3.1), to: o(-0.7, -1.45, -0.9), push: 0.08, fov: LENS.w24 }),
       run: () => {
         for (const id in seats) stand(id as CrewId, seats[id]);
+        for (const id of SAT) seatAt(a[id], o(0, -2.2, 0).y, 1, id !== 'medic');
         look(a.builder, o(-3.4, 0.4, 0.6)); a.builder.setFace({ blink: 1 });
         look(a.medic, lap(a.medic)); a.medic.doTask('use', { seconds: 40, prop: 'paper', hands: 'both' });
         look(a.explorer, bag); look(a.strong, phone()); look(a.scientist, o(0, -1.0, -1.4)); look(a.social, phone());
