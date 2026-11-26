@@ -141,6 +141,16 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
   - Physics (part 6) and city tasks/crowd (part 7): not looked at.
 
 ## 2026-11-26 parts 5 to 7 (cine5 agent: worktree ~/bs-cine, branch cine5 from main cae253a; captures ~/bs-cap/cine5)
+- PART 7 LANDED b3a2302 on main (CI run 45803442029 all green on that sha), with part 6's watch and runner (not in CI).
+  GPU take P7_city_tasks_GPU.mp4 + NOTES_P6_P7.md: only paratha, pack, phone reached (the script stuck at a zebra);
+  the phone job's spot is at the shop door, not a counter with the clerk (move it into the shop: not done).
+- PART 6 NOT DONE: glitch_check.py found 0 events in pull/city/ep1/ep2/ep3 (city walk 38.9 m), but its own poke
+  (nearest drawn body moved 1 m in a frame) was MISSED in the city: likely the city re-places pooled bodies every frame
+  before the watch samples. Make the poke move a townsperson (`people` standing, not pooled) or sample before the city
+  update; then trust the zeros or find the glitches, fix root causes, add the `glitch` CI job.
+- Episodes One to Three got no new choices (part 5's density ask): next.
+- Stale worktrees: ~/bs-cine-base removed; ~/bs-cine-t and ~/bs-cine-g are not git worktrees (plain folders, 278 MB
+  each), left alone.
 - PART 5 LANDED c22ebfb on main (CI run 45793352896 all green on that sha). Clips + NOTES_P5_choices.md in the owner's folder.
   app_smoke now accepts the New Game confirm (an opening in progress is a save). Capture kit: ~/bs-cap/cine5/run.sh NAME PLAN DIST QS
   (plan_p5.json, plan_p7.json: a page script presses the keys like a player).
