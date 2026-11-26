@@ -140,6 +140,61 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
     clips.
   - Physics (part 6) and city tasks/crowd (part 7): not looked at.
 
+## 2026-11-26 parts 6, 5b, 7b (cine6 agent: worktree ~/bs-cine, branch cine6 from cine5 da28549; captures ~/bs-cap/cine6)
+NOTHING OF THIS IS ON MAIN YET. Branch cine6 is pushed (WIP commits). Last CI on cine6 (run 45829243670, sha 3b0c9728):
+every gate green except `choices` (fixed after: the second episode test waited on a scene; now skips it) and
+`glitch_city` (fixed after: see below); `glitch_planet` was still running.
+- PART 6 (physics). The watch (src/core/glitch.ts) is now tested at its own read: `inject(kind, on)` / `__bs.glitchTest`
+  puts a pop, snap, floor, float, jitter or wall in just before the watch reads the frame (after every update, so the
+  city's pools cannot undo it), restores it after, marks every event it causes as the test's (`test` id), one test at a
+  time; a cut or the body leaving the camera's range re-arms it. `__bs.clipPoke()` tests the clip probe. Tracks restart
+  for a body not drawn the frame before (a pooled body handed to someone else). The played body's pops are not
+  excused by a camera cut (the follow camera jumps with a teleport). Events carry the film time in a film, the camera's
+  move and what the player was doing at a snap. Runner tools/glitch_check.py: three rounds of self-tests (start, middle,
+  end; jitter twice during the walk), walk plans from `__bs.glitchTour()` (city: the eight jobs; planet: the steepest
+  climbable slope, the water's edge, in and out of the water, the thickest trees, the camp, the objective), `--dist`,
+  `--json` with a position trace. CI jobs `glitch_city`, `glitch_planet` added to gates.yml (about 30 min each in CI).
+- Measured (local, SwiftShader, 2 ticks a drawn frame): city 27/27 tests caught, 152 m walked, no glitches (g_city2);
+  ep1 155 m, no glitches; ep2 254 m: 5 upperarmR snaps (~120 deg in one frame, in play), 2 floats and a 0.67 m pop at
+  the lake; ep3 163 m: 1 snap, 1 turn-pop (168 deg); pull: 1 snap, Lyrra's lowerarmL 117 deg at film 166.5 (after the
+  push-off cue at 163.4, so in the scene that follows the pull). Logs/JSON: ~/bs-cap/cine6/g_*.log|json.
+- Root causes fixed: (1) the lake: player.ts held a wading body at y -0.55 while a swimmer floats at -1.3, so every swim
+  start/stop moved the body 0.7 m in a frame and deep wading left the feet over the bed: the clamp is gone, the body
+  drops at most 4 m/s in water, and a swimmer leaves the water only up a bank within 0.4 m of where he floats.
+  NOT YET RE-MEASURED (run g_e23b in progress at hand-off: ~/bs-cap/cine6/g_e23b.log). (2) the walker/GPS route in the
+  bazaar crossed the road straight at the goal's z: into the striped stall mat at the kerb (3.3, 30) (the P7 notes'
+  "zebra") and into the tram's side; it now crosses where a 2.2 m lane is clear (city.ts route()). (3) the phone shop
+  (below). The walk still passes over parcel/chai/tram/ring/gate in some runs: at the parcel crossing he stood at
+  (4.2, 41.8) with nothing static there (awayCollide/awayBlocksAt probes empty), and once jumped 11.7 m in a second
+  with the camera (the new played-body pop check should catch and time that next run). Open: the upperarmR snaps (see
+  `doing` in the event detail next run), the pull's 166.5 s snap, the clip probe missing a body put on another in the
+  pull's middle round and ep3's end round.
+- PART 7b (city). The Capple Store never had a front: its building (z 35.2..46.9, cut by the side street) ended 3 m past
+  the shop's z 44 and shopAt() needs 3.5 m: no front was built and the phone job stood at a bare wall. The shop is at
+  z 43.4 now, with a real room (SHOP_ROOM: 7 m deep, a doorway at its north end, glass either side, floor, walls, light
+  panels, shelves of phones, a counter across the room); the clerk stands behind the counter and the job is in front of
+  it (FRONT + 4.35, 43.2), facing him; the route goes in and out by the doorway; the map shows the room.
+  prologue_smoke passes with it (CI). Crowd within 10 m of the jobs' path (~/bs-cap/cine6/density.py, 86 points every
+  2 m, bodies and cards): before (c22ebfb) mean 4.49, max 11, within 5 m 1.35; after (b3a2302 + this) mean 3.02, max 9,
+  within 5 m 0.94 (the after run overlapped a rebuild: measure again). Capture plan ~/bs-cap/cine6/plan_p9.json (all
+  eight jobs, sync marks at 0.2 s and 150 s); not recorded yet.
+- PART 5b (choices in Episodes One to Three). Six reflexes on the choice layer in scenes where you only watched:
+  the beacon's switch (lightBeacon, hold), the cord's twist (cordage, heartbeat), her way with the pyrite (press), the
+  first pot's rim (dawn, press), the ridge beam's lever (raiseFrame, hold), winnowing (harvest, heartbeat). Each changes
+  a line then or later (snare, storm, store scenes); 8 new lines voiced en/hi/ur (+ ~f variants), lip sync, voice_check
+  0 problems. Data sealed in src/game/branch/moments.sealed (PRIVATE master ~/bs-story/episode_moments.json; seal with
+  `python3 tools/story_seal.py seal ~/bs-story/episode_moments.json --file src/game/branch/moments.sealed`); loader
+  branch/moments.ts (marks them `layer: 'moment'`); game.ts sends `layer: 'moment'` decisions/reflexes to MomentBranch
+  (ui.moment) instead of the dialogue panel; `debugStep` now advances the layer's fuse (the smokes step with it).
+  choices_check plays two of them on the planet. No new decisions (only reflexes) yet: the aim (a decision or moment
+  every 2-4 min of cutscene) needs a real measurement of watched time per episode (~/bs-cap/cine6/scene_time.py is a
+  rough static estimate). Bonds card and Ledger text enlarged (style.css clamp()); the P5 panel lowering is NOT yet
+  checked on the GPU.
+- Not done: any GPU recording (P6/P8/P9), A/V sync numbers (tool ready: ~/bs-cap/cine6/av_check.py CLIP.mp4; capture
+  kit ~/bs-cap/cine6/run.sh NAME PLAN DIST QS, CRF env), landing on main. ~/bs-cine-t and ~/bs-cine-g deleted (stale
+  copies: every file in main's history except one older camera value in cinematic.ts). Worktree ~/bs-cine6-before is
+  c22ebfb (for the before builds; dist in ~/bs-cine/dist-before). dist-p9 = latest capture build.
+
 ## 2026-11-26 parts 5 to 7 (cine5 agent: worktree ~/bs-cine, branch cine5 from main cae253a; captures ~/bs-cap/cine5)
 - PART 7 LANDED b3a2302 on main (CI run 45803442029 all green on that sha), with part 6's watch and runner (not in CI).
   GPU take P7_city_tasks_GPU.mp4 + NOTES_P6_P7.md: only paratha, pack, phone reached (the script stuck at a zebra);

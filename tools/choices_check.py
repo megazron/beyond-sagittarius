@@ -184,8 +184,9 @@ def main():
             if ev('__bs.mode') == 'play': break
             ev('__bs.skip()'); page.wait_for_timeout(1500)
         def ep_moment(n, mid, press, line=None, flag=None):
-            for _ in range(40):
+            for _ in range(60):
                 if ev('__bs.mode') == 'play': break
+                if not ev('__bs.moment.open'): ev('__bs.skip()')
                 page.wait_for_timeout(500)
             if not ev(f'__bs.moment.episodeTest({mid!r}, {line!r}, {flag!r})'.replace('None', 'undefined')): fails.append(f'episode moment {n}: no scene could start (mode {ev("__bs.mode")})'); return
             try: page.wait_for_function('__bs.moment.open', timeout=15000)

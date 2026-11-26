@@ -36,6 +36,8 @@ export class Player {
   /** Out of your depth: floating, head above water. */
   swimming = false;
   private swimLift = 0;
+  /** The body's height in the water last frame (see the drop limit in update). */
+  private waterY: number | null = null;
   sensitivity = 1;
   invertY = false;
   /** Body pose (the wake-up lies down, cutscenes can override). */
@@ -216,6 +218,9 @@ export class Player {
     if (!this.physics.gaps) {
       const climb = (gNext - gNow) / Math.max(1e-3, Math.hypot(next.x - this.pos.x, next.z - this.pos.z));
       if (climb > 1.6 && gNext > gNow) { next.x = this.pos.x; next.z = this.pos.z; }
+      // a swimmer climbs out where the bank is within a step of the surface he floats on, not up a bank half a metre
+      // higher in one frame (the body rose 0.67 m in a frame there)
+      else if (this.swimming && gNext > this.pos.y + 0.4) { next.x = this.pos.x; next.z = this.pos.z; }
     } else if (gNext > this.pos.y + .35) { next.x = this.pos.x; next.z = this.pos.z; } // a ledge above you is a wall
     this.pos.x = next.x; this.pos.z = next.z;
     this.pos.y += this.vel.y * dt;
@@ -261,9 +266,17 @@ export class Player {
     } else this.stepAcc = Math.min(this.stepAcc, 0.3);
     this.model.root.position.copy(this.pos);
     if (cb?.crouch) this.model.root.position.y -= cb.crouch;
-    if (this.inWater && !this.swimming) this.model.root.position.y = Math.max(this.pos.y, -0.55);
+    // wading: the body stands on the lakebed (it was held at -0.55, so feet hung over the bed in deeper water and the body
+    // jumped 0.7 m to the swimmer's -1.3 the frame swimming began or ended: glitch_check, Episode Two's lake, 2026-11-26)
     // treading water keeps the head up; swimming lies the body flat along the surface
     if (this.swimming) { this.swimLift += (clamp(hs / 1.4, 0, 1) - this.swimLift) * (1 - Math.exp(-dt * 3)); this.model.root.position.y = WATER_Y - FLOAT + this.swimLift * 0.85; }
+    // in the water the body never drops more than 4 m/s (a swimmer lifted on the surface stands up on the bed as he
+    // reaches the shallows: 0.6 m in one frame before); up, it follows at once (the bed rising under his feet)
+    if (this.inWater || this.swimming) {
+      const y = this.model.root.position.y;
+      if (this.waterY !== null && y < this.waterY - 4 * dt) this.model.root.position.y = this.waterY - 4 * dt;
+      this.waterY = this.model.root.position.y;
+    } else this.waterY = null;
     this.model.root.rotation.y = this.facing + Math.PI;
     this.model.root.updateMatrixWorld();
     if (!this.skipAnimate) this.model.animate(this.swimming && this.pose === 'idle' ? 'swim' : this.onGround || this.pose !== 'idle' ? this.pose : 'jump', this.walkPhase, clamp(hs / 4, 0, 1.3), performance.now() / 1000, dt);

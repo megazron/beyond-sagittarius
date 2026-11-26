@@ -36,11 +36,11 @@ interface Live extends GlitchTest { target?: THREE.Object3D; frames: number; lef
 const P = new THREE.Vector3(), Q = new THREE.Vector3(), E = new THREE.Euler(), W = new THREE.Vector3(), WQ = new THREE.Quaternion();
 
 /** How long each test glitch is held (frames at 30 fps, on a body / on the player): past the kind's own threshold. */
-const HOLD: Record<GlitchKind, [number, number]> = { pop: [1, 1], snap: [1, 1], floor: [1, 1], float: [24, 54], jitter: [18, 18], wall: [1, 1] };
+const HOLD: Record<GlitchKind, [number, number]> = { pop: [1, 1], snap: [1, 1], floor: [1, 1], float: [24, 60], jitter: [18, 18], wall: [1, 1] };
 
 interface FrameOpts {
   ground?: (x: number, z: number) => number | null;
-  player?: { root: THREE.Object3D; onGround: boolean; speed: number; pos: THREE.Vector3; swimming?: boolean } | null;
+  player?: { root: THREE.Object3D; onGround: boolean; speed: number; pos: THREE.Vector3; swimming?: boolean; doing?: () => string } | null;
   collide?: (p: THREE.Vector3, r: number) => void;
   zeroG?: boolean;
   /** The body played, even when it is not in the player's hands (a scene): never a test's "other body". */
@@ -64,6 +64,7 @@ export class GlitchWatch {
   private live: Live[] = [];
   private nextId = 1;
   private film: number | undefined;
+  private camMove = 0;
 
   reset() {
     this.events = []; this.tests = []; this.live = [];
@@ -108,6 +109,8 @@ export class GlitchWatch {
       if (busy && l !== busy) continue;
       // a cut excuses pops by design: a test held over one is put in again after it
       if (cut && l.state === 'on') { l.state = 'waiting'; l.target = undefined; }
+      // its body no longer followed (out of range of the camera, hidden): put in again when there is one
+      if (l.state === 'on' && l.target && l.kind !== 'jitter' && l.kind !== 'wall' && this.tracks.get(l.target)?.frame !== this.nFrame - 1) { l.state = 'waiting'; l.target = undefined; }
       if (l.state === 'waiting' && cut) continue;
       if (l.state === 'waiting') {
         if (l.wait-- <= 0) { l.state = 'n/a'; l.why ??= 'no body to put it on'; continue; }
@@ -183,7 +186,8 @@ export class GlitchWatch {
     this.clock += dt; this.film = opts.film;
     this.stats.frames++; this.nFrame++;
     const cam = camera.getWorldPosition(new THREE.Vector3());
-    const cut = this.camSet && cam.distanceTo(this.cam) > 1.5;
+    this.camMove = this.camSet ? cam.distanceTo(this.cam) : 0;
+    const cut = this.camSet && this.camMove > 1.5;
     this.cam.copy(cam); this.camSet = true;
     if (this.live.length) this.applyTests(scene, cam, opts, cut);
     const k = Math.max(1, dt * 60);
@@ -209,12 +213,15 @@ export class GlitchWatch {
       tr.frame = this.nFrame;
       const d = Math.hypot(P.x - tr.pos.x, P.z - tr.pos.z), dy = Math.abs(P.y - tr.pos.y);
       const turn = Math.abs(Math.atan2(Math.sin(E.y - tr.yaw), Math.cos(E.y - tr.yaw)));
+      // the body in the player's hands, in play: the follow camera jumps with a teleport, so a cut excuses nothing there
+      const played = !!opts.player && opts.player.root === o;
+      if (played && cut && this.clock - tr.seen > 0.2 && (d > Math.max(0.45, 12 * dt) || dy > Math.max(0.5, 15 * dt))) this.add(who, 'pop', `${d.toFixed(2)} m across, ${dy.toFixed(2)} m up in one frame, the camera with him`, P, tr, o);
       if (!cut && this.clock - tr.seen > 0.2) {
         if (d > Math.max(0.45, 12 * dt) || dy > Math.max(0.5, 15 * dt)) this.add(who, 'pop', `${d.toFixed(2)} m across, ${dy.toFixed(2)} m up in one frame`, P, tr, o);
         else if (turn > 1.2 * k && !opts.zeroG) this.add(who, 'pop', `turned ${(turn * 57.3).toFixed(0)} degrees in one frame`, P, tr, o);
         tr.bones.forEach((b, i) => {
           const a = 2 * Math.acos(Math.min(1, Math.abs(b.quaternion.dot(tr!.quats[i]))));
-          if (a > 1.0 * k) this.add(who, 'snap', `${b.name} turned ${(a * 57.3).toFixed(0)} degrees in one frame`, P, tr, o);
+          if (a > 1.0 * k) this.add(who, 'snap', `${b.name} turned ${(a * 57.3).toFixed(0)} degrees in one frame (the camera moved ${this.camMove.toFixed(2)} m${opts.player?.root === o && opts.player.doing ? `; doing ${opts.player.doing()}` : ''})`, P, tr, o);
         });
       }
       tr.bones.forEach((b, i) => tr!.quats[i].copy(b.quaternion));

@@ -148,7 +148,7 @@ let openingSave: SaveData | null = null;
 let autoWalk = false;
 /** A walking plan for the glitch runner: points walked in order (along the map's route where there is one); a point
  *  not got nearer for 4 s is passed over and counted as stuck. */
-let walkPlan: { pts: [number, number][]; i: number; best: number; since: number; stuck: number[]; route: [number, number][] | null; rt: number; walked: number; last: [number, number] | null } | null = null;
+let walkPlan: { pts: [number, number][]; i: number; best: number; since: number; stuck: number[]; route: [number, number][] | null; rt: number; walked: number; last: [number, number] | null; ref?: [number, number] } | null = null;
 if (new URLSearchParams(location.search).get('glitch') === '1') glitch.on = true;
 function beginOpeningSave(from?: SaveData) {
   const s = from ?? newSave();
@@ -921,8 +921,9 @@ function tick(step: number) {
         while (wpn.i < wpn.pts.length) {
           const q = wpn.pts[wpn.i], d = Math.hypot(q[0] - body.pos.x, q[1] - body.pos.z);
           if (d < 1.2) { wpn.i++; wpn.best = 1e9; wpn.since = elapsed; wpn.route = null; continue; }
-          if (d < wpn.best - 0.3) { wpn.best = d; wpn.since = elapsed; }
-          if (elapsed - wpn.since > 4) { wpn.stuck.push(wpn.i); wpn.i++; wpn.best = 1e9; wpn.since = elapsed; wpn.route = null; continue; }
+          // stuck: the body has not moved half a metre in 5 s (a detour round the road can take it away from the point)
+          if (Math.hypot(body.pos.x - (wpn.ref?.[0] ?? 1e9), body.pos.z - (wpn.ref?.[1] ?? 1e9)) > 0.5) { wpn.ref = [body.pos.x, body.pos.z]; wpn.since = elapsed; }
+          if (elapsed - wpn.since > 5) { wpn.stuck.push(wpn.i); wpn.i++; wpn.best = 1e9; wpn.since = elapsed; wpn.route = null; continue; }
           break;
         }
         if (wpn.i < wpn.pts.length) {
@@ -945,7 +946,7 @@ function tick(step: number) {
       const aw = game.away?.active ? game.away : null, st = aw?.stage, body = aw ? aw.body : player;
       glitch.frame(renderer.renderPass.scene as THREE.Scene, camera, dt, {
         ground: st ? (x, z) => st.height(x, z) : (x, z) => world.terrain.height(x, z),
-        player: body && (game.mode === 'play' || game.mode === 'away') ? { root: body.model.root, onGround: body.onGround, speed: body.speedNow, pos: body.pos, swimming: body.swimming } : null,
+        player: body && (game.mode === 'play' || game.mode === 'away') ? { root: body.model.root, onGround: body.onGround, speed: body.speedNow, pos: body.pos, swimming: body.swimming, doing: () => `${(body.model as unknown as { task?: { kind?: string } | null }).task?.kind ?? 'nothing'}, pose ${body.pose}, mode ${game.mode}` } : null,
         collide: st ? (p, r) => st.collide(p, r) : (p, r) => world.forest.collide(p, r),
         self: body?.model.root ?? null,
       });
