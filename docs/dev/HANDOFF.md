@@ -2201,7 +2201,7 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   `voice`/`strings`/`direction` like the rest (a full run keeps their takes). Keep the private master in
   ~/bs-story/episode3.json; seal with tools/story_seal.py; add new phrases to the private spoiler list and rehash.
 - Roster: revealDue skips the lost; Episode3.holdsFor(level) holds a level's first scene while a crew story is due, so
-  it plays between the levels (5.5 s after the level card); Lyrra's story unlocks at 21 (between 20 and 21).
+  it plays between the levels (2 s into the level); Lyrra's story unlocks at 21 (between 20 and 21).
 - Level 19: Away.pose (the story holds the body after the player's update), Away.bodyAt, stage.setGlow (ember seams);
   dressMoon builds a rock face behind the ring (Episode3.FACE); the climb is on screen (walk to the foot, five quick
   presses up it, one slip at most, then the view from the ledge); the hold's first failure staggers him.
@@ -2211,3 +2211,10 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   the end of dusk (combat.ts nightHour), lightning (Episode3.lightning) and body.cb-lite (combat.css) trims the HUD.
 - Pello: hair 'builder', browner and greyer; the long beard is a full beard (four rows, longer, lighter roots).
 - tools/episode3_smoke.py: --from 19, --flags, --outcome AT (checks a sealed outcome without naming anything).
+- GPU takes and probes (capture kit ~/bs-cap/ep3c: mkplan.py, bot.js with __failSteady, finish.sh; probe plans clear the
+  running game's beforeunload save first): level 19 with the outcome, the climb, and probes of the dose scene, the kit,
+  harvest, salt, storm, Pello, the Ledger and the two crew stories. Clips and honest notes: the owner's folder
+  episode3/EP3C_* and NOTES_EP3C.md. Hoh-Ma's dose close is framed from her head bone's forward (Character.head
+  getWorldDirection): four framings from the scene's own axes showed her back.
+- Still below the bar (see NOTES_EP3C.md): harvest cut and sheaf inserts mostly his coat; the climb small in frame;
+  the storm still long and dark-ish; the lake creature crude.
