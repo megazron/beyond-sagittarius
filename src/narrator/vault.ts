@@ -509,6 +509,7 @@ export class Vault {
     if (fd !== this.dressing) this.dress(fd);
     this.lines = lines;
     this.onDone = done;
+    this.lastWall = 0;
     this.i = -1; this.left = 0;
     this.playing = true;
     this.pose = 'idle';
@@ -663,8 +664,15 @@ export class Vault {
     } else if (this.train) this.train.position.x = -160 + ((t0 * 6) % 360);
   }
 
-  update(dt: number) {
+  private lastWall = 0;
+  update(dt0: number) {
     if (!this.built) return;
+    // the scene keeps to the wall clock, as its voice does: frames slower than the game's 50 ms step (software GL, a
+    // weak phone) would otherwise stretch it out of sync with the lines (CI played two lines in 400 s). A held clock
+    // (recordings) steps it itself.
+    const now = performance.now(), wall = this.lastWall ? Math.min(1, (now - this.lastWall) / 1000) : dt0;
+    this.lastWall = now;
+    const dt = voice.manual ? dt0 : Math.max(dt0, wall);
     this.time += dt;
     const t0 = this.time;
     if (this.playing) {
