@@ -92,6 +92,11 @@ export class MomentLayer {
    *  with the head bones when a panel opens and weighed like a face (placeFork, placeReflex, placeSide). */
   avoid: (() => { x0: number; y0: number; x1: number; y1: number }[]) | null = null;
   private avoidBoxes: Box[] = [];
+  /** cine6's rule, kept: the open panel is looked at again every 0.5 s and moves only if where it is covers a face
+   *  and the other place is clear, so it follows a moving shot without hopping with every head turn. */
+  private placeT = 0;
+  /** Test: the fork's band and what each band covered (px of face), and how many heads and rects were read. */
+  placed: { band: 'low' | 'high'; low: number; high: number; rects: number } | null = null;
   private padPrev = 0;
   private dev = '';
   /** Where the heads are on screen when a panel opened (CSS px, radius of the face), for tests and the UI sheet. */
@@ -216,6 +221,7 @@ export class MomentLayer {
   }
 
   update(dt: number) {
+    if (this.open && (this.placeT -= dt) <= 0) { this.placeT = 0.5; if (this.fork) this.placeFork(false); else this.placeReflex(false); }
     this.pollPad();
     if (this.open && inputDevice() !== this.dev) this.refreshKeys();
     const r = this.reflex;
@@ -428,31 +434,35 @@ export class MomentLayer {
     return faces.reduce((s, f) => s + (f.w ?? 1) * overlap(b, { x0: f.x - f.r * 1.2, y0: f.y - f.r * 1.3, x1: f.x + f.r * 1.2, y1: f.y + f.r * 1.5 }), 0)
       + this.avoidBoxes.reduce((s, q) => s + overlap(b, q), 0);
   }
-  private placeFork() {
+  private placeFork(first = true) {
+    if (first) this.placeT = 0.5;
     const faces = this.readFaces();
-    if (!faces.length && !this.avoidBoxes.length) return;
-    // what is drawn, not the strip it sits in: the prompt, each slip, the fuse
+    // what is drawn, not the strip it sits in: the prompt, each answer, the timer
     const cost = () => [...this.root.querySelectorAll('.fork-prompt, .fork-who, .fork-as span, .fork-o, .fork-fuse')].reduce((s, e) => s + this.faceCost(boxOf(e), faces), 0);
-    const atBottom = cost();
-    if (!atBottom) return;
-    this.root.classList.add('at-top');
-    if (cost() >= atBottom) this.root.classList.remove('at-top');
+    const wasTop = this.root.classList.contains('at-top');
+    this.root.classList.remove('at-top'); const low = cost();
+    this.root.classList.add('at-top'); const high = cost();
+    // first look: the place that covers less (ties: low); after that only a clear move
+    const top = first ? high < low : wasTop ? !(low === 0 && high > 0) : low > 0 && high === 0;
+    this.root.classList.toggle('at-top', top);
+    this.placed = { band: top ? 'high' : 'low', low: Math.round(low), high: Math.round(high), rects: faces.length + this.avoidBoxes.length };
   }
-  private placeReflex() {
+  private placeReflex(first = true) {
+    if (first) this.placeT = 0.5;
     const faces = this.readFaces();
     const e = this.reflexEl, W = window.innerWidth, H = window.innerHeight;
     // a lower corner, never the middle of the frame (the inserts are framed there); the side away from the faces and
     // from a Ledger note or Bonds card still showing; the upper corners only if both lower ones are taken
     const others = [this.ledgerEl, this.bondEl].filter((x) => !x.classList.contains('hidden')).map(boxOf);
     const spots: [number, number][] = [[0.17, 0.7], [0.83, 0.7], [0.17, 0.34], [0.83, 0.34]];
+    const at = (x: number, y: number) => { e.style.setProperty('--x', `${x * W}px`); e.style.setProperty('--y', `${y * H}px`); };
+    const costAt = (x: number, y: number) => { at(x, y); const b = boxOf(e); return this.faceCost(b, faces) + 4 * others.reduce((s, o) => s + overlap(b, o), 0) + (y < 0.5 ? 6000 : 0); };
+    const was = first ? null : spots.find(([x, y]) => Math.abs(parseFloat(e.style.getPropertyValue('--x')) - x * W) < 2 && Math.abs(parseFloat(e.style.getPropertyValue('--y')) - y * H) < 2) ?? null;
     let best = spots[0], bc = Infinity;
-    for (const [x, y] of spots) {
-      e.style.setProperty('--x', `${x * W}px`); e.style.setProperty('--y', `${y * H}px`);
-      const b = boxOf(e);
-      const c = this.faceCost(b, faces) + 4 * others.reduce((s, o) => s + overlap(b, o), 0) + (y < 0.5 ? 6000 : 0);
-      if (c < bc - 1) { bc = c; best = [x, y]; }
-    }
-    e.style.setProperty('--x', `${best[0] * W}px`); e.style.setProperty('--y', `${best[1] * H}px`);
+    for (const [x, y] of spots) { const c = costAt(x, y); if (c < bc - 1) { bc = c; best = [x, y]; } }
+    // after the first look the ring moves only if where it is covers a face and the best place is clear
+    if (was && !(costAt(was[0], was[1]) > 0 && bc === 0)) best = was;
+    at(best[0], best[1]);
   }
   /** The hand writes one wrapped line at a time: each line's sweep takes its share of the time by its letters, with
    * a short lift of the pen between lines. */

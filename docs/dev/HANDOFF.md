@@ -37,11 +37,12 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
 - GPU captures: ~/bs-cap/ui1/run.sh NAME PLAN DIST QS TREE (preview :4791, Chrome :9393, profile bs-ui-a500);
   plans plan_desk.json, plan_phone.json (lounge and pull, the P5 answers). Before = ~/bs-ui-before (main b3a2302).
 - Merged with cine6 (branch ui2 = main 8355882 + ui1 squashed): cine6's `forkout` (the answer's subtitle waits for
-  the panel to go) is kept; its band placer (`place()`, `.fork.high`, `.reflex.high`, re-placed every 0.5 s) is replaced
-  by mine (`readFaces()`/`placeFork()`/`placeReflex()`/`placeSide()` when a panel opens), which now also weighs
-  main.ts's `ui.moment.avoid` rects (faces and the shot's subject in the middle) like a face. `__bs.moment.placed` gives
-  the panels' boxes (no `band` any more; no test read it), `__bs.faceRects()` still works. cine6's bigger Bonds sizes
-  are in moment.css.
+  the panel to go) is kept, and so is its placement rule where it overlaps mine: main.ts's `ui.moment.avoid` rects
+  (faces and the shot's subject) are weighed with my head bones; the open panel is looked at again every 0.5 s and moves
+  only if where it is covers a face and the other place is clear (first look: whichever covers less, ties low). The
+  bands are mine (`.fork.at-top`, the ring's four corner spots), not cine6's `.high` classes. `__bs.moment.placed` gives
+  the panels' boxes plus cine6's `band`/`low`/`high`/`rects`; `__bs.faceRects()` still works. cine6's bigger Bonds
+  sizes are in moment.css.
 - Status: not landed when written; see the landing commit.
 
 ## Departure lounge (Scene 1) (2026-11-24, cabin agent, branch cabin3)
