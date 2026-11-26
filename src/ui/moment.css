@@ -149,13 +149,13 @@ body.lang-hi .reflex-label, body.lang-ur .reflex-label { letter-spacing: 0; text
 .reflex-how { font: italic 400 calc(17px * var(--mo-k))/var(--mo-lh) var(--mo-serif); color: rgba(242, 235, 221, .86); text-shadow: 0 1px 2px #000, 0 0 10px #000; animation: mo-rise .35s .16s var(--mo-ease) both; }
 body.lang-hi .reflex-how, body.lang-ur .reflex-how { font-style: normal; }
 /* heartbeats: ink dots on a ruled line; a hit is filled, a miss is struck through */
-.pulse { position: relative; display: flex; gap: 16px; padding: 6px 10px 2px; }
-.pulse::before { content: ''; position: absolute; left: 0; right: 0; top: 13px; height: 1.5px; background: rgba(244, 234, 214, .35); }
-.pulse i { position: relative; width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(244, 234, 214, .85); background: rgba(5, 6, 10, .5); }
-.pulse i.hit { background: var(--mo-star); border-color: var(--mo-star); animation: mo-thump .3s ease-out; }
-.pulse i.miss { border-color: rgba(244, 234, 214, .5); }
-.pulse i.miss::before, .pulse i.miss::after { content: ''; position: absolute; left: -4px; right: -4px; top: 5px; height: 2.5px; background: #ff8a6e; transform: rotate(45deg); }
-.pulse i.miss::after { transform: rotate(-45deg); }
+.reflex .pulse { position: relative; display: flex; gap: 16px; padding: 6px 10px 2px; }
+.reflex .pulse::before { content: ''; position: absolute; left: 0; right: 0; top: 13px; height: 1.5px; background: rgba(244, 234, 214, .35); }
+.reflex .pulse i { position: relative; width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(244, 234, 214, .85); background: rgba(5, 6, 10, .5); }
+.reflex .pulse i.hit { background: var(--mo-star); border-color: var(--mo-star); animation: mo-thump .3s ease-out; }
+.reflex .pulse i.miss { border-color: rgba(244, 234, 214, .5); }
+.reflex .pulse i.miss::before, .reflex .pulse i.miss::after { content: ''; position: absolute; left: -4px; right: -4px; top: 5px; height: 2.5px; background: #ff8a6e; transform: rotate(45deg); }
+.reflex .pulse i.miss::after { transform: rotate(-45deg); }
 
 /* ---------- MegaZroN's Ledger: a torn strip, his hand written in ---------- */
 .ledger-line { position: fixed; inset-inline-start: calc(var(--safe-l) + 22px); bottom: calc(var(--safe-b) + 24vh); z-index: 31; max-width: min(440px, 62vw);
@@ -260,7 +260,7 @@ body.mo-still .fork-o, body.mo-still .fork:not(.answered) .fork-head, body.mo-st
 body.mo-still .fork-as span, body.mo-still .fork-o.taken, body.mo-still .fork-o.gone, body.mo-still .reflex.passed .reflex-ring, body.mo-still .reflex.failed .reflex-ring { animation-name: mo-fade; }
 body.mo-still .fork-o.gone, body.mo-still .reflex.passed .reflex-ring, body.mo-still .reflex.failed .reflex-ring { animation-direction: reverse; }
 body.mo-still .fork-fuse .ember, body.mo-still .fork-fuse .ember::after, body.mo-still .fork.urgent .fork-fuse svg, body.mo-still .reflex.thump .seal, body.mo-still .reflex.wrong .seal,
-body.mo-still .reflex.urgent .fg, body.mo-still .pulse i.hit { animation: none; }
+body.mo-still .reflex.urgent .fg, body.mo-still .reflex .pulse i.hit { animation: none; }
 body.mo-still .ledger-line .hand { animation: mo-fade .3s both; }
 body.mo-still .fork-o, body.mo-still .fork-o:hover, body.mo-still .fork-o.sel { transform: none; }
 @media (prefers-reduced-motion: reduce) {
