@@ -315,7 +315,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let kneel = 0, kneelGoal = 0, heels = 0, heelsGoal = 0, heldProp: PropKind | null = null, heldShown = false;
   const kneelL: Limbs = {}, KD = new THREE.Vector3(), KQ = new THREE.Quaternion();
   // a task in the hands (doTask): time in, length, where the hand goes, which hands
-  type TaskRun = { kind: TaskKind; t: number; dur: number; at: THREE.Vector3 | null; hands: 'L' | 'R' | 'both'; prop: PropKind | null; onContact?: (() => void) | null; clipOk?: boolean };
+  type TaskRun = { kind: TaskKind; t: number; dur: number; at: THREE.Vector3 | null; hands: 'L' | 'R' | 'both'; prop: PropKind | null; onContact?: (() => void) | null; clipOk?: boolean; path?: 'clip' | 'proc' };
   let task: TaskRun | null = null;
   /** A task asked for in the last moments of the running one: it starts as that one ends. Started at once, it set the
    *  task clip's clock back to 0 while the clip still had most of its weight: the arm turned ~120 degrees in a frame
@@ -1382,6 +1382,21 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const n = low ? c.low : c.high ?? c.low;
     return n && clips.has(n) ? n : null;
   }
+  /** The running task's clip in, at the task's weight. A new task on the clip a task before it still shows (asked as one
+   *  ends, or the same reach again at once): the clip's clock would jump back to its start under that weight. The
+   *  outgoing pose goes to a copy of the clip held still where it was and faded out; the new task fades in from nothing. */
+  function taskClipOn(tc: string) {
+    if (task !== clipTask) {
+      clipTask = task;
+      const prev = acts.get(tc);
+      if (prev && prev.w > 0.02) {
+        let g = acts.get(tc + '~out');
+        if (!g) { const a = mixer!.clipAction(clips!.get(tc)!.clone()); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play(); g = { a, w: 0, target: 0, manual: false }; acts.set(tc + '~out', g); }
+        g.a.timeScale = 0; g.a.time = prev.a.time; g.w = Math.max(g.w, prev.w); prev.w = 0;
+      }
+    }
+    const c = action(tc, false); c.target = taskEnv(); taskClipName = tc;
+  }
   function taskEnv() {
     if (!task) return 0;
     const a = Math.min(0.28, task.dur * 0.3), b = Math.min(0.35, task.dur * 0.3);
@@ -1770,10 +1785,20 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const moving = gaitOn && !FULL_BODY.has(kind) && (kind === 'idle' || kind === 'walk' || kind === 'stand');
     const limp = limpOn || !!kit?.splint.visible;
     for (const s of acts.values()) s.target = 0;
+    // a task's way of reaching (its clip, or the arm solved onto the thing) is chosen on its first frame and kept: a pick
+    // up begun walking was solved, and stopping mid-task switched it to the clip with the clip's weight still at 0, the
+    // arm from the solved reach to the idle pose in a frame (upperarmR 117-124 degrees 'doing pickup' while the glitch
+    // runner walked, every Episode Two run); begun standing and walked on, the clip was dropped as suddenly
+    if (task && !task.path) task.path = !moving && !FULL_BODY.has(kind) && task.clipOk && taskClip() ? 'clip' : 'proc';
+    const taskTc = task?.path === 'clip' && !FULL_BODY.has(kind) ? taskClip() : null;
+    // a solved task right after a clip task: the old clip fades from where it stopped (its clock is a clip task's only)
+    if (task?.path === 'proc') taskClipName = null;
     if (moving) {
       const parts = limp && speed < 2 ? [{ n: 'limp', w: 1 }] : locomotion(speed, dt);
       if (limp && speed < 2) gaitPhase = (gaitPhase + dt / A!.meta.limp.dur * (speed / Math.max(A!.meta.limp.speed * legScale, 0.05))) % 1;
-      for (const p of parts) if (p.w > 0) action(p.n, true).target += p.w;
+      const tw = taskTc ? taskEnv() : 0;
+      for (const p of parts) if (p.w > 0) action(p.n, true).target += p.w * (1 - tw);
+      if (taskTc) taskClipOn(taskTc);
     } else {
       const name = kind === 'idle' ? style.idle : kind === 'walk' ? 'stand' : kind === 'swim' ? (speed > 0.35 ? 'swim' : 'swim_idle') : kind === 'selfie' ? style.idle : kind; // the selfie is acted on top of the idle (selfieArm), not a clip
       const s = action(clips!.has(name) ? name : 'stand', false);
@@ -1782,23 +1807,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // reaching low (picking up, drinking, fixing something on the ground): the knees go with it
       // the path (authored clip or procedural reach) is chosen once, as the task starts: a kneel still easing out when a pick
       // up began switched it to the clip mid-reach a few frames in (a 37 cm jerk, the townsman picking up after kneeling)
-      const tc = task && !FULL_BODY.has(kind) && task.clipOk ? taskClip() : null;
-      if (tc) {
-        // a new task on the clip a task before it still shows (asked as one ends, or the same reach again at once): the
-        // clip's clock would jump back to its start under that weight, an arm swinging 116 degrees in a frame (the
-        // upperarmR snaps 'doing pickup' in glitch_planet, Episode Two). The outgoing pose goes to a copy of the clip
-        // held still where it was and faded out; the new task fades in from nothing
-        if (task !== clipTask) {
-          clipTask = task;
-          const prev = acts.get(tc);
-          if (prev && prev.w > 0.02) {
-            let g = acts.get(tc + '~out');
-            if (!g) { const a = mixer!.clipAction(clips!.get(tc)!.clone()); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play(); g = { a, w: 0, target: 0, manual: false }; acts.set(tc + '~out', g); }
-            g.a.timeScale = 0; g.a.time = prev.a.time; g.w = Math.max(g.w, prev.w); prev.w = 0;
-          }
-        }
-        const c = action(tc, false); c.target = taskEnv(); s.target = 1 - taskEnv(); taskClipName = tc;
-      }
+      const tc = taskTc;
+      if (tc) { taskClipOn(tc); s.target = 1 - taskEnv(); }
       else {
         const low = task && !(task.kind === 'drink' && task.prop) ? (LOW_TASKS[task.kind] ?? 0) * taskEnv() * (FULL_BODY.has(kind) ? 0 : 1) : 0;
         if (low > 0 && clips!.has('crouch') && name !== 'crouch') { const c = action('crouch', false); c.target = low * 0.8; s.target = 1 - low * 0.8; }
