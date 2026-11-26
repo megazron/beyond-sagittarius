@@ -19,6 +19,15 @@ SKIP = re.compile(r'^(cine\.(approach|montage)|wake\.chapter|chapter\.|signal\.|
 def problems():
     out = []
     lines = json.loads((ROOT / 'src/i18n/voice.json').read_text())['lines']
+    # lines kept in the sealed story data are voiced too (tools/tts/generate_voice.py reads them the same way)
+    sys.path.insert(0, str(ROOT / 'tools'))
+    from story_seal import unseal
+    sealed_text = {}
+    for f in sorted((ROOT / 'src/game/branch').glob('*.sealed')):
+        d = unseal(f.read_text())
+        if isinstance(d, dict):
+            lines = {**lines, **d.get('voice', {})}
+            for l, kv in d.get('strings', {}).items(): sealed_text.setdefault(l, {}).update(kv)
     used = set()
     for f in (ROOT / 'src').rglob('*.ts'):
         used |= set(SPOKEN.findall(f.read_text()))
@@ -27,7 +36,7 @@ def problems():
             out.append(f'spoken in code but not in voice.json: {k}')
     en_idx = json.loads((ROOT / 'public/audio/vo/en/index.json').read_text())
     for lang in ('en', 'hi', 'ur'):
-        texts = json.loads((ROOT / f'src/i18n/{lang}.json').read_text())
+        texts = {**json.loads((ROOT / f'src/i18n/{lang}.json').read_text()), **sealed_text.get(lang, {})}
         idx = json.loads((ROOT / f'public/audio/vo/{lang}/index.json').read_text())
         for k in lines:
             if k not in texts:

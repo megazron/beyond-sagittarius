@@ -75,7 +75,7 @@ def main():
             o = opened()
             if not o or o.get('id') != mid:
                 fails.append(f'moment {i + 1}: a different moment opened ({o and o.get("kind")})')
-            step(0.35)  # past the guard against a held key
+            step(0.35); page.wait_for_timeout(400)  # past the guard against a held key (it counts real time)
             if how == 'HOLD':
                 page.keyboard.down('KeyE')
                 for _ in range(60):
