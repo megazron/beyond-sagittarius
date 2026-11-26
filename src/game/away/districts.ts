@@ -835,10 +835,11 @@ export function buildDistricts(scene: THREE.Scene, o: { rich: boolean; tier: num
         if (sig && !go(c.r.along) && stopD > -0.5) want = Math.min(want, Math.max(0, stopD) * 0.9);
         // the car ahead in the same lane
         for (const o of cars) if (o !== c && !o.turn && o.r === c.r && o.dir === c.dir && laneOn(o.r, o.lane) === laneOn(c.r, c.lane)) { const g = (o.u - c.u) * c.dir; if (g > 0 && g < 30) want = Math.min(want, Math.max(0, g - 6.5) * 0.8); }
-        // anyone on the road in front: a walker on a zebra, or you
+        // anyone on the road in front: a walker on a zebra, or you (you only past its front bumper, 2.7 m from its middle:
+        // beside its body you are not in its way, and a car that stopped for you there kept you from crossing for good)
         pos(c.r, c.u, c.dir, c.lane, T1);
         for (let ci = 0; ci < crossN; ci++) { const p = crossers[ci]; const fx = (c.r.along === 'z' ? p.z - T1.z : p.x - T1.x) * c.dir, sx = c.r.along === 'z' ? p.x - T1.x : p.z - T1.z; if (fx > -1 && fx < 18 && Math.abs(sx) < 1.9) want = Math.min(want, Math.max(0, fx - 4.6) * 0.8); }
-        if (you) { const fx = (c.r.along === 'z' ? you.z - T1.z : you.x - T1.x) * c.dir, sx = c.r.along === 'z' ? you.x - T1.x : you.z - T1.z; if (fx > 0 && fx < 16 && Math.abs(sx) < 1.9) want = Math.min(want, Math.max(0, fx - 4) * 0.7); }
+        if (you) { const fx = (c.r.along === 'z' ? you.z - T1.z : you.x - T1.x) * c.dir, sx = c.r.along === 'z' ? you.x - T1.x : you.z - T1.z; if (fx > 2.7 && fx < 16 && Math.abs(sx) < 1.9) want = Math.min(want, Math.max(0, fx - 4) * 0.7); }
         c.v += (want - c.v) * (1 - Math.exp(-k * (want < c.v ? 4 : 1.2)));
         c.u += c.dir * c.v * k;
         if (gap - c.v * k <= 0.3 + 6.2) {

@@ -141,6 +141,8 @@ export class Player {
     if (at && Math.hypot(at.x - this.pos.x, at.z - this.pos.z) < 0.05) this.busyFace = null;
   }
   get busy() { return this.busyT > 0; }
+  /** A scene has placed him: the job in his hands no longer turns him towards it (the hands go on with it). */
+  freeFacing() { this.busyFace = null; }
   /** Stop what the hands are doing (a panel closed, the job is over). */
   endAct() { this.model.stopTask(); this.busyT = 0; this.busyFace = null; }
 

@@ -1135,11 +1135,15 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
     traffic.forEach((c, i) => {
       // slow for you, or for the car ahead in the lane
       let gap = 99;
-      if (you && Math.abs(you.position.x - c.x) < 1.6) { const ahead = (you.position.z - c.z) * c.v; if (ahead > 0) gap = Math.min(gap, ahead - 4.0); }
+      // (only someone past its front bumper, 2.4 m from its middle and a body's width more: one beside the body is not in
+      // its way. Counted from its middle, a car stopped for you with you at its front wheel and waited there for good while
+      // its side kept you from crossing: the P9 take, stuck behind it at (-0.4, -49) for five minutes)
+      const FRONT = 2.7;
+      if (you && Math.abs(you.position.x - c.x) < 1.6) { const ahead = (you.position.z - c.z) * c.v; if (ahead > FRONT) gap = Math.min(gap, ahead - 4.0); }
       for (const o of traffic) if (o !== c && o.v === c.v) { const ahead = (o.z - c.z) * c.v; if (ahead > 0) gap = Math.min(gap, ahead - 6.5); }
       // and for anyone in its lane: a card of the crowd, a body walking one, a townsperson (cars never pass through people)
-      for (const q of dense.cards) if (Math.abs(q.x - c.x) < 1.5) { const ahead = (q.z - c.z) * c.v; if (ahead > 0 && ahead < 16) gap = Math.min(gap, ahead - 4.2); }
-      for (const q of people) if (q.fig.root.visible && Math.abs(q.pos.x - c.x) < 1.5) { const ahead = (q.pos.z - c.z) * c.v; if (ahead > 0 && ahead < 16) gap = Math.min(gap, ahead - 4.2); }
+      for (const q of dense.cards) if (Math.abs(q.x - c.x) < 1.5) { const ahead = (q.z - c.z) * c.v; if (ahead > FRONT && ahead < 16) gap = Math.min(gap, ahead - 4.2); }
+      for (const q of people) if (q.fig.root.visible && Math.abs(q.pos.x - c.x) < 1.5) { const ahead = (q.pos.z - c.z) * c.v; if (ahead > FRONT && ahead < 16) gap = Math.min(gap, ahead - 4.2); }
       const want = gap < 1 ? 0 : Math.min(c.speed, gap * 0.9);
       c.z += c.v * want * dt;
       if (c.z > N - 2) c.z = S + 4; if (c.z < S + 4) c.z = N - 2;

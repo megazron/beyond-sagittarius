@@ -237,6 +237,9 @@ export class Game {
     document.getElementById('btn-skip')!.classList.remove('hidden');
     document.getElementById('hud')!.classList.add('in-scene');
     this.story.scenePose = () => this.scene?.poses.explorer ?? 'stand';
+    // a scene places him as it starts (settle: turned to what he looks at): the turn of a job he was doing would turn him
+    // back during the shot (Episode Three's first place: 168 degrees at once, then 110 back in four frames)
+    this.player.freeFacing();
     this.scene = new Cutscene(beats, {
       branch: this.sceneBranch,
       camera: this.player.camera,
@@ -262,6 +265,9 @@ export class Game {
         then?.();
       },
     });
+    // the first shot takes the camera in this frame: it waited for the next one, and the frame between showed him turned
+    // to the scene under the play camera (the 168 degree turn-pop in glitch_ep3, Episode Three's first place)
+    this.scene.update(0);
   }
 
   /** Freeze the player for a panel that takes the input (minigame, conversation). */
@@ -471,6 +477,9 @@ export class Game {
   private wakeBody: Arrival | null = null;
   private sprintSore = 0;
   private heldLimbs: import('../characters/character').Limbs | null = null;
+  /** How much of the injury's held pose (the hand on the ribs) is on, eased; the last pose it eased from. */
+  private injW = 0;
+  private injPose: import('../characters/character').Limbs | null = null;
 
   start(save: SaveData, fresh: boolean) {
     this.save = save;
@@ -743,7 +752,21 @@ export class Game {
     if (inj && p.sprinting && inj.sev('ribsL') > 0.3 && (this.sprintSore -= dt) <= 0) { this.sprintSore = 2.6; audio.human('grunt', 0.35); st.stamina = Math.max(0, st.stamina - 6); }
     this.combat?.before(dt, time);
     // the hand on the ribs, unless a weapon or a fight has the arms (combat sets them first, every frame)
-    { const cur = p.model.limbsNow; if (!cur || cur === this.heldLimbs) { const want = p.busy || p.combat ? null : eff?.limbs ?? null; p.model.setLimbs(want); this.heldLimbs = want; } }
+    // eased in and out (weight, and the bend with it): given up in one frame as a job began (and taken back as it ended),
+    // the arm swung 116 to 124 degrees in a frame between the hand on the ribs and the clip (glitch_ep2 / glitch_ep3,
+    // the upperarmR snaps 'doing pickup' and 'drink', found by logging the arm after each stage of Character.animate)
+    {
+      const cur = p.model.limbsNow;
+      if (!cur || cur === this.heldLimbs) {
+        const pose = eff?.limbs ?? null, on = !!pose && !p.busy && !p.combat;
+        if (pose) this.injPose = pose;
+        this.injW += ((on ? 1 : 0) - this.injW) * (1 - Math.exp(-dt * 6));
+        if (!on && this.injW < 0.01) this.injW = 0;
+        if (on && this.injW > 0.99) this.injW = 1;
+        const P0 = this.injPose, want = this.injW > 0 && P0 ? { ...P0, bend: (P0.bend ?? 0) * this.injW, weight: this.injW } : null;
+        p.model.setLimbs(want); this.heldLimbs = want;
+      } else this.injW = 0;
+    }
     p.update(dt, this.input, true, st.stamina, (st.health < 25 ? 0.75 : 1) * hurt * (1 - 0.4 * fev));
     this.combat?.after(dt, time);
     if (this.camShake > 0) {
