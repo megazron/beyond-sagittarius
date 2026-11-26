@@ -1662,5 +1662,17 @@
   "mo.ledger": "मेगाज़्रॉन का लेजर",
   "mo.bonds": "रिश्ते",
   "mo.silent": "(कुछ नहीं कहता)",
+  "mo.choose": "चुनें",
+  "mo.tone.truth": "सच",
+  "mo.tone.kind": "नरमी",
+  "mo.tone.nerve": "हिम्मत",
+  "mo.tone.joke": "मज़ाक",
+  "mo.tone.silent": "चुप्पी",
+  "mo.up": "भरोसा बढ़ा",
+  "mo.down": "भरोसा घटा",
+  "settings.moLarge": "चुनाव का बड़ा अक्षर",
+  "settings.moContrast": "गहरे रंग वाले चुनाव",
+  "settings.moStill": "शांत हलचल",
+  "settings.moNote": "चुनाव, तुरंत वाले पल और लेजर के नोट: बड़े अक्षर, सादा कागज़ और काली स्याही, या हिलने की जगह धीरे से उभरना।",
   "city.tick": "हो गया: {task}"
 }

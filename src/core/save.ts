@@ -68,6 +68,10 @@ export interface Settings {
   vibration?: boolean;
   /** Accessibility: choices and quick-time moments wait for the player. */
   noTimers?: boolean;
+  /** Accessibility, the choice layer's look (ui/moment.css): large text, high contrast, calm motion. */
+  moLarge?: boolean;
+  moContrast?: boolean;
+  moStill?: boolean;
   /** Path branches taken in any run on this device (the path tree unmasks them). */
   paths?: string[];
   /** Skip the playable Zenvora prologue on new games (for replays). */

@@ -439,7 +439,9 @@ export class UI implements CineUI {
       ['display', 'settings.tabDisplay', `
         ${row('settings.quality', seg('quality', [['mobile', t('settings.qualityMobile')], ['web', t('settings.qualityWeb')], ['ultra', t('settings.qualityUltra')]], quality))}
         <div class="note">${escapeHtml(t('settings.qualityNote'))}</div>
-        ${row('settings.fps', onOff('showFps', s.showFps))}`],
+        ${row('settings.fps', onOff('showFps', s.showFps))}
+        ${row('settings.moLarge', onOff('moLarge', !!s.moLarge))}${row('settings.moContrast', onOff('moContrast', !!s.moContrast))}${row('settings.moStill', onOff('moStill', !!s.moStill))}
+        <div class="note">${escapeHtml(t('settings.moNote'))}</div>`],
       ['controls', 'settings.tabControls', `
         ${range('set-sens', 'settings.sensitivity', 0.3, 2.5, 0.1, s.sensitivity)}
         ${row('settings.invertY', onOff('invertY', s.invertY))}
