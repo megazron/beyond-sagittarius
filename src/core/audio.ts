@@ -45,6 +45,7 @@ export class Audio {
   private mix = { music: 0.6, sfx: 0.8, voice: 1, muted: false };
   private ducked = false;
   private voiceOut: GainNode | null = null;
+  private limiter: DynamicsCompressorNode | null = null;
   private voiceChain: AudioNode | null = null;
   private meter = new Uint8Array(256);
   private humans: Promise<Map<string, AudioBuffer[]>> | null = null;
@@ -64,7 +65,10 @@ export class Audio {
     // the very last node: the speakers and the recording tap both hang off it, so the vacuum heartbeat and the capture
     // sync marks (which bypass the mix) are recorded too
     this.post = this.ctx.createGain();
-    this.master.connect(this.vac).connect(this.post).connect(this.ctx.destination);
+    // a brick-wall limiter last: thuds and the alarm peaked over full scale on the GPU takes (+1.5 to +2 dBFS)
+    const lim = this.ctx.createDynamicsCompressor(); lim.threshold.value = -2; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.12;
+    this.limiter = lim;
+    this.master.connect(this.vac).connect(this.post).connect(lim).connect(this.ctx.destination);
     const music = this.ctx.createGain(), sfx = this.ctx.createGain(), voice = this.ctx.createGain();
     const analyser = this.ctx.createAnalyser(); analyser.fftSize = 256;
     music.connect(this.master); sfx.connect(this.master); voice.connect(analyser);
@@ -245,7 +249,7 @@ export class Audio {
   /** What the speakers get, as a stream (recordings of real play: tools/gpu_capture.py). */
   tap(): MediaStream | null {
     if (!this.ctx) return null;
-    if (!this.tapNode) { this.tapNode = this.ctx.createMediaStreamDestination(); (this.post ?? this.master).connect(this.tapNode); }
+    if (!this.tapNode) { this.tapNode = this.ctx.createMediaStreamDestination(); (this.limiter ?? this.post ?? this.master).connect(this.tapNode); }
     return this.tapNode.stream;
   }
   duck(on: boolean) { this.ducked = on; this.applyMix(); }
