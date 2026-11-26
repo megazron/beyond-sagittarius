@@ -159,6 +159,15 @@ NOT ON MAIN YET. What I changed after 809fb55, and what I measured:
   phone shop and from (4.2, 41.3) he now reaches the parcel locker (11 s, 5 s). The player's GPS line uses the same route.
 - The test walker (main.ts autoWalk) let go of W inside 1.4 m of a plan point but counted it reached only inside 1.2 m:
   between the two he stood still until the 5 s stuck rule (the "standing at (4.2, 41.8)"). It stops at 0.8 m now.
+- STATE AT HAND-BACK (2704552 pushed, CI running on it; NOT on main): CI on c5e7a1e failed anim_qa/anim_qa_pixels (my
+  first limb cap; narrowed in 2704552) and choices (wall-clock wait; fixed in 2704552); its glitch/levels/ep3 jobs were
+  cancelled by the push, so the physics fixes are NOT re-measured yet: read glitch_city / glitch_planet on 2704552 first.
+  Watched-time runs (`--watch`) NOT run yet. GPU takes sent (owner_fixes_1126/P8_decision_*, P9_city_jobs_stuck_after_four,
+  NOTES_P6_P8_P9_evening.md). Open: P9 walker stuck at (-6.8, 20.15) going to chai (7.4, 15.6): route() calls that
+  crossing clear but something blocks (probe it with ~/bs-cap/cine6/city_probe.py from there); P6 must be re-recorded
+  with a plan that waits for play before `rec` (plan_p6.json starts recording during the vine scene); storm take lacked
+  the kit decision in the save's log (only two answers). Plans: ~/bs-cap/cine6/make_plan_p8.py writes p8, p8b, p6.
+  Kept for the P6 redo: worktree ~/bs-cine6-before and ~/bs-cine/dist-before (remove both after). dist-p9 deleted.
 - `__bs.clipPoke()` reports what it moved where (onto, hips apart, bones, distance) so a miss says why.
 - PART 2 (decisions): six timed decisions on the choice layer in scenes where you only watched, each with a line then
   and a consequence later: e1d.alone (the first drink; the beacon), e1d.vines (the rattle line; the night's end),
