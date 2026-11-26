@@ -6,6 +6,44 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## 2026-11-26 choice UI look (ui agent: worktree ~/bs-ui, branch ui1 from main b3a2302; captures ~/bs-cap/ui1)
+- Owner, first: the choice UI "looks a bit AI generated, use some UI". I made a Ledger look (paper slips, brass, wax);
+  owner, second: "doesn't blend in, it looks completely different from the scene and background. It needs to be
+  modern, minimalist, transparent." So the paper look is gone (textures, make_paper.py, Spectral/Kalam/Gulzar/Tiro).
+- I own the LOOK of the choice layer only: markup, CSS, fonts, animation in `src/ui/moment.ts` and `src/ui/moment.css`.
+  I do not change what the layer decides, its timing rules, its log, or its API (choose/quick/ledger/bond/update/close
+  keep their signatures). To cine6: your `forkout` class and the bigger Bonds sizes are kept when I rebase onto your
+  landing; the moment block of `src/style.css` moves to `src/ui/moment.css` (a conflict there resolves by taking mine).
+- What it looks like now: frosted glass (backdrop blur, a neutral low tint, so the blurred shot gives it its colour; a
+  darker fill where backdrop-filter is missing), 1 px hairlines, Barlow Light/Regular (Hindi Noto Sans Devanagari, Urdu
+  Noto Nastaliq Urdu); answers are glass tiles with a hairline key cap and a thin tone icon (shape + aria word); acts in
+  spaced capitals; the timer a 2 px hairline shortening from both ends (warmer and breathing in the last third);
+  reflexes a thin ring with a glass core (press: the ring empties; hold: it fills while held; heartbeat: a ring closes
+  on each beat, dots filled or struck); "You are X" a small glass tag; the Ledger note a small glass caption written in
+  line by line (ledger() sets the words, reads the wrap, then sweeps each line in after the one above); Bonds a glass
+  caption (names, a thin arrow, the band word, a hairline scale with where it was and where it is). Glow only on focus
+  and on the taken answer. High contrast: a dark solid backing, 2 px white lines; calm motion: fades only.
+- Placement: `readFaces()` projects every shown bone named `head` in Renderer.current's scene through its camera when
+  a panel opens; the fork goes to the top if its tiles/prompt/timer would cover a face, the ring picks the lower-third
+  spot with the least face overlap (never the middle of the frame), the Ledger note and Bonds flip sides.
+  `__bs.moment.faces`, `.placed`.
+- Input: key caps per device (1/2/3; on a pad the face button where the tile sits: X/B or X/Y/B, A takes a d-pad
+  marked tile; nothing on touch, a dot in the ring). The layer polls the pads itself; main.ts padFrame no longer skips
+  the film while a moment is open (B was a skip).
+- Settings > Display: large choice text, high-contrast choices, calm motion (Settings.moLarge/moContrast/moStill,
+  body classes mo-large/mo-contrast/mo-still; prefers-reduced-motion is honoured too). Choice timers off already existed.
+- Dev stage: dev/moment.html (?show=fork,three,act,press,hold,beat,ledger,bonds&lang&dev=pad|touch&look=...&faces=).
+  Screens: ~/bs-cap/ui1/shots.sh OUT "name|query|WxH[|touch]"... (vite :5287, stopped by PID).
+- GPU captures: ~/bs-cap/ui1/run.sh NAME PLAN DIST QS TREE (preview :4791, Chrome :9393, profile bs-ui-a500);
+  plans plan_desk.json, plan_phone.json (lounge and pull, the P5 answers). Before = ~/bs-ui-before (main b3a2302).
+- Merged with cine6 (branch ui2 = main 8355882 + ui1 squashed): cine6's `forkout` (the answer's subtitle waits for
+  the panel to go) is kept; its band placer (`place()`, `.fork.high`, `.reflex.high`, re-placed every 0.5 s) is replaced
+  by mine (`readFaces()`/`placeFork()`/`placeReflex()`/`placeSide()` when a panel opens), which now also weighs
+  main.ts's `ui.moment.avoid` rects (faces and the shot's subject in the middle) like a face. `__bs.moment.placed` gives
+  the panels' boxes (no `band` any more; no test read it), `__bs.faceRects()` still works. cine6's bigger Bonds sizes
+  are in moment.css.
+- Status: not landed when written; see the landing commit.
+
 ## Departure lounge (Scene 1) (2026-11-24, cabin agent, branch cabin3)
 - The friends' talk now plays in the passenger lounge while the liner is still docked at Earth (owner's design doc,
   Scene 1): `src/cinematic/scenes.ts` `departScene` (shots L1 to L18 of `~/bs-story/SHOTLIST_departure_lounge.md`),

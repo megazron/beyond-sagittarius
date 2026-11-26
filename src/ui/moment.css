@@ -1,0 +1,247 @@
+/* The choice layer (ui/moment.ts): a quiet overlay that sits in the shot. Owner: "modern, minimalist, transparent".
+   Frosted glass (the scene shows through, blurred, so the panels take its colours), light type with room around it,
+   hairlines instead of borders, a soft glow only on what is focused or taken, quick fades. Fonts: Barlow Light and
+   Regular (tools/ui/make_fonts.py, OFL); Hindi in Noto Sans Devanagari, Urdu in Noto Nastaliq Urdu. */
+@font-face { font-family: 'Barlow'; font-weight: 300; font-display: swap; src: url('/fonts/barlow-300.woff2') format('woff2'); }
+@font-face { font-family: 'Barlow'; font-weight: 300; font-style: italic; font-display: swap; src: url('/fonts/barlow-300i.woff2') format('woff2'); }
+@font-face { font-family: 'Barlow'; font-weight: 400; font-display: swap; src: url('/fonts/barlow-400.woff2') format('woff2'); }
+
+:root {
+  --mo-text: rgba(255, 255, 255, .95);
+  --mo-dim: rgba(255, 255, 255, .64);
+  --mo-faint: rgba(255, 255, 255, .16);
+  --mo-glass: rgba(20, 22, 28, .30);         /* a neutral, low tint: the blur brings the scene's own colour */
+  --mo-glass-hi: rgba(255, 255, 255, .13);
+  --mo-glow: rgba(255, 246, 232, .30);       /* warm white, only for focus and the taken answer */
+  --mo-up: #9fd9c8; --mo-down: #f0a898;      /* low saturation; always with an arrow shape and a word */
+  --mo-blur: blur(16px) saturate(1.2);
+  --mo-shadow: 0 1px 2px rgba(0, 0, 0, .55), 0 0 14px rgba(0, 0, 0, .35);
+  --mo-k: 1;                                  /* choice text size (Settings: large = 1.25) */
+  --mo-sans: 'Barlow', 'Noto Sans Devanagari', 'Noto Naskh Arabic', system-ui, sans-serif;
+  --mo-label: 'Barlow', 'Rajdhani', 'Noto Naskh Arabic', sans-serif;
+  --mo-w: 300;
+  --mo-lh: 1.3;
+  --mo-ease: cubic-bezier(.2, .8, .25, 1);
+}
+body.lang-hi { --mo-sans: 'Noto Sans Devanagari', 'Barlow', sans-serif; --mo-label: 'Noto Sans Devanagari', 'Barlow', sans-serif; --mo-w: 400; --mo-lh: 1.5; }
+body.lang-ur { --mo-sans: 'Noto Nastaliq Urdu', 'Noto Naskh Arabic', 'Barlow', serif; --mo-label: 'Noto Naskh Arabic', 'Barlow', sans-serif; --mo-w: 400; --mo-lh: 1.95; }
+body.mo-large { --mo-k: 1.25; }
+
+/* glass: the shared material */
+.fork-o, .fork-as span, .seal, .ledger-line, .bonds {
+  background: var(--mo-glass); -webkit-backdrop-filter: var(--mo-blur); backdrop-filter: var(--mo-blur);
+  border: 1px solid var(--mo-faint); box-shadow: 0 8px 30px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .08); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .fork-o, .fork-as span, .seal, .ledger-line, .bonds { background: rgba(16, 18, 24, .62); }
+}
+
+/* ---------- the Fork: a decision ---------- */
+.fork { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 4vh); transform: translateX(-50%); z-index: 32; width: min(1040px, 94vw);
+  display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; pointer-events: none; }
+.fork.at-top { bottom: auto; top: calc(var(--safe-t) + 4vh); }
+.fork.hidden { display: none; }
+/* a faint shade under the words for legibility over a bright shot; no panel */
+.fork::before { content: ''; position: absolute; inset: -30px -8% -22px; z-index: -1; pointer-events: none;
+  background: radial-gradient(ellipse 55% 60% at 50% 60%, rgba(0, 0, 0, .30), transparent 100%); animation: mo-fade .3s ease-out both; }
+.fork.at-top::before { background: radial-gradient(ellipse 55% 60% at 50% 40%, rgba(0, 0, 0, .30), transparent 100%); }
+.fork-head { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 800px; animation: mo-rise .3s var(--mo-ease) both; }
+.fork-who { font: 400 calc(13px * var(--mo-k))/1 var(--mo-label); letter-spacing: .28em; text-transform: uppercase; color: var(--mo-dim); text-shadow: var(--mo-shadow); }
+body.lang-hi .fork-who, body.lang-ur .fork-who { letter-spacing: 0; text-transform: none; font-size: calc(15px * var(--mo-k)); }
+.fork-prompt { font: italic 300 calc(clamp(20px, 1.9vw, 28px) * var(--mo-k))/var(--mo-lh) var(--mo-sans); letter-spacing: .01em; color: var(--mo-text);
+  text-shadow: var(--mo-shadow); text-wrap: balance; }
+body.lang-ur .fork-prompt, body.lang-hi .fork-prompt { font-style: normal; font-weight: var(--mo-w); }
+
+/* "You are <name>": a small glass tag */
+.fork-as { display: flex; justify-content: center; }
+.fork-as span { display: inline-block; white-space: nowrap; padding: 5px 14px; border-radius: 999px;
+  font: 400 calc(12px * var(--mo-k))/1.2 var(--mo-label); letter-spacing: .26em; text-transform: uppercase; color: var(--mo-text); animation: mo-fade .3s both; }
+body.lang-hi .fork-as span, body.lang-ur .fork-as span { letter-spacing: 0; text-transform: none; font-size: calc(15px * var(--mo-k)); }
+
+/* the answers: glass tiles, light type */
+.fork-opts { display: flex; gap: clamp(10px, 1.4vw, 18px); justify-content: center; align-items: stretch; width: 100%; }
+.fork-o { position: relative; flex: 1 1 0; max-width: 320px; min-height: 58px; display: flex; align-items: center; gap: 12px; padding: 12px 34px 12px 14px; border-radius: 10px;
+  color: var(--mo-text); font: var(--mo-w) calc(clamp(18px, 1.6vw, 22px) * var(--mo-k))/var(--mo-lh) var(--mo-sans); letter-spacing: .01em; text-align: start; text-shadow: 0 1px 2px rgba(0, 0, 0, .45);
+  cursor: pointer; pointer-events: auto; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transition: background .18s, border-color .18s, box-shadow .18s, transform .18s var(--mo-ease), opacity .25s;
+  animation: mo-rise .3s var(--mo-ease) var(--d, 0ms) backwards; }
+[dir='rtl'] .fork-o { padding: 12px 14px 12px 34px; }
+.fork-text { flex: 1; }
+.fork-o:hover, .fork-o.sel, .fork-o:focus-visible { outline: none; background: var(--mo-glass-hi); border-color: rgba(255, 255, 255, .5);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .12), 0 0 26px var(--mo-glow); transform: translateY(-2px); }
+/* what you do, not what you say: the same glass, spaced capitals */
+.fork.act .fork-o { font: 400 calc(clamp(16px, 1.4vw, 19px) * var(--mo-k))/1.25 var(--mo-label); letter-spacing: .16em; text-transform: uppercase; }
+body.lang-hi .fork.act .fork-o, body.lang-ur .fork.act .fork-o { text-transform: none; letter-spacing: 0; font-family: var(--mo-sans); font-size: calc(clamp(18px, 1.6vw, 22px) * var(--mo-k)); line-height: var(--mo-lh); }
+
+/* key caps: hairline squares */
+.mo-key:empty { display: none; }
+.fork-o .mo-key .kc, .fork-o .mo-key .pc { min-width: 1.75em; height: 1.75em; font: 400 13px/1 'Barlow', sans-serif; color: var(--mo-text); background: none;
+  border: 1px solid rgba(255, 255, 255, .42); border-radius: 4px; box-shadow: none; }
+.fork-o .mo-key .pc.face { border-radius: 50%; }
+.fork-o .mo-key .ic { stroke: currentColor; }
+
+/* tone marks: thin line icons in the tile's corner (a word for screen readers) */
+.fork-o .tone { position: absolute; top: 50%; inset-inline-end: 12px; width: 13px; height: 13px; margin-top: -6.5px; fill: none; stroke: var(--mo-dim);
+  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.fork-o .tone.silent { stroke-width: 3; }
+
+/* the taken answer brightens and holds; the others fade */
+.fork-o.taken { background: rgba(255, 255, 255, .18); border-color: rgba(255, 255, 255, .7); box-shadow: 0 0 30px var(--mo-glow); transform: none; animation: mo-take .25s var(--mo-ease) both; }
+.fork-o.gone { animation: mo-out .16s ease-in both; }
+.fork.answered .fork-head, .fork.answered .fork-fuse { animation: mo-out .16s ease-in forwards; }
+.fork.answered .fork-o.taken { animation: mo-take .2s var(--mo-ease) both, mo-out .2s ease-in .2s forwards; }
+.fork.answered::before { animation: mo-out .3s ease-in forwards; }
+.fork-silent { font: italic 300 calc(18px * var(--mo-k)) var(--mo-sans); color: var(--mo-dim); text-shadow: var(--mo-shadow); animation: mo-fade .25s both; }
+
+/* the timer: a hairline that shortens from both ends towards its middle */
+.fork-fuse { position: relative; width: min(520px, 64vw); height: 2px; margin-top: 2px; background: rgba(255, 255, 255, .14); border-radius: 1px; animation: mo-fade .3s .2s both; }
+.fork-fuse .bar { position: absolute; inset: 0; border-radius: 1px; background: rgba(255, 255, 255, .88); transform: scaleX(var(--k, 1)); transform-origin: 50% 50%;
+  box-shadow: 0 0 6px rgba(255, 255, 255, .25); }
+/* the last third: warmer, a soft breathing glow (shape and length carry it too) */
+.fork.urgent .fork-fuse .bar { background: #ffe0b8; box-shadow: 0 0 10px rgba(255, 200, 140, .55); animation: mo-breathe .6s ease-in-out infinite alternate; }
+.fork.untimed .fork-opts { margin-bottom: 2px; }
+
+/* ---------- reflexes: a thin ring with a glass core ---------- */
+.reflex { position: fixed; left: var(--x, 50%); top: var(--y, 76%); transform: translate(-50%, -50%); z-index: 32; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.reflex.hidden { display: none; }
+.reflex .fork-as { margin-bottom: 4px; }
+.reflex-ring { position: relative; width: 128px; height: 128px; display: grid; place-items: center; animation: mo-ring .3s var(--mo-ease) both; }
+.reflex-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.reflex-ring path { fill: none; stroke-linecap: round; }
+.reflex-ring .bg { stroke: rgba(255, 255, 255, .3); stroke-width: 1.5; }
+.reflex-ring .fg { stroke: rgba(255, 255, 255, .95); stroke-width: 3; filter: drop-shadow(0 0 4px rgba(255, 255, 255, .35)); transition: stroke .2s; }
+.reflex-ring .near { fill: none; stroke: rgba(255, 255, 255, .7); stroke-width: 1.2; opacity: 0; transform-origin: 75px 75px; }
+.reflex.beat .reflex-ring .near { opacity: var(--nearA, 0); transform: scale(var(--near, 1)); }
+.seal { position: relative; width: 74px; height: 74px; display: grid; place-items: center; border-radius: 50%; transition: transform .12s var(--mo-ease), background .12s, box-shadow .12s; }
+.seal .mo-key .kc, .seal .mo-key .pc { min-width: 0; width: auto; height: auto; padding: 0; background: none; box-shadow: none; border: 0; border-radius: 0;
+  font: 400 26px/1 'Barlow', sans-serif; color: var(--mo-text); text-shadow: 0 1px 2px rgba(0, 0, 0, .5); }
+.seal .mo-key .pc.face { width: 36px; height: 36px; border: 1.5px solid var(--mo-text); border-radius: 50%; font-size: 20px; }
+.seal .mo-key .ic { width: 24px; height: 24px; stroke: var(--mo-text); }
+/* on touch the ring itself is the button: a dot in the middle instead of a key */
+.seal .mo-key .dot { display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--mo-text); box-shadow: 0 0 10px rgba(255, 255, 255, .5); }
+.reflex.holding .seal { transform: scale(.9); background: var(--mo-glass-hi); box-shadow: 0 0 24px var(--mo-glow); }
+.reflex.thump .seal { animation: mo-thump .3s cubic-bezier(.2, .8, .3, 1); }
+.reflex.wrong .seal { animation: mo-nudge .16s linear; }
+.reflex.urgent .fg { stroke: #ffe0b8; animation: mo-breathe .3s ease-in-out infinite alternate; }
+.reflex.passed .reflex-ring { animation: mo-pass .4s var(--mo-ease) both; }
+.reflex.failed .reflex-ring { animation: mo-out .4s ease-in both; }
+.reflex.failed .reflex-label, .reflex.failed .reflex-how { animation: mo-dim .3s forwards; }
+.reflex.passed .reflex-label, .reflex.passed .reflex-how, .reflex.passed .fork-as, .reflex.passed .pulse { animation: mo-out .3s ease-in .15s both; }
+.reflex-label { font: 400 calc(clamp(17px, 1.5vw, 21px) * var(--mo-k))/1.2 var(--mo-label); letter-spacing: .2em; text-transform: uppercase; color: var(--mo-text);
+  text-shadow: var(--mo-shadow); animation: mo-rise .3s .08s var(--mo-ease) both; }
+body.lang-hi .reflex-label, body.lang-ur .reflex-label { letter-spacing: 0; text-transform: none; font-family: var(--mo-sans); }
+.reflex-how { font: 300 calc(15px * var(--mo-k))/var(--mo-lh) var(--mo-sans); color: var(--mo-dim); text-shadow: var(--mo-shadow); animation: mo-rise .3s .12s var(--mo-ease) both; }
+body.lang-hi .reflex-how, body.lang-ur .reflex-how { font-weight: var(--mo-w); }
+/* heartbeats: small dots; a hit fills, a miss is struck through */
+.reflex .pulse { position: relative; display: flex; gap: 14px; padding: 4px 8px 2px; }
+.reflex .pulse i { position: relative; width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .7); }
+.reflex .pulse i.hit { background: var(--mo-text); border-color: var(--mo-text); box-shadow: 0 0 8px rgba(255, 255, 255, .5); animation: mo-thump .3s ease-out; }
+.reflex .pulse i.miss { border-color: rgba(255, 255, 255, .35); }
+.reflex .pulse i.miss::before { content: ''; position: absolute; left: -4px; right: -4px; top: 3.5px; height: 1px; background: var(--mo-down); transform: rotate(-45deg); }
+
+/* ---------- MegaZroN's Ledger: a small caption, written in line by line ---------- */
+.ledger-line { position: fixed; inset-inline-start: calc(var(--safe-l) + 24px); bottom: calc(var(--safe-b) + 24vh); z-index: 31; max-width: min(400px, 60vw);
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 16px 12px; border-radius: 10px; pointer-events: none; animation: mo-rise .3s var(--mo-ease) both; }
+.ledger-line.flip { inset-inline-start: auto; inset-inline-end: calc(var(--safe-r) + 24px); }
+.ledger-line.hidden { display: none; }
+.ledger-line.fading { animation: mo-out .45s ease-in forwards; }
+.ledger-line small { font: 400 calc(11px * var(--mo-k))/1.2 var(--mo-label); letter-spacing: .26em; text-transform: uppercase; color: var(--mo-dim); }
+body.lang-hi .ledger-line small, body.lang-ur .ledger-line small { letter-spacing: 0; text-transform: none; font-size: calc(13px * var(--mo-k)); }
+.ledger-line .hand { font: italic 300 calc(19px * var(--mo-k))/1.35 var(--mo-sans); color: var(--mo-text); text-shadow: 0 1px 2px rgba(0, 0, 0, .4); }
+body.lang-hi .ledger-line .hand, body.lang-ur .ledger-line .hand { font-style: normal; font-weight: var(--mo-w); }
+.ledger-line .ln { display: block; white-space: nowrap; animation: mo-write var(--write, 1s) cubic-bezier(.4, .1, .4, 1) var(--d, .25s) both; }
+body.lang-ur .ledger-line .hand { line-height: 2; font-size: calc(20px * var(--mo-k)); }
+[dir='rtl'] .ledger-line .ln { animation-name: mo-write-rtl; }
+
+/* ---------- Bonds: a small caption, read at a glance ---------- */
+.bonds { position: fixed; top: calc(var(--safe-t) + 64px); inset-inline-end: calc(var(--safe-r) + 22px); z-index: 31; width: clamp(300px, 25vw, 420px);
+  display: flex; flex-direction: column; gap: 12px; padding: 12px 18px 14px; border-radius: 10px; color: var(--mo-text); pointer-events: none; animation: mo-rise .3s var(--mo-ease) both; }
+.bonds.flip { inset-inline-end: auto; inset-inline-start: calc(var(--safe-l) + 22px); }
+.bonds.hidden { display: none; }
+.bonds.fading { animation: mo-out .45s ease-in forwards; }
+.bonds small { font: 400 calc(clamp(12px, 1vw, 15px) * var(--mo-k))/1 var(--mo-label); letter-spacing: .26em; text-transform: uppercase; color: var(--mo-dim); }
+body.lang-hi .bonds small, body.lang-ur .bonds small { letter-spacing: 0; text-transform: none; }
+.bond { display: grid; grid-template-columns: 1fr auto; align-items: baseline; column-gap: 10px; animation: mo-fade .3s var(--d, 0ms) both; }
+.bond-names { display: flex; align-items: center; gap: 8px; font: var(--mo-w) calc(clamp(20px, 1.65vw, 26px) * var(--mo-k))/1.15 var(--mo-sans); text-shadow: 0 1px 2px rgba(0, 0, 0, .4); }
+.bond-names .arrow { width: 14px; height: 18px; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.bond.up .arrow { stroke: var(--mo-up); } .bond.down .arrow { stroke: var(--mo-down); }
+.bond-word { font: 300 calc(clamp(16px, 1.3vw, 20px) * var(--mo-k))/1.2 var(--mo-sans); color: var(--mo-dim); text-align: end; }
+.bond-scale { grid-column: 1 / -1; width: 100%; height: 18px; overflow: visible; }
+.bond-scale path { fill: none; stroke-linecap: round; }
+.bond-scale .rule { stroke: rgba(255, 255, 255, .24); stroke-width: 1; }
+.bond-scale .tick { stroke: rgba(255, 255, 255, .3); stroke-width: 1; }
+.bond-scale .was { stroke: rgba(255, 255, 255, .45); stroke-width: 1.2; stroke-dasharray: 2 2.5; }
+.bond-scale .move { stroke: rgba(255, 255, 255, .85); stroke-width: 1.6; stroke-dasharray: 100; stroke-dashoffset: 100; animation: mo-draw .8s var(--mo-ease) calc(var(--d, 0ms) + 120ms) forwards; }
+.bond-scale .now { opacity: 0; animation: mo-fade .2s calc(var(--d, 0ms) + 800ms) forwards; }
+.bond.up .bond-scale .now { fill: var(--mo-up); } .bond.down .bond-scale .now { fill: var(--mo-down); }
+
+/* ---------- motion: quick fades, small moves ---------- */
+@keyframes mo-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mo-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes mo-dim { to { opacity: .4; } }
+@keyframes mo-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes mo-take { 0% { transform: scale(1); } 45% { transform: scale(.98); } 100% { transform: scale(1); } }
+@keyframes mo-breathe { from { opacity: .75; } to { opacity: 1; } }
+@keyframes mo-ring { from { opacity: 0; transform: scale(1.12); } to { opacity: 1; transform: none; } }
+@keyframes mo-thump { 0% { transform: scale(1.08); } 100% { transform: scale(1); } }
+@keyframes mo-nudge { 0%, 100% { transform: translateX(0); } 33% { transform: translateX(-4px); } 66% { transform: translateX(4px); } }
+@keyframes mo-pass { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.18); opacity: 0; } }
+@keyframes mo-write { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes mo-write-rtl { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0 0 0 0); } }
+@keyframes mo-draw { to { stroke-dashoffset: 0; } }
+
+/* ---------- phones: answers stacked full width, a big ring low on the thumb's side ---------- */
+@media (max-width: 760px), (max-height: 460px) {
+  .fork { width: calc(100vw - 20px - var(--safe-l) - var(--safe-r)); bottom: calc(var(--safe-b) + 8px); gap: 8px; }
+  .fork.at-top { top: calc(var(--safe-t) + 8px); }
+  .fork-opts { gap: 8px; }
+  .fork-o { min-height: 48px; padding: 8px 28px 8px 10px; font-size: calc(17px * var(--mo-k)); }
+  .fork-prompt { font-size: calc(18px * var(--mo-k)); }
+  .ledger-line { max-width: min(360px, 66vw); bottom: calc(var(--safe-b) + 34vh); }
+  .ledger-line .hand { font-size: calc(17px * var(--mo-k)); }
+  .bonds { width: min(300px, 52vw); top: calc(var(--safe-t) + 56px); gap: 6px; padding: 8px 12px 10px; }
+  .bond-names { font-size: calc(17px * var(--mo-k)); }
+  .bond-word { font-size: calc(15px * var(--mo-k)); }
+}
+@media (max-width: 760px) and (orientation: portrait) {
+  .fork-opts { flex-direction: column; align-items: stretch; }
+  .fork-o { max-width: none; }
+}
+@media (max-height: 460px) {
+  .reflex-ring { width: 112px; height: 112px; }
+  .seal { width: 66px; height: 66px; }
+}
+
+/* ---------- high contrast: a dark solid backing, white text, firmer lines ---------- */
+body.mo-contrast .fork-o, body.mo-contrast .fork-as span, body.mo-contrast .seal, body.mo-contrast .ledger-line, body.mo-contrast .bonds {
+  background: rgba(0, 0, 0, .86); -webkit-backdrop-filter: none; backdrop-filter: none; border: 2px solid #fff; color: #fff; }
+body.mo-contrast .fork-o { font-weight: 400; }
+body.mo-contrast .fork-o .tone { stroke: #fff; stroke-width: 2; }
+body.mo-contrast .fork-o.sel, body.mo-contrast .fork-o:hover, body.mo-contrast .fork-o:focus-visible { outline: 3px solid #ffd34d; outline-offset: 2px; }
+body.mo-contrast .fork::before { background: radial-gradient(ellipse 60% 70% at 50% 60%, rgba(0, 0, 0, .8), rgba(0, 0, 0, .55) 62%, transparent 100%); }
+body.mo-contrast .fork.at-top::before { background: radial-gradient(ellipse 60% 70% at 50% 40%, rgba(0, 0, 0, .8), rgba(0, 0, 0, .55) 62%, transparent 100%); }
+body.mo-contrast .fork-prompt, body.mo-contrast .reflex-label, body.mo-contrast .reflex-how, body.mo-contrast .fork-who { color: #fff; font-weight: 400; text-shadow: 0 0 3px #000, 0 0 3px #000, 0 2px 4px #000; }
+body.mo-contrast .fork-fuse { height: 4px; background: rgba(255, 255, 255, .3); }
+body.mo-contrast .fork-fuse .bar { background: #fff; }
+body.mo-contrast .reflex-ring .fg { stroke: #fff; stroke-width: 5; }
+body.mo-contrast .reflex-ring .bg { stroke: rgba(255, 255, 255, .5); stroke-width: 3; }
+body.mo-contrast .ledger-line .hand, body.mo-contrast .bond-word, body.mo-contrast .bonds small, body.mo-contrast .ledger-line small { color: #fff; font-weight: 400; }
+
+/* ---------- calm motion (Settings, or the system asking for less): fades only ---------- */
+body.mo-still .fork-o, body.mo-still .fork:not(.answered) .fork-head, body.mo-still .reflex:not(.passed):not(.failed) .reflex-ring, body.mo-still .reflex:not(.passed):not(.failed) .reflex-label,
+body.mo-still .reflex:not(.passed):not(.failed) .reflex-how, body.mo-still .ledger-line:not(.fading), body.mo-still .bonds:not(.fading), body.mo-still .reflex.passed .reflex-ring { animation-name: mo-fade; }
+body.mo-still .reflex.passed .reflex-ring { animation-direction: reverse; }
+body.mo-still .fork.urgent .fork-fuse .bar, body.mo-still .reflex.thump .seal, body.mo-still .reflex.wrong .seal, body.mo-still .reflex.urgent .fg, body.mo-still .reflex .pulse i.hit { animation: none; }
+body.mo-still .fork-o.taken { animation: none; }
+body.mo-still .fork.answered .fork-o.taken { animation: mo-out .2s ease-in .2s forwards; }
+body.mo-still .ledger-line .ln { animation: mo-fade .3s both; }
+body.mo-still .fork-o, body.mo-still .fork-o:hover, body.mo-still .fork-o.sel { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .fork-o, .fork:not(.answered) .fork-head, .reflex:not(.passed):not(.failed) .reflex-ring, .reflex:not(.passed):not(.failed) .reflex-label, .reflex:not(.passed):not(.failed) .reflex-how, .ledger-line:not(.fading), .bonds:not(.fading) { animation-name: mo-fade; }
+  .reflex.passed .reflex-ring { animation-name: mo-fade; animation-direction: reverse; }
+  .fork.urgent .fork-fuse .bar, .reflex.thump .seal, .reflex.wrong .seal, .reflex.urgent .fg { animation: none; }
+  .fork-o.taken { animation: none; }
+  .fork.answered .fork-o.taken { animation: mo-out .2s ease-in .2s forwards; }
+  .ledger-line .ln { animation: mo-fade .3s both; }
+  .fork-o, .fork-o:hover, .fork-o.sel { transform: none; }
+}

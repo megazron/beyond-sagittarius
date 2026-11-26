@@ -1648,5 +1648,17 @@
   "mo.ledger": "MegaZroN's Ledger",
   "mo.bonds": "Bonds",
   "mo.silent": "(says nothing)",
+  "mo.choose": "Choose",
+  "mo.tone.truth": "Truthful",
+  "mo.tone.kind": "Kind",
+  "mo.tone.nerve": "Bold",
+  "mo.tone.joke": "A joke",
+  "mo.tone.silent": "Silence",
+  "mo.up": "trusts more",
+  "mo.down": "trusts less",
+  "settings.moLarge": "Large choice text",
+  "settings.moContrast": "High-contrast choices",
+  "settings.moStill": "Calm motion",
+  "settings.moNote": "Choices, quick moments and the Ledger's notes: bigger type, solid paper and black ink, or fades in place of movement.",
   "city.tick": "Done: {task}"
 }

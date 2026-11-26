@@ -75,6 +75,9 @@ function html(g: Glyph, dev: InputDevice): string {
   }
 }
 
+/** The device the player used last (prompts that draw their own keys, ui/moment.ts). */
+export const inputDevice = (): InputDevice => input?.device ?? 'kbm';
+
 /** A glyph that follows the device in use. */
 export const glyph = (g: Glyph) => `<span class="gl" data-glyph="${g}">${html(g, input?.device ?? 'kbm')}</span>`;
 

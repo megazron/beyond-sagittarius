@@ -1,13 +1,22 @@
+import * as THREE from 'three';
 import { t } from '../i18n';
 import { audio } from '../core/audio';
+import { Renderer } from '../core/renderer';
 import { trustBand } from '../game/branch/engine';
 import type { Tone } from '../game/branch/types';
+import { inputDevice, keyCap, padCap } from './glyphs';
+import './moment.css';
 
 /**
  * The cutscene choice layer: a decision over a running scene (the scene slows behind it), a press, a hold or a
  * heartbeat under pressure, the bond meter between two of the six when it moves, and MegaZroN's Ledger line saying
  * what a choice changed. Its own names and marks (the Fork, the Ledger, Bonds). Time comes from update(dt), so a held
  * clock (tests) or a paused game stops it.
+ *
+ * The look (owner: "modern, minimalist, transparent", it must sit in the scene): frosted glass over the shot, light
+ * type with room around it, a hairline timer that shortens towards its middle, a thin ring for a reflex, small
+ * translucent captions for the Ledger and Bonds. Panels place themselves off the faces in the current shot (head bones
+ * projected through the camera) and never in the middle of the frame, where the inserts are.
  */
 export interface ForkSpec {
   /** Who is asking (an i18n name key), and the line above the options. */
@@ -33,12 +42,30 @@ export interface ReflexSpec {
   onDone: (passed: boolean) => void;
 }
 
-const MARK: Record<Tone, string> = { truth: '◇', kind: '○', nerve: '△', joke: '∿', silent: '·' };
 const GUARD_MS = 300;
 const BEAT = 0.86;
 const BEAT_WIN = 0.2;
 
+/** Tone marks as thin line icons on a 24 box: a shape for each, never a colour alone. */
+const MARK: Record<Tone, string> = {
+  truth: 'M12 4 L20 12 L12 20 L4 12 Z',
+  kind: 'M12 4 A8 8 0 1 0 12.01 4',
+  nerve: 'M12 4.5 L20 19 L4 19 Z',
+  joke: 'M3 13 C6 7 9 7 12 12 S18 17 21 11',
+  silent: 'M11.4 12 L12.6 12',
+};
+/** Face buttons by where the answer sits (standard pad layout: 0 bottom, 1 right, 2 left, 3 top). */
+const PAD_SLOTS: Record<number, number[]> = { 1: [0], 2: [2, 1], 3: [2, 3, 1], 4: [2, 3, 1, 0] };
+
 const el = (tag: string, cls: string, html = '') => { const e = document.createElement(tag); e.className = cls; e.innerHTML = html; return e; };
+
+/** A circle for the reflex ring, drawn from the top, clockwise. */
+const RING = 'M75 11 A64 64 0 1 1 74.99 11';
+const tone = (tn: Tone) => `<svg class="tone ${tn}" viewBox="0 0 24 24" role="img" aria-label="${esc(t(`mo.tone.${tn}`))}"><path d="${MARK[tn]}"/></svg>`;
+
+type Box = { x0: number; y0: number; x1: number; y1: number };
+const overlap = (a: Box, b: Box) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+const boxOf = (e: Element): Box => { const r = e.getBoundingClientRect(); return { x0: r.left, y0: r.top, x1: r.right, y1: r.bottom }; };
 
 export class MomentLayer {
   private root = el('div', 'fork hidden');
@@ -61,18 +88,20 @@ export class MomentLayer {
   private pressedThis = false;
   private ledgerTimer = 0;
   private bondTimer = 0;
-  /** Where the faces (and the shot's subject) are on screen now, as rects 0..1 from the top left; set by main.ts. The
-   *  panel takes the band (low or high) that covers least of them: low it sat under the faces in most shots, but a
-   *  kneeling or seated speaker framed low had the panel over the chin. */
+  /** Where the faces (and the shot's subject) are on screen now, as rects 0..1 from the top left; set by main.ts. Read
+   *  with the head bones when a panel opens and weighed like a face (placeFork, placeReflex, placeSide). */
   avoid: (() => { x0: number; y0: number; x1: number; y1: number }[]) | null = null;
-  private placeT = 0;
-  /** Test: which band the panel took, and the face rects it read. */
-  placed: { band: 'low' | 'high'; low: number; high: number; rects: number } | null = null;
+  private avoidBoxes: Box[] = [];
+  private padPrev = 0;
+  private dev = '';
+  /** Where the heads are on screen when a panel opened (CSS px, radius of the face), for tests and the UI sheet. */
+  faces: { x: number; y: number; r: number; w?: number }[] = [];
   /** Everything shown, for tests: kind, id-ish text and result. */
   readonly log: { at: number; what: string; detail: string }[] = [];
 
   constructor() {
     this.root.id = 'fork'; this.reflexEl.id = 'reflex'; this.ledgerEl.id = 'ledger-line'; this.bondEl.id = 'bonds';
+    this.ledgerEl.setAttribute('role', 'status'); this.bondEl.setAttribute('role', 'status');
     document.body.append(this.root, this.reflexEl, this.ledgerEl, this.bondEl);
     window.addEventListener('keydown', (e) => this.key(e, true), true);
     window.addEventListener('keyup', (e) => this.key(e, false), true);
@@ -98,17 +127,26 @@ export class MomentLayer {
     this.fork = spec; this.sel = -1;
     this.total = this.left = spec.seconds ?? 0;
     this.opened = performance.now();
-    const as = spec.as ? `<div class="fork-as">${esc(t('mo.as', { who: t(spec.as) }))}</div>` : '';
+    const as = spec.as ? `<div class="fork-as"><span>${esc(t('mo.as', { who: t(spec.as) }))}</span></div>` : '';
     const who = spec.who ? `<div class="fork-who">${esc(t(spec.who))}</div>` : '';
     const prompt = spec.prompt ? `<div class="fork-prompt">${esc(t(spec.prompt))}</div>` : '';
-    const opts = spec.options.map((o, i) => `<button class="btn fork-o ${spec.style}" data-i="${i}"><kbd>${i + 1}</kbd>${o.tone ? `<i class="tone ${o.tone}" aria-hidden="true">${MARK[o.tone]}</i>` : ''}<span>${esc(t(o.label))}</span></button>`).join('');
-    const fuse = spec.seconds ? '<div class="fork-fuse"><b></b></div>' : '';
-    this.root.innerHTML = `${as}${who}${prompt}<div class="fork-opts ${spec.options.length > 2 ? 'three' : ''}">${opts}</div>${fuse}`;
+    const n = spec.options.length;
+    const opts = spec.options.map((o, i) => `<button class="fork-o ${spec.style}" data-i="${i}" style="--d:${60 + i * 70}ms">`
+      + `<span class="mo-key" data-slot="${i}">${this.keyFor(i, n)}</span>`
+      + `<span class="fork-text">${esc(t(o.label))}</span>`
+      + (o.tone ? tone(o.tone) : '') + `</button>`).join('');
+    const fuse = spec.seconds
+      ? `<div class="fork-fuse" aria-hidden="true"><i class="bar"></i></div>`
+      : '';
+    this.root.innerHTML = `<div class="fork-head">${as}${who}${prompt}</div><div class="fork-opts n${n}">${opts}</div>${fuse}`;
     this.root.classList.toggle('act', spec.style === 'act');
-    this.root.classList.remove('hidden', 'gone');
+    this.root.classList.toggle('untimed', !spec.seconds);
+    this.root.classList.remove('hidden', 'gone', 'urgent', 'answered', 'at-top');
+    this.root.setAttribute('role', 'group');
+    this.root.setAttribute('aria-label', spec.prompt ? t(spec.prompt) : t('mo.choose'));
     document.body.classList.add('choosing', 'forking');
+    this.placeFork();
     this.paint();
-    this.place(this.root, true);
     audio.tone(spec.style === 'act' ? 330 : 523, 0.12, 'sine', 0.08, 0, spec.style === 'act' ? -60 : 40);
     this.log.push({ at: performance.now(), what: 'fork', detail: spec.prompt ?? spec.options.map((o) => o.label).join('|') });
   }
@@ -119,46 +157,68 @@ export class MomentLayer {
     this.total = this.left = spec.kind === 'beat' ? (spec.count ?? 4) * BEAT + 0.6 : spec.seconds ?? 0;
     this.opened = performance.now();
     this.held = false; this.heldFor = 0; this.letGo = 0; this.beatT = 0; this.beatsDone = 0; this.hits = 0; this.misses = 0;
-    const as = spec.as ? `<div class="fork-as">${esc(t('mo.as', { who: t(spec.as) }))}</div>` : '';
+    const as = spec.as ? `<div class="fork-as"><span>${esc(t('mo.as', { who: t(spec.as) }))}</span></div>` : '';
     const how = t(spec.kind === 'hold' ? 'mo.hold' : spec.kind === 'beat' ? 'mo.beat' : 'mo.press');
     const pips = spec.kind === 'beat' ? `<div class="pulse">${Array.from({ length: spec.count ?? 4 }, () => '<i></i>').join('')}</div>` : '';
-    this.reflexEl.innerHTML = `${as}<div class="reflex-ring ${spec.kind}"><svg viewBox="0 0 48 48" aria-hidden="true"><circle class="bg" cx="24" cy="24" r="21"/><circle class="fg" cx="24" cy="24" r="21" pathLength="100" stroke-dasharray="100"/></svg><kbd>E</kbd></div><div class="reflex-label">${esc(t(spec.label))}</div><div class="reflex-how">${esc(how)}</div>${pips}`;
+    this.reflexEl.innerHTML = `${as}<div class="reflex-ring ${spec.kind}"><svg viewBox="0 0 150 150" aria-hidden="true">`
+      + `<path class="bg" d="${RING}" pathLength="100"/><path class="fg" d="${RING}" pathLength="100" stroke-dasharray="100"/>`
+      + `<circle class="near" cx="75" cy="75" r="64"/></svg><div class="seal"><span class="mo-key" data-slot="-1">${this.keyFor(-1, 1)}</span></div></div>`
+      + `<div class="reflex-label">${esc(t(spec.label))}</div><div class="reflex-how">${esc(how)}</div>${pips}`;
     this.reflexEl.className = `reflex ${spec.kind}`;
+    this.reflexEl.setAttribute('role', 'button');
+    this.reflexEl.setAttribute('aria-label', `${t(spec.label)}. ${how}`);
     document.body.classList.add('choosing');
+    this.placeReflex();
     this.paint();
-    this.place(this.reflexEl, true);
     audio.tone(spec.kind === 'beat' ? 90 : 740, 0.1, spec.kind === 'beat' ? 'sine' : 'square', 0.06);
     this.log.push({ at: performance.now(), what: spec.kind, detail: spec.label });
   }
 
-  /** MegaZroN's line in the Ledger: what a choice changed, plain words. */
+  /** MegaZroN's line in the Ledger: what a choice changed, plain words, written in by his hand. */
   ledger(key: string) {
-    this.ledgerEl.innerHTML = `<small>${esc(t('mo.ledger'))}</small><span>${esc(t(key))}</span>`;
-    this.ledgerEl.classList.remove('hidden');
+    const text = t(key);
+    // set word by word first so the wrap can be read, then each wrapped line is written in after the one above it
+    const words = text.split(/\s+/).filter(Boolean);
+    this.ledgerEl.innerHTML = `<small>${esc(t('mo.ledger'))}</small><span class="hand">${words.map((w) => `<span class="w">${esc(w)}</span>`).join(' ')}</span>`;
+    this.ledgerEl.classList.remove('hidden', 'fading');
+    this.placeSide(this.ledgerEl);
+    this.writeLines(this.ledgerEl.querySelector<HTMLElement>('.hand')!, text.length);
     clearTimeout(this.ledgerTimer);
-    this.ledgerTimer = window.setTimeout(() => this.ledgerEl.classList.add('hidden'), 4200);
+    this.ledgerTimer = window.setTimeout(() => {
+      this.ledgerEl.classList.add('fading');
+      this.ledgerTimer = window.setTimeout(() => this.ledgerEl.classList.add('hidden'), 520);
+    }, 3700);
     this.log.push({ at: performance.now(), what: 'ledger', detail: key });
   }
 
-  /** How far `from` trusts `to` has moved: both names, a meter from -10 to 10, before and after, and the word for it. */
+  /** How far `from` trusts `to` has moved: both names, a scale from -10 to 10, before and after, and the word for it. */
   bond(changes: { from: string; to: string; before: number; after: number }[]) {
     if (!changes.length) return;
-    this.bondEl.innerHTML = `<small>${esc(t('mo.bonds'))}</small>` + changes.slice(0, 3).map((c) => {
-      const pos = (v: number) => `${50 + v * 5}%`, up = c.after > c.before;
-      return `<div class="bond ${up ? 'up' : 'down'}"><div class="bond-names">${esc(t(`crew.${c.from}.name`))} <b>${up ? '▲' : '▼'}</b> ${esc(t(`crew.${c.to}.name`))}</div>`
-        + `<div class="bond-bar"><i class="was" style="left:${pos(c.before)}"></i><i class="now" style="left:${pos(c.before)}" data-to="${pos(c.after)}"></i></div>`
-        + `<div class="bond-word">${esc(t(`br.trust.${trustBand(c.after)}`))}</div></div>`;
+    const X = (v: number) => 100 + Math.max(-10, Math.min(10, v)) * 9;
+    this.bondEl.innerHTML = `<small>${esc(t('mo.bonds'))}</small>` + changes.slice(0, 3).map((c, i) => {
+      const up = c.after > c.before, a = X(c.before), b = X(c.after);
+      const arrow = up ? 'M3 15 L10 5 L17 15 M10 5 L10 19' : 'M3 9 L10 19 L17 9 M10 19 L10 5';
+      return `<div class="bond ${up ? 'up' : 'down'}" style="--d:${i * 140}ms">`
+        + `<div class="bond-names"><span>${esc(t(`crew.${c.from}.name`))}</span><svg class="arrow" viewBox="0 0 20 24" role="img" aria-label="${esc(t(up ? 'mo.up' : 'mo.down'))}"><path d="${arrow}"/></svg><span>${esc(t(`crew.${c.to}.name`))}</span></div>`
+        + `<div class="bond-word">${esc(t(`br.trust.${trustBand(c.after)}`))}</div>`
+        + `<svg class="bond-scale" viewBox="0 0 200 26" aria-hidden="true"><path class="rule" d="M8 15.2 C60 14.4 140 15.8 192 14.9"/>`
+        + `<path class="tick" d="M8 10 L8 20 M100 11 L100 19 M192 10 L192 20"/><path class="was" d="M${a} 7 L${a} 23"/>`
+        + `<path class="move" d="M${a} 15 L${b} 15" pathLength="100"/><circle class="now" cx="${b}" cy="15" r="4.6"/></svg></div>`;
     }).join('');
-    this.bondEl.classList.remove('hidden');
-    requestAnimationFrame(() => requestAnimationFrame(() => this.bondEl.querySelectorAll<HTMLElement>('.now').forEach((n) => (n.style.left = n.dataset.to!))));
+    this.bondEl.classList.remove('hidden', 'fading');
+    this.placeSide(this.bondEl);
     clearTimeout(this.bondTimer);
-    this.bondTimer = window.setTimeout(() => this.bondEl.classList.add('hidden'), 4600);
+    this.bondTimer = window.setTimeout(() => {
+      this.bondEl.classList.add('fading');
+      this.bondTimer = window.setTimeout(() => this.bondEl.classList.add('hidden'), 520);
+    }, 4100);
     for (const c of changes) this.log.push({ at: performance.now(), what: 'bond', detail: `${c.from}>${c.to}:${c.before}>${c.after}` });
   }
 
   update(dt: number) {
+    this.pollPad();
+    if (this.open && inputDevice() !== this.dev) this.refreshKeys();
     const r = this.reflex;
-    if ((this.fork || r) && (this.placeT -= dt) <= 0) this.place(this.fork ? this.root : this.reflexEl, false);
     if (this.fork && this.total) {
       this.left -= dt;
       if (this.left <= 0) { this.finishFork(this.fork.fallback, true); return; }
@@ -193,16 +253,23 @@ export class MomentLayer {
 
   private paint() {
     if (this.fork && this.total) {
-      const b = this.root.querySelector<HTMLElement>('.fork-fuse b');
       const k = Math.max(0, this.left / this.total);
-      if (b) b.style.transform = `scaleX(${k})`;
+      // the hairline shortens from both ends towards its middle (CSS reads --k)
+      this.root.style.setProperty('--k', k.toFixed(4));
       this.root.classList.toggle('urgent', k < 0.34);
     }
     const r = this.reflex;
     if (r) {
-      const fg = this.reflexEl.querySelector<SVGCircleElement>('.fg');
+      const fg = this.reflexEl.querySelector<SVGPathElement>('.fg');
       const k = r.kind === 'hold' ? this.heldFor / Math.max(0.01, this.total) : r.kind === 'beat' ? this.beatsDone / (r.count ?? 4) : this.total ? 1 - this.left / this.total : 0;
+      // press: the ring is drawn and erases as the moment goes; hold: it draws itself while you hold; beat: the beats done
       if (fg) fg.style.strokeDashoffset = String(100 * (r.kind === 'press' ? k : 1 - k));
+      if (r.kind === 'beat') {
+        // a ring closes on the seal and lands on each beat: you see when the next one comes before it comes
+        const next = this.beatT < 0.6 ? 1 - this.beatT / 0.6 : 1 - (((this.beatT - 0.6) % BEAT) / BEAT);
+        this.reflexEl.style.setProperty('--near', (1 + 0.75 * next).toFixed(3));
+        this.reflexEl.style.setProperty('--nearA', (this.beatsDone >= (r.count ?? 4) ? 0 : 0.25 + 0.75 * (1 - next)).toFixed(3));
+      }
       this.reflexEl.classList.toggle('urgent', r.kind === 'press' && k > 0.66);
       this.reflexEl.classList.toggle('holding', this.held);
     }
@@ -235,7 +302,8 @@ export class MomentLayer {
   private finishFork(i: number, timedOut: boolean) {
     const f = this.fork!;
     this.fork = null; this.total = 0;
-    this.root.querySelectorAll('button').forEach((b, j) => b.classList.add(j === i ? 'taken' : 'gone'));
+    this.root.querySelectorAll('button').forEach((b, j) => b.classList.add(j === i && !timedOut ? 'taken' : 'gone'));
+    this.root.classList.add('answered');
     if (timedOut) this.root.insertAdjacentHTML('beforeend', `<div class="fork-silent">${esc(t('mo.silent'))}</div>`);
     document.body.classList.remove('choosing', 'forking');
     // the answer's line starts at once: its subtitle waits until the panel showing the pick has gone (it was written over
@@ -252,27 +320,10 @@ export class MomentLayer {
     this.reflex = null; this.total = 0;
     this.reflexEl.classList.add(passed ? 'passed' : 'failed');
     document.body.classList.remove('choosing');
-    setTimeout(() => { if (!this.reflex) this.reflexEl.classList.add('hidden'); }, 600);
+    setTimeout(() => { if (!this.reflex) this.reflexEl.classList.add('hidden'); }, 700);
     audio.tone(passed ? 660 : 140, 0.18, passed ? 'sine' : 'sawtooth', 0.06, 0, passed ? 220 : -40);
     this.log.push({ at: performance.now(), what: 'result', detail: `${r.label}:${passed ? 'pass' : 'fail'}` });
     r.onDone(passed);
-  }
-
-  /** The band for the panel: the one whose rect covers less of the faces and the subject (ties: low). Moved later only if
-   *  the band it is in covers a face and the other is clear, so it does not hop with every small head turn. */
-  private place(e: HTMLElement, first: boolean) {
-    this.placeT = 0.5;
-    const rs = this.avoid?.() ?? [];
-    const W = innerWidth || 1, H = innerHeight || 1, b = e.getBoundingClientRect(), wasHigh = e.classList.contains('high');
-    const h = b.height / H, x0 = b.left / W, x1 = b.right / W;
-    // the two bands as fractions of the screen (style.css: .fork bottom 9vh / top 9vh; .reflex at 68% / 26% of the height)
-    const low = e === this.root ? [1 - 0.09 - h, 1 - 0.09] : [0.68 - h / 2, 0.68 + h / 2], high = e === this.root ? [0.09, 0.09 + h] : [0.26 - h / 2, 0.26 + h / 2];
-    const cover = (y: number[]) => rs.reduce((a, r) => a + Math.max(0, Math.min(x1, r.x1) - Math.max(x0, r.x0)) * Math.max(0, Math.min(y[1], r.y1) - Math.max(y[0], r.y0)) / Math.max(1e-6, (r.x1 - r.x0) * (r.y1 - r.y0)), 0);
-    const cl = cover(low), ch = cover(high);
-    let hi = first ? ch + 0.02 < cl : wasHigh ? !(cl < 0.02 && ch > 0.02) : cl > 0.02 && ch < 0.02;
-    if (!rs.length) hi = wasHigh && !first;
-    e.classList.toggle('high', hi);
-    this.placed = { band: hi ? 'high' : 'low', low: +cl.toFixed(3), high: +ch.toFixed(3), rects: rs.length };
   }
 
   /** Closes whatever is open without an answer (a scene torn down). */
@@ -298,6 +349,139 @@ export class MomentLayer {
   private focus(i: number) {
     this.sel = i;
     this.root.querySelectorAll('button').forEach((b, j) => b.classList.toggle('sel', j === i));
+  }
+
+  /** A pad: the face button where the slip sits picks it; the d-pad moves and A takes the marked slip; any face button
+   *  presses or holds the seal. Read straight from the pads, so it works over a film as well as in play. */
+  private pollPad() {
+    const pads = navigator.getGamepads?.() ?? [];
+    let mask = 0;
+    for (const p of pads) if (p) for (let i = 0; i < 16 && i < p.buttons.length; i++) if (p.buttons[i].pressed) mask |= 1 << i;
+    const hit = mask & ~this.padPrev, rel = this.padPrev & ~mask;
+    this.padPrev = mask;
+    if (!hit && !rel) return;
+    if (this.reflex) {
+      if (hit & 0xf) this.down();
+      if ((rel & 0xf) && !(mask & 0xf)) this.up();
+      return;
+    }
+    const f = this.fork;
+    if (!f || !hit) return;
+    const n = f.options.length, slots = PAD_SLOTS[Math.min(4, n)] ?? PAD_SLOTS[4];
+    const s = slots.findIndex((b) => hit & (1 << b));
+    if (s >= 0 && s < n) { this.pick(s); return; }
+    if (hit & ((1 << 14) | (1 << 12))) this.focus((this.sel + n - 1) % n);
+    else if (hit & ((1 << 15) | (1 << 13))) this.focus((this.sel + 1) % n);
+    else if ((hit & 1) && this.sel >= 0) this.pick(this.sel);
+  }
+
+  /** The prompt for slip i of n (or the seal, i = -1) on the device in use: its number, its face button, or nothing
+   *  on touch (the slip itself is the button). */
+  private keyFor(i: number, n: number) {
+    const dev = inputDevice();
+    this.dev = dev;
+    if (dev === 'touch') return i < 0 ? '<i class="dot" aria-hidden="true"></i>' : '';
+    if (dev === 'pad') return padCap(i < 0 ? 0 : (PAD_SLOTS[Math.min(4, n)] ?? PAD_SLOTS[4])[i] ?? 0);
+    return i < 0 ? keyCap('KeyE') : `<kbd class="kc">${i + 1}</kbd>`;
+  }
+  private refreshKeys() {
+    const n = this.fork?.options.length ?? 1;
+    document.querySelectorAll<HTMLElement>('#fork .mo-key, #reflex .mo-key').forEach((k) => { k.innerHTML = this.keyFor(+k.dataset.slot!, n); });
+  }
+
+  /** The heads in the current shot, in CSS px, with the size of the face: the camera's projection of each shown head
+   *  bone. Read when a panel opens (the scene behind is nearly still while it is up). */
+  /** Dev stage only (dev/moment.ts): faces to place around, in place of the camera's. */
+  static fakeFaces: { x: number; y: number; r: number; w?: number }[] | null = null;
+  private readFaces() {
+    if (MomentLayer.fakeFaces) { this.avoidBoxes = []; return (this.faces = MomentLayer.fakeFaces); }
+    // main.ts's rects (every drawn face, the shot's subject in the middle), weighed with the heads read here
+    const W0 = window.innerWidth, H0 = window.innerHeight;
+    this.avoidBoxes = (this.avoid?.() ?? []).map((q) => ({ x0: q.x0 * W0, y0: q.y0 * H0, x1: q.x1 * W0, y1: q.y1 * H0 }));
+    const out: { x: number; y: number; r: number; w: number }[] = [];
+    const pass = Renderer.current?.renderPass as unknown as { scene?: THREE.Scene; camera?: THREE.Camera } | undefined;
+    const scene = pass?.scene, cam = pass?.camera as THREE.PerspectiveCamera | undefined;
+    if (scene && cam) {
+      const W = window.innerWidth, H = window.innerHeight, v = new THREE.Vector3(), c = new THREE.Vector3(), h = new THREE.Vector3(), fw = new THREE.Vector3(), to = new THREE.Vector3();
+      cam.updateMatrixWorld(); c.setFromMatrixPosition(cam.matrixWorld);
+      const tanH = Math.tan(THREE.MathUtils.degToRad((cam.fov ?? 50) / 2));
+      scene.traverseVisible((o) => {
+        if (!(o as THREE.Bone).isBone || o.name !== 'head' || out.length > 24) return;
+        v.setFromMatrixPosition(o.matrixWorld); h.copy(v);
+        const d = v.distanceTo(c);
+        // the face sits a little above and in front of the head bone; 0.12 m is about half a face's height
+        v.y += 0.06;
+        v.project(cam);
+        if (v.z < -1 || v.z > 1 || Math.abs(v.x) > 1.15 || Math.abs(v.y) > 1.15) return;
+        // a head seen from behind matters less than a face (the body's +z is where it faces, cutscene.ts yaw)
+        let body: THREE.Object3D | null = o; while (body && !body.userData.isCharacter) body = body.parent;
+        let w = 1;
+        if (body) { body.getWorldDirection(fw); to.subVectors(c, h).normalize(); if (fw.dot(to) < -0.2) w = 0.25; }
+        out.push({ x: (v.x + 1) / 2 * W, y: (1 - v.y) / 2 * H, r: Math.min(H, (0.13 / Math.max(0.05, d * tanH)) * (H / 2)), w });
+      });
+    }
+    this.faces = out;
+    return out;
+  }
+  private faceCost(b: Box, faces = this.faces) {
+    // a face counts from its brow to its chin and a little either side
+    return faces.reduce((s, f) => s + (f.w ?? 1) * overlap(b, { x0: f.x - f.r * 1.2, y0: f.y - f.r * 1.3, x1: f.x + f.r * 1.2, y1: f.y + f.r * 1.5 }), 0)
+      + this.avoidBoxes.reduce((s, q) => s + overlap(b, q), 0);
+  }
+  private placeFork() {
+    const faces = this.readFaces();
+    if (!faces.length && !this.avoidBoxes.length) return;
+    // what is drawn, not the strip it sits in: the prompt, each slip, the fuse
+    const cost = () => [...this.root.querySelectorAll('.fork-prompt, .fork-who, .fork-as span, .fork-o, .fork-fuse')].reduce((s, e) => s + this.faceCost(boxOf(e), faces), 0);
+    const atBottom = cost();
+    if (!atBottom) return;
+    this.root.classList.add('at-top');
+    if (cost() >= atBottom) this.root.classList.remove('at-top');
+  }
+  private placeReflex() {
+    const faces = this.readFaces();
+    const e = this.reflexEl, W = window.innerWidth, H = window.innerHeight;
+    // a lower corner, never the middle of the frame (the inserts are framed there); the side away from the faces and
+    // from a Ledger note or Bonds card still showing; the upper corners only if both lower ones are taken
+    const others = [this.ledgerEl, this.bondEl].filter((x) => !x.classList.contains('hidden')).map(boxOf);
+    const spots: [number, number][] = [[0.17, 0.7], [0.83, 0.7], [0.17, 0.34], [0.83, 0.34]];
+    let best = spots[0], bc = Infinity;
+    for (const [x, y] of spots) {
+      e.style.setProperty('--x', `${x * W}px`); e.style.setProperty('--y', `${y * H}px`);
+      const b = boxOf(e);
+      const c = this.faceCost(b, faces) + 4 * others.reduce((s, o) => s + overlap(b, o), 0) + (y < 0.5 ? 6000 : 0);
+      if (c < bc - 1) { bc = c; best = [x, y]; }
+    }
+    e.style.setProperty('--x', `${best[0] * W}px`); e.style.setProperty('--y', `${best[1] * H}px`);
+  }
+  /** The hand writes one wrapped line at a time: each line's sweep takes its share of the time by its letters, with
+   * a short lift of the pen between lines. */
+  private writeLines(hand: HTMLElement, chars: number) {
+    const lines: string[][] = [];
+    let top = NaN;
+    for (const w of hand.querySelectorAll<HTMLElement>('.w')) {
+      if (!lines.length || Math.abs(w.offsetTop - top) > 4) { lines.push([]); top = w.offsetTop; }
+      lines[lines.length - 1].push(w.textContent || '');
+    }
+    const total = Math.min(1800, Math.max(650, chars * 34)), lift = 140;
+    let at = 90;
+    hand.innerHTML = lines.map((ws) => {
+      const s = ws.join(' '), d = Math.max(260, Math.round(total * s.length / Math.max(1, chars)));
+      const html = `<span class="ln" style="--d:${at}ms;--write:${d}ms;--st:${Math.max(6, s.length)}">${esc(s)}</span>`;
+      at += d + lift;
+      return html;
+    }).join('');
+  }
+  /** The Ledger note and the Bonds card keep to the side the faces are not on. */
+  private placeSide(e: HTMLElement) {
+    if (!this.open) this.readFaces();
+    const others = [this.reflexEl, this.root].filter((x) => x !== e && !x.classList.contains('hidden')).map(boxOf);
+    const cost = () => { const b = boxOf(e); return this.faceCost(b) + 4 * others.reduce((s, o) => s + overlap(b, o), 0); };
+    e.classList.remove('flip');
+    const here = cost();
+    if (!here) return;
+    e.classList.add('flip');
+    if (cost() >= here) e.classList.remove('flip');
   }
 }
 

@@ -316,12 +316,12 @@ sounds like what is in [docs/VOICE_CAST.md](docs/VOICE_CAST.md).
 Self-hosted in `public/fonts/`, subset by `tools/ui/make_fonts.py`, all under the
 SIL Open Font License 1.1 (full texts in `public/fonts/OFL.txt`):
 
-- **Barlow** and **Barlow Condensed** (Jeremy Tribby): English text and UI
+- **Barlow** and **Barlow Condensed** (Jeremy Tribby): English text and UI; Barlow Light and Regular for the choice layer
 - **VT323** (Peter Hull): wrist device readouts
 - **Rajdhani** (Indian Type Foundry): Hindi UI
-- **Noto Sans Devanagari** (Google): Hindi reading text and subtitles
+- **Noto Sans Devanagari** (Google): Hindi reading text, subtitles and choices
 - **Noto Naskh Arabic** (Google): Urdu UI
-- **Noto Nastaliq Urdu** (Google): Urdu subtitles and story text
+- **Noto Nastaliq Urdu** (Google): Urdu subtitles, story text and choices
 
 ## Logo
 

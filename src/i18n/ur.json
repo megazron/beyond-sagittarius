@@ -1664,5 +1664,17 @@
   "mo.ledger": "میگازرون کا لیجر",
   "mo.bonds": "رشتے",
   "mo.silent": "(کچھ نہیں کہتا)",
+  "mo.choose": "چنیں",
+  "mo.tone.truth": "سچ",
+  "mo.tone.kind": "نرمی",
+  "mo.tone.nerve": "ہمت",
+  "mo.tone.joke": "مذاق",
+  "mo.tone.silent": "خاموشی",
+  "mo.up": "بھروسا بڑھا",
+  "mo.down": "بھروسا گھٹا",
+  "settings.moLarge": "انتخاب کے بڑے حروف",
+  "settings.moContrast": "گہرے رنگ والے انتخاب",
+  "settings.moStill": "پرسکون حرکت",
+  "settings.moNote": "انتخاب، فوری لمحے اور لیجر کے نوٹ: بڑے حروف، سادہ کاغذ اور کالی سیاہی، یا حرکت کی جگہ آہستہ سے ابھرنا۔",
   "city.tick": "ہو گیا: {task}"
 }

@@ -87,6 +87,13 @@ function applyAudio() {
 }
 applyAudio();
 applyLanguages();
+/** The choice layer's look from Settings (ui/moment.css): large text, high contrast, calm motion. */
+function applyChoiceLook() {
+  document.body.classList.toggle('mo-large', !!settings.moLarge);
+  document.body.classList.toggle('mo-contrast', !!settings.moContrast);
+  document.body.classList.toggle('mo-still', !!settings.moStill);
+}
+applyChoiceLook();
 onLangChange(() => void voice.load());
 
 let renderer: Renderer;
@@ -196,6 +203,7 @@ renderer.setScene(cine.scene, cine.camera, false);
 function persistSettings() {
   writeSettings(settings);
   applyLanguages();
+  applyChoiceLook();
   applyAudio();
   if (player) { player.sensitivity = settings.sensitivity; player.invertY = settings.invertY; }
   input.vibration = settings.vibration !== false;
@@ -763,7 +771,7 @@ window.addEventListener('keyup', (e) => { if (input.actionFor(e.code) === 'inven
 /** Pad buttons that do what the keys above do. */
 let padInv = false;
 function padFrame() {
-  if (inScene()) { if (input.padSkip()) skipCurrent(); return; }
+  if (inScene()) { if (!ui.moment.open && input.padSkip()) skipCurrent(); return; } // a pad's face buttons answer an open choice (ui/moment.ts)
   if (state !== 'game') return;
   if (input.padAct('pause')) { if (ui.modalOpen()) { if (paused) resume(); } else openPause(); }
   if (!ui.modalOpen()) { // in menus the bumpers switch tabs and B goes back
@@ -1235,7 +1243,9 @@ window.addEventListener('resize', () => {
   moment: {
     get open() { return ui.moment.open; },
     get log() { return ui.moment.log; },
-    get placed() { return ui.moment.placed; },
+    /** The heads on screen when the last panel opened (CSS px), and where the panels went. */
+    get faces() { return ui.moment.faces; },
+    get placed() { const r = (id: string) => { const e = document.getElementById(id); if (!e || e.classList.contains('hidden')) return null; const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom), e.className]; }; return { fork: r('fork'), reflex: r('reflex'), ledger: r('ledger-line'), bonds: r('bonds') }; },
     get choosing() { return cine.choosing; },
     get said() { return [...ui.subLog]; },
     get opening() { return openingSave ? { log: openingSave.branch.log, trust: openingSave.branch.trust, flags: openingSave.flags, record: openingSave.branch.record } : null; },

@@ -35,6 +35,10 @@ FONTS = [
     ("noto-sans-devanagari", "notosansdevanagari", "NotoSansDevanagari[wdth,wght].ttf", DEVA, {"wdth": 100, "wght": (400, 700)}),
     ("noto-naskh-arabic", "notonaskharabic", "NotoNaskhArabic[wght].ttf", ARAB, {"wght": (400, 700)}),
     ("noto-nastaliq-urdu", "notonastaliqurdu", "NotoNastaliqUrdu[wght].ttf", ARAB, {"wght": (400, 700)}),
+    # the choice layer (ui/moment.ts): light and regular weights for a quiet overlay in the scene
+    ("barlow-300", "barlow", "Barlow-Light.ttf", LATIN, None),
+    ("barlow-300i", "barlow", "Barlow-LightItalic.ttf", LATIN, None),
+    ("barlow-400", "barlow", "Barlow-Regular.ttf", LATIN, None),
 ]
 
 
