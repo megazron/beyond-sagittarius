@@ -57,9 +57,10 @@ jobs:
           # physics glitches (core/glitch.ts): every kind put in at the watch's own read and caught, in each place, then a
           # walk over the city's jobs and the planet's slopes, water and camp with none found (longer walks: run it locally)
           - { name: glitch_city, run: 'python tools/glitch_check.py --only city --secs 60' }
-          # (one job for all four ran past the 45 minute limit in every run: two halves)
+          # (one job for all four ran past the 45 minute limit in every run; ep2 alone takes about 30 minutes)
           - { name: glitch_pull_ep1, run: 'python tools/glitch_check.py --only pull,ep1 --secs 40' }
-          - { name: glitch_ep2_ep3, run: 'python tools/glitch_check.py --only ep2,ep3 --secs 40' }
+          - { name: glitch_ep2, run: 'python tools/glitch_check.py --only ep2 --secs 40' }
+          - { name: glitch_ep3, run: 'python tools/glitch_check.py --only ep3 --secs 40' }
           # each of the six arrivals plays from its first frame to control (game/arrival.ts), and leaves them hurt
           - { name: landing_smoke, run: 'python tools/landing_smoke.py --quality web' }
           - { name: combat, run: 'node --experimental-strip-types tools/combat/sim_test.ts && node --experimental-strip-types tools/combat/pose_test.ts && python tools/combat/play_test.py' }
