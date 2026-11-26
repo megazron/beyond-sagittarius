@@ -452,10 +452,12 @@ export class MomentLayer {
   private placeFork() {
     const faces = this.readFaces();
     if (!faces.length) return;
-    const atBottom = this.faceCost(boxOf(this.root));
+    // what is drawn, not the strip it sits in: the prompt, each slip, the fuse
+    const cost = () => [...this.root.querySelectorAll('.fork-prompt, .fork-who, .fork-as span, .fork-o, .fork-fuse')].reduce((s, e) => s + this.faceCost(boxOf(e), faces), 0);
+    const atBottom = cost();
     if (!atBottom) return;
     this.root.classList.add('at-top');
-    if (this.faceCost(boxOf(this.root)) >= atBottom) this.root.classList.remove('at-top');
+    if (cost() >= atBottom) this.root.classList.remove('at-top');
   }
   private placeReflex() {
     const faces = this.readFaces();
