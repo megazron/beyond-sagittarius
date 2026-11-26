@@ -178,7 +178,8 @@ export class Away {
     p.hurt = eff ? { speed: eff.speed, jump: eff.jump, sprint: eff.sprint } : null;
     if (eff) { p.model.setLimp(eff.limp); p.model.setLimbs(this.busy ? null : eff.limbs); }
     this.air(dt, p);
-    p.update(dt, this.input, canMove && !this.busy, this.stamina, this.pace);
+    if (this.approach) this.walkUp(dt, p);
+    p.update(dt, this.input, canMove && (!this.busy || !!this.approach), this.stamina, this.pace);
     // a scripted moment holds the body itself (a climb, a fall): after the player's own update, every frame
     if (this.pose) { p.skipAnimate = true; this.pose(p.model, dt); p.model.root.updateMatrixWorld(true); } else p.skipAnimate = false;
     inj?.update(dt, dt / 50, { resting: p.speedNow < 0.2 });
@@ -214,7 +215,10 @@ export class Away {
     if (p.pos.y < -30) { p.spawn(s.spawn.x, s.spawn.z, 0); this.ui.toast(t('away.fell')); }
     // the nearest one, not the first in the list: beside Mir, E talks to Mir even with a friend a step further off
     const dist = (k: { pos: THREE.Vector3 }) => Math.hypot(k.pos.x - p.pos.x, k.pos.z - p.pos.z);
-    const near = s.tasks.filter((k) => this.open(k) && dist(k) < k.radius && Math.abs(k.pos.y - p.pos.y) < 3).sort((x, y) => dist(x) - dist(y))[0];
+    // a job on the list in reach comes before a passer-by's small talk (by the chai stall, E answered the chaiwala's
+    // joke instead of Skyvra: "random people are talking")
+    const inReach = s.tasks.filter((k) => this.open(k) && dist(k) < k.radius && Math.abs(k.pos.y - p.pos.y) < 3).sort((x, y) => dist(x) - dist(y));
+    const near = inReach.find((k) => !k.optional) ?? inReach[0];
     this.ui.setPrompt(near && !this.busy ? near.label : null);
     if (near && !this.busy && canMove && this.input.act('interact')) this.finish(near);
   }
@@ -234,8 +238,28 @@ export class Away {
     }
   }
 
+  /** In the city a job is walked up to first: to arm's length, facing it (it was done from where E was pressed, up to
+   *  1.8 m off, the hands reaching into the air). */
+  private approach: { k: AwayTask; t: number } | null = null;
+  private walkUp(dt: number, p: Player) {
+    const a = this.approach!, k = a.k, d = Math.hypot(k.pos.x - p.pos.x, k.pos.z - p.pos.z);
+    const want = Math.atan2(-(k.pos.x - p.pos.x), -(k.pos.z - p.pos.z));
+    p.yaw += Math.atan2(Math.sin(want - p.yaw), Math.cos(want - p.yaw)) * Math.min(1, dt * 8);
+    a.t += dt;
+    const reach = k.id.startsWith('talk.') ? 1.1 : 0.62;
+    const go = d > reach && a.t < 2.5;
+    this.input.hold('KeyW', go);
+    if (!go) { this.input.hold('KeyW', false); this.approach = null; this.finishNow(k); }
+  }
+
   private finish(k: AwayTask) {
     this.busy = true;
+    const p = this.player;
+    if (this.location === 'city' && p && Math.hypot(k.pos.x - p.pos.x, k.pos.z - p.pos.z) > (k.id.startsWith('talk.') ? 1.2 : 0.75)) { this.approach = { k, t: 0 }; return; }
+    this.finishNow(k);
+  }
+
+  private finishNow(k: AwayTask) {
     // the hands do the job: eat, pack, take the phone, open the locker, drink the chai, hold the tram door...
     const base = k.id.startsWith('talk.') ? 'talk' : k.id.replace(/[_\-.]?\d+$/, '');
     const job: Record<string, TaskKind> = { paratha: 'eat', pack: 'carry', phone: 'phone', parcel: 'open', chai: 'drink', tram: 'open', ring: 'pickup',
@@ -244,6 +268,13 @@ export class Away {
     if (kind && this.player) {
       const at = kind === 'eat' || kind === 'carry' ? null : k.pos.clone().setY(Math.max(k.pos.y, this.player.pos.y) + (kind === 'open' ? 1.15 : kind === 'use' ? 0.95 : 0));
       this.player.act(kind, at);
+      // the city: a short framing on the hands and the thing, from his side, while the job is done
+      if (this.location === 'city' && at && !k.id.startsWith('talk.')) {
+        const pp = this.player.pos, f = new THREE.Vector3(at.x - pp.x, 0, at.z - pp.z).normalize(), side = new THREE.Vector3(f.z, 0, -f.x);
+        const mid = new THREE.Vector3((pp.x + at.x) / 2, Math.max(pp.y + 1.15, at.y), (pp.z + at.z) / 2);
+        const from = mid.clone().addScaledVector(side, 1.7).addScaledVector(f, -0.6).setY(pp.y + 1.75);
+        if ((this.stage?.clearance?.(pp.x, pp.z, from.x, from.z) ?? 1) > 0.8) this.cut = { from, to: mid, t: 2.2, fov: 42 };
+      }
       // and they are heard: a chew, a zip, a door, a locker
       const fx: Record<string, [string, number, number]> = { paratha: ['eat', 0.55, 0.6], pack: ['zip', 0.5, 0.4], phone: ['type', 0.35, 0.3], parcel: ['door_open', 0.45, 0.3], chai: ['drink', 0.5, 0.6], tram: ['hatch_close', 0.4, 0.5], ring: ['splash', 0.3, 0.3], weld: ['field', 0.4, 0.2], ice: ['stone', 0.5, 0.3], break: ['stone', 0.6, 0.3], plate: ['metal', 0.45, 0.4], patch: ['cloth', 0.45, 0.3] };
       const f = fx[base]; if (f) audio.sample(f[0], f[1], { delay: f[2] });
@@ -253,6 +284,7 @@ export class Away {
     const aid = FIRST_AID[k.id];
     if (aid && aid.who === this.who && this.injuries) { this.injuries.treat(aid.part); audio.humanInner('grunt', 0.55, aid.who === 'strong' || aid.who === 'builder' ? 0.85 : 1.15); }
     const go = () => {
+      if (this.location === 'city' && !k.optional) { this.ui.toast(t('city.tick', { task: k.label })); audio.tone(988, 0.09, 'sine', 0.07); audio.tone(1319, 0.16, 'sine', 0.06, 0.09); }
       this.done.add(k.id); this.busy = false;
       if (this.stage!.tasks.every((x) => x.optional || this.done.has(x.id))) this.closing();
     };

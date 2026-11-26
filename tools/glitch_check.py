@@ -70,26 +70,39 @@ def main():
             walk = name != 'pull'
             if walk: ev('__bs.autoWalk(true)')
             clips = []
+            p0 = ev('__bs.bodyPos')
             n = int(a.secs * 30)
             for i in range(n):
                 step()
                 if walk and i % 30 == 0 and ev('__bs.away') and not ev('__bs.away').get('next'): break
+                # at a job (the prompt up), do it, as a player would
+                if walk and i % 20 == 10 and ev("!!document.getElementById('prompt') && !document.getElementById('prompt').classList.contains('hidden')"):
+                    page.keyboard.press('KeyE')
                 if i % 30 == 15:
                     for h in ev('__bs.clipProbe()') or []:
                         if h['kind'] == 'body' and h['depth'] > 0.06: clips.append(h)
                 if walk and i % 90 == 0 and ev("__bs.away ? false : (__bs.mode !== 'play')"):
                     ev('__bs.skip()')  # a scene came on the way: let it pass
+            p1 = ev('__bs.bodyPos')
+            walked = (((p1[0] - p0[0]) ** 2 + (p1[2] - p0[2]) ** 2) ** 0.5) if p0 and p1 else 0
+            # the watch itself: one body moved a metre in a frame must be caught
+            poked = walk and ev('__bs.glitchPoke()')
+            if poked: step(); step()
             g = ev('__bs.glitches')
+            caught = bool(poked) and any(e['kind'] == 'pop' and e['detail'][:3] in ('0.9', '1.0', '1.1') for e in g['events'][-6:])
+            if poked and not caught: fails.append(f'{name}: the watch missed a body moved a metre in one frame')
             ev('__bs.autoWalk(false)'); ev('__bs.glitch(false)')
             ctx.close()
-            ev_by = g['summary']['by']
+            ev_by = dict(g['summary']['by'])
+            if caught: ev_by['pop'] = ev_by.get('pop', 1) - 1  # the test poke is not a glitch
+            if walk and walked < 3: fails.append(f'{name}: the player walked only {walked:.1f} m')
             out[name] = {'summary': g['summary'], 'events': g['events'][:200], 'clips': clips[:50], 'errors': errs[:5]}
             bad = sum(ev_by.get(k, 0) for k in HARD)
             first = {}
             for e in g['events']:
                 first.setdefault(e['kind'], e)
             print(f"{name}: {g['summary']['frames']} frames, {g['summary']['meanBodies']} bodies near on average; "
-                  + (', '.join(f'{k} {v}' for k, v in sorted(ev_by.items())) or 'no glitches') + f'; bodies through bodies {len(clips)}', flush=True)
+                  + (', '.join(f'{k} {v}' for k, v in sorted(ev_by.items())) or 'no glitches') + f'; bodies through bodies {len(clips)}; walked {walked:.1f} m; test poke {"caught" if caught else "not run" if not poked else "MISSED"}', flush=True)
             for k, e in first.items():
                 print(f"   first {k}: {e['who']} at {e['t']} s, {e['detail']} at {e['at']}", flush=True)
             if bad > a.allow: fails.append(f'{name}: {bad} glitches')

@@ -1645,5 +1645,6 @@
   "mo.beat": "Press on each heartbeat",
   "mo.ledger": "MegaZroN's Ledger",
   "mo.bonds": "Bonds",
-  "mo.silent": "(says nothing)"
+  "mo.silent": "(says nothing)",
+  "city.tick": "Done: {task}"
 }

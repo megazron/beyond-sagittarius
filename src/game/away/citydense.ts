@@ -188,7 +188,7 @@ export function buildDense(scene: THREE.Scene, o: DenseOpts) {
     // fixes: near the camera every one of them is a body now, and the bodies have to cover them all
     // (thinned again, p29: with 64 on Web and 22 on phones more of them came into the view within 27 m than there were
     // bodies, and the rest stayed flat cards up to you: the detector's cardClose, most of them these cards)
-    const n = rich ? 36 : 12, gateN = rich ? 4 : 2;
+    const n = rich ? 16 : 8, gateN = rich ? 4 : 2; // (36 and 12 before 2026-11-26: the owner, "so much crowd over there", round the jobs on the main street)
     const geo = new THREE.PlaneGeometry(1, 1); geo.translate(0, 0.5, 0);
     const offs = new Float32Array(n + gateN); for (let i = 0; i < n + gateN; i++) offs[i] = Math.floor(rnd() * 8) / 8; // every card its own figure, gate crowd included
     const tiles = new Float32Array((n + gateN) * 2); for (let i = 0; i < n + gateN; i++) tiles[i * 2] = offs[i];

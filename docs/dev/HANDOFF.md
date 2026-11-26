@@ -140,6 +140,39 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
     clips.
   - Physics (part 6) and city tasks/crowd (part 7): not looked at.
 
+## 2026-11-26 parts 5 to 7 (cine5 agent: worktree ~/bs-cine, branch cine5 from main cae253a; captures ~/bs-cap/cine5)
+- PART 5 LANDED c22ebfb on main (CI run 45793352896 all green on that sha). Clips + NOTES_P5_choices.md in the owner's folder.
+  app_smoke now accepts the New Game confirm (an opening in progress is a save). Capture kit: ~/bs-cap/cine5/run.sh NAME PLAN DIST QS
+  (plan_p5.json, plan_p7.json: a page script presses the keys like a player).
+- PART 5 (choices). The layer: `src/ui/moment.ts` (MomentLayer, `ui.moment`): a decision panel over a film (two or three
+  plates with a tone mark, a fuse that burns down, silence taken when it runs out; the film runs at 0.06 behind it), reflexes
+  (press, hold, heartbeat: press on each of four beats), the Bonds card (who trusts whom, -10..10, before and after, the
+  band word) and MegaZroN's Ledger line (what the answer changed, in plain words). `src/game/moments.ts` (MomentBranch) is
+  a SceneBranch over any save that asks through the layer, writes each answer to disk at once and shows the bonds moved.
+- The opening's own save: main.ts `beginOpeningSave()` on New Game (on disk at once, `flags.openingLive`); the city,
+  the lounge (Cutscene beats) and the pull (Cinematic `mcue`, timeline moments) answer into it; `enterWorld(true)` takes
+  its log, trust, record, flags and stats onto the planet's save and writes it. Continue on an `openingLive` save plays the
+  opening again with every answered moment passed over. Skip in the pull goes from choice to choice (never answers for
+  you), then to the end. Automated browsers (navigator.webdriver) play the opening as one film unless ?choices=1
+  (the old smokes drive it by Skip and fixed waits); ?choices=0 turns it off anywhere.
+- Moments (data sealed: `src/game/branch/opening.sealed`, private master ~/bs-story/opening.json, seal with
+  `python3 tools/story_seal.py seal ~/bs-story/opening.json --file src/game/branch/opening.sealed`): city chai, ring
+  light, tram door (hold); lounge (the snacks); pull C1 (tell or check again), E1 (grab the console, press), E2 (Lyrra's
+  reach), E3 (Draxum holds, hold), G2 (breath, heartbeat), G6c/G7 (one reach). Lines that change: dep.5b/6b/6s in the
+  lounge, line4 in C1, dep.7 (a swap), and two Episode One lines (swaps in the sealed `lines`). E1, E2, E3 and G7 are
+  staged per answer in cinematic.ts. New takes en/hi/ur via ~/bs-cap/cine5/tts.sh.
+- Test: `tools/choices_check.py` (needs dist): seven moments answered with real keys, saved at once, branched lines,
+  a reload and Continue, carried to the planet.
+- PART 6 (physics): `src/core/glitch.ts` (GlitchWatch: pops, limb snaps, feet under the ground, standing in the air,
+  the player's height flickering, the player inside a wall after the frame), `__bs.glitch(on)`, `__bs.glitches`,
+  `__bs.autoWalk(on)` (walks to the next task or objective), ?glitch=1. Runner `tools/glitch_check.py` (pull, city,
+  ep1, ep2, ep3 segments; clip probe sampled for bodies through bodies).
+- PART 7 (city): away.ts walks him up to arm's length of a job before the hands go to it, frames the hands and the
+  thing from his side for 2.2 s, a tick and the job's name when done; a job on the list in reach comes before a
+  passer-by's small talk; the job's answer comes from the one it is about (clerk, Skyvra, Bolzar, Nuvexa), by name and
+  facing him. Crowd: painted cards 36 -> 16 (Web/Ultra), 12 -> 8 (phones); walkers 10 -> 5, 4 -> 2; the pavement threes
+  by the phone shop and the tram square gone; no silent talking mouths within 9 m of you.
+
 ## Layout
 - `src/combat/sim/`: the simulation. No DOM, no three.js. `core.ts` (types, difficulty), `weapons.ts`, `species.ts`,
   `ai.ts`, `sim.ts`, `encounters.ts`, `tension.ts`. Runs under Node.

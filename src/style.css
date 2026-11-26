@@ -628,7 +628,7 @@ body.touch .fork-o kbd { display: none; }
 .fork-fuse b { display: block; height: 100%; background: var(--accent); transform-origin: center; }
 .fork.urgent .fork-fuse b { background: var(--red); }
 .fork-silent { font: italic 500 18px var(--font-body); color: var(--dim); }
-.reflex { position: fixed; left: 50%; top: 54%; transform: translate(-50%, -50%); z-index: 32; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; text-shadow: var(--shadow); touch-action: none; user-select: none; }
+.reflex { position: fixed; left: 50%; top: 68%; transform: translate(-50%, -50%); z-index: 32; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; text-shadow: var(--shadow); touch-action: none; user-select: none; }
 .reflex.hidden { display: none; }
 .reflex-ring { position: relative; width: 104px; height: 104px; display: grid; place-items: center; }
 .reflex-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }

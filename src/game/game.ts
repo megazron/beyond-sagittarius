@@ -104,7 +104,14 @@ export class Game {
         return;
       }
       // three of the list's jobs are choices: the snack debt, the ring light, the tram door (the answer picks the line)
-      const said = (key: string) => this.ui.say(key, 'crew.scientist.name', Math.max(4.5, (voice.duration(key) ?? 4) + 0.6));
+      // the job's answer comes from the one it is about, by name, facing him and talking (it was a line in Zenvik's name
+      // from nobody in particular): the clerk for the phone, Skyvra at the chai stall, Bolzar at the tram, Nuvexa for her ring
+      const ANSWER: Record<string, [string, string]> = { phone: ['clerk', 'city.who.clerk'], chai: ['explorer', 'crew.explorer.name'], tram: ['builder', 'crew.builder.name'], ring: ['social', 'crew.social.name'] };
+      const said = (key: string) => {
+        const dur = Math.max(4.5, (voice.duration(key) ?? 4) + 0.6), who = ANSWER[id];
+        this.ui.say(key, who ? who[1] : 'crew.scientist.name', dur);
+        if (who) this.away!.talk(who[0], dur - 0.6);
+      };
       const ch = (d: string, o: string) => test(save, { chose: [d, o] });
       // he stops while you answer (the street goes on), and walks on after it
       const hold = (fn: (b: SceneBranch, done: () => void) => void) => (b: SceneBranch) => { this.input.enabled = false; fn(b, () => { this.input.enabled = true; }); };

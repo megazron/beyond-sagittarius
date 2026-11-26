@@ -907,11 +907,14 @@ function tick(step: number) {
     if (autoWalk && !paused) {
       // steer the body played towards the next task (away) or the objective (the planet), forward held
       const aw = game.away?.active ? game.away : null, body = aw ? aw.body : player;
-      const tgt = aw ? aw.next?.pos ?? null : game.objectivePoint();
-      if (body && tgt && (game.mode === 'play' || game.mode === 'away')) {
+      const goal = aw ? aw.next?.pos ?? null : game.objectivePoint();
+      // along the GPS route (round walls and doors), the first point of it more than a stride away; else straight
+      const wp = goal && body && navRoute?.find((q) => Math.hypot(q[0] - body.pos.x, q[1] - body.pos.z) > 1.5);
+      const tgt = goal && body ? (wp && Math.hypot(goal.x - body.pos.x, goal.z - body.pos.z) > 3 ? { x: wp[0], z: wp[1] } : goal) : null;
+      if (body && tgt && goal && (game.mode === 'play' || game.mode === 'away')) {
         const want = Math.atan2(-(tgt.x - body.pos.x), -(tgt.z - body.pos.z)), d = Math.hypot(tgt.x - body.pos.x, tgt.z - body.pos.z);
         body.yaw += Math.atan2(Math.sin(want - body.yaw), Math.cos(want - body.yaw)) * Math.min(1, dt * 6);
-        input.hold('KeyW', d > 1.4);
+        input.hold('KeyW', Math.hypot(goal.x - body.pos.x, goal.z - body.pos.z) > 1.4 && d > 0.2);
       } else input.hold('KeyW', false);
     }
     if (glitch.on && !paused) {
@@ -1121,6 +1124,12 @@ window.addEventListener('resize', () => {
     get savedLog() { const raw = localStorage.getItem('bs-save-v1'); return raw ? (JSON.parse(raw) as SaveData).branch?.log ?? [] : []; },
   },
   /** Physics glitches over time (core/glitch.ts, tools/glitch_check.py). */
+  /** Where the body played is (the planet or a stage), for the glitch runner's distance walked. */
+  get bodyPos() { const b = game?.away?.active ? game.away.body : player; return b ? [b.pos.x, b.pos.y, b.pos.z] : null; },
+  /** Test of the glitch watch itself: moves the nearest other body 1 m in one frame (it must be caught as a pop). */
+  glitchPoke() { const sc = renderer.renderPass.scene as THREE.Scene; let best: THREE.Object3D | null = null, bd = 1e9; const me = (game?.away?.active ? game.away.body : player)?.model.root;
+    sc.traverse((o) => { if (!o.userData.isCharacter || o === me) return; for (let q: THREE.Object3D | null = o; q; q = q.parent) if (!q.visible) return; const d = o.getWorldPosition(new THREE.Vector3()).distanceTo(camera.position); if (d < bd) { bd = d; best = o; } });
+    if (best) (best as THREE.Object3D).position.x += 1; return !!best; },
   glitch(on = true) { if (on && !glitch.on) glitch.reset(); glitch.on = on; return glitch.summary(); },
   get glitches() { return { events: glitch.events, summary: glitch.summary() }; },
   /** Walks the player towards the next task or objective (glitch_check.py): steers and holds W. */

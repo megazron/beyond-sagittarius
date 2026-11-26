@@ -1270,7 +1270,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   { const c = createCharacter('strong', detail, undefined, 'suit'); c.mergeParts(tier === 0 && LITE_STORY); person('mir', c, 5.0, 15.4, Math.PI / 2 + 0.5, 'idle'); }
   // walkers: up and down the pavements' outer edge, clear of the stalls
   const lineages = Object.keys(LINEAGES) as PlayerLook['lineage'][];
-  for (let i = 0, n = rich ? 10 : 4; i < n; i++) { // (14 and 6 before p29: fewer people near the routes, not more bodies)
+  for (let i = 0, n = rich ? 5 : 2; i < n; i++) { // (14 and 6 before p29, 10 and 4 before 2026-11-26: the owner's "so much crowd" round the jobs)
     const sd = i % 2 ? 1 : -1, x = sd * (4.9 + rnd() * 0.5), za = S + 12 + rnd() * 30, zb = Math.min(za + 40 + rnd() * 50, N - 12);
     person(`walker${i}`, someone(lineages[i % lineages.length], i + 3), x, za + rnd() * (zb - za), 0, 'idle', { z0: za, z1: zb, dir: rnd() < 0.5 ? 1 : -1, speed: 1.1 + rnd() * 0.5 });
   }
@@ -1821,7 +1821,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   // (p29: fewer near the walking routes, the owner's "too crowded": with more people in view than bodies the rest were
   // flat cards up to you. Web, Ultra: three, not six (none at the gate or the queue's end of the crowd); phones: none,
   // not three (the townsfolk took all eleven bodies in the bazaar and at the gate))
-  const groups: [number, number][] = rich ? [[6.6, 38], [6.4, -8], [-6.6, -36]] : []; // (phones: none; the last, at the tram square, left 4 flat cards there in p29f) // (none at the gate: perf_gate's Web gate went over 1.3 M triangles with one there, p29)
+  const groups: [number, number][] = rich ? [[6.4, -8]] : []; // (2026-11-26, the owner: "so much crowd over there": the threes by the phone shop and the tram square stood within 7 m of a job; only the one by Lyrra's corner stays) // (phones: none; the last, at the tram square, left 4 flat cards there in p29f) // (none at the gate: perf_gate's Web gate went over 1.3 M triangles with one there, p29)
   // no stock emotes on a loop: they stand easy, look at whoever in the three is talking, and the talker's mouth moves
   const chats: { members: CityPerson[]; next: number; who: number }[] = [];
   groups.forEach(([x, z], gi) => {
@@ -2388,7 +2388,8 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         c.who = (c.who + 1 + Math.floor(Math.random() * 2)) % 3;
         const dur = 1.6 + Math.random() * 2.6, talker = c.members[c.who];
         c.next = time + dur + 0.3 + Math.random() * 0.8;
-        talker.fig.say(dur);
+        // nobody's mouth goes near you unless they are talking to you (the owner: "random people are talking")
+        if (!you || Math.hypot(talker.pos.x - you.position.x, talker.pos.z - you.position.z) > 9) talker.fig.say(dur);
         talker.fig.setLookTarget(eye.copy(c.members[(c.who + 1) % 3].pos).setY(c.members[(c.who + 1) % 3].pos.y + 1.6).clone());
         for (const m of c.members) if (m !== talker) m.fig.setLookTarget(talker.pos.clone().setY(talker.pos.y + 1.6));
       }
