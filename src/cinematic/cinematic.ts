@@ -296,7 +296,8 @@ export class Cinematic {
   get inFlashback() { return this.flashback; }
 
   private animateCrew(dt: number) {
-    if (this.ins.cockpit.visible) { this.pilot.root.updateMatrixWorld(); this.pilot.animate('stand', 0, 0, this.clockT, dt); } // seated by setLimbs: the sit clip sits on the ground, far forward of its root
+    // (the pilot is posed after the shot has moved the yoke: posed before it, her hands held last frame's yoke, a frame
+    // behind a yoke that shakes, and slid round the horns) // seated by setLimbs: the sit clip sits on the ground, far forward of its root
     if (!this.interior.group.visible) return;
     const poses = this.stage?.poses;
     // whoever sits on a sofa in the pull: the chair legs and the hips on the cushion every frame, whatever a shot did
@@ -311,6 +312,9 @@ export class Cinematic {
     });
   }
   private clockT = 0;
+  /** The pilot's wrists in the yoke's own frame, a row a frame while the cockpit shows (yokeReport; null: off). */
+  yokeRows: { t: number; L: number[]; R: number[] }[] | null = null;
+  private yokeLog = () => {};
   /** Seated on a sofa in the pull (1 sat, 0 up), the hands free or on a task, and an arm pose over the seated one. */
   private seated = new Map<Character, { k: number; hands: boolean; extra?: Limbs }>();
 
@@ -712,14 +716,27 @@ export class Cinematic {
     this.cue(S + 42.6, () => { audio.whoosh(); audio.tone(44, 13, 'sawtooth', 0.12, 0, 14); ins.warn(null); });
     // D1 wide from behind and above the pilot, over her right shoulder: the seat, her hands on the yoke, the panel and
     // the canopy with the core beyond. She is already fighting it
-    const YH = { L: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(1, 0, 0), radius: 0.019 }, R: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(-1, 0, 0), radius: 0.019 } }; // the horns are 19 mm round
+    // Two-hand grip on the horns (the owner: "the hand placement when steering is glitching"). Each hand closes round
+    // its horn (grasp: the palm on the horn's outer side, the fingers round its front, curled to its 19 mm), turns with
+    // the yoke at once (rigid), and the pilot is posed after the yoke has moved each frame (see update)
+    const YH = { L: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(1, 0, 0), radius: 0.019, grasp: true, along: 0.5, rigid: true }, R: { at: V(0, 0, 0), fingers: V(0, 0, -1), palm: V(-1, 0, 0), radius: 0.019, grasp: true, along: 0.5, rigid: true } };
+    const HORN = { L: V(0.17, 0.03, 0), R: V(-0.17, 0.03, 0) };
     const yoke = (local: number, haul: number) => { // she hauls back and fights the roll; the hands go with the yoke
-      ins.stick.position.z = -0.56 + 0.07 * haul + Math.sin(local * 7.3) * 0.006;
-      ins.stick.rotation.z = Math.sin(local * 1.9) * 0.12 * haul + Math.sin(local * 11) * 0.015;
+      // a slow haul and roll she fights, a small tremor of effort on top (the 11 Hz rattle read as the hands glitching)
+      // on the film's own clock, not each shot's: restarted at every cut, the roll jumped 0.1 rad and the hands chased it
+      const tt = this.clockT; void local;
+      ins.stick.position.z = -0.4 + 0.05 * haul + Math.sin(tt * 2.3) * 0.004;
+      ins.stick.rotation.z = Math.sin(tt * 1.9) * 0.12 * haul + Math.sin(tt * 4.1) * 0.006;
       ins.yokeHold(YH);
+      for (const sd of ['L', 'R'] as const) YH[sd].at.copy(HORN[sd]).applyMatrix4(ins.stick.matrixWorld);
+    };
+    this.yokeLog = () => {
+      if (!this.yokeRows) return;
+      const inv = ins.stick.matrixWorld.clone().invert(), w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv).toArray().map((v) => +v.toFixed(4));
+      this.yokeRows.push({ t: +this.clockT.toFixed(3), L: w(this.pilot.handL), R: w(this.pilot.handR) });
     };
     shotAt(S + 42.6, S + 44.8, {
-      enter: () => { this.setVisible('cockpit'); d.uBHPos.value.set(-6, 4, -160); ins.attitude(0, 0); ins.mfd(['THRUST', '112%'], ['NAV', 'DEVIATION +2.1°'], '#ffb347'); ins.yokeHold(YH); this.pilot.setHold(YH);
+      enter: () => { this.setVisible('cockpit'); d.uBHPos.value.set(-6, 4, -160); ins.attitude(0, 0); ins.mfd(['THRUST', '112%'], ['NAV', 'DEVIATION +2.1°'], '#ffb347'); yoke(0, 0.6); this.pilot.setHold(YH); this.pilot.setGrip('both', { shape: 'grip', radius: 0.019 });
         // in a chair: thighs forward, shins down; the hip joints just above the cushion (top at y -1.69)
         this.pilot.setLimbs({ legL: [0.06, -0.12, 1], legR: [-0.06, -0.12, 1], shinL: [0.04, -1, 0.12], shinR: [-0.04, -1, 0.12] });
         const r = this.pilot.root; r.position.y = -2.2; r.updateMatrixWorld(true);
@@ -742,14 +759,14 @@ export class Cinematic {
         // from just over the glare shield, a little right of the column: both horns and both hands clear of the hub, her
         // face above them in the same frame (the camera sits between the shield's back edge, z -1.15, and the yoke)
         lens(26); const g = ins.stick.getWorldPosition(new THREE.Vector3()), hp = head(this.pilot, -0.1);
-        this.camera.position.copy(ins.cockpit.position).add(V(0.17, -0.9, -1.07)); this.lookTarget.copy(g).lerp(hp, 0.4);
+        this.camera.position.copy(ins.cockpit.position).add(V(0.05, -0.8, -0.98)); this.lookTarget.copy(g).lerp(hp, 0.45); // nearly on her axis and higher: from 0.17 to the side her right coat sleeve covered that hand
         this.pilot.setFace({ frown: 0.75, squint: 0.5, open: Math.max(0, Math.sin(local * 2.4)) * 0.25 }); this.pilot.setLookTarget(ins.cockpit.position.clone().add(V(0, -0.7, -3)));
         this.shake = 0.008;
       },
     });
     // D3 insert: the attitude display straight on, the side displays at its edges; the horizon rolls the wrong way
     this.vcue(S + 49.3, 'pull.ai1', () => { ui.subtitle('pull.ai1'); audio.thud(); });
-    this.cue(S + 56.2, () => { ui.subtitle(null); this.pilot.setHold(null); this.pilot.setLimbs(null); });
+    this.cue(S + 56.2, () => { ui.subtitle(null); this.pilot.setHold(null); this.pilot.setGrip('both', null); this.pilot.setLimbs(null); });
     shotAt(S + 49.0, S + 56.2, {
       update: (k, local) => {
         yoke(local, 1);
@@ -1029,6 +1046,7 @@ export class Cinematic {
       }
     }
     if (!film) this.filmAt(undefined, 0);
+    if (this.ins.cockpit.visible) { this.pilot.root.updateMatrixWorld(); this.pilot.animate('stand', 0, 0, this.clockT, dt); this.yokeLog(); }
     if (label) this.logCut(label, t < 39 ? 'journey' : 'pull');
     this.camera.lookAt(this.lookTarget);
     if (this.roll) this.camera.rotateZ(this.roll);

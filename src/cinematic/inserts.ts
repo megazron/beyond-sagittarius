@@ -135,9 +135,9 @@ export function createInserts(deck: THREE.Group) {
   }
   // the yoke: a column out of the panel, a bar and two horns; it rolls about the column and slides in and out
   // out of the panel face, at the seated pilot's reach
-  const stick = new THREE.Group(); stick.position.set(0, -1.3, -0.56); cockpit.add(stick);
+  const stick = new THREE.Group(); stick.position.set(0, -1.3, -0.4); cockpit.add(stick); // in reach: at -0.56 her arms ran out 5 to 10 cm short and the wrists wandered on the horns
   const grips = { L: new THREE.Vector3(0.17, 0.02, 0), R: new THREE.Vector3(-0.17, 0.02, 0) };
-  { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.55, 14), bezel); col.rotation.x = Math.PI / 2; col.position.z = -0.27; stick.add(col);
+  { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.72, 14), bezel); col.rotation.x = Math.PI / 2; col.position.z = -0.36; stick.add(col);
     const bar = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.035, 0.035), metal); stick.add(bar);
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.04, 20), metal); hub.rotation.x = Math.PI / 2; stick.add(hub);
     for (const sx of [-1, 1]) { const horn = new THREE.Mesh(new THREE.CapsuleGeometry(0.019, 0.1, 4, 12), new THREE.MeshStandardMaterial({ color: 0x101215, roughness: 0.75 })); horn.position.set(sx * 0.17, 0.035, 0); stick.add(horn); } }

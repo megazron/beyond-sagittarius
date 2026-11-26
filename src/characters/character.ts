@@ -447,7 +447,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
    *  the palm turned to given world directions, the fingers closed. Eased in and out. */
   // grasp: `at` is the middle of the held thing (a stone, a shaft at this hand's place on it), not the wrist; the palm
   // closes on it, `radius` out from the palm (graspWrist). along: where on the palm, 0 the wrist, 1 the knuckles (0.6)
-  type HoldSide = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius?: number; grasp?: boolean; along?: number };
+  type HoldSide = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius?: number; grasp?: boolean; along?: number; /** Turn the hand with the thing at once (a yoke that rolls and shakes: eased, the hand slid round the horn). */ rigid?: boolean };
   let hold: { L?: HoldSide; R?: HoldSide } | null = null; const holdW = { L: 0, R: 0 };
   const selfM = { a: new THREE.Vector3(), b: new THREE.Vector3(), l: new THREE.Matrix4(), q0: new THREE.Quaternion(), qi: new THREE.Quaternion(), x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), m: new THREE.Matrix4(), q: new THREE.Quaternion() };
   let gaitPhase = 0, inited = false, hipDrop = 0, sacAt = 1, sacX = 0, sacY = 0, firstFrame = true, eyeAimX = 0, eyeAimY = 0;
@@ -1934,7 +1934,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       hs.off.add(sk).multiplyScalar(se); hs.offV.addScaledVector(sk, -sw0).multiplyScalar(se);
       hs.at.copy(hs.prev).add(hs.off);
       if (h !== hs.last) { root.worldToLocal(hs.loc.copy(hs.prev)); hs.last.fingers.copy(h.fingers); hs.last.palm.copy(h.palm); hs.last.grasp = h.grasp; hs.last.radius = h.radius; hs.last.along = h.along; }
-      const ek = 1 - Math.exp(-dt * 12);
+      const ek = h.rigid && hw > 0.98 ? 1 : 1 - Math.exp(-dt * 12);
       if (h.fingers.lengthSq() > 1e-8) hs.fingers.lerp(V1.copy(h.fingers).normalize(), ek).normalize();
       if (h.palm.lengthSq() > 1e-8) hs.palm.lerp(V1.copy(h.palm).normalize(), ek).normalize();
       // a grasp: the wrist where the palm closes on the thing (the eased directions, as the hand is turned below)
