@@ -229,6 +229,10 @@ export class FirstNight {
       // went through the fist that held the vine: GPU take e169v6)
       { key: 'e1.vn.1', who: 'scientist', shot: () => ({ from: work.clone().addScaledVector(f, 0.95).addScaledVector(r, -0.3).add(new THREE.Vector3(0, 0.12, 0)), to: work.clone().add(new THREE.Vector3(0, 0.1, 0)), push: 0.02 }), run: () => { if (spear) spear.visible = false; pull(5); z.setLookTarget(work); audio.sample('leather', 0.3, { rate: 0.6 }); } },
       { key: 'e1.vn.2', who: 'scientist', shot: () => cover.mid(z, -0.7, 2.2), run: () => { if (spear) spear.visible = spearOn; z.setHold(null); z.setLookTarget(this.kneel.clone().addScaledVector(f, -4).add(new THREE.Vector3(0, 0.3, 0))); this.after(0.8, () => audio.sample('cb_rattle', 0.3)); }, after: 0.4 },
+      // (a decision, branch/moments.ts) where the stones go: far out on the path or close round the fire; the night remembers
+      { choice: 'e1d.vines', shot: () => cover.mid(z, 0.6, 2.4) },
+      { key: 'e1d.vn.path', who: 'scientist', if: { chose: ['e1d.vines', 'path'] }, shot: () => cover.mid(z, -0.7, 2.2), run: () => z.setLookTarget(this.kneel.clone().addScaledVector(f, -6).add(new THREE.Vector3(0, 0.3, 0))) },
+      { key: 'e1d.vn.fire', who: 'scientist', if: { chose: ['e1d.vines', 'fire'] }, shot: () => cover.mid(z, 0.5, 2.2), run: () => z.setLookTarget(this.kneel.clone().addScaledVector(f, 1.5)) },
     ], () => {
       if (spear) spear.visible = spearOn;
       this.s.flags['inv.vineTraps'] = true;
@@ -279,6 +283,8 @@ export class FirstNight {
       if (scarred) s.flags.scarred = true;
       this.after(1.2, () => this.playScene([
         { key: scarred ? 'e1.ni.scar' : pick === 'brace' ? 'e1.ni.held' : pick === 'run' ? 'e1.ni.ran' : 'e1.ni.hid', who: 'scientist', shot: () => cover.close(z, 0.35, 0.95), run: () => z.setFace(scarred ? { frown: 0.5, squint: 0.4 } : { smile: 0.2 }), after: 0.6 },
+        { key: 'e1d.ni.path', who: 'scientist', if: { chose: ['e1d.vines', 'path'] }, shot: () => cover.close(z, -0.35, 1.0) },
+        { key: 'e1d.ni.fire', who: 'scientist', if: { chose: ['e1d.vines', 'fire'] }, shot: () => cover.close(z, -0.35, 1.0) },
       ], () => { z.setFace(null); done(!scarred); this.dawn(); }));
     }
   }

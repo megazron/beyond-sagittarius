@@ -323,6 +323,11 @@ export class Episode2 {
         { key: 'e2.vn.1', who: 'scientist', shot: () => this.handShot(mid, 0.75), run: () => {
           this.after(0.5, () => { audio.sample('wood', 0.5, { rate: 1.7 }); this.anim(0.4, (k) => { apart = k * 0.15; grip(); }); });
         }, after: 0.4 },
+        // (a decision, branch/moments.ts) the snapped vine in his hands: what he makes of it; the first good cord remembers
+        { choice: 'e2d.vine', shot: () => cover.close(z, 0.4, 1.05, 0.24) },
+        { key: 'e2d.vn.truth', who: 'scientist', if: { chose: ['e2d.vine', 'truth'] }, shot: () => cover.close(z, -0.4, 0.95, 0.24), run: () => z.setFace({ frown: 0.2 }) },
+        { key: 'e2d.vn.nerve', who: 'scientist', if: { chose: ['e2d.vine', 'nerve'] }, shot: () => cover.mid(z, 0.5, 1.8), run: () => z.setFace({ frown: 0.4 }) },
+        { key: 'e2d.vn.joke', who: 'scientist', if: { chose: ['e2d.vine', 'joke'] }, shot: () => this.handShot(mid, 0.8), run: () => z.setFace({ smile: 0.3 }) },
         { key: 'e2.vn.2', who: 'scientist', shot: () => cover.close(z, 0.4, 0.95, 0.24), run: () => { z.setFace({ frown: 0.3, squint: 0.2 }); z.setLookTarget(this.ahead()); } },
         { hold: 6.5, shot: () => cover.mid(z, -0.6, 2.2), run: () => { z.setFace(null); z.setLookTarget(mid.clone().add(v3(0, -0.2, 0))); this.ui.memory('e2.vn.lyrra', 8); } },
       ], () => { a.removeFromParent(); b.removeFromParent(); this.clearHands(); this.ui.toast(t('level.11.hint')); });
@@ -372,6 +377,10 @@ export class Episode2 {
         { qte: 'e2m.twist', shot: () => this.handShot(mid, 0.8) },
         { key: 'e2.cd.ok', who: 'scientist', if: { not: { flag: 'e2m.cord.loose' } }, shot: () => cover.mid(z, 0.5, 1.8), run: () => { z.setLookTarget(mid); this.after(0.3, () => audio.sample('wood', 0.2, { rate: 2 })); } },
         { key: 'e2m.cd.loose', who: 'scientist', if: { flag: 'e2m.cord.loose' }, shot: () => cover.mid(z, 0.5, 1.8), run: () => z.setLookTarget(mid) },
+        // what he said over the snapped vine (decision e2d.vine)
+        { key: 'e2d.cd.truth', who: 'scientist', if: { chose: ['e2d.vine', 'truth'] }, shot: () => cover.close(z, 0.4, 1.0, 0.24) },
+        { key: 'e2d.cd.nerve', who: 'scientist', if: { chose: ['e2d.vine', 'nerve'] }, shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => z.setFace({ smile: 0.3 }) },
+        { key: 'e2d.cd.joke', who: 'scientist', if: { chose: ['e2d.vine', 'joke'] }, shot: () => this.handShot(mid, 0.8) },
       ], () => { cord.removeFromParent(); this.clearHands(); this.set('inv.cordage'); this.ui.toast(t('e2.learn.cordage')); card(); });
       return true;
     }
@@ -874,6 +883,10 @@ export class Episode2 {
       this.scene([
         { key: 'e2.cl.1', who: 'scientist', shot: () => cover.mid(z, 0.55, 1.5), run: () => z.setLookTarget(lump.position) },
         { hold: 6, shot: () => cover.mid(z, -0.6, 2.2), run: () => this.ui.memory('e2.cl.bolzar', 7) },
+        // (a decision, branch/moments.ts) grit in the mix as Bolzar said, or the clay kept pure; the dawn remembers
+        { choice: 'e2d.grit', shot: () => this.handShot(lump.position, 0.8) },
+        { key: 'e2d.cl.grit', who: 'scientist', if: { chose: ['e2d.grit', 'grit'] }, shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setFace({ smile: 0.2 }) },
+        { key: 'e2d.cl.pure', who: 'scientist', if: { chose: ['e2d.grit', 'pure'] }, shot: () => cover.close(z, -0.4, 1.0, 0.24), run: () => z.setFace({ squint: 0.2 }) },
       ], () => { lump.removeFromParent(); this.clearHands(); this.ui.toast(t('level.14.hint')); });
     });
   }
@@ -1057,6 +1070,8 @@ export class Episode2 {
         } },
         { key: 'e2.dw.1', who: 'scientist', if: { not: { flag: 'e2m.pot.chipped' } }, shot: () => cover.close(z, 0.45, 0.95, 0.24), run: () => { z.setHold(null); z.setFace({ smile: 0.3 }); } },
         { key: 'e2m.dw.chip', who: 'scientist', if: { flag: 'e2m.pot.chipped' }, shot: () => cover.close(z, 0.45, 0.95, 0.24), run: () => { z.setHold(null); z.setFace({ squint: 0.3 }); } },
+        { key: 'e2d.dw.grit', who: 'scientist', if: { chose: ['e2d.grit', 'grit'] }, shot: () => cover.close(z, -0.4, 0.95, 0.24) },
+        { key: 'e2d.dw.pure', who: 'scientist', if: { chose: ['e2d.grit', 'pure'] }, shot: () => cover.close(z, -0.4, 0.95, 0.24), run: () => z.setFace({ smile: 0.3 }) },
         { key: 'e2.dw.lost', who: 'scientist', if: { any: [{ flag: 'e2.kiln.left' }, { flag: 'e2.kiln.froze' }] }, shot: () => cover.mid(z, -0.5, 2.0) },
         { hold: 2.6, shot: () => ({ from: c.clone().add(v3(0.5, 0.45, 0.5)), to: c.clone().add(v3(0, 0.15, 0)), push: 0.01, aperture: 0.005 }), run: () => { this.boil(); } },
         { key: 'e2.dw.2', who: 'scientist', shot: () => cover.close(z, -0.4, 0.95, 0.24) },

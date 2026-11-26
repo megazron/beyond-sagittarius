@@ -28,6 +28,7 @@ from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from smoke import launch, serve  # noqa: E402
+from watch_time import watch_scene, watch_between, dump, report  # noqa: E402
 
 # the last level that can be played (src/ui/ui.ts PLAYABLE_LEVELS): Episode Three ends at level 21
 LAST = 21
@@ -147,6 +148,8 @@ def main():
     ap.add_argument("--quality", default="web")
     ap.add_argument("--port", type=int, default=4174)
     ap.add_argument("--shots", default=str(ROOT / "docs" / "screenshots" / "levels"))
+    ap.add_argument("--watch", default="", help="play every scene to its end and write the watched time (tools/watch_time.py) here")
+    ap.add_argument("--last", type=int, default=LAST, help="with --watch: stop after this level")
     args = ap.parse_args()
     shots = pathlib.Path(args.shots)
     shots.mkdir(parents=True, exist_ok=True)
@@ -464,6 +467,7 @@ def main():
             return False
 
         answered = []
+        between = []
         fights = []  # the set pieces the story started: [id, result]
         trees = []
 
@@ -587,6 +591,8 @@ def main():
             if st["mode"] == "play" and lvl == 6 and "small" not in taken:
                 taken.add("small")
                 small_actions()
+            if st["state"] in ("narrator", "flashback") and args.watch:
+                between.append({"level": lvl, "state": st["state"], "wall_s": watch_between(page, ev, st["state"])}); continue
             if st["state"] in ("narrator", "flashback"):
                 # between-level scenes: let them start, photograph, skip
                 if not skip_scene(st["state"]):
@@ -594,6 +600,8 @@ def main():
                     log(f"scene stuck on level {lvl}:", ev("({state: __bs.state, mode: __bs.mode, modal: !document.getElementById('modal').classList.contains('hidden'), diff: !!document.querySelector('[data-diff]'), fb: document.body.classList.contains('flashback'), vault: __bs.vault && __bs.vault.playing, enc: __bs.combat && __bs.combat.debug().encounter})"))
                     break
                 continue
+            if st["mode"] == "scene" and args.watch:
+                watch_scene(page, ev); continue
             if st["mode"] == "scene":
                 n_scenes += 1
                 for _ in range(8):  # small steps: a quick-time window must not pass unseen
@@ -615,7 +623,7 @@ def main():
                 seen_levels.append(lvl)
                 last_level = lvl
                 stuck = 0
-            if lvl > LAST:
+            if lvl > (args.last if args.watch else LAST):
                 break
             if st["mode"] == "dead":
                 failures.append(f"died on level {lvl}")
@@ -721,6 +729,15 @@ def main():
                     shot(f"{name}")
                     ev("__bs.photo(null)")
                     ev(f"__bs.setTime({saved_t})")
+        if args.watch:
+            for _ in range(240):  # the chapter's last scenes and its Vault scene, played
+                if ev("__bs.state") in ("narrator", "flashback"):
+                    between.append({"level": ev("__bs.level"), "state": ev("__bs.state"), "wall_s": watch_between(page, ev, "narrator")})
+                elif ev("__bs.mode") == "scene":
+                    watch_scene(page, ev)
+                ev("__bs.step(0.5)")
+            dump(ev, args.watch, {"between": between}); report([args.watch])
+            browser.close(); httpd.shutdown(); return
         # chapter end: the final Vault scene follows the beacon
         ev("__bs.step(6)")
         for _ in range(60):

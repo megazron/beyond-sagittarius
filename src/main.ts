@@ -939,7 +939,10 @@ function tick(step: number) {
       if (body && tgt && goal && (game.mode === 'play' || game.mode === 'away')) {
         const want = Math.atan2(-(tgt.x - body.pos.x), -(tgt.z - body.pos.z)), d = Math.hypot(tgt.x - body.pos.x, tgt.z - body.pos.z);
         body.yaw += Math.atan2(Math.sin(want - body.yaw), Math.cos(want - body.yaw)) * Math.min(1, dt * 6);
-        input.hold('KeyW', Math.hypot(goal.x - body.pos.x, goal.z - body.pos.z) > 1.4 && d > 0.2);
+        // a walk plan's point counts as reached inside 1.2 m: stopping at 1.4 left him standing between the two until the
+        // stuck rule moved on (the parcel crossing, (4.2, 41.8), g_city3)
+        const stop = wpn && wpn.i < wpn.pts.length ? 0.8 : 1.4;
+        input.hold('KeyW', Math.hypot(goal.x - body.pos.x, goal.z - body.pos.z) > stop && d > 0.2);
       } else input.hold('KeyW', false);
     }
     if (glitch.on && !paused) {
@@ -1135,6 +1138,8 @@ window.addEventListener('resize', () => {
   nextBeat() { cine.debugNext(); game?.scene?.debugNext(); },
   get frameReport() { return frameReport; },
   /** The branch system, for the smoke tests. */
+  /** Watched cutscene time between the player's inputs (game.ts watch; tools/watch_time.py). */
+  get watch() { return game ? { cur: +game.watch.cur.toFixed(1), stretches: game.watch.stretches } : null; },
   branch: {
     get open() { return ui.choice.open || !!game?.dialogue.deciding; },
     get remaining() { return ui.choice.remaining ?? game?.dialogue.remaining ?? null; },
@@ -1151,6 +1156,8 @@ window.addEventListener('resize', () => {
   },
   /** Physics glitches over time (core/glitch.ts, tools/glitch_check.py). */
   /** Where the body played is (the planet or a stage), for the glitch runner's distance walked. */
+  /** The played body's physics, a frame at a time (glitch probes). */
+  get bodyState() { const b = player; if (!b) return null; const r = b.model.root.position; return { x: +b.pos.x.toFixed(3), y: +b.pos.y.toFixed(3), z: +b.pos.z.toFixed(3), ry: +r.y.toFixed(3), g: +world.terrain.height(b.pos.x, b.pos.z).toFixed(3), on: b.onGround, sw: b.swimming, vy: +b.vel.y.toFixed(2), cy: +camera.position.y.toFixed(3), mode: game?.mode }; },
   get bodyPos() { const b = game?.away?.active ? game.away.body : player; return b ? [b.pos.x, b.pos.y, b.pos.z] : null; },
   /** Tests of the glitch watch itself (glitch_check.py): a glitch of each kind put in at the watch's own read. */
   glitchTest(kinds: string[], on?: 'npc' | 'player') { return kinds.map((k) => glitch.inject(k as GlitchKind, on)); },
@@ -1167,8 +1174,12 @@ window.addEventListener('resize', () => {
     if (mover.parent) { mover.parent.updateWorldMatrix(true, false); mover.parent.worldToLocal(w); }
     mover.position.copy(w); mover.updateMatrixWorld(true);
     const hits = clipProbe(sc);
+    // what the probe saw (a miss says why): the two hips apart after the move, the mover's distance, its bone count
+    const hip = (r: THREE.Object3D) => { let h: THREE.Object3D | undefined; r.traverse((o) => { if (!h && (o as THREE.Bone).isBone && /^(hips|pelvis)$/i.test(o.name)) h = o; }); return h?.getWorldPosition(new THREE.Vector3()); };
+    const ha = hip(mover), hb = hip(onto), apart = ha && hb ? +ha.distanceTo(hb).toFixed(2) : null;
+    let nb = 0; mover.traverse((o) => { if ((o as THREE.Bone).isBone) nb++; });
     mover.position.copy(was); mover.updateMatrixWorld(true);
-    return { ran: true, caught: hits.some((h) => h.kind === 'body' && h.depth > 0.06), who: (mover.userData.id as string | undefined) ?? mover.name };
+    return { ran: true, caught: hits.some((h) => h.kind === 'body' && h.depth > 0.06), who: (mover.userData.id as string | undefined) ?? mover.name, onto: onto === me ? 'player' : (onto.userData.id as string | undefined) ?? onto.name, apart, bones: nb, far: +was.distanceTo(w).toFixed(1) };
   },
   glitch(on = true) { if (on && !glitch.on) glitch.reset(); glitch.on = on; return glitch.summary(); },
   get glitches() { return { events: glitch.events, summary: glitch.summary() }; },
@@ -1215,7 +1226,7 @@ window.addEventListener('resize', () => {
     }
     return named;
   },
-  get walkPlan() { return walkPlan ? { i: walkPlan.i, n: walkPlan.pts.length, stuck: walkPlan.stuck, walked: +walkPlan.walked.toFixed(1) } : null; },
+  get walkPlan() { return walkPlan ? { i: walkPlan.i, n: walkPlan.pts.length, stuck: walkPlan.stuck, walked: +walkPlan.walked.toFixed(1), route: walkPlan.route?.slice(0, 7).map((q) => [+q[0].toFixed(1), +q[1].toFixed(1)]) ?? null } : null; },
   /** The cutscene choice layer and the opening's save (tools/choices_check.py). */
   moment: {
     get open() { return ui.moment.open; },
@@ -1227,9 +1238,11 @@ window.addEventListener('resize', () => {
     get ready() { return openingReady.then(() => true); },
     /** The episodes' scene moments (branch/moments.ts), and one played in a small scene where you stand (choices_check). */
     get episodes() { return momentsReady.then(() => Object.values(QTES).filter((q) => q.layer === 'moment').map((q) => q.id).concat(Object.values(DECISIONS).filter((d) => d.layer === 'moment').map((d) => d.id))); },
+    /** A reflex (line said if `flag` is set) or a decision (line said if option `flag` was taken). */
     episodeTest(id: string, line?: string, flag?: string) {
       if (!game || game.mode !== 'play') return false;
-      game.playScene([{ qte: id }, ...(line && flag ? [{ key: line, who: 'scientist' as const, if: { flag } }] : []), { hold: 0.5 }]);
+      const dec = !!DECISIONS[id];
+      game.playScene([dec ? { choice: id } : { qte: id }, ...(line && flag ? [{ key: line, who: 'scientist' as const, if: dec ? { chose: [id, flag] as [string, string] } : { flag } }] : []), { hold: 0.5 }]);
       return true;
     },
   },
@@ -1470,6 +1483,11 @@ window.addEventListener('resize', () => {
   /** Fights: state for the tests, and the way to start a set piece (tools/combat/play_test.py). */
   get combat() { return combat; },
   get ep2() { return (game as unknown as { ep2?: { debug(): unknown } } | null)?.ep2?.debug() ?? null; },
+  /** Test: play one of an episode's scenes now, by its method name (GPU takes of a scene's decision). */
+  sceneCall(ep: 'ep2' | 'ep3' | 'waking' | 'night', name: string, ...args: unknown[]) {
+    const o = (game as unknown as Record<string, Record<string, (...a: unknown[]) => unknown> | undefined> | null)?.[ep];
+    const f = o?.[name]; if (typeof f !== 'function') return false; f.apply(o, args); return true;
+  },
   get ep3() { return (game as unknown as { ep3?: { debug(): unknown } } | null)?.ep3?.debug() ?? null; },
   /** The player's body: kneeling (0..1), the game mode, where the hips are (checks of the kneel in Episode One). */
   get body() { const m = (game as unknown as { player?: { model: import('./characters/character').Character } } | null)?.player?.model; if (!m) return null; const h = new THREE.Vector3(); (m.root.getObjectByName('hips') ?? m.root).getWorldPosition(h); return { kneel: m.kneeling, mode: game!.mode, rootY: m.root.position.y, hipsY: h.y }; },

@@ -1360,6 +1360,14 @@ export class Episode3 extends Episode2 {
       } },
       { key: this.f('fire.high') ? 'e3.hm.1h' : 'e3.hm.1', who: 'hohma' as Who, shot: () => cover.close(F.hohma, 0.4, 1.0, -0.22), run: () => { F.hohma.setHold(null); F.hohma.setLookTarget(this.head()); } },
       { key: 'e3.hm.cairn', who: 'hohma' as Who, if: { flag: 'e2.cairn.six' }, shot: () => cover.close(F.hohma, -0.35, 1.0, -0.22) },
+      // (a decision, branch/moments.ts) the loud one, she says: how he answers her; the harvest remembers
+      { choice: 'e3d.hohma', shot: () => cover.close(z, 0.45, 1.05, 0.24) },
+      { key: 'e3d.hm.truth', who: 'scientist', if: { chose: ['e3d.hohma', 'truth'] }, shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setFace({ frown: 0.2 }) },
+      { key: 'e3d.hm.joke', who: 'scientist', if: { chose: ['e3d.hohma', 'joke'] }, shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setFace({ smile: 0.35 }) },
+      { key: 'e3d.hm.kind', who: 'scientist', if: { chose: ['e3d.hohma', 'kind'] }, shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => z.setFace({ smile: 0.2 }) },
+      { key: 'e3d.hm.r.truth', who: 'hohma' as Who, if: { chose: ['e3d.hohma', 'truth'] }, shot: () => cover.close(F.hohma, 0.4, 1.0, -0.22) },
+      { key: 'e3d.hm.r.joke', who: 'hohma' as Who, if: { chose: ['e3d.hohma', 'joke'] }, shot: () => cover.close(F.hohma, 0.4, 1.0, -0.22) },
+      { key: 'e3d.hm.r.kind', who: 'hohma' as Who, if: { chose: ['e3d.hohma', 'kind'] }, shot: () => cover.close(F.hohma, 0.4, 1.0, -0.22) },
       // the grain: a head rubbed between his palms, the husk blown off, fat grains creased down one side
       { hold: 3.2, shot: () => ({ from: palm.clone().addScaledVector(f, 0.36).addScaledVector(r, 0.12).add(v3(0, 0.08, 0)), to: palm.clone(), fov: 24, push: 0.006, aperture: 0.003, lightAt: palm.clone(), lightScale: 0.7 }), run: () => {
         z.setLookTarget(palm);
@@ -2513,6 +2521,13 @@ export class Episode3 extends Episode2 {
         { key: 'e3.sm.kit', who: 'scientist', if: { flag: 'e3.kit.kept' }, shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => audio.tone(1800, 0.3, 'square', 0.05) },
         { key: 'e3m.sm.creak', who: 'scientist', if: { flag: 'e3m.frame.slipped' }, shot: () => ({ from: c.clone().addScaledVector(H.a, 1.2).add(v3(0, 1.3, 0)), to: c.clone().add(v3(0, 2.2, 0)), fov: 50, push: 0.01, lightAt: c.clone().add(v3(0, 1.0, 0)), lightScale: 0.8 }), run: () => { audio.sample('wood', 0.45, { rate: 0.5 }); z.setLookTarget(c.clone().add(v3(0, 2.4, 0))); } }, // the ridge where the beam slipped (moment e3m.lever)
       ];
+      // (a decision, branch/moments.ts) everything at once: the door, the store or the kit; the morning remembers
+      beats.push(
+        { choice: 'e3d.storm', shot: () => cover.close(z, 0.4, 1.1, 0.24) },
+        { key: 'e3d.sm.door', who: 'scientist', if: { chose: ['e3d.storm', 'door'] }, shot: () => cover.close(z, -0.4, 1.0, 0.24), run: () => z.setLookTarget(c.clone().addScaledVector(H.a, -2).add(v3(0, 1.2, 0))) },
+        { key: 'e3d.sm.store', who: 'scientist', if: { chose: ['e3d.storm', 'store'] }, shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => { z.setFace({ fear: 0.3 }); audio.sample('wood', 0.4, { rate: 0.6 }); } },
+        { key: 'e3d.sm.kit', who: 'scientist', if: { chose: ['e3d.storm', 'kit'] }, shot: () => cover.close(z, 0.4, 0.95, 0.24), run: () => z.setFace({ smile: 0.15 }) },
+      );
       if (band) beats.push({ key: 'e3.st.1', who: 'scientist', shot: () => ({ from: c.clone().addScaledVector(H.a, 1.6).add(v3(0, 1.5, 0)), to: c.clone().add(v3(0, 0.5, 0)), fov: 58, push: 0.01, lightAt: c.clone().add(v3(0, 0.6, 0)), lightScale: 0.8 }), run: () => { F.hohma.setLookTarget(this.head()); F.wenka.setLookTarget(this.head()); } });
       this.scene(beats, async () => {
         S.end(); this.clearHands(); void me;
@@ -2584,6 +2599,10 @@ export class Episode3 extends Episode2 {
       this.s.timeOfDay = 6.5;
       this.scene([
         { hold: 3.6, shot: () => ({ from: me.clone().add(v3(0, 1.5, 0)).addScaledVector(f, -1.0).addScaledVector(this.right(f), 0.5), to: at.clone().add(v3(0, 1.2, 0)), fov: 22, push: 0.01 }), run: () => z.setLookTarget(at.clone().add(v3(0, 1.6, 0))) },
+        // the storm, as he met it (decision e3d.storm)
+        { key: 'e3d.pl.door', who: 'scientist', if: { chose: ['e3d.storm', 'door'] }, shot: () => cover.close(z, 0.45, 1.0, 0.24) },
+        { key: 'e3d.pl.store', who: 'scientist', if: { chose: ['e3d.storm', 'store'] }, shot: () => cover.close(z, 0.45, 1.0, 0.24) },
+        { key: 'e3d.pl.kit', who: 'scientist', if: { chose: ['e3d.storm', 'kit'] }, shot: () => cover.close(z, 0.45, 1.0, 0.24) },
         { key: 'e3.pl.1', who: 'pello' as Who, shot: () => cover.close(P, 0.35, 1.05, 0), run: () => P.setLookTarget(this.head()) },
         { key: 'e3.pl.2', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24) },
         { key: 'e3.pl.3', who: 'pello' as Who, shot: () => cover.close(P, -0.35, 1.05, 0), run: () => P.setLookTarget(card.position) },

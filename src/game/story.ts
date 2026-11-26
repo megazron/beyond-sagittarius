@@ -671,6 +671,10 @@ export class Story {
       // (a moment, branch/moments.ts) his hand on the switch while it charges: let go early and it catches on the second try
       { qte: 'e1m.beacon', shot: beaconShot },
       { key: 'e1m.bc.flicker', who: 'scientist', if: { flag: 'e1m.beacon.flicker' }, shot: beaconShot },
+      // what he said at the river, alone (decision e1d.alone), comes back as the light goes up
+      { key: 'e1d.bc.call', who: 'scientist', if: { chose: ['e1d.alone', 'call'] }, shot: skyShot },
+      { key: 'e1d.bc.ammi', who: 'scientist', if: { chose: ['e1d.alone', 'ammi'] }, shot: skyShot },
+      { key: 'e1d.bc.joke', who: 'scientist', if: { chose: ['e1d.alone', 'joke'] }, shot: () => cover.close(z, 0.35, 1.0) },
       { run: push('beacon.2'), hold: 1.7 },
       { run: push('beacon.strong'), key: 'rad.strong', who: 'strong', fallback: 'br.rad.static', shot: () => cover.mid(z, 0.5, 2.2), poses: { scientist: 'stand' } },
       { run: push('beacon.medic'), key: 'rad.medic', who: 'medic', fallback: 'br.rad.static', shot: () => cover.mid(z, -0.5, 2.2), poses: { scientist: 'stand' } },

@@ -179,7 +179,7 @@ def main():
         # the episodes' scene moments (branch/moments.ts): loaded on the choice layer, and one answered and one let go
         # in a scene where you stand, each written to disk at once, the second changing the line that follows
         eps = page.evaluate('__bs.moment.episodes') or []
-        if len(eps) < 6: fails.append(f'only {len(eps)} episode moments loaded on the choice layer')
+        if len(eps) < 12: fails.append(f'only {len(eps)} episode moments loaded on the choice layer')
         for _ in range(40):
             if ev('__bs.mode') == 'play': break
             ev('__bs.skip()'); page.wait_for_timeout(1500)
@@ -191,18 +191,21 @@ def main():
             if not ev(f'__bs.moment.episodeTest({mid!r}, {line!r}, {flag!r})'.replace('None', 'undefined')): fails.append(f'episode moment {n}: no scene could start (mode {ev("__bs.mode")})'); return
             try: page.wait_for_function('__bs.moment.open', timeout=15000)
             except Exception: fails.append(f'episode moment {n} never opened on the layer'); return
-            if press: page.wait_for_timeout(300); page.keyboard.press('KeyE')
+            if press: page.wait_for_timeout(300); page.keyboard.press('KeyE' if press is True else press)
             page.wait_for_function('!__bs.moment.open', timeout=20000)
             page.wait_for_timeout(400)
             log = ((ev('__bs.moment.saved') or {}).get('branch') or {}).get('log', [])
             got = next((e['pick'] for e in log if e['id'] == mid), None)
-            if got != ('pass' if press else 'fail'): fails.append(f'episode moment {n}: logged {got} on disk')
+            want = flag if press not in (True, False, None) else ('pass' if press else 'fail')
+            if got != want: fails.append(f'episode moment {n}: logged {"nothing" if got is None else "another answer"} on disk')
             if line:
                 page.wait_for_function("__bs.mode === 'play'", timeout=30000)
                 if line not in ev('__bs.moment.said'): fails.append(f'episode moment {n}: the line its answer brings was not said')
             print(f'episode moment {n}: {"pressed" if press else "let go"}, saved at once' + (', its line said' if line else ''), flush=True)
         ep_moment(1, 'e2m.tap', True)
         ep_moment(2, 'e2m.spark', False, 'e2m.py.miss', 'e2m.spark.missed')
+        # a decision of the episodes (Hoh-Ma's question): the first option shown, by its number; its line follows
+        ep_moment(3, 'e3d.hohma', 'Digit1', 'e3d.hm.truth', 'truth')
         b.close()
     httpd.shutdown()
     fails += errors[:5]

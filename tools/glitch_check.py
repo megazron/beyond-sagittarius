@@ -81,7 +81,7 @@ def main():
                 """Every kind put in at the watch's own read, on the nearest other body and on the player, and a body
                 put on another for the clip probe: each must be caught (or say why it could not be put in here)."""
                 ev("__bs.glitchTest(['pop', 'snap', 'floor', 'float'], 'npc')")
-                if walk: ev("__bs.glitchTest(['pop', 'snap', 'floor', 'float', 'jitter', 'wall'], 'player')")
+                if walk: ev("__bs.glitchTest(['pop', 'snap', 'floor', 'float', 'wall'], 'player')")
                 # one at a time (two on one body in a frame would undo each other): until each is caught, missed or n/a
                 for k in range(220):
                     step()
@@ -99,6 +99,8 @@ def main():
             for i in range(n):
                 step()
                 wp = ev('__bs.walkPlan') if walk and i % 15 == 0 else None
+                # the height flicker can only be put in while he walks: twice on the way
+                if walk and i in (45, 300): ev("__bs.glitchTest(['jitter'], 'player')")
                 if wp and wp['i'] >= wp['n']: break
                 if wp: trace.append([round(i / 15, 1)] + [round(v, 2) for v in (ev('__bs.bodyPos') or [0, 0, 0])] + [wp['i'], ev('__bs.mode')])
                 if walk and not mid and wp and wp['i'] >= wp['n'] / 2: mid = True; selftest('middle')

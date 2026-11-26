@@ -170,6 +170,11 @@ export class Waking {
       // a laugh that is half a sob, still on his knees
       { key: 'e1.w.ok', who: 'scientist', shot: () => cover.close(z, 0.45, 0.95), run: () => { z.stopTask(); z.setLimbs({ bend: 0.12 }); z.setLookTarget(null); z.setFace({ smile: 0.45, frown: 0.3 }); audio.human('laugh', 0.35); }, after: 0.5 },
       { key: 'e1.w.ammi', who: 'scientist', if: { flag: 'ammi.called' }, shot: () => cover.close(z, -0.35, 1.0), run: () => z.setFace({ smile: 0.25 }), after: 0.4 },
+      // (a decision, branch/moments.ts) alive and alone: what he says out loud, if anything; the beacon remembers it
+      { choice: 'e1d.alone', shot: () => cover.close(z, 0.3, 1.1) },
+      { key: 'e1d.al.call', who: 'scientist', if: { chose: ['e1d.alone', 'call'] }, shot: () => cover.mid(z, -0.5, 2.6), run: () => { z.setLookTarget(new THREE.Vector3().setFromMatrixPosition(z.head.matrixWorld).addScaledVector(this.fwd(), 6).add(new THREE.Vector3(0, 1.5, 0))); z.setFace({ open: 0.4 }); }, after: 0.8 },
+      { key: 'e1d.al.ammi', who: 'scientist', if: { chose: ['e1d.alone', 'ammi'] }, shot: () => cover.close(z, -0.35, 1.0), run: () => z.setFace({ smile: 0.2, frown: 0.2 }), after: 0.6 },
+      { key: 'e1d.al.joke', who: 'scientist', if: { chose: ['e1d.alone', 'joke'] }, shot: () => cover.close(z, 0.4, 1.0), run: () => z.setFace({ smile: 0.35 }), after: 0.5 },
       // a broad leaf, rolled into a cone in his hands
       { hold: 1.6, shot: () => this.handsShot(this.chest(0.3, 0, 0.5), 0.85), run: () => {
         z.setFace(null); z.setLimbs({ bend: 0.15 });

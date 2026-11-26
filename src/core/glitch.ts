@@ -31,7 +31,7 @@ interface Track {
   pos: THREE.Vector3; yaw: number; bones: THREE.Bone[]; feet: THREE.Bone[]; quats: THREE.Quaternion[];
   floatT: number; seen: number; frame: number; lastKind: Record<string, number>;
 }
-interface Live extends GlitchTest { target?: THREE.Object3D; frames: number; left: number; grace: number; wait: number; undo?: () => void; flip: number }
+interface Live extends GlitchTest { target?: THREE.Object3D; frames: number; left: number; grace: number; wait: number; undo?: () => void; flip: number; was?: THREE.Object3D; wasT?: number }
 
 const P = new THREE.Vector3(), Q = new THREE.Vector3(), E = new THREE.Euler(), W = new THREE.Vector3(), WQ = new THREE.Quaternion();
 
@@ -86,6 +86,9 @@ export class GlitchWatch {
     for (const l of this.live) if (test === undefined && l.kind === kind && l.target && l.target === o && (l.state === 'on' || l.state === 'caught')) { test = l.id; l.state = 'caught'; }
     // what else a test glitch sets off on its body while it is in and just after (a lifted body dropping back is a pop)
     for (const l of this.live) if (test === undefined && l.target && l.target === o && l.state !== 'waiting') test = l.id;
+    // and the drop back when a test is taken out to be put in again (a float lifted 0.6 m and let down at a cut read as
+    // a pop every half second, g_e23b and g_city4: not the game's)
+    for (const l of this.live) if (test === undefined && l.was === o && l.wasT !== undefined && this.clock - l.wasT < 0.6) test = l.id;
     // one event per body and kind in any half second: a body stuck in the floor is one glitch, not sixty
     if (tr && test === undefined) { const last = tr.lastKind[kind] ?? -9; if (this.clock - last < 0.5) return; tr.lastKind[kind] = this.clock; }
     if (this.events.length < 2000) this.events.push({ t: +this.clock.toFixed(2), who, kind, detail, at: [+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)], ...(test !== undefined ? { test } : {}), ...(this.film !== undefined ? { film: +this.film.toFixed(2) } : {}) });
@@ -108,9 +111,9 @@ export class GlitchWatch {
     for (const l of this.live) {
       if (busy && l !== busy) continue;
       // a cut excuses pops by design: a test held over one is put in again after it
-      if (cut && l.state === 'on') { l.state = 'waiting'; l.target = undefined; }
+      if (cut && l.state === 'on') { l.was = l.target; l.wasT = this.clock; l.state = 'waiting'; l.target = undefined; }
       // its body no longer followed (out of range of the camera, hidden): put in again when there is one
-      if (l.state === 'on' && l.target && l.kind !== 'jitter' && l.kind !== 'wall' && this.tracks.get(l.target)?.frame !== this.nFrame - 1) { l.state = 'waiting'; l.target = undefined; }
+      if (l.state === 'on' && l.target && l.kind !== 'jitter' && l.kind !== 'wall' && this.tracks.get(l.target)?.frame !== this.nFrame - 1) { l.was = l.target; l.wasT = this.clock; l.state = 'waiting'; l.target = undefined; }
       if (l.state === 'waiting' && cut) continue;
       if (l.state === 'waiting') {
         if (l.wait-- <= 0) { l.state = 'n/a'; l.why ??= 'no body to put it on'; continue; }

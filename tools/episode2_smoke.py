@@ -19,6 +19,7 @@ from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from smoke import launch, serve  # noqa: E402
+from watch_time import watch_scene, watch_between, dump, report  # noqa: E402
 from levels_smoke import play_craft  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -52,6 +53,7 @@ def main():
     ap.add_argument("--port", type=int, default=4181)
     ap.add_argument("--picks", default="")
     ap.add_argument("--shots", default="")
+    ap.add_argument("--watch", default="", help="play every scene to its end and write the watched time (tools/watch_time.py) here")
     args = ap.parse_args()
     picks = dict(DEFAULT_PICKS)
     for kv in filter(None, args.picks.split(",")):
@@ -87,6 +89,7 @@ def main():
         log("start:", ev("({level: __bs.level, day: __bs.save.day, t: __bs.save.timeOfDay})"))
 
         answered, fights, seen, taken = [], [], [], set()
+        between = []
         last, stuck = 0, 0
         for it in range(1400):
             lvl = ev("__bs.level")
@@ -123,8 +126,12 @@ def main():
                     answered.append(("?", opts[0] if opts else None)); page.keyboard.press("Digit1")
                 ev("__bs.step(0.2)"); continue
             st = ev("({state: __bs.state, mode: __bs.mode})")
+            if st["state"] == "narrator" and args.watch:
+                between.append({"level": lvl, "state": "narrator", "wall_s": watch_between(page, ev, "narrator")}); continue
             if st["state"] == "narrator":
                 time.sleep(1.5); shot("e2-ledger"); ev(SKIP); time.sleep(1); continue
+            if st["mode"] == "scene" and args.watch:
+                watch_scene(page, ev); continue
             if st["mode"] == "scene":
                 for _ in range(8):
                     ev("__bs.step(0.2)")
@@ -169,6 +176,8 @@ def main():
         for _ in range(80):
             if ev("!!__bs.save.flags['seen-ep2']") and ev("__bs.state") == "game":
                 break
+            if ev("__bs.state") == "narrator" and args.watch:
+                between.append({"level": ev("__bs.level"), "state": "narrator", "wall_s": watch_between(page, ev, "narrator")}); continue
             if ev("__bs.state") == "narrator":
                 time.sleep(1.2); shot("e2-ledger"); ev(SKIP)
             ev("__bs.step(0.5)"); time.sleep(0.2)
@@ -199,6 +208,8 @@ def main():
         if ev("__bs.level") != 15:
             failures.append(f"did not reach level 15: {ev('__bs.level')}")
 
+        if args.watch:
+            dump(ev, args.watch, {"between": between}); report([args.watch])
         # ---- reload: everything Episode Two set is still there ----
         ev("window.dispatchEvent(new Event('beforeunload'))")
         page.reload(wait_until="domcontentloaded", timeout=240000)

@@ -140,6 +140,37 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
     clips.
   - Physics (part 6) and city tasks/crowd (part 7): not looked at.
 
+## 2026-11-26 evening, cine6 continued (second cine6 agent; same worktree, branch and capture folder)
+NOT ON MAIN YET. What I changed after 809fb55, and what I measured:
+- g_e23b (SwiftShader, 2 ticks a frame, before these fixes): ep2 24 pops + 5 snaps, ep3 18 pops + 1 snap, pull 1 snap
+  (Lyrra's lowerarmL at film 166.5), clip probe missed in ep2 start and pull middle. Every upperarmR snap is "doing
+  pickup" (one "drink"): the runner presses E at each prompt, and a new task restarted the task clip's clock while the
+  clip still had its weight. character.ts: a task asked for in the last 0.45 s of a running one now waits for it
+  (`taskNext`). The 0.55 to 0.62 m pops every ~0.53 s (ep2 58-71 s, ep3 40-53 s, city 168-178 s) are the runner's own
+  float test on the player: each fell inside a float test's window (caught at 70.87 / 53.2), the lift moved the follow
+  camera, the cut re-armed the test and the drop back was logged unmarked. glitch.ts marks a re-armed test's aftermath on
+  its body (0.6 s) as the test's. Lyrra's forearm in the title montage (after the pods): reproduced at film 166.497 (117
+  degrees, no cut) and 169.697 (104, a frame after a cut) with ~/bs-cap/cine6/snap_probe2.py (choices off). character.ts:
+  a set pose (setLimbs, the one a scene sets each frame) now turns a limb at most 0.45 rad a frame from the frame before
+  (`aimLast`, AIM_STEP); not yet re-measured.
+- City walker trapped at (4.2, 41.3) in g_city4 (tour 3/8, 427 m walked, no stuck mark: it swung between the road and
+  the kerb every half second). city.ts route(): asked again from the road (|x| < 5.2) it sent him back to his own
+  pavement lane first. A walker already off the kerb now keeps crossing. ~/bs-cap/cine6/city_probe.py: from inside the
+  phone shop and from (4.2, 41.3) he now reaches the parcel locker (11 s, 5 s). The player's GPS line uses the same route.
+- The test walker (main.ts autoWalk) let go of W inside 1.4 m of a plan point but counted it reached only inside 1.2 m:
+  between the two he stood still until the 5 s stuck rule (the "standing at (4.2, 41.8)"). It stops at 0.8 m now.
+- `__bs.clipPoke()` reports what it moved where (onto, hips apart, bones, distance) so a miss says why.
+- PART 2 (decisions): six timed decisions on the choice layer in scenes where you only watched, each with a line then
+  and a consequence later: e1d.alone (the first drink; the beacon), e1d.vines (the rattle line; the night's end),
+  e2d.vine (the snapped vine; the first cord), e2d.grit (the clay; the dawn), e3d.hohma (at the quern; the harvest line),
+  e3d.storm (the storm; the morning after). Talk ones carry tone marks and a silent fallback; act ones a default. Data in
+  the PRIVATE master ~/bs-story/episode_moments.json (written by a script, backup of the old file in my scratchpad),
+  sealed into moments.sealed; 34 new lines (en/hi/ur, feminine forms where the Hindi/Urdu is gendered), directions set.
+  choices_check answers one of them by number (ep_moment 3). Seven phrases added to spoiler_phrases.txt and rehashed.
+- Watched time: game.ts keeps `watch` (cutscene seconds since the player last did anything; closed by a decision or a
+  reflex opening or by control coming back), `__bs.watch`; the three episode smokes take `--watch OUT.json` and then play
+  every scene to its end (tools/watch_time.py has the scene player and the report; levels_smoke takes `--last 10`).
+
 ## 2026-11-26 parts 6, 5b, 7b (cine6 agent: worktree ~/bs-cine, branch cine6 from cine5 da28549; captures ~/bs-cap/cine6)
 NOTHING OF THIS IS ON MAIN YET. Branch cine6 is pushed (WIP commits). Last CI on cine6 (run 45829243670, sha 3b0c9728):
 every gate green except `choices` (fixed after: the second episode test waited on a scene; now skips it) and

@@ -313,7 +313,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let kneel = 0, kneelGoal = 0, heels = 0, heelsGoal = 0, heldProp: PropKind | null = null, heldShown = false;
   const kneelL: Limbs = {}, KD = new THREE.Vector3(), KQ = new THREE.Quaternion();
   // a task in the hands (doTask): time in, length, where the hand goes, which hands
-  let task: { kind: TaskKind; t: number; dur: number; at: THREE.Vector3 | null; hands: 'L' | 'R' | 'both'; prop: PropKind | null; onContact?: (() => void) | null; clipOk?: boolean } | null = null;
+  type TaskRun = { kind: TaskKind; t: number; dur: number; at: THREE.Vector3 | null; hands: 'L' | 'R' | 'both'; prop: PropKind | null; onContact?: (() => void) | null; clipOk?: boolean };
+  let task: TaskRun | null = null;
+  /** A task asked for in the last moments of the running one: it starts as that one ends. Started at once, it set the
+   *  task clip's clock back to 0 while the clip still had most of its weight: the arm turned ~120 degrees in a frame
+   *  (glitch watch g_e23b, Episode Two, picking things up one after another). */
+  let taskNext: TaskRun | null = null;
   // the thing in the hand: made once per kind, parented to the hand (or held in front of the hips for a parcel)
   const props = new Map<PropKind, THREE.Mesh>();
   let propOn: THREE.Mesh | null = null;
@@ -1288,8 +1293,16 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   }
 
   const aimAxis = new Map<string, THREE.Vector3>();
-  /** Lays the set pose over the clip: each bone turns to point the requested way. */
-  function applyLimbs(l: Limbs, bs: Map<string, THREE.Bone>) {
+  /** Each posed limb's turn as last posed, and on which pose tick: a set pose turns a limb at most AIM_STEP a frame
+   *  from the frame before. A forearm aimed near straight back from where it hung flipped its roll in a frame (Lyrra in the
+   *  title montage, film 166.5 and 169.7: 117 and 104 degrees, glitch watch g_e23b / snap_probe2). */
+  const aimLast = new Map<THREE.Bone, { q: THREE.Quaternion; tick: number }>();
+  let aimTick = 0;
+  const AIM_STEP = 0.45;
+  /** Lays the set pose over the clip: each bone turns to point the requested way. `steady`: the pose of the frame
+   *  (the one a scene sets), held to AIM_STEP from the last frame's. */
+  function applyLimbs(l: Limbs, bs: Map<string, THREE.Bone>, steady = false) {
+    if (steady) aimTick++;
     if (l.bend) { bs.get('spine1')!.quaternion.multiply(Q.setFromEuler(E.set(l.bend * 0.5, 0, 0))); bs.get('chest')!.quaternion.multiply(Q.setFromEuler(E.set(l.bend * 0.5, 0, 0))); }
     if (l.twist) bs.get('chest')!.quaternion.multiply(Q.setFromEuler(E.set(0, l.twist, 0)));
     root.updateWorldMatrix(true, true);
@@ -1311,10 +1324,17 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const q = new THREE.Quaternion().setFromUnitVectors(from.clone().applyQuaternion(q1), to).multiply(q1);
       aimAxis.set(a, k); worldRotate(p, q);
     };
-    aim('upperarmL', 'lowerarmL', l.armL); aim('lowerarmL', 'handL', l.foreL ?? l.armL);
-    aim('upperarmR', 'lowerarmR', l.armR); aim('lowerarmR', 'handR', l.foreR ?? l.armR);
-    aim('upperlegL', 'lowerlegL', l.legL); aim('lowerlegL', 'footL', l.shinL ?? l.legL);
-    aim('upperlegR', 'lowerlegR', l.legR); aim('lowerlegR', 'footR', l.shinR ?? l.legR);
+    const held = (a: string, b: string, d?: Dir) => {
+      aim(a, b, d);
+      if (!steady || !d) return;
+      const p = bs.get(a)!, last = aimLast.get(p);
+      if (last && last.tick === aimTick - 1 && last.q.angleTo(p.quaternion) > AIM_STEP) { p.quaternion.copy(last.q.rotateTowards(p.quaternion, AIM_STEP)); p.updateWorldMatrix(false, true); }
+      if (last) { last.q.copy(p.quaternion); last.tick = aimTick; } else aimLast.set(p, { q: p.quaternion.clone(), tick: aimTick });
+    };
+    held('upperarmL', 'lowerarmL', l.armL); held('lowerarmL', 'handL', l.foreL ?? l.armL);
+    held('upperarmR', 'lowerarmR', l.armR); held('lowerarmR', 'handR', l.foreR ?? l.armR);
+    held('upperlegL', 'lowerlegL', l.legL); held('lowerlegL', 'footL', l.shinL ?? l.legL);
+    held('upperlegR', 'lowerlegR', l.legR); held('lowerlegR', 'footR', l.shinR ?? l.legR);
     if (l.openHands) handOpen = true;
   }
 
@@ -1605,7 +1625,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const proc = !tcp && (T.kind === 'pickup' || T.kind === 'putdown' || T.kind === 'plant');
     const at = tcp ? (tcp.release ?? tcp.touch) : proc ? 0.5 : -1, past = at >= 0 && k >= at;
     if (past && T.onContact) { const cb = T.onContact; T.onContact = null; cb(); }
-    if (T.t >= T.dur) { task = null; showProp(bs, null, 0); return; }
+    if (T.t >= T.dur) { task = taskNext; taskNext = null; if (task) MA.fresh = true; showProp(bs, null, 0); return; }
     const after = tcp ? tcp.prop === 'after' : T.kind === 'pickup';
     // (not while her own phone is still in that hand on its way to the pocket: the stone and the phone were in her hand
     // together for a quarter second, GPU take tasks9)
@@ -1815,7 +1835,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         g.rotation.set(0, 0, 0);
       }
     }
-    if (limbs) applyLimbs(limbs, bs);
+    if (limbs) applyLimbs(limbs, bs, true);
     kneel += (kneelGoal - kneel) * (1 - Math.exp(-dt * 3.2));
     heels += (heelsGoal - heels) * (1 - Math.exp(-dt * 2.4));
     if (kneelGoal === 0 && kneel < 0.004) kneel = 0;
@@ -2296,8 +2316,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const prop = o.prop === undefined ? TASK_PROP[kind] ?? null : o.prop;
       // drinking from a cup is one hand's; from cupped hands, both
       const hands = o.hands ?? (kind === 'type' || kind === 'carry' || (kind === 'drink' && !prop) || kind === 'gesture' || kind === 'fix' ? 'both' : 'R');
+      const next = { kind, t: 0, dur, at: o.at ? o.at.clone() : null, hands, prop, onContact: o.onContact ?? null, clipOk: kneelGoal === 0 };
+      if (task && task.dur - task.t < 0.45 && taskEnv() > 0.01) { taskNext = next; return; }
       MA.fresh = true;
-      task = { kind, t: 0, dur, at: o.at ? o.at.clone() : null, hands, prop, onContact: o.onContact ?? null, clipOk: kneelGoal === 0 };
+      taskNext = null;
+      task = next;
     },
     /** Hold on to something with one or both hands: live world points and directions (mutate them to move the hands
      *  with what they hold); null lets go. */
@@ -2309,7 +2332,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
      *  to a finger's range and the hand eases to the target, so calling it every frame with the same values is still. */
     setGrip(side: 'L' | 'R' | 'both', g: Grip | null) { for (const sd of side === 'both' ? ['L', 'R'] as const : [side]) { if (g) gripSet[sd] = { ...g }; else delete gripSet[sd]; } },
     /** Let go of the task now (it eases out over a moment). */
-    stopTask() { if (task) { const out = Math.min(0.35, task.dur * 0.3); task.dur = Math.min(task.dur, task.t + out); task.t = Math.max(task.t, task.dur - out); } },
+    stopTask() { taskNext = null; if (task) { const out = Math.min(0.35, task.dur * 0.3); task.dur = Math.min(task.dur, task.t + out); task.t = Math.max(task.t, task.dur - out); } },
     /** What the hands are busy with, or null. */
     get task() { return task ? { kind: task.kind, t: task.t, dur: task.dur } : null; },
     /** Head offset for looking at something (radians). */

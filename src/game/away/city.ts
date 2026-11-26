@@ -2045,9 +2045,13 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         // into the stall mats at the kerb and into the tram's side: the walker stood there, 2026-11-26 glitch_check)
         const crosses = Math.sign(cx || 1) !== Math.sign(ex || 1) && Math.abs(ex - cx) > 4;
         const clear = (zz: number) => { for (const k of wallsNear(-7, zz - 1.1, 7, zz + 1.1)) { const b = blocks[k]; if (b.max.y > 0.25 && b.min.y < 1.8 && b.max.z > zz - 1.1 && b.min.z < zz + 1.1 && b.max.x > -7 && b.min.x < 7) return false; } return true; }; // a lane 2.2 m wide: a walker drifts off the line a little
-        let zx = ez;
-        if (crosses) for (let d = 0; d <= 24; d += 0.5) { if (clear(ez + (ez < cz ? d : -d))) { zx = ez + (ez < cz ? d : -d); break; } if (clear(ez - (ez < cz ? d : -d))) { zx = ez - (ez < cz ? d : -d); break; } }
-        if (crosses) { const la = laneOf(cx), lb = laneOf(ex); if (Math.abs(la - cx) > 0.5 || Math.abs(zx - cz) > 0.5) pts.push([la, cz]); pts.push([la, zx], [lb, zx]); if (Math.abs(ez - zx) > 0.5) pts.push([lb, ez]); }
+        // already off the kerb (the route is asked again every half second as he goes): on across from where he is. Sent
+        // back to his own pavement first, he swung between the road and the kerb at (4.2, 41.3) for minutes (g_city4)
+        const onRoad = Math.abs(cx) < 5.2, from = onRoad ? cz : ez;
+        let zx = from;
+        if (crosses) for (let d = 0; d <= 24; d += 0.5) { if (clear(from + (from < cz ? d : -d))) { zx = from + (from < cz ? d : -d); break; } if (clear(from - (from < cz ? d : -d))) { zx = from - (from < cz ? d : -d); break; } }
+        if (crosses && onRoad) { const lb = laneOf(ex); if (Math.abs(zx - cz) > 0.5) pts.push([cx, zx]); pts.push([lb, zx]); if (Math.abs(ez - zx) > 0.5) pts.push([lb, ez]); }
+        else if (crosses) { const la = laneOf(cx), lb = laneOf(ex); if (Math.abs(la - cx) > 0.5 || Math.abs(zx - cz) > 0.5) pts.push([la, cz]); pts.push([la, zx], [lb, zx]); if (Math.abs(ez - zx) > 0.5) pts.push([lb, ez]); }
         else if (Math.abs(ez - cz) > 4) { const lane = laneOf(cx); if (Math.abs(lane - cx) > 0.5) pts.push([lane, cz]); pts.push([lane, ez]); }
         return [...pts, ...tail, [bx, bz]];
       },

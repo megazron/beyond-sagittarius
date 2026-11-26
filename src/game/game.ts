@@ -671,9 +671,24 @@ export class Game {
     this.player.model.root.visible = out || blend > 0.05;
   }
 
+  /**
+   * Watched time (tools/watch_time.py): game seconds of cutscene since the player last did anything, closed by a
+   * decision or a reflex opening (on the dialogue panel or the choice layer) or by his getting control back. Each
+   * stretch is kept with its level and how it ended.
+   */
+  watch = { cur: 0, play: 0, level: 0, stretches: [] as { level: number; sec: number; end: 'choice' | 'play' }[] };
+  private watchTick(dt: number) {
+    const w = this.watch, asking = this.ui.choice.open || !!this.dialogue.deciding || this.ui.moment.open;
+    const close = (end: 'choice' | 'play') => { if (w.cur > 0.5) w.stretches.push({ level: w.level, sec: +w.cur.toFixed(1), end }); w.cur = 0; };
+    if (asking) { close('choice'); w.play = 0; return; }
+    if (this.mode === 'scene' || this.mode === 'wake') { w.cur += dt; w.level = this.save.level; w.play = 0; return; }
+    if (this.mode === 'play' || this.mode === 'craft' || this.mode === 'talk' || this.mode === 'away') { w.play += dt; if (w.play > 0.3) close('play'); }
+  }
+
   update(dt: number, time: number) {
     const s = this.save;
     const st = s.stats;
+    this.watchTick(dt);
     s.timeOfDay += dt / 50; // one in-game hour = 50 s
     // the first day does not run out on him: he wakes at midday and the light waits in the late afternoon until the
     // night level begins (an unscripted night before "Survive the First Night" made that one the second)
