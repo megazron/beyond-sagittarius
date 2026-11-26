@@ -183,6 +183,19 @@ NOT ON MAIN until a landing line below says so. What I changed and measured:
   FOUND: the procedural arm solve (armTo, elbowOut) is weighted; next step is a frame log of the player's upperarmR
   through each stage (clip, set pose, task arm solve) around 32.47 s of glitch_check --only ep2. ce590af splits ep2 and
   ep3 into their own CI jobs. (Making the ep2 job report-only was refused by the permission check: it stays a gate.)
+- CI on ce590af (run 45884358934): glitch_ep2 FAILED (the 4 pickup snaps, unchanged), glitch_ep3 FAILED (3 pickup snaps
+  'doing pickup' 123 deg at 23.13 s, and a turn-pop: the player turned 168 deg in one frame at 15.27 s, at
+  [-8.95, 4.28, 6.23]; the watch allows 2.4 rad a 1/30 s frame, so the facing was set, not eased: player.ts spawn() or a
+  scene handing control back with a new yaw and no camera cut is my guess, NOT checked), choices FAILED once (fixed in
+  7b4be7f: the wait is on the game clock). glitch_pull_ep1 and glitch_city green again.
+- f611d0d: the pickup snaps' cause as I read it: the task clip path only ran standing (character.ts, the locomotion
+  branch reset every clip target and never drove the task clip), a pick up begun walking was solved by the arm, and
+  stopping mid-task switched the same task to the clip at weight 0: the arm from the solved reach to the idle pose in a
+  frame. Now each task's path is chosen on its first frame and kept (task.path), the clip driven while walking too with
+  the walk weighted down by the task's envelope, a solved task clears the stale clip name. CI is the measure.
+- GPU capture plans: the game writes its own save on beforeunload, which overwrote the save a plan put in before
+  location.reload(): only a plan's FIRST load had its save (the cine6 'storm with two answers' and my first P8 Hoh-Ma
+  take were on the wrong save). make_plans.py puts the save again on pagehide.
 - P9 GPU take on a4dafb8 (~/bs-cap/cine7/P9, 480 s cap): paratha, pack, phone, parcel, chai, tram done (the chai
   crossing works on the GPU now); at the end he was at (-0.4, -48.97) on the way to the ring (2.8, -44, r 2.2): ring and
   gate not reached.
