@@ -192,14 +192,21 @@ def main():
             try: page.wait_for_function('__bs.moment.open', timeout=15000)
             except Exception: fails.append(f'episode moment {n} never opened on the layer'); return
             if press: page.wait_for_timeout(300); page.keyboard.press('KeyE' if press is True else press)
-            page.wait_for_function('!__bs.moment.open', timeout=20000)
+            # on the game's clock, not the wall's: a window let go closes when its seconds have passed in the game, and a
+            # software GPU in CI runs that clock slowly (20 s of real time were not enough for a 2.4 s window)
+            for _ in range(120):
+                if not ev('__bs.moment.open'): break
+                ev('__bs.step(0.25)'); page.wait_for_timeout(50)
+            if ev('__bs.moment.open'): fails.append(f'episode moment {n} did not close'); return
             page.wait_for_timeout(400)
             log = ((ev('__bs.moment.saved') or {}).get('branch') or {}).get('log', [])
             got = next((e['pick'] for e in log if e['id'] == mid), None)
             want = flag if press not in (True, False, None) else ('pass' if press else 'fail')
             if got != want: fails.append(f'episode moment {n}: logged {"nothing" if got is None else "another answer"} on disk')
             if line:
-                page.wait_for_function("__bs.mode === 'play'", timeout=30000)
+                for _ in range(120):
+                    if ev("__bs.mode") == 'play': break
+                    ev('__bs.step(0.25)'); page.wait_for_timeout(50)
                 if line not in ev('__bs.moment.said'): fails.append(f'episode moment {n}: the line its answer brings was not said')
             print(f'episode moment {n}: {"pressed" if press else "let go"}, saved at once' + (', its line said' if line else ''), flush=True)
         ep_moment(1, 'e2m.tap', True)

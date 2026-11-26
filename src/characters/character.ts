@@ -1293,10 +1293,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   }
 
   const aimAxis = new Map<string, THREE.Vector3>();
-  /** Each posed limb's turn as last posed, and on which pose tick: a set pose turns a limb at most AIM_STEP a frame
-   *  from the frame before. A forearm aimed near straight back from where it hung flipped its roll in a frame (Lyrra in the
+  /** Each posed limb's turn as last posed, the way it was asked to point, and on which pose tick: asked to point
+   *  nearly where it pointed the frame before, a limb turns at most AIM_STEP (a new pose still lands at once). A forearm aimed near straight back from where it hung flipped its roll in a frame (Lyrra in the
    *  title montage, film 166.5 and 169.7: 117 and 104 degrees, glitch watch g_e23b / snap_probe2). */
-  const aimLast = new Map<THREE.Bone, { q: THREE.Quaternion; tick: number }>();
+  const aimLast = new Map<THREE.Bone, { q: THREE.Quaternion; tick: number; dir: THREE.Vector3 }>();
   let aimTick = 0;
   const AIM_STEP = 0.45;
   /** Lays the set pose over the clip: each bone turns to point the requested way. `steady`: the pose of the frame
@@ -1327,9 +1327,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const held = (a: string, b: string, d?: Dir) => {
       aim(a, b, d);
       if (!steady || !d) return;
-      const p = bs.get(a)!, last = aimLast.get(p);
-      if (last && last.tick === aimTick - 1 && last.q.angleTo(p.quaternion) > AIM_STEP) { p.quaternion.copy(last.q.rotateTowards(p.quaternion, AIM_STEP)); p.updateWorldMatrix(false, true); }
-      if (last) { last.q.copy(p.quaternion); last.tick = aimTick; } else aimLast.set(p, { q: p.quaternion.clone(), tick: aimTick });
+      const p = bs.get(a)!, last = aimLast.get(p), want = V5.set(d[0], d[1], d[2]).normalize().applyQuaternion(rq);
+      if (last && last.tick === aimTick - 1 && last.dir.angleTo(want) < AIM_STEP && last.q.angleTo(p.quaternion) > AIM_STEP) { p.quaternion.copy(last.q.rotateTowards(p.quaternion, AIM_STEP)); p.updateWorldMatrix(false, true); }
+      if (last) { last.q.copy(p.quaternion); last.tick = aimTick; last.dir.copy(want); } else aimLast.set(p, { q: p.quaternion.clone(), tick: aimTick, dir: want.clone() });
     };
     held('upperarmL', 'lowerarmL', l.armL); held('lowerarmL', 'handL', l.foreL ?? l.armL);
     held('upperarmR', 'lowerarmR', l.armR); held('lowerarmR', 'handR', l.foreR ?? l.armR);

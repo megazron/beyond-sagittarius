@@ -228,7 +228,10 @@ export class MomentLayer {
     this.root.querySelectorAll('button').forEach((b, j) => b.classList.add(j === i ? 'taken' : 'gone'));
     if (timedOut) this.root.insertAdjacentHTML('beforeend', `<div class="fork-silent">${esc(t('mo.silent'))}</div>`);
     document.body.classList.remove('choosing', 'forking');
-    setTimeout(() => { if (!this.fork) this.root.classList.add('hidden'); }, timedOut ? 900 : 520);
+    // the answer's line starts at once: its subtitle waits until the panel showing the pick has gone (it was written over
+    // the fading buttons, GPU take P8 vine)
+    document.body.classList.add('forkout');
+    setTimeout(() => { if (!this.fork) { this.root.classList.add('hidden'); document.body.classList.remove('forkout'); } }, timedOut ? 900 : 520);
     audio.uiClick();
     this.log.push({ at: performance.now(), what: 'picked', detail: `${f.options[i]?.label}${timedOut ? ':timeout' : ''}` });
     f.onDone(i, timedOut);
@@ -249,7 +252,7 @@ export class MomentLayer {
   close() {
     this.fork = null; this.reflex = null; this.total = 0;
     this.root.classList.add('hidden'); this.reflexEl.classList.add('hidden');
-    document.body.classList.remove('choosing', 'forking');
+    document.body.classList.remove('choosing', 'forking', 'forkout');
   }
 
   private key(e: KeyboardEvent, isDown: boolean) {
