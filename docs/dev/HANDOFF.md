@@ -141,7 +141,19 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
   - Physics (part 6) and city tasks/crowd (part 7): not looked at.
 
 ## 2026-11-26 night, cine6 third agent (same worktree ~/bs-cine and branch cine6; captures and tools ~/bs-cap/cine7)
-NOT ON MAIN until a landing line below says so. What I changed and measured:
+NOT ON MAIN. STATE AT HAND-BACK (071b4d4 pushed): the last full CI (740e334, run 45887830329) is green on every job I
+saw finish (choices, anim_qa, the smokes) EXCEPT glitch_ep2 and glitch_ep3, which fail on the player's upperarmR
+pickup snaps (and one 168 degree turn-pop in ep3). Those snaps come back with identical numbers whatever I changed in
+the task code (clip crossfade a4dafb8, path lock f611d0d, reverted in 071b4d4): their cause is NOT found. They block a
+fully green sha, so nothing is landed. Next step: in tools/glitch_check.py --only ep3 (snap at 23.13 s, the shorter
+way in), log the player's upperarmR quaternion after each stage of Character.animate (mixer, set pose, task hands,
+holds, keepArmsOut) for the frames round it; find which stage moves it 2 rad.
+In flight at hand-back (my background jobs; logs ~/bs-cap/cine7/<name>.log, clips ~/bs-cap/cine7/<name>/): P6before
+(dist-before = c22ebfb) and P6after2 (dist = 740e334), plan_p6.json now waits for 20 s of steady play and skips scenes
+during the recording (the first P6after take recorded the vine scene and a shore scene, not sent); P8c: the storm
+three times, each on a clean save (plan_p8c.json leaves the game for /brand/logo.svg before putting the save in). Keep
+~/bs-cine6-before and ~/bs-cine/dist-before until P6 is sent, then remove them (git worktree remove).
+What I changed and measured:
 - CI on 5938dbd: every job green except glitch_planet, which was cancelled at the 45 minute job limit (it never finished
   in any run: pull, ep1 and ep2 took the whole 45). In its log: pull 1 snap (Lyrra lowerarmL 117 deg) and a clip probe
   miss, ep2 4 upperarmR snaps 'doing pickup'. gates.yml now runs it as two jobs: glitch_pull_ep1, glitch_ep2_ep3.
