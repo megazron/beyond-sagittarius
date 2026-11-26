@@ -690,7 +690,7 @@ export class Game {
     // Episode Three holds a level's first scene while someone's story is due, so that story comes between the levels
     // (after the level's card) and never breaks into a scene (GPU takes EP3B: Bolzar's cut into 16, Lyrra's into 21)
     const between = !!who && !!this.ep3?.holdsFor(s.level);
-    if (who && this.sinceLevel > (between ? 5.5 : 15) && !this.story.busy && !this.ui.modalOpen()) { this.goAway(who.id, who.location!); return; }
+    if (who && this.sinceLevel > (between ? 2 : 15) && !this.story.busy && !this.ui.modalOpen()) { this.goAway(who.id, who.location!); return; }
     // the crash isn't forgotten by the next cutscene: the fall's wounds (game/injury.ts) heal by the hour; never slower
     // than the old day-one pace (0.45 on day one, 0.72 on day two)
     const inj = this.injuries, eff = inj?.effects();
