@@ -398,7 +398,10 @@ export class Vault {
         if (u?.uMarks) u.uMarks.value = NO_MARKS;
         // his pale hair burned white under the lamp and the room's reflections (GPU take a1): a shade down, little sheen
         if ((mt.userData?.film as { kind?: string } | undefined)?.kind === 'hair' && !mt.userData.dimmed) {
-          mt.userData.dimmed = true; (mt as THREE.MeshStandardMaterial).color?.multiplyScalar(0.62); (mt as THREE.MeshStandardMaterial).envMapIntensity = 0.12;
+          mt.userData.dimmed = true; (mt as THREE.MeshStandardMaterial).envMapIntensity = 0.12;
+          const hu = mt.userData.hairU as Record<string, { value: THREE.Color }> | undefined;
+          if (hu) { hu.uRoot.value.multiplyScalar(0.7); hu.uMid.value.multiplyScalar(0.6); hu.uTip.value.multiplyScalar(0.55); hu.uShine.value.multiplyScalar(0.4); }
+          else (mt as THREE.MeshStandardMaterial).color?.multiplyScalar(0.62);
         }
       }
       if (!m.isSkinnedMesh || !m.geometry.attributes.normal) return;
@@ -764,7 +767,7 @@ function introBeats(): VaultLine[] {
       move: { a: V(0.75, 1.48, 1.7), b: V(0.62, 1.58, 1.52), la: page, lb: V(0, 1.75, 0.2), look: [0.35, 0.8], fa: 0.95, fb: 1.65, rack: [0.4, 0.75], ap: 0.016 } },
     // 8. the hand-over: two taps of the quill, "Turn the page", and the camera goes into the glowing page
     { key: 'mz.intro.4', lead: 1.1, min: 5.2, after: 0.2, act: { pose: 'stand', gaze: 'cam', taps: [0.3, 0.62], glow: [1.8, 5.0], note: 'resolve' },
-      move: { a: V(0.3, 1.72, 1.75), b: V(0.04, 1.34, 1.02), la: V(0, 1.7, 0.2), lb: page, look: [0.3, 0.75], fa: 1.6, fb: 0.35, rack: [0.3, 0.8], ap: 0.012, fov: [30, 24], ease: 'io' } },
+      move: { a: V(0.34, 1.9, 1.8), b: V(0.04, 1.34, 1.02), la: V(0, 1.9, 0.05), lb: page, look: [0.45, 0.8], fa: 1.8, fb: 0.35, rack: [0.3, 0.8], ap: 0.012, fov: [30, 24], ease: 'io' } },
   ];
 }
 
