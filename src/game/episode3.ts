@@ -1683,9 +1683,9 @@ export class Episode3 extends Episode2 {
         holdComb(); F.wenka.setLookTarget(this.head()); F.hohma.setLookTarget(foot); z.setLookTarget(boy()); F.wenka.setFace({ frown: 0.5, squint: 0.4 });
       } },
       // her close from in front of her (from the mat's side), not from the way the body's yaw says she faces
-      // her line from in front of her face, at her eye height (probes EP3C: from above, and from the boy's side, the camera
-      // saw the crown and the back of her head: she kneels facing out from the mat)
-      { key: 'e3.ds.1', who: 'hohma' as Who, shot: () => { const hh = F.hohma.head.getWorldPosition(new THREE.Vector3()); return { from: hh.clone().addScaledVector(out, 0.85).addScaledVector(d, -0.2).add(v3(0, -0.04, 0)), to: hh.clone().add(v3(0, -0.04, 0)), fov: 36, push: 0.01 }; }, run: () => { F.hohma.setLookTarget(this.head()); } },
+      // her line from where she looks (at him), a little to the open side, at her eye height (probes EP3C: from above, from
+      // the boy's side and from the open side the camera saw the back of her head or her pack)
+      { key: 'e3.ds.1', who: 'hohma' as Who, shot: () => { const hh = F.hohma.head.getWorldPosition(new THREE.Vector3()); const zh = this.head(), to = zh.clone().sub(hh).setY(0).normalize(), sd = v3(-to.z, 0, to.x); if (sd.dot(out) < 0) sd.negate(); return { from: hh.clone().addScaledVector(to, 0.55).addScaledVector(sd, 0.35).add(v3(0, -0.02, 0)), to: hh.clone().add(v3(0, -0.04, 0)), fov: 38, push: 0.01 }; }, run: () => { F.hohma.setLookTarget(this.head()); } },
       // the comb in her hands from above and in front of her (the camera stood inside her body in the GPU take)
       { hold: 2.6, shot: () => ({ from: held.clone().addScaledVector(out, -0.48).addScaledVector(d, -0.12).add(v3(0, 0.16, 0)), to: held.clone().add(v3(0, 0.01, 0)), fov: 30, push: 0.006, aperture: 0.004, lightAt: held.clone().add(v3(0, 0.15, 0)), lightScale: 0.6 }), run: () => z.setLookTarget(held) },
       { key: 'e3.ds.2', who: 'scientist', shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => { z.setLookTarget(boy()); z.setFace({ frown: 0.3 }); } },
@@ -2376,7 +2376,7 @@ export class Episode3 extends Episode2 {
           });
         } },
         // insert: the clean grain poured into a pot, the level coming up
-        { hold: 2.6, shot: () => ({ from: grainPot.position.clone().add(v3(0.16, 0.55, 0.1)), to: grainPot.position.clone().add(v3(0, 0.03, 0)), fov: 30, push: 0.006, aperture: 0.004, lightAt: grainPot.position.clone().add(v3(0, 0.2, 0)) }), run: () => {
+        { hold: 2.6, shot: () => ({ from: grainPot.position.clone().addScaledVector(r, -0.3).add(v3(0, 0.62, 0)), to: grainPot.position.clone().add(v3(0, 0.03, 0)), fov: 34, push: 0.006, aperture: 0.004, lightAt: grainPot.position.clone().add(v3(0, 0.2, 0)) }), run: () => {
           const top = grainPot.position.clone().add(v3(0, 0.22, 0));
           grains.forEach((g0) => { g0.visible = true; });
           S.anim(2.6, (k) => { fill.position.y = grainPot.position.y - 0.08 + Math.min(1, k / 2.4) * 0.13; grains.forEach((g0, i) => { const w = ((k * 1.2 + i / 26) % 1); g0.position.copy(top).add(v3(Math.sin(i) * 0.015, -w * (0.22 - (fill.position.y - grainPot.position.y + 0.08)), Math.cos(i) * 0.015)); }); });
@@ -2635,8 +2635,8 @@ export class Episode3 extends Episode2 {
     const dose = this.f('e3.dose.self') ? 'e3.mz.self' : this.f('e3.dose.half') ? 'e3.mz.half' : 'e3.mz.boy';
     const H = this.house(), c = H.at.clone(), fld = this.fieldAt(), fenn = this.fennAt();
     const mid = c.clone().lerp(fld, 0.5);
-    // (GPU probe EP3C: from 4 to 9 m up the crane went through the tree canopy: now from above the trees, looking down)
-    const crane = (k: number) => ({ from: mid.clone().addScaledVector(H.a, -10 - k * 4).addScaledVector(H.b, 7 + k * 3).add(v3(0, 22 + k * 5, 0)), to: mid.clone().lerp(fenn, 0.15 + k * 0.1).add(v3(0, 0.6, 0)), fov: 46, push: 0.02 });
+    // (GPU probes EP3C: through the canopy, then above it the trees hid the village; now up from the field's open side)
+    const crane = (k: number) => ({ from: mid.clone().addScaledVector(H.b, -(9 + k * 3)).addScaledVector(H.a, 2 + k).add(v3(0, 2.5 + k * 2.5, 0)), to: mid.clone().add(v3(0, 0.8, 0)), fov: 46, push: 0.02 });
     this.ui.banner(t('e3.end'), t('e3.next'));
     this.scene([
       { key: 'e3.mz.1', who: 'megazron' as Who, shot: () => crane(0) },
