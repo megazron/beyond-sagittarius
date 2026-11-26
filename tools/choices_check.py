@@ -176,10 +176,33 @@ def main():
         disk = ev('__bs.moment.saved') or {}
         if disk.get('flags', {}).get('openingLive'): fails.append('the opening\'s save was not replaced on the planet')
         if not any(k.startswith('explorer>') for k in (st or {}).get('trust', {})): fails.append('trust did not come to the planet')
+        # the episodes' scene moments (branch/moments.ts): loaded on the choice layer, and one answered and one let go
+        # in a scene where you stand, each written to disk at once, the second changing the line that follows
+        eps = page.evaluate('__bs.moment.episodes') or []
+        if len(eps) < 6: fails.append(f'only {len(eps)} episode moments loaded on the choice layer')
+        for _ in range(40):
+            if ev('__bs.mode') == 'play': break
+            ev('__bs.skip()'); page.wait_for_timeout(1500)
+        def ep_moment(n, mid, press, line=None, flag=None):
+            if not ev(f'__bs.moment.episodeTest({mid!r}, {line!r}, {flag!r})'.replace('None', 'undefined')): fails.append(f'episode moment {n}: no scene could start (mode {ev("__bs.mode")})'); return
+            try: page.wait_for_function('__bs.moment.open', timeout=15000)
+            except Exception: fails.append(f'episode moment {n} never opened on the layer'); return
+            if press: page.wait_for_timeout(300); page.keyboard.press('KeyE')
+            page.wait_for_function('!__bs.moment.open', timeout=20000)
+            page.wait_for_timeout(400)
+            log = ((ev('__bs.moment.saved') or {}).get('branch') or {}).get('log', [])
+            got = next((e['pick'] for e in log if e['id'] == mid), None)
+            if got != ('pass' if press else 'fail'): fails.append(f'episode moment {n}: logged {got} on disk')
+            if line:
+                page.wait_for_function("__bs.mode === 'play'", timeout=30000)
+                if line not in ev('__bs.moment.said'): fails.append(f'episode moment {n}: the line its answer brings was not said')
+            print(f'episode moment {n}: {"pressed" if press else "let go"}, saved at once' + (', its line said' if line else ''), flush=True)
+        ep_moment(1, 'e2m.tap', True)
+        ep_moment(2, 'e2m.spark', False, 'e2m.py.miss', 'e2m.spark.missed')
         b.close()
     httpd.shutdown()
     fails += errors[:5]
-    print(('FAILED: ' + '; '.join(fails)) if fails else 'OK: seven moments asked, answered, saved at once, kept across a reload, branched lines, carried to the planet')
+    print(('FAILED: ' + '; '.join(fails)) if fails else 'OK: seven moments asked, answered, saved at once, kept across a reload, branched lines, carried to the planet; the episodes\' moments on the layer')
     sys.exit(1 if fails else 0)
 
 

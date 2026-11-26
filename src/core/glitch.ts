@@ -7,13 +7,21 @@ import * as THREE from 'three';
  *   snap    a limb (upper/lower arm or leg) turns further in one frame than a joint can
  *   floor   a foot under the ground (sinking or falling through)
  *   float   both feet well off the ground, standing, for longer than a jump
- *   jitter  the player's height flickering up and down while walking (stairs, kerbs, slopes)
+ *   jitter  the player's height flickering up and down while walking (kerbs, slopes, steps)
  *   wall    the player inside a wall after the frame's own collision (the stage's collide still pushes them)
- * A cut (the camera jumping) excuses that frame's pops. Bodies through each other and through the set are the clip
- * probe's (core/clipprobe.ts), sampled by the runner.
+ * A cut (the camera jumping) excuses that frame's pops. A body not drawn in the frame before (hidden, out of range,
+ * just given to a walker by a pool) starts a new track: it is compared with where it was drawn last, never with where
+ * it was before it was hidden. Bodies through each other are the clip probe's (core/clipprobe.ts), sampled by the runner.
+ *
+ * The watch reads the bodies at the end of the frame, after every update that places them (the city's pools set each
+ * walker's root every frame), so a test poke made between frames is undone before it is read. `inject()` puts a test
+ * glitch in at the read itself: the body or the limb is moved just before the watch reads it and put back just after,
+ * and the events it causes are marked as the test's (`test`), so the runner can prove each kind is caught there.
  */
 export type GlitchKind = 'pop' | 'snap' | 'floor' | 'float' | 'jitter' | 'wall';
-export interface GlitchEvent { t: number; who: string; kind: GlitchKind; detail: string; at: [number, number, number] }
+export interface GlitchEvent { t: number; who: string; kind: GlitchKind; detail: string; at: [number, number, number]; test?: number }
+/** One test glitch: what, on whom, whether the watch caught it, and why not when it could not be put in. */
+export interface GlitchTest { id: number; kind: GlitchKind; on: 'npc' | 'player'; who: string; t: number; state: 'waiting' | 'on' | 'caught' | 'missed' | 'n/a'; why?: string }
 
 const LIMBS = ['upperarmL', 'upperarmR', 'lowerarmL', 'lowerarmR', 'upperlegL', 'upperlegR', 'lowerlegL', 'lowerlegR'];
 const FEET = ['footL', 'footR'];
@@ -21,46 +29,154 @@ const NEAR = 24;
 
 interface Track {
   pos: THREE.Vector3; yaw: number; bones: THREE.Bone[]; feet: THREE.Bone[]; quats: THREE.Quaternion[];
-  floatT: number; seen: number; lastKind: Record<string, number>;
+  floatT: number; seen: number; frame: number; lastKind: Record<string, number>;
 }
+interface Live extends GlitchTest { target?: THREE.Object3D; frames: number; left: number; grace: number; wait: number; undo?: () => void; flip: number }
 
-const P = new THREE.Vector3(), Q = new THREE.Vector3(), E = new THREE.Euler();
+const P = new THREE.Vector3(), Q = new THREE.Vector3(), E = new THREE.Euler(), W = new THREE.Vector3(), WQ = new THREE.Quaternion();
+
+/** How long each test glitch is held (frames at 30 fps, on a body / on the player): past the kind's own threshold. */
+const HOLD: Record<GlitchKind, [number, number]> = { pop: [1, 1], snap: [1, 1], floor: [1, 1], float: [24, 54], jitter: [18, 18], wall: [1, 1] };
+
+interface FrameOpts {
+  ground?: (x: number, z: number) => number | null;
+  player?: { root: THREE.Object3D; onGround: boolean; speed: number; pos: THREE.Vector3; swimming?: boolean } | null;
+  collide?: (p: THREE.Vector3, r: number) => void;
+  zeroG?: boolean;
+  /** The body played, even when it is not in the player's hands (a scene): never a test's "other body". */
+  self?: THREE.Object3D | null;
+}
 
 export class GlitchWatch {
   on = false;
   events: GlitchEvent[] = [];
+  tests: GlitchTest[] = [];
   /** Frames looked at and bodies followed, for the runner's summary. */
-  stats = { frames: 0, bodies: 0, maxBodies: 0 };
+  stats = { frames: 0, bodies: 0, maxBodies: 0, groundKnown: 0, playerFrames: 0, collideFrames: 0 };
   private tracks = new WeakMap<THREE.Object3D, Track>();
   private cam = new THREE.Vector3();
   private camSet = false;
   private hist: { t: number; y: number }[] = [];
   private clock = 0;
+  private nFrame = 0;
+  private live: Live[] = [];
+  private nextId = 1;
 
-  reset() { this.events = []; this.stats = { frames: 0, bodies: 0, maxBodies: 0 }; this.tracks = new WeakMap(); this.camSet = false; this.hist = []; }
+  reset() {
+    this.events = []; this.tests = []; this.live = [];
+    this.stats = { frames: 0, bodies: 0, maxBodies: 0, groundKnown: 0, playerFrames: 0, collideFrames: 0 };
+    this.tracks = new WeakMap(); this.camSet = false; this.hist = [];
+  }
 
-  private add(who: string, kind: GlitchKind, detail: string, p: THREE.Vector3, tr?: Track) {
+  /** A test glitch of this kind, put in at the next frame's read (on the nearest other body, or on the player). */
+  inject(kind: GlitchKind, on: 'npc' | 'player' = kind === 'jitter' || kind === 'wall' ? 'player' : 'npc') {
+    const [fn, fp] = HOLD[kind];
+    const t: Live = { id: this.nextId++, kind, on, who: '', t: +this.clock.toFixed(2), state: 'waiting', frames: on === 'player' ? fp : fn, left: 0, grace: 0, wait: 300, flip: 0 };
+    this.live.push(t); this.tests.push(t);
+    return t.id;
+  }
+
+  private add(who: string, kind: GlitchKind, detail: string, p: THREE.Vector3, tr?: Track, o?: THREE.Object3D) {
+    // a test glitch's events are the test's: marked (and the test caught), never counted as the game's
+    let test: number | undefined;
+    for (const l of this.live) if (test === undefined && l.kind === kind && l.target && l.target === o && (l.state === 'on' || l.state === 'caught')) { test = l.id; l.state = 'caught'; }
     // one event per body and kind in any half second: a body stuck in the floor is one glitch, not sixty
-    if (tr) { const last = tr.lastKind[kind] ?? -9; if (this.clock - last < 0.5) return; tr.lastKind[kind] = this.clock; }
-    if (this.events.length < 2000) this.events.push({ t: +this.clock.toFixed(2), who, kind, detail, at: [+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)] });
+    if (tr && test === undefined) { const last = tr.lastKind[kind] ?? -9; if (this.clock - last < 0.5) return; tr.lastKind[kind] = this.clock; }
+    if (this.events.length < 2000) this.events.push({ t: +this.clock.toFixed(2), who, kind, detail, at: [+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)], ...(test !== undefined ? { test } : {}) });
+  }
+
+  /** Moves a body by a world offset (in its parent's frame), returning how to put it back. */
+  private shift(o: THREE.Object3D, dx: number, dy: number, dz: number) {
+    const was = o.position.clone();
+    o.getWorldPosition(W).add(Q.set(dx, dy, dz));
+    if (o.parent) { o.parent.updateWorldMatrix(true, false); o.parent.worldToLocal(W); }
+    o.position.copy(W); o.updateMatrixWorld(true);
+    return () => { o.position.copy(was); o.updateMatrixWorld(true); };
+  }
+
+  /** The test glitches due this frame, put in just before the read. */
+  private applyTests(scene: THREE.Scene, cam: THREE.Vector3, opts: FrameOpts, cut: boolean) {
+    const pl = opts.player;
+    for (const l of this.live) {
+      // a cut excuses pops by design: a test held over one is put in again after it
+      if (cut && l.state === 'on') { l.state = 'waiting'; l.target = undefined; }
+      if (l.state === 'waiting' && cut) continue;
+      if (l.state === 'waiting') {
+        if (l.wait-- <= 0) { l.state = 'n/a'; l.why ??= 'no body to put it on'; continue; }
+        let target: THREE.Object3D | null = null;
+        if (l.on === 'player') {
+          if (!pl) { l.why = 'no player here'; continue; }
+          target = pl.root;
+          if (l.kind === 'jitter' && !(pl.onGround && pl.speed > 0.5 && !pl.swimming)) { l.why = 'the player was not walking'; continue; }
+          if (l.kind === 'wall' && !opts.collide) { l.state = 'n/a'; l.why = 'no walls known here'; continue; }
+          if ((l.kind === 'floor' || l.kind === 'float') && (!opts.ground || opts.zeroG || opts.ground(pl.pos.x, pl.pos.z) === null || !pl.onGround || pl.swimming)) { l.why = 'the player was not on known ground'; continue; }
+          const pt = this.tracks.get(pl.root);
+          if (l.kind !== 'jitter' && l.kind !== 'wall' && (!pt || pt.frame !== this.nFrame - 1 || this.clock - pt.seen < 0.3)) { l.why = 'the player was not followed (out of range of the camera)'; continue; }
+        } else {
+          let bd = 16;
+          scene.traverse((o) => {
+            if (!o.userData.isCharacter || o === pl?.root || o === opts.self) return;
+            for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return;
+            const tr = this.tracks.get(o); if (!tr || tr.frame !== this.nFrame - 1 || this.clock - tr.seen < 0.3) return; // followed already
+            o.getWorldPosition(P); const d = P.distanceTo(cam); if (d >= bd) return;
+            if (l.kind === 'snap' && !tr.bones.length) return;
+            if (l.kind === 'floor' || l.kind === 'float') {
+              const g = opts.ground && !opts.zeroG ? opts.ground(P.x, P.z) : null;
+              if (g === null || g === undefined || !tr.feet.length || Math.abs(P.y - g) > 0.12) return;
+            }
+            bd = d; target = o;
+          });
+          if (!target) { l.why = l.kind === 'floor' || l.kind === 'float' ? 'no body standing on known ground within 16 m' : 'no body within 16 m'; continue; }
+        }
+        const tg = target as THREE.Object3D;
+        l.target = tg; l.who = l.on === 'player' ? 'player' : ((tg.userData.id as string | undefined) ?? tg.name ?? 'body');
+        l.state = 'on'; l.left = l.frames; l.why = undefined; l.t = +this.clock.toFixed(2);
+      }
+      if ((l.state !== 'on' && l.state !== 'caught') || l.left <= 0) continue;
+      l.left--;
+      const o = l.target!;
+      if (l.kind === 'pop') l.undo = this.shift(o, 1, 0, 0);
+      else if (l.kind === 'floor') l.undo = this.shift(o, 0, -0.5, 0);
+      else if (l.kind === 'float') l.undo = this.shift(o, 0, 0.6, 0);
+      else if (l.kind === 'snap') {
+        const b = this.tracks.get(o)?.bones[0]; if (!b) { l.state = 'n/a'; l.why = 'no limbs'; continue; }
+        const was = b.quaternion.clone(); b.quaternion.multiply(WQ.setFromAxisAngle(Q.set(1, 0, 0), 1.75));
+        l.undo = () => { b.quaternion.copy(was); };
+      } else if (l.kind === 'jitter' && pl) {
+        const was = pl.pos.y; pl.pos.y += (l.flip++ % 2 ? -0.05 : 0.05); l.undo = () => { pl.pos.y = was; };
+      } else if (l.kind === 'wall' && pl && opts.collide) {
+        // the nearest point round the player that a wall pushes out of
+        const at = pl.pos.clone(); let found: THREE.Vector3 | null = null;
+        for (let r = 0.4; r <= 8 && !found; r += 0.2) for (let a = 0; a < 32 && !found; a++) {
+          const c = new THREE.Vector3(at.x + Math.cos(a * Math.PI / 16) * r, at.y, at.z + Math.sin(a * Math.PI / 16) * r), q = c.clone();
+          opts.collide(q, 0.3); if (Math.hypot(q.x - c.x, q.z - c.z) > 0.15) found = c;
+        }
+        if (!found) { l.state = 'n/a'; l.why = 'no wall within 8 m'; continue; }
+        pl.pos.copy(found); l.undo = () => { pl.pos.copy(at); };
+      }
+    }
+  }
+
+  private endTests() {
+    for (const l of this.live) { l.undo?.(); l.undo = undefined; }
+    for (const l of this.live) if ((l.state === 'on' || l.state === 'caught') && l.left <= 0) l.grace++;
+    // a few frames after it is taken out for it to show (the pop back, a float past its threshold)
+    for (const l of this.live) if (l.state === 'on' && l.left <= 0 && l.grace > 8) l.state = 'missed';
+    this.live = this.live.filter((l) => l.state === 'waiting' || l.state === 'on' || (l.state === 'caught' && (l.left > 0 || l.grace < 12)));
   }
 
   /**
    * One frame, after everything has moved. `ground` gives the walkable height under a point (null where it is not
    * known: a deck, a vehicle); `player` adds the player's own checks; `collide` is the stage's wall push.
    */
-  frame(scene: THREE.Scene, camera: THREE.Camera, dt: number, opts: {
-    ground?: (x: number, z: number) => number | null;
-    player?: { root: THREE.Object3D; onGround: boolean; speed: number; pos: THREE.Vector3 } | null;
-    collide?: (p: THREE.Vector3, r: number) => void;
-    zeroG?: boolean;
-  } = {}) {
+  frame(scene: THREE.Scene, camera: THREE.Camera, dt: number, opts: FrameOpts = {}) {
     if (!this.on || dt <= 0) return;
     this.clock += dt;
-    this.stats.frames++;
-    const cam = camera.getWorldPosition(Q);
+    this.stats.frames++; this.nFrame++;
+    const cam = camera.getWorldPosition(new THREE.Vector3());
     const cut = this.camSet && cam.distanceTo(this.cam) > 1.5;
     this.cam.copy(cam); this.camSet = true;
+    if (this.live.length) this.applyTests(scene, cam, opts, cut);
     const k = Math.max(1, dt * 60);
     let n = 0;
     scene.traverse((o) => {
@@ -71,42 +187,49 @@ export class GlitchWatch {
       n++;
       const who = (o.userData.id as string | undefined) ?? o.name ?? 'body';
       let tr = this.tracks.get(o);
-      E.setFromQuaternion(o.getWorldQuaternion(new THREE.Quaternion()), 'YXZ');
+      E.setFromQuaternion(o.getWorldQuaternion(WQ), 'YXZ');
+      // not drawn last frame (hidden, out of range, a pooled body given to someone else): a new track
+      if (tr && tr.frame !== this.nFrame - 1) tr = undefined;
       if (!tr) {
         const bones: THREE.Bone[] = [], feet: THREE.Bone[] = [];
         o.traverse((b) => { if ((b as THREE.Bone).isBone) { if (LIMBS.includes(b.name)) bones.push(b as THREE.Bone); else if (FEET.includes(b.name)) feet.push(b as THREE.Bone); } });
-        tr = { pos: P.clone(), yaw: E.y, bones, feet, quats: bones.map((b) => b.quaternion.clone()), floatT: 0, seen: this.clock, lastKind: {} };
+        tr = { pos: P.clone(), yaw: E.y, bones, feet, quats: bones.map((b) => b.quaternion.clone()), floatT: 0, seen: this.clock, frame: this.nFrame, lastKind: {} };
         this.tracks.set(o, tr);
         return;
       }
+      tr.frame = this.nFrame;
       const d = Math.hypot(P.x - tr.pos.x, P.z - tr.pos.z), dy = Math.abs(P.y - tr.pos.y);
       const turn = Math.abs(Math.atan2(Math.sin(E.y - tr.yaw), Math.cos(E.y - tr.yaw)));
       if (!cut && this.clock - tr.seen > 0.2) {
-        if (d > Math.max(0.45, 12 * dt) || dy > Math.max(0.5, 15 * dt)) this.add(who, 'pop', `${d.toFixed(2)} m across, ${dy.toFixed(2)} m up in one frame`, P, tr);
-        else if (turn > 1.2 * k && !opts.zeroG) this.add(who, 'pop', `turned ${(turn * 57.3).toFixed(0)} degrees in one frame`, P, tr);
+        if (d > Math.max(0.45, 12 * dt) || dy > Math.max(0.5, 15 * dt)) this.add(who, 'pop', `${d.toFixed(2)} m across, ${dy.toFixed(2)} m up in one frame`, P, tr, o);
+        else if (turn > 1.2 * k && !opts.zeroG) this.add(who, 'pop', `turned ${(turn * 57.3).toFixed(0)} degrees in one frame`, P, tr, o);
         tr.bones.forEach((b, i) => {
           const a = 2 * Math.acos(Math.min(1, Math.abs(b.quaternion.dot(tr!.quats[i]))));
-          if (a > 1.0 * k) this.add(who, 'snap', `${b.name} turned ${(a * 57.3).toFixed(0)} degrees in one frame`, P, tr);
+          if (a > 1.0 * k) this.add(who, 'snap', `${b.name} turned ${(a * 57.3).toFixed(0)} degrees in one frame`, P, tr, o);
         });
       }
       tr.bones.forEach((b, i) => tr!.quats[i].copy(b.quaternion));
       tr.pos.copy(P); tr.yaw = E.y;
       // the ground under the body, where it is known
+      const isPlayer = opts.player?.root === o;
       const g = opts.ground && !opts.zeroG ? opts.ground(P.x, P.z) : null;
       if (g !== null && g !== undefined && tr.feet.length) {
+        this.stats.groundKnown++;
         let low = Infinity;
-        for (const f of tr.feet) low = Math.min(low, f.getWorldPosition(new THREE.Vector3()).y);
-        if (low < g - 0.14 && P.y < g - 0.06) this.add(who, 'floor', `feet ${(g - low).toFixed(2)} m under the ground`, P, tr);
-        const isPlayer = opts.player?.root === o;
-        if (low > g + 0.28 && P.y > g + 0.25) tr.floatT += dt; else tr.floatT = 0;
-        if (tr.floatT > (isPlayer ? 1.4 : 0.45)) { this.add(who, 'float', `feet ${(low - g).toFixed(2)} m off the ground for ${tr.floatT.toFixed(1)} s`, P, tr); tr.floatT = 0; }
+        for (const f of tr.feet) low = Math.min(low, f.getWorldPosition(W).y);
+        if (low < g - 0.14 && P.y < g - 0.06) this.add(who, 'floor', `feet ${(g - low).toFixed(2)} m under the ground`, P, tr, o);
+        // a swimmer is off the ground by design
+        const swim = isPlayer && opts.player?.swimming;
+        if (!swim && low > g + 0.28 && P.y > g + 0.25) tr.floatT += dt; else tr.floatT = 0;
+        if (tr.floatT > (isPlayer ? 1.4 : 0.45)) { this.add(who, 'float', `feet ${(low - g).toFixed(2)} m off the ground for ${tr.floatT.toFixed(1)} s`, P, tr, o); tr.floatT = 0; }
       }
     });
     this.stats.bodies += n; this.stats.maxBodies = Math.max(this.stats.maxBodies, n);
     const pl = opts.player;
     if (pl) {
+      this.stats.playerFrames++;
       // the player's height flickering while walking: up, down, up, down within half a second
-      if (pl.onGround && pl.speed > 0.5) this.hist.push({ t: this.clock, y: pl.pos.y }); else this.hist = [];
+      if (pl.onGround && pl.speed > 0.5 && !pl.swimming) this.hist.push({ t: this.clock, y: pl.pos.y }); else this.hist = [];
       while (this.hist.length && this.clock - this.hist[0].t > 0.6) this.hist.shift();
       let flips = 0, sign = 0;
       for (let i = 1; i < this.hist.length; i++) {
@@ -114,20 +237,26 @@ export class GlitchWatch {
         if (Math.abs(v) < 0.012) continue;
         const s = Math.sign(v); if (sign && s !== sign) flips++; sign = s;
       }
-      if (flips >= 4) { this.add('player', 'jitter', `height flipped ${flips} times in 0.6 s while walking`, pl.pos); this.hist = []; }
+      if (flips >= 4) { this.add('player', 'jitter', `height flipped ${flips} times in 0.6 s while walking`, pl.pos, undefined, pl.root); this.hist = []; }
       if (opts.collide) {
+        this.stats.collideFrames++;
         const q = pl.pos.clone(); opts.collide(q, 0.3);
         const push = Math.hypot(q.x - pl.pos.x, q.z - pl.pos.z);
-        if (push > 0.06) this.add('player', 'wall', `${push.toFixed(2)} m inside a wall after the frame`, pl.pos);
+        if (push > 0.06) this.add('player', 'wall', `${push.toFixed(2)} m inside a wall after the frame`, pl.pos, undefined, pl.root);
       }
     }
+    if (this.live.length) this.endTests();
   }
 
-  /** Counts by kind and the first few of each. */
+  /** Counts by kind (the tests' own events left out), the tests, and how much of the frame the watch could see. */
   summary() {
     const by: Record<string, number> = {};
-    for (const e of this.events) by[e.kind] = (by[e.kind] ?? 0) + 1;
-    return { by, frames: this.stats.frames, meanBodies: this.stats.frames ? +(this.stats.bodies / this.stats.frames).toFixed(1) : 0, maxBodies: this.stats.maxBodies };
+    for (const e of this.events) if (e.test === undefined) by[e.kind] = (by[e.kind] ?? 0) + 1;
+    return {
+      by, tests: this.tests.map((x) => ({ id: x.id, kind: x.kind, on: x.on, who: x.who, t: x.t, state: x.state, why: x.why })),
+      frames: this.stats.frames, meanBodies: this.stats.frames ? +(this.stats.bodies / this.stats.frames).toFixed(1) : 0, maxBodies: this.stats.maxBodies,
+      groundShare: this.stats.bodies ? +(this.stats.groundKnown / this.stats.bodies).toFixed(2) : 0, playerFrames: this.stats.playerFrames, collideFrames: this.stats.collideFrames,
+    };
   }
 }
 

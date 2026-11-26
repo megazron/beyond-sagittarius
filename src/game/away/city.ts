@@ -224,11 +224,12 @@ export const SHOPS: { id: string; name: string; side: number; z: number; bg: str
   { id: 'mehndi', name: 'Pixel Mehndi', side: -1, z: -30, bg: '#5a1f6e', fg: '#ffb6e6', hue: 300 },
 ];
 
+const SHOP_ROOM_COUNTER = 4.9; // (SHOP_ROOM.counter: the lists below are read before SHOP_ROOM is)
 /** The player's list, top to bottom. `label` keys live in the i18n files under `city.task.*`. */
 const TASKS: { id: string; x: number; z: number; r?: number; need?: string[] }[] = [
   { id: 'paratha', x: 12.4, z: 66.6 },
   { id: 'pack', x: 12.0, z: 69.8, need: ['paratha'] },
-  { id: 'phone', x: 8.4, z: 44, need: ['pack'] },
+  { id: 'phone', x: FRONT + SHOP_ROOM_COUNTER - 0.55, z: 43.6, r: 1.6, need: ['pack'] }, // at the counter in the phone shop, facing the clerk (it was at the door, x 8.4)
   { id: 'parcel', x: -8.4, z: 30, need: ['phone'] },
   { id: 'chai', x: 7.4, z: 15.6, need: ['parcel'] },
   { id: 'tram', x: -4.9, z: -29, need: ['chai'] }, // at the tram's door (TRAM_Z + 3)
@@ -236,6 +237,10 @@ const TASKS: { id: string; x: number; z: number; r?: number; need?: string[] }[]
   { id: 'gate', x: 0, z: -72, r: 4, need: ['ring'] },
 ];
 
+/** The shop you walk into: the phone shop. Its room runs `depth` m back from the building line, `half` m either side
+ *  of the shop's middle, `height` m high; the doorway is `door` (m from the middle, along the street); the counter
+ *  runs across the room `counter` m in, and the clerk stands behind it. */
+const SHOP_ROOM = { id: 'capple', depth: 7, half: 3, height: 3.3, door: [0.6, 2.4] as [number, number], counter: SHOP_ROOM_COUNTER };
 /** Where the five are, and what they're doing when you get there. */
 const FRIENDS: { id: CrewId; x: number; z: number; yaw: number; pose: CrewPose }[] = [
   { id: 'strong', x: -6.6, z: 2.5, yaw: Math.PI / 2, pose: 'idle' },
@@ -249,7 +254,7 @@ const FRIENDS: { id: CrewId; x: number; z: number; yaw: number; pose: CrewPose }
 const FOLK: { id: string; x: number; z: number; yaw: number; pose: CrewPose; lineage: PlayerLook['lineage'] }[] = [
   { id: 'chaiwala', x: 8.4, z: 11.6, yaw: -Math.PI / 2, pose: 'idle', lineage: 'ortek' },
   { id: 'aunty', x: -7.6, z: -28, yaw: Math.PI / 2, pose: 'idle', lineage: 'sirelle' },
-  { id: 'clerk', x: 8.9, z: 46.2, yaw: -Math.PI / 2, pose: 'idle', lineage: 'vael' },
+  { id: 'clerk', x: FRONT + SHOP_ROOM_COUNTER + 0.95, z: 43.6, yaw: -Math.PI / 2, pose: 'idle', lineage: 'vael' }, // behind the counter, facing the door (was on the pavement at x 8.9)
   { id: 'driver', x: 4.7, z: 22, yaw: -Math.PI / 2, pose: 'idle', lineage: 'korrath' }, // on the kerb by the taxis, not in the road
   { id: 'kid1', x: -6.2, z: -58.5, yaw: 0.4, pose: 'idle', lineage: 'tarnkin' }, // the two by the gate on the pavements: in the road (x -1, 2) one stood at the edge of the gate's hero view
   { id: 'kid2', x: 6.4, z: -61, yaw: -2.6, pose: 'idle', lineage: 'ulari' },
@@ -668,6 +673,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
   const doorDarkM = new THREE.MeshStandardMaterial({ color: 0x2a1a10, emissive: 0xffb877, emissiveIntensity: 0.55, roughness: 0.9 });
   const ledgeM = new THREE.MeshStandardMaterial({ color: 0x6b4a32, roughness: 0.75 });
   const facadesOut: Facade[] = [];
+  const roomAt: { side: number; z: number; hue: number; top: number }[] = []; // the shop rooms, dressed after the street (shopRoom)
   const greebles: Record<'ledge' | 'pipe' | 'panel', THREE.BufferGeometry[]> = { ledge: [], pipe: [], panel: [] };
   // junctions: the canyon opens to side streets, and the skyline shows down them
   const GAPS: Record<number, [number, number][]> = { 1: [[34, 26]], [-1]: [[-40, -48]] };
@@ -692,7 +698,18 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
       if (!inFlat) facadesOut.push({ side, z0: z, z1: z - len, h });
       const fi = k % 3 === 2 ? 2 : k % 5 === 1 ? 1 : 0, wallM = pick(facadeMats[fi]);
       const face = side * FRONT, out = -side; // `out` points from the wall into the street
-      if (!inFlat) solid(box(depth, h, len - 0.3, wallM, side * (FRONT + depth / 2), h / 2, zc));
+      // the phone shop is a room you walk into (2026-11-26, the owner: the phone job faces the clerk across a counter):
+      // its block is built round the room (behind, both sides and above), not as one solid box
+      const roomShop = !inFlat ? shopAt(side, z, z - len) : undefined, room = roomShop?.id === SHOP_ROOM.id ? roomShop : null;
+      if (!inFlat && !room) solid(box(depth, h, len - 0.3, wallM, side * (FRONT + depth / 2), h / 2, zc));
+      if (room) {
+        const zN = zc + (len - 0.3) / 2, zS = zc - (len - 0.3) / 2, r0 = room.z - SHOP_ROOM.half, r1 = room.z + SHOP_ROOM.half, D = SHOP_ROOM.depth, RT = FLOOR + SHOP_ROOM.height;
+        solid(box(depth - D, h, len - 0.3, wallM, side * (FRONT + D + (depth - D) / 2), h / 2, zc));
+        if (zN > r1) solid(box(D, h, zN - r1, wallM, side * (FRONT + D / 2), h / 2, (zN + r1) / 2));
+        if (r0 > zS) solid(box(D, h, r0 - zS, wallM, side * (FRONT + D / 2), h / 2, (zS + r0) / 2));
+        cover(box(D, h - RT, r1 - r0, wallM, side * (FRONT + D / 2), (h + RT) / 2, room.z));
+        roomAt.push({ side, z: room.z, hue: room.hue, top: RT });
+      }
       box(depth + 0.3, 0.6, len - 0.1, parapetM, side * (FRONT + depth / 2), h + 0.3, zc);
       // stepped back above the street front: upper floors 4 m behind it, so the skyline shows from the pavement
       if (!inFlat && rnd() < 0.75) {
@@ -741,9 +758,20 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         const shop = shopAt(side, z, z - len);
         if (shop) {
           for (const dz of [-3.15, 3.15]) box(0.3, 3.4, 0.3, frameM, face + out * 0.15, 1.7 + FLOOR, shop.z + dz);
-          box(0.3, 0.3, 6.6, frameM, face + out * 0.15, 3.25 + FLOOR, shop.z); box(0.35, 0.25, 6.6, frameM, face + out * 0.17, 0.12 + FLOOR, shop.z);
-          plane(6, 2.7, lit(shelves(shop.hue), 1.0), face + out * 0.03, 1.6 + FLOOR, shop.z, out > 0 ? Math.PI / 2 : -Math.PI / 2); // the lit interior, on the wall behind the glass
-          plane(6, 2.7, new THREE.MeshStandardMaterial({ color: 0x9fb8c8, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.4 }), face + out * 0.33, 1.6 + FLOOR, shop.z, out > 0 ? Math.PI / 2 : -Math.PI / 2);
+          box(0.3, 0.3, 6.6, frameM, face + out * 0.15, 3.25 + FLOOR, shop.z); if (shop.id !== SHOP_ROOM.id) box(0.35, 0.25, 6.6, frameM, face + out * 0.17, 0.12 + FLOOR, shop.z);
+          if (shop.id !== SHOP_ROOM.id) {
+            plane(6, 2.7, lit(shelves(shop.hue), 1.0), face + out * 0.03, 1.6 + FLOOR, shop.z, out > 0 ? Math.PI / 2 : -Math.PI / 2); // the lit interior, on the wall behind the glass
+            plane(6, 2.7, new THREE.MeshStandardMaterial({ color: 0x9fb8c8, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.4 }), face + out * 0.33, 1.6 + FLOOR, shop.z, out > 0 ? Math.PI / 2 : -Math.PI / 2);
+          } else {
+            // glass either side of an open doorway (the north end: you come down the street from the flat)
+            const glassShop = new THREE.MeshStandardMaterial({ color: 0x9fb8c8, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.4 });
+            const d0 = shop.z + SHOP_ROOM.door[0], d1 = shop.z + SHOP_ROOM.door[1], e0 = shop.z - 3, e1 = shop.z + 3;
+            for (const [a0, a1] of [[e0, d0], [d1, e1]]) {
+              plane(a1 - a0, 2.7, glassShop, face + out * 0.2, 1.6 + FLOOR, (a0 + a1) / 2, out > 0 ? Math.PI / 2 : -Math.PI / 2);
+              blocks.push(new THREE.Box3(new THREE.Vector3(Math.min(face, face + out * 0.3), 0, a0), new THREE.Vector3(Math.max(face, face + out * 0.3), 3.2, a1)));
+            }
+            for (const dz of [d0, d1]) box(0.16, 3.2, 0.16, frameM, face + out * 0.15, 1.6 + FLOOR, dz);
+          }
           plane(6.2, 1.15, lit(sign(shop.name, shop.bg, shop.fg)), face + out * 0.32, 3.85 + FLOOR, shop.z, out > 0 ? Math.PI / 2 : -Math.PI / 2);
           if (tier === 2) { const pl = top(new THREE.PointLight(0xffc98a, 6, 9, 2)); pl.position.set(face + out * 1.6, 3.0, shop.z); }
         }
@@ -779,6 +807,32 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         aw.rotation.set(-Math.PI / 2, out * 0.3, 0, 'XYZ'); aw.position.set(face + out * 0.8, 3.75 + FLOOR, zc); aw.castShadow = true; cover(aw);
       }
       z -= len; k++;
+    }
+  }
+  // ---- the shop room's inside: floor, walls, shelves of phones under strip lights, the counter across the room ----
+  for (const r of roomAt) {
+    const D = SHOP_ROOM.depth, H2 = SHOP_ROOM.height, sx = (d: number) => r.side * (FRONT + d), out = -r.side, yaw = out > 0 ? Math.PI / 2 : -Math.PI / 2;
+    const inM = new THREE.MeshStandardMaterial({ color: 0xe9e6e1, roughness: 0.8 }), flM = new THREE.MeshStandardMaterial({ color: 0xcfc9c0, roughness: 0.45, metalness: 0.05 });
+    const fl = add(new THREE.Mesh(new THREE.PlaneGeometry(D, SHOP_ROOM.half * 2), flM)); fl.rotation.x = -Math.PI / 2; fl.position.set(sx(D / 2), FLOOR + 0.006, r.z); fl.receiveShadow = true; fl.userData.ground = true;
+    const ce = add(new THREE.Mesh(new THREE.PlaneGeometry(D, SHOP_ROOM.half * 2), inM)); ce.rotation.x = Math.PI / 2; ce.position.set(sx(D / 2), r.top - 0.01, r.z);
+    for (const [zz, ry] of [[r.z + SHOP_ROOM.half - 0.01, Math.PI], [r.z - SHOP_ROOM.half + 0.01, 0]] as [number, number][]) plane(D, H2, inM, sx(D / 2), FLOOR + H2 / 2, zz, ry);
+    // the back wall: lit shelves of goods (the painted room the other shops have, here as the wall it would be)
+    plane(SHOP_ROOM.half * 2, 2.7, lit(shelves(r.hue), 0.9), sx(D - 0.02), FLOOR + 1.5, r.z, yaw);
+    // two light panels in the ceiling, and on bigger screens a real light
+    for (const dx of [D * 0.3, D * 0.72]) { const lp = add(new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2.4), new THREE.MeshBasicMaterial({ color: 0xfff4e6 }))); lp.rotation.x = Math.PI / 2; lp.position.set(sx(dx), r.top - 0.02, r.z); }
+    if (tier >= 1) { const pl = top(new THREE.PointLight(0xfff1dc, tier === 2 ? 9 : 6, 9, 2)); pl.position.set(sx(D * 0.55), r.top - 0.4, r.z); }
+    // the counter across the room, a glass top with phones under it, a till; the way round it at the far end
+    const C = SHOP_ROOM.counter, cz0 = r.z - SHOP_ROOM.half + 0.6, cz1 = r.z + 1.6;
+    solid(box(0.62, 1.0, cz1 - cz0, new THREE.MeshStandardMaterial({ color: 0x2b2d33, roughness: 0.4, metalness: 0.3 }), sx(C + 0.31), FLOOR + 0.5, (cz0 + cz1) / 2));
+    box(0.66, 0.04, cz1 - cz0 + 0.04, new THREE.MeshStandardMaterial({ color: 0xbfd8e6, roughness: 0.05, metalness: 0.2, emissive: 0x334455, emissiveIntensity: 0.3 }), sx(C + 0.31), FLOOR + 1.02, (cz0 + cz1) / 2).castShadow = false;
+    const scr = new THREE.MeshStandardMaterial({ color: 0x0c0d12, emissive: 0x6fa8ff, emissiveIntensity: 0.55, roughness: 0.2 });
+    for (let i = 0; i < 5; i++) { const ph = box(0.16, 0.012, 0.08, scr, sx(C + 0.18 + (i % 2) * 0.22), FLOOR + 1.05, cz0 + 0.5 + i * 0.6); ph.castShadow = false; ph.rotation.y = 0.2 * (i - 2); }
+    box(0.3, 0.22, 0.36, new THREE.MeshStandardMaterial({ color: 0x1c1e24, roughness: 0.5 }), sx(C + 0.4), FLOOR + 1.15, r.z + 1.15);
+    // phones on the side walls' shelves, lit from below
+    for (const [zz, dz] of [[r.z + SHOP_ROOM.half - 0.18, -1], [r.z - SHOP_ROOM.half + 0.18, 1]] as [number, number][]) for (let y = 0; y < 3; y++) {
+      box(D - 3.2, 0.04, 0.3, ledgeM, sx(1.2 + (D - 3.2) / 2), FLOOR + 1.0 + y * 0.45, zz).castShadow = false;
+      if (y === 0) blocks.push(new THREE.Box3(new THREE.Vector3(Math.min(sx(1.2), sx(D - 2)), 0, zz - 0.17), new THREE.Vector3(Math.max(sx(1.2), sx(D - 2)), 2.2, zz + 0.17)));
+      for (let i = 0; i < 6; i++) box(0.09, 0.17, 0.012, scr, sx(1.5 + i * 0.6), FLOOR + 1.11 + y * 0.45, zz + dz * 0.06).castShadow = false;
     }
   }
   for (const [k2, m] of [['ledge', parapetM], ['pipe', railM], ['panel', frameM]] as ['ledge' | 'pipe' | 'panel', THREE.Material][]) {
@@ -1962,6 +2016,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           g.fillStyle = '#f2ebdd'; g.fillText(label(st.side > 0 ? 'city.map.fountain' : 'city.map.statue'), X(X2(FRONT + SIDE_L + 8)), Y(zc) + 22);
         }
         W(FRONT, FRONT + FLAT_D, FLAT_Z0, FLAT_Z1, '#b39a6e'); // the flat
+        { const r = SHOPS.find((x) => x.id === SHOP_ROOM.id)!; W(r.side * FRONT, r.side * (FRONT + SHOP_ROOM.depth), r.z - SHOP_ROOM.half, r.z + SHOP_ROOM.half, '#b39a6e'); } // the phone shop's room
         W(-12, 12, S - 30, S - 1.5, '#6f6a62'); // the gate plaza
         W(-3, 3, S - 2.5, S - 0.5, '#e8a33d');
         g.font = '600 13px Barlow, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -1977,7 +2032,11 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         const inFlat = (x: number, z: number) => x > FRONT && x < FRONT + FLAT_D && z > FLAT_Z0 && z < FLAT_Z1;
         const pts: [number, number][] = [[ax, az]];
         if (inFlat(ax, az) && !inFlat(bx, bz)) pts.push([FRONT + 0.8, 65.4], [FRONT - 1.2, 65.4]);
-        const tail: [number, number][] = inFlat(bx, bz) && !inFlat(ax, az) ? [[FRONT - 1.2, 65.4], [FRONT + 0.8, 65.4]] : [];
+        // the phone shop: in and out by its doorway
+        const shopR = SHOPS.find((x) => x.id === SHOP_ROOM.id)!, inShop = (x: number, z: number) => x * shopR.side > FRONT && x * shopR.side < FRONT + SHOP_ROOM.depth && Math.abs(z - shopR.z) < SHOP_ROOM.half;
+        const dz = shopR.z + (SHOP_ROOM.door[0] + SHOP_ROOM.door[1]) / 2, sd = shopR.side;
+        if (inShop(ax, az) && !inShop(bx, bz)) pts.push([sd * (FRONT + 1.2), dz], [sd * (FRONT - 1.2), dz]);
+        const tail: [number, number][] = inFlat(bx, bz) && !inFlat(ax, az) ? [[FRONT - 1.2, 65.4], [FRONT + 0.8, 65.4]] : inShop(bx, bz) && !inShop(ax, az) ? [[sd * (FRONT - 1.2), dz], [sd * (FRONT + 1.2), dz]] : [];
         const [cx, cz] = pts[pts.length - 1], [ex, ez] = tail[0] ?? [bx, bz];
         if (Math.abs(ez - cz) > 4) { const lane = (cx < 0 ? -1 : 1) * Math.max(5.4, Math.min(6.8, Math.abs(cx))); /* the middle of the pavement, clear of the awnings and the stalls */ if (Math.abs(lane - cx) > 0.5) pts.push([lane, cz]); pts.push([lane, ez]); }
         return [...pts, ...tail, [bx, bz]];

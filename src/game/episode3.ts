@@ -866,6 +866,9 @@ export class Episode3 extends Episode2 {
     const wideFrame = (): Shot => ({ from: H.at.clone().addScaledVector(H.b, -6.2).addScaledVector(H.a, 2.6).add(v3(0, 1.6, 0)), to: H.at.clone().add(v3(0, 1.3, 0)), fov: 45, push: 0.02 });
     this.scene([
       { hold: 2.0, shot: wideFrame, run: () => z.setLookTarget(F()) },
+      // (a moment, branch/moments.ts) his weight on the lever while each chock goes in: let up and the beam slips back
+      { qte: 'e3m.lever', shot: side, run: () => z.setLookTarget(E.clone().add(v3(0, 0.4, 0))) },
+      { key: 'e3m.fr.slip', who: 'scientist', if: { flag: 'e3m.frame.slipped' }, shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => { audio.sample('wood', 0.5, { rate: 0.7 }); z.setFace({ frown: 0.25 }); } },
       { hold: 5.6, shot: side, run: () => { z.setLookTarget(E.clone().add(v3(0, 0.4, 0))); steps(); } },
       { hold: 3.4, shot: wideFrame, run: () => {
         beam.removeFromParent(); lever.removeFromParent(); fulcrum.removeFromParent(); for (const c of chocks) c.removeFromParent();
@@ -2382,6 +2385,8 @@ export class Episode3 extends Episode2 {
           S.anim(2.6, (k) => { fill.position.y = grainPot.position.y - 0.08 + Math.min(1, k / 2.4) * 0.13; grains.forEach((g0, i) => { const w = ((k * 1.2 + i / 26) % 1); g0.position.copy(top).add(v3(Math.sin(i) * 0.015, -w * (0.22 - (fill.position.y - grainPot.position.y + 0.08)), Math.cos(i) * 0.015)); }); });
           audio.sample('leather', 0.18, { rate: 2.6, dur: 2.4 });
         } },
+        // (a moment) toss on each gust: between them the chaff falls back in with the grain (the store remembers)
+        { qte: 'e3m.winnow', shot: () => cover.mid(z, 0.5, 2.2) },
         { key: 'e3.hv.1', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => { z.setLookTarget(this.ahead()); grains.forEach((g0) => { g0.visible = false; }); } },
       ];
       if (F) beats.push({ key: 'e3.hm.reap', who: 'hohma' as Who, shot: () => this.oomClose(F.hohma, 0.4, 1.0), run: () => F.hohma.setLookTarget(this.head()) });
@@ -2470,6 +2475,7 @@ export class Episode3 extends Episode2 {
         for (let i = 0; i < pots; i++) S.after(0.4 + i * (2.6 / pots), () => { const n = this.mesh(new THREE.BoxGeometry(0.004, 0.026, 0.026), std(0x3a2a1a), stick.position.clone().addScaledVector(r, -0.1 + i * 0.035)); n.quaternion.copy(stick.quaternion); notches.push(n); audio.sample('wood', 0.25, { rate: 2 }); });
       } },
       { key: 'e3.tl.1', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24), run: () => { z.setHold(null); z.setLookTarget(this.ahead()); } },
+      { key: 'e3m.st.chaff', who: 'scientist', if: { flag: 'e3m.grain.chaff' }, shot: () => cover.mid(z, -0.5, 2.0) }, // winnowed between the gusts (moment e3m.winnow)
     ];
     if (this.f('scarred') || this.f('e2.cb.kiln.scattered') || this.f('cb.night.held')) {
       beats.push(
@@ -2505,6 +2511,7 @@ export class Episode3 extends Episode2 {
         { key: door === 'a-' ? 'e3.sm.lee' : door === 'a+' ? 'e3.sm.view' : 'e3.sm.band', who: 'scientist', shot: () => cover.close(z, 0.45, 1.0, 0.24) },
         { key: 'e3.sm.flood', who: 'scientist', if: flooded ? undefined : { flag: '__never' }, shot: () => cover.close(z, -0.4, 1.0, 0.24) },
         { key: 'e3.sm.kit', who: 'scientist', if: { flag: 'e3.kit.kept' }, shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => audio.tone(1800, 0.3, 'square', 0.05) },
+        { key: 'e3m.sm.creak', who: 'scientist', if: { flag: 'e3m.frame.slipped' }, shot: () => ({ from: c.clone().addScaledVector(H.a, 1.2).add(v3(0, 1.3, 0)), to: c.clone().add(v3(0, 2.2, 0)), fov: 50, push: 0.01, lightAt: c.clone().add(v3(0, 1.0, 0)), lightScale: 0.8 }), run: () => { audio.sample('wood', 0.45, { rate: 0.5 }); z.setLookTarget(c.clone().add(v3(0, 2.4, 0))); } }, // the ridge where the beam slipped (moment e3m.lever)
       ];
       if (band) beats.push({ key: 'e3.st.1', who: 'scientist', shot: () => ({ from: c.clone().addScaledVector(H.a, 1.6).add(v3(0, 1.5, 0)), to: c.clone().add(v3(0, 0.5, 0)), fov: 58, push: 0.01, lightAt: c.clone().add(v3(0, 0.6, 0)), lightScale: 0.8 }), run: () => { F.hohma.setLookTarget(this.head()); F.wenka.setLookTarget(this.head()); } });
       this.scene(beats, async () => {

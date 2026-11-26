@@ -33,6 +33,8 @@ import { FirstNight } from './night';
 import { Arrival } from './arrival';
 import { Injuries } from './injury';
 import { Cutscene, Beat, SceneBranch } from '../cinematic/cutscene';
+import { MomentBranch } from './moments';
+import './branch/moments';
 import { voice } from '../core/voice';
 import type { Combat } from '../combat/combat';
 import { apply, collectPayoffs, DECISIONS, isAlive, LINE_RULES, QTES, record, resolveLine, test } from './branch';
@@ -363,9 +365,12 @@ export class Game {
     line: (b) => resolveLine(this.save, b),
     apply: (e) => apply(this.save, e),
     answered: (id) => this.save.branch.log.some((e) => e.id === id),
-    ask: (id, done) => this.ask(id, done),
-    quick: (id, done) => this.quick(id, done),
+    // the episodes' scene moments marked for the choice layer (branch/moments.ts) ask there, like the opening's
+    ask: (id, done) => (DECISIONS[id]?.layer === 'moment' ? this.momentAsk.ask(id, done) : this.ask(id, done)),
+    quick: (id, done) => (QTES[id]?.layer === 'moment' ? this.momentAsk.quick(id, done) : this.quick(id, done)),
   };
+  private momentAskB: MomentBranch | null = null;
+  private get momentAsk() { return (this.momentAskB ??= new MomentBranch(() => this.save, this.ui.moment, () => this.persist(), () => this.timersOff)); }
 
   /**
    * Opens a decision. The panel is saved as open and the answer is saved the

@@ -368,7 +368,10 @@ export class Episode2 {
       z.setHold({ L: { at: mid.clone().addScaledVector(r, -0.25), fingers: f.clone(), palm: r.clone(), radius: 0.01, grasp: true }, R: { at: mid.clone().addScaledVector(r, 0.25), fingers: f.clone(), palm: r.clone().negate(), radius: 0.01, grasp: true } });
       this.scene([
         { key: 'e2.cd.fix', who: 'scientist', if: { not: { flag: 'e2.failed.cordage' } }, shot: () => this.handShot(mid, 0.8) },
-        { key: 'e2.cd.ok', who: 'scientist', shot: () => cover.mid(z, 0.5, 1.8), run: () => { z.setLookTarget(mid); this.after(0.3, () => audio.sample('wood', 0.2, { rate: 2 })); } },
+        // (a moment) the twist on the beat: an uneven one leaves the cord loose, and the snare remembers it
+        { qte: 'e2m.twist', shot: () => this.handShot(mid, 0.8) },
+        { key: 'e2.cd.ok', who: 'scientist', if: { not: { flag: 'e2m.cord.loose' } }, shot: () => cover.mid(z, 0.5, 1.8), run: () => { z.setLookTarget(mid); this.after(0.3, () => audio.sample('wood', 0.2, { rate: 2 })); } },
+        { key: 'e2m.cd.loose', who: 'scientist', if: { flag: 'e2m.cord.loose' }, shot: () => cover.mid(z, 0.5, 1.8), run: () => z.setLookTarget(mid) },
       ], () => { cord.removeFromParent(); this.clearHands(); this.set('inv.cordage'); this.ui.toast(t('e2.learn.cordage')); card(); });
       return true;
     }
@@ -570,6 +573,7 @@ export class Episode2 {
       { choice: 'e2.snare', shot: () => cover.mid(z, 0.6, 2.2) },
       { key: 'e2.sn.near', who: 'scientist', if: CHOSE('e2.snare', 'near'), shot: () => cover.close(z, 0.4, 1.0, 0.24) },
       { key: 'e2.sn.far', who: 'scientist', if: CHOSE('e2.snare', 'far'), shot: () => cover.close(z, 0.4, 1.0, 0.24) },
+      { key: 'e2m.sn.loose', who: 'scientist', if: { flag: 'e2m.cord.loose' }, shot: () => cover.mid(z, -0.5, 2.0) }, // the cord twisted unevenly (moment e2m.twist)
     ], () => {
       this.set('e2.snareSet'); this.buildSnare();
       void at;
@@ -713,6 +717,10 @@ export class Episode2 {
         oom.setHold({ R: { at: hands.clone().add(v3(0.03, 0, 0)), fingers: v3(0, 0, 1), palm: v3(-1, 0, 0), radius: 0.02, grasp: true }, L: { at: hands.clone().add(v3(-0.04, 0, 0)), fingers: v3(0, 0, 1), palm: v3(1, 0, 0), radius: 0.02, grasp: true } });
         for (let i = 0; i < 3; i++) this.after(0.4 + i * 0.6, () => { this.sparks(hands); audio.sample('flint', 0.5); });
       } },
+      // (a moment) his turn: strike on her nod. A spark first time, or she takes his wrist, says how, and it sparks
+      { qte: 'e2m.spark', shot: () => cover.two(z, oom, 2.2), run: () => { oom.setHold(null); z.setLookTarget(hands); } },
+      { key: 'e2m.py.miss', who: OOM, if: { flag: 'e2m.spark.missed' }, shot: () => cover.two(z, oom, 2.4), run: () => { oom.setLookTarget(hands); audio.sample('flint', 0.3, { rate: 0.8 }); } },
+      { hold: 1.4, shot: () => cover.close(z, -0.9, 0.9, 0.24), run: () => { this.sparks(hands); audio.sample('flint', 0.5); } },
       { key: 'e2.py.2', who: 'scientist', shot: () => cover.close(z, -0.9, 0.9, 0.24), run: () => { z.setLookTarget(hands); oom.setHold(null); } },
     ], () => {
       pyr.removeFromParent(); this.clearHands(); oom.setKneel(false);
@@ -1039,13 +1047,16 @@ export class Episode2 {
       const rim = pot.position.clone().add(v3(0, 0.2, 0));
       this.scene([
         { hold: 3.2, shot: () => this.wide(me, 6, 0.5, 1.2), run: () => { this.world.camp.setFire(1); z.setLookTarget(pot.position); } },
+        // (a moment) the knuckle on the rim: gently and it rings; too hard and it chips
+        { qte: 'e2m.tap', shot: () => ({ from: rim.clone().addScaledVector(f, 0.5).addScaledVector(r, 0.3).add(v3(0, 0.16, 0)), to: rim.clone().addScaledVector(f, -0.05), push: 0.01, aperture: 0.004, lightAt: rim.clone() }) },
         // from beyond the pot, looking back at his knuckle on the rim (GPU take: from his side his sleeve filled the lens)
         { hold: 1.8, shot: () => ({ from: rim.clone().addScaledVector(f, 0.5).addScaledVector(r, 0.3).add(v3(0, 0.16, 0)), to: rim.clone().addScaledVector(f, -0.05), push: 0.01, aperture: 0.004, lightAt: rim.clone() }), run: () => {
           z.setHold({ R: { at: rim.clone().addScaledVector(f, -0.1).addScaledVector(r, 0.04), fingers: f.clone(), palm: f.clone(), radius: 0.02 } });
-          this.after(0.6, () => { z.setHold({ R: { at: rim.clone().addScaledVector(f, -0.08), fingers: f.clone(), palm: f.clone(), radius: 0.02 } }); audio.sample('pot', 0.4); audio.tone(1960, 0.9, 'sine', 0.07); audio.tone(2940, 0.6, 'sine', 0.035, 0.01); });
+          this.after(0.6, () => { z.setHold({ R: { at: rim.clone().addScaledVector(f, -0.08), fingers: f.clone(), palm: f.clone(), radius: 0.02 } }); if (this.f('e2m.pot.chipped')) { audio.sample('pot', 0.7, { rate: 0.7 }); audio.tone(620, 0.25, 'triangle', 0.05); } else { audio.sample('pot', 0.4); audio.tone(1960, 0.9, 'sine', 0.07); audio.tone(2940, 0.6, 'sine', 0.035, 0.01); } });
           this.after(0.85, () => z.setHold({ R: { at: rim.clone().addScaledVector(f, -0.16).addScaledVector(r, 0.05), fingers: f.clone(), palm: f.clone(), radius: 0.02 } }));
         } },
-        { key: 'e2.dw.1', who: 'scientist', shot: () => cover.close(z, 0.45, 0.95, 0.24), run: () => { z.setHold(null); z.setFace({ smile: 0.3 }); } },
+        { key: 'e2.dw.1', who: 'scientist', if: { not: { flag: 'e2m.pot.chipped' } }, shot: () => cover.close(z, 0.45, 0.95, 0.24), run: () => { z.setHold(null); z.setFace({ smile: 0.3 }); } },
+        { key: 'e2m.dw.chip', who: 'scientist', if: { flag: 'e2m.pot.chipped' }, shot: () => cover.close(z, 0.45, 0.95, 0.24), run: () => { z.setHold(null); z.setFace({ squint: 0.3 }); } },
         { key: 'e2.dw.lost', who: 'scientist', if: { any: [{ flag: 'e2.kiln.left' }, { flag: 'e2.kiln.froze' }] }, shot: () => cover.mid(z, -0.5, 2.0) },
         { hold: 2.6, shot: () => ({ from: c.clone().add(v3(0.5, 0.45, 0.5)), to: c.clone().add(v3(0, 0.15, 0)), push: 0.01, aperture: 0.005 }), run: () => { this.boil(); } },
         { key: 'e2.dw.2', who: 'scientist', shot: () => cover.close(z, -0.4, 0.95, 0.24) },

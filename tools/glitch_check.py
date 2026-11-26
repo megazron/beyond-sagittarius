@@ -32,10 +32,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--port', type=int, default=4761)
     ap.add_argument('--quality', default='web')
-    ap.add_argument('--secs', type=float, default=20)
+    ap.add_argument('--secs', type=float, default=120)
     ap.add_argument('--only', default='pull,city,ep1,ep2,ep3')
     ap.add_argument('--allow', type=int, default=0)
     ap.add_argument('--json', default='')
+    ap.add_argument('--tick', type=float, default=1 / 30)
     a = ap.parse_args()
     want = a.only.split(',')
     httpd = serve(a.port)
@@ -56,9 +57,11 @@ def main():
             ev = page.evaluate
             frames = [ev('__bs.frames')]
 
-            def step(sec=1 / 30, n=1):
+            def step(sec=None, n=1):
+                # two ticks of 1/30 s a drawn frame (the watch looks at every tick; a body is posed at full rate
+                # for up to three ticks undrawn, character.ts sinceDrawn): half the drawing on a software GPU
                 for _ in range(n):
-                    ev(f'__bs.advance({sec})')
+                    ev(f'__bs.advance({sec or a.tick * 2})')
                     page.wait_for_function(f'__bs.frames > {frames[0]}', timeout=300000)
                     frames[0] = ev('__bs.frames')
             try:
@@ -68,41 +71,74 @@ def main():
             ev('__bs.hold(true)'); frames[0] = ev('__bs.frames')
             ev('__bs.glitch(true)')
             walk = name != 'pull'
-            if walk: ev('__bs.autoWalk(true)')
-            clips = []
+            clips, clip_tests = [], []
+
+            def selftest(where):
+                """Every kind put in at the watch's own read, on the nearest other body and on the player, and a body
+                put on another for the clip probe: each must be caught (or say why it could not be put in here)."""
+                ev("__bs.glitchTest(['pop', 'snap', 'floor', 'float'], 'npc')")
+                if walk: ev("__bs.glitchTest(['pop', 'floor', 'float', 'jitter', 'wall'], 'player')")
+                for _ in range(40):
+                    step()
+                c = ev('__bs.clipPoke()')
+                clip_tests.append({'where': where, **c})
+
+            selftest('start')
+            tour = ev('__bs.glitchTour()') if walk else []
+            if walk: ev(f"__bs.autoWalk(true, {json.dumps([[q['x'], q['z']] for q in tour])})")
             p0 = ev('__bs.bodyPos')
-            n = int(a.secs * 30)
+            n = int(a.secs * 15)
+            mid = False
+            trace = []
             for i in range(n):
                 step()
-                if walk and i % 30 == 0 and ev('__bs.away') and not ev('__bs.away').get('next'): break
+                wp = ev('__bs.walkPlan') if walk and i % 15 == 0 else None
+                if wp and wp['i'] >= wp['n']: break
+                if wp: trace.append([round(i / 15, 1)] + [round(v, 2) for v in (ev('__bs.bodyPos') or [0, 0, 0])] + [wp['i'], ev('__bs.mode')])
+                if walk and not mid and wp and wp['i'] >= wp['n'] / 2: mid = True; selftest('middle')
+                if not walk and not mid and i >= n / 2: mid = True; selftest('middle')
                 # at a job (the prompt up), do it, as a player would
-                if walk and i % 20 == 10 and ev("!!document.getElementById('prompt') && !document.getElementById('prompt').classList.contains('hidden')"):
+                if walk and i % 10 == 5 and ev("!!document.getElementById('prompt') && !document.getElementById('prompt').classList.contains('hidden')"):
                     page.keyboard.press('KeyE')
-                if i % 30 == 15:
+                if i % 15 == 7:
                     for h in ev('__bs.clipProbe()') or []:
                         if h['kind'] == 'body' and h['depth'] > 0.06: clips.append(h)
-                if walk and i % 90 == 0 and ev("__bs.away ? false : (__bs.mode !== 'play')"):
+                if walk and i % 45 == 0 and ev("__bs.away ? false : (__bs.mode !== 'play')"):
                     ev('__bs.skip()')  # a scene came on the way: let it pass
+            wp = ev('__bs.walkPlan') if walk else None
+            selftest('end')
             p1 = ev('__bs.bodyPos')
-            walked = (((p1[0] - p0[0]) ** 2 + (p1[2] - p0[2]) ** 2) ** 0.5) if p0 and p1 else 0
-            # the watch itself: one body moved a metre in a frame must be caught
-            poked = walk and ev('__bs.glitchPoke()')
-            if poked: step(); step()
+            walked = wp['walked'] if wp else ((((p1[0] - p0[0]) ** 2 + (p1[2] - p0[2]) ** 2) ** 0.5) if p0 and p1 else 0)
             g = ev('__bs.glitches')
-            caught = bool(poked) and any(e['kind'] == 'pop' and e['detail'][:3] in ('0.9', '1.0', '1.1') for e in g['events'][-6:])
-            if poked and not caught: fails.append(f'{name}: the watch missed a body moved a metre in one frame')
             ev('__bs.autoWalk(false)'); ev('__bs.glitch(false)')
             ctx.close()
-            ev_by = dict(g['summary']['by'])
-            if caught: ev_by['pop'] = ev_by.get('pop', 1) - 1  # the test poke is not a glitch
-            if walk and walked < 3: fails.append(f'{name}: the player walked only {walked:.1f} m')
-            out[name] = {'summary': g['summary'], 'events': g['events'][:200], 'clips': clips[:50], 'errors': errs[:5]}
+            sm = g['summary']
+            ev_by = dict(sm['by'])
+            tests = sm['tests']
+            missed = [t for t in tests if t['state'] in ('missed', 'on', 'waiting')]
+            na = [t for t in tests if t['state'] == 'n/a']
+            caught = [t for t in tests if t['state'] == 'caught']
+            for t in missed: fails.append(f"{name}: the watch MISSED a test {t['kind']} on the {t['on']} ({t['who'] or 'nobody'}, at {t['t']} s)")
+            for c in clip_tests:
+                if c.get('ran') and not c.get('caught'): fails.append(f"{name}: the clip probe MISSED a body put on another ({c['where']})")
+            # every kind must have been caught at least once in the segment, where it can happen there
+            kinds = ['pop', 'snap'] + (['floor', 'float', 'jitter', 'wall'] if walk else [])
+            for k in kinds:
+                if not any(t['kind'] == k for t in caught): fails.append(f'{name}: no test {k} was caught (' + '; '.join(sorted({t.get("why") or t['state'] for t in tests if t['kind'] == k})) + ')')
+            if walk and walked < 30: fails.append(f'{name}: the player walked only {walked:.1f} m')
+            out[name] = {'summary': sm, 'events': [e for e in g['events'] if 'test' not in e][:200], 'clips': clips[:50], 'errors': errs[:5], 'tour': tour, 'walk': wp, 'clip_tests': clip_tests, 'trace': trace}
             bad = sum(ev_by.get(k, 0) for k in HARD)
             first = {}
             for e in g['events']:
-                first.setdefault(e['kind'], e)
-            print(f"{name}: {g['summary']['frames']} frames, {g['summary']['meanBodies']} bodies near on average; "
-                  + (', '.join(f'{k} {v}' for k, v in sorted(ev_by.items())) or 'no glitches') + f'; bodies through bodies {len(clips)}; walked {walked:.1f} m; test poke {"caught" if caught else "not run" if not poked else "MISSED"}', flush=True)
+                if 'test' not in e: first.setdefault(e['kind'], e)
+            stuck = [tour[k]['what'] for k in (wp or {}).get('stuck', [])]
+            print(f"{name}: {sm['frames']} frames, {sm['meanBodies']} bodies near on average (max {sm['maxBodies']}), ground known for {sm['groundShare']:.0%} of them; "
+                  + (', '.join(f'{k} {v}' for k, v in sorted(ev_by.items())) or 'no glitches') + f'; bodies through bodies {len(clips)}; walked {walked:.1f} m'
+                  + (f"; tour {wp['i']}/{wp['n']} points" + (f" (passed over, stuck: {', '.join(stuck)})" if stuck else '') if wp else ''), flush=True)
+            print(f"   tests: {len(caught)} caught, {len(missed)} missed, {len(na)} could not be put in"
+                  + ''.join(f"\n     n/a {t['kind']}/{t['on']}: {t['why']}" for t in na)
+                  + f"; clip probe {sum(1 for c in clip_tests if c.get('caught'))}/{sum(1 for c in clip_tests if c.get('ran'))}", flush=True)
+            if tour: print('   tour: ' + ', '.join(q['what'] for q in tour), flush=True)
             for k, e in first.items():
                 print(f"   first {k}: {e['who']} at {e['t']} s, {e['detail']} at {e['at']}", flush=True)
             if bad > a.allow: fails.append(f'{name}: {bad} glitches')

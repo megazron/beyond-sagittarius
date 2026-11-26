@@ -3,7 +3,7 @@ import './style.css';
 import * as THREE from 'three';
 import { BATCH, batchSupported } from './core/ibatch';
 import { clipProbe, clipStats, type ClipHit } from './core/clipprobe';
-import { glitch } from './core/glitch';
+import { glitch, type GlitchKind } from './core/glitch';
 import { NEAR_FADE } from './core/nearfade';
 import { setLang, setPlayer, t, Lang } from './i18n';
 import { detectQuality, isPhone, saveQualityChoice, QualityName, qualityFromUrl } from './core/quality';
@@ -23,6 +23,8 @@ import { applyCrewNames, CREW_IDS, CrewNames } from './core/crew';
 import { CHAPTERS, COMMENTS, emptyBranch, pathView, pickComments, resolveLine, takenBranches, endingFor, ENDINGS } from './game/branch';
 import type { Chapter } from './game/branch';
 import { openingReady } from './game/branch/opening';
+import { momentsReady } from './game/branch/moments';
+import { DECISIONS, QTES } from './game/branch/registry';
 import { MomentBranch } from './game/moments';
 import { TouchControls, TouchAction } from './ui/touch';
 import { openCreator, CreatorStage } from './ui/creator';
@@ -144,6 +146,9 @@ let pendingNames: CrewNames = {};
  *  once, marked `openingLive`), and the planet starts from it. Null outside a new game's opening. */
 let openingSave: SaveData | null = null;
 let autoWalk = false;
+/** A walking plan for the glitch runner: points walked in order (along the map's route where there is one); a point
+ *  not got nearer for 4 s is passed over and counted as stuck. */
+let walkPlan: { pts: [number, number][]; i: number; best: number; since: number; stuck: number[]; route: [number, number][] | null; rt: number; walked: number; last: [number, number] | null } | null = null;
 if (new URLSearchParams(location.search).get('glitch') === '1') glitch.on = true;
 function beginOpeningSave(from?: SaveData) {
   const s = from ?? newSave();
@@ -907,9 +912,28 @@ function tick(step: number) {
     if (autoWalk && !paused) {
       // steer the body played towards the next task (away) or the objective (the planet), forward held
       const aw = game.away?.active ? game.away : null, body = aw ? aw.body : player;
-      const goal = aw ? aw.next?.pos ?? null : game.objectivePoint();
+      let goal: { x: number; z: number } | null = aw ? aw.next?.pos ?? null : game.objectivePoint();
+      let route = navRoute;
+      const wpn = walkPlan;
+      if (wpn && body) {
+        if (wpn.last) wpn.walked += Math.hypot(body.pos.x - wpn.last[0], body.pos.z - wpn.last[1]);
+        wpn.last = [body.pos.x, body.pos.z];
+        while (wpn.i < wpn.pts.length) {
+          const q = wpn.pts[wpn.i], d = Math.hypot(q[0] - body.pos.x, q[1] - body.pos.z);
+          if (d < 1.2) { wpn.i++; wpn.best = 1e9; wpn.since = elapsed; wpn.route = null; continue; }
+          if (d < wpn.best - 0.3) { wpn.best = d; wpn.since = elapsed; }
+          if (elapsed - wpn.since > 4) { wpn.stuck.push(wpn.i); wpn.i++; wpn.best = 1e9; wpn.since = elapsed; wpn.route = null; continue; }
+          break;
+        }
+        if (wpn.i < wpn.pts.length) {
+          const q = wpn.pts[wpn.i]; goal = { x: q[0], z: q[1] };
+          wpn.rt -= dt;
+          if (!wpn.route || wpn.rt <= 0) { wpn.rt = 0.5; const L = navCache?.layer; wpn.route = L ? routeOf(L, body.pos.x, body.pos.z, q[0], q[1]) : null; }
+          route = wpn.route;
+        }
+      }
       // along the GPS route (round walls and doors), the first point of it more than a stride away; else straight
-      const wp = goal && body && navRoute?.find((q) => Math.hypot(q[0] - body.pos.x, q[1] - body.pos.z) > 1.5);
+      const wp = goal && body && route?.find((q) => Math.hypot(q[0] - body.pos.x, q[1] - body.pos.z) > 1.5);
       const tgt = goal && body ? (wp && Math.hypot(goal.x - body.pos.x, goal.z - body.pos.z) > 3 ? { x: wp[0], z: wp[1] } : goal) : null;
       if (body && tgt && goal && (game.mode === 'play' || game.mode === 'away')) {
         const want = Math.atan2(-(tgt.x - body.pos.x), -(tgt.z - body.pos.z)), d = Math.hypot(tgt.x - body.pos.x, tgt.z - body.pos.z);
@@ -921,8 +945,9 @@ function tick(step: number) {
       const aw = game.away?.active ? game.away : null, st = aw?.stage, body = aw ? aw.body : player;
       glitch.frame(renderer.renderPass.scene as THREE.Scene, camera, dt, {
         ground: st ? (x, z) => st.height(x, z) : (x, z) => world.terrain.height(x, z),
-        player: body && (game.mode === 'play' || game.mode === 'away') ? { root: body.model.root, onGround: body.onGround, speed: body.speedNow, pos: body.pos } : null,
-        collide: st ? (p, r) => st.collide(p, r) : undefined,
+        player: body && (game.mode === 'play' || game.mode === 'away') ? { root: body.model.root, onGround: body.onGround, speed: body.speedNow, pos: body.pos, swimming: body.swimming } : null,
+        collide: st ? (p, r) => st.collide(p, r) : (p, r) => world.forest.collide(p, r),
+        self: body?.model.root ?? null,
       });
     }
     // the eye adapting to a camp fire close by in a fight (combat.ts exposure; 1 elsewhere)
@@ -1126,14 +1151,70 @@ window.addEventListener('resize', () => {
   /** Physics glitches over time (core/glitch.ts, tools/glitch_check.py). */
   /** Where the body played is (the planet or a stage), for the glitch runner's distance walked. */
   get bodyPos() { const b = game?.away?.active ? game.away.body : player; return b ? [b.pos.x, b.pos.y, b.pos.z] : null; },
-  /** Test of the glitch watch itself: moves the nearest other body 1 m in one frame (it must be caught as a pop). */
-  glitchPoke() { const sc = renderer.renderPass.scene as THREE.Scene; let best: THREE.Object3D | null = null, bd = 1e9; const me = (game?.away?.active ? game.away.body : player)?.model.root;
-    sc.traverse((o) => { if (!o.userData.isCharacter || o === me) return; for (let q: THREE.Object3D | null = o; q; q = q.parent) if (!q.visible) return; const d = o.getWorldPosition(new THREE.Vector3()).distanceTo(camera.position); if (d < bd) { bd = d; best = o; } });
-    if (best) (best as THREE.Object3D).position.x += 1; return !!best; },
+  /** Tests of the glitch watch itself (glitch_check.py): a glitch of each kind put in at the watch's own read. */
+  glitchTest(kinds: string[], on?: 'npc' | 'player') { return kinds.map((k) => glitch.inject(k as GlitchKind, on)); },
+  /** Test of the clip probe: the nearest other body put on the player (or on the nearest other body) for one probe. */
+  clipPoke() {
+    const sc = renderer.renderPass.scene as THREE.Scene, me = state === 'game' ? (game?.away?.active ? game.away.body : player)?.model.root : undefined;
+    const bodies: THREE.Object3D[] = [];
+    sc.traverse((o) => { if (!o.userData.isCharacter) return; for (let q: THREE.Object3D | null = o; q; q = q.parent) if (!q.visible) return; bodies.push(o); });
+    const cam = (state === 'cinematic' ? cine.camera : camera).getWorldPosition(new THREE.Vector3());
+    const others = bodies.filter((o) => o !== me).sort((a, b) => a.getWorldPosition(new THREE.Vector3()).distanceTo(cam) - b.getWorldPosition(new THREE.Vector3()).distanceTo(cam));
+    const onto = me ?? others[1], mover = others[0];
+    if (!onto || !mover || mover === onto) return { ran: false, caught: false };
+    const was = mover.position.clone(), w = onto.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0.05, 0, 0.05));
+    if (mover.parent) { mover.parent.updateWorldMatrix(true, false); mover.parent.worldToLocal(w); }
+    mover.position.copy(w); mover.updateMatrixWorld(true);
+    const hits = clipProbe(sc);
+    mover.position.copy(was); mover.updateMatrixWorld(true);
+    return { ran: true, caught: hits.some((h) => h.kind === 'body' && h.depth > 0.06), who: (mover.userData.id as string | undefined) ?? mover.name };
+  },
   glitch(on = true) { if (on && !glitch.on) glitch.reset(); glitch.on = on; return glitch.summary(); },
   get glitches() { return { events: glitch.events, summary: glitch.summary() }; },
   /** Walks the player towards the next task or objective (glitch_check.py): steers and holds W. */
-  autoWalk(on = true) { autoWalk = on; if (!on) input.hold('KeyW', false); },
+  autoWalk(on = true, pts?: [number, number][]) { autoWalk = on; walkPlan = on && pts?.length ? { pts, i: 0, best: 1e9, since: elapsed, stuck: [], route: null, rt: 0, walked: 0, last: null } : null; if (!on) input.hold('KeyW', false); },
+  /**
+   * A walk for the glitch runner that goes where glitches happen (tools/glitch_check.py): on a stage every task in
+   * order with the people to talk to on the way; on the planet the steepest slope you can climb, the water's edge
+   * (in and out), the thickest trees, the crew at the camp and the objective, nearest first, within `r` metres.
+   */
+  glitchTour(r = 70) {
+    const aw = game?.away?.active ? game.away : null, st = aw?.stage;
+    const named: { x: number; z: number; what: string }[] = [];
+    if (aw && st) {
+      for (const k of st.tasks) if (!k.optional) named.push({ x: k.pos.x, z: k.pos.z, what: k.id });
+    } else if (game) {
+      const T = world.terrain, P0 = player.pos, h = (x: number, z: number) => T.height(x, z);
+      let steep: { x: number; z: number; g: number } | null = null, edge: { x: number; z: number; d: number } | null = null, trees: { x: number; z: number; n: number } | null = null;
+      for (let x = -r; x <= r; x += 3) for (let z = -r; z <= r; z += 3) {
+        const X = P0.x + x, Z = P0.z + z, d = Math.hypot(x, z); if (d > r) continue;
+        const gx = (h(X + 1, Z) - h(X - 1, Z)) / 2, gz = (h(X, Z + 1) - h(X, Z - 1)) / 2, g = Math.hypot(gx, gz), y = h(X, Z);
+        if (y > 0.3 && g > 0.45 && g < 1.4 && !world.forest.blocks(X, Z, 0.6) && (!steep || g > steep.g)) steep = { x: X, z: Z, g };
+        if (Math.abs(y) < 0.25 && (h(X + 3, Z) < -0.4 || h(X - 3, Z) < -0.4 || h(X, Z + 3) < -0.4 || h(X, Z - 3) < -0.4) && (!edge || d < edge.d)) edge = { x: X, z: Z, d };
+        if (y > 0.3 && !world.forest.blocks(X, Z, 0.5)) { let n = 0; for (let a = 0; a < 8; a++) if (world.forest.blocks(X + Math.cos(a * 0.785) * 2.5, Z + Math.sin(a * 0.785) * 2.5, 0.4)) n++; if (n >= 3 && (!trees || n > trees.n)) trees = { x: X, z: Z, n }; }
+      }
+      if (steep) named.push({ x: steep.x, z: steep.z, what: `slope ${steep.g.toFixed(2)}` });
+      if (edge) {
+        // into the water a few metres (wading, then swimming) and back out
+        let wx = edge.x, wz = edge.z; for (const [dx, dz] of [[3, 0], [-3, 0], [0, 3], [0, -3]]) if (h(edge.x + dx, edge.z + dz) < -0.4) { wx = edge.x + dx * 1.6; wz = edge.z + dz * 1.6; break; }
+        named.push({ x: edge.x, z: edge.z, what: 'water edge' }, { x: wx, z: wz, what: 'in the water' }, { x: edge.x, z: edge.z, what: 'out of the water' });
+      }
+      if (trees) named.push({ x: trees.x, z: trees.z, what: `trees ${trees.n}/8` });
+      const camp = world.layout?.camp; if (camp && Math.hypot(camp.x - P0.x, camp.z - P0.z) < r * 1.5) named.push({ x: camp.x + 1.5, z: camp.z + 1.5, what: 'camp' });
+      const o = game.objectivePoint(); if (o) named.push({ x: o.x, z: o.z, what: 'objective' });
+      // nearest first, keeping the water's three together
+      const out: typeof named = []; let at = { x: P0.x, z: P0.z };
+      const left = [...named];
+      while (left.length) {
+        let bi = 0; for (let i = 1; i < left.length; i++) if (Math.hypot(left[i].x - at.x, left[i].z - at.z) < Math.hypot(left[bi].x - at.x, left[bi].z - at.z)) bi = i;
+        const [q] = left.splice(bi, 1); out.push(q); at = q;
+        if (q.what === 'water edge') for (const w of ['in the water', 'out of the water']) { const k = left.findIndex((x) => x.what === w); if (k >= 0) { out.push(left[k]); left.splice(k, 1); } }
+      }
+      return out;
+    }
+    return named;
+  },
+  get walkPlan() { return walkPlan ? { i: walkPlan.i, n: walkPlan.pts.length, stuck: walkPlan.stuck, walked: +walkPlan.walked.toFixed(1) } : null; },
   /** The cutscene choice layer and the opening's save (tools/choices_check.py). */
   moment: {
     get open() { return ui.moment.open; },
@@ -1143,6 +1224,13 @@ window.addEventListener('resize', () => {
     get opening() { return openingSave ? { log: openingSave.branch.log, trust: openingSave.branch.trust, flags: openingSave.flags, record: openingSave.branch.record } : null; },
     get saved() { const raw = localStorage.getItem('bs-save-v1'); return raw ? JSON.parse(raw) as SaveData : null; },
     get ready() { return openingReady.then(() => true); },
+    /** The episodes' scene moments (branch/moments.ts), and one played in a small scene where you stand (choices_check). */
+    get episodes() { return momentsReady.then(() => Object.values(QTES).filter((q) => q.layer === 'moment').map((q) => q.id).concat(Object.values(DECISIONS).filter((d) => d.layer === 'moment').map((d) => d.id))); },
+    episodeTest(id: string, line?: string, flag?: string) {
+      if (!game || game.mode !== 'play') return false;
+      game.playScene([{ qte: id }, ...(line && flag ? [{ key: line, who: 'scientist' as const, if: { flag } }] : []), { hold: 0.5 }]);
+      return true;
+    },
   },
   get npcs() { return game?.story.npcs.debug(); },
   get craft() { return game?.craft.debug() ?? null; },

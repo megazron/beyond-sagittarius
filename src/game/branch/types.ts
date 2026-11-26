@@ -84,6 +84,8 @@ export interface Decision {
   as?: Person;
   /** 'talk' answers in a tone; 'act' is what you do under pressure (cutscene choices). */
   style?: 'talk' | 'act';
+  /** 'moment': asked on the choice layer (ui/moment.ts: fuse, tone marks, Ledger and Bonds) in a scene in the world too. */
+  layer?: 'moment';
 }
 
 export interface Qte {
@@ -102,6 +104,8 @@ export interface Qte {
   as?: Person;
   /** The Ledger's line for each result (i18n keys). */
   note?: { pass?: string; fail?: string };
+  /** 'moment': on the choice layer in a scene in the world too (the opening's are always). */
+  layer?: 'moment';
 }
 
 /** A consequence that arrives later, once the level is reached. */

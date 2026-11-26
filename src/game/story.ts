@@ -668,6 +668,9 @@ export class Story {
     this.player.spawn(b.x + 2.6, b.z + 0.9, 0); // and off the line from the beacon shot's camera to the beacon
     this.playScene([
       { run: push('beacon.1'), hold: 1.8, shot: beaconShot, poses: { scientist: 'stand', explorer: 'stand' } },
+      // (a moment, branch/moments.ts) his hand on the switch while it charges: let go early and it catches on the second try
+      { qte: 'e1m.beacon', shot: beaconShot },
+      { key: 'e1m.bc.flicker', who: 'scientist', if: { flag: 'e1m.beacon.flicker' }, shot: beaconShot },
       { run: push('beacon.2'), hold: 1.7 },
       { run: push('beacon.strong'), key: 'rad.strong', who: 'strong', fallback: 'br.rad.static', shot: () => cover.mid(z, 0.5, 2.2), poses: { scientist: 'stand' } },
       { run: push('beacon.medic'), key: 'rad.medic', who: 'medic', fallback: 'br.rad.static', shot: () => cover.mid(z, -0.5, 2.2), poses: { scientist: 'stand' } },
