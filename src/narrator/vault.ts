@@ -429,7 +429,7 @@ export class Vault {
             vec2 q = d.xz / max(0.08, d.y + 0.12) * 0.6 + vec2(uTime * 0.012, 0.0);
             float c = smoothstep(0.42, 0.85, fbm(q * 1.3));
             col = mix(col, uCloud * (0.7 + 0.6 * fbm(q * 3.0)), c * smoothstep(-0.05, 0.12, y));
-            col += uFlash * vec3(0.55, 0.9, 0.7) * (0.35 + c) * smoothstep(-0.05, 0.3, y);
+            col += uFlash * vec3(0.7, 1.1, 0.85) * (0.6 + 1.4 * c) * smoothstep(-0.05, 0.3, y);
             float st = step(0.9965, h(floor(d.xy * 420.0 + d.z * 97.0))) * uStars * (1.0 - c) * smoothstep(0.1, 0.5, y);
             gl_FragColor = vec4(col + st, 1.0); }`,
       });
@@ -438,10 +438,10 @@ export class Vault {
     }
     if (name === 'storm' && !this.outside.storm) {
       const g = new THREE.Group(); s.add(g); this.outside.storm = g;
-      const sea = new THREE.Mesh(new THREE.PlaneGeometry(1600, 900).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x0a120f, roughness: 0.18, metalness: 0.7 }));
+      const sea = new THREE.Mesh(new THREE.PlaneGeometry(1600, 900).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x060a09, roughness: 0.35, metalness: 0.5, envMapIntensity: 0.05 }));
       sea.position.set(0, -8, -460); g.add(sea);
       // the ferry far out on the bay: a dark hull, a lit wheelhouse, a mast light
-      const ferry = new THREE.Group(); ferry.position.set(38, -7.4, -230); ferry.rotation.y = 0.5; g.add(ferry);
+      const ferry = new THREE.Group(); ferry.position.set(16, -7.2, -120); ferry.rotation.y = 0.5; ferry.scale.setScalar(1.4); g.add(ferry);
       ferry.add(new THREE.Mesh(new THREE.BoxGeometry(16, 2.2, 5), new THREE.MeshStandardMaterial({ color: 0x15181a, roughness: 0.7 })));
       const lit = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xfff0c0, emissiveIntensity: 2.2 });
       const wh = new THREE.Mesh(new THREE.BoxGeometry(5, 1.6, 3.4), lit); wh.position.set(-2, 1.9, 0); ferry.add(wh);
@@ -463,13 +463,13 @@ export class Vault {
     }
     if (name === 'dawn' && !this.outside.dawn) {
       const g = new THREE.Group(); s.add(g); this.outside.dawn = g;
-      const land = new THREE.Mesh(new THREE.PlaneGeometry(1600, 900).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x141a12, roughness: 0.95 }));
+      const land = new THREE.Mesh(new THREE.PlaneGeometry(1600, 900).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x1a2016, roughness: 0.95, envMapIntensity: 0.05 }));
       land.position.set(0, -10, -460); g.add(land);
       // a sleeping city's lights on the horizon and a train going along under them
       const N = 1400, p = new Float32Array(N * 3);
       for (let i = 0; i < N; i++) { const a = (Math.random() - 0.5) * 1.6, r = 220 + Math.random() * 240; p.set([Math.sin(a) * r, -9.6 + Math.random() * (Math.random() < 0.1 ? 6 : 1.2), -Math.cos(a) * r], i * 3); }
       const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.BufferAttribute(p, 3));
-      g.add(new THREE.Points(cg, new THREE.PointsMaterial({ color: 0xffc070, size: 0.9, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true })));
+      g.add(new THREE.Points(cg, new THREE.PointsMaterial({ color: 0xffc070, size: 2.2, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: false })));
       this.train = new THREE.Group(); this.train.position.set(-160, -9.2, -170); g.add(this.train);
       for (let i = 0; i < 9; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(5.4, 1.1, 1.2), new THREE.MeshStandardMaterial({ color: 0x0c0c0c, emissive: 0xfff2c8, emissiveIntensity: 1.6 })); c.position.x = -i * 5.8; this.train.add(c); }
     }
@@ -480,7 +480,7 @@ export class Vault {
     this.scene.traverse((o) => { if (o.userData.orrery) o.visible = bh; });
     if (this.sky) {
       const u = this.sky.uniforms;
-      if (name === 'storm') { u.uTop.value.set(0x05080a); u.uHor.value.set(0x16221e); u.uCloud.value.set(0x1a2622); u.uStars.value = 0; }
+      if (name === 'storm') { u.uTop.value.set(0x070b0c); u.uHor.value.set(0x2c403a); u.uCloud.value.set(0x3a4c46); u.uStars.value = 0; }
       if (name === 'dawn') { u.uTop.value.set(0x141a3a); u.uHor.value.set(0xd8805a); u.uCloud.value.set(0x5a4a5e); u.uStars.value = 0.8; }
     }
     // the room's colour for each view: warm amber (the disk), cold green and white (the storm), rose and gold (dawn)
@@ -761,7 +761,7 @@ function introBeats(): VaultLine[] {
       move: { a: V(0.36, 1.96, 1.5), b: V(0.27, 1.96, 1.3), la: eyes, fa: 1.5, fb: 1.3, rack: [0, 1], ap: 0.015, fov: [28, 27] } },
     // 6. the hook: he turns to the window; the camera rises behind his shoulder until the black hole fills the frame past him
     { key: 'mz.intro.2', lead: 1.2, after: 0.8, act: { pose: 'stand', face: [Math.PI - 0.32, 0.1, 1.9], gaze: 'window', note: 'swell' },
-      move: { a: V(1.2, 1.85, 2.4), via: V(1.9, 2.3, 2.3), b: V(1.25, 2.75, 3.0), la: eyes, lb: V(-1.0, 7.5, -40), look: [0.12, 0.7], fa: 2.0, fb: 30, rack: [0.15, 0.65], ap: 0.01, fov: [34, 38] } },
+      move: { a: V(1.2, 1.85, 2.4), via: V(1.9, 2.3, 2.3), b: V(1.25, 2.75, 3.0), la: eyes, lb: V(-0.6, 4.6, -14), look: [0.12, 0.7], fa: 2.0, fb: 30, rack: [0.15, 0.65], ap: 0.01, fov: [34, 38] } },
     // 7. the Ledger: he turns back and writes; from the nib, focus racks up to his face
     { key: 'mz.intro.3', lead: 1.6, after: 0.5, act: { pose: 'stand', face: [0, 0, 1.4], gaze: 'book', scratch: [1.6, 4.6] },
       move: { a: V(0.75, 1.48, 1.7), b: V(0.62, 1.58, 1.52), la: page, lb: V(0, 1.75, 0.2), look: [0.35, 0.8], fa: 0.95, fb: 1.65, rack: [0.4, 0.75], ap: 0.016 } },
