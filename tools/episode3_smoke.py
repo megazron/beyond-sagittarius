@@ -123,10 +123,11 @@ def check_outcome(ev, sealed, at, failures, log, disc_html):
     for k in own:
         if k not in spoken:
             failures.append(f"outcome at {at}: one of its own lines was never shown")
-    lvl = next((l for l, k, _ in subs if k in own), 99)
+    # (in the order shown: everything after the outcome's last own line)
+    last = max((i for i, (_, k, _) in enumerate(subs) if k in own), default=len(subs))
     for who in lost:
         name = f"crew.{who}.name"
-        late = [k for l, k, w in subs if w == name and l >= lvl and k not in own]
+        late = [k for _, k, w in subs[last + 1:] if w == name]
         if late:
             failures.append(f"outcome at {at}: {len(late)} later line(s) by someone it took")
         st = ev(f"__bs.game.story.crewStatus({who!r})")
@@ -237,6 +238,13 @@ def main():
             st = ev("({state: __bs.state, mode: __bs.mode})")
             if st["state"] == "narrator":
                 time.sleep(1.5); shot("e2-ledger"); ev(SKIP); time.sleep(1); continue
+            if st["mode"] == "scene" and args.outcome and lvl >= 19:
+                # with --outcome the scenes after the moment play out (their lines are checked), not skipped
+                for _ in range(400):
+                    ev("__bs.step(0.3)"); time.sleep(0.05)
+                    if ev("__bs.branch.open") or ev("__bs.mode") != "scene":
+                        break
+                continue
             if st["mode"] == "scene":
                 for _ in range(8):
                     ev("__bs.step(0.2)")

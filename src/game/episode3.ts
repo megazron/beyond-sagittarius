@@ -1922,7 +1922,7 @@ export class Episode3 extends Episode2 {
           this.say('e3.dx.again', 'strong', 3); r = await hold(); held = !r || r.passed; if (!held) this.set('e3.wall.twice');
         }
         const o = this.outcome('e3.wall');
-        if (!held && o && test(this.s as unknown as StoryState, o.if)) { this.set(o.id); apply(this.s as unknown as StoryState, o.effects); this.outcomeScene(o, body, leave, go); return; }
+        if (!held && o && test(this.s as unknown as StoryState, o.if)) { this.set(o.id); this.outcomeScene(o, body, leave, go); return; }
         this.set(held ? 'e3.wall.held' : 'draxum.hurt2');
         this.say(held ? 'e3.dx.held' : 'e3.dx.thrown', 'strong', 5); leave(); this.after(5.2, () => this.wallEnd(go));
       });
@@ -2029,7 +2029,8 @@ export class Episode3 extends Episode2 {
     void at;
     const play = (i: number) => {
       const b = o.beats[i];
-      if (!b) { this.ui.fade('black', 1, 1.2); this.after(1.6, () => { if (A) A.pose = null; st?.setGlow?.(1); go(); }); return; }
+      // (its effects at the end: a speaker it takes would be silenced in his own scene by the dead-speaker rule)
+      if (!b) { apply(this.s as unknown as StoryState, o.effects); this.ui.fade('black', 1, 1.2); this.after(1.6, () => { if (A) A.pose = null; st?.setGlow?.(1); go(); }); return; }
       if (b.shot) shots[b.shot]?.();
       if (b.act) acts[b.act]?.();
       if (b.card) this.ui.banner(t(b.card), '');
