@@ -88,6 +88,26 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
   3.8 s at its start, so I took that out); a 1.7 s freeze as the city appears; the take-off's first shots fill the frame
   with the liner's white hull up close; "Prologue: The Last Normal Day" shows after the city, which was that day.
 
+## 2026-11-26 MegaZroN's entrance (narrator agent, worktree ~/bs-mzn, branch mzn1; captures ~/bs-cap/mzn)
+- Owner: "I want MegaZroN narrator in all the games. Create his dramatic entrance, full cinematic." Bible (one character
+  across games, shot lists, lines): ~/megazron/NARRATOR_BIBLE.md; reference notes (public sources, technique only):
+  ~/megazron/reference/SOURCES.md. My files here: src/narrator/vault.ts, the mz.intro.* strings and takes. Nothing in
+  cine6's or ui1's areas.
+- The cold open (vaultScript('intro')) is now eight timed beats, each one continuous camera move with its own acting
+  (VaultLine.move/act/min/lead): crane down to the black hole through a new great window, his steps and silhouette with
+  a rack focus off a lantern (__bs.dof's DofPass via Renderer.setDof), the lamp coming up, the page turned, the first look
+  with a beat of silence, the hook over his shoulder, the Ledger, two quill taps and the push into the glowing page.
+  Lines mz.intro.0 ("Ah. You found the door.") and mz.intro.4 ("Turn the page.") are new (en/hi/ur voiced, lip tracks;
+  hi/ur .4 trimmed of a TTS tail). intro_smoke's contract is unchanged (keys in order, never black or frozen).
+- Set: the black hole is the dome's ray-marched one placed in the room (uBHPos follows the camera: real parallax),
+  window beams with dust, three lanterns, a hooded desk lamp (SpotLight), an environment map for the metals. All lights
+  are made in build() (during loading), never later.
+- Him: the quill is parented to his right hand bone with a pinch grip (it floated before); smooth normals across split
+  vertices; the baked face-marks map swapped for black in the Vault (the "face dots"); hair a shade down.
+- Visits (l3, l7, ch1, ch2, ep2) keep the old shot table; they get the new room and his fixes.
+- Tools only: window.__mzFilm = {dress: 'storm'|'dawn', beats} plays a film of this room for the other games (JUNO,
+  Shambhar Takke) via __bs.sceneTest('intro'); their lines and takes never enter this repo (~/megazron/films).
+
 ## 2026-11-26 owner fixes, cinematic agent (worktree ~/bs-cine, branch cine1; captures ~/bs-cap/cine1)
 - Owner's list (verbatim in the coordinator's brief): continuity lounge -> pull -> pods, the pilot's hands on the yoke,
   voices "in the background", the pods scene copy-paste, choices like an interactive drama, physics glitches, city tasks
