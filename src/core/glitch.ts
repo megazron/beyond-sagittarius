@@ -19,7 +19,7 @@ import * as THREE from 'three';
  * and the events it causes are marked as the test's (`test`), so the runner can prove each kind is caught there.
  */
 export type GlitchKind = 'pop' | 'snap' | 'floor' | 'float' | 'jitter' | 'wall';
-export interface GlitchEvent { t: number; who: string; kind: GlitchKind; detail: string; at: [number, number, number]; test?: number }
+export interface GlitchEvent { t: number; who: string; kind: GlitchKind; detail: string; at: [number, number, number]; test?: number; /** the film's own time, in a film */ film?: number }
 /** One test glitch: what, on whom, whether the watch caught it, and why not when it could not be put in. */
 export interface GlitchTest { id: number; kind: GlitchKind; on: 'npc' | 'player'; who: string; t: number; state: 'waiting' | 'on' | 'caught' | 'missed' | 'n/a'; why?: string }
 
@@ -45,6 +45,8 @@ interface FrameOpts {
   zeroG?: boolean;
   /** The body played, even when it is not in the player's hands (a scene): never a test's "other body". */
   self?: THREE.Object3D | null;
+  /** The film's clock, logged with each event in a film. */
+  film?: number;
 }
 
 export class GlitchWatch {
@@ -61,6 +63,7 @@ export class GlitchWatch {
   private nFrame = 0;
   private live: Live[] = [];
   private nextId = 1;
+  private film: number | undefined;
 
   reset() {
     this.events = []; this.tests = []; this.live = [];
@@ -80,9 +83,11 @@ export class GlitchWatch {
     // a test glitch's events are the test's: marked (and the test caught), never counted as the game's
     let test: number | undefined;
     for (const l of this.live) if (test === undefined && l.kind === kind && l.target && l.target === o && (l.state === 'on' || l.state === 'caught')) { test = l.id; l.state = 'caught'; }
+    // what else a test glitch sets off on its body while it is in and just after (a lifted body dropping back is a pop)
+    for (const l of this.live) if (test === undefined && l.target && l.target === o && l.state !== 'waiting') test = l.id;
     // one event per body and kind in any half second: a body stuck in the floor is one glitch, not sixty
     if (tr && test === undefined) { const last = tr.lastKind[kind] ?? -9; if (this.clock - last < 0.5) return; tr.lastKind[kind] = this.clock; }
-    if (this.events.length < 2000) this.events.push({ t: +this.clock.toFixed(2), who, kind, detail, at: [+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)], ...(test !== undefined ? { test } : {}) });
+    if (this.events.length < 2000) this.events.push({ t: +this.clock.toFixed(2), who, kind, detail, at: [+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)], ...(test !== undefined ? { test } : {}), ...(this.film !== undefined ? { film: +this.film.toFixed(2) } : {}) });
   }
 
   /** Moves a body by a world offset (in its parent's frame), returning how to put it back. */
@@ -97,7 +102,10 @@ export class GlitchWatch {
   /** The test glitches due this frame, put in just before the read. */
   private applyTests(scene: THREE.Scene, cam: THREE.Vector3, opts: FrameOpts, cut: boolean) {
     const pl = opts.player;
+    // one test at a time: two on one body in a frame would undo each other wrongly
+    let busy = this.live.find((l) => l.state === 'on' || (l.state === 'caught' && (l.left > 0 || l.grace < 12)));
     for (const l of this.live) {
+      if (busy && l !== busy) continue;
       // a cut excuses pops by design: a test held over one is put in again after it
       if (cut && l.state === 'on') { l.state = 'waiting'; l.target = undefined; }
       if (l.state === 'waiting' && cut) continue;
@@ -129,8 +137,9 @@ export class GlitchWatch {
           if (!target) { l.why = l.kind === 'floor' || l.kind === 'float' ? 'no body standing on known ground within 16 m' : 'no body within 16 m'; continue; }
         }
         const tg = target as THREE.Object3D;
-        l.target = tg; l.who = l.on === 'player' ? 'player' : ((tg.userData.id as string | undefined) ?? tg.name ?? 'body');
+        l.target = tg; l.who = l.on === 'player' ? 'player' : tg.userData.id === 'player' ? `townsperson ${tg.name || tg.id}` : ((tg.userData.id as string | undefined) ?? tg.name ?? 'body');
         l.state = 'on'; l.left = l.frames; l.why = undefined; l.t = +this.clock.toFixed(2);
+        busy = l;
       }
       if ((l.state !== 'on' && l.state !== 'caught') || l.left <= 0) continue;
       l.left--;
@@ -140,7 +149,7 @@ export class GlitchWatch {
       else if (l.kind === 'float') l.undo = this.shift(o, 0, 0.6, 0);
       else if (l.kind === 'snap') {
         const b = this.tracks.get(o)?.bones[0]; if (!b) { l.state = 'n/a'; l.why = 'no limbs'; continue; }
-        const was = b.quaternion.clone(); b.quaternion.multiply(WQ.setFromAxisAngle(Q.set(1, 0, 0), 1.75));
+        const was = b.quaternion.clone(); b.quaternion.multiply(WQ.setFromAxisAngle(Q.set(1, 0, 0), 2.8));
         l.undo = () => { b.quaternion.copy(was); };
       } else if (l.kind === 'jitter' && pl) {
         const was = pl.pos.y; pl.pos.y += (l.flip++ % 2 ? -0.05 : 0.05); l.undo = () => { pl.pos.y = was; };
@@ -171,7 +180,7 @@ export class GlitchWatch {
    */
   frame(scene: THREE.Scene, camera: THREE.Camera, dt: number, opts: FrameOpts = {}) {
     if (!this.on || dt <= 0) return;
-    this.clock += dt;
+    this.clock += dt; this.film = opts.film;
     this.stats.frames++; this.nFrame++;
     const cam = camera.getWorldPosition(new THREE.Vector3());
     const cut = this.camSet && cam.distanceTo(this.cam) > 1.5;
@@ -185,7 +194,7 @@ export class GlitchWatch {
       o.getWorldPosition(P);
       if (P.distanceTo(cam) > NEAR) { this.tracks.delete(o); return; }
       n++;
-      const who = (o.userData.id as string | undefined) ?? o.name ?? 'body';
+      const id0 = o.userData.id as string | undefined, who = o === opts.self || o === opts.player?.root ? 'player' : id0 === 'player' ? `townsperson ${o.name || o.id}` : id0 ?? o.name ?? 'body';
       let tr = this.tracks.get(o);
       E.setFromQuaternion(o.getWorldQuaternion(WQ), 'YXZ');
       // not drawn last frame (hidden, out of range, a pooled body given to someone else): a new track

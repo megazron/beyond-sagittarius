@@ -891,7 +891,7 @@ function tick(step: number) {
     cine.idle(dt);
   } else if (state === 'cinematic' || state === 'flashback') {
     cine.update(dt);
-    if (glitch.on) glitch.frame(cine.scene, cine.camera, dt, { zeroG: cine.time > 130 });
+    if (glitch.on) glitch.frame(cine.scene, cine.camera, dt, { zeroG: cine.time > 130, film: cine.time });
   } else if (state === 'film') {
     film.update(dt);
     if (film.inWorld) { world.update(dt, elapsed, film.hours, film.focus, film.wcam, renderer.renderer); renderer.renderer.toneMappingExposure *= film.boost; world.fog.density *= film.fog; }
@@ -1397,6 +1397,16 @@ window.addEventListener('resize', () => {
   get wounds() { const i = game?.mode === 'away' ? game?.away?.injuries : game?.injuries; return i ? { who: i.who, wounds: i.wounds.map((w) => ({ ...w })), effects: i.effects() } : null; },
   awayGoNext() { const k = game?.away?.next; if (k) game!.away!.teleport(k.pos.x, k.pos.z); },
   awayTeleport(x: number, z: number, yaw = 0) { game?.away?.teleport(x, z, yaw); },
+  /** Test: what the stage's collision does to a body of radius r standing at (x, z): where it is pushed to (null off a stage). */
+  /** Test: a bone's local rotation on a character in the film (glitch probes), and the film's camera. */
+  cineBone(id: string, bone: string) {
+    let q: number[] | null = null;
+    cine.scene.traverse((o) => { if (q || !o.userData.isCharacter || o.userData.id !== id) return; o.traverse((b) => { if (!q && b.name === bone) q = b.quaternion.toArray(); }); });
+    const c = cine.camera.getWorldPosition(new THREE.Vector3());
+    return { q, cam: [+c.x.toFixed(3), +c.y.toFixed(3), +c.z.toFixed(3)], t: +cine.time.toFixed(3) };
+  },
+  awayBlocksAt(x: number, z: number) { return (game?.away?.stage as { blocksAt?: (x: number, z: number) => unknown } | null)?.blocksAt?.(x, z) ?? null; },
+  awayCollide(x: number, z: number, r = 0.35, y = 0.14) { const st = game?.away?.active ? game.away.stage : null; if (!st) return null; const p = new THREE.Vector3(x, y, z); st.collide(p, r); return [+p.x.toFixed(3), +p.z.toFixed(3)]; },
   /** Walk with the keys, not a teleport (soak_smoke's bump test): hold or let go a key, and turn the away body to a heading. */
   key(code: string, on: boolean) { if (on) input.keys.add(code); else input.keys.delete(code); },
   awayYaw(yaw: number) { const p = (game?.away as unknown as { player?: Player } | undefined)?.player; if (p) p.yaw = yaw; },

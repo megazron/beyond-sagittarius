@@ -37,8 +37,12 @@ def main():
     ap.add_argument('--allow', type=int, default=0)
     ap.add_argument('--json', default='')
     ap.add_argument('--tick', type=float, default=1 / 30)
+    ap.add_argument('--dist', default='', help='a built dist other than dist/')
     a = ap.parse_args()
     want = a.only.split(',')
+    if a.dist:
+        import smoke
+        smoke.DIST = pathlib.Path(a.dist).resolve()
     httpd = serve(a.port)
     out, fails = {}, []
     with sync_playwright() as pw:
@@ -77,9 +81,11 @@ def main():
                 """Every kind put in at the watch's own read, on the nearest other body and on the player, and a body
                 put on another for the clip probe: each must be caught (or say why it could not be put in here)."""
                 ev("__bs.glitchTest(['pop', 'snap', 'floor', 'float'], 'npc')")
-                if walk: ev("__bs.glitchTest(['pop', 'floor', 'float', 'jitter', 'wall'], 'player')")
-                for _ in range(40):
+                if walk: ev("__bs.glitchTest(['pop', 'snap', 'floor', 'float', 'jitter', 'wall'], 'player')")
+                # one at a time (two on one body in a frame would undo each other): until each is caught, missed or n/a
+                for k in range(220):
                     step()
+                    if k % 10 == 9 and not any(t['state'] in ('waiting', 'on') for t in ev('__bs.glitches')['summary']['tests']): break
                 c = ev('__bs.clipPoke()')
                 clip_tests.append({'where': where, **c})
 
@@ -96,7 +102,9 @@ def main():
                 if wp and wp['i'] >= wp['n']: break
                 if wp: trace.append([round(i / 15, 1)] + [round(v, 2) for v in (ev('__bs.bodyPos') or [0, 0, 0])] + [wp['i'], ev('__bs.mode')])
                 if walk and not mid and wp and wp['i'] >= wp['n'] / 2: mid = True; selftest('middle')
-                if not walk and not mid and i >= n / 2: mid = True; selftest('middle')
+                # the pull is a film about 65 s long: its middle round at 20 s, and it ends when the film does
+                if not walk and not mid and i >= 300: mid = True; selftest('middle')
+                if not walk and i % 15 == 0 and ev('__bs.state') != 'cinematic': break
                 # at a job (the prompt up), do it, as a player would
                 if walk and i % 10 == 5 and ev("!!document.getElementById('prompt') && !document.getElementById('prompt').classList.contains('hidden')"):
                     page.keyboard.press('KeyE')
@@ -115,8 +123,11 @@ def main():
             sm = g['summary']
             ev_by = dict(sm['by'])
             tests = sm['tests']
-            missed = [t for t in tests if t['state'] in ('missed', 'on', 'waiting')]
-            na = [t for t in tests if t['state'] == 'n/a']
+            missed = [t for t in tests if t['state'] in ('missed', 'on')]
+            # never put in by the end (the film over, nobody near): said so, not counted as caught or missed
+            na = [t for t in tests if t['state'] == 'n/a' or t['state'] == 'waiting']
+            for t in na:
+                if t['state'] == 'waiting': t['why'] = (t.get('why') or 'the segment ended first') + ' (still waiting at the end)'
             caught = [t for t in tests if t['state'] == 'caught']
             for t in missed: fails.append(f"{name}: the watch MISSED a test {t['kind']} on the {t['on']} ({t['who'] or 'nobody'}, at {t['t']} s)")
             for c in clip_tests:

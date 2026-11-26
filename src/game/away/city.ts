@@ -216,7 +216,9 @@ const canvasOf = (t: THREE.Texture) => t.image as HTMLCanvasElement;
 
 /** Shops on the bazaar: name, side (-1 west, 1 east), z, sign colours. The names are parodies on purpose. */
 export const SHOPS: { id: string; name: string; side: number; z: number; bg: string; fg: string; hue: number }[] = [
-  { id: 'capple', name: 'Capple Store', side: 1, z: 44, bg: '#f4f4f6', fg: '#202024', hue: 210 },
+  // (z 43.4: at 44 its building, cut short by the side street at 34, ended 3 m past it and shopAt() built no front at all:
+  // the phone job stood at a bare wall; 2026-11-26)
+  { id: 'capple', name: 'Capple Store', side: 1, z: 43.4, bg: '#f4f4f6', fg: '#202024', hue: 210 },
   { id: 'lamazon', name: 'Lamazon Orbit', side: -1, z: 30, bg: '#232f3e', fg: '#ff9900', hue: 30 },
   { id: 'chai', name: 'Chai Cosmos', side: 1, z: 14, bg: '#7a2e12', fg: '#ffd27a', hue: 20 },
   { id: 'biryani', name: 'Biryani Supernova', side: -1, z: 0, bg: '#1d6b3a', fg: '#fff3c4', hue: 45 },
@@ -229,7 +231,7 @@ const SHOP_ROOM_COUNTER = 4.9; // (SHOP_ROOM.counter: the lists below are read b
 const TASKS: { id: string; x: number; z: number; r?: number; need?: string[] }[] = [
   { id: 'paratha', x: 12.4, z: 66.6 },
   { id: 'pack', x: 12.0, z: 69.8, need: ['paratha'] },
-  { id: 'phone', x: FRONT + SHOP_ROOM_COUNTER - 0.55, z: 43.6, r: 1.6, need: ['pack'] }, // at the counter in the phone shop, facing the clerk (it was at the door, x 8.4)
+  { id: 'phone', x: FRONT + SHOP_ROOM_COUNTER - 0.55, z: 43.2, r: 1.6, need: ['pack'] }, // at the counter in the phone shop, facing the clerk (it was at the door, x 8.4)
   { id: 'parcel', x: -8.4, z: 30, need: ['phone'] },
   { id: 'chai', x: 7.4, z: 15.6, need: ['parcel'] },
   { id: 'tram', x: -4.9, z: -29, need: ['chai'] }, // at the tram's door (TRAM_Z + 3)
@@ -240,7 +242,7 @@ const TASKS: { id: string; x: number; z: number; r?: number; need?: string[] }[]
 /** The shop you walk into: the phone shop. Its room runs `depth` m back from the building line, `half` m either side
  *  of the shop's middle, `height` m high; the doorway is `door` (m from the middle, along the street); the counter
  *  runs across the room `counter` m in, and the clerk stands behind it. */
-const SHOP_ROOM = { id: 'capple', depth: 7, half: 3, height: 3.3, door: [0.6, 2.4] as [number, number], counter: SHOP_ROOM_COUNTER };
+const SHOP_ROOM = { id: 'capple', depth: 7, half: 2.9, height: 3.3, door: [0.6, 2.4] as [number, number], counter: SHOP_ROOM_COUNTER };
 /** Where the five are, and what they're doing when you get there. */
 const FRIENDS: { id: CrewId; x: number; z: number; yaw: number; pose: CrewPose }[] = [
   { id: 'strong', x: -6.6, z: 2.5, yaw: Math.PI / 2, pose: 'idle' },
@@ -254,7 +256,7 @@ const FRIENDS: { id: CrewId; x: number; z: number; yaw: number; pose: CrewPose }
 const FOLK: { id: string; x: number; z: number; yaw: number; pose: CrewPose; lineage: PlayerLook['lineage'] }[] = [
   { id: 'chaiwala', x: 8.4, z: 11.6, yaw: -Math.PI / 2, pose: 'idle', lineage: 'ortek' },
   { id: 'aunty', x: -7.6, z: -28, yaw: Math.PI / 2, pose: 'idle', lineage: 'sirelle' },
-  { id: 'clerk', x: FRONT + SHOP_ROOM_COUNTER + 0.95, z: 43.6, yaw: -Math.PI / 2, pose: 'idle', lineage: 'vael' }, // behind the counter, facing the door (was on the pavement at x 8.9)
+  { id: 'clerk', x: FRONT + SHOP_ROOM_COUNTER + 0.95, z: 43.2, yaw: -Math.PI / 2, pose: 'idle', lineage: 'vael' }, // behind the counter, facing the door (was on the pavement at x 8.9)
   { id: 'driver', x: 4.7, z: 22, yaw: -Math.PI / 2, pose: 'idle', lineage: 'korrath' }, // on the kerb by the taxis, not in the road
   { id: 'kid1', x: -6.2, z: -58.5, yaw: 0.4, pose: 'idle', lineage: 'tarnkin' }, // the two by the gate on the pavements: in the road (x -1, 2) one stood at the edge of the gate's hero view
   { id: 'kid2', x: 6.4, z: -61, yaw: -2.6, pose: 'idle', lineage: 'ulari' },
@@ -460,7 +462,7 @@ function model(name: string) {
   return p;
 }
 
-export function buildCity(label: (k: string) => string, detail = 1): AwayStage & { bind(b: StageBody): void; people: CityPerson[]; mapLayer: import('../../ui/minimap').MapLayer; drawnAs(id: string): string; readonly perfState: Record<string, unknown>; crowdState(): { near: number; bodies: number; lost: number; room?: number }; trafficState(): unknown; pedProbe(): unknown; boardingCheck(): unknown; linerDesign(): string[] | null; takeoffClearance(): unknown; takeoffMap(x: number, z: number, span?: number, G?: number): unknown } {
+export function buildCity(label: (k: string) => string, detail = 1): AwayStage & { bind(b: StageBody): void; people: CityPerson[]; mapLayer: import('../../ui/minimap').MapLayer; drawnAs(id: string): string; readonly perfState: Record<string, unknown>; crowdState(): { near: number; bodies: number; lost: number; room?: number }; trafficState(): unknown; pedProbe(): unknown; boardingCheck(): unknown; linerDesign(): string[] | null; takeoffClearance(): unknown; takeoffMap(x: number, z: number, span?: number, G?: number): unknown; blocksAt(x: number, z: number, r?: number): unknown } {
   seed = 1234567; // the same city every time
   const rich = detail >= 1; // phones get fewer props, people and lights
   const scene = new THREE.Scene();
@@ -765,7 +767,7 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
           } else {
             // glass either side of an open doorway (the north end: you come down the street from the flat)
             const glassShop = new THREE.MeshStandardMaterial({ color: 0x9fb8c8, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.4 });
-            const d0 = shop.z + SHOP_ROOM.door[0], d1 = shop.z + SHOP_ROOM.door[1], e0 = shop.z - 3, e1 = shop.z + 3;
+            const d0 = shop.z + SHOP_ROOM.door[0], d1 = shop.z + SHOP_ROOM.door[1], e0 = shop.z - SHOP_ROOM.half, e1 = shop.z + SHOP_ROOM.half;
             for (const [a0, a1] of [[e0, d0], [d1, e1]]) {
               plane(a1 - a0, 2.7, glassShop, face + out * 0.2, 1.6 + FLOOR, (a0 + a1) / 2, out > 0 ? Math.PI / 2 : -Math.PI / 2);
               blocks.push(new THREE.Box3(new THREE.Vector3(Math.min(face, face + out * 0.3), 0, a0), new THREE.Vector3(Math.max(face, face + out * 0.3), 3.2, a1)));
@@ -2038,10 +2040,20 @@ export function buildCity(label: (k: string) => string, detail = 1): AwayStage &
         if (inShop(ax, az) && !inShop(bx, bz)) pts.push([sd * (FRONT + 1.2), dz], [sd * (FRONT - 1.2), dz]);
         const tail: [number, number][] = inFlat(bx, bz) && !inFlat(ax, az) ? [[FRONT - 1.2, 65.4], [FRONT + 0.8, 65.4]] : inShop(bx, bz) && !inShop(ax, az) ? [[sd * (FRONT - 1.2), dz], [sd * (FRONT + 1.2), dz]] : [];
         const [cx, cz] = pts[pts.length - 1], [ex, ez] = tail[0] ?? [bx, bz];
-        if (Math.abs(ez - cz) > 4) { const lane = (cx < 0 ? -1 : 1) * Math.max(5.4, Math.min(6.8, Math.abs(cx))); /* the middle of the pavement, clear of the awnings and the stalls */ if (Math.abs(lane - cx) > 0.5) pts.push([lane, cz]); pts.push([lane, ez]); }
+        const laneOf = (x: number) => (x < 0 ? -1 : 1) * Math.max(5.4, Math.min(6.8, Math.abs(x))); // the middle of the pavement, clear of the awnings and the stalls
+        // across the road: where nothing stands in the way from pavement to pavement (a straight line at the goal's z ran
+        // into the stall mats at the kerb and into the tram's side: the walker stood there, 2026-11-26 glitch_check)
+        const crosses = Math.sign(cx || 1) !== Math.sign(ex || 1) && Math.abs(ex - cx) > 4;
+        const clear = (zz: number) => { for (const k of wallsNear(-7, zz - 1.1, 7, zz + 1.1)) { const b = blocks[k]; if (b.max.y > 0.25 && b.min.y < 1.8 && b.max.z > zz - 1.1 && b.min.z < zz + 1.1 && b.max.x > -7 && b.min.x < 7) return false; } return true; }; // a lane 2.2 m wide: a walker drifts off the line a little
+        let zx = ez;
+        if (crosses) for (let d = 0; d <= 24; d += 0.5) { if (clear(ez + (ez < cz ? d : -d))) { zx = ez + (ez < cz ? d : -d); break; } if (clear(ez - (ez < cz ? d : -d))) { zx = ez - (ez < cz ? d : -d); break; } }
+        if (crosses) { const la = laneOf(cx), lb = laneOf(ex); if (Math.abs(la - cx) > 0.5 || Math.abs(zx - cz) > 0.5) pts.push([la, cz]); pts.push([la, zx], [lb, zx]); if (Math.abs(ez - zx) > 0.5) pts.push([lb, ez]); }
+        else if (Math.abs(ez - cz) > 4) { const lane = laneOf(cx); if (Math.abs(lane - cx) > 0.5) pts.push([lane, cz]); pts.push([lane, ez]); }
         return [...pts, ...tail, [bx, bz]];
       },
     },
+    /** Test hook: the walls (collision boxes) within r of a point, [x0, z0, x1, z1, y1] each, and how many come from where. */
+    blocksAt(x: number, z: number, r = 0.4) { return wallsNear(x - r, z - r, x + r, z + r).map((k) => { const b = blocks[k]; return [k, +b.min.x.toFixed(2), +b.min.z.toFixed(2), +b.max.x.toFixed(2), +b.max.z.toFixed(2), +b.max.y.toFixed(2)]; }).filter((b) => x > (b[1] as number) - r && x < (b[3] as number) + r && z > (b[2] as number) - r && z < (b[4] as number) + r); },
     /** Test hook: how a person is drawn now: a body, a card standing in for one, or (never, within sight) nothing. */
     crowdNear() { return crowdK; },
     pending() { const w: string[] = []; if (figsLeft > 0) w.push(`bodies ${figsLeft}`); if (propsLeft > 0) w.push(`props ${propsLeft}`); if (poolDrawn && !poolDone) w.push('pools drawing'); if (bakeBodies.length >= 4 && !baker?.done) w.push('card atlas baking'); if (prebaking) w.push('prebake'); return w; },
