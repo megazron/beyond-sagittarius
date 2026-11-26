@@ -14,6 +14,25 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
   block of `src/style.css` moves to `src/ui/moment.css` (a conflict there resolves by taking my file).
 - Brief and research: ~/bs-story/CHOICE_UI.md. Fonts (OFL, self-hosted): Spectral, Kalam, Gulzar, Tiro Devanagari
   Hindi (tools/ui/make_fonts.py). Textures drawn by tools/ui/make_paper.py (public/textures/ui).
+- What changed (look only; choose/quick/ledger/bond/update/close and the log keep their behaviour): answers are torn
+  Ledger slips (talk) or binding-cloth slips (act) with an ink tone stamp each (shape + an aria word, mo.tone.*); the
+  timer is an ink line under them burning in from both ends with an ember at each end (last third: bigger embers, the
+  line shivers); reflexes are a wax seal inside a hand-drawn ring (press: the ring erases; hold: it draws while held
+  and the seal sinks; heartbeat: a ring closes on the seal and lands on each beat, pips filled or struck through);
+  "You are X" a brass plate; the Ledger note a torn strip written in by hand (Kalam / Gulzar); Bonds a ledger card
+  (names, an ink arrow, the band word in hand, a scale with a pencil mark where it was and an ink dot where it is).
+- Placement: `readFaces()` projects every shown bone named `head` in Renderer.current's scene through its camera when
+  a panel opens; the fork goes to the top if the bottom covers a face, the seal picks the lower-third spot with the least
+  face overlap (never the middle of the frame), the Ledger note and Bonds flip sides. `__bs.moment.faces`, `.placed`.
+- Input: key caps per device (1/2/3; on a pad the face button where the slip sits: X/B or X/Y/B, A takes a d-pad
+  marked slip; nothing on touch, a star pressed in the seal). The layer polls the pads itself; main.ts padFrame no
+  longer skips the film while a moment is open (B was a skip).
+- Settings > Display: large choice text, high-contrast choices, calm motion (Settings.moLarge/moContrast/moStill,
+  body classes mo-large/mo-contrast/mo-still; prefers-reduced-motion is honoured too). Choice timers off already existed.
+- Dev stage: dev/moment.html (?show=fork,three,act,press,hold,beat,ledger,bonds&lang&dev=pad|touch&look=...&faces=).
+  Screens: ~/bs-cap/ui1/shots.sh OUT "name|query|WxH[|touch]"... (vite :5287, stopped by PID).
+- GPU captures: ~/bs-cap/ui1/run.sh NAME PLAN DIST QS TREE (preview :4791, Chrome :9393, profile bs-ui-a500);
+  plans plan_desk.json, plan_phone.json (lounge and pull, the P5 answers). Before = ~/bs-ui-before (main b3a2302).
 - Status: WIP, not landed.
 
 ## Departure lounge (Scene 1) (2026-11-24, cabin agent, branch cabin3)

@@ -31,7 +31,7 @@ body.mo-large { --mo-k: 1.25; }
 /* ---------- the Fork: a decision ---------- */
 .fork { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 3.2vh); transform: translateX(-50%); z-index: 32; width: min(1060px, 96vw);
   display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; pointer-events: none; }
-.fork.at-top { bottom: auto; top: calc(var(--safe-t) + 3.2vh); flex-direction: column-reverse; }
+.fork.at-top { bottom: auto; top: calc(var(--safe-t) + 3.2vh); }
 .fork.hidden { display: none; }
 /* a soft ink wash under the words, no panel */
 .fork::before { content: ''; position: absolute; inset: -28px -6% -18px; z-index: -1; pointer-events: none;
