@@ -160,6 +160,27 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
     clips.
   - Physics (part 6) and city tasks/crowd (part 7): not looked at.
 
+## 2026-11-26 late night, cine7 (fourth agent; worktree ~/bs-cine, branch cine7 = cine6 + fixes + main d0e1c89)
+NOT ON MAIN until a fully green sha is fast-forwarded. What I found and measured:
+- The glitch_ep2/ep3 pickup snaps: NOT task code. I logged the player's upperarmR after each stage of Character.animate
+  (debug hooks kept out of the branch: ~/bs-cap/cine7/armdbg/hooks.patch, probe ~/bs-cap/cine7/armdbg/probe.py = glitch_check
+  plus the stage log). Before a pickup the set pose (game.ts: the injury's hand on the ribs, eff.limbs) turned the arm ~127
+  degrees from the clip every frame; the frame a job began (p.busy) it was dropped at once: 123 degrees in a frame. It
+  now eases (injW, weight and bend). The 168 degree turn-pop at ep3 15.27 s: seeSite's settle() turned him while the
+  Cutscene's first shot took the camera only on the next frame (game.playScene now calls scene.update(0)), and the
+  pickup's busyFace turned him back during the shot (Player.freeFacing at scene start). glitch_check --only ep3 on
+  SwiftShader: before pop 1 snap 3, after no glitches (tests 20 caught 0 missed both runs).
+- P9 stuck at (-0.4, -49): an old-town car stopped for anyone ahead of its middle, so with him at its front wheel it
+  waited for good while its side kept him from crossing. Cars (city.ts traffic, districts.ts) stop only for someone past
+  the front bumper (2.7 m). ~/bs-cap/cine7/ring_probe.py: before stuck 30 s, after at the ring in 5.3 s.
+- Capture saves: the game writes its own save on beforeunload/visibilitychange; the plans now put the save after the page
+  is left (P8c used it: all three storm takes on the kit-kept save). Players do not lose choices this way: MomentBranch
+  persists each answer at once and the unload writes the same in-memory save (only two open tabs could overwrite).
+- Sent (owner_fixes_1126): P6_lake_and_slope_before_after_GPU.mp4, P8_storm_answer_{door,store,kit}_kit_kept_GPU.mp4,
+  NOTES_P6_P8_storm_late_night.md. Storm scene opens on ~2 s black and ~3 s of an unreadable brown close-up: NOT fixed.
+- Removed ~/bs-cine6-before and ~/bs-cine/dist-before. ui1 (choice UI) was not on main at the merge: it conflicts with
+  cine7 in main.ts, style.css, moment.ts.
+
 ## 2026-11-26 night, cine6 third agent (same worktree ~/bs-cine and branch cine6; captures and tools ~/bs-cap/cine7)
 NOT ON MAIN. STATE AT HAND-BACK (071b4d4 pushed): the last full CI (740e334, run 45887830329) is green on every job I
 saw finish (choices, anim_qa, the smokes) EXCEPT glitch_ep2 and glitch_ep3, which fail on the player's upperarmR
