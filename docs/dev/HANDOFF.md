@@ -2191,3 +2191,23 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   long-lens Away.cut onto the copier; the shelter's cliff is one sculpted face (rockshelter.ts); Oom-Sa's first close-up
   framed from his side (Episode2.firstClose); trodden grass at the house and the reed camp (grass clearings 3 and 4).
 - __bs.game exposes the game for probes. Draxum's death is NOT implemented (owner has not confirmed).
+
+## 2026-11-26 Episode Three polish round 2 (ep3c agent: worktree ~/bs-ep3b, branch ep3c from main 024067bd)
+- Sealed outcomes: src/game/branch/episode3.ts now also reads `outcomes` (what a moment comes to, keyed by the moment:
+  its condition, warnings, effects, its own beats and an `after` at home), `lines` (LINE_RULES entries, merged by key)
+  and `strings` (en/hi/ur, added with addStrings) from the sealed data. resolveLine tries LINE_RULES[key].swap for any
+  beat; ui.sayFilter applies key rules to MegaZroN's lines too; science.ts codexStory.line: a joke by a crewmate the
+  story has lost shows as "{name}, remembered" or follows a rule. tools/tts/generate_voice.py voices the sealed
+  `voice`/`strings`/`direction` like the rest (a full run keeps their takes). Keep the private master in
+  ~/bs-story/episode3.json; seal with tools/story_seal.py; add new phrases to the private spoiler list and rehash.
+- Roster: revealDue skips the lost; Episode3.holdsFor(level) holds a level's first scene while a crew story is due, so
+  it plays between the levels (5.5 s after the level card); Lyrra's story unlocks at 21 (between 20 and 21).
+- Level 19: Away.pose (the story holds the body after the player's update), Away.bodyAt, stage.setGlow (ember seams);
+  dressMoon builds a rock face behind the ring (Episode3.FACE); the climb is on screen (walk to the foot, five quick
+  presses up it, one slip at most, then the view from the ledge); the hold's first failure staggers him.
+- Level 20: the sprung snare stands beyond the kit (its stick no longer crosses his close-ups). Level 21: stooks, a
+  sheaf in his arms, threshing on a stone, grain poured into a pot; a real hearth under the salt pot (stones, ember
+  lumps, charred sticks, a crust that creeps in, steam); the storm fight: every phase x0.5 (story.store), its hour at
+  the end of dusk (combat.ts nightHour), lightning (Episode3.lightning) and body.cb-lite (combat.css) trims the HUD.
+- Pello: hair 'builder', browner and greyer; the long beard is a full beard (four rows, longer, lighter roots).
+- tools/episode3_smoke.py: --from 19, --flags, --outcome AT (checks a sealed outcome without naming anything).

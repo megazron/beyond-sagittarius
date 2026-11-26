@@ -1683,9 +1683,11 @@ export class Episode3 extends Episode2 {
         holdComb(); F.wenka.setLookTarget(this.head()); F.hohma.setLookTarget(foot); z.setLookTarget(boy()); F.wenka.setFace({ frown: 0.5, squint: 0.4 });
       } },
       // her close from in front of her (from the mat's side), not from the way the body's yaw says she faces
-      { key: 'e3.ds.1', who: 'hohma' as Who, shot: () => { const hh = F.hohma.head.getWorldPosition(new THREE.Vector3()); return { from: mat.clone().addScaledVector(out, -0.15).addScaledVector(d, 0.25).add(v3(0, 1.25, 0)), to: hh.clone().add(v3(0, -0.05, 0)), fov: 38, push: 0.01 }; }, run: () => { F.hohma.setLookTarget(this.head()); } },
+      // her line from in front of her, at her eye height, over the boy lying between them (probe EP3C: from above, the
+      // camera saw the crown and back of her head)
+      { key: 'e3.ds.1', who: 'hohma' as Who, shot: () => { const hh = F.hohma.head.getWorldPosition(new THREE.Vector3()); return { from: hh.clone().addScaledVector(out, -0.85).addScaledVector(d, -0.25).add(v3(0, -0.06, 0)), to: hh.clone().add(v3(0, -0.04, 0)), fov: 36, push: 0.01 }; }, run: () => { F.hohma.setLookTarget(this.head()); } },
       // the comb in her hands from above and in front of her (the camera stood inside her body in the GPU take)
-      { hold: 2.6, shot: () => ({ from: mat.clone().addScaledVector(out, -0.05).addScaledVector(d, 0.35).add(v3(0, 0.95, 0)), to: held.clone().add(v3(0, 0.01, 0)), fov: 30, push: 0.006, aperture: 0.004, lightAt: held.clone().add(v3(0, 0.15, 0)), lightScale: 0.6 }), run: () => z.setLookTarget(held) },
+      { hold: 2.6, shot: () => ({ from: held.clone().addScaledVector(out, -0.48).addScaledVector(d, -0.12).add(v3(0, 0.16, 0)), to: held.clone().add(v3(0, 0.01, 0)), fov: 30, push: 0.006, aperture: 0.004, lightAt: held.clone().add(v3(0, 0.15, 0)), lightScale: 0.6 }), run: () => z.setLookTarget(held) },
       { key: 'e3.ds.2', who: 'scientist', shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => { z.setLookTarget(boy()); z.setFace({ frown: 0.3 }); } },
       { hold: 1.2, shot: () => cover.close(z, 0.45, 1.1, 0.24), run: () => z.setLookTarget(held) },
       { choice: 'e3.dose', shot: () => cover.close(z, 0.45, 1.1, 0.24) },
@@ -1694,7 +1696,7 @@ export class Episode3 extends Episode2 {
       { key: 'e3.ds.half', who: 'scientist', if: CHOSE('e3.dose', 'half'), shot: () => cover.close(z, 0.4, 1.0, 0.24) },
       // he cleans the boy's foot first (or shows her how, when he keeps the honey), Hoh-Ma holding him
       // the foot from above the boy's shins, looking out past it to the hands (the camera stood in a body in the GPU take)
-      { hold: 3.6, shot: () => ({ from: mat.clone().addScaledVector(out, 0.0).addScaledVector(d, -0.1).add(v3(0, 1.0, 0)), to: foot.clone().addScaledVector(out, 0.1), fov: 34, push: 0.01, aperture: 0.004, lightAt: foot.clone().add(v3(0, 0.2, 0)) }), run: () => {
+      { hold: 3.6, shot: () => ({ from: foot.clone().addScaledVector(out, -0.55).addScaledVector(d, -0.1).add(v3(0, 0.42, 0)), to: foot.clone().addScaledVector(out, 0.08).add(v3(0, 0.04, 0)), fov: 32, push: 0.01, aperture: 0.004, lightAt: foot.clone().add(v3(0, 0.2, 0)) }), run: () => {
         comb.removeFromParent(); leaf.removeFromParent(); F.hohma.setHold(null); F.hohma.setLookTarget(foot); F.wenka.setLookTarget(foot);
         S.anim(3.6, (k) => clean(k, foot)); audio.human('breath', 0.3);
         S.after(2.0, () => { (mud.material as THREE.MeshStandardMaterial).color.setHex(0xc89a40); });
@@ -1820,6 +1822,22 @@ export class Episode3 extends Episode2 {
     };
     st.tasks.forEach((tk, i) => { if (/^ice\d$/.test(tk.id)) lake(tk.pos.x, tk.pos.z, 2.6, false, i * 2.3 + 1); });
     lake(15, -17, 5.5, true, 7);
+    // the rock face behind the ring (the script's "foot of the cliff"): rough, frosted, a ledge on top; the climb goes up it
+    {
+      const F = Episode3.FACE, gy = st.height(F.x, F.z), W = 9, Hh = F.top, D = 2.4;
+      const geo = new THREE.BoxGeometry(W, Hh, D, 24, 14, 2), pp = geo.getAttribute('position');
+      for (let i = 0; i < pp.count; i++) {
+        const x = pp.getX(i), y = pp.getY(i), zz = pp.getZ(i);
+        const n = Math.sin(x * 2.3 + y * 1.1) * 0.12 + Math.sin(x * 5.1 - y * 3.7) * 0.06 + Math.sin(y * 7.3 + x) * 0.04;
+        if (zz > 0 && y < Hh / 2 - 0.01) pp.setZ(i, zz + n + (y < -Hh / 2 + 0.2 ? 0.25 : 0)); // the front face, and a skirt of scree at its foot
+        if (y > Hh / 2 - 0.01) pp.setY(i, y + n * 0.5 * (Math.abs(x) > 1.2 ? 1 : 0.2)); // (the ledge above the climb stays flat)
+      }
+      geo.computeVertexNormals();
+      const face = new THREE.Mesh(geo.toNonIndexed(), new THREE.MeshStandardMaterial({ color: 0x4a3a30, roughness: 0.92, flatShading: true }));
+      face.geometry.computeVertexNormals(); face.position.set(F.x, gy + Hh / 2, F.z - D / 2); face.castShadow = true; face.receiveShadow = true; face.name = 'e3.face'; g.add(face);
+      const frost = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.9, 0.5), new THREE.MeshStandardMaterial({ color: 0x9ab0c8, roughness: 0.3, transparent: true, opacity: 0.55 }));
+      frost.rotation.x = -Math.PI / 2; frost.position.set(F.x, gy + Hh + 0.02, F.z - 0.3); g.add(frost);
+    }
     st.scene.add(g);
   }
   /** Set by game.ts: the away controller (to hold Draxum's body for a scripted moment). */
@@ -1984,7 +2002,8 @@ export class Episode3 extends Episode2 {
     const lieAt = v3(R.x - 0.4, gy, R.z - 0.5);
     let glow = 1, lying = false;
     const shots: Record<string, () => void> = {
-      low: () => this.awayCut?.(v3(R.x + 4.2, gy + 0.55, R.z + 3.6), v3(R.x, gy + 0.5, R.z), 30, 50),
+      // from outside the wall, low, between it and the rock face: the blocks hide him (nothing of the fall is shown)
+      low: () => this.awayCut?.(v3(R.x + 1.8, gy + 0.6, R.z - 4.2), v3(R.x - 0.3, gy + 0.35, R.z - 0.4), 30, 50),
       lake: () => this.awayCut?.(v3(R.x + 1.5, gy + 1.4, R.z + 2.5), body ? body.position.clone() : v3(15, gy, -17), 30, 26),
       lie: () => this.awayCut?.(v3(lieAt.x + 1.1, gy + 1.75, lieAt.z + 1.4), lieAt.clone().add(v3(0, 0.25, 0)), 30, 34),
       rise: () => { const t0 = performance.now(); this.anim(8, (k) => { const u = k / 8; this.awayCut?.(v3(R.x + 1.2 + u * 2, gy + 1.8 + u * 13, R.z + 1.6 + u * 4), v3(R.x, gy + u * 9, R.z - u * 10), 0.2, 40); void t0; }); },
