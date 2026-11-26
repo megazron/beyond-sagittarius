@@ -1807,7 +1807,7 @@ export class Episode3 extends Episode2 {
     if (!st || this.moonDressed === st.scene) return;
     this.moonDressed = st.scene;
     const g = new THREE.Group(); g.name = 'e3.moonLakes';
-    const sheetM = new THREE.MeshStandardMaterial({ color: 0x7f9ab8, roughness: 0.12, metalness: 0.05, envMapIntensity: 1.4, emissive: 0x0a1626 });
+    const sheetM = new THREE.MeshStandardMaterial({ color: 0x5f92d0, roughness: 0.1, metalness: 0.05, envMapIntensity: 1.4, emissive: 0x16345c }); // (take EP3C D: still grey in the orange light)
     const crackM = new THREE.MeshBasicMaterial({ color: 0x3a4248 });
     const lake = (x: number, z: number, r: number, black: boolean, seed: number) => {
       const y = st.height(x, z);
@@ -1824,16 +1824,19 @@ export class Episode3 extends Episode2 {
     lake(15, -17, 5.5, true, 7);
     // the rock face behind the ring (the script's "foot of the cliff"): rough, frosted, a ledge on top; the climb goes up it
     {
-      const F = Episode3.FACE, gy = st.height(F.x, F.z), W = 9, Hh = F.top, D = 2.4;
-      const geo = new THREE.BoxGeometry(W, Hh, D, 24, 14, 2), pp = geo.getAttribute('position');
+      // (take EP3C D: a 9 m box with small bumps read as a flat dark board; now wider, its top ragged, its face deeply
+      // broken into buttresses and ledges, lighter rock that takes the orange light)
+      const F = Episode3.FACE, gy = st.height(F.x, F.z), W = 18, Hh = F.top, D = 3.2;
+      const geo = new THREE.BoxGeometry(W, Hh, D, 48, 18, 3), pp = geo.getAttribute('position');
       for (let i = 0; i < pp.count; i++) {
-        const x = pp.getX(i), y = pp.getY(i), zz = pp.getZ(i);
-        const n = Math.sin(x * 2.3 + y * 1.1) * 0.12 + Math.sin(x * 5.1 - y * 3.7) * 0.06 + Math.sin(y * 7.3 + x) * 0.04;
-        if (zz > 0 && y < Hh / 2 - 0.01) pp.setZ(i, zz + n + (y < -Hh / 2 + 0.2 ? 0.25 : 0)); // the front face, and a skirt of scree at its foot
-        if (y > Hh / 2 - 0.01) pp.setY(i, y + n * 0.5 * (Math.abs(x) > 1.2 ? 1 : 0.2)); // (the ledge above the climb stays flat)
+        const x = pp.getX(i), y = pp.getY(i), zz = pp.getZ(i), edge = Math.min(1, Math.max(0, (Math.abs(x) - 1.4) / 1.5));
+        const n = Math.sin(x * 1.1 + y * 0.7) * 0.45 + Math.sin(x * 2.9 - y * 1.9) * 0.22 + Math.sin(y * 5.3 + x * 3.1) * 0.1 + Math.abs(Math.sin(x * 0.8)) * 0.3;
+        if (zz > 0) pp.setZ(i, zz + n * (0.35 + 0.65 * edge) + (y < -Hh / 2 + 0.3 ? 0.5 : 0)); // the face (smoother where he climbs), scree at its foot
+        if (y > Hh / 2 - 0.01) pp.setY(i, y + edge * (Math.sin(x * 1.7) * 0.9 + Math.sin(x * 4.3) * 0.35 + 0.6)); // a ragged skyline; the ledge stays flat
+        pp.setX(i, x + Math.sin(y * 2.1 + zz) * 0.12);
       }
       geo.computeVertexNormals();
-      const face = new THREE.Mesh(geo.toNonIndexed(), new THREE.MeshStandardMaterial({ color: 0x4a3a30, roughness: 0.92, flatShading: true }));
+      const face = new THREE.Mesh(geo.toNonIndexed(), new THREE.MeshStandardMaterial({ color: 0x7a5a44, roughness: 0.88, flatShading: true }));
       face.geometry.computeVertexNormals(); face.position.set(F.x, gy + Hh / 2, F.z - D / 2); face.castShadow = true; face.receiveShadow = true; face.name = 'e3.face'; g.add(face);
       const frost = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.9, 0.5), new THREE.MeshStandardMaterial({ color: 0x9ab0c8, roughness: 0.3, transparent: true, opacity: 0.55 }));
       frost.rotation.x = -Math.PI / 2; frost.position.set(F.x, gy + Hh + 0.02, F.z - 0.3); g.add(frost);
@@ -1919,7 +1922,10 @@ export class Episode3 extends Episode2 {
         if (!held && hurt && this.f('draxum.waited')) {
           // the first fail: it shoves him off the wall and he staggers back to it (seen, before the second try)
           this.stagger();
-          this.say('e3.dx.again', 'strong', 3); r = await hold(); held = !r || r.passed; if (!held) this.set('e3.wall.twice');
+          // (GPU take EP3C D: the second hold opened a second after the first, before any of this was seen)
+          this.copierState.rear = 0;
+          await new Promise<void>((ok) => this.after(1.2, () => { this.say('e3.dx.again', 'strong', 3); this.after(2.4, ok); }));
+          r = await hold(); held = !r || r.passed; if (!held) this.set('e3.wall.twice');
         }
         const o = this.outcome('e3.wall');
         if (!held && o && test(this.s as unknown as StoryState, o.if)) { this.set(o.id); this.outcomeScene(o, body, leave, go); return; }
@@ -2006,7 +2012,9 @@ export class Episode3 extends Episode2 {
       low: () => this.awayCut?.(v3(R.x + 1.8, gy + 0.6, R.z - 4.2), v3(R.x - 0.3, gy + 0.35, R.z - 0.4), 30, 50),
       lake: () => this.awayCut?.(v3(R.x + 1.5, gy + 1.4, R.z + 2.5), body ? body.position.clone() : v3(15, gy, -17), 30, 26),
       lie: () => this.awayCut?.(v3(lieAt.x + 1.1, gy + 1.75, lieAt.z + 1.4), lieAt.clone().add(v3(0, 0.25, 0)), 30, 34),
-      rise: () => { const t0 = performance.now(); this.anim(8, (k) => { const u = k / 8; this.awayCut?.(v3(R.x + 1.2 + u * 2, gy + 1.8 + u * 13, R.z + 1.6 + u * 4), v3(R.x, gy + u * 9, R.z - u * 10), 0.2, 40); void t0; }); },
+      // up and back from over him, looking down on the ring as his light goes (take EP3C D: it looked past the ring
+      // into the rock face and showed nothing)
+      rise: () => { this.anim(8, (k) => { const u = k / 8; this.awayCut?.(v3(lieAt.x + 1.0 + u * 2.5, gy + 1.9 + u * 9, lieAt.z + 1.4 + u * 7), lieAt.clone().add(v3(0, 0.2, 0)), 0.2, 40 + u * 8); }); },
     };
     const acts: Record<string, () => void> = {
       fall: () => {
@@ -2041,8 +2049,9 @@ export class Episode3 extends Episode2 {
   }
   /** Back on Verdaxis after a sealed outcome: its quiet beats (he does not know; MegaZroN writes it down). */
   private outcomeAfter(o: Outcome, then: () => void) {
-    const z = this.z, at = this.z.root.position.clone();
-    const sky = (): Shot => ({ from: at.clone().add(v3(0.6, 0.5, 1.2)), to: at.clone().add(v3(-2, 9, -14)), fov: 50, push: 0.01 });
+    const z = this.z, hd = this.head(), fw = this.fwd(), rt = this.right(fw);
+    // over his shoulder, from behind and below, up into the evening sky (take EP3C D: from beside him it was his coat)
+    const sky = (): Shot => ({ from: hd.clone().addScaledVector(fw, -2.4).addScaledVector(rt, 0.7).add(v3(0, -0.2, 0)), to: hd.clone().addScaledVector(fw, 8).add(v3(0, 5, 0)), fov: 48, push: 0.01 });
     const fire = (): Shot => cover.mid(z, 0.5, 2.6);
     const beats: Beat[] = o.after!.map((b) => ({ ...(b.key ? { key: b.key, who: (b.who ?? 'megazron') as Who } : { hold: b.sec }), shot: b.shot === 'sky' ? sky : fire, after: 0.6 }));
     this.scene(beats, then);

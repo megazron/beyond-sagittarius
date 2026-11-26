@@ -88,7 +88,7 @@ export function iceBlock(seed: number): THREE.Mesh {
   }
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.computeVertexNormals();
-  if (!iceMat) iceMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.02, normalMap: grainNormal(), normalScale: new THREE.Vector2(0.35, 0.35), envMapIntensity: 1.3 });
+  if (!iceMat) iceMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.02, emissive: 0x0e2a4a, /* (a cold blue of its own: in Methryx's orange light the blocks read cream) */ normalMap: grainNormal(), normalScale: new THREE.Vector2(0.35, 0.35), envMapIntensity: 1.3 });
   const m = new THREE.Mesh(geo, iceMat); m.castShadow = true; m.receiveShadow = true;
   return m;
 }
