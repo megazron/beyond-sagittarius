@@ -189,8 +189,12 @@ def main():
                 if not ev('__bs.moment.open'): ev('__bs.skip()')
                 page.wait_for_timeout(500)
             if not ev(f'__bs.moment.episodeTest({mid!r}, {line!r}, {flag!r})'.replace('None', 'undefined')): fails.append(f'episode moment {n}: no scene could start (mode {ev("__bs.mode")})'); return
-            try: page.wait_for_function('__bs.moment.open', timeout=15000)
-            except Exception: fails.append(f'episode moment {n} never opened on the layer'); return
+            # 15 s of the game's clock for the scene to reach it (15 s of the wall's ran out on a slow CI runner while the
+            # scene was still playing: run 45884358934; the same build passed the run before)
+            t0 = ev('__bs.debug.t')
+            try: page.wait_for_function(f'__bs.moment.open || __bs.debug.t > {t0} + 15', timeout=240000)
+            except Exception: pass
+            if not ev('__bs.moment.open'): fails.append(f'episode moment {n} never opened on the layer'); return
             if press: page.wait_for_timeout(300); page.keyboard.press('KeyE' if press is True else press)
             # on the game's clock, not the wall's: a window let go closes when its seconds have passed in the game, and a
             # software GPU in CI runs that clock slowly (20 s of real time were not enough for a 2.4 s window)

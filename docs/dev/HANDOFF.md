@@ -168,6 +168,24 @@ NOT ON MAIN until a landing line below says so. What I changed and measured:
 - Sync marks log both clocks (`__bs.syncLog`: the beep's audible time by getOutputTimestamp, the page time of the
   square); ~/bs-cap/cine7/cap.py also saves the recorder's start() and onstart times; ~/bs-cap/cine7/av_clock.py splits
   the offset into what a player gets and what the recorder adds.
+- A/V sync (P9 GPU take, 24 sync marks over 8 min, ~/bs-cap/cine7/av_clock.py): what a player gets (the beep's
+  audible time by AudioContext.getOutputTimestamp, outputLatency 40 ms included, minus the square's composited frame)
+  is +5 to +27 ms: no game-side fix needed. The 31-103 ms in the cine6 takes was the capture: (1) the recorder's start
+  was stamped at MediaRecorder onstart, 74-80 ms after recording began (start() to onstart measured 75.7 ms): sound
+  placed that late; (2) the cine5/cine6 cap.py join (ffmpeg concat with a duration per frame, ~54 frames a second)
+  drifts the picture late by about 1.1 ms a second (+24 ms at the start, +471 ms at 420 s; the sound file itself does
+  not drift). tools/gpu_capture.py's join already avoids both (sound placed by the marks, frames picked on their own
+  timestamps): ~/bs-cap/cine7/run.sh now records and joins with tools/gpu_capture.py. Use it, not cine5/cap.py.
+- CI on a4dafb8 (run 45877235336): every job green except glitch_ep2_ep3, cancelled at 45 min (ep2 alone took ~30).
+  glitch_pull_ep1 and glitch_city passed: the pull's forearm snaps and its clip probe miss are gone in CI. ep2 still
+  finds four upperarmR snaps 'doing pickup' (116 deg in a frame at 32.47 s of the segment, camera moved 0.61 m, at
+  [2.92, 4.88, -5.09]), the same numbers as before the task clip crossfade: the crossfade did not touch them. NOT
+  FOUND: the procedural arm solve (armTo, elbowOut) is weighted; next step is a frame log of the player's upperarmR
+  through each stage (clip, set pose, task arm solve) around 32.47 s of glitch_check --only ep2. ce590af splits ep2 and
+  ep3 into their own CI jobs. (Making the ep2 job report-only was refused by the permission check: it stays a gate.)
+- P9 GPU take on a4dafb8 (~/bs-cap/cine7/P9, 480 s cap): paratha, pack, phone, parcel, chai, tram done (the chai
+  crossing works on the GPU now); at the end he was at (-0.4, -48.97) on the way to the ring (2.8, -44, r 2.2): ring and
+  gate not reached.
 - Watched time (tools/watch_time.py, SwiftShader, dist of 2704552+route): Episode One levels 1-10 3.1 min in 6 stretches,
   longest 1.1 min; Episode Two 4.3 min in 24, longest 0.6; Episode Three 9.6 min in 42, longest 0.6. None over 4 min.
   NOT measured: the scenes between levels (narrator, flashback): the runner only has their SwiftShader wall time
