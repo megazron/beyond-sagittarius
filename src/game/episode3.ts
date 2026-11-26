@@ -1683,9 +1683,9 @@ export class Episode3 extends Episode2 {
         holdComb(); F.wenka.setLookTarget(this.head()); F.hohma.setLookTarget(foot); z.setLookTarget(boy()); F.wenka.setFace({ frown: 0.5, squint: 0.4 });
       } },
       // her close from in front of her (from the mat's side), not from the way the body's yaw says she faces
-      // her line from in front of her, at her eye height, over the boy lying between them (probe EP3C: from above, the
-      // camera saw the crown and back of her head)
-      { key: 'e3.ds.1', who: 'hohma' as Who, shot: () => { const hh = F.hohma.head.getWorldPosition(new THREE.Vector3()); return { from: hh.clone().addScaledVector(out, -0.85).addScaledVector(d, -0.25).add(v3(0, -0.06, 0)), to: hh.clone().add(v3(0, -0.04, 0)), fov: 36, push: 0.01 }; }, run: () => { F.hohma.setLookTarget(this.head()); } },
+      // her line from in front of her face, at her eye height (probes EP3C: from above, and from the boy's side, the camera
+      // saw the crown and the back of her head: she kneels facing out from the mat)
+      { key: 'e3.ds.1', who: 'hohma' as Who, shot: () => { const hh = F.hohma.head.getWorldPosition(new THREE.Vector3()); return { from: hh.clone().addScaledVector(out, 0.85).addScaledVector(d, -0.2).add(v3(0, -0.04, 0)), to: hh.clone().add(v3(0, -0.04, 0)), fov: 36, push: 0.01 }; }, run: () => { F.hohma.setLookTarget(this.head()); } },
       // the comb in her hands from above and in front of her (the camera stood inside her body in the GPU take)
       { hold: 2.6, shot: () => ({ from: held.clone().addScaledVector(out, -0.48).addScaledVector(d, -0.12).add(v3(0, 0.16, 0)), to: held.clone().add(v3(0, 0.01, 0)), fov: 30, push: 0.006, aperture: 0.004, lightAt: held.clone().add(v3(0, 0.15, 0)), lightScale: 0.6 }), run: () => z.setLookTarget(held) },
       { key: 'e3.ds.2', who: 'scientist', shot: () => cover.close(z, 0.4, 1.0, 0.24), run: () => { z.setLookTarget(boy()); z.setFace({ frown: 0.3 }); } },
@@ -2341,7 +2341,7 @@ export class Episode3 extends Episode2 {
           audio.sample('leather', 0.2, { rate: 1.8, delay: 1.2 });
         } },
         // threshing: the sheaf beaten on a flat stone, the grain jumping out of the ears
-        { hold: 3.2, shot: () => ({ from: thresh.clone().addScaledVector(f, 0.55).addScaledVector(r, 1.3).add(v3(0, 0.7, 0)), to: thresh.clone().addScaledVector(f, 0.5).add(v3(0, 0.3, 0)), fov: 36, push: 0.01, lightAt: thresh.clone().add(v3(0, 0.5, 0)) }), run: () => {
+        { hold: 3.2, shot: () => ({ from: thresh.clone().addScaledVector(f, 1.1).addScaledVector(r, 1.0).add(v3(0, 1.25, 0)), to: thresh.clone().addScaledVector(f, 0.5).add(v3(0, 0.3, 0)), fov: 38, push: 0.01, lightAt: thresh.clone().add(v3(0, 0.5, 0)) }), run: () => {
           this.settle(thresh, thresh.clone().addScaledVector(f, 1), false);
           const ff = this.fwd(), rr = this.right(ff), top = stone.position.clone().add(v3(0, 0.07, 0));
           for (let i = 0; i < 26; i++) { const g0 = this.mesh(new THREE.SphereGeometry(0.006, 4, 3), gold, top.clone()); g0.castShadow = false; g0.visible = false; grains.push(g0); }
@@ -2365,7 +2365,7 @@ export class Episode3 extends Episode2 {
           });
         } },
         // insert: the clean grain poured into a pot, the level coming up
-        { hold: 2.6, shot: () => ({ from: grainPot.position.clone().add(v3(0.28, 0.3, 0.12)), to: grainPot.position.clone().add(v3(0, 0.02, 0)), fov: 28, push: 0.006, aperture: 0.004, lightAt: grainPot.position.clone().add(v3(0, 0.2, 0)) }), run: () => {
+        { hold: 2.6, shot: () => ({ from: grainPot.position.clone().add(v3(0.16, 0.55, 0.1)), to: grainPot.position.clone().add(v3(0, 0.03, 0)), fov: 30, push: 0.006, aperture: 0.004, lightAt: grainPot.position.clone().add(v3(0, 0.2, 0)) }), run: () => {
           const top = grainPot.position.clone().add(v3(0, 0.22, 0));
           grains.forEach((g0) => { g0.visible = true; });
           S.anim(2.6, (k) => { fill.position.y = grainPot.position.y - 0.08 + Math.min(1, k / 2.4) * 0.13; grains.forEach((g0, i) => { const w = ((k * 1.2 + i / 26) % 1); g0.position.copy(top).add(v3(Math.sin(i) * 0.015, -w * (0.22 - (fill.position.y - grainPot.position.y + 0.08)), Math.cos(i) * 0.015)); }); });
