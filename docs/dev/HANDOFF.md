@@ -161,7 +161,9 @@ Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/co
   - Physics (part 6) and city tasks/crowd (part 7): not looked at.
 
 ## 2026-11-26 late night, cine7 (fourth agent; worktree ~/bs-cine, branch cine7 = cine6 + fixes + main d0e1c89)
-NOT ON MAIN until a fully green sha is fast-forwarded. What I found and measured:
+LANDED 8355882 on main (fast-forward from d0e1c89; CI run 45905508330 green on every job incl. glitch_ep2/ep3).
+P9 GPU take on 8355882 sent (all eight jobs in 129 s; still WRONG: ~40 s back and forth across the road by the tram
+square before the ring, route() sends him to the far pavement and back). What I found and measured:
 - The glitch_ep2/ep3 pickup snaps: NOT task code. I logged the player's upperarmR after each stage of Character.animate
   (debug hooks kept out of the branch: ~/bs-cap/cine7/armdbg/hooks.patch, probe ~/bs-cap/cine7/armdbg/probe.py = glitch_check
   plus the stage log). Before a pickup the set pose (game.ts: the injury's hand on the ribs, eff.limbs) turned the arm ~127
