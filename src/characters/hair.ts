@@ -292,6 +292,7 @@ function hairMesh(geo: THREE.BufferGeometry, colors: HairColors, sway: SwayUnifo
     uTip: { value: new THREE.Color(colors.tip) },
     uShine: { value: new THREE.Color(colors.shine) },
   };
+  mat.userData.hairU = u; // a scene can shade a head of hair down (the narrator's pale hair under his lamp)
   applySway(mat, sway, (sh) => {
     Object.assign(sh.uniforms, u);
     // (uDrop: the strands hang. They are built for an upright head and ride it rigidly, so bending, Nuvexa's ponytails
