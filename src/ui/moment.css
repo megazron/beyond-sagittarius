@@ -133,6 +133,8 @@ body.lang-hi .fork.act .fork-o, body.lang-ur .fork.act .fork-o { text-transform:
   font: 600 34px/1 'Barlow Condensed', sans-serif; color: #f2c9b8; text-shadow: 0 -1px 0 rgba(0, 0, 0, .55), 0 1px 0 rgba(255, 190, 170, .35); }
 .seal .mo-key .pc.face { width: 44px; height: 44px; border: 2.5px solid #f2c9b8; border-radius: 50%; font-size: 26px; }
 .seal .mo-key .ic { width: 28px; height: 28px; stroke: #f2c9b8; }
+/* on touch the seal itself is the button: a star pressed into the wax instead of a key */
+.seal .mo-key .star { width: 40px; height: 40px; fill: #e9b9a6; filter: drop-shadow(0 -1px 0 rgba(0, 0, 0, .5)) drop-shadow(0 1px 0 rgba(255, 190, 170, .3)); }
 .reflex.holding .seal { transform: scale(.9) translateY(3px); filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .6)); }
 .reflex.thump .seal { animation: mo-thump .32s cubic-bezier(.2, .8, .3, 1); }
 .reflex.wrong .seal { animation: mo-nudge .16s linear; }
@@ -239,7 +241,8 @@ body.mo-contrast .fork.act .fork-o { background: #0d1118; color: #fff; border-co
 body.mo-contrast .fork-o .tone { stroke: #000; stroke-width: 2.6; top: 4px; inset-inline-end: 4px; }
 body.mo-contrast .fork.act .fork-o .tone { stroke: #fff; }
 body.mo-contrast .fork-o.sel, body.mo-contrast .fork-o:hover, body.mo-contrast .fork-o:focus-visible { outline: 4px solid #ffd34d; outline-offset: 2px; }
-body.mo-contrast .fork::before { background: rgba(0, 0, 0, .72); }
+body.mo-contrast .fork::before { background: radial-gradient(ellipse 60% 70% at 50% 60%, rgba(0, 0, 0, .82), rgba(0, 0, 0, .6) 62%, transparent 100%); }
+body.mo-contrast .fork.at-top::before { background: radial-gradient(ellipse 60% 70% at 50% 40%, rgba(0, 0, 0, .82), rgba(0, 0, 0, .6) 62%, transparent 100%); }
 body.mo-contrast .fork-prompt, body.mo-contrast .reflex-label, body.mo-contrast .reflex-how { color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000, 0 2px 4px #000; }
 body.mo-contrast .fork-fuse .ink { fill: #fff; }
 body.mo-contrast .fork-fuse .ash { fill: rgba(255, 255, 255, .12); }

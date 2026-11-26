@@ -405,7 +405,7 @@ export class MomentLayer {
   private keyFor(i: number, n: number) {
     const dev = inputDevice();
     this.dev = dev;
-    if (dev === 'touch') return '';
+    if (dev === 'touch') return i < 0 ? '<svg class="star" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 3 L23.2 16.8 L37 20 L23.2 23.2 L20 37 L16.8 23.2 L3 20 L16.8 16.8 Z"/></svg>' : '';
     if (dev === 'pad') return padCap(i < 0 ? 0 : (PAD_SLOTS[Math.min(4, n)] ?? PAD_SLOTS[4])[i] ?? 0);
     return i < 0 ? keyCap('KeyE') : `<kbd class="kc">${i + 1}</kbd>`;
   }

@@ -1146,6 +1146,9 @@ window.addEventListener('resize', () => {
   moment: {
     get open() { return ui.moment.open; },
     get log() { return ui.moment.log; },
+    /** The heads on screen when the last panel opened (CSS px), and where the panels went. */
+    get faces() { return ui.moment.faces; },
+    get placed() { const r = (id: string) => { const e = document.getElementById(id); if (!e || e.classList.contains('hidden')) return null; const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom), e.className]; }; return { fork: r('fork'), reflex: r('reflex'), ledger: r('ledger-line'), bonds: r('bonds') }; },
     get choosing() { return cine.choosing; },
     get said() { return [...ui.subLog]; },
     get opening() { return openingSave ? { log: openingSave.branch.log, trust: openingSave.branch.trust, flags: openingSave.flags, record: openingSave.branch.record } : null; },
