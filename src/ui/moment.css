@@ -166,9 +166,10 @@ body.lang-hi .reflex-how, body.lang-ur .reflex-how { font-style: normal; }
 .ledger-line.fading { animation: mo-out .5s ease-in forwards; }
 .ledger-line small { font: 600 calc(12px * var(--mo-k))/1.2 var(--mo-label); letter-spacing: .26em; text-transform: uppercase; color: var(--mo-brown); }
 body.lang-hi .ledger-line small, body.lang-ur .ledger-line small { letter-spacing: 0; text-transform: none; font-size: calc(14px * var(--mo-k)); }
-.ledger-line .hand { font: 400 calc(21px * var(--mo-k))/1.28 var(--mo-hand); color: var(--mo-ink); animation: mo-write var(--write, 1s) steps(28, end) .25s both; }
+.ledger-line .hand { font: 400 calc(21px * var(--mo-k))/1.28 var(--mo-hand); color: var(--mo-ink); }
+.ledger-line .ln { display: block; white-space: nowrap; animation: mo-write var(--write, 1s) steps(var(--st, 28), end) var(--d, .25s) both; }
 body.lang-ur .ledger-line .hand { line-height: 2.05; font-size: calc(22px * var(--mo-k)); }
-[dir='rtl'] .ledger-line .hand { animation-name: mo-write-rtl; }
+[dir='rtl'] .ledger-line .ln { animation-name: mo-write-rtl; }
 
 /* ---------- Bonds: a ledger card, read at a glance ---------- */
 .bonds { position: fixed; top: calc(var(--safe-t) + 64px); inset-inline-end: calc(var(--safe-r) + 20px); z-index: 31; width: clamp(290px, 25vw, 400px);
@@ -261,12 +262,12 @@ body.mo-still .fork-as span, body.mo-still .fork-o.taken, body.mo-still .fork-o.
 body.mo-still .fork-o.gone, body.mo-still .reflex.passed .reflex-ring, body.mo-still .reflex.failed .reflex-ring { animation-direction: reverse; }
 body.mo-still .fork-fuse .ember, body.mo-still .fork-fuse .ember::after, body.mo-still .fork.urgent .fork-fuse svg, body.mo-still .reflex.thump .seal, body.mo-still .reflex.wrong .seal,
 body.mo-still .reflex.urgent .fg, body.mo-still .reflex .pulse i.hit { animation: none; }
-body.mo-still .ledger-line .hand { animation: mo-fade .3s both; }
+body.mo-still .ledger-line .ln { animation: mo-fade .3s both; }
 body.mo-still .fork-o, body.mo-still .fork-o:hover, body.mo-still .fork-o.sel { transform: none; }
 @media (prefers-reduced-motion: reduce) {
   .fork-o, .fork:not(.answered) .fork-head, .reflex:not(.passed):not(.failed) .reflex-ring, .reflex:not(.passed):not(.failed) .reflex-label, .reflex:not(.passed):not(.failed) .reflex-how, .ledger-line:not(.fading), .bonds:not(.fading), .fork-as span, .fork-o.taken { animation-name: mo-fade; }
   .fork-o.gone, .reflex.passed .reflex-ring, .reflex.failed .reflex-ring { animation-name: mo-fade; animation-direction: reverse; }
   .fork-fuse .ember, .fork-fuse .ember::after, .fork.urgent .fork-fuse svg, .reflex.thump .seal, .reflex.wrong .seal, .reflex.urgent .fg { animation: none; }
-  .ledger-line .hand { animation: mo-fade .3s both; }
+  .ledger-line .ln { animation: mo-fade .3s both; }
   .fork-o, .fork-o:hover, .fork-o.sel { transform: none; }
 }

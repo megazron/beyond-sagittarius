@@ -206,9 +206,12 @@ export class MomentLayer {
   /** MegaZroN's line in the Ledger: what a choice changed, plain words, written in by his hand. */
   ledger(key: string) {
     const text = t(key);
-    this.ledgerEl.innerHTML = `<small>${esc(t('mo.ledger'))}</small><span class="hand" style="--write:${Math.round(Math.min(1800, Math.max(650, text.length * 34)))}ms">${esc(text)}</span>`;
+    // set word by word first so the wrap can be read, then each wrapped line is written in after the one above it
+    const words = text.split(/\s+/).filter(Boolean);
+    this.ledgerEl.innerHTML = `<small>${esc(t('mo.ledger'))}</small><span class="hand">${words.map((w) => `<span class="w">${esc(w)}</span>`).join(' ')}</span>`;
     this.ledgerEl.classList.remove('hidden', 'fading');
     this.placeSide(this.ledgerEl);
+    this.writeLines(this.ledgerEl.querySelector<HTMLElement>('.hand')!, text.length);
     clearTimeout(this.ledgerTimer);
     this.ledgerTimer = window.setTimeout(() => {
       this.ledgerEl.classList.add('fading');
@@ -474,6 +477,24 @@ export class MomentLayer {
       if (c < bc - 1) { bc = c; best = [x, y]; }
     }
     e.style.setProperty('--x', `${best[0] * W}px`); e.style.setProperty('--y', `${best[1] * H}px`);
+  }
+  /** The hand writes one wrapped line at a time: each line's sweep takes its share of the time by its letters, with
+   * a short lift of the pen between lines. */
+  private writeLines(hand: HTMLElement, chars: number) {
+    const lines: string[][] = [];
+    let top = NaN;
+    for (const w of hand.querySelectorAll<HTMLElement>('.w')) {
+      if (!lines.length || Math.abs(w.offsetTop - top) > 4) { lines.push([]); top = w.offsetTop; }
+      lines[lines.length - 1].push(w.textContent || '');
+    }
+    const total = Math.min(1800, Math.max(650, chars * 34)), lift = 140;
+    let at = 250;
+    hand.innerHTML = lines.map((ws) => {
+      const s = ws.join(' '), d = Math.max(260, Math.round(total * s.length / Math.max(1, chars)));
+      const html = `<span class="ln" style="--d:${at}ms;--write:${d}ms;--st:${Math.max(6, s.length)}">${esc(s)}</span>`;
+      at += d + lift;
+      return html;
+    }).join('');
   }
   /** The Ledger note and the Bonds card keep to the side the faces are not on. */
   private placeSide(e: HTMLElement) {

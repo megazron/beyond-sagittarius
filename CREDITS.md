@@ -321,7 +321,11 @@ SIL Open Font License 1.1 (full texts in `public/fonts/OFL.txt`):
 - **Rajdhani** (Indian Type Foundry): Hindi UI
 - **Noto Sans Devanagari** (Google): Hindi reading text and subtitles
 - **Noto Naskh Arabic** (Google): Urdu UI
-- **Noto Nastaliq Urdu** (Google): Urdu subtitles and story text
+- **Noto Nastaliq Urdu** (Google): Urdu subtitles and story text, Urdu choice answers
+- **Spectral** (Production Type): choice answers and prompts
+- **Kalam** (Indian Type Foundry): MegaZroN's handwritten Ledger notes in English and Hindi
+- **Gulzar** (Simon Cozens): MegaZroN's handwritten Ledger notes in Urdu
+- **Tiro Devanagari Hindi** (Tiro Typeworks): Hindi choice answers and prompts
 
 ## Logo
 
