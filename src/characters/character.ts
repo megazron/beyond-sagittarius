@@ -2230,6 +2230,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     id, root, body, chest, head, armL, armR, legL, legR, handL, handR, fig, look: L,
     animate,
     setName,
+    /** Standing height in metres. */
+    get height() { return heightM; },
     /** Hurt and moving like it. */
     setLimp(on: boolean) { limpOn = on; },
     setSplint(on: boolean) { pendingSplint = on; if (kit) kit.splint.visible = on; },
