@@ -39,3 +39,11 @@ for (const s of show) {
 const T = +(q.get('t') ?? 0);
 for (let i = 0; i < T * 60; i++) m.update(1 / 60);
 (window as unknown as { step: (s: number) => void }).step = (s: number) => { for (let i = 0; i < s * 60; i++) m.update(1 / 60); };
+// ?answer=N: press N (1-based) 1.3 s in, to see the taken slip and the others swept off
+if (q.get('answer')) setTimeout(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: `Digit${q.get('answer')}` })), 1300);
+// ?press=1: a reflex press/hold 1.0 s in (hold: kept down)
+if (q.get('press')) setTimeout(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' })), 1000);
+// the layer runs on update(): a real clock here, so the fuse burns while the page is up
+let last = performance.now();
+const tick = () => { const n = performance.now(); m.update(Math.min(0.1, (n - last) / 1000)); last = n; requestAnimationFrame(tick); };
+if (q.get('live')) requestAnimationFrame(tick);

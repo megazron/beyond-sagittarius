@@ -119,7 +119,7 @@ export class MomentLayer {
   private dev = '';
   private seed = 1;
   /** Where the heads are on screen when a panel opened (CSS px, radius of the face), for tests and the UI sheet. */
-  faces: { x: number; y: number; r: number }[] = [];
+  faces: { x: number; y: number; r: number; w?: number }[] = [];
   /** Everything shown, for tests: kind, id-ish text and result. */
   readonly log: { at: number; what: string; detail: string }[] = [];
 
@@ -417,25 +417,29 @@ export class MomentLayer {
   /** The heads in the current shot, in CSS px, with the size of the face: the camera's projection of each shown head
    *  bone. Read when a panel opens (the scene behind is nearly still while it is up). */
   /** Dev stage only (dev/moment.ts): faces to place around, in place of the camera's. */
-  static fakeFaces: { x: number; y: number; r: number }[] | null = null;
+  static fakeFaces: { x: number; y: number; r: number; w?: number }[] | null = null;
   private readFaces() {
     if (MomentLayer.fakeFaces) return (this.faces = MomentLayer.fakeFaces);
-    const out: { x: number; y: number; r: number }[] = [];
+    const out: { x: number; y: number; r: number; w: number }[] = [];
     const pass = Renderer.current?.renderPass as unknown as { scene?: THREE.Scene; camera?: THREE.Camera } | undefined;
     const scene = pass?.scene, cam = pass?.camera as THREE.PerspectiveCamera | undefined;
     if (scene && cam) {
-      const W = window.innerWidth, H = window.innerHeight, v = new THREE.Vector3(), c = new THREE.Vector3();
+      const W = window.innerWidth, H = window.innerHeight, v = new THREE.Vector3(), c = new THREE.Vector3(), h = new THREE.Vector3(), fw = new THREE.Vector3(), to = new THREE.Vector3();
       cam.updateMatrixWorld(); c.setFromMatrixPosition(cam.matrixWorld);
       const tanH = Math.tan(THREE.MathUtils.degToRad((cam.fov ?? 50) / 2));
       scene.traverseVisible((o) => {
         if (!(o as THREE.Bone).isBone || o.name !== 'head' || out.length > 24) return;
-        v.setFromMatrixPosition(o.matrixWorld);
+        v.setFromMatrixPosition(o.matrixWorld); h.copy(v);
         const d = v.distanceTo(c);
         // the face sits a little above and in front of the head bone; 0.12 m is about half a face's height
         v.y += 0.06;
         v.project(cam);
         if (v.z < -1 || v.z > 1 || Math.abs(v.x) > 1.15 || Math.abs(v.y) > 1.15) return;
-        out.push({ x: (v.x + 1) / 2 * W, y: (1 - v.y) / 2 * H, r: Math.min(H, (0.13 / Math.max(0.05, d * tanH)) * (H / 2)) });
+        // a head seen from behind matters less than a face (the body's +z is where it faces, cutscene.ts yaw)
+        let body: THREE.Object3D | null = o; while (body && !body.userData.isCharacter) body = body.parent;
+        let w = 1;
+        if (body) { body.getWorldDirection(fw); to.subVectors(c, h).normalize(); if (fw.dot(to) < -0.2) w = 0.25; }
+        out.push({ x: (v.x + 1) / 2 * W, y: (1 - v.y) / 2 * H, r: Math.min(H, (0.13 / Math.max(0.05, d * tanH)) * (H / 2)), w });
       });
     }
     this.faces = out;
@@ -443,7 +447,7 @@ export class MomentLayer {
   }
   private faceCost(b: Box, faces = this.faces) {
     // a face counts from its brow to its chin and a little either side
-    return faces.reduce((s, f) => s + overlap(b, { x0: f.x - f.r * 1.2, y0: f.y - f.r * 1.3, x1: f.x + f.r * 1.2, y1: f.y + f.r * 1.5 }), 0);
+    return faces.reduce((s, f) => s + (f.w ?? 1) * overlap(b, { x0: f.x - f.r * 1.2, y0: f.y - f.r * 1.3, x1: f.x + f.r * 1.2, y1: f.y + f.r * 1.5 }), 0);
   }
   private placeFork() {
     const faces = this.readFaces();
@@ -456,12 +460,15 @@ export class MomentLayer {
   private placeReflex() {
     const faces = this.readFaces();
     const e = this.reflexEl, W = window.innerWidth, H = window.innerHeight;
-    // lower third, never the middle of the frame (the inserts); the side away from the faces, the centre if both are clear
-    const spots: [number, number][] = [[0.5, 0.76], [0.2, 0.7], [0.8, 0.7], [0.2, 0.36], [0.8, 0.36]];
+    // a lower corner, never the middle of the frame (the inserts are framed there); the side away from the faces and
+    // from a Ledger note or Bonds card still showing; the upper corners only if both lower ones are taken
+    const others = [this.ledgerEl, this.bondEl].filter((x) => !x.classList.contains('hidden')).map(boxOf);
+    const spots: [number, number][] = [[0.17, 0.7], [0.83, 0.7], [0.17, 0.34], [0.83, 0.34]];
     let best = spots[0], bc = Infinity;
     for (const [x, y] of spots) {
       e.style.setProperty('--x', `${x * W}px`); e.style.setProperty('--y', `${y * H}px`);
-      const c = this.faceCost(boxOf(e), faces) + (y < 0.5 ? 1500 : 0);
+      const b = boxOf(e);
+      const c = this.faceCost(b, faces) + 4 * others.reduce((s, o) => s + overlap(b, o), 0) + (y < 0.5 ? 6000 : 0);
       if (c < bc - 1) { bc = c; best = [x, y]; }
     }
     e.style.setProperty('--x', `${best[0] * W}px`); e.style.setProperty('--y', `${best[1] * H}px`);
@@ -469,12 +476,13 @@ export class MomentLayer {
   /** The Ledger note and the Bonds card keep to the side the faces are not on. */
   private placeSide(e: HTMLElement) {
     if (!this.open) this.readFaces();
+    const others = [this.reflexEl, this.root].filter((x) => x !== e && !x.classList.contains('hidden')).map(boxOf);
+    const cost = () => { const b = boxOf(e); return this.faceCost(b) + 4 * others.reduce((s, o) => s + overlap(b, o), 0); };
     e.classList.remove('flip');
-    if (!this.faces.length) return;
-    const here = this.faceCost(boxOf(e));
+    const here = cost();
     if (!here) return;
     e.classList.add('flip');
-    if (this.faceCost(boxOf(e)) >= here) e.classList.remove('flip');
+    if (cost() >= here) e.classList.remove('flip');
   }
 }
 

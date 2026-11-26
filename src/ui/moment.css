@@ -46,7 +46,7 @@ body.lang-ur .fork-prompt, body.lang-hi .fork-prompt { font-style: normal; }
 
 /* "You are <name>": a brass plate, engraved */
 .fork-as { display: flex; justify-content: center; margin-bottom: 2px; }
-.fork-as span { display: inline-block; padding: 9px 30px 8px; border: 12px solid transparent; border-image: url('/textures/ui/brass.webp') 24 fill / 12px stretch;
+.fork-as span { display: inline-block; white-space: nowrap; padding: 9px 30px 8px; border: 12px solid transparent; border-image: url('/textures/ui/brass.webp') 24 fill / 12px stretch;
   font: 600 calc(15px * var(--mo-k))/1 var(--mo-label); letter-spacing: .22em; text-transform: uppercase; color: #3b2a10;
   text-shadow: 0 1px 0 rgba(255, 236, 190, .55), 0 -1px 0 rgba(60, 38, 8, .35); filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .55));
   margin: -12px 0; animation: mo-plate .45s var(--mo-ease) both; }
@@ -92,8 +92,8 @@ body.lang-hi .fork.act .fork-o, body.lang-ur .fork.act .fork-o { text-transform:
 .fork-o.taken { animation: mo-stamp .32s var(--mo-ease) both; }
 .fork-o.taken .stroke { transition: stroke-dashoffset .38s ease-out .08s; stroke-dashoffset: 0; opacity: 1; }
 .fork-o.gone { animation: mo-sweep .45s cubic-bezier(.5, 0, .9, .4) both; }
-.fork.answered .fork-head, .fork.answered .fork-fuse { transition: opacity .3s; opacity: 0; }
-.fork.answered::before { transition: opacity .6s .2s; opacity: 0; }
+.fork.answered .fork-head, .fork.answered .fork-fuse { animation: mo-out .28s ease-in forwards; }
+.fork.answered::before { animation: mo-out .6s ease-in .15s forwards; }
 .fork-silent { font: italic 400 calc(20px * var(--mo-k)) var(--mo-serif); color: var(--paper); opacity: .85; text-shadow: 0 1px 2px #000, 0 0 12px #000; animation: mo-fade .3s both; }
 
 /* the fuse: an ink line ruled under the slips, burning in from both ends, an ember at each end */
@@ -141,7 +141,8 @@ body.lang-hi .fork.act .fork-o, body.lang-ur .fork.act .fork-o { text-transform:
 .reflex.urgent .fg { animation: mo-ember .14s steps(2) infinite alternate; }
 .reflex.passed .reflex-ring { animation: mo-pressed .5s var(--mo-ease) both; }
 .reflex.failed .reflex-ring { animation: mo-crack .5s ease-in both; }
-.reflex.failed .reflex-label, .reflex.failed .reflex-how { opacity: .4; transition: opacity .3s; }
+.reflex.failed .reflex-label, .reflex.failed .reflex-how { animation: mo-dim .3s forwards; }
+.reflex.passed .reflex-label, .reflex.passed .reflex-how, .reflex.passed .fork-as, .reflex.passed .pulse { animation: mo-out .35s ease-in .2s both; }
 .reflex-label { font: 600 calc(clamp(22px, 2vw, 28px) * var(--mo-k))/1.05 var(--mo-label); letter-spacing: .12em; text-transform: uppercase; color: var(--paper);
   text-shadow: 0 1px 2px #000, 0 0 14px rgba(0, 0, 0, .8); animation: mo-rise .35s .1s var(--mo-ease) both; }
 body.lang-hi .reflex-label, body.lang-ur .reflex-label { letter-spacing: 0; text-transform: none; }
@@ -162,7 +163,7 @@ body.lang-hi .reflex-how, body.lang-ur .reflex-how { font-style: normal; }
   transform: rotate(-.8deg); filter: drop-shadow(0 6px 8px rgba(0, 0, 0, .5)); pointer-events: none; animation: mo-pin .45s var(--mo-drop) both; }
 .ledger-line.flip { inset-inline-start: auto; inset-inline-end: calc(var(--safe-r) + 22px); transform: rotate(.8deg); }
 .ledger-line.hidden { display: none; }
-.ledger-line.fading { opacity: 0; transition: opacity .5s; }
+.ledger-line.fading { animation: mo-out .5s ease-in forwards; }
 .ledger-line small { font: 600 calc(12px * var(--mo-k))/1.2 var(--mo-label); letter-spacing: .26em; text-transform: uppercase; color: var(--mo-brown); }
 body.lang-hi .ledger-line small, body.lang-ur .ledger-line small { letter-spacing: 0; text-transform: none; font-size: calc(14px * var(--mo-k)); }
 .ledger-line .hand { font: 400 calc(21px * var(--mo-k))/1.28 var(--mo-hand); color: var(--mo-ink); animation: mo-write var(--write, 1s) steps(28, end) .25s both; }
@@ -175,7 +176,7 @@ body.lang-ur .ledger-line .hand { line-height: 2.05; font-size: calc(22px * var(
   color: var(--mo-ink); transform: rotate(.6deg); filter: drop-shadow(0 6px 8px rgba(0, 0, 0, .5)); pointer-events: none; animation: mo-pin .45s var(--mo-drop) both; }
 .bonds.flip { inset-inline-end: auto; inset-inline-start: calc(var(--safe-l) + 20px); transform: rotate(-.6deg); }
 .bonds.hidden { display: none; }
-.bonds.fading { opacity: 0; transition: opacity .5s; }
+.bonds.fading { animation: mo-out .5s ease-in forwards; }
 .bonds small { font: 600 calc(clamp(13px, 1.05vw, 16px) * var(--mo-k))/1 var(--mo-label); letter-spacing: .26em; text-transform: uppercase; color: var(--mo-brown); }
 body.lang-hi .bonds small, body.lang-ur .bonds small { letter-spacing: 0; text-transform: none; }
 .bond { display: grid; grid-template-columns: 1fr auto; align-items: baseline; column-gap: 10px; animation: mo-fade .3s var(--d, 0ms) both; }
@@ -194,6 +195,8 @@ body.lang-hi .bonds small, body.lang-ur .bonds small { letter-spacing: 0; text-t
 
 /* ---------- motion ---------- */
 @keyframes mo-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mo-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes mo-dim { to { opacity: .4; } }
 @keyframes mo-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes mo-lay { 0% { opacity: 0; transform: translateY(26px) rotate(calc(var(--r, 0deg) * 4)) scale(1.04); } 60% { opacity: 1; } 100% { opacity: 1; transform: rotate(var(--r, 0deg)); } }
 @keyframes mo-stamp { 0% { transform: rotate(0deg) translateY(-5px) scale(1.025); } 40% { transform: rotate(0deg) translateY(1px) scale(.97); } 100% { transform: rotate(0deg) translateY(0) scale(1); } }
@@ -253,7 +256,7 @@ body.mo-contrast .ledger-line .hand, body.mo-contrast .bond-word { font-family: 
 body.mo-contrast .bonds small, body.mo-contrast .ledger-line small { color: #000; }
 
 /* ---------- calm motion (Settings, or the system asking for less): fades only ---------- */
-body.mo-still .fork-o, body.mo-still .fork-head, body.mo-still .reflex-ring, body.mo-still .reflex-label, body.mo-still .reflex-how, body.mo-still .ledger-line, body.mo-still .bonds,
+body.mo-still .fork-o, body.mo-still .fork:not(.answered) .fork-head, body.mo-still .reflex:not(.passed):not(.failed) .reflex-ring, body.mo-still .reflex:not(.passed):not(.failed) .reflex-label, body.mo-still .reflex:not(.passed):not(.failed) .reflex-how, body.mo-still .ledger-line:not(.fading), body.mo-still .bonds:not(.fading),
 body.mo-still .fork-as span, body.mo-still .fork-o.taken, body.mo-still .fork-o.gone, body.mo-still .reflex.passed .reflex-ring, body.mo-still .reflex.failed .reflex-ring { animation-name: mo-fade; }
 body.mo-still .fork-o.gone, body.mo-still .reflex.passed .reflex-ring, body.mo-still .reflex.failed .reflex-ring { animation-direction: reverse; }
 body.mo-still .fork-fuse .ember, body.mo-still .fork-fuse .ember::after, body.mo-still .fork.urgent .fork-fuse svg, body.mo-still .reflex.thump .seal, body.mo-still .reflex.wrong .seal,
@@ -261,7 +264,7 @@ body.mo-still .reflex.urgent .fg, body.mo-still .pulse i.hit { animation: none; 
 body.mo-still .ledger-line .hand { animation: mo-fade .3s both; }
 body.mo-still .fork-o, body.mo-still .fork-o:hover, body.mo-still .fork-o.sel { transform: none; }
 @media (prefers-reduced-motion: reduce) {
-  .fork-o, .fork-head, .reflex-ring, .reflex-label, .reflex-how, .ledger-line, .bonds, .fork-as span, .fork-o.taken { animation-name: mo-fade; }
+  .fork-o, .fork:not(.answered) .fork-head, .reflex:not(.passed):not(.failed) .reflex-ring, .reflex:not(.passed):not(.failed) .reflex-label, .reflex:not(.passed):not(.failed) .reflex-how, .ledger-line:not(.fading), .bonds:not(.fading), .fork-as span, .fork-o.taken { animation-name: mo-fade; }
   .fork-o.gone, .reflex.passed .reflex-ring, .reflex.failed .reflex-ring { animation-name: mo-fade; animation-direction: reverse; }
   .fork-fuse .ember, .fork-fuse .ember::after, .fork.urgent .fork-fuse svg, .reflex.thump .seal, .reflex.wrong .seal, .reflex.urgent .fg { animation: none; }
   .ledger-line .hand { animation: mo-fade .3s both; }
