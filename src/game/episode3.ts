@@ -1898,7 +1898,7 @@ export class Episode3 extends Episode2 {
     // a long lens over his shoulder onto it coming out of the black lake and up the shore (shot list 3.9/3: fov 20)
     // (take EP3B C: aimed at a fixed point the long lens saw only rocks; now it follows the creature itself, from in front of the ring)
     // (take EP3C C: from 1.7 m the ground between filled the long lens; now from 4 m up, re-aimed at it every frame)
-    if (st && body) { const b = body, y = st.height(4.5, -4.0), from = v3(4.5, y + 4.0, -4.0); this.anim(5.2, () => this.awayCut?.(from, b.position.clone().add(v3(0, 0.5, 0)), 0.1, 26)); }
+    if (st && body) { const b = body, y = st.height(4.5, -4.0), from = v3(4.5, y + 4.0, -4.0); this.anim(5.2, (k) => { if (k > 1.6) this.awayCut?.(from, b.position.clone().add(v3(0, 0.5, 0)), 0.1, 26); }); } // (from when it is out of the ice: take EP3C D2 showed bare ground first)
     this.say('e3.dx.come', 'strong', 4.5);
     this.after(2.2, () => { this.copierState.call = 1; this.ui.say(isAlive(this.s.branch, 'builder') ? 'e3.dx.voice' : 'e3.dx.hum', 'e3.who.voice', 3); });
     this.after(5.2, () => { this.copierState.call = 0; });
