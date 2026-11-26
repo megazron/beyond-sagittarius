@@ -74,7 +74,7 @@ def main():
                 fails.append(f'moment {i + 1} never opened'); return
             o = opened()
             if not o or o.get('id') != mid:
-                fails.append(f'moment {i + 1}: a different moment opened ({o and o.get("kind")})')
+                fails.append(f'moment {i + 1}: a different moment opened ({o and o.get("kind")} {o and o.get("id")}, film at {ev("__bs.cineTime()"):.1f})')
             step(0.35); page.wait_for_timeout(400)  # past the guard against a held key (it counts real time)
             if how == 'HOLD':
                 page.keyboard.down('KeyE')
@@ -92,7 +92,7 @@ def main():
             step(0.1, 3)
             log = (ev('__bs.moment.saved') or {}).get('branch', {}).get('log', [])
             got = next((e['pick'] for e in log if e['id'] == mid), None)
-            if got != want: fails.append(f'moment {i + 1}: logged {"nothing" if got is None else "another answer"} on disk')
+            if got != want: fails.append(f'moment {i + 1}: logged {"nothing" if got is None else "another answer"} on disk (log: {[e["id"] for e in log]})')
             else: print(f'moment {i + 1}: answered and on disk', flush=True)
 
         def start(cont=False):
@@ -144,7 +144,7 @@ def main():
         for i, (mid, how, want) in enumerate(PLAN[1:4], 1):
             ev(f'__bs.cineSeek({AT[mid]})'); step(0.1)
             answer(i, mid, how, want)
-        step(0.1, 30)
+        # (no more film here: the next moment, the hold, is a second away and would time out unanswered)
         if 'cine.line4' in ev('__bs.moment.said'): fails.append('a line was said that the answer took away')
         shown = ev('__bs.moment.log')
         if not any(x['what'] == 'bond' for x in shown): fails.append('no bond meter shown')
