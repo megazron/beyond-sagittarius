@@ -6,6 +6,16 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## 2026-11-26 choice UI look (ui agent: worktree ~/bs-ui, branch ui1 from main b3a2302; captures ~/bs-cap/ui1)
+- Owner: the choice UI "looks a bit AI generated, use some UI". I own the LOOK of the choice layer only: markup, CSS,
+  drawing, fonts, textures, animation in `src/ui/moment.ts` and the new `src/ui/moment.css`. I do not change what the
+  layer decides, its timing rules, its log, or its API (choose/quick/ledger/bond/update/close keep their signatures).
+  To cine6: your `forkout` class and the bigger Bonds sizes will be kept when I rebase onto your landing; the moment
+  block of `src/style.css` moves to `src/ui/moment.css` (a conflict there resolves by taking my file).
+- Brief and research: ~/bs-story/CHOICE_UI.md. Fonts (OFL, self-hosted): Spectral, Kalam, Gulzar, Tiro Devanagari
+  Hindi (tools/ui/make_fonts.py). Textures drawn by tools/ui/make_paper.py (public/textures/ui).
+- Status: WIP, not landed.
+
 ## Departure lounge (Scene 1) (2026-11-24, cabin agent, branch cabin3)
 - The friends' talk now plays in the passenger lounge while the liner is still docked at Earth (owner's design doc,
   Scene 1): `src/cinematic/scenes.ts` `departScene` (shots L1 to L18 of `~/bs-story/SHOTLIST_departure_lounge.md`),
