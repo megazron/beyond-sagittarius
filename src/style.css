@@ -667,3 +667,9 @@ body.touch .reflex-ring kbd { display: none; }
 .bond-word { font: 500 clamp(16px, 1.3vw, 20px) var(--font-body); color: var(--dim); }
 @keyframes mo-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (max-width: 700px) { .fork-opts { flex-direction: column; align-items: stretch; } .fork-o { max-width: none; min-height: 52px; } .bonds { width: 240px; } }
+
+/* out of MegaZroN's cold open: the logo forms out of the dark, then the menu comes up */
+#title.from-film .game-title { animation: mz-logo 3.4s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+#title.from-film .tagline, #title.from-film .menu, #title.from-film .lang-row, #title.from-film .title-foot { animation: mz-menu 1.4s 2.6s ease-out both; }
+@keyframes mz-logo { from { opacity: 0; filter: blur(14px) brightness(2.2); transform: scale(1.12); letter-spacing: 0.3em; } 40% { opacity: 0.9; } to { opacity: 1; filter: none; transform: none; } }
+@keyframes mz-menu { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
