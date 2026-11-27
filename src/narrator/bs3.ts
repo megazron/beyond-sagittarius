@@ -25,7 +25,7 @@ export const BS3_LINES: [string, number][] = [['mz.v3.1', 2.2], ['mz.v3.2', 12.1
 export function bs3Film(v: Vault, lang = 'en'): Film {
   const cam = v.camera, host = v.host, snd = v.snd, P = v as unknown as Inner, page = P.page;
   const win = V(0, 24, -96);
-  const T = { sit0: 4.8, write0: 9.9, look: 14.2, pull0: 24.4, stop: 33.0, lean0: 39.0, lean1: 44.6, shut: 45.4, hand: 49.0, len: 53.5 };
+  const T = { sit0: 4.8, write0: 9.9, look: 14.2, pull0: 24.4, stop: 33.0, lean0: 39.0, lean1: 44.6, shut: 45.4, hand: 49.0, len: 51.4 }; // (the ring's journey to the title is 2.9 s: a longer tail was 6 s of black, GPU take v3b)
   // the last line runs longer in Hindi (4.1 s) and Urdu (5.6 s) than in English (3.35 s): the end waits for it
   { const x = ({ hi: 0.9, ur: 2.4 } as Record<string, number>)[lang] ?? 0; T.lean1 += x; T.shut += x; T.hand += x; T.len += x; }
   const L = Object.fromEntries(BS3_LINES.map(([k, t]) => [k.slice(-1), t])) as Record<string, number>;
@@ -68,7 +68,7 @@ export function bs3Film(v: Vault, lang = 'en'): Film {
     desk.updateWorldMatrix(true, true);
     const c = desk.localToWorld(V(-0.55, 1.2, 0.2)); P.candle.position.set(c.x, c.y + 0.172, c.z); P.candleGlow.position.set(c.x, c.y + 0.195, c.z);
     P.lamp.position.set(S.x + 0.7, seatY + 1.4, S.z + 0.2); P.lamp.target.position.copy(nibAt(1024, 600));
-    const face = V(S.x, seatY + 0.95, S.z), candle = P.candle.position.clone();
+    const face = V(S.x, seatY + 0.95, S.z);
     shots = [
       // 1. the room and the window, low, for a moment
       { t0: 0, t1: 1.5, a: V(S.x + 2.6, 1.1, S.z + 4.6), b: V(S.x + 2.3, 1.15, S.z + 4.45), la: V(0, 1.5, 0), lb: V(-0.1, 1.45, 0.2), fov: [36, 35], breath: 0.5 },
@@ -76,7 +76,7 @@ export function bs3Film(v: Vault, lang = 'en'): Film {
       // chest large enough to read on his first line (v3 take r8: he was small and far off when he spoke it)
       { t0: 1.5, t1: T.sit0, a: V(S.x + 1.9, 1.55, S.z + 3.9), b: V(S.x + 1.6, 1.5, S.z + 3.6), la: V(S.x, 1.4, S.z), fov: [23, 25], breath: 0.4 },
       // 2. he turns and sits at the desk: full body, the black hole over his shoulder
-      { t0: T.sit0, t1: T.write0, a: V(S.x + 1.5, 1.15, S.z + 3.9), b: V(S.x + 1.0, 1.2, S.z + 3.5), la: V(S.x - 0.1, 1.05, S.z), fov: [34, 31], breath: 0.5 },
+      { t0: T.sit0, t1: T.write0, a: V(S.x + 1.9, 2.0, S.z + 3.6), b: V(S.x + 1.5, 1.95, S.z + 3.2), la: V(S.x - 0.05, 1.45, S.z), lb: V(S.x - 0.05, 1.3, S.z), fov: [38, 34], breath: 0.5 }, // (from above the lectern: low, it hid him and cut off his head, GPU take v3b)
       // 3. from his front left over the desk: he writes the sixth name
       { t0: T.write0, t1: 11.9, a: V(S.x + 0.95, seatY + 1.0, S.z + 1.45), b: V(S.x + 0.8, seatY + 0.97, S.z + 1.3), la: nibAt(1250, ROW6 - 40), fov: [30, 28], f: [1.5, 1.3], ap: 0.008, breath: 0.4 },
       // 4. straight down on the Ledger, its top at the top of the frame: six names and homes, the sixth being written
@@ -86,10 +86,7 @@ export function bs3Film(v: Vault, lang = 'en'): Film {
       // 6. the pull: low over the floor from his side, the slips going past behind him to the window
       // (from his side it was a dark stool and his legs, take r7: now from low behind his left shoulder towards the window,
       // the slips skating away across the floor under the black hole)
-      { t0: T.pull0, t1: 25.7, a: V(S.x - 1.3, 0.55, S.z + 0.9), b: V(S.x - 1.2, 0.6, S.z + 0.6), la: V(-0.3, 0.6, -3.5), lb: V(-0.2, 0.9, -5), fov: [44, 42], breath: 0.8 },
-      // 6b. the candle on his desk from the side, its flame laid over towards the window, he out of focus beyond it
-      // (take r8: the candle's lean did not read at all; it was never framed)
-      { t0: 25.7, t1: 26.9, a: candle.clone().add(V(-0.36, 0.08, 0.3)), b: candle.clone().add(V(-0.32, 0.08, 0.27)), la: candle.clone().add(V(0, 0.1, -0.02)), fov: [26, 25], f: [0.46, 0.42], ap: 0.016, breath: 0.6 },
+      { t0: T.pull0, t1: 26.7, a: V(S.x - 1.3, 0.55, S.z + 0.9), b: V(S.x - 1.2, 0.6, S.z + 0.6), la: V(-0.3, 0.6, -3.5), lb: V(-0.2, 0.9, -5), fov: [44, 42], breath: 0.8 },
       // 7. back to him, closer: hair and coat leaning to the window, his palm holding the page down
       { t0: 26.7, t1: T.stop, a: V(S.x + 0.3, seatY + 0.8, S.z + 1.95), b: V(S.x + 0.24, seatY + 0.82, S.z + 1.75), la: face.clone().setY(seatY + 0.78), fov: [27, 26], f: [1.9, 1.7], ap: 0.01, breath: 0.9 },
       // 8. it stops dead: close, held where his eyes are at the cut
