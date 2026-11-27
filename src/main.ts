@@ -46,6 +46,7 @@ import { setKtx2Renderer, setTextureWarmer, warmPending } from './core/assets';
 import { defaultLook, PlayerLook, CrewSkins } from './characters/custom';
 import { voice } from './core/voice';
 import { frameReport } from './cinematic/cutscene';
+import { RingHandover, discOnScreen } from './narrator/handover';
 import { Vault, vaultScript } from './narrator/vault';
 import { Montage } from './cinematic/montage';
 import { designOf } from './game/away/boarding';
@@ -246,6 +247,7 @@ function showTitle(fromFilm = false) {
   ti.classList.toggle('from-film', fromFilm);
   if (fromFilm) setTimeout(() => ti.classList.remove('from-film'), 6000);
   ui.fade('black', 0, fromFilm ? 2.6 : 1.2);
+  entryRing?.release(2.4); entryRing = null; entryToTitle = false;
   audio.stopWind();
   applyCrewNames(undefined);
   useSlot('main');
@@ -329,8 +331,12 @@ function entranceBeforeTitle() {
   const q = new URLSearchParams(location.search).get('entrance');
   if (q === '0' || entrySeen() || (navigator.webdriver && q !== '1')) return;
   ui.show('title', false);
-  whenWorldReady(() => { ui.show('loading', false); audio.start(); void voice.load(); markEntry(); playVault('intro', () => showTitle(true)); });
+  whenWorldReady(() => { ui.show('loading', false); audio.start(); void voice.load(); markEntry(); entryToTitle = true; playVault('intro', () => showTitle(true)); });
 }
+
+/** The cold open is playing before the title (it ends in it): its ring-to-limb hand-over, while it is up. */
+let entryToTitle = false;
+let entryRing: RingHandover | null = null;
 
 /** Fade into the Vault for a MegaZroN scene, then hand back to `after`. */
 function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', after: () => void) {
@@ -351,7 +357,15 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', after: () 
     renderer.setScene(vault.scene, vault.camera, false);
     renderer.renderer.toneMappingExposure = 1;
     // the cold open goes into the black hole's shadow: the black comes up with it, and the title (or Zenvora) out of it
-    vault.onHandover = id === 'intro' ? () => ui.fade('black', 1, 2.6) : null;
+    vault.onHandover = id === 'intro' ? () => {
+      ui.fade('black', 1, entryToTitle ? 1.5 : 2.6);
+      if (!entryToTitle) return;
+      // the last light in the frame, the photon ring, goes to where the Earth's lit limb will be on the title
+      cine.idle(0);
+      entryRing?.stop();
+      entryRing = new RingHandover({ r: 0.4 }, discOnScreen(cine.camera, new THREE.Vector3(0, 0, 0), 101.2, new THREE.Vector3(1, 0.22, 0.55).normalize()), 2.9);
+      (window as unknown as Record<string, unknown>).__mzRing = entryRing;
+    } : null;
     ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden');
     vault.play(lines, () => {

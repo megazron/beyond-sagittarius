@@ -77,6 +77,13 @@ export class Vault {
   private lampBulb!: THREE.MeshStandardMaterial;
   private lampG = new THREE.Group();
   private lantern: { l: THREE.PointLight; m: THREE.MeshStandardMaterial; f: THREE.Mesh; base: number }[] = [];
+  /** The candle on the lectern: the flame the pull is read by in the close shots. */
+  private candle!: THREE.Group;
+  private candleGlow!: THREE.Sprite;
+  /** Loose slips of paper round the lectern: the pull takes them across the floor to the window. */
+  private slips: { m: THREE.Mesh; a: THREE.Vector3; b: THREE.Vector3; d: number; h: number; s: number }[] = [];
+  private motes2!: THREE.Points;
+  private beamMotes2!: THREE.Points;
   private halo = new THREE.PointLight(0xffc36a, 0, 5);
   private key = new THREE.PointLight(0xffd9a0, 7, 11);
   private lamp = new THREE.SpotLight(0xffd29a, 0, 7, 0.75, 0.55, 1.6);
@@ -270,6 +277,33 @@ export class Vault {
       this.lantern.push({ l, m: fm, f: flame, base });
     }
 
+    // a candle on the lectern's far corner, on a short brass stick: in the close shots its flame is what leans
+    {
+      const cx = -0.5, cz = -1.1, cy = 1.2;
+      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.03, 0.1, 12), brass); stick.position.set(cx, cy + 0.05, cz); s.add(stick);
+      const wax = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.07, 12), new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.6, emissive: 0x5a3a18, emissiveIntensity: 0.5 })); wax.position.set(cx, cy + 0.135, cz); s.add(wax);
+      // a teardrop: round at the wick, drawn to a point
+      const prof: THREE.Vector2[] = []; for (let i = 0; i <= 14; i++) { const u = i / 14; prof.push(new THREE.Vector2(0.0085 * Math.sin(Math.PI * Math.pow(u, 0.62)) * (1 - 0.25 * u), u * 0.046)); }
+      const fg = new THREE.LatheGeometry(prof, 14);
+      const outer = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ color: 0xffa238, transparent: true, opacity: 0.9, toneMapped: false }));
+      const inner = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ color: 0xfff2c4, toneMapped: false })); inner.scale.set(0.55, 0.62, 0.55);
+      this.candle = new THREE.Group(); this.candle.add(outer, inner); this.candle.position.set(cx, cy + 0.172, cz); s.add(this.candle);
+      this.candleGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot(), color: 0xff9a40, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
+      this.candleGlow.scale.setScalar(0.22); this.candleGlow.position.set(cx, cy + 0.195, cz); s.add(this.candleGlow);
+    }
+    // loose slips round the lectern (notes that never went into the Ledger)
+    {
+      const sm0 = new THREE.MeshStandardMaterial({ color: 0xcfc3a4, roughness: 0.85, side: THREE.DoubleSide, emissive: 0x3a2c18, emissiveIntensity: 0.35 });
+      const at: [number, number, number, number, number, number, number][] = [
+        [0.62, 0.012, -0.25, 1.9, -7.2, 0.0, 0.5], [-0.75, 0.012, -0.5, -1.2, -7.6, 0.9, 0.35], [0.3, 0.012, 0.75, 0.6, -6.6, 1.8, 0.7],
+        [-0.3, 0.012, 1.4, -2.3, -6.9, 2.9, 0.6], [1.5, 0.012, 0.9, 2.8, -7.4, 3.6, 0.45], [-1.6, 0.012, 0.2, -0.4, -7.9, 4.6, 0.55],
+      ];
+      for (const [x, y, z, bx, bz, d, h] of at) {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(0.21, 0.15).rotateX(-Math.PI / 2), sm0); m.position.set(x, y, z); m.rotation.y = x * 2.1 + z; s.add(m);
+        this.slips.push({ m, a: V(x, y, z), b: V(bx, 0.012, bz), d, h, s: x * 3 + z * 5 });
+      }
+    }
+
     // dust: a few motes everywhere, many more inside the window's beams
     const N = this.detail >= 1 ? 900 : 400, p = new Float32Array(N * 3);
     for (let i = 0; i < N; i++) { p[i * 3] = (Math.random() - 0.5) * 12; p[i * 3 + 1] = Math.random() * 5; p[i * 3 + 2] = (Math.random() - 0.5) * 10; }
@@ -277,6 +311,8 @@ export class Vault {
     const sprite = dot();
     this.motes = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0xffd9a8, size: 0.014, map: sprite, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending }));
     s.add(this.motes);
+    // the same dust again one room-length behind: in the pull the two go to the window in turn, so the stream never runs out
+    this.motes2 = new THREE.Points(pg, this.motes.material); s.add(this.motes2);
     const NB = this.detail >= 1 ? 1400 : 500, pb = new Float32Array(NB * 3);
     for (let i = 0; i < NB; i++) {
       const b = this.beams[i % this.beams.length], u = Math.random();
@@ -289,6 +325,7 @@ export class Vault {
     const pbg = new THREE.BufferGeometry(); pbg.setAttribute('position', new THREE.BufferAttribute(pb, 3));
     this.beamMotes = new THREE.Points(pbg, new THREE.PointsMaterial({ color: 0xffc890, size: 0.018, map: sprite, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }));
     s.add(this.beamMotes);
+    this.beamMotes2 = new THREE.Points(pbg, this.beamMotes.material); s.add(this.beamMotes2);
 
     // lighting: the window is his key (the disk's amber on his face as he faces it), a warm lamp pool on the page, a
     // cold fill off the shelves, a warm back light from the room behind him, and a floor of light so nothing goes black
@@ -535,6 +572,8 @@ export class Vault {
     const pose = this.pose === 'write' ? 'stand' : this.pose;
     this.host.animate(pose, 0, pose === 'walk' ? 0.25 : 0, t0, dt);
     this.host.look2(0, 0);
+    // in the pull his hair and the coat's hem lean to the window with everything else (he faces it: the body's +z)
+    if (this.pullK > 0 && this.host.sway) { const sw = this.host.sway; sw.uSwing.value.z += this.pullK * (0.045 + 0.012 * Math.sin(t0 * 5.3)); sw.uFlutter.value += this.pullK * 0.012; }
     this.hairCaps();
     this.hand.after();
     if (this.room.visible) this.roomFrame(t0);
@@ -558,6 +597,23 @@ export class Vault {
       ln.f.rotation.x = -pk * (0.9 + 0.15 * Math.sin(t0 * 17 + i)); ln.f.scale.set(1 - pk * 0.35, 1 + pk * 0.6, 1 - pk * 0.35);
     }
     this.lampG.rotation.x = pk * 0.03 * Math.sin(t0 * 23);
+    // the candle: upright and breathing, then laid over towards the window, drawn long and thin, guttering
+    {
+      const gut = pk > 0.05 ? 0.75 + 0.25 * Math.sin(t0 * 37) * Math.sin(t0 * 11.3) : 1;
+      this.candle.rotation.x = -pk * (1.12 + 0.12 * Math.sin(t0 * 19)) + Math.sin(t0 * 2.3) * 0.03; this.candle.rotation.z = Math.sin(t0 * 3.1) * 0.03 + pk * 0.08 * Math.sin(t0 * 27);
+      this.candle.scale.set(1 - pk * 0.3, (1 + 0.06 * Math.sin(t0 * 9.1) + pk * 0.85) * gut, 1 - pk * 0.3);
+      (this.candleGlow.material as THREE.SpriteMaterial).opacity = 0.35 * gut * (1 - pk * 0.35);
+      this.candleGlow.position.z = this.candle.position.z - pk * 0.03;
+    }
+    // the slips: one after another they lift, tumble and skate across the floor to the foot of the window
+    for (const sl of this.slips) {
+      const u = Math.min(1, Math.max(0, (this.drift - sl.d) / 5.5)), e = u * u * (3 - 2 * u);
+      sl.m.position.lerpVectors(sl.a, sl.b, e); sl.m.position.y += Math.sin(Math.PI * Math.min(1, u * 1.15)) * sl.h * (0.8 + 0.2 * Math.sin(u * 23 + sl.s));
+      const tum = Math.sin(Math.PI * u);
+      sl.m.rotation.set(tum * Math.sin(u * 17 + sl.s) * 1.6, sl.s + u * 7, tum * Math.cos(u * 13 + sl.s) * 1.3);
+      // waiting its turn, a slip trembles on the floor
+      if (u <= 0 && pk > 0.2 && this.drift > sl.d - 1.2) sl.m.rotation.x = Math.sin(t0 * 31 + sl.s) * 0.07 * pk;
+    }
     this.beamMat.uniforms.uTime.value = t0;
     this.orrery.rotation.y = t0 * 0.05;
     for (const w of this.worlds) { const a = w.a + t0 * w.s; w.m.position.set(Math.cos(a) * w.r, 0, Math.sin(a) * w.r); }
@@ -566,10 +622,16 @@ export class Vault {
     this.beamMotes.position.y = Math.sin(t0 * 0.07) * 0.18 - (t0 * 0.012) % 0.6;
     this.beamMotes.position.x = Math.sin(t0 * 0.05) * 0.12;
     // the dust drifts towards the window while the pull is on (and stays where the pull left it)
-    this.drift += pk * 0.9 * (1 / 60);
-    this.motes.position.z = -this.drift * 1.4; this.beamMotes.position.z = -this.drift;
+    this.drift += pk * 0.9 * Math.min(0.05, Math.max(0, t0 - this.roomT));
+    this.roomT = t0;
+    const mz = (this.drift * 1.4) % 10, bz = this.drift % 10;
+    this.motes.position.z = -mz; this.motes2.position.z = 10 - mz; this.motes2.position.y = this.motes.position.y; this.motes2.rotation.y = this.motes.rotation.y;
+    this.beamMotes.position.z = -bz; this.beamMotes2.position.set(this.beamMotes.position.x, this.beamMotes.position.y, 10 - bz);
+    this.motes2.visible = this.beamMotes2.visible = this.drift > 0;
+    // in the pull the dust is a stream you can see: brighter and larger
+    (this.motes.material as THREE.PointsMaterial).opacity = 0.4 + pk * 0.5; (this.motes.material as THREE.PointsMaterial).size = 0.014 + pk * 0.012;
   }
-  private drift = 0;
+  private drift = 0; private roomT = 0;
 
   /** Where his eyes are now (the head bone, a little forward and up): close-ups follow him as he leans. */
   eyesAt(out = new THREE.Vector3()) {
@@ -607,7 +669,7 @@ export class Vault {
     const eyes = V(0, 1.93, -0.07), win = V(0, 24, -96);
     const nibAt = (px: number, py: number, lift = 0) => this.pagePoint(px, py, lift);
     const cost = nibAt(COL.cost + 30, ROW0 + 5 * ROWH - 14, 0.012);
-    const wellAt = V(0.6, 1.2, -0.66);
+    const wellAt = V(0.6, 1.2, -0.66), restAt = nibAt(2250, 930, 0.0);
     const shots: Shot[] = [
       // 1. macro on the nib: the sixth name and its home being written, his hand in frame
       { t0: 0, t1: 7, a: V(-0.03, 1.56, -0.33), b: V(-0.02, 1.55, -0.36), la: nibAt(COL.name + 120, ROW0 + 5 * ROWH), lb: nibAt(COL.from + 120, ROW0 + 5 * ROWH), fov: [12, 12], f: [0.5, 0.5], ap: 0.03, breath: 0.4 },
@@ -648,7 +710,9 @@ export class Vault {
         else if (ft < 11) nib = nibAt(COL.from + 230, ROW0 + 5 * ROWH - 30, 0.02 + sm(5.2, 6.5, ft) * 0.02);
         else if (ft < 19.6) nib = nibAt(COL.from + 230 + (COL.cost + 30 - COL.from - 230) * sm(11, 13, ft), ROW0 + 5 * ROWH - 30 + 16 * sm(11, 13, ft), 0.04 - 0.028 * sm(11.5, 13.2, ft));
         else if (ft < 21.2) nib = cost.clone().lerp(wellAt, sm(19.6, 21.2, ft)).add(V(0, Math.sin(sm(19.6, 21.2, ft) * Math.PI) * 0.06, 0));
-        else nib = wellAt.clone().add(V(0, Math.sin(ft * 0.7) * 0.004, 0));
+        else if (ft < 22.2) nib = wellAt.clone().add(V(0, Math.sin(ft * 9) * 0.003, 0));
+        // then down beside the book, off the page, low: the quill stays by the Ledger for the rest of the film
+        else nib = wellAt.clone().lerp(restAt, sm(22.2, 24.0, ft)).add(V(0, Math.sin(sm(22.2, 24.0, ft) * Math.PI) * 0.04 + Math.sin(ft * 0.7) * 0.002, 0));
         // the left hand: steadies the page while he writes, lifts off as he straightens to the window, comes down flat on
         // the lifting page without his eyes leaving the window, and shuts the book
         let left: ReturnType<Vault['palmOn']> | null = null;
