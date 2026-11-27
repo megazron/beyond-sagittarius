@@ -1066,7 +1066,7 @@ export class Montage {
     /** The passage as the break leaves it: open to the lounge, dark but for the hole's light, torn open aft. */
     const passage = (torn: number, t: number) => {
       const pas = set.interior.passage;
-      pas.show(true); pas.door(1); pas.lamps(0, 0.35 * (1 - torn), false); pas.tear(torn, t);
+      pas.show(true); pas.door(1); pas.lamps(0.26, 0.35 * (1 - torn), false); pas.tear(torn, t); pas.drift(t); // (the battery strips stay on, as the run's last shot left them)
       this.cine.damage = Math.max(this.cine.damage, 3); this.cine.airOut = true; this.cine.gravOff = true;
     };
     const RAIL = V(PA.tearX - 1.6, PA.railY, PA.doorZ - (PA.half - PA.railOff)), DRX_AT = V(RAIL.x - 0.25, RAIL.y - 0.2, RAIL.z + 0.45), DRX_Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.15, -Math.PI / 2, 0.12, 'YXZ'));
@@ -1091,8 +1091,8 @@ export class Montage {
       i.alarmLight.intensity = 0; i.mainLight.intensity = 0.6; i.consoleLight.intensity = 1.5;
       this.hole(-2, 6, -20, 0.1);
       // from the hatch's end of the passage, down it: the six torn off their holds and out through the open side
-      this.lens(V(7.2 + k * 0.5, -0.35, PA.doorZ + 0.7).add(shakeAt(b, 0.012 + k * 0.03, tmp)), V(15, -0.8, PA.doorZ - 0.5), 58, 4.5, 0.003, -0.05 + k * 0.09);
-      this.setRig([{ p: V(PA.tearX + 1.5, 0.6, PA.doorZ - 1.6), color: 0xffc890, i: 20, d: 14 }, { p: V(9, -0.4, PA.doorZ + 0.6), color: 0xd8c8c0, i: 1.5, d: 8 }]);
+      this.lens(V(6.6 + k * 0.5, -0.3, PA.doorZ + 0.7).add(shakeAt(b, 0.012 + k * 0.03, tmp)), V(15, -1.15, PA.doorZ - 0.85), 58, 4.5, 0.003, -0.05 + k * 0.09);
+      this.setRig([{ p: V(PA.tearX + 2.2, 0.8, PA.doorZ - PA.half - 1.2), color: 0xffc890, i: 14, d: 18 }, { p: V(9, -0.4, PA.doorZ + 0.9), color: 0xd8c8c0, i: 1.5, d: 8 }]); // the hole's light from outside the far wall, where the run's own glow is
       const fl = after(k, 0.45, 0.1) * 0.3;
       this.fx = { flash: [fl, fl, fl * 1.2], exposure: 0.8 };
       this.cine.logFilm('H0a', ORDER.map((id) => this.cast[id]));

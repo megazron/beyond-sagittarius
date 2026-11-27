@@ -1468,7 +1468,7 @@ window.addEventListener('resize', () => {
   awayOrbit(o: { x: number; y: number; z: number; r: number; a: number; h: number } | null) { if (game?.away) game.away.orbit = o; },
   cineTime() { return cine.time; },
   /** The opening's continuity log (?contlog=1 or contLog(true) before it plays): cuts, acted posture changes and the breaks. */
-  get continuity() { const c = cine.cont; return { on: c.on, cuts: c.cuts, seen: c.seen, travel: c.travel, breaks: c.check() }; },
+  get continuity() { const c = cine.cont; return { on: c.on, cuts: c.cuts, seen: c.seen, travel: c.travel, breaks: c.check(), worst: c.worst }; },
   contLog(on: boolean) { cine.cont.on = on; cine.cont.reset(); },
   deckOverlaps() { return cine.deckOverlaps(); },
   /** Start (true) or read the log of the pilot's wrists in the yoke's frame (tools/yoke_check.py). */

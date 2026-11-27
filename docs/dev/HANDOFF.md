@@ -6,6 +6,67 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## 2026-11-27 the run to the pods, second pass (second pods agent: same worktree ~/bs-podsw; branch pods3; captures ~/bs-cap/pods1, dev runs in ~/bs-cap/pods1/dev)
+STATE AT HAND-BACK (stopped by the owner mid-work, 2026-11-27 evening): NOT on main. Main is still f821a403. The work is
+WIP on branch `pods3` (pushed, not CI-green, do not land as is). Nothing here is signed off: only the owner does that.
+- Last full local result is build a11 minus one fix: continuity `--answers a` ok; no-answers ok on a10 (a11's was
+  cancelled); `--answers b` FAILED on a11 with Bolzar's rail hand 49 to 91 cm off in P2 to P5 (Draxum hurt, Bolzar
+  leads). Cause found and fixed in the tree AFTER that run, NOT re-run: Bolzar's sofa-back hold (`tau > 3.85 &&
+  !towHand`) stayed on for the whole run once the pair stopped being hand in hand; it now ends when the pair joins.
+- `glitch_check.py --only pull --secs 40` FAILS on build a10 (same code for this): "explorer at 65.2 s, 0.52 m across
+  in one frame at [0.34, -1.78, -0.54]" (Skyvra at Zenvik's side: her facing block in `run`, the `toHim` slerp, swings
+  her root about her chest) and "explorer at 71 s, upperarmL turned 130 degrees in one frame at [8.21, ...]" (her first
+  hold on the rail, just inside the hatch: the arm goes from the free 'ahead' pose to the hold; ease the limb pose
+  towards the rail before the hold starts, as Bolzar's arms do for the sofa). CI's glitch_pull_ep1 will fail until
+  both are fixed. Log: ~/bs-cap/pods1/dev/glitch_pull_a10.log.
+- NEXT, in order: (1) `cd ~/bs-cap/pods1/dev && (nohup setsid ./iter.sh a12 dist-a12 "a b none" > iter_a12.log 2>&1
+  9>&- < /dev/null &)` (remove dist-a10 first: at most 3 builds) and read cont_a12_*.log; (2) fix the two glitches,
+  run `~/bin/heavy bash -c "cd ~/bs-podsw && ~/.venvs/bs-test/bin/python tools/glitch_check.py --only pull --secs
+  40"`; (3) GPU takes: copy cap11.sh to the new tag (it waits for the three checks to be green, then run.sh a12A/B/C
+  and the encodes to out/AFTER2_*); watch them frame by frame; (4) send to the owner with a note; (5) push, CI, land
+  by fast-forward only when green on the exact sha.
+- GPU takes that exist of the restaging: ~/bs-cap/pods1/a8A/takeA.mp4 (hand) and a8B/takeB.mp4 (core, both hurt),
+  build a8, 44 MB each, NOT sent (over 30 MB, and a8 still had Lyrra flipping over in G6b and Draxum's towing hand
+  12 to 27 cm short; both fixed since). Contact sheets: ~/bs-cap/pods1/rev/a8A_*.jpg. Stills of every later build:
+  ~/bs-cap/pods1/dev/s_a*_{a,b,0}/ (SwiftShader).
+- Seen on the a8 GPU take, not yet dealt with: G7 (hand) is a train of six flat bodies into the hatch (pairs do not
+  read); in P1 Zenvik ends large and cut by the frame's bottom right; P2's nearest pair is cut by the bottom edge.
+- What the GPU takes of main f821a403 showed (a4A hand, a4B core + both hurt, a4C silence; RTX A500): the route was
+  there but the picture did not read. The six were one knot in the passage with bodies through each other; every body
+  flew flat out head first, so shots from ahead or behind showed hair, not faces; P1 and P2 were shot from among them;
+  G7 was a dark clump at the far end of the room; P5 was dark with one burnt-out wall; with the core chosen Zenvik at
+  the console was off screen. The continuity check was green on all of it: it had no idea where hands or bodies were.
+- STAGING IS NUMBERS NOW: `src/cinematic/podsrun.ts` (no three.js): `buildRun(start, answers)` gives each of the six a
+  route (keys of time and chest position) and a role (rail or towed, partner, when they join). Three pairs, one behind
+  the other; in each pair one goes hand over hand along the FAR wall's rail (left hand) and tows the other, who
+  follows THEIR route held off it by an arm's reach (`follow`). Whoever is alone takes the rail. Nothing may depend on
+  the hand/core answer before RUN_SHARED (4.7 s): the film waits for the answer inside G6c and anything that differed
+  jumped when it came. `tools/pods_routes.ts` measures every answer set offline in a second (nearest two bodies,
+  furthest a joined pair gets): `npx esbuild tools/pods_routes.ts --bundle --format=esm --platform=node
+  --outfile=/tmp/pr.mjs && node /tmp/pr.mjs [-v]`. Its start positions are approximate (from a take's log).
+- cinematic.ts `run(tau)`: bodies first (place, heading, lean), then what each does. HANDS: a hold set in a frame is
+  solved in the NEXT frame's animate, before that frame's shot moves the body, so every hold is set for where its
+  thing will be next frame less the body's own move (`step`); do not "fix" this by posing twice (animateCrew(0) makes
+  the rig treat the target as jumped: hands trail 11 to 16 cm). `railPoint(dist, step)` is the rail hand; a tow is one
+  point between the two chests, nearer the one who tows.
+- THE SET (passage.ts): 3.2 m wide, 2.55 m high; lanes PASSAGE.laneRail / laneTow on the far side, the near wall's
+  side is the cameras'. Dressing rides on each wall plate so it goes with it in the break. `drift(t)`: loose things
+  (bounded: they never enter the lanes) and beacons. After the break the battery strips stay at 0.26.
+- THE CHECK (continuity.ts): two new break kinds, fed by `Cinematic.runContact` in the run's shots only: `grip` (a hand
+  meant to be closed on a rail or another's hand more than 5 cm off it for 0.25 s, in frame; holds get 0.9 s to
+  travel first) and `crowd` (two chests nearer than 0.36 m for a joined pair, 0.45 m otherwise, both in frame).
+  `__bs.continuity.worst` and the check's printout give every hand's largest gap and the nearest pairs even when
+  green. `continuity_check.py --stills DIR --fast 0.25 --size 960x540` saves a picture every half second from the
+  call on (SwiftShader: for where people and cameras are, not for the look). `~/bs-cap/pods1/dev/iter.sh TAG DIST
+  "a b none"` = one build and one stills + check run per answer set, each its own heavy step.
+- Also: G3 now shows Zenvik and Nuvexa drift to their two-shot marks (they changed place behind the G4 insert); F2's
+  console light eases down (his face was burnt out).
+- NOT DONE, said to the owner: no motion capture in the run (the swim and float clips exist, `CrewPose` 'swim' /
+  'float', but the run still poses limbs by hand over 'stand'; retargeting CMU climbing takes was not started); hair
+  and clothes have no follow-through of their own; E2 (the wrist insert) and F4 (four close-ups against a lit wall)
+  untouched; a hitch of about 80 ms at the title sequence's first interior shot (the check's "moved 0.84 m in one
+  frame" on GPU take a4A: the frame was long, not the move).
+
 ## 2026-11-27 the run to the pods (pods agent: worktree ~/bs-podsw, branch pods1w, landing branch pods2 (squashed on main b18c6b3); before-tree ~/bs-pods = main d7dceefb; captures ~/bs-cap/pods1)
 - Owner on main d7dceefb: "The cutscenes going to the pods scene is still not proper, doesn't show continuity." The
   continuity check said 0 problems: it stopped where the pull ends (the handoff to the title sequence was never looked
