@@ -8,6 +8,7 @@ import { audio } from '../core/audio';
 import { Renderer } from '../core/renderer';
 import { sceneSound } from '../core/soundscape';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Film, FilmSound, Ink, Page, Shot, WritingHand, paperGround, shoot, smooth as sm } from './entrance';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -243,8 +244,9 @@ export class Vault {
     s.add(this.lamp, this.lamp.target);
 
     // the quill rides in his right hand: cream feather, dark nib, big enough to read in a medium shot
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0024, 0.0038, 0.32, 8).translate(0, 0.16, 0), new THREE.MeshStandardMaterial({ color: 0xe4d8bc, roughness: 0.55 }));
-    const vane = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10).scale(0.026, 0.15, 0.003).translate(0, 0.21, 0), new THREE.MeshStandardMaterial({ color: 0xeee4cc, roughness: 0.7, side: THREE.DoubleSide, emissive: 0x332a1a, emissiveIntensity: 0.4 }));
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0016, 0.0032, 0.2, 8).translate(0, 0.1, 0), new THREE.MeshStandardMaterial({ color: 0xd8ccb0, roughness: 0.55 }));
+    // a pen-sized quill: a narrow feather, its vane a soft leaf and not a blade (it read as a knife at twice this size)
+    const vane = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10).scale(0.013, 0.07, 0.002).translate(0.002, 0.135, 0), new THREE.MeshStandardMaterial({ color: 0xcfc4a8, roughness: 0.85, side: THREE.DoubleSide }));
     const nib = new THREE.Mesh(new THREE.ConeGeometry(0.0034, 0.024, 8).rotateX(Math.PI).translate(0, -0.012, 0), new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.3, metalness: 0.6 }));
     this.ink = new THREE.Mesh(new THREE.SphereGeometry(0.0035, 10, 8), new THREE.MeshStandardMaterial({ color: 0x05060a, roughness: 0.05, metalness: 0.3 }));
     this.ink.position.y = -0.026; this.ink.visible = false;
@@ -345,6 +347,28 @@ export class Vault {
     this.hand = new WritingHand(this.host, this.quill);
     void this.host.whenReady.then(() => this.fitHost()); void this.host.whenFull.then(() => this.smoothAll());
     this.dome.mesh.position.set(0, 0, 0);
+  }
+
+  /**
+   * His own acting clips (tools/build_mz_animations.py: captured motion with its real path over the floor): loaded once,
+   * on the first film that asks. `acting` then says where the capture's stool stands from where `mz_sit_down` starts.
+   */
+  acting: { seat: [number, number, number]; seatYaw: number; upEnd: [number, number]; upYaw: number; clips: Record<string, { dur: number; loop: boolean }> } | null = null;
+  private actingP: Promise<void> | null = null;
+  loadActing() {
+    return (this.actingP ??= (async () => {
+      const base = `${import.meta.env.BASE_URL}models/crew/`;
+      const [g, j] = await Promise.all([new GLTFLoader().loadAsync(`${base}anim_mz.glb`), fetch(`${base}anim_mz.json`).then((r) => r.json())]);
+      // one side for every rotation track (a key and its negative are one pose, but blending between them goes the long way)
+      for (const c of g.animations) for (const tr of c.tracks) {
+        if (!tr.name.endsWith('.quaternion')) continue;
+        const v = tr.values;
+        for (let i = 4; i < v.length; i += 4) if (v[i] * v[i - 4] + v[i + 1] * v[i - 3] + v[i + 2] * v[i - 2] + v[i + 3] * v[i - 1] < 0) { v[i] = -v[i]; v[i + 1] = -v[i + 1]; v[i + 2] = -v[i + 2]; v[i + 3] = -v[i + 3]; }
+      }
+      await this.host.whenReady;
+      this.host.addClips(g.animations);
+      this.acting = j;
+    })().catch((e) => { console.error('[vault] acting clips', e); }));
   }
 
   /** Once his body is in: the quill into his right hand, a smooth coat (its flat facets caught the lamp), a pen grip. */

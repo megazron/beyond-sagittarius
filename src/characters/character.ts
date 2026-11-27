@@ -247,6 +247,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const style = STYLE[custom ? custom.outfit : id];
   const heightM = (custom ? (custom.gender === 'f' ? 1.68 : 1.76) * custom.height : (human ? 2 : ({ scientist: 1.76, strong: 1.97, medic: 1.69, explorer: 1.71, builder: 1.57, social: 1.67, megazron: 2.08 } as Record<string, number>)[id]));
   const sway = swayUniforms();
+  // the living face (eyes that find what they look at and converge, never dead still; brows and cheeks that move with
+  // speech; double blinks): a build flag for the crew, always on for the narrator, who is filmed in close-up
+  const ALIVE = DECREEP || (id === 'megazron' && !custom);
   const root = new THREE.Group();
   root.userData.isCharacter = true; // stage mergers leave bodies alone
   root.userData.id = custom ? 'player' : id; // who it is, for tests (clipProbe)
@@ -510,7 +513,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const overC = marks === 'explorer' ? 0xf3e7cf : marks === 'strong' ? 0xe8c49a : 0x1e1e1e;
     const skin = skinMaterial(M.skin, marks, { skin: skinC, shade: shadeC, lip: lipC, glow: glowC, over: overC, glowK: human ? 0 : 1.15 }, lod);
     const irisC = custom ? custom.iris : human ? 0x1e120b : L.face.iris;
-    const eyes = eyeMaterial(irisC, (custom ? custom.eyeGlow : !human) ? 0.55 : 0);
+    const eyes = eyeMaterial(irisC, (custom ? custom.eyeGlow : !human) ? 0.55 : 0, ALIVE);
     const browC = custom ? new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex() : human ? 0x2c1d14 : L.face.brow;
     const atlas = M.atlas;
     const cloth = new THREE.MeshStandardMaterial({ map: tex(`${atlas}_cloth`, lod, true), normalMap: tex(`${atlas}_cloth_n`, lod), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, side: THREE.DoubleSide });
@@ -973,6 +976,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const easeMorph = (k: string, v: number, r: number) => setMorph(k, (morph[k] ?? 0) + (v - (morph[k] ?? 0)) * r);
 
   let limpOn = false;
+  // A performance (the narrator's films): clips set to exact times and weights by the film's own clock, over whatever the
+  // body would play by itself (which keeps the rest of the weight). The same second always gives the same pose.
+  let perf: { name: string; time: number; w: number; loop?: boolean }[] | null = null;
+  const perfActs = new Map<string, THREE.AnimationAction>();
+  const extraClips = new Map<string, THREE.AnimationClip>();
+  let leanX = 0, leanY = 0;
 
   /** Hands never sink into the thighs (seated, the clip's hands rest on the lap and wide trousers swallowed the fingers:
    *  the townsman's worst flag, 195 px): a capsule per thigh from its own skin and cloth, the hand moved out of it by
@@ -1807,9 +1816,22 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const rate = firstFrame ? 1 : 1 - Math.exp(-dt * 4.5);
     let sum = 0;
     for (const s of acts.values()) { s.w += (s.target - s.w) * rate; if (s.w < 0.004 && s.target === 0) s.w = 0; sum += s.w; }
+    let pw = 0;
+    if (perf) for (const p of perf) pw += Math.max(0, p.w);
+    const pk = Math.min(1, pw), pn = pw > 1 ? 1 / pw : 1;
+    if (perf) for (const tr of perf) {
+      if (perfActs.has(tr.name)) continue;
+      const c = extraClips.get(tr.name) ?? clips!.get(tr.name); if (!c) continue;
+      const a = mixer!.clipAction(c.clone()); a.timeScale = 0; a.play(); perfActs.set(tr.name, a);
+    }
+    for (const [n, a] of perfActs) {
+      const tr = perf?.find((p) => p.name === n);
+      a.enabled = !!tr && tr.w > 0; a.setEffectiveWeight(tr ? Math.max(0, tr.w) * pn : 0);
+      if (tr) { const d = a.getClip().duration; a.time = tr.loop ? ((tr.time % d) + d) % d : clamp(tr.time, 0, d - 1e-3); }
+    }
     for (const s of acts.values()) {
-      s.a.enabled = s.w > 0;
-      s.a.setEffectiveWeight(sum > 0 ? s.w / sum : 0);
+      s.a.enabled = s.w > 0 && pk < 1;
+      s.a.setEffectiveWeight(sum > 0 ? (s.w / sum) * (1 - pk) : 0);
       if (s.manual) { s.a.timeScale = 0; s.a.time = gaitPhase * s.a.getClip().duration; }
     }
     // the task's clip runs on the task's own clock, stretched to its length
@@ -1834,6 +1856,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const breathe = bp * 0.005;
     const hipsB = bs.get('hips')!, spine1 = bs.get('spine1')!, chestB = bs.get('chest')!, neckB = bs.get('neck')!, headB = bs.get('head')!;
     const standing = !FULL_BODY.has(kind);
+    // a lean of the whole upper body (towards the lens, to a side), shared down the spine
+    if (leanX || leanY) { const q = Q.setFromEuler(E.set(leanX / 3, leanY / 3, 0)); bs.get('spine')!.quaternion.multiply(q); spine1.quaternion.multiply(q); chestB.quaternion.multiply(q); }
     if (standing) {
       spine1.quaternion.multiply(Q.setFromEuler(E.set(P.stoop * 0.12 + Math.min(speed / 4, 1.3) * P.lean * 0.15, 0, 0)));
       chestB.quaternion.multiply(Q.setFromEuler(E.set(P.stoop * 0.1 + breathe, 0, 0)));
@@ -2035,9 +2059,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       headB.quaternion.multiply(Q.setFromEuler(E.set(lx * 0.6, ly * 0.6, 0)));
     }
     sacAt -= dt;
-    if (sacAt <= 0) { sacAt = DECREEP ? 0.5 + Math.random() * 2.2 : 1.2 + Math.random() * 3; sacX = (Math.random() - 0.5) * 0.05; sacY = (Math.random() - 0.5) * 0.09; if (DECREEP && Math.random() < 0.18) blinkAt = Math.min(blinkAt, 0.05); }
+    if (sacAt <= 0) { sacAt = ALIVE ? 0.5 + Math.random() * 2.2 : 1.2 + Math.random() * 3; sacX = (Math.random() - 0.5) * 0.05; sacY = (Math.random() - 0.5) * 0.09; if (ALIVE && Math.random() < 0.18) blinkAt = Math.min(blinkAt, 0.05); }
     eyeY += (sacY + clamp(yawRate * 0.08, -0.25, 0.25) - eyeY) * (1 - Math.exp(-dt * 20));
-    if (DECREEP) {
+    if (ALIVE) {
       // the eyes finish the look the head only half makes, converge on what they look at, and never sit dead still
       const restY = clamp(wantY - ly * 1.0, -0.45, 0.45) * (gaze ? 1 : 0), restX = clamp(wantX - lx * 1.0, -0.3, 0.3) * (gaze ? 1 : 0);
       eyeAimY += (restY - eyeAimY) * (1 - Math.exp(-dt * 14)); eyeAimX += (restX - eyeAimX) * (1 - Math.exp(-dt * 14));
@@ -2096,12 +2120,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     easeMorph('round', lip.round * 0.55, 1 - Math.exp(-dt * 22));
     easeMorph('wide', lip.wide * 0.5, 1 - Math.exp(-dt * 22));
     bs.get('jaw')!.rotation.x = (morph.open ?? 0) * 0.2;
-    if (DECREEP) {
+    if (ALIVE) {
       // never a dead-neutral face: a soft resting smile that drifts, brows and cheeks that move with speech,
       // a mouth that shuts fully between syllables; the stare shapes (wide 'fear' eyes at rest) are gone
       const talk = speak > 0 ? lip.open : 0, idle = wob(t * 0.6, id.length * 3.1);
       if (speak > 0 && lip.open < 0.1) easeMorph('open', 0, 1 - Math.exp(-dt * 60));
-      easeMorph('smile', (ex.smile ?? Math.max(smileBase, 0.24)) + idle * 0.05 + talk * 0.12, r);
+      easeMorph('smile', (ex.smile ?? Math.max(smileBase, id === 'megazron' ? 0.05 : 0.24)) + idle * 0.05 + talk * (id === 'megazron' ? 0.05 : 0.12), r); // the narrator does not smile at rest
       easeMorph('frown', ex.frown ?? 0, r);
       // brows barely lifted at rest (more reads as worry)
       easeMorph('fear', (ex.fear ?? 0.04) + hurt * 0.1 + talk * 0.08 + Math.max(0, wob(t * 0.35, 9)) * 0.06, r);
@@ -2283,6 +2307,20 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     /** Mouth moves while > 0 (seconds of speech left). */
     /** Hand-set pose over the clip (null gives the body back to the clip). */
     setLimbs(l: Limbs | null) { limbs = l; },
+    /** Films: clips of the body's own that are not in the shared set (hips tracks in the reference body's metres). */
+    addClips(list: THREE.AnimationClip[]) {
+      for (const c of list) {
+        const d = c.clone();
+        d.tracks = d.tracks.map((tr) => { if (!tr.name.endsWith('.position')) return tr; const u = tr.clone(); for (let i = 0; i < u.values.length; i++) u.values[i] *= legScale; return u; });
+        extraClips.set(c.name, d);
+      }
+    },
+    /** This body's leg length over the reference body's: what a clip's hips track is scaled by. */
+    get legScale() { return legScale; },
+    /** Films: these clips at these seconds and weights this frame (null: the body's own animation again). */
+    perform(tracks: { name: string; time: number; w: number; loop?: boolean }[] | null) { perf = tracks; },
+    /** Films: lean the upper body forward (radians, +: towards where he faces) and to a side. */
+    setLean(x: number, y = 0) { leanX = x; leanY = y; },
     /** Down on both knees (true) or back up (false); it takes about a second either way (instant: at once, under a cut). */
     setKneel(on: boolean, sit = false, instant = false) { kneelGoal = on ? 1 : 0; heelsGoal = on && sit ? 1 : 0; if (instant) { kneel = kneelGoal; heels = heelsGoal; } },
     get kneeling() { return kneel; },

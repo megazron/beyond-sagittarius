@@ -383,7 +383,7 @@ export type HairStyleId = 'scientist' | 'strong' | 'medic' | 'explorer' | 'build
 /** Per-style body: how far the hair mass swells off the scalp at the top (fraction of skull radius). */
 export const HAIR_VOLUME: Partial<Record<HairStyleId, number>> = { suit: 0.06 }; // the cards carry the volume; the cap stays under them
 /** Styles drawn as textured hair cards instead of swept strands. */
-export const HAIR_CARDS: Partial<Record<HairStyleId, true | 'curly'>> = { suit: 'curly' };
+export const HAIR_CARDS: Partial<Record<HairStyleId, true | 'curly'>> = { suit: 'curly', megazron: true };
 /** Per-style surface: thick dry hair is matte. */
 export const HAIR_ROUGH: Partial<Record<HairStyleId, number>> = { suit: 0.92 };
 
@@ -469,12 +469,19 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
     }
     return out;
   },
-  // Long pale hair that floats upward at the ends, as if gravity is a suggestion.
+  // Long pale hair, fine and straight: taken back off the forehead over the crown and behind the ears, falling down the
+  // back to the shoulder blades. Drawn as strand cards (HAIR_CARDS), many and overlapping, so it reads as hair and not
+  // as tubes; nothing stands up or out, nothing hangs in front of the face or the shoulders.
   megazron: () => [
-    ...layer(78, 70, 290, 18, 0.46, 5, 0.05, { out: 0, sway: 1 }),
-    ...layer(40, 96, 264, 14, 0.42, 5, 0.05, { out: 0, sway: 1.1 }),
-    // centre parting: the fringe opens on the face and falls behind the ears
-    ...[-1, 1].flatMap((s) => fan(26 * D, 64 * D, 4, (az, i) => ({ az: az * s, el: 74 * D, len: 0.2 + i * 0.02, droop: 5, sweep: s * 0.8, w: 0.024, out: 0, sway: 0.5 }))),
+    // off the forehead: rooted along the hairline, up and back over the top
+    ...fan(-58 * D, 58 * D, 17, (az, i) => ({ az, el: (57 + (i % 2) * 5) * D, len: 0.34 + (i % 3) * 0.03, droop: 4.2, dir: [Math.sin(az) * 0.35, 0.8, -1] as [number, number, number], w: 0.052, out: 0, sway: 0.35, lift: 1.035 })),
+    // the temples: back behind the ears
+    ...[-1, 1].flatMap((s) => fan(60 * D, 84 * D, 5, (az, i) => ({ az: az * s, el: (50 - i * 5) * D, len: 0.42, droop: 5.5, dir: [s * 0.12, -0.15, -1] as [number, number, number], w: 0.05, out: 0, sway: 0.6, lift: 1.02 }))),
+    // the fall: four rings from the crown to the nape, straight down the back
+    ...layer(82, 60, 300, 22, 0.54, 6.5, 0.06, { out: 0, sway: 0.9 }),
+    ...layer(62, 72, 288, 26, 0.5, 6.5, 0.06, { out: 0, sway: 1 }),
+    ...layer(40, 86, 274, 24, 0.46, 6.5, 0.058, { out: 0, sway: 1 }),
+    ...layer(18, 104, 256, 18, 0.4, 6.5, 0.055, { out: 0, sway: 1.1 }),
   ],
   // Two huge spiral tails with an airy fringe: the loudest silhouette in the crew.
   social: () => [

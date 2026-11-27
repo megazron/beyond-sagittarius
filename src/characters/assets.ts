@@ -283,8 +283,9 @@ export function skinMaterial(sex: string, marks: string, l: SkinLook, lod: numbe
   return m;
 }
 
-export function eyeMaterial(iris: number, glow: number) {
-  const m = new THREE.MeshStandardMaterial({ map: texPlain('eye'), roughness: DECREEP ? 0.1 : 0.18 });
+/** `alive`: the living eye (limbal ring, corneal highlight, lid shadow, no lamp-like glow); the narrator always has it. */
+export function eyeMaterial(iris: number, glow: number, alive = DECREEP) {
+  const m = new THREE.MeshStandardMaterial({ map: texPlain('eye'), roughness: alive ? 0.1 : 0.18 });
   m.userData.film = { kind: 'eye', iris, glow };
   const u = { uIris: { value: col(iris) }, uEyeGlow: { value: glow } };
   m.userData.u = u; // the merged crowd body (bodymerge.ts) shares them
@@ -296,7 +297,7 @@ export function eyeMaterial(iris: number, glow: number) {
         vec3 sclera = vec3(0.78, 0.8, 0.84) * pow(ey.r, 1.6) * 1.2;
         vec3 irisC = uIris * (0.35 + ey.r * 1.3);
         diffuseColor.rgb = mix(sclera, irisC, ey.g) * (1.0 - ey.b * 0.97);
-        ${DECREEP ? /* glsl */ `
+        ${alive ? /* glsl */ `
         // a living eye: a warm, slightly darker white; depth in the iris (dark limbal ring, lighter towards the pupil);
         // the upper lid's soft shadow over the top of the ball
         vec3 scl = vec3(0.80, 0.77, 0.74) * pow(ey.r, 1.3) * 1.1;
@@ -308,8 +309,8 @@ export function eyeMaterial(iris: number, glow: number) {
         float lidSh = smoothstep(0.05, 0.75, normalize(vNormal).y);
         diffuseColor.rgb *= 1.0 - 0.55 * lidSh;` : ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += uIris * ey.g * (1.0 - ey.b) * uEyeGlow * (0.3 + ey.r) * ${DECREEP ? '0.08' : '1.0'};
-        ${DECREEP ? /* glsl */ `
+        totalEmissiveRadiance += uIris * ey.g * (1.0 - ey.b) * uEyeGlow * (0.3 + ey.r) * ${alive ? '0.08' : '1.0'};
+        ${alive ? /* glsl */ `
         { // the cornea's highlight: a small bright window and a soft second one, from a key that sits up and to the side
           vec3 Nn = normalize(vNormal), Vv = normalize(vViewPosition);
           float h1 = pow(max(dot(reflect(-normalize(vec3(-0.35, 0.55, 0.75)), Nn), Vv), 0.0), 420.0);
@@ -318,7 +319,7 @@ export function eyeMaterial(iris: number, glow: number) {
           // the wet line along the lower lid
           totalEmissiveRadiance += vec3(0.9) * smoothstep(-0.55, -0.8, Nn.y) * 0.05; }` : ''}`);
   };
-  m.customProgramCacheKey = () => (DECREEP ? 'crew-eye2' : 'crew-eye');
+  m.customProgramCacheKey = () => (alive ? 'crew-eye2' : 'crew-eye');
   return m;
 }
 
