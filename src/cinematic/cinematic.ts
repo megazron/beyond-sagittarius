@@ -1137,8 +1137,9 @@ export class Cinematic {
         route(keys, tau, pA); route(keys, tau + 0.5, pB); pB.sub(route(keys, tau - 0.25, upV));
         const sp = pB.length() / 0.75, moving = smoothstep(0.12, 0.6, sp);
         // the heading follows the travel; when nearly still it keeps to the way aft
-        // (blended as directions, not as an angle: an angle scaled across its wrap swung the body round in one frame)
-        const hw = smoothstep(0.05, 0.3, sp), hl = Math.hypot(pB.x, pB.z) || 1, hx = (1 - hw) + hw * pB.x / hl, hz = hw * pB.z / hl, yaw = Math.hypot(hx, hz) > 0.05 ? Math.atan2(hx, hz) : Math.PI / 2;
+        // the heading is where the route goes over the next second and more, not this instant's velocity: tied to
+        // the speed it swung a body 80 to 110 degrees in a frame as it started to move (the check's pops in G6c)
+        const far = route(keys, tau + 1.2, new THREE.Vector3()).sub(route(keys, tau - 0.2, new THREE.Vector3())), yaw = Math.hypot(far.x, far.z) > 0.04 ? Math.atan2(far.x, far.z) : Math.PI / 2;
         const sway = nz(tau * 0.9, b.seed) * 0.08;
         const inP = smoothstep(PA.doorX - 0.6, PA.doorX + 0.8, pA.x), trail = Math.max(moving, 0.7 * inP);
         eA.set(0.4 + (b.lean - 0.2) * trail + sway, yaw, b.roll * moving + nz(tau * 0.7, b.seed + 3) * 0.1, 'YXZ'); qA.setFromEuler(eA);

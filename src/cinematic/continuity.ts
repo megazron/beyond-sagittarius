@@ -187,7 +187,7 @@ export class ContinuityLog {
           if (flipped >= 4 && flipped >= 2 * kept) out.push({ kind: 'axis', shot: c.shot, from: o.shot, clock: c.clock, detail: `${flipped} of ${flipped + kept} pairs swap sides of the frame over the cut: the camera crossed the line` });
           let same = 0, turned = 0;
           for (const [a, b] of both) { if (Math.abs(a.vs) < 0.3 || Math.abs(b.vs) < 0.3) continue; if (Math.abs(a.vs) < 0.6 * Math.abs(a.vd) || Math.abs(b.vs) < 0.6 * Math.abs(b.vd)) continue; /* towards or away from the lens: neutral */ if (a.vs * b.vs < 0) turned++; else same++; }
-          if (turned > same) out.push({ kind: 'direction', shot: c.shot, from: o.shot, clock: c.clock, detail: `${turned} of ${turned + same} moving people change direction across the screen over the cut` });
+          if (turned > same && turned >= 2) out.push({ kind: 'direction', shot: c.shot, from: o.shot, clock: c.clock, detail: `${turned} of ${turned + same} moving people change direction across the screen over the cut` });
         }
         if (lastDeck && lastDeck.furniture !== c.furniture) out.push({ kind: 'furniture', shot: c.shot, from: lastDeck.shot, clock: c.clock, detail: c.furniture ? 'the furniture appears' : 'the furniture vanishes' });
         for (const m of c.crew) {
