@@ -194,6 +194,10 @@ export class Episode3 extends Episode2 {
       const a = this.saplingAt(), p = this.player.pos;
       if (Math.hypot(p.x - a.x, p.z - a.z) < 3.5) { this.axeScene(); return; }
     }
+    // the ground axe made but the sapling not yet down: a save from the three days between (or from the felling itself)
+    // came back with nothing left to do, and level 15 could never end (found by the cheat menu's checkpoints, CI
+    // cheat_L15). The felling plays now
+    if (isDiscovered(s, 'polish') && !this.f('e3.felled')) { this.busy = true; this.fell(() => {}); }
   }
 
   // ------------------------------------------------------------------ places
@@ -2303,7 +2307,9 @@ export class Episode3 extends Episode2 {
   /** How much the field gives: all of it sown and watered is the most; the scoured ditch takes a third. */
   private harvestShare() { let k = this.f('e3.field.all') ? 1 : 0.6; if (this.f('e3.field.scoured')) k *= 0.66; return k; }
   private update21() {
-    if (!this.f('e3.l21.intro')) { this.harvestScene(); return; }
+    // (the harvest marks itself begun before its three days pass: a save from between came back with nothing to do and
+    // level 21 could never end, found by the cheat menu's checkpoints, CI cheat_L21. It plays again)
+    if (!this.f('e3.l21.intro') || !this.f('e3.harvest')) { this.harvestScene(); return; }
     if (this.f('e3.harvest') && isDiscovered(this.s, 'salt') && !this.f('e3.stored')) { this.storeScene(); return; }
     if (this.f('e3.stored') && !this.f('e3.stormDone')) { this.storm(); return; }
     if (this.f('e3.stormDone') && !this.f('e3.pelloDone')) { this.pelloScene(); return; }

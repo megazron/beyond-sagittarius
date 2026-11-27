@@ -1725,7 +1725,9 @@ async function cheatJump(j: Jump) {
 // a jump in the URL starts once the title is up (with a click first unless cgo=1, so the page may play sound)
 if (cheatUrl.jump || cheatUrl.menu) {
   const go = () => {
-    if (state !== 'title' || !consentGiven()) { setTimeout(go, 200); return; }
+    // (after the boot's warm-up: it draws every set once and puts the title's backdrop back when it ends, which hid the
+    // deck under a jump made before it, GPU take clips1)
+    if (state !== 'title' || !consentGiven() || !worldReady) { setTimeout(go, 200); return; }
     if (cheatUrl.menu) { void cheat.show(); return; }
     const j = cheatUrl.jump!;
     if (j.go) void cheatJump(j); else cheat.ask(j.target, () => void cheatJump(j));

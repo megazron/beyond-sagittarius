@@ -106,6 +106,11 @@ def main():
                         time.sleep(1.5)
                         at = ev("__bs.cineTime()")
                         log(f"  {tid}: film clock {at:.1f}")
+                    if tid in ("open.lounge", "open.run"):
+                        # the six are drawn (a jump made before the boot's warm-up ended left the deck hidden: empty sky)
+                        n = ev("(() => { let n = 0; __bs.stageInfo().scene.traverse((o) => { if (!o.userData.isCharacter) return; for (let p = o; p; p = p.parent) if (!p.visible) return; n++; }); return n; })()")
+                        if n < 4:
+                            fails.append(f"{tid}: {n} of the crew drawn")
                     if tid == "open.city":
                         page.wait_for_function("__bs.mode === 'away'", timeout=180000)
                         ev("__bs.awayOutro()")

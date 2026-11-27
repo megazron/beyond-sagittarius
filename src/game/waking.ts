@@ -140,7 +140,9 @@ export class Waking {
       return;
     }
     st.thirst = Math.min(100, st.thirst + 40);
-    if (s.flags.drankStream) return;
+    // (a save from inside the first drink's scene came back with the stream drunk and the level's mark not set, and a
+    // drink at the stream never set it: level 1 could never end, found by the cheat menu's checkpoints, CI cheat_L1_4)
+    if (s.flags.drankStream) { s.flags.drank = true; return; }
     s.flags.drankStream = true;
     this.ui.toast(t('msg.drink'));
     // the first real drink is acted, close enough to see it: he goes down on his knees on the bank, drinks from

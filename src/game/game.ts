@@ -505,6 +505,10 @@ export class Game {
       const open = save.branch.open;
       // the first night's question belongs to the night (night.ts): the story starts the night again and it asks there
       if (open?.id === 'e1.night' && !save.flags.houndGone) save.flags['e1.night'] = false;
+      // a save from the first night after its fight but before the night was over (the dawn) came back with the night
+      // marked begun and nothing to end it: level 7 could never end (the cheat menu's checkpoints, CI cheat_L5_8). The
+      // night is the story's to start again, as a save from inside the fight already does (persist)
+      else if (save.level === 7 && save.flags['e1.night'] && !save.flags.houndGone) save.flags['e1.night'] = false;
       else if (open) this.after(0.6, () => this.playScene([open.kind === 'decision' ? { choice: open.id } : { qte: open.id }]));
     }
     this.player.model.root.visible = true;
