@@ -14,7 +14,14 @@ swap sides, or most movers turn round), and the sound bed (a bed cut on a pictur
 with no alarm heard). --answers a|b plays it with the opening's choices on and answers them one way or the other with
 the real keys (moments are numbered in the log, never named).
 
+In the run to the pods it also fails on a hand that is meant to be closed on a rail or on another's hand and is not
+there, and on two bodies inside each other; the largest gap of each hand and the least distance between each two bodies
+are printed whether they fail or not. --stills DIR saves a picture every --stills-every seconds of film from
+--stills-from (cinematic seconds) on, to look at the staging without a GPU take (the pictures are SwiftShader's: for
+where people and cameras are, not for how it looks).
+
   python tools/continuity_check.py [--port 4741] [--step 0.1] [--answers a|b] [--json OUT.json]
+      [--stills DIR --stills-from 153.5 --stills-every 0.5 --fast 0.25 --until 186 --size 960x540]
 
 Needs a built dist/ (npm run build). Prints each break with the cinematic clock, the shot and who.
 """
@@ -41,12 +48,21 @@ def main():
     ap.add_argument('--limit', type=float, default=400, help='cinematic seconds at most')
     ap.add_argument('--json', default='')
     ap.add_argument('--answers', default='', choices=['', 'a', 'b'])
+    ap.add_argument('--stills', default='', help='a folder for pictures of the film')
+    ap.add_argument('--stills-from', type=float, default=153.5, help='cinematic seconds (the call to the pods is at 153.5)')
+    ap.add_argument('--stills-every', type=float, default=0.5)
+    ap.add_argument('--fast', type=float, default=0, help='with --stills: the step before --stills-from (the check itself is then not the full one)')
+    ap.add_argument('--until', type=float, default=0, help='with --stills: stop at this cinematic second')
+    ap.add_argument('--size', default='640x360')
     a = ap.parse_args()
     httpd = serve(a.port)
     errors = []
     with sync_playwright() as pw:
         b = launch(pw)
-        page = b.new_page(viewport={'width': 640, 'height': 360})
+        vw, vh = (int(x) for x in a.size.split('x'))
+        page = b.new_page(viewport={'width': vw, 'height': vh})
+        if a.stills: pathlib.Path(a.stills).mkdir(parents=True, exist_ok=True)
+        shot_at = -1.0
         page.on('pageerror', lambda e: errors.append(f'pageerror: {e}'))
         page.add_init_script("localStorage.setItem('bs-settings-v1', JSON.stringify({lang: 'en', sensitivity: 1, invertY: false, volume: 0, subtitles: true, showFps: false}))")
         page.add_init_script("localStorage.setItem('bs-consent-v1', '1')")
@@ -94,9 +110,16 @@ def main():
                         page.keyboard.press('KeyE')
                     elif how:
                         page.keyboard.press(how)
-            step(a.step)
-            t += a.step
-            if int(t / a.step) % 300 == 0:
+            ct = page.evaluate('__bs.cineTime()') if a.stills else 0
+            if a.stills and a.until and ct >= a.until and page.evaluate('__bs.state') == 'cinematic':
+                break
+            if a.stills and ct >= a.stills_from and t - shot_at >= a.stills_every - 1e-6:
+                shot_at = t
+                page.screenshot(path=str(pathlib.Path(a.stills) / f'c{ct:07.2f}.jpg'), type='jpeg', quality=80)
+            st = a.fast if a.stills and a.fast and ct < a.stills_from - 1 else a.step
+            step(st)
+            t += st
+            if int(round(t / a.step)) % 300 == 0:
                 print(f'  {t:.0f} s of film, clock {page.evaluate("__bs.cineTime()"):.1f}', flush=True)
         res = page.evaluate('__bs.continuity')
         props = page.evaluate('__bs.deckOverlaps ? __bs.deckOverlaps() : []')
@@ -106,6 +129,11 @@ def main():
     print(f"{len(cuts)} shots logged over {t:.1f} s; {len(res['seen'])} posture changes seen on screen")
     if a.json:
         pathlib.Path(a.json).write_text(json.dumps({'cuts': res['cuts'], 'seen': res['seen'], 'breaks': res['breaks'], 'props': props}, indent=1))
+    w = res.get('worst') or {}
+    for k, v in sorted((w.get('grip') or {}).items(), key=lambda kv: -kv[1]):
+        print(f'  hand  {k:40} at most {v * 100:5.1f} cm off')
+    for k, v in sorted((w.get('near') or {}).items(), key=lambda kv: kv[1])[:8]:
+        print(f'  near  {k:40} at least {v:5.2f} m apart')
     for x in res['breaks']:
         print(f"BREAK {x['kind']:9} {x['clock']:7.2f}s {x['from']:>5} -> {x['shot']:<5} {x.get('id', ''):10} {x['detail']}")
     for p in props:
