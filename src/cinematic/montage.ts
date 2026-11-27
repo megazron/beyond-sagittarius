@@ -934,13 +934,18 @@ export class Montage {
     const id = ORDER[i], c = new THREE.Color(id === 'scientist' ? this.playerGlow() : TRAIL[id]).lerp(new THREE.Color(1, 1, 1), 0.45);
     // only the name rides the light: the fate is written in the list once it is settled (see fateList)
     const name = t(`crew.${id}.name`);
-    if (el.textContent !== name) el.textContent = name;
+    if (el.textContent !== name) { el.textContent = name; this.tagW[i] = 0; }
     el.style.color = `#${c.getHexString()}`;
     const p = at.clone().project(cam), w = this.el.root.clientWidth || window.innerWidth, h = this.el.root.clientHeight || window.innerHeight;
-    this.tagPos[i] = [(p.x * 0.5 + 0.5) * w + 14, (-p.y * 0.5 + 0.5) * h - 22];
+    // the light has left the frame (or is behind the camera): its name goes with it. In the frame the name stays whole:
+    // it rode half off the right edge as a trail neared it (glitch sweep, Lyrra's name 19 px past a 1280 px screen)
+    if (p.z > 1 || Math.abs(p.x) > 1 || Math.abs(p.y) > 1) { el.style.opacity = '0'; this.tagPos[i] = null; return; }
+    const tw = this.tagW[i] || (this.tagW[i] = el.offsetWidth);
+    this.tagPos[i] = [Math.max(8, Math.min(w - tw - 8, (p.x * 0.5 + 0.5) * w + 14)), Math.max(8, Math.min(h - 32, (-p.y * 0.5 + 0.5) * h - 22))];
     el.style.opacity = '1';
   }
   private tagPos: ([number, number] | null)[] = [];
+  private tagW: number[] = [];
   /** Push overlapping names apart (top to bottom), then place them. */
   private layoutTags() {
     const live = this.tagPos.map((p, i) => (p ? { i, x: p[0], y: p[1] } : null)).filter(Boolean) as { i: number; x: number; y: number }[];

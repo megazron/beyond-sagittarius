@@ -728,6 +728,10 @@ export class Renderer {
     // a stage can ask for image-based light from its own sky: shade then reads as sky-lit, not black
     this.ensureEnv(scene);
     if (scene.userData.ao) aoEnabled = true;
+    // a lens belongs to the scene that set it: another scene starts with none. The Vault's last beat kept its close-up
+    // focus set every frame after the scene had ended (it holds its last frame under the title card), so the city after
+    // it, and the take-off, were drawn through it: everything past a metre out of focus (glitch sweep, 2026-11-27)
+    if (scene !== this.renderPass.scene) this.setDof(0, 0);
     this.renderPass.scene = scene;
     this.renderPass.camera = camera;
     if (this.ao) {

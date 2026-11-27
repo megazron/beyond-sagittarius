@@ -815,7 +815,7 @@ let fpsAcc = 0, fpsFrames = 0, fpsLast = performance.now();
 
 let frameCount = 0;
 /** Test hook: frames only move when asked, by a fixed step, so a slow GPU sees the same film. */
-const hold = { on: false, pending: 0, done: 0 };
+const hold = { on: false, pending: 0, done: 0, tick: 1 / 30 };
 function setHold(on: boolean) { hold.on = on; film.manual = on; voice.manual = on ? () => elapsed : null; audio.manual = on ? () => elapsed : null; }
 // tools/perf_gate.py: from the moment you arrive on a stage the clock is held (stepped by hand with advance), the game's
 // clock set to `at` and Math.random seeded, so every run of the gate steps the same simulation whatever the machine's
@@ -873,7 +873,7 @@ function frame() {
   // a lost context: the game is paused (openPause above) and only the drawing waits, so menus and input still work
   if (!hold.on) { const t0 = performance.now(); tick(real); const t1 = performance.now(); if (!glLost) draw(real); perfFrame(renderer.renderer, real, t1 - t0, performance.now() - t1); return; }
   if (hold.pending <= 0) return;
-  for (let left = hold.pending; left > 1e-6; left -= 1 / 30) tick(Math.min(left, 1 / 30));
+  for (let left = hold.pending; left > 1e-6; left -= hold.tick) tick(Math.min(left, hold.tick));
   hold.pending = 0;
   draw(1 / 30);
   perfFrame(renderer.renderer, 1 / 30, 0, 0);
@@ -1300,7 +1300,8 @@ window.addEventListener('resize', () => {
   /** What was played on the held clock: lines, sounds, music, beds (laid under recorded frames). */
   get soundLog() { return [...voice.log, ...audio.log]; },
   get clock() { return elapsed; },
-  advance(sec: number) { hold.pending = sec; },
+  /** `tick`: the step the game is advanced by (1/30 s unless given: 1/60 is what a 60 fps player's frames are). */
+  advance(sec: number, tick?: number) { hold.pending = sec; if (tick) hold.tick = tick; },
   get frames() { return hold.done; },
   film: { get fx() { return film.lensFx; }, get video() { return film.videoOn; }, seek(b: number) { film.seek(b); }, get playing() { return film.playing; }, get beat() { return film.beat; }, get seconds() { return film.lengthSeconds; }, start() { state = 'film'; renderer.setScene(cine.scene, cine.camera, false); ui.show('title', false); ui.show('cine', true); ui.fade('black', 0, 0); void film.play(() => {}); } },
   stageInfo() { return renderer.stageInfo(); },

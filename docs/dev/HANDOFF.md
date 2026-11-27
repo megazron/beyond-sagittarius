@@ -6,6 +6,55 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## 2026-11-27 glitch sweep (sweep agent: worktree ~/bs-sweep, branch sweep1 from main d7dceefb; captures and tools ~/bs-cap/sweep)
+Owner: "The games are glitchy." A whole-game sweep as a player, on the A500 in Windows Chrome with sound, nothing skipped.
+The log (what a player sees, severity, cause, repro, fixed or open) is ~/bs-story/GLITCH_SWEEP_1127.md, with a copy and
+the clips in Downloads\BS_Game_v1.1\glitch_sweep. Nothing here is signed off: only the owner does that.
+- HOW IT RUNS (all in ~/bs-cap/sweep): `seg.sh NAME DIST QUERY [mkplan args]` = `mkplan.py` (one recording a segment,
+  `--new` for New Game, else Continue on the save kept in the capture Chrome's own profile bs-sweep-a500; `--mobile`,
+  `--pick N` which answer to take, `--profile` a CPU profile in half-minute pieces, `--from-save FILE`), `runseg.sh`
+  (ONE exclusive heavy step: preview :4797, Chrome :9397, stopped by PID and checked) and `post.sh` (join, raw frames
+  deleted, then ffmpeg black / frozen picture / silence detectors and contact sheets). `cap.py` is tools/gpu_capture.py
+  plus scripts injected before the page's own, the detectors drained every 8 s (`probe.jsonl`), console and crash lines
+  (`console.jsonl`), heap (`metrics.jsonl`). `analyze.py SEGDIR` prints the report with video times; `sheets.py` and
+  `zooms.sh` make labelled contact sheets (this ffmpeg has no drawtext and there is no ffprobe); `peek.py` reads a
+  running segment; `cdp_file.py PORT FILE.js` evaluates a file in the running capture page (Windows Python).
+- `probe.js` (detectors in the page): the glitch watch, the opening's continuity log, frames over 100 ms and long tasks
+  with the probe's own time taken out, page and console errors, words cut off or off the screen (boxes that scroll
+  are said once), a voice line cut or silent, a scene with nothing changing for 45 s, bodies whose arms, spine and head
+  have not moved at all for 6 s (frozen), T-poses, tools/pedglitch.js in the city only, and every second: fps, worst
+  frame, heap, geometries, textures, draw calls, the lens (focus, aperture), the pixel ratio. TRAPS I HIT: the clip
+  probe costs 0.25 to 1.5 s a call on the planet and 7 to 12 s in the city (films only now); pedglitch throws every
+  frame on a stage that is not the city; a long frame makes a probe timer fire at its end, so "the probe ran in this
+  frame" is not "the probe caused it" (the probe's own milliseconds are summed instead).
+- `bot.js` (the stand-in player): watches every scene, reads then answers decisions, plays reflexes (the choice layer's
+  ring, the older `#qte` ring, tension moments, craft panels), walks to the marker with a camera turned every frame,
+  goes round water (`__bs.groundAt`) and round what blocks it, jumps the gaps between a stage's pads once it has fallen
+  there, closes the pause menu the game opens by itself as a chapter ends, hands fights to tools/combat/demo_bot.js.
+  When it is stuck it says so first (a finding) and only then helps itself. WHAT WAS THE BOT AND NOT THE GAME in the
+  first takes: the asteroid and the hull plates (it walked off the pads: by design you fall and wake at the start), the
+  splint (an untimed press of E it did not know), The Ledger tab at the end of Chapter One (the game waits for Resume),
+  three drownings (it swam straight at the marker), and the view turning in ten steps a second.
+- FOUND AND FIXED IN THIS BRANCH (see the log for the rest, most of it open):
+  - The city and the take-off were out of focus for every New Game on Web and Ultra: the Vault's last beat goes on
+    setting its close-up focus every frame after the scene has ended (it holds its last frame under the title card), and
+    the renderer kept that lens for the next scene. `Renderer.setScene` now starts another scene with no lens;
+    tools/intro_smoke.py fails if the city is drawn through one. Every earlier capture of the city came after the same
+    Vault, so this was in them too.
+  - A name riding a trail in the scatter film went off the right edge (montage.ts tag: kept inside the frame, hidden
+    with its light).
+  - The glitch watch only ever ran at 30 ticks a second in tests, where a limb must turn 114 degrees in a tick to count.
+    At a player's 60 frames a second the bar is 57 degrees, and the GPU takes show an arm snap of 59 to 130 degrees at
+    nearly every pickup and leg snaps at walk starts and craft starts. `__bs.advance(sec, tick)` and
+    `glitch_check.py --tick 0.0166667` run the watch at 60 (its own tests last as long in seconds). ep1 at 60 ticks:
+    5 snaps, first "upperarmR turned 80 degrees doing pickup" at 9.9 s. The cause is NOT found yet: the stage log of
+    cine7 (~/bs-cap/cine7/armdbg/hooks.patch) is set up for it in ~/bs-cap/sweep/armdbg (run.sh).
+- TO THE AGENTS ON THE OPENING (lounge to pods in ~/bs-pods, the cold open reshoot): seen in my takes, not touched by me:
+  the lounge's first wide shot stands frozen 3.7 s (a main-thread freeze, the game's own long-task log has it too) and
+  another 1.9 s freeze comes as the warning starts; after "TARAVEL · 2189" the screen is black with nothing on it for
+  6 to 7 s while the city compiles; Nuvexa's landing in the scatter film is a still picture for about 7 s; the memory
+  at level 6 opens on a white flash and a shot that does not move for about 6 s (3.6 s of it a freeze).
+
 ## 2026-11-26 choice UI look (ui agent: worktree ~/bs-ui, branch ui1 from main b3a2302; captures ~/bs-cap/ui1)
 - Owner, first: the choice UI "looks a bit AI generated, use some UI". I made a Ledger look (paper slips, brass, wax);
   owner, second: "doesn't blend in, it looks completely different from the scene and background. It needs to be

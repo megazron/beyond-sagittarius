@@ -40,6 +40,8 @@ def main():
     ap.add_argument('--dist', default='', help='a built dist other than dist/')
     a = ap.parse_args()
     want = a.only.split(',')
+    # drawn frames a second of game time: two ticks a frame (15 at the default 1/30 s tick, 30 at --tick 0.0166667)
+    per = max(1, round(1 / (a.tick * 2)))
     if a.dist:
         import smoke
         smoke.DIST = pathlib.Path(a.dist).resolve()
@@ -65,7 +67,7 @@ def main():
                 # two ticks of 1/30 s a drawn frame (the watch looks at every tick; a body is posed at full rate
                 # for up to three ticks undrawn, character.ts sinceDrawn): half the drawing on a software GPU
                 for _ in range(n):
-                    ev(f'__bs.advance({sec or a.tick * 2})')
+                    ev(f'__bs.advance({sec or a.tick * 2}, {a.tick})')
                     page.wait_for_function(f'__bs.frames > {frames[0]}', timeout=300000)
                     frames[0] = ev('__bs.frames')
             try:
@@ -83,7 +85,7 @@ def main():
                 ev("__bs.glitchTest(['pop', 'snap', 'floor', 'float'], 'npc')")
                 if walk: ev("__bs.glitchTest(['pop', 'snap', 'floor', 'float', 'wall'], 'player')")
                 # one at a time (two on one body in a frame would undo each other): until each is caught, missed or n/a
-                for k in range(220):
+                for k in range(220 * per // 15):
                     step()
                     if k % 10 == 9 and not any(t['state'] in ('waiting', 'on') for t in ev('__bs.glitches')['summary']['tests']): break
                 c = ev('__bs.clipPoke()')
@@ -93,27 +95,27 @@ def main():
             tour = ev('__bs.glitchTour()') if walk else []
             if walk: ev(f"__bs.autoWalk(true, {json.dumps([[q['x'], q['z']] for q in tour])})")
             p0 = ev('__bs.bodyPos')
-            n = int(a.secs * 15)
+            n = int(a.secs * per)
             mid = False
             trace = []
             for i in range(n):
                 step()
-                wp = ev('__bs.walkPlan') if walk and i % 15 == 0 else None
+                wp = ev('__bs.walkPlan') if walk and i % per == 0 else None
                 # the height flicker can only be put in while he walks: twice on the way
-                if walk and i in (45, 300): ev("__bs.glitchTest(['jitter'], 'player')")
+                if walk and i in (3 * per, 20 * per): ev("__bs.glitchTest(['jitter'], 'player')")
                 if wp and wp['i'] >= wp['n']: break
-                if wp: trace.append([round(i / 15, 1)] + [round(v, 2) for v in (ev('__bs.bodyPos') or [0, 0, 0])] + [wp['i'], ev('__bs.mode')])
+                if wp: trace.append([round(i / per, 1)] + [round(v, 2) for v in (ev('__bs.bodyPos') or [0, 0, 0])] + [wp['i'], ev('__bs.mode')])
                 if walk and not mid and wp and wp['i'] >= wp['n'] / 2: mid = True; selftest('middle')
                 # the pull is a film about 65 s long: its middle round at 20 s, and it ends when the film does
-                if not walk and not mid and i >= 300: mid = True; selftest('middle')
-                if not walk and i % 15 == 0 and ev('__bs.state') != 'cinematic': break
+                if not walk and not mid and i >= 20 * per: mid = True; selftest('middle')
+                if not walk and i % per == 0 and ev('__bs.state') != 'cinematic': break
                 # at a job (the prompt up), do it, as a player would
                 if walk and i % 10 == 5 and ev("!!document.getElementById('prompt') && !document.getElementById('prompt').classList.contains('hidden')"):
                     page.keyboard.press('KeyE')
-                if i % 15 == 7:
+                if i % per == 7:
                     for h in ev('__bs.clipProbe()') or []:
                         if h['kind'] == 'body' and h['depth'] > 0.06: clips.append(h)
-                if walk and i % 45 == 0 and ev("__bs.away ? false : (__bs.mode !== 'play')"):
+                if walk and i % (3 * per) == 0 and ev("__bs.away ? false : (__bs.mode !== 'play')"):
                     ev('__bs.skip()')  # a scene came on the way: let it pass
             wp = ev('__bs.walkPlan') if walk else None
             selftest('end')

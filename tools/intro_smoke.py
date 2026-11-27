@@ -85,6 +85,12 @@ with sync_playwright() as pw:
     try:
         page.wait_for_function("window.__bs.mode === 'away' && window.__bs.away && window.__bs.away.who", timeout=400000)
         print('reached the city', page.evaluate('__bs.away.who'), flush=True)
+        # the lens is the scene's own: the Vault's depth of field must not ride into the city (it did: its last beat kept
+        # setting it after the scene had ended, and the whole city and the take-off were out of focus on the GPU)
+        time.sleep(1.5)
+        lens = page.evaluate("(() => { const i = __bs.rnd.stageInfo(); return { focus: i.focus, aperture: i.aperture, dof: !!__bs.rnd.dof }; })()")
+        print('lens in the city:', lens, flush=True)
+        if lens['aperture'] > 0: fails.append(f'the city is drawn through a lens left on by the scene before it: {lens}')
         if shots: page.screenshot(path=str(shots / 'intro_city.jpg'), type='jpeg', quality=70)
     except Exception:
         fails.append(f"the narrator did not hand over to the city (state {page.evaluate('__bs.state')}, mode {page.evaluate('__bs.mode')})")

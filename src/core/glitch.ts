@@ -54,6 +54,7 @@ export class GlitchWatch {
   events: GlitchEvent[] = [];
   tests: GlitchTest[] = [];
   /** Frames looked at and bodies followed, for the runner's summary. */
+  private sc = 1;
   stats = { frames: 0, bodies: 0, maxBodies: 0, groundKnown: 0, playerFrames: 0, collideFrames: 0 };
   private tracks = new WeakMap<THREE.Object3D, Track>();
   private cam = new THREE.Vector3();
@@ -107,7 +108,7 @@ export class GlitchWatch {
   private applyTests(scene: THREE.Scene, cam: THREE.Vector3, opts: FrameOpts, cut: boolean) {
     const pl = opts.player;
     // one test at a time: two on one body in a frame would undo each other wrongly
-    let busy = this.live.find((l) => l.state === 'on' || (l.state === 'caught' && (l.left > 0 || l.grace < 12)));
+    let busy = this.live.find((l) => l.state === 'on' || (l.state === 'caught' && (l.left > 0 || l.grace < 12 * this.sc)));
     for (const l of this.live) {
       if (busy && l !== busy) continue;
       // a cut excuses pops by design: a test held over one is put in again after it
@@ -144,7 +145,7 @@ export class GlitchWatch {
         }
         const tg = target as THREE.Object3D;
         l.target = tg; l.who = l.on === 'player' ? 'player' : tg.userData.id === 'player' ? `townsperson ${tg.name || tg.id}` : ((tg.userData.id as string | undefined) ?? tg.name ?? 'body');
-        l.state = 'on'; l.left = l.frames; l.why = undefined; l.t = +this.clock.toFixed(2);
+        l.state = 'on'; l.left = l.frames * this.sc; l.why = undefined; l.t = +this.clock.toFixed(2);
         busy = l;
       }
       if ((l.state !== 'on' && l.state !== 'caught') || l.left <= 0) continue;
@@ -176,8 +177,8 @@ export class GlitchWatch {
     for (const l of this.live) { l.undo?.(); l.undo = undefined; }
     for (const l of this.live) if ((l.state === 'on' || l.state === 'caught') && l.left <= 0) l.grace++;
     // a few frames after it is taken out for it to show (the pop back, a float past its threshold)
-    for (const l of this.live) if (l.state === 'on' && l.left <= 0 && l.grace > 8) l.state = 'missed';
-    this.live = this.live.filter((l) => l.state === 'waiting' || l.state === 'on' || (l.state === 'caught' && (l.left > 0 || l.grace < 12)));
+    for (const l of this.live) if (l.state === 'on' && l.left <= 0 && l.grace > 8 * this.sc) l.state = 'missed';
+    this.live = this.live.filter((l) => l.state === 'waiting' || l.state === 'on' || (l.state === 'caught' && (l.left > 0 || l.grace < 12 * this.sc)));
   }
 
   /**
@@ -187,6 +188,8 @@ export class GlitchWatch {
   frame(scene: THREE.Scene, camera: THREE.Camera, dt: number, opts: FrameOpts = {}) {
     if (!this.on || dt <= 0) return;
     this.clock += dt; this.film = opts.film;
+    // the tests' holds are counted in frames of 1/30 s: on a faster tick (the watch at 60 a second) they last as long
+    this.sc = Math.max(1, Math.round(1 / (30 * dt)));
     this.stats.frames++; this.nFrame++;
     const cam = camera.getWorldPosition(new THREE.Vector3());
     this.camMove = this.camSet ? cam.distanceTo(this.cam) : 0;
