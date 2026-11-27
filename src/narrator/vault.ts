@@ -9,6 +9,7 @@ import { Renderer } from '../core/renderer';
 import { sceneSound } from '../core/soundscape';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { bs3Film, BS3_LINES } from './bs3';
 import { Film, FilmSound, Ink, Page, Shot, WritingHand, paperGround, shoot, smooth as sm } from './entrance';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -355,6 +356,7 @@ export class Vault {
    * His own acting clips (tools/build_mz_animations.py: captured motion with its real path over the floor): loaded once,
    * on the first film that asks. `acting` then says where the capture's stool stands from where `mz_sit_down` starts.
    */
+  private actingFailed = false;
   acting: { seat: [number, number, number]; seatYaw: number; upEnd: [number, number]; upYaw: number; walkFrom?: [number, number]; clips: Record<string, { dur: number; loop: boolean }> } | null = null;
   private actingP: Promise<void> | null = null;
   loadActing() {
@@ -372,7 +374,7 @@ export class Vault {
       this.acting = j;
       // and what his mouth does on each line (the spoken language's tracks, and English's for lines only said in English)
       await voice.loadVisemes();
-    })().catch((e) => { console.error('[vault] acting clips', e); }));
+    })().catch((e) => { console.error('[vault] acting clips', e); this.actingFailed = true; }));
   }
 
   /** Once his body is in: the quill into his right hand, a smooth coat (its flat facets caught the lamp), a pen grip. */
@@ -497,7 +499,8 @@ export class Vault {
   /** The film for the lines: Beyond Sagittarius's own, or another story's set (tools: window.__mzFilm). */
   private makeFilm(): Film {
     const ext = (globalThis as { __mzSet?: (v: Vault) => Film }).__mzSet;
-    return ext ? ext(this) : this.entry();
+    // (the older film stays as the fallback: without his captured clips the new one has no body to stage)
+    return ext ? ext(this) : this.actingFailed ? this.entry() : bs3Film(this, voice.spoken);
   }
 
   /** Skip pressed while the scene was still loading under the black: it ends as soon as it starts. */
@@ -859,7 +862,8 @@ function relaxNormals(g: THREE.BufferGeometry, passes: number) {
 }
 
 // The cold open's lines at their seconds (the film itself is Vault.entry; ENTRANCES_v2.md section 4).
-const INTRO: VaultLine[] = [{ key: 'mz.intro.1', at: 9.4 }, { key: 'mz.intro.2', at: 36.2 }, { key: 'mz.intro.3', at: 48.3 }];
+// the opening's lines (bs3.ts): he talks to the player
+const INTRO: VaultLine[] = BS3_LINES.map(([key, at]) => ({ key, at }));
 
 /** Scene scripts. `s` says what the player actually did. */
 export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', s: { ateRed: boolean; deaths: number; bites: number; renamed: boolean; failed?: number; comments?: string[] }): VaultLine[] {
