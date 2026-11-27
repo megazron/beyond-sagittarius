@@ -59,6 +59,10 @@ and `&picks=e1.handcore:core,e1.reach:bolzar,e1.hold:fail` (hurt variants) jump 
   by the frame on a8); bodies a little less flat across the lounge (G7 read as a train of flat bodies).
 - Results: a12 (before the facing limit) continuity a ok, none ok, b one pop (fixed after). a13 = the fix, runs b, a,
   none, then glitch_check --only pull (logs cont_a13_*.log, glitch_pull_a13.log; started from iter_g.sh).
+- a13 (all fixes): continuity a, b and no answers all ok. glitch_check --only pull still FAILS: "explorer at 71 s,
+  upperarmL turned 126 degrees in one frame at [8.21, -1.98, -0.66]" (2.3 m inside the passage: not her first hold,
+  my pre-pose did not cure it; look at her rail re-grips or the hand answer's tow there). Log glitch_pull_a13.log.
+  CI's glitch_pull_ep1 will fail on pods4 until it is fixed.
 - Still wrong on the a12 stills (SwiftShader, staging only): the six still read as one cluster coming through the hatch
   in P1 and P2 (pairs overlap in depth from those angles), an arm cut by the top of P1's frame, G7 bodies still near
   flat. NOT started: CMU mocap for zero-g, hair and clothes follow-through, faces acting beyond the set expressions, E2,
