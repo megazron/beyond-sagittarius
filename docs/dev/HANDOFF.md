@@ -51,6 +51,22 @@ here is signed off (only the owner does that). The opening code word goes to the
 - CAPTURES: put the point in the capture URL, e.g. `...index.html?quality=ultra&cheat=open.run&cgo=1&cpick=b` (the pods
   run with the second answers), `&cheat=L15.dec2&cgo=1`. Keep one honest full playthrough per release batch.
 
+## 2026-11-27 night, the run to the pods, third pass (cheat agent 2 took it over: worktree ~/bs-podsw, branch pods4 = pods3 rebased on cheat1; dev runs ~/bs-cap/pods1/dev)
+NOT on main, not signed off. pods4 = pods3 + my fixes, on top of the cheat menu branch so `?cheat=open.run&cgo=1&cpick=a|b`
+and `&picks=e1.handcore:core,e1.reach:bolzar,e1.hold:fail` (hurt variants) jump straight to the run.
+- Fixed in the tree: Skyvra's facing to Zenvik is read chest to chest and turned at a body's rate (the 0.52 m one-frame
+  swing), and her whole facing is rate-limited (78 degrees in a frame with answers b, a12); the rail arm comes up ahead
+  before the hand closes on the rail (her 130 degree upper-arm flip); P1 from 7.4 m in, P2 from the near wall (bodies cut
+  by the frame on a8); bodies a little less flat across the lounge (G7 read as a train of flat bodies).
+- Results: a12 (before the facing limit) continuity a ok, none ok, b one pop (fixed after). a13 = the fix, runs b, a,
+  none, then glitch_check --only pull (logs cont_a13_*.log, glitch_pull_a13.log; started from iter_g.sh).
+- Still wrong on the a12 stills (SwiftShader, staging only): the six still read as one cluster coming through the hatch
+  in P1 and P2 (pairs overlap in depth from those angles), an arm cut by the top of P1's frame, G7 bodies still near
+  flat. NOT started: CMU mocap for zero-g, hair and clothes follow-through, faces acting beyond the set expressions, E2,
+  F2, F4, G4-G5. No GPU take of pods4 yet: next is a13's results, then GPU takes of the three answers and hurt variants
+  via the cheat jumps (~/bs-cap/cheat1/run.sh with a plan like plan_clips2.json), watch, encode under 30 MB, send to
+  Downloads/BS_Game_v1.1/pods_continuity with new names.
+
 ## 2026-11-27 the run to the pods, second pass (second pods agent: same worktree ~/bs-podsw; branch pods3; captures ~/bs-cap/pods1, dev runs in ~/bs-cap/pods1/dev)
 STATE AT HAND-BACK (stopped by the owner mid-work, 2026-11-27 evening): NOT on main. Main is still f821a403. The work is
 WIP on branch `pods3` (pushed, not CI-green, do not land as is). Nothing here is signed off: only the owner does that.
