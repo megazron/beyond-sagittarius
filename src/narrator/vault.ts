@@ -107,6 +107,7 @@ export class Vault {
   /** The film playing (null: a visit, line by line). */
   private film: Film | null = null;
   private filmT = 0;
+  private subEnd = 0;
   private handedOver = false;
   /** Called when a film begins its hand-over into what comes next (the title screen): the caller starts its fade. */
   onHandover: (() => void) | null = null;
@@ -469,7 +470,7 @@ export class Vault {
     this.host.root.position.set(0, 0, 0); this.host.root.rotation.y = Math.PI;
     this.leaf.rotation.z = 0;
     this.film = lines.length && lines.every((l) => l.at !== undefined) ? this.makeFilm() : null;
-    this.filmT = 0;
+    this.filmT = 0; this.subEnd = 0;
     if (this.film) { this.room.visible = true; this.film.start(); }
     else { audio.startDrone(); this.hand.set(null); this.page.draw(99); }
     if (this.skipNext) { this.skipNext = false; this.finish(); }
@@ -550,7 +551,9 @@ export class Vault {
     const ft = this.filmT;
     // a line starts at its second; if the one before is still being said (a take that loaded late) it waits for it
     const nx = this.lines[this.i + 1];
-    if (nx && ft >= nx.at! && !(voice.speaking() && this.i >= 0)) { this.i++; this.speak(nx.key); }
+    if (nx && ft >= nx.at! && !(voice.speaking() && this.i >= 0)) { this.i++; this.subEnd = ft + this.speak(nx.key) + 0.5; }
+    // a line's subtitle goes when the line is over (it stayed up until the next line, half a minute in the long silences)
+    else if (this.subEnd && ft >= this.subEnd && !voice.speaking()) { this.subEnd = 0; this.subtitle(null); }
     if (f.handover !== undefined && !this.handedOver && ft >= f.handover) { this.handedOver = true; this.onHandover?.(); }
     f.frame(ft, dt);
     if (ft >= f.len && !voice.speaking()) this.finish();
