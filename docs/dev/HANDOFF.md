@@ -6,6 +6,43 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## 2026-11-27 cheat menu (cheat agent: worktree ~/bs-cheat, branch cheat1 from main f821a403; STOPPED EARLY, NOTHING BUILT)
+Owner: "I think playthrough every game is taking time so do one thing make cheat codes so that you can test the game at
+certain levels directly." I was stopped by the owner (all tasks, change of model) after reading only. Exact state:
+- DONE: the worktree and branch exist; I read this file's top sections (pods run, glitch sweep), the Layout / Tests / CI
+  sections and listed src/ and tools/. No code written, no heavy job queued, no capture, nothing on main. No cheat word
+  chosen yet.
+- NOT READ YET (read before designing): src/main.ts (the URL params level / skip / cinema, window.__bs), src/core/save.ts
+  (save format), src/game/story.ts, episode2.ts, episode3.ts, chapter2.ts (level flow), src/ui/moment.ts (choice layer),
+  tools/story_seal.py + tools/spoiler_check.py (how sealed data is built and checked), tools/gpu_capture.py and
+  ~/bs-cap/sweep (mkplan.py --from-save FILE already starts a take from a save: reuse that idea).
+- THE BRIEF, as given to me:
+  1. A cheat menu opened by a typed word on the title screen and in pause (not a story spoiler, not an existing secret
+     code), a gamepad sequence, a 5-tap corner on touch, a URL form for bots. Jump to any level 1 to 21 and any checkpoint
+     in it (start, each objective, each film by id, each decision, boss or set piece, results), the opening's parts, the
+     city. Preset the story choices (all a, all b, pick each) with the survivor and bond states they imply; inventory for
+     that point or everything; toggles: no damage, no hunger or thirst drain, fast walk, time of day and weather, slow
+     motion 0.25x to 2x, free camera, hide HUD, glitch and continuity overlays.
+  2. A jump must give a VALID state through the same code path as play: load a save snapshot per checkpoint. Snapshots
+     come from an automated playthrough, are stored with the build and sealed like the story data. Level names in the
+     menu: numbers and neutral labels, or names read from the sealed data at runtime (spoiler_check must stay green).
+  3. Cheat sessions are flagged: never write the real save (use a separate storage key), never unlock achievements or
+     endings, always show a small "cheat" mark.
+  4. Tests: every checkpoint loads headless with no errors and the level completes from it; a CI job; no gate loosened.
+  5. Capture tooling jumps straight to the moment under test (one line per use case here), and one honest full
+     playthrough stays per release batch.
+  6. A GPU clip (Windows Chrome, A500) of the menu and three jumps (a film, a decision, a late level), watched, under
+     30 MB, with notes, to Downloads/BS_Game_v1.1/cheats/. The code goes to the owner by message only: never in the
+     README, store text or any public file.
+- DESIGN I INTENDED (not verified against the code): new files only (src/cheat/cheat.ts, cheat.css, a sealed
+  snapshots file, tools/cheat_snapshots.py to generate, tools/cheat_smoke.py to test) plus small hooks in main.ts (URL
+  param, key buffer on title and pause, __bs.cheat) and core/save.ts (a storage key switch while the flag is set). Other
+  agents are in the cinematic files (pods run) and narrator files (MegaZroN): keep out of them.
+- LANDING RULES given: CI green on the exact sha, fast-forward only, `git push origin <sha>:main` as its own command, a
+  new branch name if main moved, never a force push. Machine: one heavy step at a time through ~/bin/heavy.
+- AFTER THIS: the same idea for Shambhar Takke (~/shambhar-takke; read its HANDOFF.md "REPO CHANGE" section first).
+  Not started.
+
 ## 2026-11-27 the run to the pods (pods agent: worktree ~/bs-podsw, branch pods1w, landing branch pods2 (squashed on main b18c6b3); before-tree ~/bs-pods = main d7dceefb; captures ~/bs-cap/pods1)
 - Owner on main d7dceefb: "The cutscenes going to the pods scene is still not proper, doesn't show continuity." The
   continuity check said 0 problems: it stopped where the pull ends (the handoff to the title sequence was never looked
