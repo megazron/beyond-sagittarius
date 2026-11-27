@@ -1086,7 +1086,7 @@ export class Cinematic {
       scientist: { lean: 1.05, roll: -0.12, step: 0.8, seed: 1.3 }, explorer: { lean: 1.2, roll: 0.16, step: 0.8, seed: 4.1 }, medic: { lean: 0.95, roll: 0.08, step: 0.75, seed: 7.7 },
       social: { lean: 0.8, roll: -0.2, step: 0.8, seed: 10.9 }, strong: { lean: 1.15, roll: 0.1, step: 0.9, seed: 14.2 }, builder: { lean: 0.9, roll: 0.3, step: 0.7, seed: 17.5 },
     };
-    const joined = new Map<string, number>(), railSince = new Map<string, number>(), headYaw = new Map<string, number>(); let runTau = 0; let skyYaw: number | null = null;
+    const joined = new Map<string, number>(), railSince = new Map<string, number>(), headYaw = new Map<string, number>(); let runTau = 0; let skyYaw: number | null = null; let skyQ: THREE.Quaternion | null = null;
     /** Where the rail hand is for a chest `dist` along the passage: closed on the rail while the body passes it, then
      *  off it, forward and on again a step further (the reach: a third of the step), a reach ahead of the shoulder. */
     const railPoint = (dist: number, step: number) => {
@@ -1181,6 +1181,10 @@ export class Cinematic {
         if (w > 0) {
           qA.setFromEuler(eA.set(0.55, toHim, 0.1, 'YXZ')); const now = sky.root.quaternion.clone();
           sky.root.quaternion.copy(s0.q).slerp(qA, i.ease).slerp(now, 1 - w);
+          // and never faster than a body turns: when the answer changes her route the ease out of her first pose moved
+          // with it, 78 degrees in one frame (continuity --answers b, a12)
+          if (skyQ) { const want = sky.root.quaternion.clone(); sky.root.quaternion.copy(skyQ).rotateTowards(want, 3.2 * dtN); }
+          skyQ = (skyQ ?? new THREE.Quaternion()).copy(sky.root.quaternion);
           upV.set(0, s0.up, 0).applyQuaternion(sky.root.quaternion); sky.root.position.copy(i.chest).sub(upV); sky.root.position.y += Math.max(0, FLOOR + 0.22 - sky.root.position.y) * i.ease;
         }
       }
