@@ -1182,7 +1182,7 @@ export class Cinematic {
             if (grab > 0) { limbs = { ...limbs, armL: [0.25, -0.35, 0.9], foreL: [0.1, -0.3, 1], armR: [-0.25, -0.35, 0.9], foreR: [-0.1, -0.3, 1], bend: 0.3 * grab }; look = core.getWorldPosition(new THREE.Vector3()); }
             if (carry > 0) { limbs = { ...limbs, armL: [0.35, -0.75, 0.5], foreL: [-0.75, 0.15, 0.6] }; delete hold.L; }
             c.root.quaternion.slerp(qA.setFromEuler(eA.set(0.25, Math.PI, 0, 'YXZ')), smoothstep(3.3, 4.2, tau) * (1 - smoothstep(5.9, 6.8, tau))); // back to the console, then round for the hatch
-            upV.set(0, s0.up, 0).applyQuaternion(c.root.quaternion); c.root.position.copy(pA).sub(upV);
+            upV.set(0, s0.up, 0).applyQuaternion(c.root.quaternion); c.root.position.copy(pA).sub(upV); c.root.position.y += Math.max(0, FLOOR + 0.22 - c.root.position.y);
           }
           if (!hd && !cr && tau < 4.4) { limbs = mixLimbs(STANDING, FALL.spread, 0.25); face = { fear: 0.8, open: 0.1 }; look = head(sky); } // frozen
         } else if (id === 'explorer') {
@@ -1191,6 +1191,16 @@ export class Cinematic {
           if (tau < 4.8) { limbs = { ...limbs, ...mixLimbs(FALL.explorer, { ...FALL.explorer, armR: [-0.3, 0.45, 1], foreR: [-0.2, 0.3, 1] }, reach) }; look = head(sci); }
           if (hd && tau >= 3.9) hold.R = { at: hand(sci, false), fingers: V(1, 0.2, 0).normalize(), palm: V(0, -1, 0), radius: 0.03, grasp: true }; // her hand in his
           if (!hd && tau > 4.0 && tau < 4.8) face = { fear: 0.6, frown: 0.5, open: 0.1 }; // her hand closed on nothing
+          if (!hd) {
+            // she goes to him and then back the way she came, for the hatch: her route turns right round at his side, so
+            // her facing is set here (to him, then round to the way aft over a second), not read off a route that reverses
+            const z = sci.root.position, toHim = Math.atan2(z.x - c.root.position.x, z.z - c.root.position.z), w = 1 - smoothstep(4.5, 5.7, tau);
+            if (w > 0) {
+              qA.setFromEuler(eA.set(0.55, toHim, 0.1, 'YXZ')); const now = c.root.quaternion.clone();
+              c.root.quaternion.copy(s0.q).slerp(qA, ease).slerp(now, 1 - w);
+              upV.set(0, s0.up, 0).applyQuaternion(c.root.quaternion); c.root.position.copy(pA).sub(upV); c.root.position.y += Math.max(0, FLOOR + 0.22 - c.root.position.y) * ease;
+            }
+          }
           if (!hd && ((tau > 9.6 && tau < 11.0) || (tau > 14.2 && tau < 15.4))) look = head(sci); // she looks back for him
         } else if (id === 'medic') {
           face = { frown: 0.45, fear: 0.35, open: 0.1 };
