@@ -1225,7 +1225,6 @@ export class Cinematic {
           look = tau > 2.0 && tau < 12.4 ? head(bol) : look;
         } else if (id === 'builder') {
           face = { fear: 0.75, squint: 0.4 };
-          const cling = smoothstep(3.2, 3.9, tau) * (1 - smoothstep(4.9, 5.3, tau));
           limbs = { ...FALL.builder, ...legs, bend: 0.5 - 0.2 * moving };
           // his arms go out for the sofa's back before the hands close on it, and stay out between it and Draxum's arm: a
           // hold switched on from a tucked arm turned his upper arm 134 degrees in a frame (glitch_pull)
