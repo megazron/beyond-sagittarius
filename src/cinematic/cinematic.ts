@@ -1191,7 +1191,7 @@ export class Cinematic {
           if (tau < 4.8) { limbs = { ...limbs, ...mixLimbs(FALL.explorer, { ...FALL.explorer, armR: [-0.3, 0.45, 1], foreR: [-0.2, 0.3, 1] }, reach) }; look = head(sci); }
           if (hd && tau >= 3.9) hold.R = { at: hand(sci, false), fingers: V(1, 0.2, 0).normalize(), palm: V(0, -1, 0), radius: 0.03, grasp: true }; // her hand in his
           if (!hd && tau > 4.0 && tau < 4.8) face = { fear: 0.6, frown: 0.5, open: 0.1 }; // her hand closed on nothing
-          if (!hd) {
+          {
             // she goes to him and then back the way she came, for the hatch: her route turns right round at his side, so
             // her facing is set here (to him, then round to the way aft over a second), not read off a route that reverses
             const z = sci.root.position, toHim = Math.atan2(z.x - c.root.position.x, z.z - c.root.position.z), w = 1 - smoothstep(4.5, 5.7, tau);
