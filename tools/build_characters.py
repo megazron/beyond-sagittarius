@@ -247,7 +247,8 @@ def skirt_weights(c, p, pivots, shins=False, loose=False):
         # an open coat on a man who sits down in it: its skirt goes less than half the way with a thigh, so the knees
         # come out between the fronts and the cloth hangs. Following a thigh by 62 to 85%, it stood out along each leg:
         # a tent over the stool, and with a knee turned out a balloon to that side (GPU take r5)
-        leg = 0.34 + 0.1 * fz
+        # (at 0.34 to 0.44 the raised knee came through the cloth with a torn-looking edge, GPU take r6: the middle way)
+        leg = 0.47 + 0.13 * fz
     # behind, the middle of the back panel goes with the hips: half on each thigh, standing wide the two thighs turned it
     # opposite ways, the blend pulled it in and it showed as a grey mass between Zenvik's legs (GPU takes e13v4, e13v5)
     mid = 1 - np.abs(2 * a - 1)

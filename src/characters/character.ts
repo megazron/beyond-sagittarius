@@ -696,7 +696,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const chestBone = bs.get('chest')!;
       const n = chestBone.worldToLocal(bs.get('neck')!.getWorldPosition(new THREE.Vector3()));
       const stock = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), new THREE.MeshStandardMaterial({ color: 0x0c0d1c, roughness: 0.8 }));
-      stock.scale.set(1.0, 1.7, 0.9); stock.position.set(n.x, n.y - 0.17, n.z + 0.03); chestBone.add(stock); // (forward a little: his chest came through it under the chin as a ragged edge)
+      stock.scale.set(1.0, 2.0, 0.9); stock.position.set(n.x, n.y - 0.15, n.z + 0.03); chestBone.add(stock); // (taller: a high dark collar up the neck that covers where the neck skin is cut away under the coat, a ragged edge in every close shot, GPU take r6 and stills d1) // (forward a little: his chest came through it under the chin as a ragged edge)
     }
     pitK = M.pit ?? null; corrRegions = [];
     // the light body for distance (game LOD): the full one near the camera, the .lod1 build further off. Both ride on
@@ -2164,10 +2164,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const vt = hasUnits && speak > 0 ? voice.viseme() : null;
     if (vt) {
       mouthAt(parseVis(vt.track), vt.at, visW);
-      // (sizes from GPU take r5: at 0.9 of the jaw and 1.25 of the lips he bared every tooth on each open vowel)
+      // (sizes from GPU take r5: at 0.9 of the jaw and 1.25 of the lips he bared every tooth on each open vowel; r7: the
+      // lips drawn back still read as a grimace on 'ee' and 's', so those two units at 0.35)
       const kv = 1 - Math.exp(-dt * 30), loud = 0.6 + 0.4 * lip.open;
       easeMorph('open', visW[0] * loud * 0.52, kv);
-      for (let u = 1; u < VIS_UNITS.length; u++) easeMorph(VIS_UNITS[u], Math.min(1, visW[u] * (VIS_UNITS[u] === 'v_upret' || VIS_UNITS[u] === 'v_retr' ? 0.6 : 1.0)), kv);
+      for (let u = 1; u < VIS_UNITS.length; u++) easeMorph(VIS_UNITS[u], Math.min(1, visW[u] * (VIS_UNITS[u] === 'v_upret' || VIS_UNITS[u] === 'v_retr' ? 0.35 : 1.0)), kv);
       easeMorph('round', 0, kv); easeMorph('wide', 0, kv);
     } else {
     const open = speak > 0 ? lip.open * (id === 'megazron' && !custom ? 0.3 : 0.45) : ex.open ?? 0; // the narrator speaks with a small mouth (in close-up the full opening gaped)

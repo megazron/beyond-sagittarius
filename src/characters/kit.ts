@@ -288,8 +288,12 @@ export function addKit(k: KitInput): Kit {
     // and the long hair went through it)
     // (a hand's width up and wider than the head it read as a hoop hung over him: now two fingers over the crown, no
     // wider than the skull, a hair-thin line that the bloom does not swell)
-    halo = new THREE.Group(); halo.position.set(0, top + 0.022, M.skull.c[2] - 0.012); halo.rotation.set(Math.PI / 2 - 0.1, 0, 0); head.add(halo);
-    { const arc = add(new THREE.TorusGeometry(0.092, 0.0016, 8, 96, Math.PI * 1.8), new THREE.MeshStandardMaterial({ color: 0x221708, emissive: 0xffc36a, emissiveIntensity: 0.7 }), halo, 0, 0, 0, false); arc.rotation.z = Math.PI * 0.72; }
+    // (level over the crown it still read as a hoop hung over a game character, GPU takes r5, r6: now what the bible
+    // asks for, a broken arc standing behind his head, never a full circle. Only its top third: the hair is worn back
+    // into one tail that hangs from the nape, well under the arc, and the arc stands a finger behind the hair)
+    const hr = M.skull.r[M.skull.r.length - 1][0];
+    halo = new THREE.Group(); halo.position.set(0, M.skull.c[1] + 0.01, M.skull.c[2] - hr - 0.045); head.add(halo);
+    { const arc = add(new THREE.TorusGeometry(hr + 0.05, 0.0011, 6, 96, Math.PI * 0.62), new THREE.MeshStandardMaterial({ color: 0x221708, emissive: 0xffc36a, emissiveIntensity: 0.55 }), halo, 0, 0, 0, false); arc.rotation.z = Math.PI * 0.19; }
     const gold = metal(0xd4a94e, 0.3);
     for (const s of ['L', 'R']) { const hd = piv(`hand${s}`), fw = piv(`forearmtw${s}`); const r = add(new THREE.TorusGeometry(0.043, 0.004, 8, 28), gold, B.get(`forearmtw${s}`)!); r.position.copy(local(`forearmtw${s}`, hd.clone().lerp(fw, 0.28))); r.quaternion.setFromUnitVectors(V(0, 0, 1), hd.sub(fw).normalize()); }
   }
@@ -351,7 +355,7 @@ export function addKit(k: KitInput): Kit {
     // what moves or hides on its own: never merged into the body (rigid.ts)
     live: [splint, ...(phone ? [phone] : []), ...(halo ? [halo] : []), ...scarfEnds, ...(tailBones.length ? [tailBones[0].parent!] : [])],
     update(t, amount) {
-      if (halo) halo.rotation.z = t * 0.4;
+      if (halo) halo.rotation.z = Math.sin(t * 0.23) * 0.06; // (it breathes a little; it no longer spins: an upright arc turning round would swing under his chin)
       phoneStep?.(t);
       tailBones.forEach((b, i) => {
         const q = i / 7;

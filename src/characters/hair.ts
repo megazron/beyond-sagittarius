@@ -98,7 +98,7 @@ function grow(l: Lock, steps: number, S: Skull): { path: THREE.Vector3[]; side: 
 }
 
 /** Smooth under-shell: the mass the locks lie on, cut along the hairline. */
-function capShell(lowDeg: number, frontDeg: number, S: Skull, volume = 0, fray = false, band = 0.06) {
+function capShell(lowDeg: number, frontDeg: number, S: Skull, volume = 0, fray = false, band = 0.06, uRep = 7, base = 1.012) {
   // a narrow band (straight cards) needs a fine shell: the fade runs from point to point, and on the coarse one it
   // followed the triangles, a hairline in two-centimetre steps
   const sp = band < 0.06 ? new THREE.SphereGeometry(1, 96, 64) : new THREE.SphereGeometry(1, 30, 22);
@@ -117,7 +117,7 @@ function capShell(lowDeg: number, frontDeg: number, S: Skull, volume = 0, fray =
     for (let i = 0; i < p.count; i++) {
       q.fromBufferAttribute(p, i); const n = q.clone().normalize(), az = Math.atan2(n.x, n.z), l0 = line(az);
       const k = Math.max(0, Math.min(1, (n.y - l0) / Math.max(0.05, 1 - l0))), swell = k * k * (3 - 2 * k) * (0.75 + 0.25 * Math.max(0, Math.cos(az)));
-      q.multiplyScalar(S.radius(q) * (1.012 + volume * swell)); p.setXYZ(i, q.x, q.y, q.z);
+      q.multiplyScalar(S.radius(q) * (base + volume * swell)); p.setXYZ(i, q.x, q.y, q.z);
     } }
   sp.computeVertexNormals();
   sp.translate(S.c.x, S.c.y, S.c.z);
@@ -133,7 +133,7 @@ function capShell(lowDeg: number, frontDeg: number, S: Skull, volume = 0, fray =
     const uvA = sp.attributes.uv as THREE.BufferAttribute, line = (az: number) => Math.sin(((frontDeg + (lowDeg - frontDeg) * Math.pow((1 - Math.cos(az)) / 2, 0.7)) * Math.PI) / 180);
     for (let i = 0; i < uvA.count; i++) {
       v.set(p.getX(i) - S.c.x, p.getY(i) - S.c.y, p.getZ(i) - S.c.z).normalize(); const az = Math.atan2(v.x, v.z), d = v.y - line(az);
-      const f = Math.max(0, Math.min(1, (d + band) / (band * 2.67))); uvA.setXY(i, az / (Math.PI * 2) * 7, 0.01 + 0.97 * (1 - f * f * (3 - 2 * f)));
+      const f = Math.max(0, Math.min(1, (d + band) / (band * 2.67))); uvA.setXY(i, az / (Math.PI * 2) * uRep, 0.01 + 0.97 * (1 - f * f * (3 - 2 * f)));
     } }
   sp.setAttribute('aT', new THREE.BufferAttribute(at, 1));
   sp.setAttribute('aTan', new THREE.BufferAttribute(tan, 3));
@@ -288,7 +288,11 @@ function hairGeometry(locks: Lock[], rnd: () => number, detail: number, capLow: 
     return withLen(swayByStrand(g, 0.12, l.sway ?? 1, rnd()), l.len, path[0], path[path.length - 1]);
   });
   // straight cards (the narrator): a narrow frayed band, so the hairline is a clean line of fine ends and not long streaks on the forehead
-  parts.push(withLen(capShell(capLow, capFront, skull, volume, !!cards, cards === true ? 0.032 : 0.06), 0));
+  // (GPU take r6: in his close-up the ends still read as a zigzag of wide teeth along the forehead, the strand texture
+  // seven times round the head: now eighteen times, finer strands, and a band half as deep, so the line is fine and close)
+  // (and it stands a little further off the skull: over and behind the ears his skin came through it in bald patches,
+  // headless stills st5 and d1, from the side)
+  parts.push(withLen(capShell(capLow, capFront, skull, volume, !!cards, cards === true ? 0.016 : 0.06, cards === true ? 18 : 7, cards === true ? 1.04 : 1.012), 0));
   return mergeGeometries(parts)!;
 }
 
@@ -411,7 +415,7 @@ export type HairStyleId = 'scientist' | 'strong' | 'medic' | 'explorer' | 'build
 
 /** Per-style shell cut: back and front hairline elevation in degrees. */
 /** Per-style body: how far the hair mass swells off the scalp at the top (fraction of skull radius). */
-export const HAIR_VOLUME: Partial<Record<HairStyleId, number>> = { suit: 0.06, megazron: 0.035 }; // the cards carry the volume; the cap stays under them
+export const HAIR_VOLUME: Partial<Record<HairStyleId, number>> = { suit: 0.06, megazron: 0.06 }; // the cards carry the volume; the cap stays under them
 /** Styles drawn as textured hair cards instead of swept strands. */
 export const HAIR_CARDS: Partial<Record<HairStyleId, true | 'curly'>> = { suit: 'curly', megazron: true };
 /** Per-style surface: thick dry hair is matte. */

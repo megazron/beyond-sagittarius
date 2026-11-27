@@ -200,6 +200,7 @@ def main():
             tr = lay(shapes, spans_w)
             out[f.stem] = ','.join(f'{round(t * 100)}:{s}' for t, s in tr)
             print(lang, f.stem, how, ' '.join(shapes), flush=True)
+            print('  words', ' '.join(f'{w}@{sp[0]:.2f}-{sp[1]:.2f}' for w, sp in zip(tw, spans_w)), flush=True)  # (for timing a film's beats on the words)
         outp.write_text(json.dumps(out, separators=(',', ':'), ensure_ascii=False))
         print(lang, len(out), 'tracks', outp.stat().st_size, 'bytes')
 

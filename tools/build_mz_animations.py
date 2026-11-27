@@ -102,6 +102,19 @@ def main():
     idx = np.concatenate([np.arange(n + 1), np.arange(n - 1, 0, -1)])
     Ti = {k: v[idx] for k, v in Ti.items()}; pi = pi[idx]
     Ti, pi = B.smooth_clip(Ti, pi, 3.0, 0.85, True)
+    # the seated actor nodded his head 30 degrees down and back up twice in the loop (head pitch +20 -> +52 -> +12 over
+    # 1.5 s): with the look to the lens catching it late, his head sank 22 degrees on the reel's key line and came up 16
+    # past level (GPU takes r5, r6). The neck and head keep only a slow third of their own drift about their mean; what
+    # he does with his head on the words is authored in each film, over the clip
+    tt = np.arange(len(pi))
+    for k in ('neck', 'head'):
+        if k not in Ti: continue
+        q = Ti[k].copy(); m = q.mean(0); m /= np.linalg.norm(m); q[(q * m).sum(1) < 0] *= -1
+        sig = 0.8 * FPS
+        d = np.minimum(np.abs(tt[:, None] - tt[None, :]), len(tt) - np.abs(tt[:, None] - tt[None, :]))  # (a loop: wrap round)
+        g = np.exp(-0.5 * (d / sig) ** 2); g /= g.sum(1, keepdims=True)
+        q = m + 0.35 * (g @ q - m)
+        Ti[k] = q / np.linalg.norm(q, axis=1, keepdims=True)
     made['mz_sit_idle'] = (Ti, pi)
     made['mz_stand_up'] = cut(*UP)
     # the seated talk: the standing talk loop's arms, hands, neck and head on the seated body (every bone's rest turn is

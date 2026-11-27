@@ -313,9 +313,11 @@ export function eyeMaterial(iris: number, glow: number, alive: boolean | 'film' 
           // a dark rim and a lighter ring round a pupil large enough to read from across the room (drawn here by
           // distance from the iris's centre in the map: the map's own pupil is a third of this), a white that is grey
           float rI = min(distance(vMapUv, vec2(0.705, 0.297)), distance(vMapUv, vec2(0.291, 0.703))) / 0.118;
-          float pupil = 1.0 - smoothstep(0.42, 0.48, rI), inIris = 1.0 - smoothstep(0.95, 1.03, rI);
-          vec3 amber = uIris * vec3(0.92, 0.6, 0.34);
-          vec3 fIris = amber * (0.12 + 0.34 * smoothstep(0.46, 0.76, rI)) * (0.7 + 0.3 * ey.r) + amber * 0.16 * (1.0 - smoothstep(0.46, 0.66, rI));
+          // (on the GPU, under the Vault's bloom, the lighter ring still read as two amber lamps at medium distance, takes
+          // r5 and r6: the ring darker, the pupil a little larger, the iris a warm brown-amber that only the lamps light)
+          float pupil = 1.0 - smoothstep(0.45, 0.51, rI), inIris = 1.0 - smoothstep(0.95, 1.03, rI);
+          vec3 amber = uIris * vec3(0.8, 0.48, 0.25);
+          vec3 fIris = amber * (0.07 + 0.2 * smoothstep(0.5, 0.78, rI)) * (0.7 + 0.3 * ey.r) + amber * 0.09 * (1.0 - smoothstep(0.5, 0.68, rI));
           fIris *= 1.0 - 0.78 * smoothstep(0.8, 1.0, rI);
           vec3 fScl = vec3(0.3, 0.29, 0.285) * pow(ey.r, 1.3);
           diffuseColor.rgb = diffuse * mix(mix(fScl, fIris, inIris), vec3(0.003), pupil); }` : ''}

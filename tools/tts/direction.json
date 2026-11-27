@@ -1161,6 +1161,69 @@
 "tags": [],
 "fx": "room"
 },
+"mz.v3.1": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 0.95,
+"pre": 0.0,
+"post": 0.25,
+"tags": [],
+"fx": "room"
+},
+"mz.v3.2": {
+"emotion": "calm",
+"intensity": 0.35,
+"pace": 0.9,
+"pre": 0.0,
+"post": 0.3,
+"tags": [],
+"fx": "room"
+},
+"mz.v3.3": {
+"emotion": "ominous",
+"intensity": 0.4,
+"pace": 0.88,
+"pre": 0.0,
+"post": 0.35,
+"tags": [],
+"fx": "room"
+},
+"mz.v3.4": {
+"emotion": "calm",
+"intensity": 0.4,
+"pace": 0.86,
+"pre": 0.0,
+"post": 0.4,
+"tags": [],
+"fx": "room"
+},
+"mz.v3.5": {
+"emotion": "ominous",
+"intensity": 0.5,
+"pace": 0.84,
+"pre": 0.0,
+"post": 0.4,
+"tags": [],
+"fx": "room"
+},
+"mz.v3.6": {
+"emotion": "dry",
+"intensity": 0.35,
+"pace": 0.9,
+"pre": 0.0,
+"post": 0.35,
+"tags": [],
+"fx": "room"
+},
+"mz.v3.7": {
+"emotion": "dry",
+"intensity": 0.45,
+"pace": 0.88,
+"pre": 0.0,
+"post": 0.5,
+"tags": [],
+"fx": "room"
+},
 "mz.l3.1": {
 "emotion": "dry",
 "intensity": 0.55,
