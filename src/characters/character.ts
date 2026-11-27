@@ -696,7 +696,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const chestBone = bs.get('chest')!;
       const n = chestBone.worldToLocal(bs.get('neck')!.getWorldPosition(new THREE.Vector3()));
       const stock = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), new THREE.MeshStandardMaterial({ color: 0x0c0d1c, roughness: 0.8 }));
-      stock.scale.set(0.95, 1.7, 0.78); stock.position.set(n.x, n.y - 0.17, n.z + 0.02); chestBone.add(stock);
+      stock.scale.set(1.0, 1.7, 0.9); stock.position.set(n.x, n.y - 0.17, n.z + 0.03); chestBone.add(stock); // (forward a little: his chest came through it under the chin as a ragged edge)
     }
     pitK = M.pit ?? null; corrRegions = [];
     // the light body for distance (game LOD): the full one near the camera, the .lod1 build further off. Both ride on
@@ -2086,7 +2086,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     }
     const gr = gazeSnap ? 1 : 1 - Math.exp(-dt * gazeRate); gazeSnap = false;
     gazeY += (wantY - gazeY) * gr; gazeX += (wantX - gazeX) * gr;
-    const ly = clamp(lookAt.y + gazeY + clamp(yawRate * 0.05, -0.15, 0.15), -1.1, 1.1), lx = clamp(lookAt.x + gazeX, -0.5, 0.5);
+    // (in a performance the head may come up further: the seated capture's actor hung his head for seconds at a time, and
+    // with the lean on top the look to the lens stopped at the limit, his eyes rolled up under his brows)
+    const ly = clamp(lookAt.y + gazeY + clamp(yawRate * 0.05, -0.15, 0.15), -1.1, 1.1), lx = clamp(lookAt.x + gazeX, perf ? -1.0 : -0.5, 0.5);
     if (ly || lx) {
       neckB.quaternion.multiply(Q.setFromEuler(E.set(lx * 0.4, ly * 0.4, 0)));
       headB.quaternion.multiply(Q.setFromEuler(E.set(lx * 0.6, ly * 0.6, 0)));
@@ -2162,9 +2164,10 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const vt = hasUnits && speak > 0 ? voice.viseme() : null;
     if (vt) {
       mouthAt(parseVis(vt.track), vt.at, visW);
-      const kv = 1 - Math.exp(-dt * 34), loud = 0.6 + 0.4 * lip.open;
-      easeMorph('open', visW[0] * loud * 0.9, kv);
-      for (let u = 1; u < VIS_UNITS.length; u++) easeMorph(VIS_UNITS[u], Math.min(1, visW[u] * 1.25), kv);
+      // (sizes from GPU take r5: at 0.9 of the jaw and 1.25 of the lips he bared every tooth on each open vowel)
+      const kv = 1 - Math.exp(-dt * 30), loud = 0.6 + 0.4 * lip.open;
+      easeMorph('open', visW[0] * loud * 0.52, kv);
+      for (let u = 1; u < VIS_UNITS.length; u++) easeMorph(VIS_UNITS[u], Math.min(1, visW[u] * (VIS_UNITS[u] === 'v_upret' || VIS_UNITS[u] === 'v_retr' ? 0.6 : 1.0)), kv);
       easeMorph('round', 0, kv); easeMorph('wide', 0, kv);
     } else {
     const open = speak > 0 ? lip.open * (id === 'megazron' && !custom ? 0.3 : 0.45) : ex.open ?? 0; // the narrator speaks with a small mouth (in close-up the full opening gaped)
@@ -2176,7 +2179,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     bs.get('jaw')!.rotation.x = (morph.open ?? 0) * (hasUnits ? 0.1 : 0.2);
     // his teeth are in the dark behind closed lips (lit, they drew a white line along the mouth at rest) and come into
     // the light as it opens
-    if (teethMat) { const o = Math.min(1, ((morph.open ?? 0) + 0.4 * (morph.v_part ?? 0) + 0.3 * (morph.v_upret ?? 0)) * 3.2); teethMat.color.setRGB(0.05 + 0.45 * o, 0.045 + 0.415 * o, 0.045 + 0.405 * o); }
+    if (teethMat) { const o = Math.min(1, ((morph.open ?? 0) + 0.4 * (morph.v_part ?? 0) + 0.3 * (morph.v_upret ?? 0)) * 3.2); teethMat.color.setRGB(0.04 + 0.3 * o, 0.04 + 0.3 * o, 0.042 + 0.31 * o); }
     if (ALIVE) {
       // never a dead-neutral face: a soft resting smile that drifts, brows and cheeks that move with speech,
       // a mouth that shuts fully between syllables; the stare shapes (wide 'fear' eyes at rest) are gone

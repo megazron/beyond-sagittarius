@@ -165,7 +165,7 @@ CHARS = {  # noqa
         # coat (3,700 quads at the source: flat facets on a two metre body) is subdivided once instead of decimated
         face_units=True, head_full=True,
         clothes=[('toigo_wool_pants', (0x0a, 0x0b, 0x16), {}),
-                 ('punkduck_winter_coat', (0x14, 0x1a, 0x3c), {'skirt': True, 'follow_top': True, 'subdiv': True, 'shins': True}),
+                 ('punkduck_winter_coat', (0x14, 0x1a, 0x3c), {'skirt': True, 'follow_top': True, 'subdiv': True, 'loose': True, 'no_facing': True}),
                  ('mindfront_shoes_biker_boots_male', (0x0c, 0x0c, 0x12), {})],
     ),
 }

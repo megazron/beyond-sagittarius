@@ -317,7 +317,7 @@ export function eyeMaterial(iris: number, glow: number, alive: boolean | 'film' 
           vec3 amber = uIris * vec3(0.92, 0.6, 0.34);
           vec3 fIris = amber * (0.12 + 0.34 * smoothstep(0.46, 0.76, rI)) * (0.7 + 0.3 * ey.r) + amber * 0.16 * (1.0 - smoothstep(0.46, 0.66, rI));
           fIris *= 1.0 - 0.78 * smoothstep(0.8, 1.0, rI);
-          vec3 fScl = vec3(0.6, 0.585, 0.575) * pow(ey.r, 1.3);
+          vec3 fScl = vec3(0.3, 0.29, 0.285) * pow(ey.r, 1.3);
           diffuseColor.rgb = diffuse * mix(mix(fScl, fIris, inIris), vec3(0.003), pupil); }` : ''}
         float lidSh = smoothstep(0.05, 0.75, normalize(vNormal).y);
         diffuseColor.rgb *= 1.0 - 0.55 * lidSh;` : ''}`)
@@ -326,9 +326,9 @@ export function eyeMaterial(iris: number, glow: number, alive: boolean | 'film' 
         ${alive ? /* glsl */ `
         { // the cornea's highlight: a small bright window and a soft second one, from a key that sits up and to the side
           vec3 Nn = normalize(vNormal), Vv = normalize(vViewPosition);
-          float h1 = pow(max(dot(reflect(-normalize(vec3(-0.35, 0.55, 0.75)), Nn), Vv), 0.0), ${film ? '240.0' : '420.0'});
+          float h1 = pow(max(dot(reflect(-normalize(vec3(-0.35, 0.55, 0.75)), Nn), Vv), 0.0), ${film ? '520.0' : '420.0'});
           float h2 = pow(max(dot(reflect(-normalize(vec3(0.45, -0.15, 0.85)), Nn), Vv), 0.0), 160.0);
-          totalEmissiveRadiance += vec3(1.0, 0.98, 0.95) * ${film ? '(h1 * 1.1)' : '(h1 * 1.6 + h2 * 0.12)'} * (1.0 - 0.6 * lidSh);
+          totalEmissiveRadiance += vec3(1.0, 0.98, 0.95) * ${film ? '(h1 * 0.9)' : '(h1 * 1.6 + h2 * 0.12)'} * (1.0 - 0.6 * lidSh);
           // the wet line along the lower lid
           totalEmissiveRadiance += vec3(0.9) * smoothstep(-0.55, -0.8, Nn.y) * 0.05; }` : ''}`);
   };

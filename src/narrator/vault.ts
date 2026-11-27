@@ -412,10 +412,13 @@ export class Vault {
         // his eyes under the Vault's lamps and the bloom were two glowing slits with no iris or pupil to be seen (GPU
         // reel r1): the ball shaded down, less of a mirror, so the iris and the pupil are what you read
         if ((mt.userData?.film as { kind?: string } | undefined)?.kind === 'eye' && !mt.userData.dimmed) {
-          mt.userData.dimmed = true; const em = mt as THREE.MeshStandardMaterial; em.color.setScalar(0.8); em.roughness = 0.3; em.envMapIntensity = 0.2;
+          mt.userData.dimmed = true; const em = mt as THREE.MeshStandardMaterial; em.color.setScalar(0.62); em.roughness = 0.45; em.envMapIntensity = 0.08;
           const eu = mt.userData.u as { uEyeGlow?: { value: number } } | undefined; if (eu?.uEyeGlow) eu.uEyeGlow.value = 0;
         }
         // the coat's weave normal map, laid over so few triangles, lit each triangle its own way (crumpled foil in close-up)
+        // the clear shell over each eye mirrored the window and the lamps as a white veil over the iris and the pupil (GPU take r5)
+        // (the material, not the mesh: the body's own level-of-detail switch shows its meshes again every frame)
+        if (m.name === 'cornea') mt.visible = false;
         if ((mt.userData?.film as { kind?: string } | undefined)?.kind === 'cloth' && !mt.userData.dimmed) { mt.userData.dimmed = true; (mt as THREE.MeshStandardMaterial).normalScale?.set(0.45, 0.45); }
         if ((mt.userData?.film as { kind?: string } | undefined)?.kind === 'hair' && !mt.userData.dimmed) {
           mt.userData.dimmed = true; (mt as THREE.MeshStandardMaterial).envMapIntensity = 0.12;

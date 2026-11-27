@@ -227,7 +227,7 @@ def asset_part(c, name_or_path, Vdm, scale, off, morphs, name, Wfix=None, inflat
     return p
 
 
-def skirt_weights(c, p, pivots, shins=False):
+def skirt_weights(c, p, pivots, shins=False, loose=False):
     """Long garments must not split with the legs: below the crotch, hang from both thighs and the hips."""
     ix = c.rig.index
     crotch = pivots[ix['upperlegL']][1] - 0.04
@@ -243,6 +243,11 @@ def skirt_weights(c, p, pivots, shins=False):
     fz = np.clip((p.P[:, 2] - pivots[ix['hips']][2]) / 0.08, 0, 1)
     fz = fz * fz * (3 - 2 * fz)
     leg = 0.62 + 0.23 * fz
+    if loose:
+        # an open coat on a man who sits down in it: its skirt goes less than half the way with a thigh, so the knees
+        # come out between the fronts and the cloth hangs. Following a thigh by 62 to 85%, it stood out along each leg:
+        # a tent over the stool, and with a knee turned out a balloon to that side (GPU take r5)
+        leg = 0.34 + 0.1 * fz
     # behind, the middle of the back panel goes with the hips: half on each thigh, standing wide the two thighs turned it
     # opposite ways, the blend pulled it in and it showed as a grey mass between Zenvik's legs (GPU takes e13v4, e13v5)
     mid = 1 - np.abs(2 * a - 1)
@@ -852,7 +857,7 @@ def build(c, cid, force=False):
         p.extra['_ACCENT'] = np.full(len(p.P), 1.0 if opt.get('accent') else 0.0, np.float32)
         deleted.update(p.clo.delete)
         if opt.get('skirt'):
-            skirt_weights(c, p, piv, bool(opt.get('shins')))
+            skirt_weights(c, p, piv, bool(opt.get('shins')), bool(opt.get('loose')))
             if opt.get('follow_top'): opt['follow_above'] = float(piv[c.rig.index['hips']][1] + 0.18)  # the waist up: the thighs keep their own weights under the skirt
         # a sleeve follows the forearm, never the hand: a cuff weighted to the hand leaps when the wrist turns
         for sd in 'LR':
@@ -1233,7 +1238,9 @@ def build(c, cid, force=False):
             # a split seam is a boundary loop to facing(): welded first, so only real openings get a facing (Nuvexa's front
             # seam got a band pulled in to the skin: the dark notch at her collar)
             if g.opt.get('knit') and not getattr(g, 'welded', False): weld_seams(g)
-            n_ = facing(g, Vb[surf])
+            # (the narrator's open coat gets none: along its front edges, lapels and collar each edge's band ran to its own
+            # nearest skin, up to 6 cm in, and showed in every close shot as dark jagged shards on his chest and at his neck)
+            n_ = 0 if g.opt.get('no_facing') else facing(g, Vb[surf])
             if os.environ.get('CAP_DEBUG') and n_: print(f'    {g.asset}: {n_} edges of facing inside its openings', flush=True)
     Adj0 = pit.laplacian(Tall, len(V))[1]
     # decimation never leaves a triangle across two bones that move apart: a long one from one thigh to the other across
