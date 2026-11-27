@@ -2274,6 +2274,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     setName,
     /** Standing height in metres. */
     get height() { return heightM; },
+    /** The hair's and cloth's shared uniforms (a scene can add its own capsules for the strands after animate()). */
+    get sway() { return sway; },
     /** Hurt and moving like it. */
     setLimp(on: boolean) { limpOn = on; },
     setSplint(on: boolean) { pendingSplint = on; if (kit) kit.splint.visible = on; },

@@ -20,6 +20,8 @@ export function createSpaceDome() {
     // Sagittarius A*'s gas is thin, hot and faint (well under 1% of what it captures falls in): no bright golden
     // disk, a dim haze with a hot spot going round at about a third of light speed. 1 is the old bright disk.
     uDisk: { value: 0.14 },
+    // a thin, sharp accretion disk (the film look: a hard edge, lensed over and under the shadow); 0 is off
+    uThin: { value: 0 },
   };
   const mat = new THREE.ShaderMaterial({
     uniforms,
@@ -35,7 +37,7 @@ export function createSpaceDome() {
     `,
     fragmentShader: /* glsl */ `
       precision highp float;
-      uniform float uTime, uNebula, uWarp, uOther, uBH, uStar, uDisk;
+      uniform float uTime, uNebula, uWarp, uOther, uBH, uStar, uDisk, uThin;
       uniform vec3 uBHPos, uWarpDir;
       uniform mat3 uBHRot;
       varying vec3 vDir;
@@ -135,6 +137,24 @@ export function createSpaceDome() {
               // as tall as it is wide, brightest just outside the shadow, with a flare going round. Emission is
               // summed through the volume, so there is no crisp golden line across the black.
               float rq = length(p.xz);
+              // the thin disk: where the ray crosses its plane, from the innermost stable orbit (3 r_s) outwards, hot and
+              // bright inside, Doppler-bright on the side coming towards us, opaque enough to hide the shadow behind it
+              if (uThin > 0.0 && prev.y * p.y < 0.0) {
+                vec3 q = mix(prev, p, prev.y / (prev.y - p.y));
+                float rd2 = length(q.xz);
+                if (rd2 > 3.0 && rd2 < 16.0) {
+                  float edge = smoothstep(3.0, 3.25, rd2) * (1.0 - smoothstep(10.0, 16.0, rd2));
+                  float tmp = pow(3.0 / rd2, 0.9);
+                  float bands = 0.82 + 0.18 * sin(rd2 * 9.0 + atan(q.z, q.x) * 3.0 - uTime * 0.6 / rd2) * sin(rd2 * 23.0);
+                  vec3 tng = normalize(vec3(-q.z, 0.0, q.x));
+                  float beta = clamp(sqrt(0.5 / max(rd2 - 1.0, 0.5)), 0.0, 0.7);
+                  float g = 1.0 / ((1.0 / sqrt(1.0 - beta * beta)) * (1.0 + beta * dot(tng, normalize(v))));
+                  float I = uThin * edge * tmp * bands * pow(g, 3.0);
+                  vec3 dc = mix(vec3(1.0, 0.42, 0.12), vec3(1.0, 0.86, 0.62), clamp(tmp * g - 0.25, 0.0, 1.0));
+                  acc += (1.0 - alpha) * dc * I * 2.2;
+                  alpha += (1.0 - alpha) * clamp(edge * 0.92, 0.0, 0.95);
+                }
+              }
               if (r > 1.6 && r < 13.0) {
                 float hgt = 0.55 * rq + 0.4;
                 float vol = exp(-(p.y * p.y) / (hgt * hgt)) * smoothstep(1.6, 2.6, r) * exp(-(r - 2.6) / 3.0);
