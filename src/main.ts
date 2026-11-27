@@ -468,6 +468,9 @@ function playOpening(withCity: boolean, replay: boolean) {
     ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden');
     renderer.setScene(cine.scene, cine.camera, false);
+    // the title sequence's score is fetched and decoded while the opening plays: asked for only at the handoff, the
+    // picture stood still on the pull's last frame with no sound until it was ready
+    audio.preloadScore('theme', 'theme_sfx');
     cine.start(() => playFilm(replay));
   };
   playVault('intro', () => (withCity ? playPrologue(() => titleCard(films, 'takeoff.card')) : films()));

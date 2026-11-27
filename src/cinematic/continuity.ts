@@ -21,7 +21,9 @@ import type { Character } from '../characters/character';
 export type Posture = 'stand' | 'sit' | 'low' | 'air';
 export interface CrewMark { id: string; x: number; y: number; z: number; yaw: number; hip: number; posture: Posture; visible: boolean;
   /** Where the head is across the frame (-1 left edge .. 1 right edge), and how fast the body moves across it (m/s, + to the right). */
-  sx: number; vs: number }
+  sx: number; vs: number;
+  /** How fast the body comes towards the lens (m/s, + nearer): a move mostly in depth has no screen direction. */
+  vd: number }
 /**
  * The ship's state and the sound bed on a frame. Inside the event (the pull to the white) each of these only goes one
  * way: gravity 1 -> 0, power (how much of the room's light is left) down, damage up (0 whole, 1 strained, 2 a seam
@@ -44,7 +46,7 @@ export function posture(c: Character, floor: number): { hip: number; posture: Po
   return { hip, y, posture: y > 0.15 ? 'air' : hip > 0.4 ? 'stand' : hip > 0.18 ? 'sit' : 'low' };
 }
 
-const C = new THREE.Vector3(), R = new THREE.Vector3();
+const C = new THREE.Vector3(), R = new THREE.Vector3(), Z = new THREE.Vector3();
 /** In the picture: shown, and the head or the chest inside the frame in front of the lens. */
 function inFrame(c: Character, cam?: THREE.Camera) {
   if (!isShown(c.root)) return false;
@@ -56,7 +58,7 @@ function mark(c: Character, floor: number, cam?: THREE.Camera): CrewMark {
   const p = posture(c, floor);
   c.root.getWorldPosition(P); c.root.getWorldQuaternion(Q); E.setFromQuaternion(Q, 'YXZ');
   let sx = 0; if (cam) { c.head.getWorldPosition(C).project(cam); sx = +C.x.toFixed(3); }
-  return { id: c.id, x: +P.x.toFixed(3), y: +p.y.toFixed(3), z: +P.z.toFixed(3), yaw: +E.y.toFixed(3), hip: +p.hip.toFixed(3), posture: p.posture, visible: inFrame(c, cam), sx, vs: 0 };
+  return { id: c.id, x: +P.x.toFixed(3), y: +p.y.toFixed(3), z: +P.z.toFixed(3), yaw: +E.y.toFixed(3), hip: +p.hip.toFixed(3), posture: p.posture, visible: inFrame(c, cam), sx, vs: 0, vd: 0 };
 }
 /** Visible all the way up the tree (a hidden group hides everyone in it). */
 function isShown(o: THREE.Object3D | null) {
@@ -76,14 +78,14 @@ export class ContinuityLog {
   /** The furthest each one-way state has got in this scene, and what was already reported. */
   private far: Partial<StageState> = {}; private farScene = ''; private told = new Set<string>();
   private bedAt: Partial<Record<keyof StageState, number>> = {}; private lastCut = -9; private quiet = 0; private lampOnly = 0;
-  private inPending: CutMark | null = null;
+  private inPending: CutMark | null = null; private gravOffAt = -1;
   /** Scenes whose state only goes one way (one continuous time). */
   oneWay = new Set(['pull']);
   /** Footprints on the deck floor (furniture, the console): a standing body whose feet are inside one is clipping. */
   footprints: { name: string; x: number; z: number; yaw: number; w: number; d: number; furniture: boolean }[] = [];
   private clipped = new Set<string>();
 
-  reset() { this.cuts = []; this.seen = []; this.pops = []; this.travel = []; this.prev = null; this.clipped.clear(); this.far = {}; this.farScene = ''; this.told.clear(); this.bedAt = {}; this.lastCut = -9; this.quiet = 0; this.lampOnly = 0; this.inPending = null; }
+  reset() { this.cuts = []; this.seen = []; this.pops = []; this.travel = []; this.prev = null; this.clipped.clear(); this.far = {}; this.farScene = ''; this.told.clear(); this.bedAt = {}; this.lastCut = -9; this.quiet = 0; this.lampOnly = 0; this.inPending = null; this.gravOffAt = -1; }
 
   /** Which footprint (if any) a body standing at x, z is inside, with its radius r. */
   inside(x: number, z: number, r = 0.12, furniture = true) {
@@ -104,9 +106,9 @@ export class ContinuityLog {
     const sameShot = !!p && p.shot === shot && p.scene === scene;
     // how fast each one crosses the frame: from the frame before in the same shot (a shot's first frame gets its second's)
     if (sameShot && cam && set === 'deck') {
-      const dt = Math.max(1e-3, now.clock - p!.clock); cam.updateMatrixWorld(); R.setFromMatrixColumn(cam.matrixWorld, 0);
-      for (const c of now.crew) { const o = p!.crew.find((x) => x.id === c.id); if (o) c.vs = +(((c.x - o.x) * R.x + (c.y - o.y) * R.y + (c.z - o.z) * R.z) / dt).toFixed(3); }
-      if (this.inPending && this.inPending.shot === shot) { for (const c of now.crew) { const m = this.inPending.crew.find((x) => x.id === c.id); if (m) m.vs = c.vs; } this.inPending = null; }
+      const dt = Math.max(1e-3, now.clock - p!.clock); cam.updateMatrixWorld(); R.setFromMatrixColumn(cam.matrixWorld, 0); Z.setFromMatrixColumn(cam.matrixWorld, 2);
+      for (const c of now.crew) { const o = p!.crew.find((x) => x.id === c.id); if (o) { c.vs = +(((c.x - o.x) * R.x + (c.y - o.y) * R.y + (c.z - o.z) * R.z) / dt).toFixed(3); c.vd = +(((c.x - o.x) * Z.x + (c.y - o.y) * Z.y + (c.z - o.z) * Z.z) / dt).toFixed(3); } }
+      if (this.inPending && this.inPending.shot === shot) { for (const c of now.crew) { const m = this.inPending.crew.find((x) => x.id === c.id); if (m) { m.vs = c.vs; m.vd = c.vd; } } this.inPending = null; }
     }
     if (state) this.states(now, state, sameShot);
     if (set === 'deck') for (const c of now.crew) {
@@ -124,7 +126,8 @@ export class ContinuityLog {
         const pa = placeOf(o.x), pb = placeOf(c.x);
         if (pa !== pb) this.travel.push({ shot, id: c.id, from: pa, to: pb, clock: now.clock });
         const d = Math.hypot(c.x - o.x, c.z - o.z), turn = Math.abs(Math.atan2(Math.sin(c.yaw - o.yaw), Math.cos(c.yaw - o.yaw)));
-        if (d > 0.3) this.pops.push({ kind: 'pop', shot, from: shot, id: c.id, clock: now.clock, detail: `moved ${d.toFixed(2)} m in one frame` });
+        // (bodies thrown about with gravity off may go fast: for them a pop is a move no body could make, 7 m/s)
+        if (d > (now.state && now.state.gravity < 0.5 ? Math.max(0.6, 7 * (now.clock - p.clock)) : 0.3)) this.pops.push({ kind: 'pop', shot, from: shot, id: c.id, clock: now.clock, detail: `moved ${d.toFixed(2)} m in one frame` });
         if (turn > 1.05) this.pops.push({ kind: 'pop', shot, from: shot, id: c.id, clock: now.clock, detail: `turned ${(turn * 57.3).toFixed(0)} degrees in one frame` });
         if (c.posture !== o.posture) {
           // a sit to stand acted over frames is fine; one that happens between two frames is a pop
@@ -144,9 +147,12 @@ export class ContinuityLog {
     if (this.oneWay.has(now.scene)) {
       const DOWN: (keyof StageState)[] = ['gravity', 'power', 'air'], UP: (keyof StageState)[] = ['damage', 'loose', 'door'];
       const WORD: Record<string, string> = { gravity: 'gravity is back on', power: 'the lights are back', air: 'the air is back', damage: 'the hull is mended', loose: 'the loose things are back at rest', door: 'the hatch is shut again' };
-      for (const k of DOWN) { const f = this.far[k] ?? s[k]; if (s[k] > f + 0.15) say('reset', k, `${WORD[k]} (${f.toFixed(2)} before, ${s[k].toFixed(2)} now)`); this.far[k] = Math.min(f, s[k]); }
+      const TOL: Partial<Record<keyof StageState, number>> = { power: 0.4 }; // the room's light flickers with the hole's glow: only lamps coming back count
+      for (const k of DOWN) { const f = this.far[k] ?? s[k]; if (s[k] > f + (TOL[k] ?? 0.15)) say('reset', k, `${WORD[k]} (${f.toFixed(2)} before, ${s[k].toFixed(2)} now)`); this.far[k] = Math.min(f, s[k]); }
       for (const k of UP) { const f = this.far[k] ?? s[k]; if (s[k] < f - 0.15) say('reset', k, `${WORD[k]} (${f.toFixed(2)} before, ${s[k].toFixed(2)} now)`); this.far[k] = Math.max(f, s[k]); }
-      if (s.gravity < 0.5 && now.set === 'deck') for (const c of now.crew) if (c.visible && c.posture !== 'air' && c.y < 0.05) say('gravity', c.id, `${c.posture === 'stand' ? 'standing' : 'resting'} on the floor with gravity off`, c.id);
+      // (they need a few seconds to leave the floor once it goes)
+      if (s.gravity > 0.5) this.gravOffAt = -1; else if (this.gravOffAt < 0) this.gravOffAt = clock;
+      if (s.gravity < 0.5 && clock - this.gravOffAt > 5 && now.set === 'deck') for (const c of now.crew) if (c.visible && c.posture !== 'air' && c.y < 0.05) say('gravity', c.id, `${c.posture === 'stand' ? 'standing' : 'resting'} on the floor with gravity off`, c.id);
       // the sound bed: a bed switched on a cut, dead air, lamps with no alarm
       for (const k of ['alarm', 'drone', 'score', 'muffle'] as const) {
         const was = this.prev?.state?.[k];
@@ -155,7 +161,7 @@ export class ContinuityLog {
       }
       const bed = s.alarm || s.drone || s.score || s.muffle;
       this.quiet = bed ? 0 : this.quiet + dt; if (this.quiet > 0.5) say('audio', 'quiet', 'no bed at all for half a second: dead air');
-      this.lampOnly = s.lamp > 0.5 && !s.alarm && s.air > 0.5 ? this.lampOnly + dt : 0; if (this.lampOnly > 2.5) say('audio', 'lamp', 'the alarm lamps flash for 2.5 s with no alarm heard');
+      this.lampOnly = s.lamp > 0.5 && !s.alarm && !s.muffle && s.air > 0.5 ? this.lampOnly + dt : 0; if (this.lampOnly > 2.5) say('audio', 'lamp', 'the alarm lamps flash for 2.5 s with no alarm heard');
     }
   }
 
@@ -178,9 +184,9 @@ export class ContinuityLog {
           const both = c.crew.filter((m) => m.visible && Math.abs(m.sx) < 1).map((m) => [o.crew.find((x) => x.id === m.id && x.visible && Math.abs(x.sx) < 1), m] as const).filter((x): x is readonly [CrewMark, CrewMark] => !!x[0]);
           let kept = 0, flipped = 0;
           for (let a = 0; a < both.length; a++) for (let b = a + 1; b < both.length; b++) { const d0 = both[a][0].sx - both[b][0].sx, d1 = both[a][1].sx - both[b][1].sx; if (Math.abs(d0) < 0.12 || Math.abs(d1) < 0.12) continue; if (d0 * d1 < 0) flipped++; else kept++; }
-          if (flipped > kept && flipped >= 2) out.push({ kind: 'axis', shot: c.shot, from: o.shot, clock: c.clock, detail: `${flipped} of ${flipped + kept} pairs swap sides of the frame over the cut: the camera crossed the line` });
+          if (flipped >= 4 && flipped >= 2 * kept) out.push({ kind: 'axis', shot: c.shot, from: o.shot, clock: c.clock, detail: `${flipped} of ${flipped + kept} pairs swap sides of the frame over the cut: the camera crossed the line` });
           let same = 0, turned = 0;
-          for (const [a, b] of both) { if (Math.abs(a.vs) < 0.3 || Math.abs(b.vs) < 0.3) continue; if (a.vs * b.vs < 0) turned++; else same++; }
+          for (const [a, b] of both) { if (Math.abs(a.vs) < 0.3 || Math.abs(b.vs) < 0.3) continue; if (Math.abs(a.vs) < 0.6 * Math.abs(a.vd) || Math.abs(b.vs) < 0.6 * Math.abs(b.vd)) continue; // towards or away from the lens: neutral if (a.vs * b.vs < 0) turned++; else same++; }
           if (turned > same) out.push({ kind: 'direction', shot: c.shot, from: o.shot, clock: c.clock, detail: `${turned} of ${turned + same} moving people change direction across the screen over the cut` });
         }
         if (lastDeck && lastDeck.furniture !== c.furniture) out.push({ kind: 'furniture', shot: c.shot, from: lastDeck.shot, clock: c.clock, detail: c.furniture ? 'the furniture appears' : 'the furniture vanishes' });

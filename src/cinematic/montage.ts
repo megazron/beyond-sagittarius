@@ -556,15 +556,16 @@ export class Montage {
     const w = this.getWorld();
     if (w) this.buildWorldFx(w);
     this.cues.forEach((c) => (c.done = false));
-    for (const id of ORDER) { const c = this.cast[id]; c.root.rotation.set(0, 0, 0); this.group.add(c.root); c.root.visible = false; }
     this.trails[5].color = this.playerGlow();
     this.time = 0; this.lag = 0; this.cur = null; this.inWorld = false; this.lastCue = -1;
     this.el.root.classList.remove('hidden');
     this.el.card.style.opacity = '0'; this.el.title.style.opacity = '0';
     // the rendered film if there is one; test runs on a held clock always use the real-time scene
     this.video = this.manual ? null : await FilmVideo.open('scatter', this.el.root, this.small);
-    this.playing = true;
     this.score = await audio.playScore('theme', 'theme_sfx');
+    // (only now: taken out of the pull's last picture before the film was ready, the six vanished from it for the frames between)
+    for (const id of ORDER) { const c = this.cast[id]; c.root.rotation.set(0, 0, 0); this.group.add(c.root); c.root.visible = false; }
+    this.playing = true;
   }
 
   /** Test hook: jump to a beat. Everything on screen is derived from it. */
@@ -1063,6 +1064,7 @@ export class Montage {
       pas.show(true); pas.door(1); pas.lamps(0, 0.35 * (1 - torn), false); pas.tear(torn, t);
       this.cine.damage = Math.max(this.cine.damage, 3); this.cine.airOut = true; this.cine.gravOff = true;
     };
+    const RAIL = V(PA.tearX - 1.6, PA.railY, PA.doorZ - (PA.half - PA.railOff)), DRX_AT = V(RAIL.x - 0.25, RAIL.y - 0.2, RAIL.z + 0.45), DRX_Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.15, -Math.PI / 2, 0.12, 'YXZ'));
     const lift = (id: CrewId, i: number, k: number, b: number) => {
       const t = b * BEAT, go = smoothstep(0.04 * i, 0.5 + 0.05 * i, k), g2 = go * go;
       const m = mark(id, i), side = i % 2 ? 1 : -1;
@@ -1077,13 +1079,15 @@ export class Montage {
     P(16, 20, 'interior', (k, b) => {
       const i = set.interior;
       this.crack.visible = false; this.shards.mesh.visible = false;
-      passage(lerp(0.62, 1, smoothstep(0, 0.8, k)), b * BEAT);
+      passage(lerp(0.8, 1, smoothstep(0, 0.8, k)), b * BEAT);
       ORDER.forEach((id, n) => lift(id, n, k, b));
+      // Draxum is not thrown clear with the rest: he is dragged aft along the rail to its last metre, where the next shot finds him
+      { const m = mark('strong', 0), g = smoothstep(0.05, 0.9, k), c = this.cast.strong; c.root.position.copy(m.p).lerp(DRX_AT, g); c.root.quaternion.copy(m.q).slerp(DRX_Q, g); }
       i.alarmLight.intensity = 0; i.mainLight.intensity = 0.6; i.consoleLight.intensity = 1.5;
       this.hole(-2, 6, -20, 0.1);
       // from the hatch's end of the passage, down it: the six torn off their holds and out through the open side
       this.lens(V(7.2 + k * 0.5, -0.35, PA.doorZ + 0.7).add(shakeAt(b, 0.012 + k * 0.03, tmp)), V(15, -0.8, PA.doorZ - 0.5), 58, 4.5, 0.003, -0.05 + k * 0.09);
-      this.setRig([{ p: V(PA.tearX + 1.5, 0.6, PA.doorZ - 1.6), color: 0xffc890, i: 26, d: 14 }, { p: V(9, -0.4, PA.doorZ + 0.6), color: 0x9ab8ff, i: 5, d: 8 }]);
+      this.setRig([{ p: V(PA.tearX + 1.5, 0.6, PA.doorZ - 1.6), color: 0xffc890, i: 20, d: 14 }, { p: V(9, -0.4, PA.doorZ + 0.6), color: 0xd8c8c0, i: 1.5, d: 8 }]);
       const fl = after(k, 0.45, 0.1) * 0.3;
       this.fx = { flash: [fl, fl, fl * 1.2], exposure: 0.8 };
       this.cine.logFilm('H0a', ORDER.map((id) => this.cast[id]));
@@ -1094,8 +1098,8 @@ export class Montage {
       i.alarmLight.intensity = 0; i.mainLight.intensity = 0.6;
       passage(1, b * BEAT);
       // Draxum: one hand still on the passage's rail, and the whole body streaming aft from it
-      const t = b * BEAT, rail = V(PA.tearX - 1.6, PA.railY, PA.doorZ - (PA.half - PA.railOff));
-      const m = mark('strong', 0), p0 = V(rail.x - 0.25, rail.y - 0.2, rail.z + 0.45), e = smoothstep(0, 0.25, k);
+      const t = b * BEAT, rail = RAIL;
+      const m = mark('strong', 0), p0 = DRX_AT, e = smoothstep(0, 0.25, k);
       // (the shot before threw him aft with the others: here he has caught the last of the rail)
       const p = p0.clone().add(V(nz(t * 2.6, 1) * 0.18, nz(t * 2.2, 2) * 0.12, nz(t * 1.9, 3) * 0.12)); void m; void e;
       const body = flail({ ...FALL.strong, armR: [-0.3, 0.1, 1], foreR: [-0.2, 0.1, 1], openHands: true, hair: [0, 0.4, 1] }, t, 4, 0.5);
@@ -1110,7 +1114,7 @@ export class Montage {
       });
       const h = c.head.getWorldPosition(tmp);
       this.lens(V(h.x + 1.5 - k * 0.3, h.y + 0.1, PA.doorZ + 0.8).add(shakeAt(b, 0.012, this.tmp2)), V(h.x, h.y - 0.1, h.z), 40, 2.0, 0.012, 0.06);
-      this.setRig([{ p: V(h.x + 1.6, h.y + 0.8, h.z - 1.4), color: 0xffc890, i: 12 }, { p: V(h.x - 1.2, h.y + 0.2, h.z + 1.0), color: 0x9ab8ff, i: 7 }]);
+      this.setRig([{ p: V(h.x + 1.6, h.y + 0.8, h.z - 1.4), color: 0xffc890, i: 10 }, { p: V(h.x - 1.2, h.y + 0.2, h.z + 1.0), color: 0xd8c8c0, i: 2 }]);
       this.hole(-2, 6, -18, 0.1);
       this.cine.logFilm('H0b', (['strong', 'social', 'builder'] as CrewId[]).map((id) => this.cast[id]));
     }, () => { set.show('interior'); });

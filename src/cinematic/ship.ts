@@ -430,7 +430,7 @@ export function createInterior(detail = 1): Interior {
     const w = new THREE.Mesh(new THREE.ShapeGeometry(sh, 48), bulk); w.position.x = ex; w.rotation.y = ex < 0 ? Math.PI / 2 : -Math.PI / 2; w.receiveShadow = true; group.add(w);
   }
   const hatchF = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.2, 0.8) });
-  const passage = createPassage(frameMat); group.add(passage.group);
+  const passage = createPassage(frameMat, tex); group.add(passage.group);
   // the navigation core: a short cylinder with a lit band, in its socket at the console's right end
   const core = new THREE.Group(); core.name = 'core';
   core.add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.16, 16), new THREE.MeshStandardMaterial({ color: 0x2a2f38, metalness: 0.8, roughness: 0.3 })));

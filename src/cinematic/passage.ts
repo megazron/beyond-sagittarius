@@ -49,9 +49,11 @@ function signTexture(text: string, color: string, w = 512, h = 128) {
   return t;
 }
 
-export function createPassage(frameMat: THREE.Material): Passage {
+export function createPassage(frameMat: THREE.Material, hullTex: THREE.Texture): Passage {
   const P = PASSAGE, group = new THREE.Group(); group.name = 'passage';
-  const panel = new THREE.MeshStandardMaterial({ color: 0x8a929d, metalness: 0.45, roughness: 0.55, side: THREE.DoubleSide });
+  const pt = hullTex.clone(); pt.repeat.set(1, 1); pt.needsUpdate = true;
+  const panel = new THREE.MeshStandardMaterial({ color: 0x6d7580, map: pt, metalness: 0.5, roughness: 0.5, side: THREE.DoubleSide });
+  const stripM = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 1.2, 0.9) });
   const floorM = new THREE.MeshStandardMaterial({ color: 0x2c3038, metalness: 0.6, roughness: 0.55, side: THREE.DoubleSide });
   const railM = new THREE.MeshStandardMaterial({ color: 0xd9b25a, metalness: 0.9, roughness: 0.3 });
   const redM = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 0.25, 0.15) });
@@ -86,6 +88,8 @@ export function createPassage(frameMat: THREE.Material): Passage {
       mk(new THREE.CylinderGeometry(0.018, 0.018, SEC - 0.06, 8).rotateZ(Math.PI / 2), railM, x, P.railY, P.doorZ + s * (P.half - P.railOff), new THREE.Vector3(0.1, 0.2, s), 4 + s);
       mk(new THREE.BoxGeometry(SEC - 0.02, 0.025, 0.05), redM, x, P.floor + 0.02, P.doorZ + s * (P.half - 0.05), new THREE.Vector3(0.1, -0.6, s), 6 + s);
     }
+    mk(new THREE.BoxGeometry(SEC - 0.5, 0.02, 0.1), stripM, x, P.ceil - 0.02, P.doorZ, new THREE.Vector3(0.1, 1, -0.5), 1);
+    for (const s of [-1, 1]) mk(new THREE.BoxGeometry(SEC - 0.02, 0.5, 0.03), dark, x, P.floor + 0.3, P.doorZ + s * (P.half - 0.02), new THREE.Vector3(0.15, 0.1, s), 2.5 + s);
     if (i % 2 === 0) mk(new THREE.PlaneGeometry(1.2, 0.3), signM, x, -0.45, P.doorZ - P.half + 0.005, new THREE.Vector3(0.15, 0.3, -1), 2);
   }
 
@@ -100,18 +104,20 @@ export function createPassage(frameMat: THREE.Material): Passage {
   const hole = new THREE.Path(); hole.moveTo(-P.half, P.floor - P.axisY); hole.lineTo(P.half, P.floor - P.axisY); hole.lineTo(P.half, P.ceil - P.axisY); hole.lineTo(-P.half, P.ceil - P.axisY); hole.closePath(); mouth.holes.push(hole);
   const mw = new THREE.Mesh(new THREE.ShapeGeometry(mouth, 36), panel); mw.position.set(P.x1 - BX, 0, 0); mw.rotation.y = Math.PI / 2; bay.add(mw);
   const deck = new THREE.Mesh(new THREE.BoxGeometry(L, 0.04, 2.4), floorM); deck.position.set(0, P.floor - 0.02 - P.axisY, 0); bay.add(deck);
+  // the six pod hatches, in a ring on the bay's far wall: seen all the way down the passage, from the lounge's hatch
   for (let i = 0; i < 6; i++) {
-    const a = Math.PI / 6 + (i / 6) * Math.PI * 2, r = P.bayR - 0.03, pod = new THREE.Group();
-    bay.add(pod); pod.position.set(P.podX + (i % 2 ? 0.9 : -0.9) - BX, Math.sin(a) * r, Math.cos(a) * r);
-    pod.rotation.x = Math.PI - a; // its face to the bay's axis
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.07, 10, 32), railM); pod.add(ring);
-    const iris = new THREE.Mesh(new THREE.CircleGeometry(0.6, 32), dark); iris.position.z = 0.005; pod.add(iris);
-    for (let b = 0; b < 6; b++) { const blade = new THREE.Mesh(new THREE.BoxGeometry(0.02, 1.16, 0.012), frameMat); blade.rotation.z = (b / 6) * Math.PI; blade.position.z = 0.012; pod.add(blade); }
-    const lamp = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.022, 6, 40), podLampM); lamp.position.z = 0.02; pod.add(lamp);
-    const num = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.2), new THREE.MeshBasicMaterial({ map: signTexture(`POD ${i + 1}`, '#7dffb0', 256, 96) })); num.position.set(0, 0.95, 0.03); pod.add(num);
+    const a = Math.PI / 6 + (i / 6) * Math.PI * 2, r = 1.12, pod = new THREE.Group();
+    bay.add(pod); pod.position.set(P.bayX1 - BX - 0.06, Math.sin(a) * r, Math.cos(a) * r); pod.rotation.y = -Math.PI / 2; // facing down the passage
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.05, 10, 32), railM); pod.add(ring);
+    const iris = new THREE.Mesh(new THREE.CircleGeometry(0.39, 32), dark); iris.position.z = 0.005; pod.add(iris);
+    for (let b = 0; b < 6; b++) { const blade = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.76, 0.01), frameMat); blade.rotation.z = (b / 6) * Math.PI; blade.position.z = 0.012; pod.add(blade); }
+    const lamp = new THREE.Mesh(new THREE.TorusGeometry(0.47, 0.022, 6, 40), podLampM); lamp.position.z = 0.02; pod.add(lamp);
+    const num = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.11), new THREE.MeshBasicMaterial({ map: signTexture(`POD ${i + 1}`, '#7dffb0', 256, 96) })); num.position.set(0, 0, 0.03); pod.add(num);
   }
-  const bayLight = new THREE.PointLight(0xbfffe0, 0, 14, 1.6); bayLight.position.set(P.podX - BX, 0, 0); bay.add(bayLight);
-  const light = new THREE.PointLight(0xff3a22, 0, 16, 1.5); light.position.set((P.doorX + P.tearX) / 2 + 1, -0.2, P.doorZ); body.add(light);
+  const bayLight = new THREE.PointLight(0xbfffe0, 0, 12, 1.6); bayLight.position.set(P.podX - BX, 0, 0); bay.add(bayLight);
+  const light = new THREE.PointLight(0xff3a22, 0, 9, 1.6); light.position.set(P.doorX + 5, -0.5, P.doorZ); body.add(light);
+  // the emergency strips' own light, steady while the passage has power: faces read by it
+  const fills = [P.doorX + 2.6, P.doorX + 6.6].map((x) => { const f = new THREE.PointLight(0xffe2c8, 0, 7, 1.5); f.position.set(x, P.ceil - 0.25, P.doorZ); body.add(f); return f; });
 
   // ---- the hatch's door: a slab in the opening that slides along the bulkhead towards the room's side ----
   const doorM = new THREE.MeshStandardMaterial({ color: 0x3a4049, metalness: 0.7, roughness: 0.35 });
@@ -119,14 +125,16 @@ export function createPassage(frameMat: THREE.Material): Passage {
   const doorSign = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.25), new THREE.MeshBasicMaterial({ map: signTexture('ESCAPE PODS', '#7dffb0', 512, 128) }));
   doorSign.position.set(P.doorX - 0.03, P.doorTop + 0.22, P.doorZ); doorSign.rotation.y = -Math.PI / 2; group.add(doorSign);
 
+  // the hole's light through the gap, once it opens
+  const glow = new THREE.PointLight(0xffc890, 0, 16, 1.4); glow.position.set(P.tearX + 1.2, 0.5, P.doorZ - 1.4); body.add(glow);
   const bay0 = bay.position.clone(), home = plates.map((p) => ({ p: p.m.position.clone(), q: p.m.quaternion.clone() }));
   const out: Passage = {
     group, light, bayLight, torn: 0, open: 0,
     show(on) { body.visible = on; },
     door(k) { k = Math.min(1, Math.max(0, k)); out.open = k; door.position.z = P.doorZ + k * (P.doorW + 0.04); },
-    lamps(red, bayK, ready) { redM.color.setRGB(2.6 * red + 0.05, 0.25 * red, 0.15 * red); podLampM.color.setRGB(ready ? 0.4 * bayK : 2.6 * bayK, ready ? 2.6 * bayK : 0.3 * bayK, ready ? 0.9 * bayK : 0.2 * bayK); light.intensity = 26 * red; bayLight.intensity = 30 * bayK; bayLight.color.set(ready ? 0xbfffe0 : 0xff5a40); },
+    lamps(red, bayK, ready) { redM.color.setRGB(2.6 * red + 0.05, 0.25 * red, 0.15 * red); podLampM.color.setRGB(ready ? 0.4 * bayK : 2.6 * bayK, ready ? 2.6 * bayK : 0.3 * bayK, ready ? 0.9 * bayK : 0.2 * bayK); light.intensity = 9 * red; bayLight.intensity = 24 * bayK; const pw = red > 0.3 ? 1 : red / 0.3; fills.forEach((f) => { f.intensity = 3.2 * pw; }); stripM.color.setRGB(1.5 * pw + 0.03, 1.2 * pw + 0.03, 0.9 * pw + 0.03); bayLight.color.set(ready ? 0xbfffe0 : 0xff5a40); },
     tear(k, t) {
-      out.torn = k;
+      out.torn = k; glow.intensity = 34 * Math.min(1, k * 2.2);
       plates.forEach((p, i) => {
         // each plate lets go in its turn (the seam first, then aft), then drifts out and turns, slowly: there is no air to hurry it
         const g = Math.max(0, (k - p.order * 0.55) / 0.45), e = g * g;

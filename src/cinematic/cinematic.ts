@@ -1104,12 +1104,12 @@ export class Cinematic {
       }
       // Lyrra goes to Nuvexa and takes her wrist; she tows her down the left rail
       R.medic = [[0, ...l0], [1.7, meet[0] + 0.45, meet[1], meet[2] - 0.1], [2.9 + late, meet[0] + 0.55, meet[1], meet[2]], [6.6 + late, 3.6, -1.15, 0.55], [8.9 + late, ...D0], [9.6 + late, ...D1], [11.1 + late, ...lane(7.4, 'L')], [13.8 + late, ...lane(8.9, 'L')], [16.8 + late, ...lane(10.2, 'L')], [19.6, ...lane(10.9, 'L')], [TEAR + 0.6, ...lane(11.2, 'L')], [RUN_END, ...lane(11.35, 'L')]];
-      R.social = [[0, ...n0], [1.7, n0[0] + (meet[0] - n0[0]) * 0.4, meet[1], n0[2] + (meet[2] - n0[2]) * 0.4], [2.9 + late, meet[0] - 0.1, meet[1], meet[2] + 0.05], [7.2 + late, 3.5, -1.2, 0.5], [9.6 + late, ...D0], [10.3 + late, ...D1], [11.8 + late, ...lane(7.2, 'L')], [14.5 + late, ...lane(8.3, 'L')], [17.5 + late, ...lane(9.5, 'L')], [19.9, ...lane(10.0, 'L')], [TEAR + 0.6, ...lane(10.3, 'L')], [RUN_END, ...lane(10.45, 'L')]];
+      R.social = [[0, ...n0], [1.7, n0[0] + (meet[0] - n0[0]) * 0.4, meet[1], n0[2] + (meet[2] - n0[2]) * 0.4], [2.9 + late, meet[0] - 0.1, meet[1], meet[2] + 0.05], [7.2 + late, 3.5, -1.2, 0.5], [9.6 + late, ...D0], [10.3 + late, ...D1], [11.8 + late, ...lane(7.2, 'L')], [14.5 + late, ...lane(8.3, 'L')], [17.5 + late, ...lane(9.5, 'L')], [19.9, ...lane(9.6, 'L')], [TEAR + 0.6, ...lane(9.85, 'L')], [RUN_END, ...lane(9.95, 'L')]];
       // Draxum comes off the ceiling for Bolzar, who has hold of the sofa's back; he sends him through the hatch ahead of
       // him and follows (with his arm hurt he cannot work the rail: he goes down the middle off the ribs, slower)
       const dl = hurtD ? 'M' : 'R';
-      R.strong = [[0, ...d0], [1.0, d0[0] + 0.1, d0[1] - 0.25, d0[2] + 0.1], [4.4, sofa[0] + 0.3, sofa[1] + 0.45, sofa[2] - 0.3], [5.2, sofa[0] + 0.32, sofa[1] + 0.42, sofa[2] - 0.28], [8.0 + slow, 4.3, -1.0, 0.45], [10.4 + slow, 5.5, -0.8, PA.doorZ + 0.8], [11.5 + slow, 5.52, -0.8, PA.doorZ + 0.78], [12.4 + slow, ...D1], [13.6 + slow, ...lane(7.0, dl)], [16.4 + slow, ...lane(8.1, dl)], [19.2 + slow, ...lane(8.9 - slow * 0.5, dl)], [TEAR + 0.9, ...lane(9.3 - slow * 0.6, dl)], [RUN_END, ...lane(9.4 - slow * 0.6, dl)]];
-      R.builder = [[0, ...b0], [2.6, ...b0], [3.9, ...sofa], [5.0, ...sofa], [8.2 + slow, 4.75, -1.25, 0.5], [10.3 + slow, 5.3, -1.2, PA.doorZ - 0.05], [11.3 + slow, ...D1], [12.7 + slow, ...lane(7.3, 'L')], [15.4 + slow, ...lane(7.9, 'L')], [18.6 + slow, ...lane(8.6, 'L')], [TEAR + 0.9, ...lane(9.0, 'L')], [RUN_END, ...lane(9.1, 'L')]];
+      R.strong = [[0, ...d0], [1.0, d0[0] + 0.1, d0[1] - 0.25, d0[2] + 0.1], [4.4, sofa[0] + 0.3, sofa[1] + 0.45, sofa[2] - 0.3], [5.2, sofa[0] + 0.32, sofa[1] + 0.42, sofa[2] - 0.28], [8.0 + slow, 4.3, -1.0, 0.45], [10.4 + slow, 5.5, -0.8, PA.doorZ + 0.8], [11.5 + slow, 5.52, -0.8, PA.doorZ + 0.78], [12.4 + slow, ...D1], [13.6 + slow, ...lane(7.0, dl)], [16.4 + slow, ...lane(7.8, dl)], [19.2 + slow, ...lane(8.3 - slow * 0.5, dl)], [TEAR + 0.9, ...lane(8.6 - slow * 0.6, dl)], [RUN_END, ...lane(8.7 - slow * 0.6, dl)]];
+      R.builder = [[0, ...b0], [2.6, ...b0], [3.9, ...sofa], [5.0, ...sofa], [8.2 + slow, 4.75, -1.25, 0.5], [10.3 + slow, 5.3, -1.2, PA.doorZ - 0.05], [11.3 + slow, ...D1], [12.7 + slow, ...lane(7.0, 'L')], [15.4 + slow, ...lane(7.3, 'L')], [18.6 + slow, ...lane(7.7, 'L')], [TEAR + 0.9, ...lane(7.95, 'L')], [RUN_END, ...lane(8.05, 'L')]];
       return { R, hand, core, hurtN, hurtD };
     };
     const qA = new THREE.Quaternion(), eA = new THREE.Euler(), pA = new THREE.Vector3(), pB = new THREE.Vector3(), upV = new THREE.Vector3();
@@ -1124,7 +1124,7 @@ export class Cinematic {
     /** Everyone where the run has them at t seconds after the call. */
     const run = (tau: number) => {
       const { R, hand: hd, core: cr, hurtN, hurtD } = routes();
-      const flash = Math.sin(this.clockT * 9) * 0.5 + 0.5, torn = smoothstep(TEAR, RUN_END + 2.2, tau) * 0.62;
+      const flash = Math.sin(this.clockT * 9) * 0.5 + 0.5, torn = smoothstep(TEAR, RUN_END, tau) * 0.8;
       // the room and the passage: the hatch opens at the call's end, the lamps go with the hull
       pas.show(true); pas.door(smoothstep(4.7, 5.9, tau));
       pas.lamps(tau < TEAR ? 0.55 + 0.45 * flash : 0.25 * (1 - smoothstep(TEAR, TEAR + 0.5, tau)), tau < TEAR + 0.4 ? 1 : 0.5, tau < 18.6);
@@ -1134,12 +1134,14 @@ export class Cinematic {
       floatUp(1, 0, 2.4);
       for (const c of intr.crew) {
         const id = c.id as CrewId, keys = R[id], b = BODY[id], s0 = runStart.get(id)!;
-        route(keys, tau, pA); route(keys, tau + 0.35, pB); pB.sub(route(keys, tau - 0.1, upV));
-        const sp = pB.length() / 0.45, moving = smoothstep(0.12, 0.6, sp);
+        route(keys, tau, pA); route(keys, tau + 0.5, pB); pB.sub(route(keys, tau - 0.25, upV));
+        const sp = pB.length() / 0.75, moving = smoothstep(0.12, 0.6, sp);
         // the heading follows the travel; when nearly still it keeps to the way aft
-        const hw = smoothstep(0.05, 0.3, sp), hd0 = Math.atan2(pB.x, pB.z) - Math.PI / 2, yaw = Math.PI / 2 + Math.atan2(Math.sin(hd0), Math.cos(hd0)) * hw;
+        // (blended as directions, not as an angle: an angle scaled across its wrap swung the body round in one frame)
+        const hw = smoothstep(0.05, 0.3, sp), hl = Math.hypot(pB.x, pB.z) || 1, hx = (1 - hw) + hw * pB.x / hl, hz = hw * pB.z / hl, yaw = Math.hypot(hx, hz) > 0.05 ? Math.atan2(hx, hz) : Math.PI / 2;
         const sway = nz(tau * 0.9, b.seed) * 0.08;
-        eA.set(0.18 + b.lean * moving + sway, yaw, b.roll * moving + nz(tau * 0.7, b.seed + 3) * 0.1, 'YXZ'); qA.setFromEuler(eA);
+        const inP = smoothstep(PA.doorX - 0.6, PA.doorX + 0.8, pA.x), trail = Math.max(moving, 0.7 * inP);
+        eA.set(0.4 + (b.lean - 0.2) * trail + sway, yaw, b.roll * moving + nz(tau * 0.7, b.seed + 3) * 0.1, 'YXZ'); qA.setFromEuler(eA);
         // out of the pose the call found them in, over their first second of moving
         let j0 = 0; while (j0 < keys.length - 2 && keys[j0 + 1][1] === keys[0][1] && keys[j0 + 1][2] === keys[0][2] && keys[j0 + 1][3] === keys[0][3]) j0++;
         const tStart = keys[j0][0];
@@ -1147,6 +1149,8 @@ export class Cinematic {
         c.root.quaternion.copy(s0.q).slerp(qA, ease);
         upV.set(0, s0.up, 0).applyQuaternion(c.root.quaternion);
         c.root.position.copy(pA).sub(upV);
+        // nobody's feet in the floor: a body that slows and comes upright rides higher
+        if (ease > 0) c.root.position.y += Math.max(0, FLOOR + 0.22 - c.root.position.y) * ease;
         // ---- what each body does on the way: authored per person, driven by how far they have come, not by a clock ----
         const inPass = smoothstep(PA.doorX + 0.2, PA.doorX + 1.2, pA.x), dist = pA.x; // metres along the way aft
         const sideRail = keys[keys.length - 1][3] > PA.doorZ + 0.2 ? 'R' : keys[keys.length - 1][3] < PA.doorZ - 0.2 ? 'L' : null;
@@ -1230,7 +1234,7 @@ export class Cinematic {
       if (cr && tau > 5.0) { const g = smoothstep(5.0, 5.8, tau); const want = sci.handL.getWorldPosition(new THREE.Vector3()); intr.group.worldToLocal(want); core.position.copy(coreHome).lerp(want, g); } else core.position.copy(coreHome);
       this.pullPose = { social: 'selfie' };
     };
-    const runShot = (t0: number, t1: number, label: string, cam: (tau: number, k: number) => void, enter?: () => void) => shotAt(RUN + t0, RUN + t1, { label, enter, update: (k) => { run(this.time - RUN); this.scene.updateMatrixWorld(); cam(this.time - RUN, k); } });
+    const runShot = (t0: number, t1: number, label: string, cam: (tau: number, k: number) => void, enter?: () => void) => shotAt(RUN + t0, RUN + t1, { label, enter, update: (k, local) => { run(t0 + local); this.scene.updateMatrixWorld(); cam(t0 + local, k); } }); // (by the shot's own time: the film's clock is stretched by the lines before it, RUN is not)
     // G6b: they hear him. Lyrra pushes off to Nuvexa and takes her wrist; above them Draxum tucks against the ceiling and shoves off
     runShot(0, 2.6, 'G6b', () => {
       const m = head(lyr).lerp(head(nuv), 0.5);
@@ -1262,7 +1266,7 @@ export class Cinematic {
     // P3 their faces, from ahead of them, backing off as they come hand over hand: who holds whom
     runShot(17.2, TEAR, 'P3', (tau) => {
       const lead = Math.max(sci.chest.getWorldPosition(new THREE.Vector3()).x, sky.chest.getWorldPosition(new THREE.Vector3()).x);
-      lens(35); this.camera.position.copy(at(lead + 2.3, -0.5, PA.doorZ + 0.78)); this.lookTarget.copy(at(lead - 1.2, -1.05, PA.doorZ - 0.05)); this.shake = 0.008 + 0.02 * smoothstep(18.6, TEAR, tau);
+      lens(30); this.camera.position.copy(at(lead + 2.1, -0.12, PA.doorZ + 0.8)); this.lookTarget.copy(at(lead - 1.4, -1.15, PA.doorZ - 0.05)); this.shake = 0.008 + 0.02 * smoothstep(18.6, TEAR, tau);
     });
     this.cue(RUN + 18.6, () => { audio.tone(48, 1.8, 'sawtooth', 0.16, 0, -8); audio.beep(); }); // the hull groans; the pod lamps go red
     // P4 insert, the cause: a seam opens across the passage ahead; the light of the hole comes through it; the air goes
