@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { createCharacter, Character, CrewId } from '../characters/character';
 import { NOISE_GLSL } from '../core/glsl';
+import { createPassage, PASSAGE, type Passage } from './passage';
 
 /** Panel-line hull texture generated on a canvas. */
 function hullTexture(): THREE.CanvasTexture {
@@ -278,6 +279,10 @@ export interface Interior {
   lounge: THREE.Group;
   /** Floor footprints nobody may stand in (deck units, centre, turn, width along x, depth along z before the turn). */
   footprints: { name: string; x: number; z: number; yaw: number; w: number; d: number }[];
+  /** The way aft: the hatch in the aft bulkhead, the passage behind it and the pod bay at its end (passage.ts). */
+  passage: Passage;
+  /** The navigation core, in its socket at the console's end (the pull: an arm's length from Zenvik at the call). */
+  core: THREE.Group;
 }
 
 /** The lounge's furniture, in deck units: two low sofas either side of the console, backs to the window. */
@@ -417,9 +422,20 @@ export function createInterior(detail = 1): Interior {
   put(new THREE.PlaneGeometry(9, 1.5), new THREE.MeshStandardMaterial({ color: 0x3a3f4a, roughness: 0.97 }), lounge, 0, -2.195, 0.9).rotation.x = -Math.PI / 2;
   // end bulkheads close the shell; aft (+x) has the hatch to the passage to the habitat ring, its frame lit
   const bulk = new THREE.MeshStandardMaterial({ color: 0x8a929d, metalness: 0.45, roughness: 0.5 });
-  for (const ex of [-5.95, 5.95]) { const w = new THREE.Mesh(new THREE.CircleGeometry(4, 48), bulk); w.position.x = ex; w.rotation.y = ex < 0 ? Math.PI / 2 : -Math.PI / 2; w.receiveShadow = true; group.add(w); }
+  // (the aft one is cut through for the hatch: the passage to the pods is really behind it, and its door really slides)
+  bulk.side = THREE.DoubleSide;
+  for (const ex of [-5.95, 5.95]) {
+    const sh = new THREE.Shape(); sh.absarc(0, 0, 4, 0, Math.PI * 2, false);
+    if (ex > 0) { const P = PASSAGE, h = new THREE.Path(), z0 = P.doorZ - P.doorW / 2, z1 = P.doorZ + P.doorW / 2; h.moveTo(z0, P.floor); h.lineTo(z1, P.floor); h.lineTo(z1, P.doorTop); h.lineTo(z0, P.doorTop); h.closePath(); sh.holes.push(h); }
+    const w = new THREE.Mesh(new THREE.ShapeGeometry(sh, 48), bulk); w.position.x = ex; w.rotation.y = ex < 0 ? Math.PI / 2 : -Math.PI / 2; w.receiveShadow = true; group.add(w);
+  }
   const hatchF = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.2, 0.8) });
-  put(rb(0.06, 2.1, 1.1, 0.02), new THREE.MeshStandardMaterial({ color: 0x3a4049, metalness: 0.7, roughness: 0.35 }), group, 5.9, -1.15, 0.9);
+  const passage = createPassage(frameMat, tex); group.add(passage.group);
+  // the navigation core: a short cylinder with a lit band, in its socket at the console's right end
+  const core = new THREE.Group(); core.name = 'core';
+  core.add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.16, 16), new THREE.MeshStandardMaterial({ color: 0x2a2f38, metalness: 0.8, roughness: 0.3 })));
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.053, 0.053, 0.035, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 2.2, 2.6) })); core.add(band);
+  core.position.set(1.02, -1.22, -1.2); group.add(core);
   for (const [y, h, z, d] of [[-0.07, 0.05, 0.9, 1.22], [-1.15, 2.18, 0.31, 0.05], [-1.15, 2.18, 1.49, 0.05]] as const) put(new THREE.BoxGeometry(0.03, h, d), hatchF, group, 5.88, y, z);
   // warm ceiling strips along the room (stripLight is the light they give)
   const stripM = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.9, 1.3) });
@@ -471,7 +487,7 @@ export function createInterior(detail = 1): Interior {
     { name: 'table', x: 0.95, z: 0.75, yaw: 0, w: 0.9, d: 0.5 }, { name: 'bag', x: -0.6, z: 0.85, yaw: 0.4, w: 0.62, d: 0.38 },
     { name: 'console', x: 0, z: -1.4, yaw: 0, w: 2.4, d: 0.9 },
   ];
-  return { group, crew, floaters, alarmLight, holo, consoleLight, mainLight, earthLight, stripLight, display, seats, lounge, footprints };
+  return { group, crew, floaters, alarmLight, holo, consoleLight, mainLight, earthLight, stripLight, display, seats, lounge, footprints, passage, core };
 }
 
 /** The liner's vestibule (ship units): floor, ceiling and walls as one lit mesh and the passages' dark ends as another. */

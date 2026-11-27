@@ -8,11 +8,12 @@ import { Cutscene, Beat, addCutsceneRig, type SceneBranch } from './cutscene';
 import { departScene, fightScene, stageDeck, seatAt } from './scenes';
 import { t } from '../i18n';
 import { createCharacter, Character, CrewId, CrewPose, type Face, type Limbs } from '../characters/character';
-import { flail, mixLimbs, FALL, STANDING } from './montage';
+import { flail, mixLimbs, nz, FALL, STANDING } from './montage';
 import { defaultLook, type PlayerLook, type CrewSkins } from '../characters/custom';
 import { createInserts, type Inserts } from './inserts';
 import { FilmVideo } from './filmvideo';
-import { ContinuityLog, overlaps } from './continuity';
+import { ContinuityLog, overlaps, setPlaces, type StageState } from './continuity';
+import { PASSAGE, ROUTE_PLACES } from './passage';
 import { emptyBranch, test } from '../game/branch/engine';
 
 export interface CineUI {
@@ -134,6 +135,7 @@ export class Cinematic {
     this.dome.uniforms.uBHRot.value = this.bhRot;
     addCutsceneRig(this.scene);
     this.cont.on = new URLSearchParams(location.search).get('contlog') === '1';
+    setPlaces(ROUTE_PLACES);
     this.cont.footprints = this.interior.footprints.map((f) => ({ ...f, furniture: f.name !== 'console' }));
     this.buildTimeline();
     this.idle(0);
@@ -161,6 +163,7 @@ export class Cinematic {
     this.time = PRE;
     this.playing = true;
     this.waiting = null; this.skipping = false; this.zenSlide = 0.5; this.drxGive = 0;
+    this.resetEvent();
     this.fitToVoice();
     this.cues.forEach((c) => (c.done = false));
     this.shots.forEach((s) => (s.done = false));
@@ -343,7 +346,21 @@ export class Cinematic {
   /** Seated on a sofa in the pull (1 sat, 0 up), the hands free or on a task, and an arm pose over the seated one. */
   private seated = new Map<Character, { k: number; hands: boolean; extra?: Limbs }>();
 
-  private finish() {
+  /** The event's one-way state (continuity): how far the hull has gone (0 whole, 1 strained, 2 a seam, 3 torn, 4 broken
+   *  apart), whether gravity and the air are gone. It only goes forward from the pull's first shot to the white. */
+  damage = 0; airOut = false; gravOff = false;
+  /** Where the run to the pods left each of the six (the title sequence goes on from there), or null. */
+  runEnd: Record<string, { p: THREE.Vector3; q: THREE.Quaternion }> | null = null;
+  /** The ship as it was before the event: whole, the hatch shut, the passage dark. */
+  resetEvent() {
+    const p = this.interior.passage;
+    this.damage = 0; this.airOut = false; this.gravOff = false; this.runEnd = null;
+    p.door(0); p.tear(0, 0); p.lamps(0, 0, true); p.show(false);
+    this.interior.crew.forEach((c) => { c.setHold(null); c.setGrip('both', null); });
+  }
+  /** `carry`: the title sequence follows and goes on from this state (the torn passage, the six where they are). */
+  private finish(carry = false) {
+    if (!carry) this.resetEvent();
     this.playing = false;
     this.waiting = null;
     this.seated.clear();
@@ -543,7 +560,7 @@ export class Cinematic {
     let slid = 0, offAt = -1;
     const floatUp = (g: number, _local: number, slide = 0) => {
       slid = Math.max(slid, slide);
-      if (g > 0.02 && offAt < 0) offAt = this.clockT;
+      if (g > 0.02 && offAt < 0) { offAt = this.clockT; this.gravOff = true; }
       const up = offAt < 0 ? 0 : this.clockT - offAt;
       for (const f of intr.floaters) {
         const base = f.userData.base as THREE.Vector3, spin = f.userData.spin as THREE.Vector3, r = f.userData.rise as number;
@@ -551,7 +568,7 @@ export class Cinematic {
         f.rotation.set(spin.x * up, spin.y * up + (f.userData.yaw0 ??= f.rotation.y), spin.z * up);
       }
     };
-    const resetLoose = () => { slid = 0; offAt = -1; floatUp(0, 0, 0); };
+    const resetLoose = () => { slid = 0; offAt = -1; this.gravOff = false; floatUp(0, 0, 0); };
 
     // ==== The pull into Sagittarius, shot by shot (~/bs-story/SHOTLIST_pull_and_fates.md, A1 to G7) ====
     // The line of action runs between Zenvik at the console's left end and the five by the window at the right: the
@@ -842,7 +859,7 @@ export class Cinematic {
         const sl = (c: Character, go: number) => { const g = smoothstep(go, go + 1.6, local); if (!slideFrom.has(c)) slideFrom.set(c, c.root.position.x); c.root.position.x = slideFrom.get(c)! + g * SLIDE[c.id]; c.setLimbs(mixLimbs(STANDING, { ...FALL.spread, legL: [0.35, -1, 0.1], legR: [-0.35, -1, -0.1] }, g * 0.6)); c.setFace({ fear: 0.5 * g }); return g; };
         sl(nuv, 0.2); sl(bol, 0.1); sl(sky, 0.4); sl(sci, 0.5); sl(drx, 0.3); sl(lyr, 0.6);
         floatUp(0, 0, smoothstep(0, 2.4, local) * 2.2);
-        intr.alarmLight.color.copy(AMBER); intr.alarmLight.intensity = 5 + Math.sin(local * 5) * 3;
+        intr.alarmLight.color.copy(AMBER); intr.alarmLight.intensity = 5; // steady: the alarm's tone stopped with the cockpit shots, a flashing lamp with no alarm heard read as the sound dropping out
       },
     });
     const slideFrom = new Map<Character, number>();
@@ -940,7 +957,7 @@ export class Cinematic {
     // the far end towards us and their faces follow each one; the red strips by the hatch come on and light them
     const SECT = [-3.6, -1.2, 1.3, 3.6], FAIL = [0.8, 1.7, 2.6, 3.5];
     shotAt(S + 84.5, S + 93.6, {
-      enter: () => { this.pullPose = {}; group(); for (const c of [drx, nuv, lyr, sky, bol]) c.root.rotation.y = 0.35 + (c.root.position.x - 2.6) * 0.12; put(sci, -0.6, -0.4, 0.9); },
+      enter: () => { this.damage = Math.max(this.damage, 1); this.pullPose = {}; group(); for (const c of [drx, nuv, lyr, sky, bol]) c.root.rotation.y = 0.35 + (c.root.position.x - 2.6) * 0.12; put(sci, -0.6, -0.4, 0.9); },
       update: (k, local) => {
         lens(24); this.camera.position.copy(at(4.7, -0.7, 1.3)); this.lookTarget.copy(at(0.9, -1.15, -1.5)); this.shake = 0.015;
         const gone = FAIL.filter((f) => local >= f).length; // sections dark so far, from the far end
@@ -1032,92 +1049,259 @@ export class Cinematic {
         sci.setLimbs(mixLimbs({ ...mixLimbs(STANDING, FALL.spread, 0.25), ...held, armL: [0.45, -0.7, 0.4], foreL: [0.35, -0.4, 0.8] }, point, call));
         sci.setLookTarget(local < 0.9 ? head(nuv) : at(5.5, -0.9, 0.9)); // eyes to the hatch before the arm
         sci.setFace({ fear: 0.7, open: smoothstep(0.7, 0.9, local) * 0.7, frown: 0.3 });
-        intr.alarmLight.intensity = (Math.sin(local * 9) * 0.5 + 0.5) * 22; floatUp(1, 18 + local, 2.4);
+        intr.alarmLight.intensity = (Math.sin(this.clockT * 9) * 0.5 + 0.5) * 22; floatUp(1, 18 + local, 2.4);
       },
     });
-    // G7 wide behind the group towards the hatch: they push off together; the hatch stays far; the walls open, silently
-    this.cue(S + 121.2, () => { audio.alarm(false); audio.vacuum(true); ui.subtitle(null); });
-    // G6b: they hear him, each their own way. Lyrra pushes off towards Nuvexa and takes her wrist (the medic goes to the
-    // one with no hands free: the phone); behind them Draxum, against the ceiling, braces his feet on it to push off
-    const reachFrom = new Map<Character, THREE.Vector3>();
-    shotAt(S + 117.6, S + 119.4, {
-      enter: () => { reachFrom.clear(); for (const c of [lyr, drx, nuv]) reachFrom.set(c, c.root.position.clone()); },
-      update: (k, local) => {
-        const l0 = reachFrom.get(lyr)!, n0 = reachFrom.get(nuv)!, d0 = reachFrom.get(drx)!;
-        const go = smoothstep(0.1, 1.6, local), grab = smoothstep(1.3, 1.6, local);
-        const meet = n0.clone().lerp(l0, 0.35); // she covers most of the gap; Nuvexa drifts a little her way
-        lyr.root.position.copy(l0).lerp(meet.clone().add(V(0.45, 0, -0.1)), go); lyr.root.rotation.set(-0.35 * go, Math.atan2(n0.x - l0.x, n0.z - l0.z), 0.1);
-        nuv.root.position.copy(n0).lerp(meet.clone().add(V(-0.1, 0, 0.05)), go * 0.4); nuv.root.rotation.set(-0.2, Math.atan2(l0.x - n0.x, l0.z - n0.z) * 0.5, -0.1);
-        // eased in from her clip's pose: set at once, her forearm turned 84 degrees in a frame with the camera barely
-        // moving (the cut from the shot before is 0.2 m: it reads as one shot), glitch_planet / snap_probe2
-        lyr.setLimbs({ ...mixLimbs(FALL.medic, { ...FALL.medic, armR: [-0.25, 0.1, 1], foreR: [-0.15, 0.05, 1] }, go), weight: smoothstep(0, 0.35, local) }); lyr.setFace({ frown: 0.5, open: 0.15 }); lyr.setLookTarget(hand(nuv, false));
-        this.pullPose.social = 'selfie'; nuv.setLimbs({ ...FALL.social, armL: [0.55 * (1 - grab) + 0.2, 0.1, 0.8], foreL: [0.3, 0.2, 1] }); nuv.setFace({ fear: 0.75, open: 0.3 }); nuv.setLookTarget(head(lyr));
-        const push = smoothstep(0.4, 1.2, local); // Draxum: knees to his chest against the ceiling, then the shove
-        drx.root.position.copy(d0).add(V(0.2 * push, -0.6 * push * push, 0.2 * push)); drx.root.rotation.set(-1.2 + 0.9 * push, Math.PI, 0.3);
-        drx.setLimbs({ ...FALL.strong, legL: [0.35, -0.2 - 0.6 * push, 0.9 - 0.7 * push], legR: [-0.35, -0.2 - 0.6 * push, 0.9 - 0.7 * push], shinL: [0.2, -1, -0.3 + 0.6 * (1 - push)], shinR: [-0.2, -1, -0.3 + 0.6 * (1 - push)] }); drx.setFace({ frown: 0.85, open: 0.3 * push });
-        const m = head(lyr).lerp(head(nuv), 0.5);
-        lens(35); this.camera.position.copy(m).add(V(-0.9, 0.05, 3.1)); this.lookTarget.copy(m).add(V(0.15, 0.1, 0)); // wide enough for both and Draxum above
-        floatUp(1, 0, 2.4);
-      },
-    });
-    // G6c: Bolzar has hold of the sofa's back and will not let go of it; Skyvra pushes off the window frame towards
-    // Zenvik, her hand out for his (the shot list's G7: her hand in his)
-    shotAt(S + 119.4, S + 120.8, {
-      enter: () => { reachFrom.set(bol, bol.root.position.clone()); reachFrom.set(sky, sky.root.position.clone()); },
-      update: (k, local) => {
-        const b0 = reachFrom.get(bol)!, s0 = reachFrom.get(sky)!, back = at(3.25, -1.5, -1.45); // the sofa's back, at its right end
-        const g = smoothstep(0, 0.7, local);
-        bol.root.position.copy(b0).lerp(back.clone().add(V(0.35, -0.75, -0.45)), g); bol.root.rotation.set(0.25, Math.PI * 1.25, 0.15 * Math.sin(local * 2));
-        bol.setLimbs({ ...FALL.builder, armL: [0.3, -0.35, 1], foreL: [-0.1, -0.5, 1], armR: [-0.3, -0.35, 1], foreR: [0.1, -0.5, 1], bend: 0.5 }); bol.setFace({ fear: 0.8, squint: 0.5 }); bol.setLookTarget(back);
-        const p = smoothstep(0.2, 1.4, local);
-        sky.root.position.copy(s0).lerp(head(sci).setY(s0.y), 0.25 * p); sky.root.rotation.set(-0.5 * p, Math.atan2(sci.root.position.x - s0.x, sci.root.position.z - s0.z), 0);
-        sky.setLimbs(mixLimbs(FALL.explorer, { ...FALL.explorer, armR: [-0.3, 0.3, 1], foreR: [-0.2, 0.25, 1] }, p)); sky.setFace({ fear: 0.5, open: 0.3, frown: 0.2 }); sky.setLookTarget(head(sci));
-        lens(35); const m = head(bol).lerp(head(sky), 0.45); this.camera.position.copy(m).add(V(-2.1, -0.2, 2.8)); this.lookTarget.copy(m);
-        floatUp(1, 0, 2.4);
-      },
-    });
-    this.mcue(S + 119.5, 'e1.handcore', 'choice');
-    // each pushes off from where they are floating, in their own time and their own way (they all moved as one before)
-    const PODS: Record<string, { t0: number; pace: number; look: Face }> = {
-      scientist: { t0: 0.0, pace: 1.0, look: { fear: 0.6, frown: 0.4, open: 0.3 } }, // first, the one who called it
-      explorer: { t0: 0.18, pace: 1.05, look: { fear: 0.5, open: 0.35 } }, // straight after him, reaching for his hand
-      medic: { t0: 0.4, pace: 0.85, look: { fear: 0.55, frown: 0.3 } }, // looks back for Nuvexa before she goes
-      strong: { t0: 0.55, pace: 1.15, look: { frown: 0.8, open: 0.25 } }, // off the ceiling, hardest
-      social: { t0: 0.8, pace: 0.8, look: { fear: 0.75, open: 0.25 } }, // the phone held to her chest, one hand free
-      builder: { t0: 1.0, pace: 0.7, look: { fear: 0.65, squint: 0.3 } }, // last, curled, kicks off the sofa's back
+    // ==== The run to the pods (G6b to P5): one clock, one state ====
+    // The owner: "the cutscenes going to the pods scene is still not proper, doesn't show continuity." Before, each shot
+    // placed and moved the six on its own, the hatch never got nearer and the next thing seen was the liner from outside.
+    // Now where each of the six is at film time t comes from their own route from where the call found them, through the
+    // hatch aft, along the passage's rails towards the pod bay; every shot is only a camera on that one movement, so no
+    // cut can move anyone, and the answers given (Lyrra's reach, Draxum's hold, the hand or the core) decide who tows
+    // whom, with which arm, and who is last. The passage tears open ahead of them.
+    const RUN = S + 117.6, TEAR = 20.2, RUN_END = 24.6;
+    const pas = intr.passage, PA = PASSAGE;
+    type Key = [number, number, number, number]; // t, then where the chest is (deck units)
+    const kTmp = new THREE.Vector3();
+    /** A route at time t: a smooth curve through its keys (no stop at a key unless its neighbours hold it there). */
+    const route = (keys: Key[], t: number, out: THREE.Vector3) => {
+      const n = keys.length;
+      if (t <= keys[0][0]) return out.set(keys[0][1], keys[0][2], keys[0][3]);
+      if (t >= keys[n - 1][0]) return out.set(keys[n - 1][1], keys[n - 1][2], keys[n - 1][3]);
+      let i = 0; while (i < n - 2 && t >= keys[i + 1][0]) i++;
+      const a = keys[i], b = keys[i + 1], h = b[0] - a[0], u = (t - a[0]) / h, u2 = u * u, u3 = u2 * u;
+      const slope = (j: number, c: number) => { if (j <= 0 || j >= n - 1) return 0; const p = keys[j - 1], q = keys[j + 1]; return (q[c] - p[c]) / (q[0] - p[0]); };
+      for (let c = 1; c <= 3; c++) {
+        const m0 = slope(i, c) * h, m1 = slope(i + 1, c) * h;
+        kTmp.setComponent(c - 1, (2 * u3 - 3 * u2 + 1) * a[c] + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * b[c] + (u3 - u2) * m1);
+      }
+      return out.copy(kTmp);
     };
-    const podFrom = new Map<Character, THREE.Vector3>();
-    shotAt(S + 120.8, S + 124.4, {
-      enter: () => { podFrom.clear(); for (const c of intr.crew) podFrom.set(c, c.root.position.clone()); },
-      update: (k, local) => {
-        lens(24); this.camera.position.copy(at(-4.2, -0.9, 1.0)); this.lookTarget.copy(at(4.8, -1.0, 0.6));
-        const hatch = V(5.9, -1.4, 0.9);
-        // Zenvik's choice: her hand (they go together, her path bends to his), the core (he turns back for it first and her
-        // hand closes on nothing), or neither (he freezes a beat, then goes alone)
-        const hand = this.chose('e1.handcore', 'hand'), core = this.chose('e1.handcore', 'core'), froze = !hand && !core;
-        intr.crew.forEach((c, i) => {
-          const late = c.id === 'scientist' ? (core ? 0.7 : froze && this.answered('e1.handcore') ? 0.45 : 0) : 0;
-          const pd = { ...PODS[c.id], t0: PODS[c.id].t0 + late }, p0 = podFrom.get(c) ?? c.root.position, go = smoothstep(pd.t0, pd.t0 + 0.9, local);
-          const dir = hatch.clone().sub(p0); dir.y *= 0.4; dir.normalize();
-          const dist = pd.pace * (0.9 * smoothstep(pd.t0, pd.t0 + 1.3, local) + 0.35 * Math.max(0, local - pd.t0 - 1.3));
-          c.root.position.copy(p0).addScaledVector(dir, dist);
-          if (c.id === 'explorer' && hand) { const z = intr.crew[0].root.position; c.root.position.lerp(V(z.x - 0.35, z.y, z.z + 0.45), smoothstep(0.2, 1.4, local) * 0.6); }
-          c.root.rotation.set(-0.55 * go, Math.atan2(dir.x, dir.z), (i % 2 ? 0.12 : -0.12) * go);
-          const reach: Limbs = c.id === 'scientist' && hand ? { ...FALL.spread, armR: [-0.85, -0.1, -0.5], foreR: [-0.8, 0, -0.4] } // his hand back for hers
-            : c.id === 'scientist' && core && local < pd.t0 ? { ...FALL.spread, armL: [0.2, 0.1, -1], foreL: [0.1, 0.2, -1] } // back to the console for the core
-            : c.id === 'explorer' ? { ...FALL.explorer, armR: [-0.3, 0.45, 1], foreR: [-0.2, 0.3, 1] }
-            : c.id === 'medic' ? { ...FALL.medic, armL: [0.9, 0.2, -0.4], foreL: [0.8, 0.4, -0.3] } // an arm back for Nuvexa
-            : c.id === 'social' ? { ...FALL.social, armR: [-0.35, -0.3, 0.6], foreR: [0.4, 0.3, 0.6] } // the phone to her chest
-            : FALL[c.id] ?? FALL.spread;
-          c.setLimbs(mixLimbs(STANDING, flail(reach, local, i * 1.7, 0.15 + 0.1 * (1 - go)), 0.35 + 0.65 * go));
-          c.setFace(pd.look); c.setLookTarget(c.id === 'medic' && local < pd.t0 + 0.6 ? head(nuv) : at(5, -0.8, 0.6));
-        });
-        intr.group.scale.set(1 + 0.05 * k, 1, 1); // the deck stretches away from them: the hatch never gets closer
-        floatUp(1, 22 + local, 2.4);
-      },
+    const lane = (x: number, side: 'L' | 'R' | 'M'): [number, number, number] => side === 'L' ? [x, -1.22, PA.doorZ - 0.5] : side === 'R' ? [x, -1.0, PA.doorZ + 0.5] : [x, -0.62, PA.doorZ];
+    const D0: [number, number, number] = [5.2, -1.15, PA.doorZ], D1: [number, number, number] = [PA.doorX + 0.1, -1.15, PA.doorZ];
+    const runStart = new Map<string, { chest: THREE.Vector3; q: THREE.Quaternion; up: number }>();
+    /** The routes for the answers given so far. Every branch shares its keys up to 3.2 s (the choice is answered by then). */
+    const routes = () => {
+      const st = (id: string): [number, number, number] => { const s = runStart.get(id)!.chest; return [s.x, s.y, s.z]; };
+      const hand = this.chose('e1.handcore', 'hand'), core = this.chose('e1.handcore', 'core');
+      const hurtN = this.answered('e1.reach') && !this.chose('e1.reach', 'nuvexa'), hurtD = this.answered('e1.hold') && !this.passed('e1.hold');
+      const late = hurtN ? 0.5 : 0, slow = hurtD ? 0.6 : 0; // a hurt one makes their pair later through the hatch
+      const z0 = st('scientist'), s0 = st('explorer'), l0 = st('medic'), n0 = st('social'), d0 = st('strong'), b0 = st('builder');
+      const meet: [number, number, number] = [n0[0] + (l0[0] - n0[0]) * 0.35 + 0.4, (n0[1] + l0[1]) / 2, n0[2] + (l0[2] - n0[2]) * 0.35];
+      const sofa: [number, number, number] = [3.38, -1.2, -0.86]; // Bolzar behind the right sofa's back, at its aft end
+      const R: Record<string, Key[]> = {};
+      // Skyvra pushes off the window's frame towards Zenvik, her hand out, in every branch
+      const reachZ: [number, number, number] = [z0[0] + 1.25, z0[1] - 0.05, z0[2] + 0.1];
+      if (hand) {
+        R.scientist = [[0, ...z0], [3.2, ...z0], [5.9, 3.3, -1.1, 0.45], [7.5, ...D0], [8.2, ...D1], [9.7, ...lane(7.5, 'R')], [12.4, ...lane(9.5, 'R')], [15.6, ...lane(11.2, 'R')], [19, ...lane(12.3, 'R')], [TEAR + 0.6, ...lane(12.8, 'R')], [RUN_END, ...lane(13.0, 'R')]];
+        R.explorer = [[0, ...s0], [2.8, ...s0], [3.9, ...reachZ], [6.3, 3.0, -1.15, 0.05], [8.0, 5.1, -1.2, PA.doorZ - 0.1], [8.8, ...D1], [10.3, ...lane(7.3, 'L')], [13.0, ...lane(9.2, 'L')], [16.2, ...lane(10.9, 'L')], [19.5, ...lane(11.9, 'L')], [TEAR + 0.6, ...lane(12.3, 'L')], [RUN_END, ...lane(12.5, 'L')]];
+      } else {
+        // the core: he turns back to the console for it and comes last; frozen: he hangs a beat and follows her alone
+        R.scientist = core
+          ? [[0, ...z0], [3.2, ...z0], [4.4, 0.55, -1.0, -0.72], [6.2, 0.6, -1.0, -0.7], [9.0, 3.3, -1.1, 0.45], [11.9, ...D0], [13.0, ...D1], [14.8, ...lane(7.3, 'M')], [17.6, ...lane(8.5, 'M')], [TEAR + 0.6, ...lane(9.2, 'M')], [RUN_END, ...lane(9.35, 'M')]]
+          : [[0, ...z0], [3.2, ...z0], [4.3, z0[0] + 0.05, z0[1], z0[2]], [6.8, 3.3, -1.1, 0.45], [8.5, ...D0], [9.1, ...D1], [10.6, ...lane(7.3, 'R')], [13.4, ...lane(9.0, 'R')], [16.6, ...lane(10.6, 'R')], [19.6, ...lane(11.5, 'R')], [TEAR + 0.6, ...lane(11.8, 'R')], [RUN_END, ...lane(11.95, 'R')]];
+        R.explorer = [[0, ...s0], [2.8, ...s0], [3.9, ...reachZ], [4.7, reachZ[0] + 0.1, reachZ[1], reachZ[2] + 0.1], [6.5, 3.6, -1.1, 0.5], [7.6, ...D0], [8.2, ...D1], [9.8, ...lane(7.6, 'R')], [12.6, ...lane(9.6, 'R')], [15.8, ...lane(11.4, 'R')], [19.2, ...lane(12.5, 'R')], [TEAR + 0.6, ...lane(12.9, 'R')], [RUN_END, ...lane(13.05, 'R')]];
+      }
+      // Lyrra goes to Nuvexa and takes her wrist; she tows her down the left rail
+      R.medic = [[0, ...l0], [1.7, meet[0] + 0.45, meet[1], meet[2] - 0.1], [2.9 + late, meet[0] + 0.55, meet[1], meet[2]], [6.6 + late, 3.6, -1.15, 0.55], [8.9 + late, ...D0], [9.6 + late, ...D1], [11.1 + late, ...lane(7.4, 'L')], [13.8 + late, ...lane(8.9, 'L')], [16.8 + late, ...lane(10.2, 'L')], [19.6, ...lane(10.9, 'L')], [TEAR + 0.6, ...lane(11.2, 'L')], [RUN_END, ...lane(11.35, 'L')]];
+      R.social = [[0, ...n0], [1.7, n0[0] + (meet[0] - n0[0]) * 0.4, meet[1], n0[2] + (meet[2] - n0[2]) * 0.4], [2.9 + late, meet[0] - 0.1, meet[1], meet[2] + 0.05], [7.2 + late, 3.5, -1.2, 0.5], [9.6 + late, ...D0], [10.3 + late, ...D1], [11.8 + late, ...lane(7.2, 'L')], [14.5 + late, ...lane(8.3, 'L')], [17.5 + late, ...lane(9.5, 'L')], [19.9, ...lane(9.6, 'L')], [TEAR + 0.6, ...lane(9.85, 'L')], [RUN_END, ...lane(9.95, 'L')]];
+      // Draxum comes off the ceiling for Bolzar, who has hold of the sofa's back; he sends him through the hatch ahead of
+      // him and follows (with his arm hurt he cannot work the rail: he goes down the middle off the ribs, slower)
+      const dl = hurtD ? 'M' : 'R';
+      R.strong = [[0, ...d0], [1.0, d0[0] + 0.1, d0[1] - 0.25, d0[2] + 0.1], [4.4, sofa[0] + 0.3, sofa[1] + 0.45, sofa[2] - 0.3], [5.2, sofa[0] + 0.32, sofa[1] + 0.42, sofa[2] - 0.28], [8.0 + slow, 4.3, -1.0, 0.45], [10.4 + slow, 5.5, -0.8, PA.doorZ + 0.8], [11.5 + slow, 5.52, -0.8, PA.doorZ + 0.78], [12.4 + slow, ...D1], [13.6 + slow, ...lane(7.0, dl)], [16.4 + slow, ...lane(7.8, dl)], [19.2 + slow, ...lane(8.3 - slow * 0.5, dl)], [TEAR + 0.9, ...lane(8.6 - slow * 0.6, dl)], [RUN_END, ...lane(8.7 - slow * 0.6, dl)]];
+      R.builder = [[0, ...b0], [2.6, ...b0], [3.9, ...sofa], [5.0, ...sofa], [8.2 + slow, 4.75, -1.25, 0.5], [10.3 + slow, 5.3, -1.2, PA.doorZ - 0.05], [11.3 + slow, ...D1], [12.7 + slow, ...lane(7.0, 'L')], [15.4 + slow, ...lane(7.3, 'L')], [18.6 + slow, ...lane(7.7, 'L')], [TEAR + 0.9, ...lane(7.95, 'L')], [RUN_END, ...lane(8.05, 'L')]];
+      return { R, hand, core, hurtN, hurtD };
+    };
+    const qA = new THREE.Quaternion(), eA = new THREE.Euler(), pA = new THREE.Vector3(), pB = new THREE.Vector3(), upV = new THREE.Vector3();
+    /** How each one carries the body along a route: how far they lean into the travel, a roll of their own, the pull's length. */
+    const BODY: Record<string, { lean: number; roll: number; step: number; seed: number }> = {
+      scientist: { lean: 1.05, roll: -0.12, step: 0.95, seed: 1.3 }, explorer: { lean: 1.2, roll: 0.16, step: 0.8, seed: 4.1 }, medic: { lean: 0.95, roll: 0.08, step: 0.85, seed: 7.7 },
+      social: { lean: 0.8, roll: -0.2, step: 0.9, seed: 10.9 }, strong: { lean: 1.15, roll: 0.1, step: 1.15, seed: 14.2 }, builder: { lean: 0.9, roll: 0.3, step: 0.7, seed: 17.5 },
+    };
+    const railGrip = { L: { at: V(0, 0, 0), fingers: V(0, 1, 0), palm: V(0, 0, -1), radius: 0.018, grasp: true }, R: { at: V(0, 0, 0), fingers: V(0, 1, 0), palm: V(0, 0, 1), radius: 0.018, grasp: true } };
+    const holdAt = new Map<string, THREE.Vector3>();
+    const core = intr.core, coreHome = core.position.clone();
+    /** Everyone where the run has them at t seconds after the call. */
+    const run = (tau: number) => {
+      const { R, hand: hd, core: cr, hurtN, hurtD } = routes();
+      const flash = Math.sin(this.clockT * 9) * 0.5 + 0.5, torn = smoothstep(TEAR, RUN_END, tau) * 0.8;
+      // the room and the passage: the hatch opens at the call's end, the lamps go with the hull
+      pas.show(true); pas.door(smoothstep(4.7, 5.9, tau));
+      pas.lamps(tau < TEAR ? 0.55 + 0.45 * flash : 0.25 * (1 - smoothstep(TEAR, TEAR + 0.5, tau)), tau < TEAR + 0.4 ? 1 : 0.5, tau < 18.6);
+      pas.tear(torn, this.clockT);
+      this.damage = Math.max(this.damage, tau >= TEAR ? 2 + smoothstep(TEAR, TEAR + 1.5, tau) : 1); this.airOut = tau >= TEAR;
+      intr.mainLight.intensity = 0.6; intr.alarmLight.color.copy(RED); intr.alarmLight.intensity = tau < TEAR ? flash * 22 : 0;
+      floatUp(1, 0, 2.4);
+      for (const c of intr.crew) {
+        const id = c.id as CrewId, keys = R[id], b = BODY[id], s0 = runStart.get(id)!;
+        route(keys, tau, pA); route(keys, tau + 0.5, pB); pB.sub(route(keys, tau - 0.25, upV));
+        const sp = pB.length() / 0.75, moving = smoothstep(0.12, 0.6, sp);
+        // the heading follows the travel; when nearly still it keeps to the way aft
+        // the heading is where the route goes over the next second and more, not this instant's velocity: tied to
+        // the speed it swung a body 80 to 110 degrees in a frame as it started to move (the check's pops in G6c)
+        const far = route(keys, tau + 1.2, new THREE.Vector3()).sub(route(keys, tau - 0.2, new THREE.Vector3())), yaw = Math.hypot(far.x, far.z) > 0.04 ? Math.atan2(far.x, far.z) : Math.PI / 2;
+        const sway = nz(tau * 0.9, b.seed) * 0.08;
+        const inP = smoothstep(PA.doorX - 0.6, PA.doorX + 0.8, pA.x), trail = Math.max(moving, 0.7 * inP);
+        eA.set(0.4 + (b.lean - 0.2) * trail + sway, yaw, b.roll * moving + nz(tau * 0.7, b.seed + 3) * 0.1, 'YXZ'); qA.setFromEuler(eA);
+        // out of the pose the call found them in, over their first second of moving
+        let j0 = 0; while (j0 < keys.length - 2 && keys[j0 + 1][1] === keys[0][1] && keys[j0 + 1][2] === keys[0][2] && keys[j0 + 1][3] === keys[0][3]) j0++;
+        const tStart = keys[j0][0];
+        const ease = smoothstep(tStart, tStart + 1.3, tau);
+        c.root.quaternion.copy(s0.q).slerp(qA, ease);
+        upV.set(0, s0.up, 0).applyQuaternion(c.root.quaternion);
+        c.root.position.copy(pA).sub(upV);
+        // nobody's feet in the floor: a body that slows and comes upright rides higher
+        if (ease > 0) c.root.position.y += Math.max(0, FLOOR + 0.22 - c.root.position.y) * ease;
+        // ---- what each body does on the way: authored per person, driven by how far they have come, not by a clock ----
+        const inPass = smoothstep(PA.doorX + 0.2, PA.doorX + 1.2, pA.x), dist = pA.x; // metres along the way aft
+        const sideRail = keys[keys.length - 1][3] > PA.doorZ + 0.2 ? 'R' : keys[keys.length - 1][3] < PA.doorZ - 0.2 ? 'L' : null;
+        const ph = (dist / b.step) % 1, pull = Math.sin(ph * Math.PI * 2); // one pull on the rail per step of travel
+        // trailing legs, a small kick of their own on each pull
+        const legs: Limbs = { legL: [0.1, -1, -0.12 - 0.12 * pull * moving], shinL: [0.06, -1, -0.35 - 0.2 * moving], legR: [-0.1, -1, -0.12 + 0.12 * pull * moving], shinR: [-0.06, -1, -0.3 - 0.25 * moving] };
+        // the free arms: ahead for the next hold while travelling, loose when still
+        const ahead = (s: 1 | -1, k: number): Limbs => s > 0 ? { armL: [0.45, 0.75 * k - 0.3 * (1 - k), 0.35], foreL: [0.25, 0.9 * k - 0.2 * (1 - k), 0.3] } : { armR: [-0.45, 0.75 * k - 0.3 * (1 - k), 0.35], foreR: [-0.25, 0.9 * k - 0.2 * (1 - k), 0.3] };
+        let limbs: Limbs = { ...mixLimbs(STANDING, FALL.spread, 0.2), ...legs, ...ahead(1, moving * (0.5 + 0.5 * pull)), ...ahead(-1, moving * (0.5 - 0.5 * pull)), openHands: true, hair: [0, 0.3, -1] };
+        let face: Face = { fear: 0.55, open: 0.2 }, look: THREE.Vector3 | null = at(pA.x + 4, -0.9, PA.doorZ);
+        const hold: { L?: typeof railGrip.L; R?: typeof railGrip.R } = {};
+        // a hand on the rail in the passage: it stays where it closed while the body passes, then lets go for the next
+        if (sideRail && inPass > 0.5 && tau < RUN_END + 5) {
+          const sgn = sideRail === 'R' ? 1 : -1, zr = PA.doorZ + sgn * (PA.half - PA.railOff);
+          const lead = 0.5, k0 = Math.floor((dist + lead) / b.step), gx = Math.min(PA.tearX - 0.25, k0 * b.step + 0.12), g = holdAt.get(id) ?? V(gx, PA.railY, zr);
+          // the reach to the next hold: off the rail, forward, on (a third of the step)
+          const u = smoothstep(0, 0.35, ((dist + lead) / b.step) % 1), from = Math.min(PA.tearX - 0.25, (k0 - 1) * b.step + 0.12);
+          g.set(lerp(from, gx, u), PA.railY + Math.sin(u * Math.PI) * 0.06, zr - sgn * Math.sin(u * Math.PI) * 0.1); holdAt.set(id, g);
+          const h = { at: at(g.x, g.y, g.z), fingers: V(0.3, 1, 0).normalize(), palm: V(0, 0, sgn), radius: 0.018, grasp: true };
+          if (sideRail === 'R') hold.R = h; else hold.L = h;
+        }
+        if (id === 'scientist') {
+          face = { fear: 0.6, frown: 0.35, open: 0.15 };
+          if (hd) { limbs = { ...limbs, armL: [0.8, -0.25, -0.35], foreL: [0.85, -0.35, -0.3] }; look = tau > 10.5 && tau < 11.6 ? head(sky) : look; } // his hand back for hers
+          if (cr) {
+            // at the console: both hands to the core, a wrench, then it rides under his left arm
+            const grab = smoothstep(3.6, 4.4, tau) * (1 - smoothstep(5.9, 6.3, tau)), carry = smoothstep(5.9, 6.4, tau);
+            if (grab > 0) { limbs = { ...limbs, armL: [0.25, -0.35, 0.9], foreL: [0.1, -0.3, 1], armR: [-0.25, -0.35, 0.9], foreR: [-0.1, -0.3, 1], bend: 0.3 * grab }; look = core.getWorldPosition(new THREE.Vector3()); }
+            if (carry > 0) { limbs = { ...limbs, armL: [0.35, -0.75, 0.5], foreL: [-0.75, 0.15, 0.6] }; delete hold.L; }
+            c.root.quaternion.slerp(qA.setFromEuler(eA.set(0.25, Math.PI, 0, 'YXZ')), smoothstep(3.3, 4.2, tau) * (1 - smoothstep(5.9, 6.8, tau))); // back to the console, then round for the hatch
+            upV.set(0, s0.up, 0).applyQuaternion(c.root.quaternion); c.root.position.copy(pA).sub(upV); c.root.position.y += Math.max(0, FLOOR + 0.22 - c.root.position.y);
+          }
+          if (!hd && !cr && tau < 4.4) { limbs = mixLimbs(STANDING, FALL.spread, 0.25); face = { fear: 0.8, open: 0.1 }; look = head(sky); } // frozen
+        } else if (id === 'explorer') {
+          face = { fear: 0.5, open: 0.3 };
+          const reach = smoothstep(2.8, 3.7, tau);
+          if (tau < 4.8) { limbs = { ...limbs, ...mixLimbs(FALL.explorer, { ...FALL.explorer, armR: [-0.3, 0.45, 1], foreR: [-0.2, 0.3, 1] }, reach) }; look = head(sci); }
+          if (hd && tau >= 3.9) hold.R = { at: hand(sci, false), fingers: V(1, 0.2, 0).normalize(), palm: V(0, -1, 0), radius: 0.03, grasp: true }; // her hand in his
+          if (!hd && tau > 4.0 && tau < 4.8) face = { fear: 0.6, frown: 0.5, open: 0.1 }; // her hand closed on nothing
+          {
+            // she goes to him and then back the way she came, for the hatch: her route turns right round at his side, so
+            // her facing is set here (to him, then round to the way aft over a second), not read off a route that reverses
+            const z = sci.root.position, toHim = Math.atan2(z.x - c.root.position.x, z.z - c.root.position.z), w = 1 - smoothstep(4.5, 5.7, tau);
+            if (w > 0) {
+              qA.setFromEuler(eA.set(0.55, toHim, 0.1, 'YXZ')); const now = c.root.quaternion.clone();
+              c.root.quaternion.copy(s0.q).slerp(qA, ease).slerp(now, 1 - w);
+              upV.set(0, s0.up, 0).applyQuaternion(c.root.quaternion); c.root.position.copy(pA).sub(upV); c.root.position.y += Math.max(0, FLOOR + 0.22 - c.root.position.y) * ease;
+            }
+          }
+          if (!hd && ((tau > 9.6 && tau < 11.0) || (tau > 14.2 && tau < 15.4))) look = head(sci); // she looks back for him
+        } else if (id === 'medic') {
+          face = { frown: 0.45, fear: 0.35, open: 0.1 };
+          const go = smoothstep(0.1, 1.6, tau);
+          limbs = { ...limbs, armR: [-0.55, -0.45 + 0.5 * (1 - go), -0.5 + 1.2 * (1 - go)], foreR: [-0.5, -0.6 + 0.5 * (1 - go), -0.5 + 1.3 * (1 - go)], weight: smoothstep(0, 0.35, tau) }; // an arm for Nuvexa: out to her, then back as she tows
+          look = tau < 2.4 ? hand(nuv, false) : (tau > 12.6 && tau < 13.6) || (tau > 17.4 && tau < 18.3) ? head(nuv) : look;
+        } else if (id === 'social') {
+          face = hurtN ? { fear: 0.6, squint: 0.7, open: 0.2 } : { fear: 0.75, open: 0.25 };
+          limbs = { ...limbs, armR: [-0.35, -0.3, 0.6], foreR: [0.4, 0.3, 0.6], legL: [0.14, -1, hurtN ? 0.25 : -0.1], shinL: [0.1, -1, hurtN ? -0.7 : -0.4], bend: hurtN ? 0.35 : 0.1 }; // the phone to her chest
+          delete hold.L; delete hold.R;
+          if (tau >= 1.5) hold.L = { at: hand(lyr), fingers: V(1, 0, 0), palm: V(0, -1, 0), radius: 0.03, grasp: true }; // her wrist in Lyrra's hand
+          look = tau < 2.6 ? head(lyr) : tau > 19 ? at(16, -0.9, 0.9) : head(lyr);
+        } else if (id === 'strong') {
+          face = { frown: 0.85, open: 0.25 };
+          // off the ceiling: knees to the chest, then the shove; at the sofa an arm for Bolzar; at the hatch a hand on its frame
+          const tuck = smoothstep(0.2, 0.9, tau) * (1 - smoothstep(1.0, 1.9, tau));
+          if (tuck > 0) limbs = { ...limbs, legL: [0.35, -0.5 + 0.3 * tuck, 0.2 + 0.7 * tuck], legR: [-0.35, -0.5 + 0.3 * tuck, 0.2 + 0.7 * tuck], shinL: [0.2, -1, -0.3 * tuck], shinR: [-0.2, -1, -0.3 * tuck] };
+          const tow: Limbs = hurtD ? { armR: [-0.7, -0.5, -0.2], foreR: [-0.6, -0.7, -0.2], armL: [0.3, -0.7, 0.55], foreL: [-0.7, 0.2, 0.6] } : { armL: [0.7, -0.5, -0.2], foreL: [0.6, -0.7, -0.2] };
+          if (tau > 4.2) limbs = { ...limbs, ...tow };
+          if (hurtD) { delete hold.L; delete hold.R; face = { frown: 0.7, squint: 0.6, open: 0.3 }; }
+          if (tau > 10.2 + (hurtD ? 0.6 : 0) && tau < 12.0 + (hurtD ? 0.6 : 0) && !hurtD) hold.R = { at: at(PA.doorX - 0.03, -0.72, PA.doorZ + PA.doorW / 2 + 0.03), fingers: V(1, 0, 0), palm: V(0, 0, -1), radius: 0.03, grasp: true }; // the hatch's frame, beside it while Bolzar goes through
+          look = tau > 2.0 && tau < 12.4 ? head(bol) : look;
+        } else if (id === 'builder') {
+          face = { fear: 0.75, squint: 0.4 };
+          limbs = { ...FALL.builder, ...legs, bend: 0.5 - 0.2 * moving };
+          // his arms go out for the sofa's back before the hands close on it, and stay out between it and Draxum's arm: a
+          // hold switched on from a tucked arm turned his upper arm 134 degrees in a frame (glitch_pull)
+          const out = smoothstep(2.9, 3.7, tau); limbs = { ...limbs, armL: [0.3, -0.4 + 0.5 * out, 0.9], foreL: [-0.4 + 0.5 * out, 0.15, 1], armR: [-0.3, -0.4 + 0.5 * out, 0.9], foreR: [0.4 - 0.5 * out, 0.15, 1] };
+          if (tau > 3.85 && tau < 4.85) { const back = at(3.15, -1.33, -0.45), al = V(0.14, 0, 0.077); hold.L = { at: back.clone().add(al), fingers: V(-0.3, -0.4, 0.86).normalize(), palm: V(0, -1, 0), radius: 0.05, grasp: true }; hold.R = { at: back.clone().sub(al), fingers: V(-0.3, -0.4, 0.86).normalize(), palm: V(0, -1, 0), radius: 0.05, grasp: true }; look = back; }
+          else if (tau >= 5.35) {
+            // both hands (one, if the fall hurt him) round the arm that tows him
+            const arm = (hurtD ? drx.handR : drx.handL).getWorldPosition(new THREE.Vector3()), g = { at: arm, fingers: V(0, 1, 0), palm: V(-1, 0, 0), radius: 0.045, grasp: true };
+            hold.R = g; if (this.chose('e1.reach', 'nuvexa')) limbs = { ...limbs, armL: [0.3, -0.75, 0.5], foreL: [-0.6, 0.1, 0.7] }; else hold.L = { ...g, at: arm.clone().add(V(0, 0.07, 0)) };
+            look = tau < 12.6 ? at(PA.doorX, -1, PA.doorZ) : look;
+          }
+        }
+        // the breach: the air goes aft and takes them a little with it; hands fly to the rail, faces to the gap
+        if (tau > TEAR) { const g = smoothstep(TEAR, TEAR + 0.8, tau); face = { ...face, fear: 0.9, open: 0.45 * g + (face.open ?? 0) * (1 - g) }; look = at(PA.tearX + 2.5, -0.4, PA.doorZ - 0.6); limbs = { ...limbs, hair: [0, 1, 0.4] }; }
+        c.setLimbs(limbs); c.setFace(face); c.setLookTarget(look);
+        c.setHold(hold.L || hold.R ? hold : null);
+        c.setGrip('both', hold.L || hold.R ? { shape: 'grip', radius: 0.02 } : null);
+      }
+      // the core: on the console until he takes it, then under his arm
+      if (cr && tau > 5.0) { const g = smoothstep(5.0, 5.8, tau); const want = sci.handL.getWorldPosition(new THREE.Vector3()); intr.group.worldToLocal(want); core.position.copy(coreHome).lerp(want, g); } else core.position.copy(coreHome);
+      this.pullPose = { social: 'selfie' };
+    };
+    const runShot = (t0: number, t1: number, label: string, cam: (tau: number, k: number) => void, enter?: () => void) => shotAt(RUN + t0, RUN + t1, { label, enter, update: (k, local) => { run(t0 + local); this.scene.updateMatrixWorld(); cam(t0 + local, k); } }); // (by the shot's own time: the film's clock is stretched by the lines before it, RUN is not)
+    // G6b: they hear him. Lyrra pushes off to Nuvexa and takes her wrist; above them Draxum tucks against the ceiling and shoves off
+    runShot(0, 2.6, 'G6b', () => {
+      const m = head(lyr).lerp(head(nuv), 0.5);
+      lens(35); this.camera.position.copy(m).add(V(-0.9, 0.05, 3.1)); this.lookTarget.copy(m).add(V(0.15, 0.1, 0));
+    }, () => {
+      runStart.clear(); holdAt.clear(); this.scene.updateMatrixWorld(true);
+      for (const c of intr.crew) { const ch = c.chest.getWorldPosition(new THREE.Vector3()), r = c.root.getWorldPosition(new THREE.Vector3()); runStart.set(c.id, { chest: intr.group.worldToLocal(ch.clone()), q: c.root.quaternion.clone(), up: ch.distanceTo(r) }); }
     });
-    // the breaking apart, the white and the six fates are the title sequence: montage.ts
-    this.cue(S + 124.4, () => { holoOn(true); intr.crew.forEach((c) => { c.root.visible = true; }); ui.subtitle(null); audio.alarm(false); calm(); intr.crew.forEach((c) => { c.root.rotation.set(0, Math.PI, 0); c.setLookTarget(null); }); intr.group.scale.set(1, 1, 1); this.roll = 0; this.pullPose = {}; audio.vacuum(false); ins.cup(null); ins.warn(null); ins.comms(['COMMS', 'LINK OK']); ins.readout(['NAV', 'COURSE NOMINAL']); this.finish(); });
+    // G6c: Bolzar has hold of the sofa's back and will not let go; Draxum is coming down to him. Skyvra pushes off the
+    // window frame towards Zenvik, her hand out for his: the choice
+    runShot(2.6, 4.6, 'G6c', () => {
+      // from high on the room side, over everyone: Skyvra's reach for Zenvik (the choice), Bolzar at the sofa's back and
+      // Draxum coming down to him all read at once. (Level, from beside them, Lyrra and Nuvexa filled the foreground
+      // and hid the hand the choice is about: GPU take a3)
+      lens(24); this.camera.position.copy(at(0.9, 0.7, 2.75)); this.lookTarget.copy(at(1.85, -1.25, -0.95));
+    });
+    this.mcue(RUN + 2.75, 'e1.handcore', 'choice');
+    // G7 the way out, established: the hatch aft slides open on the passage, lit red, ESCAPE PODS over it; they go for it
+    // from where they float, in the order the answers made, and the first go through it
+    this.cue(RUN + 4.7, () => { audio.tone(90, 1.1, 'sawtooth', 0.09, 0, 60); audio.thud(); });
+    runShot(4.6, 9.4, 'G7', (tau, k) => {
+      lens(24); this.camera.position.copy(at(lerp(-2.1, -1.2, k), -1.0, 2.35)); this.lookTarget.copy(at(5.2, -1.1, 0.6)); this.shake = 0.006;
+    });
+    // P1 the threshold, from inside the passage: they come through the hatch one after another, the lounge behind them
+    runShot(9.4, 13.7, 'P1', () => {
+      lens(28); this.camera.position.copy(at(8.7, -0.22, PA.doorZ + 0.72)); this.lookTarget.copy(at(PA.doorX, -1.05, PA.doorZ - 0.05)); this.shake = 0.006;
+    });
+    // P2 the passage, established down its length: the rails, the signs, and at its end the pod bay, six lit hatches
+    runShot(13.7, 17.2, 'P2', (tau, k) => {
+      lens(24); this.camera.position.copy(at(lerp(6.35, 6.9, k), -0.3, PA.doorZ + 0.66)); this.lookTarget.copy(at(18.5, -1.05, PA.doorZ - 0.1)); this.shake = 0.006;
+    });
+    // P3 their faces, from ahead of them, backing off as they come hand over hand: who holds whom
+    runShot(17.2, TEAR, 'P3', (tau) => {
+      const lead = Math.max(sci.chest.getWorldPosition(new THREE.Vector3()).x, sky.chest.getWorldPosition(new THREE.Vector3()).x);
+      lens(30); this.camera.position.copy(at(lead + 2.1, -0.12, PA.doorZ + 0.8)); this.lookTarget.copy(at(lead - 1.4, -1.15, PA.doorZ - 0.05)); this.shake = 0.008 + 0.02 * smoothstep(18.6, TEAR, tau);
+    });
+    this.cue(RUN + 18.6, () => { audio.tone(48, 1.8, 'sawtooth', 0.16, 0, -8); audio.beep(); }); // the hull groans; the pod lamps go red
+    // P4 insert, the cause: a seam opens across the passage ahead; the light of the hole comes through it; the air goes
+    this.cue(RUN + TEAR, () => { audio.thud(); this.shake = 0.14; audio.alarm(false); audio.vacuum(true); ui.subtitle(null); });
+    runShot(TEAR, TEAR + 1.5, 'P4', (tau) => {
+      lens(40); this.camera.position.copy(at(PA.tearX - 2.7, -0.14, PA.doorZ + 0.25)); this.lookTarget.copy(at(PA.tearX + 1.3, -0.1, PA.doorZ - 0.55)); void tau; // over their heads
+    });
+    // P5 over their shoulders: the passage comes apart plate by plate, without a sound; the bay and its six lit hatches
+    // drift away; nobody is getting there
+    runShot(TEAR + 1.5, RUN_END, 'P5', (tau, k) => {
+      lens(24); this.camera.position.copy(at(lerp(7.4, 7.9, k), -0.28, PA.doorZ + 0.7)); this.lookTarget.copy(at(17, -0.95, PA.doorZ - 0.15)); this.shake = 0.01;
+    });
+    // the breaking apart, the white and the six fates are the title sequence: montage.ts (it goes on from this state)
+    this.cue(RUN + RUN_END, () => {
+      this.runEnd = Object.fromEntries(intr.crew.map((c) => [c.id, { p: c.root.position.clone(), q: c.root.quaternion.clone() }]));
+      holoOn(true); intr.crew.forEach((c) => { c.root.visible = true; c.setHold(null); c.setGrip('both', null); }); ui.subtitle(null); calm(); intr.crew.forEach((c) => c.setLookTarget(null));
+      intr.group.scale.set(1, 1, 1); this.roll = 0; this.pullPose = {}; ins.cup(null); ins.warn(null); ins.comms(['COMMS', 'LINK OK']); ins.readout(['NAV', 'COURSE NOMINAL']); core.position.copy(coreHome);
+      this.finish(true);
+    });
   }
 
   /** Camera roll for the shot in hand (the deck tilting), and poses the pull gives the crew outside a staged scene. */
@@ -1190,7 +1374,21 @@ export class Cinematic {
     if (!this.cont.on) return;
     const set = this.interior.group.visible ? 'deck' : this.ins.cockpit.visible ? 'cockpit' : 'space';
     this.scene.updateMatrixWorld();
-    this.cont.frame(shot, scene, set, this.clockT, this.interior.lounge.visible, this.interior.crew, this.interior.group.position.y - 2.2, this.camera);
+    this.cont.frame(shot, scene, set, this.clockT, this.interior.lounge.visible, this.interior.crew, this.interior.group.position.y - 2.2, this.camera, this.stageState());
+  }
+  private lampWas = 0; private lampMoved = -9;
+  /** The ship's state and the sound bed now (continuity log). */
+  stageState(): StageState {
+    const i = this.interior, a = i.alarmLight.intensity;
+    if (Math.abs(a - this.lampWas) > 0.05) this.lampMoved = this.clockT; this.lampWas = a;
+    return { gravity: this.gravOff ? 0 : 1, power: clamp(i.mainLight.intensity / 9, 0, 1), damage: this.damage, loose: this.gravOff ? 1 : 0, door: i.passage.open, air: this.airOut ? 0 : 1,
+      alarm: audio.filmBeds.alarm, drone: audio.filmBeds.drone, score: audio.filmBeds.score, muffle: audio.filmBeds.muffle, lamp: a > 1 && this.clockT - this.lampMoved < 0.5 ? 1 : 0 };
+  }
+  /** The title sequence's shots inside the ship, on the same log as the pull (one event, one time). */
+  logFilm(shot: string, crew: Character[]) {
+    if (!this.cont.on) return;
+    this.scene.updateMatrixWorld();
+    this.cont.frame(shot, 'pull', 'deck', this.clockT, this.interior.lounge.visible, crew, this.interior.group.position.y - 2.2, this.camera, this.stageState());
   }
 
   private commonUpdate(dt: number) {
