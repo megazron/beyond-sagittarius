@@ -1086,7 +1086,7 @@ export class Cinematic {
       scientist: { lean: 1.05, roll: -0.12, step: 0.8, seed: 1.3 }, explorer: { lean: 1.2, roll: 0.16, step: 0.8, seed: 4.1 }, medic: { lean: 0.95, roll: 0.08, step: 0.75, seed: 7.7 },
       social: { lean: 0.8, roll: -0.2, step: 0.8, seed: 10.9 }, strong: { lean: 1.15, roll: 0.1, step: 0.9, seed: 14.2 }, builder: { lean: 0.9, roll: 0.3, step: 0.7, seed: 17.5 },
     };
-    const joined = new Map<string, number>(), railSince = new Map<string, number>(), headYaw = new Map<string, number>(); let runTau = 0;
+    const joined = new Map<string, number>(), railSince = new Map<string, number>(), headYaw = new Map<string, number>(); let runTau = 0; let skyYaw: number | null = null;
     /** Where the rail hand is for a chest `dist` along the passage: closed on the rail while the body passes it, then
      *  off it, forward and on again a step further (the reach: a third of the step), a reach ahead of the shoulder. */
     const railPoint = (dist: number, step: number) => {
@@ -1151,7 +1151,7 @@ export class Cinematic {
         // the body pitches a little with each pull (the shoulders go down into it, the legs come up behind)
         // (in the passage they come along the rail half upright, heads up, not flat out head first: flat, every shot from
         // ahead or behind showed six heads of hair and no faces, GPU take a4)
-        eA.set(0.4 + lerp(0.65 * b.lean - 0.1, 0.42 * b.lean - 0.1, inPass) * trail + sway + 0.07 * Math.sin(ph0 * Math.PI * 2) * inPass, yaw + side, b.roll * moving + nz(tau * 0.7, b.seed + 3) * 0.1 + (role.lane === 'tow' ? 0.22 * inPass : 0), 'YXZ'); qA.setFromEuler(eA);
+        eA.set(0.4 + lerp(0.45 * b.lean - 0.1, 0.42 * b.lean - 0.1, inPass) * trail + sway + 0.07 * Math.sin(ph0 * Math.PI * 2) * inPass, yaw + side, b.roll * moving + nz(tau * 0.7, b.seed + 3) * 0.1 + (role.lane === 'tow' ? 0.22 * inPass : 0), 'YXZ'); qA.setFromEuler(eA);
         // out of the pose the call found them in, over their first second of moving
         let j0 = 0; while (j0 < keys.length - 2 && keys[j0 + 1][1] === keys[0][1] && keys[j0 + 1][2] === keys[0][2] && keys[j0 + 1][3] === keys[0][3]) j0++;
         const tStart = keys[j0][0], ease = smoothstep(tStart, tStart + 1.3, tau);
@@ -1173,7 +1173,11 @@ export class Cinematic {
       {
         // she goes to him and then back the way she came, for the hatch: her route turns right round at his side, so
         // her facing is set here (to him, then round to the way aft over a second), not read off a route that reverses
-        const s0 = runStart.get('explorer')!, i = info.get('explorer')!, z = sci.root.position, toHim = Math.atan2(z.x - sky.root.position.x, z.z - sky.root.position.z), w = 1 - smoothstep(4.5, 5.7, tau);
+        // (her facing to him is read chest to chest and turned towards at a rate a body turns: read off the two roots, it
+        // swung with her own root as it moved about her chest, 0.52 m across in one frame at his side, glitch_pull a10)
+        const s0 = runStart.get('explorer')!, i = info.get('explorer')!, z = info.get('scientist')!.chest, w = 1 - smoothstep(4.5, 5.7, tau);
+        const want = Math.atan2(z.x - i.chest.x, z.z - i.chest.z);
+        let toHim = skyYaw ?? want; const dw = Math.atan2(Math.sin(want - toHim), Math.cos(want - toHim)); toHim += clamp(dw, -2.4 * dtN, 2.4 * dtN); skyYaw = w > 0 ? toHim : null;
         if (w > 0) {
           qA.setFromEuler(eA.set(0.55, toHim, 0.1, 'YXZ')); const now = sky.root.quaternion.clone();
           sky.root.quaternion.copy(s0.q).slerp(qA, i.ease).slerp(now, 1 - w);
@@ -1205,6 +1209,9 @@ export class Cinematic {
         // a hand on the far wall's rail in the passage: it stays where it closed while the body passes, then lets go
         // for the next hold, a reach ahead of the shoulder
         const me = info.get(id)!, step = V(me.next.x - me.chest.x, me.next.y - me.chest.y, me.next.z - me.chest.z); // how far this body moves by next frame
+        // the rail arm comes up ahead for the rail before the hand closes on it (switched on from a free arm, Skyvra's
+        // upper arm turned 130 degrees in a frame at her first hold, glitch_pull a10)
+        if (role.lane === 'rail' && inPass > 0.15 && inPass <= 0.5) limbs = { ...limbs, ...mixLimbs(limbs, ahead(1, 1), smoothstep(0.15, 0.5, inPass)) };
         if (role.lane === 'rail' && inPass > 0.5) {
           hold.L = { at: world(railPoint(me.next.x, b.step).sub(step)), fingers: V(0.25, 1, 0).normalize(), palm: V(0, 0, -1), radius: 0.018, grasp: true };
           if (!railSince.has(id)) railSince.set(id, tau);
@@ -1329,11 +1336,13 @@ export class Cinematic {
     // beside it): nobody passes under the lens, and the far wall is behind them in every frame
     // P1 the threshold, from inside the passage: they come through the hatch pair after pair, the lounge behind them
     runShot(9.4, 13.7, 'P1', () => {
-      lens(32); this.camera.position.copy(at(PA.doorX + 5.7, -0.5, PA.doorZ + PA.half - 0.25)); this.lookTarget.copy(at(PA.doorX + 0.9, -1.1, PA.doorZ - 0.3)); this.shake = 0.006;
+      // (from 7.4 m in, not 5.7: nearer, whoever came last through ended large and cut by the frame's bottom right, a8)
+      lens(30); this.camera.position.copy(at(PA.doorX + 7.4, -0.45, PA.doorZ + PA.half - 0.25)); this.lookTarget.copy(at(PA.doorX + 1.2, -1.15, PA.doorZ - 0.35)); this.shake = 0.006;
     });
     // P2 the passage, established down its length: the rails, the signs, and at its end the pod bay, six lit hatches
     runShot(13.7, 17.2, 'P2', (tau, k) => {
-      lens(21); this.camera.position.copy(at(PA.doorX + lerp(0.3, 0.75, k), PA.ceil - 0.35, PA.doorZ + 0.8)); this.lookTarget.copy(at(12.2, -1.3, PA.doorZ - 0.9)); this.shake = 0.006;
+      // (against the near wall, not over the lanes: from above them the nearest pair was cut by the frame's bottom, a8)
+      lens(22); this.camera.position.copy(at(PA.doorX + lerp(0.3, 0.75, k), PA.ceil - 0.3, PA.doorZ + PA.half - 0.25)); this.lookTarget.copy(at(12.2, -1.25, PA.doorZ - 0.9)); this.shake = 0.006;
     });
     // P3 their faces, from ahead of them, backing off as they come hand over hand: who holds whom
     runShot(17.2, TEAR, 'P3', (tau) => {
