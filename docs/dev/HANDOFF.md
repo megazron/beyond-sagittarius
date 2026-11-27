@@ -39,6 +39,14 @@ here is signed off (only the owner does that). The opening code word goes to the
 - MAKING THE CHECKPOINTS: build, then `~/bin/heavy ~/.venvs/bs-test/bin/python tools/cheat_snapshots.py make`
   (levels_smoke with ?cheatrec=1, about 40 minutes on the laptop), commit `src/cheat/snapshots.sealed`. Remake it when
   a level's flow or the save format changes (cheat_smoke fails when a checkpoint no longer plays through).
+- FOUND BY THE CHECKPOINTS (fixed): saves from the middle of a beat that could never be finished on Continue: level 1
+  during the first drink (waking.ts), level 7 after the first night's fight before dawn (game.ts start), level 15
+  between the ground axe and the felling, level 21 during the harvest (episode3.ts). A jump must wait for the boot's
+  warm-up (cine.warm puts the title's backdrop back when it ends: the deck was hidden under an early jump).
+- STATE: 227 checkpoints (made from c96c5cd2), all load and finish their level in CI (cheat_L* shards, 15 to 30 min
+  each). GPU clips of the menu and jumps with notes: Downloads/BS_Game_v1.1/cheats (~/bs-cap/cheat1/clips1, clips2,
+  run.sh, plan_clips*.json). Seen there and not fixed: level 20 and 21 scene cameras in rocks and behind branches at
+  night, a few seconds near black at the storm's start.
 - CAPTURES: put the point in the capture URL, e.g. `...index.html?quality=ultra&cheat=open.run&cgo=1&cpick=b` (the pods
   run with the second answers), `&cheat=L15.dec2&cgo=1`. Keep one honest full playthrough per release batch.
 
