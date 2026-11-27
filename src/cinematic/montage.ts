@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PASSAGE } from './passage';
 import beat from './beatmap.json';
 import { clamp, easeInOut, lerp, mulberry32, Simplex, smoothstep } from '../core/noise';
 import { audio } from '../core/audio';
@@ -586,7 +587,7 @@ export class Montage {
     if (this.vacuum) { this.vacuum = false; audio.vacuum(false); }
     this.playing = false;
     this.video?.close(); this.video = null;
-    this.score?.stop(); this.score = null;
+    this.score?.stop(); this.score = null; audio.filmBeds.score = 0;
     this.ui.subtitle(null);
     voice.stop();
     this.clear();
@@ -599,6 +600,7 @@ export class Montage {
       c.setLimbs(null); c.setFace(null); c.setLookTarget(null); c.root.visible = true; c.root.quaternion.identity();
       interior.group.add(c.root);
     }
+    this.cine.resetEvent();
     sun.intensity = 3.2; sun.color.set(0xfff2e0); sun.position.copy(V(1, 0.22, 0.55).normalize()).multiplyScalar(100);
     ship.group.scale.set(1, 1, 1);
     this.mend();
@@ -1050,64 +1052,73 @@ export class Montage {
       this.fx = { exposure: 0.8 };
     }, breakShip);
 
-    // Thrown, not lifted: each one goes at their own moment, and the rotation builds as they go.
+    // Thrown, not lifted: each one goes at their own moment, and the rotation builds as they go. They go from where the
+    // run to the pods left them in the passage (cinematic.ts runEnd), aft and out through where it tore open: the
+    // lounge is behind them (before, this shot put the six back on the lounge floor at their first marks, gravity on)
+    const PA = PASSAGE;
+    const mark = (id: CrewId, i: number) => this.cine.runEnd?.[id] ?? { p: V(PA.tearX - 1.2 - i * 0.75, -1.9 + (i % 3) * 0.25, PA.doorZ + (i % 2 ? 0.45 : -0.45)), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(1.1, Math.PI / 2, 0, 'YXZ')) };
+    /** The passage as the break leaves it: open to the lounge, dark but for the hole's light, torn open aft. */
+    const passage = (torn: number, t: number) => {
+      const pas = set.interior.passage;
+      pas.show(true); pas.door(1); pas.lamps(0, 0.35 * (1 - torn), false); pas.tear(torn, t);
+      this.cine.damage = Math.max(this.cine.damage, 3); this.cine.airOut = true; this.cine.gravOff = true;
+    };
     const lift = (id: CrewId, i: number, k: number, b: number) => {
       const t = b * BEAT, go = smoothstep(0.04 * i, 0.5 + 0.05 * i, k), g2 = go * go;
-      const mark = DECK[id], side = i % 2 ? 1 : -1;
-      const p = V(mark[0] + side * g2 * 0.9 + nz(t * 2.1, i) * 0.25 * go, -2.2 + go * (1.1 + (i % 3) * 0.45) + nz(t * 1.7, i + 3) * 0.2 * go, lerp(mark[1], mark[1] - 3.4, g2));
-      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-g2 * (1.6 + (i % 3) * 0.7) + nz(t * 2, i) * 0.3 * go, Math.PI + (i - 2.5) * 0.15 + side * g2 * 1.8, side * g2 * (1 + (i % 2)) + nz(t * 2.4, i + 7) * 0.25 * go));
-      const c = this.act(id, p, q, 'float', mixLimbs(STANDING, flail({ ...FALL.spread, openHands: true }, t, i * 3.1, 0.75), smoothstep(0, 0.3, go)), { fear: 0.4 + 0.5 * go, open: 0.15 + 0.45 * go });
+      const m = mark(id, i), side = i % 2 ? 1 : -1;
+      // aft with the air, then out of the open side (towards the hole, the window's side of the ship) and up
+      const p = V(m.p.x + g2 * (4.2 + (i % 3) * 0.6) + nz(t * 2.1, i) * 0.2 * go, m.p.y + go * (0.2 + (i % 3) * 0.3) + g2 * 1.1 + nz(t * 1.7, i + 3) * 0.15 * go, m.p.z - g2 * (1.6 + (i % 2) * 0.9) + nz(t * 1.9, i + 5) * 0.12 * go);
+      const spin = new THREE.Quaternion().setFromEuler(new THREE.Euler(g2 * (1.6 + (i % 3) * 0.7) + nz(t * 2, i) * 0.3 * go, side * g2 * 1.8, side * g2 * (1 + (i % 2)) + nz(t * 2.4, i + 7) * 0.25 * go));
+      const q = m.q.clone().multiply(spin);
+      const c = this.act(id, p, q, 'float', mixLimbs(FALL[id] ?? FALL.spread, flail({ ...FALL.spread, openHands: true }, t, i * 3.1, 0.75), smoothstep(0, 0.3, go)), { fear: 0.6 + 0.3 * go, open: 0.25 + 0.35 * go });
       c.look2(nz(t * 2.4, i + 2) * 0.9, nz(t * 1.8, i + 4) * 0.35);
       return c;
     };
     P(16, 20, 'interior', (k, b) => {
-      const tt = (b - 16) * BEAT;
       const i = set.interior;
-      const crack = smoothstep(0, 0.3, k);
-      this.crack.visible = k < 0.72;
-      const cu = (this.crack.material as THREE.ShaderMaterial).uniforms;
-      cu.uK.value = crack * 1.5;
-      cu.uFade.value = 1 - smoothstep(0.42, 0.7, k); // the glass goes with the first shards, it doesn't switch off
-      if (k > 0.45) this.shards.update((k - 0.45) * 4, tmp.set(0, 0.05, -1), 1.2, 4, -3.2, 0.3);
-      else this.shards.mesh.visible = false;
+      this.crack.visible = false; this.shards.mesh.visible = false;
+      passage(lerp(0.62, 1, smoothstep(0, 0.8, k)), b * BEAT);
       ORDER.forEach((id, n) => lift(id, n, k, b));
-      i.alarmLight.intensity = 6 + 14 * after(b % 1, 0, 0.6);
-      i.mainLight.intensity = 1.2;
-      i.consoleLight.intensity = 1.5;
+      i.alarmLight.intensity = 0; i.mainLight.intensity = 0.6; i.consoleLight.intensity = 1.5;
       this.hole(-2, 6, -20, 0.1);
-      this.lens(V(-0.3 + k * 0.5, -0.45, 3.7).add(shakeAt(b, 0.012 + k * 0.03, tmp)), V(0, -0.85, -3), 64, 4.5, 0.003, -0.05 + k * 0.09);
+      // from the hatch's end of the passage, down it: the six torn off their holds and out through the open side
+      this.lens(V(7.2 + k * 0.5, -0.35, PA.doorZ + 0.7).add(shakeAt(b, 0.012 + k * 0.03, tmp)), V(15, -0.8, PA.doorZ - 0.5), 58, 4.5, 0.003, -0.05 + k * 0.09);
+      this.setRig([{ p: V(PA.tearX + 1.5, 0.6, PA.doorZ - 1.6), color: 0xffc890, i: 26, d: 14 }, { p: V(9, -0.4, PA.doorZ + 0.6), color: 0x9ab8ff, i: 5, d: 8 }]);
       const fl = after(k, 0.45, 0.1) * 0.3;
       this.fx = { flash: [fl, fl, fl * 1.2], exposure: 0.8 };
-      void tt;
+      this.cine.logFilm('H0a', ORDER.map((id) => this.cast[id]));
     }, () => set.show('interior'));
 
     P(20, 24, 'interior', (k, b) => {
       const i = set.interior;
-      i.alarmLight.intensity = 8 + 14 * after(b % 1, 0, 0.6);
-      i.mainLight.intensity = 1.2;
-      // one hand on the rib, and the whole body swinging from it in the gale
-      const t = b * BEAT;
-      const p = V(-1.5 + nz(t * 2.6, 1) * 0.22, -1.0 + nz(t * 2.2, 2) * 0.16, -0.2 + nz(t * 1.9, 3) * 0.16);
+      i.alarmLight.intensity = 0; i.mainLight.intensity = 0.6;
+      passage(1, b * BEAT);
+      // Draxum: one hand still on the passage's rail, and the whole body streaming aft from it
+      const t = b * BEAT, rail = V(PA.tearX - 1.6, PA.railY, PA.doorZ - (PA.half - PA.railOff));
+      const m = mark('strong', 0), p0 = V(rail.x - 0.25, rail.y - 0.2, rail.z + 0.45), e = smoothstep(0, 0.25, k);
+      // (the shot before threw him aft with the others: here he has caught the last of the rail)
+      const p = p0.clone().add(V(nz(t * 2.6, 1) * 0.18, nz(t * 2.2, 2) * 0.12, nz(t * 1.9, 3) * 0.12)); void m; void e;
       const body = flail({ ...FALL.strong, armR: [-0.3, 0.1, 1], foreR: [-0.2, 0.1, 1], openHands: true, hair: [0, 0.4, 1] }, t, 4, 0.5);
-      this.act('strong', p, new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.5 + nz(t * 2.1, 5) * 0.3, Math.PI * 0.86 + nz(t * 1.7, 6) * 0.3, 0.12 + nz(t * 2.4, 7) * 0.26)), 'float', { ...body, armL: [0.55, 0.85, -0.2], foreL: [0.45, 0.9, -0.1] }, { frown: 0.8, open: 0.45, squint: 0.2 });
-      const c = this.cast.strong;
+      const c = this.act('strong', p, new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.15 + nz(t * 2.1, 5) * 0.25, -Math.PI / 2 + nz(t * 1.7, 6) * 0.25, 0.12 + nz(t * 2.4, 7) * 0.2, 'YXZ')), 'float', { ...body, armL: [0.55, 0.85, -0.2], foreL: [0.45, 0.9, -0.1] }, { frown: 0.8, open: 0.45, squint: 0.2 });
+      c.setHold({ L: { at: rail, fingers: V(0.3, 1, 0).normalize(), palm: V(0, 0, -1), radius: 0.018, grasp: true } }); c.setGrip('L', { shape: 'grip', radius: 0.02 });
       c.look2(nz(t * 2, 8) * 0.55, nz(t * 1.6, 9) * 0.2);
-      // the others go past him and out of the window
-      (['explorer', 'builder'] as CrewId[]).forEach((id, n) => {
+      // two of the others go past him, aft and out
+      (['social', 'builder'] as CrewId[]).forEach((id, n) => {
         const u = clamp((k - 0.12 - n * 0.36) / 0.5, 0, 1);
         if (u <= 0 || u >= 1) { this.cast[id].root.visible = false; return; }
-        this.act(id, V(lerp(-9, 7.5, u), -1.6 + u * 1.2 + n * 0.3, 1.5 + n * 0.8 - u * 0.6), new THREE.Quaternion().setFromEuler(new THREE.Euler(u * 5 + n, u * 3.4, u * 2.6)), 'float', flail({ ...FALL.spread, openHands: true }, t, n * 7, 0.9), { fear: 0.9, open: 0.6 });
+        this.act(id, V(lerp(7.5, 17.5, u), -1.5 + u * 1.3 + n * 0.3, PA.doorZ + 0.35 - n * 0.3 - u * u * 1.4), new THREE.Quaternion().setFromEuler(new THREE.Euler(u * 5 + n, u * 3.4, u * 2.6)), 'float', flail({ ...FALL.spread, openHands: true }, t, n * 7, 0.9), { fear: 0.9, open: 0.6 });
       });
       const h = c.head.getWorldPosition(tmp);
-      this.lens(V(h.x + 1.3 - k * 0.3, h.y - 0.1, h.z - 2.3 + k * 0.5).add(shakeAt(b, 0.012, this.tmp2)), V(h.x, h.y - 0.15, h.z), 34, 2.4, 0.012, 0.06);
-      this.setRig([{ p: V(h.x + 1.2, h.y + 0.6, h.z - 1.4), color: 0xff4030, i: 12 }, { p: V(h.x - 1.2, h.y + 0.2, h.z + 1.4), color: 0xff9a50, i: 9 }]);
+      this.lens(V(h.x + 1.5 - k * 0.3, h.y + 0.1, PA.doorZ + 0.8).add(shakeAt(b, 0.012, this.tmp2)), V(h.x, h.y - 0.1, h.z), 40, 2.0, 0.012, 0.06);
+      this.setRig([{ p: V(h.x + 1.6, h.y + 0.8, h.z - 1.4), color: 0xffc890, i: 12 }, { p: V(h.x - 1.2, h.y + 0.2, h.z + 1.0), color: 0x9ab8ff, i: 7 }]);
       this.hole(-2, 6, -18, 0.1);
-    }, () => set.show('interior'));
+      this.cine.logFilm('H0b', (['strong', 'social', 'builder'] as CrewId[]).map((id) => this.cast[id]));
+    }, () => { set.show('interior'); });
 
     // Six in a ring above the hole, hand reaching for hand. The ring is breaking.
     P(24, 27, 'deep', (k, b) => {
       const e = easeInOut(k), R = lerp(1.0, 1.9, e * e);
-      ship.group.visible = false;
+      ship.group.visible = false; this.cast.strong.setHold(null); this.cast.strong.setGrip('L', null);
       const spin = b * 0.03;
       ORDER.forEach((id, i) => {
         const a = (i / 6) * Math.PI * 2 + spin;

@@ -224,7 +224,11 @@ export class Audio {
   private vacTimer = 0;
   /** No air: the world is heard as from inside your own head (everything muffled), over your own heartbeat. */
   private vacOn = false;
+  /** The beds that run under a film, as asked for (1 on): the alarm, the cinematic's drone, the score, the airless
+   *  muffle. The continuity log reads them (a bed cut on a picture cut, dead air), sound or no sound. */
+  readonly filmBeds = { alarm: 0, drone: 0, score: 0, muffle: 0 };
   vacuum(on: boolean) {
+    this.filmBeds.muffle = on ? 1 : 0;
     const ctx = this.ctx;
     if (!ctx || !this.vac) return;
     this.vacOn = on;
@@ -362,6 +366,7 @@ export class Audio {
 
   /** Space pad for the cinematic. */
   startDrone() {
+    this.filmBeds.drone = 1;
     if (!this.ctx || this.drone) return;
     const ctx = this.ctx;
     const g = ctx.createGain(); g.gain.value = 0;
@@ -378,6 +383,7 @@ export class Audio {
   }
 
   stopDrone() {
+    this.filmBeds.drone = 0;
     if (!this.ctx || !this.drone) return;
     const g = this.drone; this.drone = null;
     g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.6);
@@ -406,6 +412,7 @@ export class Audio {
    * `now` is seconds into the score on the audio clock: picture follows it.
    */
   async playScore(music: string, sfx: string) {
+    this.filmBeds.score = 1;
     const ctx = this.ctx;
     if (!ctx) return null;
     const [m, s] = await Promise.all([this.scoreBuffer(music), this.scoreBuffer(sfx)]);
@@ -418,7 +425,7 @@ export class Audio {
     });
     return {
       now: () => (ctx.state === 'running' ? ctx.currentTime - t0 : undefined),
-      stop: () => nodes.forEach(({ src, g }) => { g.gain.setTargetAtTime(0, ctx.currentTime, 0.12); try { src.stop(ctx.currentTime + 0.7); } catch { /* over already */ } }),
+      stop: () => { this.filmBeds.score = 0; nodes.forEach(({ src, g }) => { g.gain.setTargetAtTime(0, ctx.currentTime, 0.12); try { src.stop(ctx.currentTime + 0.7); } catch { /* over already */ } }); },
     };
   }
 
@@ -728,6 +735,7 @@ export class Audio {
   }
 
   alarm(on: boolean) {
+    this.filmBeds.alarm = on ? 1 : 0;
     clearInterval(this.alarmTimer);
     if (!on || !this.ctx) return;
     const fire = () => { this.tone(740, 0.35, 'square', 0.07); this.tone(554, 0.35, 'square', 0.07, 0.38); };

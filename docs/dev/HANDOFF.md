@@ -6,6 +6,40 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## 2026-11-27 the run to the pods (pods agent: worktree ~/bs-podsw, branch pods1w; before-tree ~/bs-pods = main d7dceefb; captures ~/bs-cap/pods1)
+- Owner on main d7dceefb: "The cutscenes going to the pods scene is still not proper, doesn't show continuity." The
+  continuity check said 0 problems: it stopped where the pull ends (the handoff to the title sequence was never looked
+  at), skipped everyone in the air, and knew nothing of places, the ship's state, the camera's side or the sound.
+- What a viewer saw (GPU takes of main, three answer sets, shot by shot in Downloads/BS_Game_v1.1/pods_continuity/):
+  the hatch was a slab painted on the aft wall with nothing behind it; nobody travelled (G7 moved them 1 to 2 m while
+  the room was stretched 5%); then the liner whole from outside; then all six back on the lounge floor at their first
+  marks with gravity on, thrown out of the lounge window.
+- THE SET: `src/cinematic/passage.ts` (PASSAGE, createPassage): the hatch cut through the aft bulkhead (ship.ts, a
+  ShapeGeometry with a hole) with a door that slides, the aft passage (12 m, in 2 m sections, rails, red strips,
+  ESCAPE PODS signs) and the pod bay (a drum, six hatches POD 1 to 6). `door(k)`, `lamps(red, bay, ready)`, `tear(k, t)`
+  (the sections aft of PASSAGE.tearX come away plate by plate and the bay drifts off), `show(on)` (drawn only in the
+  run). Interior.passage, Interior.core (the navigation core in its socket on the console).
+- THE RUN: cinematic.ts `run(tau)` from RUN = S + 117.6. One clock, one state: each of the six has a route (keys of
+  time and chest position, `routes()`), built from where the call found them and from the answers (e1.reach, e1.hold,
+  e1.handcore); body heading and lean come from the route's own velocity; hands go to the rail by setHold, one pull per
+  step of travel (driven by distance, not by a clock); who tows whom is a hand hold on the other's hand. Shots G6b, G6c,
+  G7, P1 to P5 are cameras only (`runShot`). To change the staging change the routes, never a shot.
+  `finish(true)` hands the state on: `cine.runEnd` (where each one is), the torn passage, air out. The title sequence
+  (montage.ts beats 16 to 24) goes on from it in the passage; `cine.resetEvent()` puts the ship back (start, skip, the
+  title sequence's end).
+- Canon: nobody reaches a pod (owner's doc, DECISIONS, CONTINUITY). A brief asked me for six pods launching with the
+  six inside; I did not build that. Shot list: ~/bs-story/SHOTLIST_pods_run.md.
+- THE CHECK: continuity.ts now also logs, per frame, where each head is across the frame and how fast each body crosses
+  it, and a StageState (gravity, power, damage, loose, door, air; alarm, drone, score, muffle, lamp: `audio.filmBeds`,
+  `cine.stageState()`). New break kinds: `place` (lounge / passage / pod bay changed with no travel seen: `travel`),
+  `reset` (a one-way state went back), `gravity` (on the floor with gravity off), `axis` (most pairs swap sides over a
+  cut), `direction` (most movers turn round over a cut), `audio` (a bed cut on a picture cut unless the score takes
+  over, half a second of dead air, alarm lamps flashing 2.5 s with no alarm heard). Bodies in the air are checked for
+  off-screen moves too (2.6 m/s). The title sequence's interior shots log through `cine.logFilm` as the same scene.
+  tools/continuity_check.py runs on to the white (film beat 31) and takes `--answers a|b` (choices on, answered with
+  real keys); CI jobs continuity, continuity_a, continuity_b.
+- E1: the amber lamp is steady (it flashed with no alarm heard: the alarm tone stops at the cockpit shots).
+
 ## 2026-11-26 choice UI look (ui agent: worktree ~/bs-ui, branch ui1 from main b3a2302; captures ~/bs-cap/ui1)
 - Owner, first: the choice UI "looks a bit AI generated, use some UI". I made a Ledger look (paper slips, brass, wax);
   owner, second: "doesn't blend in, it looks completely different from the scene and background. It needs to be
