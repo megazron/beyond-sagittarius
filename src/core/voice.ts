@@ -66,6 +66,8 @@ class Voice {
   /** Spoken language; null follows the game language. */
   override: Lang | null = null;
   private get lang(): Lang { return this.override ?? getLang(); }
+  /** The language he is heard in right now (the narrator's film times its end to it). */
+  get spoken(): Lang { return this.lang; }
 
   /** The language a take is spoken in: the game's, or English where that language has no take of it. */
   private langOf(file: string): Lang {
