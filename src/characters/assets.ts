@@ -288,6 +288,7 @@ export function eyeMaterial(iris: number, glow: number, alive = DECREEP) {
   const m = new THREE.MeshStandardMaterial({ map: texPlain('eye'), roughness: alive ? 0.1 : 0.18 });
   m.userData.film = { kind: 'eye', iris, glow };
   const u = { uIris: { value: col(iris) }, uEyeGlow: { value: glow } };
+  m.userData.alive = alive; // the merged body draws the eyes itself and has to know
   m.userData.u = u; // the merged crowd body (bodymerge.ts) shares them
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
@@ -305,7 +306,7 @@ export function eyeMaterial(iris: number, glow: number, alive = DECREEP) {
         // pale irises read as blank, dead eyes: every iris is deepened and saturated towards its own hue
         float iLum = dot(uIris, vec3(0.3, 0.6, 0.1)); vec3 hue = mix(vec3(iLum), uIris, 1.7); hue = max(hue, vec3(0.0)) * (0.5 / max(iLum, 0.25));
         vec3 irs = hue * (0.10 + 0.95 * ey.r * limb);
-        diffuseColor.rgb = mix(scl, irs, ey.g) * (1.0 - ey.b * 0.98);
+        diffuseColor.rgb = diffuse * mix(scl, irs, ey.g) * (1.0 - ey.b * 0.98); // (the material's colour is white unless a scene shades the eyes down)
         float lidSh = smoothstep(0.05, 0.75, normalize(vNormal).y);
         diffuseColor.rgb *= 1.0 - 0.55 * lidSh;` : ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>

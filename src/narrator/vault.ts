@@ -245,9 +245,9 @@ export class Vault {
     s.add(this.lamp, this.lamp.target);
 
     // the quill rides in his right hand: cream feather, dark nib, big enough to read in a medium shot
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0016, 0.0032, 0.2, 8).translate(0, 0.1, 0), new THREE.MeshStandardMaterial({ color: 0xd8ccb0, roughness: 0.55 }));
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0016, 0.0032, 0.2, 8).translate(0, 0.1, 0), new THREE.MeshStandardMaterial({ color: 0x9a917c, roughness: 0.6 }));
     // a pen-sized quill: a narrow feather, its vane a soft leaf and not a blade (it read as a knife at twice this size)
-    const vane = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10).scale(0.013, 0.07, 0.002).translate(0.002, 0.135, 0), new THREE.MeshStandardMaterial({ color: 0xcfc4a8, roughness: 0.85, side: THREE.DoubleSide }));
+    const vane = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10).scale(0.013, 0.07, 0.002).translate(0.002, 0.135, 0), new THREE.MeshStandardMaterial({ color: 0x8f8672, roughness: 0.9, side: THREE.DoubleSide })); // (cream burned to a white glowing blade under the lamps and the bloom)
     const nib = new THREE.Mesh(new THREE.ConeGeometry(0.0034, 0.024, 8).rotateX(Math.PI).translate(0, -0.012, 0), new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.3, metalness: 0.6 }));
     this.ink = new THREE.Mesh(new THREE.SphereGeometry(0.0035, 10, 8), new THREE.MeshStandardMaterial({ color: 0x05060a, roughness: 0.05, metalness: 0.3 }));
     this.ink.position.y = -0.026; this.ink.visible = false;
@@ -406,6 +406,14 @@ export class Vault {
         const u = mt.userData?.u as { uMarks?: { value: THREE.Texture | null } } | undefined;
         if (u?.uMarks) u.uMarks.value = NO_MARKS;
         // his pale hair burned white under the lamp and the room's reflections (GPU take a1): a shade down, little sheen
+        // his eyes under the Vault's lamps and the bloom were two glowing slits with no iris or pupil to be seen (GPU
+        // reel r1): the ball shaded down, less of a mirror, so the iris and the pupil are what you read
+        if ((mt.userData?.film as { kind?: string } | undefined)?.kind === 'eye' && !mt.userData.dimmed) {
+          mt.userData.dimmed = true; const em = mt as THREE.MeshStandardMaterial; em.color.setScalar(0.42); em.roughness = 0.32; em.envMapIntensity = 0.25;
+          const eu = mt.userData.u as { uEyeGlow?: { value: number } } | undefined; if (eu?.uEyeGlow) eu.uEyeGlow.value = 0.15;
+        }
+        // the coat's weave normal map, laid over so few triangles, lit each triangle its own way (crumpled foil in close-up)
+        if ((mt.userData?.film as { kind?: string } | undefined)?.kind === 'cloth' && !mt.userData.dimmed) { mt.userData.dimmed = true; (mt as THREE.MeshStandardMaterial).normalScale?.set(0.25, 0.25); }
         if ((mt.userData?.film as { kind?: string } | undefined)?.kind === 'hair' && !mt.userData.dimmed) {
           mt.userData.dimmed = true; (mt as THREE.MeshStandardMaterial).envMapIntensity = 0.12;
           const hu = mt.userData.hairU as Record<string, { value: THREE.Color }> | undefined;
@@ -415,6 +423,8 @@ export class Vault {
       }
       if (!m.isSkinnedMesh || !m.geometry.attributes.normal) return;
       smoothNormals(m.geometry);
+      // his coat's coarse cut caught the key as a crumple of flat triangles in every close shot: its shading (not its shape) eased across neighbours
+      if (m.name === 'cloth') relaxNormals(m.geometry, 3);
     });
   }
 
@@ -451,6 +461,7 @@ export class Vault {
    */
   prepare() {
     if (!this.built) this.build();
+    void this.loadActing(); // his own clips are in before any film asks (they came a second into a film, and he popped into the room)
     this.page.draw(0);
     this.update(0.016);
   }
@@ -810,6 +821,33 @@ function smoothNormals(g: THREE.BufferGeometry) {
     if (s.lengthSq() < 1e-8 || own.dot(s.clone().normalize()) < 0.5) continue;
     const m = s.clone().normalize(); nor.setXYZ(i, m.x, m.y, m.z);
   }
+  nor.needsUpdate = true;
+}
+
+/** Shading eased across a mesh's neighbouring points (a few passes of each normal with its neighbours'): soft cloth, no facets. */
+function relaxNormals(g: THREE.BufferGeometry, passes: number) {
+  const pos = g.attributes.position as THREE.BufferAttribute, nor = g.attributes.normal as THREE.BufferAttribute, idx = g.index;
+  if (!pos || !nor || !idx || g.userData.relaxed) return;
+  g.userData.relaxed = true;
+  const id = new Int32Array(pos.count), seen = new Map<string, number>();
+  for (let i = 0; i < pos.count; i++) {
+    const k = `${Math.round(pos.getX(i) * 2e4)},${Math.round(pos.getY(i) * 2e4)},${Math.round(pos.getZ(i) * 2e4)}`;
+    let w = seen.get(k); if (w === undefined) { w = seen.size; seen.set(k, w); }
+    id[i] = w;
+  }
+  const n = seen.size; let N = new Float32Array(n * 3);
+  for (let i = 0; i < pos.count; i++) { const w = id[i] * 3; N[w] += nor.getX(i); N[w + 1] += nor.getY(i); N[w + 2] += nor.getZ(i); }
+  const nb: Set<number>[] = Array.from({ length: n }, () => new Set<number>());
+  for (let t = 0; t < idx.count; t += 3) { const a = id[idx.getX(t)], b = id[idx.getX(t + 1)], c = id[idx.getX(t + 2)]; nb[a].add(b).add(c); nb[b].add(a).add(c); nb[c].add(a).add(b); }
+  const unit = (A: Float32Array) => { for (let w = 0; w < n; w++) { const l = Math.hypot(A[w * 3], A[w * 3 + 1], A[w * 3 + 2]) || 1; A[w * 3] /= l; A[w * 3 + 1] /= l; A[w * 3 + 2] /= l; } };
+  unit(N);
+  for (let p = 0; p < passes; p++) {
+    const M = N.slice();
+    for (let w = 0; w < n; w++) for (const o of nb[w]) { M[w * 3] += N[o * 3]; M[w * 3 + 1] += N[o * 3 + 1]; M[w * 3 + 2] += N[o * 3 + 2]; }
+    unit(M); N = M;
+  }
+  // (a point whose own normal faces away from the eased one keeps its own: the two sides of a doubled layer)
+  for (let i = 0; i < pos.count; i++) { const w = id[i] * 3; if (nor.getX(i) * N[w] + nor.getY(i) * N[w + 1] + nor.getZ(i) * N[w + 2] > 0.3) nor.setXYZ(i, N[w], N[w + 1], N[w + 2]); }
   nor.needsUpdate = true;
 }
 

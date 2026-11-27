@@ -1858,6 +1858,15 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const standing = !FULL_BODY.has(kind);
     // a lean of the whole upper body (towards the lens, to a side), shared down the spine
     if (leanX || leanY) { const q = Q.setFromEuler(E.set(leanX / 3, leanY / 3, 0)); bs.get('spine')!.quaternion.multiply(q); spine1.quaternion.multiply(q); chestB.quaternion.multiply(q); }
+    // the narrator is filmed close and still: his breath has to be seen (chest up and back on the in-breath, the
+    // shoulders with it, the head held where it was), in every pose, captured or not
+    if (id === 'megazron' && !custom) {
+      const br = bp * 0.014 + Math.sin(t * 0.31 + 1.3) * 0.004;
+      chestB.quaternion.multiply(Q.setFromEuler(E.set(-br, 0, 0)));
+      neckB.quaternion.multiply(Q.setFromEuler(E.set(br * 0.6, 0, 0)));
+      bs.get('clavicleL')?.quaternion.premultiply(Q.setFromAxisAngle(V1.set(0, 0, 1), br * 0.5));
+      bs.get('clavicleR')?.quaternion.premultiply(Q.setFromAxisAngle(V1.set(0, 0, 1), -br * 0.5));
+    }
     if (standing) {
       spine1.quaternion.multiply(Q.setFromEuler(E.set(P.stoop * 0.12 + Math.min(speed / 4, 1.3) * P.lean * 0.15, 0, 0)));
       chestB.quaternion.multiply(Q.setFromEuler(E.set(P.stoop * 0.1 + breathe, 0, 0)));
@@ -2046,10 +2055,16 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (gaze) {
       headB.getWorldPosition(V2);
       V3.copy(gaze).sub(V2);
-      root.getWorldQuaternion(Q).invert();
+      // in a performance the clip turns and bows the body away from where the root faces (seated on a stool a third of
+      // a turn round, bent over a desk): the look is measured from where the clip leaves the head, not from the root
+      // (measured from the root he looked 27 degrees past the lens, at the desk)
+      (perf ? headB : root).getWorldQuaternion(Q).invert();
       V3.applyQuaternion(Q);
       const yawTo = Math.atan2(V3.x, V3.z);
       if (Math.abs(yawTo) < 1.7) { wantY = yawTo; wantX = -Math.atan2(V3.y, Math.hypot(V3.x, V3.z)); }
+      // in a performance, with what he looks at behind him (turning round to sit): the head at least comes level, it
+      // does not hang where the capture's actor looked for the stool (his hair fell over his face)
+      else if (perf) { headB.getWorldQuaternion(Q); V3.set(0, 0, 1).applyQuaternion(Q); V3.y = 0; V3.normalize().applyQuaternion(Q.invert()); wantX = -Math.atan2(V3.y, Math.hypot(V3.x, V3.z)); }
     }
     const gr = gazeSnap ? 1 : 1 - Math.exp(-dt * gazeRate); gazeSnap = false;
     gazeY += (wantY - gazeY) * gr; gazeX += (wantX - gazeX) * gr;
@@ -2115,7 +2130,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const hurt = (kind === 'injured' ? 1 : 0);
     // the mouth follows the voice clip itself; no clip, no movement
     if (speak > 0) { speak = Math.max(0, speak - dt); voice.mouth(lip); } else lip.open = lip.round = lip.wide = 0;
-    const open = speak > 0 ? lip.open * 0.45 : ex.open ?? 0;
+    const open = speak > 0 ? lip.open * (id === 'megazron' && !custom ? 0.3 : 0.45) : ex.open ?? 0; // the narrator speaks with a small mouth (in close-up the full opening gaped)
     easeMorph('open', open, 1 - Math.exp(-dt * 30));
     easeMorph('round', lip.round * 0.55, 1 - Math.exp(-dt * 22));
     easeMorph('wide', lip.wide * 0.5, 1 - Math.exp(-dt * 22));

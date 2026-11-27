@@ -6,7 +6,7 @@ over the floor so nothing slides: every clip is in one frame whose origin is whe
 facing +Z. The film puts his root there and the stool where the capture's stool was (seat, seatYaw in the json).
   mz_sit_down   steps to the stool, turns, sits            (once)
   mz_sit_idle   seated, small shifts, there and back       (loop)
-  mz_sit_talk   seated; arms, hands and head of the standing talk loop on the seated body (loop)
+  mz_sit_talk   seated; arms, hands and head of the standing talk loop on the seated loop, same length and clock (loop)
   mz_stand_up   up off the stool and a step away           (once)
 Run through ~/bin/heavy (numpy + the MakeHuman reference rig).
 """
@@ -61,19 +61,29 @@ def main():
     # the identity, so a bone's turn can be taken from one clip and its parent's from another)
     Tt, pt, _ = B.make_ual(ref, 'ual:Idle_Talking_Loop', 'uloop')
     Ft = len(pt)
-    ii = np.arange(Ft) % len(pi)
-    Tk = {k: v[ii].copy() for k, v in Ti.items()}
+    # as long as the seated loop and on the same clock, so the body under the talking arms is the seated loop itself and
+    # the film can cross between the two at any moment; the talk loop runs four times in it (it was cut to the talk
+    # loop's own 2.9 s, where the seated body under it jumped back to its start: a pop every 2.9 s)
+    N = len(pi)
+    ph = (np.arange(N) * (4.0 * Ft / N)) % Ft
+    i0 = np.floor(ph).astype(int) % Ft; i1 = (i0 + 1) % Ft; fr = (ph - np.floor(ph))[:, None]
+    def at(q):
+        a, b = q[i0], q[i1].copy()
+        flip = (a * b).sum(1) < 0; b[flip] = -b[flip]
+        o = a * (1 - fr) + b * fr
+        return o / np.linalg.norm(o, axis=1, keepdims=True)
+    Tk = {k: v.copy() for k, v in Ti.items()}
     for k in Tt:
         if k.startswith(('clavicle', 'upperarm', 'lowerarm', 'hand', 'forearm')) and k in Tk:
-            Tk[k] = Tt[k].copy()
+            Tk[k] = at(Tt[k])
     for k in ('neck', 'head', 'chest'):
-        # half of the talk's own nods and turns, about the seated pose
+        # a share of the talk's own nods and turns, about the seated pose
         if k in Tt and k in Tk:
             m = Tt[k].mean(0); m /= np.linalg.norm(m)
-            d = Tt[k] - m
-            q = Tk[k] + d * 0.6
+            d = at(Tt[k]) - m
+            q = Tk[k] + d * (0.5 if k == 'chest' else 0.3)  # (0.6 on the head cocked it to one side for the whole speech)
             Tk[k] = q / np.linalg.norm(q, axis=1, keepdims=True)
-    made['mz_sit_talk'] = (Tk, pi[ii].copy())
+    made['mz_sit_talk'] = (Tk, pi.copy())
     # where the stool is: under the seated hips, and which way he faces on it
     seat = pi.mean(0)
     Rw, _ = B.fk(ref, Ti, pi, 0)

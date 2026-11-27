@@ -258,6 +258,8 @@ export function bodyDepthMaterial(body: THREE.MeshStandardMaterial) {
 }
 export function bodyMaterial(skin: THREE.MeshStandardMaterial, cloth: THREE.MeshStandardMaterial, eyes: THREE.MeshStandardMaterial | null, extras: BodyExtras = { kit: null, cull: false, hair: null }) {
   const m = new THREE.MeshStandardMaterial({ map: skin.map, normalMap: skin.normalMap, normalScale: skin.normalScale.clone(), roughness: 1, side: THREE.DoubleSide });
+  // the living eye (no lamp glow, a limbal ring, a corneal highlight): a build flag for the crew, always for the narrator
+  const alive = DECREEP || !!eyes?.userData.alive;
   const su = skin.userData.u as U, cu = cloth.userData.u as U, eu = (eyes?.userData.u ?? { uIris: { value: new THREE.Color(0) }, uEyeGlow: { value: 0 } }) as U;
   const sway = cloth.userData.sway as SwayUniforms;
   const u: U = {
@@ -390,7 +392,7 @@ uniform vec3 uRoot, uMid, uTip, uShine; uniform float uHairRough; varying vec3 v
     vec3 sclera = vec3(0.78, 0.8, 0.84) * pow(ey.r, 1.6) * 1.2;
     vec3 irisC = uIris * (0.35 + ey.r * 1.3);
     diffuseColor.rgb = mix(sclera, irisC, ey.g) * (1.0 - ey.b * 0.97);
-    ${DECREEP ? `vec3 scl = vec3(0.80, 0.77, 0.74) * pow(ey.r, 1.3) * 1.1;
+    ${alive ? `vec3 scl = vec3(0.80, 0.77, 0.74) * pow(ey.r, 1.3) * 1.1;
     float limb = smoothstep(0.35, 0.95, ey.g);
     float iLum = dot(uIris, vec3(0.3, 0.6, 0.1)); vec3 hue = mix(vec3(iLum), uIris, 1.7); hue = max(hue, vec3(0.0)) * (0.5 / max(iLum, 0.25));
     vec3 irs = hue * (0.10 + 0.95 * ey.r * limb);
@@ -407,7 +409,7 @@ uniform vec3 uRoot, uMid, uTip, uShine; uniform float uHairRough; varying vec3 v
 #ifdef BODY_HAIR
   else if (vPart > 8.5) roughnessFactor = uHairRough;
 #endif
-  else roughnessFactor = ${DECREEP ? '0.1' : '0.18'};`)
+  else roughnessFactor = ${alive ? '0.1' : '0.18'};`)
       .replace('#include <metalnessmap_fragment>', /* glsl */ `#include <metalnessmap_fragment>
 #ifdef BODY_KIT
   if (vPart > 2.5 && vPart < 8.5) metalnessFactor = vAccent;
@@ -440,8 +442,8 @@ uniform vec3 uRoot, uMid, uTip, uShine; uniform float uHairRough; varying vec3 v
     float rimS = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0);
     totalEmissiveRadiance += mix(sc, uSkin, 0.5) * rimS * 0.1;
   } else if (vPart > 1.5 && vPart < 2.5) {
-    totalEmissiveRadiance += uIris * ey.g * (1.0 - ey.b) * uEyeGlow * (0.3 + ey.r) * ${DECREEP ? '0.08' : '1.0'};
-    ${DECREEP ? `{ vec3 Nn = normalize(vNormal), Vv = normalize(vViewPosition);
+    totalEmissiveRadiance += uIris * ey.g * (1.0 - ey.b) * uEyeGlow * (0.3 + ey.r) * ${alive ? '0.08' : '1.0'};
+    ${alive ? `{ vec3 Nn = normalize(vNormal), Vv = normalize(vViewPosition);
       float h1 = pow(max(dot(reflect(-normalize(vec3(-0.35, 0.55, 0.75)), Nn), Vv), 0.0), 420.0);
       float h2 = pow(max(dot(reflect(-normalize(vec3(0.45, -0.15, 0.85)), Nn), Vv), 0.0), 160.0);
       totalEmissiveRadiance += vec3(1.0, 0.98, 0.95) * (h1 * 1.6 + h2 * 0.12) * (1.0 - 0.6 * lidSh);
@@ -468,7 +470,7 @@ uniform vec3 uRoot, uMid, uTip, uShine; uniform float uHairRough; varying vec3 v
   }
 #endif`);
   };
-  m.customProgramCacheKey = () => (DECREEP ? 'crew-body-dc1' : 'crew-body1');
+  m.customProgramCacheKey = () => (DECREEP ? 'crew-body-dc1' : alive ? 'crew-body1-ae' : 'crew-body1');
   return m;
 }
 export { PARTS as BODY_PARTS };
