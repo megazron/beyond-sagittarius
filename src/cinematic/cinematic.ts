@@ -1259,7 +1259,10 @@ export class Cinematic {
     // G6c: Bolzar has hold of the sofa's back and will not let go; Draxum is coming down to him. Skyvra pushes off the
     // window frame towards Zenvik, her hand out for his: the choice
     runShot(2.6, 4.6, 'G6c', () => {
-      lens(35); const m = head(bol).lerp(head(sky), 0.45); this.camera.position.copy(m).add(V(-2.1, -0.2, 2.8)); this.lookTarget.copy(m);
+      // from high on the room side, over everyone: Skyvra's reach for Zenvik (the choice), Bolzar at the sofa's back and
+      // Draxum coming down to him all read at once. (Level, from beside them, Lyrra and Nuvexa filled the foreground
+      // and hid the hand the choice is about: GPU take a3)
+      lens(24); this.camera.position.copy(at(0.9, 0.7, 2.75)); this.lookTarget.copy(at(1.85, -1.25, -0.95));
     });
     this.mcue(RUN + 2.75, 'e1.handcore', 'choice');
     // G7 the way out, established: the hatch aft slides open on the passage, lit red, ESCAPE PODS over it; they go for it
