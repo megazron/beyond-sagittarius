@@ -16,6 +16,30 @@ MORPHS = {
 }
 
 
+# The narrator's own face units (megazron only, cfg face_units): he is filmed speaking in close-up, so his mouth is
+# built from single muscle units that the game mixes into visemes (src/characters/visemes.ts), and his brows, lids
+# and upper cheeks each move on their own.
+FACE_UNITS = {
+    'v_part': [(U + 'mouth-parling.target', 1)],            # lips apart, teeth together
+    'v_purse': [(U + 'mouth-pursing.target', 1)],           # corners in (oo, w)
+    'v_prot': [(U + 'mouth-protusion.target', 1)],          # lips forward (sh, ch, oo)
+    'v_retr': [(U + 'mouth-retraction.target', 1)],         # corners back (ee, s)
+    'v_comp': [(U + 'mouth-compression.target', 1)],        # lips pressed (p, b, m)
+    'v_elev': [(U + 'mouth-elevation.target', 1)],          # lower lip up (f, v)
+    'v_ever': [(U + 'mouth-eversion.target', 1)],           # lips rolled out
+    'v_upret': [(U + 'mouth-upward-retraction.target', 1)], # upper lip lifted off the teeth
+    'v_depr': [(U + 'mouth-depression.target', 1)],         # corners down
+    'brow_up': [(U + 'eyebrows-left-up.target', 1), (U + 'eyebrows-right-up.target', 1)],
+    'brow_upL': [(U + 'eyebrows-left-up.target', 0.7), (U + 'eyebrows-left-extern-up.target', 0.6)],
+    'brow_upR': [(U + 'eyebrows-right-up.target', 0.7), (U + 'eyebrows-right-extern-up.target', 0.6)],
+    'brow_in': [(U + 'eyebrows-left-inner-up.target', 1), (U + 'eyebrows-right-inner-up.target', 1)],
+    'brow_down': [(U + 'eyebrows-left-down.target', 1), (U + 'eyebrows-right-down.target', 1)],
+    'lid_up': [(U + 'eye-left-opened-up.target', 1), (U + 'eye-right-opened-up.target', 1)],
+    'cheek': [(U + 'nose-left-elevation.target', 0.5), (U + 'nose-right-elevation.target', 0.5), (U + 'eye-left-slit.target', 0.35), (U + 'eye-right-slit.target', 0.35)],
+    'smileL': [(U + 'mouth-corner-puller.target', 0.9)],     # cut to his left half in the build (a dry half smile)
+}
+
+
 def _pair(t, w):
     """A left and right target at the same weight: t holds {s} for the side."""
     return [(t.format(s='l'), w), (t.format(s='r'), w)]
@@ -137,6 +161,8 @@ CHARS = {  # noqa
         look=dict(skin=0x23213c, shade=0x09081a, iris=0xffc36a, brow=0xe8e4f6, glow=0xd8dcff, marks='stars', ear='long'),
         height=2.08, macro=dict(gender=1.0, muscle=0.3, weight=0.12, height=1.0, proportions=0.9),
         skin_src='m', deep_collar=0.04, deep_body=0.045,  # the coat's high collar over a turning neck (see build_characters.py)
+        # (his face units only: every other part of his build is exactly as before, so he looks the same; owner, 2026-11-27)
+        face_units=True,
         clothes=[('toigo_wool_pants', (0x0a, 0x0b, 0x16), {}),
                  ('punkduck_winter_coat', (0x14, 0x1a, 0x3c), {'skirt': True, 'follow_top': True}),
                  ('mindfront_shoes_biker_boots_male', (0x0c, 0x0c, 0x12), {})],
