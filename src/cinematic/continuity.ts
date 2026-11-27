@@ -186,7 +186,7 @@ export class ContinuityLog {
           for (let a = 0; a < both.length; a++) for (let b = a + 1; b < both.length; b++) { const d0 = both[a][0].sx - both[b][0].sx, d1 = both[a][1].sx - both[b][1].sx; if (Math.abs(d0) < 0.12 || Math.abs(d1) < 0.12) continue; if (d0 * d1 < 0) flipped++; else kept++; }
           if (flipped >= 4 && flipped >= 2 * kept) out.push({ kind: 'axis', shot: c.shot, from: o.shot, clock: c.clock, detail: `${flipped} of ${flipped + kept} pairs swap sides of the frame over the cut: the camera crossed the line` });
           let same = 0, turned = 0;
-          for (const [a, b] of both) { if (Math.abs(a.vs) < 0.3 || Math.abs(b.vs) < 0.3) continue; if (Math.abs(a.vs) < 0.6 * Math.abs(a.vd) || Math.abs(b.vs) < 0.6 * Math.abs(b.vd)) continue; // towards or away from the lens: neutral if (a.vs * b.vs < 0) turned++; else same++; }
+          for (const [a, b] of both) { if (Math.abs(a.vs) < 0.3 || Math.abs(b.vs) < 0.3) continue; if (Math.abs(a.vs) < 0.6 * Math.abs(a.vd) || Math.abs(b.vs) < 0.6 * Math.abs(b.vd)) continue; /* towards or away from the lens: neutral */ if (a.vs * b.vs < 0) turned++; else same++; }
           if (turned > same) out.push({ kind: 'direction', shot: c.shot, from: o.shot, clock: c.clock, detail: `${turned} of ${turned + same} moving people change direction across the screen over the cut` });
         }
         if (lastDeck && lastDeck.furniture !== c.furniture) out.push({ kind: 'furniture', shot: c.shot, from: lastDeck.shot, clock: c.clock, detail: c.furniture ? 'the furniture appears' : 'the furniture vanishes' });
