@@ -49,6 +49,24 @@ the clips in Downloads\BS_Game_v1.1\glitch_sweep. Nothing here is signed off: on
     `glitch_check.py --tick 0.0166667` run the watch at 60 (its own tests last as long in seconds). ep1 at 60 ticks:
     5 snaps, first "upperarmR turned 80 degrees doing pickup" at 9.9 s. The cause is NOT found yet: the stage log of
     cine7 (~/bs-cap/cine7/armdbg/hooks.patch) is set up for it in ~/bs-cap/sweep/armdbg (run.sh).
+  - LANDED e82c8d8b (CI 45942795157 green on that sha, no reruns): the three above.
+  - SECOND BATCH (branch sweep2; on main only if its sha is there):
+    - THE PICKUP ARM SNAP, cause found with that stage log: a pickup is the authored clip or the procedural kneeling
+      reach, and which one was asked again every frame (character.ts taskClip(): the hips' height against the thing).
+      The reach moves the hips, so the answer changed at 0.6 to 0.7 s of a 1.1 s pickup, from the reach to pickup_low:
+      the mixer stage moved the arm 80 degrees and the reach no longer moved it back. The clip is now chosen once, on
+      the task's first frame (TaskRun.clip). NOT yet re-measured at 60 ticks when this was written: read
+      ~/bs-cap/sweep/g60_b.log (ep1, 24 s). If it is clean, add a CI job
+      `python tools/glitch_check.py --only ep1 --secs 24 --tick 0.0166667` (the 30 tick jobs cannot see this class).
+    - "TARAVEL · 2189" left on its timer and the city took 6 to 7 s more on a black screen with nothing on it. The card
+      now stays until the city's shaders are compiled and the world is there, the city starts under it, and then it
+      goes (main.ts titleCard `until`). intro_smoke fails if the card is gone before the city begins.
+- STILL OPEN, with numbers, in the log: freezes of 1 to 8.5 s (the night fight's start at level 14 is the worst; a CPU
+  profile take of it and of the opening is set up: mkplan.py --profile, takes p14 and a01), leg snaps at walk and craft
+  starts, shots that do not move, geometries and heap growing with play time on the planet (614 to 1467 geometries and
+  492 to 753 MB heap in 30 minutes from level 16; nothing soaks the planet), teleports in view at level starts.
+- NOT DONE: the Mobile preset pass (take m01 was queued), levels 19 to 21 on Web (take w06), frame by frame through
+  the fights and every scene for hands, held things and cloth.
 - TO THE AGENTS ON THE OPENING (lounge to pods in ~/bs-pods, the cold open reshoot): seen in my takes, not touched by me:
   the lounge's first wide shot stands frozen 3.7 s (a main-thread freeze, the game's own long-task log has it too) and
   another 1.9 s freeze comes as the warning starts; after "TARAVEL · 2189" the screen is black with nothing on it for

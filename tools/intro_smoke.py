@@ -29,6 +29,8 @@ with sync_playwright() as pw:
     page.on('console', lambda m: errors.append(f'console.error: {m.text[:200]}') if m.type == 'error' else None)
     page.on('requestfailed', lambda r: errors.append(f'failed: {r.url[-90:]} {r.failure}') if 'favicon' not in r.url else None)
     page.on('response', lambda r: errors.append(f'http {r.status}: {r.url[-90:]}') if r.status >= 400 and 'favicon' not in r.url else None)
+    # was the title card still up when the city began under it (not gone on a timer, leaving a black screen)?
+    page.add_init_script("window.__cardAtGame = null; setInterval(() => { if (window.__cardAtGame === null && window.__bs && window.__bs.state === 'game') window.__cardAtGame = !!document.querySelector('#title-card'); }, 30);")
     page.add_init_script("window.__cards = []; new MutationObserver(() => { const c = document.querySelector('#title-card'); if (c && c.textContent && window.__cards[window.__cards.length - 1] !== c.textContent) window.__cards.push(c.textContent); }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true })")
     page.goto(f'http://127.0.0.1:{a.port}/index.html?quality={a.quality}', wait_until='domcontentloaded', timeout=180000)
     page.wait_for_function('window.__bs && window.__bs.ready', timeout=400000)
@@ -90,6 +92,9 @@ with sync_playwright() as pw:
         time.sleep(1.5)
         lens = page.evaluate("(() => { const i = __bs.rnd.stageInfo(); return { focus: i.focus, aperture: i.aperture, dof: !!__bs.rnd.dof }; })()")
         print('lens in the city:', lens, flush=True)
+        held = page.evaluate('window.__cardAtGame')
+        print('title card still up as the city began:', held, flush=True)
+        if held is not True: fails.append('the title card was gone before the city began (a black screen with nothing on it while the city loads)')
         if lens['aperture'] > 0: fails.append(f'the city is drawn through a lens left on by the scene before it: {lens}')
         if shots: page.screenshot(path=str(shots / 'intro_city.jpg'), type='jpeg', quality=70)
     except Exception:

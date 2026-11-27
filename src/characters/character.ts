@@ -315,7 +315,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   let kneel = 0, kneelGoal = 0, heels = 0, heelsGoal = 0, heldProp: PropKind | null = null, heldShown = false;
   const kneelL: Limbs = {}, KD = new THREE.Vector3(), KQ = new THREE.Quaternion();
   // a task in the hands (doTask): time in, length, where the hand goes, which hands
-  type TaskRun = { kind: TaskKind; t: number; dur: number; at: THREE.Vector3 | null; hands: 'L' | 'R' | 'both'; prop: PropKind | null; onContact?: (() => void) | null; clipOk?: boolean };
+  type TaskRun = { kind: TaskKind; t: number; dur: number; at: THREE.Vector3 | null; hands: 'L' | 'R' | 'both'; prop: PropKind | null; onContact?: (() => void) | null; clipOk?: boolean; /** The task's clip, chosen on its first frame (null: the procedural reach). */ clip?: string | null };
   let task: TaskRun | null = null;
   /** A task asked for in the last moments of the running one: it starts as that one ends. Started at once, it set the
    *  task clip's clock back to 0 while the clip still had most of its weight: the arm turned ~120 degrees in a frame
@@ -1782,7 +1782,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       // reaching low (picking up, drinking, fixing something on the ground): the knees go with it
       // the path (authored clip or procedural reach) is chosen once, as the task starts: a kneel still easing out when a pick
       // up began switched it to the clip mid-reach a few frames in (a 37 cm jerk, the townsman picking up after kneeling)
-      const tc = task && !FULL_BODY.has(kind) && task.clipOk ? taskClip() : null;
+      // (the clip too, low or table height: taskClip() reads the hips' height against the thing, and the reach itself
+      // moves the hips. Asked every frame it changed its answer two thirds of the way through a pickup, from the
+      // procedural reach to pickup_low: the right arm swung 59 to 130 degrees in a frame at nearly every pickup, at a
+      // player's 60 frames a second. Glitch sweep 2026-11-27, stage log ~/bs-cap/sweep/armdbg)
+      const tc = task && !FULL_BODY.has(kind) && task.clipOk ? (task.clip === undefined ? (task.clip = taskClip()) : task.clip) : null;
       if (tc) {
         // a new task on the clip a task before it still shows (asked as one ends, or the same reach again at once): the
         // clip's clock would jump back to its start under that weight, an arm swinging 116 degrees in a frame (the

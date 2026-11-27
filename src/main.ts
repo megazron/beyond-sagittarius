@@ -474,24 +474,39 @@ function playOpening(withCity: boolean, replay: boolean) {
 }
 
 /** Black, then one line: the planet and the year (or, after the take-off, where the liner is). Nothing else. */
-function titleCard(then: () => void, key = 'city.title') {
+function titleCard(then: () => void, key = 'city.title', until?: Promise<unknown>) {
   const el = document.createElement('div');
   el.id = 'title-card'; el.textContent = t(key);
   el.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;color:#f2ead8;font:600 clamp(28px,5vw,64px) Rajdhani,sans-serif;letter-spacing:.35em;opacity:0;transition:opacity 1.2s;z-index:60';
   document.body.appendChild(el);
   requestAnimationFrame(() => (el.style.opacity = '1'));
-  setTimeout(() => { el.style.opacity = '0'; }, 3400);
-  setTimeout(() => { el.remove(); then(); }, 4700);
+  if (!until) {
+    setTimeout(() => { el.style.opacity = '0'; }, 3400);
+    setTimeout(() => { el.remove(); then(); }, 4700);
+    return;
+  }
+  // a card that waits for what comes after it: it stays up until that is ready (at least its usual 3.4 s), the next
+  // scene is started under it, and only then does it go. It used to leave on its timer whatever was ready: on the A500
+  // the city then took 6 to 7 s more, on a black screen with nothing on it (glitch sweep 2026-11-27)
+  void Promise.all([new Promise((r) => setTimeout(r, 3400)), Promise.race([until, new Promise((r) => setTimeout(r, 25000))])]).then(() => {
+    then();
+    el.style.transition = 'opacity .7s'; el.style.opacity = '0';
+    setTimeout(() => el.remove(), 800);
+  });
 }
 
 /** Zenvora: the player's list on the last normal afternoon, then the opening films. */
 function playPrologue(then: () => void) {
   ui.fade('black', 1, 0.4);
   // the city is built and its shaders compiled while the title card is up, not in the first frame after it
-  let ready: Promise<unknown> = Promise.resolve();
-  setTimeout(() => { if (!game?.away) return; const st = game.away.prepare('city'); ready = renderer.precompile(st.scene, camera); }, 300);
-  // after the card, black until the city's shaders are compiled (at most a few seconds more), not a frozen first frame
-  titleCard(() => { ui.show('loading', true); void Promise.race([ready, new Promise((r) => setTimeout(r, 25000))]).then(() => whenWorldReady(() => {
+  const ready = new Promise<void>((res) => setTimeout(() => {
+    if (!game?.away) { res(); return; }
+    const st = game.away.prepare('city');
+    void renderer.precompile(st.scene, camera).then(() => res(), () => res());
+  }, 300));
+  // the card stays until the city's shaders are compiled and the world is there; the city starts under it
+  const worldThere = new Promise<void>((res) => { const look = (): void => { if (worldReady) res(); else setTimeout(look, 100); }; look(); });
+  titleCard(() => whenWorldReady(() => {
     ui.show('loading', false);
     state = 'game';
     const save = openingSave ?? newSave(); save.names = { ...pendingNames }; save.player = { ...pendingLook }; save.skins = settings.skins ?? {};
@@ -501,7 +516,7 @@ function playPrologue(then: () => void) {
     ui.show('hud', true);
     input.enabled = true;
     ui.fade('black', 0, 1.2);
-  })); });
+  }), 'city.title', Promise.all([ready, worldThere]));
 }
 
 /** The title sequence, then the wake-up (or, replaying the opening, back to the title screen). */
