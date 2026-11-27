@@ -329,7 +329,7 @@ function entranceBeforeTitle() {
   const q = new URLSearchParams(location.search).get('entrance');
   if (q === '0' || entrySeen() || (navigator.webdriver && q !== '1')) return;
   ui.show('title', false);
-  whenWorldReady(() => { ui.show('loading', false); audio.start(); void voice.load(); playVault('intro', () => showTitle(true)); });
+  whenWorldReady(() => { ui.show('loading', false); audio.start(); void voice.load(); markEntry(); playVault('intro', () => showTitle(true)); });
 }
 
 /** Fade into the Vault for a MegaZroN scene, then hand back to `after`. */
@@ -352,7 +352,6 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', after: () 
     renderer.renderer.toneMappingExposure = 1;
     // the cold open goes into the black hole's shadow: the black comes up with it, and the title (or Zenvora) out of it
     vault.onHandover = id === 'intro' ? () => ui.fade('black', 1, 2.6) : null;
-    if (id === 'intro') markEntry();
     ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden');
     vault.play(lines, () => {
