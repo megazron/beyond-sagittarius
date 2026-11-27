@@ -200,6 +200,9 @@ export class Cinematic {
     v.sync(local);
   }
 
+  /** The opening's moments (choices and reflexes) on the written timeline, in order: the cheat menu jumps to them. */
+  get momentPoints() { return this.cues.filter((c) => c.moment).map((c) => ({ id: c.moment!, t: c.t0 ?? c.t })).sort((a, b) => a.t - b.t); }
+
   /** Jump to a time (debug / screenshots). Earlier cues are marked done without firing. */
   seek(t: number, raw = false) {
     if (!this.playing) return;

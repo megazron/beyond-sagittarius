@@ -6,42 +6,41 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
-## 2026-11-27 cheat menu (cheat agent: worktree ~/bs-cheat, branch cheat1 from main f821a403; STOPPED EARLY, NOTHING BUILT)
-Owner: "I think playthrough every game is taking time so do one thing make cheat codes so that you can test the game at
-certain levels directly." I was stopped by the owner (all tasks, change of model) after reading only. Exact state:
-- DONE: the worktree and branch exist; I read this file's top sections (pods run, glitch sweep), the Layout / Tests / CI
-  sections and listed src/ and tools/. No code written, no heavy job queued, no capture, nothing on main. No cheat word
-  chosen yet.
-- NOT READ YET (read before designing): src/main.ts (the URL params level / skip / cinema, window.__bs), src/core/save.ts
-  (save format), src/game/story.ts, episode2.ts, episode3.ts, chapter2.ts (level flow), src/ui/moment.ts (choice layer),
-  tools/story_seal.py + tools/spoiler_check.py (how sealed data is built and checked), tools/gpu_capture.py and
-  ~/bs-cap/sweep (mkplan.py --from-save FILE already starts a take from a save: reuse that idea).
-- THE BRIEF, as given to me:
-  1. A cheat menu opened by a typed word on the title screen and in pause (not a story spoiler, not an existing secret
-     code), a gamepad sequence, a 5-tap corner on touch, a URL form for bots. Jump to any level 1 to 21 and any checkpoint
-     in it (start, each objective, each film by id, each decision, boss or set piece, results), the opening's parts, the
-     city. Preset the story choices (all a, all b, pick each) with the survivor and bond states they imply; inventory for
-     that point or everything; toggles: no damage, no hunger or thirst drain, fast walk, time of day and weather, slow
-     motion 0.25x to 2x, free camera, hide HUD, glitch and continuity overlays.
-  2. A jump must give a VALID state through the same code path as play: load a save snapshot per checkpoint. Snapshots
-     come from an automated playthrough, are stored with the build and sealed like the story data. Level names in the
-     menu: numbers and neutral labels, or names read from the sealed data at runtime (spoiler_check must stay green).
-  3. Cheat sessions are flagged: never write the real save (use a separate storage key), never unlock achievements or
-     endings, always show a small "cheat" mark.
-  4. Tests: every checkpoint loads headless with no errors and the level completes from it; a CI job; no gate loosened.
-  5. Capture tooling jumps straight to the moment under test (one line per use case here), and one honest full
-     playthrough stays per release batch.
-  6. A GPU clip (Windows Chrome, A500) of the menu and three jumps (a film, a decision, a late level), watched, under
-     30 MB, with notes, to Downloads/BS_Game_v1.1/cheats/. The code goes to the owner by message only: never in the
-     README, store text or any public file.
-- DESIGN I INTENDED (not verified against the code): new files only (src/cheat/cheat.ts, cheat.css, a sealed
-  snapshots file, tools/cheat_snapshots.py to generate, tools/cheat_smoke.py to test) plus small hooks in main.ts (URL
-  param, key buffer on title and pause, __bs.cheat) and core/save.ts (a storage key switch while the flag is set). Other
-  agents are in the cinematic files (pods run) and narrator files (MegaZroN): keep out of them.
-- LANDING RULES given: CI green on the exact sha, fast-forward only, `git push origin <sha>:main` as its own command, a
-  new branch name if main moved, never a force push. Machine: one heavy step at a time through ~/bin/heavy.
-- AFTER THIS: the same idea for Shambhar Takke (~/shambhar-takke; read its HANDOFF.md "REPO CHANGE" section first).
-  Not started.
+## 2026-11-27 cheat menu (cheat agent 2: worktree ~/bs-cheat, branch cheat1; captures ~/bs-cap/cheat1)
+Owner: "make cheat codes so that you can test the game at certain levels directly." A test tool, not a feature: nothing
+here is signed off (only the owner does that). The opening code word goes to the owner by message only, never in a file.
+- FILES: `src/cheat/cheat.ts` (the menu, its openers, the options, the URL form), `cheat.css`, `presets.ts` (story
+  choice presets), `snapshots.sealed` (the checkpoints, sealed like the story data), `tools/cheat_snapshots.py` (makes,
+  seals, opens, checks, lists them), `tools/cheat_play.py` (plays on from wherever the game is, levels_smoke's loop
+  without its checks), `tools/cheat_smoke.py` (the test). Hooks: `core/save.ts` slot 'cheat' (`bs-save-cheat-v1`,
+  `inCheatSlot()`), `game.ts` `snapshot()` (what persist writes) and `afterUpdate`, `player.ts` `Player.speedScale`,
+  `cinematic.ts` `momentPoints`, `opening.ts` `openingIds`, `main.ts` (playOpening(from, seekTo), continueGame(slot), the
+  block "the cheat menu" before boot(), `__bs.cheat`), `levels_smoke.py --snapshots OUT`.
+- OPENING THE MENU: the typed word on the title screen or in the pause menu; a pad (both shoulder buttons held, then
+  D-pad up, down, left, right, Y); five taps in the top left 64 px of a touch screen within 3 s; `?cheat=menu`.
+- A JUMP IS A PAGE LOAD with `?cheat=<point>`, then the start a player makes: a level point writes its checkpoint save to
+  the cheat slot and goes through Continue; an opening point starts a New Game (opening save in the cheat slot) and
+  seeks the opening's clock as the tests do. The real save is never written; the path tree's device record of branches
+  seen (settings.paths) is not added to; a CHEAT mark shows. Back on the title screen the main slot is used again.
+- POINTS: `open.vault`, `open.city`, `open.lounge`, `open.pull`, `open.m1`..`open.m6` (the film's moments, in order),
+  `open.run` (the run to the pods), `open.film` (the title sequence); `L<n>.start`, `L<n>.obj<k>`, `L<n>.scene<k>`,
+  `L<n>.dec<k>`, `L<n>.fight<k>`, `L<n>.away<k>`, `L<n>.film<k>`, `L<n>.results` (`L<n>` alone = start). The menu names
+  them by kind and number only. `python3 tools/cheat_snapshots.py list` prints every id.
+- URL PARAMS: `cpick=a|b|ask` (a: first option, reflexes passed; b: second option, reflexes failed; ask: as recorded,
+  and the opening asks), `picks=<id>:<option>,...`, `cinv=all`, `cgo=1` (start at once: bots; without it one click
+  starts the jump so the page may play sound), `nodmg=1`, `nodrain=1`, `fast=1.5..3`, `tod=<hour>`, `wx=clear|rain|fog`,
+  `slow=0.25..2`, `freecam=1` (WASD, Q/E, drag; Shift fast), `hud=0`, `glov=1` (glitch overlay), `ctov=1`
+  (continuity overlay). In a running page: `__bs.cheat.open()`, `__bs.cheat.set({slow: 0.5})`, `__bs.cheat.points()`.
+- PRESETS (presets.ts): on a copy of the checkpoint the recorded answers are answered again: the old answer's effects
+  taken back (trust, record, flags, who it cost), the new one's put on, the log rewritten; the opening's moments (the
+  playthrough plays it as one film) are written in. LIMIT: what a scene's own code did because of an answer (not an
+  effect) is not redone, so a 'b' jump deep into Episode Three is the answers' survivors and bonds on the 'a' route's
+  world state.
+- MAKING THE CHECKPOINTS: build, then `~/bin/heavy ~/.venvs/bs-test/bin/python tools/cheat_snapshots.py make`
+  (levels_smoke with ?cheatrec=1, about 40 minutes on the laptop), commit `src/cheat/snapshots.sealed`. Remake it when
+  a level's flow or the save format changes (cheat_smoke fails when a checkpoint no longer plays through).
+- CAPTURES: put the point in the capture URL, e.g. `...index.html?quality=ultra&cheat=open.run&cgo=1&cpick=b` (the pods
+  run with the second answers), `&cheat=L15.dec2&cgo=1`. Keep one honest full playthrough per release batch.
 
 ## 2026-11-27 the run to the pods (pods agent: worktree ~/bs-podsw, branch pods1w, landing branch pods2 (squashed on main b18c6b3); before-tree ~/bs-pods = main d7dceefb; captures ~/bs-cap/pods1)
 - Owner on main d7dceefb: "The cutscenes going to the pods scene is still not proper, doesn't show continuity." The

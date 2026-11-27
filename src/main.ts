@@ -12,7 +12,12 @@ import { Away } from './game/away/away';
 import type { CrewId } from './characters/character';
 import { Renderer } from './core/renderer';
 import { audio } from './core/audio';
-import { loadSave, newSave, clearSave, loadSettings, writeSettings, useSlot, writeSave, SaveData, Settings } from './core/save';
+import { loadSave, newSave, clearSave, loadSettings, writeSettings, useSlot, writeSave, inCheatSlot, SaveData, Settings } from './core/save';
+import { CheatMenu, opts as cheatOpts, optsActive, parseUrl, loadSnapshots, everything, type Jump } from './cheat/cheat';
+import { applyPreset } from './cheat/presets';
+import { createRain, type Rain } from './world/rain';
+import { ep2Ready } from './game/branch/episode2';
+import { ep3Ready } from './game/branch/episode3';
 import { UI } from './ui/ui';
 import { Cinematic } from './cinematic/cinematic';
 import { World } from './world/world';
@@ -22,7 +27,7 @@ import { Game } from './game/game';
 import { applyCrewNames, CREW_IDS, CrewNames } from './core/crew';
 import { CHAPTERS, COMMENTS, emptyBranch, pathView, pickComments, resolveLine, takenBranches, endingFor, ENDINGS } from './game/branch';
 import type { Chapter } from './game/branch';
-import { openingReady } from './game/branch/opening';
+import { openingReady, openingIds } from './game/branch/opening';
 import { momentsReady } from './game/branch/moments';
 import { DECISIONS, QTES } from './game/branch/registry';
 import { MomentBranch } from './game/moments';
@@ -371,9 +376,9 @@ function playFlashback(after: () => void) {
 
 /** Opens the path tree for a save, and remembers on this device what it has seen. */
 function openPathTree(s: SaveData, ch: Chapter, onClose: () => void, opts: { replay?: () => void; back?: string; standalone?: boolean } = {}) {
-  settings.paths = Array.from(new Set([...(settings.paths ?? []), ...takenBranches(s, ch)]));
+  if (!inCheatSlot()) settings.paths = Array.from(new Set([...(settings.paths ?? []), ...takenBranches(s, ch)]));
   writeSettings(settings);
-  ui.openPath(t(ch.title), pathView(s, ch, settings.paths, CREW_IDS), onClose, { ...opts, note: s.replay ? t('br.replay.note') : undefined, leaning: [endingFor(s, 'stay', ENDINGS).id, endingFor(s, 'home', ENDINGS).id] });
+  ui.openPath(t(ch.title), pathView(s, ch, inCheatSlot() ? [...(settings.paths ?? []), ...takenBranches(s, ch)] : settings.paths ?? [], CREW_IDS), onClose, { ...opts, note: s.replay ? t('br.replay.note') : undefined, leaning: [endingFor(s, 'stay', ENDINGS).id, endingFor(s, 'home', ENDINGS).id] });
 }
 
 /** Chapter select: each chapter you have played shows its tree; ones with branches can be replayed. */
@@ -462,7 +467,7 @@ function startNewGame(look: PlayerLook = defaultLook()) {
  * sequence and the wake-up. Every scene has its Skip. `replay` (chapter select) plays it in the replay slot and
  * ends on the title screen; ?prologue=0 and the settings switch leave the city out.
  */
-function playOpening(withCity: boolean, replay: boolean) {
+function playOpening(withCity: boolean, replay: boolean, from: 'vault' | 'city' | 'films' = 'vault', seekTo?: number) {
   const films = () => {
     state = 'cinematic';
     ui.show('cine', true);
@@ -472,8 +477,11 @@ function playOpening(withCity: boolean, replay: boolean) {
     // picture stood still on the pull's last frame with no sound until it was ready
     audio.preloadScore('theme', 'theme_sfx');
     cine.start(() => playFilm(replay));
+    // the cheat menu's jumps into the opening (src/cheat): on the opening's own clock, as the tests seek it
+    if (seekTo !== undefined) cine.seek(seekTo);
   };
-  playVault('intro', () => (withCity ? playPrologue(() => titleCard(films, 'takeoff.card')) : films()));
+  const city = () => (withCity ? playPrologue(() => titleCard(films, 'takeoff.card')) : films());
+  if (from === 'films') films(); else if (from === 'city') city(); else playVault('intro', city);
 }
 
 /** Black, then one line: the planet and the year (or, after the take-off, where the liner is). Nothing else. */
@@ -533,8 +541,8 @@ function playFilm(replay = false) {
   });
 }
 
-function continueGame() {
-  useSlot('main');
+function continueGame(slot: 'main' | 'cheat' = 'main') {
+  useSlot(slot);
   audio.start();
   if (input.device === 'touch') tryFullscreen();
   ui.show('title', false);
@@ -899,7 +907,7 @@ function frame() {
 }
 
 function tick(step: number) {
-  let dt = step;
+  let dt = step * cheatOpts.slow;
   // a blow that lands holds the frame for a moment; slow-motion assist stretches the dangerous ones
   if (state === 'game' && combat && !paused) dt = combat.scaleTime(dt);
   elapsed += dt;
@@ -993,6 +1001,7 @@ function tick(step: number) {
     rain: (game?.away?.active ? (game.away as unknown as { stage?: { weather?: { rain?: number } } }).stage?.weather?.rain : (world as unknown as { weather?: { rain?: number } }).weather?.rain) ?? 0,
     dt: paused ? 0 : dt,
   });
+  cheatFrame(dt);
 }
 const earFwd = new THREE.Vector3();
 
@@ -1117,6 +1126,7 @@ async function boot() {
   combat = new Combat({ world, player, input, ui, save: () => game.save, settings: () => (settings.combat ??= defaultCombatSettings()), saveSettings: persistSettings,
     free: () => state === 'game' && game.mode === 'play' && !paused && !ui.modalOpen(), persist: () => game.persist(), home: () => game.mode !== 'away' });
   game.combat = combat;
+  if (CHEAT_REC) game.afterUpdate = recSafe;
   { const d = new URLSearchParams(location.search).get('diff'); if (d === 'story' || d === 'normal' || d === 'hard') combat.setDifficulty(d); }
   // a story fight starts only in plain play: not under a flashback, the Vault, a film, the pause menu or a panel
   game.canFight = () => state === 'game' && !paused && !ui.modalOpen();
@@ -1151,6 +1161,14 @@ window.addEventListener('resize', () => {
 
 // Small hook used by the automated smoke test and for debugging.
 (window as unknown as Record<string, unknown>).__bs = {
+  /** The cheat menu (src/cheat): open it, its toggles, jump (as the menu's Jump, without the page load), the recorder. */
+  cheat: {
+    open() { void cheat.show(); }, close() { cheat.close(); }, get isOpen() { return cheat.open; }, get opts() { return cheatOpts; },
+    set(o: Partial<typeof cheatOpts>) { Object.assign(cheatOpts, o); cheatApply(); },
+    get session() { return inCheatSlot(); },
+    async points() { return (await loadSnapshots()).points.map((p) => p.id); },
+    get recorded() { return { v: 1, saves: rec.saves.map((x) => JSON.parse(x)), points: rec.points }; },
+  },
   get state() { return state; },
   get mode() { return game?.mode; },
   get ready() { return worldReady; },
@@ -1643,6 +1661,170 @@ const faceDbg = { chars: 0, heads: 0, kept: 0 };
     });
     return out;
   };
+}
+
+// ---------------- the cheat menu (src/cheat): jumps for testing, its toggles, and the checkpoint recorder ----------------
+// written times on the opening's clock (cinematic.ts buildTimeline: the lounge's stage starts at 14.2, the pull at S = 39,
+// the run to the pods at S + 117.6)
+const OPEN_AT: Record<string, number> = { lounge: 13.9, pull: 39, run: 156.6 };
+const cheatUrl = parseUrl(new URLSearchParams(location.search));
+const cheat = new CheatMenu({
+  where: () => (state === 'title' ? 'title' : state === 'game' && paused ? 'pause' : 'none'),
+  openingPoints: () => [['open.vault', 'Vault (the cold open)'], ['open.city', 'the city'], ['open.lounge', 'the lounge'], ['open.pull', 'the pull'],
+    ...cine.momentPoints.map((m, i) => [`open.m${i + 1}`, `moment ${i + 1} of the film`] as [string, string]), ['open.run', 'the run to the pods'], ['open.film', 'the title film']],
+  levelTitle: (n) => t(`level.${n}.title`),
+  crew: () => CREW_IDS.map((id) => ({ id, name: t(`crew.${id}.name`) })),
+  decisions: () => DECISIONS, qtes: () => QTES, openingIds: () => openingIds,
+  text: (k) => t(k),
+  changed: () => cheatApply(),
+  shown: () => {},
+});
+const storyReady = () => Promise.all([openingReady, momentsReady, ep2Ready, ep3Ready]);
+
+/** A jump: started the way a player's start is (New Game on the opening's clock, or Continue on a checkpoint's save). */
+async function cheatJump(j: Jump) {
+  await storyReady();
+  audio.start();
+  if (j.target.startsWith('open.')) {
+    const part = j.target.slice(5);
+    useSlot('cheat'); clearSave();
+    pendingLook = defaultLook(); pendingNames = {} as CrewNames;
+    applyPlayer(pendingLook, settings.skins ?? {});
+    ui.show('title', false);
+    void voice.load();
+    beginOpeningSave();
+    const s = openingSave!;
+    applyPreset(s, j.preset, j.picks, DECISIONS, QTES, j.preset === 'ask' ? Object.keys(j.picks) : openingIds);
+    writeSave(s);
+    // the opening's choices are on in a cheat session (beginOpeningSave leaves them off in an automated browser): the
+    // preset's answers are what the film reads; ?choices=0 still turns them off
+    if (!cine.branch && new URLSearchParams(location.search).get('choices') !== '0') {
+      cine.branch = new MomentBranch(() => openingSave!, ui.moment, () => { if (openingSave) writeSave(openingSave); }, () => !!settings.noTimers);
+      cine.momentScale = () => ui.moment.timeScale;
+    }
+    const withCity = PROLOGUE_PARAM !== null ? PROLOGUE_PARAM !== '0' : true;
+    const m = /^m(\d+)$/.exec(part), mp = m ? cine.momentPoints[Number(m[1]) - 1] : undefined;
+    if (part === 'vault') playOpening(withCity, false);
+    else if (part === 'city') playOpening(true, false, 'city');
+    else if (part === 'film') {
+      ui.show('cine', true); renderer.setScene(cine.scene, cine.camera, false); audio.preloadScore('theme', 'theme_sfx');
+      playFilm(false);
+    } else if (mp) playOpening(false, false, 'films', Math.max(0, mp.t - 0.6));
+    else playOpening(false, false, 'films', OPEN_AT[part] ?? OPEN_AT.lounge);
+    return;
+  }
+  const data = await loadSnapshots();
+  const p = data.points.find((x) => x.id === j.target) ?? data.points.find((x) => x.id === `${j.target}.start`);
+  if (!p) { console.warn('cheat: no checkpoint', j.target); ui.toast(`No checkpoint ${j.target}`); return; }
+  const s = JSON.parse(JSON.stringify(data.saves[p.save])) as SaveData;
+  applyPreset(s, j.preset, j.picks, DECISIONS, QTES, j.preset === 'ask' ? Object.keys(j.picks) : openingIds);
+  if (j.inv === 'all') everything(data, s);
+  useSlot('cheat'); clearSave(); writeSave(s);
+  continueGame('cheat');
+}
+// a jump in the URL starts once the title is up (with a click first unless cgo=1, so the page may play sound)
+if (cheatUrl.jump || cheatUrl.menu) {
+  const go = () => {
+    if (state !== 'title' || !consentGiven()) { setTimeout(go, 200); return; }
+    if (cheatUrl.menu) { void cheat.show(); return; }
+    const j = cheatUrl.jump!;
+    if (j.go) void cheatJump(j); else cheat.ask(j.target, () => void cheatJump(j));
+  };
+  setTimeout(go, 200);
+}
+
+let cheatRain: Rain | null = null, cheatKeep: { h: number; t: number } | null = null, cheatOvT = 0, cheatHud = false, cheatMarkOn = false;
+const fly = { on: false, pos: new THREE.Vector3(), yaw: 0, pitch: 0, keys: new Set<string>() };
+window.addEventListener('keydown', (e) => { if (cheatOpts.freeCam) fly.keys.add(e.code); });
+window.addEventListener('keyup', (e) => fly.keys.delete(e.code));
+window.addEventListener('mousemove', (e) => {
+  if (!cheatOpts.freeCam || cheat.open || !((e.buttons & 1) || document.pointerLockElement)) return;
+  fly.yaw -= e.movementX * 0.003; fly.pitch = Math.max(-1.5, Math.min(1.5, fly.pitch - e.movementY * 0.003));
+});
+/** What shows at once when an option changes. */
+function cheatApply() {
+  if (cheatHud !== cheatOpts.hideHud) { cheatHud = cheatOpts.hideHud; setCinema(cheatHud); }
+  if (cheatOpts.glitchOv && !glitch.on) { glitch.reset(); glitch.on = true; }
+  if (cheatOpts.contOv && !cine.cont.on) { cine.cont.on = true; cine.cont.reset(); }
+  if (!cheatOpts.glitchOv && !cheatOpts.contOv) cheat.overlay(null);
+}
+cheatApply();
+function cheatFrame(dt: number) {
+  if (CHEAT_REC) recSafe();
+  const mark = inCheatSlot() || optsActive();
+  if (mark !== cheatMarkOn) { cheatMarkOn = mark; cheat.setMark(mark); }
+  Player.speedScale = cheatOpts.fast;
+  if (state === 'game' && game?.save) {
+    const st = game.save.stats;
+    if (cheatOpts.noDamage) st.health = 100;
+    if (cheatOpts.noDrain) { if (cheatKeep) { st.hunger = Math.max(st.hunger, cheatKeep.h); st.thirst = Math.max(st.thirst, cheatKeep.t); } cheatKeep = { h: st.hunger, t: st.thirst }; } else cheatKeep = null;
+    if (cheatOpts.tod !== null) game.save.timeOfDay = cheatOpts.tod;
+    const wx = cheatOpts.weather;
+    if (wx === 'rain' && !cheatRain) cheatRain = createRain(world.scene, quality.name !== 'mobile');
+    if (cheatRain) { cheatRain.set(wx === 'rain' ? 1 : 0); cheatRain.update(dt, player.pos); }
+    if (wx === 'fog') world.fog.density *= 3.5;
+    else if (wx === 'clear') { world.fog.density *= 0.5; world.scene.traverse((o) => { if (o.name === 'rain' && o !== cheatRain?.lines) o.visible = false; }); }
+  }
+  // free camera: on whichever camera is drawn, from where it was
+  const cam = state === 'game' ? camera : state === 'narrator' ? vault.camera : cine.camera;
+  if (cheatOpts.freeCam && !cheat.open) {
+    if (!fly.on) { fly.on = true; cam.updateMatrixWorld(); cam.getWorldPosition(fly.pos); const e = new THREE.Euler().setFromQuaternion(cam.getWorldQuaternion(new THREE.Quaternion()), 'YXZ'); fly.yaw = e.y; fly.pitch = e.x; }
+    if (state === 'game') input.enabled = false;
+    const k = fly.keys, v = (k.has('ShiftLeft') || k.has('ShiftRight') ? 12 : 3) * (dt / Math.max(0.25, cheatOpts.slow));
+    const fwd = new THREE.Vector3(-Math.sin(fly.yaw) * Math.cos(fly.pitch), Math.sin(fly.pitch), -Math.cos(fly.yaw) * Math.cos(fly.pitch)), right = new THREE.Vector3(Math.cos(fly.yaw), 0, -Math.sin(fly.yaw));
+    if (k.has('KeyW')) fly.pos.addScaledVector(fwd, v); if (k.has('KeyS')) fly.pos.addScaledVector(fwd, -v);
+    if (k.has('KeyD')) fly.pos.addScaledVector(right, v); if (k.has('KeyA')) fly.pos.addScaledVector(right, -v);
+    if (k.has('KeyE')) fly.pos.y += v; if (k.has('KeyQ')) fly.pos.y -= v;
+    if (cam.parent) { cam.parent.updateMatrixWorld(); cam.position.copy(cam.parent.worldToLocal(fly.pos.clone())); } else cam.position.copy(fly.pos);
+    cam.rotation.set(fly.pitch, fly.yaw, 0, 'YXZ'); cam.updateMatrixWorld();
+  } else if (fly.on) { fly.on = false; if (state === 'game' && !paused && !ui.modalOpen()) input.enabled = true; }
+  if ((cheatOpts.glitchOv || cheatOpts.contOv) && (cheatOvT -= dt) <= 0) {
+    cheatOvT = 0.5;
+    const lines: string[] = [];
+    if (cheatOpts.glitchOv) {
+      const by = glitch.summary().by, ev = glitch.events.filter((x) => x.test === undefined).slice(-3);
+      lines.push(`glitches: ${Object.entries(by).map(([k, n]) => `${k} ${n}`).join(', ') || 'none'}`, ...ev.map((x) => `  ${x.kind} ${x.who}: ${x.detail}`.slice(0, 110)));
+    }
+    if (cheatOpts.contOv) {
+      const br = cine.cont.check(), by: Record<string, number> = {}; for (const b of br) by[b.kind] = (by[b.kind] ?? 0) + 1;
+      lines.push(`continuity: ${Object.entries(by).map(([k, n]) => `${k} ${n}`).join(', ') || 'no breaks'} (${cine.cont.cuts.length} cuts)`, ...br.slice(-3).map((b) => `  ${b.kind} ${b.shot}: ${b.detail}`.slice(0, 110)));
+    }
+    cheat.overlay(lines);
+  }
+}
+
+// ---- the recorder (?cheatrec=1, tools/cheat_snapshots.py): during a playthrough, a checkpoint at the start of each
+// level, at each change of objective, and just before each scene, decision, fight, away stage and film; the save of
+// each is what persist() would write at that moment (the last one in plain play before the event)
+const CHEAT_REC = new URLSearchParams(location.search).get('cheatrec') === '1';
+const rec = { saves: [] as string[], index: new Map<string, number>(), points: [] as { id: string; level: number; kind: string; n: number; save: number }[],
+  prev: '', prevLevel: 0, level: 0, obj: '', mode: '', state: '', open: false, fight: false, startDue: true, counts: new Map<string, number>() };
+function recAdd(kind: string, level: number, save: string) {
+  if (!save || level < 1 || level > 21) return;
+  let i = rec.index.get(save); if (i === undefined) { i = rec.saves.length; rec.saves.push(save); rec.index.set(save, i); }
+  const key = `${level}.${kind}`, n = (rec.counts.get(key) ?? 0) + 1; rec.counts.set(key, n);
+  rec.points.push({ id: kind === 'start' || kind === 'results' ? `L${level}.${kind}` : `L${level}.${kind}${n}`, level, kind, n, save: i });
+}
+let recErr = false;
+function recSafe() { try { recFrame(); } catch (e) { if (!recErr) { recErr = true; console.warn('cheat recorder', e); } } }
+function recFrame() {
+  if (!game?.save || inCheatSlot()) return;
+  const lvl = game.save.level, mode = game.mode;
+  if (state !== rec.state) { if ((state === 'narrator' || state === 'flashback') && rec.state === 'game') recAdd('film', rec.prevLevel, rec.prev); rec.state = state; }
+  if (state !== 'game') return;
+  if (rec.level && lvl !== rec.level) { recAdd('results', rec.prevLevel, rec.prev); rec.startDue = true; rec.obj = ''; }
+  rec.level = lvl;
+  const open = ui.choice.open || !!game.dialogue.deciding || ui.moment.open, fight = !!combat?.encounter;
+  if (open && !rec.open) recAdd('dec', rec.prevLevel, rec.prev);
+  if (fight && !rec.fight) recAdd('fight', rec.prevLevel, rec.prev);
+  if (mode !== rec.mode) { if (mode === 'scene') recAdd('scene', rec.prevLevel, rec.prev); else if (mode === 'away') recAdd('away', rec.prevLevel, rec.prev); rec.mode = mode; }
+  rec.open = open; rec.fight = fight;
+  if (mode !== 'play' || paused || ui.modalOpen() || open || fight) return;
+  const cur = JSON.stringify({ ...game.snapshot(), savedAt: 0 });
+  const obj = (game as unknown as { lastObjKey: string }).lastObjKey;
+  if (rec.startDue) { recAdd('start', lvl, cur); rec.startDue = false; }
+  else if (obj && rec.obj && obj !== rec.obj) recAdd('obj', lvl, cur);
+  rec.obj = obj; rec.prev = cur; rec.prevLevel = lvl;
 }
 
 boot();

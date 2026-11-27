@@ -100,6 +100,8 @@ export class Player {
   physics = { gravity: 14, jump: 5.2, gaps: false };
   /** What the body's wounds allow (game/injury.ts): a share of the speed and the jump, and whether it can sprint. */
   hurt: { speed: number; jump: number; sprint: boolean } | null = null;
+  /** Cheat menu's fast walk (src/cheat): every played body's speed times this. */
+  static speedScale = 1;
   /** The body is posed by someone else this frame (an arrival): the player only moves the camera. */
   skipAnimate = false;
 
@@ -182,7 +184,7 @@ export class Player {
     const moving = len > 0.05;
     const cb = this.combat;
     this.sprinting = moving && canMove && (cb?.sprint ?? input.held('sprint')) && stamina > 2 && mz > 0 && !(cb && (cb.scale < 0.9 || cb.sneak)) && (this.hurt?.sprint ?? true);
-    let speed = (this.sprinting ? 7.2 : 4.0) * slow * (cb ? cb.scale : 1) * (cb ? 1 : this.hurt?.speed ?? 1);
+    let speed = (this.sprinting ? 7.2 : 4.0) * slow * (cb ? cb.scale : 1) * (cb ? 1 : this.hurt?.speed ?? 1) * Player.speedScale;
     if (cb?.sneak) speed = Math.min(speed, 1.9);
     if (this.swimming) speed = (this.sprinting ? 2.6 : 1.7) * slow;
     else if (this.inWater) speed *= 0.55;

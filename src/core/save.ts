@@ -84,6 +84,8 @@ export interface Settings {
 
 const SAVE_KEY = 'bs-save-v1';
 const REPLAY_KEY = 'bs-save-replay-v1';
+/** The cheat menu's jumps (src/cheat): their own slot, so a test session never writes the real save. */
+const CHEAT_KEY = 'bs-save-cheat-v1';
 const SETTINGS_KEY = 'bs-settings-v1';
 
 /**
@@ -91,7 +93,9 @@ const SETTINGS_KEY = 'bs-settings-v1';
  * can never rewrite the choices of the main story.
  */
 let slotKey = SAVE_KEY;
-export function useSlot(slot: 'main' | 'replay') { slotKey = slot === 'main' ? SAVE_KEY : REPLAY_KEY; }
+export function useSlot(slot: 'main' | 'replay' | 'cheat') { slotKey = slot === 'main' ? SAVE_KEY : slot === 'cheat' ? CHEAT_KEY : REPLAY_KEY; }
+/** A cheat session is on while the cheat slot is in use (the title screen goes back to the main slot). */
+export const inCheatSlot = () => slotKey === CHEAT_KEY;
 
 export function loadSave(): SaveData | null {
   try {

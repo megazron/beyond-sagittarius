@@ -150,6 +150,7 @@ def main():
     ap.add_argument("--shots", default=str(ROOT / "docs" / "screenshots" / "levels"))
     ap.add_argument("--watch", default="", help="play every scene to its end and write the watched time (tools/watch_time.py) here")
     ap.add_argument("--last", type=int, default=LAST, help="with --watch: stop after this level")
+    ap.add_argument("--snapshots", default="", help="record the cheat menu's checkpoints on the way (?cheatrec=1) and write them here as JSON (tools/cheat_snapshots.py seals them)")
     args = ap.parse_args()
     shots = pathlib.Path(args.shots)
     shots.mkdir(parents=True, exist_ok=True)
@@ -157,6 +158,8 @@ def main():
     httpd = serve(args.port)
     errors: list[str] = []
     url = f"http://127.0.0.1:{args.port}/index.html?prologue=0&quality={args.quality}"
+    if args.snapshots:
+        url += "&cheatrec=1"
     log = lambda *a: print(*a, flush=True)
     with sync_playwright() as p:
         browser = launch(p)
@@ -759,6 +762,10 @@ def main():
                 log("no second path tree:", str(e)[:120])
         if len(trees) != 2:
             failures.append(f"path tree should open after each chapter, opened {len(trees)} times")
+        if args.snapshots:
+            rec = ev("__bs.cheat.recorded")
+            pathlib.Path(args.snapshots).write_text(json.dumps(rec))
+            log(f"cheat checkpoints: {len(rec['points'])} points, {len(rec['saves'])} saves -> {args.snapshots}")
         b = ev("__bs.branch.state")
         log("branch state:", json.dumps({k: b[k] for k in ("trust", "record", "pending", "open", "dead")}))
         picks = {e["id"]: e["pick"] for e in b["log"]}

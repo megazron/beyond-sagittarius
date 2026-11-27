@@ -694,7 +694,10 @@ export class Game {
     if (this.mode === 'play' || this.mode === 'craft' || this.mode === 'talk' || this.mode === 'away') { w.play += dt; if (w.play > 0.3) close('play'); }
   }
 
-  update(dt: number, time: number) {
+  /** Called after every update (the cheat menu's checkpoint recorder, main.ts ?cheatrec=1). */
+  afterUpdate: (() => void) | null = null;
+  update(dt: number, time: number) { this.updateFrame(dt, time); this.afterUpdate?.(); }
+  private updateFrame(dt: number, time: number) {
     const s = this.save;
     const st = s.stats;
     this.watchTick(dt);
@@ -1188,7 +1191,10 @@ export class Game {
     }
   }
 
-  persist() {
+  persist() { writeSave(this.snapshot()); }
+
+  /** What persist() writes: the save as Continue would take it up (the cheat menu's checkpoints are these). */
+  snapshot(): SaveData {
     const s = this.save;
     if (this.mode === 'play') {
       s.pos = [this.player.pos.x, this.player.pos.y, this.player.pos.z];
@@ -1199,6 +1205,6 @@ export class Game {
     const out = this.combat?.checkpoint(s) ?? s;
     const nightFight = this.combat?.encounter?.id === 'night.defence' || (this.combat?.encounter?.id === 'chase.escape' && s.level === 7);
     if (out !== s && nightFight && !s.flags.houndGone) out.flags = { ...s.flags, 'e1.night': false };
-    writeSave(out);
+    return out;
   }
 }
