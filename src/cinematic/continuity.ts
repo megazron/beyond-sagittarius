@@ -16,7 +16,10 @@ import type { Character } from '../characters/character';
  *  - the camera crossing the line: most pairs of people swapping sides of the frame over a cut, or most of those moving
  *    changing their direction across the screen over a cut;
  *  - the sound bed: an alarm, the room's drone, the airless muffle or the score switching on or off on a cut (a hard
- *    cut in the sound), dead air with no bed at all, and the alarm lamps flashing with no alarm heard while there is air.
+ *    cut in the sound), dead air with no bed at all, and the alarm lamps flashing with no alarm heard while there is air;
+ *  - hands and bodies, where a scene says what they are doing (the run to the pods): a hand meant to be closed on a
+ *    rail or on another's hand that is not there (more than 5 cm off it for a quarter of a second, in frame), and two
+ *    bodies inside each other (chests nearer than a body allows: 0.36 m for two who hold each other, 0.45 m otherwise).
  */
 export type Posture = 'stand' | 'sit' | 'low' | 'air';
 export interface CrewMark { id: string; x: number; y: number; z: number; yaw: number; hip: number; posture: Posture; visible: boolean;
@@ -35,7 +38,11 @@ export let PLACES: { name: string; from: number }[] = [{ name: 'lounge', from: -
 export function setPlaces(p: { name: string; from: number }[]) { PLACES = p; }
 export function placeOf(x: number) { let n = PLACES[0].name; for (const p of PLACES) if (x >= p.from) n = p.name; return n; }
 export interface CutMark { at: 'in' | 'out'; shot: string; scene: string; set: string; clock: number; furniture: boolean; crew: CrewMark[]; state?: StageState }
-export interface Break { kind: 'furniture' | 'posture' | 'jump' | 'pop' | 'clip' | 'place' | 'reset' | 'gravity' | 'axis' | 'direction' | 'audio'; shot: string; from: string; id?: string; clock: number; detail: string }
+/** What a scene says its people are doing this frame: hands meant to be closed on something (how far each is off it,
+ *  in metres) and how near every two chests are. */
+export interface Contact { grips: { id: string; what: string; gap: number }[]; near: { a: string; b: string; d: number; pair: boolean }[] }
+export const GRIP_OFF = 0.05, GRIP_FOR = 0.25, CROWD_PAIR = 0.36, CROWD_OTHER = 0.45;
+export interface Break { kind: 'furniture' | 'posture' | 'jump' | 'pop' | 'clip' | 'place' | 'reset' | 'gravity' | 'axis' | 'direction' | 'audio' | 'grip' | 'crowd'; shot: string; from: string; id?: string; clock: number; detail: string }
 
 const P = new THREE.Vector3(), Q = new THREE.Quaternion(), E = new THREE.Euler();
 
@@ -79,13 +86,16 @@ export class ContinuityLog {
   private far: Partial<StageState> = {}; private farScene = ''; private told = new Set<string>();
   private bedAt: Partial<Record<keyof StageState, number>> = {}; private lastCut = -9; private quiet = 0; private lampOnly = 0;
   private inPending: CutMark | null = null; private gravOffAt = -1;
+  private gripOff = new Map<string, number>();
+  /** The worst seen, whether or not it broke the rule (for reports): each hand's largest gap, each two bodies' least distance. */
+  worst: { grip: Record<string, number>; near: Record<string, number> } = { grip: {}, near: {} };
   /** Scenes whose state only goes one way (one continuous time). */
   oneWay = new Set(['pull']);
   /** Footprints on the deck floor (furniture, the console): a standing body whose feet are inside one is clipping. */
   footprints: { name: string; x: number; z: number; yaw: number; w: number; d: number; furniture: boolean }[] = [];
   private clipped = new Set<string>();
 
-  reset() { this.cuts = []; this.seen = []; this.pops = []; this.travel = []; this.prev = null; this.clipped.clear(); this.far = {}; this.farScene = ''; this.told.clear(); this.bedAt = {}; this.lastCut = -9; this.quiet = 0; this.lampOnly = 0; this.inPending = null; this.gravOffAt = -1; }
+  reset() { this.cuts = []; this.seen = []; this.pops = []; this.travel = []; this.prev = null; this.clipped.clear(); this.far = {}; this.farScene = ''; this.told.clear(); this.bedAt = {}; this.lastCut = -9; this.quiet = 0; this.lampOnly = 0; this.inPending = null; this.gravOffAt = -1; this.gripOff.clear(); this.worst = { grip: {}, near: {} }; }
 
   /** Which footprint (if any) a body standing at x, z is inside, with its radius r. */
   inside(x: number, z: number, r = 0.12, furniture = true) {
@@ -99,7 +109,7 @@ export class ContinuityLog {
   }
 
   /** Call once a frame after the bodies are posed. */
-  frame(shot: string, scene: string, set: string, clock: number, furniture: boolean, crew: Character[], floor: number, cam?: THREE.Camera, state?: StageState) {
+  frame(shot: string, scene: string, set: string, clock: number, furniture: boolean, crew: Character[], floor: number, cam?: THREE.Camera, state?: StageState, contact?: Contact) {
     if (!this.on) return;
     const now: CutMark = { at: 'in', shot, scene, set, clock: +clock.toFixed(3), furniture, crew: crew.map((c) => mark(c, floor, cam)), state: state ? { ...state } : undefined };
     const p = this.prev;
@@ -111,6 +121,22 @@ export class ContinuityLog {
       if (this.inPending && this.inPending.shot === shot) { for (const c of now.crew) { const m = this.inPending.crew.find((x) => x.id === c.id); if (m) { m.vs = c.vs; m.vd = c.vd; } } this.inPending = null; }
     }
     if (state) this.states(now, state, sameShot);
+    if (contact) {
+      const dt = sameShot ? Math.max(0, now.clock - p!.clock) : 0, seen = (id: string) => !!now.crew.find((c) => c.id === id)?.visible;
+      const live = new Set<string>();
+      for (const g of contact.grips) {
+        const k = `${g.id}|${g.what}`; live.add(k);
+        if (seen(g.id)) this.worst.grip[k] = Math.max(this.worst.grip[k] ?? 0, +g.gap.toFixed(3));
+        const off = g.gap > GRIP_OFF && seen(g.id) ? (this.gripOff.get(k) ?? 0) + dt : 0; this.gripOff.set(k, off);
+        if (off > GRIP_FOR && !this.told.has(`grip|${k}|${shot}`)) { this.told.add(`grip|${k}|${shot}`); this.pops.push({ kind: 'grip', shot, from: shot, id: g.id, clock: now.clock, detail: `a hand meant to be closed on ${g.what} is ${(g.gap * 100).toFixed(0)} cm off it` }); }
+      }
+      for (const k of this.gripOff.keys()) if (!live.has(k)) this.gripOff.delete(k);
+      for (const n of contact.near) {
+        if (!seen(n.a) || !seen(n.b)) continue;
+        const k = `${n.a}~${n.b}`; this.worst.near[k] = Math.min(this.worst.near[k] ?? 9, +n.d.toFixed(3));
+        if (n.d < (n.pair ? CROWD_PAIR : CROWD_OTHER) && !this.told.has(`crowd|${k}|${shot}`)) { this.told.add(`crowd|${k}|${shot}`); this.pops.push({ kind: 'crowd', shot, from: shot, id: n.a, clock: now.clock, detail: `${n.a} and ${n.b} are ${n.d.toFixed(2)} m apart chest to chest: inside each other` }); }
+      }
+    }
     if (set === 'deck') for (const c of now.crew) {
       if (!c.visible || c.posture === 'air' || c.posture === 'sit') continue;
       const k = `${shot}|${c.id}`, f = this.inside(c.x, c.z, 0.12, furniture);
