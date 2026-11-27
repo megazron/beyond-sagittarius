@@ -46,6 +46,7 @@ import { setKtx2Renderer, setTextureWarmer, warmPending } from './core/assets';
 import { defaultLook, PlayerLook, CrewSkins } from './characters/custom';
 import { voice } from './core/voice';
 import { frameReport } from './cinematic/cutscene';
+import { RingHandover, discOnScreen } from './narrator/handover';
 import { Vault, vaultScript } from './narrator/vault';
 import { Montage } from './cinematic/montage';
 import { designOf } from './game/away/boarding';
@@ -228,7 +229,7 @@ function refreshTitle() {
   document.querySelectorAll<HTMLButtonElement>('.btn.lang').forEach((b) => b.classList.toggle('active', b.dataset.lang === settings.lang));
 }
 
-function showTitle() {
+function showTitle(fromFilm = false) {
   state = 'title';
   touch.show(false);
   paused = false;
@@ -241,7 +242,12 @@ function showTitle() {
   ui.closeModal();
   cine.resetIdle();
   renderer.setScene(cine.scene, cine.camera, false);
-  ui.fade('black', 0, 1.2);
+  // out of MegaZroN's cold open (the shadow of the black hole): the logo forms out of the dark, then the menu
+  const ti = document.getElementById('title')!;
+  ti.classList.toggle('from-film', fromFilm);
+  if (fromFilm) setTimeout(() => ti.classList.remove('from-film'), 6000);
+  ui.fade('black', 0, fromFilm ? 2.6 : 1.2);
+  entryRing?.release(2.4); entryRing = null; entryToTitle = false;
   audio.stopWind();
   applyCrewNames(undefined);
   useSlot('main');
@@ -312,6 +318,26 @@ function openSkins(onClose: () => void) {
   }, tryCode, onClose);
 }
 
+/** MegaZroN's cold open has been seen on this device (it plays before the title the first time, ending in it). */
+const ENTRY_SEEN = 'mz-entry-v2';
+const entrySeen = () => { try { return localStorage.getItem(ENTRY_SEEN) === '1'; } catch { return false; } };
+const markEntry = () => { try { localStorage.setItem(ENTRY_SEEN, '1'); } catch { /* private mode: it plays again next time */ } };
+/**
+ * The first time the game is opened, the cold open plays before the title and ends in it (owner: "It should lead to
+ * the starting screen of the game"): after the safety card's click, which lets it sound. Automated runs (the browser
+ * tests) keep the old order, New Game then the cold open, unless ?entrance=1; ?entrance=0 never plays it here.
+ */
+function entranceBeforeTitle() {
+  const q = new URLSearchParams(location.search).get('entrance');
+  if (q === '0' || entrySeen() || (navigator.webdriver && q !== '1')) return;
+  ui.show('title', false);
+  whenWorldReady(() => { ui.show('loading', false); audio.start(); void voice.load(); markEntry(); entryToTitle = true; playVault('intro', () => showTitle(true)); });
+}
+
+/** The cold open is playing before the title (it ends in it): its ring-to-limb hand-over, while it is up. */
+let entryToTitle = false;
+let entryRing: RingHandover | null = null;
+
 /** Fade into the Vault for a MegaZroN scene, then hand back to `after`. */
 function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', after: () => void) {
   const s = game?.save;
@@ -330,6 +356,16 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', after: () 
     if (stage.active) showStage(false);
     renderer.setScene(vault.scene, vault.camera, false);
     renderer.renderer.toneMappingExposure = 1;
+    // the cold open goes into the black hole's shadow: the black comes up with it, and the title (or Zenvora) out of it
+    vault.onHandover = id === 'intro' ? () => {
+      ui.fade('black', 1, entryToTitle ? 1.5 : 2.6);
+      if (!entryToTitle) return;
+      // the last light in the frame, the photon ring, goes to where the Earth's lit limb will be on the title
+      cine.idle(0);
+      entryRing?.stop();
+      entryRing = new RingHandover({ r: 0.4 }, discOnScreen(cine.camera, new THREE.Vector3(0, 0, 0), 101.2, new THREE.Vector3(1, 0.22, 0.55).normalize()), 2.9);
+      (window as unknown as Record<string, unknown>).__mzRing = entryRing;
+    } : null;
     ui.show('cine', true);
     document.getElementById('btn-skip')!.classList.remove('hidden');
     vault.play(lines, () => {
@@ -473,7 +509,8 @@ function playOpening(withCity: boolean, replay: boolean) {
     audio.preloadScore('theme', 'theme_sfx');
     cine.start(() => playFilm(replay));
   };
-  playVault('intro', () => (withCity ? playPrologue(() => titleCard(films, 'takeoff.card')) : films()));
+  const next = () => (withCity ? playPrologue(() => titleCard(films, 'takeoff.card')) : films());
+  if (!replay && entrySeen()) next(); else playVault('intro', next);
 }
 
 /** Black, then one line: the planet and the year (or, after the take-off, where the liner is). Nothing else. */
@@ -1078,6 +1115,7 @@ async function boot() {
   ui.show('loading', false);
   showTitle();
   const redrawSafety = showSafetyCard(ui);
+  if (redrawSafety) document.addEventListener('click', (e) => { if ((e.target as HTMLElement | null)?.id === 'sf-ok') entranceBeforeTitle(); });
   if (redrawSafety) onLangChange(() => { if (!consentGiven()) redrawSafety(); });
   // the title's first frame waits until its programs (its scene's and the post chain's) are linked in the background:
   // drawn at once it linked twenty-six of them on the main thread, a freeze of up to 20 s on a cold shader cache. The
