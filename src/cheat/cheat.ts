@@ -17,8 +17,9 @@ import { unseal } from '../game/branch/sealed';
  *
  * URL form (bots and capture plans; docs/dev/HANDOFF.md):
  *   ?cheat=menu | open.vault | open.city | open.lounge | open.pull | open.m<N> | open.run | open.film | L<level>[.<point>]
- *   &cpick=a|b|ask &picks=<id>:<option>,... &cinv=all &cgo=1 (start at once; else one click starts it, for the sound)
- *   &nodmg=1 &nodrain=1 &fast=2 &tod=21.5 &wx=rain|fog|clear &slow=0.5 &freecam=1 &hud=0 &glov=1 &ctov=1
+ *   &cpick=a|b|ask &cpicks=<id>:<option>,... &cinv=all &cgo=1 (start at once; else one click starts it, for the sound)
+ *   &cnodmg=1 &cnodrain=1 &cfast=2 &ctod=21.5 &cwx=rain|fog|clear &cslow=0.5 &cfreecam=1 &chud=0 &cglov=1 &cctov=1
+ *   (every toggle has its own c-prefixed name: ?tod= is the world's own, perf_gate.py sets it)
  * Level points are L<level>.start, .obj<N>, .scene<N>, .dec<N>, .fight<N>, .away<N>, .film<N>, .results.
  */
 
@@ -36,42 +37,42 @@ export interface Snapshots { v: 1; made?: string; saves: SaveData[]; points: Poi
 export function parseUrl(q: URLSearchParams): { jump: Jump | null; menu: boolean } {
   const c = q.get('cheat');
   const num = (k: string, lo: number, hi: number) => { const v = Number(q.get(k)); return q.has(k) && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : null; };
-  if (q.get('nodmg') === '1') opts.noDamage = true;
-  if (q.get('nodrain') === '1') opts.noDrain = true;
-  opts.fast = num('fast', 0.5, 4) ?? opts.fast;
-  opts.tod = num('tod', 0, 24) ?? opts.tod;
-  const wx = q.get('wx'); if (wx === 'clear' || wx === 'rain' || wx === 'fog') opts.weather = wx;
-  opts.slow = num('slow', 0.25, 2) ?? opts.slow;
-  if (q.get('freecam') === '1') opts.freeCam = true;
-  if (q.get('hud') === '0') opts.hideHud = true;
-  if (q.get('glov') === '1') opts.glitchOv = true;
-  if (q.get('ctov') === '1') opts.contOv = true;
+  if (q.get('cnodmg') === '1') opts.noDamage = true;
+  if (q.get('cnodrain') === '1') opts.noDrain = true;
+  opts.fast = num('cfast', 0.5, 4) ?? opts.fast;
+  opts.tod = num('ctod', 0, 24) ?? opts.tod;
+  const wx = q.get('cwx'); if (wx === 'clear' || wx === 'rain' || wx === 'fog') opts.weather = wx;
+  opts.slow = num('cslow', 0.25, 2) ?? opts.slow;
+  if (q.get('cfreecam') === '1') opts.freeCam = true;
+  if (q.get('chud') === '0') opts.hideHud = true;
+  if (q.get('cglov') === '1') opts.glitchOv = true;
+  if (q.get('cctov') === '1') opts.contOv = true;
   if (!c) return { jump: null, menu: false };
   if (c === 'menu') return { jump: null, menu: true };
   const p = q.get('cpick'), picks: Picks = {};
-  for (const kv of (q.get('picks') ?? '').split(',')) { const [k, v] = kv.split(':'); if (k && v) picks[k] = v; }
+  for (const kv of (q.get('cpicks') ?? '').split(',')) { const [k, v] = kv.split(':'); if (k && v) picks[k] = v; }
   return { jump: { target: c === 'city' ? 'open.city' : c, preset: p === 'b' || p === 'ask' ? p : 'a', picks, inv: q.get('cinv') === 'all' ? 'all' : 'rec', go: q.get('cgo') === '1' }, menu: false };
 }
 
 export function jumpUrl(j: Jump, o: CheatOpts = opts): string {
   const u = new URL(location.href);
-  for (const k of ['cheat', 'cpick', 'picks', 'cinv', 'cgo', 'nodmg', 'nodrain', 'fast', 'tod', 'wx', 'slow', 'freecam', 'hud', 'glov', 'ctov']) u.searchParams.delete(k);
+  for (const k of ['cheat', 'cpick', 'cpicks', 'cinv', 'cgo', 'cnodmg', 'cnodrain', 'cfast', 'ctod', 'cwx', 'cslow', 'cfreecam', 'chud', 'cglov', 'cctov']) u.searchParams.delete(k);
   const s = u.searchParams;
   s.set('cheat', j.target);
   if (j.preset !== 'a') s.set('cpick', j.preset);
-  const pk = Object.entries(j.picks).map(([k, v]) => `${k}:${v}`).join(','); if (pk) s.set('picks', pk);
+  const pk = Object.entries(j.picks).map(([k, v]) => `${k}:${v}`).join(','); if (pk) s.set('cpicks', pk);
   if (j.inv === 'all') s.set('cinv', 'all');
   if (j.go) s.set('cgo', '1');
-  if (o.noDamage) s.set('nodmg', '1');
-  if (o.noDrain) s.set('nodrain', '1');
-  if (o.fast !== 1) s.set('fast', String(o.fast));
-  if (o.tod !== null) s.set('tod', String(o.tod));
-  if (o.weather) s.set('wx', o.weather);
-  if (o.slow !== 1) s.set('slow', String(o.slow));
-  if (o.freeCam) s.set('freecam', '1');
-  if (o.hideHud) s.set('hud', '0');
-  if (o.glitchOv) s.set('glov', '1');
-  if (o.contOv) s.set('ctov', '1');
+  if (o.noDamage) s.set('cnodmg', '1');
+  if (o.noDrain) s.set('cnodrain', '1');
+  if (o.fast !== 1) s.set('cfast', String(o.fast));
+  if (o.tod !== null) s.set('ctod', String(o.tod));
+  if (o.weather) s.set('cwx', o.weather);
+  if (o.slow !== 1) s.set('cslow', String(o.slow));
+  if (o.freeCam) s.set('cfreecam', '1');
+  if (o.hideHud) s.set('chud', '0');
+  if (o.glitchOv) s.set('cglov', '1');
+  if (o.contOv) s.set('cctov', '1');
   return u.toString();
 }
 

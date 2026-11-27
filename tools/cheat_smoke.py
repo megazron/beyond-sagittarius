@@ -84,7 +84,7 @@ def main():
             if not ev("__bs.cheat.opts.noDamage"):
                 fails.append("menu: a toggle did not take")
             url = ev("document.querySelector('#cheat .ch-url').value")
-            if "cheat=L12." not in url or "nodmg=1" not in url:
+            if "cheat=L12." not in url or "cnodmg=1" not in url:
                 fails.append(f"menu: the jump's URL is wrong: {url}")
             page.keyboard.press("Escape")
             if ev("__bs.cheat.isOpen"):

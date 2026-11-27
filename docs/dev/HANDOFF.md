@@ -27,10 +27,11 @@ here is signed off (only the owner does that). The opening code word goes to the
   `L<n>.dec<k>`, `L<n>.fight<k>`, `L<n>.away<k>`, `L<n>.film<k>`, `L<n>.results` (`L<n>` alone = start). The menu names
   them by kind and number only. `python3 tools/cheat_snapshots.py list` prints every id.
 - URL PARAMS: `cpick=a|b|ask` (a: first option, reflexes passed; b: second option, reflexes failed; ask: as recorded,
-  and the opening asks), `picks=<id>:<option>,...`, `cinv=all`, `cgo=1` (start at once: bots; without it one click
-  starts the jump so the page may play sound), `nodmg=1`, `nodrain=1`, `fast=1.5..3`, `tod=<hour>`, `wx=clear|rain|fog`,
-  `slow=0.25..2`, `freecam=1` (WASD, Q/E, drag; Shift fast), `hud=0`, `glov=1` (glitch overlay), `ctov=1`
-  (continuity overlay). In a running page: `__bs.cheat.open()`, `__bs.cheat.set({slow: 0.5})`, `__bs.cheat.points()`.
+  and the opening asks), `cpicks=<id>:<option>,...`, `cinv=all`, `cgo=1` (start at once: bots; without it one click
+  starts the jump so the page may play sound), `cnodmg=1`, `cnodrain=1`, `cfast=1.5..3`, `ctod=<hour>`, `cwx=clear|rain|fog`,
+  `cslow=0.25..2`, `cfreecam=1` (WASD, Q/E, drag; Shift fast), `chud=0`, `cglov=1` (glitch overlay), `cctov=1`
+  (continuity overlay). Every toggle is c-prefixed: `?tod=` is the world's own (perf_gate sets it; a cheat `tod`
+  pinned the clock and the city's card atlas never finished baking). In a running page: `__bs.cheat.open()`, `__bs.cheat.set({slow: 0.5})`, `__bs.cheat.points()`.
 - PRESETS (presets.ts): on a copy of the checkpoint the recorded answers are answered again: the old answer's effects
   taken back (trust, record, flags, who it cost), the new one's put on, the log rewritten; the opening's moments (the
   playthrough plays it as one film) are written in. LIMIT: what a scene's own code did because of an answer (not an
