@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'chars'))
 import mh
 from glb import Glb, pack_skin, F32, U8, I8, U16, U32
 from simplify import simplify
-from config import CHARS, MORPHS, CREW
+from config import CHARS, MORPHS, CREW, FACE_UNITS
 from scipy.spatial import cKDTree
 from multiprocessing import Pool
 import paint
@@ -137,6 +137,67 @@ def write_prim(g, part, skin, mat):
     return g.mesh(part.name, prim, names or None), len(idx) // 3
 
 
+def subdivided(part, body_P=None, body_N=None, margin=0.004, weld=0.0006):
+    """A garment at four times its triangles, rounded by Loop's rules (the narrator's coat is 3,700 quads at the source:
+    on a two metre body, in close-up, every one was a flat facet). Split seams are welded first so the shading runs
+    across them; uvs, weights and extras are carried to the new points linearly; open edges follow Loop's boundary
+    rule, so a hem or a lapel edge stays a clean curve. Rounding draws a convex surface in a little: where a point
+    comes nearer the body than `margin`, it is put back out along the body's normal."""
+    import copy
+    src = copy.copy(part)
+    src.P, src.T, src.TU = part.P.copy(), part.T.copy(), part.TU.copy()
+    if weld and not getattr(src, 'welded', False): weld_seams(src, weld)
+    P, T, TU, UV, W = src.P, src.T, src.TU, src.UV, src.W
+    nP, nU = len(P), len(UV)
+    E, UE = {}, {}
+    for t, tu in zip(T, TU):
+        for k in range(3):
+            a, b, c = int(t[k]), int(t[(k + 1) % 3]), int(t[(k + 2) % 3])
+            E.setdefault((min(a, b), max(a, b)), []).append(c)
+            ua, ub = int(tu[k]), int(tu[(k + 1) % 3])
+            UE.setdefault((min(ua, ub), max(ua, ub)), len(UE))
+    keys = list(E); eid = {k: nP + i for i, k in enumerate(keys)}
+    ka, kb = np.array([k[0] for k in keys]), np.array([k[1] for k in keys])
+    lin = lambda A: np.concatenate([A, (A[ka] + A[kb]) / 2])
+    P2 = lin(P)
+    nb = [[] for _ in range(nP)]; bnb = [[] for _ in range(nP)]
+    for i, (k, opp) in enumerate(E.items()):
+        nb[k[0]].append(k[1]); nb[k[1]].append(k[0])
+        if len(opp) == 2: P2[nP + i] = 0.375 * (P[k[0]] + P[k[1]]) + 0.125 * (P[opp[0]] + P[opp[1]])
+        else: bnb[k[0]].append(k[1]); bnb[k[1]].append(k[0])
+    for v in range(nP):
+        if bnb[v]:
+            if len(bnb[v]) == 2: P2[v] = 0.75 * P[v] + 0.125 * (P[bnb[v][0]] + P[bnb[v][1]])
+        elif nb[v]:
+            n = len(nb[v]); beta = 3 / 16 if n == 3 else 3 / (8 * n)
+            P2[v] = (1 - n * beta) * P[v] + beta * P[nb[v]].sum(0)
+    ukeys = list(UE)
+    UV2 = np.concatenate([UV, (UV[[k[0] for k in ukeys]] + UV[[k[1] for k in ukeys]]) / 2])
+    T2, TU2 = [], []
+    for t, tu in zip(T, TU):
+        a, b, c = (int(x) for x in t); ua, ub, uc = (int(x) for x in tu)
+        mab, mbc, mca = eid[(min(a, b), max(a, b))], eid[(min(b, c), max(b, c))], eid[(min(c, a), max(c, a))]
+        uab, ubc, uca = nU + UE[(min(ua, ub), max(ua, ub))], nU + UE[(min(ub, uc), max(ub, uc))], nU + UE[(min(uc, ua), max(uc, ua))]
+        T2 += [(a, mab, mca), (mab, b, mbc), (mca, mbc, c), (mab, mbc, mca)]
+        TU2 += [(ua, uab, uca), (uab, ub, ubc), (uca, ubc, uc), (uab, ubc, uca)]
+    T2, TU2 = np.array(T2, np.int64), np.array(TU2, np.int64)
+    if body_P is not None and len(body_P):
+        d, j = cKDTree(body_P).query(P2, workers=1)
+        s_ = np.einsum('ij,ij->i', P2 - body_P[j], body_N[j])
+        m = (d < 0.03) & (s_ < margin) & (s_ > -0.03)
+        P2[m] += body_N[j[m]] * (margin - s_[m])[:, None]
+    o = copy.copy(src)
+    o.P, o.T, o.TU, o.UV = P2, T2, TU2, UV2
+    W2 = lin(W); o.W = W2 / np.maximum(W2.sum(1, keepdims=True), 1e-9)
+    o.extra = {k: lin(a) for k, a in src.extra.items()}
+    o.morph = {k: lin(a) for k, a in src.morph.items()}
+    N2 = vnormals(P2, T2)
+    # patches the source winds inside out keep the outward normals they were given
+    N0 = lin(src.N); N2[np.einsum('ij,ij->i', N2, N0) < 0] *= -1
+    o.N = N2
+    return o
+
+
 class Ctx:
     pass
 
@@ -166,7 +227,7 @@ def asset_part(c, name_or_path, Vdm, scale, off, morphs, name, Wfix=None, inflat
     return p
 
 
-def skirt_weights(c, p, pivots):
+def skirt_weights(c, p, pivots, shins=False):
     """Long garments must not split with the legs: below the crotch, hang from both thighs and the hips."""
     ix = c.rig.index
     crotch = pivots[ix['upperlegL']][1] - 0.04
@@ -190,6 +251,13 @@ def skirt_weights(c, p, pivots):
     Wn[:, ix['upperlegL']] = a * leg
     Wn[:, ix['upperlegR']] = (1 - a) * leg
     Wn[:, ix['hips']] = 1 - leg
+    if shins:
+        # a coat to the calf: below the knee its front goes with the shin under it. Hung from the thighs alone, the
+        # skirt of a seated man stood straight out past his knees, a stiff tent over the stool
+        kk = np.clip((knee - 0.02 - y) / 0.16, 0, 1); kk = kk * kk * (3 - 2 * kk) * (0.25 + 0.6 * fz)
+        for sd, aa in (('L', a), ('R', 1 - a)):
+            t = Wn[:, ix[f'upperleg{sd}']] * kk
+            Wn[:, ix[f'upperleg{sd}']] -= t; Wn[:, ix[f'lowerleg{sd}']] += t
     p.W = p.W * (1 - k[:, None]) + Wn * k[:, None]
     # a skirt stands clear of the legs it hides: striding thighs must not come through (a little more in front)
     r = np.stack([x, np.zeros_like(x), p.P[:, 2] - pivots[ix['hips']][2]], 1)
@@ -757,6 +825,15 @@ def build(c, cid, force=False):
             i, d = mh.load_target(t)
             D[i] += d * w * scale
         morphs[name] = D
+    if cfg.get('face_units'):
+        for name, lst in FACE_UNITS.items():
+            D = np.zeros_like(Vdm)
+            for t, w in lst:
+                i, d = mh.load_target(t)
+                D[i] += d * w * scale
+            if name.endswith('L') and name.startswith('smile'):
+                D *= np.clip(Vdm[:, 0] * scale / 0.012 * 0.5 + 0.5, 0, 1)[:, None]  # his left half only, eased over the middle
+            morphs[name] = D
     morphs.update(ear_morphs(Vdm, scale))
     # build sliders for the character creator
     vb = {}
@@ -775,7 +852,7 @@ def build(c, cid, force=False):
         p.extra['_ACCENT'] = np.full(len(p.P), 1.0 if opt.get('accent') else 0.0, np.float32)
         deleted.update(p.clo.delete)
         if opt.get('skirt'):
-            skirt_weights(c, p, piv)
+            skirt_weights(c, p, piv, bool(opt.get('shins')))
             if opt.get('follow_top'): opt['follow_above'] = float(piv[c.rig.index['hips']][1] + 0.18)  # the waist up: the thighs keep their own weights under the skirt
         # a sleeve follows the forearm, never the hand: a cuff weighted to the hand leaps when the wrist turns
         for sd in 'LR':
@@ -1216,7 +1293,9 @@ def build(c, cid, force=False):
         hlock = locked
         if suffix:
             hlock = locked | (sum(np.abs(morphs[k_]).max(1) for k_ in ('smile', 'open', 'round', 'wide')) > 0.001) | (W0[:, ix['jaw']] > 0.05)
-        hd = head.decimated(L['head'], hlock, imp, min(L['cost'], LODS['']['cost']), bone_of, near_b, shapedH)
+        full_face = bool(cfg.get('head_full')) and suffix == ''
+        hd = head if full_face else head.decimated(L['head'], hlock, imp, min(L['cost'], LODS['']['cost']), bone_of, near_b, shapedH)
+        if full_face: print(f'  {cid}: the head keeps all {len(head.T)} triangles', flush=True)
         if not os.environ.get('NO_SOCKETS'):
             hd = eye_sockets(hd, eyes.P)
         emit(hd, 'skin')
@@ -1231,14 +1310,17 @@ def build(c, cid, force=False):
         ccost = min(L['cost'], LODS['']['cost'])
         for p in garments:
             if p.opt.get('knit') and not getattr(p, 'welded', False): weld_seams(p)
-        cl = [p.decimated(max(300, int(budget * len(p.T) * p.opt.get('budget', 1) / tot)), None, None, ccost * (0.25 if p.opt.get('budget') else 1)) for p in garments]
+        cl = [subdivided(p, Vb[bodyv], Nb[bodyv]) if p.opt.get('subdiv') and suffix == '' else p.decimated(max(300, int(budget * len(p.T) * p.opt.get('budget', 1) / tot)), None, None, ccost * (0.25 if p.opt.get('budget') else 1)) for p in garments]
+        if suffix == '':
+            for p0, p1 in zip(garments, cl):
+                if p0.opt.get('subdiv'): print(f'  {cid}: {p0.asset} subdivided, {len(p0.T)} -> {len(p1.T)} triangles', flush=True)
         if not os.environ.get('NO_CAPS'):
             bb, nk, nd = cap_holes(bb, seam, V[bodyv], Nb[bodyv], piv, posed)
             if suffix == '': print(f'  {cid}: {nk} skin holes capped' + (f', {nd} left open (a cap would show)' if nd else ''), flush=True)
         emit(bb, 'skin')
         emit(eyes.decimated(500 if suffix == '' else 200), 'eyes')
         emit(cornea.decimated(200 if suffix == '' else 80), 'cornea')
-        mp = merge([mouth_t.decimated(420 if suffix == '' else 160), tongue.decimated(80 if suffix == '' else 40)], 'mouth', morphs=list(morphs))
+        mp = merge([mouth_t, tongue] if full_face else [mouth_t.decimated(420 if suffix == '' else 160), tongue.decimated(80 if suffix == '' else 40)], 'mouth', morphs=list(morphs))
         emit(mp, 'mouth')
         lb = merge([lash, brow], 'lash', uvmap=[(0, 0, 0.5, 1), (0.5, 0, 0.5, 1)], morphs=list(morphs))
         emit(lb, 'lash')

@@ -18,6 +18,7 @@ import { perfBody } from '../core/perfhud';
 
 /** ?lensfade=old: a crowd body fades through a dithered half-shape from 2.2 m to 1.1 m of the camera (the old way). */
 const LENS_BAND = typeof location !== 'undefined' && new URLSearchParams(location.search).get('lensfade') === 'old';
+import { VIS_UNITS, mouthAt, parseVis } from './visemes';
 export type { CrewId } from './looks';
 export { preloadCrew } from './assets';
 /** A direction in the body's own space: +x left, +y up, +z forward. */
@@ -43,7 +44,13 @@ export interface Limbs { armL?: Dir; armR?: Dir; foreL?: Dir; foreR?: Dir; legL?
   ownArms?: 'L' | 'R' | 'both';
   /** How far the set pose is laid over the clip, 0..1 (default 1): a pose eased in from the clip's own, mid-shot. */
   weight?: number }
-export type Face = Partial<Record<'smile' | 'frown' | 'fear' | 'squint' | 'open' | 'blink', number>>;
+export type Face = Partial<Record<'smile' | 'frown' | 'fear' | 'squint' | 'open' | 'blink' | FaceUnit, number>>;
+/** The narrator's own face units (only his build has them; on anyone else they do nothing). */
+export type FaceUnit = 'brow_up' | 'brow_upL' | 'brow_upR' | 'brow_in' | 'brow_down' | 'lid_up' | 'cheek' | 'smileL';
+const FACE_UNITS: FaceUnit[] = ['brow_up', 'brow_upL', 'brow_upR', 'brow_in', 'brow_down', 'lid_up', 'cheek', 'smileL'];
+/** Films: authored acting laid over the clip and the look (radians). nod + is chin down, turn + is to his left, tilt + is
+ *  his left ear to his left shoulder; the chest the same way; a shoulder lifts (+ up). His eyes stay on what he looks at. */
+export interface Act { nod?: number; turn?: number; tilt?: number; chestNod?: number; chestTurn?: number; chestTilt?: number; shoulderL?: number; shoulderR?: number }
 /** A hand's finger shape for Character.setGrip. */
 export interface Grip { shape: 'open' | 'relaxed' | 'grip' | 'pinch' | 'point'; radius?: number; amount?: number }
 /** Something the hands do (Character.doTask): reach and pick up, put down, throw, use a thing in front of you, eat,
@@ -314,6 +321,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   const morph: Record<string, number> = {};
   let blinkAt = 2 + Math.random() * 3, blinkT = 0, speak = 0;
   let limbs: Limbs | null = null, faceSet: Face | null = null, armOwner: 'L' | 'R' | 'both' | null = null;
+  let hasUnits = false, filmed = false, trailed = false, act: Act | null = null, teethMat: THREE.MeshStandardMaterial | null = null; const visW: number[] = VIS_UNITS.map(() => 0);
   // kneeling (0 standing, 1 on both knees) eases to its goal; a prop held outside any task
   let kneel = 0, kneelGoal = 0, heels = 0, heelsGoal = 0, heldProp: PropKind | null = null, heldShown = false;
   const kneelL: Limbs = {}, KD = new THREE.Vector3(), KQ = new THREE.Quaternion();
@@ -513,7 +521,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const overC = marks === 'explorer' ? 0xf3e7cf : marks === 'strong' ? 0xe8c49a : 0x1e1e1e;
     const skin = skinMaterial(M.skin, marks, { skin: skinC, shade: shadeC, lip: lipC, glow: glowC, over: overC, glowK: human ? 0 : 1.15 }, lod);
     const irisC = custom ? custom.iris : human ? 0x1e120b : L.face.iris;
-    const eyes = eyeMaterial(irisC, (custom ? custom.eyeGlow : !human) ? 0.55 : 0, ALIVE);
+    const eyes = eyeMaterial(irisC, (custom ? custom.eyeGlow : !human) ? 0.55 : 0, id === 'megazron' && !custom ? 'film' : ALIVE);
     const browC = custom ? new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex() : human ? 0x2c1d14 : L.face.brow;
     const atlas = M.atlas;
     const cloth = new THREE.MeshStandardMaterial({ map: tex(`${atlas}_cloth`, lod, true), normalMap: tex(`${atlas}_cloth_n`, lod), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, side: THREE.DoubleSide });
@@ -664,8 +672,18 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     }
     // The decimated scan teeth break up in close-ups: use a clean mouth instead.
     const mouthBox = new THREE.Box3();
-    scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.material as THREE.Material) === mouth) { m.geometry.computeBoundingBox(); mouthBox.union(m.geometry.boundingBox!); m.visible = false; } });
-    if (!mouthBox.isEmpty()) {
+    // (the narrator's build keeps every triangle of its teeth and tongue and gives them his visemes: they are drawn)
+    let ownTeeth = false;
+    scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.material as THREE.Material) === mouth) { m.geometry.computeBoundingBox(); mouthBox.union(m.geometry.boundingBox!); if (m.morphTargetDictionary?.v_part !== undefined) ownTeeth = true; else m.visible = false; } });
+    hasUnits = ownTeeth;
+    if (ownTeeth && !mouthBox.isEmpty()) {
+      // the mouth behind his own teeth: the far wall of a dark hollow (its near half is not drawn, so the teeth and the
+      // tongue are seen in it), and the teeth themselves in the shade of the lips, not lit like the face
+      const c = mouthBox.getCenter(new THREE.Vector3()).sub(piv('head')), sz = mouthBox.getSize(new THREE.Vector3());
+      const inside = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), new THREE.MeshBasicMaterial({ color: 0x0b0304, side: THREE.BackSide }));
+      inside.scale.set(sz.x * 0.62, sz.y * 0.75, sz.z * 0.66); inside.position.set(c.x, c.y, c.z - sz.z * 0.06); bs.get('head')!.add(inside);
+      mouth.color.setRGB(0.5, 0.46, 0.45); mouth.roughness = 0.5; mouth.envMapIntensity = 0.15; teethMat = mouth;
+    } else if (!mouthBox.isEmpty()) {
       // bind-pose position, so it holds wherever the character happens to stand when the model arrives
       const c = mouthBox.getCenter(new THREE.Vector3()).sub(piv('head'));
       const inside = new THREE.Mesh(new THREE.SphereGeometry(0.026, 14, 10), new THREE.MeshStandardMaterial({ color: 0x170708, roughness: 0.9 }));
@@ -1860,7 +1878,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (leanX || leanY) { const q = Q.setFromEuler(E.set(leanX / 3, leanY / 3, 0)); bs.get('spine')!.quaternion.multiply(q); spine1.quaternion.multiply(q); chestB.quaternion.multiply(q); }
     // the narrator is filmed close and still: his breath has to be seen (chest up and back on the in-breath, the
     // shoulders with it, the head held where it was), in every pose, captured or not
-    if (id === 'megazron' && !custom) {
+    if (filmed) {
       const br = bp * 0.014 + Math.sin(t * 0.31 + 1.3) * 0.004;
       chestB.quaternion.multiply(Q.setFromEuler(E.set(-br, 0, 0)));
       neckB.quaternion.multiply(Q.setFromEuler(E.set(br * 0.6, 0, 0)));
@@ -2073,12 +2091,21 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       neckB.quaternion.multiply(Q.setFromEuler(E.set(lx * 0.4, ly * 0.4, 0)));
       headB.quaternion.multiply(Q.setFromEuler(E.set(lx * 0.6, ly * 0.6, 0)));
     }
+    // authored acting over the clip and the look: nods, turns and tilts of the head, the chest and the shoulders with
+    // them. The eyes take the head's part back (below), so a nod on a word never takes his look off the lens
+    const aN = act?.nod ?? 0, aT = act?.turn ?? 0, aZ = act?.tilt ?? 0;
+    if (act) {
+      if (aN || aT || aZ) { neckB.quaternion.multiply(Q.setFromEuler(E.set(aN * 0.35, aT * 0.35, aZ * 0.35))); headB.quaternion.multiply(Q.setFromEuler(E.set(aN * 0.65, aT * 0.65, aZ * 0.65))); }
+      if (act.chestNod || act.chestTurn || act.chestTilt) { const q = Q.setFromEuler(E.set((act.chestNod ?? 0) / 2, (act.chestTurn ?? 0) / 2, (act.chestTilt ?? 0) / 2)); spine1.quaternion.multiply(q); chestB.quaternion.multiply(q); }
+      if (act.shoulderL) bs.get('clavicleL')?.quaternion.premultiply(Q.setFromAxisAngle(V1.set(0, 0, 1), act.shoulderL));
+      if (act.shoulderR) bs.get('clavicleR')?.quaternion.premultiply(Q.setFromAxisAngle(V1.set(0, 0, 1), -act.shoulderR));
+    }
     sacAt -= dt;
     if (sacAt <= 0) { sacAt = ALIVE ? 0.5 + Math.random() * 2.2 : 1.2 + Math.random() * 3; sacX = (Math.random() - 0.5) * 0.05; sacY = (Math.random() - 0.5) * 0.09; if (ALIVE && Math.random() < 0.18) blinkAt = Math.min(blinkAt, 0.05); }
     eyeY += (sacY + clamp(yawRate * 0.08, -0.25, 0.25) - eyeY) * (1 - Math.exp(-dt * 20));
     if (ALIVE) {
       // the eyes finish the look the head only half makes, converge on what they look at, and never sit dead still
-      const restY = clamp(wantY - ly * 1.0, -0.45, 0.45) * (gaze ? 1 : 0), restX = clamp(wantX - lx * 1.0, -0.3, 0.3) * (gaze ? 1 : 0);
+      const restY = clamp(wantY - ly * 1.0 - aT - (act?.chestTurn ?? 0), -0.5, 0.5) * (gaze ? 1 : 0), restX = clamp(wantX - lx * 1.0 - aN - (act?.chestNod ?? 0), -0.38, 0.38) * (gaze ? 1 : 0);
       eyeAimY += (restY - eyeAimY) * (1 - Math.exp(-dt * 14)); eyeAimX += (restX - eyeAimX) * (1 - Math.exp(-dt * 14));
       const dist = gaze ? Math.max(0.35, V2.distanceTo(gaze)) : 3, verg = Math.atan(0.032 / dist);
       const jx = wob(t * 9, 3) * 0.004, jy = wob(t * 11, 7) * 0.006;
@@ -2130,28 +2157,55 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const hurt = (kind === 'injured' ? 1 : 0);
     // the mouth follows the voice clip itself; no clip, no movement
     if (speak > 0) { speak = Math.max(0, speak - dt); voice.mouth(lip); } else lip.open = lip.round = lip.wide = 0;
+    // the narrator, on a line with a viseme track: each mouth shape of the words, made of his own lip units; the jaw's
+    // share follows the voice's loudness too, so a quiet syllable is a small one
+    const vt = hasUnits && speak > 0 ? voice.viseme() : null;
+    if (vt) {
+      mouthAt(parseVis(vt.track), vt.at, visW);
+      const kv = 1 - Math.exp(-dt * 34), loud = 0.6 + 0.4 * lip.open;
+      easeMorph('open', visW[0] * loud * 0.9, kv);
+      for (let u = 1; u < VIS_UNITS.length; u++) easeMorph(VIS_UNITS[u], Math.min(1, visW[u] * 1.25), kv);
+      easeMorph('round', 0, kv); easeMorph('wide', 0, kv);
+    } else {
     const open = speak > 0 ? lip.open * (id === 'megazron' && !custom ? 0.3 : 0.45) : ex.open ?? 0; // the narrator speaks with a small mouth (in close-up the full opening gaped)
     easeMorph('open', open, 1 - Math.exp(-dt * 30));
     easeMorph('round', lip.round * 0.55, 1 - Math.exp(-dt * 22));
     easeMorph('wide', lip.wide * 0.5, 1 - Math.exp(-dt * 22));
-    bs.get('jaw')!.rotation.x = (morph.open ?? 0) * 0.2;
+    if (hasUnits) for (let u = 1; u < VIS_UNITS.length; u++) easeMorph(VIS_UNITS[u], 0, 1 - Math.exp(-dt * 22));
+    }
+    bs.get('jaw')!.rotation.x = (morph.open ?? 0) * (hasUnits ? 0.1 : 0.2);
+    // his teeth are in the dark behind closed lips (lit, they drew a white line along the mouth at rest) and come into
+    // the light as it opens
+    if (teethMat) { const o = Math.min(1, ((morph.open ?? 0) + 0.4 * (morph.v_part ?? 0) + 0.3 * (morph.v_upret ?? 0)) * 3.2); teethMat.color.setRGB(0.05 + 0.45 * o, 0.045 + 0.415 * o, 0.045 + 0.405 * o); }
     if (ALIVE) {
       // never a dead-neutral face: a soft resting smile that drifts, brows and cheeks that move with speech,
       // a mouth that shuts fully between syllables; the stare shapes (wide 'fear' eyes at rest) are gone
       const talk = speak > 0 ? lip.open : 0, idle = wob(t * 0.6, id.length * 3.1);
-      if (speak > 0 && lip.open < 0.1) easeMorph('open', 0, 1 - Math.exp(-dt * 60));
+      if (speak > 0 && lip.open < 0.1 && !vt) easeMorph('open', 0, 1 - Math.exp(-dt * 60));
       easeMorph('smile', (ex.smile ?? Math.max(smileBase, id === 'megazron' ? 0.05 : 0.24)) + idle * 0.05 + talk * (id === 'megazron' ? 0.05 : 0.12), r); // the narrator does not smile at rest
       easeMorph('frown', ex.frown ?? 0, r);
       // brows barely lifted at rest (more reads as worry)
-      easeMorph('fear', (ex.fear ?? 0.04) + hurt * 0.1 + talk * 0.08 + Math.max(0, wob(t * 0.35, 9)) * 0.06, r);
-      easeMorph('squint', (ex.squint ?? 0) + eyeShape.squint * 0.3 + Math.max(0, idle) * 0.06 + (morph.smile ?? 0) * 0.12, r);
+      // (the narrator's brows, lids and cheeks are single units: his 'fear' shape also pulls the mouth, so speech leaves it alone)
+      easeMorph('fear', hasUnits ? ex.fear ?? 0 : (ex.fear ?? 0.04) + hurt * 0.1 + talk * 0.08 + Math.max(0, wob(t * 0.35, 9)) * 0.06, r);
+      if (hasUnits) {
+        const lookUp = clamp(-(eyeAimX + lx), 0, 0.4);
+        for (const k of FACE_UNITS) {
+          let v = ex[k] ?? 0;
+          // brows that ride the voice a little and never sit dead level; the upper lids open as he looks up; the cheeks lift with a smile
+          if (k === 'brow_up') v += talk * 0.16 + Math.max(0, wob(t * 0.35, 9)) * 0.06;
+          if (k === 'lid_up') v += lookUp * 0.9;
+          if (k === 'cheek') v += (morph.smile ?? 0) * 0.5 + (morph.smileL ?? 0) * 0.3;
+          easeMorph(k, v, k === 'lid_up' ? 1 - Math.exp(-dt * 16) : 1 - Math.exp(-dt * 7));
+        }
+      }
+      easeMorph('squint', (ex.squint ?? 0) + (hasUnits ? 0 : eyeShape.squint * 0.3) + Math.max(0, idle) * 0.06 + (morph.smile ?? 0) * 0.12, r);
       // blinks: irregular, sometimes double, quick to close and slower to open
       blinkAt -= dt;
       if (blinkAt <= 0) { blinkT = 0.2; blinkAt = Math.random() < 0.15 ? 0.32 : 1.6 + Math.random() * Math.random() * 6.5; }
       if (blinkT > 0) blinkT -= dt;
       const bk = blinkT > 0 ? 1 - blinkT / 0.2 : 1, bl = blinkT > 0 ? (bk < 0.3 ? bk / 0.3 : 1 - (bk - 0.3) / 0.7) : 0;
       // the upper lid rests over the top of the iris: relaxed, never round and staring; it follows the eye down
-      const restLid = Math.min(Math.max(ex.blink ?? eyeShape.blink, 0.15), ex.blink ?? 0.2) + clamp(eyeAimX + lx, 0, 0.4) * 0.35;
+      const restLid = (hasUnits ? ex.blink ?? 0.07 : Math.min(Math.max(ex.blink ?? eyeShape.blink, 0.15), ex.blink ?? 0.2)) + clamp(eyeAimX + lx, 0, 0.4) * (hasUnits ? 0.7 : 0.35);
       setMorph('blink', Math.max(bl, Math.min(0.92, restLid)));
     } else {
     easeMorph('smile', ex.smile ?? smileBase, r);
@@ -2215,6 +2269,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
 
     // ---- secondary motion: spring on the body's world velocity, in body space ----
     tmp.setFromMatrixPosition(root.matrixWorld);
+    // in a performance the root stands still and the capture carries the body over the floor: the coat's skirt and the
+    // hair trail what the hips do (walking in, the turn onto the stool, standing up), or nothing would follow through
+    const trail = filmed && !!perf && perf.length > 0;
+    if (trail) tmp.setFromMatrixPosition(bs.get('hips')!.matrixWorld);
+    if (trail !== trailed) { trailed = trail; lastPos.copy(tmp); }
     if (!inited) { lastPos.copy(tmp); inited = true; }
     const vel = tmp.clone().sub(lastPos).divideScalar(Math.max(dt, 1 / 120));
     lastPos.copy(tmp);
@@ -2222,11 +2281,13 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     if (limbs?.hair) vel.set(limbs.hair[0], limbs.hair[1], limbs.hair[2]).multiplyScalar(-8);
     const yaw = root.rotation.y, cs = Math.cos(-yaw), sn = Math.sin(-yaw);
     const lx2 = vel.x * cs + vel.z * sn, lz = -vel.x * sn + vel.z * cs;
-    const target = tmp.set(-lx2 * 0.02, -Math.abs(Math.cos(gaitPhase * 12.566)) * 0.012 * amount + vel.y * -0.02, -lz * 0.02);
+    const gain = trail ? 0.034 : 0.02;
+    const target = tmp.set(-lx2 * gain, -Math.abs(Math.cos(gaitPhase * 12.566)) * 0.012 * amount + vel.y * -gain, -lz * gain);
     target.x += Math.sin(t * 0.8) * 0.008; target.z += Math.cos(t * 0.63) * 0.006; // breeze
     // critically damped: hair and hems settle, they never ring
     const sdt2 = Math.min(dt, 1 / 30);
-    swingV.addScaledVector(tmp.sub(swing), 49 * sdt2); swingV.multiplyScalar(Math.exp(-sdt2 * 14));
+    // (filmed: a softer, slightly under-damped spring, so a hem swings on past the stop and comes back once)
+    swingV.addScaledVector(tmp.sub(swing), (trail ? 34 : 49) * sdt2); swingV.multiplyScalar(Math.exp(-sdt2 * (trail ? 7.5 : 14)));
     swing.addScaledVector(swingV, sdt2);
     swing.clampLength(0, 0.2);
     sway.uSwing.value.copy(swing);
@@ -2384,6 +2445,12 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     get faded() { return fadeOn && !fig.visible; },
     /** Held expression (null goes back to what the pose asks for). */
     setFace(f: Face | null) { faceSet = f; },
+    /** He is being filmed (the Vault sets it): his breath is drawn large enough to see. Off, the body is the game's own (the animation gates measure it). */
+    setFilmed(on: boolean) { filmed = on; },
+    /** Films: authored acting over the clip (head, chest, shoulders); null clears it. */
+    setAct(a: Act | null) { act = a; },
+    /** His own face units and teeth are built in (the narrator's film build). */
+    get hasFaceUnits() { return hasUnits; },
     say(seconds: number) { speak = Math.max(speak, seconds); },
     /** Where the lips' middle is now, in the world (what eating and drinking bring the bread or the cup to). */
     lipsAt(out = new THREE.Vector3()) { return B ? lipsAt(B, out) : out.set(NaN, NaN, NaN); },

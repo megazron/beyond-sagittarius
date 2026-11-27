@@ -284,7 +284,8 @@ export function skinMaterial(sex: string, marks: string, l: SkinLook, lod: numbe
 }
 
 /** `alive`: the living eye (limbal ring, corneal highlight, lid shadow, no lamp-like glow); the narrator always has it. */
-export function eyeMaterial(iris: number, glow: number, alive = DECREEP) {
+export function eyeMaterial(iris: number, glow: number, alive: boolean | 'film' = DECREEP) {
+  const film = alive === 'film';
   const m = new THREE.MeshStandardMaterial({ map: texPlain('eye'), roughness: alive ? 0.1 : 0.18 });
   m.userData.film = { kind: 'eye', iris, glow };
   const u = { uIris: { value: col(iris) }, uEyeGlow: { value: glow } };
@@ -307,20 +308,31 @@ export function eyeMaterial(iris: number, glow: number, alive = DECREEP) {
         float iLum = dot(uIris, vec3(0.3, 0.6, 0.1)); vec3 hue = mix(vec3(iLum), uIris, 1.7); hue = max(hue, vec3(0.0)) * (0.5 / max(iLum, 0.25));
         vec3 irs = hue * (0.10 + 0.95 * ey.r * limb);
         diffuseColor.rgb = diffuse * mix(scl, irs, ey.g) * (1.0 - ey.b * 0.98); // (the material's colour is white unless a scene shades the eyes down)
+        ${film ? /* glsl */ `
+        { // the narrator's eye, filmed close under lamps and bloom: nothing in it shines by itself. A deep amber iris with
+          // a dark rim and a lighter ring round a pupil large enough to read from across the room (drawn here by
+          // distance from the iris's centre in the map: the map's own pupil is a third of this), a white that is grey
+          float rI = min(distance(vMapUv, vec2(0.705, 0.297)), distance(vMapUv, vec2(0.291, 0.703))) / 0.118;
+          float pupil = 1.0 - smoothstep(0.42, 0.48, rI), inIris = 1.0 - smoothstep(0.95, 1.03, rI);
+          vec3 amber = uIris * vec3(0.92, 0.6, 0.34);
+          vec3 fIris = amber * (0.12 + 0.34 * smoothstep(0.46, 0.76, rI)) * (0.7 + 0.3 * ey.r) + amber * 0.16 * (1.0 - smoothstep(0.46, 0.66, rI));
+          fIris *= 1.0 - 0.78 * smoothstep(0.8, 1.0, rI);
+          vec3 fScl = vec3(0.6, 0.585, 0.575) * pow(ey.r, 1.3);
+          diffuseColor.rgb = diffuse * mix(mix(fScl, fIris, inIris), vec3(0.003), pupil); }` : ''}
         float lidSh = smoothstep(0.05, 0.75, normalize(vNormal).y);
         diffuseColor.rgb *= 1.0 - 0.55 * lidSh;` : ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += uIris * ey.g * (1.0 - ey.b) * uEyeGlow * (0.3 + ey.r) * ${alive ? '0.08' : '1.0'};
+        totalEmissiveRadiance += uIris * ey.g * (1.0 - ey.b) * uEyeGlow * (0.3 + ey.r) * ${film ? '0.0' : alive ? '0.08' : '1.0'};
         ${alive ? /* glsl */ `
         { // the cornea's highlight: a small bright window and a soft second one, from a key that sits up and to the side
           vec3 Nn = normalize(vNormal), Vv = normalize(vViewPosition);
-          float h1 = pow(max(dot(reflect(-normalize(vec3(-0.35, 0.55, 0.75)), Nn), Vv), 0.0), 420.0);
+          float h1 = pow(max(dot(reflect(-normalize(vec3(-0.35, 0.55, 0.75)), Nn), Vv), 0.0), ${film ? '240.0' : '420.0'});
           float h2 = pow(max(dot(reflect(-normalize(vec3(0.45, -0.15, 0.85)), Nn), Vv), 0.0), 160.0);
-          totalEmissiveRadiance += vec3(1.0, 0.98, 0.95) * (h1 * 1.6 + h2 * 0.12) * (1.0 - 0.6 * lidSh);
+          totalEmissiveRadiance += vec3(1.0, 0.98, 0.95) * ${film ? '(h1 * 1.1)' : '(h1 * 1.6 + h2 * 0.12)'} * (1.0 - 0.6 * lidSh);
           // the wet line along the lower lid
           totalEmissiveRadiance += vec3(0.9) * smoothstep(-0.55, -0.8, Nn.y) * 0.05; }` : ''}`);
   };
-  m.customProgramCacheKey = () => (alive ? 'crew-eye2' : 'crew-eye');
+  m.customProgramCacheKey = () => (film ? 'crew-eye3' : alive ? 'crew-eye2' : 'crew-eye');
   return m;
 }
 

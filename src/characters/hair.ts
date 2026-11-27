@@ -121,7 +121,7 @@ function capShell(lowDeg: number, frontDeg: number, S: Skull, volume = 0, fray =
     } }
   sp.computeVertexNormals();
   sp.translate(S.c.x, S.c.y, S.c.z);
-  const n = p.count, at = new Float32Array(n).fill(volume > 0 ? 0.02 : 0.16), z = new Float32Array(n), ph = new Float32Array(n).fill(0.5), tan = new Float32Array(n * 3);
+  const n = p.count, at = new Float32Array(n).fill(volume > 0 && band >= 0.06 ? 0.02 : band < 0.06 ? 0.3 : 0.16), z = new Float32Array(n), ph = new Float32Array(n).fill(0.5), tan = new Float32Array(n * 3);
   const v = new THREE.Vector3(), down = new THREE.Vector3(0, -1, 0);
   for (let i = 0; i < n; i++) {
     v.set(p.getX(i) - S.c.x, p.getY(i) - S.c.y, p.getZ(i) - S.c.z).normalize();
@@ -305,6 +305,8 @@ function hairMesh(geo: THREE.BufferGeometry, colors: HairColors, sway: SwayUnifo
     uMid: { value: new THREE.Color(colors.mid) },
     uTip: { value: new THREE.Color(colors.tip) },
     uShine: { value: new THREE.Color(colors.shine) },
+    // light that comes through pale hair from the lit side (a scene sets it: 0 leaves the far side to the room's fill)
+    uThrough: { value: 0 },
   };
   mat.userData.hairU = u; // a scene can shade a head of hair down (the narrator's pale hair under his lamp)
   applySway(mat, sway, (sh) => {
@@ -341,7 +343,7 @@ function hairMesh(geo: THREE.BufferGeometry, colors: HairColors, sway: SwayUnifo
   }
   // and never into the ground (uGround, a plane a little above it): the free part of a strand rests on it
   { float gd = dot(uGround.xyz, transformed) + uGround.w; if (gd < 0.0) transformed -= uGround.xyz * gd * min(aT * 2.5, 1.0); }`);
-    sh.fragmentShader = `varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uRoot, uMid, uTip, uShine;\n` + sh.fragmentShader
+    sh.fragmentShader = `varying float vT; varying float vPh; varying vec3 vTan; uniform vec3 uRoot, uMid, uTip, uShine; uniform float uThrough;\n` + sh.fragmentShader
       .replace('#include <color_fragment>', /* glsl */ `#include <color_fragment>
         diffuseColor.rgb = mix(mix(uRoot, uMid, smoothstep(0.0, 0.35, vT)), uTip, smoothstep(0.45, 1.0, vT));`)
       .replace('#include <emissivemap_fragment>', /* glsl */ `#include <emissivemap_fragment>
@@ -373,6 +375,7 @@ function hairMesh(geo: THREE.BufferGeometry, colors: HairColors, sway: SwayUnifo
             // each lock catches the light a little differently, and a soft sky fill keeps the top of the head out of black
             #ifdef HAIR_OWN
             totalEmissiveRadiance += hi * Li * wrapL * texture2D(map, vMapUv).r; // (no card by card difference: it showed each card as a rectangle)
+            totalEmissiveRadiance += diffuseColor.rgb * uThrough; // the side away from the key is not a dark slab: pale hair passes light on
             #else
             totalEmissiveRadiance += hi * Li * wrapL * smoothstep(0.3, 0.8, diffuseColor.a) * (0.55 + 0.9 * vPh);
             #endif
@@ -408,7 +411,7 @@ export type HairStyleId = 'scientist' | 'strong' | 'medic' | 'explorer' | 'build
 
 /** Per-style shell cut: back and front hairline elevation in degrees. */
 /** Per-style body: how far the hair mass swells off the scalp at the top (fraction of skull radius). */
-export const HAIR_VOLUME: Partial<Record<HairStyleId, number>> = { suit: 0.06 }; // the cards carry the volume; the cap stays under them
+export const HAIR_VOLUME: Partial<Record<HairStyleId, number>> = { suit: 0.06, megazron: 0.035 }; // the cards carry the volume; the cap stays under them
 /** Styles drawn as textured hair cards instead of swept strands. */
 export const HAIR_CARDS: Partial<Record<HairStyleId, true | 'curly'>> = { suit: 'curly', megazron: true };
 /** Per-style surface: thick dry hair is matte. */
@@ -496,21 +499,15 @@ export const HAIRSTYLES: Record<HairStyleId, () => Lock[]> = {
     }
     return out;
   },
-  // Long pale hair, fine and straight: taken back off the forehead over the crown and behind the ears, falling down the
-  // back to the shoulder blades. Drawn as strand cards (HAIR_CARDS), many and overlapping, so it reads as hair and not
-  // as tubes; nothing stands up or out, nothing hangs in front of the face or the shoulders.
+  // Long pale hair, fine and straight, worn back: flat off the forehead over the crown, back over the ears, gathered
+  // at the nape and hanging in one tail between the shoulder blades. Drawn as strand cards (HAIR_CARDS). Nothing falls
+  // beside the face or onto the shoulders: worn loose, the fall broke into ragged ends on his collar in every shot from
+  // the front, its shadowed side read as a dark slab beside his cheek, and it closed over his face when he bowed.
   megazron: () => [
-    // off the forehead: rooted along the hairline, up and back over the top
-    ...fan(-58 * D, 58 * D, 17, (az, i) => ({ az, el: (62 + (i % 2) * 4) * D, len: 0.34 + (i % 3) * 0.03, droop: 4.2, dir: [Math.sin(az) * 0.35, 0.8, -1] as [number, number, number], w: 0.052, out: 0, sway: 0.35, lift: 1.035 })),
-    // the temples: back behind the ears
-    ...[-1, 1].flatMap((s) => fan(60 * D, 84 * D, 5, (az, i) => ({ az: az * s, el: (50 - i * 5) * D, len: 0.42, droop: 5.5, dir: [s * 0.12, -0.15, -1] as [number, number, number], w: 0.05, out: 0, sway: 0.6, lift: 1.02 }))),
-    // the fall: four rings from the crown to the nape, straight down the back
-    // (all of it behind the ears: locks rooted further forward hung beside the cheeks and, when he bowed his head, closed
-    // over his face like a curtain)
-    ...layer(82, 94, 266, 20, 0.54, 6.5, 0.06, { out: 0, sway: 0.9 }),
-    ...layer(62, 96, 264, 22, 0.5, 6.5, 0.06, { out: 0, sway: 1 }),
-    ...layer(40, 98, 262, 22, 0.46, 6.5, 0.058, { out: 0, sway: 1 }),
-    ...layer(18, 106, 254, 18, 0.4, 6.5, 0.055, { out: 0, sway: 1.1 }),
+    // (the hair on his head is the smooth shell itself, combed back strand by strand in its texture: laid over it as
+    // cards, every row stood off the skull like a pleated ruff, from the front, the side and above)
+    // the tail, from where it is tied at the nape
+    ...fan(160 * D, 200 * D, 11, (az, i) => ({ az, el: (-12 + (i % 3) * 4) * D, len: 0.4 + (i % 3) * 0.03, droop: 8, dir: [Math.sin(az) * 0.2, -1, -0.25] as [number, number, number], w: 0.04, out: 0.1, sway: 1 })),
   ],
   // Two huge spiral tails with an airy fringe: the loudest silhouette in the crew.
   social: () => [

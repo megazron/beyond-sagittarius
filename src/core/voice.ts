@@ -204,6 +204,23 @@ class Voice {
     try { const r = await fetch(`${BASE}audio/vo/${lang}/lipsync.json`); if (r.ok) this.lips[lang] = await r.json(); } catch { /* mouths stay shut */ }
   }
 
+  private vis: Partial<Record<Lang, Record<string, string>>> = {};
+  /** The narrator's viseme tracks for a language (tools/tts/visemes.py); asked for by his films, never by the game's own start. */
+  async loadVisemes(lang: Lang = this.lang) {
+    if (lang !== 'en') await this.loadVisemes('en');
+    if (this.vis[lang]) return;
+    this.vis[lang] = {};
+    try { const r = await fetch(`${BASE}audio/vo/${lang}/visemes.json`); if (r.ok) this.vis[lang] = await r.json(); } catch { /* his mouth falls back to the loudness bands */ }
+  }
+  /** The viseme track of the line being said and the second it is at, or null (no line, or a line without a track). */
+  viseme(): { track: string; at: number } | null {
+    const now = this.manual ? this.manual() : audio.ctx?.currentTime ?? 0;
+    const file = this.lipFile;
+    if (!file || (this.manual ? now > this.manualEnd : !this.src || !audio.ctx)) return null;
+    const track = this.vis[this.langOf(file)]?.[file];
+    return track ? { track, at: now - this.startedAt } : null;
+  }
+
   /**
    * Mouth shape right now, read from the clip's own track (open, round, wide,
    * 0..1). All zero when nothing is playing, so silence is a closed mouth.

@@ -286,8 +286,10 @@ export function addKit(k: KitInput): Kit {
     // the broken halo: one thin arc lying level a hand's width over the crown, tipped a little to the front, with one
     // clean gap at the back left. Over the head it never meets the hair (it stood behind the head as an upright ring
     // and the long hair went through it)
-    halo = new THREE.Group(); halo.position.set(0, top + 0.05, M.skull.c[2] - 0.012); halo.rotation.set(Math.PI / 2 - 0.14, 0, 0); head.add(halo);
-    { const arc = add(new THREE.TorusGeometry(0.118, 0.003, 10, 96, Math.PI * 1.8), new THREE.MeshStandardMaterial({ color: 0x221708, emissive: 0xffc36a, emissiveIntensity: 1.3 }), halo, 0, 0, 0, false); arc.rotation.z = Math.PI * 0.72; }
+    // (a hand's width up and wider than the head it read as a hoop hung over him: now two fingers over the crown, no
+    // wider than the skull, a hair-thin line that the bloom does not swell)
+    halo = new THREE.Group(); halo.position.set(0, top + 0.022, M.skull.c[2] - 0.012); halo.rotation.set(Math.PI / 2 - 0.1, 0, 0); head.add(halo);
+    { const arc = add(new THREE.TorusGeometry(0.092, 0.0016, 8, 96, Math.PI * 1.8), new THREE.MeshStandardMaterial({ color: 0x221708, emissive: 0xffc36a, emissiveIntensity: 0.7 }), halo, 0, 0, 0, false); arc.rotation.z = Math.PI * 0.72; }
     const gold = metal(0xd4a94e, 0.3);
     for (const s of ['L', 'R']) { const hd = piv(`hand${s}`), fw = piv(`forearmtw${s}`); const r = add(new THREE.TorusGeometry(0.043, 0.004, 8, 28), gold, B.get(`forearmtw${s}`)!); r.position.copy(local(`forearmtw${s}`, hd.clone().lerp(fw, 0.28))); r.quaternion.setFromUnitVectors(V(0, 0, 1), hd.sub(fw).normalize()); }
   }

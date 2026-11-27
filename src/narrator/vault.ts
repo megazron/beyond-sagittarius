@@ -343,6 +343,7 @@ export class Vault {
     this.halo.position.set(0, 2.4, 0.7); s.add(this.halo);
 
     this.host = createCharacter('megazron', this.detail);
+    this.host.setFilmed(true); // in his Vault he is always on camera: his breath is drawn to be seen
     this.scene.add(this.host.root);
     this.host.root.rotation.y = Math.PI;
     this.hand = new WritingHand(this.host, this.quill);
@@ -354,7 +355,7 @@ export class Vault {
    * His own acting clips (tools/build_mz_animations.py: captured motion with its real path over the floor): loaded once,
    * on the first film that asks. `acting` then says where the capture's stool stands from where `mz_sit_down` starts.
    */
-  acting: { seat: [number, number, number]; seatYaw: number; upEnd: [number, number]; upYaw: number; clips: Record<string, { dur: number; loop: boolean }> } | null = null;
+  acting: { seat: [number, number, number]; seatYaw: number; upEnd: [number, number]; upYaw: number; walkFrom?: [number, number]; clips: Record<string, { dur: number; loop: boolean }> } | null = null;
   private actingP: Promise<void> | null = null;
   loadActing() {
     return (this.actingP ??= (async () => {
@@ -369,6 +370,8 @@ export class Vault {
       await this.host.whenReady;
       this.host.addClips(g.animations);
       this.acting = j;
+      // and what his mouth does on each line (the spoken language's tracks, and English's for lines only said in English)
+      await voice.loadVisemes();
     })().catch((e) => { console.error('[vault] acting clips', e); }));
   }
 
@@ -409,14 +412,15 @@ export class Vault {
         // his eyes under the Vault's lamps and the bloom were two glowing slits with no iris or pupil to be seen (GPU
         // reel r1): the ball shaded down, less of a mirror, so the iris and the pupil are what you read
         if ((mt.userData?.film as { kind?: string } | undefined)?.kind === 'eye' && !mt.userData.dimmed) {
-          mt.userData.dimmed = true; const em = mt as THREE.MeshStandardMaterial; em.color.setScalar(0.42); em.roughness = 0.32; em.envMapIntensity = 0.25;
-          const eu = mt.userData.u as { uEyeGlow?: { value: number } } | undefined; if (eu?.uEyeGlow) eu.uEyeGlow.value = 0.15;
+          mt.userData.dimmed = true; const em = mt as THREE.MeshStandardMaterial; em.color.setScalar(0.8); em.roughness = 0.3; em.envMapIntensity = 0.2;
+          const eu = mt.userData.u as { uEyeGlow?: { value: number } } | undefined; if (eu?.uEyeGlow) eu.uEyeGlow.value = 0;
         }
         // the coat's weave normal map, laid over so few triangles, lit each triangle its own way (crumpled foil in close-up)
-        if ((mt.userData?.film as { kind?: string } | undefined)?.kind === 'cloth' && !mt.userData.dimmed) { mt.userData.dimmed = true; (mt as THREE.MeshStandardMaterial).normalScale?.set(0.25, 0.25); }
+        if ((mt.userData?.film as { kind?: string } | undefined)?.kind === 'cloth' && !mt.userData.dimmed) { mt.userData.dimmed = true; (mt as THREE.MeshStandardMaterial).normalScale?.set(0.45, 0.45); }
         if ((mt.userData?.film as { kind?: string } | undefined)?.kind === 'hair' && !mt.userData.dimmed) {
           mt.userData.dimmed = true; (mt as THREE.MeshStandardMaterial).envMapIntensity = 0.12;
           const hu = mt.userData.hairU as Record<string, { value: THREE.Color }> | undefined;
+          const thr = (mt.userData.hairU as { uThrough?: { value: number } } | undefined)?.uThrough; if (thr) thr.value = 0.8;
           if (hu) { hu.uRoot.value.multiplyScalar(0.7); hu.uMid.value.multiplyScalar(0.6); hu.uTip.value.multiplyScalar(0.55); hu.uShine.value.multiplyScalar(0.4); }
           else (mt as THREE.MeshStandardMaterial).color?.multiplyScalar(0.62);
         }
@@ -424,7 +428,7 @@ export class Vault {
       if (!m.isSkinnedMesh || !m.geometry.attributes.normal) return;
       smoothNormals(m.geometry);
       // his coat's coarse cut caught the key as a crumple of flat triangles in every close shot: its shading (not its shape) eased across neighbours
-      if (m.name === 'cloth') relaxNormals(m.geometry, 3);
+      if (m.name === 'cloth') relaxNormals(m.geometry, 1); // (one pass now: his coat is built four times as fine)
     });
   }
 
