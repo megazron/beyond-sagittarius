@@ -1227,8 +1227,11 @@ export class Cinematic {
           face = { fear: 0.75, squint: 0.4 };
           const cling = smoothstep(3.2, 3.9, tau) * (1 - smoothstep(4.9, 5.3, tau));
           limbs = { ...FALL.builder, ...legs, bend: 0.5 - 0.2 * moving };
-          if (cling > 0.5) { const back = at(3.15, -1.33, -0.45), al = V(0.14, 0, 0.077); hold.L = { at: back.clone().add(al), fingers: V(-0.3, -0.4, 0.86).normalize(), palm: V(0, -1, 0), radius: 0.05, grasp: true }; hold.R = { at: back.clone().sub(al), fingers: V(-0.3, -0.4, 0.86).normalize(), palm: V(0, -1, 0), radius: 0.05, grasp: true }; look = back; }
-          else if (tau >= 5.1) {
+          // his arms go out for the sofa's back before the hands close on it, and stay out between it and Draxum's arm: a
+          // hold switched on from a tucked arm turned his upper arm 134 degrees in a frame (glitch_pull)
+          const out = smoothstep(2.9, 3.7, tau); limbs = { ...limbs, armL: [0.3, -0.4 + 0.5 * out, 0.9], foreL: [-0.4 + 0.5 * out, 0.15, 1], armR: [-0.3, -0.4 + 0.5 * out, 0.9], foreR: [0.4 - 0.5 * out, 0.15, 1] };
+          if (tau > 3.85 && tau < 4.85) { const back = at(3.15, -1.33, -0.45), al = V(0.14, 0, 0.077); hold.L = { at: back.clone().add(al), fingers: V(-0.3, -0.4, 0.86).normalize(), palm: V(0, -1, 0), radius: 0.05, grasp: true }; hold.R = { at: back.clone().sub(al), fingers: V(-0.3, -0.4, 0.86).normalize(), palm: V(0, -1, 0), radius: 0.05, grasp: true }; look = back; }
+          else if (tau >= 5.35) {
             // both hands (one, if the fall hurt him) round the arm that tows him
             const arm = (hurtD ? drx.handR : drx.handL).getWorldPosition(new THREE.Vector3()), g = { at: arm, fingers: V(0, 1, 0), palm: V(-1, 0, 0), radius: 0.045, grasp: true };
             hold.R = g; if (this.chose('e1.reach', 'nuvexa')) limbs = { ...limbs, armL: [0.3, -0.75, 0.5], foreL: [-0.6, 0.1, 0.7] }; else hold.L = { ...g, at: arm.clone().add(V(0, 0.07, 0)) };
