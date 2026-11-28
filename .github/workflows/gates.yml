@@ -64,6 +64,8 @@ jobs:
           - { name: glitch_pull_ep1, run: 'python tools/glitch_check.py --only pull,ep1 --secs 40' }
           - { name: glitch_ep2, run: 'python tools/glitch_check.py --only ep2 --secs 40' }
           - { name: glitch_ep3, run: 'python tools/glitch_check.py --only ep3 --secs 40' }
+          # at a player's 60 frames a second (a limb must turn 57 degrees in a tick to count, not 114): the pickup arm snap
+          - { name: glitch_ep1_60, run: 'python tools/glitch_check.py --only ep1 --secs 24 --tick 0.0166667' }
           # each of the six arrivals plays from its first frame to control (game/arrival.ts), and leaves them hurt
           - { name: landing_smoke, run: 'python tools/landing_smoke.py --quality web' }
           # the cheat menu (src/cheat): its openers and toggles, the opening's points, and every level checkpoint loads and
