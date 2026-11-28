@@ -6,6 +6,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { installGpuTimer } from './gputime';
 const GPU_TIMER_ON = new URLSearchParams(location.search).has('gputime');
+const NO_PREBAKE = new URLSearchParams(location.search).get('prebake') === '0';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
@@ -834,7 +835,8 @@ export class Renderer {
       await new Promise((r) => requestAnimationFrame(r));
     }
     // a stage's own work that belongs under the black too (Zenvora bakes its far people here)
-    if (this.renderPass.scene === scene) return;
+    // (test: ?prebake=0 skips it, as when the scene came on screen first: what a slow machine gets, tools/perf_gate.py)
+    if (this.renderPass.scene === scene || NO_PREBAKE) return;
     try { await (scene.userData.prebake as ((cam: THREE.Camera) => Promise<void>) | undefined)?.(camera); } catch { /* done in play instead */ }
     const texs = new Set<THREE.Texture>();
     scene.traverse((o) => {

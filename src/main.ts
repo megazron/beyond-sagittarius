@@ -540,9 +540,7 @@ function titleCard(then: () => void, key = 'city.title', until?: Promise<unknown
   // a card that waits for what comes after it: it stays up until that is ready (at least its usual 3.4 s), the next
   // scene is started under it, and only then does it go. It used to leave on its timer whatever was ready: on the A500
   // the city then took 6 to 7 s more, on a black screen with nothing on it (glitch sweep 2026-11-27)
-  // (test: ?cardwait=<ms> waits less, as a slow machine's precompile outlasting the card: tools/perf_gate.py --query cardwait=500)
-  const CARD_WAIT = +(new URLSearchParams(location.search).get('cardwait') ?? '') || 25000;
-  void Promise.all([new Promise((r) => setTimeout(r, 3400)), Promise.race([until, new Promise((r) => setTimeout(r, CARD_WAIT))])]).then(() => {
+  void Promise.all([new Promise((r) => setTimeout(r, 3400)), Promise.race([until, new Promise((r) => setTimeout(r, 25000))])]).then(() => {
     then();
     el.style.transition = 'opacity .7s'; el.style.opacity = '0';
     setTimeout(() => el.remove(), 800);

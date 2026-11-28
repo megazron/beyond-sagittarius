@@ -598,7 +598,8 @@ export class Cinematic {
     const keepSit = () => { const k: Partial<Record<CrewId, CrewPose>> = {}; for (const [id, p] of Object.entries(this.pullPose)) if (p === 'sit') k[id as CrewId] = p; this.pullPose = k; };
     /** The party at the window (A to C: facing each other and the phone) or the five looking out (F and G). */
     const group = (party = false) => {
-      put(drx, party ? 2.3 : 3.45, party ? -1.9 : -2.0, party ? -0.7 : Math.PI * 1.15); // (for the pull aft of Lyrra, by Bolzar: at 2.3 he stood in Nuvexa's lane and she slid into him) put(nuv, 1.4, -1.95, party ? 1.52 : Math.PI * 0.82); put(sky, 2.7, -2.55, Math.PI);
+      // (Draxum for the pull aft of Lyrra, by Bolzar: at 2.3 he stood in Nuvexa's lane and she slid into him)
+      put(drx, party ? 2.3 : 3.45, party ? -1.9 : -2.0, party ? -0.7 : Math.PI * 1.15); put(nuv, 1.4, -1.95, party ? 1.52 : Math.PI * 0.82); put(sky, 2.7, -2.55, Math.PI);
       if (party) { sit(lyr, SEAT_L); sit(bol, SEAT_B); return; }
       put(lyr, 3.2, -1.5, Math.PI * 1.1); put(bol, 4.0, -2.2, Math.PI * 1.2); this.seated.clear();
     };
