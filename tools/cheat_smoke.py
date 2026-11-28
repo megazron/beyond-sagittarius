@@ -39,6 +39,7 @@ def main():
     ap.add_argument("--opening", action="store_true")
     ap.add_argument("--preset", default="a", choices=["a", "b", "ask"])
     ap.add_argument("--rounds", type=int, default=900, help="driver rounds at most per checkpoint")
+    ap.add_argument("--lens", type=float, default=0.5, help="seconds in a row the camera may be inside a rock, trunk, boughs or the ground")
     a = ap.parse_args()
     lo, hi = (int(x) for x in a.levels.split("-")) if "-" in a.levels else (int(a.levels), int(a.levels))
     data = cheat_snapshots.load()
@@ -125,6 +126,7 @@ def main():
             except Exception as e:
                 fails.append(f"{tid}: did not come up ({str(e)[:140]}) state={ev('({s: __bs && __bs.state, m: __bs && __bs.mode, l: __bs && __bs.level})')}")
                 continue
+            ev("__bs.lensReset()")
             if not ev("__bs.cheat.session"):
                 fails.append(f"{tid}: not a cheat session")
             if ev("document.getElementById('cheat-mark').classList.contains('hidden')"):
@@ -134,6 +136,9 @@ def main():
             except Exception as e:
                 why = f"error: {str(e)[:200]}"
             end = ev("({state: __bs.state, mode: __bs.mode, level: __bs.level})")
+            lens = ev("__bs.lens")
+            if lens["worst"] > a.lens:
+                fails.append(f"{tid}: the camera was inside something for {lens['worst']} s ({lens['mode']}) at {lens['at']}")
             if why != "stop":
                 fails.append(f"{tid}: did not finish ({why}) at {end}")
             if ev("localStorage.getItem('bs-save-v1')") != real:
@@ -141,7 +146,7 @@ def main():
             errs = [e for e in errors if "favicon" not in e]
             if errs:
                 fails.append(f"{tid}: {errs[:3]}")
-            log(f"{tid}: {why} in {time.time() - t0:.0f} s -> {end}")
+            log(f"{tid}: {why} in {time.time() - t0:.0f} s -> {end}; lens inside {lens['inside']}/{lens['frames']} frames, worst {lens['worst']} s ({lens['mode']})")
         b.close()
     httpd.shutdown()
     if fails:

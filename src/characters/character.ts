@@ -1804,6 +1804,11 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const moving = gaitOn && !FULL_BODY.has(kind) && (kind === 'idle' || kind === 'walk' || kind === 'stand');
     const limp = limpOn || !!kit?.splint.visible;
     for (const s of acts.values()) s.target = 0;
+    // a task begun on the move (a pickup as he walks up to the thing) keeps the procedural reach for all of it: its clip
+    // was only asked for once the gait had stopped, two thirds through, and by then the reach had lowered the hips, so
+    // pickup_low came in mid-reach and the arm went from the reach's pose to the clip's in a frame (upperarmR 80 degrees,
+    // 'doing pickup', at 60 ticks; stage log ~/bs-cap/pods6/armdbg: the clip switched at task.t 0.68 of 1.1)
+    if (task && task.clip === undefined && moving) task.clip = null;
     if (moving) {
       const parts = limp && speed < 2 ? [{ n: 'limp', w: 1 }] : locomotion(speed, dt);
       if (limp && speed < 2) gaitPhase = (gaitPhase + dt / A!.meta.limp.dur * (speed / Math.max(A!.meta.limp.speed * legScale, 0.05))) % 1;

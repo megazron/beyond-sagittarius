@@ -6,6 +6,49 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## 2026-11-28 pods leftovers, cameras in rock, freezes (pods agent 5: worktree ~/bs-podsw, branch pods7 from main b1f521cb; dev runs and captures ~/bs-cap/pods6)
+NOT signed off (only the owner does that). What I changed, what the checks say, what still looks wrong.
+- CAMERA IN ROCK, at the cause: level 13's rock shelter (world/rockshelter.ts) was no obstacle for any camera. It now
+  gives a `solid(x, y, z)` test (the cliff's mass and the boulders, the hollow under the overhang open, a quarter metre
+  in front of the faces counted as inside) and episode2 registers it with `Forest.addSolid`; `Forest.inFoliage` (what
+  the follow camera, the scene cameras' cameraOk and nearBlocked ask) now says yes inside it. Level 13's jump opened
+  with the follow camera inside that rock; level 21's house scene put a scene camera in it (Episode Three keeps the
+  shelter). cutscene.ts `clearSetUp` now also clears a set-up whose whole line to what it looks at is blocked
+  (game.ts `lineBlocked` also tests trunks and the rock), first by coming in along the line, then by turning round
+  the aim point; and runs again after `clearShot`'s swing. Level 13's pyrite two-shot was two fir trunks and grass
+  with both people behind them.
+- THE LENS WATCH: main.ts `lensFrame` (every tick on the planet): how long in a row the camera has been inside a rock,
+  a trunk, boughs or the ground (`__bs.lens`, `__bs.lensReset()`). cheat_smoke fails a checkpoint over `--lens 0.5`
+  seconds. NOTE: cheat_smoke steps time in big chunks, so it sees few frames; ~/bs-cap/pods6/lensprobe.py (a jump, then
+  1/30 s ticks with a still every second) is the honest look.
+- E2 RESTAGED (the bodies, not only the camera): the two stand side by side across the lens's line, each turned half
+  to the other and half to the lens; Lyrra's LEFT hand goes to Nuvexa's RIGHT wrist by the rig's hold (setHold), both
+  upright, her eyes on Nuvexa's face (looking down, her fringe hid her face); camera 2 m off on the window side, a
+  little below the hands. With the other answer Nuvexa slides on past the hand.
+- F4: Lyrra looks up to the glow (her head tips back and her hair falls behind her face), camera a little lower.
+- P1 backs off to 8.8 m (the first pair came on to the lens). P2 a metre in from the hatch under the ceiling, off the
+  near wall, 25 mm (the lamp strip streak and the last pair's arm at the corner). P5 high over them; with the core,
+  from in the hatch itself, low, turned to the far wall, so Zenvik (last, on the far rail) is in the frame's left third.
+- FREEZES, measured on the A500 (hitch probe: main.ts `hitchFrame`, `__bs.hitches`: every frame over 90 ms with the
+  new shader programs by name, geometries, textures, tick and draw ms, and where). Every Continue/cheat jump compiled
+  53 to 60 programs in its first frame of play (2.0 to 6.1 s on levels 13, 14, 16, 20); arriving on a stage 13 to 20
+  programs (1.8 to 2.0 s, levels 9, 16); the lounge's first interior shot 24 programs (1.3 s). Fixed for Continue: the
+  first update runs, then renderer.prewarm(world) under the black, then the fade. Fixed for stages: the stage scene is
+  prewarmed under a moment of black (main.ts, the Away show callback). The lounge's 24 are NOT fixed yet (see names in
+  the next hitch take).
+- THE PICKUP ARM SNAP (G02), the real cause: the 60 tick re-measure of the first fix (g60_b) still had "upperarmR
+  turned 80 degrees doing pickup" at 9.9 s. Stage log (~/bs-cap/pods6/armdbg, run.sh with char.patch, an.py): the task's
+  clip is chosen in the not-moving branch only, so a pickup begun on the move (limping up to the thing) asked for its
+  clip when the gait stopped, at task.t 0.68 of 1.1, with the hips already lowered by the reach: pickup_low came in and
+  the arm went from the reach's pose to the clip's in a frame. Now a task begun on the move keeps the procedural reach
+  for all of it (character.ts, before `if (moving)`).
+- SCENE SHOTS BUILT FROM STALE MATRICES: cutscene.ts start() now updates every actor's world matrix before a beat's
+  shot is built (a scene that had just placed them aimed the shot at where they stood before: level 13's pyrite
+  two-shot was the empty field between the shelter and the camp). The story's own props (Episode Two/Three groups,
+  `Episode2.props`) now count in lineBlocked and nearBlocked (a harvest rack's poles filled level 21's close shots).
+- TOOLS: tools/leak_probe.py + src/core/geocensus.ts (?geocensus=1): geometries drawn once and since dropped from every
+  scene without dispose(), grouped by where they were first drawn, every few dozen driver rounds of a long session.
+
 ## 2026-11-27 cheat menu (cheat agent 2: worktree ~/bs-cheat, branch cheat1; captures ~/bs-cap/cheat1)
 Owner: "make cheat codes so that you can test the game at certain levels directly." A test tool, not a feature: nothing
 here is signed off (only the owner does that). The opening code word goes to the owner by message only, never in a file.

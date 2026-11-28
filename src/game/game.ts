@@ -251,13 +251,23 @@ export class Game {
       nearBlocked: (from, to) => {
         const d = to.clone().sub(from), len = Math.min(1.6, d.length() - 0.6); if (len <= 0) return false; d.normalize();
         for (let k = 0.3; k <= len; k += 0.3) { const x = from.x + d.x * k, y = from.y + d.y * k, z = from.z + d.z * k; if (this.world.forest.inFoliage(x, y, z) || this.world.forest.blocks(x, z, 0.25, y - this.world.terrain.height(x, z))) return true; }
-        return false;
+        // and the story's own props (a harvest rack's poles filled half of level 21's close shots, q3 stills)
+        SIGHT.set(from, d); SIGHT.near = 0.05; SIGHT.far = len; SIGHT.camera = this.player.camera; SIGHT.params.Points.threshold = 0;
+        const hit = SIGHT.intersectObjects(this.propRoots(), true).some((x) => this.shownSolid(x.object));
+        SIGHT.near = 0;
+        return hit;
       },
       lineBlocked: (from, to) => {
         const d = to.clone().sub(from), len = d.length();
+        // a trunk or the rock between the lens and the face (level 13's pyrite two-shot was a fir trunk and grass, nobody in it)
+        for (let k = 0.6; k < len - 0.5; k += 0.3) {
+          const x = from.x + (d.x / len) * k, y = from.y + (d.y / len) * k, z = from.z + (d.z / len) * k;
+          if (this.world.forest.blocks(x, z, 0.1, y - this.world.terrain.height(x, z)) || this.world.forest.inSolid(x, y, z)) return true;
+        }
         SIGHT.set(from, d.divideScalar(len)); SIGHT.far = len - 0.3; SIGHT.camera = this.player.camera; SIGHT.params.Points.threshold = 0;
         const shown = (o: THREE.Object3D | null): boolean => !o || (o.visible && shown(o.parent));
-        return SIGHT.intersectObject(this.world.camp.root, true).some((x) => shown(x.object) && !((x.object as THREE.Mesh).material as THREE.Material).transparent);
+        void shown;
+        return SIGHT.intersectObjects(this.propRoots(), true).some((x) => this.shownSolid(x.object));
       },
       onDone: () => {
         this.scene = null;
@@ -277,6 +287,16 @@ export class Game {
   }
 
   /** Freeze the player for a panel that takes the input (minigame, conversation). */
+  /** The camp and what the episodes have built: what a scene camera must not look through or sit against. */
+  private propRoots(): THREE.Object3D[] { return [this.world.camp.root, ...(this.ep2 ? [this.ep2.props] : []), ...(this.ep3 && this.ep3.props !== this.ep2?.props ? [this.ep3.props] : [])]; }
+  private shownSolid(o: THREE.Object3D) {
+    for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false;
+    const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+    if (!(o as THREE.Mesh).isMesh || !m || (Array.isArray(m) ? m.some((x) => x.transparent) : m.transparent)) return false;
+    // a body is a subject, not a prop in the way
+    for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p.userData.isCharacter) return false;
+    return true;
+  }
   private enterPanel(mode: 'craft' | 'talk') {
     this.mode = mode;
     document.body.classList.add('in-panel');
