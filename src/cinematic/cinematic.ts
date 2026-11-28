@@ -1290,9 +1290,9 @@ export class Cinematic {
             const cling = id === 'strong' || role.partner === 'strong';
             if (cling && role.leads) towHand = null;
             if (towHand) {
-              // (Bolzar's hold on Draxum's arm: three tenths of the way from Draxum's chest to his own, shoulder high; a quarter was 5 cm past his reach with the bodies more upright, p4)
-              const armNow = cling ? world(lead.clone().lerp(towd, 0.3)).add(V(0, 0.14, 0)) : m;
-              const armNext = cling ? world(info.get(role.partner!)!.next.clone().lerp(me.next, 0.3)).add(V(0, 0.14, 0)).sub(step) : mNext;
+              // (Bolzar's hold on Draxum's arm: by the shoulder, 0.38 of the way from the chest of the one who tows to the other's; a quarter was 5 to 10 cm past the reach of whoever holds it with the bodies more upright, p4, p5)
+              const armNow = cling ? world(lead.clone().lerp(towd, 0.38)).add(V(0, 0.12, 0)) : m;
+              const armNext = cling ? world(info.get(role.partner!)!.next.clone().lerp(me.next, 0.38)).add(V(0, 0.12, 0)).sub(step) : mNext;
               hold[towHand] = { at: armNext, fingers: role.leads ? d : d.clone().negate(), palm: role.leads ? V(0, 1, 0) : V(0, -1, 0), radius: cling ? 0.05 : 0.026, grasp: true };
               if (tau - joined.get(key)! > SETTLE) this.runHolds.push({ id, side: towHand, at: armNow, what: cling ? 'the arm that tows him' : 'tow' });
             }
