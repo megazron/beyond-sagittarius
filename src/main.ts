@@ -251,7 +251,7 @@ function showTitle(fromFilm = false) {
   const ti = document.getElementById('title')!;
   ti.classList.toggle('from-film', fromFilm);
   if (fromFilm) setTimeout(() => ti.classList.remove('from-film'), 6000);
-  ui.fade('black', 0, fromFilm ? 2.6 : 1.2);
+  ui.fade('black', 0, fromFilm ? 1.8 : 1.2);
   entryRing?.release(2.4); entryRing = null; entryToTitle = false;
   audio.stopWind();
   applyCrewNames(undefined);
@@ -366,9 +366,11 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', after: () 
       ui.fade('black', 1, entryToTitle ? 1.5 : 2.6);
       if (!entryToTitle) return;
       // the last light in the frame, the photon ring, goes to where the Earth's lit limb will be on the title
-      cine.idle(0);
+      // (the title's own camera as the title will have it: its lens, this window's shape, and in Urdu the planet moved
+      // over to the left; measured on a stale aspect the Urdu ring went to the English planet's place, take v3b)
+      cine.camera.aspect = innerWidth / innerHeight; cine.resetIdle(); cine.idle(0);
       entryRing?.stop();
-      entryRing = new RingHandover({ r: 0.4 }, discOnScreen(cine.camera, new THREE.Vector3(0, 0, 0), 101.2, new THREE.Vector3(1, 0.22, 0.55).normalize()), 2.9);
+      entryRing = new RingHandover({ r: 0.4 }, discOnScreen(cine.camera, new THREE.Vector3(0, 0, 0), 101.2, new THREE.Vector3(1, 0.22, 0.55).normalize()), 2.2);
       (window as unknown as Record<string, unknown>).__mzRing = entryRing;
     } : null;
     ui.show('cine', true);

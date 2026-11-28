@@ -82,6 +82,8 @@ export class Vault {
   /** The candle on the lectern: the flame the pull is read by in the close shots. */
   private candle!: THREE.Group;
   private candleGlow!: THREE.Sprite;
+  /** The candle's brass stick and wax (a film that moves the candle moves them with it). */
+  private candleBase: THREE.Object3D[] = [];
   /** Loose slips of paper round the lectern: the pull takes them across the floor to the window. */
   private slips: { m: THREE.Mesh; a: THREE.Vector3; b: THREE.Vector3; d: number; h: number; s: number }[] = [];
   private motes2!: THREE.Points;
@@ -291,7 +293,7 @@ export class Vault {
       const fg = new THREE.LatheGeometry(prof, 14);
       const outer = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ color: 0xffa238, transparent: true, opacity: 0.9, toneMapped: false }));
       const inner = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ color: 0xfff2c4, toneMapped: false })); inner.scale.set(0.55, 0.62, 0.55);
-      this.candle = new THREE.Group(); this.candle.add(outer, inner); this.candle.position.set(cx, cy + 0.172, cz); s.add(this.candle);
+      this.candleBase = [stick, wax]; this.candle = new THREE.Group(); this.candle.add(outer, inner); this.candle.position.set(cx, cy + 0.172, cz); s.add(this.candle);
       this.candleGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot(), color: 0xff9a40, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
       this.candleGlow.scale.setScalar(0.22); this.candleGlow.position.set(cx, cy + 0.195, cz); s.add(this.candleGlow);
     }
