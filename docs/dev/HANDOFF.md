@@ -42,8 +42,15 @@ mechanisms only. Private master and design: ~/bs-story/MYSTERY.md, ~/bs-story/my
   follows the save, a JSON round-trip, recap rules, en/hi/ur/hl text for every key, every prop known. tools/mystery_smoke.py
   (CI job mystery_smoke): the board at L11 (5 questions, 11 entries, 4 walked past, dot, threads), beats 0, 7, 13 from
   cheat points, the recap with a key skip. Local: both ok on this build.
-- VOICE: lines are voiced through tools/tts/generate_voice.py from the sealed `voice` map; until takes exist the map is
-  kept out of the sealed file (voice_check would fail), so the first batch is subtitles only.
+- VOICE: 425 takes (en/hi/ur, ~f and ~anon where needed) from the sealed `voice` map (keys listed in the private
+  ~/bs-story/mystery_voiced.json; `MYST_VOICE_ALL=1 python3 ~/bs-story/mystery_build.py` puts the whole plan in for a
+  render), mouth tracks by tools/tts/lipsync.py. Render one language per heavy call (about 25 min each with --device cuda).
+- GPU (kit ~/bs-cap/myst: run.sh, mkplan.py; clips and NOTES_MYSTERY_1.md in Downloads/BS_Game_v1.1/mystery): the board,
+  the recap, beats 7, 14, 16. STILL WRONG: the dream's sky shape is a crude capsule (needs a real liner); the reed lights
+  are specks; prints read as dots; the recap is small text on black; a nearby threat can hold a beat until it is dropped
+  (75 s); beats run 8 to 14 s; no find and no level 19 beat recorded yet.
+- CI: levels_smoke and mobile_smoke wait out a closing beat before their next panel; a hand-written save (savedAt 1) gets
+  no recap.
 
 ## 2026-11-28 later: pods leftovers, sixth pass (pods agent 6: worktree ~/bs-podsw, branch pods8 = pods7 + my work, rebased on main; captures ~/bs-cap/pods6 r1, r2)
 NOT signed off (only the owner does that). What I changed, what the checks say, what still looks wrong.
