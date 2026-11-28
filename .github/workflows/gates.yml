@@ -27,7 +27,7 @@ jobs:
         include:
           # spoiler_check: no known story spoiler in plain text in the tracked files or the built game (dist); the
           # phrases are kept privately, only their hashes are here. story_seal: the sealed Episode One data decodes
-          - { name: build and typecheck, nobrowser: true, run: 'npx tsc --noEmit -p . && python3 tools/voice_check.py && python3 tools/spoiler_check.py dist && python3 tools/story_seal.py check && python3 tools/story_seal.py check --file src/game/branch/episode2.sealed && python3 tools/story_seal.py check --file src/game/branch/episode3.sealed && python3 tools/story_seal.py check --file src/game/branch/opening.sealed && python3 tools/cheat_snapshots.py check' }
+          - { name: build and typecheck, nobrowser: true, run: 'npx tsc --noEmit -p . && python3 tools/voice_check.py && python3 tools/spoiler_check.py dist && python3 tools/story_seal.py check && python3 tools/story_seal.py check --file src/game/branch/episode2.sealed && python3 tools/story_seal.py check --file src/game/branch/episode3.sealed && python3 tools/story_seal.py check --file src/game/branch/opening.sealed && python3 tools/story_seal.py check --file src/game/branch/mystery.sealed && python3 tools/cheat_snapshots.py check && npx esbuild tools/mystery_test.ts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/mt.mjs" --log-level=warning && node "$RUNNER_TEMP/mt.mjs"' }
           - { name: smoke, run: 'python tools/smoke.py --quality web --out "$RUNNER_TEMP/shots"' }
           - { name: levels_smoke, run: 'python tools/levels_smoke.py --quality web --shots "$RUNNER_TEMP/shots"' }
           # Episode Two (levels 11 to 14) from a level 11 save, twice: one set of choices each way
@@ -81,6 +81,8 @@ jobs:
           - { name: cheat_L17_18, run: 'python tools/cheat_smoke.py --levels 17-18' }
           - { name: cheat_L19_20, run: 'python tools/cheat_smoke.py --levels 19-20' }
           - { name: cheat_L21, run: 'python tools/cheat_smoke.py --levels 21-21' }
+          # the Ledger's questions: the board, closing beats from cheat points, "previously" on Continue
+          - { name: mystery_smoke, run: 'python tools/mystery_smoke.py --quality web' }
           - { name: combat, run: 'node --experimental-strip-types tools/combat/sim_test.ts && node --experimental-strip-types tools/combat/pose_test.ts && python tools/combat/play_test.py' }
           - { name: anim_qa, run: 'python tools/anim_qa.py --serve --every 0 --out "$RUNNER_TEMP/anim_qa.json"' }
           - { name: anim_qa_pixels, run: 'python tools/anim_qa.py --serve --every 15 --only zenvik,nuvexa,custom_f_social --out "$RUNNER_TEMP/anim_qa_px.json"' }

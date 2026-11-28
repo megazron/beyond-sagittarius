@@ -6,6 +6,45 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## 2026-11-28 the Ledger's questions (mystery agent: worktree ~/bs-myst2, branch myst2 from main 397f9c95)
+Owner: the game had "no mysteries or something that will excite the user to play it continuously"; plan answered "All
+yes". NOT signed off (only the owner does that). The text of every entry, beat and line is sealed; this section names
+mechanisms only. Private master and design: ~/bs-story/MYSTERY.md, ~/bs-story/mystery_build.py -> mystery.json.
+- DATA: `src/game/branch/mystery.sealed` (seal: `python3 tools/story_seal.py seal ~/bs-story/mystery.json --file
+  src/game/branch/mystery.sealed`; rebuild the json first with `python3 ~/bs-story/mystery_build.py`). Loader
+  `branch/mystery.ts` (adds en/hi/ur/hl strings), types and the loaded copy in `branch/mysterydata.ts` (no sealed import,
+  so Node tests can set it). New spoiler phrases are in the private list and rehashed.
+- STATE (`src/game/mystery.ts`, pure): everything lives in save.flags: `hook-N` (level N's closing beat played or
+  skipped: never again), `find-Fn` (a find picked up), `my.seen.*` (board dots). A level's own board entry counts once the
+  level is complete, whether or not its beat was seen. board(), markSeen(), recapLines(), recapDue(), hookFor(),
+  hookBeats(), findsOpen().
+- THE BOARD (`src/ui/board.ts`, `board.css`, moment.css tokens): main.ts showTab('ledger') calls attachBoard after
+  openPathTree: a PATH / QUESTIONS switch over the page; open questions left, entries right, dashed "walked past, level N"
+  tiles for finds missed in played levels, hairline threads on hover/focus (tap pins), dots for new entries and on the
+  Ledger tab (dotTab after every menu tab). Stacks on phones; Urdu mirrors.
+- CLOSING BEATS (`src/game/mysteryplay.ts`): game.checkLevel queues level N's beat (`mystery.queue(n, then)`); the next
+  level's `story.onLevelStart` runs after it. While one is due `mystery.holding` holds Episode Two and Three's scenes (their
+  free() predicate) and the roster's goAway. It waits for the level's Vault or memory (main.ts `levelBeatDue`, set by
+  onLevelDone for this session only), a pause, a panel or the title; anything else that holds it over 75 s gives it up
+  (flag set, entry stays). Played through game.playScene with named shots (face, face2, hands, sky, over, ridge, insert,
+  top, dream, actor) and props from `src/world/finds.ts` (shared materials, no lights). Only for levels completed in
+  this session (a Continue does not replay one). The wake's beat (0) fires on his first 2.5 m of control. Level 19's is
+  on Draxum's stage: episode3 `endAway` (set by game.ts) runs it in wallEnd before the stage is left.
+- FINDS: eight small props placed from named anchors (camp, ridge, lake rim) once their level is reached; a glint within
+  6 m, Use within 1.6 m (game.findInteraction takes `mystery.actions()`), a short close-up and a line, then the tile.
+- PREVIOUSLY: on Continue, over the black before the fade (enterWorld's prewarm `go`): three lines and "Now:", any key or
+  tap skips; settings.recap 'always' | 'break' (default: last save 20 min ago or more) | 'never'; `?recap=always|never`.
+  Off in the cheat slot unless recap=always. MegaZroN's voice where a take exists.
+- CHEAT: every level's list in the cheat menu has "closing beat" = `L<n>.hook` (next level's start, then the beat at
+  once; L0.hook after the wake; L19.hook is L19.start: play the wall to its end). `?chook=<n>` does the same. In a page:
+  `__bs.mystery.hook(n)`, `.board()`, `.ledger()`, `.holding`, `.playing`, `.why`.
+- TESTS: tools/mystery_test.ts (build job; Node): every beat 0-21 due once and only once, never on a replay, the board
+  follows the save, a JSON round-trip, recap rules, en/hi/ur/hl text for every key, every prop known. tools/mystery_smoke.py
+  (CI job mystery_smoke): the board at L11 (5 questions, 11 entries, 4 walked past, dot, threads), beats 0, 7, 13 from
+  cheat points, the recap with a key skip. Local: both ok on this build.
+- VOICE: lines are voiced through tools/tts/generate_voice.py from the sealed `voice` map; until takes exist the map is
+  kept out of the sealed file (voice_check would fail), so the first batch is subtitles only.
+
 ## 2026-11-28 later: pods leftovers, sixth pass (pods agent 6: worktree ~/bs-podsw, branch pods8 = pods7 + my work, rebased on main; captures ~/bs-cap/pods6 r1, r2)
 NOT signed off (only the owner does that). What I changed, what the checks say, what still looks wrong.
 - E1 -> E2 JUMP (CI 46123671300, continuity, _a, _b: "social 1.28 m in 0.1 s off screen"), at the cause: E2's restage

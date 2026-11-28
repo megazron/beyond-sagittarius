@@ -2082,9 +2082,11 @@ export class Episode3 extends Episode2 {
     const beats: Beat[] = o.after!.map((b) => ({ ...(b.key ? { key: b.key, who: (b.who ?? 'megazron') as Who } : { hold: b.sec }), shot: b.shot === 'sky' ? sky : fire, after: 0.6 }));
     this.scene(beats, then);
   }
+  /** Set by game.ts: what plays on the stage before he leaves it (the level's closing beat); calls `go` after. */
+  endAway: ((go: () => void) => void) | null = null;
   private wallEnd(go: () => void) {
     this.say('e3.dx.end', 'strong', 5);
-    this.after(5.2, () => go());
+    this.after(5.2, () => (this.endAway ? this.endAway(go) : go()));
   }
 
   // ------------------------------------------------------------------ level 20: water runs downhill (3.10 dry weeks, 3.11 the kit)

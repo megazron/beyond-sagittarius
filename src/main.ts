@@ -1,5 +1,8 @@
 import { Combat, defaultCombatSettings } from './combat/combat';
 import './style.css';
+import { attachBoard, dotTab, playRecap } from './ui/board';
+import { board, recapDue } from './game/mystery';
+import './game/branch/mystery';
 import * as THREE from 'three';
 import { startCensus, census } from './core/geocensus';
 import { BATCH, batchSupported } from './core/ibatch';
@@ -463,16 +466,20 @@ function startReplay(ch: Chapter) {
 }
 
 /** Level endings that cut away to the Vault or a memory (once per save). */
+/** The level whose Vault or memory is scheduled and not yet over (the Ledger's closing beat waits for it). */
+let levelBeatDue = -1;
+const LEVEL_BEAT: Record<number, 'l3' | 'fight' | 'l7' | 'ch1' | 'ep2' | 'ch2'> = { 3: 'l3', 5: 'fight', 7: 'l7', 10: 'ch1', 14: 'ep2', 21: 'ch2' };
 function onLevelDone(n: number) {
-  const beat: Record<number, 'l3' | 'fight' | 'l7' | 'ch1' | 'ep2' | 'ch2'> = { 3: 'l3', 5: 'fight', 7: 'l7', 10: 'ch1', 14: 'ep2', 21: 'ch2' };
+  const beat = LEVEL_BEAT;
   const id = beat[n];
   if (!id || game.save.flags[`seen-${id}`]) return;
+  levelBeatDue = n;
   const go = () => {
     if (state !== 'game' || game.mode !== 'play' || paused || ui.modalOpen()) { game.after(1, go); return; }
     game.save.flags[`seen-${id}`] = true;
     game.persist();
-    if (id === 'fight') playFlashback(() => { backToWorld(); game.after(1.2, () => ui.say('fb.10', 'crew.scientist.name', 4)); });
-    else playVault(id, () => { backToWorld(); if (id === 'ch1') chapterClosed(1); else if (id === 'ch2') chapterClosed(2); });
+    if (id === 'fight') playFlashback(() => { backToWorld(); levelBeatDue = -1; game.after(1.2, () => ui.say('fb.10', 'crew.scientist.name', 4)); });
+    else playVault(id, () => { backToWorld(); levelBeatDue = -1; if (id === 'ch1') chapterClosed(1); else if (id === 'ch2') chapterClosed(2); });
   };
   game.after(5.2, go);
 }
@@ -634,7 +641,20 @@ function enterWorld(fresh: boolean) {
   // runs, then every program the world now needs is compiled in the background under the black, then the fade
   if (!fresh) {
     warmHold = true;
-    const go = () => { warmHold = false; ui.fade('black', 0, 1.2); };
+    const fade = () => { ui.fade('black', 0, 1.2); };
+    const go = () => {
+      warmHold = false;
+      const mode = (new URLSearchParams(location.search).get('recap') ?? settings.recap ?? 'break') as 'always' | 'break' | 'never';
+      if (!inCheatSlot() || mode === 'always') {
+        if (recapDue(save, mode) && !save.replay) {
+          freeze(); paused = true;
+          const obj = save.level <= 21 ? t(`level.${save.level}.title`) : t('level.arc.title');
+          if (playRecap(save, obj, () => { resume(); fade(); })) return;
+          resume();
+        }
+      }
+      fade();
+    };
     requestAnimationFrame(() => requestAnimationFrame(() => { void renderer.prewarm(world.scene, camera, undefined, 8000).catch(() => {}).then(go); }));
   }
 }
@@ -784,9 +804,10 @@ function showTab(tab: MenuTab) {
   } else if (tab === 'map') openMapTab();
   else if (tab === 'objectives') ui.openObjectives(game.save.level, game.save.completed, resume);
   else if (tab === 'codex') openCodex(ui, game.save, resume);
-  else if (tab === 'ledger') openPathTree(game.save, CHAPTERS.find((c) => game.save.level <= c.levels[1]) ?? CHAPTERS[0], resume);
+  else if (tab === 'ledger') { openPathTree(game.save, CHAPTERS.find((c) => game.save.level <= c.levels[1]) ?? CHAPTERS[0], resume); attachBoard(game.save, () => game.persist()); }
   else if (tab === 'inventory') ui.openInventory(game.save.inventory, game.story.tools(), resume);
   else ui.openCrew((id) => game.story.crewStatus(id), resume, undefined, (id, loc) => game.goAway(id as CrewId, loc));
+  dotTab(game.save);
 }
 ui.onMenuTab = showTab;
 
@@ -1220,6 +1241,8 @@ async function boot() {
   // a story fight starts only in plain play: not under a flashback, the Vault, a film, the pause menu or a panel
   game.canFight = () => state === 'game' && !paused && !ui.modalOpen();
   game.onLevelComplete = onLevelDone;
+  // the Ledger's level-end beat comes after the level's Vault or memory, never over a pause, a panel or the title
+  if (game.mystery) game.mystery.blocked = (n) => state !== 'game' || paused || ui.modalOpen() || document.body.classList.contains('flashback') || levelBeatDue === n;
   game.timersOff = !!settings.noTimers;
   // warm up shaders so the first in-game frame doesn't hitch
   player.spawn(0, 2, 0.35);
@@ -1446,6 +1469,8 @@ window.addEventListener('resize', () => {
   goAway(id: CrewId, loc: string) { game?.goAway(id, loc); },
   get away() { const a = game?.away; return a?.active ? { who: a.who, next: a.next?.id ?? null, done: [...a.done], pos: a.position?.toArray() } : null; },
   get revealDue() { return !!game?.revealDue; },
+  /** The Ledger's questions (tests): the board as the save has it, open the Ledger, play a level's closing beat. */
+  mystery: { board: () => board(game.save), ledger: () => openPanel('ledger'), hook: (n: number) => game.mystery?.force(n), get holding() { return !!game?.mystery?.holding; }, get why() { return { state, paused, modal: ui.modalOpen(), beat: levelBeatDue }; }, get playing() { return !!game?.mystery?.playing; } },
   /** Ground truth for tests: the drawn surface under the feet and under the camera, by ray, against what is drawn. */
   groundProbe() {
     const a = game?.away, on = a?.active && a.stage;
@@ -1813,6 +1838,10 @@ async function cheatJump(j: Jump) {
     return;
   }
   const data = await loadSnapshots();
+  // L<n>.hook (or chook=<n>): the start of the next level, then level n's closing beat at once (L0.hook: after the wake)
+  const hk = /^L(\d+)\.hook$/.exec(j.target) ?? (new URLSearchParams(location.search).get('chook') ? [null, new URLSearchParams(location.search).get('chook')!] : null);
+  if (hk && Number(hk[1]) === 19) j = { ...j, target: 'L19.start' };
+  else if (hk) { const n = Number(hk[1]); j = { ...j, target: `L${Math.max(1, n + (n >= 21 ? 0 : 1))}.${n >= 21 ? 'results' : 'start'}` }; window.setTimeout(function wait() { if (state === 'game' && game.mode === 'play' && game.mystery) game.mystery.force(n); else window.setTimeout(wait, 300); }, 600); }
   const p = data.points.find((x) => x.id === j.target) ?? data.points.find((x) => x.id === `${j.target}.start`);
   if (!p) { console.warn('cheat: no checkpoint', j.target); ui.toast(`No checkpoint ${j.target}`); return; }
   const s = JSON.parse(JSON.stringify(data.saves[p.save])) as SaveData;

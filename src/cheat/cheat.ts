@@ -109,7 +109,7 @@ export interface CheatHost {
 const CODE_HASH = '0aad8bb97c782c896848452534d92a1b7cb56f1b1a37bd82fd517575aaaf0f52';
 const CODE_LEN = 7;
 const LEVELS = 21;
-const KIND_LABEL: Record<string, string> = { start: 'start', obj: 'objective', scene: 'scene', dec: 'decision', fight: 'fight', away: 'away stage', film: 'film', results: 'last step' };
+const KIND_LABEL: Record<string, string> = { start: 'start', obj: 'objective', scene: 'scene', dec: 'decision', fight: 'fight', away: 'away stage', film: 'film', results: 'last step', hook: 'closing beat' };
 
 async function sha(text: string) {
   const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -185,8 +185,9 @@ export class CheatMenu {
   }
   close() { this.open = false; this.el.className = 'hidden'; this.el.innerHTML = ''; this.host.shown(false); }
 
-  private points(level: number) { return (this.data?.points ?? []).filter((p) => p.level === level); }
-  private pointLabel(p: Point) { return p.kind === 'start' || p.kind === 'results' ? KIND_LABEL[p.kind] : `${KIND_LABEL[p.kind] ?? p.kind} ${p.n}`; }
+  /** Each level's checkpoints, then its closing beat (the Ledger's questions: L<n>.hook, from the next level's start). */
+  private points(level: number) { const out = (this.data?.points ?? []).filter((p) => p.level === level); if (out.length) out.push({ id: `L${level}.hook`, level, kind: 'hook', n: 0, save: out[0].save }); return out; }
+  private pointLabel(p: Point) { return p.kind === 'start' || p.kind === 'results' || p.kind === 'hook' ? KIND_LABEL[p.kind] : `${KIND_LABEL[p.kind] ?? p.kind} ${p.n}`; }
 
   /** The save the jump would start from, with the preset on it (for the summary). */
   private preview(): SaveData | null {

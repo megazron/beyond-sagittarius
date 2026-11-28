@@ -72,6 +72,8 @@ export interface Settings {
   moLarge?: boolean;
   moContrast?: boolean;
   moStill?: boolean;
+  /** "Previously" on Continue: always, after a break of 20 minutes (the default), or never. */
+  recap?: 'always' | 'break' | 'never';
   /** Path branches taken in any run on this device (the path tree unmasks them). */
   paths?: string[];
   /** Skip the playable Zenvora prologue on new games (for replays). */

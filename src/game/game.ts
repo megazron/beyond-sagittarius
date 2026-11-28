@@ -36,6 +36,7 @@ import { Cutscene, Beat, SceneBranch } from '../cinematic/cutscene';
 import { MomentBranch } from './moments';
 import './branch/moments';
 import { voice } from '../core/voice';
+import { MysteryPlay } from './mysteryplay';
 import type { Combat } from '../combat/combat';
 import { apply, collectPayoffs, DECISIONS, isAlive, LINE_RULES, QTES, record, resolveLine, test } from './branch';
 
@@ -154,6 +155,8 @@ export class Game {
   tutorial: Tutorial;
   /** Playing another crew member on their own stage (main.ts makes it). */
   away: Away | null = null;
+  /** The Ledger's questions: the beat at each level's end and the small things off the path (game/mysteryplay.ts). */
+  mystery: MysteryPlay | null = null;
   craft = new Craft();
   dialogue = new Dialogue();
   private fails = 0;
@@ -195,11 +198,11 @@ export class Game {
       this.ui.say(`fail.${(this.fails++ % 4) + 1}`, 'mz.name', 3.5);
     };
     this.ep2 = new Episode2(world, player, ui, this.story.npcs, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn),
-      (spec) => this.combat?.tension(spec) ?? null, () => this.combat, () => this.mode === 'play' && this.canFight() && !this.combat?.encounter && !this.combat?.threatened,
+      (spec) => this.combat?.tension(spec) ?? null, () => this.combat, () => this.mode === 'play' && this.canFight() && !this.combat?.encounter && !this.combat?.threatened && !this.mystery?.holding,
       (id, then) => this.discoverNow(id, then));
     this.story.ch2.ep2 = this.ep2;
     this.ep3 = new Episode3(world, player, ui, this.story.npcs, () => this.save, (beats, then) => this.playScene(beats, then), (sec, fn) => this.after(sec, fn),
-      (spec) => this.combat?.tension(spec) ?? null, () => this.combat, () => this.mode === 'play' && this.canFight() && !this.combat?.encounter && !this.combat?.threatened,
+      (spec) => this.combat?.tension(spec) ?? null, () => this.combat, () => this.mode === 'play' && this.canFight() && !this.combat?.encounter && !this.combat?.threatened && !this.mystery?.holding,
       (id, then) => this.discoverNow(id, then));
     this.story.ch2.ep3 = this.ep3;
     // level 19 is Draxum's, on his own stage: the story's away hook, the stage, and the decision panel
@@ -207,6 +210,16 @@ export class Game {
     this.ep3.waking = () => this.waking;
     this.ep3.revealPending = () => !!this.revealDue;
     this.ep3.awayCtl = () => this.away ?? null;
+    // level 19's level-end beat is on Draxum's stage, before he leaves it
+    this.ep3.endAway = (go) => { if (!this.mystery) { go(); return; } this.mystery.away(19, this.away?.stage ?? null, this.away?.bodyAt ?? null, (f, to, sec, fov) => this.ep3.awayCut?.(f, to, sec, fov), go); };
+    const game = this;
+    this.mystery = new MysteryPlay({
+      world, player, ui, playScene: (b, then) => this.playScene(b, then), persist: () => this.persist(),
+      get save() { return game.save; }, get mode() { return game.mode; },
+      actorsNow: () => ({ ...this.ep2?.actors, ...this.ep3?.actors }),
+      storyBusy: () => this.story.busy || !!this.ep3?.isBusy,
+      fighting: () => !!this.combat?.encounter || !!this.combat?.threatened,
+    });
     this.ep3.awayCut = (from, to, secs, fov) => { if (this.away) this.away.cut = { from, to, t: secs, fov }; };
     // the dead stop talking, wherever the line comes from
     ui.sayFilter = (key, who) => {
@@ -768,11 +781,12 @@ export class Game {
     // whoever this level reveals: their own story, on their own ground, as soon as the moment is free
     // a level's own ending lands first: the Vault, the Ledger, then the next person's story
     this.sinceLevel += dt;
+    this.mystery?.update(dt);
     const who = this.revealDue;
     // Episode Three holds a level's first scene while someone's story is due, so that story comes between the levels
     // (after the level's card) and never breaks into a scene (GPU takes EP3B: Bolzar's cut into 16, Lyrra's into 21)
     const between = !!who && !!this.ep3?.holdsFor(s.level);
-    if (who && this.sinceLevel > (between ? 2 : 15) && !this.story.busy && !this.ui.modalOpen()) { this.goAway(who.id, who.location!); return; }
+    if (who && this.sinceLevel > (between ? 2 : 15) && !this.story.busy && !this.ui.modalOpen() && !this.mystery?.holding) { this.goAway(who.id, who.location!); return; }
     // the crash isn't forgotten by the next cutscene: the fall's wounds (game/injury.ts) heal by the hour; never slower
     // than the old day-one pace (0.45 on day one, 0.72 on day two)
     const inj = this.injuries, eff = inj?.effects();
@@ -917,7 +931,7 @@ export class Game {
       return;
     }
     let act: Action | null = null, ad = Infinity;
-    for (const a of this.story.actions()) {
+    for (const a of [...this.story.actions(), ...(this.mystery?.actions() ?? [])]) {
       const d = Math.hypot(a.pos.x - p.pos.x, a.pos.z - p.pos.z);
       if (d < a.radius && d < ad && Math.abs(a.pos.y - p.pos.y) < 3) { ad = d; act = a; }
     }
@@ -1077,11 +1091,13 @@ export class Game {
       audio.chime();
       this.ui.banner(t('level.complete', { n }), t(`level.${n}.title`));
       this.onLevelComplete?.(n);
+      // the level's closing beat (the Ledger's questions) plays first; the next level begins after it
+      const next0 = s.level, held = this.mystery?.queue(n, s.level <= PLAYABLE_LEVELS ? () => this.story.onLevelStart(next0) : undefined) ?? false;
       if (n === LAST_LEVEL) { this.syncItems(); this.after(4.7, () => this.ui.toast(t('level.arc.toast'))); }
       if (s.level <= PLAYABLE_LEVELS) {
         const next = s.level;
         this.after(4.7, () => { this.ui.toast(`${t('hud.level', { n: next })}: ${t(`level.${next}.title`)}`); const h = `level.${next}.hint`; if (t(h) !== h) this.ui.toast(t(h)); });
-        this.story.onLevelStart(next);
+        if (!held) this.story.onLevelStart(next);
       } else if (n === CH2_LAST) {
         this.after(4.7, () => this.ui.toast(t('level.arc2.toast')));
       }
