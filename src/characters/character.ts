@@ -683,6 +683,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       const inside = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), new THREE.MeshBasicMaterial({ color: 0x0b0304, side: THREE.BackSide }));
       inside.scale.set(sz.x * 0.62, sz.y * 0.75, sz.z * 0.66); inside.position.set(c.x, c.y, c.z - sz.z * 0.06); bs.get('head')!.add(inside);
       mouth.color.setRGB(0.5, 0.46, 0.45); mouth.roughness = 0.5; mouth.envMapIntensity = 0.15; teethMat = mouth;
+      // the clean mouth below is three objects he does not get; their ids are still drawn, so on a seeded Math.random
+      // (the animation gates) every body after him starts its clips at the same times as before his build had teeth
+      for (let k = 0; k < 3; k++) THREE.MathUtils.generateUUID();
     } else if (!mouthBox.isEmpty()) {
       // bind-pose position, so it holds wherever the character happens to stand when the model arrives
       const c = mouthBox.getCenter(new THREE.Vector3()).sub(piv('head'));
