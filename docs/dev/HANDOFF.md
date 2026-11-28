@@ -46,8 +46,8 @@ NOT signed off (only the owner does that). What I changed, what the checks say, 
 - CHECKS on my last build: continuity, --answers a, --answers b all ok (local); perf_gate web ok, and ok with prebake=0.
 - NOT DONE: level 21's close harvest shots through tall grass (not looked at: their 26 stems are props, the world's
   grass is not; see which it is first), level 14's night fight, level 20's night scene, the lounge freeze (above).
-- HINGLISH: the MegaZroN agent has it in work in ~/bs-mzn (branch mzn7, uncommitted: src/i18n/hl.json, the language
-  menu's fourth entry, heard in the Hindi voice). I did not duplicate it.
+- HINGLISH: landed on main by the MegaZroN agent (996b2d98: src/i18n/hl.json, the language menu's fourth entry,
+  heard in the Hindi voice). I did not duplicate it.
 
 ## 2026-11-28 pods leftovers, cameras in rock, freezes (pods agent 5: worktree ~/bs-podsw, branch pods7 from main b1f521cb; dev runs and captures ~/bs-cap/pods6)
 NOT signed off (only the owner does that). What I changed, what the checks say, what still looks wrong.
