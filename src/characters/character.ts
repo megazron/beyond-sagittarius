@@ -467,6 +467,8 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
   // closes on it, `radius` out from the palm (graspWrist). along: where on the palm, 0 the wrist, 1 the knuckles (0.6)
   type HoldSide = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius?: number; grasp?: boolean; along?: number; /** Turn the hand with the thing at once (a yoke that rolls and shakes: eased, the hand slid round the horn). */ rigid?: boolean };
   let hold: { L?: HoldSide; R?: HoldSide } | null = null; const holdW = { L: 0, R: 0 };
+  // how much the hair hangs (1: on the ground; 0: weightless, it floats where the body's motion leaves it)
+  let hairGrav = 1;
   const selfM = { a: new THREE.Vector3(), b: new THREE.Vector3(), l: new THREE.Matrix4(), q0: new THREE.Quaternion(), qi: new THREE.Quaternion(), x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), m: new THREE.Matrix4(), q: new THREE.Quaternion() };
   let gaitPhase = 0, inited = false, hipDrop = 0, sacAt = 1, sacX = 0, sacY = 0, firstFrame = true, eyeAimX = 0, eyeAimY = 0;
   const footOff = [0, 0];
@@ -2315,7 +2317,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
       tmp.set(0, -1, 0).applyQuaternion(dropQ); tmp.y += 1;
       dropV.addScaledVector(tmp.sub(drop), 70 * sdt2); dropV.multiplyScalar(Math.exp(-sdt2 * 11));
       drop.addScaledVector(dropV, sdt2);
-      sway.uDrop.value.copy(drop).multiplyScalar(HAIR_DROP / sc);
+      sway.uDrop.value.copy(drop).multiplyScalar(HAIR_DROP * hairGrav / sc);
       // the turn from the upright head's down (0,-1,0) to the sprung down, about the axis between them
       tmp.copy(drop); tmp.y -= 1;
       const gl = tmp.length();
@@ -2324,7 +2326,7 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         const ang = Math.acos(Math.max(-1, Math.min(1, -tmp.y)));
         V1.set(0, -1, 0).cross(tmp);
         const al = V1.length();
-        if (al > 1e-5) sway.uTilt.value.set(V1.x / al, V1.y / al, V1.z / al, ang * RIG_OPTS.hairTurn); else sway.uTilt.value.set(1, 0, 0, 0);
+        if (al > 1e-5) sway.uTilt.value.set(V1.x / al, V1.y / al, V1.z / al, ang * RIG_OPTS.hairTurn * hairGrav); else sway.uTilt.value.set(1, 0, 0, 0);
       }
     }
     // the arms and thighs as capsules in the head's space, for the long strands to hang round (hair.ts uCap); only as
@@ -2488,6 +2490,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
      *  0.002 a bow string or sling cord, 0.015 a spear shaft, 0.02 a yoke horn, 0.04 a club), 'pinch' (thumb to index:
      *  an arrow nock, a stone to place), 'point'. amount 0..1 scales the curl (a loosening grip). Joints are clamped
      *  to a finger's range and the hand eases to the target, so calling it every frame with the same values is still. */
+    /** How much the hair hangs: 1 under gravity, 0 weightless (the strands then go only where the body's motion and
+     *  Limbs.hair push them). */
+    setHairWeight(k: number) { hairGrav = clamp(k, 0, 1); },
     setGrip(side: 'L' | 'R' | 'both', g: Grip | null) { for (const sd of side === 'both' ? ['L', 'R'] as const : [side]) { if (g) gripSet[sd] = { ...g }; else delete gripSet[sd]; } },
     /** Let go of the task now (it eases out over a moment). */
     stopTask() { taskNext = null; if (task) { const out = Math.min(0.35, task.dur * 0.3); task.dur = Math.min(task.dur, task.t + out); task.t = Math.max(task.t, task.dur - out); } },

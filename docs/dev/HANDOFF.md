@@ -51,6 +51,34 @@ here is signed off (only the owner does that). The opening code word goes to the
 - CAPTURES: put the point in the capture URL, e.g. `...index.html?quality=ultra&cheat=open.run&cgo=1&cpick=b` (the pods
   run with the second answers), `&cheat=L15.dec2&cgo=1`. Keep one honest full playthrough per release batch.
 
+## 2026-11-28 the run to the pods, fourth pass (pods agent 4: worktree ~/bs-podsw, branch pods5 = pods4 rebased on main f9c08a14; dev runs and captures ~/bs-cap/pods5)
+NOT signed off (only the owner does that). STATUS: see the last bullet.
+- THE ARM SNAP (glitch_pull, "upperarmL turned 126 degrees in one frame" 2.3 m into the passage): measured per tick with a
+  probe (~/bs-cap/pods5/probe2.py, a TMPDBG hook `__bs.cineDbg()` in main.ts that is NOT committed): the rail hand,
+  on its way to the next hold, went in a straight line along the rail, and the rail runs past the shoulder: the wrist
+  came within 3 cm of the shoulder, the shoulder-to-wrist line collapsed and the upper arm turned 120 degrees in a tick.
+  Fix at the cause: `railPoint` brings the travelling hand up and over, 0.3 m above the rail at mid-travel (out from the wall it would pass through the chest).
+  The same for the new grab on the hatch's frame: the hold is carried round the shoulder from the frame to the rail.
+- PAIRS: the three pairs go through the hatch 2.5 s apart (8.0, 10.5, 13.0) and stop about 2.5 m apart (13.2, 10.6,
+  8.1); the first metres off the frame are in proportion to how far each will get; with the core, Zenvik is last at
+  15.6 s. `tools/pods_routes.ts` now prints the nearest two who are not a pair in the passage (1.3 to 1.8 m; core 1.08).
+  P1 is from the near wall 5.5 m in at an angle to the lanes.
+- BODIES: at most about a quarter turn over in the passage (0.45 rad), a third in the lounge; push-offs (knees up, then
+  the legs drive out) at each one's first move; the one on the rail takes the far side of the hatch's frame and swings
+  through on it. The surge of each pull is a captured one: PULL in podsrun.ts, the average of five pulls of CMU subject
+  1 take 2 (playground climb), fetched to ~/bs-cap/pods5/cmu, measured by cmu/prof.py. That is all the motion capture
+  in the run: no whole-body retarget (the hands are on holds by IK, the clip under them is still 'stand').
+- HAIR AND CLOTHES: `Character.setHairWeight(k)` (0: the hair does not hang, weightless); in the run Limbs.hair is a
+  sprung direction from each body's own acceleration and speed (it was one fixed direction for all six). The rig's
+  spring does the follow-through; hems use the same spring.
+- FACES: breath with each pull, blinks, a start and a look up when the hull groans (18.6), per-person faces kept on top.
+- EARLIER SHOTS: E2 from 2 m off and below the hands; F2 console light 0.9 to 0.3; F4 lit by the room's lamp moved in
+  front of them on the window side plus the hole's glow (dimming the lamp broke the check: power only goes down).
+- EXTRAS: cheat menu text scales from 16 px (cheat.css); scene set-ups whose camera is in a rock, in boughs or has
+  boughs or a rock within 1.6 m in front are brought in along their line or up (cutscene.ts clearSetUp, game.ts
+  cameraOk/nearBlocked). Level 13's shelter rocks are not obstacles, so that one may not be cured.
+- continuity_check.py no longer crashes printing a break with no shot.
+
 ## 2026-11-27 night, the run to the pods, third pass (cheat agent 2 took it over: worktree ~/bs-podsw, branch pods4 = pods3 rebased on cheat1; dev runs ~/bs-cap/pods1/dev)
 NOT on main, not signed off. pods4 = pods3 + my fixes, on top of the cheat menu branch so `?cheat=open.run&cgo=1&cpick=a|b`
 and `&picks=e1.handcore:core,e1.reach:bolzar,e1.hold:fail` (hurt variants) jump straight to the run.

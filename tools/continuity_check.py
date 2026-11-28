@@ -135,7 +135,7 @@ def main():
     for k, v in sorted((w.get('near') or {}).items(), key=lambda kv: kv[1])[:8]:
         print(f'  near  {k:40} at least {v:5.2f} m apart')
     for x in res['breaks']:
-        print(f"BREAK {x['kind']:9} {x['clock']:7.2f}s {x['from']:>5} -> {x['shot']:<5} {x.get('id', ''):10} {x['detail']}")
+        print(f"BREAK {x['kind']:9} {x['clock']:7.2f}s {x.get('from') or '':>5} -> {x.get('shot') or '':<5} {x.get('id') or '':10} {x['detail']}")
     for p in props:
         print(f'BREAK prop      {p}')
     for e in errors:

@@ -64,8 +64,10 @@ export function buildRun(start: Record<RunId, P3>, a: RunAnswers): { R: Record<R
   const add = (p: P3, dx: number, dy = 0, dz = 0): P3 => [p[0] + dx, p[1] + dy, p[2] + dz];
   /** Through the hatch at `door`, then along the lane to `end`: quick off the frame, hand over hand, stopped by the break. */
   const pass = (door: number, kind: 'rail' | 'tow', end: number): Key[] => {
+    // (the first metres off the frame in proportion to how far they will get: all of them to 1.5 m in, the pair behind
+    // caught up with the towed one of the pair ahead at the hatch, 1.1 m apart)
     // (quickest in the first metres, slower as they close on whoever is ahead and the hull starts to groan)
-    const arr = Math.max(door + 3.2, 19.6), x0 = Math.max(PA.doorX + 0.7, Math.min(PA.doorX + 1.5, end - 0.5)), e = Math.max(x0 + 0.15, end - 0.35), t1 = door + 1.3;
+    const arr = Math.max(door + 3.2, 19.6), x0 = Math.min(end - 0.4, PA.doorX + 0.5 + Math.min(1.8, 0.35 * (end - PA.doorX))), e = Math.max(x0 + 0.15, end - 0.35), t1 = door + 1.3;
     return [[door, ...D1], [t1, ...lane(x0, kind)], [t1 + 0.4 * (arr - t1), ...lane(x0 + 0.62 * (e - x0), kind)], [arr, ...lane(e, kind)], [Math.max(arr + 0.6, RUN_TEAR + 0.6), ...lane(Math.max(e + 0.2, end), kind)], [RUN_END, ...lane(Math.max(e + 0.2, end) + 0.12, kind)]];
   };
   /** The one who tows goes through at `door`; the one towed follows them 0.55 s behind, on the same line. */
@@ -91,7 +93,9 @@ export function buildRun(start: Record<RunId, P3>, a: RunAnswers): { R: Record<R
 // (she comes to him round the window's side of Lyrra and Nuvexa, who meet between her and him: straight across, she
   // went through them. She reaches him on his window side)
   const reachZ: P3 = add(z0, 0.7, -0.05, -0.45), round: P3 = [reachZ[0] + 0.45, (s0[1] + reachZ[1]) / 2, Math.min(s0[2], reachZ[2] - 0.7)];
-  const sDoor = 8.0, sEnd = 13.0;
+  // (the three pairs 2.5 s and about 2.5 m apart, one pair through the hatch per beat: 1.9 s and 1.8 m apart, from P1's
+  // and P2's angles the six read as one cluster coming through, a12)
+  const sDoor = 8.0, sEnd = 13.2;
   R.explorer = lead([[0, ...s0], [2.8, ...s0], [3.45, ...round], [3.9, ...reachZ], [RUN_SHARED - 0.1, ...add(reachZ, 0.08, 0, 0.08)], [RUN_SHARED, ...add(reachZ, 0.1, 0, 0.1)], [5.5, reachZ[0] + 0.5, -1.15, reachZ[2] + 0.9]], [3.6, -1.1, 0.55], 6.2, sDoor, 'rail', sEnd);
   roles.explorer = { lane: 'rail', door: sDoor, end: sEnd };
   const zPre: Key[] = [[0, ...z0], [3.2, ...z0], [RUN_SHARED - 0.1, ...z0], [RUN_SHARED, ...z0]];
@@ -100,21 +104,21 @@ export function buildRun(start: Record<RunId, P3>, a: RunAnswers): { R: Record<R
     roles.scientist = { lane: 'tow', partner: 'explorer', join: 3.9, door: sDoor + 0.55, end: sEnd - 0.6 };
     roles.explorer.partner = 'scientist'; roles.explorer.leads = true; roles.explorer.join = 3.9;
   } else if (a.core) {
-    const zd = 13.9 + (a.hurtD ? 0.6 : 0) + (a.hurtN ? 0.5 : 0); // behind the last pair, however late they are
-    R.scientist = lead([...zPre, [CORE_AT, 0.55, -1.0, -0.72], [CORE_AT + 1.6, 0.6, -1.0, -0.7]], [2.6, -1.0, 0.3], zd - 3.1, zd, 'rail', 7.55);
-    roles.scientist = { lane: 'rail', door: zd, end: 7.55 };
+    const zd = 15.6 + (a.hurtD ? 0.6 : 0) + (a.hurtN ? 0.5 : 0); // behind the last pair, however late they are
+    R.scientist = lead([...zPre, [CORE_AT, 0.55, -1.0, -0.72], [CORE_AT + 1.6, 0.6, -1.0, -0.7]], [2.6, -1.0, 0.3], zd - 3.1, zd, 'rail', 6.6);
+    roles.scientist = { lane: 'rail', door: zd, end: 6.6 };
   } else {
-    R.scientist = lead([...zPre, [5.5, ...add(z0, 0.05)]], [3.2, -1.1, 0.5], 7.6, 9.7, 'rail', 11.4);
-    roles.scientist = { lane: 'rail', door: 9.7, end: 11.4 };
+    R.scientist = lead([...zPre, [5.5, ...add(z0, 0.05)]], [3.2, -1.1, 0.5], 7.9, 10.0, 'rail', 11.3);
+    roles.scientist = { lane: 'rail', door: 10.0, end: 11.3 };
   }
 
   // ---- Lyrra goes to Nuvexa and takes her wrist; she tows her (a hurt Nuvexa makes the pair half a second later)
-  const late = (a.hurtN ? 0.5 : 0), lb = late + (silence ? 1.1 : 0), lDoor = 9.9 + lb, lEnd = silence ? 9.7 : 11.2;
+  const late = (a.hurtN ? 0.5 : 0), lb = late + (silence ? 1.6 : 0), lDoor = 10.5 + lb, lEnd = silence ? 9.5 : 10.6;
   // (they meet a little to the room's side of the line between them, and Lyrra sets off that way: straight along it
   // she brushed past Skyvra at the window)
   // (and near Nuvexa's place, not half way: half way is where Skyvra hangs from the window's rail)
   const meet: P3 = [n0[0] + 0.2, (n0[1] + l0[1]) / 2, n0[2] + 0.35];
-  R.medic = lead([[0, ...l0], [0.9, ...add(l0, -0.2, 0.3, 1.0)], [1.7, ...add(meet, 0.45, 0, -0.1)], [2.9 + late, ...add(meet, 0.55)], [RUN_SHARED - 0.1, ...add(meet, 0.66, 0.07, 0.05)], [RUN_SHARED, ...add(meet, 0.68, 0.08, 0.06)]], [3.7, -0.5, -0.15], 6.9 + lb, lDoor, 'rail', lEnd);
+  R.medic = lead([[0, ...l0], [0.9, ...add(l0, -0.2, 0.3, 1.0)], [1.7, ...add(meet, 0.45, 0, -0.1)], [2.9 + late, ...add(meet, 0.55)], [RUN_SHARED - 0.1, ...add(meet, 0.66, 0.07, 0.05)], [RUN_SHARED, ...add(meet, 0.68, 0.08, 0.06)]], [3.7, -0.5, -0.15], 7.5 + lb, lDoor, 'rail', lEnd);
   R.social = follow([[0, ...n0], [1.7, n0[0] + (meet[0] - n0[0]) * 0.4, meet[1], n0[2] + (meet[2] - n0[2]) * 0.4], [2.9 + late, ...add(meet, -0.1, 0, 0.05)], [RUN_SHARED - 0.1, ...add(meet, 0.01, 0.07, 0.1)], [RUN_SHARED, ...add(meet, 0.03, 0.08, 0.11)]], R.medic, RUN_SHARED + 0.9);
   roles.medic = { lane: 'rail', partner: 'social', leads: true, join: 1.6, door: lDoor, end: lEnd };
   roles.social = { lane: 'tow', partner: 'medic', join: 1.6, door: lDoor + 0.55, end: lEnd - 0.6 };
@@ -122,22 +126,34 @@ export function buildRun(start: Record<RunId, P3>, a: RunAnswers): { R: Record<R
   // ---- Draxum comes off the ceiling for Bolzar, who has hold of the sofa's back, and tows him out. With his arm
   // hurt (the hold lost) he cannot work a rail: Bolzar has to take it and pull him
   const sofa: P3 = [3.38, -1.2, -0.86];
-  const c = (a.hurtD ? 0.6 : 0) + (silence ? 1.5 : 0) + late, dDoor = 11.8 + c, dEnd = silence ? 8.0 : 9.4;
+  const c = (a.hurtD ? 0.6 : 0) + (silence ? 2.0 : 0) + late, dDoor = 13.0 + c, dEnd = silence ? 7.7 : a.core ? 8.5 : 8.1; // (with the core, room behind them for Zenvik)
   // (beside and a little over him, an arm's length off: straight over him, the hand he gave Bolzar had to go through his own body)
   const dx = a.hurtD ? -0.35 : 0.5, dy = 0.28, dz = a.hurtD ? -0.6 : -0.5; // hurt, he comes down behind Bolzar and is the one pulled
-  const dAt: Key[] = [[0, ...d0], [1.0, ...add(d0, 0.1, -0.25, 0.1)], [4.4, ...add(sofa, dx, dy, dz)], [5.3, ...add(sofa, dx + 0.02, dy - 0.03, dz + 0.02)], [7.6 + c, ...add(sofa, dx + 0.06, dy - 0.05, dz + 0.08)]];
-  const bAt: Key[] = [[0, ...b0], [2.6, ...b0], [3.9, ...sofa], [5.3, ...sofa], [7.6 + c, ...add(sofa, 0.04, 0, 0.05)]];
+  const dAt: Key[] = [[0, ...d0], [1.0, ...add(d0, 0.1, -0.25, 0.1)], [4.4, ...add(sofa, dx, dy, dz)], [5.3, ...add(sofa, dx + 0.02, dy - 0.03, dz + 0.02)], [8.8 + c, ...add(sofa, dx + 0.06, dy - 0.05, dz + 0.08)]];
+  const bAt: Key[] = [[0, ...b0], [2.6, ...b0], [3.9, ...sofa], [5.3, ...sofa], [8.8 + c, ...add(sofa, 0.04, 0, 0.05)]];
   const first: P3 = [4.3, -1.1, 0.15];
   if (!a.hurtD) {
-    R.strong = lead(dAt, first, 9.9 + c, dDoor, 'rail', dEnd); R.builder = follow(bAt, R.strong, 8.5 + c);
+    R.strong = lead(dAt, first, 11.1 + c, dDoor, 'rail', dEnd); R.builder = follow(bAt, R.strong, 9.7 + c);
     roles.strong = { lane: 'rail', partner: 'builder', leads: true, join: 5.5, door: dDoor, end: dEnd };
     roles.builder = { lane: 'tow', partner: 'strong', join: 5.5, door: dDoor + 0.55, end: dEnd - 0.6 };
   } else {
-    R.builder = lead(bAt, first, 9.9 + c, dDoor, 'rail', dEnd); R.strong = follow(dAt, R.builder, 8.5 + c);
+    R.builder = lead(bAt, first, 11.1 + c, dDoor, 'rail', dEnd); R.strong = follow(dAt, R.builder, 9.7 + c);
     roles.builder = { lane: 'rail', partner: 'strong', leads: true, join: 5.5, door: dDoor, end: dEnd };
     roles.strong = { lane: 'tow', partner: 'builder', join: 5.5, door: dDoor + 0.55, end: dEnd - 0.6 };
   }
   return { R, roles };
+}
+
+/** One pull on a rail, from motion capture: how far ahead of an even pace the body is through one hand-over-hand cycle,
+ *  in cycles (0 at the hand's closing). The average of five pulls of a climb up playground bars, CMU motion capture
+ *  subject 1, take 2 (3.9 to 6.5 s and 15.7 to 17.6 s): the body hangs back while the hand goes ahead for the next hold,
+ *  then surges as the arm pulls, and is carried past the even pace as the hand lets go. (It was a sine.) */
+export const PULL = [0, -0.064, -0.098, -0.115, -0.126, -0.112, -0.083, -0.044, -0.007, 0.029, 0.057, 0.083, 0.098, 0.101, 0.085, 0.057];
+/** PULL at a phase 0..1 of the cycle, smooth and periodic. */
+export function pullAt(ph: number) {
+  const n = PULL.length, x = (((ph % 1) + 1) % 1) * n, i = Math.floor(x), u = x - i;
+  const p0 = PULL[(i - 1 + n) % n], p1 = PULL[i % n], p2 = PULL[(i + 1) % n], p3 = PULL[(i + 2) % n];
+  return p1 + 0.5 * u * (p2 - p0 + u * (2 * p0 - 5 * p1 + 4 * p2 - p3 + u * (3 * (p1 - p2) + p3 - p0)));
 }
 
 /** How near two chests may come before the bodies are inside each other (m). Joined pairs ride closer than strangers. */

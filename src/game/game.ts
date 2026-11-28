@@ -246,7 +246,13 @@ export class Game {
       scene: this.world.scene,
       actors: { scientist: this.player.model, explorer: this.world.explorer, ...this.ep2?.actors, ...this.ep3?.actors },
       subtitle: (k, sp) => this.ui.subtitle(k, sp),
-      cameraOk: (p) => !this.world.forest.blocks(p.x, p.z, 0.5) && p.y > this.world.terrain.height(p.x, p.z) + 0.35,
+      cameraOk: (p) => !this.world.forest.blocks(p.x, p.z, 0.5) && p.y > this.world.terrain.height(p.x, p.z) + 0.35 && !this.world.forest.inFoliage(p.x, p.y, p.z),
+      // boughs or a rock in the first 1.6 m in front of the lens fill the frame (at night, black for seconds)
+      nearBlocked: (from, to) => {
+        const d = to.clone().sub(from), len = Math.min(1.6, d.length() - 0.6); if (len <= 0) return false; d.normalize();
+        for (let k = 0.3; k <= len; k += 0.3) { const x = from.x + d.x * k, y = from.y + d.y * k, z = from.z + d.z * k; if (this.world.forest.inFoliage(x, y, z) || this.world.forest.blocks(x, z, 0.25, y - this.world.terrain.height(x, z))) return true; }
+        return false;
+      },
       lineBlocked: (from, to) => {
         const d = to.clone().sub(from), len = d.length();
         SIGHT.set(from, d.divideScalar(len)); SIGHT.far = len - 0.3; SIGHT.camera = this.player.camera; SIGHT.params.Points.threshold = 0;
