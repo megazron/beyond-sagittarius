@@ -611,8 +611,9 @@ html.cinema, html.cinema * { cursor: none !important; }
 
 /* ---- the cutscene choice layer (ui/moment.ts): its own sheet, src/ui/moment.css ---- */
 
-/* out of MegaZroN's cold open: the logo forms out of the dark, then the menu comes up */
-#title.from-film .game-title { animation: mz-logo 3.4s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-#title.from-film .tagline, #title.from-film .menu, #title.from-film .lang-row, #title.from-film .title-foot { animation: mz-menu 1.4s 2.6s ease-out both; }
+/* out of MegaZroN's cold open: the logo forms slowly out of the dark and is held alone (owner: "slow and dramatic"),
+   then the menu comes up about 6.5 s in */
+#title.from-film .game-title { animation: mz-logo 4.6s cubic-bezier(0.25, 0.6, 0.2, 1) both; }
+#title.from-film .tagline, #title.from-film .menu, #title.from-film .lang-row, #title.from-film .title-foot { animation: mz-menu 1.8s 6.4s ease-out both; }
 @keyframes mz-logo { from { opacity: 0; filter: blur(14px) brightness(2.2); transform: scale(1.12); letter-spacing: 0.3em; } 40% { opacity: 0.9; } to { opacity: 1; filter: none; transform: none; } }
 @keyframes mz-menu { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }

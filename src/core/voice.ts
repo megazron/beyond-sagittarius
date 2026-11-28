@@ -65,7 +65,7 @@ class Voice {
   private ext = 'ogg';
   /** Spoken language; null follows the game language. */
   override: Lang | null = null;
-  private get lang(): Lang { return this.override ?? getLang(); }
+  private get lang(): Lang { const l = this.override ?? getLang(); return l === 'hl' ? 'hi' : l; } // (Hinglish is heard in the Hindi voice)
   /** The language he is heard in right now (the narrator's film times its end to it). */
   get spoken(): Lang { return this.lang; }
 

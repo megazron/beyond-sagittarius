@@ -19,7 +19,7 @@ export interface SwayUniforms {
 }
 
 export function swayUniforms(): SwayUniforms {
-  return { uTime: { value: 0 }, uSwing: { value: new THREE.Vector3() }, uFlutter: { value: 0.012 }, uDrop: { value: new THREE.Vector3() }, uTilt: { value: new THREE.Vector4() }, uCap: { value: Array.from({ length: 12 }, () => new THREE.Vector4()) }, uGround: { value: new THREE.Vector4() } };
+  return { uTime: { value: 0 }, uSwing: { value: new THREE.Vector3() }, uFlutter: { value: 0.012 }, uDrop: { value: new THREE.Vector3() }, uTilt: { value: new THREE.Vector4() }, uCap: { value: Array.from({ length: 16 }, () => new THREE.Vector4()) }, uGround: { value: new THREE.Vector4() } };
 }
 
 const VERT_HEAD = /* glsl */ `

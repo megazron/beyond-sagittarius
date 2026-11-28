@@ -9,7 +9,7 @@ import { Renderer } from '../core/renderer';
 import { sceneSound } from '../core/soundscape';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { bs3Film, BS3_LINES } from './bs3';
+import { bs3Film, bs3Lines } from './bs3';
 import { Film, FilmSound, Ink, Page, Shot, WritingHand, paperGround, shoot, smooth as sm } from './entrance';
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -287,15 +287,18 @@ export class Vault {
     {
       const cx = -0.5, cz = -1.1, cy = 1.2;
       const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.03, 0.1, 12), brass); stick.position.set(cx, cy + 0.05, cz); s.add(stick);
-      const wax = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.07, 12), new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.6, emissive: 0x5a3a18, emissiveIntensity: 0.5 })); wax.position.set(cx, cy + 0.135, cz); s.add(wax);
+      const wax = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.07, 12), new THREE.MeshStandardMaterial({ color: 0xcfba92, roughness: 0.55, emissive: 0x2a1406, emissiveIntensity: 0.35 })); wax.position.set(cx, cy + 0.135, cz); s.add(wax);
       // a teardrop: round at the wick, drawn to a point
       const prof: THREE.Vector2[] = []; for (let i = 0; i <= 14; i++) { const u = i / 14; prof.push(new THREE.Vector2(0.0085 * Math.sin(Math.PI * Math.pow(u, 0.62)) * (1 - 0.25 * u), u * 0.046)); }
       const fg = new THREE.LatheGeometry(prof, 14);
-      const outer = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ color: 0xffa238, transparent: true, opacity: 0.9, toneMapped: false }));
-      const inner = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ color: 0xfff2c4, toneMapped: false })); inner.scale.set(0.55, 0.62, 0.55);
-      this.candleBase = [stick, wax]; this.candle = new THREE.Group(); this.candle.add(outer, inner); this.candle.position.set(cx, cy + 0.172, cz); s.add(this.candle);
-      this.candleGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot(), color: 0xff9a40, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
-      this.candleGlow.scale.setScalar(0.22); this.candleGlow.position.set(cx, cy + 0.195, cz); s.add(this.candleGlow);
+      // (a crisp flame: a solid orange body with a bright core and a small blue root at the wick; the soft glow sprite
+      // that blurred it to a smudge in the GPU close shot is smaller and fainter)
+      const outer = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ color: 0xff9a2a, toneMapped: false }));
+      const inner = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ color: 0xfff0c0, toneMapped: false })); inner.scale.set(0.5, 0.6, 0.5); inner.position.y = 0.004;
+      const root = new THREE.Mesh(new THREE.SphereGeometry(0.0042, 10, 8).scale(1, 0.8, 1), new THREE.MeshBasicMaterial({ color: 0x3a5cff, transparent: true, opacity: 0.55, toneMapped: false })); root.position.y = 0.003;
+      this.candleBase = [stick, wax]; this.candle = new THREE.Group(); this.candle.add(outer, inner, root); this.candle.position.set(cx, cy + 0.172, cz); s.add(this.candle);
+      this.candleGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot(), color: 0xff9a40, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
+      this.candleGlow.scale.setScalar(0.13); this.candleGlow.position.set(cx, cy + 0.195, cz); s.add(this.candleGlow);
     }
     // loose slips round the lectern (notes that never went into the Ledger)
     {
@@ -507,7 +510,9 @@ export class Vault {
 
   /** Skip pressed while the scene was still loading under the black: it ends as soon as it starts. */
   skipNext = false;
-  skip() { if (this.playing) this.finish(); else this.skipNext = true; }
+  skip() { this.skipped = true; if (this.playing) this.finish(); else this.skipNext = true; }
+  /** The last scene was skipped (a returning player): the title after it comes up at once, not slowly. */
+  skipped = false;
 
   private finish() {
     this.playing = false;
@@ -652,7 +657,7 @@ export class Vault {
       const gut = pk > 0.05 ? 0.75 + 0.25 * Math.sin(t0 * 37) * Math.sin(t0 * 11.3) : 1;
       this.candle.rotation.x = -pk * (1.12 + 0.12 * Math.sin(t0 * 19)) + Math.sin(t0 * 2.3) * 0.03; this.candle.rotation.z = Math.sin(t0 * 3.1) * 0.03 + pk * 0.08 * Math.sin(t0 * 27);
       this.candle.scale.set(1 - pk * 0.3, (1 + 0.06 * Math.sin(t0 * 9.1) + pk * 0.85) * gut, 1 - pk * 0.3);
-      (this.candleGlow.material as THREE.SpriteMaterial).opacity = 0.35 * gut * (1 - pk * 0.35);
+      (this.candleGlow.material as THREE.SpriteMaterial).opacity = 0.22 * gut * (1 - pk * 0.35);
       this.candleGlow.position.z = this.candle.position.z - pk * 0.03;
     }
     // the slips: one after another they lift, tumble and skate across the floor to the foot of the window
@@ -865,7 +870,8 @@ function relaxNormals(g: THREE.BufferGeometry, passes: number) {
 
 // The cold open's lines at their seconds (the film itself is Vault.entry; ENTRANCES_v2.md section 4).
 // the opening's lines (bs3.ts): he talks to the player
-const INTRO: VaultLine[] = BS3_LINES.map(([key, at]) => ({ key, at }));
+// (laid out from each language's own takes: bs3Plan)
+const INTRO = (): VaultLine[] => bs3Lines(voice.spoken).map(([key, at]) => ({ key, at }));
 
 /** Scene scripts. `s` says what the player actually did. */
 export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', s: { ateRed: boolean; deaths: number; bites: number; renamed: boolean; failed?: number; comments?: string[] }): VaultLine[] {
@@ -873,7 +879,7 @@ export function vaultScript(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', s
   const said = (s.comments ?? []).map((key, i): VaultLine => ({ key, shot: i % 2 ? 'profile' : 'hands', pose: i % 2 ? 'present' : 'write' }));
   switch (id) {
     // another story's film (tools: a recording sets window.__mzFilm = { lines: [[key, second], ...] } and __mzSet)
-    case 'intro': { const f = (globalThis as { __mzFilm?: { lines?: [string, number][] } }).__mzFilm; return f?.lines ? f.lines.map(([key, at]) => ({ key, at })) : INTRO.map((l) => ({ ...l })); }
+    case 'intro': { const f = (globalThis as { __mzFilm?: { lines?: [string, number][] } }).__mzFilm; return f?.lines ? f.lines.map(([key, at]) => ({ key, at })) : INTRO(); }
     case 'l3': return [
       { key: 'mz.l3.1', shot: 'wide', pose: 'stand' },
       { key: s.ateRed ? 'mz.l3.red' : 'mz.l3.safe', shot: 'hands', pose: 'write' },

@@ -250,8 +250,8 @@ function showTitle(fromFilm = false) {
   // out of MegaZroN's cold open (the shadow of the black hole): the logo forms out of the dark, then the menu
   const ti = document.getElementById('title')!;
   ti.classList.toggle('from-film', fromFilm);
-  if (fromFilm) setTimeout(() => ti.classList.remove('from-film'), 6000);
-  ui.fade('black', 0, fromFilm ? 1.8 : 1.2);
+  if (fromFilm) setTimeout(() => ti.classList.remove('from-film'), 9500);
+  ui.fade('black', 0, fromFilm ? 2.6 : 1.2);
   entryRing?.release(2.4); entryRing = null; entryToTitle = false;
   audio.stopWind();
   applyCrewNames(undefined);
@@ -336,7 +336,7 @@ function entranceBeforeTitle() {
   const q = new URLSearchParams(location.search).get('entrance');
   if (q === '0' || entrySeen() || (navigator.webdriver && q !== '1')) return;
   ui.show('title', false);
-  whenWorldReady(() => { ui.show('loading', false); audio.start(); void voice.load(); markEntry(); entryToTitle = true; playVault('intro', () => showTitle(true)); });
+  whenWorldReady(() => { ui.show('loading', false); audio.start(); void voice.load(); markEntry(); entryToTitle = true; playVault('intro', () => showTitle(!vault.skipped)); });
 }
 
 /** The cold open is playing before the title (it ends in it): its ring-to-limb hand-over, while it is up. */
@@ -355,7 +355,7 @@ function playVault(id: 'intro' | 'l3' | 'l7' | 'ch1' | 'ch2' | 'ep2', after: () 
   // under the black: the voices' index and the first line's take are in before the scene starts (a fresh profile asked
   // for them only as the first subtitle showed, so the first line came late or not at all)
   const voiced = voice.ready(lines.map((l) => l.key).filter(Boolean));
-  vault.skipNext = false;
+  vault.skipNext = false; vault.skipped = false;
   setTimeout(() => void voiced.then(() => {
     // Begin in the creator leaves its stage up under the fade; the black is complete now
     if (stage.active) showStage(false);

@@ -523,7 +523,9 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
     const overC = marks === 'explorer' ? 0xf3e7cf : marks === 'strong' ? 0xe8c49a : 0x1e1e1e;
     const skin = skinMaterial(M.skin, marks, { skin: skinC, shade: shadeC, lip: lipC, glow: glowC, over: overC, glowK: human ? 0 : 1.15 }, lod);
     const irisC = custom ? custom.iris : human ? 0x1e120b : L.face.iris;
-    const eyes = eyeMaterial(irisC, (custom ? custom.eyeGlow : !human) ? 0.55 : 0);
+    // (the narrator's amber eyes have a LOW inner glow (NARRATOR_BIBLE "Look"): at the crew's 0.55 they read as white-hot
+    // lamps in his film close-ups, iris and pupil lost; 0.16 keeps a glow and lets the amber iris and the pupil read)
+    const eyes = eyeMaterial(irisC, (custom ? custom.eyeGlow : !human) ? (id === 'megazron' && !custom ? 0.16 : 0.55) : 0, id === 'megazron' && !custom ? 0.42 : 1); // (and a shaded white: under his film key the bright whites, not the glow, read as white lamps in every GPU close-up)
     const browC = custom ? new THREE.Color(custom.hairRoot).multiplyScalar(0.45).getHex() : human ? 0x2c1d14 : L.face.brow;
     const atlas = M.atlas;
     const cloth = new THREE.MeshStandardMaterial({ map: tex(`${atlas}_cloth`, lod, true), normalMap: tex(`${atlas}_cloth_n`, lod), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, side: THREE.DoubleSide });
@@ -2339,6 +2341,17 @@ export function createCharacter(id: CrewId, detail = 1, custom?: PlayerLook, ski
         if (!on || !ba || !bb) { A.w = 0; return; }
         hb.worldToLocal(ba.getWorldPosition(tmp)); A.set(tmp.x, tmp.y, tmp.z, (r + 0.012) / sc * on);
         hb.worldToLocal(bb.getWorldPosition(tmp)); Bv.set(tmp.x, tmp.y, tmp.z, 0);
+      });
+      // the narrator's long locks lie over his coat: his chest and his high collar as two more capsules, always on (they
+      // passed into the coat at the collar and the chest in every close-up of his films, upright as much as bent). The
+      // chest's radius is the rig's own measure of skin and cloth (front and back averaged) and a coat's thickness
+      const tc = id === 'megazron' && !custom && torsoR ? torsoR : null;
+      ([['spine1', 'chest', 1, 1], ['chest', 'neck', 2, 0.72]] as const).forEach(([a, b, j, reach], k) => {
+        const A = sway.uCap.value[12 + k * 2], Bv = sway.uCap.value[13 + k * 2], ba = bs.get(a), bb = bs.get(b);
+        if (!tc || !ba || !bb) { A.w = 0; return; }
+        ba.getWorldPosition(V2); bb.getWorldPosition(tmp); tmp.lerp(V2, 1 - reach);
+        hb.worldToLocal(V2); A.set(V2.x, V2.y, V2.z, ((tc[j].f + tc[j].b) / 2 + 0.014) / sc);
+        hb.worldToLocal(tmp); Bv.set(tmp.x, tmp.y, tmp.z, 0);
       });
     }
     // the ground under the body as a plane in the head's space, 1.5 cm up (hair.ts uGround): the long tails rest on it

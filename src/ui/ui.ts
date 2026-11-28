@@ -427,7 +427,7 @@ export class UI implements CineUI {
     const onOff = (name: string, v: boolean) => seg(name, [['1', t('settings.on')], ['0', t('settings.off')]], v ? '1' : '0');
     const row = (label: string, body: string) => `<div class="row"><label>${escapeHtml(t(label))}</label>${body}</div>`;
     const range = (id: string, label: string, min: number, max: number, step: number, v: number) => row(label, `<input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${v}">`);
-    const LANGS: [string, string][] = [['en', 'English'], ['hi', 'हिन्दी'], ['ur', 'اردو']];
+    const LANGS: [string, string][] = [['en', 'English'], ['hi', 'हिन्दी'], ['ur', 'اردو'], ['hl', 'Hinglish']];
     const panes: [string, string, string][] = [
       ['sound', 'settings.tabSound', `
         ${row('menu.language', seg('lang', LANGS, s.lang))}

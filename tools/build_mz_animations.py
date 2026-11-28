@@ -28,6 +28,27 @@ FPS = B.FPS
 WALK = '07_01'
 
 
+def qmul(a, b):
+    x1, y1, z1, w1 = np.moveaxis(a, -1, 0); x2, y2, z2, w2 = np.moveaxis(b, -1, 0)
+    return np.stack([w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2, w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+                     w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2, w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2], -1)
+
+
+def carry_rest(T, bones, keep=0.15):
+    """Each bone's local turns (x, y, z, w) keep their motion about the clip's mean, while the mean itself goes to the
+    rig's rest turn (identity) but for `keep` of it: q' = slerp(1, m, keep) * m^-1 * q."""
+    out = dict(T)
+    for k in bones:
+        if k not in T: continue
+        q = T[k].copy(); q[(q[:, 3]) < 0] *= -1
+        m = q.mean(0); m /= np.linalg.norm(m)
+        tgt = B.slerp(np.array([[0, 0, 0, 1.0]]), m[None], keep)[0]
+        minv = m * np.array([-1, -1, -1, 1.0])
+        r = qmul(np.broadcast_to(qmul(tgt, minv), q.shape), q)
+        out[k] = r / np.linalg.norm(r, axis=1, keepdims=True)
+    return out
+
+
 def walk_in(ref):
     """A captured walk with its real path over the floor, in mz_sit_down's own frame: it ends at the origin facing +Z as
     one foot passes the other (the nearest pose to standing), so the film holds his root still and crosses from the
@@ -55,6 +76,11 @@ def walk_in(ref):
         for bn in ('footL', 'footR', 'toeL', 'toeR'):
             low = min(low, Pw[bn][1] - ref.p(bn)[1])
     p[:, 1] -= low
+    # the captured walker carried his neck bent back and his chin dropped (CMU 07_01 on this rig): on MegaZroN's high
+    # collar the head sank into the coat at every step (owner: "His neck when he walks is going inside his body";
+    # probe: head 7.8 cm lower over the shoulders and 27 degrees further down than his standing rest). The neck and
+    # the head keep their step-by-step motion about their mean, but the mean is his rest carriage
+    T = carry_rest(T, ('neck', 'head'), keep=0.0)
     print(f'walk {WALK}: frames {a}..{b} of {n}, {len(p) / FPS:.2f}s, {np.hypot(p[0, 0], p[0, 2]):.2f} m to the origin from ({p[0, 0]:+.2f}, {p[0, 2]:+.2f}), feet {gap[b]:.3f} apart at the end')
     return T, p
 

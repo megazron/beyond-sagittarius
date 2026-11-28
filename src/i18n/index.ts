@@ -1,13 +1,16 @@
 import en from './en.json';
 import hi from './hi.json';
 import ur from './ur.json';
+// Hinglish: Hindi and English as people text it, in Roman script, heard in the Hindi voice; any string not written yet
+// falls back to English (owner 2026-11-28: "keep hinglish option as well")
+import hl from './hl.json';
 
-export type Lang = 'en' | 'hi' | 'ur';
+export type Lang = 'en' | 'hi' | 'ur' | 'hl';
 type Dict = Record<string, string>;
 
-const DICTS: Record<Lang, Dict> = { en, hi, ur };
-export const LANGS: Lang[] = ['en', 'hi', 'ur'];
-export const RTL: Record<Lang, boolean> = { en: false, hi: false, ur: true };
+const DICTS: Record<Lang, Dict> = { en, hi, ur, hl };
+export const LANGS: Lang[] = ['en', 'hi', 'ur', 'hl'];
+export const RTL: Record<Lang, boolean> = { en: false, hi: false, ur: true, hl: false };
 
 /** More strings from a module that keeps its own (src/combat/strings.ts). */
 export function addStrings(d: Partial<Record<Lang, Dict>>) { for (const l of LANGS) Object.assign(DICTS[l], d[l] ?? {}); }

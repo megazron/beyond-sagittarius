@@ -44,7 +44,7 @@ export interface SaveData {
 }
 
 export interface Settings {
-  lang: 'en' | 'hi' | 'ur';
+  lang: 'en' | 'hi' | 'ur' | 'hl';
   sensitivity: number;
   invertY: boolean;
   volume: number;
@@ -54,9 +54,9 @@ export interface Settings {
   muted: boolean;
   subtitles: boolean;
   /** Subtitle language, independent of the game: 'same', en, hi, ur or off. */
-  subLang: 'same' | 'en' | 'hi' | 'ur' | 'off';
+  subLang: 'same' | 'en' | 'hi' | 'ur' | 'hl' | 'off';
   /** Spoken language: 'same' follows the game language. */
-  voiceLang: 'same' | 'en' | 'hi' | 'ur';
+  voiceLang: 'same' | 'en' | 'hi' | 'ur' | 'hl';
   /** Skins opened with a code; stays open for every save on this device. */
   unlocked?: string[];
   /** Chosen crew skins, used for new games. */

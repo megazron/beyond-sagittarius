@@ -154,16 +154,16 @@ export class WritingHand {
   private at = new THREE.Vector3(); private fingers = V(0, -0.5, 1).normalize(); private palm = V(0.35, -0.9, 0.1).normalize();
   private off = new THREE.Vector3(0, 0.09, -0.07);
   private nibW = new THREE.Vector3(); private goal = new THREE.Vector3();
-  private on = false; private holdL: { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius?: number; grasp?: boolean } | null = null;
+  private on = false; private holdL: { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius?: number; grasp?: boolean; rigid?: boolean } | null = null;
   constructor(private host: Character, private quill: THREE.Object3D) {}
   /** Where the right hand should put the nib (null: hand off, the clip's own arm), and the left hand flat on a point. */
-  set(nib: THREE.Vector3 | null, left: { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3 } | null = null) {
+  set(nib: THREE.Vector3 | null, left: { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; radius?: number; grasp?: boolean; rigid?: boolean } | null = null) {
     if (nib) this.goal.copy(nib);
     const was = this.on; this.on = !!nib;
     if (!nib && was) this.off.set(0, 0.09, -0.07);
     // the first frame of a reach: the target starts where the nib should be (not at the world's origin)
     if (nib && !was) this.at.copy(this.goal).add(this.off);
-    this.holdL = left ? { at: left.at, fingers: left.fingers, palm: left.palm, radius: 0.0, grasp: false } : null;
+    this.holdL = left ? { at: left.at, fingers: left.fingers, palm: left.palm, radius: left.radius ?? 0.0, grasp: left.grasp ?? false, rigid: left.rigid } : null;
     this.host.setHold(this.on || this.holdL ? { R: this.on ? { at: this.at, fingers: this.fingers, palm: this.palm, radius: 0.004, grasp: true } : undefined, L: this.holdL ?? undefined } : null);
   }
   /** After the body is posed: measure the nib, correct the target for next frame. */
@@ -176,6 +176,11 @@ export class WritingHand {
     this.off.clampLength(0, 0.22);
     this.at.copy(this.goal).add(this.off);
   }
+  /** How the writing hand lies (world directions; the default suits a writer facing +z): a film whose writer faces
+   *  elsewhere, or wants the hand off the line it has just written, sets its own. */
+  pose(fingers: THREE.Vector3, palm: THREE.Vector3) { this.fingers.copy(fingers).normalize(); this.palm.copy(palm).normalize(); }
+  /** What each hand is asked to touch this frame (the contact probe reads it): the nib's goal and the left hold. */
+  get targets() { return { nib: this.on ? this.goal : null, L: this.holdL }; }
   /** Where the nib is now (world). */
   get nib() { return this.nibW; }
 }

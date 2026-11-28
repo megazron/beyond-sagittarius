@@ -283,17 +283,17 @@ export function skinMaterial(sex: string, marks: string, l: SkinLook, lod: numbe
   return m;
 }
 
-export function eyeMaterial(iris: number, glow: number) {
+export function eyeMaterial(iris: number, glow: number, sclera = 1) {
   const m = new THREE.MeshStandardMaterial({ map: texPlain('eye'), roughness: DECREEP ? 0.1 : 0.18 });
   m.userData.film = { kind: 'eye', iris, glow };
-  const u = { uIris: { value: col(iris) }, uEyeGlow: { value: glow } };
+  const u = { uIris: { value: col(iris) }, uEyeGlow: { value: glow }, uScl: { value: sclera } };
   m.userData.u = u; // the merged crowd body (bodymerge.ts) shares them
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.fragmentShader = `uniform vec3 uIris; uniform float uEyeGlow;\n` + sh.fragmentShader
+    sh.fragmentShader = `uniform vec3 uIris; uniform float uEyeGlow; uniform float uScl;\n` + sh.fragmentShader
       .replace('#include <map_fragment>', /* glsl */ `
         vec3 ey = texture2D(map, vMapUv).rgb;
-        vec3 sclera = vec3(0.78, 0.8, 0.84) * pow(ey.r, 1.6) * 1.2;
+        vec3 sclera = vec3(0.78, 0.8, 0.84) * pow(ey.r, 1.6) * 1.2 * uScl;
         vec3 irisC = uIris * (0.35 + ey.r * 1.3);
         diffuseColor.rgb = mix(sclera, irisC, ey.g) * (1.0 - ey.b * 0.97);
         ${DECREEP ? /* glsl */ `
