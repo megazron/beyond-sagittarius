@@ -105,8 +105,8 @@ export function buildRun(start: Record<RunId, P3>, a: RunAnswers): { R: Record<R
     roles.explorer.partner = 'scientist'; roles.explorer.leads = true; roles.explorer.join = 3.9;
   } else if (a.core) {
     const zd = 15.6 + (a.hurtD ? 0.6 : 0) + (a.hurtN ? 0.5 : 0); // behind the last pair, however late they are
-    R.scientist = lead([...zPre, [CORE_AT, 0.55, -1.0, -0.72], [CORE_AT + 1.6, 0.6, -1.0, -0.7]], [2.6, -1.0, 0.3], zd - 3.1, zd, 'rail', 6.6);
-    roles.scientist = { lane: 'rail', door: zd, end: 6.6 };
+    R.scientist = lead([...zPre, [CORE_AT, 0.55, -1.0, -0.72], [CORE_AT + 1.6, 0.6, -1.0, -0.7]], [2.6, -1.0, 0.3], zd - 3.1, zd, 'rail', 7.0);
+    roles.scientist = { lane: 'rail', door: zd, end: 7.0 };
   } else {
     R.scientist = lead([...zPre, [5.5, ...add(z0, 0.05)]], [3.2, -1.1, 0.5], 7.9, 10.0, 'rail', 11.3);
     roles.scientist = { lane: 'rail', door: 10.0, end: 11.3 };
@@ -126,7 +126,7 @@ export function buildRun(start: Record<RunId, P3>, a: RunAnswers): { R: Record<R
   // ---- Draxum comes off the ceiling for Bolzar, who has hold of the sofa's back, and tows him out. With his arm
   // hurt (the hold lost) he cannot work a rail: Bolzar has to take it and pull him
   const sofa: P3 = [3.38, -1.2, -0.86];
-  const c = (a.hurtD ? 0.6 : 0) + (silence ? 2.0 : 0) + late, dDoor = 13.0 + c, dEnd = silence ? 7.7 : a.core ? 8.5 : 8.1; // (with the core, room behind them for Zenvik)
+  const c = (a.hurtD ? 0.6 : 0) + (silence ? 2.0 : 0) + late, dDoor = 13.0 + c, dEnd = silence ? 7.7 : a.core ? 8.7 : 8.1; // (with the core, room behind them for Zenvik)
   // (beside and a little over him, an arm's length off: straight over him, the hand he gave Bolzar had to go through his own body)
   const dx = a.hurtD ? -0.35 : 0.5, dy = 0.28, dz = a.hurtD ? -0.6 : -0.5; // hurt, he comes down behind Bolzar and is the one pulled
   const dAt: Key[] = [[0, ...d0], [1.0, ...add(d0, 0.1, -0.25, 0.1)], [4.4, ...add(sofa, dx, dy, dz)], [5.3, ...add(sofa, dx + 0.02, dy - 0.03, dz + 0.02)], [8.8 + c, ...add(sofa, dx + 0.06, dy - 0.05, dz + 0.08)]];

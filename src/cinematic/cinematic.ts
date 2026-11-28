@@ -880,9 +880,10 @@ export class Cinematic {
         nuv.setLimbs(mixLimbs(STANDING, { ...FALL.spread, armL: [0.9, 0.35, 0.3], foreL: [1, 0.25, 0.3] }, 0.9)); nuv.setFace({ fear: 0.8, open: 0.4 });
         lyr.setLimbs(mixLimbs(STANDING, { ...STANDING, armR: [-0.9, 0.15, 0.45], foreR: [-1, 0.1, 0.3] }, g));
         const m = hand(lyr).add(hand(nuv, false)).multiplyScalar(0.5);
-        // (from 2 m off, a little below the hands, in front of Lyrra (she faces -x), both of them whole: from 1 m above at
-        // 50 mm the frame was Lyrra's jumper and Nuvexa's hair, and from the room side her back hid her face, p2, p3)
-        lens(34); this.camera.position.copy(m).add(V(-1.6, -0.25, 1.0)); this.lookTarget.copy(m).add(V(0.15, 0.1, 0));
+        // (from the window's side, 1.8 m off and a little below the hands, both of them whole, inside the glass: from 1 m
+        // above at 50 mm the frame was Lyrra's jumper and Nuvexa's hair, and from the room's side, near or far, their
+        // backs hid their faces and the hands, p2, p3, gpu6)
+        lens(34); this.camera.position.copy(m).add(V(-0.5, -0.25, -1.8)); { const lc = intr.group.worldToLocal(this.camera.position.clone()); if (lc.z < -3.2) { lc.z = -3.2; this.camera.position.copy(intr.group.localToWorld(lc)); } } this.lookTarget.copy(m).add(V(0, 0.1, 0));
       },
     });
     const nuvFrom = new THREE.Vector3();
@@ -1121,7 +1122,7 @@ export class Cinematic {
       pas.lamps(tau < TEAR ? 0.6 + 0.4 * flash : lerp(0.6, 0.26, smoothstep(TEAR, TEAR + 0.6, tau)), tau < TEAR + 0.4 ? 1 : 0.5, tau < 18.6);
       pas.tear(torn, this.clockT);
       this.damage = Math.max(this.damage, tau >= TEAR ? 2 + smoothstep(TEAR, TEAR + 1.5, tau) : 1); this.airOut = tau >= TEAR;
-      intr.mainLight.intensity = 0.6 + 1.3 * smoothstep(0, 1.5, tau); intr.alarmLight.color.copy(RED); intr.alarmLight.intensity = tau < TEAR ? (0.4 + 0.6 * flash) * 20 : 0;
+      intr.mainLight.intensity = 0.6 + 1.3 * smoothstep(0, 1.5, tau); intr.consoleLight.intensity = 0.5; // (at 2.2 Zenvik at the console for the core was a white shape, gpu6) intr.alarmLight.color.copy(RED); intr.alarmLight.intensity = tau < TEAR ? (0.4 + 0.6 * flash) * 20 : 0;
       floatUp(1, 0, 2.4);
       this.runHolds.length = 0; this.runNear.length = 0;
       // ---- first where each body is: its place on its route, its heading and its lean ----
@@ -1231,9 +1232,10 @@ export class Cinematic {
         hs.a.lerp(hv.clone().sub(hs.v).divideScalar(dtN), 1 - Math.exp(-dtN * 8)); hs.v.copy(hv); hairS.set(id, hs);
         const hairDir = hs.a.clone().multiplyScalar(-0.35).addScaledVector(hv, -0.3).add(V(nz(tau * 0.3, b.seed + 21) * 0.25, 0.12 + nz(tau * 0.25, b.seed + 23) * 0.2, nz(tau * 0.35, b.seed + 25) * 0.25)).clampLength(0, 1.3);
         c.setHairWeight(1 - smoothstep(0, 2.2, tau));
-        // the free arms: ahead for the next hold while travelling, loose when still
+        // the free arms: ahead for the next hold while travelling, loose when still (a calm swing with each pull: from
+        // full down to full up every pull, the towed ones' free arms waved like flags on the GPU take, gpu6)
         const ahead = (s: 1 | -1, k: number): Limbs => s > 0 ? { armL: [0.45, 0.75 * k - 0.3 * (1 - k), 0.35], foreL: [0.25, 0.9 * k - 0.2 * (1 - k), 0.3] } : { armR: [-0.45, 0.75 * k - 0.3 * (1 - k), 0.35], foreR: [-0.25, 0.9 * k - 0.2 * (1 - k), 0.3] };
-        let limbs: Limbs = { ...mixLimbs(STANDING, FALL.spread, 0.2), ...legs, ...ahead(1, moving * (0.5 + 0.5 * pull)), ...ahead(-1, moving * (0.5 - 0.5 * pull)), openHands: true, hair: [hairDir.x, hairDir.y, hairDir.z] };
+        let limbs: Limbs = { ...mixLimbs(STANDING, FALL.spread, 0.2), ...legs, ...ahead(1, moving * (role.lane === 'tow' ? 0.4 + 0.1 * pull : 0.55 + 0.25 * pull)), ...ahead(-1, moving * (role.lane === 'tow' ? 0.4 - 0.1 * pull : 0.55 - 0.25 * pull)), openHands: true, hair: [hairDir.x, hairDir.y, hairDir.z] };
         // faces: fear under everything, the effort of each pull over it, eyes to the bay and, every few seconds, to the
         // one they are joined to
         const effort = Math.max(0, pull) * inPass * (role.lane === 'rail' ? 1 : 0.3), dread = smoothstep(18.4, 19.4, tau);
@@ -1393,7 +1395,7 @@ export class Cinematic {
       // other and the six read as one cluster, a12; from 3.7 m the first pair filled the frame's right side, p2. With
       // the pairs 2.5 s apart each comes through on its own beat. It backs off aft as the first pair comes on: held still,
       // Zenvik ended the shot large and cut by the frame's right edge, p4)
-      lens(24); this.camera.position.copy(at(PA.doorX + lerp(5.5, 7.1, easeInOut(k)), -0.45, PA.doorZ + PA.half - 0.3)); this.lookTarget.copy(at(PA.doorX + lerp(1.1, 2.3, easeInOut(k)), -1.2, PA.doorZ - 0.5)); this.shake = 0.006;
+      lens(24); this.camera.position.copy(at(PA.doorX + lerp(5.5, 7.1, easeInOut(k)), -0.45, PA.doorZ + PA.half - 0.45)); this.lookTarget.copy(at(PA.doorX + lerp(1.1, 2.3, easeInOut(k)), -1.2, PA.doorZ - 0.5)); this.shake = 0.006;
     });
     // P2 the passage, established down its length: the rails, the signs, and at its end the pod bay, six lit hatches
     runShot(13.7, 17.2, 'P2', (tau, k) => {
@@ -1414,7 +1416,9 @@ export class Cinematic {
     // P5 from behind the last of them: the passage comes apart plate by plate, without a sound; the bay and its six lit
     // hatches drift away; nobody is getting there
     runShot(TEAR + 1.5, RUN_END, 'P5', (tau, k) => {
-      lens(24); this.camera.position.copy(at(lerp(6.35, 6.8, k), -0.3, PA.doorZ + 0.7)); this.lookTarget.copy(at(15, -1.15, PA.doorZ - 0.85)); this.shake = 0.01;
+      // (with the core taken Zenvik is the last of them, just inside the hatch: from 6.35 m he was beside the lens and
+      // out of the frame, and what that answer cost was not seen at the end, gpu6)
+      const z0 = this.chose('e1.handcore', 'core') ? 5.95 : 6.35; lens(24); this.camera.position.copy(at(lerp(z0, z0 + 0.45, k), -0.3, PA.doorZ + 0.7)); this.lookTarget.copy(at(15, -1.15, PA.doorZ - 0.85)); this.shake = 0.01;
     });
     // the breaking apart, the white and the six fates are the title sequence: montage.ts (it goes on from this state)
     this.cue(RUN + RUN_END, () => {
