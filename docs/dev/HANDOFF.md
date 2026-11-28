@@ -46,6 +46,19 @@ NOT signed off (only the owner does that). What I changed, what the checks say, 
   shot is built (a scene that had just placed them aimed the shot at where they stood before: level 13's pyrite
   two-shot was the empty field between the shelter and the camp). The story's own props (Episode Two/Three groups,
   `Episode2.props`) now count in lineBlocked and nearBlocked (a harvest rack's poles filled level 21's close shots).
+- RESULTS (build 746a4e05 = dist-q5): glitch_check --only ep1 --secs 24 --tick 1/60 clean (it had the 80 degree pickup
+  snap); new CI job glitch_ep1_60. GPU takes ~/bs-cap/pods6/q5 (plan_q3.json, run.sh), sent as
+  Downloads/BS_Game_v1.1/pods_continuity/AFTER5_746a4e05_* with NOTES_5_fifth_pass_GPU.md, and glitch_sweep/H2_* with
+  NOTES_H2_freezes_and_arm.md. Hitches after the fixes (q5/h_*.json): Continue's first visible frame 0.2 to 0.5 s (was 2
+  to 6 s); the stage arrival's 1 s is now under black.
+- STILL WRONG / NOT DONE: E2 Lyrra's face half in shadow and partly behind her hair (the hands and Nuvexa read); level
+  13's pyrite scene still opens on 4 s of trees and grass with nobody in it (my matrix refresh did not cure it: look at
+  where Oom-Sa is pinned, npcs.pin, against when cover.two reads her head); level 21's close harvest shots through tall
+  grass; level 20's night scene never reached by a jump (needs a walk to it); the lounge's first interior shot still
+  compiles 24 programs (1.1 s; program names read "", log program.cacheKey instead); the night fight at level 14 was not
+  reached by the jump in 40 s; the geometry leak probe (tools/leak_probe.py --dist DIST --from L16.start) was started and
+  stopped for the queue, NOT run: run it next; still shots, black gaps, teleports, Mobile pass, levels 14 to 21 review
+  not started; no whole-body mocap in the run.
 - TOOLS: tools/leak_probe.py + src/core/geocensus.ts (?geocensus=1): geometries drawn once and since dropped from every
   scene without dispose(), grouped by where they were first drawn, every few dozen driver rounds of a long session.
 
