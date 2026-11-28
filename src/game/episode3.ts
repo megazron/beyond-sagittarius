@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { audio } from '../core/audio';
 import { t } from '../i18n';
 import type { Action } from './story';
@@ -2351,11 +2352,21 @@ export class Episode3 extends Episode2 {
       // (owner, take EP3B: "a fuller harvest") sheaves bound and stood in stooks along the field, a sheaf in his arms, the
       // threshing on a flat stone, the grain poured into a pot
       const gold = std(0xd8b050, { roughness: 0.8 }), cord = std(0x8a6a3a);
+      // (one geometry for all of a sheaf's stalks and ears, shared by every sheaf: built stalk by stalk, the 30 sheaves in
+      // the stooks were a thousand meshes and geometries that stayed in the field, the planet's geometry count from 900 to
+      // 3000 over levels 19 to 21 in the glitch sweep, G08, leak probe pods agent 7)
+      const sheafGeo = new Map<number, THREE.BufferGeometry>(), bandGeo = new THREE.TorusGeometry(0.035, 0.005, 4, 12);
       const sheaf = (len = 0.62) => {
-        const g = new THREE.Group();
-        for (let i = 0; i < 22; i++) { const a = i * 2.4, rr = 0.012 + (i % 5) * 0.008, st = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, len, 3), gold); st.position.set(Math.cos(a) * rr, 0, Math.sin(a) * rr); st.rotation.set(Math.sin(a) * 0.18, 0, Math.cos(a) * 0.18); g.add(st);
-          if (i % 2 === 0) { const ear = new THREE.Mesh(new THREE.CapsuleGeometry(0.007, 0.04, 2, 4), gold); ear.position.set(Math.cos(a) * rr * 2.2, len / 2 + 0.02, Math.sin(a) * rr * 2.2); g.add(ear); } }
-        const band = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.005, 4, 12), cord); band.rotation.x = Math.PI / 2; band.position.y = -0.05; g.add(band);
+        let geo = sheafGeo.get(len);
+        if (!geo) {
+          const parts: THREE.BufferGeometry[] = [], M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), ONE = v3(1, 1, 1);
+          for (let i = 0; i < 22; i++) { const a = i * 2.4, rr = 0.012 + (i % 5) * 0.008;
+            parts.push(new THREE.CylinderGeometry(0.003, 0.003, len, 3).applyMatrix4(M.compose(v3(Math.cos(a) * rr, 0, Math.sin(a) * rr), Q.setFromEuler(E.set(Math.sin(a) * 0.18, 0, Math.cos(a) * 0.18)), ONE)));
+            if (i % 2 === 0) parts.push(new THREE.CapsuleGeometry(0.007, 0.04, 2, 4).translate(Math.cos(a) * rr * 2.2, len / 2 + 0.02, Math.sin(a) * rr * 2.2)); }
+          geo = mergeGeometries(parts, false) ?? new THREE.CylinderGeometry(0.03, 0.03, len, 6); parts.forEach((x) => x.dispose()); sheafGeo.set(len, geo);
+        }
+        const g = new THREE.Group(); g.add(new THREE.Mesh(geo, gold));
+        const band = new THREE.Mesh(bandGeo, cord); band.rotation.x = Math.PI / 2; band.position.y = -0.05; g.add(band);
         return g;
       };
       const stooks: THREE.Group[] = [];

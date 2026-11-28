@@ -310,12 +310,13 @@ export class Cinematic {
   /**
    * The deck's programs for the light set it is really shown with: `compile(scene, cam)` is called with the deck as
    * the departure shows it (the interior, Earth and the ring, no other group), then as the pull and the flashback show
-   * it (the interior alone), and every group is put back as it was. A program's key holds the number of lights in
+   * it (the interior alone), the run to the pods (the passage shown: G6b built 19 programs, 4.6 s frozen) and the
+   * cockpit (the pull's D1, 13 programs), and every group is put back as it was. A program's key holds the number of lights in
    * view: warm() compiled the deck with every group shown, so the lounge's first shot built its 24 programs again in
    * its first frame (1.3 s frozen, hitch probe on the A500). `compile` must do its work at once (renderer.prewarm
    * does: it compiles synchronously, then links in the background); the promise is for when the links are done.
    */
-  warmDeck(compile: (scene: THREE.Scene, cam: THREE.Camera) => Promise<unknown> | void, states: ('depart' | 'deck')[] = ['depart', 'deck']): Promise<unknown> {
+  warmDeck(compile: (scene: THREE.Scene, cam: THREE.Camera) => Promise<unknown> | void, states: ('depart' | 'deck' | 'run' | 'cockpit')[] = ['depart', 'deck', 'run', 'cockpit']): Promise<unknown> {
     const linked: (Promise<unknown> | void)[] = [];
     const groups: THREE.Object3D[] = [this.earth.group, this.ring, this.mars, this.giant, this.giantRing, this.home, this.interior.group, this.ship.group, this.ins.cockpit, this.sunDisc];
     const was = groups.map((o) => o.visible), sun = this.sunLight.intensity;
@@ -325,14 +326,16 @@ export class Cinematic {
     cam.updateMatrixWorld();
     try {
       for (const s of states) {
-        this.setVisible('interior');
+        this.setVisible(s === 'cockpit' ? 'cockpit' : 'interior');
         if (s === 'depart') this.earth.group.visible = this.ring.visible = true;
+        this.interior.passage.show(s === 'run');
         this.scene.updateMatrixWorld(true);
-        linked.push(compile(this.scene, cam));
+        linked.push(compile(this.scene, s === 'cockpit' ? this.camera : cam));
       }
     } finally {
       groups.forEach((o, i) => (o.visible = was[i]));
       this.sunLight.intensity = sun;
+      this.interior.passage.show(false);
     }
     return Promise.all(linked);
   }

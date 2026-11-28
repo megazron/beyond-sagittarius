@@ -6,6 +6,44 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## 2026-11-28 evening: lounge freeze, E2/E3, glitch sweep (pods agent 7: worktree ~/bs-pods9, branch pods9 from main 397f9c95; captures ~/bs-cap/pods7 a, b)
+NOT signed off (only the owner does that). What I changed, what the checks say, what still looks wrong.
+- LOUNGE FIRST-SHOT FREEZE, at the cause: Cinematic.warmDeck(compile, states) shows the deck as each part of the opening
+  really shows it (depart: interior + Earth + ring; deck: interior alone (pull, level 6 memory); run: interior with the
+  passage shown; cockpit) and calls renderer.prewarm for each (sync compile, background link), then puts every group
+  back. main.ts films() calls it under the take-off's black; a cheat jump into the opening waits for it under black
+  (warmHold) before seeking. renderer.prewarmLens() compiles the DOF pass for composer.readBuffer: after the deck was
+  warm the lounge's first shot still built ONE program, the lens (key "..,STEP,1.00"), 1.5 s.
+  MEASURED (GPU take b, honest New Game from the Vault, ?prologue=0): no hitch at the lounge's first shot any more
+  (was 1.27 s / 24 programs). Left in that take: Vault 1.9 s + 2.6 s (narrator, frozen files: not mine), D1 (pull's
+  first cockpit shot) 0.77 s / 13 programs and G6b (the run) 4.6 s / 19 programs: the 'run' and 'cockpit' states were
+  added AFTER take b (commit 2 on pods9), NOT yet measured on the GPU.
+- E2 other answer: Lyrra's look goes to Bolzar lerped 45% to the lens (face 3/4, not her back); Nuvexa's extra slide
+  0.35 m and 0.35 m away from the lens (passes clear behind her, not through her into Draxum); Nuvexa looks between
+  Lyrra's hand and the lens (was side-on); lens 33 mm, +0.06 m higher (sofa strip). E3: lens 60 from head(drx)+(0.6,
+  -0.2,1.9), aim 45% to Bolzar: Lyrra's head is off the left edge (probe scr x -1.3). TRAP: further aft (x +1.2) the
+  lens is behind the aft wall on ultra: the whole shot was BLACK on the GPU (take a) while SwiftShader web drew it.
+- GRASS: world/grass.ts has 6 clearing slots (was 4). Episode Three's dug field takes one (trample(), radius 5.5):
+  level 21's low harvest shots no longer look through blades. The camp clearing is 8.5 (was 6.5): level 14's night
+  scene over his shoulder (cover.ots) was a frame of grass.
+- FADES: ui.fade('black'|'white', 1, <=0.05) now goes up at once (was set in the next rAF, after the frame that it
+  should hide was drawn: the fight's spawn and stage moves showed for a frame, sweep G07). Last call wins (fadeSeq).
+- G08 GEOMETRY: three r187 counts info.memory.geometries up on first use and down ONLY on dispose(); a geometry
+  dropped and garbage collected is never counted down, and its VAO state (with attribute refs) stays until dispose. So
+  the sweep's 932 -> 3000 is partly counter, partly real. Real finding (leak_probe with the new "in a scene" list,
+  ~/bs-cap/pods7/leak_on.log): at level 21 the harvest's sheaves were 719 CylinderGeometry + 366 CapsuleGeometry, one
+  mesh per stalk, 30 sheaves left standing in the field. Now one merged geometry shared by every sheaf (commit 2).
+  core/geosweep.ts: every 4 s, a geometry that was in world/cine/stage scene and is gone two looks running is disposed
+  (comes back = re-uploaded and never swept again; ?geosweep=0 turns it off; __bs.geoCensus() has sweep and heap).
+- SEEN IN GPU TAKE b (~/bs-cap/pods7/b, contact sheets ~/bs-cap/pods7/look/b_*), STILL WRONG: level 21's first harvest
+  wide is half filled by a blurred dark bough at the right (a forest tree the cutscene's checks do not count); level 14's
+  "Big one walks tonight" over-the-shoulder shot has no Oom-Sa in it now (no grass either: look at where she is pinned
+  vs. the shot); the L14.fight1 jump stops on "How hard should fights be?" (cheat jumps should answer it); level 20's
+  night scene is still not reached by a jump (L20.scene1 stands at the fire for 30 s). E3 with the other answer reads
+  (Draxum's face, Bolzar, Nuvexa at his side) but is still a close cluster.
+- CI on 3b656786: levels_smoke failed at the trader after level 22 ("before trade: talk None"); a local repro on the
+  same build (L21.dec4 -> 22 -> trader, ~/bs-cap/pods7/trader) talks fine. combat bow-arms failed (known flake).
+
 ## 2026-11-28 later: pods leftovers, sixth pass (pods agent 6: worktree ~/bs-podsw, branch pods8 = pods7 + my work, rebased on main; captures ~/bs-cap/pods6 r1, r2)
 NOT signed off (only the owner does that). What I changed, what the checks say, what still looks wrong.
 - E1 -> E2 JUMP (CI 46123671300, continuity, _a, _b: "social 1.28 m in 0.1 s off screen"), at the cause: E2's restage

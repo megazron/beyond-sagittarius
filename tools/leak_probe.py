@@ -20,6 +20,7 @@ def main():
     ap.add_argument("--chunks", type=int, default=12)
     ap.add_argument("--rounds", type=int, default=60)
     ap.add_argument("--json", default="")
+    ap.add_argument("--query", default="", help="more URL params, e.g. geosweep=0")
     a = ap.parse_args()
     if a.dist: smoke.DIST = pathlib.Path(a.dist).resolve()
     httpd = smoke.serve(a.port)
@@ -28,7 +29,7 @@ def main():
     with sync_playwright() as pw:
         b = smoke.launch(pw); ctx = b.new_context(viewport={"width": 640, "height": 360}); page = ctx.new_page()
         ctx.add_init_script("localStorage.setItem('bs-consent-v1', '1')")
-        page.goto(f"http://127.0.0.1:{a.port}/index.html?prologue=0&quality=web&geocensus=1&cheat={a.start}&cgo=1&cpick=a", wait_until="domcontentloaded", timeout=180000)
+        page.goto(f"http://127.0.0.1:{a.port}/index.html?prologue=0&quality=web&geocensus=1&cheat={a.start}&cgo=1&cpick=a{'&' + a.query if a.query else ''}", wait_until="domcontentloaded", timeout=180000)
         page.wait_for_function("window.__bs && window.__bs.ready && __bs.state === 'game'", timeout=300000)
         ev = page.evaluate
         t0 = time.time()
