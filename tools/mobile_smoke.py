@@ -376,6 +376,14 @@ def run_device(p, tag, device_name, landscape, shots, port, failures, log):
 
     # ---- Chapter Two on a phone: codex, minigame, discovery, dialogue ----
     # Episode Two's level 12 (src/game/episode2.ts): the stranger met, resin and cord in the bag, the hafted point to make
+    # the wake's closing beat (the Ledger's questions) may be playing or due: let it play out first
+    for _ in range(80):
+        if not ev("!!(__bs.mystery && (__bs.mystery.holding || __bs.mystery.playing))"):
+            break
+        if ev("__bs.mode") == "scene":
+            ev("__bs.skip()")
+        ev("__bs.step(0.3)")
+        time.sleep(0.1)
     ev("""(() => { const s = __bs.save; s.level = 12; s.completed = [1,2,3,4,5,6,7,8,9,10,11]; s.flags.crewCamp = true; s.flags.ch2Intro = true;
         for (const k of ['e2.l11.intro', 'e2.snareSet', 'e2.voiceDone', 'e2.met', 'e2.l12.glue']) s.flags[k] = true;
         s.discoveries = ['knapping', 'cordage']; Object.assign(s.inventory, { resin: 2, cord: 1, branch: 2 }); })()""")

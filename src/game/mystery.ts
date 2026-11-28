@@ -82,7 +82,8 @@ export function recapLines(s: SaveData): { lines: string[]; days: number } | nul
 export function recapDue(s: SaveData, mode: 'always' | 'break' | 'never' = 'break', now = Date.now()): boolean {
   if (mode === 'never' || s.replay || s.flags.openingLive || !MYSTERY) return false;
   if (mode === 'always') return true;
-  return !s.savedAt || now - s.savedAt > 20 * 60 * 1000;
+  // a save without a real time stamp (written by hand, tests) has no break to recap
+  return s.savedAt > 1.6e12 && now - s.savedAt > 20 * 60 * 1000;
 }
 
 /** The beat for the end of level n, if it has not played on this save (never on a replay). */

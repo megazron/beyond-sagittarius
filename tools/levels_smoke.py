@@ -828,6 +828,18 @@ def main():
         page.keyboard.press("KeyC")
         close_menus()
 
+        # ---- the last level's closing beat (the Ledger's questions) plays once the game is free: let it, then skip it ----
+        for _ in range(120):
+            if not ev("!!(__bs.mystery && (__bs.mystery.holding || __bs.mystery.playing))"):
+                break
+            if ev("__bs.mode") == "scene":
+                ev("__bs.skip()")
+            if ev("!document.getElementById('modal').classList.contains('hidden')"):
+                page.keyboard.press("Escape")
+            ev("__bs.step(0.3)")
+            time.sleep(0.1)
+        else:
+            failures.append(f"the last level's closing beat never let go: {ev('__bs.mystery.why')}")
         # ---- discoveries: save, warnings, codex, planned entries stay locked ----
         disc = ev("__bs.save.discoveries")
         log("discoveries:", disc)

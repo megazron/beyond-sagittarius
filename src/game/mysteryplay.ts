@@ -142,7 +142,7 @@ export class MysteryPlay {
         });
         break;
       }
-      case 'dotrings': at(this.ground(p.x, p.z)); break;
+      case 'dotrings': { const c = this.h.world.layout.camp; at(c.distanceTo(p) < 20 ? this.ground(c.x, c.z) : this.ground(p.x, p.z)); break; }
       case 'trunkmarks': at(this.open(p.clone().addScaledVector(f, 2.4).addScaledVector(r, 0.8))); g.lookAt(p.x, g.position.y, p.z); break;
       case 'skyform': at(p.clone().addScaledVector(f, 260).add(V(0, 120, 0))); g.lookAt(p.x, g.position.y, p.z); g.rotateY(Math.PI / 2); break;
       case 'groundline': at(this.ground(p.x + r.x * 3, p.z + r.z * 3)); g.lookAt(g.position.clone().add(f)); g.position.y -= 0.02; break;
