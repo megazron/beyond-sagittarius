@@ -69,6 +69,8 @@ export interface CutsceneCtx {
   onDone: () => void;
   /** Can a camera stand here? Walls, trees, the ground. */
   cameraOk?: (p: THREE.Vector3) => boolean;
+  /** Is there something just in front of a camera at `from` looking at `to` (boughs, a rock): the frame would be filled by it. */
+  nearBlocked?: (from: THREE.Vector3, to: THREE.Vector3) => boolean;
   /** Is a prop (a post, a frame, a wall) between the camera and this point? */
   lineBlocked?: (from: THREE.Vector3, to: THREE.Vector3) => boolean;
 }
@@ -174,6 +176,21 @@ export class Cutscene {
     return cost;
   }
 
+  /** A set-up whose camera is inside something (a rock, a crown's boughs, the ground) or looks through boughs close to
+   *  the lens: brought in along its own line towards what it looks at until it is clear, or up a little. The swing in
+   *  clearShot only runs for coverage built on a speaker; a set-up aimed at a place stayed where it was, and at night
+   *  on levels 20 and 21 and at level 13's shelter the camera sat in a rock or behind a fir branch for seconds. */
+  private clearSetUp(s: Shot) {
+    const ok = this.ctx.cameraOk; if (!ok) return;
+    const near = this.ctx.nearBlocked, d = s.to.clone().sub(s.from), len = d.length();
+    const bad = (p: THREE.Vector3) => !ok(p) || !!near?.(p, s.to);
+    if (len < 0.5 || !bad(s.from)) return;
+    const p = new THREE.Vector3();
+    for (const k of [0.12, 0.22, 0.32, 0.42, 0.52, 0.6]) {
+      for (const up of [0, 0.4, 0.9]) { p.copy(s.from).addScaledVector(d, k); p.y += up; if (!bad(p)) { s.from.copy(p); return; } }
+    }
+  }
+
   /** Swing the camera around the speaker to the nearest angle that sees them clearly. */
   private clearShot(a: Character, h: THREE.Vector3, s: Shot) {
     const base = s.from.clone().sub(h);
@@ -271,6 +288,7 @@ export class Cutscene {
       }
       this.shotBeat = this.i;
       this.shot = b.shot(); this.shotT = 0; this.shotLen = Math.max(this.left, 6); this.fresh = true;
+      this.clearSetUp(this.shot);
       const fov = this.shot.fov ?? this.baseFov, cam = this.ctx.camera;
       if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
     }
