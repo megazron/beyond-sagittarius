@@ -517,8 +517,9 @@ function playOpening(withCity: boolean, replay: boolean, from: 'vault' | 'city' 
     if (seekTo !== undefined) cine.seek(seekTo);
   };
   const city = () => (withCity ? playPrologue(() => titleCard(films, 'takeoff.card')) : films());
-  // (MegaZroN's cold open is not played again on New Game once it played before the title on this device)
-  if (from === 'films') films(); else if (from === 'city' || (!replay && entrySeen())) city(); else playVault('intro', city);
+  // (MegaZroN's cold open is not played again on New Game once it played before the title on this device; the cheat
+  // menu's jump to the Vault still plays it)
+  if (from === 'films') films(); else if (from === 'city' || (!replay && !inCheatSlot() && entrySeen())) city(); else playVault('intro', city);
 }
 
 /** Black, then one line: the planet and the year (or, after the take-off, where the liner is). Nothing else. */
