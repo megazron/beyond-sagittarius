@@ -886,7 +886,7 @@ export class Cinematic {
         // she comes to rest in her own lane, in front of Lyrra on the window side, about 0.65 m from her
         nuvTo.set(Math.max(n0.x, l.x - 0.45), n0.y, n0.z);
         E2SIDE.set(nuvTo.x - l.x, 0, nuvTo.z - l.z).normalize(); E2CAM.set(E2SIDE.z, 0, -E2SIDE.x);
-        put(lyr, l.x, l.z, yawOf(E2CAM.clone().multiplyScalar(0.85).addScaledVector(E2SIDE, 0.5)));
+        put(lyr, l.x, l.z, yawOf(E2CAM.clone().multiplyScalar(0.95).addScaledVector(E2SIDE, 0.35)));
         put(nuv, n0.x, n0.z, yawOf(E2CAM.clone().multiplyScalar(0.8).addScaledVector(E2SIDE, -0.6)));
         only(nuv, lyr); nuvFrom.copy(n0); lyr.setHold(null); nuv.setHold(null);
         lightWas.copy(intr.mainLight.position);
@@ -901,11 +901,14 @@ export class Cinematic {
         const slide = D * (1 - (1 - u) * (1 - u)) + (caught ? 0 : 0.45 * smoothstep(0.5, 1.2, local));
         nuv.root.position.x = nuvFrom.x + slide;
         // (her eyes on Nuvexa's face, not down at the hand: looking down, her hair fell over her face, q2 stills)
-        if (!caught) lyr.setLookTarget(local > 0.3 ? at(3.2, -0.8, -1.6) : head(nuv)); else lyr.setLookTarget(head(nuv, -0.05));
+        // (and up, half to the lens: turned level to Nuvexa her long fringe hung over her whole face, r2 GPU; as in F4, her head
+        // tipped back lets the hair fall behind it)
+        const up = head(nuv, 0.35).lerp(head(lyr).lerp(head(nuv), 0.5).addScaledVector(E2CAM, 2.0), 0.35); // (towards where E2's lens is)
+        if (!caught) lyr.setLookTarget(local > 0.3 ? at(3.2, -0.8, -1.6) : up); else lyr.setLookTarget(up);
         // (Nuvexa's free arm a little out for balance; the other goes to Lyrra by its hold)
         nuv.setLimbs(mixLimbs(STANDING, { ...FALL.spread }, 0.35)); nuv.setFace({ fear: 0.8, open: 0.4 }); nuv.setLookTarget(head(lyr, -0.1));
         // (Lyrra upright, her weight back against the slide: bent forward her hair hid her face)
-        lyr.setLimbs(STANDING); lyr.setHairWeight(0.6); lyr.setFace({ frown: 0.5 * g, open: 0.2 + 0.2 * g });
+        lyr.setLimbs(STANDING); lyr.setHairWeight(1); lyr.setFace({ frown: 0.5 * g, open: 0.2 + 0.2 * g });
         // the two hands meet between them, a little towards the lens: hers out to Nuvexa's, and Nuvexa's out to hers
         const lc = lyr.chest.getWorldPosition(new THREE.Vector3()), nc = nuv.chest.getWorldPosition(new THREE.Vector3());
         const meet = lc.clone().lerp(nc, 0.5).addScaledVector(E2CAM, 0.22).add(V(0, -0.08, 0));
@@ -916,7 +919,7 @@ export class Cinematic {
         const m = meet.clone();
         // a two-shot from the lens side: both faces, the hands in the middle of the frame
         // (from a little below the hands: under the fringe, faces up)
-        lens(30); this.camera.position.copy(m).addScaledVector(E2CAM, 2.0).add(V(0, -0.2, 0)); this.lookTarget.copy(m).add(V(0, 0.12, 0));
+        lens(30); this.camera.position.copy(m).addScaledVector(E2CAM, 2.0).add(V(0, -0.05, 0)); /* (from -0.2 the sofa's back crossed the frame's foot, r2) */ this.lookTarget.copy(m).add(V(0, 0.12, 0));
         // a key on the faces from in front of Lyrra's, above the lens (from the ceiling's lamp, over and behind her, her face was
         // half in shadow, q5 GPU); the lamp moved, not turned up: the deck's power reads off its intensity
         { const hl = intr.group.worldToLocal(head(lyr, -0.12)), f = E2CAM.clone().multiplyScalar(0.8).addScaledVector(E2SIDE, 0.6); intr.mainLight.position.set(hl.x + f.x * 1.5, hl.y + 0.9, hl.z + f.z * 1.5); }
@@ -929,7 +932,7 @@ export class Cinematic {
     shotAt(S + 62.9, S + 65.8, {
       enter: () => { lyr.setHold(null); nuv.setHold(null); lyr.setHairWeight(1); intr.mainLight.position.copy(lightWas); const p = drx.root.position; put(drx, p.x, p.z, -0.35); put(bol, p.x + 0.45, p.z - 0.2, -0.9); /* (where E1's slide left him, against Draxum) */ this.bolY0 = bol.root.position.y; this.drxGive = 0; }, // Bolzar has fallen against him
       update: (k, local) => {
-        lens(35); const h = head(drx, -0.3); this.camera.position.copy(h).add(V(-0.7, -0.3, 2.1)); this.lookTarget.copy(h).add(V(0.3, 0, 0)); this.shake = 0.02;
+        lens(35); const h = head(drx, -0.3); this.camera.position.copy(h).add(V(0.3, -0.3, 2.1)); /* (aft of him, not fore: with Draxum aft by Bolzar, from 0.7 fore Lyrra's and Nuvexa's heads were between the lens and his face, r2) */ this.lookTarget.copy(h).add(V(0.3, 0, 0)); this.shake = 0.02;
         drx.setLimbs(mixLimbs(STANDING, { ...STANDING, legL: [0.45, -1, 0.1], shinL: [0.2, -1, 0], legR: [-0.4, -1, -0.15], shinR: [-0.2, -1, 0], armL: [1, -0.1, 0.35], foreL: [0.9, 0.2, 0.5] }, smoothstep(0, 0.8, local)));
         drx.setFace({ frown: 0.7, open: 0.2 }); drx.setLookTarget(head(bol));
         bol.setLimbs(mixLimbs(STANDING, FALL.spread, 0.5)); bol.setFace({ fear: 0.6 }); bol.setLookTarget(head(drx));
