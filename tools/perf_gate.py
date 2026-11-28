@@ -112,7 +112,8 @@ with sync_playwright() as pw:
         if clock != 600: fails.append(f'{q}: the clock was not held on arrival (clock {clock})'); page.close(); continue
 
         def wait_in(deadline, ticking=False):
-            """Until nothing is pending (and no request for 0.3 s); the atlas bakes only in ticks, so a step need not wait for it."""
+            """Until nothing is pending (and no request for 0.3 s). The atlas bakes only in ticks, so it is waited for only when
+            `ticking` (asked once the ticks that bake it are done); a step never waits for it before its own tick."""
             quiet = None; waited = 0
             while True:
                 why = [w for w in page.evaluate('__bs.settled()') if ticking or w != 'card atlas baking']
@@ -133,8 +134,17 @@ with sync_playwright() as pw:
         try:
             dl = time.time() + a.settle * 2
             for _ in range(3): step(1e-9, dl)
-            for _ in range(10): step(0.4, dl, ticking=True)
-            wait_in(dl, ticking=False)
+            # the ticks bake the atlas (a row a tick), so they must not wait for it first: when the city came on screen
+            # before its precompile ended (the title card waits 25 s at most; a slow runner took longer), the prebake under
+            # the card is skipped and the atlas is baked in play. Waiting for it before each tick, with the clock held, was a
+            # wait for something that could not move (CI 46123671300, web: 'did not settle in 600 s (card atlas baking)')
+            for _ in range(10): step(0.4, dl)
+            extra = 0
+            while 'card atlas baking' in page.evaluate('__bs.settled()'):
+                if time.time() > dl: raise NotSettled('card atlas baking (in play)')
+                step(0.1, dl); extra += 1
+            if extra: print(q, f'arrival: the card atlas was baked in play, {extra} more ticks of 0.1 s (no prebake under the card)', flush=True)
+            wait_in(dl, ticking=True)
         except NotSettled as e:
             fails.append(f'{q} arrival: did not settle in {a.settle * 2:.0f} s ({e})'); print(fails[-1], flush=True); page.close(); continue
 

@@ -598,7 +598,7 @@ export class Cinematic {
     const keepSit = () => { const k: Partial<Record<CrewId, CrewPose>> = {}; for (const [id, p] of Object.entries(this.pullPose)) if (p === 'sit') k[id as CrewId] = p; this.pullPose = k; };
     /** The party at the window (A to C: facing each other and the phone) or the five looking out (F and G). */
     const group = (party = false) => {
-      put(drx, 2.3, -1.9, party ? -0.7 : Math.PI * 1.15); put(nuv, 1.4, -1.95, party ? 1.52 : Math.PI * 0.82); put(sky, 2.7, -2.55, Math.PI);
+      put(drx, party ? 2.3 : 3.45, party ? -1.9 : -2.0, party ? -0.7 : Math.PI * 1.15); // (for the pull aft of Lyrra, by Bolzar: at 2.3 he stood in Nuvexa's lane and she slid into him) put(nuv, 1.4, -1.95, party ? 1.52 : Math.PI * 0.82); put(sky, 2.7, -2.55, Math.PI);
       if (party) { sit(lyr, SEAT_L); sit(bol, SEAT_B); return; }
       put(lyr, 3.2, -1.5, Math.PI * 1.1); put(bol, 4.0, -2.2, Math.PI * 1.2); this.seated.clear();
     };
@@ -856,12 +856,14 @@ export class Cinematic {
       update: (k, local) => {
         lens(24); this.camera.position.copy(at(-1.6, -0.8, 2.6)); this.lookTarget.copy(at(1.6, -1.2, -1.3)); this.shake = 0.015;
         // how far each one goes before their feet hold: Nuvexa furthest (she goes past Lyrra, E2), Bolzar least (the aft wall)
-        const SLIDE: Record<string, number> = { social: 1.3, builder: 0.3, explorer: 0.6, scientist: 0.5, strong: 0.7, medic: 0.15 };
+        const SLIDE: Record<string, number> = { social: 1.6, builder: 0.3, explorer: 0.6, scientist: 0.5, strong: 0.4, medic: 0.15 };
         // his own slide follows the reflex: caught on the console's edge, or carried into the sofa (eased, never a jump)
         const want = this.passed('e1.brace') ? 0.12 : this.answered('e1.brace') ? 1.0 : 0.5;
         this.zenSlide += (want - this.zenSlide) * (1 - Math.exp(-(1 / 60) * 4)); SLIDE.scientist = this.zenSlide;
-        const sl = (c: Character, go: number) => { const g = smoothstep(go, go + 1.6, local); if (!slideFrom.has(c)) slideFrom.set(c, c.root.position.x); c.root.position.x = slideFrom.get(c)! + g * SLIDE[c.id]; c.setLimbs(mixLimbs(STANDING, { ...FALL.spread, legL: [0.35, -1, 0.1], legR: [-0.35, -1, -0.1] }, g * 0.6)); c.setFace({ fear: 0.5 * g }); return g; };
-        sl(nuv, 0.2); sl(bol, 0.1); sl(sky, 0.4); sl(sci, 0.5); sl(drx, 0.3); sl(lyr, 0.6);
+        const sl = (c: Character, go: number, dur = 1.6) => { const g = smoothstep(go, go + dur, local); if (!slideFrom.has(c)) slideFrom.set(c, c.root.position.x); c.root.position.x = slideFrom.get(c)! + g * SLIDE[c.id]; c.setLimbs(mixLimbs(STANDING, { ...FALL.spread, legL: [0.35, -1, 0.1], legR: [-0.35, -1, -0.1] }, g * 0.6)); c.setFace({ fear: 0.5 * g }); return g; };
+        // (Nuvexa still sliding at the cut, up her lane to Lyrra's front: E2 goes on from where she is. She used to stop here
+        // and then stand 1.28 m on, past Lyrra, at E2's first frame, CI continuity)
+        sl(nuv, 0.2, 2.8); sl(bol, 0.1); sl(sky, 0.4); sl(sci, 0.5); sl(drx, 0.3); sl(lyr, 0.6);
         floatUp(0, 0, smoothstep(0, 2.4, local) * 2.2);
         intr.alarmLight.color.copy(AMBER); intr.alarmLight.intensity = 5; // steady: the alarm's tone stopped with the cockpit shots, a flashing lamp with no alarm heard read as the sound dropping out
       },
@@ -873,21 +875,29 @@ export class Cinematic {
     // (restaged, gpu7: from every camera place tried the two had their backs to the lens, because they faced each other
     // across its line: now they stand side by side across it, each turned half to the other and half to the lens, so
     // both faces and the two hands between them read. Lyrra's RIGHT hand takes Nuvexa's LEFT wrist by the rig's reach: with the left, across her body, the reach turned her back to the lens, q4)
-    const E2CAM = V(-0.5, 0, -1.8).normalize(), E2SIDE = V(E2CAM.z, 0, -E2CAM.x).negate(); // to the lens; across it (Nuvexa's side, towards the bow)
+    // E2's two-shot is built from where E1 left them: E2SIDE from Lyrra to where Nuvexa comes to rest, E2CAM to the lens
+    // (on the room's side, E1's side of their line, so the slide keeps its screen direction)
+    const E2CAM = V(0, 0, 1), E2SIDE = V(1, 0, 0), nuvTo = new THREE.Vector3(), lightWas = new THREE.Vector3();
     const yawOf = (f: THREE.Vector3) => Math.atan2(f.x, f.z);
     shotAt(S + 61.4, S + 62.9, {
       enter: () => {
-        const l = lyr.root.position.clone();
-        put(lyr, l.x, l.z, yawOf(E2CAM.clone().multiplyScalar(0.8).addScaledVector(E2SIDE, 0.6)));
-        put(nuv, l.x + E2SIDE.x * 0.62, l.z + E2SIDE.z * 0.62, yawOf(E2CAM.clone().multiplyScalar(0.8).addScaledVector(E2SIDE, -0.6)));
-        only(nuv, lyr); nuvFrom.copy(nuv.root.position); lyr.setHold(null); nuv.setHold(null);
-      }, // where the slide left her; Nuvexa sliding past her on the lens's side of the line
+        const l = lyr.root.position.clone(), n0 = nuv.root.position.clone();
+        // she comes to rest in her own lane, in front of Lyrra on the window side, about 0.65 m from her
+        nuvTo.set(Math.max(n0.x, l.x - 0.45), n0.y, n0.z);
+        E2SIDE.set(nuvTo.x - l.x, 0, nuvTo.z - l.z).normalize(); E2CAM.set(E2SIDE.z, 0, -E2SIDE.x);
+        put(lyr, l.x, l.z, yawOf(E2CAM.clone().multiplyScalar(0.85).addScaledVector(E2SIDE, 0.5)));
+        put(nuv, n0.x, n0.z, yawOf(E2CAM.clone().multiplyScalar(0.8).addScaledVector(E2SIDE, -0.6)));
+        only(nuv, lyr); nuvFrom.copy(n0); lyr.setHold(null); nuv.setHold(null);
+        lightWas.copy(intr.mainLight.position);
+      }, // where the slide left them: Nuvexa still sliding up to Lyrra
       update: (k, local) => {
         // Lyrra's choice: her hand closes on Nuvexa's wrist, or she turns for Bolzar and Nuvexa slides on past her hand
         const caught = !this.answered('e1.reach') || this.chose('e1.reach', 'nuvexa');
         const g = caught ? smoothstep(0.0, 0.55, local) : 0.35 * smoothstep(0.0, 0.5, local);
-        // Nuvexa slides aft past her (towards +x, the hatch's end) and is stopped by the hand, or goes on past it
-        const slide = caught ? 0.35 * smoothstep(0.0, 0.7, local) : 0.35 * smoothstep(0.0, 0.7, local) + 0.9 * smoothstep(0.6, 1.4, local);
+        // the last of her slide at the speed E1 left her with (about 0.55 m/s), easing to rest by Lyrra; without the hand
+        // she goes on aft past her, into Draxum's side (the thud and the yelp)
+        const D = nuvTo.x - nuvFrom.x, T = clamp((2 * D) / 0.55, 0.2, 0.9), u = Math.min(1, local / T);
+        const slide = D * (1 - (1 - u) * (1 - u)) + (caught ? 0 : 0.45 * smoothstep(0.5, 1.2, local));
         nuv.root.position.x = nuvFrom.x + slide;
         // (her eyes on Nuvexa's face, not down at the hand: looking down, her hair fell over her face, q2 stills)
         if (!caught) lyr.setLookTarget(local > 0.3 ? at(3.2, -0.8, -1.6) : head(nuv)); else lyr.setLookTarget(head(nuv, -0.05));
@@ -905,7 +915,10 @@ export class Cinematic {
         const m = meet.clone();
         // a two-shot from the lens side: both faces, the hands in the middle of the frame
         // (from a little below the hands: under the fringe, faces up)
-        lens(30); this.camera.position.copy(m).addScaledVector(E2CAM, 2.0).add(V(0, -0.3, 0)); { const lc2 = intr.group.worldToLocal(this.camera.position.clone()); if (lc2.z < -3.2) { lc2.z = -3.2; this.camera.position.copy(intr.group.localToWorld(lc2)); } } this.lookTarget.copy(m).add(V(0, 0.12, 0));
+        lens(30); this.camera.position.copy(m).addScaledVector(E2CAM, 2.0).add(V(0, -0.2, 0)); this.lookTarget.copy(m).add(V(0, 0.12, 0));
+        // a key on the faces from in front of Lyrra's, above the lens (from the ceiling's lamp, over and behind her, her face was
+        // half in shadow, q5 GPU); the lamp moved, not turned up: the deck's power reads off its intensity
+        { const hl = intr.group.worldToLocal(head(lyr, -0.12)), f = E2CAM.clone().multiplyScalar(0.8).addScaledVector(E2SIDE, 0.6); intr.mainLight.position.set(hl.x + f.x * 1.5, hl.y + 0.9, hl.z + f.z * 1.5); }
       },
     });
     const nuvFrom = new THREE.Vector3();
@@ -913,7 +926,7 @@ export class Cinematic {
     // E3 Draxum plants his feet and takes Bolzar's weight on one arm; eyes on Bolzar, not on us
     this.vcue(S + 63.2, 'cine.line8', () => { ui.subtitle('cine.line8', 'crew.strong.name'); talk(drx, 'cine.line8'); });
     shotAt(S + 62.9, S + 65.8, {
-      enter: () => { lyr.setHold(null); nuv.setHold(null); lyr.setHairWeight(1); const p = drx.root.position; put(drx, p.x, p.z, -0.35); put(bol, p.x + 0.65, p.z - 0.25, -0.9); this.bolY0 = bol.root.position.y; this.drxGive = 0; }, // Bolzar has fallen against him
+      enter: () => { lyr.setHold(null); nuv.setHold(null); lyr.setHairWeight(1); intr.mainLight.position.copy(lightWas); const p = drx.root.position; put(drx, p.x, p.z, -0.35); put(bol, p.x + 0.45, p.z - 0.2, -0.9); /* (where E1's slide left him, against Draxum) */ this.bolY0 = bol.root.position.y; this.drxGive = 0; }, // Bolzar has fallen against him
       update: (k, local) => {
         lens(35); const h = head(drx, -0.3); this.camera.position.copy(h).add(V(-0.7, -0.3, 2.1)); this.lookTarget.copy(h).add(V(0.3, 0, 0)); this.shake = 0.02;
         drx.setLimbs(mixLimbs(STANDING, { ...STANDING, legL: [0.45, -1, 0.1], shinL: [0.2, -1, 0], legR: [-0.4, -1, -0.15], shinR: [-0.2, -1, 0], armL: [1, -0.1, 0.35], foreL: [0.9, 0.2, 0.5] }, smoothstep(0, 0.8, local)));

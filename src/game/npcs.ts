@@ -383,7 +383,12 @@ export class Npcs {
     if (!this.built) this.build();
     if (!at) { this.pins.delete(id); if (n && home) { n.home.copy(home); n.target.copy(home); } return; }
     this.pins.set(id, { at: at.clone(), yaw });
-    if (n) { n.pos.copy(at); n.target.copy(at); n.yaw = yaw; n.speed = 0; n.pose = 'idle'; }
+    if (n) {
+      n.pos.copy(at); n.target.copy(at); n.yaw = yaw; n.speed = 0; n.pose = 'idle';
+      // the body on its mark now, not at the next update: a scene started at once builds its first shot on where she
+      // stands (level 13's pyrite scene opened on 4 s of empty trees: the shot was aimed at her before she was moved)
+      n.fig.root.position.copy(at); n.fig.root.rotation.y = yaw; n.fig.root.visible = true; n.fig.root.updateMatrixWorld();
+    }
   }
   figure(id: NpcId) { if (!this.built) this.build(); return this.list.find((x) => x.id === id)?.fig ?? null; }
 }

@@ -540,7 +540,9 @@ function titleCard(then: () => void, key = 'city.title', until?: Promise<unknown
   // a card that waits for what comes after it: it stays up until that is ready (at least its usual 3.4 s), the next
   // scene is started under it, and only then does it go. It used to leave on its timer whatever was ready: on the A500
   // the city then took 6 to 7 s more, on a black screen with nothing on it (glitch sweep 2026-11-27)
-  void Promise.all([new Promise((r) => setTimeout(r, 3400)), Promise.race([until, new Promise((r) => setTimeout(r, 25000))])]).then(() => {
+  // (test: ?cardwait=<ms> waits less, as a slow machine's precompile outlasting the card: tools/perf_gate.py --query cardwait=500)
+  const CARD_WAIT = +(new URLSearchParams(location.search).get('cardwait') ?? '') || 25000;
+  void Promise.all([new Promise((r) => setTimeout(r, 3400)), Promise.race([until, new Promise((r) => setTimeout(r, CARD_WAIT))])]).then(() => {
     then();
     el.style.transition = 'opacity .7s'; el.style.opacity = '0';
     setTimeout(() => el.remove(), 800);
@@ -948,8 +950,9 @@ function hitchFrame(t0: number, t1: number) {
   const r = renderer.renderer, prog = (r.info.programs?.length ?? 0), mem = r.info.memory, now = performance.now(), ms = now - t0;
   if (hitchLast.programs < 0) { hitchLast.programs = prog; hitchLast.geometries = mem.geometries; hitchLast.textures = mem.textures; return; }
   const dp = prog - hitchLast.programs, dg = mem.geometries - hitchLast.geometries, dt = mem.textures - hitchLast.textures;
-  // the new programs by name (three names each after its material's type or a ShaderMaterial's own name)
-  const names = dp > 0 && ms > 90 ? (r.info.programs as unknown as { name: string; usedTimes: number }[]).slice(-dp).map((p) => p.name).reduce((m, n) => { m[n] = (m[n] ?? 0) + 1; return m; }, {} as Record<string, number>) : undefined;
+  // the new programs by name (three names each after its material's type or a ShaderMaterial's own name; a merged
+  // body's or an onBeforeCompile material's name is "": then the two ends of its cacheKey, which say what it was built from)
+  const names = dp > 0 && ms > 90 ? (r.info.programs as unknown as { name: string; cacheKey?: string; usedTimes: number }[]).slice(-dp).map((p) => p.name || `key ${(p.cacheKey ?? '').slice(0, 80)} .. ${(p.cacheKey ?? '').slice(-80)}`).reduce((m, n) => { m[n] = (m[n] ?? 0) + 1; return m; }, {} as Record<string, number>) : undefined;
   hitchLast.programs = prog; hitchLast.geometries = mem.geometries; hitchLast.textures = mem.textures;
   if (ms > 90 && hitches.length < 400) hitches.push({ t: +(now / 1000).toFixed(2), ms: Math.round(ms), tick: Math.round(t1 - t0), draw: Math.round(now - t1), programs: dp, geometries: dg, textures: dt, where: `${state}${state === 'game' ? ` ${game?.mode} L${game?.save?.level}${combat?.encounter ? ` fight ${combat.encounter.id}` : ''}` : ''}${state === 'cinematic' ? ` ${cine.time.toFixed(1)} ${cine.shotLabel}` : ''}`, ...(names ? { names } : {}) });
 }
