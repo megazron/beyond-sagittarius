@@ -299,7 +299,7 @@ export function eyeMaterial(iris: number, glow: number, sclera = 1) {
         ${DECREEP ? /* glsl */ `
         // a living eye: a warm, slightly darker white; depth in the iris (dark limbal ring, lighter towards the pupil);
         // the upper lid's soft shadow over the top of the ball
-        vec3 scl = vec3(0.80, 0.77, 0.74) * pow(ey.r, 1.3) * 1.1;
+        vec3 scl = vec3(0.80, 0.77, 0.74) * pow(ey.r, 1.3) * 1.1 * uScl; // (uScl here too: the shaded white was only in the other path, unseen on every take)
         float limb = smoothstep(0.35, 0.95, ey.g) ;
         // pale irises read as blank, dead eyes: every iris is deepened and saturated towards its own hue
         float iLum = dot(uIris, vec3(0.3, 0.6, 0.1)); vec3 hue = mix(vec3(iLum), uIris, 1.7); hue = max(hue, vec3(0.0)) * (0.5 / max(iLum, 0.25));

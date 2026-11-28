@@ -2838,3 +2838,11 @@ Owner: "The time when all of them onboard it glitches completely. The ship is di
   getWorldDirection): four framings from the scene's own axes showed her back.
 - Still below the bar (see NOTES_EP3C.md): harvest cut and sheaf inserts mostly his coat; the climb small in frame;
   the storm still long and dark-ish; the lake creature crude.
+
+## 2026-11-28 MegaZroN v3d/v3e and the Hinglish option (narrator agent, branch mzn7)
+- Owner: "keep hinglish option as well". I added the game language 'hl' (Hinglish) on mzn7: src/i18n/hl.json (the
+  title, the menu basics and MegaZroN's lines mz.v3.1-7; every other key falls back to English), save.ts Lang type,
+  ui.ts settings rows, the index.html title button, voice.ts plays the Hindi takes for 'hl'. Anyone adding Hinglish
+  to the menu: it is already here once mzn7 lands, please build on it and do not add a second 'hl'.
+- The entrance (bs3.ts) is slower ("slow and dramatic"); the book is closed by its edge with the hand staying on the
+  cover; his walk's neck and head and his clavicles keep his standing idle's carriage (tools/build_mz_animations.py).

@@ -36,7 +36,7 @@ export function bs3Plan(lang = 'en') {
   T.pull0 = L[4] + D[3] + 2.4; L[5] = T.pull0 + 2.8; T.stop = L[5] + D[4] + 1.5;
   L[6] = T.stop + 3.0; T.lean0 = L[6] + D[5] + 1.0; L[7] = T.lean0 + 2.2;
   T.lean1 = L[7] + D[6] + 2.4;             // a held beat after the last line before he shuts the book
-  T.hook = T.lean1 + 0.9; T.up = T.hook + 1.1; T.over = T.up + 0.5; T.shut = T.over + 0.8; T.free = T.shut + 1.8;
+  T.hook = T.lean1 + 0.9; T.up = T.hook + 1.1; T.over = T.up + 0.9; T.shut = T.over + 1.5; T.free = T.shut + 1.8; // (slower round the edge and over: at 0.5 + 0.8 s the cover swung 1.5 m/s and his hand lagged it in the air, w2)
   T.hand = T.shut + 8.0; T.len = T.hand + 1.6;
   return { T, L, D };
 }
@@ -69,7 +69,7 @@ export function bs3Film(v: Vault, lang = 'en'): Film {
   const nibAt = (px: number, py: number, lift = 0) => P.pagePoint(px, py, lift);
   const INK = page.ink.filter((k) => k.t0 >= 0);
   const eye = () => v.eyesAt();
-  let trk: THREE.Vector3 | null = null, reach0: THREE.Vector3 | null = null;
+  let trk: THREE.Vector3 | null = null, reach0: THREE.Vector3 | null = null, lFrom: THREE.Vector3 | null = null;
   let eye0: THREE.Vector3 | null = null; const eyeHeld = () => eye0 ?? v.eyesAt();
   let shots: Shot[] = [];
   const lay = () => {
@@ -143,7 +143,7 @@ export function bs3Film(v: Vault, lang = 'en'): Film {
   return {
     len: T.len, handover: T.hand, lines: [],
     start: () => {
-      v.scene.add(set); void v.loadActing(); laid = false; eye0 = null; trk = null; reach0 = null;
+      v.scene.add(set); void v.loadActing(); laid = false; eye0 = null; trk = null; reach0 = null; lFrom = null;
       P.lampG.visible = false; // (its hood and bulb flared over the right of every medium shot, take r7; its light stays)
       host.root.position.set(0, -50, 0);
       key.intensity = 34; fill.intensity = 5;
@@ -215,19 +215,20 @@ export function bs3Film(v: Vault, lang = 'en'): Film {
       if (seated && ft < T.home1 + 0.15) {
         if (nibP) right = nibAt(nibP[0], nibP[1]);
         else if (ft < T.name0) right = nibAt(COL.name - 10, ROW6 - 28, 0.02 * (1 - sm(T.write0 - 0.3, T.name0, ft)) + 0.004);
+        else if (ft >= T.home1 - 0.05) right = nibAt(homeEnd[0], homeEnd[1], 0.01 * sm(T.home1 - 0.05, T.home1 + 0.15, ft)); // (the home written: it stays at its end and lifts; it went back to the home's start for 0.15 s, 9 cm a frame, probe p7)
         else { // between the name and the home: the quill lifts, holds still over the page, then goes to the home column
           const k = sm(T.home0 - 1.1, T.home0 - 0.05, ft), hop = Math.sin(Math.PI * k) * 0.02;
           right = nibAt(nameEnd[0] + (COL.from - 10 - nameEnd[0]) * k, nameEnd[1] + (ROW6 - 28 - nameEnd[1]) * k, 0.03 * sm(T.name1, T.name1 + 0.5, ft) * (1 - sm(T.home0 - 0.4, T.home0, ft)) + hop + 0.003);
         }
         if (reach0 && ft < T.write0 + 1.0) right = reach0.clone().lerp(right!, sm(T.write0 - 0.3, T.write0 + 1.0, ft));
-      } else if (seated && ft < T.free) {
+      } else if (seated) { // (and the quill stays laid down in his hand to the end: let go at T.free the arm jumped back to the clip, probe p7)
         const lift7 = 0.025 * beat(ft, L['7'] + 0.1, L['7'] + 0.5, 0.15, 0.3), k = sm(T.home1 + 0.15, T.look + 0.6, ft);
         right = nibAt(homeEnd[0], homeEnd[1], 0.01).lerp(rest, k).add(V(0, Math.sin(k * Math.PI) * 0.04 + lift7, 0));
       }
       // the left hand: flat on the left page while he talks; held down on the lifting page in the pull; a small
       // open-handed shrug on "I don't decide which"; then he takes the cover's edge, lifts it, comes round over its top
       // edge onto its back and lays it shut, and rests there a moment before he lets go
-      const shrug = beat(ft, L['6'] + 0.2, L['6'] + 1.3, 0.35, 0.6);
+      const shrug = beat(ft, L['6'] + 0.2, L['6'] + 1.3, 0.35, 1.0);
       type Hold = { at: THREE.Vector3; fingers: THREE.Vector3; palm: THREE.Vector3; rigid?: boolean };
       let left: Hold | null = null;
       const lq = P.leaf.getWorldQuaternion(new THREE.Quaternion());
@@ -240,18 +241,26 @@ export function bs3Film(v: Vault, lang = 'en'): Film {
       const hookHold = (): Hold => ({ at: onLeaf(E - 0.085, 0.05, zc), fingers: leafDir(1, -0.6, 0.12), palm: leafDir(0.35, -1, 0), rigid: true });
       const backHold = (press = 0): Hold => ({ at: onLeaf(0.26, -0.038 + press, zc), fingers: leafDir(0.25, 0, 1), palm: leafDir(0, 1, 0), rigid: true });
       const mixH = (a: Hold, b: Hold, k: number): Hold => ({ at: a.at.lerp(b.at, k), fingers: a.fingers.lerp(b.fingers, k).normalize(), palm: a.palm.lerp(b.palm, k).normalize(), rigid: true });
-      if (seated && ft > T.look - 0.3 && ft < T.lean1) left = pageHold();
-      else if (ft >= T.lean1 && ft < T.hook) left = mixH(pageHold(), hookHold(), sm(T.lean1, T.hook, ft));
+      if (ft < T.look - 0.3) lFrom = null;
+      if (seated && ft > T.look - 0.3 && ft < T.lean1) {
+        // (it comes onto the page over 2 s from where his hand is: picked up by the hold's own spring it crossed 60 cm
+        // in half a second, the fingers 10 cm a frame, probe p6)
+        left = pageHold();
+        if (!lFrom) { const hl = host.root.getObjectByName('handL'); lFrom = hl ? hl.getWorldPosition(V(0, 0, 0)) : left.at.clone(); }
+        const k = sm(T.look - 0.3, T.look + 1.7, ft); if (k < 1) left.at = lFrom.clone().lerp(left.at, k);
+      } else if (ft >= T.lean1 && ft < T.hook) left = mixH(pageHold(), hookHold(), sm(T.lean1, T.hook, ft));
       else if (ft >= T.hook && ft < T.up) left = hookHold();
       else if (ft >= T.up && ft < T.over) {
         // round the top edge: out past the edge, then onto the back
         const k = sm(T.up, T.over, ft), h = hookHold(), b2 = backHold(), out = { at: onLeaf(E - 0.03, -0.075, zc), fingers: leafDir(-0.3, 0.2, 1), palm: leafDir(-0.2, 1, 0), rigid: true }; // (under the lifted edge, not round its top: there the hand fell 19 cm short, probe p4)
-        left = k < 0.5 ? mixH(h, out, sm(0, 0.5, k)) : mixH(out, b2, sm(0.5, 1, k));
-      } else if (ft >= T.over && ft < T.free) left = backHold(-0.006 * beat(ft, T.shut, T.shut + 0.2, 0.15, 0.6));
+        // (one smooth curve through the three, not two eased halves: at the joint the fingers moved 9 cm a frame, probe p7)
+        const bz = (a: THREE.Vector3, m: THREE.Vector3, c: THREE.Vector3) => a.clone().multiplyScalar((1 - k) * (1 - k)).addScaledVector(m, 2 * k * (1 - k)).addScaledVector(c, k * k);
+        left = { at: bz(h.at, out.at, b2.at), fingers: bz(h.fingers, out.fingers, b2.fingers).normalize(), palm: bz(h.palm, out.palm, b2.palm).normalize(), rigid: true };
+      } else if (ft >= T.over) left = backHold(-0.006 * beat(ft, T.shut, T.shut + 0.2, 0.15, 0.6)); // (and it stays on the shut book: let go at T.free the arm swung back to the clip's pose, 13 cm a frame, probe p6)
       v.hand.set(right, left);
       // (flat on the page: at 0.55 the fingertips curled 3 cm into the Ledger, probe on main; the curl round the cover's
       // edge comes and goes over 0.4 s: switched in a frame, the fingers jumped 12 cm, probe p3)
-      host.setGrip('L', !seated ? null : { shape: 'relaxed', amount: 0.1 + 0.85 * sm(T.hook - 0.45, T.hook, ft) * (1 - sm(T.up, T.up + 0.4, ft)) + 0.15 * sm(T.up, T.over, ft) });
+      host.setGrip('L', !seated ? null : { shape: 'relaxed', amount: 0.1 + 0.85 * sm(T.hook - 0.45, T.hook, ft) * (1 - sm(T.up, T.up + 0.9, ft)) + 0.15 * sm(T.up, T.over, ft) });
       // --- eyes: ahead as he walks; us, held, once he stops; down to the stool as he sits; us; the nib, then us on
       // "yet", the nib for the home; us (looked up to slowly); the slips in the pull; his hand on the cover; the window ---
       const fwd = V(Math.sin(th), 0, Math.cos(th));
@@ -279,16 +288,18 @@ export function bs3Film(v: Vault, lang = 'en'): Film {
       const lean = sm(T.lean0, T.lean0 + 1.6, ft) * (1 - sm(T.lean1, T.lean1 + 1.2, ft));
       const smile = beat(ft, w7 + 2.0, w7 + 4.4, 0.5, 1.2);                              // "Try not to enjoy it.": the smallest smile, held
       const look0 = beat(ft, T.walkEnd + 0.4, L['1'] - 0.1, 0.8, 0.3);                  // the held look before he speaks: eyes narrow a touch
+      const early = beat(ft, L['1'] + 0.5, L['1'] + 1.3, 0.2, 0.8);                   // "You're early.": one brow, a dry look
+      const threat = beat(ft, w5 + 1.6, w5 + 4.0, 0.4, 1.0);                             // "somebody you like doesn't come home": the eyes narrow
+      // (owner list: more head acting on the key lines: the nods and turns about 1.5 times what they were, a dry tilt on
+      // "You're early." and the head lowered a little into the threat on "doesn't come home")
       host.setAct({
-        nod: 0.05 * six + 0.07 * read + 0.06 * write + 0.05 * lean - 0.04 * found,
-        turn: 0.06 * which - 0.03 * smile,
-        tilt: 0.07 * hole - 0.05 * more + 0.04 * which - 0.035 * smile + 0.02 * look0,
+        nod: 0.08 * six + 0.11 * read + 0.09 * write + 0.07 * lean - 0.06 * found + 0.05 * threat,
+        turn: 0.09 * which - 0.045 * smile + 0.03 * early,
+        tilt: 0.1 * hole - 0.07 * more + 0.06 * which - 0.05 * smile + 0.03 * look0 + 0.045 * early,
         chestNod: 0.02 * six + 0.02 * write,
         chestTilt: 0.02 * hole,
         shoulderL: 0.08 * shrug + 0.02 * hole, shoulderR: 0.06 * shrug,
       });
-      const early = beat(ft, L['1'] + 0.5, L['1'] + 1.3, 0.2, 0.8);                   // "You're early.": one brow, a dry look
-      const threat = beat(ft, w5 + 1.6, w5 + 4.0, 0.4, 1.0);                             // "somebody you like doesn't come home": the eyes narrow
       host.setFace({
         brow_up: 0.6 * found + 0.25 * six + 0.3 * which,
         brow_upR: 0.55 * early,
