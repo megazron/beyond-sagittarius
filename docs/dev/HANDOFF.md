@@ -51,7 +51,7 @@ here is signed off (only the owner does that). The opening code word goes to the
 - CAPTURES: put the point in the capture URL, e.g. `...index.html?quality=ultra&cheat=open.run&cgo=1&cpick=b` (the pods
   run with the second answers), `&cheat=L15.dec2&cgo=1`. Keep one honest full playthrough per release batch.
 
-## 2026-11-28 the run to the pods, fourth pass (pods agent 4: worktree ~/bs-podsw, branch pods5 = pods4 rebased on main f9c08a14; dev runs and captures ~/bs-cap/pods5)
+## 2026-11-28 the run to the pods, fourth pass (pods agent 4: worktree ~/bs-podsw, branch pods6 = pods4 + my work rebased on main d4baa58f (pods5 was the same on f9c08a14); dev runs and captures ~/bs-cap/pods5)
 NOT signed off (only the owner does that). STATUS: see the last bullet.
 - THE ARM SNAP (glitch_pull, "upperarmL turned 126 degrees in one frame" 2.3 m into the passage): measured per tick with a
   probe (~/bs-cap/pods5/probe2.py, a TMPDBG hook `__bs.cineDbg()` in main.ts that is NOT committed): the rail hand,
@@ -78,6 +78,16 @@ NOT signed off (only the owner does that). STATUS: see the last bullet.
   boughs or a rock within 1.6 m in front are brought in along their line or up (cutscene.ts clearSetUp, game.ts
   cameraOk/nearBlocked). Level 13's shelter rocks are not obstacles, so that one may not be cured.
 - continuity_check.py no longer crashes printing a break with no shot.
+- The continuity check measures a hand round someone's arm to the sleeve (radius 0.05), not to the arm's axis.
+- RESULTS (build p7 = eaa3d246; the last commit only changes that measurement): glitch_check --only pull clean;
+  continuity none, a ok; b (core, both hurt) had one 7 cm "grip" on Draxum's hand on Bolzar's arm, cured by the sleeve
+  measure (not re-run locally: CI runs it). GPU takes via the cheat jumps (~/bs-cap/pods5/gpu7, gpu6; plan_p7.json,
+  run.sh) sent as Downloads/BS_Game_v1.1/pods_continuity/AFTER4_* with NOTES_4_fourth_pass_GPU.md.
+- STILL WRONG (seen in the GPU clips): E2 (three camera places, the two still have their backs to the lens); with the
+  core Zenvik is at the edge of P5, not readable; P2's near-wall lamp streak and a passing arm in its corner; F4
+  Lyrra's face behind her hair; no whole-body mocap under the held hands; level 13's jump opens with the player camera
+  in the shelter's rock and boughs (the shelter's rocks are not obstacles); level 21's house scene still puts a camera
+  in a rock for a moment (clearSetUp did not catch it); level 20 not shown by the clip.
 
 ## 2026-11-27 night, the run to the pods, third pass (cheat agent 2 took it over: worktree ~/bs-podsw, branch pods4 = pods3 rebased on cheat1; dev runs ~/bs-cap/pods1/dev)
 NOT on main, not signed off. pods4 = pods3 + my fixes, on top of the cheat menu branch so `?cheat=open.run&cgo=1&cpick=a|b`
