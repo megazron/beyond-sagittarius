@@ -1296,7 +1296,7 @@ export class Cinematic {
               const armNow = cling ? world(lead.clone().lerp(towd, 0.38)).add(V(0, 0.12, 0)) : m;
               const armNext = cling ? world(info.get(role.partner!)!.next.clone().lerp(me.next, 0.38)).add(V(0, 0.12, 0)).sub(step) : mNext;
               hold[towHand] = { at: armNext, fingers: role.leads ? d : d.clone().negate(), palm: role.leads ? V(0, 1, 0) : V(0, -1, 0), radius: cling ? 0.05 : 0.026, grasp: true };
-              if (tau - joined.get(key)! > SETTLE) this.runHolds.push({ id, side: towHand, at: armNow, what: cling ? 'the arm that tows him' : 'tow' });
+              if (tau - joined.get(key)! > SETTLE) this.runHolds.push({ id, side: towHand, at: armNow, what: cling ? 'the arm that tows him' : 'tow', r: cling ? 0.05 : 0 }); // (a hand round an arm is on its sleeve, an arm's half thickness off the line through it)
             }
           }
         }
@@ -1438,7 +1438,7 @@ export class Cinematic {
   private pullPose: Partial<Record<CrewId, CrewPose>> = {};
   /** The run to the pods, for the continuity log: the hands that are meant to be closed on something this frame (a
    *  rail, another's hand) and where, and how near every two chests are. */
-  private runHolds: { id: string; side: 'L' | 'R'; at: THREE.Vector3; what: string }[] = [];
+  private runHolds: { id: string; side: 'L' | 'R'; at: THREE.Vector3; what: string; r?: number }[] = [];
   private runNear: { a: string; b: string; d: number; pair: boolean }[] = [];
 
   update(dt: number) {
@@ -1510,7 +1510,7 @@ export class Cinematic {
   private runContact(shot: string) {
     if (!/^(G6b|G6c|G7|P\d)$/.test(shot)) return undefined;
     const p = new THREE.Vector3();
-    return { grips: this.runHolds.map((h) => { const c = this.interior.crew.find((x) => x.id === h.id)!; return { id: h.id, what: `${h.what} (${h.side === 'L' ? 'left' : 'right'} hand)`, gap: Math.max(0, (h.side === 'L' ? c.handL : c.handR).getWorldPosition(p).distanceTo(h.at) - 0.075) }; }), near: this.runNear };
+    return { grips: this.runHolds.map((h) => { const c = this.interior.crew.find((x) => x.id === h.id)!; return { id: h.id, what: `${h.what} (${h.side === 'L' ? 'left' : 'right'} hand)`, gap: Math.max(0, (h.side === 'L' ? c.handL : c.handR).getWorldPosition(p).distanceTo(h.at) - 0.075 - (h.r ?? 0)) }; }), near: this.runNear };
   }
   private lampWas = 0; private lampMoved = -9;
   /** The ship's state and the sound bed now (continuity log). */
