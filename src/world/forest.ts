@@ -382,8 +382,22 @@ export class Forest {
     if (!a) { a = []; this.screens.set(k, a); }
     a.push({ x, z, r, y0, y1, cone });
   }
-  /** Is the point inside a crown or a shrub? (camera collision; crowns reach up to 6 m out, so the next cells count) */
+  /** Solid masses the camera must not sit in that are not round obstacles (level 13's rock shelter and its cliff: the
+   *  jump to level 13 opened with the follow camera inside its rock, and level 21's house scene put a scene camera in it):
+   *  a bounding circle and an exact test. Camera only: walking is the mass's own business. */
+  private solids: { x: number; z: number; r: number; test: (x: number, y: number, z: number) => boolean; tag?: string }[] = [];
+  addSolid(x: number, z: number, r: number, test: (x: number, y: number, z: number) => boolean, tag?: string) {
+    if (tag) this.solids = this.solids.filter((o) => o.tag !== tag);
+    this.solids.push({ x, z, r, test, tag });
+  }
+  /** Is the point inside one of the solid masses (addSolid)? */
+  inSolid(x: number, y: number, z: number): boolean {
+    for (const o of this.solids) if (Math.abs(x - o.x) < o.r && Math.abs(z - o.z) < o.r && o.test(x, y, z)) return true;
+    return false;
+  }
+  /** Is the point inside a crown or a shrub, or a solid mass? (camera collision; crowns reach up to 6 m out, so the next cells count) */
   inFoliage(x: number, y: number, z: number): boolean {
+    if (this.solids.length && this.inSolid(x, y, z)) return true;
     const cx = Math.floor(x / 10), cz = Math.floor(z / 10);
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
       const a = this.screens.get(`${cx + dx},${cz + dz}`);

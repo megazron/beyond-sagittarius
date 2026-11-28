@@ -13,7 +13,14 @@ import { Simplex } from '../core/noise';
  *
  * Local frame: x across the opening, z into the rock, y up; the origin on the floor in the middle of the shelter.
  */
-export interface RockShelter { group: THREE.Group; wall: THREE.Mesh; hands: THREE.Vector3[]; hearth: THREE.Vector3 }
+export interface RockShelter {
+  group: THREE.Group; wall: THREE.Mesh; hands: THREE.Vector3[]; hearth: THREE.Vector3;
+  /** Is a world point inside the rock (the cliff's mass, the boulders), with a quarter metre's margin in front of its
+   *  faces? The hollow under the overhang is open. For the cameras (Forest.addSolid). */
+  solid: (x: number, y: number, z: number) => boolean;
+  /** The middle of the cliff and a radius round all of it (metres). */
+  centre: THREE.Vector3; radius: number;
+}
 
 const N = new Simplex(1307);
 const fbm = (x: number, y: number) => N.noise2(x, y) * 0.6 + N.noise2(x * 2.1 + 7, y * 2.1 - 3) * 0.3 + N.noise2(x * 4.3 - 11, y * 4.3 + 5) * 0.12;
@@ -200,5 +207,21 @@ export function buildRockShelter(origin: THREE.Vector3, into: THREE.Vector3, sid
     const d = new THREE.Mesh(dg, mat); d.name = 'handStencil'; d.receiveShadow = true;
     group.add(d); hands.push(hit.point.clone().addScaledVector(nrm, 0.01));
   }
-  return { group, wall, hands, hearth };
+  // ---- the cameras: the same shapes as numbers, without the noise (a margin for it instead)
+  const toLocal = toWorld.clone().invert(), L = new THREE.Vector3();
+  const BOULDERS: [number, number, number, number, number, number][] = blocks.map(([x, y, z, sx, sy, sz]) => [x, y, z, sx + 0.35, sy + 0.35, sz + 0.35]);
+  const solid = (x: number, y: number, z: number) => {
+    L.set(x, y, z).applyMatrix4(toLocal);
+    const ax = Math.abs(L.x);
+    for (const [bx, by, bz, sx, sy, sz] of BOULDERS) if (((L.x - bx) / sx) ** 2 + ((L.y - by) / sy) ** 2 + ((L.z - bz) / sz) ** 2 < 1) return true;
+    if (ax > 9.8 || L.y > 7.3 || L.y < -0.8 || L.z > 6.6) return false;
+    const front = (ax < 3.1 ? -1.45 : -1.0 + Math.pow(Math.max(0, ax - 3.1) / 6.4, 1.6) * 3.2) + Math.max(0, Math.min(L.y, 6.4) - 2.4) * 0.14;
+    if (L.z < front - 0.25) return false; // in front of the face (its lumps stand out up to about this far)
+    // the hollow under the overhang: open below the roof, out to the back wall (the sides bow in towards the piers)
+    const u = L.x / 3.0;
+    if (ax < 2.85 && L.y < 2.35 && L.z < 1.85 - 1.7 * u * u) return false;
+    return true;
+  };
+  const centre = new THREE.Vector3(0, 0, 2).applyMatrix4(toWorld);
+  return { group, wall, hands, hearth, solid, centre, radius: 11 };
 }

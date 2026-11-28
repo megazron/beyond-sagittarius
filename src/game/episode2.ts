@@ -46,6 +46,8 @@ export class Episode2 {
   /** Set by the game: extra people a scene can cut to (Oom-Sa). */
   actors: Record<string, Character> = {};
   protected group = new THREE.Group();
+  /** What this episode has built in the world (the scene cameras keep out of it: game.ts lineBlocked, nearBlocked). */
+  get props(): THREE.Object3D { return this.group; }
   protected snare: THREE.Group | null = null;
   private shelterSite: { at: THREE.Vector3; facing: number; wall: THREE.Vector3; cairn: THREE.Vector3 } | null = null;
   private pots: THREE.Mesh[] = [];
@@ -787,6 +789,7 @@ export class Episode2 {
     const origin = S.at.clone().addScaledVector(back, 1.0); origin.y = this.h(origin.x, origin.z);
     const rs = buildRockShelter(origin, back, side, (x, z) => this.h(x, z), handTex);
     const g = rs.group; g.name = 'rockShelterSite';
+    this.world.forest.addSolid(rs.centre.x, rs.centre.z, rs.radius, rs.solid, 'rockShelter');
     // the old hearth under the soot: a ring of fire-cracked stones round grey ash
     const ashM = std(0x4a4643, { roughness: 1 }), burntM = std(0x2e2a27, { roughness: 0.95 });
     const ash = new THREE.Mesh(new THREE.CircleGeometry(0.42, 14), ashM); ash.rotation.x = -Math.PI / 2; ash.position.copy(rs.hearth).add(v3(0, 0.015, 0)); g.add(ash);

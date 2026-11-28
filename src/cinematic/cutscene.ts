@@ -183,12 +183,24 @@ export class Cutscene {
   private clearSetUp(s: Shot) {
     const ok = this.ctx.cameraOk; if (!ok) return;
     const near = this.ctx.nearBlocked, d = s.to.clone().sub(s.from), len = d.length();
+    const line = this.ctx.lineBlocked;
     const bad = (p: THREE.Vector3) => !ok(p) || !!near?.(p, s.to);
-    if (len < 0.5 || !bad(s.from)) return;
+    // and a trunk or the rock across the whole line to what it looks at (level 13's pyrite two-shot was two fir trunks
+    // and grass with both of them behind the trunks: a set-up with no speaker to swing round never looked at the line)
+    const blind = (p: THREE.Vector3) => bad(p) || !!line?.(p, s.to);
+    if (len < 0.5 || !blind(s.from)) return;
     const p = new THREE.Vector3();
     for (const k of [0.12, 0.22, 0.32, 0.42, 0.52, 0.6]) {
-      for (const up of [0, 0.4, 0.9]) { p.copy(s.from).addScaledVector(d, k); p.y += up; if (!bad(p)) { s.from.copy(p); return; } }
+      for (const up of [0, 0.4, 0.9]) { p.copy(s.from).addScaledVector(d, k); p.y += up; if (!blind(p)) { s.from.copy(p); return; } }
     }
+    // round what it looks at, at the same distance, the nearest turn that is clear
+    const base = s.from.clone().sub(s.to);
+    for (const turn of [0.35, -0.35, 0.7, -0.7, 1.05, -1.05, 1.4, -1.4, 1.8, -1.8, 2.3, -2.3, Math.PI]) {
+      p.copy(base).applyAxisAngle(UP, turn).add(s.to);
+      if (!blind(p)) { s.from.copy(p); return; }
+    }
+    // nothing clear all round: at least not inside anything
+    if (bad(s.from)) for (const k of [0.12, 0.22, 0.32, 0.42, 0.52, 0.6]) { p.copy(s.from).addScaledVector(d, k); if (!bad(p)) { s.from.copy(p); return; } }
   }
 
   /** Swing the camera around the speaker to the nearest angle that sees them clearly. */
@@ -201,6 +213,8 @@ export class Cutscene {
       if (c < top - 1e-6) { top = c; best = turn; }
     }
     if (best) { s.from.copy(base.applyAxisAngle(UP, best).add(h)); }
+    // the swing may end in a rock or boughs too (every angle round the speaker cost something): brought clear as any set-up
+    this.clearSetUp(s);
   }
 
   /** Keep the speaker's head inside the safe area, and light them from the camera side. */
@@ -287,6 +301,10 @@ export class Cutscene {
         x.root.updateMatrixWorld(true);
       }
       this.shotBeat = this.i;
+      // the shot is built from where the actors are NOW: a scene that has just placed them (settle, a pin) left their
+      // heads' world matrices where they stood before, and level 13's pyrite two-shot was aimed at the empty field
+      // between the shelter and the camp (q4 stills)
+      for (const id in actors) actors[id as CrewId]?.root.updateMatrixWorld(true);
       this.shot = b.shot(); this.shotT = 0; this.shotLen = Math.max(this.left, 6); this.fresh = true;
       this.clearSetUp(this.shot);
       const fov = this.shot.fov ?? this.baseFov, cam = this.ctx.camera;

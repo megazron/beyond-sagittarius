@@ -870,20 +870,42 @@ export class Cinematic {
     this.mcue(S + 59.45, 'e1.brace', 'qte');
     // E2 insert: Lyrra's hand closes on Nuvexa's wrist as she slides past
     this.cue(S + 62.2, () => audio.tone(320, 0.18, 'sine', 0.05, 0, -120));
+    // (restaged, gpu7: from every camera place tried the two had their backs to the lens, because they faced each other
+    // across its line: now they stand side by side across it, each turned half to the other and half to the lens, so
+    // both faces and the two hands between them read. Lyrra's RIGHT hand takes Nuvexa's LEFT wrist by the rig's reach: with the left, across her body, the reach turned her back to the lens, q4)
+    const E2CAM = V(-0.5, 0, -1.8).normalize(), E2SIDE = V(E2CAM.z, 0, -E2CAM.x).negate(); // to the lens; across it (Nuvexa's side, towards the bow)
+    const yawOf = (f: THREE.Vector3) => Math.atan2(f.x, f.z);
     shotAt(S + 61.4, S + 62.9, {
-      enter: () => { const l = lyr.root.position; put(lyr, l.x, l.z, -Math.PI * 0.45); put(nuv, l.x - 0.6, l.z - 0.3, Math.PI * 0.6); only(nuv, lyr); nuvFrom.copy(nuv.root.position); }, // where the slide left them
+      enter: () => {
+        const l = lyr.root.position.clone();
+        put(lyr, l.x, l.z, yawOf(E2CAM.clone().multiplyScalar(0.8).addScaledVector(E2SIDE, 0.6)));
+        put(nuv, l.x + E2SIDE.x * 0.62, l.z + E2SIDE.z * 0.62, yawOf(E2CAM.clone().multiplyScalar(0.8).addScaledVector(E2SIDE, -0.6)));
+        only(nuv, lyr); nuvFrom.copy(nuv.root.position); lyr.setHold(null); nuv.setHold(null);
+      }, // where the slide left her; Nuvexa sliding past her on the lens's side of the line
       update: (k, local) => {
         // Lyrra's choice: her hand closes on Nuvexa's wrist, or she turns for Bolzar and Nuvexa slides on past her hand
         const caught = !this.answered('e1.reach') || this.chose('e1.reach', 'nuvexa');
-        const g = caught ? smoothstep(0.1, 0.9, local) : 0.35 * smoothstep(0.1, 0.6, local);
-        if (!caught) { nuv.root.position.x = nuvFrom.x + 0.9 * smoothstep(0.2, 1.4, local); lyr.setLookTarget(local > 0.3 ? at(3.2, -0.8, -1.6) : null); }
-        nuv.setLimbs(mixLimbs(STANDING, { ...FALL.spread, armL: [0.9, 0.35, 0.3], foreL: [1, 0.25, 0.3] }, 0.9)); nuv.setFace({ fear: 0.8, open: 0.4 });
-        lyr.setLimbs(mixLimbs(STANDING, { ...STANDING, armR: [-0.9, 0.15, 0.45], foreR: [-1, 0.1, 0.3] }, g));
-        const m = hand(lyr).add(hand(nuv, false)).multiplyScalar(0.5);
-        // (from the window's side, 1.8 m off and a little below the hands, both of them whole, inside the glass: from 1 m
-        // above at 50 mm the frame was Lyrra's jumper and Nuvexa's hair, and from the room's side, near or far, their
-        // backs hid their faces and the hands, p2, p3, gpu6)
-        lens(34); this.camera.position.copy(m).add(V(-0.5, -0.25, -1.8)); { const lc = intr.group.worldToLocal(this.camera.position.clone()); if (lc.z < -3.2) { lc.z = -3.2; this.camera.position.copy(intr.group.localToWorld(lc)); } } this.lookTarget.copy(m).add(V(0, 0.1, 0));
+        const g = caught ? smoothstep(0.0, 0.55, local) : 0.35 * smoothstep(0.0, 0.5, local);
+        // Nuvexa slides aft past her (towards +x, the hatch's end) and is stopped by the hand, or goes on past it
+        const slide = caught ? 0.35 * smoothstep(0.0, 0.7, local) : 0.35 * smoothstep(0.0, 0.7, local) + 0.9 * smoothstep(0.6, 1.4, local);
+        nuv.root.position.x = nuvFrom.x + slide;
+        // (her eyes on Nuvexa's face, not down at the hand: looking down, her hair fell over her face, q2 stills)
+        if (!caught) lyr.setLookTarget(local > 0.3 ? at(3.2, -0.8, -1.6) : head(nuv)); else lyr.setLookTarget(head(nuv, -0.05));
+        // (Nuvexa's free arm a little out for balance; the other goes to Lyrra by its hold)
+        nuv.setLimbs(mixLimbs(STANDING, { ...FALL.spread }, 0.35)); nuv.setFace({ fear: 0.8, open: 0.4 }); nuv.setLookTarget(head(lyr, -0.1));
+        // (Lyrra upright, her weight back against the slide: bent forward her hair hid her face)
+        lyr.setLimbs(STANDING); lyr.setHairWeight(0.6); lyr.setFace({ frown: 0.5 * g, open: 0.2 + 0.2 * g });
+        // the two hands meet between them, a little towards the lens: hers out to Nuvexa's, and Nuvexa's out to hers
+        const lc = lyr.chest.getWorldPosition(new THREE.Vector3()), nc = nuv.chest.getWorldPosition(new THREE.Vector3());
+        const meet = lc.clone().lerp(nc, 0.5).addScaledVector(E2CAM, 0.22).add(V(0, -0.08, 0));
+        const nh = caught ? meet : nc.clone().lerp(lc, 0.45).addScaledVector(E2CAM, 0.2).add(V(0, -0.05, 0));
+        nuv.setHold({ L: { at: nh, fingers: lc.clone().sub(nc).setY(0).normalize(), palm: V(0, -1, 0), radius: 0.04, grasp: caught && local > 0.6 } });
+        const reach = caught ? meet.clone().addScaledVector(E2SIDE, -0.03) : lc.clone().lerp(meet, 0.7);
+        lyr.setHold(g > 0.02 ? { R: { at: reach, fingers: nc.clone().sub(lc).setY(0).normalize(), palm: V(0, 1, 0).add(E2CAM).normalize(), radius: 0.035, grasp: caught && local > 0.6 } } : null);
+        const m = meet.clone();
+        // a two-shot from the lens side: both faces, the hands in the middle of the frame
+        // (from a little below the hands: under the fringe, faces up)
+        lens(30); this.camera.position.copy(m).addScaledVector(E2CAM, 2.0).add(V(0, -0.3, 0)); { const lc2 = intr.group.worldToLocal(this.camera.position.clone()); if (lc2.z < -3.2) { lc2.z = -3.2; this.camera.position.copy(intr.group.localToWorld(lc2)); } } this.lookTarget.copy(m).add(V(0, 0.12, 0));
       },
     });
     const nuvFrom = new THREE.Vector3();
@@ -891,7 +913,7 @@ export class Cinematic {
     // E3 Draxum plants his feet and takes Bolzar's weight on one arm; eyes on Bolzar, not on us
     this.vcue(S + 63.2, 'cine.line8', () => { ui.subtitle('cine.line8', 'crew.strong.name'); talk(drx, 'cine.line8'); });
     shotAt(S + 62.9, S + 65.8, {
-      enter: () => { const p = drx.root.position; put(drx, p.x, p.z, -0.35); put(bol, p.x + 0.65, p.z - 0.25, -0.9); this.bolY0 = bol.root.position.y; this.drxGive = 0; }, // Bolzar has fallen against him
+      enter: () => { lyr.setHold(null); nuv.setHold(null); lyr.setHairWeight(1); const p = drx.root.position; put(drx, p.x, p.z, -0.35); put(bol, p.x + 0.65, p.z - 0.25, -0.9); this.bolY0 = bol.root.position.y; this.drxGive = 0; }, // Bolzar has fallen against him
       update: (k, local) => {
         lens(35); const h = head(drx, -0.3); this.camera.position.copy(h).add(V(-0.7, -0.3, 2.1)); this.lookTarget.copy(h).add(V(0.3, 0, 0)); this.shake = 0.02;
         drx.setLimbs(mixLimbs(STANDING, { ...STANDING, legL: [0.45, -1, 0.1], shinL: [0.2, -1, 0], legR: [-0.4, -1, -0.15], shinR: [-0.2, -1, 0], armL: [1, -0.1, 0.35], foreL: [0.9, 0.2, 0.5] }, smoothstep(0, 0.8, local)));
@@ -957,9 +979,9 @@ export class Cinematic {
         // were against the lounge's far wall lit flat white, not looking at anything dark. Two metres further from the
         // lamp than their faces, the wall falls off to a fifth
         const hl = intr.group.worldToLocal(head(c, -0.12)); intr.mainLight.position.set(hl.x + 0.5, hl.y + 0.7, hl.z - 1.4);
-        intr.earthLight.color.setRGB(1, 0.62, 0.42); intr.earthLight.intensity = 4; const h = head(c, -0.12); this.camera.position.copy(h).add(i === 1 ? V(0.72, -0.05, -0.92) : V(1.05, -0.05, -0.55)); this.lookTarget.copy(h);
+        intr.earthLight.color.setRGB(1, 0.62, 0.42); intr.earthLight.intensity = 4; const h = head(c, -0.12); this.camera.position.copy(h).add(i === 1 ? V(0.66, -0.16, -0.98) : V(1.05, -0.05, -0.55)); this.lookTarget.copy(h);
         // each looks straight out through the glass, a little towards the lens side: screen right
-        const out = h.clone().add(i === 1 ? V(-1.2, 0.2, -4) : V(0.6, 0.2, -4)); // Lyrra's lens is more frontal: her look goes further screen right to match
+        const out = h.clone().add(i === 1 ? V(-1.2, 1.4, -4) : V(0.6, 0.2, -4)); // (Lyrra looks up to the glow: her head tipped back so her hair falls behind her face; level, it hung across it, F4 on gpu7 and q2) // Lyrra's lens is more frontal: her look goes further screen right to match
         c.setLookTarget(out); c.setFace(i === 2 ? { smile: 0.4 * (1 - smoothstep(0.3, 0.7, local)), fear: 0.6 * smoothstep(0.4, 0.9, local) } : face);
         if (i === 3) c.setLookTarget(local > 0.5 ? h.clone().add(V(-2, -1.2, 1)) : out); // Bolzar looks away
         if (i === 4) this.pullPose.social = local < 0.5 ? 'selfie' : undefined as unknown as CrewPose; // Nuvexa lowers the phone
@@ -1390,17 +1412,18 @@ export class Cinematic {
     // beside it): nobody passes under the lens, and the far wall is behind them in every frame
     // P1 the threshold, from inside the passage: they come through the hatch pair after pair, the lounge behind them
     runShot(9.4, 13.7, 'P1', (tau, k) => {
+      // (backing off to 8.8 m: to 7.1 the first pair came on to the lens and filled the frame's right before the cut, q2)
       // (from 7.4 m in, not 5.7: nearer, whoever came last through ended large and cut by the frame's bottom right, a8)
       // (from the near wall 5.5 m in, at an angle to the lanes: from 7.4 m in, down them, the pairs stood one behind the
       // other and the six read as one cluster, a12; from 3.7 m the first pair filled the frame's right side, p2. With
       // the pairs 2.5 s apart each comes through on its own beat. It backs off aft as the first pair comes on: held still,
       // Zenvik ended the shot large and cut by the frame's right edge, p4)
-      lens(24); this.camera.position.copy(at(PA.doorX + lerp(5.5, 7.1, easeInOut(k)), -0.45, PA.doorZ + PA.half - 0.45)); this.lookTarget.copy(at(PA.doorX + lerp(1.1, 2.3, easeInOut(k)), -1.2, PA.doorZ - 0.5)); this.shake = 0.006;
+      lens(24); this.camera.position.copy(at(PA.doorX + lerp(5.5, 8.8, easeInOut(k)), -0.45, PA.doorZ + PA.half - 0.45)); this.lookTarget.copy(at(PA.doorX + lerp(1.1, 3.4, easeInOut(k)), -1.2, PA.doorZ - 0.5)); this.shake = 0.006;
     });
     // P2 the passage, established down its length: the rails, the signs, and at its end the pod bay, six lit hatches
     runShot(13.7, 17.2, 'P2', (tau, k) => {
       // (against the near wall, not over the lanes: from above them the nearest pair was cut by the frame's bottom, a8)
-      lens(22); this.camera.position.copy(at(PA.doorX + lerp(0.3, 0.75, k), PA.ceil - 0.3, PA.doorZ + PA.half - 0.25)); this.lookTarget.copy(at(12.2, -1.25, PA.doorZ - 0.9)); this.shake = 0.006;
+      lens(25); this.camera.position.copy(at(PA.doorX + lerp(1.0, 1.4, k), PA.ceil - 0.15, PA.doorZ + PA.half - 0.45)); this.lookTarget.copy(at(12.2, -1.0, PA.doorZ - 0.9)); this.shake = 0.006; // (off the near wall, a metre in from the hatch under the ceiling, 25 mm, looking a little higher: at 22 mm against the wall its lamp strip was a bright orange streak down the frame's right, and the last pair came through the hatch past the lens's corner, gpu7 and q2)
     });
     // P3 their faces, from ahead of them, backing off as they come hand over hand: who holds whom
     runShot(17.2, TEAR, 'P3', (tau) => {
@@ -1418,7 +1441,13 @@ export class Cinematic {
     runShot(TEAR + 1.5, RUN_END, 'P5', (tau, k) => {
       // (with the core taken Zenvik is the last of them, just inside the hatch: from 6.35 m he was beside the lens and
       // out of the frame, and what that answer cost was not seen at the end, gpu6)
-      const z0 = this.chose('e1.handcore', 'core') ? 5.95 : 6.35; lens(24); this.camera.position.copy(at(lerp(z0, z0 + 0.45, k), -0.3, PA.doorZ + 0.7)); this.lookTarget.copy(at(15, -1.15, PA.doorZ - 0.85)); this.shake = 0.01;
+      // (high over them under the ceiling, not at their shoulders: from there the last pair, a metre off, were cut by the frame's left edge, q2)
+      lens(24);
+      // with the core Zenvik is last, a metre and a half inside on the far rail: from over the others he was out past the
+      // frame's left edge (q3). From in the hatch itself, low, turned a little to the far wall, he is in the frame's left
+      // third with the others beyond him (the hatch's frame is wider than this lens sees from here)
+      if (this.chose('e1.handcore', 'core')) { this.camera.position.copy(at(lerp(5.82, 5.98, k), -0.45, PA.doorZ)); this.lookTarget.copy(at(13, -1.4, PA.doorZ - 2.2)); }
+      else { this.camera.position.copy(at(lerp(6.15, 6.55, k), PA.ceil - 0.12, PA.doorZ + 0.25)); this.lookTarget.copy(at(15, -1.5, PA.doorZ - 0.85)); } this.shake = 0.01;
     });
     // the breaking apart, the white and the six fates are the title sequence: montage.ts (it goes on from this state)
     this.cue(RUN + RUN_END, () => {
@@ -1431,6 +1460,8 @@ export class Cinematic {
 
   /** Camera roll for the shot in hand (the deck tilting), and poses the pull gives the crew outside a staged scene. */
   private roll = 0;
+  /** The shot on screen now (its shot list name), for tests and probes. */
+  shotLabel = '';
   /** The pull's choices, as staged: Zenvik's slide (e1.brace), Draxum's arm giving (e1.hold). */
   private zenSlide = 0.5;
   private drxGive = 0;
@@ -1482,6 +1513,7 @@ export class Cinematic {
     // degrees in a frame at the push-off and the pods, glitch_planet). dt 0: poses only, no time passes
     if (cut) this.animateCrew(0);
     if (this.ins.cockpit.visible) { this.pilot.root.updateMatrixWorld(); this.pilot.animate('stand', 0, 0, this.clockT, dt); this.yokeLog(); }
+    this.shotLabel = label;
     if (label) this.logCut(label, t < 39 ? 'journey' : 'pull');
     this.camera.lookAt(this.lookTarget);
     if (this.roll) this.camera.rotateZ(this.roll);

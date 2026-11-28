@@ -1,6 +1,7 @@
 import { Combat, defaultCombatSettings } from './combat/combat';
 import './style.css';
 import * as THREE from 'three';
+import { startCensus, census } from './core/geocensus';
 import { BATCH, batchSupported } from './core/ibatch';
 import { clipProbe, clipStats, type ClipHit } from './core/clipprobe';
 import { glitch, type GlitchKind } from './core/glitch';
@@ -628,7 +629,14 @@ function enterWorld(fresh: boolean) {
   if (!fresh && replay) game.startTutorial();
   // ?combat=<encounter>: straight into a set piece once play begins (recordings, tests)
   { const want = new URLSearchParams(location.search).get('combat'); if (want) { const go = () => { if (game.mode === 'play' && combat && !combat.encounter) combat.trial(want as Parameters<Combat['trial']>[0]); else setTimeout(go, 500); }; setTimeout(go, 800); } }
-  if (!fresh) ui.fade('black', 0, 1.2);
+  // Continue: the level's own things (built by game.start and its first update) were compiled in the first frame of play,
+  // 55 programs and a 2.9 s freeze on the A500 after a cheat jump to level 14 (hitch probe, take hitch1). The first update
+  // runs, then every program the world now needs is compiled in the background under the black, then the fade
+  if (!fresh) {
+    warmHold = true;
+    const go = () => { warmHold = false; ui.fade('black', 0, 1.2); };
+    requestAnimationFrame(() => requestAnimationFrame(() => { void renderer.prewarm(world.scene, camera, undefined, 8000).catch(() => {}).then(go); }));
+  }
 }
 
 document.getElementById('btn-new')!.addEventListener('click', () => {
@@ -930,6 +938,22 @@ function memoryGuard(now: number) {
   ui.toast(t('msg.memLow'));
 }
 
+/** Test: what each long frame did (tools/hitch_probe.py, `__bs.hitches`): new shader programs, new geometries and
+ *  textures, the tick's and the draw's milliseconds, and where the game was. A freeze of seconds at a fight's start or
+ *  a stage's first frame is nearly always one of the three; this says which, without a profiler. */
+if (new URLSearchParams(location.search).has('geocensus')) startCensus();
+const hitches: { t: number; ms: number; tick: number; draw: number; programs: number; geometries: number; textures: number; where: string; names?: Record<string, number> }[] = [];
+const hitchLast = { programs: -1, geometries: 0, textures: 0 };
+function hitchFrame(t0: number, t1: number) {
+  const r = renderer.renderer, prog = (r.info.programs?.length ?? 0), mem = r.info.memory, now = performance.now(), ms = now - t0;
+  if (hitchLast.programs < 0) { hitchLast.programs = prog; hitchLast.geometries = mem.geometries; hitchLast.textures = mem.textures; return; }
+  const dp = prog - hitchLast.programs, dg = mem.geometries - hitchLast.geometries, dt = mem.textures - hitchLast.textures;
+  // the new programs by name (three names each after its material's type or a ShaderMaterial's own name)
+  const names = dp > 0 && ms > 90 ? (r.info.programs as unknown as { name: string; usedTimes: number }[]).slice(-dp).map((p) => p.name).reduce((m, n) => { m[n] = (m[n] ?? 0) + 1; return m; }, {} as Record<string, number>) : undefined;
+  hitchLast.programs = prog; hitchLast.geometries = mem.geometries; hitchLast.textures = mem.textures;
+  if (ms > 90 && hitches.length < 400) hitches.push({ t: +(now / 1000).toFixed(2), ms: Math.round(ms), tick: Math.round(t1 - t0), draw: Math.round(now - t1), programs: dp, geometries: dg, textures: dt, where: `${state}${state === 'game' ? ` ${game?.mode} L${game?.save?.level}${combat?.encounter ? ` fight ${combat.encounter.id}` : ''}` : ''}${state === 'cinematic' ? ` ${cine.time.toFixed(1)} ${cine.shotLabel}` : ''}`, ...(names ? { names } : {}) });
+}
+
 function frame() {
   requestAnimationFrame(frame);
   frameCount++;
@@ -937,13 +961,28 @@ function frame() {
   clock.update();
   const real = Math.min(clock.getDelta(), 0.05);
   // a lost context: the game is paused (openPause above) and only the drawing waits, so menus and input still work
-  if (!hold.on) { const t0 = performance.now(); tick(real); const t1 = performance.now(); if (!glLost) draw(real); perfFrame(renderer.renderer, real, t1 - t0, performance.now() - t1); return; }
+  if (!hold.on) { const t0 = performance.now(); tick(real); const t1 = performance.now(); if (!glLost) draw(real); perfFrame(renderer.renderer, real, t1 - t0, performance.now() - t1); hitchFrame(t0, t1); return; }
   if (hold.pending <= 0) return;
   for (let left = hold.pending; left > 1e-6; left -= hold.tick) tick(Math.min(left, hold.tick));
   hold.pending = 0;
   draw(1 / 30);
   perfFrame(renderer.renderer, 1 / 30, 0, 0);
   hold.done++;
+}
+
+/** Test: the lens inside something on the planet (a rock, a trunk, a crown's boughs, the ground), in play or in a scene.
+ *  The longest time it stayed inside, where and in what (tools/cheat_smoke.py fails on more than half a second). Level 13's
+ *  jump opened with the follow camera in the shelter's rock for seconds; level 21's house scene put a camera in it. */
+const lens = { t: 0, worst: 0, at: [0, 0, 0] as number[], mode: '', inside: 0, frames: 0, reset() { this.t = 0; this.worst = 0; this.inside = 0; this.frames = 0; this.mode = ''; } };
+const LP = new THREE.Vector3();
+function lensFrame(dt: number) {
+  camera.getWorldPosition(LP);
+  const f = world.forest, gy = world.terrain.height(LP.x, LP.z);
+  const inside = LP.y < gy + 0.05 || f.blocks(LP.x, LP.z, 0.08, LP.y - gy) || f.inFoliage(LP.x, LP.y, LP.z);
+  lens.frames++;
+  if (!inside) { lens.t = 0; return; }
+  lens.inside++; lens.t += dt;
+  if (lens.t > lens.worst) { lens.worst = lens.t; lens.at = [+LP.x.toFixed(2), +LP.y.toFixed(2), +LP.z.toFixed(2)]; lens.mode = `${game.mode}${f.inSolid(LP.x, LP.y, LP.z) ? ', in rock' : LP.y < gy + 0.05 ? ', under the ground' : f.blocks(LP.x, LP.z, 0.08, LP.y - gy) ? ', in a trunk or obstacle' : ', in boughs'}`; }
 }
 
 function tick(step: number) {
@@ -1028,6 +1067,7 @@ function tick(step: number) {
         self: body?.model.root ?? null,
       });
     }
+    if (!paused && !game.away?.active) lensFrame(dt);
     // the eye adapting to a camp fire close by in a fight (combat.ts exposure; 1 elsewhere)
     if (combat) renderer.renderer.toneMappingExposure *= combat.exposureScale;
   }
@@ -1147,6 +1187,13 @@ async function boot() {
   game.away = new Away(camera, input, ui, detail(), (sc) => {
     if (!sc) { renderer.setScene(world.scene, camera, true); return; }
     renderer.setScene(sc, camera, false);
+    // the body played there is new on each visit (its merged materials), and so are some of the stage's: compiled in the
+    // first frame there they froze the picture 1.8 to 2 s on arriving (levels 9 and 16, hitch probe on the A500). Compiled
+    // in the background under a moment of black instead
+    if (state === 'game') {
+      warmHold = true; ui.fade('black', 1, 0.01);
+      void renderer.prewarm(sc, camera, undefined, 6000).catch(() => {}).then(() => { warmHold = false; ui.fade('black', 0, 0.5); });
+    }
     // phones: what the planet, the films, the vault and the title's stage hold on the GPU goes while you are away (it is
     // uploaded again when next drawn); ?awayrelease=0 keeps it
     if (quality.name === 'mobile' && new URLSearchParams(location.search).get('awayrelease') !== '0') AWAY_RELEASED.last = releaseGpu([world.scene, cine.scene, vault.scene, stage.scene], [sc]);
@@ -1272,6 +1319,15 @@ window.addEventListener('resize', () => {
   },
   glitch(on = true) { if (on && !glitch.on) glitch.reset(); glitch.on = on; return glitch.summary(); },
   get glitches() { return { events: glitch.events, summary: glitch.summary() }; },
+  get playerRoot() { const b = game?.away?.active ? game.away.body : player; return b ? b.model.root : null; },
+  get glitchClock() { return (glitch as unknown as { clock: number }).clock; },
+  /** ?geocensus=1: geometries drawn once and since dropped from every scene without dispose(), by where they were drawn. */
+  geoCensus() { const st = renderer.stageInfo() as { scene?: THREE.Scene }; return { ...census([world.scene, cine.scene, ...(st.scene && st.scene !== world.scene ? [st.scene] : [])]), gpu: renderer.renderer.info.memory.geometries }; },
+  /** Long frames and what they did (hitchFrame). */
+  get hitches() { return hitches; },
+  /** The lens watch (lensFrame): `worst` seconds in a row inside something, where and in what. */
+  get lens() { return { worst: +lens.worst.toFixed(2), at: lens.at, mode: lens.mode, inside: lens.inside, frames: lens.frames }; },
+  lensReset() { lens.reset(); },
   /** Walks the player towards the next task or objective (glitch_check.py): steers and holds W. */
   autoWalk(on = true, pts?: [number, number][]) { autoWalk = on; walkPlan = on && pts?.length ? { pts, i: 0, best: 1e9, since: elapsed, stuck: [], route: null, rt: 0, walked: 0, last: null } : null; if (!on) input.hold('KeyW', false); },
   /**
@@ -1526,6 +1582,7 @@ window.addEventListener('resize', () => {
   holdSubs(on: boolean) { ui.holdSubs = on; },
   awayOrbit(o: { x: number; y: number; z: number; r: number; a: number; h: number } | null) { if (game?.away) game.away.orbit = o; },
   cineTime() { return cine.time; },
+  cineShot() { return cine.shotLabel; },
   /** The opening's continuity log (?contlog=1 or contLog(true) before it plays): cuts, acted posture changes and the breaks. */
   get continuity() { const c = cine.cont; return { on: c.on, cuts: c.cuts, seen: c.seen, travel: c.travel, breaks: c.check(), worst: c.worst }; },
   contLog(on: boolean) { cine.cont.on = on; cine.cont.reset(); },
