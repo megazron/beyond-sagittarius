@@ -6,6 +6,49 @@ and owns scenes, dialogue, choices, cutscenes and voices; I do not edit its file
 
 Read first: `MECHANICS_NOTES.md` (why the rules are what they are), then `src/combat/index.ts` (the API).
 
+## 2026-11-28 later: pods leftovers, sixth pass (pods agent 6: worktree ~/bs-podsw, branch pods8 = pods7 + my work, rebased on main; captures ~/bs-cap/pods6 r1, r2)
+NOT signed off (only the owner does that). What I changed, what the checks say, what still looks wrong.
+- E1 -> E2 JUMP (CI 46123671300, continuity, _a, _b: "social 1.28 m in 0.1 s off screen"), at the cause: E2's restage
+  stood Nuvexa 1.28 m from where E1's slide left her. E2 now starts from where E1 leaves them: in E1 Nuvexa is still
+  sliding at the cut (2.8 s ramp, 1.6 m), up her lane to Lyrra's window-side front; E2 takes their real places, builds
+  its frame from them (E2SIDE Lyrra to where Nuvexa comes to rest, E2CAM from that) and lets her slide the last
+  centimetres into Lyrra's hand. The lens is now on the room's side, E1's side of their line, so the slide keeps its
+  screen direction (from the window side it reversed over the cut; the check only counts two or more movers).
+  Draxum stood in Nuvexa's lane (both z -1.9, she slid into him): for the pull he now starts aft by Bolzar (3.45, -2.0)
+  and slides 0.4; E3 puts Bolzar where E1 left him, against Draxum (offset 0.45, -0.2 from 0.65, -0.25).
+- E2 LIGHT AND FACE: the deck's main lamp moves (not turned up: the ship's power reads off its intensity) to in front
+  of Lyrra's face and above the lens for E2, and back at E3. Turned level to Nuvexa her long fringe hid her whole face
+  (r2): as in F4 she looks up, half to the lens, with her hair's full weight. E3's lens is aft of Draxum now (from fore
+  of him Lyrra's and Nuvexa's heads were between the lens and his face).
+- TRAP (cost me two rounds): in this file's long one-line shots a trailing `// comment` comments out the rest of the
+  line. My group() note hid Nuvexa's and Skyvra's places (r1: she slid from her lounge mark); my E2 and E3 camera notes
+  hid their lookTarget (r3: both shots aimed at nothing). Use /* */ inside a line.
+- GPU (~/bs-cap/pods6 r1..r4, clips AFTER6_* and NOTES_6_E1_E2_GPU.md sent): r4 = 910fa624: E1 Nuvexa slides up to
+  Lyrra, E2 both faces and the clasp read, E3 Draxum's face clear. STILL WRONG: with the other answer E2 ends on Lyrra's
+  back with Nuvexa sliding on behind her and E3 is a crowded pile; E3's left edge is Lyrra's hair; a sliver of sofa
+  back at E2's foot; Nuvexa side-on in E2.
+- PERF_GATE (web "did not settle in 600 s (card atlas baking)"): not a budget. The title card waits 25 s at most for the
+  city's precompile; on a slow runner the city came on screen first, so its prebake was skipped (renderer.precompile)
+  and the card atlas is baked a row a tick in play, by design. perf_gate's arrival ticks waited for the atlas BEFORE
+  ticking, on a held clock: a wait for something that could not move. Now the arrival ticks, then ticks on in 0.1 s
+  steps while the atlas bakes (and says so), then waits for everything. Same measurements on the normal path.
+  ?prebake=0 (renderer.precompile) skips the prebake to reproduce it: perf_gate --query prebake=0. Measured: the old
+  gate with it fails exactly as CI did; the new one settles with the same numbers (web flat 142 calls, 918359 tris).
+- LEVEL 13 PYRITE OPENING: npcs.pin now puts the body on its mark at once (it moved at the next NPC update, after the
+  scene had aimed its first shot at where Oom-Sa stood before). GPU take r1_L13_jump: the scene opens on both of them
+  at the fire on her first line. (The 4 s before it are play at night under the shelter, before the scene.)
+- HITCH NAMES: an unnamed program (merged bodies, onBeforeCompile) is logged by the two ends of its cacheKey.
+  THE LOUNGE'S FIRST SHOT (r1_h_lounge.json, 1.27 s, 24 programs): every one is a lounge material (crew skin, cloth,
+  hair, eyes, lashes, the deck's props) built for a light set with no env map and the interior's lamps, while
+  Cinematic.warm compiled them with every group shown and renderer.prewarm's env map: the keys differ, so the first
+  interior shot builds them again. NEXT: warm the deck in its departure state (holdDepart's lights, no env map) under
+  the black before the vault's exit, or compile cine.scene once with the interior shown and the exterior hidden.
+- CHECKS on my last build: continuity, --answers a, --answers b all ok (local); perf_gate web ok, and ok with prebake=0.
+- NOT DONE: level 21's close harvest shots through tall grass (not looked at: their 26 stems are props, the world's
+  grass is not; see which it is first), level 14's night fight, level 20's night scene, the lounge freeze (above).
+- HINGLISH: the MegaZroN agent has it in work in ~/bs-mzn (branch mzn7, uncommitted: src/i18n/hl.json, the language
+  menu's fourth entry, heard in the Hindi voice). I did not duplicate it.
+
 ## 2026-11-28 pods leftovers, cameras in rock, freezes (pods agent 5: worktree ~/bs-podsw, branch pods7 from main b1f521cb; dev runs and captures ~/bs-cap/pods6)
 NOT signed off (only the owner does that). What I changed, what the checks say, what still looks wrong.
 - CAMERA IN ROCK, at the cause: level 13's rock shelter (world/rockshelter.ts) was no obstacle for any camera. It now
