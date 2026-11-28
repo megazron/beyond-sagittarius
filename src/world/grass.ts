@@ -64,7 +64,7 @@ export function createGrass(terrain: Terrain, q: Quality) {
     uRadius: { value: R },
     uRes: { value: terrain.res },
     // trampled clearings (camp, crash sites): xz centre, radius
-    uClear: { value: [new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1)] },
+    uClear: { value: Array.from({ length: 6 }, () => new THREE.Vector3(0, 0, -1)) }, // (six: Episode Three's field took a fifth)
     // a water course with no grass on it (Episode One's stream and pool): points (x, z, half width); a point with a
     // negative width starts a new line; only blades inside the box test the line
     uRib: { value: Array.from({ length: RIB }, () => new THREE.Vector3(0, 0, -1)) },
@@ -75,7 +75,7 @@ export function createGrass(terrain: Terrain, q: Quality) {
     Object.assign(sh.uniforms, uniforms, { uTime: windUniforms.uTime, uWind: windUniforms.uWind });
     sh.vertexShader = /* glsl */ `
       attribute vec4 aOffset;
-      uniform vec2 uCenter; uniform sampler2D uHeight; uniform float uWorld, uRadius, uTime, uWind, uRes; uniform vec3 uClear[4]; uniform vec3 uRib[${RIB}]; uniform vec4 uRibBox;
+      uniform vec2 uCenter; uniform sampler2D uHeight; uniform float uWorld, uRadius, uTime, uWind, uRes; uniform vec3 uClear[6]; uniform vec3 uRib[${RIB}]; uniform vec4 uRibBox;
       varying float vTip; varying float vVar; varying float vPatch;
       float th(vec2 p){ return texture2D(uHeight, ((p + uWorld * 0.5) / uWorld * (uRes - 1.0) + 0.5) / uRes).r; }
       float gh(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -92,7 +92,7 @@ export function createGrass(terrain: Terrain, q: Quality) {
       float patchK = gh(floor(wp * 0.12)) * 0.4 + 0.6 * (0.5 + 0.5 * sin(wp.x * 0.07 + sin(wp.y * 0.05) * 2.0));
       float dist = length(wp - uCenter) / uRadius;
       float s = (0.7 + aOffset.w * 0.75) * smoothstep(0.6, 1.4, hgt) * (1.0 - smoothstep(0.35, 0.6, slope)) * smoothstep(1.0, 0.75, dist) * smoothstep(0.15, 0.45, patchK);
-      for (int i = 0; i < 4; i++) { float cr = uClear[i].z; if (cr > 0.0) s *= mix(0.15, 1.0, smoothstep(cr * 0.55, cr, length(wp - uClear[i].xy))); }
+      for (int i = 0; i < 6; i++) { float cr = uClear[i].z; if (cr > 0.0) s *= mix(0.15, 1.0, smoothstep(cr * 0.55, cr, length(wp - uClear[i].xy))); }
       if (wp.x > uRibBox.x && wp.y > uRibBox.y && wp.x < uRibBox.z && wp.y < uRibBox.w) {
         float dm = 1e5;
         for (int i = 0; i < ${RIB - 1}; i++) {

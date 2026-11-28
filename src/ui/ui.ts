@@ -90,11 +90,16 @@ export class UI implements CineUI {
 
   setLoading(p: number) { $('loader-fill').style.width = `${Math.round(p * 100)}%`; }
 
+  private fadeSeq = 0;
   fade(color: 'black' | 'white', to: number, seconds: number) {
-    const f = $('fade');
+    const f = $('fade'), seq = ++this.fadeSeq;
     f.classList.toggle('white', color === 'white');
+    // a cut to black is put up now, before the frame this turn draws: set in the next frame's callback it came up after the
+    // game had drawn what it was meant to hide (the player moved for a fight or a stage was seen moving for one frame,
+    // glitch sweep G07). The last call wins either way
+    if (to >= 1 && seconds <= 0.05) { f.style.transition = 'none'; f.style.opacity = '1'; return; }
     f.style.transition = `opacity ${seconds}s ease`;
-    requestAnimationFrame(() => (f.style.opacity = String(to)));
+    requestAnimationFrame(() => { if (seq === this.fadeSeq) f.style.opacity = String(to); });
   }
 
   // ---------- cinematic ----------

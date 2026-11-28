@@ -921,6 +921,22 @@ export class Renderer {
     if (mats?.size) await this.linked([...mats], maxMs);
     rt.dispose(); g.dispose();
   }
+  /**
+   * The lens pass's program, compiled for the buffer it really draws into and linked in the background. The lounge's
+   * first shot (the first lens of a New Game) still built it in its first frame after the deck was warm: 1.5 s frozen
+   * with one program new (hitch probe, A500, pods agent 7).
+   */
+  async prewarmLens(maxMs = 20000) {
+    const mat = (this.dof as unknown as { mat?: THREE.Material } | null)?.mat;
+    if (!mat) return;
+    const r = this.renderer, sc = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), g = new THREE.PlaneGeometry(2, 2);
+    const q = new THREE.Mesh(g, mat); q.frustumCulled = false; sc.add(q);
+    const prev = r.getRenderTarget();
+    let mats: Set<THREE.Material> | undefined;
+    try { r.setRenderTarget(this.composer.readBuffer); mats = r.compile(sc, cam) as unknown as Set<THREE.Material>; } catch { /* compiled on first draw instead */ } finally { r.setRenderTarget(prev); }
+    if (mats?.size) await this.linked([...mats], maxMs);
+    g.dispose();
+  }
   /** Resolves when every one of these materials' programs is linked (or after `maxMs`). */
   private linked(list: THREE.Material[], maxMs: number, progress?: (k: number) => void) {
     const r = this.renderer, t0 = performance.now();

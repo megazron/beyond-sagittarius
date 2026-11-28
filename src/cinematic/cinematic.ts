@@ -307,6 +307,36 @@ export class Cinematic {
     await draw(this.scene, this.camera);
   }
 
+  /**
+   * The deck's programs for the light set it is really shown with: `compile(scene, cam)` is called with the deck as
+   * the departure shows it (the interior, Earth and the ring, no other group), then as the pull and the flashback show
+   * it (the interior alone), and every group is put back as it was. A program's key holds the number of lights in
+   * view: warm() compiled the deck with every group shown, so the lounge's first shot built its 24 programs again in
+   * its first frame (1.3 s frozen, hitch probe on the A500). `compile` must do its work at once (renderer.prewarm
+   * does: it compiles synchronously, then links in the background); the promise is for when the links are done.
+   */
+  warmDeck(compile: (scene: THREE.Scene, cam: THREE.Camera) => Promise<unknown> | void, states: ('depart' | 'deck')[] = ['depart', 'deck']): Promise<unknown> {
+    const linked: (Promise<unknown> | void)[] = [];
+    const groups: THREE.Object3D[] = [this.earth.group, this.ring, this.mars, this.giant, this.giantRing, this.home, this.interior.group, this.ship.group, this.ins.cockpit, this.sunDisc];
+    const was = groups.map((o) => o.visible), sun = this.sunLight.intensity;
+    const cam = new THREE.PerspectiveCamera(110, 16 / 9, 0.05, 40000);
+    cam.position.copy(this.interior.group.position).add(V(0, -0.6, 5));
+    cam.lookAt(this.interior.group.position.clone().add(V(0, -1.2, 0)));
+    cam.updateMatrixWorld();
+    try {
+      for (const s of states) {
+        this.setVisible('interior');
+        if (s === 'depart') this.earth.group.visible = this.ring.visible = true;
+        this.scene.updateMatrixWorld(true);
+        linked.push(compile(this.scene, cam));
+      }
+    } finally {
+      groups.forEach((o, i) => (o.visible = was[i]));
+      this.sunLight.intensity = sun;
+    }
+    return Promise.all(linked);
+  }
+
   /** Back to the title backdrop. */
   resetIdle() { this.setVisible('earth'); this.dome.uniforms.uBH.value = 0; this.camera.fov = 45; this.camera.updateProjectionMatrix(); }
 
@@ -898,15 +928,23 @@ export class Cinematic {
         // the last of her slide at the speed E1 left her with (about 0.55 m/s), easing to rest by Lyrra; without the hand
         // she goes on aft past her, into Draxum's side (the thud and the yelp)
         const D = nuvTo.x - nuvFrom.x, T = clamp((2 * D) / 0.55, 0.2, 0.9), u = Math.min(1, local / T);
-        const slide = D * (1 - (1 - u) * (1 - u)) + (caught ? 0 : 0.45 * smoothstep(0.5, 1.2, local));
+        const on = caught ? 0 : smoothstep(0.5, 1.2, local);
+        const slide = D * (1 - (1 - u) * (1 - u)) + 0.35 * on;
         nuv.root.position.x = nuvFrom.x + slide;
+        // (without the hand she goes on past Lyrra a little further from the lens, clear of her: in her lane she slid on through
+        // Lyrra's back and into Draxum, and E3 was a pile of bodies round him, pods agent 6 GPU r4)
+        nuv.root.position.z = nuvFrom.z - 0.35 * on;
         // (her eyes on Nuvexa's face, not down at the hand: looking down, her hair fell over her face, q2 stills)
         // (and up, half to the lens: turned level to Nuvexa her long fringe hung over her whole face, r2 GPU; as in F4, her head
         // tipped back lets the hair fall behind it)
         const up = head(nuv, 0.35).lerp(head(lyr).lerp(head(nuv), 0.5).addScaledVector(E2CAM, 2.0), 0.35); // (towards where E2's lens is)
-        if (!caught) lyr.setLookTarget(local > 0.3 ? at(3.2, -0.8, -1.6) : up); else lyr.setLookTarget(up);
+        // (turning for Bolzar she looks past her own shoulder on the lens side: looking straight aft she turned her back on the
+        // lens and the shot ended on her hair, r4 GPU)
+        if (!caught) lyr.setLookTarget(local > 0.3 ? head(bol).lerp(this.camera.position, 0.45) : up); else lyr.setLookTarget(up);
         // (Nuvexa's free arm a little out for balance; the other goes to Lyrra by its hold)
-        nuv.setLimbs(mixLimbs(STANDING, { ...FALL.spread }, 0.35)); nuv.setFace({ fear: 0.8, open: 0.4 }); nuv.setLookTarget(head(lyr, -0.1));
+        nuv.setLimbs(mixLimbs(STANDING, { ...FALL.spread }, 0.35)); nuv.setFace({ fear: 0.8, open: 0.4 });
+        // (her eyes on Lyrra's hand, a little towards the lens: on Lyrra's face she was side-on to us all shot, r4 GPU)
+        nuv.setLookTarget(head(lyr, -0.25).lerp(this.camera.position, caught ? 0.3 : 0.45));
         // (Lyrra upright, her weight back against the slide: bent forward her hair hid her face)
         lyr.setLimbs(STANDING); lyr.setHairWeight(1); lyr.setFace({ frown: 0.5 * g, open: 0.2 + 0.2 * g });
         // the two hands meet between them, a little towards the lens: hers out to Nuvexa's, and Nuvexa's out to hers
@@ -919,7 +957,10 @@ export class Cinematic {
         const m = meet.clone();
         // a two-shot from the lens side: both faces, the hands in the middle of the frame
         // (from a little below the hands: under the fringe, faces up)
-        lens(30); this.camera.position.copy(m).addScaledVector(E2CAM, 2.0).add(V(0, -0.05, 0)); /* (from -0.2 the sofa's back crossed the frame's foot, r2) */ this.lookTarget.copy(m).add(V(0, 0.12, 0));
+        // (a touch higher and tighter: at -0.05 and 30 mm a strip of the sofa's back was still at the frame's foot, r4)
+        lens(33); this.camera.position.copy(m).addScaledVector(E2CAM, 2.0).add(V(0, 0.06, 0)); this.lookTarget.copy(m).add(V(0, 0.16, 0));
+        // without the hand the lens follows her a little as she goes on past
+        if (!caught) this.lookTarget.lerp(head(nuv, -0.2), 0.35 * on);
         // a key on the faces from in front of Lyrra's, above the lens (from the ceiling's lamp, over and behind her, her face was
         // half in shadow, q5 GPU); the lamp moved, not turned up: the deck's power reads off its intensity
         { const hl = intr.group.worldToLocal(head(lyr, -0.12)), f = E2CAM.clone().multiplyScalar(0.8).addScaledVector(E2SIDE, 0.6); intr.mainLight.position.set(hl.x + f.x * 1.5, hl.y + 0.9, hl.z + f.z * 1.5); }
@@ -932,7 +973,9 @@ export class Cinematic {
     shotAt(S + 62.9, S + 65.8, {
       enter: () => { lyr.setHold(null); nuv.setHold(null); lyr.setHairWeight(1); intr.mainLight.position.copy(lightWas); const p = drx.root.position; put(drx, p.x, p.z, -0.35); put(bol, p.x + 0.45, p.z - 0.2, -0.9); /* (where E1's slide left him, against Draxum) */ this.bolY0 = bol.root.position.y; this.drxGive = 0; }, // Bolzar has fallen against him
       update: (k, local) => {
-        lens(35); const h = head(drx, -0.3); this.camera.position.copy(h).add(V(0.3, -0.3, 2.1)); /* (aft of him, not fore: with Draxum aft by Bolzar, from 0.7 fore Lyrra's and Nuvexa's heads were between the lens and his face, r2) */ this.lookTarget.copy(h).add(V(0.3, 0, 0)); this.shake = 0.02;
+        // (aft of him, not fore: from 0.7 fore Lyrra's and Nuvexa's heads were between the lens and his face, r2; and further aft
+        // and tighter on the two of them, turned a little to Bolzar: from 0.3 at 35 mm Lyrra's hair filled the frame's left edge, r4)
+        lens(60); const h = head(drx, -0.3); this.camera.position.copy(h).add(V(0.6, -0.2, 1.9)); /* (not further aft: from 1.2 the lens was behind the aft wall and the whole shot black on the GPU, a) */ this.lookTarget.copy(head(drx, 0.02)).lerp(head(bol, 0.02), 0.45); this.shake = 0.02;
         drx.setLimbs(mixLimbs(STANDING, { ...STANDING, legL: [0.45, -1, 0.1], shinL: [0.2, -1, 0], legR: [-0.4, -1, -0.15], shinR: [-0.2, -1, 0], armL: [1, -0.1, 0.35], foreL: [0.9, 0.2, 0.5] }, smoothstep(0, 0.8, local)));
         drx.setFace({ frown: 0.7, open: 0.2 }); drx.setLookTarget(head(bol));
         bol.setLimbs(mixLimbs(STANDING, FALL.spread, 0.5)); bol.setFace({ fear: 0.6 }); bol.setLookTarget(head(drx));

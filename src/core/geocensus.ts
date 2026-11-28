@@ -36,14 +36,16 @@ export function startCensus() {
 export function census(roots: THREE.Object3D[]) {
   const inScene = new Set<THREE.BufferGeometry>();
   for (const r of roots) r.traverse((o) => { const g = (o as THREE.Mesh).geometry as THREE.BufferGeometry | undefined; if (g) inScene.add(g); });
-  const by = new Map<string, number>();
+  const by = new Map<string, number>(), held = new Map<string, number>();
   let alive = 0, lost = 0;
   for (const w of refs) {
     const g = w.deref(); if (!g) continue;
     const s = seen.get(g); if (!s || s.disposed) continue;
     alive++;
-    if (inScene.has(g)) continue;
+    if (inScene.has(g)) { held.set(s.label, (held.get(s.label) ?? 0) + 1); continue; }
     lost++; by.set(s.label, (by.get(s.label) ?? 0) + 1);
   }
-  return { alive, inScene: inScene.size, lost, top: [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40) };
+  // (and the ones still in a scene, by the same label: the growth in the sweep was mostly these, leak_q5)
+  const sort = (m: Map<string, number>) => [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40);
+  return { alive, inScene: inScene.size, lost, top: sort(by), held: sort(held) };
 }

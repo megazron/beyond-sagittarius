@@ -1223,11 +1223,14 @@ export class Episode3 extends Episode2 {
   private trample() {
     const lvl = this.s.level, w = this.world as unknown as { clearings: [number, number, number][]; grass?: { setClearings(l: [number, number, number][]): void } };
     if (lvl < 16 || !w.grass || !w.clearings?.length || !this.f('e3.siteDone')) return;
-    const H = this.house(), key = `${this.siteNow()}/${lvl >= 17}`;
+    const H = this.house(), dug = !!this.fieldG, key = `${this.siteNow()}/${lvl >= 17}/${dug}`;
     if (key === this.trampleKey) return;
     this.trampleKey = key;
     const list: [number, number, number][] = [w.clearings[0], w.clearings[1], [H.at.x, H.at.z, 4.2]];
     if (lvl >= 17) { const c = this.fennAt(); list.push([c.x, c.z, 6.5]); }
+    // the field once it is dug: a tilled field grows no meadow grass, and level 21's close harvest shots were taken through
+    // blades a metre tall at the lens (GPU take q5 L21)
+    if (dug) { const f = this.fieldAt(); list.push([f.x, f.z, 5.5]); }
     w.grass.setClearings(list);
   }
   /** Level 21: the band reaps beside him while the harvest scene plays (trust >= 1). */

@@ -34,10 +34,11 @@ def main():
         t0 = time.time()
         for c in range(a.chunks + 1):
             g = ev("__bs.geoCensus()"); st = ev("({level: __bs.level, mode: __bs.mode})")
-            row = {"chunk": c, "secs": round(time.time() - t0), **st, "gpu": g["gpu"], "alive": g["alive"], "inScene": g["inScene"], "lost": g["lost"], "top": g["top"][:15]}
+            row = {"chunk": c, "secs": round(time.time() - t0), **st, "gpu": g["gpu"], "alive": g["alive"], "inScene": g["inScene"], "lost": g["lost"], "heap": g.get("heap"), "sweep": g.get("sweep"), "top": g["top"][:15], "held": g.get("held", [])[:15]}
             out.append(row)
-            print(f"[{row['secs']:5d}s] L{st['level']} {st['mode']}: gpu {g['gpu']}, alive {g['alive']}, in scenes {g['inScene']}, dropped {g['lost']}", flush=True)
+            print(f"[{row['secs']:5d}s] L{st['level']} {st['mode']}: gpu {g['gpu']}, alive {g['alive']}, in scenes {g['inScene']}, dropped {g['lost']}, heap {g.get('heap', 0) // 1048576} MB, swept {g.get('sweep')}", flush=True)
             for lab, n in g["top"][:8]: print(f"     {n:5d}  {lab}", flush=True)
+            for lab, n in g.get("held", [])[:8]: print(f"     {n:5d}  (in a scene) {lab}", flush=True)
             if c == a.chunks: break
             why = drive(page, ev, lambda *x: None, lambda st: (st["level"] or 0) > L + a.levels, rounds=a.rounds)
             if why == "stop": print("reached the last level", flush=True)

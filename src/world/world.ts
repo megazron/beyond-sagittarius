@@ -123,7 +123,7 @@ export class World {
     this.explorer.root.position.copy(L.crewSpot);
     s.add(this.explorer.root);
     this.clearings = [
-      [L.camp.x - 1.2, L.camp.z + 1.2, 6.5],
+      [L.camp.x - 1.2, L.camp.z + 1.2, 8.5], // (8.5, was 6.5: level 14's night scene, over his shoulder by the fire, was shot through blades at the lens)
       [L.beacon.x, L.beacon.z, 2.2],
       [L.crewSpot.x, L.crewSpot.z, 2.5],
       [L.pod2.x, L.pod2.z, 4],

@@ -2,6 +2,7 @@ import { Combat, defaultCombatSettings } from './combat/combat';
 import './style.css';
 import * as THREE from 'three';
 import { startCensus, census } from './core/geocensus';
+import { geoSweep, sweepStats } from './core/geosweep';
 import { BATCH, batchSupported } from './core/ibatch';
 import { clipProbe, clipStats, type ClipHit } from './core/clipprobe';
 import { glitch, type GlitchKind } from './core/glitch';
@@ -400,6 +401,8 @@ function playFlashback(after: () => void) {
   input.enabled = false; input.resetTouch(); touch.show(false); suppressPauseOnUnlock = true; input.releasePointer();
   ui.fade('white', 1, 0.5);
   ui.show('hud', false);
+  // the deck alone, as the memory shows it, compiled while the white comes up (its first shot froze 3.6 s, level 6)
+  cine.warmDeck((sc, cam) => { void renderer.prewarm(sc, cam, undefined, 8000).catch(() => {}); }, ['deck']); void renderer.prewarmLens(8000).catch(() => {});
   setTimeout(() => {
     document.body.classList.add('flashback');
     renderer.setScene(cine.scene, cine.camera, false);
@@ -515,9 +518,17 @@ function playOpening(withCity: boolean, replay: boolean, from: 'vault' | 'city' 
     // the title sequence's score is fetched and decoded while the opening plays: asked for only at the handoff, the
     // picture stood still on the pull's last frame with no sound until it was ready
     audio.preloadScore('theme', 'theme_sfx');
-    cine.start(() => playFilm(replay));
-    // the cheat menu's jumps into the opening (src/cheat): on the opening's own clock, as the tests seek it
-    if (seekTo !== undefined) cine.seek(seekTo);
+    // the deck's programs for the lights it is shown with, under the take-off's black: linked in the background by the
+    // time the lounge's first shot comes (it built 24 of them in its first frame, 1.3 s frozen)
+    const deckWarm = Promise.all([cine.warmDeck((sc, cam) => renderer.prewarm(sc, cam, undefined, 20000).catch(() => {})), renderer.prewarmLens().catch(() => {})]);
+    const go = () => {
+      cine.start(() => playFilm(replay));
+      // the cheat menu's jumps into the opening (src/cheat): on the opening's own clock, as the tests seek it
+      if (seekTo !== undefined) cine.seek(seekTo);
+    };
+    // a jump lands on its shot at once: it waits under the black for the deck's links (the take-off gives a player 14 s)
+    if (seekTo === undefined) go();
+    else { warmHold = true; ui.fade('black', 1, 0); void deckWarm.then(() => { warmHold = false; go(); }); }
   };
   const city = () => (withCity ? playPrologue(() => titleCard(films, 'takeoff.card')) : films());
   // (MegaZroN's cold open is not played again on New Game once it played before the title on this device; the cheat
@@ -1069,6 +1080,8 @@ function tick(step: number) {
       });
     }
     if (!paused && !game.away?.active) lensFrame(dt);
+    // geometry the story dropped from the planet without dispose() (core/geosweep.ts, glitch sweep G08)
+    geoSweep(dt, [world.scene, cine.scene, renderer.stageInfo().scene]);
     // the eye adapting to a camp fire close by in a fight (combat.ts exposure; 1 elsewhere)
     if (combat) renderer.renderer.toneMappingExposure *= combat.exposureScale;
   }
@@ -1323,7 +1336,7 @@ window.addEventListener('resize', () => {
   get playerRoot() { const b = game?.away?.active ? game.away.body : player; return b ? b.model.root : null; },
   get glitchClock() { return (glitch as unknown as { clock: number }).clock; },
   /** ?geocensus=1: geometries drawn once and since dropped from every scene without dispose(), by where they were drawn. */
-  geoCensus() { const st = renderer.stageInfo() as { scene?: THREE.Scene }; return { ...census([world.scene, cine.scene, ...(st.scene && st.scene !== world.scene ? [st.scene] : [])]), gpu: renderer.renderer.info.memory.geometries }; },
+  geoCensus() { const st = renderer.stageInfo() as { scene?: THREE.Scene }; return { sweep: { ...sweepStats }, heap: (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0, ...census([world.scene, cine.scene, ...(st.scene && st.scene !== world.scene ? [st.scene] : [])]), gpu: renderer.renderer.info.memory.geometries }; },
   /** Long frames and what they did (hitchFrame). */
   get hitches() { return hitches; },
   /** The lens watch (lensFrame): `worst` seconds in a row inside something, where and in what. */
