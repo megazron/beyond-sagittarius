@@ -21,6 +21,9 @@ function mat(k: string): THREE.Material {
 const GLOW: Record<string, THREE.Material> = {};
 function glow(c: number) { return (GLOW[c] ??= new THREE.MeshBasicMaterial({ color: c, fog: false, toneMapped: false })); }
 
+/** Unfogged pale for a shape far up in the sky (fog washed it out to nothing, GPU take r1). */
+let SKY: THREE.Material | null = null;
+const sky = () => (SKY ??= new THREE.MeshBasicMaterial({ color: 0xe9ecf2, fog: false }));
 const box = (w: number, h: number, d: number, m: string) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(m));
 const ball = (r: number, m: string, seg = 10) => new THREE.Mesh(new THREE.SphereGeometry(r, seg, Math.max(6, seg - 3)), mat(m));
 
@@ -51,7 +54,7 @@ export function buildProp(kind: string): THREE.Group {
     }
     case 'glowpoint': { const p = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), glow(0xffc070)); add(p, 0, 0, 0); break; }
     case 'glowfield': {
-      for (let i = 0; i < 12; i++) add(new THREE.Mesh(new THREE.SphereGeometry(i === 11 ? 0.5 : 0.28, 8, 6), glow(0xffb060)));
+      for (let i = 0; i < 12; i++) add(new THREE.Mesh(new THREE.SphereGeometry(i === 11 ? 0.9 : 0.55, 8, 6), glow(0xffb060)));
       break;
     }
     case 'trunkmarks': {
@@ -62,7 +65,7 @@ export function buildProp(kind: string): THREE.Group {
     case 'dotrings': {
       for (let r = 0; r < 3; r++) {
         const R = 3.4 + r * 0.8, n = 16 + r * 4;
-        for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + r * 0.3, p = new THREE.Mesh(new THREE.CircleGeometry(0.11, 7), mat('ash')); p.rotation.x = -Math.PI / 2; p.scale.set(1, 1.4, 1); add(p, Math.cos(a) * R, 0.03, Math.sin(a) * R); }
+        for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + r * 0.3, p = new THREE.Mesh(new THREE.CircleGeometry(0.13, 7), mat('sap')); p.rotation.x = -Math.PI / 2; p.scale.set(1, 1.4, 1); add(p, Math.cos(a) * R, 0.03, Math.sin(a) * R); }
       }
       break;
     }
@@ -92,8 +95,8 @@ export function buildProp(kind: string): THREE.Group {
       break;
     }
     case 'skyform': {
-      const b = new THREE.Mesh(new THREE.CapsuleGeometry(6, 60, 4, 12), mat('pale')); b.rotation.z = Math.PI / 2; add(b);
-      const r = new THREE.Mesh(new THREE.TorusGeometry(10, 1.2, 6, 20), mat('pale')); r.rotation.y = Math.PI / 2; add(r, -14, 0, 0);
+      const b = new THREE.Mesh(new THREE.CapsuleGeometry(6, 60, 4, 12), sky()); b.rotation.z = Math.PI / 2; add(b);
+      const r = new THREE.Mesh(new THREE.TorusGeometry(10, 1.2, 6, 20), sky()); r.rotation.y = Math.PI / 2; add(r, -14, 0, 0);
       break;
     }
     case 'groundline': {

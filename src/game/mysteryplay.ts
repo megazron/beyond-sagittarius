@@ -97,11 +97,14 @@ export class MysteryPlay {
     const d = this.due!;
     if (!hook) { this.drop(); return; }
     this.playing = true; this.lastProp = undefined;
+    // empty hands for the beat: a carried spear crossed every close-up of his face (GPU take r1)
+    const held = this.h.player.model.handR.children.filter((c) => c.visible); held.forEach((c) => { c.visible = false; });
     const beats = hookBeats(hook, s).map((b) => this.beat(b));
     // marked as it starts: a skip, a quit or a reload never brings it back
     hookPlayed(n, s); this.h.persist();
     this.h.playScene(beats, () => {
       this.playing = false; this.due = null;
+      held.forEach((c) => { c.visible = true; });
       this.cleanup();
       document.body.classList.remove('my-dream');
       const clue = MYSTERY?.clues.find((c) => 'hook' in c.from && c.from.hook === n);
@@ -144,7 +147,7 @@ export class MysteryPlay {
       }
       case 'dotrings': { const c = this.h.world.layout.camp; at(c.distanceTo(p) < 20 ? this.ground(c.x, c.z) : this.ground(p.x, p.z)); break; }
       case 'trunkmarks': at(this.open(p.clone().addScaledVector(f, 2.4).addScaledVector(r, 0.8))); g.lookAt(p.x, g.position.y, p.z); break;
-      case 'skyform': at(p.clone().addScaledVector(f, 260).add(V(0, 120, 0))); g.lookAt(p.x, g.position.y, p.z); g.rotateY(Math.PI / 2); break;
+      case 'skyform': at(p.clone().addScaledVector(f, 150).add(V(0, 75, 0))); g.lookAt(p.x, g.position.y, p.z); g.rotateY(Math.PI / 2); break;
       case 'groundline': at(this.ground(p.x + r.x * 3, p.z + r.z * 3)); g.lookAt(g.position.clone().add(f)); g.position.y -= 0.02; break;
       case 'rockmark': case 'bankcut': at(this.ground(p.x + f.x * 1.3, p.z + f.z * 1.3)); g.lookAt(p.x, g.position.y, p.z); break;
       case 'cardB': at(p.clone().addScaledVector(f, 0.32).add(V(0, 1.05, 0))); g.lookAt(this.head()); g.rotateX(-Math.PI / 2); break;
